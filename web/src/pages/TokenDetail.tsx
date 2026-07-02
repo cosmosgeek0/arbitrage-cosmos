@@ -1,21 +1,38 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
 import { TokenIcon, brandColor } from '../components/TokenIcon';
-import { BigChart, type ChartPoint } from '../components/BigChart';
+import type { ChartPoint } from '../components/BigChart';
 import { Num } from '../components/Num';
 import { OrderBook } from '../components/OrderBook';
+import { TradingViewChart, type TvCandle } from '../components/TradingViewChart';
 import { SideTag } from '../components/ui';
 import { fmtPrice, fmtPct, fmtBasis, fmtMoney, fmtFunding, fmtQty, signClass, countdown, baseOf, fmtTimeShort, fmtDateTime, timeAgo } from '../format';
 import type { FillRow, MarketDetail, SignalRecord } from '../types';
 
 const WINDOWS = {
-  '1H': { interval: '1m', limit: 60 },
-  '1D': { interval: '5m', limit: 288 },
-  '1W': { interval: '30m', limit: 336 },
-  '1M': { interval: '2h', limit: 360 },
+  '1s': { interval: '1s', limit: 500 },
+  '1m': { interval: '1m', limit: 720 },
+  '5m': { interval: '5m', limit: 576 },
+  '15m': { interval: '15m', limit: 672 },
+  '1H': { interval: '1h', limit: 720 },
+  '4H': { interval: '4h', limit: 720 },
+  '1D': { interval: '1d', limit: 365 },
+  '1W': { interval: '1w', limit: 260 },
 } as const;
 type WinKey = keyof typeof WINDOWS;
 type ChartMode = 'price' | 'basis' | 'funding' | 'volume';
+
+interface BinanceKlineMsg {
+  k?: {
+    t: number;
+    o: string;
+    h: string;
+    l: string;
+    c: string;
+    v: string;
+    q: string;
+  };
+}
 
 interface SymbolContext {
   openOrders: { orderId: number; side: string; type: string; price: number; origQty: number; time: number }[];
@@ -86,12 +103,12 @@ function DataRow({
 
 export function TokenDetail({ symbol }: { symbol: string }) {
   const { markets, state, openTicket, toggleWatch, setPage, importFills } = useStore();
-  const [win, setWin] = useState<WinKey>('1D');
+  const [win, setWin] = useState<WinKey>('1s');
   const [mode, setMode] = useState<ChartMode>('price');
-  const [spotK, setSpotK] = useState<ChartPoint[]>([]);
+  const [candles, setCandles] = useState<TvCandle[]>([]);
+  const [chartStream, setChartStream] = useState<'connecting' | 'live' | 'poll'>('connecting');
   const [futK, setFutK] = useState<ChartPoint[]>([]);
   const [funding, setFunding] = useState<ChartPoint[]>([]);
-  const [volK, setVolK] = useState<ChartPoint[]>([]);
   const [detail, setDetail] = useState<MarketDetail | null>(null);
   const [ctx, setCtx] = useState<SymbolContext | null>(null);
   const [importMsg, setImportMsg] = useState<string | null>(null);
@@ -100,28 +117,75 @@ export function TokenDetail({ symbol }: { symbol: string }) {
   const base = baseOf(symbol);
   const watchlisted = state?.config.watchlist.includes(symbol) ?? false;
 
-  // klines (spot + futures for the basis series)
+  const spotK = useMemo<ChartPoint[]>(() => candles.map((c) => ({ t: c.t, v: c.c })), [candles]);
+  const volK = useMemo<ChartPoint[]>(() => candles.map((c) => ({ t: c.t, v: c.qv || c.v * c.c })), [candles]);
+
+  // OHLCV candles (spot) + futures closes for basis. Spot uses real Binance
+  // 1s candles when selected; futures 1s is not requested because USD-M REST
+  // intervals are not consistently available at that granularity.
   useEffect(() => {
     const { interval, limit } = WINDOWS[win];
     let alive = true;
     const load = () => {
-      void fetch(`/api/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`)
+      void fetch(`/api/candles?symbol=${symbol}&interval=${interval}&limit=${limit}`)
         .then((r) => (r.ok ? r.json() : null))
-        .then((d) => alive && d && setSpotK(d as ChartPoint[]));
-      void fetch(`/api/klines?symbol=${symbol}&interval=${interval}&limit=${limit}&market=futures`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => alive && d && setFutK(d as ChartPoint[]))
-        .catch(() => setFutK([]));
-      void fetch(`/api/klines?symbol=${symbol}&interval=${interval}&limit=${limit}&field=volume`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => alive && d && setVolK(d as ChartPoint[]))
-        .catch(() => setVolK([]));
+        .then((d) => alive && Array.isArray(d) && setCandles(d as TvCandle[]))
+        .catch(() => undefined);
+      if (interval === '1s') {
+        setFutK([]);
+      } else {
+        void fetch(`/api/klines?symbol=${symbol}&interval=${interval}&limit=${limit}&market=futures`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => alive && d && setFutK(d as ChartPoint[]))
+          .catch(() => setFutK([]));
+      }
     };
     load();
     const t = setInterval(load, 60_000);
     return () => {
       alive = false;
       clearInterval(t);
+    };
+  }, [symbol, win]);
+
+  useEffect(() => {
+    const { interval, limit } = WINDOWS[win];
+    let alive = true;
+    setChartStream('connecting');
+    const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${interval}`);
+    ws.onopen = () => alive && setChartStream('live');
+    ws.onmessage = (ev) => {
+      if (!alive) return;
+      try {
+        const msg = JSON.parse(String(ev.data)) as BinanceKlineMsg;
+        const k = msg.k;
+        if (!k) return;
+        const nextCandle: TvCandle = {
+          t: k.t,
+          o: Number(k.o),
+          h: Number(k.h),
+          l: Number(k.l),
+          c: Number(k.c),
+          v: Number(k.v),
+          qv: Number(k.q) || Number(k.v) * Number(k.c),
+        };
+        setCandles((prev) => {
+          const next = [...prev];
+          const idx = next.findIndex((c) => c.t === nextCandle.t);
+          if (idx >= 0) next[idx] = nextCandle;
+          else next.push(nextCandle);
+          next.sort((a, b) => a.t - b.t);
+          return next.length > limit ? next.slice(next.length - limit) : next;
+        });
+      } catch {
+        // malformed stream frame; ignore and wait for the next public tick
+      }
+    };
+    ws.onerror = () => ws.close();
+    ws.onclose = () => alive && setChartStream('poll');
+    return () => {
+      alive = false;
+      ws.close();
     };
   }, [symbol, win]);
 
@@ -206,8 +270,8 @@ export function TokenDetail({ symbol }: { symbol: string }) {
       : mode === 'funding'
         ? 'Binance settled funding history'
         : mode === 'volume'
-          ? 'Binance spot quote-volume klines'
-          : 'Binance spot klines';
+          ? 'Binance spot quote-volume candles'
+          : `TradingView canvas · Binance spot ${WINDOWS[win].interval} OHLCV`;
   const chartLatest =
     chartLast === null ? '—' : mode === 'price' ? chartPriceFmt(chartLast) : mode === 'volume' ? fmtMoney(chartLast) : pctFmt(chartLast);
   const chartMoveLabel =
@@ -238,12 +302,12 @@ export function TokenDetail({ symbol }: { symbol: string }) {
   const importDisabledReason = !state?.binance.keysPresent ? 'Read-only Binance keys must be present on the server to import fills' : 'Import Binance fill history';
   const hasPerp = live?.hasPerp ?? live?.perpMark !== null;
   const topSource = hasPerp ? 'Binance spot + USD-M futures' : 'Binance spot market data';
-  const chartModes = (hasPerp ? ['price', 'basis', 'funding', 'volume'] : ['price', 'volume']) as ChartMode[];
+  const chartModes = (hasPerp && win !== '1s' ? ['price', 'basis', 'funding', 'volume'] : ['price', 'volume']) as ChartMode[];
 
   // If a spot-only token is opened while a perp-mode chart is selected, snap back.
   useEffect(() => {
-    if (live && !hasPerp && (mode === 'basis' || mode === 'funding')) setMode('price');
-  }, [live, hasPerp, mode]);
+    if (((live && !hasPerp) || win === '1s') && (mode === 'basis' || mode === 'funding')) setMode('price');
+  }, [live, hasPerp, win, mode]);
 
   return (
     <div className="container page token-detail-shell">
@@ -355,7 +419,15 @@ export function TokenDetail({ symbol }: { symbol: string }) {
           <div className="token-chart-title">
             <span>
               <h2>{base} market tape</h2>
-              <span>{chartSource} · {chartRange}</span>
+              <span>
+                {chartSource} · {chartRange}
+                {mode === 'price' && (
+                  <span className={`chart-stream-state ${chartStream === 'live' ? 'on' : ''}`}>
+                    <span />
+                    {chartStream === 'live' ? 'live kline' : chartStream === 'connecting' ? 'connecting' : 'REST fallback'}
+                  </span>
+                )}
+              </span>
             </span>
             <span className={`chart-latest num ${signClass(chartMove)}`}>
               {chartLatest}
@@ -387,17 +459,21 @@ export function TokenDetail({ symbol }: { symbol: string }) {
                   ? 'settled funding, last 120 intervals'
                   : mode === 'volume'
                     ? 'quote volume per candle'
-                    : hasPerp
-                      ? `funding ${fmtFunding(live?.fundingRate)} in ${countdown(live?.nextFundingTime)}`
-                      : 'spot market · no perp funding'}
+                    : win === '1s'
+                      ? 'real Binance 1s spot candles'
+                      : hasPerp
+                        ? `funding ${fmtFunding(live?.fundingRate)} in ${countdown(live?.nextFundingTime)}`
+                        : 'spot market · no perp funding'}
             </span>
           </div>
-          <BigChart
-            data={chartData}
+          <TradingViewChart
+            candles={mode === 'price' ? candles : undefined}
+            points={mode === 'price' ? undefined : chartData}
+            kind={mode === 'price' ? 'candles' : mode === 'volume' ? 'histogram' : 'line'}
             height={520}
             color={mode === 'price' || mode === 'volume' ? brandColor(symbol) : undefined}
             valueFmt={mode === 'price' ? chartPriceFmt : mode === 'volume' ? fmtMoney : pctFmt}
-            animateKey={`${symbol}-${win}-${mode}`}
+            resetKey={`${symbol}-${win}-${mode}`}
           />
         </section>
 

@@ -103,7 +103,6 @@ export function TradingViewChart({
   }, [candles]);
 
   const volumeData = useMemo<HistogramData[]>(() => {
-    const t = chartTheme();
     return (candles ?? []).map((d) => ({
       time: timeOf(d.t),
       value: d.qv || d.v,

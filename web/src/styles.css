@@ -2399,8 +2399,55 @@ table.mkt { width: 100%; border-collapse: collapse; }
 .token-chart-card .chart-head {
   margin-bottom: 12px;
 }
-.token-chart-card .chart-svg path[stroke] {
-  filter: drop-shadow(0 8px 14px color-mix(in srgb, var(--text) 8%, transparent));
+.tv-chart-wrap {
+  position: relative;
+  width: 100%;
+  min-height: 360px;
+  overflow: hidden;
+  border-radius: 16px;
+}
+.tv-chart-canvas {
+  position: absolute;
+  inset: 0;
+}
+.tv-chart-canvas table {
+  background: transparent !important;
+}
+.tv-chart-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+  pointer-events: none;
+}
+.chart-stream-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  padding: 3px 7px;
+  border-radius: var(--r-pill);
+  color: var(--faint);
+  background: var(--tile);
+  font-size: 10px;
+  font-weight: 780;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.chart-stream-state span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.chart-stream-state.on {
+  color: var(--up);
+}
+.chart-stream-state.on span {
+  animation: obPulse 1.8s ease-in-out infinite;
 }
 .token-workspace .token-asset-card {
   grid-area: asset;
@@ -2641,6 +2688,9 @@ table.mkt { width: 100%; border-collapse: collapse; }
   .ob-cols {
     padding-left: 10px;
     padding-right: 10px;
+  }
+  .tv-chart-wrap {
+    height: 430px !important;
   }
 }
 

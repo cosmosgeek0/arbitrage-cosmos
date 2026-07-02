@@ -957,7 +957,8 @@ table.mkt { width: 100%; border-collapse: collapse; }
 .rail-title { font-size: 13.5px; font-weight: 660; color: var(--text); letter-spacing: -.15px; }
 
 /* kill / arm strips on Risk page */
-.arm-row { display: flex; align-items: center; gap: 14px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.arm-row { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+.card .arm-row:last-child { border-bottom: 0; }
 .arm-row .a-ic { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: var(--tile); color: var(--text-2); flex: none; }
 .arm-row .a-ic svg { width: 18px; height: 18px; }
 .arm-row.danger .a-ic { background: var(--down-soft); color: var(--down); }

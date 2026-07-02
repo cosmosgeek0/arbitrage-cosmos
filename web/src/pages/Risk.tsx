@@ -74,91 +74,96 @@ export function Risk() {
         </div>
       </div>
 
-      <div className={`arm-row ${cfg.killSwitch ? 'danger' : 'armed'}`}>
-        <span className="a-ic">
-          <IconPower size={18} />
-        </span>
-        <div className="arm-body">
-          <div className="arm-name">
-            Kill switch — {cfg.killSwitch ? <span className="down">HALTED</span> : <span className="up">running</span>}
+      <div className="settings-sec">Safety controls</div>
+      <div className="card pad-0">
+        <div className={`arm-row ${cfg.killSwitch ? 'danger' : 'armed'}`}>
+          <span className="a-ic">
+            <IconPower size={18} />
+          </span>
+          <div className="arm-body">
+            <div className="arm-name">
+              Kill switch — {cfg.killSwitch ? <span className="down">HALTED</span> : <span className="up">running</span>}
+            </div>
+            <div className="arm-sub">
+              {cfg.killSwitch
+                ? 'Everything is halted; the risk gate rejects every send. Halting is always instant; resuming needs typed confirmation.'
+                : 'Halting is instant and always available in the header. Sends still require live arming and every other check.'}
+            </div>
           </div>
-          <div className="arm-sub">
-            {cfg.killSwitch
-              ? 'Everything is halted; the risk gate rejects every send. Halting is always instant; resuming needs typed confirmation.'
-              : 'Halting is instant and always available in the header. Sends still require live arming and every other check.'}
-          </div>
+          {cfg.killSwitch ? (
+            <button className="cta-pill" onClick={() => setModal('resume')}>
+              Resume…
+            </button>
+          ) : (
+            <button className="cta-pill danger" onClick={() => void setKill(true)}>
+              HALT
+            </button>
+          )}
         </div>
-        {cfg.killSwitch ? (
-          <button className="cta-pill" onClick={() => setModal('resume')}>
-            Resume…
-          </button>
-        ) : (
-          <button className="cta-pill danger" onClick={() => void setKill(true)}>
-            HALT
-          </button>
-        )}
+
+        <div className={`arm-row ${cfg.liveTradingEnabled ? 'armed' : ''}`}>
+          <span className="a-ic">
+            <IconZapOff size={18} armed={cfg.liveTradingEnabled} />
+          </span>
+          <div className="arm-body">
+            <div className="arm-name">
+              Live trading — {cfg.liveTradingEnabled ? <span className="up">ARMED</span> : 'disarmed'}
+            </div>
+            <div className="arm-sub">
+              {cfg.liveTradingEnabled
+                ? 'The “Send live” button is visible on the ticket, and loan borrowing is enabled. Every action still passes the full gate + typed confirmation.'
+                : 'Live sends and loan borrowing are blocked and hidden. Preview and Validate always work.'}
+            </div>
+          </div>
+          {cfg.liveTradingEnabled ? (
+            <button className="mini-btn" onClick={() => void setLive(false)}>
+              Disarm
+            </button>
+          ) : (
+            <button
+              className="cta-pill"
+              disabled={cfg.killSwitch}
+              title={cfg.killSwitch ? 'Resume the kill switch first' : ''}
+              onClick={() => setModal('arm')}
+            >
+              Arm live…
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className={`arm-row ${cfg.liveTradingEnabled ? 'armed' : ''}`}>
-        <span className="a-ic">
-          <IconZapOff size={18} armed={cfg.liveTradingEnabled} />
-        </span>
-        <div className="arm-body">
-          <div className="arm-name">
-            Live trading — {cfg.liveTradingEnabled ? <span className="up">ARMED</span> : 'disarmed'}
-          </div>
-          <div className="arm-sub">
-            {cfg.liveTradingEnabled
-              ? 'The “Send live” button is visible on the ticket, and loan borrowing is enabled. Every action still passes the full gate + typed confirmation.'
-              : 'Live sends and loan borrowing are blocked and hidden. Preview and Validate always work.'}
-          </div>
-        </div>
-        {cfg.liveTradingEnabled ? (
-          <button className="mini-btn" onClick={() => void setLive(false)}>
-            Disarm
-          </button>
-        ) : (
+      <div className="card">
+        <div className="card-head">
+          <span className="ch-title">Trading limits</span>
           <button
             className="cta-pill"
-            disabled={cfg.killSwitch}
-            title={cfg.killSwitch ? 'Resume the kill switch first' : ''}
-            onClick={() => setModal('arm')}
+            disabled={Object.keys(draft).length === 0}
+            onClick={async () => {
+              await saveConfig(draft);
+              setDraft({});
+              setSaved(true);
+            }}
           >
-            Arm live…
+            {saved ? 'Saved ✓' : 'Save changes'}
           </button>
-        )}
+        </div>
+        {fieldGrid(LIMIT_FIELDS)}
       </div>
 
-      <div className="sec-head">
-        <h2 className="sec-title">Trading limits</h2>
-        <button
-          className="cta-pill"
-          disabled={Object.keys(draft).length === 0}
-          onClick={async () => {
-            await saveConfig(draft);
-            setDraft({});
-            setSaved(true);
-          }}
-        >
-          {saved ? 'Saved ✓' : 'Save changes'}
-        </button>
+      <div className="card">
+        <div className="card-head">
+          <span className="ch-title">Scanner parameters</span>
+          <span className="sec-note">
+            effective threshold{' '}
+            {((draft.feesPct ?? cfg.feesPct) + (draft.minNetBasisPct ?? cfg.minNetBasisPct)).toFixed(2)}% gross basis
+          </span>
+        </div>
+        {fieldGrid(SCANNER_FIELDS)}
       </div>
-      {fieldGrid(LIMIT_FIELDS)}
 
-      <div className="sec-head">
-        <h2 className="sec-title">Scanner parameters</h2>
-        <span className="sec-note">
-          effective threshold{' '}
-          {(
-            (draft.feesPct ?? cfg.feesPct) + (draft.minNetBasisPct ?? cfg.minNetBasisPct)
-          ).toFixed(2)}
-          % gross basis
-        </span>
-      </div>
-      {fieldGrid(SCANNER_FIELDS)}
-
-      <div className="sec-head">
-        <h2 className="sec-title">Symbol allowlist</h2>
+      <div className="card">
+      <div className="card-head">
+        <span className="ch-title">Symbol allowlist</span>
         <span className="sec-note">{cfg.allowedSymbols.length === 0 ? 'EMPTY — every send is rejected' : `${cfg.allowedSymbols.length} allowed`}</span>
       </div>
       <div className="chips" style={{ marginBottom: 10 }}>
@@ -181,9 +186,11 @@ export function Risk() {
           Allow
         </button>
       </div>
+      </div>
 
-      <div className="sec-head">
-        <h2 className="sec-title">Blocklist</h2>
+      <div className="card">
+      <div className="card-head">
+        <span className="ch-title">Blocklist</span>
         <span className="sec-note">blocklist beats allowlist</span>
       </div>
       <div className="chips">
@@ -205,6 +212,7 @@ export function Risk() {
         >
           Block
         </button>
+      </div>
       </div>
 
       {modal === 'resume' && (

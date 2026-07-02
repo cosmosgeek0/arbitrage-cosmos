@@ -60,122 +60,129 @@ export function Dashboard() {
         <WarnStrip>Account sync failing: {state.binance.lastError ?? 'unknown error'}</WarnStrip>
       )}
 
-      <div className="equity-hero">
-        <div>
-          <div className="headline" style={{ marginBottom: 6 }}>
-            {acct ? (
-              <Num value={acct.totalUsdt} className="headline-val">
-                {fmtPrice(acct.totalUsdt)}
-              </Num>
+      <div className="card hero-card">
+        <div className="equity-hero">
+          <div>
+            <div className="headline" style={{ marginBottom: 6 }}>
+              {acct ? (
+                <Num value={acct.totalUsdt} className="headline-val">
+                  {fmtPrice(acct.totalUsdt)}
+                </Num>
+              ) : (
+                <span className="headline-val faint" style={{ fontSize: 32 }}>
+                  —
+                </span>
+              )}
+              <span className="headline-unit">total equity</span>
+              {acct?.dayChangeUsd !== null && acct?.dayChangeUsd !== undefined ? (
+                <span className={`hl-chip num ${signClass(acct.dayChangeUsd)}`}>
+                  {acct.dayChangeUsd >= 0 ? '▲' : '▼'} {fmtPrice(Math.abs(acct.dayChangeUsd))}
+                  {dayPct !== null ? ` (${fmtPct(dayPct, 2)})` : ''} today
+                </span>
+              ) : (
+                !acct && <span className="hl-chip muted-chip">account not connected</span>
+              )}
+            </div>
+            {equity.length > 3 ? (
+              <div className="equity-spark">
+                <SparkArea values={equity} w={520} h={64} dots endDot />
+              </div>
             ) : (
-              <span className="headline-val faint" style={{ fontSize: 32 }}>
-                —
-              </span>
-            )}
-            <span className="headline-unit">total equity</span>
-            {acct?.dayChangeUsd !== null && acct?.dayChangeUsd !== undefined ? (
-              <span className={`hl-chip num ${signClass(acct.dayChangeUsd)}`}>
-                {acct.dayChangeUsd >= 0 ? '▲' : '▼'} {fmtPrice(Math.abs(acct.dayChangeUsd))}
-                {dayPct !== null ? ` (${fmtPct(dayPct, 2)})` : ''} today
-              </span>
-            ) : (
-              !acct && <span className="hl-chip muted-chip">account not connected</span>
+              <div className="equity-spark-empty muted small">
+                {acct ? 'Equity curve builds as 15-min snapshots accrue.' : 'Live public market data is streaming; connect keys for your equity curve.'}
+              </div>
             )}
           </div>
-          {equity.length > 3 ? (
-            <div className="equity-spark">
-              <SparkArea values={equity} w={520} h={64} dots endDot />
-            </div>
-          ) : (
-            <div className="equity-spark-empty muted small">
-              {acct ? 'Equity curve builds as 15-min snapshots accrue.' : 'Live public market data is streaming; connect keys for your equity curve.'}
+          {acct && acct.entries.length > 0 && (
+            <div className="hero-donut">
+              <div className="stat-k" style={{ marginBottom: 10 }}>Allocation</div>
+              <Donut slices={acct.entries.map((e) => ({ label: e.asset, value: e.valueUsdt }))} />
             </div>
           )}
         </div>
-        {acct && acct.entries.length > 0 && (
-          <div className="card" style={{ marginBottom: 0, minWidth: 300 }}>
-            <div className="stat-k" style={{ marginBottom: 10 }}>Allocation</div>
-            <Donut slices={acct.entries.map((e) => ({ label: e.asset, value: e.valueUsdt }))} />
-          </div>
-        )}
-      </div>
 
-      <div className="metric-strip">
-        <div className="metric">
-          <span className="k">Available USDT</span>
-          <span className="v num">{acct ? fmtPrice(acct.availableUsdt) : '—'}</span>
-          <span className="s">free, not in orders</span>
-        </div>
-        <div className="metric">
-          <span className="k">Realized today</span>
-          <span className={`v num ${acct ? signClass(acct.realizedTodayUsd) : ''}`}>
-            {acct ? fmtPrice(acct.realizedTodayUsd) : '—'}
-          </span>
-          <span className="s">from ledgered fills</span>
-        </div>
-        <div className="metric">
-          <span className="k">Open exposure</span>
-          <span className="v num">{acct ? fmtPrice(exposure) : '—'}</span>
-          <span className="s">
-            {state.openOrders.length} open order{state.openOrders.length === 1 ? '' : 's'}
-          </span>
-        </div>
-        <div className="metric">
-          <span className="k">Unrealized</span>
-          <span
-            className={`v num ${state.positions.some((p) => p.unrealizedUsd !== null) ? signClass(state.positions.reduce((s, p) => s + (p.unrealizedUsd ?? 0), 0)) : ''}`}
-          >
-            {state.positions.some((p) => p.unrealizedUsd !== null)
-              ? fmtPrice(state.positions.reduce((s, p) => s + (p.unrealizedUsd ?? 0), 0))
-              : '—'}
-          </span>
-          <span className="s">needs fill history for cost basis</span>
-        </div>
-        <div className="metric">
-          <span className="k">Daily notional used</span>
-          <span className="v num">{fmtPrice(state.risk.dailyNotionalUsedUsd)}</span>
-          <span className="s">of ${state.config.maxDailyNotionalUsd} limit</span>
-        </div>
-        <div className="metric">
-          <span className="k">Risk rejections today</span>
-          <span className={`v num ${state.risk.rejectionsToday > 0 ? 'down' : ''}`}>{state.risk.rejectionsToday}</span>
-          <span className="s">reasons in the ledger</span>
-        </div>
-        <div className="metric">
-          <span className="k">Mode</span>
-          <span className={`v ${state.mode === 'HALTED' ? 'down' : state.mode === 'LIVE_ARMED' ? 'up' : ''}`}>
-            {state.mode === 'LIVE_ARMED' ? 'LIVE ARMED' : state.mode}
-          </span>
-          <span className="s">change on Risk page</span>
+        <div className="metric-strip in-card">
+          <div className="metric">
+            <span className="k">Available USDT</span>
+            <span className="v num">{acct ? fmtPrice(acct.availableUsdt) : '—'}</span>
+            <span className="s">free, not in orders</span>
+          </div>
+          <div className="metric">
+            <span className="k">Realized today</span>
+            <span className={`v num ${acct ? signClass(acct.realizedTodayUsd) : ''}`}>
+              {acct ? fmtPrice(acct.realizedTodayUsd) : '—'}
+            </span>
+            <span className="s">from ledgered fills</span>
+          </div>
+          <div className="metric">
+            <span className="k">Open exposure</span>
+            <span className="v num">{acct ? fmtPrice(exposure) : '—'}</span>
+            <span className="s">
+              {state.openOrders.length} open order{state.openOrders.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          <div className="metric">
+            <span className="k">Unrealized</span>
+            <span
+              className={`v num ${state.positions.some((p) => p.unrealizedUsd !== null) ? signClass(state.positions.reduce((s, p) => s + (p.unrealizedUsd ?? 0), 0)) : ''}`}
+            >
+              {state.positions.some((p) => p.unrealizedUsd !== null)
+                ? fmtPrice(state.positions.reduce((s, p) => s + (p.unrealizedUsd ?? 0), 0))
+                : '—'}
+            </span>
+            <span className="s">needs fill history</span>
+          </div>
+          <div className="metric">
+            <span className="k">Daily notional</span>
+            <span className="v num">{fmtPrice(state.risk.dailyNotionalUsedUsd)}</span>
+            <span className="s">of ${state.config.maxDailyNotionalUsd} limit</span>
+          </div>
+          <div className="metric">
+            <span className="k">Risk rejections</span>
+            <span className={`v num ${state.risk.rejectionsToday > 0 ? 'down' : ''}`}>{state.risk.rejectionsToday}</span>
+            <span className="s">today · in the ledger</span>
+          </div>
+          <div className="metric">
+            <span className="k">Mode</span>
+            <span className={`v ${state.mode === 'HALTED' ? 'down' : state.mode === 'LIVE_ARMED' ? 'up' : ''}`}>
+              {state.mode === 'LIVE_ARMED' ? 'LIVE' : state.mode}
+            </span>
+            <span className="s">set on Risk page</span>
+          </div>
         </div>
       </div>
 
       {!state.binance.keysPresent && (
-        <div className="ghost-tile">
-          <StatusDot status="none" />
-          <div>
-            <div className="gt-title">Binance account not connected</div>
-            <div className="gt-sub">
-              Public market data is live. Add read-only keys on the server to see balances, orders and fills here.
+        <div className="card connect-card">
+          <div className="connect-inner">
+            <StatusDot status="none" />
+            <div style={{ flex: 1 }}>
+              <div className="gt-title">Binance account not connected</div>
+              <div className="gt-sub">
+                Public market data is live. Add read-only keys on the server to see balances, orders and fills here.
+              </div>
+              <SetupChecklist />
             </div>
-            <SetupChecklist />
+            <span className="gt-badge">setup</span>
           </div>
-          <span className="gt-badge">setup</span>
         </div>
       )}
 
-      <div className="two-col" style={{ marginTop: 10 }}>
+      <div className="two-col" style={{ marginTop: 4 }}>
         <div>
-          <div className="sec-head">
-            <h2 className="sec-title">Open orders</h2>
+          <div className="card pad-0">
+          <div className="card-head" style={{ padding: '16px 18px 0' }}>
+            <span className="ch-title">Open orders</span>
             <button className="sec-link" onClick={() => setPage('orders')}>
               View all →
             </button>
           </div>
           {state.openOrders.length === 0 ? (
-            <EmptyState title="No open orders">
-              {state.binance.keysPresent ? 'Orders appear here live within seconds.' : 'Connect Binance to manage orders.'}
-            </EmptyState>
+            <div className="card-body-empty">
+              <EmptyState title="No open orders">
+                {state.binance.keysPresent ? 'Orders appear here live within seconds.' : 'Connect Binance to manage orders.'}
+              </EmptyState>
+            </div>
           ) : (
             <div className="table-scroll">
               <table className="mkt dense">
@@ -210,17 +217,21 @@ export function Dashboard() {
               </table>
             </div>
           )}
+          </div>
 
-          <div className="sec-head">
-            <h2 className="sec-title">Recent fills</h2>
+          <div className="card pad-0">
+          <div className="card-head" style={{ padding: '16px 18px 0' }}>
+            <span className="ch-title">Recent fills</span>
             <button className="sec-link" onClick={() => setPage('fills')}>
               View all →
             </button>
           </div>
           {state.recentFills.length === 0 ? (
-            <EmptyState title="No fills recorded yet">
-              Fills stream in live from the moment Binance connects. Import history per symbol on the Fills page.
-            </EmptyState>
+            <div className="card-body-empty">
+              <EmptyState title="No fills recorded yet">
+                Fills stream in live from the moment Binance connects. Import history per symbol on the Fills page.
+              </EmptyState>
+            </div>
           ) : (
             <div className="table-scroll">
               <table className="mkt dense">
@@ -257,9 +268,11 @@ export function Dashboard() {
               </table>
             </div>
           )}
+          </div>
 
-          <div className="sec-head">
-            <h2 className="sec-title">Event timeline</h2>
+          <div className="card">
+          <div className="card-head">
+            <span className="ch-title">Event timeline</span>
             <button className="sec-link" onClick={() => setPage('ledger')}>
               Full ledger →
             </button>
@@ -272,14 +285,15 @@ export function Dashboard() {
               </div>
             ))}
           </div>
+          </div>
         </div>
 
         <div className="rail">
-          <div className="rail-sec">
-            <div className="rail-head">
-              <span className="rail-title">Quick trade</span>
+          <div className="card">
+            <div className="card-head">
+              <span className="ch-title">Quick trade</span>
             </div>
-            <div className="fld" style={{ marginTop: 8 }}>
+            <div className="fld">
               <span>Symbol</span>
               <input value={quickSymbol} onChange={(e) => setQuickSymbol(e.target.value.toUpperCase())} spellCheck={false} />
             </div>
@@ -296,9 +310,9 @@ export function Dashboard() {
             </div>
           </div>
 
-          <div className="rail-sec">
-            <div className="rail-head">
-              <span className="rail-title">Strategies</span>
+          <div className="card">
+            <div className="card-head">
+              <span className="ch-title">Strategies</span>
               <button className="sec-link" onClick={() => setPage('strategies')}>
                 Details →
               </button>
@@ -318,9 +332,9 @@ export function Dashboard() {
           </div>
 
           {state.proposals.length > 0 && (
-            <div className="rail-sec">
-              <div className="rail-head">
-                <span className="rail-title">Opportunities</span>
+            <div className="card">
+              <div className="card-head">
+                <span className="ch-title">Opportunities</span>
                 <button className="sec-link" onClick={() => setPage('opportunities')}>
                   All →
                 </button>
@@ -343,9 +357,9 @@ export function Dashboard() {
           )}
 
           {acct && acct.entries.length > 0 && (
-            <div className="rail-sec">
-              <div className="rail-head">
-                <span className="rail-title">Holdings</span>
+            <div className="card">
+              <div className="card-head">
+                <span className="ch-title">Holdings</span>
                 <button className="sec-link" onClick={() => setPage('account')}>
                   Account →
                 </button>
@@ -363,9 +377,9 @@ export function Dashboard() {
             </div>
           )}
 
-          <div className="rail-sec">
-            <div className="rail-head">
-              <span className="rail-title">System</span>
+          <div className="card">
+            <div className="card-head">
+              <span className="ch-title">System</span>
             </div>
             {Object.entries(state.feeds).map(([name, status]) => (
               <div key={name} className="drow">

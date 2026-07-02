@@ -50,7 +50,7 @@ export function SystemHealth() {
     return () => clearInterval(t);
   }, []);
 
-  if (!info) return <div className="container page"><div className="empty-state">Reading system state…</div></div>;
+  if (!info) return <div className="container page page-narrow"><div className="empty-state">Reading system state…</div></div>;
 
   const rows: { k: string; status: string; v: string; sub?: string }[] = [
     {
@@ -100,7 +100,7 @@ export function SystemHealth() {
   ];
 
   return (
-    <div className="container page">
+    <div className="container page page-narrow">
       <div className="page-head">
         <div>
           <h1 className="page-title">System Health</h1>

@@ -36,7 +36,7 @@ export function Settings() {
   );
 
   return (
-    <div className="container page">
+    <div className="container page page-narrow">
       <div className="page-head">
         <div>
           <h1 className="page-title">Settings</h1>

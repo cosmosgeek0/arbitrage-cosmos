@@ -183,6 +183,9 @@ input, select { font-family: inherit; }
 [data-motion="reduced"] .tape-track { animation: none !important; }
 .dense-tables .mkt tbody td { height: 44px; }
 .container { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 32px; }
+/* form/list pages (Settings, System Health) read as a constrained column so
+   labels and their controls never drift apart across a wide/zoomed viewport */
+.container.page-narrow { max-width: 940px; }
 .page { flex: 1 0 auto; padding: 4px 0 90px; animation: pageIn .28s ease both; }
 @keyframes pageIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {

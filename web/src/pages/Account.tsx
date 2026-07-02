@@ -43,6 +43,13 @@ export function Account() {
           <span className="s">falls back to polling</span>
         </div>
         <div className="metric">
+          <span className="k">Spot trading</span>
+          <span className={`v ${state.binance.canTrade === true ? 'up' : state.binance.canTrade === false ? 'down' : ''}`}>
+            {state.binance.canTrade === null ? 'unknown' : state.binance.canTrade ? 'enabled' : 'disabled'}
+          </span>
+          <span className="s">key permission detected from Binance</span>
+        </div>
+        <div className="metric">
           <span className="k">Withdrawals</span>
           <span className={`v ${state.binance.canWithdraw === true ? 'down' : state.binance.canWithdraw === false ? 'up' : ''}`}>
             {state.binance.canWithdraw === null ? 'unknown' : state.binance.canWithdraw ? 'ENABLED' : 'disabled ✓'}

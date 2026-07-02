@@ -142,6 +142,7 @@ function buildState() {
       lastSyncTs: account.lastSyncTs,
       lastError: account.lastError,
       canWithdraw: account.canWithdraw,
+      canTrade: account.canTrade,
       userStream: userStream?.status ?? 'off',
     },
     feeds: engine.feeds,
@@ -181,6 +182,7 @@ function buildState() {
     risk: {
       dailyNotionalUsedUsd: risk.dailyNotionalUsedUsd(),
       lastOrderTs: risk.lastOrderTs(),
+      rejectionsToday: risk.rejectionsTodayCount(),
     },
     events: ledger.recentEvents(30),
   };
@@ -260,10 +262,10 @@ app.post('/api/fills/import', (req, res) => {
 // so the account WS payload stays light.
 app.get('/api/markets', (_req, res) => {
   const rows = engine
-    .rows()
+    .allRows()
     .map((r) => ({
       ...r,
-      status: scanner.statusOf(r.symbol),
+      status: r.hasPerp ? scanner.statusOf(r.symbol) : ('idle' as const),
       spark: engine.sparkOf(r.symbol, 36),
     }))
     .sort((a, b) => (b.quoteVolume24h ?? 0) - (a.quoteVolume24h ?? 0));
@@ -391,6 +393,17 @@ app.post('/api/proposals/:id/approve', (req, res) => {
   };
   ledger.logEvent('manual_action', p.symbol, { action: 'approve_proposal', proposalId: id, intent });
   res.json({ intent, note: 'Prefilled ticket for the SPOT leg. The perp leg is not automated in v0.' });
+});
+
+app.post('/api/proposals/:id/reject', (req, res) => {
+  const id = Number(req.params.id);
+  const ok = scanner.dismiss(id);
+  if (!ok) {
+    res.status(404).json({ error: 'proposal not active' });
+    return;
+  }
+  ledger.logEvent('manual_action', null, { action: 'reject_proposal', proposalId: id });
+  res.json({ ok: true });
 });
 
 app.get('/api/market/quote', (req, res) => {
@@ -651,6 +664,7 @@ function parseIntent(body: Record<string, unknown>): OrderIntent | null {
   const type = body.type === 'LIMIT' ? 'LIMIT' : body.type === 'MARKET' ? 'MARKET' : null;
   if (!/^[A-Z0-9]{4,20}$/.test(symbol) || !side || !type) return null;
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined);
+  const tif = body.timeInForce === 'IOC' ? 'IOC' : body.timeInForce === 'FOK' ? 'FOK' : 'GTC';
   return {
     symbol,
     side,
@@ -658,6 +672,7 @@ function parseIntent(body: Record<string, unknown>): OrderIntent | null {
     quantity: num(body.quantity),
     quoteQty: num(body.quoteQty),
     price: num(body.price),
+    timeInForce: tif,
     source: body.source === 'proposal' ? 'proposal' : 'manual',
   };
 }

@@ -99,7 +99,7 @@ export class OrderService {
       type: intent.type,
     };
     if (intent.type === 'LIMIT') {
-      params.timeInForce = 'GTC';
+      params.timeInForce = intent.timeInForce ?? 'GTC';
       params.price = roundToStep(intent.price!, f.tickSize);
       params.quantity = quantity ?? undefined;
     } else if (intent.quoteQty !== undefined && intent.quoteQty > 0) {

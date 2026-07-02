@@ -31,6 +31,7 @@ export interface MarketRow {
   quoteVolume24h: number | null;
   status: 'idle' | 'watching' | 'signal';
   spark: number[];
+  hasPerp: boolean;
 }
 
 export interface MarketDetail {
@@ -179,6 +180,7 @@ export interface ServerState {
     lastSyncTs: number | null;
     lastError: string | null;
     canWithdraw: boolean | null;
+    canTrade: boolean | null;
     userStream: string;
   };
   feeds: Record<string, string>;
@@ -196,7 +198,7 @@ export interface ServerState {
   recentFills: FillRow[];
   proposals: Proposal[];
   scanner: { pairs: number; watching: number; lastTickTs: number | null; grossThresholdPct: number };
-  risk: { dailyNotionalUsedUsd: number; lastOrderTs: number | null };
+  risk: { dailyNotionalUsedUsd: number; lastOrderTs: number | null; rejectionsToday: number };
   events: LedgerEvent[];
 }
 

@@ -9,8 +9,12 @@ const SIDE_LABEL: Record<string, string> = {
 };
 
 export function Opportunities() {
-  const { state, approveProposal, openDetail } = useStore();
+  const { state, approveProposal, openDetail, toggleWatch } = useStore();
   const s = state;
+
+  const reject = async (id: number) => {
+    await fetch(`/api/proposals/${id}/reject`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => undefined);
+  };
 
   return (
     <div className="container page">
@@ -74,9 +78,17 @@ export function Opportunities() {
                     <div className="k">24h vol</div>
                     <div className="v num sm">{fmtMoney(p.quoteVolume24h)}</div>
                   </div>
-                  <button className="cta-pill" onClick={() => void approveProposal(p.id)}>
-                    Approve → ticket
-                  </button>
+                  <span style={{ display: 'flex', gap: 7 }}>
+                    <button className="cta-pill" onClick={() => void approveProposal(p.id)}>
+                      Approve → ticket
+                    </button>
+                    <button className="mini-btn" title="Add to watchlist and keep watching" onClick={() => void toggleWatch(p.symbol)}>
+                      Watch
+                    </button>
+                    <button className="mini-btn" title="Dismiss this proposal (ledgered)" onClick={() => void reject(p.id)}>
+                      Reject
+                    </button>
+                  </span>
                 </div>
               </div>
               <div className="muted small" style={{ marginTop: 8 }}>

@@ -15,6 +15,7 @@ export function ManualTrade() {
   const [qty, setQty] = useState('');
   const [quoteQty, setQuoteQty] = useState('');
   const [price, setPrice] = useState('');
+  const [tif, setTif] = useState<'GTC' | 'IOC' | 'FOK'>('GTC');
   const [source, setSource] = useState<'manual' | 'proposal'>('manual');
   const [quote, setQuote] = useState<Quote | null>(null);
   const [pv, setPv] = useState<PreviewResult | null>(null);
@@ -64,8 +65,20 @@ export function ManualTrade() {
     quantity: qty ? Number(qty) : undefined,
     quoteQty: type === 'MARKET' && quoteQty ? Number(quoteQty) : undefined,
     price: type === 'LIMIT' && price ? Number(price) : undefined,
+    timeInForce: type === 'LIMIT' ? tif : undefined,
     source,
   });
+
+  const reset = () => {
+    setQty('');
+    setQuoteQty('');
+    setPrice('');
+    setTif('GTC');
+    setPv(null);
+    setTestResult(null);
+    setSendResult(null);
+    setSource('manual');
+  };
 
   const doPreview = async () => {
     setBusy(true);
@@ -144,9 +157,25 @@ export function ManualTrade() {
             )}
           </div>
 
+          {type === 'LIMIT' && (
+            <div className="fld">
+              <span>Time in force</span>
+              <span className="seg" style={{ alignSelf: 'flex-start' }}>
+                {(['GTC', 'IOC', 'FOK'] as const).map((t) => (
+                  <button key={t} className={tif === t ? 'on' : ''} onClick={() => setTif(t)} title={t === 'GTC' ? 'Good till canceled' : t === 'IOC' ? 'Immediate or cancel' : 'Fill or kill'}>
+                    {t}
+                  </button>
+                ))}
+              </span>
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <button className="cta-pill" disabled={busy} onClick={doPreview}>
               Preview
+            </button>
+            <button className="mini-btn" disabled={busy} onClick={reset} title="Clear the ticket">
+              Reset
             </button>
             <button
               className="mini-btn"

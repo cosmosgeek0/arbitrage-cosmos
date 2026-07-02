@@ -40,6 +40,25 @@ export class Scanner {
     return out;
   }
 
+  /** Manual rejection of a proposal — closes it and records why it vanished. */
+  dismiss(id: number): boolean {
+    for (const t of this.track.values()) {
+      if (t.proposal?.id === id) {
+        this.ledger.closeSignal(id, Date.now(), t.proposal.basisNow);
+        this.ledger.logEvent('strategy_signal', t.proposal.symbol, {
+          action: 'dismissed_by_user',
+          id,
+          basisAtDismiss: t.proposal.basisNow,
+        });
+        t.proposal = null;
+        t.ticksAbove = 0;
+        t.ticksBelow = 0;
+        return true;
+      }
+    }
+    return false;
+  }
+
   watchingCount(): number {
     let n = 0;
     for (const t of this.track.values()) if (!t.proposal && t.ticksAbove > 0) n++;

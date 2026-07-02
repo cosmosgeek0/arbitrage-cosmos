@@ -35,6 +35,14 @@ export class RiskService {
     return this.ledger.lastEvent('order_response')?.ts ?? null;
   }
 
+  rejectionsTodayCount(): number {
+    let n = 0;
+    for (const ev of this.ledger.eventsSince(utcDayStart(), 'risk_decision')) {
+      if ((ev.data as { allowed?: boolean } | null)?.allowed === false) n++;
+    }
+    return n;
+  }
+
   evaluate(intent: OrderIntent, ctx: RiskContext, opts: { forLiveSend: boolean }): RiskDecision {
     const checks: RiskCheck[] = [];
     const add = (name: string, pass: boolean, detail: string) => checks.push({ name, pass, detail });

@@ -31,6 +31,17 @@ export function Pnl() {
   const totalRealized = days.reduce((s, d) => s + d.usd, 0);
   const acct = state?.account;
 
+  let drawdown: number | null = null;
+  if (data && data.equitySnapshots.length > 2) {
+    let peak = -Infinity;
+    let maxDd = 0;
+    for (const s of data.equitySnapshots) {
+      peak = Math.max(peak, s.totalUsdt);
+      if (peak > 0) maxDd = Math.max(maxDd, ((peak - s.totalUsdt) / peak) * 100);
+    }
+    drawdown = maxDd;
+  }
+
   return (
     <div className="container page">
       <div className="page-head">
@@ -61,6 +72,13 @@ export function Pnl() {
           <span className="s">
             {days.length} day{days.length === 1 ? '' : 's'} with fills
           </span>
+        </div>
+        <div className="metric">
+          <span className="k">Max drawdown</span>
+          <span className={`v num ${drawdown !== null && drawdown > 0 ? 'down' : ''}`}>
+            {drawdown !== null ? `${drawdown.toFixed(2)}%` : '—'}
+          </span>
+          <span className="s">peak-to-trough on the equity curve</span>
         </div>
       </div>
 

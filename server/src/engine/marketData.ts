@@ -37,6 +37,7 @@ export class MarketEngine {
   /** Last spot price for EVERY USDT symbol seen on the mini-ticker feed (for valuations). */
   private spotPrices = new Map<string, number>();
   private spotChange = new Map<string, number>();
+  private spotVol = new Map<string, number>();
   private features = new Map<string, FeatureEntry>();
   private history = new Map<string, number[]>();
   private streams: BinanceStream[] = [];
@@ -93,14 +94,15 @@ export class MarketEngine {
     for (const s of this.streams) s.start();
 
     this.sampler = setInterval(() => {
-      for (const f of this.features.values()) {
-        if (f.spotLast === null) continue;
-        let h = this.history.get(f.symbol);
+      for (const sym of this.filters.keys()) {
+        const p = this.spotPrices.get(sym);
+        if (p === undefined) continue;
+        let h = this.history.get(sym);
         if (!h) {
           h = [];
-          this.history.set(f.symbol, h);
+          this.history.set(sym, h);
         }
-        h.push(f.spotLast);
+        h.push(p);
         if (h.length > SPARK_CAP) h.shift();
       }
     }, SPARK_MS);
@@ -139,6 +141,7 @@ export class MarketEngine {
       if (t.s.endsWith('USDT')) {
         this.spotPrices.set(t.s, last);
         if (open > 0) this.spotChange.set(t.s, ((last - open) / open) * 100);
+        this.spotVol.set(t.s, Number(t.q));
       }
       const f = this.features.get(t.s);
       if (!f) continue;
@@ -157,6 +160,34 @@ export class MarketEngine {
       if (m.r !== undefined) f.fundingRate = Number(m.r);
       if (m.T !== undefined) f.nextFundingTime = m.T;
     }
+  }
+
+  /**
+   * The full tradable USDT universe: every spot+perp pair (with basis/funding)
+   * PLUS spot-only symbols — "do not miss symbols". The scanner keeps using
+   * rows() (pairs only); this feeds the Markets page.
+   */
+  allRows(): (SymbolRow & { hasPerp: boolean })[] {
+    const out: (SymbolRow & { hasPerp: boolean })[] = this.rows().map((r) => ({ ...r, hasPerp: true }));
+    for (const [sym, f] of this.filters) {
+      if (this.features.has(sym)) continue;
+      const last = this.spotPrices.get(sym);
+      if (last === undefined) continue;
+      out.push({
+        symbol: sym,
+        base: f.base,
+        spot: last,
+        perpMark: null,
+        basisPct: null,
+        fundingRate: null,
+        nextFundingTime: null,
+        change24hPct: this.spotChange.get(sym) ?? null,
+        quoteVolume24h: this.spotVol.get(sym) ?? null,
+        status: 'idle',
+        hasPerp: false,
+      });
+    }
+    return out;
   }
 
   rows(): SymbolRow[] {

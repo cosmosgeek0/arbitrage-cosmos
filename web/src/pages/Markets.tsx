@@ -118,8 +118,8 @@ export function Markets() {
         <div>
           <h1 className="page-title">Markets</h1>
           <div className="page-sub">
-            {markets.length} Binance spot+perp pairs · live basis, funding and signals · this inspects the Binance
-            universe, the cockpit stays on the Dashboard
+            {markets.length} tradable USDT symbols ({markets.filter((m) => m.hasPerp).length} with perps for
+            basis/funding) · this inspects the Binance universe, the cockpit stays on the Dashboard
           </div>
         </div>
       </div>
@@ -210,7 +210,10 @@ export function Markets() {
                     <TokenIcon symbol={m.symbol} size={30} />
                     <span className="tok-meta">
                       <span className="tok-name">{m.base}</span>
-                      <span className="tok-sub">{m.symbol}</span>
+                      <span className="tok-sub">
+                        {m.symbol}
+                        {!m.hasPerp && ' · spot only'}
+                      </span>
                     </span>
                   </span>
                 </td>

@@ -14,6 +14,7 @@ export class AccountService {
   lastSyncTs: number | null = null;
   lastError: string | null = null;
   canWithdraw: boolean | null = null; // surfaced so the user can verify it's FALSE
+  canTrade: boolean | null = null;
   private balances = new Map<string, { free: number; locked: number }>();
   private lastSnapshotTs = 0;
   private pnlCacheDirty = true;
@@ -45,6 +46,7 @@ export class AccountService {
         if (free > 0 || locked > 0) this.balances.set(b.asset, { free, locked });
       }
       this.canWithdraw = acct.canWithdraw;
+      this.canTrade = acct.canTrade;
       const wasConnected = this.connected;
       this.connected = true;
       this.lastSyncTs = Date.now();

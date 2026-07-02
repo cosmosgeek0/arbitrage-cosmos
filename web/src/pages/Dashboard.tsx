@@ -89,9 +89,25 @@ export function Dashboard() {
           </span>
         </div>
         <div className="metric">
+          <span className="k">Unrealized</span>
+          <span
+            className={`v num ${state.positions.some((p) => p.unrealizedUsd !== null) ? signClass(state.positions.reduce((s, p) => s + (p.unrealizedUsd ?? 0), 0)) : ''}`}
+          >
+            {state.positions.some((p) => p.unrealizedUsd !== null)
+              ? fmtPrice(state.positions.reduce((s, p) => s + (p.unrealizedUsd ?? 0), 0))
+              : '—'}
+          </span>
+          <span className="s">needs fill history for cost basis</span>
+        </div>
+        <div className="metric">
           <span className="k">Daily notional used</span>
           <span className="v num">{fmtPrice(state.risk.dailyNotionalUsedUsd)}</span>
           <span className="s">of ${state.config.maxDailyNotionalUsd} limit</span>
+        </div>
+        <div className="metric">
+          <span className="k">Risk rejections today</span>
+          <span className={`v num ${state.risk.rejectionsToday > 0 ? 'down' : ''}`}>{state.risk.rejectionsToday}</span>
+          <span className="s">reasons in the ledger</span>
         </div>
         <div className="metric">
           <span className="k">Mode</span>

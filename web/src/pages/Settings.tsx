@@ -125,6 +125,28 @@ export function Settings() {
       {!state?.binance.keysPresent && <SetupChecklist />}
 
       <div className="sec-head">
+        <h2 className="sec-title">Security posture</h2>
+      </div>
+      {[
+        { k: 'Keys never leave the server', v: 'signed server-side; no key material in the browser or bundle', ok: true },
+        { k: 'No withdrawal code', v: 'no withdrawal/transfer method exists in the client or server', ok: true },
+        { k: 'Withdrawal permission on key', v: state?.binance.canWithdraw === true ? 'ENABLED — recreate the key!' : state?.binance.canWithdraw === false ? 'disabled on Binance side' : 'unknown until connected', ok: state?.binance.canWithdraw !== true },
+        { k: 'Live sends', v: 'kill switch + arm + allowlist + typed confirmation + server re-check', ok: true },
+        { k: 'Access', v: 'Cloudflare Access (YubiKey + email) in front of the tunnel', ok: true },
+        { k: 'Audit', v: 'every decision, order, error and config change is ledgered', ok: true },
+      ].map((r) => (
+        <div key={r.k} className="xrow">
+          <span className={r.ok ? 'up' : 'down'} style={{ fontWeight: 800, width: 14 }}>
+            {r.ok ? '✓' : '✗'}
+          </span>
+          <span>
+            <div className="k">{r.k}</div>
+            <div className="t">{r.v}</div>
+          </span>
+        </div>
+      ))}
+
+      <div className="sec-head">
         <h2 className="sec-title">About</h2>
       </div>
       <p className="muted" style={{ lineHeight: 1.65, maxWidth: 760, marginTop: 0 }}>

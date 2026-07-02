@@ -43,6 +43,7 @@ export interface OrderIntent {
   quantity?: number;
   quoteQty?: number; // MARKET by quote amount
   price?: number; // LIMIT
+  timeInForce?: 'GTC' | 'IOC' | 'FOK'; // LIMIT only, default GTC
   source: 'manual' | 'proposal';
 }
 

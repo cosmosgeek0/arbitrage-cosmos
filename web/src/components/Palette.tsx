@@ -6,19 +6,22 @@ import { fmtPrice, fmtPct, signClass } from '../format';
 
 const PAGES: { page: Page; name: string; sub: string }[] = [
   { page: 'dashboard', name: 'Dashboard', sub: 'Account control room' },
+  { page: 'account', name: 'Account', sub: 'Connection & permissions' },
+  { page: 'wallets', name: 'Wallets / Assets', sub: 'Spot · margin · futures' },
   { page: 'markets', name: 'Markets', sub: 'All spot+perp pairs' },
+  { page: 'detail', name: 'Token Detail', sub: 'Charts, book, trades' },
+  { page: 'loans', name: 'Loans / Borrow', sub: 'Flexible loans & margin' },
   { page: 'trade', name: 'Manual Trade', sub: 'Order ticket' },
-  { page: 'loans', name: 'Loans', sub: 'Flexible crypto loans' },
-  { page: 'account', name: 'Account', sub: 'Balances & connection' },
   { page: 'orders', name: 'Orders', sub: 'Open & history' },
   { page: 'positions', name: 'Positions', sub: 'Holdings & unrealized' },
   { page: 'fills', name: 'Fills', sub: 'Executions' },
   { page: 'pnl', name: 'PnL', sub: 'Daily realized & equity' },
-  { page: 'strategies', name: 'Strategies', sub: 'Basis monitor' },
+  { page: 'strategies', name: 'Strategies', sub: 'Monitors & history' },
   { page: 'opportunities', name: 'Opportunities', sub: 'Live proposals' },
   { page: 'risk', name: 'Risk', sub: 'Kill switch & limits' },
-  { page: 'ledger', name: 'Ledger', sub: 'Decision trail' },
-  { page: 'settings', name: 'Settings', sub: 'Keys & about' },
+  { page: 'ledger', name: 'Ledger / Logs', sub: 'Full audit trail' },
+  { page: 'system', name: 'System Health', sub: 'Feeds, latency, limits' },
+  { page: 'settings', name: 'Settings', sub: 'Preferences & keys' },
 ];
 
 export function Palette() {

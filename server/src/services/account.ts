@@ -17,10 +17,12 @@ export class AccountService {
   private balances = new Map<string, { free: number; locked: number }>();
   private lastSnapshotTs = 0;
   private pnlCacheDirty = true;
-  private pnlCache: { realizedByDay: Map<string, number>; avgCost: Map<string, { qty: number; avgCost: number }> } = {
-    realizedByDay: new Map(),
-    avgCost: new Map(),
-  };
+  private pnlCache: {
+    realizedByDay: Map<string, number>;
+    realizedBySymbol: Map<string, number>;
+    feesByAsset: Map<string, number>;
+    avgCost: Map<string, { qty: number; avgCost: number }>;
+  } = { realizedByDay: new Map(), realizedBySymbol: new Map(), feesByAsset: new Map(), avgCost: new Map() };
 
   constructor(
     private readonly client: BinanceClient | null,
@@ -134,14 +136,24 @@ export class AccountService {
       });
   }
 
-  /** Realized PnL per UTC day + average cost, replayed from ledgered fills. */
-  pnl(): { realizedByDay: Map<string, number>; avgCost: Map<string, { qty: number; avgCost: number }> } {
+  /** Realized PnL per UTC day / per symbol + fees + avg cost, from ledgered fills. */
+  pnl(): {
+    realizedByDay: Map<string, number>;
+    realizedBySymbol: Map<string, number>;
+    feesByAsset: Map<string, number>;
+    avgCost: Map<string, { qty: number; avgCost: number }>;
+  } {
     if (!this.pnlCacheDirty) return this.pnlCache;
     const realizedByDay = new Map<string, number>();
+    const realizedBySymbol = new Map<string, number>();
+    const feesByAsset = new Map<string, number>();
     const avgCost = new Map<string, { qty: number; avgCost: number }>();
     for (const f of this.ledger.allFillsAsc()) {
       const base = f.symbol.replace(/USDT$/, '');
       const pos = avgCost.get(base) ?? { qty: 0, avgCost: 0 };
+      if (f.commission > 0 && f.commissionAsset) {
+        feesByAsset.set(f.commissionAsset, (feesByAsset.get(f.commissionAsset) ?? 0) + f.commission);
+      }
       if (f.side === 'BUY') {
         const newQty = pos.qty + f.qty;
         pos.avgCost = newQty > 0 ? (pos.avgCost * pos.qty + f.price * f.qty) / newQty : 0;
@@ -150,13 +162,15 @@ export class AccountService {
         const matched = Math.min(f.qty, pos.qty);
         if (matched > 0) {
           const day = new Date(f.ts).toISOString().slice(0, 10);
-          realizedByDay.set(day, (realizedByDay.get(day) ?? 0) + (f.price - pos.avgCost) * matched);
+          const gain = (f.price - pos.avgCost) * matched;
+          realizedByDay.set(day, (realizedByDay.get(day) ?? 0) + gain);
+          realizedBySymbol.set(f.symbol, (realizedBySymbol.get(f.symbol) ?? 0) + gain);
         }
         pos.qty = Math.max(0, pos.qty - f.qty);
       }
       avgCost.set(base, pos);
     }
-    this.pnlCache = { realizedByDay, avgCost };
+    this.pnlCache = { realizedByDay, realizedBySymbol, feesByAsset, avgCost };
     this.pnlCacheDirty = false;
     return this.pnlCache;
   }

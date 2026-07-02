@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { StatusDot } from '../components/ui';
-import { fmtPct, fmtDateTime, duration, timeAgo } from '../format';
-import type { SignalRecord } from '../types';
+import { TokenIcon } from '../components/TokenIcon';
+import { fmtPct, fmtFunding, fmtDateTime, duration, timeAgo, signClass } from '../format';
+import type { MarketRow, SignalRecord } from '../types';
 
 export function Strategies() {
-  const { state, setPage } = useStore();
+  const { state, setPage, openDetail } = useStore();
   const [history, setHistory] = useState<SignalRecord[]>([]);
+  const [extremes, setExtremes] = useState<{ positive: MarketRow[]; negative: MarketRow[] } | null>(null);
 
   useEffect(() => {
     void fetch('/api/signals')
@@ -14,6 +16,17 @@ export function Strategies() {
       .then((d) => d && setHistory((d as { recent: SignalRecord[] }).recent))
       .catch(() => undefined);
   }, [state?.proposals.length]);
+
+  useEffect(() => {
+    const load = () =>
+      fetch('/api/funding/extremes')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => d && setExtremes(d as typeof extremes))
+        .catch(() => undefined);
+    void load();
+    const t = setInterval(load, 15_000);
+    return () => clearInterval(t);
+  }, []);
 
   return (
     <div className="container page">
@@ -45,6 +58,68 @@ export function Strategies() {
         </div>
         <button className="cta-pill" onClick={() => setPage('opportunities')}>
           {state?.proposals.length ?? 0} proposals →
+        </button>
+      </div>
+
+      <div className="arm-row armed">
+        <span className="a-ic">
+          <StatusDot status="live" />
+        </span>
+        <div className="arm-body">
+          <div className="arm-name">
+            Funding monitor <span className="chip-tag gold">running · monitor only</span>
+          </div>
+          <div className="arm-sub">
+            Watches live funding across all liquid pairs. Extreme funding is the raw material for carry trades —
+            these are candidates, not proposals; verify basis and depth before touching anything.
+          </div>
+          {extremes && (
+            <div style={{ display: 'flex', gap: 26, flexWrap: 'wrap', marginTop: 8 }}>
+              <div style={{ minWidth: 220, flex: 1 }}>
+                <div className="stat-k" style={{ marginBottom: 4 }}>Most positive (shorts get paid)</div>
+                {extremes.positive.slice(0, 4).map((r) => (
+                  <button key={r.symbol} className="lb-row" style={{ minHeight: 36 }} onClick={() => openDetail(r.symbol)}>
+                    <TokenIcon symbol={r.symbol} size={20} />
+                    <span className="lb-name" style={{ fontSize: 12.5 }}>{r.base}</span>
+                    <span className={`lb-val num ${signClass(r.fundingRate)}`} style={{ fontSize: 12.5 }}>
+                      {fmtFunding(r.fundingRate)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <div style={{ minWidth: 220, flex: 1 }}>
+                <div className="stat-k" style={{ marginBottom: 4 }}>Most negative (longs get paid)</div>
+                {extremes.negative.slice(0, 4).map((r) => (
+                  <button key={r.symbol} className="lb-row" style={{ minHeight: 36 }} onClick={() => openDetail(r.symbol)}>
+                    <TokenIcon symbol={r.symbol} size={20} />
+                    <span className="lb-name" style={{ fontSize: 12.5 }}>{r.base}</span>
+                    <span className={`lb-val num ${signClass(r.fundingRate)}`} style={{ fontSize: 12.5 }}>
+                      {fmtFunding(r.fundingRate)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="arm-row">
+        <span className="a-ic">
+          <StatusDot status={state?.binance.keysPresent ? 'stale' : 'none'} />
+        </span>
+        <div className="arm-body">
+          <div className="arm-name">
+            Borrow / reverse-basis monitor <span className="chip-tag">{state?.binance.keysPresent ? 'partial' : 'needs keys'}</span>
+          </div>
+          <div className="arm-sub">
+            Checks whether “Long perp · Short spot” proposals are actually executable: is the base asset borrowable,
+            at what limit and rate. Lives on the Loans → Cross margin tab; automatic pre-checks land with the
+            two-leg executor.
+          </div>
+        </div>
+        <button className="mini-btn" onClick={() => setPage('loans')}>
+          Loans →
         </button>
       </div>
 

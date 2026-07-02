@@ -17,7 +17,7 @@ interface HistOrder {
 }
 
 export function Orders() {
-  const { state, cancelOrder } = useStore();
+  const { state, cancelOrder, cancelAll } = useStore();
   const [tab, setTab] = useState<'open' | 'history'>('open');
   const [histSymbol, setHistSymbol] = useState('BTCUSDT');
   const [hist, setHist] = useState<HistOrder[] | null>(null);
@@ -77,6 +77,7 @@ export function Orders() {
                   <th>Price</th>
                   <th>Qty (filled)</th>
                   <th>Placed</th>
+                  <th className="l col-hide-sm">Client id</th>
                   <th className="l">Status</th>
                   <th />
                 </tr>
@@ -105,6 +106,9 @@ export function Orders() {
                     <td className="muted" title={fmtDateTime(o.time)}>
                       {timeAgo(o.time)} {o.stale && <span className="chip-tag gold">stale</span>}
                     </td>
+                    <td className="l muted small mono col-hide-sm" title={o.clientOrderId ?? ''}>
+                      {(o.clientOrderId ?? '—').slice(0, 12)}
+                    </td>
                     <td className="l muted">{o.status}</td>
                     <td>
                       <button
@@ -115,6 +119,17 @@ export function Orders() {
                         }}
                       >
                         Cancel
+                      </button>
+                      <button
+                        className="mini-btn"
+                        style={{ marginLeft: 6 }}
+                        title={`Cancel ALL open ${o.symbol} orders`}
+                        onClick={async () => {
+                          const res = await cancelAll(o.symbol);
+                          setMsg(res.ok ? null : (res.error ?? 'cancel-all failed'));
+                        }}
+                      >
+                        All
                       </button>
                     </td>
                   </tr>

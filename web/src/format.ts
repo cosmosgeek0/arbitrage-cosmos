@@ -58,20 +58,27 @@ export function signClass(v: number | null | undefined): string {
 
 const pad = (x: number) => String(x).padStart(2, '0');
 
+// Display timezone: 'local' (default) or 'utc' — set from Settings.
+let tzUtc = false;
+export function setDisplayUtc(v: boolean): void {
+  tzUtc = v;
+}
+
 export function fmtClockUTC(d = new Date()): string {
   return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} UTC`;
 }
 
 export function fmtTimeShort(ts: number): string {
   const d = new Date(ts);
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return tzUtc ? `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}` : `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export function fmtDateTime(ts: number | null | undefined): string {
   if (!ts) return '—';
   const d = new Date(ts);
-  const mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()];
-  return `${mon} ${d.getDate()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  if (tzUtc) return `${MON[d.getUTCMonth()]} ${d.getUTCDate()}, ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC`;
+  return `${MON[d.getMonth()]} ${d.getDate()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export function timeAgo(ts: number | null | undefined): string {

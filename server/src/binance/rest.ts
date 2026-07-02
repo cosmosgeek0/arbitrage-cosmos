@@ -142,17 +142,88 @@ const KLINE_CACHE_MS = 60_000;
 export async function fetchKlines(
   symbol: string,
   interval: string,
-  limit: number
+  limit: number,
+  market: 'spot' | 'futures' = 'spot'
 ): Promise<KlinePoint[]> {
-  const key = `${symbol}:${interval}:${limit}`;
+  const key = `${market}:${symbol}:${interval}:${limit}`;
   const cached = klineCache.get(key);
   if (cached && Date.now() - cached.fetchedAt < KLINE_CACHE_MS) return cached.data;
 
-  const url = `${SPOT_API}/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`;
+  const url =
+    market === 'futures'
+      ? `${FAPI}/fapi/v1/klines?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`
+      : `${SPOT_API}/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`klines HTTP ${res.status}`);
   const raw = (await res.json()) as [number, string, string, string, string, ...unknown[]][];
   const data = raw.map((k) => ({ t: k[0], v: Number(k[4]) }));
   klineCache.set(key, { fetchedAt: Date.now(), data });
   return data;
+}
+
+export interface DepthLevel {
+  price: number;
+  qty: number;
+}
+
+const depthCache = new Map<string, { fetchedAt: number; data: { bids: DepthLevel[]; asks: DepthLevel[] } }>();
+
+export async function fetchDepth(symbol: string, limit = 20): Promise<{ bids: DepthLevel[]; asks: DepthLevel[] }> {
+  const cached = depthCache.get(symbol);
+  if (cached && Date.now() - cached.fetchedAt < 2_500) return cached.data;
+  const res = await fetch(`${SPOT_API}/api/v3/depth?symbol=${encodeURIComponent(symbol)}&limit=${limit}`);
+  if (!res.ok) throw new Error(`depth HTTP ${res.status}`);
+  const raw = (await res.json()) as { bids: [string, string][]; asks: [string, string][] };
+  const data = {
+    bids: raw.bids.map(([p, q]) => ({ price: Number(p), qty: Number(q) })),
+    asks: raw.asks.map(([p, q]) => ({ price: Number(p), qty: Number(q) })),
+  };
+  depthCache.set(symbol, { fetchedAt: Date.now(), data });
+  return data;
+}
+
+export interface PublicTrade {
+  id: number;
+  price: number;
+  qty: number;
+  time: number;
+  isBuyerMaker: boolean;
+}
+
+const tradesCache = new Map<string, { fetchedAt: number; data: PublicTrade[] }>();
+
+export async function fetchTrades(symbol: string, limit = 30): Promise<PublicTrade[]> {
+  const cached = tradesCache.get(symbol);
+  if (cached && Date.now() - cached.fetchedAt < 2_500) return cached.data;
+  const res = await fetch(`${SPOT_API}/api/v3/trades?symbol=${encodeURIComponent(symbol)}&limit=${limit}`);
+  if (!res.ok) throw new Error(`trades HTTP ${res.status}`);
+  const raw = (await res.json()) as { id: number; price: string; qty: string; time: number; isBuyerMaker: boolean }[];
+  const data = raw
+    .map((t) => ({ id: t.id, price: Number(t.price), qty: Number(t.qty), time: t.time, isBuyerMaker: t.isBuyerMaker }))
+    .reverse();
+  tradesCache.set(symbol, { fetchedAt: Date.now(), data });
+  return data;
+}
+
+const fundingCache = new Map<string, { fetchedAt: number; data: { t: number; v: number }[] }>();
+
+/** Funding-rate history from the futures REST API (public), rate as percent. */
+export async function fetchFundingHistory(symbol: string, limit = 120): Promise<{ t: number; v: number }[]> {
+  const cached = fundingCache.get(symbol);
+  if (cached && Date.now() - cached.fetchedAt < 300_000) return cached.data;
+  const res = await fetch(`${FAPI}/fapi/v1/fundingRate?symbol=${encodeURIComponent(symbol)}&limit=${limit}`);
+  if (!res.ok) throw new Error(`fundingRate HTTP ${res.status}`);
+  const raw = (await res.json()) as { fundingTime: number; fundingRate: string }[];
+  const data = raw.map((r) => ({ t: r.fundingTime, v: Number(r.fundingRate) * 100 }));
+  fundingCache.set(symbol, { fetchedAt: Date.now(), data });
+  return data;
+}
+
+export async function fetchBinanceServerTime(): Promise<{ diffMs: number; latencyMs: number }> {
+  const t0 = Date.now();
+  const res = await fetch(`${SPOT_API}/api/v3/time`);
+  const t1 = Date.now();
+  if (!res.ok) throw new Error(`time HTTP ${res.status}`);
+  const { serverTime } = (await res.json()) as { serverTime: number };
+  return { diffMs: serverTime - Math.round((t0 + t1) / 2), latencyMs: t1 - t0 };
 }

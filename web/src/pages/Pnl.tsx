@@ -6,6 +6,8 @@ import { fmtPrice, signClass } from '../format';
 
 interface PnlData {
   realizedByDay: { day: string; usd: number }[];
+  realizedBySymbol: { symbol: string; usd: number }[];
+  feesByAsset: { asset: string; amount: number }[];
   equitySnapshots: { ts: number; totalUsdt: number }[];
 }
 
@@ -97,6 +99,47 @@ export function Pnl() {
           animateKey={`eq-${data.equitySnapshots.length}`}
         />
       )}
+
+      <div className="two-col" style={{ marginTop: 8 }}>
+        <div>
+          <div className="sec-head">
+            <h2 className="sec-title">Realized by symbol</h2>
+          </div>
+          {(data?.realizedBySymbol.length ?? 0) === 0 ? (
+            <EmptyState title="No closed round-trips yet" />
+          ) : (
+            data!.realizedBySymbol.slice(0, 12).map((r) => (
+              <div key={r.symbol} className="xrow">
+                <span className="k">{r.symbol}</span>
+                <span className={`v num ${signClass(r.usd)}`}>{fmtPrice(r.usd)}</span>
+              </div>
+            ))
+          )}
+        </div>
+        <div className="rail">
+          <div className="rail-head">
+            <span className="rail-title">Costs</span>
+          </div>
+          {(data?.feesByAsset.length ?? 0) === 0 ? (
+            <div className="muted small">No fees recorded yet — commissions land here per asset as fills arrive.</div>
+          ) : (
+            data!.feesByAsset.map((f) => (
+              <div key={f.asset} className="drow">
+                <span className="k">Fees paid ({f.asset})</span>
+                <span className="v num">{f.amount}</span>
+              </div>
+            ))
+          )}
+          <div className="drow">
+            <span className="k">Funding paid/received</span>
+            <span className="v muted small">— needs futures account (planned)</span>
+          </div>
+          <div className="drow">
+            <span className="k">Borrow interest</span>
+            <span className="v muted small">— shows once margin/loans are used</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

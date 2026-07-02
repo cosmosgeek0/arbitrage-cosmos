@@ -22,9 +22,16 @@ const KINDS = [
 export function LedgerPage() {
   const [events, setEvents] = useState<LedgerEvent[]>([]);
   const [kind, setKind] = useState('all');
+  const [symbol, setSymbol] = useState('');
+  const [q, setQ] = useState('');
+  const [decision, setDecision] = useState<'all' | 'accepted' | 'rejected'>('all');
 
   useEffect(() => {
-    const url = kind === 'all' ? '/api/events?limit=300' : `/api/events?limit=300&kind=${kind}`;
+    const params = new URLSearchParams({ limit: '400' });
+    if (kind !== 'all') params.set('kind', kind);
+    if (/^[A-Z0-9]{5,20}$/.test(symbol)) params.set('symbol', symbol);
+    if (q.trim()) params.set('q', q.trim());
+    const url = `/api/events?${params}`;
     const load = () =>
       fetch(url)
         .then((r) => (r.ok ? r.json() : []))
@@ -33,14 +40,36 @@ export function LedgerPage() {
     void load();
     const t = setInterval(load, 5000);
     return () => clearInterval(t);
-  }, [kind]);
+  }, [kind, symbol, q]);
+
+  const visible = events.filter((ev) => {
+    if (decision === 'all') return true;
+    const allowed = (ev.data as { allowed?: boolean } | null)?.allowed;
+    if (allowed === undefined) return false;
+    return decision === 'accepted' ? allowed : !allowed;
+  });
 
   return (
     <div className="container page">
       <div className="page-head">
         <div>
-          <h1 className="page-title">Ledger</h1>
-          <div className="page-sub">Every action the system takes lands here — nothing is silent</div>
+          <h1 className="page-title">Ledger / Logs</h1>
+          <div className="page-sub">Every decision, order, fill, error and config change — nothing is silent</div>
+        </div>
+        <div className="head-actions">
+          <div className="tsearch">
+            <input placeholder="Symbol" value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} spellCheck={false} style={{ width: 90 }} />
+          </div>
+          <div className="tsearch">
+            <input placeholder="Search text…" value={q} onChange={(e) => setQ(e.target.value)} spellCheck={false} />
+          </div>
+          <span className="seg">
+            {(['all', 'accepted', 'rejected'] as const).map((d) => (
+              <button key={d} className={decision === d ? 'on' : ''} onClick={() => setDecision(d)}>
+                {d}
+              </button>
+            ))}
+          </span>
         </div>
       </div>
 
@@ -52,7 +81,7 @@ export function LedgerPage() {
         ))}
       </div>
 
-      {events.length === 0 ? (
+      {visible.length === 0 ? (
         <EmptyState title="No events for this filter" />
       ) : (
         <div className="table-scroll">
@@ -66,7 +95,7 @@ export function LedgerPage() {
               </tr>
             </thead>
             <tbody>
-              {events.map((ev) => (
+              {visible.map((ev) => (
                 <tr key={ev.id}>
                   <td className="l muted mono small">{fmtDateTime(ev.ts)}</td>
                   <td className="l">

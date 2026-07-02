@@ -2,12 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { TokenIcon, brandColor } from '../components/TokenIcon';
 import { Sparkline, SparkArea } from '../components/Spark';
-import { BigChart, type ChartPoint } from '../components/BigChart';
 import { Num } from '../components/Num';
 import { StatTile, EmptyState } from '../components/ui';
-import { IconArrowLeft, IconSearch } from '../components/Icons';
-import { fmtPrice, fmtPct, fmtMoney, fmtFunding, signClass, countdown, baseOf } from '../format';
-import type { MarketDetail, MarketRow } from '../types';
+import { IconSearch } from '../components/Icons';
+import { fmtPrice, fmtPct, fmtMoney, fmtFunding, signClass } from '../format';
 
 type SortKey = 'quoteVolume24h' | 'spot' | 'change24hPct' | 'basisPct' | 'fundingRate';
 type Filter = 'all' | 'watchlist' | 'gainers' | 'losers' | 'basis' | 'signals';
@@ -41,7 +39,7 @@ function Star({ on, onClick }: { on: boolean; onClick: () => void }) {
 }
 
 export function Markets() {
-  const { markets, state, detailSymbol, openDetail, toggleWatch } = useStore();
+  const { markets, state, openDetail, toggleWatch } = useStore();
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('quoteVolume24h');
@@ -62,36 +60,28 @@ export function Markets() {
         r = r.filter((m) => watchlist.includes(m.symbol));
         break;
       case 'gainers':
-        r = [...r].sort((a, b) => (b.change24hPct ?? -999) - (a.change24hPct ?? -999));
-        break;
+        return [...r].sort((a, b) => (b.change24hPct ?? -999) - (a.change24hPct ?? -999));
       case 'losers':
-        r = [...r].sort((a, b) => (a.change24hPct ?? 999) - (b.change24hPct ?? 999));
-        break;
+        return [...r].sort((a, b) => (a.change24hPct ?? 999) - (b.change24hPct ?? 999));
       case 'basis':
-        r = [...r].sort((a, b) => Math.abs(b.basisPct ?? 0) - Math.abs(a.basisPct ?? 0));
-        break;
+        return [...r].sort((a, b) => Math.abs(b.basisPct ?? 0) - Math.abs(a.basisPct ?? 0));
       case 'signals':
         r = r.filter((m) => m.status !== 'idle');
         break;
     }
-    if (filter === 'all' || filter === 'watchlist' || filter === 'signals' || search) {
-      const dir = sortDesc ? -1 : 1;
-      r = [...r].sort((a, b) => {
-        const av = a[sortKey];
-        const bv = b[sortKey];
-        if (av === null && bv === null) return 0;
-        if (av === null) return 1;
-        if (bv === null) return -1;
-        const cmp = sortKey === 'basisPct' ? Math.abs(av) - Math.abs(bv) : av - bv;
-        return cmp * dir;
-      });
-    }
-    return r;
+    const dir = sortDesc ? -1 : 1;
+    return [...r].sort((a, b) => {
+      const av = a[sortKey];
+      const bv = b[sortKey];
+      if (av === null && bv === null) return 0;
+      if (av === null) return 1;
+      if (bv === null) return -1;
+      const cmp = sortKey === 'basisPct' ? Math.abs(av) - Math.abs(bv) : av - bv;
+      return cmp * dir;
+    });
   }, [markets, filter, search, sortKey, sortDesc, watchlist]);
 
   useEffect(() => setPageN(0), [filter, search, pageSize]);
-
-  if (detailSymbol) return <TokenDetail symbol={detailSymbol} />;
 
   const totalVol = markets.reduce((s, m) => s + (m.quoteVolume24h ?? 0), 0);
   const btc = markets.find((m) => m.symbol === 'BTCUSDT');
@@ -128,7 +118,8 @@ export function Markets() {
         <div>
           <h1 className="page-title">Markets</h1>
           <div className="page-sub">
-            {markets.length} Binance spot+perp pairs · live basis, funding and signals
+            {markets.length} Binance spot+perp pairs · live basis, funding and signals · this inspects the Binance
+            universe, the cockpit stays on the Dashboard
           </div>
         </div>
       </div>
@@ -204,6 +195,7 @@ export function Markets() {
               {header('Volume', 'quoteVolume24h')}
               <th className="col-hide-sm">Last hour</th>
               <th className="col-hide-xs">Signal</th>
+              <th />
             </tr>
           </thead>
           <tbody>
@@ -251,6 +243,17 @@ export function Markets() {
                     <span className="faint">—</span>
                   )}
                 </td>
+                <td>
+                  <button
+                    className="mini-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openDetail(m.symbol);
+                    }}
+                  >
+                    View
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -266,12 +269,7 @@ export function Markets() {
         <span>
           Rows{' '}
           {[25, 50, 100, 200].map((n) => (
-            <button
-              key={n}
-              className="mini-btn"
-              style={{ marginLeft: 6, opacity: pageSize === n ? 1 : 0.6 }}
-              onClick={() => setPageSize(n)}
-            >
+            <button key={n} className="mini-btn" style={{ marginLeft: 6, opacity: pageSize === n ? 1 : 0.6 }} onClick={() => setPageSize(n)}>
               {n}
             </button>
           ))}
@@ -289,235 +287,6 @@ export function Markets() {
             ›
           </button>
         </span>
-      </div>
-    </div>
-  );
-}
-
-/* ---------------- token detail (Coinbase asset page) ---------------- */
-
-const WINDOWS = {
-  '1H': { interval: '1m', limit: 60 },
-  '1D': { interval: '5m', limit: 288 },
-  '1W': { interval: '30m', limit: 336 },
-  '1M': { interval: '2h', limit: 360 },
-} as const;
-type WinKey = keyof typeof WINDOWS;
-
-function TokenDetail({ symbol }: { symbol: string }) {
-  const { markets, state, openDetail, openTicket, toggleWatch, setPage, importFills } = useStore();
-  const [win, setWin] = useState<WinKey>('1D');
-  const [klines, setKlines] = useState<ChartPoint[]>([]);
-  const [detail, setDetail] = useState<MarketDetail | null>(null);
-  const [importMsg, setImportMsg] = useState<string | null>(null);
-
-  const live = markets.find((m) => m.symbol === symbol);
-  const base = baseOf(symbol);
-  const watchlisted = state?.config.watchlist.includes(symbol) ?? false;
-  const allowlisted = state?.config.allowedSymbols.includes(symbol) ?? false;
-
-  useEffect(() => {
-    const { interval, limit } = WINDOWS[win];
-    let alive = true;
-    const load = () =>
-      fetch(`/api/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => alive && d && setKlines(d as ChartPoint[]))
-        .catch(() => undefined);
-    void load();
-    const t = setInterval(load, 60_000);
-    return () => {
-      alive = false;
-      clearInterval(t);
-    };
-  }, [symbol, win]);
-
-  useEffect(() => {
-    let alive = true;
-    const load = () =>
-      fetch(`/api/market/detail?symbol=${symbol}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => alive && d && setDetail(d as MarketDetail))
-        .catch(() => undefined);
-    void load();
-    const t = setInterval(load, 5000);
-    return () => {
-      alive = false;
-      clearInterval(t);
-    };
-  }, [symbol]);
-
-  const spread =
-    detail?.book && detail.book.bidPrice > 0
-      ? ((detail.book.askPrice - detail.book.bidPrice) / detail.book.bidPrice) * 100
-      : null;
-
-  return (
-    <div className="container page">
-      <button className="back-link" onClick={() => openDetail(null)}>
-        <IconArrowLeft size={15} /> Markets
-      </button>
-
-      <div className="detail-top">
-        <span className="tok">
-          <TokenIcon symbol={symbol} size={46} />
-          <span className="tok-meta">
-            <span className="detail-name">{base}</span>
-            <span className="detail-sub">
-              {symbol} · spot + perp {live?.status === 'signal' && <span className="chip-tag gold">SIGNAL</span>}
-            </span>
-          </span>
-        </span>
-        <div className="detail-head-actions">
-          <Star on={watchlisted} onClick={() => void toggleWatch(symbol)} />
-          <button className="cta-pill buy" onClick={() => openTicket({ symbol, side: 'BUY', source: 'manual' })}>
-            Buy
-          </button>
-          <button className="cta-pill danger" onClick={() => openTicket({ symbol, side: 'SELL', source: 'manual' })}>
-            Sell
-          </button>
-        </div>
-      </div>
-
-      <div className="headline">
-        <Num value={live?.spot ?? null} className="headline-val">
-          {fmtPrice(live?.spot)}
-        </Num>
-        <span className={`hl-chip num ${signClass(live?.change24hPct)}`}>{fmtPct(live?.change24hPct)} 24h</span>
-        <span className="hl-chip muted-chip">Spot · USDT</span>
-      </div>
-
-      <div className="chart-shell">
-        <div className="chart-head">
-          <div className="win">
-            {(Object.keys(WINDOWS) as WinKey[]).map((w) => (
-              <button key={w} className={win === w ? 'on' : ''} onClick={() => setWin(w)}>
-                {w}
-              </button>
-            ))}
-          </div>
-          <div className="spacer" />
-          <span className="sec-note num">
-            {live?.perpMark !== null && live?.perpMark !== undefined && `perp mark ${fmtPrice(live.perpMark)}`}
-          </span>
-        </div>
-        <BigChart data={klines} height={340} color={brandColor(symbol)} animateKey={`${symbol}-${win}`} />
-      </div>
-
-      <div className="asset-panels">
-        <div className="apanel">
-          <h3>Market stats</h3>
-          <div className="kv-grid">
-            <div className="kv">
-              <div className="k">Perp mark</div>
-              <div className="v num">{fmtPrice(live?.perpMark)}</div>
-            </div>
-            <div className="kv">
-              <div className="k">Basis</div>
-              <div className={`v num ${signClass(live?.basisPct)}`}>{fmtPct(live?.basisPct, 3)}</div>
-            </div>
-            <div className="kv">
-              <div className="k">Funding</div>
-              <div className={`v num ${signClass(live?.fundingRate)}`}>{fmtFunding(live?.fundingRate)}</div>
-            </div>
-            <div className="kv">
-              <div className="k">Next funding</div>
-              <div className="v num">{countdown(live?.nextFundingTime)}</div>
-            </div>
-            <div className="kv">
-              <div className="k">24h volume</div>
-              <div className="v num">{fmtMoney(live?.quoteVolume24h)}</div>
-            </div>
-            <div className="kv">
-              <div className="k">Spread</div>
-              <div className="v num">{spread !== null ? `${spread.toFixed(4)}%` : '—'}</div>
-            </div>
-            <div className="kv">
-              <div className="k">Min notional</div>
-              <div className="v num sm">{detail?.filters ? `$${detail.filters.minNotional}` : '—'}</div>
-            </div>
-            <div className="kv">
-              <div className="k">Qty step</div>
-              <div className="v num sm">{detail?.filters?.stepSize ?? '—'}</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="apanel">
-          <h3>Top of book</h3>
-          <div className="ladder-row">
-            <span className="bar ask" style={{ width: '52%' }} />
-            <span className="k">Ask</span>
-            <span className="v num">
-              {fmtPrice(detail?.book?.askPrice)} <span className="muted small">× {detail?.book?.askQty ?? '—'}</span>
-            </span>
-          </div>
-          <div className="ladder-mid">spread {spread !== null ? `${spread.toFixed(4)}%` : '—'}</div>
-          <div className="ladder-row">
-            <span className="bar bid" style={{ width: '52%' }} />
-            <span className="k">Bid</span>
-            <span className="v num">
-              {fmtPrice(detail?.book?.bidPrice)} <span className="muted small">× {detail?.book?.bidQty ?? '—'}</span>
-            </span>
-          </div>
-          <div className="drow" style={{ marginTop: 14 }}>
-            <span className="k">Tradable on allowlist</span>
-            <span className="v">
-              {allowlisted ? (
-                <span className="chip-tag ok">allowed</span>
-              ) : (
-                <button className="mini-btn" onClick={() => setPage('risk')}>
-                  not allowed — Risk page
-                </button>
-              )}
-            </span>
-          </div>
-        </div>
-
-        <div className="apanel">
-          <h3>Actions</h3>
-          <div className="xrow">
-            <span>
-              <div className="k">Open a trade ticket</div>
-              <div className="t">Risk gate + typed confirmation apply</div>
-            </span>
-            <span className="v">
-              <button className="mini-btn" onClick={() => openTicket({ symbol, side: 'BUY', source: 'manual' })}>
-                Ticket →
-              </button>
-            </span>
-          </div>
-          <div className="xrow">
-            <span>
-              <div className="k">Import fill history</div>
-              <div className="t">Pull past trades for this symbol into the ledger</div>
-            </span>
-            <span className="v">
-              <button
-                className="mini-btn"
-                disabled={!state?.binance.keysPresent}
-                onClick={async () => {
-                  const res = await importFills(symbol);
-                  setImportMsg(res.error ? `Failed: ${res.error}` : `Imported ${res.imported} fills`);
-                }}
-              >
-                Import
-              </button>
-            </span>
-          </div>
-          <div className="xrow">
-            <span>
-              <div className="k">Watchlist</div>
-              <div className="t">Shows first on the tape and Markets</div>
-            </span>
-            <span className="v">
-              <button className="mini-btn" onClick={() => void toggleWatch(symbol)}>
-                {watchlisted ? 'Remove ★' : 'Add ☆'}
-              </button>
-            </span>
-          </div>
-          {importMsg && <div className="result-strip ok">{importMsg}</div>}
-        </div>
       </div>
     </div>
   );

@@ -23,8 +23,21 @@ export function brandColor(symbol: string): string {
   return BRAND[b] ?? `hsl(${hueOf(b)} 62% 46%)`;
 }
 
+// Manual alias map for bases whose icon lives under a different ticker.
+const ALIAS: Record<string, string> = {
+  RENDER: 'RNDR',
+  IOTA: 'MIOTA',
+  BEAMX: 'BEAM',
+  POL: 'MATIC',
+  FET: 'FET',
+  '1000SATS': 'SATS',
+  WBETH: 'ETH',
+  BNSOL: 'SOL',
+};
+
 const SPOTHQ = (base: string) =>
   `https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/svg/color/${base.toLowerCase()}.svg`;
+const COINCAP = (base: string) => `https://assets.coincap.io/assets/icons/${base.toLowerCase()}@2x.png`;
 
 /** Deterministic gradient monogram — a missing logo is never an empty circle. */
 export function Monogram({ base, size }: { base: string; size: number }) {
@@ -61,24 +74,29 @@ export function Monogram({ base, size }: { base: string; size: number }) {
   );
 }
 
-/** Real CC0 logo (spothq CDN) with in-place monogram fallback on 404. */
+/**
+ * Real logo resolver with a fallback chain (Signal Lab pattern): alias map →
+ * spothq CC0 SVG → coincap PNG → gradient monogram. Never an empty circle.
+ */
 export function TokenIcon({ symbol, size = 26 }: { symbol: string; size?: number }) {
-  const base = baseOf(symbol);
-  const [failed, setFailed] = useState(false);
-  if (failed) return <Monogram base={base} size={size} />;
+  const raw = baseOf(symbol);
+  const base = ALIAS[raw] ?? raw;
+  const chain = [SPOTHQ(base), COINCAP(base)];
+  const [idx, setIdx] = useState(0);
+  if (idx >= chain.length) return <Monogram base={raw} size={size} />;
   const cls = 'tok-ico' + (size <= 20 ? ' sm' : size >= 40 ? ' lg' : '');
   return (
     <img
       className={cls}
-      src={SPOTHQ(base)}
+      src={chain[idx]}
       width={size}
       height={size}
-      alt={base}
+      alt={raw}
       loading="lazy"
       decoding="async"
       referrerPolicy="no-referrer"
       style={{ width: size, height: size }}
-      onError={() => setFailed(true)}
+      onError={() => setIdx(idx + 1)}
     />
   );
 }

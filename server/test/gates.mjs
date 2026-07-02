@@ -215,6 +215,39 @@ check('loan borrow blocked without keys/arm', borrow?.ok === false);
 const oh = (await get('/api/orders/history?symbol=BTCUSDT')).body;
 check('order history honest without keys', oh?.available === false && Array.isArray(oh?.orders));
 
+const depthB = (await get('/api/market/depth?symbol=BTCUSDT')).body;
+check('depth endpoint returns book', Array.isArray(depthB?.bids) && depthB.bids.length > 5 && Array.isArray(depthB?.asks));
+
+const tradesB = (await get('/api/market/trades?symbol=BTCUSDT')).body;
+check('trades endpoint returns prints', Array.isArray(tradesB) && tradesB.length > 5 && tradesB[0].price > 0);
+
+const futK = (await get('/api/klines?symbol=BTCUSDT&interval=5m&limit=50&market=futures')).body;
+check('futures klines for basis chart', Array.isArray(futK) && futK.length > 10);
+
+const fundH = (await get('/api/funding/history?symbol=BTCUSDT')).body;
+check('funding history responds', Array.isArray(fundH) && fundH.length > 10);
+
+const fundX = (await get('/api/funding/extremes')).body;
+check('funding extremes responds', Array.isArray(fundX?.positive) && Array.isArray(fundX?.negative));
+
+const sctx = (await get('/api/symbol/context?symbol=BTCUSDT')).body;
+check('symbol context responds', Array.isArray(sctx?.openOrders) && Array.isArray(sctx?.fills) && Array.isArray(sctx?.signals));
+
+const loansM = (await get('/api/loans')).body;
+check('loans includes honest margin state', loansM?.margin?.available === false && /keys/i.test(loansM?.margin?.error ?? ''));
+
+const cAll = (await post('/api/orders/cancel-all', { symbol: 'BTCUSDT' })).body;
+check('cancel-all honest without keys', cAll?.ok === false && /keys/i.test(cAll?.error ?? ''));
+
+const maxB = (await get('/api/loans/max-borrowable?asset=BTC')).body;
+check('max-borrowable honest without keys', maxB?.ok === false);
+
+const sys = (await get('/api/system')).body;
+check('system health responds', sys?.ok === true && typeof sys.uptimeSec === 'number' && sys.dbOk === true);
+
+const evSearch = (await get('/api/events?kind=manual_action&q=kill')).body;
+check('ledger search works', Array.isArray(evSearch));
+
 child.kill();
 
 const failed = results.filter((r) => !r.pass);

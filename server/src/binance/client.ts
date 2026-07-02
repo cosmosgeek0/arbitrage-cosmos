@@ -34,6 +34,7 @@ export interface AccountInfo {
 export interface OpenOrder {
   symbol: string;
   orderId: number;
+  clientOrderId?: string;
   side: string;
   type: string;
   price: string;
@@ -42,6 +43,10 @@ export interface OpenOrder {
   status: string;
   time: number;
 }
+
+// Rate-limit visibility: Binance returns the used request weight on every
+// REST response; keep the last reading for the System Health page.
+export const rateLimit = { usedWeight1m: 0, ts: 0 };
 
 export interface OrderResponse {
   symbol: string;
@@ -99,6 +104,11 @@ export class BinanceClient {
       method,
       headers: { 'X-MBX-APIKEY': this.creds.apiKey },
     });
+    const uw = res.headers.get('x-mbx-used-weight-1m');
+    if (uw) {
+      rateLimit.usedWeight1m = Number(uw);
+      rateLimit.ts = Date.now();
+    }
     const body: unknown = await res.json().catch(() => null);
     if (!res.ok) {
       const b = body as { code?: number; msg?: string } | null;
@@ -129,6 +139,35 @@ export class BinanceClient {
 
   cancelOrder(symbol: string, orderId: number): Promise<unknown> {
     return this.request('DELETE', '/api/v3/order', { symbol, orderId }, true);
+  }
+
+  cancelAllOrders(symbol: string): Promise<unknown> {
+    return this.request('DELETE', '/api/v3/openOrders', { symbol }, true);
+  }
+
+  // ---- Cross margin (read-only visibility; borrow eligibility for the
+  // reverse-basis leg). No transfer methods exist.
+  marginAccount(): Promise<{
+    borrowEnabled: boolean;
+    marginLevel: string;
+    totalAssetOfBtc: string;
+    totalLiabilityOfBtc: string;
+    totalNetAssetOfBtc: string;
+    userAssets: { asset: string; free: string; locked: string; borrowed: string; interest: string; netAsset: string }[];
+  }> {
+    return this.request('GET', '/sapi/v1/margin/account', {}, true);
+  }
+
+  maxBorrowable(asset: string): Promise<{ amount: string; borrowLimit: string }> {
+    return this.request('GET', '/sapi/v1/margin/maxBorrowable', { asset }, true);
+  }
+
+  marginInterestHistory(): Promise<{ rows?: { asset: string; interest: string; interestRate: string; interestAccuredTime: number }[] }> {
+    return this.request('GET', '/sapi/v1/margin/interestHistory', { size: 50 }, true);
+  }
+
+  borrowRepayRecords(type: 'BORROW' | 'REPAY'): Promise<{ rows?: { asset: string; amount: string; timestamp: number; status: string }[] }> {
+    return this.request('GET', '/sapi/v1/margin/borrow-repay', { type, size: 50 }, true);
   }
 
   allOrders(symbol: string, limit = 100): Promise<OpenOrder[]> {

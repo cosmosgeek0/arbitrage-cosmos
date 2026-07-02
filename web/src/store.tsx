@@ -7,6 +7,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { applyPrefs, getPrefs, onPrefs, resolvedTheme, setPref, type Prefs } from './lib/prefs';
+import { setDisplayUtc } from './format';
 import type {
   AppConfig,
   MarketRow,
@@ -18,10 +20,12 @@ import type {
 
 export type Page =
   | 'dashboard'
-  | 'markets'
-  | 'trade'
-  | 'loans'
   | 'account'
+  | 'wallets'
+  | 'markets'
+  | 'detail'
+  | 'loans'
+  | 'trade'
   | 'orders'
   | 'positions'
   | 'fills'
@@ -30,9 +34,13 @@ export type Page =
   | 'opportunities'
   | 'risk'
   | 'ledger'
+  | 'system'
   | 'settings';
 
-type Theme = 'light' | 'dark';
+const PAGE_IDS: Page[] = [
+  'dashboard', 'account', 'wallets', 'markets', 'detail', 'loans', 'trade', 'orders',
+  'positions', 'fills', 'pnl', 'strategies', 'opportunities', 'risk', 'ledger', 'system', 'settings',
+];
 
 interface Store {
   state: ServerState | null;
@@ -40,10 +48,10 @@ interface Store {
   connected: boolean;
   page: Page;
   setPage: (p: Page) => void;
-  detailSymbol: string | null;
-  openDetail: (symbol: string | null) => void;
-  theme: Theme;
-  setTheme: (t: Theme) => void;
+  detailSymbol: string;
+  openDetail: (symbol: string) => void;
+  prefs: Prefs;
+  updatePref: <K extends keyof Prefs>(k: K, v: Prefs[K]) => void;
   paletteOpen: boolean;
   setPaletteOpen: (v: boolean) => void;
   ticket: TicketPrefill | null;
@@ -57,6 +65,7 @@ interface Store {
   testOrder: (intent: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
   sendLive: (intent: Record<string, unknown>, confirmSymbol: string) => Promise<SendResult>;
   cancelOrder: (symbol: string, orderId: number) => Promise<{ ok: boolean; error?: string }>;
+  cancelAll: (symbol: string) => Promise<{ ok: boolean; error?: string }>;
   approveProposal: (id: number) => Promise<void>;
   importFills: (symbol: string) => Promise<{ imported?: number; error?: string }>;
 }
@@ -80,33 +89,40 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<ServerState | null>(null);
   const [markets, setMarkets] = useState<MarketRow[]>([]);
   const [connected, setConnected] = useState(false);
-  const [page, setPage] = useState<Page>('dashboard');
-  const [detailSymbol, setDetailSymbol] = useState<string | null>(null);
+  const [prefs, setPrefs] = useState<Prefs>(() => {
+    applyPrefs();
+    const p = getPrefs();
+    setDisplayUtc(p.timezone === 'utc');
+    return p;
+  });
+  const [page, setPage] = useState<Page>(() =>
+    PAGE_IDS.includes(getPrefs().defaultPage as Page) ? (getPrefs().defaultPage as Page) : 'dashboard'
+  );
+  const [detailSymbol, setDetailSymbol] = useState('BTCUSDT');
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [ticket, setTicket] = useState<TicketPrefill | null>(null);
-  const [theme, setThemeState] = useState<Theme>(
-    () => (localStorage.getItem('cosmos-theme') as Theme) || 'light'
-  );
   const wsRef = useRef<WebSocket | null>(null);
 
+  useEffect(() => onPrefs((p) => {
+    setPrefs(p);
+    setDisplayUtc(p.timezone === 'utc');
+  }), []);
+
+  // follow system theme changes when theme = system
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem('cosmos-theme', theme);
-  }, [theme]);
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const fn = () => {
+      if (getPrefs().theme === 'system') applyPrefs();
+    };
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
+  }, []);
 
   useEffect(() => {
     void fetch('/api/state')
       .then((r) => (r.ok ? r.json() : null))
       .then((s) => s && setState(s as ServerState))
       .catch(() => undefined);
-
-    const loadMarkets = () =>
-      fetch('/api/markets')
-        .then((r) => (r.ok ? r.json() : null))
-        .then((m) => m && setMarkets((m as { rows: MarketRow[] }).rows))
-        .catch(() => undefined);
-    void loadMarkets();
-    const mt = setInterval(loadMarkets, 6000);
 
     let closed = false;
     let retry: number | undefined;
@@ -133,26 +149,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     return () => {
       closed = true;
-      clearInterval(mt);
       if (retry) clearTimeout(retry);
       wsRef.current?.close();
     };
   }, []);
 
+  // markets poll at the preferred refresh rate
+  useEffect(() => {
+    const load = () =>
+      fetch('/api/markets')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((m) => m && setMarkets((m as { rows: MarketRow[] }).rows))
+        .catch(() => undefined);
+    void load();
+    const t = setInterval(load, Math.max(3, prefs.refreshSec) * 1000);
+    return () => clearInterval(t);
+  }, [prefs.refreshSec]);
+
   const openTicket = useCallback((t: TicketPrefill) => {
     setTicket(t);
     setPage('trade');
+    window.scrollTo({ top: 0 });
   }, []);
 
-  const openDetail = useCallback((symbol: string | null) => {
+  const openDetail = useCallback((symbol: string) => {
     setDetailSymbol(symbol);
-    if (symbol) setPage('markets');
+    setPage('detail');
     window.scrollTo({ top: 0 });
   }, []);
 
   const changePage = useCallback((p: Page) => {
     setPage(p);
-    setDetailSymbol(null);
     window.scrollTo({ top: 0 });
   }, []);
 
@@ -166,8 +193,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setPage: changePage,
     detailSymbol,
     openDetail,
-    theme,
-    setTheme: setThemeState,
+    prefs,
+    updatePref: useCallback(<K extends keyof Prefs>(k: K, v: Prefs[K]) => {
+      setPrefs(setPref(k, v));
+    }, []),
     paletteOpen,
     setPaletteOpen,
     ticket,
@@ -207,6 +236,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         },
       []
     ),
+    cancelAll: useCallback(
+      async (symbol) =>
+        (await post<{ ok: boolean; error?: string }>('/api/orders/cancel-all', { symbol })) ?? {
+          ok: false,
+          error: 'network error',
+        },
+      []
+    ),
     approveProposal: useCallback(
       async (id) => {
         const res = await post<{ intent: TicketPrefill }>(`/api/proposals/${id}/approve`, {});
@@ -228,4 +265,9 @@ export function useStore(): Store {
   const ctx = useContext(StoreContext);
   if (!ctx) throw new Error('useStore outside provider');
   return ctx;
+}
+
+export function useResolvedTheme(): 'light' | 'dark' {
+  const { prefs } = useStore();
+  return resolvedTheme(prefs);
 }

@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { useStore } from '../store';
 import { TokenIcon } from '../components/TokenIcon';
 import { ConfirmModal } from '../components/Modal';
-import { StatTile, EmptyState, SetupChecklist } from '../components/ui';
-import { fmtQty, fmtPct, timeAgo } from '../format';
-import type { LoansSnapshot } from '../types';
+import { StatTile, EmptyState, SetupChecklist, StatusDot } from '../components/ui';
+import { fmtQty, fmtPct, fmtDateTime, timeAgo, baseOf } from '../format';
+import type { LoansSnapshot, Proposal, TicketPrefill } from '../types';
 
 async function post<T>(url: string, body: unknown): Promise<T | null> {
   try {
@@ -16,8 +16,10 @@ async function post<T>(url: string, body: unknown): Promise<T | null> {
 }
 
 export function Loans() {
-  const { state } = useStore();
+  const { state, openTicket } = useStore();
+  const [tab, setTab] = useState<'flexible' | 'margin'>('flexible');
   const [snap, setSnap] = useState<LoansSnapshot | null>(null);
+  const [borrowChecks, setBorrowChecks] = useState<Record<string, string>>({});
   const [borrowFor, setBorrowFor] = useState<{ coin: string; min: number; max: number } | null>(null);
   const [repayFor, setRepayFor] = useState<{ loanCoin: string; collateralCoin: string; debt: number } | null>(null);
   const [collateralCoin, setCollateralCoin] = useState('USDT');
@@ -62,7 +64,25 @@ export function Loans() {
         </div>
       </div>
 
-      {!keysPresent ? (
+      <div className="atabs">
+        <button className={`atab ${tab === 'flexible' ? 'on' : ''}`} onClick={() => setTab('flexible')}>
+          Flexible loans
+        </button>
+        <button className={`atab ${tab === 'margin' ? 'on' : ''}`} onClick={() => setTab('margin')}>
+          Cross margin &amp; borrowability
+        </button>
+      </div>
+
+      {tab === 'margin' ? (
+        <MarginTab
+          snap={snap}
+          keysPresent={keysPresent}
+          borrowChecks={borrowChecks}
+          setBorrowChecks={setBorrowChecks}
+          openTicket={openTicket}
+          proposals={state?.proposals ?? []}
+        />
+      ) : !keysPresent ? (
         <div className="ghost-tile">
           <div>
             <div className="gt-title">Loans need API keys</div>
@@ -340,5 +360,226 @@ export function Loans() {
         </ConfirmModal>
       )}
     </div>
+  );
+}
+
+function MarginTab({
+  snap,
+  keysPresent,
+  borrowChecks,
+  setBorrowChecks,
+  openTicket,
+  proposals,
+}: {
+  snap: LoansSnapshot | null;
+  keysPresent: boolean;
+  borrowChecks: Record<string, string>;
+  setBorrowChecks: Dispatch<SetStateAction<Record<string, string>>>;
+  openTicket: (t: TicketPrefill) => void;
+  proposals: Proposal[];
+}) {
+  const margin = snap?.margin;
+  const reverse = proposals.filter((p) => p.side === 'LONG_PERP_SHORT_SPOT');
+
+  const checkBorrowable = async (asset: string) => {
+    setBorrowChecks((c) => ({ ...c, [asset]: 'checking…' }));
+    try {
+      const res = await fetch(`/api/loans/max-borrowable?asset=${asset}`);
+      const d = (await res.json()) as { ok: boolean; amount?: number; borrowLimit?: number; error?: string };
+      setBorrowChecks((c) => ({
+        ...c,
+        [asset]: d.ok ? `max ${fmtQty(d.amount)} (limit ${fmtQty(d.borrowLimit)})` : `unavailable: ${d.error}`,
+      }));
+    } catch {
+      setBorrowChecks((c) => ({ ...c, [asset]: 'network error' }));
+    }
+  };
+
+  if (!keysPresent || !margin || !margin.available) {
+    return (
+      <>
+        <div className="ghost-tile">
+          <StatusDot status="none" />
+          <div>
+            <div className="gt-title">Cross margin not connected</div>
+            <div className="gt-sub">
+              {margin?.error ??
+                'Margin data needs API keys with margin permission (withdrawals stay disabled). Once connected: liabilities, interest, borrow limits and per-asset max-borrowable checks appear here.'}
+            </div>
+            {!keysPresent && <SetupChecklist />}
+          </div>
+          <span className="gt-badge">{keysPresent ? 'permission' : 'setup'}</span>
+        </div>
+        {reverse.length > 0 && (
+          <>
+            <div className="sec-head">
+              <h2 className="sec-title">Reverse-basis proposals waiting on borrow</h2>
+              <span className="sec-note">these need a borrowed spot leg — borrowability unverifiable without keys</span>
+            </div>
+            {reverse.map((p) => (
+              <div key={p.id} className="xrow">
+                <TokenIcon symbol={p.symbol} size={26} />
+                <span>
+                  <div className="k">{p.symbol}</div>
+                  <div className="t">basis {p.basisNow.toFixed(2)}% · Long perp · Short spot (borrow {baseOf(p.symbol)})</div>
+                </span>
+                <span className="v muted small">borrow not checkable</span>
+              </div>
+            ))}
+          </>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="metric-strip">
+        <div className="metric">
+          <span className="k">Borrow enabled</span>
+          <span className={`v ${margin.borrowEnabled ? 'up' : 'down'}`}>{margin.borrowEnabled ? 'yes' : 'no'}</span>
+        </div>
+        <div className="metric">
+          <span className="k">Margin level</span>
+          <span className={`v num ${margin.marginLevel !== null && margin.marginLevel < 1.5 ? 'down' : ''}`}>
+            {margin.marginLevel?.toFixed(2) ?? '—'}
+          </span>
+          <span className="s">&lt;1.3 margin call · &lt;1.1 liquidation</span>
+        </div>
+        <div className="metric">
+          <span className="k">Liability (BTC)</span>
+          <span className="v num">{margin.totalLiabilityBtc.toFixed(8)}</span>
+        </div>
+        <div className="metric">
+          <span className="k">Net asset (BTC)</span>
+          <span className="v num">{margin.totalNetAssetBtc.toFixed(8)}</span>
+        </div>
+      </div>
+
+      <div className="sec-head">
+        <h2 className="sec-title">Reverse-basis eligibility</h2>
+        <span className="sec-note">proposals needing a borrowed spot leg · check live max borrowable</span>
+      </div>
+      {reverse.length === 0 ? (
+        <EmptyState title="No reverse-basis proposals right now">
+          When the basis monitor proposes “Long perp · Short spot”, the borrow check for the base asset happens here
+          before you consider the trade.
+        </EmptyState>
+      ) : (
+        reverse.map((p) => {
+          const asset = baseOf(p.symbol);
+          return (
+            <div key={p.id} className="xrow">
+              <TokenIcon symbol={p.symbol} size={26} />
+              <span>
+                <div className="k">{p.symbol}</div>
+                <div className="t">basis {p.basisNow.toFixed(2)}% · needs borrowed {asset}</div>
+              </span>
+              <span className="v">
+                {borrowChecks[asset] ? (
+                  <span className="muted small">{borrowChecks[asset]}</span>
+                ) : (
+                  <button className="mini-btn" onClick={() => void checkBorrowable(asset)}>
+                    Check borrowable
+                  </button>
+                )}
+                <button className="mini-btn" style={{ marginLeft: 8 }} onClick={() => openTicket({ symbol: p.symbol, side: 'SELL', source: 'proposal' })}>
+                  Ticket →
+                </button>
+              </span>
+            </div>
+          );
+        })
+      )}
+
+      <div className="sec-head">
+        <h2 className="sec-title">Margin balances &amp; liabilities</h2>
+      </div>
+      {margin.assets.length === 0 ? (
+        <EmptyState title="No margin balances" />
+      ) : (
+        <div className="table-scroll">
+          <table className="mkt dense">
+            <thead>
+              <tr>
+                <th className="l">Asset</th>
+                <th>Free</th>
+                <th>Borrowed</th>
+                <th>Interest</th>
+                <th>Net</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {margin.assets.map((a) => (
+                <tr key={a.asset}>
+                  <td className="l">
+                    <span className="tok">
+                      <TokenIcon symbol={`${a.asset}USDT`} size={26} />
+                      <span className="tok-name">{a.asset}</span>
+                    </span>
+                  </td>
+                  <td><span className="num">{fmtQty(a.free)}</span></td>
+                  <td className={a.borrowed > 0 ? 'down' : 'muted'}><span className="num">{a.borrowed ? fmtQty(a.borrowed) : '—'}</span></td>
+                  <td className={a.interest > 0 ? 'down' : 'muted'}><span className="num">{a.interest ? fmtQty(a.interest) : '—'}</span></td>
+                  <td className="val-strong"><span className="num">{fmtQty(a.netAsset)}</span></td>
+                  <td>
+                    {!borrowChecks[a.asset] ? (
+                      <button className="mini-btn" onClick={() => void checkBorrowable(a.asset)}>
+                        Max borrowable
+                      </button>
+                    ) : (
+                      <span className="muted small">{borrowChecks[a.asset]}</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="sec-head">
+        <h2 className="sec-title">Interest &amp; borrow history</h2>
+        <span className="sec-note">last 50 records each</span>
+      </div>
+      {margin.interestHistory.length === 0 && margin.borrowRecords.length === 0 && margin.repayRecords.length === 0 ? (
+        <EmptyState title="No margin history">Interest accruals and borrow/repay records appear once margin is used.</EmptyState>
+      ) : (
+        <div className="table-scroll">
+          <table className="mkt dense">
+            <thead>
+              <tr>
+                <th className="l">Time</th>
+                <th className="l">Type</th>
+                <th className="l">Asset</th>
+                <th>Amount</th>
+                <th className="l">Detail</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ...margin.interestHistory.map((r) => ({ ts: r.ts, type: 'interest', asset: r.asset, amount: r.interest, detail: `rate ${r.rate}` })),
+                ...margin.borrowRecords.map((r) => ({ ts: r.ts, type: 'borrow', asset: r.asset, amount: r.amount, detail: r.status })),
+                ...margin.repayRecords.map((r) => ({ ts: r.ts, type: 'repay', asset: r.asset, amount: r.amount, detail: r.status })),
+              ]
+                .sort((a, b) => b.ts - a.ts)
+                .slice(0, 50)
+                .map((r, i) => (
+                  <tr key={i}>
+                    <td className="l muted">{fmtDateTime(r.ts)}</td>
+                    <td className="l">
+                      <span className={`chip-tag ${r.type === 'interest' ? 'bad' : r.type === 'borrow' ? 'gold' : 'ok'}`}>{r.type}</span>
+                    </td>
+                    <td className="l val-strong">{r.asset}</td>
+                    <td><span className="num">{fmtQty(r.amount)}</span></td>
+                    <td className="l muted small">{r.detail}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
   );
 }

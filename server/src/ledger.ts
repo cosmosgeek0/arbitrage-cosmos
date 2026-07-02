@@ -138,12 +138,26 @@ export class Ledger extends EventEmitter {
     return ev;
   }
 
-  recentEvents(limit = 100, kind?: string): LedgerEvent[] {
-    const rows = (
-      kind
-        ? this.db.prepare('SELECT * FROM events WHERE kind = ? ORDER BY id DESC LIMIT ?').all(kind, limit)
-        : this.db.prepare('SELECT * FROM events ORDER BY id DESC LIMIT ?').all(limit)
-    ) as EventDbRow[];
+  recentEvents(limit = 100, kind?: string, symbol?: string, q?: string): LedgerEvent[] {
+    const clauses: string[] = [];
+    const params: (string | number)[] = [];
+    if (kind) {
+      clauses.push('kind = ?');
+      params.push(kind);
+    }
+    if (symbol) {
+      clauses.push('symbol = ?');
+      params.push(symbol);
+    }
+    if (q) {
+      clauses.push('(data LIKE ? OR kind LIKE ? OR symbol LIKE ?)');
+      const like = `%${q}%`;
+      params.push(like, like, like);
+    }
+    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    const rows = this.db
+      .prepare(`SELECT * FROM events ${where} ORDER BY id DESC LIMIT ?`)
+      .all(...params, limit) as EventDbRow[];
     return rows.map(parseEvent);
   }
 
@@ -192,11 +206,30 @@ export class Ledger extends EventEmitter {
     return info.changes > 0;
   }
 
-  listFills(limit = 200): FillRow[] {
-    const rows = this.db
-      .prepare('SELECT * FROM fills ORDER BY ts DESC LIMIT ?')
-      .all(limit) as FillDbRow[];
+  listFills(limit = 200, symbol?: string): FillRow[] {
+    const rows = (
+      symbol
+        ? this.db.prepare('SELECT * FROM fills WHERE symbol = ? ORDER BY ts DESC LIMIT ?').all(symbol, limit)
+        : this.db.prepare('SELECT * FROM fills ORDER BY ts DESC LIMIT ?').all(limit)
+    ) as FillDbRow[];
     return rows.map(parseFill);
+  }
+
+  listSignalsForSymbol(symbol: string, limit = 20): SignalRecord[] {
+    const rows = this.db
+      .prepare('SELECT * FROM signals WHERE symbol = ? ORDER BY id DESC LIMIT ?')
+      .all(symbol, limit) as SignalDbRow[];
+    return rows.map((r) => ({
+      id: r.id,
+      symbol: r.symbol,
+      side: r.side,
+      openedTs: r.opened_ts,
+      closedTs: r.closed_ts,
+      basisOpen: r.basis_open,
+      basisPeak: r.basis_peak,
+      basisClose: r.basis_close,
+      fundingOpen: r.funding_open,
+    }));
   }
 
   allFillsAsc(): FillRow[] {

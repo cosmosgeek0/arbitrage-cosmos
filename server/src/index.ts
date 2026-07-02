@@ -7,8 +7,15 @@ import { MarketEngine } from './engine/marketData.js';
 import { Scanner } from './engine/scanner.js';
 import { Ledger } from './ledger.js';
 import { loadConfig, saveConfig } from './config.js';
-import { fetchBookTicker, fetchKlines } from './binance/rest.js';
-import { BinanceClient, credsFromEnv } from './binance/client.js';
+import {
+  fetchBinanceServerTime,
+  fetchBookTicker,
+  fetchDepth,
+  fetchFundingHistory,
+  fetchKlines,
+  fetchTrades,
+} from './binance/rest.js';
+import { BinanceClient, credsFromEnv, rateLimit } from './binance/client.js';
 import { UserStream, type ExecutionReport } from './binance/userStream.js';
 import { AccountService } from './services/account.js';
 import { RiskService } from './services/risk.js';
@@ -153,6 +160,7 @@ function buildState() {
     openOrders: orders.openOrdersCache.map((o) => ({
       symbol: o.symbol,
       orderId: o.orderId,
+      clientOrderId: o.clientOrderId ?? null,
       side: o.side,
       type: o.type,
       price: Number(o.price),
@@ -200,7 +208,9 @@ app.get('/api/state', (_req, res) => {
 app.get('/api/events', (req, res) => {
   const limit = Math.min(Number(req.query.limit ?? 200), 1000);
   const kind = req.query.kind ? String(req.query.kind) : undefined;
-  res.json(ledger.recentEvents(limit, kind));
+  const symbol = req.query.symbol ? String(req.query.symbol).toUpperCase() : undefined;
+  const q = req.query.q ? String(req.query.q).slice(0, 60) : undefined;
+  res.json(ledger.recentEvents(limit, kind, symbol, q));
 });
 
 app.get('/api/fills', (_req, res) => {
@@ -344,16 +354,20 @@ app.get('/api/orders/history', (req, res) => {
 });
 
 app.get('/api/pnl', (_req, res) => {
-  const { realizedByDay } = account.pnl();
+  const { realizedByDay, realizedBySymbol, feesByAsset } = account.pnl();
   const days = [...realizedByDay.entries()]
     .map(([day, usd]) => ({ day, usd }))
     .sort((a, b) => a.day.localeCompare(b.day));
+  const bySymbol = [...realizedBySymbol.entries()]
+    .map(([symbol, usd]) => ({ symbol, usd }))
+    .sort((a, b) => Math.abs(b.usd) - Math.abs(a.usd));
+  const fees = [...feesByAsset.entries()].map(([asset, amount]) => ({ asset, amount }));
   const snapshots = ledger
     .recentEvents(500, 'account_snapshot')
     .map((ev) => ({ ts: ev.ts, totalUsdt: (ev.data as { totalUsdt?: number } | null)?.totalUsdt ?? null }))
     .filter((s) => s.totalUsdt !== null)
     .reverse();
-  res.json({ realizedByDay: days, equitySnapshots: snapshots });
+  res.json({ realizedByDay: days, realizedBySymbol: bySymbol, feesByAsset: fees, equitySnapshots: snapshots });
 });
 
 app.get('/api/signals', (_req, res) => {
@@ -403,15 +417,180 @@ app.get('/api/klines', (req, res) => {
     const symbol = String(req.query.symbol ?? 'BTCUSDT');
     const interval = String(req.query.interval ?? '5m');
     const limit = Math.min(Number(req.query.limit ?? 288), 500);
+    const market = req.query.market === 'futures' ? 'futures' : 'spot';
     if (!KLINE_INTERVALS.has(interval) || !/^[A-Z0-9]{1,20}$/.test(symbol)) {
       res.status(400).json({ error: 'bad symbol or interval' });
       return;
     }
     try {
-      res.json(await fetchKlines(symbol, interval, limit));
+      res.json(await fetchKlines(symbol, interval, limit, market));
     } catch (err) {
       res.status(502).json({ error: String(err) });
     }
+  })();
+});
+
+app.get('/api/market/depth', (req, res) => {
+  void (async () => {
+    const symbol = String(req.query.symbol ?? '');
+    if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
+      res.status(400).json({ error: 'bad symbol' });
+      return;
+    }
+    try {
+      res.json(await fetchDepth(symbol, 20));
+    } catch (err) {
+      res.status(502).json({ error: String(err) });
+    }
+  })();
+});
+
+app.get('/api/market/trades', (req, res) => {
+  void (async () => {
+    const symbol = String(req.query.symbol ?? '');
+    if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
+      res.status(400).json({ error: 'bad symbol' });
+      return;
+    }
+    try {
+      res.json(await fetchTrades(symbol, 30));
+    } catch (err) {
+      res.status(502).json({ error: String(err) });
+    }
+  })();
+});
+
+app.get('/api/funding/history', (req, res) => {
+  void (async () => {
+    const symbol = String(req.query.symbol ?? '');
+    if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
+      res.status(400).json({ error: 'bad symbol' });
+      return;
+    }
+    try {
+      res.json(await fetchFundingHistory(symbol));
+    } catch (err) {
+      res.status(502).json({ error: String(err) });
+    }
+  })();
+});
+
+// Live funding extremes across all pairs — the data behind the funding monitor.
+app.get('/api/funding/extremes', (_req, res) => {
+  const rows = engine
+    .rows()
+    .filter((r) => r.fundingRate !== null && (r.quoteVolume24h ?? 0) >= config.minQuoteVolume24h);
+  const sorted = [...rows].sort((a, b) => (b.fundingRate ?? 0) - (a.fundingRate ?? 0));
+  res.json({
+    positive: sorted.slice(0, 10),
+    negative: sorted.slice(-10).reverse(),
+    updatedAt: Date.now(),
+  });
+});
+
+// Everything the app knows about ONE symbol (for the token detail page).
+app.get('/api/symbol/context', (req, res) => {
+  const symbol = String(req.query.symbol ?? '');
+  if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
+    res.status(400).json({ error: 'bad symbol' });
+    return;
+  }
+  const base = symbol.replace(/USDT$/, '');
+  const eq = account.keysPresent ? account.equity() : null;
+  const baseBal = eq?.entries.find((e) => e.asset === base);
+  res.json({
+    openOrders: orders.openOrdersCache.filter((o) => o.symbol === symbol),
+    fills: ledger.listFills(20, symbol),
+    signals: ledger.listSignalsForSymbol(symbol, 10),
+    balances: {
+      base: baseBal ? baseBal.free + baseBal.locked : 0,
+      usdtFree: eq?.availableUsdt ?? null,
+    },
+    allowlisted: config.allowedSymbols.includes(symbol),
+    blocklisted: config.blockedSymbols.includes(symbol),
+  });
+});
+
+app.post('/api/orders/cancel-all', (req, res) => {
+  void (async () => {
+    const symbol = String((req.body as Record<string, unknown>).symbol ?? '');
+    if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
+      res.status(400).json({ error: 'bad symbol' });
+      return;
+    }
+    if (!client) {
+      res.json({ ok: false, error: 'Binance keys not configured' });
+      return;
+    }
+    ledger.logEvent('manual_action', symbol, { action: 'cancel_all_orders' });
+    try {
+      await client.cancelAllOrders(symbol);
+      ledger.logEvent('order_response', symbol, { status: 'ALL_CANCELED', executedQuoteUsd: 0 });
+      await orders.syncOpenOrders().catch(() => undefined);
+      res.json({ ok: true });
+    } catch (err) {
+      const msg = String((err as Error).message);
+      ledger.logEvent('error_event', symbol, { source: 'order.cancelAll', message: msg });
+      res.json({ ok: false, error: msg });
+    }
+  })();
+});
+
+app.get('/api/loans/max-borrowable', (req, res) => {
+  void (async () => {
+    const asset = String(req.query.asset ?? '').toUpperCase();
+    if (!/^[A-Z0-9]{2,10}$/.test(asset)) {
+      res.status(400).json({ error: 'bad asset' });
+      return;
+    }
+    res.json(await loans.maxBorrowable(asset));
+  })();
+});
+
+// System health for the dedicated page.
+const bootTs = Date.now();
+let timeSync: { diffMs: number; latencyMs: number; ts: number } | null = null;
+app.get('/api/system', (req, res) => {
+  void (async () => {
+    if (!timeSync || Date.now() - timeSync.ts > 60_000) {
+      try {
+        const t = await fetchBinanceServerTime();
+        timeSync = { ...t, ts: Date.now() };
+      } catch {
+        timeSync = null;
+      }
+    }
+    let dbOk = true;
+    try {
+      ledger.getConfigValue('app');
+    } catch {
+      dbOk = false;
+    }
+    res.json({
+      ok: true,
+      uptimeSec: Math.round((Date.now() - bootTs) / 1000),
+      version: '1.1.0',
+      env: process.env.NODE_ENV ?? 'production',
+      feeds: engine.feeds,
+      pairs: engine.pairCount,
+      binance: {
+        keysPresent: account.keysPresent,
+        connected: account.connected,
+        lastSyncTs: account.lastSyncTs,
+        lastError: account.lastError,
+        userStream: userStream?.status ?? 'off',
+      },
+      restLatencyMs: timeSync?.latencyMs ?? null,
+      serverTimeDiffMs: timeSync?.diffMs ?? null,
+      usedWeight1m: rateLimit.ts > 0 ? rateLimit.usedWeight1m : null,
+      usedWeightTs: rateLimit.ts || null,
+      lastScannerTickTs: scanner.lastTickTs,
+      lastOrdersSyncTs: orders.lastOrdersSyncTs,
+      dbOk,
+      killSwitch: config.killSwitch,
+      liveTradingEnabled: config.liveTradingEnabled,
+      cfUser: (req.headers['cf-access-authenticated-user-email'] as string | undefined) ?? null,
+    });
   })();
 });
 

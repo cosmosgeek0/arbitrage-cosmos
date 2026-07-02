@@ -43,6 +43,21 @@ export interface MarketDetail {
   allowlisted: boolean;
 }
 
+export interface MarginSnapshot {
+  available: boolean;
+  error: string | null;
+  fetchedAt: number | null;
+  borrowEnabled: boolean;
+  marginLevel: number | null;
+  totalAssetBtc: number;
+  totalLiabilityBtc: number;
+  totalNetAssetBtc: number;
+  assets: { asset: string; free: number; locked: number; borrowed: number; interest: number; netAsset: number }[];
+  interestHistory: { asset: string; interest: number; rate: number; ts: number }[];
+  borrowRecords: { asset: string; amount: number; ts: number; status: string }[];
+  repayRecords: { asset: string; amount: number; ts: number; status: string }[];
+}
+
 export interface LoansSnapshot {
   available: boolean;
   error: string | null;
@@ -50,6 +65,7 @@ export interface LoansSnapshot {
   ongoing: { loanCoin: string; collateralCoin: string; totalDebt: number; collateralAmount: number; currentLTV: number }[];
   loanable: { loanCoin: string; hourlyRatePct: number; yearlyRatePct: number; minLimit: number; maxLimit: number }[];
   collateral: { collateralCoin: string; initialLTV: number; marginCallLTV: number; liquidationLTV: number; maxLimit: number }[];
+  margin: MarginSnapshot;
 }
 
 export interface BalanceEntry {
@@ -68,6 +84,7 @@ export interface PositionEntry extends BalanceEntry {
 export interface OpenOrderRow {
   symbol: string;
   orderId: number;
+  clientOrderId: string | null;
   side: string;
   type: string;
   price: number;

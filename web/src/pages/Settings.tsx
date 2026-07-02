@@ -1,68 +1,140 @@
 import { useStore } from '../store';
 import { SetupChecklist, StatusDot } from '../components/ui';
+import type { Prefs } from '../lib/prefs';
+
+function Seg<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: { v: T; label: string }[];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <span className="seg">
+      {options.map((o) => (
+        <button key={o.v} className={value === o.v ? 'on' : ''} onClick={() => onChange(o.v)}>
+          {o.label}
+        </button>
+      ))}
+    </span>
+  );
+}
 
 export function Settings() {
-  const { state, theme, setTheme } = useStore();
-  if (!state) return <div className="container page"><div className="empty-state">Connecting…</div></div>;
+  const { state, prefs, updatePref } = useStore();
+
+  const row = (k: string, sub: string | null, control: JSX.Element) => (
+    <div className="xrow" key={k}>
+      <span>
+        <div className="k">{k}</div>
+        {sub && <div className="t">{sub}</div>}
+      </span>
+      <span className="v">{control}</span>
+    </div>
+  );
 
   return (
     <div className="container page">
       <div className="page-head">
         <div>
           <h1 className="page-title">Settings</h1>
-          <div className="page-sub">Keys, appearance and how this thing is built</div>
+          <div className="page-sub">UI preferences persist in this browser · trading config lives on the Risk page</div>
         </div>
       </div>
 
       <div className="sec-head">
         <h2 className="sec-title">Appearance</h2>
       </div>
-      <div className="drow">
-        <span className="k">Theme</span>
-        <span className="v">
-          <span className="seg">
-            <button className={theme === 'light' ? 'on' : ''} onClick={() => setTheme('light')}>
-              Light
-            </button>
-            <button className={theme === 'dark' ? 'on' : ''} onClick={() => setTheme('dark')}>
-              Dark
-            </button>
-          </span>
-        </span>
+      {row('Theme', 'system follows your OS', (
+        <Seg<Prefs['theme']>
+          value={prefs.theme}
+          options={[{ v: 'light', label: 'Light' }, { v: 'dark', label: 'Dark' }, { v: 'system', label: 'System' }]}
+          onChange={(v) => updatePref('theme', v)}
+        />
+      ))}
+      {row('Motion', 'reduced kills animations and the tape marquee', (
+        <Seg<Prefs['motion']>
+          value={prefs.motion}
+          options={[{ v: 'full', label: 'Full' }, { v: 'reduced', label: 'Reduced' }]}
+          onChange={(v) => updatePref('motion', v)}
+        />
+      ))}
+      {row('Table density', null, (
+        <Seg<Prefs['density']>
+          value={prefs.density}
+          options={[{ v: 'comfortable', label: 'Comfortable' }, { v: 'compact', label: 'Compact' }]}
+          onChange={(v) => updatePref('density', v)}
+        />
+      ))}
+      {row('Ticker tape', 'small optional price tape under the top bar', (
+        <button className={`switch ${prefs.tape ? 'on' : ''}`} onClick={() => updatePref('tape', !prefs.tape)} aria-label="tape" />
+      ))}
+
+      <div className="sec-head">
+        <h2 className="sec-title">Data &amp; time</h2>
       </div>
-      <div className="drow">
-        <span className="k">Keyboard</span>
-        <span className="v muted small">⌘K / “/” search · Esc closes overlays</span>
-      </div>
+      {row('Markets refresh', 'poll rate for the markets/tape data', (
+        <Seg
+          value={String(prefs.refreshSec)}
+          options={[{ v: '3', label: '3s' }, { v: '6', label: '6s' }, { v: '12', label: '12s' }]}
+          onChange={(v) => updatePref('refreshSec', Number(v))}
+        />
+      ))}
+      {row('Timestamps', 'engine always logs UTC internally', (
+        <Seg<Prefs['timezone']>
+          value={prefs.timezone}
+          options={[{ v: 'local', label: 'Local' }, { v: 'utc', label: 'UTC' }]}
+          onChange={(v) => updatePref('timezone', v)}
+        />
+      ))}
+      {row('Default page', 'where the app opens', (
+        <Seg
+          value={prefs.defaultPage}
+          options={[{ v: 'dashboard', label: 'Dashboard' }, { v: 'markets', label: 'Markets' }, { v: 'trade', label: 'Trade' }]}
+          onChange={(v) => updatePref('defaultPage', v)}
+        />
+      ))}
+      {row('Keyboard', null, <span className="muted small">⌘K / “/” search · Esc closes overlays</span>)}
+      {row('Reset preferences', 'clears local UI prefs only, never trading config', (
+        <button
+          className="mini-btn"
+          onClick={() => {
+            localStorage.removeItem('cosmos-prefs');
+            location.reload();
+          }}
+        >
+          Reset
+        </button>
+      ))}
 
       <div className="sec-head">
         <h2 className="sec-title">Binance API keys</h2>
       </div>
-      <div className="drow">
-        <span className="k" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <StatusDot status={state.binance.keysPresent ? 'live' : 'none'} /> Status
+      <div className="xrow">
+        <StatusDot status={state?.binance.keysPresent ? 'live' : 'none'} />
+        <span>
+          <div className="k">{state?.binance.keysPresent ? 'Configured in server environment' : 'Not configured'}</div>
+          <div className="t">
+            Deliberately no key input here — keys live in .env on the server, the browser never sees them. Rotate by
+            updating .env and restarting.
+          </div>
         </span>
-        <span className="v">{state.binance.keysPresent ? 'configured in server environment' : 'not configured'}</span>
       </div>
-      <p className="muted small" style={{ lineHeight: 1.6, maxWidth: 720 }}>
-        There is deliberately no key input in this UI. Keys live in <span className="mono">.env</span> on the server
-        (see <span className="mono">.env.example</span>) and the server signs every request — the browser never sees
-        key material. To rotate: update <span className="mono">.env</span>, restart the service.
-      </p>
-      {!state.binance.keysPresent && <SetupChecklist />}
+      {!state?.binance.keysPresent && <SetupChecklist />}
 
       <div className="sec-head">
         <h2 className="sec-title">About</h2>
       </div>
-      <p className="muted" style={{ lineHeight: 1.65, maxWidth: 760 }}>
-        Cosmos Arbitrage Control Room — private cockpit for one Binance account, behind Cloudflare Access. Live
+      <p className="muted" style={{ lineHeight: 1.65, maxWidth: 760, marginTop: 0 }}>
+        Cosmos Arbitrage Control Room — private cockpit for one Binance account behind Cloudflare Access. Live
         execution is manual-only: strategies propose, you approve, the server-side risk gate decides, a typed
-        confirmation sends. Loans follow the same gate. No withdrawal or transfer code exists anywhere in this app.
-        Every decision is in the Ledger. All configuration persists in SQLite and every change is a{' '}
-        <span className="mono">config_change</span> event.
+        confirmation sends. Loans follow the same gate. No withdrawal or transfer code exists anywhere. Every
+        decision is on the Ledger page.
       </p>
       <div className="chips">
-        <span className="chip-tag gold">v1 · control room + markets + loans</span>
+        <span className="chip-tag gold">v1.1 · cockpit + markets + loans + margin + system health</span>
         <span className="chip-tag">next: two-leg basis ticket via testnet</span>
       </div>
     </div>

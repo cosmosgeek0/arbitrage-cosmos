@@ -9,7 +9,7 @@ export function HealthBadge() {
   const grade = !connected ? 'bad' : !feedsOk ? 'warn' : 'ok';
 
   return (
-    <button className={`health-badge ${grade}`} onClick={() => setPage('account')} title="Connection health">
+    <button className={`health-badge ${grade}`} onClick={() => setPage('system')} title="System health">
       <IconWifi size={19} />
       <span className="hb-dot" />
       <span className="hb-tip">

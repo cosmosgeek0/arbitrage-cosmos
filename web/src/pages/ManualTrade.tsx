@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { ConfirmModal } from '../components/Modal';
-import { SideTag } from '../components/ui';
+import { SideTag, StatePill } from '../components/ui';
 import { TokenIcon } from '../components/TokenIcon';
 import { Num } from '../components/Num';
+import { IconChart, IconShield, IconTicket, IconWallet } from '../components/Icons';
 import { fmtPrice, fmtPct, signClass, baseOf } from '../format';
 import type { PreviewResult, Quote, SendResult, Side, OrderType } from '../types';
 
@@ -95,6 +96,20 @@ export function ManualTrade() {
     quote?.book && quote.book.bidPrice > 0
       ? ((quote.book.askPrice - quote.book.bidPrice) / quote.book.bidPrice) * 100
       : null;
+  const base = baseOf(symbol) || 'BASE';
+  const draftPrice = type === 'LIMIT' && price ? Number(price) : quote?.last ?? null;
+  const draftQty = qty ? Number(qty) : null;
+  const draftQuoteQty = type === 'MARKET' && quoteQty ? Number(quoteQty) : null;
+  const draftNotional =
+    draftQuoteQty ?? (draftQty !== null && draftPrice !== null && isFinite(draftQty) && isFinite(draftPrice) ? draftQty * draftPrice : null);
+  const liveTone = mode === 'LIVE_ARMED' ? 'ok' : mode === 'MANUAL' ? 'warn' : 'bad';
+  const keysTone = keysPresent ? 'ok' : 'idle';
+  const riskPassed = !!(pv?.ok && pv.risk.allowed);
+  const liveHint = canShowLiveButton
+    ? riskPassed
+      ? 'Passing preview can open the typed live-confirmation modal.'
+      : 'Run a passing preview with every risk check allowed before live send becomes available.'
+    : `Live send hidden: mode ${mode}${!keysPresent ? ', no keys' : ''}.`;
 
   return (
     <div className="container page">
@@ -108,165 +123,220 @@ export function ManualTrade() {
         {source === 'proposal' && <span className="chip-tag gold">prefilled from proposal</span>}
       </div>
 
-      <div className="two-col">
-        <div>
-          <div className="sec-head" style={{ marginTop: 10 }}>
-            <h2 className="sec-title">Order ticket</h2>
-            <span className="sec-note">mode: {mode === 'LIVE_ARMED' ? 'live armed' : mode.toLowerCase()}</span>
-          </div>
-
-          <div className="fld">
-            <span>Symbol</span>
-            <input value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} spellCheck={false} />
-          </div>
-
-          <div style={{ display: 'flex', gap: 10, marginBottom: 13, flexWrap: 'wrap' }}>
-            <div className="seg">
-              <button className={side === 'BUY' ? 'on buy' : ''} onClick={() => setSide('BUY')}>
-                Buy
-              </button>
-              <button className={side === 'SELL' ? 'on sell' : ''} onClick={() => setSide('SELL')}>
-                Sell
-              </button>
-            </div>
-            <div className="seg">
-              {(['LIMIT', 'MARKET'] as OrderType[]).map((t) => (
-                <button key={t} className={type === t ? 'on' : ''} onClick={() => setType(t)}>
-                  {t === 'LIMIT' ? 'Limit' : 'Market'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="form-row">
-            {type === 'LIMIT' && (
-              <div className="fld">
-                <span>Limit price (USDT)</span>
-                <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder={quote?.last ? String(quote.last) : '0.00'} />
+      <div className="trade-layout">
+        <main className="trade-main">
+          <section className="card trade-ticket">
+            <div className="trade-card-head">
+              <div className="trade-identity">
+                <TokenIcon symbol={symbol} size={44} />
+                <div>
+                  <div className="trade-symbol">{symbol || '—'}</div>
+                  <div className="trade-sub">
+                    {base}/USDT spot ticket · {source === 'proposal' ? 'proposal prefill' : 'manual source'}
+                  </div>
+                </div>
               </div>
-            )}
-            <div className="fld">
-              <span>Quantity ({baseOf(symbol) || 'base'})</span>
-              <input type="number" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="0.0" />
-            </div>
-            {type === 'MARKET' && (
-              <div className="fld">
-                <span>…or quote (USDT)</span>
-                <input type="number" value={quoteQty} onChange={(e) => setQuoteQty(e.target.value)} placeholder="e.g. 10" />
+              <div className="trade-state-stack">
+                <StatePill tone={liveTone}>{mode === 'LIVE_ARMED' ? 'Live armed' : mode.toLowerCase()}</StatePill>
+                <StatePill tone={keysTone}>{keysPresent ? 'Keys present' : 'No keys'}</StatePill>
               </div>
-            )}
-          </div>
+            </div>
 
-          {type === 'LIMIT' && (
-            <div className="fld">
-              <span>Time in force</span>
-              <span className="seg" style={{ alignSelf: 'flex-start' }}>
-                {(['GTC', 'IOC', 'FOK'] as const).map((t) => (
-                  <button key={t} className={tif === t ? 'on' : ''} onClick={() => setTif(t)} title={t === 'GTC' ? 'Good till canceled' : t === 'IOC' ? 'Immediate or cancel' : 'Fill or kill'}>
-                    {t}
+            <div className="trade-draft-grid">
+              <div>
+                <span className="k">Draft side</span>
+                <span className={`v ${side === 'BUY' ? 'up' : 'down'}`}>{side}</span>
+              </div>
+              <div>
+                <span className="k">Reference price</span>
+                <span className="v num">{fmtPrice(draftPrice)}</span>
+              </div>
+              <div>
+                <span className="k">Draft notional</span>
+                <span className="v num">{fmtPrice(draftNotional)}</span>
+              </div>
+            </div>
+
+            <div className="trade-input-grid">
+              <div className="fld trade-symbol-field">
+                <span>Symbol</span>
+                <input value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} spellCheck={false} />
+              </div>
+
+              <div className="trade-control-block">
+                <span className="trade-field-label">Side</span>
+                <div className="seg">
+                  <button className={side === 'BUY' ? 'on buy' : ''} onClick={() => setSide('BUY')}>
+                    Buy
                   </button>
-                ))}
-              </span>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button className="cta-pill" disabled={busy} onClick={doPreview}>
-              Preview
-            </button>
-            <button className="mini-btn" disabled={busy} onClick={reset} title="Clear the ticket">
-              Reset
-            </button>
-            <button
-              className="mini-btn"
-              disabled={busy || !keysPresent}
-              title={keysPresent ? 'Signed validation against Binance — nothing is placed' : 'Needs Binance keys'}
-              onClick={async () => {
-                setBusy(true);
-                setTestResult(await testOrder(intent()));
-                setBusy(false);
-              }}
-            >
-              Validate
-            </button>
-            {canShowLiveButton ? (
-              <button
-                className="cta-pill danger"
-                disabled={busy || !pv?.ok}
-                title={pv?.ok ? 'Opens the live confirmation' : 'Run a passing preview first'}
-                onClick={() => setShowConfirm(true)}
-              >
-                Send live…
-              </button>
-            ) : (
-              <span className="muted small">
-                Live send hidden — mode is <b>{mode}</b>
-                {!keysPresent && ', no keys'}. Arm on the Risk page.
-              </span>
-            )}
-          </div>
-
-          {testResult && (
-            <div className={`result-strip ${testResult.ok ? 'ok' : 'bad'}`}>
-              {testResult.ok
-                ? 'Binance validated this order (signed test — nothing placed).'
-                : `Validation failed: ${testResult.error}`}
-            </div>
-          )}
-          {sendResult && (
-            <div className={`result-strip ${sendResult.sent ? 'ok' : 'bad'}`}>
-              {sendResult.sent
-                ? `LIVE ORDER PLACED — id ${sendResult.order?.orderId}, status ${sendResult.order?.status}, executed ${sendResult.order?.executedQty}`
-                : `Not sent: ${sendResult.error ?? sendResult.risk?.reasons.join(' · ') ?? 'rejected'}`}
-            </div>
-          )}
-
-          {pv && (
-            <>
-              <div className="sec-head">
-                <h2 className="sec-title">Risk gate</h2>
-                <span className="sec-note">re-checked server-side at send time</span>
+                  <button className={side === 'SELL' ? 'on sell' : ''} onClick={() => setSide('SELL')}>
+                    Sell
+                  </button>
+                </div>
               </div>
-              {pv.errors.length > 0 && <div className="result-strip bad">{pv.errors.join(' · ')}</div>}
-              <div className="drow">
-                <span className="k">Order</span>
-                <span className="v">
-                  <SideTag side={pv.side} /> {pv.quantity ?? pv.quoteQty ?? '—'}
-                  {pv.quoteQty ? ' USDT by quote' : ` ${baseOf(pv.symbol)}`} @{' '}
-                  {pv.type === 'LIMIT' ? fmtPrice(pv.effectivePrice) : 'market'}
-                </span>
+
+              <div className="trade-control-block">
+                <span className="trade-field-label">Order type</span>
+                <div className="seg">
+                  {(['LIMIT', 'MARKET'] as OrderType[]).map((t) => (
+                    <button key={t} className={type === t ? 'on' : ''} onClick={() => setType(t)}>
+                      {t === 'LIMIT' ? 'Limit' : 'Market'}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="drow">
-                <span className="k">Est. notional</span>
-                <span className="v num">{fmtPrice(pv.estNotionalUsd)}</span>
+
+              {type === 'LIMIT' && (
+                <div className="fld">
+                  <span>Limit price (USDT)</span>
+                  <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder={quote?.last ? String(quote.last) : '0.00'} />
+                </div>
+              )}
+
+              <div className="fld">
+                <span>Quantity ({base})</span>
+                <input type="number" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="0.0" />
               </div>
-              {pv.filters && (
-                <div className="drow">
-                  <span className="k">Binance filters</span>
-                  <span className="v muted small num">
-                    step {pv.filters.stepSize} · minQty {pv.filters.minQty} · minNotional ${pv.filters.minNotional}
+
+              {type === 'MARKET' && (
+                <div className="fld">
+                  <span>Quote amount (USDT)</span>
+                  <input type="number" value={quoteQty} onChange={(e) => setQuoteQty(e.target.value)} placeholder="e.g. 10" />
+                </div>
+              )}
+
+              {type === 'LIMIT' && (
+                <div className="trade-control-block">
+                  <span className="trade-field-label">Time in force</span>
+                  <span className="seg">
+                    {(['GTC', 'IOC', 'FOK'] as const).map((t) => (
+                      <button key={t} className={tif === t ? 'on' : ''} onClick={() => setTif(t)} title={t === 'GTC' ? 'Good till canceled' : t === 'IOC' ? 'Immediate or cancel' : 'Fill or kill'}>
+                        {t}
+                      </button>
+                    ))}
                   </span>
                 </div>
               )}
-              <div style={{ marginTop: 6 }}>
-                {pv.risk.checks.map((c) => (
-                  <div key={c.name} className={`risk-check ${c.pass ? 'pass' : 'fail'}`}>
-                    <span className="risk-mark">{c.pass ? '✓' : '✗'}</span>
-                    <span className="risk-name">{c.name}</span>
-                    <span className="risk-detail">{c.detail}</span>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+            </div>
 
-        <div className="rail">
-          <div className="rail-sec">
+            <div className="ticket-actions">
+              <button className="cta-pill" disabled={busy} onClick={doPreview}>
+                <IconTicket size={15} />
+                Preview
+              </button>
+              <button className="mini-btn" disabled={busy} onClick={reset} title="Clear the ticket">
+                Reset
+              </button>
+              <button
+                className="mini-btn"
+                disabled={busy || !keysPresent}
+                title={keysPresent ? 'Signed validation against Binance — nothing is placed' : 'Needs Binance keys'}
+                onClick={async () => {
+                  setBusy(true);
+                  setTestResult(await testOrder(intent()));
+                  setBusy(false);
+                }}
+              >
+                Validate
+              </button>
+              {canShowLiveButton ? (
+                <button
+                  className="cta-pill danger"
+                  disabled={busy || !riskPassed}
+                  title={riskPassed ? 'Opens the live confirmation' : 'Run a passing preview with every risk check allowed first'}
+                  onClick={() => setShowConfirm(true)}
+                >
+                  Send live…
+                </button>
+              ) : (
+                <span className="trade-live-note">{liveHint}</span>
+              )}
+            </div>
+            {canShowLiveButton && <div className="trade-live-note trade-live-note-row">{liveHint}</div>}
+
+            {testResult && (
+              <div className={`result-strip ${testResult.ok ? 'ok' : 'bad'}`}>
+                {testResult.ok
+                  ? 'Binance validated this order (signed test — nothing placed).'
+                  : `Validation failed: ${testResult.error}`}
+              </div>
+            )}
+            {sendResult && (
+              <div className={`result-strip ${sendResult.sent ? 'ok' : 'bad'}`}>
+                {sendResult.sent
+                  ? `LIVE ORDER PLACED — id ${sendResult.order?.orderId}, status ${sendResult.order?.status}, executed ${sendResult.order?.executedQty}`
+                  : `Not sent: ${sendResult.error ?? sendResult.risk?.reasons.join(' · ') ?? 'rejected'}`}
+              </div>
+            )}
+          </section>
+
+          <section className="card risk-panel">
+            <div className="trade-card-head compact">
+              <div className="trade-identity">
+                <span className={`trade-icon ${riskPassed ? 'ok' : pv ? 'bad' : ''}`}>
+                  <IconShield size={18} />
+                </span>
+                <div>
+                  <div className="trade-panel-title">Risk gate</div>
+                  <div className="trade-sub">Preview now, re-check server-side at live send.</div>
+                </div>
+              </div>
+              <StatePill tone={riskPassed ? 'ok' : pv ? 'bad' : 'idle'}>{pv ? (riskPassed ? 'Passing' : 'Blocked') : 'Awaiting preview'}</StatePill>
+            </div>
+
+            {!pv ? (
+              <div className="trade-await">
+                <IconTicket size={20} />
+                <div>
+                  <b>Build the ticket, then preview.</b>
+                  <span>The preview records an intent, applies filters, estimates notional, and shows every gate before live send is even possible.</span>
+                </div>
+              </div>
+            ) : (
+              <>
+                {pv.errors.length > 0 && <div className="result-strip bad">{pv.errors.join(' · ')}</div>}
+                <div className="trade-preview-strip">
+                  <div>
+                    <span className="k">Order</span>
+                    <span className="v">
+                      <SideTag side={pv.side} /> {pv.quoteQty ? pv.quoteQty : pv.quantity ?? '—'}
+                      {pv.quoteQty ? ' USDT by quote' : ` ${baseOf(pv.symbol)}`} @{' '}
+                      {pv.type === 'LIMIT' ? fmtPrice(pv.effectivePrice) : 'market'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="k">Est. notional</span>
+                    <span className="v num">{fmtPrice(pv.estNotionalUsd)}</span>
+                  </div>
+                  <div>
+                    <span className="k">Filters</span>
+                    <span className="v num">
+                      {pv.filters ? `step ${pv.filters.stepSize} · min ${pv.filters.minQty} · $${pv.filters.minNotional}` : '—'}
+                    </span>
+                  </div>
+                </div>
+                <div className="trade-gate-list">
+                  {pv.risk.checks.map((c) => (
+                    <div key={c.name} className={`trade-gate-row ${c.pass ? 'pass' : 'fail'}`}>
+                      <span className="gate-mark">{c.pass ? '✓' : '✕'}</span>
+                      <span className="gate-main">
+                        <span className="gate-name">{c.name}</span>
+                        <span className="gate-detail">{c.detail}</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </section>
+        </main>
+
+        <aside className="trade-rail">
+          <section className="card trade-quote-card">
             <div className="rail-head">
               <span className="rail-title">
                 <span className="tok" style={{ gap: 8 }}>
-                  <TokenIcon symbol={symbol} size={22} />
+                  <TokenIcon symbol={symbol} size={24} />
                   {symbol || '—'}
                 </span>
               </span>
@@ -274,29 +344,39 @@ export function ManualTrade() {
                 Full page →
               </button>
             </div>
-            <div className="headline" style={{ margin: '10px 0 6px' }}>
-              <Num value={quote?.last ?? null} className="headline-val" >
-                <span style={{ fontSize: 30 }}>{fmtPrice(quote?.last)}</span>
+            <div className="trade-price-line">
+              <Num value={quote?.last ?? null} className="headline-val">
+                <span>{fmtPrice(quote?.last)}</span>
               </Num>
               <span className={`hl-chip num ${signClass(quote?.change24hPct)}`}>{fmtPct(quote?.change24hPct, 2)}</span>
             </div>
             {quote && !quote.tradable && <div className="result-strip warn">Not a tradable spot symbol.</div>}
-            <div className="ladder-row">
-              <span className="bar ask" style={{ width: '48%' }} />
-              <span className="k">Ask</span>
-              <span className="v num">{fmtPrice(quote?.book?.askPrice)}</span>
+            <div className="quote-ladder">
+              <div className="ladder-row">
+                <span className="bar ask" style={{ width: '48%' }} />
+                <span className="k">Ask</span>
+                <span className="v num">{fmtPrice(quote?.book?.askPrice)}</span>
+              </div>
+              <div className="ladder-mid">spread {spread !== null ? `${spread.toFixed(4)}%` : '—'}</div>
+              <div className="ladder-row">
+                <span className="bar bid" style={{ width: '48%' }} />
+                <span className="k">Bid</span>
+                <span className="v num">{fmtPrice(quote?.book?.bidPrice)}</span>
+              </div>
             </div>
-            <div className="ladder-mid">spread {spread !== null ? `${spread.toFixed(4)}%` : '—'}</div>
-            <div className="ladder-row">
-              <span className="bar bid" style={{ width: '48%' }} />
-              <span className="k">Bid</span>
-              <span className="v num">{fmtPrice(quote?.book?.bidPrice)}</span>
-            </div>
-          </div>
+          </section>
 
-          <div className="rail-sec">
-            <div className="rail-head">
-              <span className="rail-title">Account</span>
+          <section className="card trade-account-card">
+            <div className="trade-card-head compact">
+              <div className="trade-identity">
+                <span className="trade-icon">
+                  <IconWallet size={18} />
+                </span>
+                <div>
+                  <div className="trade-panel-title">Account guardrails</div>
+                  <div className="trade-sub">Server values used by the gate.</div>
+                </div>
+              </div>
             </div>
             <div className="drow">
               <span className="k">Available USDT</span>
@@ -304,12 +384,12 @@ export function ManualTrade() {
             </div>
             <div className="drow">
               <span className="k">Max per order</span>
-              <span className="v num">${state?.config.maxOrderNotionalUsd}</span>
+              <span className="v num">{fmtPrice(state?.config.maxOrderNotionalUsd)}</span>
             </div>
             <div className="drow">
               <span className="k">Daily used</span>
               <span className="v num">
-                {fmtPrice(state?.risk.dailyNotionalUsedUsd)} / ${state?.config.maxDailyNotionalUsd}
+                {fmtPrice(state?.risk.dailyNotionalUsedUsd)} / {fmtPrice(state?.config.maxDailyNotionalUsd)}
               </span>
             </div>
             <div className="drow">
@@ -318,8 +398,34 @@ export function ManualTrade() {
                 {state?.openOrders.length ?? 0} / {state?.config.maxOpenOrders}
               </span>
             </div>
-          </div>
-        </div>
+          </section>
+
+          <section className="card trade-safety-card">
+            <div className="trade-card-head compact">
+              <div className="trade-identity">
+                <span className="trade-icon">
+                  <IconChart size={18} />
+                </span>
+                <div>
+                  <div className="trade-panel-title">Execution discipline</div>
+                  <div className="trade-sub">No path places an order from this screen without preview, confirmation, and server re-check.</div>
+                </div>
+              </div>
+            </div>
+            <div className="safety-row">
+              <span>Typed confirmation</span>
+              <b>{symbol}</b>
+            </div>
+            <div className="safety-row">
+              <span>Kill switch</span>
+              <StatePill tone={state?.config.killSwitch ? 'bad' : 'ok'}>{state?.config.killSwitch ? 'On' : 'Off'}</StatePill>
+            </div>
+            <div className="safety-row">
+              <span>Live trading</span>
+              <StatePill tone={state?.config.liveTradingEnabled ? 'ok' : 'warn'}>{state?.config.liveTradingEnabled ? 'Armed' : 'Manual only'}</StatePill>
+            </div>
+          </section>
+        </aside>
       </div>
 
       {showConfirm && pv && (

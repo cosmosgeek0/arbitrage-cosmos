@@ -1,6 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
-import { StatusDot } from '../components/ui';
+import { Group, GRow, StatePill } from '../components/ui';
+import {
+  IconBook,
+  IconBrain,
+  IconChart,
+  IconPulse,
+  IconShield,
+  IconWallet,
+  IconWifi,
+} from '../components/Icons';
 import { timeAgo } from '../format';
 
 interface SystemInfo {
@@ -35,6 +44,9 @@ function fmtUptime(sec: number): string {
   return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m ${sec % 60}s`;
 }
 
+const tone = (s: string): 'ok' | 'bad' | 'warn' | 'idle' =>
+  s === 'live' || s === 'open' ? 'ok' : s === 'connecting' ? 'warn' : s === 'closed' || s === 'failed' ? 'bad' : 'idle';
+
 export function SystemHealth() {
   const { connected } = useStore();
   const [info, setInfo] = useState<SystemInfo | null>(null);
@@ -52,50 +64,66 @@ export function SystemHealth() {
 
   if (!info) return <div className="container page page-narrow"><div className="empty-state">Reading system state…</div></div>;
 
-  const rows: { k: string; status: string; v: string; sub?: string }[] = [
+  const comp: { icon: ReactNode; color: string; label: string; sub?: string; status: string; value: string }[] = [
     {
-      k: 'Dashboard ↔ engine WebSocket',
+      icon: <IconPulse />,
+      color: '#2a7de0',
+      label: 'Dashboard ↔ engine WebSocket',
+      sub: 'live state pushed every 2s',
       status: connected ? 'live' : 'closed',
-      v: connected ? 'live · state every 2s' : 'reconnecting…',
+      value: connected ? 'live' : 'reconnecting…',
     },
     ...Object.entries(info.feeds).map(([name, s]) => ({
-      k: `Binance ${name}`,
+      icon: <IconWifi />,
+      color: '#0a9b64',
+      label: `Binance ${name}`,
+      sub: name.includes('markprice') ? 'tiered /market host (legacy fstream is dead)' : 'public market stream',
       status: s,
-      v: s,
-      sub: name.includes('markprice') ? 'tiered /market host (legacy fstream is dead)' : undefined,
+      value: s,
     })),
     {
-      k: 'Binance account REST',
-      status: info.binance.keysPresent ? (info.binance.connected ? 'live' : 'closed') : 'none',
-      v: info.binance.keysPresent
+      icon: <IconWallet />,
+      color: '#e0a02a',
+      label: 'Binance account REST',
+      sub: '30s polling cadence',
+      status: info.binance.keysPresent ? (info.binance.connected ? 'live' : 'closed') : 'idle',
+      value: info.binance.keysPresent
         ? info.binance.connected
           ? `synced ${timeAgo(info.binance.lastSyncTs)}`
           : `failing: ${info.binance.lastError ?? 'unknown'}`
-        : 'no keys configured',
-      sub: '30s polling cadence',
+        : 'no keys',
     },
     {
-      k: 'User data stream',
-      status: info.binance.userStream === 'open' ? 'live' : 'none',
-      v: info.binance.userStream,
+      icon: <IconWifi />,
+      color: '#8257e0',
+      label: 'User data stream',
       sub: 'optional — polling is the guaranteed path',
+      status: info.binance.userStream === 'open' ? 'live' : 'idle',
+      value: info.binance.userStream,
     },
     {
-      k: 'Strategy loop',
-      status: info.lastScannerTickTs && Date.now() - info.lastScannerTickTs < 30_000 ? 'live' : 'closed',
-      v: info.lastScannerTickTs ? `last tick ${timeAgo(info.lastScannerTickTs)}` : 'never ticked',
+      icon: <IconBrain />,
+      color: '#0aa5a5',
+      label: 'Strategy loop',
       sub: `${info.pairs} pairs scanned every 2s`,
+      status: info.lastScannerTickTs && Date.now() - info.lastScannerTickTs < 30_000 ? 'live' : 'closed',
+      value: info.lastScannerTickTs ? `tick ${timeAgo(info.lastScannerTickTs)}` : 'never',
     },
     {
-      k: 'Risk engine',
-      status: 'live',
-      v: info.killSwitch ? 'gating (kill switch ON)' : info.liveTradingEnabled ? 'gating (live armed)' : 'gating (manual)',
+      icon: <IconShield />,
+      color: '#e0414b',
+      label: 'Risk engine',
       sub: 'in-process, runs before every send',
+      status: 'live',
+      value: info.killSwitch ? 'gating · halted' : info.liveTradingEnabled ? 'gating · live armed' : 'gating · manual',
     },
     {
-      k: 'Ledger (SQLite)',
+      icon: <IconBook />,
+      color: '#697079',
+      label: 'Ledger (SQLite)',
+      sub: 'append-only audit store',
       status: info.dbOk ? 'live' : 'closed',
-      v: info.dbOk ? 'writable' : 'WRITE FAILURE',
+      value: info.dbOk ? 'writable' : 'WRITE FAILURE',
     },
   ];
 
@@ -106,50 +134,48 @@ export function SystemHealth() {
           <h1 className="page-title">System Health</h1>
           <div className="page-sub">
             v{info.version} · {info.env} · up {fmtUptime(info.uptimeSec)}
-            {info.cfUser ? ` · signed in as ${info.cfUser} (Cloudflare Access)` : ''}
+            {info.cfUser ? ` · ${info.cfUser} (Cloudflare Access)` : ''}
           </div>
         </div>
       </div>
 
-      <div className="metric-strip">
-        <div className="metric">
-          <span className="k">REST latency</span>
-          <span className="v num">{info.restLatencyMs !== null ? `${info.restLatencyMs}ms` : '—'}</span>
-          <span className="s">api.binance.com round trip</span>
+      <div className="stats" style={{ marginTop: 4 }}>
+        <div className="stat-tile" style={{ cursor: 'default' }}>
+          <div className="stat-k">REST latency</div>
+          <div className="stat-v num">{info.restLatencyMs !== null ? `${info.restLatencyMs}ms` : '—'}</div>
+          <div className="stat-d">api.binance.com round trip</div>
         </div>
-        <div className="metric">
-          <span className="k">Clock drift</span>
-          <span className={`v num ${info.serverTimeDiffMs !== null && Math.abs(info.serverTimeDiffMs) > 1000 ? 'down' : ''}`}>
+        <div className="stat-tile" style={{ cursor: 'default' }}>
+          <div className="stat-k">Clock drift</div>
+          <div className={`stat-v num ${info.serverTimeDiffMs !== null && Math.abs(info.serverTimeDiffMs) > 1000 ? 'red' : ''}`}>
             {info.serverTimeDiffMs !== null ? `${info.serverTimeDiffMs}ms` : '—'}
-          </span>
-          <span className="s">vs Binance server time (signed requests need &lt;10s)</span>
+          </div>
+          <div className="stat-d">vs Binance server (need &lt;10s)</div>
         </div>
-        <div className="metric">
-          <span className="k">Rate-limit weight</span>
-          <span className="v num">{info.usedWeight1m !== null ? `${info.usedWeight1m} / 6000` : '—'}</span>
-          <span className="s">{info.usedWeightTs ? `as of ${timeAgo(info.usedWeightTs)} (signed calls only)` : 'no signed call yet'}</span>
+        <div className="stat-tile" style={{ cursor: 'default' }}>
+          <div className="stat-k">Rate-limit weight</div>
+          <div className="stat-v num">{info.usedWeight1m !== null ? `${info.usedWeight1m}` : '—'}<span className="muted" style={{ fontSize: 13 }}> / 6000</span></div>
+          <div className="stat-d">{info.usedWeightTs ? `signed calls · ${timeAgo(info.usedWeightTs)}` : 'no signed call yet'}</div>
         </div>
-        <div className="metric">
-          <span className="k">Orders sync</span>
-          <span className="v num">{info.lastOrdersSyncTs ? timeAgo(info.lastOrdersSyncTs) : '—'}</span>
-          <span className="s">open-orders cache</span>
+        <div className="stat-tile" style={{ cursor: 'default' }}>
+          <div className="stat-k">Orders sync</div>
+          <div className="stat-v num" style={{ fontSize: 18 }}>{info.lastOrdersSyncTs ? timeAgo(info.lastOrdersSyncTs) : '—'}</div>
+          <div className="stat-d">open-orders cache</div>
         </div>
       </div>
 
-      <div className="sec-head">
-        <h2 className="sec-title">Components</h2>
-        <span className="sec-note">refreshes every 10s</span>
-      </div>
-      {rows.map((r) => (
-        <div key={r.k} className="xrow">
-          <StatusDot status={r.status} />
-          <span>
-            <div className="k">{r.k}</div>
-            {r.sub && <div className="t">{r.sub}</div>}
-          </span>
-          <span className="v muted small">{r.v}</span>
-        </div>
-      ))}
+      <Group title="Components">
+        {comp.map((c) => (
+          <GRow
+            key={c.label}
+            icon={c.icon}
+            color={c.color}
+            label={c.label}
+            sub={c.sub}
+            control={<StatePill tone={tone(c.status)}>{c.value}</StatePill>}
+          />
+        ))}
+      </Group>
     </div>
   );
 }

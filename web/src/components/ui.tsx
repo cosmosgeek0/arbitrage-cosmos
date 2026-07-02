@@ -1,6 +1,57 @@
 import type { ReactNode } from 'react';
 import { IconAlert } from './Icons';
 
+/** macOS System Settings-style grouped list (reusable across config pages). */
+export function Group({ title, children }: { title?: string; children: ReactNode }) {
+  return (
+    <>
+      {title && <div className="settings-sec">{title}</div>}
+      <div className="settings-group">{children}</div>
+    </>
+  );
+}
+
+export function GRow({
+  icon,
+  color,
+  label,
+  sub,
+  control,
+  onClick,
+}: {
+  icon?: ReactNode;
+  color?: string;
+  label: ReactNode;
+  sub?: ReactNode;
+  control?: ReactNode;
+  onClick?: () => void;
+}) {
+  return (
+    <div className={`settings-row ${onClick ? 'clickable' : ''}`} onClick={onClick}>
+      {icon && (
+        <span className="sr-icon" style={{ background: color ?? 'var(--muted)' }}>
+          {icon}
+        </span>
+      )}
+      <span className="sr-main">
+        <span className="sr-label">{label}</span>
+        {sub && <span className="sr-sub">{sub}</span>}
+      </span>
+      {control && <span className="sr-ctl">{control}</span>}
+    </div>
+  );
+}
+
+/** Small colored status pill for grouped rows (Connected / Active / Off …). */
+export function StatePill({ tone, children }: { tone: 'ok' | 'bad' | 'warn' | 'idle'; children: ReactNode }) {
+  return (
+    <span className={`state-pill ${tone}`}>
+      <span className="state-dot" />
+      {children}
+    </span>
+  );
+}
+
 export function StatTile({
   label,
   value,

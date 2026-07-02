@@ -145,8 +145,13 @@ do not invent parallel styles.
   Real size contrast: page titles 29px, section titles 19px, metric values 19px,
   stat-tile values 22px, table values 14px, labels 10–11px uppercase. Deltas are
   always colored green/red. Numbers use `.num` (tabular).
-- **Token icons:** always `<TokenIcon>`. Real logo → brand-hued monogram chip
-  fallback (never an empty circle, never a broken image). Uniform circular badge.
+- **Token icons:** always `<TokenIcon>`. Coverage is solved by a server-side
+  resolver (`server/binance/icons.ts` → `/api/icons`): for any base without a
+  bundled logo it hits CoinGecko `/search`, exact-symbol matches, caches the URL
+  to disk (`data/icon_cache.json`). Client `lib/iconManifest.ts` batches +
+  re-polls; chain is resolved-logo → spothq → coincap → brand-hued monogram.
+  Monograms upgrade to the real logo in place. `img-src` CSP allows the CDNs —
+  do not remove CoinGecko/coincap from the CSP or icons break.
 - **Buttons:** `.cta-pill` (dark primary), `.cta-pill.buy/.danger` (gradient +
   inner sheen + glow + press state), `.mini-btn` (quiet), `.seg` (segmented),
   `.switch` (toggle). Every button must DO something or be disabled with a reason.

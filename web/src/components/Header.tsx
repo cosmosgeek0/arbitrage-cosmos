@@ -25,16 +25,23 @@ import {
 } from './Icons';
 
 const BRAND_MARK = (
-  <svg viewBox="0 0 32 32" width={28} height={28} className="brand-mark">
-    <rect width="32" height="32" rx="8" fill="#0b0e11" />
-    <path
-      d="M6 20.5h4.2l2.6-8.4 4.4 12.6 2.8-8.8 1.8 3h4.2"
-      stroke="#f0b90b"
-      strokeWidth="2.3"
-      fill="none"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
+  <svg viewBox="0 0 36 36" width={32} height={32} className="brand-mark" aria-hidden>
+    <defs>
+      <linearGradient id="cx-mark" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stopColor="#1a1d24" />
+        <stop offset="1" stopColor="#05070a" />
+      </linearGradient>
+      <linearGradient id="cx-ring" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stopColor="#f7d046" />
+        <stop offset="1" stopColor="#e9ac00" />
+      </linearGradient>
+    </defs>
+    <rect width="36" height="36" rx="10" fill="url(#cx-mark)" />
+    <rect x="0.6" y="0.6" width="34.8" height="34.8" rx="9.6" fill="none" stroke="rgba(255,255,255,.08)" />
+    {/* orbit ring + node — "cosmos" motif, crisp geometry */}
+    <ellipse cx="18" cy="18" rx="11" ry="5.4" fill="none" stroke="url(#cx-ring)" strokeWidth="2" transform="rotate(-30 18 18)" />
+    <circle cx="18" cy="18" r="3.4" fill="url(#cx-ring)" />
+    <circle cx="27.4" cy="12.7" r="1.7" fill="#f7d046" />
   </svg>
 );
 
@@ -168,34 +175,47 @@ export function Topbar() {
 
   return (
     <header className="hdr">
-      <div className="hdr-in" style={{ padding: '0 22px' }}>
-        <h1 className="tb-title">{TITLES[page]}</h1>
+      <div className="hdr-in">
+        <div className="tb-left">
+          <h1 className="tb-title">{TITLES[page]}</h1>
+          <span className="tb-crumb">{TITLES[page] === 'Dashboard' ? 'Control room' : 'Cosmos Arbitrage'}</span>
+        </div>
         <div className="hdr-right">
-          <span className="status-mini" title="Public market streams">
-            <StatusDot status={mktOk ? 'live' : 'closed'} /> market
-          </span>
-          <span className="status-mini" title="Binance account sync">
-            <StatusDot status={acctState} /> account
-          </span>
-          <span className="status-mini col-hide-sm" title="User data stream (30s polling fallback)">
-            <StatusDot status={streamState} /> stream
-          </span>
+          <div className="conn-panel col-hide-sm" title="Live data connections">
+            <span className="conn-cell">
+              <StatusDot status={mktOk ? 'live' : 'closed'} />
+              Market
+            </span>
+            <span className="conn-cell">
+              <StatusDot status={acctState} />
+              Account
+            </span>
+            <span className="conn-cell">
+              <StatusDot status={streamState} />
+              Stream
+            </span>
+          </div>
           <UtcClock />
-          <span className={`mode-pill ${mode === 'HALTED' ? 'm-halted' : mode === 'LIVE_ARMED' ? 'm-live' : 'm-manual'}`}>
+          <span className="tb-divider" />
+          <span
+            className={`mode-pill ${mode === 'HALTED' ? 'm-halted' : mode === 'LIVE_ARMED' ? 'm-live' : 'm-manual'}`}
+            title="Trading mode — set on the Risk page"
+          >
             <span className="dot" />
-            <span className="mode-txt">{mode === 'LIVE_ARMED' ? 'LIVE' : mode === 'HALTED' ? 'HALTED' : 'MANUAL'}</span>
+            <span className="mode-txt">{mode === 'LIVE_ARMED' ? 'LIVE ARMED' : mode === 'HALTED' ? 'HALTED' : 'MANUAL'}</span>
           </span>
           {mode === 'HALTED' ? (
-            <button className="mode-pill m-halted" onClick={() => setPage('risk')} title="Resume on the Risk page">
-              <IconPower size={12} />
-              <span className="mode-txt">Resume…</span>
+            <button className="tb-action resume" onClick={() => setPage('risk')} title="Resume on the Risk page">
+              <IconPower size={13} />
+              <span className="mode-txt">Resume</span>
             </button>
           ) : (
-            <button className="halt-btn" onClick={() => void setKill(true)} title="Instant kill switch">
-              <IconPower size={12} />
+            <button className="tb-action halt" onClick={() => void setKill(true)} title="Instant kill switch">
+              <IconPower size={13} />
               <span className="mode-txt">HALT</span>
             </button>
           )}
+          <span className="tb-divider" />
           <button className="icon-btn" onClick={() => setPaletteOpen(true)} title="Search (⌘K)">
             <IconSearch size={16} />
           </button>

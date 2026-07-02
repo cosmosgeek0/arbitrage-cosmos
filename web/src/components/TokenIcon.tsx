@@ -75,28 +75,35 @@ export function Monogram({ base, size }: { base: string; size: number }) {
 }
 
 /**
- * Real logo resolver with a fallback chain (Signal Lab pattern): alias map →
- * spothq CC0 SVG → coincap PNG → gradient monogram. Never an empty circle.
+ * Real logo resolver with a fallback chain: alias map → spothq CC0 SVG →
+ * coincap PNG → gradient monogram. Every icon sits in a uniform circular
+ * container with a hairline ring so real logos and monograms look consistent
+ * and premium — never an empty circle, never a jarring size mismatch.
  */
 export function TokenIcon({ symbol, size = 26 }: { symbol: string; size?: number }) {
   const raw = baseOf(symbol);
   const base = ALIAS[raw] ?? raw;
   const chain = [SPOTHQ(base), COINCAP(base)];
   const [idx, setIdx] = useState(0);
-  if (idx >= chain.length) return <Monogram base={raw} size={size} />;
-  const cls = 'tok-ico' + (size <= 20 ? ' sm' : size >= 40 ? ' lg' : '');
+  const inner =
+    idx >= chain.length ? (
+      <Monogram base={raw} size={size} />
+    ) : (
+      <img
+        src={chain[idx]}
+        width={size}
+        height={size}
+        alt={raw}
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="no-referrer"
+        style={{ width: size, height: size, display: 'block' }}
+        onError={() => setIdx(idx + 1)}
+      />
+    );
   return (
-    <img
-      className={cls}
-      src={chain[idx]}
-      width={size}
-      height={size}
-      alt={raw}
-      loading="lazy"
-      decoding="async"
-      referrerPolicy="no-referrer"
-      style={{ width: size, height: size }}
-      onError={() => setIdx(idx + 1)}
-    />
+    <span className="tok-badge" style={{ width: size, height: size }}>
+      {inner}
+    </span>
   );
 }

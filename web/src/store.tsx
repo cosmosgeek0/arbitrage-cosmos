@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { applyPrefs, getPrefs, onPrefs, resolvedTheme, setPref, type Prefs } from './lib/prefs';
-import { setDisplayUtc } from './format';
+import { setBasisBps, setDisplayUtc } from './format';
 import type {
   AppConfig,
   MarketRow,
@@ -50,6 +50,7 @@ interface Store {
   setPage: (p: Page) => void;
   detailSymbol: string;
   openDetail: (symbol: string) => void;
+  openLedger: (symbol: string) => void;
   prefs: Prefs;
   updatePref: <K extends keyof Prefs>(k: K, v: Prefs[K]) => void;
   paletteOpen: boolean;
@@ -93,6 +94,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     applyPrefs();
     const p = getPrefs();
     setDisplayUtc(p.timezone === 'utc');
+    setBasisBps(p.basisUnit === 'bps');
     return p;
   });
   const [page, setPage] = useState<Page>(() =>
@@ -106,6 +108,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => onPrefs((p) => {
     setPrefs(p);
     setDisplayUtc(p.timezone === 'utc');
+    setBasisBps(p.basisUnit === 'bps');
   }), []);
 
   // follow system theme changes when theme = system
@@ -193,6 +196,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setPage: changePage,
     detailSymbol,
     openDetail,
+    openLedger: useCallback(
+      (symbol: string) => {
+        sessionStorage.setItem('cosmos-ledger-symbol', symbol);
+        changePage('ledger');
+      },
+      [changePage]
+    ),
     prefs,
     updatePref: useCallback(<K extends keyof Prefs>(k: K, v: Prefs[K]) => {
       setPrefs(setPref(k, v));

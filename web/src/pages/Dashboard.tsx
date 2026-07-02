@@ -3,7 +3,7 @@ import { useStore } from '../store';
 import { TokenIcon } from '../components/TokenIcon';
 import { Num } from '../components/Num';
 import { EmptyState, SetupChecklist, SideTag, KindChip, WarnStrip, StatusDot } from '../components/ui';
-import { fmtPrice, fmtPct, fmtQty, timeAgo, fmtTimeShort, signClass, baseOf } from '../format';
+import { fmtPrice, fmtPct, fmtBasis, fmtQty, timeAgo, fmtTimeShort, signClass, baseOf } from '../format';
 
 export function Dashboard() {
   const { state, setPage, openTicket, openDetail } = useStore();
@@ -308,7 +308,7 @@ export function Dashboard() {
                     <span className="lb-name">{baseOf(p.symbol)}</span>
                     <span className="lb-sub"> {p.side === 'SHORT_PERP_LONG_SPOT' ? 'short perp' : 'long perp'}</span>
                   </span>
-                  <span className={`lb-val num ${signClass(p.basisNow)}`}>{fmtPct(p.basisNow, 2)}</span>
+                  <span className={`lb-val num ${signClass(p.basisNow)}`}>{fmtBasis(p.basisNow, 2)}</span>
                 </button>
               ))}
             </div>

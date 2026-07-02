@@ -9,6 +9,7 @@ export interface Prefs {
   refreshSec: number; // markets poll
   defaultPage: string;
   timezone: 'local' | 'utc';
+  basisUnit: 'pct' | 'bps';
 }
 
 const DEFAULTS: Prefs = {
@@ -19,6 +20,7 @@ const DEFAULTS: Prefs = {
   refreshSec: 6,
   defaultPage: 'dashboard',
   timezone: 'local',
+  basisUnit: 'pct',
 };
 
 const KEY = 'cosmos-prefs';

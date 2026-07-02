@@ -89,6 +89,13 @@ export function Settings() {
           onChange={(v) => updatePref('timezone', v)}
         />
       ))}
+      {row('Basis units', 'percent or basis points, everywhere basis is shown', (
+        <Seg<Prefs['basisUnit']>
+          value={prefs.basisUnit}
+          options={[{ v: 'pct', label: '%' }, { v: 'bps', label: 'bps' }]}
+          onChange={(v) => updatePref('basisUnit', v)}
+        />
+      ))}
       {row('Default page', 'where the app opens', (
         <Seg
           value={prefs.defaultPage}

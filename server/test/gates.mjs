@@ -248,6 +248,18 @@ check('system health responds', sys?.ok === true && typeof sys.uptimeSec === 'nu
 const evSearch = (await get('/api/events?kind=manual_action&q=kill')).body;
 check('ledger search works', Array.isArray(evSearch));
 
+const secRes = await fetch(`${BASE}/api/health`);
+check(
+  'security headers set (CSP, nosniff, frame, referrer)',
+  (secRes.headers.get('content-security-policy') ?? '').includes("frame-ancestors 'none'") &&
+    secRes.headers.get('x-content-type-options') === 'nosniff' &&
+    secRes.headers.get('x-frame-options') === 'DENY' &&
+    secRes.headers.get('referrer-policy') === 'no-referrer'
+);
+
+const volK = (await get('/api/klines?symbol=BTCUSDT&interval=5m&limit=50&field=volume')).body;
+check('volume klines respond', Array.isArray(volK) && volK.length > 10 && volK[0].v >= 0);
+
 child.kill();
 
 const failed = results.filter((r) => !r.pass);

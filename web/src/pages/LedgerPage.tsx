@@ -22,7 +22,11 @@ const KINDS = [
 export function LedgerPage() {
   const [events, setEvents] = useState<LedgerEvent[]>([]);
   const [kind, setKind] = useState('all');
-  const [symbol, setSymbol] = useState('');
+  const [symbol, setSymbol] = useState(() => {
+    const v = sessionStorage.getItem('cosmos-ledger-symbol') ?? '';
+    sessionStorage.removeItem('cosmos-ledger-symbol');
+    return v;
+  });
   const [q, setQ] = useState('');
   const [decision, setDecision] = useState<'all' | 'accepted' | 'rejected'>('all');
 

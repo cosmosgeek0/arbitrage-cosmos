@@ -1,7 +1,7 @@
 import { useStore } from '../store';
 import { TokenIcon } from '../components/TokenIcon';
 import { EmptyState } from '../components/ui';
-import { fmtFunding, fmtPct, fmtPrice, fmtMoney, timeAgo, signClass, baseOf } from '../format';
+import { fmtFunding, fmtPct, fmtBasis, fmtPrice, fmtMoney, timeAgo, signClass, baseOf } from '../format';
 
 const SIDE_LABEL: Record<string, string> = {
   SHORT_PERP_LONG_SPOT: 'Short perp · Long spot',
@@ -57,7 +57,7 @@ export function Opportunities() {
                   <div className="kv">
                     <div className="k">Basis now / peak</div>
                     <div className={`v num ${signClass(p.basisNow)}`}>
-                      {fmtPct(p.basisNow, 2)} / {fmtPct(p.basisPeak, 2)}
+                      {fmtBasis(p.basisNow, 2)} / {fmtBasis(p.basisPeak, 2)}
                     </div>
                   </div>
                   <div className="kv">

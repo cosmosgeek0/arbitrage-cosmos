@@ -143,9 +143,10 @@ export async function fetchKlines(
   symbol: string,
   interval: string,
   limit: number,
-  market: 'spot' | 'futures' = 'spot'
+  market: 'spot' | 'futures' = 'spot',
+  field: 'close' | 'volume' = 'close'
 ): Promise<KlinePoint[]> {
-  const key = `${market}:${symbol}:${interval}:${limit}`;
+  const key = `${market}:${symbol}:${interval}:${limit}:${field}`;
   const cached = klineCache.get(key);
   if (cached && Date.now() - cached.fetchedAt < KLINE_CACHE_MS) return cached.data;
 
@@ -155,8 +156,12 @@ export async function fetchKlines(
       : `${SPOT_API}/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`klines HTTP ${res.status}`);
-  const raw = (await res.json()) as [number, string, string, string, string, ...unknown[]][];
-  const data = raw.map((k) => ({ t: k[0], v: Number(k[4]) }));
+  const raw = (await res.json()) as [number, string, string, string, string, string, ...unknown[]][];
+  // k[4] = close, k[5] = base volume; volume is reported in quote terms (×close)
+  const data = raw.map((k) => ({
+    t: k[0],
+    v: field === 'volume' ? Number(k[5]) * Number(k[4]) : Number(k[4]),
+  }));
   klineCache.set(key, { fetchedAt: Date.now(), data });
   return data;
 }

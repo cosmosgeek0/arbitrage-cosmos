@@ -191,6 +191,24 @@ function buildState() {
 const app = express();
 app.use(express.json());
 
+// Security headers. CSP allows exactly what the app uses: self-hosted
+// scripts, inline styles (React style props), the two icon CDNs, and the
+// app's own WebSocket. Nothing else loads, nothing can frame us.
+app.use((_req, res, next) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+      "img-src 'self' data: https://cdn.jsdelivr.net https://assets.coincap.io; " +
+      "connect-src 'self' ws: wss:; font-src 'self'; object-src 'none'; " +
+      "frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+  );
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  next();
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
@@ -431,12 +449,13 @@ app.get('/api/klines', (req, res) => {
     const interval = String(req.query.interval ?? '5m');
     const limit = Math.min(Number(req.query.limit ?? 288), 500);
     const market = req.query.market === 'futures' ? 'futures' : 'spot';
+    const field = req.query.field === 'volume' ? 'volume' : 'close';
     if (!KLINE_INTERVALS.has(interval) || !/^[A-Z0-9]{1,20}$/.test(symbol)) {
       res.status(400).json({ error: 'bad symbol or interval' });
       return;
     }
     try {
-      res.json(await fetchKlines(symbol, interval, limit, market));
+      res.json(await fetchKlines(symbol, interval, limit, market, field));
     } catch (err) {
       res.status(502).json({ error: String(err) });
     }

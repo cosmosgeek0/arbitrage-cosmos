@@ -17,7 +17,7 @@ interface HistOrder {
 }
 
 export function Orders() {
-  const { state, cancelOrder, cancelAll } = useStore();
+  const { state, cancelOrder, cancelAll, openLedger } = useStore();
   const [tab, setTab] = useState<'open' | 'history'>('open');
   const [histSymbol, setHistSymbol] = useState('BTCUSDT');
   const [hist, setHist] = useState<HistOrder[] | null>(null);
@@ -119,6 +119,14 @@ export function Orders() {
                         }}
                       >
                         Cancel
+                      </button>
+                      <button
+                        className="mini-btn"
+                        style={{ marginLeft: 6 }}
+                        title={`Every decision and Binance response for ${o.symbol}`}
+                        onClick={() => openLedger(o.symbol)}
+                      >
+                        Ledger
                       </button>
                       <button
                         className="mini-btn"

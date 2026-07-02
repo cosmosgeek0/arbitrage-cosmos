@@ -5,7 +5,7 @@ import { Sparkline, SparkArea } from '../components/Spark';
 import { Num } from '../components/Num';
 import { StatTile, EmptyState } from '../components/ui';
 import { IconSearch } from '../components/Icons';
-import { fmtPrice, fmtPct, fmtMoney, fmtFunding, signClass } from '../format';
+import { fmtPrice, fmtPct, fmtBasis, fmtMoney, fmtFunding, signClass } from '../format';
 
 type SortKey = 'quoteVolume24h' | 'spot' | 'change24hPct' | 'basisPct' | 'fundingRate';
 type Filter = 'all' | 'watchlist' | 'gainers' | 'losers' | 'basis' | 'signals';
@@ -136,7 +136,7 @@ export function Markets() {
         <StatTile label="Avg |basis| (liquid)" value={`${avgBasis.toFixed(3)}%`} delta={`${liquid.length} pairs ≥ $3M`} />
         <StatTile
           label="Widest basis"
-          value={widest ? fmtPct(widest.basisPct, 2) : '—'}
+          value={widest ? fmtBasis(widest.basisPct, 2) : '—'}
           delta={widest?.symbol ?? '—'}
           onClick={widest ? () => openDetail(widest.symbol) : undefined}
         />
@@ -224,7 +224,7 @@ export function Markets() {
                   <span className="num">{fmtPct(m.change24hPct)}</span>
                 </td>
                 <td className={signClass(m.basisPct)}>
-                  <span className="num">{fmtPct(m.basisPct, 3)}</span>
+                  <span className="num">{fmtBasis(m.basisPct)}</span>
                 </td>
                 <td className={`col-hide-xs ${signClass(m.fundingRate)}`}>
                   <span className="num">{fmtFunding(m.fundingRate)}</span>

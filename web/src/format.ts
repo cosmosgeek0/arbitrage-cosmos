@@ -43,6 +43,22 @@ export function fmtPct(v: number | null | undefined, digits = 2, withSign = true
   return (withSign && n > 0 ? '+' : '') + s + '%';
 }
 
+// Basis display unit: percent (default) or basis points — set from Settings.
+let basisBps = false;
+export function setBasisBps(v: boolean): void {
+  basisBps = v;
+}
+
+export function fmtBasis(vPct: number | null | undefined, digits = 3): string {
+  const n = Number(vPct);
+  if (!isFinite(n) || vPct === null || vPct === undefined) return '—';
+  if (basisBps) {
+    const b = n * 100;
+    return (b > 0 ? '+' : '') + b.toFixed(Math.abs(b) >= 100 ? 0 : 1) + ' bps';
+  }
+  return fmtPct(n, digits);
+}
+
 export function fmtFunding(rate: number | null | undefined): string {
   const n = Number(rate);
   if (!isFinite(n) || rate === null || rate === undefined) return '—';

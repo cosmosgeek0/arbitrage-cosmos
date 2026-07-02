@@ -4,7 +4,7 @@ import { TokenIcon, brandColor } from '../components/TokenIcon';
 import { BigChart, type ChartPoint } from '../components/BigChart';
 import { Num } from '../components/Num';
 import { EmptyState, SideTag } from '../components/ui';
-import { fmtPrice, fmtPct, fmtMoney, fmtFunding, fmtQty, signClass, countdown, baseOf, fmtTimeShort, fmtDateTime, timeAgo } from '../format';
+import { fmtPrice, fmtPct, fmtBasis, fmtMoney, fmtFunding, fmtQty, signClass, countdown, baseOf, fmtTimeShort, fmtDateTime, timeAgo } from '../format';
 import type { FillRow, MarketDetail, SignalRecord } from '../types';
 
 const WINDOWS = {
@@ -14,7 +14,7 @@ const WINDOWS = {
   '1M': { interval: '2h', limit: 360 },
 } as const;
 type WinKey = keyof typeof WINDOWS;
-type ChartMode = 'price' | 'basis' | 'funding';
+type ChartMode = 'price' | 'basis' | 'funding' | 'volume';
 
 interface DepthLevel {
   price: number;
@@ -48,6 +48,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
   const [spotK, setSpotK] = useState<ChartPoint[]>([]);
   const [futK, setFutK] = useState<ChartPoint[]>([]);
   const [funding, setFunding] = useState<ChartPoint[]>([]);
+  const [volK, setVolK] = useState<ChartPoint[]>([]);
   const [detail, setDetail] = useState<MarketDetail | null>(null);
   const [depth, setDepth] = useState<{ bids: DepthLevel[]; asks: DepthLevel[] } | null>(null);
   const [trades, setTrades] = useState<{ id: number; price: number; qty: number; time: number; isBuyerMaker: boolean }[]>([]);
@@ -70,6 +71,10 @@ export function TokenDetail({ symbol }: { symbol: string }) {
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => alive && d && setFutK(d as ChartPoint[]))
         .catch(() => setFutK([]));
+      void fetch(`/api/klines?symbol=${symbol}&interval=${interval}&limit=${limit}&field=volume`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => alive && d && setVolK(d as ChartPoint[]))
+        .catch(() => setVolK([]));
     };
     load();
     const t = setInterval(load, 60_000);
@@ -126,7 +131,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
     return out;
   }, [spotK, futK]);
 
-  const chartData = mode === 'price' ? spotK : mode === 'basis' ? basisSeries : funding;
+  const chartData = mode === 'price' ? spotK : mode === 'basis' ? basisSeries : mode === 'volume' ? volK : funding;
   const pctFmt = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(3)}%`;
   const spread =
     detail?.book && detail.book.bidPrice > 0
@@ -169,15 +174,15 @@ export function TokenDetail({ symbol }: { symbol: string }) {
         </Num>
         <span className={`hl-chip num ${signClass(live?.change24hPct)}`}>{fmtPct(live?.change24hPct)} 24h</span>
         <span className="hl-chip muted-chip num">perp {fmtPrice(live?.perpMark)}</span>
-        <span className={`hl-chip num ${signClass(live?.basisPct)}`}>basis {fmtPct(live?.basisPct, 3)}</span>
+        <span className={`hl-chip num ${signClass(live?.basisPct)}`}>basis {fmtBasis(live?.basisPct)}</span>
       </div>
 
       <div className="chart-shell">
         <div className="chart-head">
           <div className="seg">
-            {(['price', 'basis', 'funding'] as ChartMode[]).map((m) => (
+            {(['price', 'basis', 'funding', 'volume'] as ChartMode[]).map((m) => (
               <button key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>
-                {m === 'price' ? 'Price' : m === 'basis' ? 'Basis' : 'Funding'}
+                {m === 'price' ? 'Price' : m === 'basis' ? 'Basis' : m === 'funding' ? 'Funding' : 'Volume'}
               </button>
             ))}
           </div>
@@ -196,14 +201,16 @@ export function TokenDetail({ symbol }: { symbol: string }) {
               ? 'spot vs perp close, same candles'
               : mode === 'funding'
                 ? 'settled funding, last 120 intervals'
-                : `funding ${fmtFunding(live?.fundingRate)} in ${countdown(live?.nextFundingTime)}`}
+                : mode === 'volume'
+                  ? 'quote volume per candle'
+                  : `funding ${fmtFunding(live?.fundingRate)} in ${countdown(live?.nextFundingTime)}`}
           </span>
         </div>
         <BigChart
           data={chartData}
           height={330}
-          color={mode === 'price' ? brandColor(symbol) : undefined}
-          valueFmt={mode === 'price' ? fmtPrice : pctFmt}
+          color={mode === 'price' || mode === 'volume' ? brandColor(symbol) : undefined}
+          valueFmt={mode === 'price' ? fmtPrice : mode === 'volume' ? fmtMoney : pctFmt}
           animateKey={`${symbol}-${win}-${mode}`}
         />
       </div>
@@ -213,7 +220,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
           <h3>Market stats</h3>
           <div className="kv-grid">
             <div className="kv"><div className="k">Perp mark</div><div className="v num">{fmtPrice(live?.perpMark)}</div></div>
-            <div className="kv"><div className="k">Basis</div><div className={`v num ${signClass(live?.basisPct)}`}>{fmtPct(live?.basisPct, 3)}</div></div>
+            <div className="kv"><div className="k">Basis</div><div className={`v num ${signClass(live?.basisPct)}`}>{fmtBasis(live?.basisPct)}</div></div>
             <div className="kv"><div className="k">Funding</div><div className={`v num ${signClass(live?.fundingRate)}`}>{fmtFunding(live?.fundingRate)}</div></div>
             <div className="kv"><div className="k">Next funding</div><div className="v num">{countdown(live?.nextFundingTime)}</div></div>
             <div className="kv"><div className="k">24h volume</div><div className="v num">{fmtMoney(live?.quoteVolume24h)}</div></div>
@@ -357,7 +364,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
                   <div className="k">{s.side === 'SHORT_PERP_LONG_SPOT' ? 'Short perp · Long spot' : 'Long perp · Short spot'}</div>
                   <div className="t">{fmtDateTime(s.openedTs)} {s.closedTs ? '· closed' : '· open'}</div>
                 </span>
-                <span className={`v num ${signClass(s.basisPeak)}`}>peak {fmtPct(s.basisPeak, 2)}</span>
+                <span className={`v num ${signClass(s.basisPeak)}`}>peak {fmtBasis(s.basisPeak, 2)}</span>
               </div>
             ))
           )}

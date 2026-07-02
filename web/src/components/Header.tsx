@@ -222,12 +222,9 @@ export function Topbar() {
           <button
             className="icon-btn"
             onClick={() => updatePref('theme', theme === 'light' ? 'dark' : 'light')}
-            title={theme === 'light' ? 'Dark mode' : 'Light mode'}
+            title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
           >
             {theme === 'light' ? <IconMoon size={15} /> : <IconSun size={15} />}
-          </button>
-          <button className="icon-btn col-hide-sm" onClick={() => setPage('settings')} title="Settings">
-            <IconGear size={15} />
           </button>
         </div>
       </div>

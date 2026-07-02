@@ -218,8 +218,10 @@ only. If a change needs a new field, add it minimally to the API and keep every
   REST fallback), light+dark.
 
 **Next (in rough priority):**
-- UI polish sweep of the trading surfaces to the §5 bar: Manual Trade, Orders,
-  Positions, Fills, then Loans and Strategies.
+- UI polish sweep of the trading surfaces to the §5 bar: Orders, Positions,
+  Fills, then Loans and Strategies. (Manual Trade done v2.8: clickable living
+  book in the rail feeds the limit ticket, side-tinted glass ticket,
+  quick-size chips from the risk cap.)
 - Backend Phase 2: live-verify the with-keys paths once real read-only keys are
   added (balances, margin, order history); then Binance **testnet** executor for
   the two-leg basis ticket; margin borrow pre-checks; volume-spike monitor.

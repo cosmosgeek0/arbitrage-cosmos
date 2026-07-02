@@ -6,6 +6,17 @@ export interface PairedSymbol {
   base: string;
 }
 
+export interface SymbolFilters {
+  symbol: string;
+  base: string;
+  quote: string;
+  status: string;
+  stepSize: number;
+  minQty: number;
+  tickSize: number;
+  minNotional: number;
+}
+
 interface SpotExchangeInfo {
   symbols: {
     symbol: string;
@@ -13,6 +24,7 @@ interface SpotExchangeInfo {
     baseAsset: string;
     quoteAsset: string;
     isSpotTradingAllowed: boolean;
+    filters: { filterType: string; [k: string]: unknown }[];
   }[];
 }
 
@@ -30,12 +42,18 @@ const EXCLUDED_BASES = new Set([
   'USDC', 'FDUSD', 'TUSD', 'USDP', 'DAI', 'BUSD', 'AEUR', 'EUR', 'EURI', 'USD1', 'USDE', 'XUSD',
 ]);
 
+export interface ExchangeUniverse {
+  pairs: PairedSymbol[]; // exact-name spot+perp pairs for the basis scanner
+  filters: Map<string, SymbolFilters>; // ALL tradable USDT spot symbols, for order validation
+}
+
 /**
- * Symbols that trade with the exact same name on spot and USDT-perp (e.g. BTCUSDT).
- * Multiplier contracts like 1000SHIBUSDT deliberately do NOT match — comparing them
- * to spot needs contract-size math, which is a later phase.
+ * One pass over both exchangeInfos. Pairs = symbols trading with the exact
+ * same name on spot and USDT-perp (multiplier contracts like 1000SHIBUSDT
+ * deliberately do not match). Filters cover every USDT spot symbol so the
+ * manual trade ticket can validate any of them.
  */
-export async function fetchPairedSymbols(): Promise<PairedSymbol[]> {
+export async function fetchExchangeUniverse(): Promise<ExchangeUniverse> {
   const [spotRes, futRes] = await Promise.all([
     fetch(`${SPOT_API}/api/v3/exchangeInfo`),
     fetch(`${FAPI}/fapi/v1/exchangeInfo`),
@@ -45,16 +63,30 @@ export async function fetchPairedSymbols(): Promise<PairedSymbol[]> {
   const spot = (await spotRes.json()) as SpotExchangeInfo;
   const fut = (await futRes.json()) as FuturesExchangeInfo;
 
-  const spotBases = new Map<string, string>();
+  const filters = new Map<string, SymbolFilters>();
+  const pairableBases = new Map<string, string>();
   for (const s of spot.symbols) {
-    if (
-      s.status === 'TRADING' &&
-      s.quoteAsset === 'USDT' &&
-      s.isSpotTradingAllowed &&
-      !EXCLUDED_BASES.has(s.baseAsset)
-    ) {
-      spotBases.set(s.symbol, s.baseAsset);
-    }
+    if (s.status !== 'TRADING' || s.quoteAsset !== 'USDT' || !s.isSpotTradingAllowed) continue;
+    const lot = s.filters.find((f) => f.filterType === 'LOT_SIZE') as
+      | { stepSize: string; minQty: string }
+      | undefined;
+    const priceF = s.filters.find((f) => f.filterType === 'PRICE_FILTER') as
+      | { tickSize: string }
+      | undefined;
+    const notional = s.filters.find((f) => f.filterType === 'NOTIONAL') as
+      | { minNotional: string }
+      | undefined;
+    filters.set(s.symbol, {
+      symbol: s.symbol,
+      base: s.baseAsset,
+      quote: s.quoteAsset,
+      status: s.status,
+      stepSize: Number(lot?.stepSize ?? 0),
+      minQty: Number(lot?.minQty ?? 0),
+      tickSize: Number(priceF?.tickSize ?? 0),
+      minNotional: Number(notional?.minNotional ?? 0),
+    });
+    if (!EXCLUDED_BASES.has(s.baseAsset)) pairableBases.set(s.symbol, s.baseAsset);
   }
 
   const pairs: PairedSymbol[] = [];
@@ -63,12 +95,40 @@ export async function fetchPairedSymbols(): Promise<PairedSymbol[]> {
       f.status === 'TRADING' &&
       f.contractType === 'PERPETUAL' &&
       f.quoteAsset === 'USDT' &&
-      spotBases.has(f.symbol)
+      pairableBases.has(f.symbol)
     ) {
-      pairs.push({ symbol: f.symbol, base: spotBases.get(f.symbol)! });
+      pairs.push({ symbol: f.symbol, base: pairableBases.get(f.symbol)! });
     }
   }
-  return pairs;
+  return { pairs, filters };
+}
+
+export interface BookTicker {
+  symbol: string;
+  bidPrice: number;
+  bidQty: number;
+  askPrice: number;
+  askQty: number;
+}
+
+const bookCache = new Map<string, { fetchedAt: number; data: BookTicker }>();
+const BOOK_CACHE_MS = 2_000;
+
+export async function fetchBookTicker(symbol: string): Promise<BookTicker> {
+  const cached = bookCache.get(symbol);
+  if (cached && Date.now() - cached.fetchedAt < BOOK_CACHE_MS) return cached.data;
+  const res = await fetch(`${SPOT_API}/api/v3/ticker/bookTicker?symbol=${encodeURIComponent(symbol)}`);
+  if (!res.ok) throw new Error(`bookTicker HTTP ${res.status}`);
+  const raw = (await res.json()) as { symbol: string; bidPrice: string; bidQty: string; askPrice: string; askQty: string };
+  const data: BookTicker = {
+    symbol: raw.symbol,
+    bidPrice: Number(raw.bidPrice),
+    bidQty: Number(raw.bidQty),
+    askPrice: Number(raw.askPrice),
+    askQty: Number(raw.askQty),
+  };
+  bookCache.set(symbol, { fetchedAt: Date.now(), data });
+  return data;
 }
 
 export interface KlinePoint {

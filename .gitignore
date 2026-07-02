@@ -5,3 +5,5 @@ data/
 *.log
 .env
 .env.*
+!.env.example
+binance-signal-lab-public copy 2/

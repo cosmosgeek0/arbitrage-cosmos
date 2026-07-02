@@ -9,6 +9,7 @@
   "scripts": {
     "build": "npm run build -w server && npm run build -w web",
     "start": "node server/dist/index.js",
-    "dev": "npm run dev -w server"
+    "dev": "npm run dev -w server",
+    "test": "node server/test/gates.mjs"
   }
 }

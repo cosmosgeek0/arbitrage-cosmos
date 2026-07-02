@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { fmtPrice, fmtDateTime } from '../format';
-import type { KlinePoint } from '../types';
+
+interface KlinePoint {
+  t: number;
+  v: number;
+}
 
 export function AreaChart({ data, height = 300 }: { data: KlinePoint[]; height?: number }) {
   const wrapRef = useRef<HTMLDivElement>(null);

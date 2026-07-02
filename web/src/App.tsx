@@ -1,40 +1,107 @@
-import { useState } from 'react';
-import { StoreProvider, useStore } from './store';
-import { Overview } from './pages/Overview';
+import { useEffect, useState } from 'react';
+import { StoreProvider, useStore, type Page } from './store';
+import { Dashboard } from './pages/Dashboard';
+import { Account } from './pages/Account';
+import { ManualTrade } from './pages/ManualTrade';
+import { Strategies } from './pages/Strategies';
 import { Opportunities } from './pages/Opportunities';
-import { Portfolio } from './pages/Portfolio';
-import { System } from './pages/System';
-import { IconGrid, IconPulse, IconRadar, IconSliders, IconWallet } from './components/Icons';
-import { fmtPrice } from './format';
+import { Orders } from './pages/Orders';
+import { Positions } from './pages/Positions';
+import { Fills } from './pages/Fills';
+import { Pnl } from './pages/Pnl';
+import { Risk } from './pages/Risk';
+import { LedgerPage } from './pages/LedgerPage';
+import { Settings } from './pages/Settings';
+import {
+  IconBook,
+  IconBrain,
+  IconChart,
+  IconGear,
+  IconGrid,
+  IconLayers,
+  IconList,
+  IconPower,
+  IconRadar,
+  IconReceipt,
+  IconShield,
+  IconTicket,
+  IconWallet,
+} from './components/Icons';
 
-type Page = 'overview' | 'opportunities' | 'portfolio' | 'system';
-
-const NAV: { id: Page; label: string; icon: JSX.Element }[] = [
-  { id: 'overview', label: 'Overview', icon: <IconGrid /> },
-  { id: 'opportunities', label: 'Opportunities', icon: <IconRadar /> },
-  { id: 'portfolio', label: 'Portfolio', icon: <IconWallet /> },
-  { id: 'system', label: 'System', icon: <IconSliders /> },
+const NAV: { group: string | null; items: { id: Page; label: string; icon: JSX.Element }[] }[] = [
+  {
+    group: null,
+    items: [
+      { id: 'dashboard', label: 'Dashboard', icon: <IconGrid /> },
+      { id: 'account', label: 'Account', icon: <IconWallet /> },
+    ],
+  },
+  {
+    group: 'Trading',
+    items: [
+      { id: 'trade', label: 'Manual Trade', icon: <IconTicket /> },
+      { id: 'orders', label: 'Orders', icon: <IconList /> },
+      { id: 'positions', label: 'Positions', icon: <IconLayers /> },
+      { id: 'fills', label: 'Fills', icon: <IconReceipt /> },
+    ],
+  },
+  {
+    group: 'Intelligence',
+    items: [
+      { id: 'strategies', label: 'Strategies', icon: <IconBrain /> },
+      { id: 'opportunities', label: 'Opportunities', icon: <IconRadar /> },
+    ],
+  },
+  {
+    group: 'Control',
+    items: [
+      { id: 'pnl', label: 'PnL', icon: <IconChart /> },
+      { id: 'risk', label: 'Risk', icon: <IconShield /> },
+      { id: 'ledger', label: 'Ledger', icon: <IconBook /> },
+      { id: 'settings', label: 'Settings', icon: <IconGear /> },
+    ],
+  },
 ];
 
 const TITLES: Record<Page, string> = {
-  overview: 'Market overview',
+  dashboard: 'Dashboard',
+  account: 'Account',
+  trade: 'Manual Trade',
+  strategies: 'Strategies',
   opportunities: 'Opportunities',
-  portfolio: 'Portfolio',
-  system: 'System & risk',
+  orders: 'Orders',
+  positions: 'Positions',
+  fills: 'Fills',
+  pnl: 'PnL',
+  risk: 'Risk',
+  ledger: 'Ledger',
+  settings: 'Settings',
 };
 
-function Shell() {
-  const [page, setPage] = useState<Page>('overview');
-  const [heroSymbol, setHeroSymbol] = useState('BTCUSDT');
-  const { snap, connected, config } = useStore();
+const MODE_LABEL: Record<string, string> = {
+  HALTED: 'HALTED',
+  MANUAL: 'MANUAL · live off',
+  LIVE_ARMED: 'LIVE ARMED',
+};
 
-  const btc = snap?.rows.find((r) => r.symbol === 'BTCUSDT');
-  const kill = config?.killSwitch ?? true;
+function UtcClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return <span className="utc-clock mono">{now.toISOString().slice(11, 19)} UTC</span>;
+}
+
+function Shell() {
+  const { state, connected, page, setPage, setKill } = useStore();
+  const mode = state?.mode ?? 'HALTED';
+  const binanceOk = state?.binance.keysPresent && state.binance.connected;
 
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="logo">
+        <div className="logo" onClick={() => setPage('dashboard')}>
           <span className="logo-mark" />
           <div>
             <div className="logo-name">COSMOS</div>
@@ -42,29 +109,28 @@ function Shell() {
           </div>
         </div>
         <nav>
-          {NAV.map((n) => (
-            <button key={n.id} className={`nav-item ${page === n.id ? 'active' : ''}`} onClick={() => setPage(n.id)}>
-              {n.icon}
-              {n.label}
-            </button>
+          {NAV.map((g, i) => (
+            <div key={i} className="nav-group">
+              {g.group && <div className="nav-group-title">{g.group}</div>}
+              {g.items.map((n) => (
+                <button key={n.id} className={`nav-item ${page === n.id ? 'active' : ''}`} onClick={() => setPage(n.id)}>
+                  {n.icon}
+                  {n.label}
+                  {n.id === 'opportunities' && (state?.proposals.length ?? 0) > 0 && (
+                    <span className="nav-badge">{state!.proposals.length}</span>
+                  )}
+                </button>
+              ))}
+            </div>
           ))}
         </nav>
-        <div className="sidebar-foot">
-          <div className={`mode-card ${kill ? 'mode-halted' : 'mode-armed'}`}>
-            <IconPulse size={16} />
-            <div>
-              <div className="mode-label">{kill ? 'Halted · Paper' : 'Armed · Paper'}</div>
-              <div className="mode-sub">Phase 1 — no live trading</div>
-            </div>
-          </div>
-        </div>
+        <div className="sidebar-foot muted small">private · one account · no withdrawals</div>
       </aside>
 
       <nav className="bottom-nav">
-        {NAV.map((n) => (
-          <button key={n.id} className={`bottom-nav-item ${page === n.id ? 'active' : ''}`} onClick={() => setPage(n.id)}>
-            {n.icon}
-            <span>{n.label}</span>
+        {(['dashboard', 'trade', 'risk', 'ledger'] as Page[]).map((id) => (
+          <button key={id} className={`bottom-nav-item ${page === id ? 'active' : ''}`} onClick={() => setPage(id)}>
+            {TITLES[id]}
           </button>
         ))}
       </nav>
@@ -73,31 +139,41 @@ function Shell() {
         <header className="topbar">
           <h1>{TITLES[page]}</h1>
           <div className="topbar-right">
-            {btc && (
-              <button className="btc-pill" onClick={() => { setHeroSymbol('BTCUSDT'); setPage('overview'); }}>
-                <span className="btc-dot" />
-                BTC {fmtPrice(btc.spot)}
+            <UtcClock />
+            <span className={`pill mode-${mode.toLowerCase()}`}>{MODE_LABEL[mode] ?? mode}</span>
+            <span
+              className={`pill ${state?.binance.keysPresent ? (binanceOk ? 'pill-ok' : 'pill-bad') : 'pill-idle'}`}
+              title={state?.binance.lastError ?? undefined}
+            >
+              Binance {state?.binance.keysPresent ? (binanceOk ? 'connected' : 'error') : 'no keys'}
+            </span>
+            <span className={`pill ${connected ? 'pill-ok' : 'pill-bad'}`}>
+              <span className="dot-inline" /> {connected ? 'Live' : 'Reconnecting'}
+            </span>
+            {mode === 'HALTED' ? (
+              <button className="pill pill-halted" onClick={() => setPage('risk')} title="Resume on the Risk page">
+                <IconPower size={13} /> Halted
+              </button>
+            ) : (
+              <button className="halt-btn" onClick={() => void setKill(true)} title="Instant kill switch">
+                <IconPower size={13} /> HALT
               </button>
             )}
-            <span className={`conn-pill ${connected ? 'ok' : 'bad'}`}>
-              <span className="dot-inline" />
-              {connected ? 'Live' : 'Reconnecting…'}
-            </span>
           </div>
         </header>
         <main className="content">
-          {page === 'overview' && (
-            <Overview
-              heroSymbol={heroSymbol}
-              setHeroSymbol={(s) => {
-                setHeroSymbol(s);
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-            />
-          )}
+          {page === 'dashboard' && <Dashboard />}
+          {page === 'account' && <Account />}
+          {page === 'trade' && <ManualTrade />}
+          {page === 'strategies' && <Strategies />}
           {page === 'opportunities' && <Opportunities />}
-          {page === 'portfolio' && <Portfolio />}
-          {page === 'system' && <System />}
+          {page === 'orders' && <Orders />}
+          {page === 'positions' && <Positions />}
+          {page === 'fills' && <Fills />}
+          {page === 'pnl' && <Pnl />}
+          {page === 'risk' && <Risk />}
+          {page === 'ledger' && <LedgerPage />}
+          {page === 'settings' && <Settings />}
         </main>
       </div>
     </div>

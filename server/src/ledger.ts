@@ -11,6 +11,20 @@ export interface LedgerEvent {
   data: unknown;
 }
 
+export interface FillRow {
+  symbol: string;
+  tradeId: number;
+  orderId: number | null;
+  side: string;
+  price: number;
+  qty: number;
+  quoteQty: number;
+  commission: number;
+  commissionAsset: string | null;
+  ts: number;
+  source: string;
+}
+
 export interface SignalRecord {
   id: number;
   symbol: string;
@@ -29,6 +43,20 @@ interface EventDbRow {
   kind: string;
   symbol: string | null;
   data: string | null;
+}
+
+interface FillDbRow {
+  symbol: string;
+  trade_id: number;
+  order_id: number | null;
+  side: string;
+  price: number;
+  qty: number;
+  quote_qty: number;
+  commission: number;
+  commission_asset: string | null;
+  ts: number;
+  source: string;
 }
 
 interface SignalDbRow {
@@ -59,6 +87,20 @@ export class Ledger extends EventEmitter {
         symbol TEXT,
         data TEXT
       );
+      CREATE TABLE IF NOT EXISTS fills (
+        symbol TEXT NOT NULL,
+        trade_id INTEGER NOT NULL,
+        order_id INTEGER,
+        side TEXT NOT NULL,
+        price REAL NOT NULL,
+        qty REAL NOT NULL,
+        quote_qty REAL NOT NULL,
+        commission REAL NOT NULL DEFAULT 0,
+        commission_asset TEXT,
+        ts INTEGER NOT NULL,
+        source TEXT NOT NULL,
+        PRIMARY KEY (symbol, trade_id)
+      );
       CREATE TABLE IF NOT EXISTS signals (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         symbol TEXT NOT NULL,
@@ -75,6 +117,8 @@ export class Ledger extends EventEmitter {
         value TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_events_ts ON events (ts DESC);
+      CREATE INDEX IF NOT EXISTS idx_events_kind ON events (kind, ts DESC);
+      CREATE INDEX IF NOT EXISTS idx_fills_ts ON fills (ts DESC);
     `);
   }
 
@@ -94,17 +138,70 @@ export class Ledger extends EventEmitter {
     return ev;
   }
 
-  recentEvents(limit = 100): LedgerEvent[] {
+  recentEvents(limit = 100, kind?: string): LedgerEvent[] {
+    const rows = (
+      kind
+        ? this.db.prepare('SELECT * FROM events WHERE kind = ? ORDER BY id DESC LIMIT ?').all(kind, limit)
+        : this.db.prepare('SELECT * FROM events ORDER BY id DESC LIMIT ?').all(limit)
+    ) as EventDbRow[];
+    return rows.map(parseEvent);
+  }
+
+  eventsSince(ts: number, kind: string): LedgerEvent[] {
     const rows = this.db
-      .prepare('SELECT * FROM events ORDER BY id DESC LIMIT ?')
-      .all(limit) as EventDbRow[];
-    return rows.map((r) => ({
-      id: r.id,
-      ts: r.ts,
-      kind: r.kind,
-      symbol: r.symbol,
-      data: r.data ? JSON.parse(r.data) : null,
-    }));
+      .prepare('SELECT * FROM events WHERE kind = ? AND ts >= ? ORDER BY id ASC')
+      .all(kind, ts) as EventDbRow[];
+    return rows.map(parseEvent);
+  }
+
+  firstEventSince(ts: number, kind: string): LedgerEvent | null {
+    const row = this.db
+      .prepare('SELECT * FROM events WHERE kind = ? AND ts >= ? ORDER BY id ASC LIMIT 1')
+      .get(kind, ts) as EventDbRow | undefined;
+    return row ? parseEvent(row) : null;
+  }
+
+  lastEvent(kind: string): LedgerEvent | null {
+    const row = this.db
+      .prepare('SELECT * FROM events WHERE kind = ? ORDER BY id DESC LIMIT 1')
+      .get(kind) as EventDbRow | undefined;
+    return row ? parseEvent(row) : null;
+  }
+
+  /** Returns true if the fill was new (not a duplicate). */
+  insertFill(f: FillRow): boolean {
+    const info = this.db
+      .prepare(
+        `INSERT OR IGNORE INTO fills
+         (symbol, trade_id, order_id, side, price, qty, quote_qty, commission, commission_asset, ts, source)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        f.symbol,
+        f.tradeId,
+        f.orderId,
+        f.side,
+        f.price,
+        f.qty,
+        f.quoteQty,
+        f.commission,
+        f.commissionAsset,
+        f.ts,
+        f.source
+      );
+    return info.changes > 0;
+  }
+
+  listFills(limit = 200): FillRow[] {
+    const rows = this.db
+      .prepare('SELECT * FROM fills ORDER BY ts DESC LIMIT ?')
+      .all(limit) as FillDbRow[];
+    return rows.map(parseFill);
+  }
+
+  allFillsAsc(): FillRow[] {
+    const rows = this.db.prepare('SELECT * FROM fills ORDER BY ts ASC').all() as FillDbRow[];
+    return rows.map(parseFill);
   }
 
   openSignal(s: {
@@ -164,4 +261,30 @@ export class Ledger extends EventEmitter {
       )
       .run(key, value);
   }
+}
+
+function parseEvent(r: EventDbRow): LedgerEvent {
+  return {
+    id: r.id,
+    ts: r.ts,
+    kind: r.kind,
+    symbol: r.symbol,
+    data: r.data ? (JSON.parse(r.data) as unknown) : null,
+  };
+}
+
+function parseFill(r: FillDbRow): FillRow {
+  return {
+    symbol: r.symbol,
+    tradeId: r.trade_id,
+    orderId: r.order_id,
+    side: r.side,
+    price: r.price,
+    qty: r.qty,
+    quoteQty: r.quote_qty,
+    commission: r.commission,
+    commissionAsset: r.commission_asset,
+    ts: r.ts,
+    source: r.source,
+  };
 }

@@ -4,6 +4,15 @@ Private Binance trading control room. Real money is involved. One user (the owne
 
 Read ARCHITECTURE.md before building anything.
 
+## Product rules (locked by the owner)
+
+- The homepage is the ACCOUNT control room (balance, PnL, orders, fills, strategy state, trade ticket, risk, kill switch, event log). Never a big BTC chart, never a market token wall, never a Signal Lab clone.
+- If a button exists it must do something; unimplemented features show as disabled/in-development, never as fake-running.
+- Empty pages show a useful setup state, not blanks.
+- Live execution is manual-only: strategy → proposal → prefilled ticket → risk gate → typed confirmation → send. No autonomous order placement in v0.
+- Withdrawals/transfers-out: no code, no UI, ever. Keys: server env only, never frontend, never git.
+- Run `npm test` (29 gates) before considering any change done.
+
 ## Non-negotiable safety rules
 
 1. **Paper mode is the default.** Live order placement is a separate, explicit mode behind a config flag AND a UI switch. It does not exist until Phase 5.
@@ -22,6 +31,8 @@ Read ARCHITECTURE.md before building anything.
 
 ## Current phase
 
-Phase 1 SHIPPED (July 2026): market data engine (spot miniTickers + futures mark/funding via the NEW tiered WS hosts — see ARCHITECTURE.md, legacy fstream `/ws` is dead), paper basis scanner, SQLite ledger, React dashboard (Overview / Opportunities / Portfolio placeholder / System with kill switch + config). Verified against Binance's own numbers.
+v0 Control Room SHIPPED (2026-07-02): account dashboard (disconnected + connected states), signed Binance client (`server/src/binance/client.ts` — no withdrawal methods by design), manual trade ticket with preview/validate/live-send, server-side risk gate (`services/risk.ts`), full ledger (events + fills + signals in SQLite), user-data stream with 30s polling fallback (listenKey flow may be deprecated — polling is the guaranteed path), basis monitor producing explained proposals, 29 gate tests in `server/test/gates.mjs` (`npm test`).
 
-Next: Phase 2 — read-only API keys → balances, positions, fills, user-data stream. Keys via env vars on the server only.
+Market data uses the NEW tiered futures WS hosts (legacy fstream `/ws` is silently dead since 2026-04-23 — see ARCHITECTURE.md).
+
+Next: two-leg basis ticket via Binance testnet executor; margin borrow checks; volume-spike monitor.

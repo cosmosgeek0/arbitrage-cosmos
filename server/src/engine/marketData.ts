@@ -1,5 +1,5 @@
 import { BinanceStream, type FeedStatus } from '../binance/ws.js';
-import { fetchPairedSymbols } from '../binance/rest.js';
+import { fetchExchangeUniverse, type SymbolFilters } from '../binance/rest.js';
 import type { Ledger } from '../ledger.js';
 import type { SymbolRow } from '../types.js';
 
@@ -12,8 +12,6 @@ interface FeatureEntry {
   perpMark: number | null;
   fundingRate: number | null;
   nextFundingTime: number | null;
-  priceHistory: number[];
-  basisHistory: number[];
 }
 
 interface SpotMiniTicker {
@@ -30,14 +28,14 @@ interface MarkPriceUpdate {
   T?: number;
 }
 
-const HISTORY_CAP = 120; // sampled every 30s → 1 hour of history
-const SAMPLE_MS = 30_000;
-
 export class MarketEngine {
   readonly feeds: Record<string, FeedStatus> = {};
+  readonly filters = new Map<string, SymbolFilters>();
+  /** Last spot price for EVERY USDT symbol seen on the mini-ticker feed (for valuations). */
+  private spotPrices = new Map<string, number>();
+  private spotChange = new Map<string, number>();
   private features = new Map<string, FeatureEntry>();
   private streams: BinanceStream[] = [];
-  private sampler: NodeJS.Timeout | null = null;
 
   constructor(private readonly ledger: Ledger) {}
 
@@ -46,7 +44,8 @@ export class MarketEngine {
   }
 
   async init(): Promise<void> {
-    const pairs = await fetchPairedSymbols();
+    const { pairs, filters } = await fetchExchangeUniverse();
+    for (const [k, v] of filters) this.filters.set(k, v);
     for (const p of pairs) {
       this.features.set(p.symbol, {
         symbol: p.symbol,
@@ -57,8 +56,6 @@ export class MarketEngine {
         perpMark: null,
         fundingRate: null,
         nextFundingTime: null,
-        priceHistory: [],
-        basisHistory: [],
       });
     }
   }
@@ -89,22 +86,34 @@ export class MarketEngine {
 
     this.streams = [spotStream, markStream];
     for (const s of this.streams) s.start();
-
-    this.sampler = setInterval(() => this.sampleHistory(), SAMPLE_MS);
   }
 
   stop(): void {
     for (const s of this.streams) s.stop();
-    if (this.sampler) clearInterval(this.sampler);
+  }
+
+  /** Spot price of any USDT symbol (e.g. for balance valuation). */
+  priceOf(symbol: string): number | null {
+    return this.spotPrices.get(symbol) ?? null;
+  }
+
+  changeOf(symbol: string): number | null {
+    return this.spotChange.get(symbol) ?? null;
   }
 
   private onSpotMiniTickers(data: unknown): void {
     if (!Array.isArray(data)) return;
     for (const t of data as SpotMiniTicker[]) {
+      const last = Number(t.c);
+      const open = Number(t.o);
+      if (t.s.endsWith('USDT')) {
+        this.spotPrices.set(t.s, last);
+        if (open > 0) this.spotChange.set(t.s, ((last - open) / open) * 100);
+      }
       const f = this.features.get(t.s);
       if (!f) continue;
-      f.spotLast = Number(t.c);
-      f.spotOpen24h = Number(t.o);
+      f.spotLast = last;
+      f.spotOpen24h = open;
       f.spotQuoteVol24h = Number(t.q);
     }
   }
@@ -120,28 +129,6 @@ export class MarketEngine {
     }
   }
 
-  private sampleHistory(): void {
-    for (const f of this.features.values()) {
-      if (f.spotLast !== null) {
-        f.priceHistory.push(f.spotLast);
-        if (f.priceHistory.length > HISTORY_CAP) f.priceHistory.shift();
-      }
-      const basis = basisPct(f);
-      if (basis !== null) {
-        f.basisHistory.push(basis);
-        if (f.basisHistory.length > HISTORY_CAP) f.basisHistory.shift();
-      }
-    }
-  }
-
-  sparkOf(symbol: string): { price: number[]; basis: number[] } {
-    const f = this.features.get(symbol);
-    return {
-      price: f ? [...f.priceHistory] : [],
-      basis: f ? [...f.basisHistory] : [],
-    };
-  }
-
   rows(): SymbolRow[] {
     const out: SymbolRow[] = [];
     for (const f of this.features.values()) {
@@ -150,7 +137,10 @@ export class MarketEngine {
         base: f.base,
         spot: f.spotLast,
         perpMark: f.perpMark,
-        basisPct: basisPct(f),
+        basisPct:
+          f.spotLast !== null && f.perpMark !== null && f.spotLast > 0
+            ? ((f.perpMark - f.spotLast) / f.spotLast) * 100
+            : null,
         fundingRate: f.fundingRate,
         nextFundingTime: f.nextFundingTime,
         change24hPct:
@@ -161,12 +151,6 @@ export class MarketEngine {
         status: 'idle',
       });
     }
-    out.sort((a, b) => (b.quoteVolume24h ?? 0) - (a.quoteVolume24h ?? 0));
     return out;
   }
-}
-
-function basisPct(f: FeatureEntry): number | null {
-  if (f.spotLast === null || f.perpMark === null || f.spotLast <= 0) return null;
-  return ((f.perpMark - f.spotLast) / f.spotLast) * 100;
 }

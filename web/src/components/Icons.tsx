@@ -146,6 +146,44 @@ export const IconMoon = ({ size = 18 }: IconProps) => (
   </svg>
 );
 
+export const IconClock = ({ size = 18 }: IconProps) => (
+  <svg {...base(size)}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
+  </svg>
+);
+
+export const IconRefresh = ({ size = 18 }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+    <path d="M21 3v5h-5" />
+    <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+    <path d="M3 21v-5h5" />
+  </svg>
+);
+
+export const IconKey = ({ size = 18 }: IconProps) => (
+  <svg {...base(size)}>
+    <circle cx="7.5" cy="15.5" r="4.5" />
+    <path d="m10.7 12.3 8.3-8.3M16 5l3 3M14 7l3 3" />
+  </svg>
+);
+
+export const IconPercent = ({ size = 18 }: IconProps) => (
+  <svg {...base(size)}>
+    <line x1="19" y1="5" x2="5" y2="19" />
+    <circle cx="6.5" cy="6.5" r="2.5" />
+    <circle cx="17.5" cy="17.5" r="2.5" />
+  </svg>
+);
+
+export const IconKeyboard = ({ size = 18 }: IconProps) => (
+  <svg {...base(size)}>
+    <rect x="2" y="6" width="20" height="12" rx="2" />
+    <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8" />
+  </svg>
+);
+
 export const IconWifi = ({ size = 18 }: IconProps) => (
   <svg {...base(size)}>
     <path d="M12 20h.01" />

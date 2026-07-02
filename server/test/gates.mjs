@@ -260,6 +260,15 @@ check(
 const volK = (await get('/api/klines?symbol=BTCUSDT&interval=5m&limit=50&field=volume')).body;
 check('volume klines respond', Array.isArray(volK) && volK.length > 10 && volK[0].v >= 0);
 
+const iconsRes = await fetch(`${BASE}/api/icons?bases=BTC,ETH,TLM,BREV`);
+const iconsBody = await iconsRes.json().catch(() => null);
+check('icon manifest endpoint responds', iconsRes.status === 200 && iconsBody !== null && typeof iconsBody === 'object');
+check(
+  'CSP allows coingecko + coincap image hosts',
+  (secRes.headers.get('content-security-policy') ?? '').includes('coingecko.com') &&
+    (secRes.headers.get('content-security-policy') ?? '').includes('coincap.io')
+);
+
 child.kill();
 
 const failed = results.filter((r) => !r.pass);

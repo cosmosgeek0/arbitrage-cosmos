@@ -7,3 +7,4 @@ data/
 .env.*
 !.env.example
 binance-signal-lab-public copy 2/
+hey/

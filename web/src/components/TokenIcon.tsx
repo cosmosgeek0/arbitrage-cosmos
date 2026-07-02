@@ -1,5 +1,6 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useReducer, useState } from 'react';
 import { baseOf } from '../format';
+import { iconUrl, onIcons, requestIcon } from '../lib/iconManifest';
 
 // Recognized token brand hues (vivid subset). Fallback = deterministic hue.
 const BRAND: Record<string, string> = {
@@ -85,21 +86,35 @@ export function Monogram({ base, size }: { base: string; size: number }) {
 }
 
 /**
- * Real logo resolver with a fallback chain: alias map → spothq CC0 SVG →
- * coincap PNG → gradient monogram. Every icon sits in a uniform circular
- * container with a hairline ring so real logos and monograms look consistent
- * and premium — never an empty circle, never a jarring size mismatch.
+ * Real logo resolver with a fallback chain: server-resolved CoinGecko logo
+ * (near-total coverage, cached to disk) → spothq CC0 SVG → coincap PNG →
+ * gradient monogram. Every icon sits in a uniform circular badge with a
+ * hairline ring so all sources look consistent — never an empty circle, never
+ * a jarring size mismatch. Monograms upgrade to the real logo in place once
+ * the background resolver finds it.
  */
 export function TokenIcon({ symbol, size = 26 }: { symbol: string; size?: number }) {
   const raw = baseOf(symbol);
   const base = ALIAS[raw] ?? raw;
-  const chain = [SPOTHQ(base), COINCAP(base)];
   const [idx, setIdx] = useState(0);
+  const [, force] = useReducer((x: number) => x + 1, 0);
+
+  // ask the manifest for this base and re-render when its logo resolves
+  useEffect(() => {
+    requestIcon(base);
+    setIdx(0);
+    return onIcons(force);
+  }, [base]);
+
+  const resolved = iconUrl(base);
+  const chain = [resolved, SPOTHQ(base), COINCAP(base)].filter(Boolean) as string[];
+
   const inner =
     idx >= chain.length ? (
       <Monogram base={raw} size={size} />
     ) : (
       <img
+        key={chain[idx]}
         src={chain[idx]}
         width={size}
         height={size}
@@ -108,7 +123,7 @@ export function TokenIcon({ symbol, size = 26 }: { symbol: string; size?: number
         decoding="async"
         referrerPolicy="no-referrer"
         style={{ width: size, height: size, display: 'block' }}
-        onError={() => setIdx(idx + 1)}
+        onError={() => setIdx((i) => i + 1)}
       />
     );
   return (

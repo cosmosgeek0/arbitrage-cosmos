@@ -16,6 +16,7 @@ import {
   fetchTrades,
 } from './binance/rest.js';
 import { BinanceClient, credsFromEnv, rateLimit } from './binance/client.js';
+import { resolveIcons } from './binance/icons.js';
 import { UserStream, type ExecutionReport } from './binance/userStream.js';
 import { AccountService } from './services/account.js';
 import { RiskService } from './services/risk.js';
@@ -198,7 +199,7 @@ app.use((_req, res, next) => {
   res.setHeader(
     'Content-Security-Policy',
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
-      "img-src 'self' data: https://cdn.jsdelivr.net https://assets.coincap.io; " +
+      "img-src 'self' data: https://cdn.jsdelivr.net https://assets.coincap.io https://coin-images.coingecko.com https://assets.coingecko.com; " +
       "connect-src 'self' ws: wss:; font-src 'self'; object-src 'none'; " +
       "frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
   );
@@ -422,6 +423,17 @@ app.post('/api/proposals/:id/reject', (req, res) => {
   }
   ledger.logEvent('manual_action', null, { action: 'reject_proposal', proposalId: id });
   res.json({ ok: true });
+});
+
+// Token icon manifest: resolved real logo URLs (CoinGecko) for the requested
+// bases. Unknown ones resolve in the background and appear on a later call.
+app.get('/api/icons', (req, res) => {
+  const bases = String(req.query.bases ?? '')
+    .split(',')
+    .map((s) => s.trim().toUpperCase())
+    .filter((b) => /^[A-Z0-9]{1,12}$/.test(b))
+    .slice(0, 200);
+  res.json(resolveIcons(bases));
 });
 
 app.get('/api/market/quote', (req, res) => {

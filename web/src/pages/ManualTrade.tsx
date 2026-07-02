@@ -4,6 +4,7 @@ import { ConfirmModal } from '../components/Modal';
 import { SideTag, StatePill } from '../components/ui';
 import { TokenIcon } from '../components/TokenIcon';
 import { Num } from '../components/Num';
+import { OrderBook } from '../components/OrderBook';
 import { IconChart, IconShield, IconTicket, IconWallet } from '../components/Icons';
 import { fmtPrice, fmtPct, signClass, baseOf } from '../format';
 import type { PreviewResult, Quote, SendResult, Side, OrderType } from '../types';
@@ -110,6 +111,28 @@ export function ManualTrade() {
       ? 'Passing preview can open the typed live-confirmation modal.'
       : 'Run a passing preview with every risk check allowed before live send becomes available.'
     : `Live send hidden: mode ${mode}${!keysPresent ? ', no keys' : ''}.`;
+  const symbolValid = /^[A-Z0-9]{5,20}$/.test(symbol);
+  const maxPerOrder = state?.config.maxOrderNotionalUsd ?? null;
+
+  // Quick sizing (UI convenience only — filters and the risk gate still rule):
+  // MARKET sizes by quote amount directly, LIMIT computes qty at the draft price.
+  const applyQuickSize = (usd: number) => {
+    if (type === 'MARKET') {
+      setQuoteQty(String(usd));
+      setQty('');
+      return;
+    }
+    const p = draftPrice;
+    if (!p || !isFinite(p) || p <= 0) return;
+    const q = usd / p;
+    setQty(q >= 1 ? String(Number(q.toFixed(4))) : q.toPrecision(5).replace(/0+$/, ''));
+  };
+
+  // Clicking a book price loads it straight into the limit ticket.
+  const useBookPrice = (p: number) => {
+    setType('LIMIT');
+    setPrice(String(p));
+  };
 
   return (
     <div className="container page">
@@ -125,7 +148,7 @@ export function ManualTrade() {
 
       <div className="trade-layout">
         <main className="trade-main">
-          <section className="card trade-ticket">
+          <section className="card trade-ticket" data-side={side}>
             <div className="trade-card-head">
               <div className="trade-identity">
                 <TokenIcon symbol={symbol} size={44} />
@@ -157,22 +180,19 @@ export function ManualTrade() {
               </div>
             </div>
 
+            <div className="side-toggle">
+              <button className={`buy ${side === 'BUY' ? 'on' : ''}`} onClick={() => setSide('BUY')}>
+                Buy {base}
+              </button>
+              <button className={`sell ${side === 'SELL' ? 'on' : ''}`} onClick={() => setSide('SELL')}>
+                Sell {base}
+              </button>
+            </div>
+
             <div className="trade-input-grid">
               <div className="fld trade-symbol-field">
                 <span>Symbol</span>
                 <input value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} spellCheck={false} />
-              </div>
-
-              <div className="trade-control-block">
-                <span className="trade-field-label">Side</span>
-                <div className="seg">
-                  <button className={side === 'BUY' ? 'on buy' : ''} onClick={() => setSide('BUY')}>
-                    Buy
-                  </button>
-                  <button className={side === 'SELL' ? 'on sell' : ''} onClick={() => setSide('SELL')}>
-                    Sell
-                  </button>
-                </div>
               </div>
 
               <div className="trade-control-block">
@@ -196,6 +216,27 @@ export function ManualTrade() {
               <div className="fld">
                 <span>Quantity ({base})</span>
                 <input type="number" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="0.0" />
+                <div className="qsize-row">
+                  {[5, 10].map((usd) => (
+                    <button
+                      key={usd}
+                      className="qsize-chip"
+                      title={type === 'MARKET' ? `Set quote amount to $${usd}` : `Size ~$${usd} at the draft price`}
+                      onClick={() => applyQuickSize(usd)}
+                    >
+                      ${usd}
+                    </button>
+                  ))}
+                  {maxPerOrder !== null && (
+                    <button
+                      className="qsize-chip max"
+                      title={`Your per-order risk cap: $${maxPerOrder}`}
+                      onClick={() => applyQuickSize(maxPerOrder)}
+                    >
+                      Max ${maxPerOrder}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {type === 'MARKET' && (
@@ -351,20 +392,18 @@ export function ManualTrade() {
               <span className={`hl-chip num ${signClass(quote?.change24hPct)}`}>{fmtPct(quote?.change24hPct, 2)}</span>
             </div>
             {quote && !quote.tradable && <div className="result-strip warn">Not a tradable spot symbol.</div>}
-            <div className="quote-ladder">
-              <div className="ladder-row">
-                <span className="bar ask" style={{ width: '48%' }} />
-                <span className="k">Ask</span>
-                <span className="v num">{fmtPrice(quote?.book?.askPrice)}</span>
-              </div>
-              <div className="ladder-mid">spread {spread !== null ? `${spread.toFixed(4)}%` : '—'}</div>
-              <div className="ladder-row">
-                <span className="bar bid" style={{ width: '48%' }} />
-                <span className="k">Bid</span>
-                <span className="v num">{fmtPrice(quote?.book?.bidPrice)}</span>
-              </div>
+            <div className="quote-meta-row">
+              <span className="k">Spread</span>
+              <span className="v num">{spread !== null ? `${spread.toFixed(4)}%` : '—'}</span>
             </div>
           </section>
+
+          {symbolValid && quote?.tradable !== false && (
+            <>
+              <OrderBook symbol={symbol} base={base} levels={7} onPriceClick={useBookPrice} />
+              <div className="rail-hint">Click any book price to load it into the limit ticket.</div>
+            </>
+          )}
 
           <section className="card trade-account-card">
             <div className="trade-card-head compact">

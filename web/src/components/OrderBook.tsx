@@ -50,11 +50,25 @@ function fmtClock(ts: number): string {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-export function OrderBook({ symbol, base }: { symbol: string; base: string }) {
+export function OrderBook({
+  symbol,
+  base,
+  levels = LEVELS_SHOWN,
+  onPriceClick,
+}: {
+  symbol: string;
+  base: string;
+  /** Rows shown per side (asks and bids each). */
+  levels?: number;
+  /** When set, book prices become clickable (e.g. load into a limit ticket). */
+  onPriceClick?: (price: number) => void;
+}) {
   const [tab, setTab] = useState<'book' | 'trades'>('book');
   const [book, setBook] = useState<{ bids: Level[]; asks: Level[] } | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
   const liveTsRef = useRef(0);
+  const pendingBookRef = useRef<{ bids: Level[]; asks: Level[] } | null>(null);
+  const bookRafRef = useRef<number | null>(null);
 
   // Reset + REST seed for instant paint, then keep polling only as a fallback
   // for when the live stream is quiet.
@@ -93,29 +107,41 @@ export function OrderBook({ symbol, base }: { symbol: string; base: string }) {
 
   // Live stream: depth snapshots ~100ms, trade prints flushed ~250ms.
   useEffect(
-    () =>
-      subscribeLiveBook(symbol, (m) => {
+    () => {
+      const unsub = subscribeLiveBook(symbol, (m) => {
         if (m.symbol !== symbol) return;
         if (m.type === 'book') {
           liveTsRef.current = Date.now();
-          setBook({
+          pendingBookRef.current = {
             bids: m.bids.map(([p, q]) => [Number(p), Number(q)] as Level),
             asks: m.asks.map(([p, q]) => [Number(p), Number(q)] as Level),
-          });
+          };
+          if (bookRafRef.current === null) {
+            bookRafRef.current = requestAnimationFrame(() => {
+              bookRafRef.current = null;
+              if (pendingBookRef.current) setBook(pendingBookRef.current);
+            });
+          }
         } else if (m.type === 'btrades') {
           setTrades((prev) => {
             const next = [...m.trades].reverse().concat(prev);
             return next.length > 60 ? next.slice(0, 60) : next;
           });
         }
-      }),
+      });
+      return () => {
+        unsub();
+        if (bookRafRef.current !== null) cancelAnimationFrame(bookRafRef.current);
+        bookRafRef.current = null;
+      };
+    },
     [symbol]
   );
 
   const live = Date.now() - liveTsRef.current < LIVE_STALE_MS;
 
-  const bids = useMemo(() => (book ? book.bids.filter(([, q]) => q > 0).slice(0, LEVELS_SHOWN) : []), [book]);
-  const asks = useMemo(() => (book ? book.asks.filter(([, q]) => q > 0).slice(0, LEVELS_SHOWN) : []), [book]);
+  const bids = useMemo(() => (book ? book.bids.filter(([, q]) => q > 0).slice(0, levels) : []), [book, levels]);
+  const asks = useMemo(() => (book ? book.asks.filter(([, q]) => q > 0).slice(0, levels) : []), [book, levels]);
 
   // Price decimals: start from magnitude, then widen until every displayed
   // level is distinct — a stablecoin book ticks at the 4th decimal and would
@@ -189,7 +215,12 @@ export function OrderBook({ symbol, base }: { symbol: string; base: string }) {
               <div className="ob-empty">Waiting for depth…</div>
             ) : (
               [...askRows].reverse().map((r) => (
-                <div key={r.p} className={`ob-row ask ${r.cum / maxCum > 0.7 ? 'heavy' : ''}`}>
+                <div
+                  key={r.p}
+                  className={`ob-row ask ${r.cum / maxCum > 0.7 ? 'heavy' : ''} ${onPriceClick ? 'clickable' : ''}`}
+                  title={onPriceClick ? 'Use as limit price' : undefined}
+                  onClick={onPriceClick ? () => onPriceClick(r.p) : undefined}
+                >
                   <span className="ob-bar" style={{ width: `${Math.min((r.cum / maxCum) * 100, 100)}%` }} />
                   <span className="ob-px num">{fmtPx(r.p, dec)}</span>
                   <span key={r.q} className="ob-size num fl">
@@ -212,7 +243,12 @@ export function OrderBook({ symbol, base }: { symbol: string; base: string }) {
 
           <div className="ob-side bids">
             {bidRows.map((r) => (
-              <div key={r.p} className={`ob-row bid ${r.cum / maxCum > 0.7 ? 'heavy' : ''}`}>
+              <div
+                key={r.p}
+                className={`ob-row bid ${r.cum / maxCum > 0.7 ? 'heavy' : ''} ${onPriceClick ? 'clickable' : ''}`}
+                title={onPriceClick ? 'Use as limit price' : undefined}
+                onClick={onPriceClick ? () => onPriceClick(r.p) : undefined}
+              >
                 <span className="ob-bar" style={{ width: `${Math.min((r.cum / maxCum) * 100, 100)}%` }} />
                 <span className="ob-px num">{fmtPx(r.p, dec)}</span>
                 <span key={r.q} className="ob-size num fl">

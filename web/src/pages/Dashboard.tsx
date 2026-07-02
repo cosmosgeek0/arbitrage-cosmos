@@ -1,13 +1,24 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { TokenIcon } from '../components/TokenIcon';
 import { Num } from '../components/Num';
-import { EmptyState, SetupChecklist, SideTag, KindChip, WarnStrip, StatusDot } from '../components/ui';
+import { Donut } from '../components/Donut';
+import { SparkArea } from '../components/Spark';
+import { EmptyState, SetupChecklist, SideTag, WarnStrip, StatusDot } from '../components/ui';
+import { eventSummary } from '../lib/eventText';
 import { fmtPrice, fmtPct, fmtBasis, fmtQty, timeAgo, fmtTimeShort, signClass, baseOf } from '../format';
 
 export function Dashboard() {
   const { state, setPage, openTicket, openDetail } = useStore();
   const [quickSymbol, setQuickSymbol] = useState('BTCUSDT');
+  const [equity, setEquity] = useState<number[]>([]);
+
+  useEffect(() => {
+    void fetch('/api/pnl')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setEquity((d.equitySnapshots as { totalUsdt: number }[]).map((s) => s.totalUsdt)))
+      .catch(() => undefined);
+  }, [state?.account?.totalUsdt]);
 
   if (!state) return <div className="container page"><div className="empty-state">Connecting to engine…</div></div>;
 
@@ -49,22 +60,43 @@ export function Dashboard() {
         <WarnStrip>Account sync failing: {state.binance.lastError ?? 'unknown error'}</WarnStrip>
       )}
 
-      <div className="headline">
-        {acct ? (
-          <Num value={acct.totalUsdt} className="headline-val">
-            {fmtPrice(acct.totalUsdt)}
-          </Num>
-        ) : (
-          <span className="headline-val faint" style={{ fontSize: 34 }}>
-            Not connected
-          </span>
-        )}
-        <span className="headline-unit">total equity</span>
-        {acct?.dayChangeUsd !== null && acct?.dayChangeUsd !== undefined && (
-          <span className={`hl-chip num ${signClass(acct.dayChangeUsd)}`}>
-            {acct.dayChangeUsd >= 0 ? '+' : ''}
-            {acct.dayChangeUsd.toFixed(2)} {dayPct !== null ? `(${fmtPct(dayPct, 2)})` : ''} today
-          </span>
+      <div className="equity-hero">
+        <div>
+          <div className="headline" style={{ marginBottom: 6 }}>
+            {acct ? (
+              <Num value={acct.totalUsdt} className="headline-val">
+                {fmtPrice(acct.totalUsdt)}
+              </Num>
+            ) : (
+              <span className="headline-val faint" style={{ fontSize: 32 }}>
+                —
+              </span>
+            )}
+            <span className="headline-unit">total equity</span>
+            {acct?.dayChangeUsd !== null && acct?.dayChangeUsd !== undefined ? (
+              <span className={`hl-chip num ${signClass(acct.dayChangeUsd)}`}>
+                {acct.dayChangeUsd >= 0 ? '▲' : '▼'} {fmtPrice(Math.abs(acct.dayChangeUsd))}
+                {dayPct !== null ? ` (${fmtPct(dayPct, 2)})` : ''} today
+              </span>
+            ) : (
+              !acct && <span className="hl-chip muted-chip">account not connected</span>
+            )}
+          </div>
+          {equity.length > 3 ? (
+            <div className="equity-spark">
+              <SparkArea values={equity} w={520} h={64} dots endDot />
+            </div>
+          ) : (
+            <div className="equity-spark-empty muted small">
+              {acct ? 'Equity curve builds as 15-min snapshots accrue.' : 'Live public market data is streaming; connect keys for your equity curve.'}
+            </div>
+          )}
+        </div>
+        {acct && acct.entries.length > 0 && (
+          <div className="card" style={{ marginBottom: 0, minWidth: 300 }}>
+            <div className="stat-k" style={{ marginBottom: 10 }}>Allocation</div>
+            <Donut slices={acct.entries.map((e) => ({ label: e.asset, value: e.valueUsdt }))} />
+          </div>
         )}
       </div>
 
@@ -233,14 +265,10 @@ export function Dashboard() {
             </button>
           </div>
           <div>
-            {state.events.slice(0, 10).map((ev) => (
-              <div key={ev.id} className="drow">
-                <span className="faint num small">{fmtTimeShort(ev.ts)}</span>
-                <KindChip kind={ev.kind} />
-                {ev.symbol && <span className="strong small">{ev.symbol}</span>}
-                <span className="muted small mono" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                  {ev.data != null ? JSON.stringify(ev.data).slice(0, 90) : ''}
-                </span>
+            {state.events.slice(0, 12).map((ev) => (
+              <div key={ev.id} className="tl-row">
+                <span className="tl-time num">{fmtTimeShort(ev.ts)}</span>
+                <span className="tl-body">{eventSummary(ev.kind, ev.data as Record<string, unknown> | null, ev.symbol)}</span>
               </div>
             ))}
           </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { KindChip, EmptyState } from '../components/ui';
+import { eventSummary } from '../lib/eventText';
 import { fmtDateTime } from '../format';
 import type { LedgerEvent } from '../types';
 
@@ -29,6 +30,7 @@ export function LedgerPage() {
   });
   const [q, setQ] = useState('');
   const [decision, setDecision] = useState<'all' | 'accepted' | 'rejected'>('all');
+  const [expanded, setExpanded] = useState<number | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams({ limit: '400' });
@@ -95,20 +97,27 @@ export function LedgerPage() {
                 <th className="l">Time</th>
                 <th className="l">Kind</th>
                 <th className="l">Symbol</th>
-                <th className="l">Data</th>
+                <th className="l">What happened</th>
+                <th className="l col-hide-sm">Raw</th>
               </tr>
             </thead>
             <tbody>
               {visible.map((ev) => (
-                <tr key={ev.id}>
+                <tr key={ev.id} className={expanded === ev.id ? 'rowlink' : 'rowlink'} onClick={() => setExpanded(expanded === ev.id ? null : ev.id)}>
                   <td className="l muted mono small">{fmtDateTime(ev.ts)}</td>
                   <td className="l">
                     <KindChip kind={ev.kind} />
                   </td>
                   <td className="l val-strong">{ev.symbol ?? '—'}</td>
-                  <td className="l muted mono small" style={{ maxWidth: 560, overflow: 'hidden', textOverflow: 'ellipsis' }} title={ev.data != null ? JSON.stringify(ev.data, null, 1) : ''}>
-                    {ev.data != null ? JSON.stringify(ev.data).slice(0, 150) : '—'}
+                  <td className="l" style={{ maxWidth: 460 }}>
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {eventSummary(ev.kind, ev.data as Record<string, unknown> | null, ev.symbol)}
+                    </div>
+                    {expanded === ev.id && ev.data != null && (
+                      <pre className="ledger-raw">{JSON.stringify(ev.data, null, 2)}</pre>
+                    )}
                   </td>
+                  <td className="l faint mono small col-hide-sm">{expanded === ev.id ? '▾' : '⋯'}</td>
                 </tr>
               ))}
             </tbody>

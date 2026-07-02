@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { TokenIcon } from '../components/TokenIcon';
+import { Donut } from '../components/Donut';
 import { EmptyState, SetupChecklist, StatusDot } from '../components/ui';
 import { fmtPrice, fmtQty, fmtPct, signClass, timeAgo } from '../format';
 import type { LoansSnapshot } from '../types';
@@ -60,6 +61,13 @@ export function Wallets() {
         ) : !acct || acct.entries.length === 0 ? (
           <EmptyState title="Spot wallet is empty">Deposit on Binance and it appears here within 30s.</EmptyState>
         ) : (
+          <>
+          {acct.entries.length > 1 && (
+            <div className="card">
+              <div className="stat-k" style={{ marginBottom: 10 }}>Spot allocation</div>
+              <Donut slices={acct.entries.map((e) => ({ label: e.asset, value: e.valueUsdt }))} size={124} />
+            </div>
+          )}
           <div className="table-scroll">
             <table className="mkt">
               <thead>
@@ -108,6 +116,7 @@ export function Wallets() {
               </tbody>
             </table>
           </div>
+          </>
         ))}
 
       {tab === 'margin' &&

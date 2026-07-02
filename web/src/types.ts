@@ -29,6 +29,8 @@ export interface MarketRow {
   nextFundingTime: number | null;
   change24hPct: number | null;
   quoteVolume24h: number | null;
+  high24h: number | null;
+  low24h: number | null;
   status: 'idle' | 'watching' | 'signal';
   spark: number[];
   hasPerp: boolean;

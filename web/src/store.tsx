@@ -73,6 +73,37 @@ interface Store {
 
 const StoreContext = createContext<Store | null>(null);
 
+// ---- live order-book stream (Token Detail) -------------------------------
+// Rides the same /ws socket as state broadcasts. One symbol at a time; the
+// server opens a Binance depth20@100ms + aggTrade stream while subscribed.
+export type LiveBookMsg =
+  | { type: 'book'; symbol: string; bids: [string, string][]; asks: [string, string][]; ts: number }
+  | { type: 'btrades'; symbol: string; trades: { id: number; price: number; qty: number; time: number; isBuyerMaker: boolean }[] };
+
+let liveWs: WebSocket | null = null;
+let liveBookSymbol: string | null = null;
+const liveBookListeners = new Set<(m: LiveBookMsg) => void>();
+
+function sendLiveSub(): void {
+  if (liveWs?.readyState === WebSocket.OPEN) {
+    liveWs.send(JSON.stringify(liveBookSymbol ? { type: 'sub-book', symbol: liveBookSymbol } : { type: 'unsub-book' }));
+  }
+}
+
+export function subscribeLiveBook(symbol: string, fn: (m: LiveBookMsg) => void): () => void {
+  liveBookListeners.add(fn);
+  liveBookSymbol = symbol;
+  sendLiveSub();
+  return () => {
+    liveBookListeners.delete(fn);
+    if (liveBookListeners.size === 0) {
+      liveBookSymbol = null;
+      sendLiveSub();
+    }
+  };
+}
+// ---------------------------------------------------------------------------
+
 async function post<T>(url: string, body: unknown): Promise<T | null> {
   try {
     const res = await fetch(url, {
@@ -133,11 +164,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       const ws = new WebSocket(`${proto}://${location.host}/ws`);
       wsRef.current = ws;
-      ws.onopen = () => setConnected(true);
+      liveWs = ws;
+      ws.onopen = () => {
+        setConnected(true);
+        sendLiveSub(); // re-attach any live book subscription after reconnect
+      };
       ws.onmessage = (msg) => {
         try {
           const data = JSON.parse(msg.data as string) as { type: string; payload: unknown };
           if (data.type === 'state') setState(data.payload as ServerState);
+          else if (data.type === 'book' || data.type === 'btrades') {
+            for (const fn of liveBookListeners) fn(data as unknown as LiveBookMsg);
+          }
         } catch {
           // ignore
         }

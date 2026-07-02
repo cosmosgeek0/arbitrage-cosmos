@@ -3,6 +3,7 @@ import { useStore } from '../store';
 import { TokenIcon, brandColor } from '../components/TokenIcon';
 import { BigChart, type ChartPoint } from '../components/BigChart';
 import { Num } from '../components/Num';
+import { OrderBook } from '../components/OrderBook';
 import { SideTag } from '../components/ui';
 import { fmtPrice, fmtPct, fmtBasis, fmtMoney, fmtFunding, fmtQty, signClass, countdown, baseOf, fmtTimeShort, fmtDateTime, timeAgo } from '../format';
 import type { FillRow, MarketDetail, SignalRecord } from '../types';
@@ -16,10 +17,6 @@ const WINDOWS = {
 type WinKey = keyof typeof WINDOWS;
 type ChartMode = 'price' | 'basis' | 'funding' | 'volume';
 
-interface DepthLevel {
-  price: number;
-  qty: number;
-}
 interface SymbolContext {
   openOrders: { orderId: number; side: string; type: string; price: number; origQty: number; time: number }[];
   fills: FillRow[];
@@ -96,8 +93,6 @@ export function TokenDetail({ symbol }: { symbol: string }) {
   const [funding, setFunding] = useState<ChartPoint[]>([]);
   const [volK, setVolK] = useState<ChartPoint[]>([]);
   const [detail, setDetail] = useState<MarketDetail | null>(null);
-  const [depth, setDepth] = useState<{ bids: DepthLevel[]; asks: DepthLevel[] } | null>(null);
-  const [trades, setTrades] = useState<{ id: number; price: number; qty: number; time: number; isBuyerMaker: boolean }[]>([]);
   const [ctx, setCtx] = useState<SymbolContext | null>(null);
   const [importMsg, setImportMsg] = useState<string | null>(null);
 
@@ -141,19 +136,13 @@ export function TokenDetail({ symbol }: { symbol: string }) {
     };
   }, [symbol]);
 
-  // detail + depth + trades + account context, polled
+  // detail + account context, polled (depth/trades live in <OrderBook> via WS)
   useEffect(() => {
     let alive = true;
     const load = () => {
       void fetch(`/api/market/detail?symbol=${symbol}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => alive && d && setDetail(d as MarketDetail));
-      void fetch(`/api/market/depth?symbol=${symbol}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => alive && d && setDepth(d as { bids: DepthLevel[]; asks: DepthLevel[] }));
-      void fetch(`/api/market/trades?symbol=${symbol}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => alive && d && Array.isArray(d) && setTrades(d as typeof trades));
       void fetch(`/api/symbol/context?symbol=${symbol}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => alive && d && setCtx(d as SymbolContext));
@@ -178,7 +167,29 @@ export function TokenDetail({ symbol }: { symbol: string }) {
   }, [spotK, futK]);
 
   const chartData = mode === 'price' ? spotK : mode === 'basis' ? basisSeries : mode === 'volume' ? volK : funding;
-  const pctFmt = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(3)}%`;
+  const pctFmt = (v: number) => {
+    let s = v.toFixed(3);
+    if (parseFloat(s) === 0) s = s.replace('-', '');
+    return `${parseFloat(s) > 0 ? '+' : ''}${s}%`;
+  };
+
+  // Range-aware axis/crosshair precision: a stablecoin's day trades in a
+  // ±0.05% band — fmtPrice's default decimals would label every gridline
+  // "$1.00". Widen decimals until the plotted range actually resolves.
+  const chartPriceFmt = useMemo(() => {
+    if (spotK.length < 2) return fmtPrice;
+    let mn = Infinity;
+    let mx = -Infinity;
+    for (const p of spotK) {
+      if (p.v < mn) mn = p.v;
+      if (p.v > mx) mx = p.v;
+    }
+    const span = mx - mn;
+    if (!(span > 0)) return fmtPrice;
+    const needed = Math.ceil(-Math.log10(span / 30)); // ~30 distinguishable steps
+    const dec = Math.max(2, Math.min(8, needed));
+    return (v: number) => '$' + v.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  }, [spotK]);
   const chartFirst = chartData.length ? chartData[0].v : null;
   const chartLast = chartData.length ? chartData[chartData.length - 1].v : null;
   const chartMove =
@@ -198,7 +209,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
           ? 'Binance spot quote-volume klines'
           : 'Binance spot klines';
   const chartLatest =
-    chartLast === null ? '—' : mode === 'price' ? fmtPrice(chartLast) : mode === 'volume' ? fmtMoney(chartLast) : pctFmt(chartLast);
+    chartLast === null ? '—' : mode === 'price' ? chartPriceFmt(chartLast) : mode === 'volume' ? fmtMoney(chartLast) : pctFmt(chartLast);
   const chartMoveLabel =
     chartMove === null
       ? '—'
@@ -209,7 +220,6 @@ export function TokenDetail({ symbol }: { symbol: string }) {
     detail?.book && detail.book.bidPrice > 0
       ? ((detail.book.askPrice - detail.book.bidPrice) / detail.book.bidPrice) * 100
       : null;
-  const maxDepthQty = depth ? Math.max(...depth.bids.map((b) => b.qty), ...depth.asks.map((a) => a.qty), 1e-9) : 1;
   const dayAnchor =
     live?.spot !== null && live?.spot !== undefined && live?.change24hPct !== null && live?.change24hPct !== undefined && live.change24hPct !== -100
       ? live.spot / (1 + live.change24hPct / 100)
@@ -228,6 +238,12 @@ export function TokenDetail({ symbol }: { symbol: string }) {
   const importDisabledReason = !state?.binance.keysPresent ? 'Read-only Binance keys must be present on the server to import fills' : 'Import Binance fill history';
   const hasPerp = live?.hasPerp ?? live?.perpMark !== null;
   const topSource = hasPerp ? 'Binance spot + USD-M futures' : 'Binance spot market data';
+  const chartModes = (hasPerp ? ['price', 'basis', 'funding', 'volume'] : ['price', 'volume']) as ChartMode[];
+
+  // If a spot-only token is opened while a perp-mode chart is selected, snap back.
+  useEffect(() => {
+    if (live && !hasPerp && (mode === 'basis' || mode === 'funding')) setMode('price');
+  }, [live, hasPerp, mode]);
 
   return (
     <div className="container page token-detail-shell">
@@ -238,7 +254,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
       <section className="card token-market-strip">
         <div className="market-strip-main">
           <span className="tok token-strip-id">
-            <TokenIcon symbol={symbol} size={42} />
+            <TokenIcon symbol={symbol} size={84} />
             <span className="tok-meta">
               <span className="detail-name">{base}/USDT</span>
               <span className="detail-sub">
@@ -259,11 +275,18 @@ export function TokenDetail({ symbol }: { symbol: string }) {
           </div>
         </div>
         <div className="strip-metrics">
-          <StripMetric label="Perp mark" value={fmtPrice(live?.perpMark)} />
-          <StripMetric label="Basis" value={fmtBasis(live?.basisPct)} tone={signClass(live?.basisPct)} />
-          <StripMetric label="Funding" value={fmtFunding(live?.fundingRate)} tone={signClass(live?.fundingRate)} sub={`next ${countdown(live?.nextFundingTime)}`} />
+          {hasPerp ? (
+            <>
+              <StripMetric label="Perp mark" value={fmtPrice(live?.perpMark)} />
+              <StripMetric label="Basis" value={fmtBasis(live?.basisPct)} tone={signClass(live?.basisPct)} />
+              <StripMetric label="Funding" value={fmtFunding(live?.fundingRate)} tone={signClass(live?.fundingRate)} sub={`next ${countdown(live?.nextFundingTime)}`} />
+            </>
+          ) : (
+            <StripMetric label="Market" value="Spot only" sub="no USD-M perp listed" />
+          )}
+          <StripMetric label="24h high" value={fmtPrice(live?.high24h)} />
+          <StripMetric label="24h low" value={fmtPrice(live?.low24h)} />
           <StripMetric label="24h volume" value={fmtMoney(live?.quoteVolume24h)} />
-          <StripMetric label="Spread" value={spreadLabel} />
         </div>
         <div className="detail-head-actions">
           <Star on={watchlisted} onClick={() => void toggleWatch(symbol)} />
@@ -339,16 +362,9 @@ export function TokenDetail({ symbol }: { symbol: string }) {
               <small>{chartMoveLabel}</small>
             </span>
           </div>
-          <div className="chart-source-strip">
-            <span className="source-chip strong">{chartSource}</span>
-            <span className="source-chip num">{mode === 'funding' ? '120 intervals' : win}</span>
-            <span className="source-chip num">{chartData.length} pts</span>
-            <span className="source-chip num">latest {chartLatest}</span>
-            <span className={`source-chip num ${signClass(chartMove)}`}>move {chartMoveLabel}</span>
-          </div>
           <div className="chart-head token-chart-controls">
             <div className="seg">
-              {(['price', 'basis', 'funding', 'volume'] as ChartMode[]).map((m) => (
+              {chartModes.map((m) => (
                 <button key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>
                   {m === 'price' ? 'Price' : m === 'basis' ? 'Basis' : m === 'funding' ? 'Funding' : 'Volume'}
                 </button>
@@ -371,77 +387,41 @@ export function TokenDetail({ symbol }: { symbol: string }) {
                   ? 'settled funding, last 120 intervals'
                   : mode === 'volume'
                     ? 'quote volume per candle'
-                    : `funding ${fmtFunding(live?.fundingRate)} in ${countdown(live?.nextFundingTime)}`}
+                    : hasPerp
+                      ? `funding ${fmtFunding(live?.fundingRate)} in ${countdown(live?.nextFundingTime)}`
+                      : 'spot market · no perp funding'}
             </span>
           </div>
           <BigChart
             data={chartData}
-            height={420}
+            height={520}
             color={mode === 'price' || mode === 'volume' ? brandColor(symbol) : undefined}
-            valueFmt={mode === 'price' ? fmtPrice : mode === 'volume' ? fmtMoney : pctFmt}
+            valueFmt={mode === 'price' ? chartPriceFmt : mode === 'volume' ? fmtMoney : pctFmt}
             animateKey={`${symbol}-${win}-${mode}`}
           />
         </section>
 
-        <aside className="card micro-card">
-          <div className="micro-head">
-            <h3>Book + prints</h3>
-            <span>Binance depth / agg trades</span>
-          </div>
-          <div className="book-trades-grid">
-            <div className="micro-section">
-              <div className="micro-label">Order book</div>
-              {!depth ? (
-                <div className="muted small">Loading depth…</div>
-              ) : (
-                <>
-                  {[...depth.asks].slice(0, 8).reverse().map((a) => (
-                    <div key={`a${a.price}`} className="depth-row ask">
-                      <span className="d-bar" style={{ width: `${Math.min((a.qty / maxDepthQty) * 100, 100)}%` }} />
-                      <span className="d-px num">{fmtPrice(a.price)}</span>
-                      <span className="d-qty num">{fmtQty(a.qty)}</span>
-                    </div>
-                  ))}
-                  <div className="ladder-mid">spread {spreadLabel}</div>
-                  {depth.bids.slice(0, 8).map((b) => (
-                    <div key={`b${b.price}`} className="depth-row bid">
-                      <span className="d-bar" style={{ width: `${Math.min((b.qty / maxDepthQty) * 100, 100)}%` }} />
-                      <span className="d-px num">{fmtPrice(b.price)}</span>
-                      <span className="d-qty num">{fmtQty(b.qty)}</span>
-                    </div>
-                  ))}
-                </>
-              )}
-            </div>
-            <div className="micro-section">
-              <div className="micro-label">Recent trades</div>
-              {trades.length === 0 ? (
-                <div className="muted small">Loading trades…</div>
-              ) : (
-                trades.slice(0, 18).map((t) => (
-                  <div key={t.id} className="trade-row">
-                    <span className={`num ${t.isBuyerMaker ? 'down' : 'up'}`}>{fmtPrice(t.price)}</span>
-                    <span className="num muted">{fmtQty(t.qty)}</span>
-                    <span className="t-time num">{fmtTimeShort(t.time)}</span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </aside>
+        <OrderBook symbol={symbol} base={base} />
       </div>
 
       <div className="token-data-grid">
         <DataPanel title="Trading insights" kicker="basis scanner">
-          <DataRow label="Scanner state" value={live?.status ?? '—'} control={<span className={`chip-tag ${live?.status === 'signal' ? 'gold' : 'ok'}`}>{live?.status ?? 'unknown'}</span>} />
-          <DataRow label="Basis" value={fmtBasis(live?.basisPct)} tone={signClass(live?.basisPct)} sub="spot/perp mark spread" />
-          <DataRow label="Funding carry" value={fmtFunding(live?.fundingRate)} tone={signClass(live?.fundingRate)} sub={`next ${countdown(live?.nextFundingTime)}`} />
+          {hasPerp ? (
+            <>
+              <DataRow label="Scanner state" value={live?.status ?? '—'} control={<span className={`chip-tag ${live?.status === 'signal' ? 'gold' : 'ok'}`}>{live?.status ?? 'unknown'}</span>} />
+              <DataRow label="Basis" value={fmtBasis(live?.basisPct)} tone={signClass(live?.basisPct)} sub="spot/perp mark spread" />
+              <DataRow label="Funding carry" value={fmtFunding(live?.fundingRate)} tone={signClass(live?.fundingRate)} sub={`next ${countdown(live?.nextFundingTime)}`} />
+            </>
+          ) : (
+            <DataRow label="Perp market" value="not listed" sub="basis scanner needs a USD-M perp" control={<span className="chip-tag">spot only</span>} />
+          )}
           <DataRow label="Spot 24h move" value={fmtPct(live?.change24hPct)} tone={signClass(live?.change24hPct)} />
         </DataPanel>
 
         <DataPanel title="Market stats" kicker="direct Binance">
           <DataRow label="Spot last" value={fmtPrice(live?.spot ?? detail?.last)} />
-          <DataRow label="Perp mark" value={fmtPrice(live?.perpMark)} />
+          {hasPerp && <DataRow label="Perp mark" value={fmtPrice(live?.perpMark)} />}
+          <DataRow label="24h high / low" value={live?.high24h != null && live?.low24h != null ? `${fmtPrice(live.high24h)} / ${fmtPrice(live.low24h)}` : '—'} />
           <DataRow label="24h quote volume" value={fmtMoney(live?.quoteVolume24h)} />
           <DataRow label="Best bid / ask" value={detail?.book ? `${fmtPrice(detail.book.bidPrice)} / ${fmtPrice(detail.book.askPrice)}` : '—'} />
           <DataRow label="Spread" value={spreadLabel} />

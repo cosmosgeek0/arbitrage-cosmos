@@ -12,6 +12,8 @@ export interface SymbolRow {
   nextFundingTime: number | null;
   change24hPct: number | null;
   quoteVolume24h: number | null;
+  high24h: number | null;
+  low24h: number | null;
   status: SymbolStatus;
 }
 

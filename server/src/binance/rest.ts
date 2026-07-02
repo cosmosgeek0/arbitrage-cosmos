@@ -136,8 +136,34 @@ export interface KlinePoint {
   v: number;
 }
 
+export interface KlineCandle {
+  t: number;
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+  v: number;
+  qv: number;
+}
+
 const klineCache = new Map<string, { fetchedAt: number; data: KlinePoint[] }>();
+const candleCache = new Map<string, { fetchedAt: number; data: KlineCandle[] }>();
 const KLINE_CACHE_MS = 60_000;
+
+async function fetchRawKlines(
+  symbol: string,
+  interval: string,
+  limit: number,
+  market: 'spot' | 'futures'
+): Promise<[number, string, string, string, string, string, number, string, ...unknown[]][]> {
+  const url =
+    market === 'futures'
+      ? `${FAPI}/fapi/v1/klines?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`
+      : `${SPOT_API}/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`klines HTTP ${res.status}`);
+  return (await res.json()) as [number, string, string, string, string, string, number, string, ...unknown[]][];
+}
 
 export async function fetchKlines(
   symbol: string,
@@ -150,19 +176,39 @@ export async function fetchKlines(
   const cached = klineCache.get(key);
   if (cached && Date.now() - cached.fetchedAt < KLINE_CACHE_MS) return cached.data;
 
-  const url =
-    market === 'futures'
-      ? `${FAPI}/fapi/v1/klines?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`
-      : `${SPOT_API}/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`klines HTTP ${res.status}`);
-  const raw = (await res.json()) as [number, string, string, string, string, string, ...unknown[]][];
+  const raw = await fetchRawKlines(symbol, interval, limit, market);
   // k[4] = close, k[5] = base volume; volume is reported in quote terms (×close)
   const data = raw.map((k) => ({
     t: k[0],
     v: field === 'volume' ? Number(k[5]) * Number(k[4]) : Number(k[4]),
   }));
   klineCache.set(key, { fetchedAt: Date.now(), data });
+  return data;
+}
+
+export async function fetchKlineCandles(
+  symbol: string,
+  interval: string,
+  limit: number,
+  market: 'spot' | 'futures' = 'spot'
+): Promise<KlineCandle[]> {
+  const key = `${market}:${symbol}:${interval}:${limit}:ohlcv`;
+  const cached = candleCache.get(key);
+  if (cached && Date.now() - cached.fetchedAt < KLINE_CACHE_MS) return cached.data;
+  const raw = await fetchRawKlines(symbol, interval, limit, market);
+  const data = raw.map((k) => {
+    const close = Number(k[4]);
+    return {
+      t: k[0],
+      o: Number(k[1]),
+      h: Number(k[2]),
+      l: Number(k[3]),
+      c: close,
+      v: Number(k[5]),
+      qv: Number(k[7]) || Number(k[5]) * close,
+    };
+  });
+  candleCache.set(key, { fetchedAt: Date.now(), data });
   return data;
 }
 

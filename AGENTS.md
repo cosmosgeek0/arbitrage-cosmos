@@ -45,7 +45,7 @@ strategy state, manual trade, risk, kill switch, event log). Never a market char
 6. **Everything is ledgered.** Signals, risk decisions, order intents/requests/
    responses, fills, manual actions, config changes, errors. If it isn't in the
    ledger, it didn't happen.
-7. **Run `npm test` (48 gates) before considering any change done.** It boots an
+7. **Run `npm test` (50 gates) before considering any change done.** It boots an
    isolated instance and asserts these invariants. If it fails, you broke
    something — fix it, don't push.
 8. **Verify UI changes in the browser preview** (both light and dark, no console
@@ -65,7 +65,7 @@ strategy state, manual trade, risk, kill switch, event log). Never a market char
 npm install
 npm run build           # builds server then web
 npm start               # http://localhost:8080  (PORT env to change)
-npm test                # 48 gate tests — MUST pass
+npm test                # 50 gate tests — MUST pass
 npm run build -w web    # web only (fast iteration)
 npm run build -w server # server only
 ```
@@ -99,6 +99,9 @@ server/src/
     risk.ts           THE GATE — evaluate() runs before every send
     orders.ts         the ONLY module that hits Binance trading endpoints
     loans.ts          flexible loans + cross-margin visibility, gated borrow/repay
+    bookStream.ts     live depth20@100ms + aggTrade fan-out over the app /ws
+                      (client sends {type:'sub-book',symbol} / {type:'unsub-book'};
+                      public data only, per-symbol upstream, idle teardown)
 
 web/src/
   App.tsx             shell: sidebar + topbar + page switch
@@ -111,6 +114,7 @@ web/src/
     ui.tsx            Group / GRow / StatePill / StatTile / EmptyState / chips
     Header.tsx        Sidebar + Topbar + BottomNav + brand mark
     TokenIcon.tsx     logo resolver (spothq→coincap→brand-hued monogram)
+    OrderBook.tsx     living order book (WS-fed, Backpack-style; REST fallback)
     BigChart.tsx      hand-built SVG chart (dotted fade + crosshair + draw-in)
     Donut.tsx Spark.tsx Num.tsx Modal.tsx Palette.tsx HealthBadge.tsx Tape.tsx
     Icons.tsx RiskIcons.tsx
@@ -208,8 +212,10 @@ only. If a change needs a new field, add it minimally to the API and keep every
 - Frontend: sidebar cockpit + control-room topbar, 17 pages, liquid-glass card
   system + specular rim, macOS grouped list (Settings/SystemHealth/Account/Risk),
   TradingView typography, token badges, humanized ledger, allocation donut,
-  Markets (full ~440-symbol universe), deep Token Detail (price/basis/funding/
-  volume charts, depth, trades), light+dark.
+  Markets (full ~440-symbol universe), Token Detail as a Coinbase+Backpack
+  terminal (hero strip w/ 24h hi-lo, spot-only handling, range-aware chart
+  decimals, LIVE order book + prints streamed at 100ms over the app WS with
+  REST fallback), light+dark.
 
 **Next (in rough priority):**
 - UI polish sweep of the trading surfaces to the §5 bar: Manual Trade, Orders,

@@ -8,6 +8,8 @@ interface FeatureEntry {
   base: string;
   spotLast: number | null;
   spotOpen24h: number | null;
+  spotHigh24h: number | null;
+  spotLow24h: number | null;
   spotQuoteVol24h: number | null;
   perpMark: number | null;
   fundingRate: number | null;
@@ -18,6 +20,8 @@ interface SpotMiniTicker {
   s: string;
   c: string;
   o: string;
+  h: string;
+  l: string;
   q: string;
 }
 
@@ -38,6 +42,7 @@ export class MarketEngine {
   private spotPrices = new Map<string, number>();
   private spotChange = new Map<string, number>();
   private spotVol = new Map<string, number>();
+  private spotRange = new Map<string, { high: number; low: number }>();
   private features = new Map<string, FeatureEntry>();
   private history = new Map<string, number[]>();
   private streams: BinanceStream[] = [];
@@ -58,6 +63,8 @@ export class MarketEngine {
         base: p.base,
         spotLast: null,
         spotOpen24h: null,
+        spotHigh24h: null,
+        spotLow24h: null,
         spotQuoteVol24h: null,
         perpMark: null,
         fundingRate: null,
@@ -138,15 +145,20 @@ export class MarketEngine {
     for (const t of data as SpotMiniTicker[]) {
       const last = Number(t.c);
       const open = Number(t.o);
+      const high = Number(t.h);
+      const low = Number(t.l);
       if (t.s.endsWith('USDT')) {
         this.spotPrices.set(t.s, last);
         if (open > 0) this.spotChange.set(t.s, ((last - open) / open) * 100);
         this.spotVol.set(t.s, Number(t.q));
+        if (high > 0 && low > 0) this.spotRange.set(t.s, { high, low });
       }
       const f = this.features.get(t.s);
       if (!f) continue;
       f.spotLast = last;
       f.spotOpen24h = open;
+      f.spotHigh24h = high > 0 ? high : null;
+      f.spotLow24h = low > 0 ? low : null;
       f.spotQuoteVol24h = Number(t.q);
     }
   }
@@ -183,6 +195,8 @@ export class MarketEngine {
         nextFundingTime: null,
         change24hPct: this.spotChange.get(sym) ?? null,
         quoteVolume24h: this.spotVol.get(sym) ?? null,
+        high24h: this.spotRange.get(sym)?.high ?? null,
+        low24h: this.spotRange.get(sym)?.low ?? null,
         status: 'idle',
         hasPerp: false,
       });
@@ -209,6 +223,8 @@ export class MarketEngine {
             ? ((f.spotLast - f.spotOpen24h) / f.spotOpen24h) * 100
             : null,
         quoteVolume24h: f.spotQuoteVol24h,
+        high24h: f.spotHigh24h,
+        low24h: f.spotLow24h,
         status: 'idle',
       });
     }

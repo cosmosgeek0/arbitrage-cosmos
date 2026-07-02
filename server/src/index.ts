@@ -12,6 +12,7 @@ import {
   fetchBookTicker,
   fetchDepth,
   fetchFundingHistory,
+  fetchKlineCandles,
   fetchKlines,
   fetchTrades,
 } from './binance/rest.js';
@@ -22,6 +23,7 @@ import { AccountService } from './services/account.js';
 import { RiskService } from './services/risk.js';
 import { OrderService } from './services/orders.js';
 import { LoanService } from './services/loans.js';
+import { BookStreamHub } from './services/bookStream.js';
 import type { AppConfig, OrderIntent } from './types.js';
 
 // Minimal .env loader (no dependency). Never logs values.
@@ -454,12 +456,12 @@ app.get('/api/market/quote', (req, res) => {
   })();
 });
 
-const KLINE_INTERVALS = new Set(['1m', '5m', '15m', '30m', '1h', '2h', '4h', '1d']);
+const KLINE_INTERVALS = new Set(['1s', '1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '1d', '1w']);
 app.get('/api/klines', (req, res) => {
   void (async () => {
     const symbol = String(req.query.symbol ?? 'BTCUSDT');
     const interval = String(req.query.interval ?? '5m');
-    const limit = Math.min(Number(req.query.limit ?? 288), 500);
+    const limit = Math.min(Number(req.query.limit ?? 288), 1000);
     const market = req.query.market === 'futures' ? 'futures' : 'spot';
     const field = req.query.field === 'volume' ? 'volume' : 'close';
     if (!KLINE_INTERVALS.has(interval) || !/^[A-Z0-9]{1,20}$/.test(symbol)) {
@@ -468,6 +470,24 @@ app.get('/api/klines', (req, res) => {
     }
     try {
       res.json(await fetchKlines(symbol, interval, limit, market, field));
+    } catch (err) {
+      res.status(502).json({ error: String(err) });
+    }
+  })();
+});
+
+app.get('/api/candles', (req, res) => {
+  void (async () => {
+    const symbol = String(req.query.symbol ?? 'BTCUSDT');
+    const interval = String(req.query.interval ?? '5m');
+    const limit = Math.min(Number(req.query.limit ?? 288), 1000);
+    const market = req.query.market === 'futures' ? 'futures' : 'spot';
+    if (!KLINE_INTERVALS.has(interval) || !/^[A-Z0-9]{1,20}$/.test(symbol)) {
+      res.status(400).json({ error: 'bad symbol or interval' });
+      return;
+    }
+    try {
+      res.json(await fetchKlineCandles(symbol, interval, limit, market));
     } catch (err) {
       res.status(502).json({ error: String(err) });
     }
@@ -766,6 +786,19 @@ if (fs.existsSync(webDist)) {
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
+
+// Live order-book/trade fan-out (public market data only, symbol-validated).
+const bookHub = new BookStreamHub((s) => engine.filters.has(s));
+wss.on('connection', (ws) => {
+  ws.on('message', (buf) => {
+    try {
+      bookHub.handleMessage(ws, JSON.parse(buf.toString()));
+    } catch {
+      // ignore malformed client frames
+    }
+  });
+  ws.on('close', () => bookHub.drop(ws));
+});
 
 function broadcast(msg: unknown): void {
   const s = JSON.stringify(msg);

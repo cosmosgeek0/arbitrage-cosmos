@@ -1,5 +1,9 @@
 # arbitrage-cosmos
 
+> **Agents: read `AGENTS.md` first** — it is the operating manual (purpose,
+> non-negotiables, repo map, design system, the improvement loop). This file
+> and `ARCHITECTURE.md` are the deeper reference.
+
 Private Binance trading control room. Real money is involved. One user (the owner), behind Cloudflare Access (YubiKey + email). This is NOT a public product and NOT a Hyperliquid clone — it is a cockpit for watching, proposing, approving, and executing the owner's own trades.
 
 Read ARCHITECTURE.md before building anything.

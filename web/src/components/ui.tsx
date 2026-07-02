@@ -1,76 +1,77 @@
 import type { ReactNode } from 'react';
 import { IconAlert } from './Icons';
 
-export function StatCard({
+export function StatTile({
   label,
   value,
-  sub,
-  accent,
+  delta,
+  spark,
+  onClick,
 }: {
   label: string;
   value: ReactNode;
-  sub?: ReactNode;
-  accent?: 'green' | 'red' | 'amber' | 'gold';
+  delta?: ReactNode;
+  spark?: ReactNode;
+  onClick?: () => void;
 }) {
   return (
-    <div className="card stat-card">
-      <div className="stat-label">{label}</div>
-      <div className={`stat-value ${accent ?? ''}`}>{value}</div>
-      {sub && <div className="stat-sub">{sub}</div>}
-    </div>
+    <button className={`stat-tile ${onClick ? 'clickable' : ''}`} onClick={onClick} disabled={!onClick}>
+      <div className="stat-k">{label}</div>
+      <div className="stat-v num">{value}</div>
+      {delta !== undefined && <div className="stat-d">{delta}</div>}
+      {spark && <div className="stat-spark">{spark}</div>}
+    </button>
   );
 }
 
 export function EmptyState({ title, children }: { title: string; children?: ReactNode }) {
   return (
     <div className="empty-state">
-      <div className="empty-title">{title}</div>
-      {children && <div className="empty-body">{children}</div>}
+      <div className="e-title">{title}</div>
+      {children && <div className="e-body">{children}</div>}
     </div>
   );
 }
 
-export function WarnBanner({ children }: { children: ReactNode }) {
+export function WarnStrip({ children }: { children: ReactNode }) {
   return (
-    <div className="warn-banner">
-      <IconAlert size={16} />
+    <div className="warn-strip">
+      <IconAlert size={15} />
       <span>{children}</span>
     </div>
   );
 }
 
 export function SetupChecklist() {
-  const steps = [
-    'Create an API key on Binance (API Management)',
-    'Enable Reading. Leave withdrawals DISABLED. Enable spot trading only when ready for live sends.',
-    'Restrict the key to this server’s IP',
-    'On the server: copy .env.example to .env, fill BINANCE_API_KEY and BINANCE_API_SECRET',
-    'Restart the app — this page will show your balances',
-  ];
   return (
     <ol className="setup-list">
-      {steps.map((s, i) => (
-        <li key={i}>{s}</li>
-      ))}
+      <li>Create an API key on Binance → <b>API Management</b></li>
+      <li>Enable <b>Reading</b>. Leave withdrawals <b>disabled</b>. Enable spot trading only when ready for live sends.</li>
+      <li>Restrict the key to this server’s IP</li>
+      <li>On the server: copy <b>.env.example</b> → <b>.env</b>, fill the two key variables</li>
+      <li>Restart the app — balances appear within seconds</li>
     </ol>
   );
 }
 
 export function SideTag({ side }: { side: string }) {
-  return <span className={`side-tag ${side === 'BUY' ? 'buy' : 'sell'}`}>{side}</span>;
+  return <span className={`chip-tag ${side === 'BUY' ? 'ok' : 'bad'}`}>{side}</span>;
 }
 
 export function KindChip({ kind }: { kind: string }) {
   const group = kind.includes('error')
-    ? 'err'
-    : kind.startsWith('order') || kind.startsWith('fill')
-      ? 'order'
+    ? 'bad'
+    : kind.startsWith('order') || kind.startsWith('fill') || kind.startsWith('loan')
+      ? 'ok'
       : kind.startsWith('risk')
-        ? 'risk'
+        ? 'gold'
         : kind.startsWith('strategy')
-          ? 'strat'
-          : kind.startsWith('manual') || kind === 'config_change'
-            ? 'manual'
-            : 'sys';
-  return <span className={`kind-chip kind-${group}`}>{kind}</span>;
+          ? 'purple'
+          : '';
+  return <span className={`chip-tag ${group}`}>{kind}</span>;
+}
+
+export function StatusDot({ status }: { status: string }) {
+  const cls = status === 'open' || status === 'live' ? 'dot-live' : status === 'connecting' ? 'dot-stale' : status === 'closed' || status === 'failed' ? 'dot-off' : 'dot-none';
+  return <span className={`dot ${cls}`} />;
 }

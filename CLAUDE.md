@@ -29,6 +29,10 @@ Read ARCHITECTURE.md before building anything.
 - When something is broken, fix that specific thing. Do not refactor unrelated code in the same pass.
 - UI polish (Coinbase/Binance quality is the bar) comes AFTER the data underneath is correct. A beautiful page showing wrong numbers is worse than an ugly page showing right ones.
 
+## Design system (locked — ported from Signal Lab's DESIGN.md)
+
+The UI follows the reference design language in `web/src/styles.css`: **surfaces not boxes** (hairlines + whitespace, tinted `--tile` only where Coinbase uses tiles), light-first with full dark theme (`data-theme`), gliding accent underline tabs, unboxed 62px-row market tables with sortable headers, number-only green/red flashes on change (never flash rows), gradient monogram token icons with real-logo fallback chain, hand-built SVG charts with dotted-fade fill + crosshair + draw-in, marquee tape, ⌘K command palette, bottom-right health badge, reduced-motion support. Banned: bordered card farms, equal KPI tile grids, boxed tabs, dead buttons, fake-running states.
+
 ## Current phase
 
 v0 Control Room SHIPPED (2026-07-02): account dashboard (disconnected + connected states), signed Binance client (`server/src/binance/client.ts` — no withdrawal methods by design), manual trade ticket with preview/validate/live-send, server-side risk gate (`services/risk.ts`), full ledger (events + fills + signals in SQLite), user-data stream with 30s polling fallback (listenKey flow may be deprecated — polling is the guaranteed path), basis monitor producing explained proposals, 29 gate tests in `server/test/gates.mjs` (`npm test`).

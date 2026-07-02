@@ -33,6 +33,7 @@ export interface AppConfig {
   allowedSymbols: string[]; // empty = nothing may trade
   blockedSymbols: string[];
   staleOrderMaxMin: number; // orders older than this are flagged in the UI
+  watchlist: string[]; // starred symbols on the Markets page
 }
 
 export interface OrderIntent {

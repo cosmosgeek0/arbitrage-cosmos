@@ -28,6 +28,9 @@ interface MarkPriceUpdate {
   T?: number;
 }
 
+const SPARK_CAP = 150; // sampled every 20s ≈ last 50 minutes
+const SPARK_MS = 20_000;
+
 export class MarketEngine {
   readonly feeds: Record<string, FeedStatus> = {};
   readonly filters = new Map<string, SymbolFilters>();
@@ -35,7 +38,9 @@ export class MarketEngine {
   private spotPrices = new Map<string, number>();
   private spotChange = new Map<string, number>();
   private features = new Map<string, FeatureEntry>();
+  private history = new Map<string, number[]>();
   private streams: BinanceStream[] = [];
+  private sampler: NodeJS.Timeout | null = null;
 
   constructor(private readonly ledger: Ledger) {}
 
@@ -86,10 +91,35 @@ export class MarketEngine {
 
     this.streams = [spotStream, markStream];
     for (const s of this.streams) s.start();
+
+    this.sampler = setInterval(() => {
+      for (const f of this.features.values()) {
+        if (f.spotLast === null) continue;
+        let h = this.history.get(f.symbol);
+        if (!h) {
+          h = [];
+          this.history.set(f.symbol, h);
+        }
+        h.push(f.spotLast);
+        if (h.length > SPARK_CAP) h.shift();
+      }
+    }, SPARK_MS);
   }
 
   stop(): void {
     for (const s of this.streams) s.stop();
+    if (this.sampler) clearInterval(this.sampler);
+  }
+
+  sparkOf(symbol: string, points = 40): number[] {
+    const h = this.history.get(symbol);
+    if (!h || h.length < 2) return [];
+    if (h.length <= points) return [...h];
+    const out: number[] = [];
+    for (let i = 0; i < points; i++) {
+      out.push(h[Math.round((i / (points - 1)) * (h.length - 1))]);
+    }
+    return out;
   }
 
   /** Spot price of any USDT symbol (e.g. for balance valuation). */

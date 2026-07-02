@@ -1,44 +1,94 @@
+// Formatting ported from the Signal Lab conventions: adaptive precision,
+// tabular-friendly, honest em-dashes for unknowns.
+
+const QUOTES = ['USDT', 'USDC', 'BUSD', 'FDUSD', 'TUSD', 'USD'];
+
+export function baseOf(symbol: string | null | undefined): string {
+  const s = String(symbol ?? '').toUpperCase();
+  for (const q of QUOTES) if (s.endsWith(q) && s.length > q.length) return s.slice(0, -q.length);
+  return s;
+}
+
+// Adaptive price precision, exchange-style.
 export function fmtPrice(v: number | null | undefined): string {
-  if (v === null || v === undefined || !Number.isFinite(v)) return '—';
-  const abs = Math.abs(v);
-  let opts: Intl.NumberFormatOptions;
-  if (abs >= 1000) opts = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
-  else if (abs >= 1) opts = { minimumFractionDigits: 2, maximumFractionDigits: 4 };
-  else opts = { maximumSignificantDigits: 4 };
-  return '$' + new Intl.NumberFormat('en-US', opts).format(v);
+  const n = Number(v);
+  if (!isFinite(n) || v === null || v === undefined) return '—';
+  if (n === 0) return '$0.00';
+  const a = Math.abs(n);
+  let d: number;
+  if (a >= 1000) d = 2;
+  else if (a >= 1) d = a >= 100 ? 2 : 3;
+  else if (a >= 0.1) d = 4;
+  else if (a >= 0.001) d = 6;
+  else d = 8;
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 }
 
-export function fmtPct(v: number | null | undefined, digits = 2): string {
-  if (v === null || v === undefined || !Number.isFinite(v)) return '—';
-  const sign = v > 0 ? '+' : '';
-  return `${sign}${v.toFixed(digits)}%`;
+export function fmtQty(v: number | null | undefined): string {
+  const n = Number(v);
+  if (!isFinite(n) || v === null || v === undefined) return '—';
+  return n.toLocaleString('en-US', { maximumFractionDigits: 8 });
 }
 
-export function fmtFunding(r: number | null | undefined): string {
-  if (r === null || r === undefined || !Number.isFinite(r)) return '—';
-  return `${(r * 100).toFixed(4)}%`;
+export function fmtMoney(v: number | null | undefined): string {
+  const n = Number(v);
+  if (!isFinite(n) || v === null || v === undefined) return '—';
+  return '$' + Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(n);
 }
 
-export function fmtCompact(v: number | null | undefined): string {
-  if (v === null || v === undefined || !Number.isFinite(v)) return '—';
-  return '$' + new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(v);
+export function fmtPct(v: number | null | undefined, digits = 2, withSign = true): string {
+  const n = Number(v);
+  if (!isFinite(n) || v === null || v === undefined) return '—';
+  const s = n.toFixed(digits);
+  return (withSign && n > 0 ? '+' : '') + s + '%';
 }
 
-export function timeAgo(ts: number): string {
-  const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ${m % 60}m ago`;
-  return `${Math.floor(h / 24)}d ago`;
+export function fmtFunding(rate: number | null | undefined): string {
+  const n = Number(rate);
+  if (!isFinite(n) || rate === null || rate === undefined) return '—';
+  const pct = n * 100;
+  return (pct > 0 ? '+' : '') + pct.toFixed(4) + '%';
+}
+
+export function signClass(v: number | null | undefined): string {
+  const n = Number(v);
+  if (!isFinite(n) || n === 0) return '';
+  return n > 0 ? 'up' : 'down';
+}
+
+const pad = (x: number) => String(x).padStart(2, '0');
+
+export function fmtClockUTC(d = new Date()): string {
+  return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} UTC`;
+}
+
+export function fmtTimeShort(ts: number): string {
+  const d = new Date(ts);
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+export function fmtDateTime(ts: number | null | undefined): string {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  const mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()];
+  return `${mon} ${d.getDate()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+export function timeAgo(ts: number | null | undefined): string {
+  if (!ts) return '—';
+  const s = Math.max(0, (Date.now() - ts) / 1000);
+  if (s < 5) return 'now';
+  if (s < 90) return Math.round(s) + 's ago';
+  if (s < 3600) return Math.round(s / 60) + 'm ago';
+  if (s < 86400) return Math.round(s / 3600) + 'h ago';
+  return Math.round(s / 86400) + 'd ago';
 }
 
 export function duration(fromTs: number, toTs: number): string {
   const s = Math.max(0, Math.floor((toTs - fromTs) / 1000));
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ${s % 60}s`;
+  if (m < 60) return `${m}m`;
   const h = Math.floor(m / 60);
   return `${h}h ${m % 60}m`;
 }
@@ -50,17 +100,4 @@ export function countdown(ts: number | null | undefined): string {
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
-
-export function fmtTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-}
-
-export function fmtDateTime(ts: number): string {
-  return new Date(ts).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }

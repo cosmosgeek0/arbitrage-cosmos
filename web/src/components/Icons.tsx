@@ -133,6 +133,50 @@ export const IconPulse = ({ size = 18 }: IconProps) => (
   </svg>
 );
 
+export const IconSun = ({ size = 18 }: IconProps) => (
+  <svg {...base(size)}>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+  </svg>
+);
+
+export const IconMoon = ({ size = 18 }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+  </svg>
+);
+
+export const IconWifi = ({ size = 18 }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="M12 20h.01" />
+    <path d="M2 8.82a15 15 0 0 1 20 0" />
+    <path d="M5 12.859a10 10 0 0 1 14 0" />
+    <path d="M8.5 16.429a5 5 0 0 1 7 0" />
+  </svg>
+);
+
+export const IconCoins = ({ size = 18 }: IconProps) => (
+  <svg {...base(size)}>
+    <circle cx="8" cy="8" r="6" />
+    <path d="M18.09 10.37A6 6 0 1 1 10.34 18" />
+    <path d="M7 6h1v4" />
+    <path d="m16.71 13.88.7.71-2.82 2.82" />
+  </svg>
+);
+
+export const IconArrowLeft = ({ size = 18 }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="m12 19-7-7 7-7" />
+    <path d="M19 12H5" />
+  </svg>
+);
+
+export const IconCaret = ({ size = 10 }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="m6 9 6 6 6-6" />
+  </svg>
+);
+
 export const IconAlert = ({ size = 18 }: IconProps) => (
   <svg {...base(size)}>
     <path d="M12 3 2.5 20h19z" />

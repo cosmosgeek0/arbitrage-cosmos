@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../store';
+import { StatusDot } from '../components/ui';
 import { fmtPct, fmtDateTime, duration, timeAgo } from '../format';
 import type { SignalRecord } from '../types';
 
@@ -14,57 +15,65 @@ export function Strategies() {
       .catch(() => undefined);
   }, [state?.proposals.length]);
 
-  if (!state) return <div className="page-loading">Connecting…</div>;
-
   return (
-    <>
-      <div className="card strat-card">
-        <div className="card-head">
-          <div className="strat-title">
-            <span className="dot dot-open" />
-            <b>Basis monitor</b>
-            <span className="chip chip-gold">monitor only</span>
-          </div>
-          <button className="link-btn" onClick={() => setPage('opportunities')}>
-            {state.proposals.length} active proposal{state.proposals.length === 1 ? '' : 's'} →
-          </button>
-        </div>
-        <p className="muted">
-          Watches all {state.scanner.pairs} exact spot+perp pairs. When |spot−perp basis| stays above{' '}
-          <b>{state.scanner.grossThresholdPct.toFixed(2)}%</b> (est. fees {state.config.feesPct}% + required edge{' '}
-          {state.config.minNetBasisPct}%) for {state.config.persistTicks} consecutive ticks on a pair with ≥ $
-          {(state.config.minQuoteVolume24h / 1e6).toFixed(0)}M volume, it opens a proposal. It never places orders —
-          approving a proposal only prefills the manual ticket.
-        </p>
-        <div className="strat-stats">
-          <span>last tick {state.scanner.lastTickTs ? timeAgo(state.scanner.lastTickTs) : '—'}</span>
-          <span>{state.scanner.watching} watching</span>
-          <span>{state.proposals.length} proposing</span>
+    <div className="container page">
+      <div className="page-head">
+        <div>
+          <h1 className="page-title">Strategies</h1>
+          <div className="page-sub">Every strategy explains itself. None places orders — proposals prefill the ticket.</div>
         </div>
       </div>
 
-      <div className="card strat-card disabled-card">
-        <div className="card-head">
-          <div className="strat-title">
-            <span className="dot dot-idle" />
-            <b>Volume spike monitor</b>
-            <span className="chip">in development</span>
+      <div className="arm-row armed">
+        <span className="a-ic">
+          <StatusDot status="live" />
+        </span>
+        <div className="arm-body">
+          <div className="arm-name">
+            Basis monitor <span className="chip-tag gold">running · monitor only</span>
+          </div>
+          <div className="arm-sub">
+            Watches all {state?.scanner.pairs ?? '—'} exact spot+perp pairs. |basis| above{' '}
+            <b>{state?.scanner.grossThresholdPct.toFixed(2)}%</b> (fees {state?.config.feesPct}% + edge{' '}
+            {state?.config.minNetBasisPct}%) persisting {state?.config.persistTicks} ticks on ≥ $
+            {((state?.config.minQuoteVolume24h ?? 0) / 1e6).toFixed(0)}M volume opens a proposal.
+          </div>
+          <div className="muted small" style={{ marginTop: 4 }}>
+            last tick {state?.scanner.lastTickTs ? timeAgo(state.scanner.lastTickTs) : '—'} ·{' '}
+            {state?.scanner.watching ?? 0} watching · {state?.proposals.length ?? 0} proposing
           </div>
         </div>
-        <p className="muted">
-          Planned: baseline volume tracking across all pairs, promotion to focus mode on anomalies, order-flow
-          confirmation before proposing. Not running — this card is a placeholder, not a fake bot.
-        </p>
+        <button className="cta-pill" onClick={() => setPage('opportunities')}>
+          {state?.proposals.length ?? 0} proposals →
+        </button>
       </div>
 
-      <div className="section-title">Proposal history</div>
-      <div className="card table-card">
-        <table className="tbl">
+      <div className="arm-row">
+        <span className="a-ic">
+          <StatusDot status="none" />
+        </span>
+        <div className="arm-body">
+          <div className="arm-name">
+            Volume spike monitor <span className="chip-tag">in development</span>
+          </div>
+          <div className="arm-sub">
+            Planned: baseline volume tracking, focus-mode promotion on anomalies, order-flow confirmation before
+            proposing. Not running — this row is a placeholder, not a fake bot.
+          </div>
+        </div>
+      </div>
+
+      <div className="sec-head">
+        <h2 className="sec-title">Proposal history</h2>
+        <span className="sec-note">everything the monitor ever opened, from the ledger</span>
+      </div>
+      <div className="table-scroll">
+        <table className="mkt dense">
           <thead>
             <tr>
-              <th>Symbol</th>
-              <th>Side</th>
-              <th>Opened</th>
+              <th className="l">Symbol</th>
+              <th className="l">Side</th>
+              <th className="l">Opened</th>
               <th>Duration</th>
               <th>Open</th>
               <th>Peak</th>
@@ -74,19 +83,27 @@ export function Strategies() {
           <tbody>
             {history.map((r) => (
               <tr key={r.id}>
-                <td className="strong">{r.symbol}</td>
-                <td className="muted small">{r.side === 'SHORT_PERP_LONG_SPOT' ? 'Short perp' : 'Long perp'}</td>
-                <td className="muted small">{fmtDateTime(r.openedTs)}</td>
-                <td className="muted small">{r.closedTs ? duration(r.openedTs, r.closedTs) : 'open'}</td>
-                <td className="num">{fmtPct(r.basisOpen, 2)}</td>
-                <td className="num">{fmtPct(r.basisPeak, 2)}</td>
-                <td className="num">{r.basisClose !== null ? fmtPct(r.basisClose, 2) : '—'}</td>
+                <td className="l val-strong">{r.symbol}</td>
+                <td className="l muted">{r.side === 'SHORT_PERP_LONG_SPOT' ? 'Short perp' : 'Long perp'}</td>
+                <td className="l muted">{fmtDateTime(r.openedTs)}</td>
+                <td>
+                  <span className="num muted">{r.closedTs ? duration(r.openedTs, r.closedTs) : 'open'}</span>
+                </td>
+                <td>
+                  <span className="num">{fmtPct(r.basisOpen, 2)}</span>
+                </td>
+                <td>
+                  <span className="num">{fmtPct(r.basisPeak, 2)}</span>
+                </td>
+                <td>
+                  <span className="num">{r.basisClose !== null ? fmtPct(r.basisClose, 2) : '—'}</span>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
-        {history.length === 0 && <div className="empty-inline">No proposals recorded yet.</div>}
       </div>
-    </>
+      {history.length === 0 && <div className="empty-state">No proposals recorded yet.</div>}
+    </div>
   );
 }

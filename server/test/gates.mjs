@@ -199,6 +199,22 @@ check('fills endpoint responds', Array.isArray((await get('/api/fills')).body));
 check('pnl endpoint responds', !!(await get('/api/pnl')).body?.realizedByDay);
 check('signals endpoint responds', !!(await get('/api/signals')).body);
 
+const mkts = (await get('/api/markets')).body;
+check('markets endpoint returns all pairs', Array.isArray(mkts?.rows) && mkts.rows.length > 300, `${mkts?.rows?.length ?? 0} rows`);
+check('markets rows carry spark arrays', Array.isArray(mkts?.rows?.[0]?.spark));
+
+const detail = (await get('/api/market/detail?symbol=BTCUSDT')).body;
+check('market detail responds', detail?.row?.symbol === 'BTCUSDT' && detail?.filters !== null);
+
+const loansSnap = (await get('/api/loans')).body;
+check('loans endpoint honest without keys', loansSnap?.available === false && /keys/i.test(loansSnap?.error ?? ''));
+
+const borrow = (await post('/api/loans/borrow', { loanCoin: 'BTC', collateralCoin: 'USDT', amount: 1, confirmCoin: 'BTC' })).body;
+check('loan borrow blocked without keys/arm', borrow?.ok === false);
+
+const oh = (await get('/api/orders/history?symbol=BTCUSDT')).body;
+check('order history honest without keys', oh?.available === false && Array.isArray(oh?.orders));
+
 child.kill();
 
 const failed = results.filter((r) => !r.pass);

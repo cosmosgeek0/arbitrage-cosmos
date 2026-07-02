@@ -16,6 +16,40 @@ export interface AppConfig {
   allowedSymbols: string[];
   blockedSymbols: string[];
   staleOrderMaxMin: number;
+  watchlist: string[];
+}
+
+export interface MarketRow {
+  symbol: string;
+  base: string;
+  spot: number | null;
+  perpMark: number | null;
+  basisPct: number | null;
+  fundingRate: number | null;
+  nextFundingTime: number | null;
+  change24hPct: number | null;
+  quoteVolume24h: number | null;
+  status: 'idle' | 'watching' | 'signal';
+  spark: number[];
+}
+
+export interface MarketDetail {
+  row: MarketRow | null;
+  book: { bidPrice: number; bidQty: number; askPrice: number; askQty: number } | null;
+  filters: { stepSize: number; minQty: number; tickSize: number; minNotional: number } | null;
+  last: number | null;
+  change24hPct: number | null;
+  watchlisted: boolean;
+  allowlisted: boolean;
+}
+
+export interface LoansSnapshot {
+  available: boolean;
+  error: string | null;
+  fetchedAt: number | null;
+  ongoing: { loanCoin: string; collateralCoin: string; totalDebt: number; collateralAmount: number; currentLTV: number }[];
+  loanable: { loanCoin: string; hourlyRatePct: number; yearlyRatePct: number; minLimit: number; maxLimit: number }[];
+  collateral: { collateralCoin: string; initialLTV: number; marginCallLTV: number; liquidationLTV: number; maxLimit: number }[];
 }
 
 export interface BalanceEntry {

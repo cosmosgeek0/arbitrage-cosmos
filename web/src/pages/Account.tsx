@@ -1,99 +1,126 @@
 import { useStore } from '../store';
-import { AssetDot } from '../components/AssetDot';
-import { EmptyState, SetupChecklist, WarnBanner } from '../components/ui';
-import { fmtPrice, timeAgo } from '../format';
+import { EmptyState, SetupChecklist, WarnStrip, StatusDot } from '../components/ui';
+import { TokenIcon } from '../components/TokenIcon';
+import { fmtPrice, fmtQty, timeAgo } from '../format';
 
 export function Account() {
-  const { state } = useStore();
-  if (!state) return <div className="page-loading">Connecting…</div>;
+  const { state, openDetail } = useStore();
+  if (!state) return <div className="container page"><div className="empty-state">Connecting…</div></div>;
   const acct = state.account;
 
   return (
-    <>
-      <div className="card">
-        <div className="card-head">
-          <b>Connection</b>
+    <div className="container page">
+      <div className="page-head">
+        <div>
+          <h1 className="page-title">Account</h1>
+          <div className="page-sub">Connection, permissions and balances</div>
         </div>
-        <div className="conn-grid">
-          <div className="conn-item">
-            <span className={`dot ${state.binance.keysPresent ? 'dot-open' : 'dot-idle'}`} />
-            API keys {state.binance.keysPresent ? 'present (server env)' : 'absent'}
-          </div>
-          <div className="conn-item">
-            <span className={`dot ${state.binance.connected ? 'dot-open' : 'dot-closed'}`} />
-            Account sync{' '}
-            {state.binance.connected
-              ? `ok · ${state.binance.lastSyncTs ? timeAgo(state.binance.lastSyncTs) : ''}`
-              : state.binance.keysPresent
-                ? `failing: ${state.binance.lastError ?? 'unknown'}`
-                : 'waiting for keys'}
-          </div>
-          <div className="conn-item">
-            <span className={`dot ${state.binance.userStream === 'open' ? 'dot-open' : 'dot-idle'}`} />
-            User data stream: {state.binance.userStream}
-            {state.binance.userStream !== 'open' && state.binance.keysPresent && ' — falling back to 30s polling'}
-          </div>
-          <div className="conn-item">
-            <span className={`dot ${state.binance.canWithdraw === false ? 'dot-open' : state.binance.canWithdraw === true ? 'dot-closed' : 'dot-idle'}`} />
-            Withdrawal permission:{' '}
-            {state.binance.canWithdraw === null ? 'unknown' : state.binance.canWithdraw ? 'ENABLED (fix this!)' : 'disabled ✓'}
-          </div>
-        </div>
-        {state.binance.canWithdraw === true && (
-          <WarnBanner>Recreate this key with withdrawals disabled. This app contains no withdrawal code, but the key itself should not have that power.</WarnBanner>
-        )}
       </div>
 
+      <div className="metric-strip">
+        <div className="metric">
+          <span className="k">API keys</span>
+          <span className="v" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <StatusDot status={state.binance.keysPresent ? 'live' : 'none'} />
+            {state.binance.keysPresent ? 'present' : 'absent'}
+          </span>
+          <span className="s">server env only</span>
+        </div>
+        <div className="metric">
+          <span className="k">Account sync</span>
+          <span className="v" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <StatusDot status={state.binance.connected ? 'live' : state.binance.keysPresent ? 'closed' : 'none'} />
+            {state.binance.connected ? 'ok' : state.binance.keysPresent ? 'failing' : 'waiting'}
+          </span>
+          <span className="s">{state.binance.lastSyncTs ? timeAgo(state.binance.lastSyncTs) : '30s polling'}</span>
+        </div>
+        <div className="metric">
+          <span className="k">User stream</span>
+          <span className="v" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <StatusDot status={state.binance.userStream} />
+            {state.binance.userStream}
+          </span>
+          <span className="s">falls back to polling</span>
+        </div>
+        <div className="metric">
+          <span className="k">Withdrawals</span>
+          <span className={`v ${state.binance.canWithdraw === true ? 'down' : state.binance.canWithdraw === false ? 'up' : ''}`}>
+            {state.binance.canWithdraw === null ? 'unknown' : state.binance.canWithdraw ? 'ENABLED' : 'disabled ✓'}
+          </span>
+          <span className="s">this app has no withdrawal code</span>
+        </div>
+      </div>
+
+      {state.binance.canWithdraw === true && (
+        <WarnStrip>
+          Recreate this key with withdrawals disabled — the key itself should not have that power.
+        </WarnStrip>
+      )}
+      {state.binance.keysPresent && !state.binance.connected && (
+        <WarnStrip>Last sync error: {state.binance.lastError ?? 'unknown'}</WarnStrip>
+      )}
+
       {!state.binance.keysPresent ? (
-        <div className="card connect-card">
-          <div className="connect-head">
-            <b>Set up read access</b>
+        <div className="ghost-tile">
+          <div>
+            <div className="gt-title">Set up read access</div>
+            <div className="gt-sub">
+              Keys are read from server environment variables only. There is deliberately no key input in this UI —
+              the browser must never see them.
+            </div>
+            <SetupChecklist />
           </div>
-          <SetupChecklist />
-          <div className="muted small">
-            Keys are read from server environment variables only. There is no key input in this UI on purpose — the
-            browser must never see them.
-          </div>
+          <span className="gt-badge">setup</span>
         </div>
       ) : (
-        <div className="card">
-          <div className="card-head">
-            <b>Balances</b>
-            <span className="muted small">total {fmtPrice(acct?.totalUsdt)}</span>
+        <>
+          <div className="sec-head">
+            <h2 className="sec-title">Balances</h2>
+            <span className="sec-note">total {fmtPrice(acct?.totalUsdt)}</span>
           </div>
           {!acct || acct.entries.length === 0 ? (
-            <EmptyState title="No balances">Deposit something on Binance and it appears here within 30s.</EmptyState>
+            <EmptyState title="No balances">Deposit on Binance and it appears here within 30s.</EmptyState>
           ) : (
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>Asset</th>
-                  <th>Free</th>
-                  <th>Locked</th>
-                  <th>Price</th>
-                  <th>Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {acct.entries.map((b) => (
-                  <tr key={b.asset}>
-                    <td>
-                      <div className="asset-cell">
-                        <AssetDot base={b.asset} size={28} />
-                        <span className="strong">{b.asset}</span>
-                      </div>
-                    </td>
-                    <td className="num">{b.free}</td>
-                    <td className="num muted">{b.locked || '—'}</td>
-                    <td className="num muted">{b.priceUsdt !== null ? fmtPrice(b.priceUsdt) : 'no USDT market'}</td>
-                    <td className="num strong">{fmtPrice(b.valueUsdt)}</td>
+            <div className="table-scroll">
+              <table className="mkt">
+                <thead>
+                  <tr>
+                    <th className="l">Asset</th>
+                    <th>Free</th>
+                    <th>Locked</th>
+                    <th>Price</th>
+                    <th>Value</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {acct.entries.map((b) => (
+                    <tr key={b.asset} className="rowlink" onClick={() => openDetail(`${b.asset}USDT`)}>
+                      <td className="l">
+                        <span className="tok">
+                          <TokenIcon symbol={`${b.asset}USDT`} size={30} />
+                          <span className="tok-name">{b.asset}</span>
+                        </span>
+                      </td>
+                      <td>
+                        <span className="num">{fmtQty(b.free)}</span>
+                      </td>
+                      <td className="muted">
+                        <span className="num">{b.locked ? fmtQty(b.locked) : '—'}</span>
+                      </td>
+                      <td className="muted">
+                        <span className="num">{b.priceUsdt !== null ? fmtPrice(b.priceUsdt) : 'no USDT market'}</span>
+                      </td>
+                      <td className="val-strong">
+                        <span className="num">{fmtPrice(b.valueUsdt)}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
-        </div>
+        </>
       )}
-    </>
+    </div>
   );
 }

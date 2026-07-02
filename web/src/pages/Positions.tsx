@@ -1,65 +1,80 @@
 import { useStore } from '../store';
-import { AssetDot } from '../components/AssetDot';
 import { EmptyState } from '../components/ui';
-import { fmtPrice } from '../format';
+import { TokenIcon } from '../components/TokenIcon';
+import { fmtPrice, fmtQty, signClass } from '../format';
 
 export function Positions() {
-  const { state, openTicket } = useStore();
-  if (!state) return <div className="page-loading">Connecting…</div>;
+  const { state, openTicket, openDetail } = useStore();
 
   return (
-    <div className="card table-card">
-      <div className="card-head">
-        <b>Spot positions</b>
-        <span className="muted small">non-USDT holdings · avg cost comes from ledgered fills</span>
+    <div className="container page">
+      <div className="page-head">
+        <div>
+          <h1 className="page-title">Positions</h1>
+          <div className="page-sub">Non-USDT holdings · average cost comes from ledgered fills</div>
+        </div>
       </div>
-      {state.positions.length === 0 ? (
+
+      {(state?.positions.length ?? 0) === 0 ? (
         <EmptyState title="No positions">
-          {state.binance.keysPresent
+          {state?.binance.keysPresent
             ? 'Anything you hold besides USDT shows here with value, average cost and unrealized PnL (once fills are in the ledger).'
-            : 'Connect Binance keys to see your holdings as positions.'}
+            : 'Connect Binance keys to see holdings as positions.'}
         </EmptyState>
       ) : (
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>Asset</th>
-              <th>Qty</th>
-              <th>Price</th>
-              <th>Value</th>
-              <th>Avg cost</th>
-              <th>Unrealized</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {state.positions.map((p) => (
-              <tr key={p.asset}>
-                <td>
-                  <div className="asset-cell">
-                    <AssetDot base={p.asset} size={28} />
-                    <span className="strong">{p.asset}</span>
-                  </div>
-                </td>
-                <td className="num">{(p.free + p.locked).toFixed(8)}</td>
-                <td className="num">{fmtPrice(p.priceUsdt)}</td>
-                <td className="num strong">{fmtPrice(p.valueUsdt)}</td>
-                <td className="num muted">{p.avgCost !== null ? fmtPrice(p.avgCost) : '— no fill history'}</td>
-                <td className={`num ${p.unrealizedUsd === null ? 'muted' : p.unrealizedUsd >= 0 ? 'pos' : 'neg'}`}>
-                  {p.unrealizedUsd !== null ? fmtPrice(p.unrealizedUsd) : '—'}
-                </td>
-                <td>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => openTicket({ symbol: `${p.asset}USDT`, side: 'SELL', source: 'manual' })}
-                  >
-                    Sell…
-                  </button>
-                </td>
+        <div className="table-scroll">
+          <table className="mkt">
+            <thead>
+              <tr>
+                <th className="l">Asset</th>
+                <th>Qty</th>
+                <th>Price</th>
+                <th>Value</th>
+                <th>Avg cost</th>
+                <th>Unrealized</th>
+                <th />
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {state!.positions.map((p) => (
+                <tr key={p.asset} className="rowlink" onClick={() => openDetail(`${p.asset}USDT`)}>
+                  <td className="l">
+                    <span className="tok">
+                      <TokenIcon symbol={`${p.asset}USDT`} size={30} />
+                      <span className="tok-name">{p.asset}</span>
+                    </span>
+                  </td>
+                  <td>
+                    <span className="num">{fmtQty(p.free + p.locked)}</span>
+                  </td>
+                  <td>
+                    <span className="num">{fmtPrice(p.priceUsdt)}</span>
+                  </td>
+                  <td className="val-strong">
+                    <span className="num">{fmtPrice(p.valueUsdt)}</span>
+                  </td>
+                  <td className="muted">
+                    <span className="num">{p.avgCost !== null ? fmtPrice(p.avgCost) : '— no fill history'}</span>
+                  </td>
+                  <td className={p.unrealizedUsd !== null ? signClass(p.unrealizedUsd) : ''}>
+                    <span className="num">{p.unrealizedUsd !== null ? fmtPrice(p.unrealizedUsd) : '—'}</span>
+                  </td>
+                  <td>
+                    <button
+                      className="mini-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openTicket({ symbol: `${p.asset}USDT`, side: 'SELL', source: 'manual' });
+                      }}
+                    >
+                      Sell…
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

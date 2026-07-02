@@ -131,6 +131,32 @@ export class BinanceClient {
     return this.request('DELETE', '/api/v3/order', { symbol, orderId }, true);
   }
 
+  allOrders(symbol: string, limit = 100): Promise<OpenOrder[]> {
+    return this.request('GET', '/api/v3/allOrders', { symbol, limit }, true);
+  }
+
+  // ---- Flexible crypto loans (v2). Read + borrow/repay only — deliberately
+  // no collateral-withdrawal or transfer-out methods.
+  loanableData(): Promise<{ rows?: Record<string, string>[] }> {
+    return this.request('GET', '/sapi/v2/loan/flexible/loanable/data', {}, true);
+  }
+
+  collateralData(): Promise<{ rows?: Record<string, string>[] }> {
+    return this.request('GET', '/sapi/v2/loan/flexible/collateral/data', {}, true);
+  }
+
+  ongoingLoans(): Promise<{ rows?: Record<string, string>[] }> {
+    return this.request('GET', '/sapi/v2/loan/flexible/ongoing/orders', { limit: 100 }, true);
+  }
+
+  flexibleBorrow(loanCoin: string, collateralCoin: string, loanAmount: number): Promise<unknown> {
+    return this.request('POST', '/sapi/v2/loan/flexible/borrow', { loanCoin, collateralCoin, loanAmount }, true);
+  }
+
+  flexibleRepay(loanCoin: string, collateralCoin: string, repayAmount: number): Promise<unknown> {
+    return this.request('POST', '/sapi/v2/loan/flexible/repay', { loanCoin, collateralCoin, repayAmount }, true);
+  }
+
   // User data stream (legacy listenKey flow; caller must handle failure and
   // fall back to polling — see userStream.ts).
   createListenKey(): Promise<{ listenKey: string }> {

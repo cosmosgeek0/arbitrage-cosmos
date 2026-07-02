@@ -9,6 +9,7 @@ import {
 } from 'react';
 import type {
   AppConfig,
+  MarketRow,
   PreviewResult,
   SendResult,
   ServerState,
@@ -17,26 +18,38 @@ import type {
 
 export type Page =
   | 'dashboard'
-  | 'account'
+  | 'markets'
   | 'trade'
-  | 'strategies'
-  | 'opportunities'
+  | 'loans'
+  | 'account'
   | 'orders'
   | 'positions'
   | 'fills'
   | 'pnl'
+  | 'strategies'
+  | 'opportunities'
   | 'risk'
   | 'ledger'
   | 'settings';
 
+type Theme = 'light' | 'dark';
+
 interface Store {
   state: ServerState | null;
+  markets: MarketRow[];
   connected: boolean;
   page: Page;
   setPage: (p: Page) => void;
+  detailSymbol: string | null;
+  openDetail: (symbol: string | null) => void;
+  theme: Theme;
+  setTheme: (t: Theme) => void;
+  paletteOpen: boolean;
+  setPaletteOpen: (v: boolean) => void;
   ticket: TicketPrefill | null;
   openTicket: (t: TicketPrefill) => void;
   clearTicket: () => void;
+  toggleWatch: (symbol: string) => Promise<void>;
   saveConfig: (patch: Partial<AppConfig>) => Promise<AppConfig | null>;
   setKill: (on: boolean) => Promise<void>;
   setLive: (on: boolean) => Promise<void>;
@@ -65,10 +78,21 @@ async function post<T>(url: string, body: unknown): Promise<T | null> {
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<ServerState | null>(null);
+  const [markets, setMarkets] = useState<MarketRow[]>([]);
   const [connected, setConnected] = useState(false);
   const [page, setPage] = useState<Page>('dashboard');
+  const [detailSymbol, setDetailSymbol] = useState<string | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [ticket, setTicket] = useState<TicketPrefill | null>(null);
+  const [theme, setThemeState] = useState<Theme>(
+    () => (localStorage.getItem('cosmos-theme') as Theme) || 'light'
+  );
   const wsRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('cosmos-theme', theme);
+  }, [theme]);
 
   useEffect(() => {
     void fetch('/api/state')
@@ -76,9 +100,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .then((s) => s && setState(s as ServerState))
       .catch(() => undefined);
 
+    const loadMarkets = () =>
+      fetch('/api/markets')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((m) => m && setMarkets((m as { rows: MarketRow[] }).rows))
+        .catch(() => undefined);
+    void loadMarkets();
+    const mt = setInterval(loadMarkets, 6000);
+
     let closed = false;
     let retry: number | undefined;
-
     function connect() {
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       const ws = new WebSocket(`${proto}://${location.host}/ws`);
@@ -102,6 +133,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     return () => {
       closed = true;
+      clearInterval(mt);
       if (retry) clearTimeout(retry);
       wsRef.current?.close();
     };
@@ -112,15 +144,44 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setPage('trade');
   }, []);
 
+  const openDetail = useCallback((symbol: string | null) => {
+    setDetailSymbol(symbol);
+    if (symbol) setPage('markets');
+    window.scrollTo({ top: 0 });
+  }, []);
+
+  const changePage = useCallback((p: Page) => {
+    setPage(p);
+    setDetailSymbol(null);
+    window.scrollTo({ top: 0 });
+  }, []);
+
+  const saveConfig = useCallback((patch: Partial<AppConfig>) => post<AppConfig>('/api/config', patch), []);
+
   const store: Store = {
     state,
+    markets,
     connected,
     page,
-    setPage,
+    setPage: changePage,
+    detailSymbol,
+    openDetail,
+    theme,
+    setTheme: setThemeState,
+    paletteOpen,
+    setPaletteOpen,
     ticket,
     openTicket,
     clearTicket: useCallback(() => setTicket(null), []),
-    saveConfig: useCallback((patch) => post<AppConfig>('/api/config', patch), []),
+    toggleWatch: useCallback(
+      async (symbol: string) => {
+        const cur = state?.config.watchlist ?? [];
+        const next = cur.includes(symbol) ? cur.filter((s) => s !== symbol) : [...cur, symbol];
+        await saveConfig({ watchlist: next });
+      },
+      [state, saveConfig]
+    ),
+    saveConfig,
     setKill: useCallback(async (on) => {
       await post('/api/kill', { on });
     }, []),
@@ -129,15 +190,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }, []),
     preview: useCallback((intent) => post<PreviewResult>('/api/trade/preview', intent), []),
     testOrder: useCallback(
-      async (intent) => (await post<{ ok: boolean; error?: string }>('/api/trade/test', intent)) ?? { ok: false, error: 'network error' },
+      async (intent) =>
+        (await post<{ ok: boolean; error?: string }>('/api/trade/test', intent)) ?? { ok: false, error: 'network error' },
       []
     ),
     sendLive: useCallback(
       async (intent, confirmSymbol) =>
-        (await post<SendResult>('/api/trade/send', { ...intent, confirmSymbol })) ?? {
-          sent: false,
-          error: 'network error',
-        },
+        (await post<SendResult>('/api/trade/send', { ...intent, confirmSymbol })) ?? { sent: false, error: 'network error' },
       []
     ),
     cancelOrder: useCallback(
@@ -157,9 +216,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     ),
     importFills: useCallback(
       async (symbol) =>
-        (await post<{ imported?: number; error?: string }>('/api/fills/import', { symbol })) ?? {
-          error: 'network error',
-        },
+        (await post<{ imported?: number; error?: string }>('/api/fills/import', { symbol })) ?? { error: 'network error' },
       []
     ),
   };

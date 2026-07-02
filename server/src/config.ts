@@ -24,6 +24,7 @@ export const DEFAULTS: AppConfig = {
   allowedSymbols: [], // empty allowlist = risk engine rejects every symbol
   blockedSymbols: [],
   staleOrderMaxMin: 60,
+  watchlist: ['BTCUSDT', 'ETHUSDT'],
 };
 
 const CONFIG_KEY = 'app';

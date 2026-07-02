@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { ConfirmModal } from '../components/Modal';
 import { SideTag } from '../components/ui';
-import { fmtPrice, fmtPct } from '../format';
+import { TokenIcon } from '../components/TokenIcon';
+import { Num } from '../components/Num';
+import { fmtPrice, fmtPct, signClass, baseOf } from '../format';
 import type { PreviewResult, Quote, SendResult, Side, OrderType } from '../types';
 
 export function ManualTrade() {
-  const { state, ticket, clearTicket, preview, testOrder, sendLive } = useStore();
+  const { state, ticket, clearTicket, preview, testOrder, sendLive, openDetail } = useStore();
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [side, setSide] = useState<Side>('BUY');
   const [type, setType] = useState<OrderType>('LIMIT');
@@ -21,7 +23,6 @@ export function ManualTrade() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  // Apply a prefilled ticket (from proposals or the dashboard quick card).
   useEffect(() => {
     if (!ticket) return;
     if (ticket.symbol) setSymbol(ticket.symbol);
@@ -37,7 +38,6 @@ export function ManualTrade() {
     clearTicket();
   }, [ticket, clearTicket]);
 
-  // Poll the live quote for the selected symbol.
   useEffect(() => {
     if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
       setQuote(null);
@@ -75,20 +75,6 @@ export function ManualTrade() {
     setBusy(false);
   };
 
-  const doTest = async () => {
-    setBusy(true);
-    setTestResult(await testOrder(intent()));
-    setBusy(false);
-  };
-
-  const doSend = async () => {
-    setBusy(true);
-    const res = await sendLive(intent(), symbol);
-    setSendResult(res);
-    setBusy(false);
-    setShowConfirm(false);
-  };
-
   const mode = state?.mode ?? 'HALTED';
   const keysPresent = state?.binance.keysPresent ?? false;
   const canShowLiveButton = mode === 'LIVE_ARMED' && keysPresent;
@@ -98,70 +84,85 @@ export function ManualTrade() {
       : null;
 
   return (
-    <>
-      <div className="trade-grid">
-        <div className="card ticket-card">
-          <div className="card-head">
-            <b>Order ticket</b>
-            {source === 'proposal' && <span className="chip chip-gold">from proposal</span>}
+    <div className="container page">
+      <div className="page-head">
+        <div>
+          <h1 className="page-title">Manual Trade</h1>
+          <div className="page-sub">
+            Preview → validate → send. Every send passes the server-side risk gate and a typed confirmation.
+          </div>
+        </div>
+        {source === 'proposal' && <span className="chip-tag gold">prefilled from proposal</span>}
+      </div>
+
+      <div className="two-col">
+        <div>
+          <div className="sec-head" style={{ marginTop: 10 }}>
+            <h2 className="sec-title">Order ticket</h2>
+            <span className="sec-note">mode: {mode === 'LIVE_ARMED' ? 'live armed' : mode.toLowerCase()}</span>
           </div>
 
-          <label className="fld">
+          <div className="fld">
             <span>Symbol</span>
             <input value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} spellCheck={false} />
-          </label>
-
-          <div className="side-toggle">
-            <button className={`side-btn buy ${side === 'BUY' ? 'active' : ''}`} onClick={() => setSide('BUY')}>
-              BUY
-            </button>
-            <button className={`side-btn sell ${side === 'SELL' ? 'active' : ''}`} onClick={() => setSide('SELL')}>
-              SELL
-            </button>
           </div>
 
-          <div className="type-toggle">
-            {(['LIMIT', 'MARKET'] as OrderType[]).map((t) => (
-              <button key={t} className={`type-btn ${type === t ? 'active' : ''}`} onClick={() => setType(t)}>
-                {t}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 13, flexWrap: 'wrap' }}>
+            <div className="seg">
+              <button className={side === 'BUY' ? 'on buy' : ''} onClick={() => setSide('BUY')}>
+                Buy
               </button>
-            ))}
+              <button className={side === 'SELL' ? 'on sell' : ''} onClick={() => setSide('SELL')}>
+                Sell
+              </button>
+            </div>
+            <div className="seg">
+              {(['LIMIT', 'MARKET'] as OrderType[]).map((t) => (
+                <button key={t} className={type === t ? 'on' : ''} onClick={() => setType(t)}>
+                  {t === 'LIMIT' ? 'Limit' : 'Market'}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {type === 'LIMIT' && (
-            <label className="fld">
-              <span>Limit price (USDT)</span>
-              <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" />
-            </label>
-          )}
+          <div className="form-row">
+            {type === 'LIMIT' && (
+              <div className="fld">
+                <span>Limit price (USDT)</span>
+                <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder={quote?.last ? String(quote.last) : '0.00'} />
+              </div>
+            )}
+            <div className="fld">
+              <span>Quantity ({baseOf(symbol) || 'base'})</span>
+              <input type="number" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="0.0" />
+            </div>
+            {type === 'MARKET' && (
+              <div className="fld">
+                <span>…or quote (USDT)</span>
+                <input type="number" value={quoteQty} onChange={(e) => setQuoteQty(e.target.value)} placeholder="e.g. 10" />
+              </div>
+            )}
+          </div>
 
-          <label className="fld">
-            <span>Quantity ({symbol.replace(/USDT$/, '') || 'base'})</span>
-            <input type="number" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="0.0" />
-          </label>
-
-          {type === 'MARKET' && (
-            <label className="fld">
-              <span>…or quote amount (USDT)</span>
-              <input
-                type="number"
-                value={quoteQty}
-                onChange={(e) => setQuoteQty(e.target.value)}
-                placeholder="e.g. 10"
-              />
-            </label>
-          )}
-
-          <div className="ticket-actions">
-            <button className="btn btn-ghost" disabled={busy} onClick={doPreview}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button className="cta-pill" disabled={busy} onClick={doPreview}>
               Preview
             </button>
-            <button className="btn btn-ghost" disabled={busy || !keysPresent} onClick={doTest} title={keysPresent ? 'Signed validation against Binance (no order placed)' : 'Needs Binance keys'}>
+            <button
+              className="mini-btn"
+              disabled={busy || !keysPresent}
+              title={keysPresent ? 'Signed validation against Binance — nothing is placed' : 'Needs Binance keys'}
+              onClick={async () => {
+                setBusy(true);
+                setTestResult(await testOrder(intent()));
+                setBusy(false);
+              }}
+            >
               Validate
             </button>
             {canShowLiveButton ? (
               <button
-                className="btn btn-red"
+                className="cta-pill danger"
                 disabled={busy || !pv?.ok}
                 title={pv?.ok ? 'Opens the live confirmation' : 'Run a passing preview first'}
                 onClick={() => setShowConfirm(true)}
@@ -169,93 +170,125 @@ export function ManualTrade() {
                 Send live…
               </button>
             ) : (
-              <span className="muted small live-note">
+              <span className="muted small">
                 Live send hidden — mode is <b>{mode}</b>
-                {!keysPresent && ', no keys'}. Arm it on the Risk page.
+                {!keysPresent && ', no keys'}. Arm on the Risk page.
               </span>
             )}
           </div>
 
           {testResult && (
-            <div className={`result-banner ${testResult.ok ? 'ok' : 'bad'}`}>
-              {testResult.ok ? 'Binance validated this order (signed test, nothing placed).' : `Validation failed: ${testResult.error}`}
+            <div className={`result-strip ${testResult.ok ? 'ok' : 'bad'}`}>
+              {testResult.ok
+                ? 'Binance validated this order (signed test — nothing placed).'
+                : `Validation failed: ${testResult.error}`}
             </div>
           )}
           {sendResult && (
-            <div className={`result-banner ${sendResult.sent ? 'ok' : 'bad'}`}>
+            <div className={`result-strip ${sendResult.sent ? 'ok' : 'bad'}`}>
               {sendResult.sent
                 ? `LIVE ORDER PLACED — id ${sendResult.order?.orderId}, status ${sendResult.order?.status}, executed ${sendResult.order?.executedQty}`
                 : `Not sent: ${sendResult.error ?? sendResult.risk?.reasons.join(' · ') ?? 'rejected'}`}
             </div>
           )}
+
+          {pv && (
+            <>
+              <div className="sec-head">
+                <h2 className="sec-title">Risk gate</h2>
+                <span className="sec-note">re-checked server-side at send time</span>
+              </div>
+              {pv.errors.length > 0 && <div className="result-strip bad">{pv.errors.join(' · ')}</div>}
+              <div className="drow">
+                <span className="k">Order</span>
+                <span className="v">
+                  <SideTag side={pv.side} /> {pv.quantity ?? pv.quoteQty ?? '—'}
+                  {pv.quoteQty ? ' USDT by quote' : ` ${baseOf(pv.symbol)}`} @{' '}
+                  {pv.type === 'LIMIT' ? fmtPrice(pv.effectivePrice) : 'market'}
+                </span>
+              </div>
+              <div className="drow">
+                <span className="k">Est. notional</span>
+                <span className="v num">{fmtPrice(pv.estNotionalUsd)}</span>
+              </div>
+              {pv.filters && (
+                <div className="drow">
+                  <span className="k">Binance filters</span>
+                  <span className="v muted small num">
+                    step {pv.filters.stepSize} · minQty {pv.filters.minQty} · minNotional ${pv.filters.minNotional}
+                  </span>
+                </div>
+              )}
+              <div style={{ marginTop: 6 }}>
+                {pv.risk.checks.map((c) => (
+                  <div key={c.name} className={`risk-check ${c.pass ? 'pass' : 'fail'}`}>
+                    <span className="risk-mark">{c.pass ? '✓' : '✗'}</span>
+                    <span className="risk-name">{c.name}</span>
+                    <span className="risk-detail">{c.detail}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
-        <div className="trade-side">
-          <div className="card">
-            <div className="card-head">
-              <b>{symbol || '—'} market</b>
-              {quote && !quote.tradable && <span className="chip">not a tradable spot symbol</span>}
+        <div className="rail">
+          <div className="rail-sec">
+            <div className="rail-head">
+              <span className="rail-title">
+                <span className="tok" style={{ gap: 8 }}>
+                  <TokenIcon symbol={symbol} size={22} />
+                  {symbol || '—'}
+                </span>
+              </span>
+              <button className="sec-link" onClick={() => openDetail(symbol)}>
+                Full page →
+              </button>
             </div>
-            <div className="quote-grid">
-              <div>
-                <div className="stat-label">Last</div>
-                <div className="quote-big">{fmtPrice(quote?.last)}</div>
-                <div className={quote?.change24hPct != null && quote.change24hPct >= 0 ? 'pos small' : 'neg small'}>
-                  {fmtPct(quote?.change24hPct)} 24h
-                </div>
-              </div>
-              <div>
-                <div className="stat-label">Bid / Ask</div>
-                <div className="num">
-                  {fmtPrice(quote?.book?.bidPrice)} / {fmtPrice(quote?.book?.askPrice)}
-                </div>
-                <div className="muted small">spread {spread !== null ? `${spread.toFixed(4)}%` : '—'}</div>
-              </div>
+            <div className="headline" style={{ margin: '10px 0 6px' }}>
+              <Num value={quote?.last ?? null} className="headline-val" >
+                <span style={{ fontSize: 30 }}>{fmtPrice(quote?.last)}</span>
+              </Num>
+              <span className={`hl-chip num ${signClass(quote?.change24hPct)}`}>{fmtPct(quote?.change24hPct, 2)}</span>
+            </div>
+            {quote && !quote.tradable && <div className="result-strip warn">Not a tradable spot symbol.</div>}
+            <div className="ladder-row">
+              <span className="bar ask" style={{ width: '48%' }} />
+              <span className="k">Ask</span>
+              <span className="v num">{fmtPrice(quote?.book?.askPrice)}</span>
+            </div>
+            <div className="ladder-mid">spread {spread !== null ? `${spread.toFixed(4)}%` : '—'}</div>
+            <div className="ladder-row">
+              <span className="bar bid" style={{ width: '48%' }} />
+              <span className="k">Bid</span>
+              <span className="v num">{fmtPrice(quote?.book?.bidPrice)}</span>
             </div>
           </div>
 
-          <div className="card">
-            <div className="card-head">
-              <b>Preview & risk gate</b>
+          <div className="rail-sec">
+            <div className="rail-head">
+              <span className="rail-title">Account</span>
             </div>
-            {!pv ? (
-              <div className="muted small">Run a preview — it validates against Binance filters and shows every risk check before anything is sent.</div>
-            ) : (
-              <>
-                {pv.errors.length > 0 && (
-                  <div className="result-banner bad">{pv.errors.join(' · ')}</div>
-                )}
-                <div className="pv-row">
-                  <span className="muted">Order</span>
-                  <span>
-                    <SideTag side={pv.side} /> {pv.quantity ?? pv.quoteQty ?? '—'}
-                    {pv.quoteQty ? ' USDT (by quote)' : ` ${pv.symbol.replace(/USDT$/, '')}`} @{' '}
-                    {pv.type === 'LIMIT' ? fmtPrice(pv.effectivePrice) : 'market'}
-                  </span>
-                </div>
-                <div className="pv-row">
-                  <span className="muted">Est. notional</span>
-                  <span className="num strong">{fmtPrice(pv.estNotionalUsd)}</span>
-                </div>
-                {pv.filters && (
-                  <div className="pv-row">
-                    <span className="muted">Binance filters</span>
-                    <span className="small muted">
-                      step {pv.filters.stepSize} · minQty {pv.filters.minQty} · minNotional ${pv.filters.minNotional}
-                    </span>
-                  </div>
-                )}
-                <div className="risk-checks">
-                  {pv.risk.checks.map((c) => (
-                    <div key={c.name} className={`risk-check ${c.pass ? 'pass' : 'fail'}`}>
-                      <span className="risk-mark">{c.pass ? '✓' : '✗'}</span>
-                      <span className="risk-name">{c.name}</span>
-                      <span className="muted small">{c.detail}</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
+            <div className="drow">
+              <span className="k">Available USDT</span>
+              <span className="v num">{fmtPrice(state?.account?.availableUsdt)}</span>
+            </div>
+            <div className="drow">
+              <span className="k">Max per order</span>
+              <span className="v num">${state?.config.maxOrderNotionalUsd}</span>
+            </div>
+            <div className="drow">
+              <span className="k">Daily used</span>
+              <span className="v num">
+                {fmtPrice(state?.risk.dailyNotionalUsedUsd)} / ${state?.config.maxDailyNotionalUsd}
+              </span>
+            </div>
+            <div className="drow">
+              <span className="k">Open orders</span>
+              <span className="v num">
+                {state?.openOrders.length ?? 0} / {state?.config.maxOpenOrders}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -267,44 +300,40 @@ export function ManualTrade() {
           confirmLabel="Send live order"
           danger
           busy={busy}
-          onConfirm={() => void doSend()}
+          onConfirm={async () => {
+            setBusy(true);
+            const res = await sendLive(intent(), symbol);
+            setSendResult(res);
+            setBusy(false);
+            setShowConfirm(false);
+          }}
           onClose={() => setShowConfirm(false)}
         >
-          <div className="confirm-grid">
-            <div className="pv-row">
-              <span className="muted">Order</span>
-              <span>
-                <SideTag side={side} /> <b>{symbol}</b> {type}
-              </span>
-            </div>
-            <div className="pv-row">
-              <span className="muted">Size</span>
-              <span>
-                {qty || `${quoteQty} USDT by quote`} {type === 'LIMIT' && `@ ${fmtPrice(Number(price))}`}
-              </span>
-            </div>
-            <div className="pv-row">
-              <span className="muted">Est. notional</span>
-              <span className="strong">{fmtPrice(pv.estNotionalUsd)}</span>
-            </div>
-            <div className="pv-row">
-              <span className="muted">Available USDT</span>
-              <span>{fmtPrice(state?.account?.availableUsdt)}</span>
-            </div>
-            <div className="pv-row">
-              <span className="muted">Limits</span>
-              <span className="small muted">
-                max/order ${state?.config.maxOrderNotionalUsd} · daily ${state?.risk.dailyNotionalUsedUsd.toFixed(2)}/
-                {state?.config.maxDailyNotionalUsd} used
-              </span>
-            </div>
-            <div className="result-banner bad" style={{ marginTop: 10 }}>
-              This will place a real order on Binance with real funds. The risk gate runs again server-side at send
-              time.
-            </div>
+          <div className="drow">
+            <span className="k">Order</span>
+            <span className="v">
+              <SideTag side={side} /> <b>{symbol}</b> {type}
+            </span>
+          </div>
+          <div className="drow">
+            <span className="k">Size</span>
+            <span className="v num">
+              {qty || `${quoteQty} USDT by quote`} {type === 'LIMIT' && `@ ${fmtPrice(Number(price))}`}
+            </span>
+          </div>
+          <div className="drow">
+            <span className="k">Est. notional</span>
+            <span className="v num">{fmtPrice(pv.estNotionalUsd)}</span>
+          </div>
+          <div className="drow">
+            <span className="k">Available USDT</span>
+            <span className="v num">{fmtPrice(state?.account?.availableUsdt)}</span>
+          </div>
+          <div className="result-strip bad" style={{ marginTop: 12 }}>
+            This places a real order with real funds. The risk gate runs again server-side at send time.
           </div>
         </ConfirmModal>
       )}
-    </>
+    </div>
   );
 }

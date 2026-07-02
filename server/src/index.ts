@@ -13,6 +13,7 @@ import { UserStream, type ExecutionReport } from './binance/userStream.js';
 import { AccountService } from './services/account.js';
 import { RiskService } from './services/risk.js';
 import { OrderService } from './services/orders.js';
+import { LoanService } from './services/loans.js';
 import type { AppConfig, OrderIntent } from './types.js';
 
 // Minimal .env loader (no dependency). Never logs values.
@@ -59,6 +60,7 @@ const client = creds ? new BinanceClient(creds) : null;
 const account = new AccountService(client, ledger, (s) => engine.priceOf(s));
 const risk = new RiskService(config, ledger);
 const orders = new OrderService(client, engine.filters, (s) => engine.priceOf(s), risk, ledger, account);
+const loans = new LoanService(client, config, ledger);
 
 let userStream: UserStream | null = null;
 if (client) {
@@ -243,6 +245,104 @@ app.post('/api/fills/import', (req, res) => {
   })();
 });
 
+// Full market list for the Markets page: all exact spot+perp pairs with
+// live spot/perp/basis/funding + a rolling spark. Separate from /api/state
+// so the account WS payload stays light.
+app.get('/api/markets', (_req, res) => {
+  const rows = engine
+    .rows()
+    .map((r) => ({
+      ...r,
+      status: scanner.statusOf(r.symbol),
+      spark: engine.sparkOf(r.symbol, 36),
+    }))
+    .sort((a, b) => (b.quoteVolume24h ?? 0) - (a.quoteVolume24h ?? 0));
+  res.json({ updatedAt: Date.now(), rows });
+});
+
+app.get('/api/market/detail', (req, res) => {
+  void (async () => {
+    const symbol = String(req.query.symbol ?? '');
+    if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
+      res.status(400).json({ error: 'bad symbol' });
+      return;
+    }
+    const row = engine
+      .rows()
+      .map((r) => ({ ...r, status: scanner.statusOf(r.symbol) }))
+      .find((r) => r.symbol === symbol);
+    let book = null;
+    try {
+      book = await fetchBookTicker(symbol);
+    } catch {
+      // ok — book optional
+    }
+    res.json({
+      row: row ?? null,
+      book,
+      filters: engine.filters.get(symbol) ?? null,
+      last: engine.priceOf(symbol),
+      change24hPct: engine.changeOf(symbol),
+      watchlisted: config.watchlist.includes(symbol),
+      allowlisted: config.allowedSymbols.includes(symbol),
+    });
+  })();
+});
+
+app.get('/api/loans', (req, res) => {
+  void (async () => {
+    res.json(await loans.snapshot(req.query.force === '1'));
+  })();
+});
+
+app.post('/api/loans/borrow', (req, res) => {
+  void (async () => {
+    const b = req.body as Record<string, unknown>;
+    const loanCoin = String(b.loanCoin ?? '').toUpperCase();
+    const collateralCoin = String(b.collateralCoin ?? '').toUpperCase();
+    const amount = Number(b.amount);
+    if (!/^[A-Z0-9]{2,10}$/.test(loanCoin) || !/^[A-Z0-9]{2,10}$/.test(collateralCoin) || !(amount > 0)) {
+      res.status(400).json({ error: 'bad borrow request' });
+      return;
+    }
+    res.json(await loans.borrow(loanCoin, collateralCoin, amount, String(b.confirmCoin ?? '')));
+  })();
+});
+
+app.post('/api/loans/repay', (req, res) => {
+  void (async () => {
+    const b = req.body as Record<string, unknown>;
+    const loanCoin = String(b.loanCoin ?? '').toUpperCase();
+    const collateralCoin = String(b.collateralCoin ?? '').toUpperCase();
+    const amount = Number(b.amount);
+    if (!/^[A-Z0-9]{2,10}$/.test(loanCoin) || !/^[A-Z0-9]{2,10}$/.test(collateralCoin) || !(amount > 0)) {
+      res.status(400).json({ error: 'bad repay request' });
+      return;
+    }
+    res.json(await loans.repay(loanCoin, collateralCoin, amount));
+  })();
+});
+
+app.get('/api/orders/history', (req, res) => {
+  void (async () => {
+    const symbol = String(req.query.symbol ?? '');
+    if (!client) {
+      res.json({ available: false, error: 'Binance keys not configured', orders: [] });
+      return;
+    }
+    if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
+      res.status(400).json({ error: 'bad symbol' });
+      return;
+    }
+    try {
+      const all = await client.allOrders(symbol, 100);
+      res.json({ available: true, orders: all.reverse() });
+    } catch (err) {
+      res.json({ available: false, error: String((err as Error).message), orders: [] });
+    }
+  })();
+});
+
 app.get('/api/pnl', (_req, res) => {
   const { realizedByDay } = account.pnl();
   const days = [...realizedByDay.entries()]
@@ -331,7 +431,7 @@ const NUMERIC_KEYS: (keyof AppConfig)[] = [
   'cooldownSec',
   'staleOrderMaxMin',
 ];
-const LIST_KEYS: (keyof AppConfig)[] = ['allowedSymbols', 'blockedSymbols'];
+const LIST_KEYS: (keyof AppConfig)[] = ['allowedSymbols', 'blockedSymbols', 'watchlist'];
 
 app.post('/api/config', (req, res) => {
   const body = req.body as Record<string, unknown>;

@@ -144,11 +144,17 @@ do not invent parallel styles.
   colored rounded-square icon per row, label + sublabel, control/status right,
   inset dividers. Already on Settings, System Health, Account. Use it for any new
   list/settings surface.
-- **Typography hierarchy (TradingView-grade).** Values/prices = near-black
-  `--text`, weight 700–720. Grey (`--muted`) is for LABELS ONLY — never data.
-  Real size contrast: page titles 29px, section titles 19px, metric values 19px,
-  stat-tile values 22px, table values 14px, labels 10–11px uppercase. Deltas are
-  always colored green/red. Numbers use `.num` (tabular).
+- **Typography hierarchy (TradingView-grade data, Figma-grade heroes).**
+  Values/prices = near-black `--text`, weight 700–720. Grey (`--muted`) is for
+  LABELS ONLY — never data. Page titles are editorial: clamp(32–40px), -1.6px
+  tracking, subtitles are real sentences (14.5px, 640px measure). Section
+  titles 19px, metric values 19px, stat-tile values 22px, table values 14px,
+  labels 10–11px uppercase. Deltas always green/red. Numbers use `.num`.
+- **Buttons (Figma-language, v3.0).** `.cta-pill` = flat near-black rounded-rect
+  (12px radius, inverts to white in dark, subtle lighten on hover — never a
+  color-swap hover). `.mini-btn` = bordered transparent secondary. `.buy`/
+  `.danger` = flat `--up`/`--down` with a soft color-glow. Header chrome is
+  quiet: bg through light blur + one hairline, no decoration.
 - **Token icons:** always `<TokenIcon>`. Coverage is solved by a server-side
   resolver (`server/binance/icons.ts` → `/api/icons`): for any base without a
   bundled logo it hits CoinGecko `/search`, exact-symbol matches, caches the URL

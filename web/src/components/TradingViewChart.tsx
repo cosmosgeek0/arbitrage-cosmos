@@ -82,6 +82,7 @@ export function TradingViewChart({
   const lineRef = useRef<ISeriesApi<'Line'> | null>(null);
   const histRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const fmtRef = useRef(valueFmt);
+  const fittedKeyRef = useRef<string | null>(null);
   const [themeTick, setThemeTick] = useState(0);
 
   fmtRef.current = valueFmt;
@@ -171,6 +172,7 @@ export function TradingViewChart({
     volumeRef.current = null;
     lineRef.current = null;
     histRef.current = null;
+    fittedKeyRef.current = null;
 
     if (kind === 'candles') {
       candleRef.current = chart.addSeries(CandlestickSeries, {
@@ -232,7 +234,10 @@ export function TradingViewChart({
     } else {
       histRef.current?.setData(histData);
     }
-    chartRef.current.timeScale().fitContent();
+    if (fittedKeyRef.current !== resetKey) {
+      chartRef.current.timeScale().fitContent();
+      fittedKeyRef.current = resetKey;
+    }
   }, [kind, candleData, volumeData, lineData, histData, resetKey]);
 
   const empty =

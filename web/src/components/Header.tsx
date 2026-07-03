@@ -169,9 +169,13 @@ export function Topbar() {
   const { state, connected, page, setPage, setKill, setPaletteOpen, prefs, updatePref } = useStore();
   const theme = useResolvedTheme();
   const mode = state?.mode ?? 'HALTED';
-  const mktOk = Object.values(state?.feeds ?? {}).every((s) => s === 'open') && connected;
+  const feedStates = Object.values(state?.feeds ?? {});
+  const mktOk = connected && feedStates.length > 0 && feedStates.every((s) => s === 'open');
   const acctState = state?.binance.keysPresent ? (state.binance.connected ? 'live' : 'closed') : 'none';
   const streamState = state?.binance.userStream === 'open' ? 'live' : 'none';
+  const acctLabel = !state?.binance.keysPresent ? 'keys not set' : state.binance.connected ? 'account synced' : 'account offline';
+  const healthTone = !connected || !mktOk ? 'bad' : acctState !== 'live' ? 'warn' : 'ok';
+  const healthLine = !connected ? 'socket offline' : `${mktOk ? 'market live' : 'market degraded'} / ${acctLabel}`;
 
   return (
     <header className="hdr">
@@ -195,6 +199,21 @@ export function Topbar() {
               Stream
             </span>
           </div>
+          <button
+            className={`hdr-health ${healthTone}`}
+            onClick={() => setPage('system')}
+            title="Open System Health"
+            aria-label={`System Health: ${healthLine}`}
+          >
+            <span className="hdr-health-orb">
+              <IconWifi size={15} />
+            </span>
+            <span className="hdr-health-copy">
+              <b>System Health</b>
+              <em>{healthLine}</em>
+            </span>
+            <span className="hdr-health-car" aria-hidden="true">&gt;</span>
+          </button>
           <UtcClock />
           <span className="tb-divider" />
           <span

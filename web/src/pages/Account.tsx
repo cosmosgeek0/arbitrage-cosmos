@@ -1,103 +1,209 @@
+import { useMemo, type ReactNode } from 'react';
 import { useStore } from '../store';
-import { EmptyState, SetupChecklist, WarnStrip, Group, GRow, StatePill } from '../components/ui';
+import { EmptyState, SetupChecklist, StatePill, WarnStrip } from '../components/ui';
 import { TokenIcon } from '../components/TokenIcon';
-import { IconKey, IconWallet, IconWifi, IconPulse, IconPower } from '../components/Icons';
+import { Donut } from '../components/Donut';
+import { Num } from '../components/Num';
+import {
+  IconBook,
+  IconChart,
+  IconClock,
+  IconKey,
+  IconLayers,
+  IconLock,
+  IconPower,
+  IconPulse,
+  IconShield,
+  IconWallet,
+  IconWifi,
+} from '../components/Icons';
 import { fmtPrice, fmtQty, timeAgo } from '../format';
 
+type Tone = 'ok' | 'bad' | 'warn' | 'idle';
+
+function toneForBool(v: boolean | null | undefined, invert = false): Tone {
+  if (v === null || v === undefined) return 'idle';
+  const pass = invert ? !v : v;
+  return pass ? 'ok' : 'bad';
+}
+
 export function Account() {
-  const { state, openDetail } = useStore();
-  if (!state) return <div className="container page page-narrow"><div className="empty-state">Connecting…</div></div>;
+  const { state, setPage, openDetail } = useStore();
+  if (!state) return <div className="container page account-page"><div className="empty-state">Connecting…</div></div>;
+
   const acct = state.account;
   const b = state.binance;
+  const entries = acct?.entries ?? [];
+  const topEntries = useMemo(() => entries.slice().sort((a, z) => z.valueUsdt - a.valueUsdt).slice(0, 6), [entries]);
+  const lockedValue = entries.reduce((sum, e) => sum + (e.priceUsdt ?? 0) * e.locked, 0);
+  const checks = [
+    { label: 'server keys', pass: b.keysPresent },
+    { label: 'account sync', pass: b.connected },
+    { label: 'withdrawals off', pass: b.canWithdraw === false || b.canWithdraw === null },
+    { label: 'risk gated', pass: true },
+    { label: 'ledger active', pass: state.events.length >= 0 },
+  ];
+  const score = checks.filter((c) => c.pass).length;
+  const statusTone: Tone = b.canWithdraw === true ? 'bad' : b.connected ? 'ok' : b.keysPresent ? 'warn' : 'idle';
+  const statusText = b.canWithdraw === true
+    ? 'unsafe key scope'
+    : b.connected
+      ? 'account synced'
+      : b.keysPresent
+        ? 'sync needs attention'
+        : 'read access pending';
 
   return (
-    <div className="container page page-narrow">
+    <div className="container page account-page">
       <div className="page-head">
         <div>
           <h1 className="page-title">Account</h1>
-          <div className="page-sub">Connection, key permissions and balances</div>
+          <div className="page-sub">Binance access, permissions, sync, and account data custody</div>
+        </div>
+        <div className="head-actions">
+          <button className="mini-btn" type="button" onClick={() => setPage('system')}>
+            <IconPulse /> System health
+          </button>
+          <button className="mini-btn" type="button" onClick={() => setPage('risk')}>
+            <IconShield /> Risk gate
+          </button>
         </div>
       </div>
 
       {b.canWithdraw === true && (
-        <WarnStrip>Recreate this key with withdrawals disabled — the key itself should not have that power.</WarnStrip>
+        <WarnStrip>Recreate this Binance key with withdrawals disabled. This app contains no withdrawal path, and the key should not have that permission either.</WarnStrip>
       )}
 
-      <Group title="Connection">
-        <GRow
-          icon={<IconKey />}
-          color={b.keysPresent ? '#0a9b64' : '#697079'}
-          label="API keys"
-          sub="Server environment only — never in the browser"
-          control={<StatePill tone={b.keysPresent ? 'ok' : 'idle'}>{b.keysPresent ? 'present' : 'absent'}</StatePill>}
-        />
-        <GRow
-          icon={<IconWallet />}
-          color="#e0a02a"
-          label="Account sync"
-          sub={b.lastSyncTs ? `last ${timeAgo(b.lastSyncTs)} · 30s polling` : '30s polling cadence'}
-          control={
-            <StatePill tone={b.connected ? 'ok' : b.keysPresent ? 'bad' : 'idle'}>
-              {b.connected ? 'synced' : b.keysPresent ? 'failing' : 'waiting'}
-            </StatePill>
-          }
-        />
-        <GRow
-          icon={<IconWifi />}
-          color="#8257e0"
-          label="User data stream"
-          sub="Falls back to polling if unavailable"
-          control={<StatePill tone={b.userStream === 'open' ? 'ok' : 'idle'}>{b.userStream}</StatePill>}
-        />
-      </Group>
+      <section className={`card account-hero ${statusTone}`}>
+        <div className="account-hero-main">
+          <div className="account-eyebrow">
+            <StatePill tone={statusTone}>{statusText}</StatePill>
+            <span>{state.mode.toLowerCase()}</span>
+            <span>{state.config.killSwitch ? 'kill switch on' : 'kill switch off'}</span>
+          </div>
+          <h2>{b.connected ? 'Binance account synced' : b.keysPresent ? 'Key present, account not synced' : 'Read access not connected'}</h2>
+          <p>
+            API keys stay on the server, account data is read from Binance USER_DATA endpoints, and every trading path remains behind the risk gate.
+          </p>
+          <div className="account-actions">
+            <button className="cta-pill" type="button" onClick={() => setPage('wallets')}>
+              Wallets & assets
+            </button>
+            <button className="mini-btn" type="button" onClick={() => setPage('ledger')}>
+              Audit ledger
+            </button>
+            <button className="mini-btn" type="button" onClick={() => setPage('settings')}>
+              Settings
+            </button>
+          </div>
+        </div>
+        <div className="account-score">
+          <div className="account-score-ring" style={{ '--score': `${(score / checks.length) * 100}%` } as React.CSSProperties}>
+            <span className="num">{score}/{checks.length}</span>
+          </div>
+          <div>
+            <div className="account-score-title">Access posture</div>
+            <div className="account-score-sub">Safety checks shown from current server state. Unknown exchange permissions are not guessed.</div>
+          </div>
+        </div>
+      </section>
 
-      <Group title="Key permissions (detected from Binance)">
-        <GRow
-          icon={<IconPulse />}
-          color={b.canTrade ? '#0a9b64' : '#697079'}
-          label="Spot trading"
-          sub="Enable only when you intend to send live orders"
-          control={
-            <StatePill tone={b.canTrade === true ? 'ok' : b.canTrade === false ? 'idle' : 'idle'}>
-              {b.canTrade === null ? 'unknown' : b.canTrade ? 'enabled' : 'disabled'}
-            </StatePill>
-          }
-        />
-        <GRow
-          icon={<IconPower />}
-          color={b.canWithdraw === true ? '#e0414b' : '#0a9b64'}
-          label="Withdrawals"
-          sub="This app contains no withdrawal code — the key should not either"
-          control={
-            <StatePill tone={b.canWithdraw === true ? 'bad' : b.canWithdraw === false ? 'ok' : 'idle'}>
-              {b.canWithdraw === null ? 'unknown' : b.canWithdraw ? 'ENABLED' : 'disabled'}
-            </StatePill>
-          }
-        />
-      </Group>
+      <div className="account-grid">
+        <section className="card account-panel">
+          <PanelHead icon={<IconKey />} title="Connection" note="What the server can currently see from Binance." />
+          <div className="account-signal-grid">
+            <SignalCard
+              icon={<IconLock />}
+              label="API keys"
+              value={b.keysPresent ? 'present' : 'absent'}
+              sub="environment only, never browser input"
+              tone={b.keysPresent ? 'ok' : 'idle'}
+            />
+            <SignalCard
+              icon={<IconWallet />}
+              label="Account sync"
+              value={b.connected ? 'synced' : b.keysPresent ? 'failing' : 'waiting'}
+              sub={b.lastSyncTs ? `last ${timeAgo(b.lastSyncTs)}` : '30s polling cadence'}
+              tone={b.connected ? 'ok' : b.keysPresent ? 'bad' : 'idle'}
+            />
+            <SignalCard
+              icon={<IconWifi />}
+              label="User stream"
+              value={b.userStream}
+              sub="falls back to polling"
+              tone={b.userStream === 'open' ? 'ok' : 'idle'}
+            />
+            <SignalCard
+              icon={<IconClock />}
+              label="Last event"
+              value={state.events[0] ? timeAgo(state.events[0].ts) : '—'}
+              sub={`${state.events.length} ledger rows in state`}
+              tone="idle"
+            />
+          </div>
+        </section>
+
+        <section className="card account-panel">
+          <PanelHead icon={<IconShield />} title="Permission map" note="Binance scopes and app-side hard stops." />
+          <div className="account-permission-list">
+            <PermissionRow
+              label="Reading"
+              detail="Required for balances, order history, fills, and permissions."
+              value={b.keysPresent ? 'configured' : 'absent'}
+              tone={b.keysPresent ? 'ok' : 'idle'}
+            />
+            <PermissionRow
+              label="Spot trading"
+              detail="Only useful after live trading is deliberately armed; risk gate still runs first."
+              value={b.canTrade === null ? 'unknown' : b.canTrade ? 'enabled' : 'disabled'}
+              tone={toneForBool(b.canTrade)}
+            />
+            <PermissionRow
+              label="Withdrawals"
+              detail="Should be disabled on Binance. This frontend/backend exposes no withdrawal route."
+              value={b.canWithdraw === null ? 'unknown' : b.canWithdraw ? 'ENABLED' : 'disabled'}
+              tone={toneForBool(b.canWithdraw, true)}
+            />
+            <PermissionRow
+              label="Transfers out"
+              detail="No transfer-out UI or Binance client method exists in this app."
+              value="not implemented"
+              tone="ok"
+            />
+          </div>
+        </section>
+      </div>
 
       {!b.keysPresent ? (
-        <>
-          <div className="settings-sec">Set up read access</div>
-          <div className="card">
+        <div className="account-grid setup">
+          <section className="card account-panel">
+            <PanelHead icon={<IconBook />} title="Set up read access" note="Follow this without exposing keys to the browser." />
             <SetupChecklist />
-            <div className="muted small" style={{ marginTop: 6 }}>
-              Keys are read from server environment variables only. There is deliberately no key input in this UI —
-              the browser must never see them.
-            </div>
-          </div>
-        </>
+          </section>
+          <section className="card account-panel account-custody">
+            <PanelHead icon={<IconPower />} title="Custody rules" note="The page is useful before keys, but it will not fake account data." />
+            <CustodyItem label="No key form" detail="Secrets are read from server env only. There is deliberately no browser input field." />
+            <CustodyItem label="No withdrawals" detail="The Binance client has no withdraw or transfer-out method." />
+            <CustodyItem label="No live action" detail="This page is read-only; trading requires the separate guarded manual flow." />
+          </section>
+        </div>
       ) : (
-        <>
-          <div className="settings-sec">Balances · total {fmtPrice(acct?.totalUsdt)}</div>
-          <div className="card pad-0">
-            {!acct || acct.entries.length === 0 ? (
-              <div className="card-body-empty">
-                <EmptyState title="No balances">Deposit on Binance and it appears here within 30s.</EmptyState>
+        <section className="card account-panel account-balances">
+          <PanelHead
+            icon={<IconChart />}
+            title="Balances"
+            note={`total ${fmtPrice(acct?.totalUsdt)} · available USDT ${fmtPrice(acct?.availableUsdt)} · locked ${fmtPrice(lockedValue)}`}
+            right={<button className="mini-btn" type="button" onClick={() => setPage('wallets')}>Open full wallet</button>}
+          />
+          {!acct || entries.length === 0 ? (
+            <EmptyState title="No balances">Deposit on Binance externally and the account poll will populate this section.</EmptyState>
+          ) : (
+            <div className="account-balance-layout">
+              <div className="account-donut">
+                <Donut slices={entries.map((e) => ({ label: e.asset, value: e.valueUsdt }))} size={150} />
               </div>
-            ) : (
               <div className="table-scroll">
-                <table className="mkt">
+                <table className="mkt dense">
                   <thead>
                     <tr>
                       <th className="l">Asset</th>
@@ -108,7 +214,7 @@ export function Account() {
                     </tr>
                   </thead>
                   <tbody>
-                    {acct.entries.map((e) => (
+                    {topEntries.map((e) => (
                       <tr key={e.asset} className="rowlink" onClick={() => openDetail(`${e.asset}USDT`)}>
                         <td className="l">
                           <span className="tok">
@@ -116,19 +222,96 @@ export function Account() {
                             <span className="tok-name">{e.asset}</span>
                           </span>
                         </td>
-                        <td><span className="num">{fmtQty(e.free)}</span></td>
-                        <td className="muted"><span className="num">{e.locked ? fmtQty(e.locked) : '—'}</span></td>
-                        <td className="muted"><span className="num">{e.priceUsdt !== null ? fmtPrice(e.priceUsdt) : '—'}</span></td>
-                        <td className="val-strong"><span className="num">{fmtPrice(e.valueUsdt)}</span></td>
+                        <td><Num value={e.free}>{fmtQty(e.free)}</Num></td>
+                        <td className={e.locked ? 'val-strong' : 'muted'}><Num value={e.locked}>{e.locked ? fmtQty(e.locked) : '—'}</Num></td>
+                        <td><Num value={e.priceUsdt}>{e.priceUsdt !== null ? fmtPrice(e.priceUsdt) : '—'}</Num></td>
+                        <td className="val-strong"><Num value={e.valueUsdt}>{fmtPrice(e.valueUsdt)}</Num></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            )}
-          </div>
-        </>
+            </div>
+          )}
+        </section>
       )}
+
+      <section className="card account-flow">
+        <PanelHead icon={<IconLayers />} title="Live-send chain" note="A compact reminder of the account-side safety sequence." />
+        <div className="account-flow-steps">
+          <FlowStep label="Keys stay server-side" detail={b.keysPresent ? 'configured' : 'waiting'} tone={b.keysPresent ? 'ok' : 'idle'} />
+          <FlowStep label="Allowlist + typed symbol" detail={`${state.config.allowedSymbols.length} allowed`} tone={state.config.allowedSymbols.length ? 'ok' : 'idle'} />
+          <FlowStep label="Risk gate evaluates" detail={`${state.risk.rejectionsToday} rejects today`} tone="ok" />
+          <FlowStep label="Kill switch gates send" detail={state.config.killSwitch ? 'halted' : 'manual mode'} tone={state.config.killSwitch ? 'warn' : 'ok'} />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function PanelHead({ icon, title, note, right }: { icon: ReactNode; title: string; note: string; right?: ReactNode }) {
+  return (
+    <div className="account-panel-head">
+      <span className="account-panel-icon">{icon}</span>
+      <span>
+        <span className="account-panel-title">{title}</span>
+        <span className="account-panel-note">{note}</span>
+      </span>
+      {right && <span className="account-panel-right">{right}</span>}
+    </div>
+  );
+}
+
+function SignalCard({
+  icon,
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  sub: string;
+  tone: Tone;
+}) {
+  return (
+    <div className={`account-signal-card ${tone}`}>
+      <span className="account-signal-icon">{icon}</span>
+      <span className="account-signal-label">{label}</span>
+      <b>{value}</b>
+      <small>{sub}</small>
+    </div>
+  );
+}
+
+function PermissionRow({ label, detail, value, tone }: { label: string; detail: string; value: string; tone: Tone }) {
+  return (
+    <div className="account-permission-row">
+      <span>
+        <b>{label}</b>
+        <small>{detail}</small>
+      </span>
+      <StatePill tone={tone}>{value}</StatePill>
+    </div>
+  );
+}
+
+function CustodyItem({ label, detail }: { label: string; detail: string }) {
+  return (
+    <div className="account-custody-item">
+      <span>{label}</span>
+      <b>{detail}</b>
+    </div>
+  );
+}
+
+function FlowStep({ label, detail, tone }: { label: string; detail: string; tone: Tone }) {
+  return (
+    <div className={`account-flow-step ${tone}`}>
+      <i />
+      <span>{label}</span>
+      <b>{detail}</b>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { subscribeLiveBook } from '../store';
 import { Num } from './Num';
 
@@ -55,6 +55,7 @@ export function OrderBook({
   base,
   levels = LEVELS_SHOWN,
   onPriceClick,
+  footerActions,
 }: {
   symbol: string;
   base: string;
@@ -62,8 +63,10 @@ export function OrderBook({
   levels?: number;
   /** When set, book prices become clickable (e.g. load into a limit ticket). */
   onPriceClick?: (price: number) => void;
+  footerActions?: ReactNode;
 }) {
   const [tab, setTab] = useState<'book' | 'trades'>('book');
+  const [expandedTrades, setExpandedTrades] = useState(false);
   const [book, setBook] = useState<{ bids: Level[]; asks: Level[] } | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
   const liveTsRef = useRef(0);
@@ -278,7 +281,7 @@ export function OrderBook({
             {trades.length === 0 ? (
               <div className="ob-empty">Waiting for prints…</div>
             ) : (
-              trades.slice(0, TRADES_SHOWN).map((t) => (
+              trades.slice(0, expandedTrades ? 60 : TRADES_SHOWN).map((t) => (
                 <div key={t.id} className="ob-row trade in">
                   <span className={`ob-px num ${t.isBuyerMaker ? 'down' : 'up'}`}>{fmtPx(t.price, dec)}</span>
                   <span className="ob-size num">{fmtSize(t.qty)}</span>
@@ -289,6 +292,19 @@ export function OrderBook({
           </div>
         </div>
       )}
+
+      <div className="ob-footer-actions">
+        {tab === 'book' ? (
+          <button className="mini-btn" type="button" onClick={() => setTab('trades')}>
+            View prints
+          </button>
+        ) : (
+          <button className="mini-btn" type="button" disabled={trades.length <= TRADES_SHOWN} onClick={() => setExpandedTrades((v) => !v)}>
+            {expandedTrades ? 'Show fewer' : 'Show more prints'}
+          </button>
+        )}
+        {footerActions}
+      </div>
     </aside>
   );
 }

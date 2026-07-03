@@ -6,10 +6,31 @@ import { Num } from '../components/Num';
 import { StatTile, EmptyState, StatePill } from '../components/ui';
 import { IconSearch } from '../components/Icons';
 import { fmtPrice, fmtPct, fmtBasis, fmtMoney, fmtFunding, countdown, signClass } from '../format';
+import { iconCoverage, onIcons, primeIcons } from '../lib/iconManifest';
 import type { MarketRow } from '../types';
 
-type SortKey = 'quoteVolume24h' | 'spot' | 'change24hPct' | 'basisPct' | 'fundingRate';
+type SortKey = 'base' | 'quoteVolume24h' | 'spot' | 'change24hPct' | 'basisPct' | 'fundingRate' | 'status';
 type Filter = 'all' | 'watchlist' | 'gainers' | 'losers' | 'basis' | 'funding' | 'volume' | 'signals';
+
+interface SystemSnapshot {
+  feeds: Record<string, string>;
+  pairs: number;
+  binance: {
+    connected: boolean;
+    keysPresent: boolean;
+    lastSyncTs: number | null;
+    lastError: string | null;
+    userStream: string;
+  };
+  restLatencyMs: number | null;
+  serverTimeDiffMs: number | null;
+  usedWeight1m: number | null;
+  usedWeightTs: number | null;
+  lastScannerTickTs: number | null;
+  dbOk: boolean;
+  killSwitch: boolean;
+  liveTradingEnabled: boolean;
+}
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'All assets' },
@@ -24,6 +45,28 @@ const FILTERS: { id: Filter; label: string }[] = [
 
 const finite = (v: number | null | undefined): v is number => typeof v === 'number' && Number.isFinite(v);
 const absNum = (v: number | null | undefined) => (finite(v) ? Math.abs(v) : -1);
+const statusRank = (status: MarketRow['status']) => (status === 'signal' ? 3 : status === 'watching' ? 2 : 1);
+
+function fmtAgeMs(ms: number | null): string {
+  if (ms === null || !Number.isFinite(ms)) return '—';
+  if (ms < 1500) return 'now';
+  if (ms < 60_000) return `${Math.round(ms / 1000)}s ago`;
+  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m ago`;
+  return `${Math.round(ms / 3_600_000)}h ago`;
+}
+
+function fmtLatency(ms: number | null | undefined): string {
+  if (!finite(ms)) return '—';
+  return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(2)}s`;
+}
+
+function sortValue(m: MarketRow, key: SortKey): number | string {
+  if (key === 'base') return m.base;
+  if (key === 'status') return statusRank(m.status);
+  if (key === 'basisPct') return absNum(m.basisPct);
+  const v = m[key];
+  return finite(v) ? v : Number.NaN;
+}
 
 function Star({ on, onClick }: { on: boolean; onClick: () => void }) {
   return (
@@ -70,15 +113,48 @@ function MarketRailRow({
 }
 
 export function Markets() {
-  const { markets, state, openDetail, openTicket, toggleWatch, setPage } = useStore();
+  const { markets, marketsUpdatedAt, marketsError, connected, state, prefs, updatePref, openDetail, openTicket, toggleWatch, setPage } = useStore();
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('quoteVolume24h');
   const [sortDesc, setSortDesc] = useState(true);
   const [pageN, setPageN] = useState(0);
   const [pageSize, setPageSize] = useState(50);
+  const [now, setNow] = useState(() => Date.now());
+  const [system, setSystem] = useState<SystemSnapshot | null>(null);
+  const [iconTick, setIconTick] = useState(0);
 
   const watchlist = state?.config.watchlist ?? [];
+  const iconBases = useMemo(() => [...new Set(markets.map((m) => m.base))], [markets]);
+
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    primeIcons(iconBases);
+  }, [iconBases]);
+
+  useEffect(() => onIcons(() => setIconTick((x) => x + 1)), []);
+
+  useEffect(() => {
+    let closed = false;
+    const load = () => {
+      fetch('/api/system')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((s) => {
+          if (!closed && s) setSystem(s as SystemSnapshot);
+        })
+        .catch(() => undefined);
+    };
+    void load();
+    const t = window.setInterval(load, 10_000);
+    return () => {
+      closed = true;
+      window.clearInterval(t);
+    };
+  }, []);
 
   const rows = useMemo(() => {
     let r = markets;
@@ -91,32 +167,39 @@ export function Markets() {
         r = r.filter((m) => watchlist.includes(m.symbol));
         break;
       case 'gainers':
-        return [...r].sort((a, b) => (b.change24hPct ?? -999) - (a.change24hPct ?? -999));
+        r = r.filter((m) => (m.change24hPct ?? 0) > 0);
+        break;
       case 'losers':
-        return [...r].sort((a, b) => (a.change24hPct ?? 999) - (b.change24hPct ?? 999));
+        r = r.filter((m) => (m.change24hPct ?? 0) < 0);
+        break;
       case 'basis':
-        return [...r].sort((a, b) => Math.abs(b.basisPct ?? 0) - Math.abs(a.basisPct ?? 0));
+        r = r.filter((m) => finite(m.basisPct));
+        break;
       case 'funding':
-        return [...r].filter((m) => m.hasPerp).sort((a, b) => absNum(b.fundingRate) - absNum(a.fundingRate));
+        r = r.filter((m) => m.hasPerp && finite(m.fundingRate));
+        break;
       case 'volume':
-        return [...r].sort((a, b) => (b.quoteVolume24h ?? 0) - (a.quoteVolume24h ?? 0));
+        r = r.filter((m) => (m.quoteVolume24h ?? 0) > 0);
+        break;
       case 'signals':
         r = r.filter((m) => m.status !== 'idle');
         break;
     }
     const dir = sortDesc ? -1 : 1;
     return [...r].sort((a, b) => {
-      const av = a[sortKey];
-      const bv = b[sortKey];
-      if (av === null && bv === null) return 0;
-      if (av === null) return 1;
-      if (bv === null) return -1;
-      const cmp = sortKey === 'basisPct' ? Math.abs(av) - Math.abs(bv) : av - bv;
-      return cmp * dir;
+      const av = sortValue(a, sortKey);
+      const bv = sortValue(b, sortKey);
+      if (typeof av === 'string' || typeof bv === 'string') return String(av).localeCompare(String(bv)) * dir;
+      const af = Number.isFinite(av);
+      const bf = Number.isFinite(bv);
+      if (!af && !bf) return a.base.localeCompare(b.base);
+      if (!af) return 1;
+      if (!bf) return -1;
+      return (av - bv) * dir;
     });
   }, [markets, filter, search, sortKey, sortDesc, watchlist]);
 
-  useEffect(() => setPageN(0), [filter, search, pageSize]);
+  useEffect(() => setPageN(0), [filter, search, pageSize, sortKey, sortDesc]);
 
   const totalVol = markets.reduce((s, m) => s + (m.quoteVolume24h ?? 0), 0);
   const btc = markets.find((m) => m.symbol === 'BTCUSDT');
@@ -146,6 +229,7 @@ export function Markets() {
       rows: topVolume.slice(0, 3),
       metric: (m: MarketRow) => fmtMoney(m.quoteVolume24h),
       cls: '',
+      filter: 'volume' as Filter,
     },
     {
       title: 'Top gainers',
@@ -153,6 +237,15 @@ export function Markets() {
       rows: topGainers.filter((m) => (m.quoteVolume24h ?? 0) >= 1_000_000).slice(0, 3),
       metric: (m: MarketRow) => fmtPct(m.change24hPct),
       cls: 'up',
+      filter: 'gainers' as Filter,
+    },
+    {
+      title: 'Top losers',
+      note: 'Downside movers',
+      rows: topLosers.filter((m) => (m.quoteVolume24h ?? 0) >= 1_000_000).slice(0, 3),
+      metric: (m: MarketRow) => fmtPct(m.change24hPct),
+      cls: 'down',
+      filter: 'losers' as Filter,
     },
     {
       title: 'Basis watch',
@@ -160,6 +253,7 @@ export function Markets() {
       rows: basisRows.slice(0, 3),
       metric: (m: MarketRow) => fmtBasis(m.basisPct),
       cls: '',
+      filter: 'basis' as Filter,
     },
     {
       title: 'Funding watch',
@@ -167,6 +261,7 @@ export function Markets() {
       rows: fundingRows.slice(0, 3),
       metric: (m: MarketRow) => fmtFunding(m.fundingRate),
       cls: '',
+      filter: 'funding' as Filter,
     },
   ];
 
@@ -178,20 +273,56 @@ export function Markets() {
   const scanner = state?.scanner;
   const killOn = !!state?.config.killSwitch;
   const liveOn = !!state?.config.liveTradingEnabled;
+  const marketAgeMs = marketsUpdatedAt ? now - marketsUpdatedAt : null;
+  const scannerTickTs = system?.lastScannerTickTs ?? scanner?.lastTickTs ?? null;
+  const scannerAgeMs = scannerTickTs ? now - scannerTickTs : null;
+  const iconStats = useMemo(() => iconCoverage(iconBases), [iconBases, iconTick]);
+  const streamFresh = connected && marketAgeMs !== null && marketAgeMs < Math.max(12_000, prefs.refreshSec * 2500);
+  const scannerFresh = scannerAgeMs !== null && scannerAgeMs < 25_000;
+  const systemTone: 'ok' | 'warn' | 'bad' = marketsError || !connected ? 'bad' : streamFresh && scannerFresh ? 'ok' : 'warn';
+  const feedEntries = Object.entries(system?.feeds ?? state?.feeds ?? {}).slice(0, 4);
 
-  const header = (label: string, key: SortKey) => (
+  const applyPreset = (nextFilter: Filter) => {
+    setFilter(nextFilter);
+    if (nextFilter === 'gainers') {
+      setSortKey('change24hPct');
+      setSortDesc(true);
+    } else if (nextFilter === 'losers') {
+      setSortKey('change24hPct');
+      setSortDesc(false);
+    } else if (nextFilter === 'basis') {
+      setSortKey('basisPct');
+      setSortDesc(true);
+    } else if (nextFilter === 'funding') {
+      setSortKey('fundingRate');
+      setSortDesc(true);
+    } else if (nextFilter === 'signals') {
+      setSortKey('status');
+      setSortDesc(true);
+    } else {
+      setSortKey('quoteVolume24h');
+      setSortDesc(true);
+    }
+  };
+
+  const header = (label: string, key: SortKey, align: 'left' | 'right' = 'right', extra = '') => (
     <th
-      className={`sortable ${sortKey === key ? 'sorted' : ''}`}
-      onClick={() => {
-        if (sortKey === key) setSortDesc(!sortDesc);
-        else {
-          setSortKey(key);
-          setSortDesc(true);
-        }
-      }}
+      className={`${extra} ${align === 'left' ? 'l' : ''} sortable ${sortKey === key ? 'sorted' : ''}`}
+      aria-sort={sortKey === key ? (sortDesc ? 'descending' : 'ascending') : 'none'}
     >
-      {label}
-      <span className="sort-caret">{sortDesc ? '▼' : '▲'}</span>
+      <button
+        className="sort-btn"
+        onClick={() => {
+          if (sortKey === key) setSortDesc(!sortDesc);
+          else {
+            setSortKey(key);
+            setSortDesc(key !== 'base');
+          }
+        }}
+      >
+        {label}
+        <span className="sort-caret">{sortKey === key ? (sortDesc ? '↓' : '↑') : '↕'}</span>
+      </button>
     </th>
   );
 
@@ -212,6 +343,11 @@ export function Markets() {
             onChange={(e) => setSearch(e.target.value)}
             spellCheck={false}
           />
+          {search && (
+            <button className="search-clear" aria-label="Clear market search" title="Clear market search" onClick={() => setSearch('')}>
+              ×
+            </button>
+          )}
         </div>
       </div>
 
@@ -238,6 +374,57 @@ export function Markets() {
         />
       </div>
 
+      <div className="market-live-panel">
+        <div className="market-live-main">
+          <StatePill tone={systemTone}>{systemTone === 'ok' ? 'live' : systemTone === 'bad' ? 'disconnected' : 'checking'}</StatePill>
+          <div>
+            <b>Binance market data</b>
+            <span>
+              {markets.length} symbols · refreshed {fmtAgeMs(marketAgeMs)} · scanner {fmtAgeMs(scannerAgeMs)}
+              {marketsError ? ` · ${marketsError}` : ''}
+            </span>
+          </div>
+        </div>
+        <div className="market-live-metrics">
+          <button className="market-live-metric" onClick={() => setPage('system')}>
+            <span>System health</span>
+            <b>{connected ? 'WS connected' : 'WS offline'}</b>
+          </button>
+          <button className="market-live-metric" onClick={() => setPage('system')}>
+            <span>REST latency</span>
+            <b>{fmtLatency(system?.restLatencyMs)}</b>
+          </button>
+          <div className="market-live-metric">
+            <span>Request weight</span>
+            <b>{system?.usedWeight1m ?? '—'} / min</b>
+          </div>
+          <div className="market-live-metric icon-audit">
+            <span>Logo coverage</span>
+            <b>{iconStats.resolved}/{iconStats.total} cache</b>
+          </div>
+        </div>
+        <div className="market-feed-pills">
+          {feedEntries.length ? (
+            feedEntries.map(([name, value]) => (
+              <span key={name} className="feed-pill">
+                <span className={`dot ${String(value).toLowerCase().includes('stale') || String(value).toLowerCase().includes('off') ? 'dot-stale' : 'dot-live'}`} />
+                {name}: {value}
+              </span>
+            ))
+          ) : (
+            <span className="feed-pill"><span className="dot dot-none" /> feed status pending</span>
+          )}
+          <span className="refresh-rate">
+            Update rate
+            {[3, 6, 10].map((sec) => (
+              <button key={sec} className={prefs.refreshSec === sec ? 'active' : ''} onClick={() => updatePref('refreshSec', sec)}>
+                {sec}s
+              </button>
+            ))}
+          </span>
+        </div>
+      </div>
+
       <div className="market-scan-grid">
         {marketCards.map((card) => (
           <div key={card.title} className="market-scan-card">
@@ -246,7 +433,7 @@ export function Markets() {
                 <div className="market-scan-title">{card.title}</div>
                 <div className="market-scan-note">{card.note}</div>
               </div>
-              <button className="sec-link" onClick={() => setFilter(card.title === 'Funding watch' ? 'funding' : card.title === 'Basis watch' ? 'basis' : card.title === 'Top gainers' ? 'gainers' : 'volume')}>
+              <button className="sec-link" onClick={() => applyPreset(card.filter)}>
                 View
               </button>
             </div>
@@ -270,18 +457,23 @@ export function Markets() {
           <div className="sec-head market-table-head">
             <div>
               <h2 className="sec-title">Crypto market prices</h2>
-              <span className="sec-note">{rows.length} assets · real-time Binance feed</span>
+              <span className="sec-note">
+                {rows.length} assets · sorted by {sortKey === 'quoteVolume24h' ? 'volume' : sortKey} {sortDesc ? 'high to low' : 'low to high'}
+              </span>
             </div>
             <div className="market-health">
               <StatePill tone={killOn ? 'bad' : liveOn ? 'ok' : 'warn'}>
                 {killOn ? 'halted' : liveOn ? 'armed' : 'read-only'}
+              </StatePill>
+              <StatePill tone={streamFresh ? 'ok' : 'warn'}>
+                {streamFresh ? 'fresh' : 'stale'}
               </StatePill>
             </div>
           </div>
           <div className="table-tools">
             <div className="chips">
               {FILTERS.map((f) => (
-                <button key={f.id} className={`chip ${filter === f.id ? 'active' : ''}`} onClick={() => setFilter(f.id)}>
+                <button key={f.id} className={`chip ${filter === f.id ? 'active' : ''}`} onClick={() => applyPreset(f.id)}>
                   {f.label}
                 </button>
               ))}
@@ -290,6 +482,11 @@ export function Markets() {
             <div className="tsearch">
               <IconSearch size={13} />
               <input placeholder="Search asset" value={search} onChange={(e) => setSearch(e.target.value)} spellCheck={false} />
+              {search && (
+                <button className="search-clear" aria-label="Clear market search" title="Clear market search" onClick={() => setSearch('')}>
+                  ×
+                </button>
+              )}
             </div>
           </div>
 
@@ -299,14 +496,14 @@ export function Markets() {
                 <tr>
                   <th className="w-star" />
                   <th className="w-idx l">#</th>
-                  <th className="l">Asset</th>
+                  {header('Asset', 'base', 'left')}
                   {header('Price', 'spot')}
                   {header('24h', 'change24hPct')}
                   {header('Basis', 'basisPct')}
                   {header('Funding', 'fundingRate')}
                   {header('Volume', 'quoteVolume24h')}
                   <th className="col-hide-sm">Last hour</th>
-                  <th className="col-hide-xs">Signal</th>
+                  {header('Signal', 'status', 'right', 'col-hide-xs')}
                   <th />
                 </tr>
               </thead>
@@ -333,16 +530,16 @@ export function Markets() {
                       <Num value={m.spot}>{fmtPrice(m.spot)}</Num>
                     </td>
                     <td className={signClass(m.change24hPct)}>
-                      <span className="num">{fmtPct(m.change24hPct)}</span>
+                      <Num value={m.change24hPct}>{fmtPct(m.change24hPct)}</Num>
                     </td>
                     <td className={signClass(m.basisPct)}>
-                      <span className="num">{fmtBasis(m.basisPct)}</span>
+                      <Num value={m.basisPct}>{fmtBasis(m.basisPct)}</Num>
                     </td>
                     <td className={`col-hide-xs ${signClass(m.fundingRate)}`}>
-                      <span className="num">{fmtFunding(m.fundingRate)}</span>
+                      <Num value={m.fundingRate}>{fmtFunding(m.fundingRate)}</Num>
                     </td>
                     <td>
-                      <span className="num">{fmtMoney(m.quoteVolume24h)}</span>
+                      <Num value={m.quoteVolume24h}>{fmtMoney(m.quoteVolume24h)}</Num>
                     </td>
                     <td className="col-hide-sm">
                       <span className="sparkbox">
@@ -394,6 +591,9 @@ export function Markets() {
           )}
 
           <div className="table-foot">
+            <span>
+              Showing {visible.length} of {rows.length} · updated {fmtAgeMs(marketAgeMs)}
+            </span>
             <span>
               Rows{' '}
               {[25, 50, 100, 200].map((n) => (
@@ -467,24 +667,48 @@ export function Markets() {
           <section className="market-rail-card">
             <div className="market-rail-head">
               <h3>Execution context</h3>
-              <span>private cockpit</span>
+              <span>data quality</span>
             </div>
             <div className="market-context-list">
               <div>
+                <span>Market stream</span>
+                <b>{streamFresh ? 'fresh' : connected ? 'stale' : 'offline'}</b>
+              </div>
+              <div>
                 <span>Scanner pairs</span>
-                <b>{scanner?.pairs ?? markets.length}</b>
+                <b>{system?.pairs ?? scanner?.pairs ?? markets.length}</b>
               </div>
               <div>
-                <span>Watching</span>
-                <b>{scanner?.watching ?? signalRows.length}</b>
+                <span>Scanner tick</span>
+                <b>{fmtAgeMs(scannerAgeMs)}</b>
               </div>
               <div>
-                <span>Risk gate</span>
-                <b>{killOn ? 'halted' : liveOn ? 'armed' : 'preview only'}</b>
+                <span>Binance REST</span>
+                <b>{fmtLatency(system?.restLatencyMs)}</b>
+              </div>
+              <div>
+                <span>Real logo cache</span>
+                <b>{iconStats.resolved}/{iconStats.total}</b>
               </div>
             </div>
-            <button className="cta-pill" onClick={() => setPage('risk')}>
-              Open risk controls
+            <div className="market-rail-actions">
+              <button className="mini-btn strong" onClick={() => setPage('system')}>
+                System health
+              </button>
+              <button className="mini-btn" onClick={() => setPage('risk')}>
+                Risk controls
+              </button>
+            </div>
+            <div className="refresh-rate rail-rate">
+              Update
+              {[3, 6, 10].map((sec) => (
+                <button key={sec} className={prefs.refreshSec === sec ? 'active' : ''} onClick={() => updatePref('refreshSec', sec)}>
+                  {sec}s
+                </button>
+              ))}
+            </div>
+            <button className="cta-pill" onClick={() => setPage('system')}>
+              Open system health
             </button>
           </section>
         </aside>

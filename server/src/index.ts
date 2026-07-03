@@ -12,6 +12,7 @@ import {
   fetchBookTicker,
   fetchDepth,
   fetchFundingHistory,
+  fetchFuturesTelemetry,
   fetchKlineCandles,
   fetchKlines,
   fetchTrades,
@@ -200,9 +201,9 @@ app.use(express.json());
 app.use((_req, res, next) => {
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
-      "img-src 'self' data: https://cdn.jsdelivr.net https://assets.coincap.io https://coin-images.coingecko.com https://assets.coingecko.com; " +
-      "connect-src 'self' ws: wss:; font-src 'self'; object-src 'none'; " +
+    "default-src 'self'; script-src 'self' https://s3.tradingview.com; style-src 'self' 'unsafe-inline'; " +
+      "img-src 'self' data: https://cdn.jsdelivr.net https://assets.coincap.io https://coin-images.coingecko.com https://assets.coingecko.com https://*.tradingview.com; " +
+      "connect-src 'self' ws: wss: https://*.tradingview.com; frame-src https://www.tradingview.com https://s.tradingview.com https://www.tradingview-widget.com; font-src 'self'; object-src 'none'; " +
       "frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
   );
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -457,6 +458,7 @@ app.get('/api/market/quote', (req, res) => {
 });
 
 const KLINE_INTERVALS = new Set(['1s', '1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '1d', '1w']);
+const FUTURES_DATA_PERIODS = new Set(['5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d']);
 app.get('/api/klines', (req, res) => {
   void (async () => {
     const symbol = String(req.query.symbol ?? 'BTCUSDT');
@@ -535,6 +537,23 @@ app.get('/api/funding/history', (req, res) => {
       res.json(await fetchFundingHistory(symbol));
     } catch (err) {
       res.status(502).json({ error: String(err) });
+    }
+  })();
+});
+
+app.get('/api/futures/telemetry', (req, res) => {
+  void (async () => {
+    const symbol = String(req.query.symbol ?? '');
+    const period = String(req.query.period ?? '5m');
+    const limit = Math.min(Number(req.query.limit ?? 40), 120);
+    if (!/^[A-Z0-9]{5,20}$/.test(symbol) || !FUTURES_DATA_PERIODS.has(period)) {
+      res.status(400).json({ error: 'bad symbol or period' });
+      return;
+    }
+    try {
+      res.json(await fetchFuturesTelemetry(symbol, period, limit));
+    } catch (err) {
+      res.status(502).json({ error: String((err as Error).message) });
     }
   })();
 });

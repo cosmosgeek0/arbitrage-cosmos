@@ -270,6 +270,119 @@ export async function fetchFundingHistory(symbol: string, limit = 120): Promise<
   return data;
 }
 
+export interface FuturesTelemetryPoint {
+  t: number;
+  v: number;
+}
+
+export interface FuturesOpenInterestPoint {
+  t: number;
+  contracts: number;
+  notional: number;
+}
+
+export interface FuturesRatioPoint {
+  t: number;
+  ratio: number;
+  longPct: number;
+  shortPct: number;
+}
+
+export interface FuturesTakerFlowPoint {
+  t: number;
+  buyVol: number;
+  sellVol: number;
+  ratio: number;
+}
+
+export interface FuturesTelemetry {
+  symbol: string;
+  period: string;
+  updatedAt: number;
+  available: boolean;
+  errors: string[];
+  openInterest: FuturesOpenInterestPoint[];
+  topAccountRatio: FuturesRatioPoint[];
+  topPositionRatio: FuturesRatioPoint[];
+  globalRatio: FuturesRatioPoint[];
+  takerFlow: FuturesTakerFlowPoint[];
+}
+
+const futuresTelemetryCache = new Map<string, { fetchedAt: number; data: FuturesTelemetry }>();
+const FUTURES_TELEMETRY_CACHE_MS = 60_000;
+
+async function fetchFuturesData<T>(pathName: string, symbol: string, period: string, limit: number): Promise<T[]> {
+  const url =
+    `${FAPI}/futures/data/${pathName}?symbol=${encodeURIComponent(symbol)}` +
+    `&period=${encodeURIComponent(period)}&limit=${limit}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${pathName} HTTP ${res.status}`);
+  return (await res.json()) as T[];
+}
+
+function settledValue<T>(r: PromiseSettledResult<T[]>, errors: string[]): T[] {
+  if (r.status === 'fulfilled') return r.value;
+  errors.push(String((r.reason as Error | undefined)?.message ?? r.reason));
+  return [];
+}
+
+export async function fetchFuturesTelemetry(symbol: string, period = '5m', limit = 40): Promise<FuturesTelemetry> {
+  const safeLimit = Math.max(5, Math.min(limit, 120));
+  const key = `${symbol}:${period}:${safeLimit}`;
+  const cached = futuresTelemetryCache.get(key);
+  if (cached && Date.now() - cached.fetchedAt < FUTURES_TELEMETRY_CACHE_MS) return cached.data;
+
+  type OI = { sumOpenInterest: string; sumOpenInterestValue: string; timestamp: string | number };
+  type Ratio = { longAccount: string; shortAccount: string; longShortRatio: string; timestamp: string | number };
+  type Taker = { buySellRatio: string; buyVol: string; sellVol: string; timestamp: string | number };
+
+  const [oiRes, topAccountRes, topPositionRes, globalRes, takerRes] = await Promise.allSettled([
+    fetchFuturesData<OI>('openInterestHist', symbol, period, safeLimit),
+    fetchFuturesData<Ratio>('topLongShortAccountRatio', symbol, period, safeLimit),
+    fetchFuturesData<Ratio>('topLongShortPositionRatio', symbol, period, safeLimit),
+    fetchFuturesData<Ratio>('globalLongShortAccountRatio', symbol, period, safeLimit),
+    fetchFuturesData<Taker>('takerlongshortRatio', symbol, period, safeLimit),
+  ]);
+
+  const errors: string[] = [];
+  const openInterest = settledValue(oiRes, errors).map((p) => ({
+    t: Number(p.timestamp),
+    contracts: Number(p.sumOpenInterest),
+    notional: Number(p.sumOpenInterestValue),
+  }));
+  const mapRatio = (rows: Ratio[]) =>
+    rows.map((p) => ({
+      t: Number(p.timestamp),
+      ratio: Number(p.longShortRatio),
+      longPct: Number(p.longAccount) * 100,
+      shortPct: Number(p.shortAccount) * 100,
+    }));
+  const topAccountRatio = mapRatio(settledValue(topAccountRes, errors));
+  const topPositionRatio = mapRatio(settledValue(topPositionRes, errors));
+  const globalRatio = mapRatio(settledValue(globalRes, errors));
+  const takerFlow = settledValue(takerRes, errors).map((p) => ({
+    t: Number(p.timestamp),
+    buyVol: Number(p.buyVol),
+    sellVol: Number(p.sellVol),
+    ratio: Number(p.buySellRatio),
+  }));
+
+  const data: FuturesTelemetry = {
+    symbol,
+    period,
+    updatedAt: Date.now(),
+    available: openInterest.length + topAccountRatio.length + topPositionRatio.length + globalRatio.length + takerFlow.length > 0,
+    errors,
+    openInterest,
+    topAccountRatio,
+    topPositionRatio,
+    globalRatio,
+    takerFlow,
+  };
+  futuresTelemetryCache.set(key, { fetchedAt: Date.now(), data });
+  return data;
+}
+
 export async function fetchBinanceServerTime(): Promise<{ diffMs: number; latencyMs: number }> {
   const t0 = Date.now();
   const res = await fetch(`${SPOT_API}/api/v3/time`);

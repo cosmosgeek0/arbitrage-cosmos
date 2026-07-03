@@ -45,6 +45,8 @@ const PAGE_IDS: Page[] = [
 interface Store {
   state: ServerState | null;
   markets: MarketRow[];
+  marketsUpdatedAt: number | null;
+  marketsError: string | null;
   connected: boolean;
   page: Page;
   setPage: (p: Page) => void;
@@ -120,6 +122,8 @@ async function post<T>(url: string, body: unknown): Promise<T | null> {
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<ServerState | null>(null);
   const [markets, setMarkets] = useState<MarketRow[]>([]);
+  const [marketsUpdatedAt, setMarketsUpdatedAt] = useState<number | null>(null);
+  const [marketsError, setMarketsError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [prefs, setPrefs] = useState<Prefs>(() => {
     applyPrefs();
@@ -200,8 +204,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const load = () =>
       fetch('/api/markets')
         .then((r) => (r.ok ? r.json() : null))
-        .then((m) => m && setMarkets((m as { rows: MarketRow[] }).rows))
-        .catch(() => undefined);
+        .then((m) => {
+          if (!m) return;
+          const payload = m as { updatedAt?: number; rows: MarketRow[] };
+          setMarkets(payload.rows);
+          setMarketsUpdatedAt(payload.updatedAt ?? Date.now());
+          setMarketsError(null);
+        })
+        .catch(() => setMarketsError('market refresh failed'));
     void load();
     const t = setInterval(load, Math.max(3, prefs.refreshSec) * 1000);
     return () => clearInterval(t);
@@ -229,6 +239,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const store: Store = {
     state,
     markets,
+    marketsUpdatedAt,
+    marketsError,
     connected,
     page,
     setPage: changePage,

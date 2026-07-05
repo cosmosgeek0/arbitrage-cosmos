@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useStore, useResolvedTheme, type Page } from '../store';
 import { fmtClockUTC } from '../format';
-import { StatusDot } from './ui';
 import {
   IconBook,
   IconBrain,
@@ -24,24 +23,17 @@ import {
   IconWifi,
 } from './Icons';
 
+/* One flat glyph, no container, no gradients — the way Binance/Uniswap mark
+   their brand. Cosmos = a planet on its orbit, single accent color. */
 const BRAND_MARK = (
-  <svg viewBox="0 0 36 36" width={32} height={32} className="brand-mark" aria-hidden>
-    <defs>
-      <linearGradient id="cx-mark" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stopColor="#1a1d24" />
-        <stop offset="1" stopColor="#05070a" />
-      </linearGradient>
-      <linearGradient id="cx-ring" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stopColor="#f7d046" />
-        <stop offset="1" stopColor="#e9ac00" />
-      </linearGradient>
-    </defs>
-    <rect width="36" height="36" rx="10" fill="url(#cx-mark)" />
-    <rect x="0.6" y="0.6" width="34.8" height="34.8" rx="9.6" fill="none" stroke="rgba(255,255,255,.08)" />
-    {/* orbit ring + node — "cosmos" motif, crisp geometry */}
-    <ellipse cx="18" cy="18" rx="11" ry="5.4" fill="none" stroke="url(#cx-ring)" strokeWidth="2" transform="rotate(-30 18 18)" />
-    <circle cx="18" cy="18" r="3.4" fill="url(#cx-ring)" />
-    <circle cx="27.4" cy="12.7" r="1.7" fill="#f7d046" />
+  <svg viewBox="0 0 32 32" width={26} height={26} className="brand-mark" aria-hidden>
+    <ellipse
+      cx="16" cy="16" rx="14.4" ry="5.4"
+      fill="none" stroke="var(--accent)" strokeWidth="2"
+      transform="rotate(-24 16 16)"
+      opacity=".55"
+    />
+    <circle cx="16" cy="16" r="8.2" fill="var(--accent)" />
   </svg>
 );
 
@@ -51,7 +43,7 @@ const TITLES: Record<Page, string> = {
   wallets: 'Wallets & Assets',
   markets: 'Markets',
   detail: 'Token Detail',
-  loans: 'Loans & Borrow',
+  loans: 'Borrow Preflight',
   trade: 'Manual Trade',
   orders: 'Orders',
   positions: 'Positions',
@@ -110,6 +102,14 @@ const NAV: { group: string | null; items: { id: Page; label: string; icon: JSX.E
   },
 ];
 
+const QUICK_NAV: { id: Page; label: string }[] = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'markets', label: 'Markets' },
+  { id: 'trade', label: 'Trade' },
+  { id: 'orders', label: 'Orders' },
+  { id: 'risk', label: 'Risk' },
+];
+
 export function Sidebar() {
   const { state, page, setPage } = useStore();
   const mode = state?.mode ?? 'HALTED';
@@ -120,10 +120,8 @@ export function Sidebar() {
       <div className="snav-brand" onClick={() => setPage('dashboard')}>
         {BRAND_MARK}
         <div>
-          <div className="brand-name">
-            Cosmos <b>Arbitrage</b>
-          </div>
-          <div className="brand-sub">Control Room</div>
+          <div className="brand-name">Cosmos Arbitrage</div>
+          <div className="brand-sub">Private Binance</div>
         </div>
       </div>
       <nav className="snav-nav">
@@ -168,80 +166,65 @@ function UtcClock() {
 export function Topbar() {
   const { state, connected, page, setPage, setKill, setPaletteOpen, prefs, updatePref } = useStore();
   const theme = useResolvedTheme();
+  const pageInQuickNav = QUICK_NAV.some((item) => item.id === page);
   const mode = state?.mode ?? 'HALTED';
   const feedStates = Object.values(state?.feeds ?? {});
   const mktOk = connected && feedStates.length > 0 && feedStates.every((s) => s === 'open');
   const acctState = state?.binance.keysPresent ? (state.binance.connected ? 'live' : 'closed') : 'none';
-  const streamState = state?.binance.userStream === 'open' ? 'live' : 'none';
   const acctLabel = !state?.binance.keysPresent ? 'keys not set' : state.binance.connected ? 'account synced' : 'account offline';
   const healthTone = !connected || !mktOk ? 'bad' : acctState !== 'live' ? 'warn' : 'ok';
   const healthLine = !connected ? 'socket offline' : `${mktOk ? 'market live' : 'market degraded'} / ${acctLabel}`;
+  const healthBrief = !connected ? 'offline' : !mktOk ? 'degraded' : !state?.binance.keysPresent ? 'keys absent' : acctState === 'live' ? 'ready' : 'account offline';
 
   return (
     <header className="hdr">
       <div className="hdr-in">
         <div className="tb-left">
-          <h1 className="tb-title">{TITLES[page]}</h1>
-          <span className="tb-crumb">{TITLES[page] === 'Dashboard' ? 'Control room' : 'Cosmos Arbitrage'}</span>
+          {!pageInQuickNav && <h1 className="tb-title">{TITLES[page]}</h1>}
+          <nav className="tb-tabs" aria-label="Fast navigation">
+            {QUICK_NAV.map((item) => (
+              <button key={item.id} className={page === item.id ? 'active' : ''} type="button" onClick={() => setPage(item.id)}>
+                {item.label}
+              </button>
+            ))}
+          </nav>
         </div>
         <div className="hdr-right">
-          <div className="conn-panel col-hide-sm" title="Live data connections">
-            <span className="conn-cell">
-              <StatusDot status={mktOk ? 'live' : 'closed'} />
-              Market
-            </span>
-            <span className="conn-cell">
-              <StatusDot status={acctState} />
-              Account
-            </span>
-            <span className="conn-cell">
-              <StatusDot status={streamState} />
-              Stream
-            </span>
-          </div>
           <button
-            className={`hdr-health ${healthTone}`}
+            className={`hdr-status col-hide-sm ${healthTone}`}
             onClick={() => setPage('system')}
-            title="Open System Health"
+            title={`System health: ${healthLine} — open System Health`}
             aria-label={`System Health: ${healthLine}`}
           >
-            <span className="hdr-health-orb">
-              <IconWifi size={15} />
-            </span>
-            <span className="hdr-health-copy">
-              <b>System Health</b>
-              <em>{healthLine}</em>
-            </span>
-            <span className="hdr-health-car" aria-hidden="true">&gt;</span>
+            <span className="dot" />
+            <span>{healthBrief}</span>
           </button>
           <UtcClock />
-          <span className="tb-divider" />
           <span
-            className={`mode-pill ${mode === 'HALTED' ? 'm-halted' : mode === 'LIVE_ARMED' ? 'm-live' : 'm-manual'}`}
+            className={`hdr-mode ${mode === 'HALTED' ? 'm-halted' : mode === 'LIVE_ARMED' ? 'm-live' : 'm-manual'}`}
             title="Trading mode — set on the Risk page"
           >
             <span className="dot" />
-            <span className="mode-txt">{mode === 'LIVE_ARMED' ? 'LIVE ARMED' : mode === 'HALTED' ? 'HALTED' : 'MANUAL'}</span>
+            <span className="mode-txt">{mode === 'LIVE_ARMED' ? 'Live armed' : mode === 'HALTED' ? 'Halted' : 'Manual'}</span>
           </span>
           {mode === 'HALTED' ? (
-            <button className="tb-action resume" onClick={() => setPage('risk')} title="Resume on the Risk page">
-              <IconPower size={13} />
-              <span className="mode-txt">Resume</span>
+            <button className="hdr-action resume" onClick={() => setPage('risk')} title="Resume on the Risk page">
+              Resume
             </button>
           ) : (
-            <button className="tb-action halt" onClick={() => void setKill(true)} title="Instant kill switch">
-              <IconPower size={13} />
-              <span className="mode-txt">HALT</span>
+            <button className="hdr-action halt" onClick={() => void setKill(true)} title="Instant kill switch">
+              <IconPower size={12} />
+              Halt
             </button>
           )}
-          <span className="tb-divider" />
-          <button className="icon-btn" onClick={() => setPaletteOpen(true)} title="Search (⌘K)">
+          <button className="icon-btn" onClick={() => setPaletteOpen(true)} title="Search (⌘K)" aria-label="Search">
             <IconSearch size={16} />
           </button>
           <button
             className="icon-btn"
             onClick={() => updatePref('theme', theme === 'light' ? 'dark' : 'light')}
             title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+            aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
           >
             {theme === 'light' ? <IconMoon size={15} /> : <IconSun size={15} />}
           </button>

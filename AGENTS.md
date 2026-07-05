@@ -146,10 +146,11 @@ do not invent parallel styles.
   list/settings surface.
 - **Typography hierarchy (TradingView-grade data, Figma-grade heroes).**
   Values/prices = near-black `--text`, weight 700–720. Grey (`--muted`) is for
-  LABELS ONLY — never data. Page titles are editorial: clamp(32–40px), -1.6px
-  tracking, subtitles are real sentences (14.5px, 640px measure). Section
-  titles 19px, metric values 19px, stat-tile values 22px, table values 14px,
-  labels 10–11px uppercase. Deltas always green/red. Numbers use `.num`.
+  LABELS ONLY — never data. Page titles are editorial and fixed per breakpoint
+  (no viewport font scaling): 56px desktop, 40px tablet, 30px mobile, with
+  letter-spacing 0. Subtitles are real sentences (15–17px, 720px measure).
+  Section titles 19px, metric values 19px, stat-tile values 22px, table values
+  14px, labels 10–11px uppercase. Deltas always green/red. Numbers use `.num`.
 - **Buttons (Figma-language, v3.0).** `.cta-pill` = flat near-black rounded-rect
   (12px radius, inverts to white in dark, subtle lighten on hover — never a
   color-swap hover). `.mini-btn` = bordered transparent secondary. `.buy`/
@@ -162,8 +163,8 @@ do not invent parallel styles.
   re-polls; chain is resolved-logo → spothq → coincap → brand-hued monogram.
   Monograms upgrade to the real logo in place. `img-src` CSP allows the CDNs —
   do not remove CoinGecko/coincap from the CSP or icons break.
-- **Buttons:** `.cta-pill` (dark primary), `.cta-pill.buy/.danger` (gradient +
-  inner sheen + glow + press state), `.mini-btn` (quiet), `.seg` (segmented),
+- **Buttons:** `.cta-pill` (dark primary), `.cta-pill.buy/.danger` (flat
+  trading color), `.mini-btn` (quiet bordered secondary), `.seg` (segmented),
   `.switch` (toggle). Every button must DO something or be disabled with a reason.
 - **Themes:** full light + dark via `data-theme`. **Reduced-motion** and
   **reduced-transparency** fallbacks exist — keep them working.

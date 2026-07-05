@@ -59,6 +59,11 @@ const DETAIL_KEYS = [
   'mode',
 ];
 
+type LedgerDayGroup = {
+  label: string;
+  events: LedgerEvent[];
+};
+
 function asRecord(data: unknown): Record<string, unknown> {
   return data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, unknown>) : {};
 }
@@ -67,6 +72,27 @@ function kindLabel(kind: string): string {
   return kind
     .replace(/[._]/g, ' ')
     .replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+function reasonText(ev: LedgerEvent): string {
+  const d = asRecord(ev.data);
+  const candidates = [
+    d.reason,
+    d.reasonCode,
+    d.message,
+    d.detail,
+    d.status,
+    d.result,
+  ];
+  const list = Array.isArray(d.reasons) ? d.reasons.filter(Boolean).join(' / ') : null;
+  const value = candidates.find((v) => typeof v === 'string' && v.trim().length > 0);
+  if (typeof value === 'string') return value;
+  if (list) return list;
+  if (ev.kind === 'risk_decision') return d.allowed === true ? 'risk gate accepted the intent' : 'risk gate rejected the intent';
+  if (ev.kind === 'strategy_signal') return 'strategy signal recorded for review';
+  if (ev.kind.startsWith('order')) return 'order path event recorded';
+  if (ev.kind.includes('error')) return 'error captured in the audit log';
+  return 'ledger event recorded';
 }
 
 function eventTone(ev: LedgerEvent): 'ok' | 'bad' | 'warn' | 'purple' | 'info' {
@@ -93,7 +119,7 @@ function eventIcon(kind: string): ReactNode {
 }
 
 function formatDetailValue(key: string, value: unknown): string {
-  if (value === null || value === undefined || value === '') return '-';
+  if (value === null || value === undefined || value === '') return 'not recorded';
   if (typeof value === 'boolean') return value ? 'yes' : 'no';
   if (typeof value === 'number') {
     if (/usd|notional|price|quote/i.test(key)) return fmtPrice(value);
@@ -112,6 +138,20 @@ function formatDetailValue(key: string, value: unknown): string {
 function detailFields(ev: LedgerEvent): { key: string; value: string }[] {
   const d = asRecord(ev.data);
   return DETAIL_KEYS.filter((key) => key in d).map((key) => ({ key: kindLabel(key), value: formatDetailValue(key, d[key]) }));
+}
+
+function dayKey(ts: number): string {
+  return new Date(ts).toLocaleDateString('en-CA');
+}
+
+function dayLabel(ts: number): string {
+  const date = new Date(ts);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  if (dayKey(ts) === dayKey(today.getTime())) return 'Today';
+  if (dayKey(ts) === dayKey(yesterday.getTime())) return 'Yesterday';
+  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
 function LedgerMetric({ label, value, sub, tone, icon }: { label: string; value: ReactNode; sub?: ReactNode; tone?: string; icon: ReactNode }) {
@@ -183,6 +223,24 @@ export function LedgerPage() {
   }, [events]);
 
   const unknownKinds = useMemo(() => kindCounts.map(([k]) => k).filter((k) => !KNOWN_KINDS.includes(k)), [kindCounts]);
+  const kindOptions = useMemo(() => ['all', ...KIND_GROUPS.flatMap((g) => g.kinds), ...unknownKinds], [unknownKinds]);
+  const groupedVisible = useMemo<LedgerDayGroup[]>(() => {
+    const groups: LedgerDayGroup[] = [];
+    for (const ev of visible) {
+      const label = dayLabel(ev.ts);
+      const last = groups[groups.length - 1];
+      if (last?.label === label) {
+        last.events.push(ev);
+      } else {
+        groups.push({ label, events: [ev] });
+      }
+    }
+    return groups;
+  }, [visible]);
+  const groupTotals = useMemo(() => KIND_GROUPS.map((group) => ({
+    title: group.title,
+    count: group.kinds.reduce((sum, k) => sum + (kindCounts.find(([kk]) => kk === k)?.[1] ?? 0), 0),
+  })), [kindCounts]);
   const selected = visible.find((ev) => ev.id === expanded) ?? visible[0] ?? null;
   const errorCount = visible.filter((ev) => eventTone(ev) === 'bad').length;
   const riskRejected = visible.filter((ev) => ev.kind === 'risk_decision' && asRecord(ev.data).allowed === false).length;
@@ -239,92 +297,73 @@ export function LedgerPage() {
 
   return (
     <div className="container page ledger-page">
-      <div className="ledger-hero">
-        <div>
-          <h1 className="page-title">Ledger / Logs</h1>
-          <div className="page-sub">Every decision, order, fill, error and config change. Nothing is silent.</div>
-        </div>
-        <div className="ledger-live">
-          <span className={`state-dot ${loadError ? 'bad' : loading ? 'warn' : 'ok'}`} />
-          <span>{loadError ? loadError : loading ? 'syncing ledger' : `synced ${timeAgo(lastLoaded)}`}</span>
-        </div>
-      </div>
-
-      <section className="ledger-metrics">
-        <LedgerMetric label="Current view" value={visible.length.toLocaleString('en-US')} sub={`${symbolCount} symbols`} icon={<IconList size={16} />} />
-        <LedgerMetric label="Latest event" value={selected ? timeAgo(selected.ts) : '-'} sub={selected ? kindLabel(selected.kind) : 'no events'} icon={<IconClock size={16} />} />
-        <LedgerMetric label="Execution audit" value={executionCount.toLocaleString('en-US')} sub="orders and fills" tone="ok" icon={<IconReceipt size={16} />} />
-        <LedgerMetric label="Rejected / errors" value={(riskRejected + errorCount).toLocaleString('en-US')} sub={`${riskRejected} risk rejects`} tone={riskRejected + errorCount > 0 ? 'bad' : 'ok'} icon={<IconShield size={16} />} />
-      </section>
-
-      <section className="card ledger-filter-card">
-        <div className="ledger-filter-head">
+      <section className="card ledger-console-card">
+        <div className="ledger-console-head">
           <div>
-            <h2>Audit filters</h2>
-            <span>Query is live. Backend search checks kind, symbol, and raw event data.</span>
+          <h1 className="page-title">Ledger / Logs</h1>
+            <p>Every decision, order, fill, error and config change in one audit timeline.</p>
           </div>
-          <div className="ledger-filter-actions">
-            <button className="mini-btn" onClick={() => void load()} disabled={loading}>
-              <IconRefresh size={14} />
-              {loading ? 'Refreshing' : 'Refresh'}
-            </button>
-            <button className="mini-btn" onClick={clearFilters} disabled={!canClear}>
-              Clear
-            </button>
+          <div className="ledger-live">
+            <span className={`state-dot ${loadError ? 'bad' : loading ? 'warn' : 'ok'}`} />
+            <span>{loadError ? loadError : loading ? 'syncing ledger' : `synced ${timeAgo(lastLoaded)}`}</span>
           </div>
         </div>
 
-        <div className="ledger-tools">
-          <label className={`ledger-input ${symbol && !/^[A-Z0-9]{5,20}$/.test(symbol) ? 'warn' : ''}`}>
-            <IconSearch size={14} />
-            <span>Symbol</span>
-            <input placeholder="BTCUSDT" value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} spellCheck={false} />
-          </label>
-          <label className="ledger-input wide">
-            <IconSearch size={14} />
-            <span>Text</span>
-            <input placeholder="risk, cancel, funding, error..." value={q} onChange={(e) => setQ(e.target.value)} spellCheck={false} />
-          </label>
-          <span className="seg ledger-decision">
-            {(['all', 'accepted', 'rejected'] as const).map((d) => (
-              <button key={d} className={decision === d ? 'on' : ''} onClick={() => setDecision(d)}>
-                {d}
+        <div className="ledger-console-body">
+          <div className="ledger-console-stats">
+            <LedgerMetric label="Shown" value={visible.length.toLocaleString('en-US')} sub={`${symbolCount} symbols`} icon={<IconList size={16} />} />
+            <LedgerMetric label="Latest" value={selected ? timeAgo(selected.ts) : 'none'} sub={selected ? kindLabel(selected.kind) : 'no events'} icon={<IconClock size={16} />} />
+            <LedgerMetric label="Execution" value={executionCount.toLocaleString('en-US')} sub="orders and fills" tone="ok" icon={<IconReceipt size={16} />} />
+            <LedgerMetric label="Rejected/errors" value={(riskRejected + errorCount).toLocaleString('en-US')} sub={`${riskRejected} risk rejects`} tone={riskRejected + errorCount > 0 ? 'bad' : 'ok'} icon={<IconShield size={16} />} />
+          </div>
+
+          <div className="ledger-query-console">
+            <div className="ledger-query-row">
+              <label className={`ledger-input ${symbol && !/^[A-Z0-9]{5,20}$/.test(symbol) ? 'warn' : ''}`}>
+                <IconSearch size={14} />
+                <span>Symbol</span>
+                <input placeholder="BTCUSDT" value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} spellCheck={false} />
+              </label>
+              <label className="ledger-input wide">
+                <IconSearch size={14} />
+                <span>Text</span>
+                <input placeholder="risk, cancel, funding, error..." value={q} onChange={(e) => setQ(e.target.value)} spellCheck={false} />
+              </label>
+              <label className="ledger-kind-select">
+                <span>Kind</span>
+                <select value={kind} onChange={(e) => setKind(e.target.value)}>
+                  {kindOptions.map((k) => (
+                    <option value={k} key={k}>{k === 'all' ? 'All events' : kindLabel(k)}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="ledger-query-actions">
+              <span className="seg ledger-decision">
+                {(['all', 'accepted', 'rejected'] as const).map((d) => (
+                  <button key={d} className={decision === d ? 'on' : ''} onClick={() => setDecision(d)}>
+                    {d}
+                  </button>
+                ))}
+              </span>
+              <button className="mini-btn" onClick={() => void load()} disabled={loading}>
+                <IconRefresh size={14} />
+                {loading ? 'Refreshing' : 'Refresh'}
+              </button>
+              <button className="mini-btn" onClick={clearFilters} disabled={!canClear}>
+                Clear
+              </button>
+            </div>
+          </div>
+
+          <div className="ledger-category-summary compact" aria-label="Ledger category counts">
+            {groupTotals.map((g) => (
+              <button key={g.title} type="button" onClick={() => setKind(g.title === 'Trading' ? 'order_intent' : g.title === 'Control' ? 'strategy_signal' : 'ws.open')}>
+                <b>{g.count.toLocaleString('en-US')}</b>
+                <em>{g.title}</em>
               </button>
             ))}
-          </span>
-        </div>
-
-        <div className="ledger-kind-board">
-          <button className={`ledger-kind-chip all ${kind === 'all' ? 'active' : ''}`} onClick={() => setKind('all')}>
-            All events
-            <b>{events.length}</b>
-          </button>
-          {KIND_GROUPS.map((group) => (
-            <div className="ledger-kind-group" key={group.title}>
-              <span>{group.title}</span>
-              <div>
-                {group.kinds.map((k) => (
-                  <button key={k} className={`ledger-kind-chip ${kind === k ? 'active' : ''}`} onClick={() => setKind(k)}>
-                    {kindLabel(k)}
-                    <b>{kindCounts.find(([kk]) => kk === k)?.[1] ?? 0}</b>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-          {unknownKinds.length > 0 && (
-            <div className="ledger-kind-group">
-              <span>Other</span>
-              <div>
-                {unknownKinds.map((k) => (
-                  <button key={k} className={`ledger-kind-chip ${kind === k ? 'active' : ''}`} onClick={() => setKind(k)}>
-                    {kindLabel(k)}
-                    <b>{kindCounts.find(([kk]) => kk === k)?.[1] ?? 0}</b>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          </div>
         </div>
       </section>
 
@@ -339,22 +378,25 @@ export function LedgerPage() {
           <section className="card ledger-stream-card">
             <div className="ledger-stream-head">
               <div>
-                <h2>Audit stream</h2>
-                <span>{visible.length.toLocaleString('en-US')} events shown from the current query</span>
+                <h2>Event timeline</h2>
+                <span>{visible.length.toLocaleString('en-US')} events shown with reasons first</span>
               </div>
               <span className="chip-tag">{decision === 'all' ? 'all decisions' : decision}</span>
             </div>
             <div className="ledger-timeline">
-              {visible.map((ev) => {
-                const tone = eventTone(ev);
-                const open = expanded === ev.id;
-                const fields = detailFields(ev);
+              {groupedVisible.map((group) => (
+                <div className="ledger-day-section" key={group.label}>
+                  <div className="ledger-day-label">
+                    <span>{group.label}</span>
+                    <b>{group.events.length.toLocaleString('en-US')} events</b>
+                  </div>
+                  {group.events.map((ev) => {
+                    const tone = eventTone(ev);
+                    const open = expanded === ev.id;
+                    const fields = detailFields(ev);
                 return (
                   <article key={ev.id} className={`ledger-event ${tone} ${open ? 'open' : ''}`}>
                     <button className="ledger-event-main" onClick={() => setExpanded(open ? null : ev.id)} aria-expanded={open}>
-                      <span className="ledger-rail">
-                        <span className="ledger-dot" />
-                      </span>
                       <span className="ledger-event-icon">{eventIcon(ev.kind)}</span>
                       <span className="ledger-event-body">
                         <span className="ledger-event-top">
@@ -362,6 +404,7 @@ export function LedgerPage() {
                           <span className="ledger-time">{fmtDateTime(ev.ts)} · {timeAgo(ev.ts)}</span>
                         </span>
                         <strong>{eventSummary(ev.kind, ev.data as Record<string, unknown> | null, ev.symbol)}</strong>
+                        <span className="ledger-reason-line">{reasonText(ev)}</span>
                         <span className="ledger-event-meta">
                           {ev.symbol ? (
                             <span className="ledger-symbol">
@@ -414,7 +457,9 @@ export function LedgerPage() {
                     )}
                   </article>
                 );
-              })}
+                  })}
+                </div>
+              ))}
             </div>
           </section>
 

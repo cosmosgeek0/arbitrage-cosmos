@@ -1,3 +1,6 @@
+/* Opportunities is the proposal queue: every card is a real scanner signal
+   with the engine's own numbers — nothing is scored or ranked by invented
+   client-side formulas. Radar tabs are labeled market context, not signals. */
 import { useMemo, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
 import { TokenIcon, brandColor } from '../components/TokenIcon';
@@ -46,11 +49,6 @@ function abs(v: number | null | undefined): number {
   return finite(v) ? Math.abs(v) : 0;
 }
 
-function clampPct(v: number): number {
-  if (!Number.isFinite(v)) return 0;
-  return Math.max(0, Math.min(100, v));
-}
-
 function sideForBasis(v: number | null | undefined): Proposal['side'] {
   return (v ?? 0) >= 0 ? 'SHORT_PERP_LONG_SPOT' : 'LONG_PERP_SHORT_SPOT';
 }
@@ -59,19 +57,10 @@ function edgeDistance(m: MarketRow, threshold: number): number {
   return abs(m.basisPct) - threshold;
 }
 
-function proposalScore(p: Proposal): number {
-  const edge = clampPct(abs(p.netEdgePct) * 32);
-  const confidence = clampPct(p.confidence * 100) * 0.42;
-  const liquidity = clampPct(((p.quoteVolume24h ?? 0) / 50_000_000) * 100) * 0.16;
-  const agePenalty = Math.min(12, Math.max(0, (Date.now() - p.openedTs) / 1000 / 60 / 12));
-  return clampPct(38 + edge + confidence + liquidity - agePenalty);
-}
-
-function candidateScore(m: MarketRow, threshold: number, kind: CandidateKind): number {
-  const liquidity = clampPct(((m.quoteVolume24h ?? 0) / 40_000_000) * 100);
-  if (kind === 'funding') return clampPct(abs(m.fundingRate) * 10000 + liquidity * 0.25);
-  if (kind === 'volume') return liquidity;
-  return clampPct(Math.max(0, edgeDistance(m, threshold) + threshold) * 70 + liquidity * 0.25);
+/** Same arithmetic the scanner uses: gross |basis| minus round-trip fees. */
+function netAfterFees(m: MarketRow, feesPct: number): number | null {
+  if (!finite(m.basisPct)) return null;
+  return abs(m.basisPct) - feesPct;
 }
 
 function Metric({ label, value, tone, sub }: { label: string; value: ReactNode; tone?: string; sub?: ReactNode }) {
@@ -81,14 +70,6 @@ function Metric({ label, value, tone, sub }: { label: string; value: ReactNode; 
       <b className={`num ${tone ?? ''}`}>{value}</b>
       {sub && <em>{sub}</em>}
     </div>
-  );
-}
-
-function StrengthBar({ value, tone = 'ok' }: { value: number; tone?: 'ok' | 'warn' | 'bad' }) {
-  return (
-    <span className={`opp-strength ${tone}`}>
-      <span style={{ width: `${clampPct(value)}%` }} />
-    </span>
   );
 }
 
@@ -113,9 +94,8 @@ function ProposalCard({
   onWatch: () => void;
   onReject: () => void;
 }) {
-  const score = proposalScore(p);
-  const sideTone = p.side === 'SHORT_PERP_LONG_SPOT' ? 'ok' : 'purple';
   const borrowRequired = p.side === 'LONG_PERP_SHORT_SPOT';
+  const sideTone = borrowRequired ? 'purple' : 'ok';
   return (
     <article className={`opp-proposal-card ${selected ? 'selected' : ''}`}>
       <button className="opp-proposal-main" type="button" onClick={onSelect}>
@@ -133,16 +113,16 @@ function ProposalCard({
           </span>
         </span>
         <span className="opp-score-cell">
-          <span>Score</span>
-          <b className="num">{Math.round(score)}</b>
-          <StrengthBar value={score} tone={score > 78 ? 'ok' : score > 58 ? 'warn' : 'bad'} />
+          <span>Net edge</span>
+          <b className={`num ${signClass(p.netEdgePct)}`}>{fmtPct(p.netEdgePct, 2)}</b>
+          <em>after fees {fmtPct(p.feesPct, 2, false)}</em>
         </span>
       </button>
 
       <div className="opp-proposal-grid">
-        <Metric label="Net edge" value={fmtPct(p.netEdgePct, 2)} tone={signClass(p.netEdgePct)} sub={`fees ${fmtPct(p.feesPct, 2, false)}`} />
         <Metric label="Basis now / peak" value={`${fmtBasis(p.basisNow, 2)} / ${fmtBasis(p.basisPeak, 2)}`} tone={signClass(p.basisNow)} />
         <Metric label="Funding" value={fmtFunding(p.fundingRate)} tone={signClass(p.fundingRate)} sub={borrowRequired ? 'borrow leg required' : 'perp carry input'} />
+        <Metric label="Confidence" value={`${Math.round(p.confidence * 100)}%`} sub="persistence + liquidity" />
         <Metric label="24h volume" value={fmtMoney(p.quoteVolume24h)} sub="spot quote volume" />
       </div>
 
@@ -186,6 +166,7 @@ function CandidateRow({
   m,
   kind,
   threshold,
+  feesPct,
   watchlisted,
   onDetail,
   onWatch,
@@ -193,13 +174,14 @@ function CandidateRow({
   m: MarketRow;
   kind: CandidateKind;
   threshold: number;
+  feesPct: number;
   watchlisted: boolean;
   onDetail: () => void;
   onWatch: () => void;
 }) {
   const side = sideForBasis(m.basisPct);
-  const score = candidateScore(m, threshold, kind);
   const distance = edgeDistance(m, threshold);
+  const net = netAfterFees(m, feesPct);
   const mainMetric =
     kind === 'funding' ? fmtFunding(m.fundingRate) : kind === 'volume' ? fmtMoney(m.quoteVolume24h) : fmtBasis(m.basisPct, 2);
   const tone = kind === 'funding' ? signClass(m.fundingRate) : kind === 'volume' ? '' : signClass(m.basisPct);
@@ -221,8 +203,8 @@ function CandidateRow({
         <em>{kind === 'basis' ? `${fmtPct(distance, 2)} vs threshold` : `${fmtBasis(m.basisPct, 2)} basis / ${fmtMoney(m.quoteVolume24h)} vol`}</em>
       </span>
       <span className="opp-candidate-score">
-        <b className="num">{Math.round(score)}</b>
-        <StrengthBar value={score} tone={score > 72 ? 'ok' : score > 45 ? 'warn' : 'bad'} />
+        <span>net of fees</span>
+        <b className={`num ${net !== null && net >= threshold - feesPct ? 'up' : ''}`}>{net !== null ? fmtPct(net, 2) : '—'}</b>
       </span>
       <span className="opp-candidate-actions">
         <button className="mini-btn" type="button" onClick={onDetail}>Open</button>
@@ -263,7 +245,7 @@ export function Opportunities() {
   }, [markets]);
 
   const filteredActive = useMemo(() => {
-    const rows = [...active].sort((a, b) => proposalScore(b) - proposalScore(a));
+    const rows = [...active].sort((a, b) => b.netEdgePct - a.netEdgePct);
     return query ? rows.filter((p) => p.symbol.includes(query) || baseOf(p.symbol).includes(query)) : rows;
   }, [active, query]);
 
@@ -351,7 +333,7 @@ export function Opportunities() {
               <h2>{view === 'active' ? 'Active proposal queue' : view === 'basis' ? 'Basis radar' : view === 'funding' ? 'Funding radar' : 'Liquidity radar'}</h2>
               <span>
                 {view === 'active'
-                  ? 'Ranked by net edge, confidence, liquidity, and signal age.'
+                  ? 'Ranked by net edge after fees — the scanner\'s own number, nothing invented.'
                   : 'Candidate rows are market context, not active proposals. Use detail before approving anything.'}
               </span>
             </div>
@@ -393,6 +375,7 @@ export function Opportunities() {
                     m={m}
                     kind={view === 'funding' ? 'funding' : view === 'volume' ? 'volume' : 'basis'}
                     threshold={threshold}
+                    feesPct={s.config.feesPct}
                     watchlisted={watchlist.includes(m.symbol)}
                     onDetail={() => openDetail(m.symbol)}
                     onWatch={() => void toggleWatch(m.symbol)}

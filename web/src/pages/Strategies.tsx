@@ -1,3 +1,9 @@
+/* Strategies shows the ONE real strategy (the basis scanner) as an instrument:
+   the pipeline it runs (pairs → liquidity → watching → proposing), the symbols
+   it is watching and why, the proposals it opened with the engine's own reason,
+   and what happened to past signals. Every number on this page comes from the
+   server; nothing is scored or invented client-side. Funding/liquidity are
+   labeled context lenses, not strategies. */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
 import { TokenIcon, brandColor } from '../components/TokenIcon';
@@ -9,36 +15,26 @@ import {
   IconBrain,
   IconChart,
   IconCoins,
-  IconPercent,
   IconPulse,
   IconRadar,
   IconShield,
-  IconTicket,
 } from '../components/Icons';
 import { baseOf, duration, fmtBasis, fmtDateTime, fmtFunding, fmtMoney, fmtPct, signClass, timeAgo } from '../format';
 import type { MarketRow, Proposal, SignalRecord } from '../types';
 
-type StrategyId = 'basis' | 'funding' | 'borrow' | 'volume';
 type FundingExtremes = { positive: MarketRow[]; negative: MarketRow[] };
-
-const STRATEGY_LABEL: Record<StrategyId, string> = {
-  basis: 'Basis spread',
-  funding: 'Funding carry',
-  borrow: 'Borrow feasibility',
-  volume: 'Volume anomaly',
-};
-
-const STRATEGY_SUMMARY: Record<StrategyId, string> = {
-  basis: 'Spot/perp dislocation monitor that can open manual proposals.',
-  funding: 'Funding-rate extremes that may become carry candidates after basis and depth checks.',
-  borrow: 'Cross-margin availability pre-check for reverse-basis setups.',
-  volume: 'Liquidity and activity watchlist. It is context today, not an auto strategy.',
-};
 
 const SIDE_LABEL: Record<Proposal['side'], string> = {
   SHORT_PERP_LONG_SPOT: 'Short perp / long spot',
   LONG_PERP_SHORT_SPOT: 'Long perp / short spot',
 };
+
+const SIDE_SHORT: Record<Proposal['side'], string> = {
+  SHORT_PERP_LONG_SPOT: 'Carry setup',
+  LONG_PERP_SHORT_SPOT: 'Borrow setup',
+};
+
+const STATUS_RANK: Record<MarketRow['status'], number> = { signal: 2, watching: 1, idle: 0 };
 
 function finite(v: number | null | undefined): v is number {
   return typeof v === 'number' && Number.isFinite(v);
@@ -48,202 +44,81 @@ function abs(v: number | null | undefined): number {
   return finite(v) ? Math.abs(v) : 0;
 }
 
-function clampScore(v: number): number {
-  if (!Number.isFinite(v)) return 0;
-  return Math.max(0, Math.min(100, v));
+/** Same arithmetic the scanner uses: gross |basis| minus round-trip fees. */
+function netAfterFees(m: MarketRow, feesPct: number): number | null {
+  if (!finite(m.basisPct)) return null;
+  return Math.abs(m.basisPct) - feesPct;
 }
 
-function proposalScore(p: Proposal): number {
-  const edge = clampScore(abs(p.netEdgePct) * 34);
-  const confidence = clampScore(p.confidence * 100) * 0.42;
-  const liquidity = clampScore(((p.quoteVolume24h ?? 0) / 50_000_000) * 100) * 0.16;
-  const agePenalty = Math.min(10, Math.max(0, (Date.now() - p.openedTs) / 1000 / 60 / 16));
-  return clampScore(36 + edge + confidence + liquidity - agePenalty);
+function fmtCountdown(ts: number | null): string {
+  if (!ts) return '—';
+  const ms = ts - Date.now();
+  if (ms <= 0) return 'due';
+  const m = Math.floor(ms / 60000);
+  if (m < 60) return `in ${m}m`;
+  return `in ${Math.floor(m / 60)}h ${m % 60}m`;
 }
 
-function marketScore(m: MarketRow, threshold: number): number {
-  const edge = Math.max(0, abs(m.basisPct) - threshold);
-  const liquidity = clampScore(((m.quoteVolume24h ?? 0) / 40_000_000) * 100);
-  return clampScore(edge * 85 + liquidity * 0.25);
+function statusPill(status: MarketRow['status']): ReactNode {
+  if (status === 'signal') return <StatePill tone="ok">signal</StatePill>;
+  if (status === 'watching') return <StatePill tone="warn">watching</StatePill>;
+  return <StatePill tone="idle">idle</StatePill>;
 }
 
-function fundingScore(m: MarketRow): number {
-  const liquidity = clampScore(((m.quoteVolume24h ?? 0) / 40_000_000) * 100);
-  return clampScore(abs(m.fundingRate) * 11000 + liquidity * 0.2);
-}
-
-function fmtNumber(v: number | null | undefined): string {
-  if (!finite(v)) return '-';
-  return Intl.NumberFormat('en-US').format(v);
-}
-
-function statusCopy(status: 'live' | 'partial' | 'idle'): { tone: 'ok' | 'warn' | 'idle'; label: string } {
-  if (status === 'live') return { tone: 'ok', label: 'running' };
-  if (status === 'partial') return { tone: 'warn', label: 'needs keys' };
-  return { tone: 'idle', label: 'context only' };
-}
-
-function ScoreMeter({ value }: { value: number }) {
-  const lit = Math.max(0, Math.min(10, Math.round(value / 10)));
+function PipelineStage({ label, value, gate, hot }: { label: string; value: ReactNode; gate: string; hot?: boolean }) {
   return (
-    <span className="strategy-score-meter" aria-label={`score ${Math.round(value)}`}>
-      {Array.from({ length: 10 }).map((_, i) => (
-        <span key={i} className={i < lit ? 'on' : ''} />
-      ))}
-    </span>
-  );
-}
-
-function Metric({ label, value, sub, tone }: { label: string; value: ReactNode; sub?: ReactNode; tone?: string }) {
-  return (
-    <div className="strategy-metric">
+    <div className={`strategy-stage ${hot ? 'hot' : ''}`}>
+      <b className="num">{value}</b>
       <span>{label}</span>
-      <b className={`num ${tone ?? ''}`}>{value}</b>
-      {sub && <em>{sub}</em>}
+      <em>{gate}</em>
     </div>
   );
 }
 
-function MonitorCard({
-  id,
-  icon,
-  status,
-  score,
-  primary,
-  secondary,
-  active,
-  onSelect,
-  action,
-  children,
-}: {
-  id: StrategyId;
-  icon: ReactNode;
-  status: 'live' | 'partial' | 'idle';
-  score: number;
-  primary: ReactNode;
-  secondary: ReactNode;
-  active: boolean;
-  onSelect: () => void;
-  action?: ReactNode;
-  children?: ReactNode;
-}) {
-  const copy = statusCopy(status);
-  return (
-    <article className={`strategy-monitor-card ${active ? 'selected' : ''}`}>
-      <button className="strategy-monitor-head" type="button" onClick={onSelect}>
-        <span className={`strategy-monitor-icon ${id}`}>{icon}</span>
-        <span className="strategy-monitor-title">
-          <b>{STRATEGY_LABEL[id]}</b>
-          <em>{STRATEGY_SUMMARY[id]}</em>
-        </span>
-        <StatePill tone={copy.tone}>{copy.label}</StatePill>
-      </button>
-      <div className="strategy-monitor-body">
-        <div className="strategy-monitor-score">
-          <span>Readiness</span>
-          <b className="num">{Math.round(score)}</b>
-          <ScoreMeter value={score} />
-        </div>
-        <div className="strategy-monitor-copy">
-          <strong>{primary}</strong>
-          <span>{secondary}</span>
-        </div>
-      </div>
-      {children}
-      {action && <div className="strategy-monitor-actions">{action}</div>}
-    </article>
-  );
-}
-
-function TokenSignalRow({
-  row,
-  metric,
-  detail,
-  score,
-  onOpen,
-}: {
-  row: MarketRow;
-  metric: ReactNode;
-  detail: ReactNode;
-  score: number;
-  onOpen: () => void;
-}) {
-  return (
-    <button className="strategy-token-row" type="button" onClick={onOpen}>
-      <span className="strategy-token-name">
-        <TokenIcon symbol={row.symbol} size={30} />
-        <span>
-          <b>{row.base}</b>
-          <em>{row.symbol}</em>
-        </span>
-      </span>
-      <span className="strategy-token-spark">
-        <Sparkline values={row.spark} color={brandColor(row.symbol)} />
-      </span>
-      <span className="strategy-token-value">{metric}</span>
-      <span className="strategy-token-detail">{detail}</span>
-      <span className="strategy-token-score">
-        <b className="num">{Math.round(score)}</b>
-        <ScoreMeter value={score} />
-      </span>
-    </button>
-  );
-}
-
-function ProposalRunway({
-  proposal,
+function ProposalCard({
+  p,
   market,
-  onOpen,
   onQueue,
+  onDetail,
 }: {
-  proposal: Proposal;
+  p: Proposal;
   market?: MarketRow;
-  onOpen: () => void;
   onQueue: () => void;
+  onDetail: () => void;
 }) {
-  const score = proposalScore(proposal);
   return (
-    <article className="strategy-proposal-card">
-      <button className="strategy-proposal-head" type="button" onClick={onOpen}>
-        <TokenIcon symbol={proposal.symbol} size={38} />
-        <span>
-          <b>{baseOf(proposal.symbol)}</b>
-          <em>{proposal.symbol} / {SIDE_LABEL[proposal.side]}</em>
-        </span>
-        <strong className="num">{Math.round(score)}</strong>
-      </button>
-      <div className="strategy-proposal-chart">
-        <SparkArea values={market?.spark ?? []} color={brandColor(proposal.symbol)} dots endDot />
+    <article className="strategy-proposal card">
+      <header className="strategy-proposal-head">
+        <TokenIcon symbol={p.symbol} size={38} />
+        <div className="strategy-proposal-id">
+          <b>{baseOf(p.symbol)}</b>
+          <em>{p.symbol} · opened {timeAgo(p.openedTs)}</em>
+        </div>
+        <span className={`chip-tag ${p.side === 'SHORT_PERP_LONG_SPOT' ? 'ok' : 'purple'}`}>{SIDE_SHORT[p.side]}</span>
+        <div className="strategy-proposal-edge">
+          <em>net edge</em>
+          <Num value={p.netEdgePct} className={`strategy-edge-num ${signClass(p.netEdgePct)}`}>{fmtPct(p.netEdgePct, 2)}</Num>
+        </div>
+      </header>
+      <p className="strategy-proposal-reason">{p.reason}</p>
+      <div className="strategy-proposal-facts">
+        <div><em>Basis now → peak</em><b className={`num ${signClass(p.basisNow)}`}>{fmtBasis(p.basisNow, 2)} → {fmtBasis(p.basisPeak, 2)}</b></div>
+        <div><em>Funding</em><b className={`num ${signClass(p.fundingRate)}`}>{fmtFunding(p.fundingRate)}</b></div>
+        <div><em>Confidence</em><b className="num">{Math.round(p.confidence * 100)}%</b></div>
+        <div><em>Borrow</em><b className={p.side === 'LONG_PERP_SHORT_SPOT' ? 'warn-text' : ''}>{p.borrow}</b></div>
       </div>
-      <div className="strategy-proposal-grid">
-        <Metric label="Net edge" value={fmtPct(proposal.netEdgePct, 2)} tone={signClass(proposal.netEdgePct)} />
-        <Metric label="Basis now" value={fmtBasis(proposal.basisNow, 2)} tone={signClass(proposal.basisNow)} />
-        <Metric label="Funding" value={fmtFunding(proposal.fundingRate)} tone={signClass(proposal.fundingRate)} />
+      <div className="strategy-proposal-spark">
+        <SparkArea values={market?.spark ?? []} color={brandColor(p.symbol)} />
+        <em>spot trend</em>
       </div>
-      <button className="mini-btn" type="button" onClick={onQueue}>Open in queue</button>
+      <footer className="strategy-proposal-actions">
+        <button className="cta-pill" type="button" onClick={onQueue}>Open in queue</button>
+        <button className="mini-btn" type="button" onClick={onDetail}>
+          <IconChart size={14} />
+          Market
+        </button>
+      </footer>
     </article>
-  );
-}
-
-function HistoryRow({ row, onOpen }: { row: SignalRecord; onOpen: () => void }) {
-  const isOpen = row.closedTs === null;
-  return (
-    <button className={`strategy-history-row ${isOpen ? 'open' : ''}`} type="button" onClick={onOpen}>
-      <span className="strategy-history-token">
-        <TokenIcon symbol={row.symbol} size={30} />
-        <span>
-          <b>{baseOf(row.symbol)}</b>
-          <em>{fmtDateTime(row.openedTs)}</em>
-        </span>
-      </span>
-      <span>
-        <b>{row.side === 'SHORT_PERP_LONG_SPOT' ? 'Carry setup' : 'Borrow setup'}</b>
-        <em>{isOpen ? 'open signal' : duration(row.openedTs, row.closedTs ?? row.openedTs)}</em>
-      </span>
-      <span className={`num ${signClass(row.basisOpen)}`}>{fmtBasis(row.basisOpen, 2)}</span>
-      <span className={`num ${signClass(row.basisPeak)}`}>{fmtBasis(row.basisPeak, 2)}</span>
-      <span className="strategy-history-state">{isOpen ? 'open' : 'closed'}</span>
-    </button>
   );
 }
 
@@ -251,7 +126,6 @@ export function Strategies() {
   const { state, markets, setPage, openDetail } = useStore();
   const [history, setHistory] = useState<SignalRecord[]>([]);
   const [extremes, setExtremes] = useState<FundingExtremes | null>(null);
-  const [selected, setSelected] = useState<StrategyId>('basis');
 
   useEffect(() => {
     void fetch('/api/signals')
@@ -273,9 +147,11 @@ export function Strategies() {
 
   const s = state;
   const threshold = s?.scanner.grossThresholdPct ?? 0;
+  const feesPct = s?.config.feesPct ?? 0;
+  const minNet = s?.config.minNetBasisPct ?? 0;
   const minVolume = s?.config.minQuoteVolume24h ?? 0;
+  const persistTicks = s?.config.persistTicks ?? 0;
   const proposals = s?.proposals ?? [];
-  const proposalBySymbol = useMemo(() => new Map(proposals.map((p) => [p.symbol, p])), [proposals]);
   const marketBySymbol = useMemo(() => new Map(markets.map((m) => [m.symbol, m])), [markets]);
 
   const liquidPerps = useMemo(
@@ -283,45 +159,33 @@ export function Strategies() {
     [markets, minVolume]
   );
 
-  const basisLeaders = useMemo(
+  // What the scanner is looking at, in its own order: live signals first,
+  // then symbols it is actively watching, then the closest idle candidates.
+  const board = useMemo(
     () =>
       [...liquidPerps]
         .filter((m) => finite(m.basisPct))
-        .sort((a, b) => abs(b.basisPct) - abs(a.basisPct))
-        .slice(0, 8),
+        .sort((a, b) => STATUS_RANK[b.status] - STATUS_RANK[a.status] || abs(b.basisPct) - abs(a.basisPct))
+        .slice(0, 10),
     [liquidPerps]
   );
+
+  // One source of truth for "watching" everywhere on this page: the same
+  // market rows whose status pills are visible on the board below.
+  const watchingRows = liquidPerps.filter((m) => m.status === 'watching').length;
+  const scannerFresh = s?.scanner.lastTickTs ? Date.now() - s.scanner.lastTickTs < 45_000 : false;
 
   const fundingFallback = useMemo(
     () =>
       [...liquidPerps]
         .filter((m) => finite(m.fundingRate))
-        .sort((a, b) => abs(b.fundingRate) - abs(a.fundingRate))
-        .slice(0, 16),
+        .sort((a, b) => abs(b.fundingRate) - abs(a.fundingRate)),
     [liquidPerps]
   );
+  const positiveFunding = (extremes?.positive.length ? extremes.positive : fundingFallback.filter((m) => (m.fundingRate ?? 0) > 0)).slice(0, 3);
+  const negativeFunding = (extremes?.negative.length ? extremes.negative : fundingFallback.filter((m) => (m.fundingRate ?? 0) < 0)).slice(0, 3);
 
-  const positiveFunding = (extremes?.positive.length ? extremes.positive : fundingFallback.filter((m) => (m.fundingRate ?? 0) > 0)).slice(0, 5);
-  const negativeFunding = (extremes?.negative.length ? extremes.negative : fundingFallback.filter((m) => (m.fundingRate ?? 0) < 0)).slice(0, 5);
-
-  const volumeLeaders = useMemo(
-    () =>
-      [...markets]
-        .filter((m) => (m.quoteVolume24h ?? 0) > 0)
-        .sort((a, b) => (b.quoteVolume24h ?? 0) - (a.quoteVolume24h ?? 0))
-        .slice(0, 8),
-    [markets]
-  );
-
-  const rankedProposals = useMemo(() => [...proposals].sort((a, b) => proposalScore(b) - proposalScore(a)), [proposals]);
-  const aboveThreshold = basisLeaders.filter((m) => abs(m.basisPct) >= threshold).length;
-  const openSignals = history.filter((h) => h.closedTs === null).length;
-  const scannerFresh = s?.scanner.lastTickTs ? Date.now() - s.scanner.lastTickTs < 45_000 : false;
-  const basisReadiness = clampScore((scannerFresh ? 35 : 12) + (aboveThreshold ? 22 : 0) + proposals.length * 10 + Math.min(20, liquidPerps.length / 18));
-  const fundingReadiness = clampScore((positiveFunding.length + negativeFunding.length) * 8 + Math.min(22, liquidPerps.length / 24));
-  const borrowReadiness = s?.binance.keysPresent ? 54 : 22;
-  const volumeReadiness = clampScore(Math.min(72, volumeLeaders.length * 7 + Math.min(20, markets.length / 18)));
-  const selectedCopy = statusCopy(selected === 'basis' || selected === 'funding' ? 'live' : selected === 'borrow' ? 'partial' : 'idle');
+  const rankedProposals = useMemo(() => [...proposals].sort((a, b) => b.netEdgePct - a.netEdgePct), [proposals]);
 
   if (!s) {
     return <div className="container page"><div className="empty-state">Connecting...</div></div>;
@@ -333,12 +197,12 @@ export function Strategies() {
         <div className="strategy-hero-copy">
           <span className="strategy-eyebrow">
             <IconBrain size={15} />
-            strategy command
+            basis engine · monitor only
           </span>
           <h1 className="page-title">Strategies</h1>
           <p>
-            Monitors only. Strategies can create scanner proposals, but every order still goes through manual review,
-            typed confirmation, risk gate, allowlist, and the ledger.
+            One strategy runs today: the spot/perp basis scanner. It proposes, never trades — every order still passes
+            manual review, the risk gate, allowlist, and typed confirmation, and everything lands in the ledger.
           </p>
           <div className="strategy-hero-actions">
             <button className="cta-pill" type="button" onClick={() => setPage('opportunities')}>
@@ -351,262 +215,195 @@ export function Strategies() {
             </button>
           </div>
         </div>
-        <div className="strategy-hero-orb">
-          <span className="strategy-orb-core">
-            <IconPulse size={34} />
-          </span>
-          <b className="num">{rankedProposals.length}</b>
-          <em>live proposals</em>
-          <StatePill tone={s.mode === 'HALTED' ? 'bad' : s.mode === 'LIVE_ARMED' ? 'ok' : 'warn'}>{s.mode.toLowerCase().replace('_', ' ')}</StatePill>
-        </div>
-      </section>
 
-      <section className="strategy-metric-grid">
-        <Metric label="Scanner heartbeat" value={s.scanner.lastTickTs ? timeAgo(s.scanner.lastTickTs) : '-'} sub={`${fmtNumber(s.scanner.pairs)} exact pairs`} tone={scannerFresh ? 'up' : 'down'} />
-        <Metric label="Active signals" value={<Num value={rankedProposals.length}>{rankedProposals.length}</Num>} sub={`${openSignals} ledger-open`} tone={rankedProposals.length ? 'up' : ''} />
-        <Metric label="Basis threshold" value={`${threshold.toFixed(2)}%`} sub={`${s.config.persistTicks} ticks / fees ${fmtPct(s.config.feesPct, 2, false)}`} />
-        <Metric label="Min liquidity" value={fmtMoney(minVolume)} sub={`${fmtNumber(liquidPerps.length)} liquid perp rows`} />
+        <div className="strategy-pipeline">
+          <div className="strategy-pipeline-head">
+            <b>Scanner pipeline</b>
+            <StatePill tone={scannerFresh ? 'ok' : 'bad'}>{scannerFresh ? 'scanning' : 'stale feed'}</StatePill>
+          </div>
+          <div className="strategy-stages">
+            <PipelineStage label="pairs scanned" value={s.scanner.pairs} gate="exact spot + perp listings" />
+            <PipelineStage label="pass liquidity" value={liquidPerps.length} gate={`≥ ${fmtMoney(minVolume)} 24h volume`} />
+            <PipelineStage label="watching" value={watchingRows} gate={`|basis| above ${threshold.toFixed(2)}% gate`} hot={watchingRows > 0} />
+            <PipelineStage label="proposing" value={rankedProposals.length} gate={`persisted ${persistTicks}+ ticks`} hot={rankedProposals.length > 0} />
+          </div>
+          <div className="strategy-pipeline-foot">
+            <span>tick {s.scanner.lastTickTs ? timeAgo(s.scanner.lastTickTs) : '—'}</span>
+            <span>gate = fees {fmtPct(feesPct, 2, false)} + min net {fmtPct(minNet, 2, false)}</span>
+            <button type="button" onClick={() => setPage('ledger')}>
+              {s.risk.rejectionsToday} risk rejection{s.risk.rejectionsToday === 1 ? '' : 's'} today
+            </button>
+          </div>
+        </div>
       </section>
 
       <div className="strategy-layout">
         <main className="strategy-main">
-          <section className="strategy-monitor-grid">
-            <MonitorCard
-              id="basis"
-              icon={<IconPercent size={20} />}
-              status="live"
-              score={basisReadiness}
-              primary={`${fmtNumber(s.scanner.watching)} watching / ${rankedProposals.length} proposing`}
-              secondary={`Threshold ${threshold.toFixed(2)}%, ${s.config.persistTicks} tick persistence, ${fmtMoney(minVolume)} minimum volume.`}
-              active={selected === 'basis'}
-              onSelect={() => setSelected('basis')}
-              action={<button className="mini-btn" type="button" onClick={() => setPage('opportunities')}>Inspect queue</button>}
-            >
-              <div className="strategy-mini-strip">
-                {basisLeaders.slice(0, 4).map((m) => (
-                  <button key={m.symbol} type="button" onClick={() => openDetail(m.symbol)}>
-                    <TokenIcon symbol={m.symbol} size={24} />
-                    <span>{m.base}</span>
-                    <b className={`num ${signClass(m.basisPct)}`}>{fmtBasis(m.basisPct, 2)}</b>
-                  </button>
+          <section className="strategy-section">
+            <div className="strategy-section-head">
+              <div>
+                <h2>Open proposals</h2>
+                <span>The scanner's own explanation, verbatim from the ledger. Ranked by net edge after fees.</span>
+              </div>
+              <StatePill tone={rankedProposals.length ? 'ok' : 'idle'}>{rankedProposals.length ? `${rankedProposals.length} open` : 'none open'}</StatePill>
+            </div>
+            {rankedProposals.length > 0 ? (
+              <div className="strategy-proposal-list">
+                {rankedProposals.map((p) => (
+                  <ProposalCard
+                    key={p.id}
+                    p={p}
+                    market={marketBySymbol.get(p.symbol)}
+                    onQueue={() => setPage('opportunities')}
+                    onDetail={() => openDetail(p.symbol)}
+                  />
                 ))}
               </div>
-            </MonitorCard>
-
-            <MonitorCard
-              id="funding"
-              icon={<IconPulse size={20} />}
-              status="live"
-              score={fundingReadiness}
-              primary={`${positiveFunding.length + negativeFunding.length} funding extremes loaded`}
-              secondary="Use as raw material only; basis, depth, borrow, and risk still decide whether a ticket is worth opening."
-              active={selected === 'funding'}
-              onSelect={() => setSelected('funding')}
-              action={<button className="mini-btn" type="button" onClick={() => setSelected('funding')}>Show extremes</button>}
-            >
-              <div className="strategy-mini-strip">
-                {[...positiveFunding.slice(0, 2), ...negativeFunding.slice(0, 2)].map((m) => (
-                  <button key={m.symbol} type="button" onClick={() => openDetail(m.symbol)}>
-                    <TokenIcon symbol={m.symbol} size={24} />
-                    <span>{m.base}</span>
-                    <b className={`num ${signClass(m.fundingRate)}`}>{fmtFunding(m.fundingRate)}</b>
-                  </button>
-                ))}
+            ) : (
+              <div className="strategy-empty card">
+                <EmptyState title="No open proposals">
+                  {scannerFresh
+                    ? `No basis gap has held above ${threshold.toFixed(2)}% for ${persistTicks} ticks. The board below shows how close the market is.`
+                    : 'The market feed looks stale, so the scanner cannot judge anything right now.'}
+                </EmptyState>
               </div>
-            </MonitorCard>
-
-            <MonitorCard
-              id="borrow"
-              icon={<IconCoins size={20} />}
-              status={s.binance.keysPresent ? 'partial' : 'partial'}
-              score={borrowReadiness}
-              primary={s.binance.keysPresent ? 'Read-only account context available' : 'Server has no Binance keys'}
-              secondary="Reverse-basis trades require borrow visibility before any live ticket makes sense."
-              active={selected === 'borrow'}
-              onSelect={() => setSelected('borrow')}
-              action={<button className="mini-btn" type="button" onClick={() => setPage('loans')}>Open loans</button>}
-            />
-
-            <MonitorCard
-              id="volume"
-              icon={<IconChart size={20} />}
-              status="idle"
-              score={volumeReadiness}
-              primary={`${volumeLeaders.length} liquidity leaders available`}
-              secondary="This is a market-context lane. It helps prioritize symbols; it does not pretend to generate trades yet."
-              active={selected === 'volume'}
-              onSelect={() => setSelected('volume')}
-              action={<button className="mini-btn" type="button" onClick={() => setPage('markets')}>Open markets</button>}
-            >
-              <div className="strategy-mini-strip">
-                {volumeLeaders.slice(0, 4).map((m) => (
-                  <button key={m.symbol} type="button" onClick={() => openDetail(m.symbol)}>
-                    <TokenIcon symbol={m.symbol} size={24} />
-                    <span>{m.base}</span>
-                    <b className="num">{fmtMoney(m.quoteVolume24h)}</b>
-                  </button>
-                ))}
-              </div>
-            </MonitorCard>
+            )}
           </section>
 
           <section className="strategy-section">
             <div className="strategy-section-head">
               <div>
-                <h2>{selected === 'basis' ? 'Basis candidates' : selected === 'funding' ? 'Funding extremes' : selected === 'borrow' ? 'Borrow gate' : 'Liquidity context'}</h2>
+                <h2>Scanner board</h2>
                 <span>
-                  {selected === 'basis'
-                    ? 'Ranked by absolute basis edge and liquidity.'
-                    : selected === 'funding'
-                      ? 'Positive and negative funding extremes from the public market feed.'
-                      : selected === 'borrow'
-                        ? 'The safety check before any reverse-basis setup can be trusted.'
-                        : 'High-volume symbols to watch while the strategy lane is not armed.'}
+                  {watchingRows > 0
+                    ? `${watchingRows} symbol${watchingRows === 1 ? ' is' : 's are'} inside the gate and building persistence.`
+                    : 'Nothing is inside the gate right now — these are the closest liquid pairs.'}
                 </span>
               </div>
-              <StatePill tone={selectedCopy.tone}>{selectedCopy.label}</StatePill>
             </div>
-
-            {selected === 'basis' && (
-              <div className="strategy-token-board card">
-                {basisLeaders.slice(0, 8).map((m) => (
-                  <TokenSignalRow
-                    key={m.symbol}
-                    row={m}
-                    metric={<span className={`num ${signClass(m.basisPct)}`}>{fmtBasis(m.basisPct, 2)}</span>}
-                    detail={`${fmtMoney(m.quoteVolume24h)} 24h volume`}
-                    score={proposalBySymbol.has(m.symbol) ? Math.max(76, marketScore(m, threshold)) : marketScore(m, threshold)}
-                    onOpen={() => openDetail(m.symbol)}
-                  />
-                ))}
+            <div className="strategy-board card">
+              <div className="strategy-board-row head">
+                <span>Pair</span>
+                <span className="t-right">Trend</span>
+                <span className="t-right">Basis</span>
+                <span className="t-right">Net of fees</span>
+                <span className="t-right">Funding</span>
+                <span className="t-right">24h volume</span>
+                <span className="t-right">Scanner</span>
               </div>
-            )}
-
-            {selected === 'funding' && (
-              <div className="strategy-funding-grid">
-                <div className="strategy-token-board card">
-                  <div className="strategy-board-title">
-                    <b>Shorts get paid</b>
-                    <span>positive funding</span>
-                  </div>
-                  {positiveFunding.map((m) => (
-                    <TokenSignalRow
-                      key={m.symbol}
-                      row={m}
-                      metric={<span className={`num ${signClass(m.fundingRate)}`}>{fmtFunding(m.fundingRate)}</span>}
-                      detail={`${fmtBasis(m.basisPct, 2)} basis`}
-                      score={fundingScore(m)}
-                      onOpen={() => openDetail(m.symbol)}
-                    />
-                  ))}
-                </div>
-                <div className="strategy-token-board card">
-                  <div className="strategy-board-title">
-                    <b>Longs get paid</b>
-                    <span>negative funding</span>
-                  </div>
-                  {negativeFunding.map((m) => (
-                    <TokenSignalRow
-                      key={m.symbol}
-                      row={m}
-                      metric={<span className={`num ${signClass(m.fundingRate)}`}>{fmtFunding(m.fundingRate)}</span>}
-                      detail={`${fmtBasis(m.basisPct, 2)} basis`}
-                      score={fundingScore(m)}
-                      onOpen={() => openDetail(m.symbol)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {selected === 'borrow' && (
-              <div className="strategy-borrow-card card">
-                <span className="strategy-borrow-icon"><IconShield size={24} /></span>
-                <div>
-                  <h3>{s.binance.keysPresent ? 'Borrow checks are partially available' : 'Borrow checks need server-side keys'}</h3>
-                  <p>
-                    The page does not fake borrowability. Reverse-basis candidates stay advisory until margin visibility
-                    can confirm loanable asset, max borrow, interest, and account risk.
-                  </p>
-                  <div className="strategy-borrow-actions">
-                    <button className="cta-pill" type="button" onClick={() => setPage('loans')}>Open loan console</button>
-                    <button className="mini-btn" type="button" onClick={() => setPage('risk')}>Risk guardrails</button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {selected === 'volume' && (
-              <div className="strategy-token-board card">
-                {volumeLeaders.map((m) => (
-                  <TokenSignalRow
-                    key={m.symbol}
-                    row={m}
-                    metric={<span className="num">{fmtMoney(m.quoteVolume24h)}</span>}
-                    detail={`${fmtPct(m.change24hPct, 2)} 24h change`}
-                    score={volumeReadiness}
-                    onOpen={() => openDetail(m.symbol)}
-                  />
-                ))}
-              </div>
-            )}
+              {board.map((m) => {
+                const net = netAfterFees(m, feesPct);
+                return (
+                  <button key={m.symbol} className="strategy-board-row" type="button" onClick={() => openDetail(m.symbol)}>
+                    <span className="strategy-board-pair">
+                      <TokenIcon symbol={m.symbol} size={28} />
+                      <span><b>{m.base}</b><em>{m.symbol}</em></span>
+                    </span>
+                    <span className="strategy-board-spark"><Sparkline values={m.spark} color={brandColor(m.symbol)} /></span>
+                    <Num value={m.basisPct} className={`t-right ${signClass(m.basisPct)}`}>{fmtBasis(m.basisPct, 2)}</Num>
+                    <Num value={net} className={`t-right ${net !== null && net >= minNet ? 'up' : ''}`}>{net !== null ? fmtPct(net, 2) : '—'}</Num>
+                    <span className={`t-right num ${signClass(m.fundingRate)}`}>{fmtFunding(m.fundingRate)}</span>
+                    <span className="t-right num">{fmtMoney(m.quoteVolume24h)}</span>
+                    <span className="t-right">{statusPill(m.status)}</span>
+                  </button>
+                );
+              })}
+              {board.length === 0 && (
+                <EmptyState title="No liquid pairs yet">
+                  Waiting for the market feed to fill the spot/perp universe.
+                </EmptyState>
+              )}
+            </div>
           </section>
         </main>
 
         <aside className="strategy-rail">
           <section className="strategy-rail-card card">
             <div className="strategy-rail-head">
-              <h3>Proposal runway</h3>
-              <span>scanner to manual ticket</span>
+              <h3>Funding lens</h3>
+              <span>context, not a strategy</span>
             </div>
-            {rankedProposals.length > 0 ? (
-              <div className="strategy-proposal-list">
-                {rankedProposals.slice(0, 3).map((p) => (
-                  <ProposalRunway
-                    key={p.id}
-                    proposal={p}
-                    market={marketBySymbol.get(p.symbol)}
-                    onOpen={() => openDetail(p.symbol)}
-                    onQueue={() => setPage('opportunities')}
-                  />
-                ))}
-              </div>
-            ) : (
-              <EmptyState title="No live proposals">
-                The scanner is running, but no persisted edge is strong enough for the manual queue.
-              </EmptyState>
-            )}
+            <div className="strategy-lens-group">
+              <em className="strategy-lens-label">shorts get paid</em>
+              {positiveFunding.map((m) => (
+                <button key={m.symbol} className="strategy-lens-row" type="button" onClick={() => openDetail(m.symbol)}>
+                  <TokenIcon symbol={m.symbol} size={26} />
+                  <span><b>{m.base}</b><em>next {fmtCountdown(m.nextFundingTime)}</em></span>
+                  <b className={`num ${signClass(m.fundingRate)}`}>{fmtFunding(m.fundingRate)}</b>
+                </button>
+              ))}
+              <em className="strategy-lens-label">longs get paid</em>
+              {negativeFunding.map((m) => (
+                <button key={m.symbol} className="strategy-lens-row" type="button" onClick={() => openDetail(m.symbol)}>
+                  <TokenIcon symbol={m.symbol} size={26} />
+                  <span><b>{m.base}</b><em>next {fmtCountdown(m.nextFundingTime)}</em></span>
+                  <b className={`num ${signClass(m.fundingRate)}`}>{fmtFunding(m.fundingRate)}</b>
+                </button>
+              ))}
+              {positiveFunding.length + negativeFunding.length === 0 && (
+                <EmptyState title="No funding rows">Funding extremes appear once the futures feed warms up.</EmptyState>
+              )}
+            </div>
           </section>
 
           <section className="strategy-rail-card card">
             <div className="strategy-rail-head">
-              <h3>Execution chain</h3>
-              <span>safety before sends</span>
+              <h3>Borrow gate</h3>
+              <span>reverse-basis pre-check</span>
             </div>
-            <div className="strategy-chain">
-              <div><IconRadar size={15} /><span><b>Monitor</b><em>public market feeds only</em></span></div>
-              <div><IconTicket size={15} /><span><b>Manual ticket</b><em>proposal only prefills</em></span></div>
-              <div><IconShield size={15} /><span><b>Risk gate</b><em>server-side re-check</em></span></div>
-              <div><IconBook size={15} /><span><b>Ledger</b><em>every action recorded</em></span></div>
-            </div>
+            <button className="strategy-borrow-row" type="button" onClick={() => setPage('loans')}>
+              <span className="strategy-borrow-icon"><IconCoins size={16} /></span>
+              <span>
+                <b>{s.binance.keysPresent ? 'Margin visibility partial' : 'Needs server-side keys'}</b>
+                <em>Borrow setups stay advisory until max borrow and interest are confirmed. Open the loan console.</em>
+              </span>
+            </button>
           </section>
 
           <section className="strategy-rail-card card">
             <div className="strategy-rail-head">
               <h3>Signal history</h3>
-              <span>{history.length} recent records</span>
+              <span>{history.length ? `last ${Math.min(history.length, 8)} of ${history.length}` : 'ledger-backed'}</span>
             </div>
             {history.length > 0 ? (
               <div className="strategy-history-list">
-                {history.slice(0, 8).map((r) => (
-                  <HistoryRow key={r.id} row={r} onOpen={() => openDetail(r.symbol)} />
-                ))}
+                {history.slice(0, 8).map((r) => {
+                  const open = r.closedTs === null;
+                  return (
+                    <button key={r.id} className="strategy-history-row" type="button" onClick={() => openDetail(r.symbol)}>
+                      <TokenIcon symbol={r.symbol} size={26} />
+                      <span className="strategy-history-id">
+                        <b>{baseOf(r.symbol)}</b>
+                        <em>{fmtDateTime(r.openedTs)}</em>
+                      </span>
+                      <span className="strategy-history-basis num">
+                        {fmtBasis(r.basisOpen, 2)} → {fmtBasis(r.basisPeak, 2)}
+                      </span>
+                      {open
+                        ? <StatePill tone="warn">open</StatePill>
+                        : <span className="strategy-history-run">{duration(r.openedTs, r.closedTs ?? r.openedTs)}</span>}
+                    </button>
+                  );
+                })}
               </div>
             ) : (
-              <EmptyState title="No strategy history">
-                Ledger-backed proposals will appear here once the scanner opens them.
+              <EmptyState title="No history yet">
+                Every signal the scanner opens or closes is ledgered and will show here.
               </EmptyState>
             )}
+            <button className="strategy-rail-foot" type="button" onClick={() => setPage('ledger')}>
+              <IconBook size={13} />
+              Full audit trail in the ledger
+            </button>
+          </section>
+
+          <section className="strategy-rail-card card strategy-next">
+            <div className="strategy-rail-head">
+              <h3>Not built yet</h3>
+              <span>honest roadmap</span>
+            </div>
+            <div className="strategy-next-row"><IconPulse size={14} /><span><b>Volume-spike monitor</b><em>planned — dead symbols that wake up</em></span></div>
+            <div className="strategy-next-row"><IconCoins size={14} /><span><b>Reverse-basis executor</b><em>blocked on borrow visibility</em></span></div>
           </section>
         </aside>
       </div>

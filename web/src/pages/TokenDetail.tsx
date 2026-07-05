@@ -9,7 +9,7 @@ import { TradingViewWidget } from '../components/TradingViewWidget';
 import { DepthChart } from '../components/DepthChart';
 import { SideTag } from '../components/ui';
 import { fmtPrice, fmtPct, fmtBasis, fmtMoney, fmtFunding, fmtQty, signClass, countdown, baseOf, fmtTimeShort, fmtDateTime, timeAgo } from '../format';
-import type { FillRow, MarketDetail, SignalRecord } from '../types';
+import type { FillRow, MarketDetail, SignalRecord, Side, OrderType, TicketPrefill } from '../types';
 
 const WINDOWS = {
   '1s': { interval: '1s', limit: 500 },
@@ -23,6 +23,7 @@ const WINDOWS = {
 } as const;
 type WinKey = keyof typeof WINDOWS;
 type ChartMode = 'tradingview' | 'price' | 'depth' | 'basis' | 'funding' | 'volume';
+type RailMode = OrderType | 'TWAP' | 'SCALE';
 const TV_WINS = ['1m', '5m', '15m', '1H', '4H', '1D', '1W'] as const satisfies readonly WinKey[];
 const BINANCE_WINS = Object.keys(WINDOWS) as WinKey[];
 
@@ -131,6 +132,174 @@ function fmtSignedPrice(v: number | null | undefined): string {
 
 function lastOf<T>(arr: T[] | undefined): T | undefined {
   return arr && arr.length ? arr[arr.length - 1] : undefined;
+}
+
+function TokenRailTicket({
+  symbol,
+  base,
+  bid,
+  ask,
+  last,
+  maxOrderNotional,
+  openTicket,
+}: {
+  symbol: string;
+  base: string;
+  bid: number | null | undefined;
+  ask: number | null | undefined;
+  last: number | null | undefined;
+  maxOrderNotional: number | null | undefined;
+  openTicket: (t: TicketPrefill) => void;
+}) {
+  const [side, setSide] = useState<Side>('BUY');
+  const [mode, setMode] = useState<RailMode>('LIMIT');
+  const [price, setPrice] = useState('');
+  const [qty, setQty] = useState('');
+  const [orderValue, setOrderValue] = useState('');
+  const cap = maxOrderNotional && maxOrderNotional > 0 ? maxOrderNotional : 10;
+  const reference = last ?? (bid && ask ? (bid + ask) / 2 : bid ?? ask ?? null);
+  const px = Number(price) > 0 ? Number(price) : reference;
+  const typedQty = Number(qty);
+  const typedValue = Number(orderValue);
+  const derivedQty =
+    Number.isFinite(typedQty) && typedQty > 0
+      ? typedQty
+      : Number.isFinite(typedValue) && typedValue > 0 && px && px > 0
+        ? typedValue / px
+        : null;
+  const derivedValue =
+    Number.isFinite(typedValue) && typedValue > 0
+      ? typedValue
+      : derivedQty && px
+        ? derivedQty * px
+        : null;
+  const unsupported = mode === 'TWAP' || mode === 'SCALE';
+  const ready = Boolean(!unsupported && symbol && px && px > 0 && ((mode === 'MARKET' && derivedValue && derivedValue > 0) || (mode === 'LIMIT' && derivedQty && derivedQty > 0)));
+  const disabledReason = unsupported
+    ? `${mode === 'TWAP' ? 'TWAP' : 'Scaled orders'} need a backend executor before live or paper routing is honest.`
+    : ready
+      ? 'Open this draft in the guarded manual ticket'
+      : 'Choose price and size first';
+
+  useEffect(() => {
+    setPrice('');
+    setQty('');
+    setOrderValue('');
+    setMode('LIMIT');
+    setSide('BUY');
+  }, [symbol]);
+
+  useEffect(() => {
+    if (!price && reference) setPrice(String(reference));
+  }, [price, reference]);
+
+  const setValuePct = (pct: number) => {
+    const value = Math.max(0, (cap * pct) / 100);
+    setOrderValue(value ? String(Number(value.toFixed(2))) : '');
+    if (px && px > 0) {
+      const q = value / px;
+      setQty(q ? (q >= 1 ? String(Number(q.toFixed(5))) : q.toPrecision(6).replace(/0+$/, '')) : '');
+    }
+  };
+
+  const usePrice = (kind: 'mid' | 'bbo') => {
+    if (kind === 'mid' && bid && ask) setPrice(String((bid + ask) / 2));
+    if (kind === 'bbo') {
+      const next = side === 'BUY' ? ask ?? bid ?? reference : bid ?? ask ?? reference;
+      if (next) setPrice(String(next));
+    }
+  };
+
+  const open = () => {
+    if (!ready) return;
+    openTicket({
+      symbol,
+      side,
+      type: mode as OrderType,
+      price: mode === 'LIMIT' && px ? px : undefined,
+      quantity: mode === 'LIMIT' && derivedQty ? derivedQty : undefined,
+      quoteQty: mode === 'MARKET' && derivedValue ? derivedValue : undefined,
+      source: 'manual',
+    });
+  };
+
+  return (
+    <section className="card rail-ticket-card" data-side={side}>
+      <div className="rail-ticket-side">
+        <button className={`buy ${side === 'BUY' ? 'on' : ''}`} type="button" onClick={() => setSide('BUY')}>
+          Buy
+        </button>
+        <button className={`sell ${side === 'SELL' ? 'on' : ''}`} type="button" onClick={() => setSide('SELL')}>
+          Sell
+        </button>
+      </div>
+      <div className="rail-ticket-modes">
+        {(['LIMIT', 'MARKET', 'TWAP', 'SCALE'] as RailMode[]).map((m) => {
+          const blocked = m === 'TWAP' || m === 'SCALE';
+          return (
+            <button key={m} className={mode === m ? 'on' : ''} type="button" disabled={blocked} onClick={() => setMode(m)} title={blocked ? `${m} is designed but not wired to the Binance spot sender yet` : `Draft a ${m.toLowerCase()} ticket`}>
+              {m === 'SCALE' ? 'Scale' : m[0] + m.slice(1).toLowerCase()}
+            </button>
+          );
+        })}
+      </div>
+      <div className="rail-ticket-field">
+        <span>
+          Price
+          <em>
+            <button type="button" onClick={() => usePrice('mid')} disabled={!bid || !ask}>
+              Mid
+            </button>
+            <button type="button" onClick={() => usePrice('bbo')} disabled={!bid && !ask}>
+              BBO
+            </button>
+          </em>
+        </span>
+        <label>
+          <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} disabled={mode === 'MARKET'} placeholder={reference ? String(reference) : '0.00'} />
+          <b>$</b>
+        </label>
+      </div>
+      <div className="rail-ticket-field">
+        <span>Quantity</span>
+        <label>
+          <input type="number" value={qty} onChange={(e) => setQty(e.target.value)} placeholder={`0 ${base}`} />
+          <b>{base}</b>
+        </label>
+      </div>
+      <div className="rail-ticket-field">
+        <span>Order value</span>
+        <label>
+          <input type="number" value={orderValue} onChange={(e) => setOrderValue(e.target.value)} placeholder="0.00" />
+          <b>USDT</b>
+        </label>
+      </div>
+      <div className="rail-ticket-slider">
+        <input type="range" min="0" max="100" step="25" value={derivedValue ? Math.min(100, Math.round((derivedValue / cap) * 100)) : 0} onChange={(e) => setValuePct(Number(e.target.value))} />
+        <span>
+          <i>0</i>
+          <i>25</i>
+          <i>50</i>
+          <i>75</i>
+          <i>100%</i>
+        </span>
+      </div>
+      <div className="rail-ticket-summary">
+        <span>
+          <b className="num">{derivedQty ? fmtQty(derivedQty) : '—'}</b>
+          <em>{base} size</em>
+        </span>
+        <span>
+          <b className="num">{fmtPrice(derivedValue)}</b>
+          <em>draft value</em>
+        </span>
+      </div>
+      <button className={`cta-pill ${side === 'BUY' ? 'buy' : 'danger'} rail-ticket-submit`} type="button" disabled={!ready} title={disabledReason} onClick={open}>
+        Open guarded {side === 'BUY' ? 'buy' : 'sell'} ticket
+      </button>
+      <p>{unsupported ? disabledReason : 'No live send here. This opens Manual Trade with risk preview, filters, and typed confirmation.'}</p>
+    </section>
+  );
 }
 
 function MiniTelemetryChart({
@@ -726,23 +895,34 @@ export function TokenDetail({ symbol }: { symbol: string }) {
           )}
         </section>
 
-        <OrderBook
-          symbol={symbol}
-          base={base}
-          footerActions={
-            <>
-              <button className="mini-btn" type="button" onClick={() => setPage('fills')}>
-                Fills
-              </button>
-              <button className="mini-btn" type="button" onClick={() => setPage('orders')}>
-                Orders
-              </button>
-              <button className="cta-pill buy micro-ticket-btn" type="button" onClick={() => openTicket({ symbol, side: 'BUY', source: 'manual' })}>
-                Ticket
-              </button>
-            </>
-          }
-        />
+        <aside className="token-rail-stack">
+          <TokenRailTicket
+            symbol={symbol}
+            base={base}
+            bid={detail?.book?.bidPrice}
+            ask={detail?.book?.askPrice}
+            last={live?.spot ?? detail?.last}
+            maxOrderNotional={state?.config.maxOrderNotionalUsd}
+            openTicket={openTicket}
+          />
+          <OrderBook
+            symbol={symbol}
+            base={base}
+            footerActions={
+              <>
+                <button className="mini-btn" type="button" onClick={() => setPage('fills')}>
+                  Fills
+                </button>
+                <button className="mini-btn" type="button" onClick={() => setPage('orders')}>
+                  Orders
+                </button>
+                <button className="cta-pill buy micro-ticket-btn" type="button" onClick={() => openTicket({ symbol, side: 'BUY', source: 'manual' })}>
+                  Ticket
+                </button>
+              </>
+            }
+          />
+        </aside>
       </div>
 
       {hasPerp && (

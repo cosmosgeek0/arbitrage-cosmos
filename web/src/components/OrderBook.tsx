@@ -10,6 +10,7 @@ import { Num } from './Num';
  */
 
 type Level = [number, number]; // price, qty
+type BookLayout = 'both' | 'asks' | 'bids';
 interface Trade {
   id: number;
   price: number;
@@ -66,6 +67,8 @@ export function OrderBook({
   footerActions?: ReactNode;
 }) {
   const [tab, setTab] = useState<'book' | 'trades'>('book');
+  const [layout, setLayout] = useState<BookLayout>('both');
+  const [precisionBias, setPrecisionBias] = useState(0);
   const [expandedTrades, setExpandedTrades] = useState(false);
   const [book, setBook] = useState<{ bids: Level[]; asks: Level[] } | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
@@ -143,8 +146,9 @@ export function OrderBook({
 
   const live = Date.now() - liveTsRef.current < LIVE_STALE_MS;
 
-  const bids = useMemo(() => (book ? book.bids.filter(([, q]) => q > 0).slice(0, levels) : []), [book, levels]);
-  const asks = useMemo(() => (book ? book.asks.filter(([, q]) => q > 0).slice(0, levels) : []), [book, levels]);
+  const shownLevels = layout === 'both' ? levels : Math.min(levels * 2, 24);
+  const bids = useMemo(() => (book ? book.bids.filter(([, q]) => q > 0).slice(0, shownLevels) : []), [book, shownLevels]);
+  const asks = useMemo(() => (book ? book.asks.filter(([, q]) => q > 0).slice(0, shownLevels) : []), [book, shownLevels]);
 
   // Price decimals: start from magnitude, then widen until every displayed
   // level is distinct — a stablecoin book ticks at the 4th decimal and would
@@ -170,6 +174,8 @@ export function OrderBook({
     return { bidRows, askRows, maxCum: Math.max(bidMax, askMax, 1e-12), bidNotional, askNotional };
   }, [bids, asks]);
 
+  const displayDec = Math.max(0, Math.min(8, dec + precisionBias));
+  const tickLabel = displayDec === 0 ? '1' : `0.${'0'.repeat(Math.max(displayDec - 1, 0))}1`;
   const bestBid = bids.length ? bids[0][0] : null;
   const bestAsk = asks.length ? asks[0][0] : null;
   // Absolute spread in quote units (a % is meaningless noise on tight books —
@@ -191,18 +197,42 @@ export function OrderBook({
   return (
     <aside className="card micro-card ob-card">
       <div className="micro-head ob-head">
-        <div className="seg mini">
-          <button className={tab === 'book' ? 'on' : ''} onClick={() => setTab('book')}>
-            Book
-          </button>
-          <button className={tab === 'trades' ? 'on' : ''} onClick={() => setTab('trades')}>
-            Trades
-          </button>
+        <div className="ob-head-main">
+          <div className="seg mini">
+            <button className={tab === 'book' ? 'on' : ''} onClick={() => setTab('book')}>
+              Book
+            </button>
+            <button className={tab === 'trades' ? 'on' : ''} onClick={() => setTab('trades')}>
+              Trades
+            </button>
+          </div>
+          <span className={`ob-live num ${live ? 'on' : ''}`} title={live ? 'Binance depth stream · 100ms' : 'REST fallback · 10s'}>
+            <span className="ob-live-dot" />
+            {live ? 'LIVE' : 'POLL'}
+          </span>
         </div>
-        <span className={`ob-live num ${live ? 'on' : ''}`} title={live ? 'Binance depth stream · 100ms' : 'REST fallback · 10s'}>
-          <span className="ob-live-dot" />
-          {live ? 'LIVE' : 'POLL'}
-        </span>
+        <div className="ob-tools" aria-label="Order book controls">
+          <div className="ob-layout" aria-label="Depth layout">
+            {(['both', 'asks', 'bids'] as const).map((v) => (
+              <button key={v} className={layout === v ? 'on' : ''} type="button" onClick={() => setLayout(v)} title={v === 'both' ? 'Show asks and bids' : v === 'asks' ? 'Show asks only' : 'Show bids only'}>
+                <span className={`ob-layout-glyph ${v}`}>
+                  <i />
+                  <i />
+                  <i />
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="ob-tick" title="Displayed tick size">
+            <button type="button" onClick={() => setPrecisionBias((v) => Math.max(-2, v - 1))} aria-label="Coarser price precision">
+              −
+            </button>
+            <span className="num">{tickLabel}</span>
+            <button type="button" onClick={() => setPrecisionBias((v) => Math.min(3, v + 1))} aria-label="Finer price precision">
+              +
+            </button>
+          </div>
+        </div>
       </div>
 
       {tab === 'book' ? (
@@ -213,54 +243,58 @@ export function OrderBook({
             <span>Total</span>
           </div>
 
-          <div className="ob-side asks">
-            {askRows.length === 0 ? (
-              <div className="ob-empty">Waiting for depth…</div>
-            ) : (
-              [...askRows].reverse().map((r) => (
+          {layout !== 'bids' && (
+            <div className={`ob-side asks ${layout === 'asks' ? 'single' : ''}`}>
+              {askRows.length === 0 ? (
+                <div className="ob-empty">Waiting for depth…</div>
+              ) : (
+                [...askRows].reverse().map((r) => (
+                  <div
+                    key={r.p}
+                    className={`ob-row ask ${r.cum / maxCum > 0.7 ? 'heavy' : ''} ${onPriceClick ? 'clickable' : ''}`}
+                    title={onPriceClick ? 'Use as limit price' : undefined}
+                    onClick={onPriceClick ? () => onPriceClick(r.p) : undefined}
+                  >
+                    <span className="ob-bar" style={{ width: `${Math.min((r.cum / maxCum) * 100, 100)}%` }} />
+                    <span className="ob-px num">{fmtPx(r.p, displayDec)}</span>
+                    <span key={r.q} className="ob-size num fl">
+                      {fmtSize(r.q)}
+                    </span>
+                    <span className="ob-total num">{fmtSize(r.cum)}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          <div className="ob-mid">
+            <span className="ob-mid-label">last</span>
+            <Num value={lastPrice} className={`ob-last ${lastDir > 0 ? 'up' : lastDir < 0 ? 'down' : ''}`}>
+              {lastPrice !== null ? fmtPx(lastPrice, displayDec) : bestBid !== null && bestAsk !== null ? fmtPx((bestBid + bestAsk) / 2, displayDec) : '—'}
+            </Num>
+            {lastDir !== 0 && <span className={`ob-arrow ${lastDir > 0 ? 'up' : 'down'}`}>{lastDir > 0 ? '↑' : '↓'}</span>}
+            <span className="ob-spread num">spread {spreadAbs !== null ? fmtPx(spreadAbs, displayDec) : '—'}</span>
+          </div>
+
+          {layout !== 'asks' && (
+            <div className={`ob-side bids ${layout === 'bids' ? 'single' : ''}`}>
+              {bidRows.map((r) => (
                 <div
                   key={r.p}
-                  className={`ob-row ask ${r.cum / maxCum > 0.7 ? 'heavy' : ''} ${onPriceClick ? 'clickable' : ''}`}
+                  className={`ob-row bid ${r.cum / maxCum > 0.7 ? 'heavy' : ''} ${onPriceClick ? 'clickable' : ''}`}
                   title={onPriceClick ? 'Use as limit price' : undefined}
                   onClick={onPriceClick ? () => onPriceClick(r.p) : undefined}
                 >
                   <span className="ob-bar" style={{ width: `${Math.min((r.cum / maxCum) * 100, 100)}%` }} />
-                  <span className="ob-px num">{fmtPx(r.p, dec)}</span>
+                  <span className="ob-px num">{fmtPx(r.p, displayDec)}</span>
                   <span key={r.q} className="ob-size num fl">
                     {fmtSize(r.q)}
                   </span>
                   <span className="ob-total num">{fmtSize(r.cum)}</span>
                 </div>
-              ))
-            )}
-          </div>
-
-          <div className="ob-mid">
-            <span className="ob-mid-label">last</span>
-            <Num value={lastPrice} className={`ob-last ${lastDir > 0 ? 'up' : lastDir < 0 ? 'down' : ''}`}>
-              {lastPrice !== null ? fmtPx(lastPrice, dec) : bestBid !== null && bestAsk !== null ? fmtPx((bestBid + bestAsk) / 2, dec) : '—'}
-            </Num>
-            {lastDir !== 0 && <span className={`ob-arrow ${lastDir > 0 ? 'up' : 'down'}`}>{lastDir > 0 ? '↑' : '↓'}</span>}
-            <span className="ob-spread num">spread {spreadAbs !== null ? fmtPx(spreadAbs, dec) : '—'}</span>
-          </div>
-
-          <div className="ob-side bids">
-            {bidRows.map((r) => (
-              <div
-                key={r.p}
-                className={`ob-row bid ${r.cum / maxCum > 0.7 ? 'heavy' : ''} ${onPriceClick ? 'clickable' : ''}`}
-                title={onPriceClick ? 'Use as limit price' : undefined}
-                onClick={onPriceClick ? () => onPriceClick(r.p) : undefined}
-              >
-                <span className="ob-bar" style={{ width: `${Math.min((r.cum / maxCum) * 100, 100)}%` }} />
-                <span className="ob-px num">{fmtPx(r.p, dec)}</span>
-                <span key={r.q} className="ob-size num fl">
-                  {fmtSize(r.q)}
-                </span>
-                <span className="ob-total num">{fmtSize(r.cum)}</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           <div className="ob-ratio" title="Bid vs ask notional across the visible book">
             <span className="ob-ratio-tag up num">B {buyPct.toFixed(0)}%</span>
@@ -282,8 +316,8 @@ export function OrderBook({
               <div className="ob-empty">Waiting for prints…</div>
             ) : (
               trades.slice(0, expandedTrades ? 60 : TRADES_SHOWN).map((t) => (
-                <div key={t.id} className="ob-row trade in">
-                  <span className={`ob-px num ${t.isBuyerMaker ? 'down' : 'up'}`}>{fmtPx(t.price, dec)}</span>
+                <div key={t.id} className={`ob-row trade in ${t.isBuyerMaker ? 'sell' : 'buy'}`}>
+                  <span className={`ob-px num ${t.isBuyerMaker ? 'down' : 'up'}`}>{fmtPx(t.price, displayDec)}</span>
                   <span className="ob-size num">{fmtSize(t.qty)}</span>
                   <span className="ob-time num">{fmtClock(t.time)}</span>
                 </div>

@@ -1,0 +1,45 @@
+# PHOTO QUEUE — one photo per run, top-most non-[x] first. Never two in one run.
+# Photos live at the Desktop level: ../../example photos/ relative to this project
+# (i.e. /Users/cosmosgeek/Desktop/example photos/ — NOT inside PROJECTS/).
+
+- [x] 1password-manage-account-REFERENCE.png — applied to Settings full-page rail/account pane from TASTE_LOG #0; source image missing on disk this run
+- [x] Screenshot 2026-07-02 at 10.52.49 PM.png — macOS menu bar crop; quiet even status-cluster craft applied to the Strategies scanner-pipeline panel + its hairline status foot (TASTE_LOG #2)
+- [x] top.png — applied to shared Topbar compact strip (far-right local date/time + dot-status/health one-row controls)
+- [ ] Screenshot 2026-07-02 at 10.57.02 PM.png
+- [ ] Screenshot 2026-07-02 at 10.57.23 PM.png
+- [ ] Screenshot 2026-07-02 at 10.57.32 PM.png
+- [ ] Screenshot 2026-07-02 at 10.57.42 PM.png
+- [ ] Screenshot 2026-07-02 at 10.57.54 PM.png
+- [ ] Screenshot 2026-07-02 at 10.58.02 PM.png
+- [ ] Screenshot 2026-07-02 at 10.58.37 PM.png
+- [ ] Screenshot 2026-07-02 at 10.58.50 PM.png
+- [ ] Screenshot 2026-07-02 at 10.59.00 PM.png
+- [ ] Screenshot 2026-07-03 at 1.25.03 AM.png
+- [ ] Screenshot 2026-07-03 at 12.42.52 AM 2.png
+- [ ] Screenshot 2026-07-04 at 3.44.28 AM.png
+- [ ] Screenshot 2026-07-04 at 3.45.20 AM.png
+- [ ] Screenshot 2026-07-04 at 3.46.14 AM.png
+- [ ] Screenshot 2026-07-04 at 3.47.23 AM.png
+- [ ] Screenshot 2026-07-04 at 3.47.36 AM.png
+- [ ] Screenshot 2026-07-04 at 3.47.51 AM.png
+- [ ] Screenshot 2026-07-04 at 3.50.14 AM.png
+- [ ] Screenshot 2026-07-04 at 3.50.26 AM.png
+- [ ] Screenshot 2026-07-04 at 3.50.38 AM.png
+- [ ] Screenshot 2026-07-04 at 3.50.50 AM.png
+- [ ] Screenshot 2026-07-04 at 3.51.06 AM.png
+- [ ] Screenshot 2026-07-04 at 3.51.20 AM.png
+- [ ] Screenshot 2026-07-04 at 3.51.39 AM.png
+- [ ] Screenshot 2026-07-04 at 3.51.48 AM.png
+- [ ] Screenshot 2026-07-04 at 3.52.46 AM.png
+- [ ] Screenshot 2026-07-04 at 3.53.03 AM.png
+- [ ] Screenshot 2026-07-04 at 3.53.21 AM.png
+- [ ] Screenshot 2026-07-04 at 3.53.32 AM.png
+- [ ] Screenshot 2026-07-04 at 3.53.41 AM.png
+- [ ] Screenshot 2026-07-04 at 3.54.01 AM.png
+- [ ] Screenshot 2026-07-04 at 4.02.39 AM.png
+- [ ] Screenshot 2026-07-04 at 4.05.09 AM.png
+- [ ] Screenshot 2026-07-04 at 4.09.38 AM.png
+- [ ] Screenshot 2026-07-04 at 4.11.24 AM.png
+- [ ] Screenshot 2026-07-04 at 4.22.07 AM.png
+- [ ] Screenshot 2026-07-04 at 4.36.14 AM.png
+- [ ] Screenshot 2026-07-04 at 4.36.32 AM.png

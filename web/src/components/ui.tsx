@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { IconAlert } from './Icons';
 
-/** macOS System Settings-style grouped list (reusable across config pages). */
+/** Grouped settings list reusable across config pages. */
 export function Group({ title, children }: { title?: string; children: ReactNode }) {
   return (
     <>

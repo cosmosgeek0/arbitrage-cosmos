@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
 import { TokenIcon } from '../components/TokenIcon';
 import { Num } from '../components/Num';
 import { Donut } from '../components/Donut';
-import { SparkArea } from '../components/Spark';
-import { EmptyState, SetupChecklist, SideTag, StatePill, StatusDot, WarnStrip } from '../components/ui';
+import { EmptyState, SideTag, WarnStrip } from '../components/ui';
 import { eventSummary } from '../lib/eventText';
 import {
   fmtBasis,
@@ -17,7 +16,6 @@ import {
   baseOf,
 } from '../format';
 import {
-  IconBook,
   IconBrain,
   IconChart,
   IconClock,
@@ -36,6 +34,25 @@ import {
 
 type Tone = 'ok' | 'bad' | 'warn' | 'idle';
 
+type DecisionItem = {
+  tone: Tone;
+  icon: ReactNode;
+  title: string;
+  detail: string;
+  meta: string;
+  action: string;
+  primary?: boolean;
+  onClick: () => void;
+};
+
+type CommandKpi = {
+  label: string;
+  value: ReactNode;
+  sub: string;
+  tone: Tone;
+  meter?: number;
+};
+
 function statusTone(status: string): Tone {
   if (status === 'open' || status === 'live') return 'ok';
   if (status === 'closed' || status === 'failed') return 'bad';
@@ -46,14 +63,6 @@ function statusTone(status: string): Tone {
 export function Dashboard() {
   const { state, markets, marketsUpdatedAt, connected, setPage, openTicket, openDetail } = useStore();
   const [quickSymbol, setQuickSymbol] = useState('BTCUSDT');
-  const [equity, setEquity] = useState<number[]>([]);
-
-  useEffect(() => {
-    void fetch('/api/pnl')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d && setEquity((d.equitySnapshots as { totalUsdt: number }[]).map((s) => s.totalUsdt)))
-      .catch(() => undefined);
-  }, [state?.account?.totalUsdt]);
 
   const topMarkets = useMemo(
     () =>
@@ -85,17 +94,27 @@ export function Dashboard() {
   const modeTone: Tone = state.mode === 'LIVE_ARMED' ? 'ok' : state.mode === 'HALTED' ? 'bad' : 'warn';
   const accountTone: Tone = state.binance.connected ? 'ok' : state.binance.keysPresent ? 'bad' : 'idle';
   const scannerAge = state.scanner.lastTickTs ? timeAgo(state.scanner.lastTickTs) : '—';
+  const accountLine = !state.binance.keysPresent
+    ? 'Read keys absent'
+    : state.binance.connected
+      ? `Synced ${timeAgo(state.binance.lastSyncTs)}`
+      : 'Sync failing';
+  const postureLine = state.config.killSwitch
+    ? 'Safe halt'
+    : state.mode === 'LIVE_ARMED'
+      ? 'Live armed'
+      : 'Manual only';
 
   const readiness = [
     {
       label: 'Market stream',
-      detail: connected ? `${feedLive}/${feedEntries.length} feeds open` : 'socket reconnecting',
+      detail: connected ? `${feedLive}/${feedEntries.length} feeds` : 'reconnecting',
       tone: connected && feedLive > 0 ? 'ok' : 'warn',
       icon: <IconWifi />,
     },
     {
       label: 'Server keys',
-      detail: state.binance.keysPresent ? 'env configured' : 'not connected',
+      detail: state.binance.keysPresent ? 'env ready' : 'not set',
       tone: state.binance.keysPresent ? 'ok' : 'idle',
       icon: <IconKey />,
     },
@@ -107,42 +126,194 @@ export function Dashboard() {
     },
     {
       label: 'Withdrawals',
-      detail: state.binance.canWithdraw === true ? 'key can withdraw' : 'disabled or unavailable',
+      detail: state.binance.canWithdraw === true ? 'permission on' : 'disabled',
       tone: state.binance.canWithdraw === true ? 'bad' : 'ok',
       icon: <IconPower />,
     },
     {
       label: 'Risk gate',
-      detail: `${fmtPrice(state.config.maxOrderNotionalUsd)} max order`,
+      detail: `${fmtPrice(state.config.maxOrderNotionalUsd)} cap`,
       tone: 'ok',
       icon: <IconShield />,
     },
     {
       label: 'Kill switch',
-      detail: state.config.killSwitch ? 'blocking live sends' : 'manual mode available',
+      detail: state.config.killSwitch ? 'blocking sends' : 'manual ready',
       tone: state.config.killSwitch ? 'warn' : 'ok',
       icon: <IconPulse />,
     },
   ] satisfies { label: string; detail: string; tone: Tone; icon: ReactNode }[];
-  const readinessScore = readiness.filter((r) => r.tone === 'ok' || r.tone === 'warn').length;
+  const readinessScore = readiness.filter((r) => r.tone === 'ok').length;
+  const readinessWaiting = readiness.filter((r) => r.tone === 'idle').length;
+  const readinessAttention = readiness.filter((r) => r.tone === 'warn' || r.tone === 'bad').length;
 
   const sortedHoldings = acct?.entries.slice().sort((a, z) => z.valueUsdt - a.valueUsdt).slice(0, 5) ?? [];
   const topProposals = state.proposals.slice(0, 5);
   const recentEvents = state.events.slice(0, 9);
+  const topMover = topMarkets[0] ?? null;
+  const primaryProposal = topProposals[0] ?? null;
+  const decisionItems: DecisionItem[] = [
+    !state.binance.keysPresent
+      ? {
+          tone: 'warn',
+          icon: <IconKey />,
+          title: 'Connect read-only Binance',
+          detail: 'Unlock balances, orders, fills, and equity snapshots without any browser key form.',
+          meta: 'setup first',
+          action: 'Account setup',
+          primary: true,
+          onClick: () => setPage('account'),
+        }
+      : !state.binance.connected
+        ? {
+            tone: 'bad',
+            icon: <IconWifi />,
+            title: 'Fix account sync',
+            detail: state.binance.lastError ?? 'Keys exist, but account polling is not healthy.',
+            meta: 'attention',
+            action: 'System health',
+            primary: true,
+            onClick: () => setPage('system'),
+          }
+        : {
+            tone: 'ok',
+            icon: <IconWallet />,
+            title: 'Account sync is live',
+            detail: `Balances and orders last synced ${timeAgo(state.binance.lastSyncTs)}.`,
+            meta: 'ready',
+            action: 'Wallets',
+            primary: true,
+            onClick: () => setPage('wallets'),
+          },
+    state.config.killSwitch
+      ? {
+          tone: 'warn',
+          icon: <IconShield />,
+          title: 'Kill switch is blocking live sends',
+          detail: 'This is safe by default. Use Risk only when you intentionally want manual live mode.',
+          meta: 'halted',
+          action: 'Risk gate',
+          onClick: () => setPage('risk'),
+        }
+      : {
+          tone: state.mode === 'LIVE_ARMED' ? 'ok' : 'warn',
+          icon: <IconTicket />,
+          title: state.mode === 'LIVE_ARMED' ? 'Manual live flow armed' : 'Manual mode ready',
+          detail: `Allowlist has ${state.config.allowedSymbols.length} symbols; every send still needs typed confirmation.`,
+          meta: state.mode === 'LIVE_ARMED' ? 'armed' : 'manual',
+          action: 'New ticket',
+          onClick: () => openTicket({ symbol: quickSymbol.trim() || 'BTCUSDT', side: 'BUY', source: 'manual' }),
+        },
+    primaryProposal
+      ? {
+          tone: 'warn',
+          icon: <IconRadar />,
+          title: `${baseOf(primaryProposal.symbol)} basis proposal`,
+          detail: `${primaryProposal.side === 'SHORT_PERP_LONG_SPOT' ? 'Short perp / long spot' : 'Long perp / short spot'} at ${fmtBasis(primaryProposal.basisNow, 2)}.`,
+          meta: 'proposal',
+          action: 'Review',
+          onClick: () => setPage('opportunities'),
+        }
+      : {
+          tone: 'idle',
+          icon: <IconBrain />,
+          title: 'No proposal needs approval',
+          detail: `Scanner is watching ${state.scanner.watching} pairs; threshold ${fmtBasis(state.scanner.grossThresholdPct, 2)}.`,
+          meta: 'scanning',
+          action: 'Strategies',
+          onClick: () => setPage('strategies'),
+        },
+    state.recentFills.length
+      ? {
+          tone: 'ok',
+          icon: <IconReceipt />,
+          title: 'Recent fills are ledgered',
+          detail: `${state.recentFills.length} latest fills are feeding PnL and position cost basis.`,
+          meta: 'audit',
+          action: 'Open fills',
+          onClick: () => setPage('fills'),
+        }
+      : {
+          tone: 'idle',
+          icon: <IconReceipt />,
+          title: 'Fill history not loaded',
+          detail: 'Import symbol history after keys are set so PnL and average cost stop showing blanks.',
+          meta: 'cost basis',
+          action: 'Fills',
+          onClick: () => setPage('fills'),
+        },
+    topMover
+      ? {
+          tone: Math.abs(topMover.change24hPct ?? 0) > 10 ? 'warn' : 'ok',
+          icon: <IconPulse />,
+          title: `${topMover.base} is moving`,
+          detail: `${topMover.hasPerp ? 'spot + perp' : 'spot only'} · 24h change ${fmtPct(topMover.change24hPct, 2)}.`,
+          meta: 'market',
+          action: 'Inspect',
+          onClick: () => openDetail(topMover.symbol),
+        }
+      : {
+          tone: 'idle',
+          icon: <IconPulse />,
+          title: 'Market cache warming up',
+          detail: 'Public Binance rows populate here as the market engine streams.',
+          meta: 'market',
+          action: 'Markets',
+          onClick: () => setPage('markets'),
+      },
+  ];
+  const commandKpis: CommandKpi[] = [
+    {
+      label: 'Free USDT',
+      value: acct ? <Num value={acct.availableUsdt}>{fmtPrice(acct.availableUsdt)}</Num> : 'read keys',
+      sub: acct ? 'available balance' : 'server-side only',
+      tone: acct ? 'ok' : 'idle',
+    },
+    {
+      label: 'Day PnL',
+      value: acct ? (
+        <span className={signClass(acct.dayChangeUsd ?? acct.realizedTodayUsd)}>
+          {acct.dayChangeUsd !== null ? fmtPrice(acct.dayChangeUsd) : fmtPrice(acct.realizedTodayUsd)}
+        </span>
+      ) : 'pending',
+      sub: dayPct !== null ? fmtPct(dayPct, 2) : 'fills/equity needed',
+      tone: acct ? ((acct.dayChangeUsd ?? acct.realizedTodayUsd) >= 0 ? 'ok' : 'bad') : 'idle',
+    },
+    {
+      label: 'Orders',
+      value: String(state.openOrders.length),
+      sub: state.binance.keysPresent ? 'open account orders' : 'unloaded',
+      tone: state.openOrders.length ? 'warn' : 'idle',
+    },
+    {
+      label: 'Exposure',
+      value: acct ? fmtPrice(exposure) : 'pending',
+      sub: `${state.positions.length} position${state.positions.length === 1 ? '' : 's'}`,
+      tone: exposure > 0 ? 'warn' : 'idle',
+    },
+    {
+      label: 'Risk used',
+      value: fmtPrice(state.risk.dailyNotionalUsedUsd),
+      sub: `${Math.round(dailyRiskPct)}% of ${fmtPrice(state.config.maxDailyNotionalUsd)}`,
+      tone: dailyRiskPct > 80 ? 'bad' : dailyRiskPct > 50 ? 'warn' : 'ok',
+      meter: dailyRiskPct,
+    },
+    {
+      label: 'Proposals',
+      value: String(state.proposals.length),
+      sub: `${state.scanner.watching} watched pairs`,
+      tone: state.proposals.length > 0 ? 'warn' : 'idle',
+    },
+  ];
 
   return (
     <div className="container page dashboard-page">
       <div className="page-head dashboard-head">
         <div>
-          <div className="page-kicker">Private Binance cockpit</div>
-          <h1 className="page-title">Control room</h1>
+          <div className="page-kicker">Dashboard</div>
+          <h1 className="page-title">Account cockpit</h1>
           <div className="page-sub">
-            {state.scanner.pairs} pairs scanned · market tick {scannerAge} ·{' '}
-            {state.binance.keysPresent
-              ? state.binance.connected
-                ? `account synced ${timeAgo(state.binance.lastSyncTs)}`
-                : 'account sync failing'
-              : 'server keys not set'}
+            {state.scanner.pairs} pairs scanned · tick {scannerAge} · {accountLine}
           </div>
         </div>
         <div className="head-actions">
@@ -164,128 +335,85 @@ export function Dashboard() {
         <WarnStrip>Account sync failing: {state.binance.lastError ?? 'unknown error'}</WarnStrip>
       )}
 
-      <section className={`card dashboard-hero mode-${state.mode.toLowerCase()}`}>
-        <div className="dashboard-hero-main">
-          <div className="dash-eyebrow">
-            <StatePill tone={modeTone}>{state.mode === 'LIVE_ARMED' ? 'live armed' : state.mode.toLowerCase()}</StatePill>
-            <span>{state.config.killSwitch ? 'kill switch on' : 'kill switch off'}</span>
-            <span>{state.config.allowedSymbols.length} allowed symbols</span>
-          </div>
-          <div className="dash-equity">
-            {acct ? (
-              <Num value={acct.totalUsdt}>{fmtPrice(acct.totalUsdt)}</Num>
-            ) : (
-              <span className="dash-equity-empty">No account data</span>
-            )}
-          </div>
-          <div className="dash-equity-sub">
-            {acct?.dayChangeUsd !== null && acct?.dayChangeUsd !== undefined ? (
-              <span className={`num ${signClass(acct.dayChangeUsd)}`}>
-                {acct.dayChangeUsd >= 0 ? '▲' : '▼'} {fmtPrice(Math.abs(acct.dayChangeUsd))}
-                {dayPct !== null ? ` ${fmtPct(dayPct, 2)}` : ''} today
-              </span>
-            ) : (
-              <span>Public market data is live. Add server-side read keys to unlock balances, orders, fills, and equity history.</span>
-            )}
-          </div>
-          <div className="dash-hero-actions">
-            <button className="cta-pill" type="button" onClick={() => setPage('wallets')}>
-              Wallets & assets
-            </button>
-            <button className="mini-btn" type="button" onClick={() => setPage('orders')}>
-              Orders
-            </button>
-            <button className="mini-btn" type="button" onClick={() => setPage('ledger')}>
-              Audit ledger
-            </button>
-          </div>
-          <div className="dash-spark-shell">
-            {equity.length > 3 ? (
-              <SparkArea values={equity} w={760} h={86} dots endDot />
-            ) : (
-              <div className="dash-spark-empty">
-                <span>Equity curve will draw from 15-minute snapshots after account sync.</span>
-                <span>Until then, this dashboard stays honest and shows market/strategy state only.</span>
+      <section className={`card dash-command-center mode-${state.mode.toLowerCase()}`}>
+        <div className="dash-command-top">
+          <div className="dash-truth-panel">
+            <div className="dash-truth-meta">
+              <span className={`dash-mode-text ${modeTone}`}>{postureLine}</span>
+              <span>{state.config.killSwitch ? 'kill switch on' : 'kill switch off'}</span>
+              <span>{state.config.allowedSymbols.length} allowed</span>
+            </div>
+            <div className="dash-truth-main">
+              <span>{acct ? 'Total equity' : 'Account sync'}</span>
+              {acct ? (
+                <b className="num"><Num value={acct.totalUsdt}>{fmtPrice(acct.totalUsdt)}</Num></b>
+              ) : (
+                <b className="dash-truth-empty">{accountLine}</b>
+              )}
+              <em>
+                {acct?.dayChangeUsd !== null && acct?.dayChangeUsd !== undefined
+                  ? `${acct.dayChangeUsd >= 0 ? '+' : '-'}${fmtPrice(Math.abs(acct.dayChangeUsd))}${dayPct !== null ? ` ${fmtPct(dayPct, 2)}` : ''} today`
+                  : 'Public data is live; balances, orders, fills, and equity unlock only after server-side read keys.'}
+              </em>
+            </div>
+            {!state.binance.keysPresent && (
+              <div className="dash-truth-note">
+                No browser key form. No withdrawals. Configure read keys only on the server.
               </div>
             )}
           </div>
+
+          <aside className="dash-posture-panel">
+            <div className="dash-posture-score">
+              <span>Posture</span>
+              <b className="num">{readinessScore}/{readiness.length}</b>
+              <em>{readinessAttention} attention · {readinessWaiting} waiting</em>
+            </div>
+            <div className="dash-posture-list">
+              {readiness.map((item) => (
+                <ReadinessItem key={item.label} {...item} />
+              ))}
+            </div>
+          </aside>
         </div>
 
-        <aside className="dash-readiness">
-          <div className="dash-readiness-ring" style={{ '--score': `${(readinessScore / readiness.length) * 100}%` } as React.CSSProperties}>
-            <span className="num">{readinessScore}/{readiness.length}</span>
+        <div className="dash-kpi-strip">
+          {commandKpis.map((item) => (
+            <CommandKpi key={item.label} {...item} />
+          ))}
+        </div>
+
+        <div className="dash-decision-stack">
+          <div className="dash-decision-head">
+            <div>
+              <span>Decision stack</span>
+              <h2>Next action</h2>
+            </div>
+            <button className="sec-link" type="button" onClick={() => setPage('opportunities')}>
+              Open queue →
+            </button>
           </div>
-          <div>
-            <div className="dash-readiness-title">Command posture</div>
-            <div className="dash-readiness-sub">Read-only by default. Live sends still require arm, allowlist, typed symbol, and risk approval.</div>
-          </div>
-          <div className="dash-readiness-list">
-            {readiness.map((item) => (
-              <ReadinessItem key={item.label} {...item} />
+          <div className="dash-decision-grid">
+            {decisionItems.map((item, idx) => (
+              <button
+                key={`${item.meta}-${item.title}`}
+                className={`dash-decision-item ${item.tone} ${item.primary ? 'primary' : ''}`}
+                type="button"
+                onClick={item.onClick}
+              >
+                <span className="dash-decision-rank num">{String(idx + 1).padStart(2, '0')}</span>
+                <span className="dash-decision-icon">{item.icon}</span>
+                <span className="dash-decision-copy">
+                  <span className="dash-decision-meta">{item.meta}</span>
+                  <b>{item.title}</b>
+                  <em>{item.detail}</em>
+                </span>
+                <span className="dash-decision-action">{item.action}</span>
+              </button>
             ))}
           </div>
-        </aside>
+        </div>
       </section>
-
-      <div className="dashboard-metrics">
-        <DashMetric
-          icon={<IconWallet />}
-          label="Available USDT"
-          value={acct ? fmtPrice(acct.availableUsdt) : '—'}
-          sub={acct ? 'free balance, not in orders' : 'requires read keys'}
-          tone={acct ? 'ok' : 'idle'}
-        />
-        <DashMetric
-          icon={<IconReceipt />}
-          label="Realized today"
-          value={acct ? fmtPrice(acct.realizedTodayUsd) : '—'}
-          sub="from ledgered fills"
-          tone={acct ? (acct.realizedTodayUsd >= 0 ? 'ok' : 'bad') : 'idle'}
-        />
-        <DashMetric
-          icon={<IconLayers />}
-          label="Open exposure"
-          value={acct ? fmtPrice(exposure) : '—'}
-          sub={`${state.openOrders.length} open order${state.openOrders.length === 1 ? '' : 's'}`}
-          tone={exposure > 0 ? 'warn' : 'idle'}
-        />
-        <DashMetric
-          icon={<IconChart />}
-          label="Unrealized"
-          value={unrealized !== null ? fmtPrice(unrealized) : '—'}
-          sub={unrealized !== null ? 'mark-to-market positions' : 'needs fill history'}
-          tone={unrealized === null ? 'idle' : unrealized >= 0 ? 'ok' : 'bad'}
-        />
-        <DashMetric
-          icon={<IconShield />}
-          label="Daily notional"
-          value={fmtPrice(state.risk.dailyNotionalUsedUsd)}
-          sub={`${Math.round(dailyRiskPct)}% of ${fmtPrice(state.config.maxDailyNotionalUsd)} limit`}
-          tone={dailyRiskPct > 80 ? 'bad' : dailyRiskPct > 50 ? 'warn' : 'ok'}
-          meter={dailyRiskPct}
-        />
-        <DashMetric
-          icon={<IconRadar />}
-          label="Basis proposals"
-          value={String(state.proposals.length)}
-          sub={`${state.scanner.watching} actively watched`}
-          tone={state.proposals.length > 0 ? 'warn' : 'idle'}
-        />
-      </div>
-
-      {!state.binance.keysPresent && (
-        <section className="card dash-setup-card">
-          <div className="dash-setup-icon"><IconBook /></div>
-          <div>
-            <div className="dash-panel-title">Connect Binance without weakening custody</div>
-            <div className="dash-panel-sub">No browser key form, no withdrawals, no transfer-out path. Configure keys only on the server.</div>
-            <SetupChecklist />
-          </div>
-          <button className="mini-btn" type="button" onClick={() => setPage('account')}>
-            Account setup
-          </button>
-        </section>
-      )}
 
       <div className="dashboard-grid">
         <main className="dash-main-lane">
@@ -430,12 +558,10 @@ export function Dashboard() {
               action={<button className="sec-link" type="button" onClick={() => setPage('strategies')}>Strategies →</button>}
             />
             <div className="dash-system-row">
-              <StatusDot status="live" />
               <span>Basis monitor</span>
               <b>{state.proposals.length} proposing</b>
             </div>
             <div className="dash-system-row">
-              <StatusDot status="none" />
               <span>Volume spike</span>
               <b>in development</b>
             </div>
@@ -460,24 +586,20 @@ export function Dashboard() {
           <section className="card dash-system-card">
             <PanelHead icon={<IconWifi />} title="System state" sub="Feeds, account stream, and market refresh." />
             {feedEntries.map(([name, status]) => (
-              <div key={name} className="dash-system-row">
-                <StatusDot status={status} />
+              <div key={name} className={`dash-system-row tone-${statusTone(status)}`}>
                 <span>{name}</span>
-                <StatePill tone={statusTone(status)}>{status}</StatePill>
+                <b>{status}</b>
               </div>
             ))}
-            <div className="dash-system-row">
-              <StatusDot status={state.binance.keysPresent ? (state.binance.connected ? 'live' : 'closed') : 'none'} />
+            <div className={`dash-system-row tone-${accountTone}`}>
               <span>binance account</span>
-              <StatePill tone={accountTone}>{state.binance.keysPresent ? (state.binance.connected ? 'synced' : 'error') : 'no keys'}</StatePill>
+              <b>{state.binance.keysPresent ? (state.binance.connected ? 'synced' : 'error') : 'no keys'}</b>
             </div>
-            <div className="dash-system-row">
-              <StatusDot status={state.binance.userStream === 'open' ? 'live' : 'none'} />
+            <div className={`dash-system-row tone-${state.binance.userStream === 'open' ? 'ok' : 'idle'}`}>
               <span>user stream</span>
-              <StatePill tone={state.binance.userStream === 'open' ? 'ok' : 'idle'}>{state.binance.userStream}</StatePill>
+              <b>{state.binance.userStream}</b>
             </div>
-            <div className="dash-system-row">
-              <StatusDot status={markets.length > 0 ? 'live' : 'none'} />
+            <div className={`dash-system-row tone-${markets.length > 0 ? 'ok' : 'idle'}`}>
               <span>market cache</span>
               <b>{markets.length} rows · {marketsUpdatedAt ? timeAgo(marketsUpdatedAt) : '—'}</b>
             </div>
@@ -560,15 +682,13 @@ function ReadinessItem({ icon, label, detail, tone }: { icon: ReactNode; label: 
   );
 }
 
-function DashMetric({
-  icon,
+function CommandKpi({
   label,
   value,
   sub,
   tone,
   meter,
 }: {
-  icon: ReactNode;
   label: string;
   value: ReactNode;
   sub: string;
@@ -576,16 +696,13 @@ function DashMetric({
   meter?: number;
 }) {
   return (
-    <section className={`dash-metric-card ${tone}`}>
-      <span className="dash-metric-icon">{icon}</span>
-      <span className="dash-metric-copy">
-        <span className="dash-metric-label">{label}</span>
-        <span className="dash-metric-value num">{value}</span>
-        <span className="dash-metric-sub">{sub}</span>
+    <section className={`dash-command-kpi ${tone}`}>
+      <span className="dash-kpi-label">{label}</span>
+      <b className="dash-kpi-value num">{value}</b>
+      <span className="dash-kpi-sub">{sub}</span>
         {meter !== undefined && (
           <span className="dash-meter"><i style={{ width: `${Math.max(0, Math.min(100, meter))}%` }} /></span>
         )}
-      </span>
     </section>
   );
 }

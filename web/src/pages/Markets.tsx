@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
-import { TokenIcon, brandColor } from '../components/TokenIcon';
-import { Sparkline, SparkArea } from '../components/Spark';
+import { TokenIcon } from '../components/TokenIcon';
 import { Num } from '../components/Num';
-import { StatTile, EmptyState, StatePill } from '../components/ui';
+import { EmptyState, StatePill } from '../components/ui';
 import { IconSearch } from '../components/Icons';
 import { fmtPrice, fmtPct, fmtBasis, fmtMoney, fmtFunding, countdown, signClass } from '../format';
 import { iconCoverage, onIcons, primeIcons } from '../lib/iconManifest';
@@ -46,6 +45,7 @@ const FILTERS: { id: Filter; label: string }[] = [
 const finite = (v: number | null | undefined): v is number => typeof v === 'number' && Number.isFinite(v);
 const absNum = (v: number | null | undefined) => (finite(v) ? Math.abs(v) : -1);
 const statusRank = (status: MarketRow['status']) => (status === 'signal' ? 3 : status === 'watching' ? 2 : 1);
+type ChipTone = 'ok' | 'warn' | 'bad' | 'idle';
 
 function fmtAgeMs(ms: number | null): string {
   if (ms === null || !Number.isFinite(ms)) return '—';
@@ -58,6 +58,19 @@ function fmtAgeMs(ms: number | null): string {
 function fmtLatency(ms: number | null | undefined): string {
   if (!finite(ms)) return '—';
   return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(2)}s`;
+}
+
+function feedTone(value: string | null | undefined): ChipTone {
+  const v = String(value ?? '').toLowerCase();
+  if (!v) return 'idle';
+  if (v.includes('stale') || v.includes('lag') || v.includes('pending')) return 'warn';
+  if (v.includes('off') || v.includes('closed') || v.includes('error') || v.includes('fail')) return 'bad';
+  if (v.includes('open') || v.includes('live') || v.includes('fresh') || v.includes('connected')) return 'ok';
+  return 'idle';
+}
+
+function DataChip({ tone = 'idle', children }: { tone?: ChipTone; children: ReactNode }) {
+  return <span className={`market-data-chip ${tone}`}>{children}</span>;
 }
 
 function sortValue(m: MarketRow, key: SortKey): number | string {
@@ -222,10 +235,11 @@ export function Markets() {
     .sort((a, b) => Math.abs(b.change24hPct!) - Math.abs(a.change24hPct!))
     .slice(0, 5);
 
-  const marketCards = [
+  const summaryCards = [
     {
       title: 'Top volume',
-      note: 'Binance 24h quote volume',
+      note: topVolume[0]?.symbol ?? 'waiting',
+      value: fmtMoney(topVolume[0]?.quoteVolume24h),
       rows: topVolume.slice(0, 3),
       metric: (m: MarketRow) => fmtMoney(m.quoteVolume24h),
       cls: '',
@@ -233,7 +247,8 @@ export function Markets() {
     },
     {
       title: 'Top gainers',
-      note: 'Liquid 24h change',
+      note: topGainers[0]?.symbol ?? 'waiting',
+      value: fmtPct(topGainers[0]?.change24hPct),
       rows: topGainers.filter((m) => (m.quoteVolume24h ?? 0) >= 1_000_000).slice(0, 3),
       metric: (m: MarketRow) => fmtPct(m.change24hPct),
       cls: 'up',
@@ -241,7 +256,8 @@ export function Markets() {
     },
     {
       title: 'Top losers',
-      note: 'Downside movers',
+      note: topLosers[0]?.symbol ?? 'waiting',
+      value: fmtPct(topLosers[0]?.change24hPct),
       rows: topLosers.filter((m) => (m.quoteVolume24h ?? 0) >= 1_000_000).slice(0, 3),
       metric: (m: MarketRow) => fmtPct(m.change24hPct),
       cls: 'down',
@@ -249,7 +265,8 @@ export function Markets() {
     },
     {
       title: 'Basis watch',
-      note: 'Spot vs perp mark',
+      note: widest?.symbol ?? 'waiting',
+      value: widest ? fmtBasis(widest.basisPct, 2) : '—',
       rows: basisRows.slice(0, 3),
       metric: (m: MarketRow) => fmtBasis(m.basisPct),
       cls: '',
@@ -257,7 +274,8 @@ export function Markets() {
     },
     {
       title: 'Funding watch',
-      note: 'Next perp funding',
+      note: fundingRows[0]?.symbol ?? 'waiting',
+      value: fmtFunding(fundingRows[0]?.fundingRate),
       rows: fundingRows.slice(0, 3),
       metric: (m: MarketRow) => fmtFunding(m.fundingRate),
       cls: '',
@@ -281,6 +299,14 @@ export function Markets() {
   const scannerFresh = scannerAgeMs !== null && scannerAgeMs < 25_000;
   const systemTone: 'ok' | 'warn' | 'bad' = marketsError || !connected ? 'bad' : streamFresh && scannerFresh ? 'ok' : 'warn';
   const feedEntries = Object.entries(system?.feeds ?? state?.feeds ?? {}).slice(0, 4);
+  const feedChips = [
+    { label: 'Market stream', value: !connected ? 'offline' : streamFresh ? 'fresh' : 'stale', tone: !connected ? 'bad' : streamFresh ? 'ok' : 'warn' },
+    { label: 'Scanner', value: scannerAgeMs === null ? 'pending' : fmtAgeMs(scannerAgeMs), tone: scannerFresh ? 'ok' : scannerAgeMs === null ? 'idle' : 'warn' },
+    { label: 'REST', value: fmtLatency(system?.restLatencyMs), tone: finite(system?.restLatencyMs) && (system?.restLatencyMs ?? 9999) < 900 ? 'ok' : 'warn' },
+    ...feedEntries.map(([label, value]) => ({ label, value, tone: feedTone(value) })),
+  ].slice(0, 6);
+  const visibleStart = rows.length ? pageN * pageSize + 1 : 0;
+  const visibleEnd = pageN * pageSize + visible.length;
 
   const applyPreset = (nextFilter: Filter) => {
     setFilter(nextFilter);
@@ -332,90 +358,30 @@ export function Markets() {
         <div>
           <h1 className="page-title">Markets</h1>
           <div className="page-sub">
-            Binance execution universe · {markets.length} USDT symbols · {perpRows.length} with perps for basis and funding
+            Binance execution universe · {markets.length} USDT symbols · {perpRows.length} perps · rows are ordered for manual trade triage.
           </div>
         </div>
-        <div className="market-hero-search">
-          <IconSearch size={16} />
-          <input
-            placeholder="Search asset, symbol, or ticket"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            spellCheck={false}
-          />
-          {search && (
-            <button className="search-clear" aria-label="Clear market search" title="Clear market search" onClick={() => setSearch('')}>
-              ×
-            </button>
-          )}
+        <div className="market-hero-status">
+          <StatePill tone={systemTone}>{systemTone === 'ok' ? 'market live' : systemTone === 'bad' ? 'market offline' : 'feed check'}</StatePill>
+          <span>{visibleStart}-{visibleEnd} of {rows.length}</span>
         </div>
       </div>
 
-      <div className="stats">
-        <StatTile
-          label="Bitcoin"
-          value={<Num value={btc?.spot ?? null}>{fmtPrice(btc?.spot)}</Num>}
-          delta={<span className={signClass(btc?.change24hPct)}>{fmtPct(btc?.change24hPct)}</span>}
-          spark={btc ? <SparkArea values={btc.spark} color={brandColor('BTCUSDT')} dots endDot /> : undefined}
-          onClick={() => openDetail('BTCUSDT')}
-        />
-        <StatTile label="24h volume (tracked pairs)" value={fmtMoney(totalVol)} delta="spot quote volume" />
-        <StatTile
-          label="Market tone"
-          value={marketTone === null ? '—' : `${Math.round(marketTone)}% up`}
-          delta={`${gainers.length} gainers · ${losers.length} losers`}
-        />
-        <StatTile label="Avg |basis| (liquid)" value={`${avgBasis.toFixed(3)}%`} delta={`${liquid.length} pairs ≥ $3M`} />
-        <StatTile
-          label="Widest basis"
-          value={widest ? fmtBasis(widest.basisPct, 2) : '—'}
-          delta={widest?.symbol ?? '—'}
-          onClick={widest ? () => openDetail(widest.symbol) : undefined}
-        />
-      </div>
-
-      <div className="market-live-panel">
-        <div className="market-live-main">
-          <StatePill tone={systemTone}>{systemTone === 'ok' ? 'live' : systemTone === 'bad' ? 'disconnected' : 'checking'}</StatePill>
-          <div>
-            <b>Binance market data</b>
-            <span>
-              {markets.length} symbols · refreshed {fmtAgeMs(marketAgeMs)} · scanner {fmtAgeMs(scannerAgeMs)}
-              {marketsError ? ` · ${marketsError}` : ''}
+      <div className="market-source-strip">
+        <div className="market-source-main">
+          <span className={`dot ${systemTone === 'ok' ? 'dot-live' : systemTone === 'bad' ? 'dot-off' : 'dot-stale'}`} />
+          <b>Binance market data</b>
+          <span>{fmtAgeMs(marketAgeMs)} · {marketsError || `${fmtMoney(totalVol)} tracked 24h volume`}</span>
+        </div>
+        <div className="market-source-chips">
+          {feedChips.map((chip) => (
+            <span key={`${chip.label}-${chip.value}`} className={`feed-chip ${chip.tone}`}>
+              <span>{chip.label}</span>
+              <b>{chip.value}</b>
             </span>
-          </div>
-        </div>
-        <div className="market-live-metrics">
-          <button className="market-live-metric" onClick={() => setPage('system')}>
-            <span>System health</span>
-            <b>{connected ? 'WS connected' : 'WS offline'}</b>
-          </button>
-          <button className="market-live-metric" onClick={() => setPage('system')}>
-            <span>REST latency</span>
-            <b>{fmtLatency(system?.restLatencyMs)}</b>
-          </button>
-          <div className="market-live-metric">
-            <span>Request weight</span>
-            <b>{system?.usedWeight1m ?? '—'} / min</b>
-          </div>
-          <div className="market-live-metric icon-audit">
-            <span>Logo coverage</span>
-            <b>{iconStats.resolved}/{iconStats.total} cache</b>
-          </div>
-        </div>
-        <div className="market-feed-pills">
-          {feedEntries.length ? (
-            feedEntries.map(([name, value]) => (
-              <span key={name} className="feed-pill">
-                <span className={`dot ${String(value).toLowerCase().includes('stale') || String(value).toLowerCase().includes('off') ? 'dot-stale' : 'dot-live'}`} />
-                {name}: {value}
-              </span>
-            ))
-          ) : (
-            <span className="feed-pill"><span className="dot dot-none" /> feed status pending</span>
-          )}
+          ))}
           <span className="refresh-rate">
-            Update rate
+            Update
             {[3, 6, 10].map((sec) => (
               <button key={sec} className={prefs.refreshSec === sec ? 'active' : ''} onClick={() => updatePref('refreshSec', sec)}>
                 {sec}s
@@ -425,30 +391,28 @@ export function Markets() {
         </div>
       </div>
 
-      <div className="market-scan-grid">
-        {marketCards.map((card) => (
-          <div key={card.title} className="market-scan-card">
-            <div className="market-scan-head">
-              <div>
-                <div className="market-scan-title">{card.title}</div>
-                <div className="market-scan-note">{card.note}</div>
-              </div>
-              <button className="sec-link" onClick={() => applyPreset(card.filter)}>
-                View
-              </button>
-            </div>
-            <div className="market-scan-list">
-              {card.rows.map((m) => (
-                <MarketRailRow
-                  key={`${card.title}-${m.symbol}`}
-                  m={m}
-                  metric={<span className={card.cls || signClass(card.title.includes('Funding') ? m.fundingRate : card.title.includes('Basis') ? m.basisPct : m.change24hPct)}>{card.metric(m)}</span>}
-                  sub={m.symbol}
-                  onClick={() => openDetail(m.symbol)}
-                />
-              ))}
-            </div>
-          </div>
+      <div className="market-summary-strip">
+        <button className="market-summary-item btc" onClick={() => openDetail('BTCUSDT')}>
+          <span>Bitcoin</span>
+          <b><Num value={btc?.spot ?? null}>{fmtPrice(btc?.spot)}</Num></b>
+          <em className={signClass(btc?.change24hPct)}>{fmtPct(btc?.change24hPct)}</em>
+        </button>
+        <div className="market-summary-item">
+          <span>Market tone</span>
+          <b>{marketTone === null ? '—' : `${Math.round(marketTone)}% up`}</b>
+          <em>{gainers.length} gainers · {losers.length} losers</em>
+        </div>
+        <div className="market-summary-item">
+          <span>Avg |basis|</span>
+          <b>{avgBasis.toFixed(3)}%</b>
+          <em>{liquid.length} liquid pairs</em>
+        </div>
+        {summaryCards.slice(0, 4).map((card) => (
+          <button key={card.title} className={`market-summary-item ${card.cls}`} onClick={() => applyPreset(card.filter)}>
+            <span>{card.title}</span>
+            <b>{card.value}</b>
+            <em>{card.note}</em>
+          </button>
         ))}
       </div>
 
@@ -456,9 +420,9 @@ export function Markets() {
         <main className="market-table-card">
           <div className="sec-head market-table-head">
             <div>
-              <h2 className="sec-title">Crypto market prices</h2>
+              <h2 className="sec-title">Market list</h2>
               <span className="sec-note">
-                {rows.length} assets · sorted by {sortKey === 'quoteVolume24h' ? 'volume' : sortKey} {sortDesc ? 'high to low' : 'low to high'}
+                {rows.length} assets · sorted by {sortKey === 'quoteVolume24h' ? 'volume' : sortKey} {sortDesc ? 'high to low' : 'low to high'} · updated {fmtAgeMs(marketAgeMs)}
               </span>
             </div>
             <div className="market-health">
@@ -495,25 +459,22 @@ export function Markets() {
               <thead>
                 <tr>
                   <th className="w-star" />
-                  <th className="w-idx l">#</th>
                   {header('Asset', 'base', 'left')}
                   {header('Price', 'spot')}
                   {header('24h', 'change24hPct')}
                   {header('Basis', 'basisPct')}
                   {header('Funding', 'fundingRate')}
                   {header('Volume', 'quoteVolume24h')}
-                  <th className="col-hide-sm">Last hour</th>
-                  {header('Signal', 'status', 'right', 'col-hide-xs')}
+                  {header('State', 'status', 'right', 'col-hide-xs')}
                   <th />
                 </tr>
               </thead>
               <tbody>
-                {visible.map((m, i) => (
+                {visible.map((m) => (
                   <tr key={m.symbol} className="rowlink" onClick={() => openDetail(m.symbol)}>
                     <td className="l">
                       <Star on={watchlist.includes(m.symbol)} onClick={() => void toggleWatch(m.symbol)} />
                     </td>
-                    <td className="l idx num">{pageN * pageSize + i + 1}</td>
                     <td className="l">
                       <span className="tok">
                         <TokenIcon symbol={m.symbol} size={30} />
@@ -521,30 +482,47 @@ export function Markets() {
                           <span className="tok-name">{m.base}</span>
                           <span className="tok-sub">
                             {m.symbol}
-                            {!m.hasPerp && ' · spot only'}
+                          </span>
+                          <span className="asset-flags">
+                            {m.hasPerp ? <DataChip tone="ok">perp</DataChip> : <DataChip>spot</DataChip>}
+                            {watchlist.includes(m.symbol) && <DataChip tone="warn">watch</DataChip>}
                           </span>
                         </span>
                       </span>
                     </td>
-                    <td className="val-strong">
+                    <td className="val-strong price-cell">
                       <Num value={m.spot}>{fmtPrice(m.spot)}</Num>
+                      <span className="cell-sub">{finite(m.perpMark) ? `mark ${fmtPrice(m.perpMark)}` : 'spot last'}</span>
                     </td>
-                    <td className={signClass(m.change24hPct)}>
+                    <td className={`change-cell ${signClass(m.change24hPct)}`}>
                       <Num value={m.change24hPct}>{fmtPct(m.change24hPct)}</Num>
-                    </td>
-                    <td className={signClass(m.basisPct)}>
-                      <Num value={m.basisPct}>{fmtBasis(m.basisPct)}</Num>
-                    </td>
-                    <td className={`col-hide-xs ${signClass(m.fundingRate)}`}>
-                      <Num value={m.fundingRate}>{fmtFunding(m.fundingRate)}</Num>
-                    </td>
-                    <td>
-                      <Num value={m.quoteVolume24h}>{fmtMoney(m.quoteVolume24h)}</Num>
-                    </td>
-                    <td className="col-hide-sm">
-                      <span className="sparkbox">
-                        <Sparkline values={m.spark} color={brandColor(m.symbol)} />
+                      <span className="cell-sub">
+                        {finite(m.low24h) && finite(m.high24h) ? `${fmtPrice(m.low24h)} / ${fmtPrice(m.high24h)}` : '24h change'}
                       </span>
+                    </td>
+                    <td className={`basis-cell ${signClass(m.basisPct)}`}>
+                      {finite(m.basisPct) ? (
+                        <>
+                          <Num value={m.basisPct}>{fmtBasis(m.basisPct)}</Num>
+                          <span className="cell-sub">spot vs mark</span>
+                        </>
+                      ) : (
+                        <DataChip>spot only</DataChip>
+                      )}
+                    </td>
+                    <td className={`funding-cell col-hide-xs ${signClass(m.fundingRate)}`}>
+                      {finite(m.fundingRate) ? (
+                        <>
+                          <Num value={m.fundingRate}>{fmtFunding(m.fundingRate)}</Num>
+                          <span className="cell-sub">next {countdown(m.nextFundingTime)}</span>
+                        </>
+                      ) : (
+                        <DataChip>no perp</DataChip>
+                      )}
+                    </td>
+                    <td className="volume-cell">
+                      <Num value={m.quoteVolume24h}>{fmtMoney(m.quoteVolume24h)}</Num>
+                      <span className="cell-sub">24h quote</span>
                     </td>
                     <td className="col-hide-xs">
                       {m.status === 'signal' ? (
@@ -552,7 +530,7 @@ export function Markets() {
                       ) : m.status === 'watching' ? (
                         <span className="chip-tag">watching</span>
                       ) : (
-                        <span className="faint">—</span>
+                        <DataChip>quiet</DataChip>
                       )}
                     </td>
                     <td>
@@ -592,7 +570,7 @@ export function Markets() {
 
           <div className="table-foot">
             <span>
-              Showing {visible.length} of {rows.length} · updated {fmtAgeMs(marketAgeMs)}
+              Showing {visibleStart}-{visibleEnd} of {rows.length} · logos {iconStats.resolved}/{iconStats.total}
             </span>
             <span>
               Rows{' '}
@@ -616,6 +594,7 @@ export function Markets() {
               </button>
             </span>
           </div>
+          <p className="markets-source-note">Source: Binance public spot ticker, futures mark price, local scanner state, and server `/api/system` freshness.</p>
         </main>
 
         <aside className="market-rail">

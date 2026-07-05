@@ -79,6 +79,16 @@ function GateStep({ icon, label, sub, tone }: { icon: ReactNode; label: string; 
   );
 }
 
+function GateLamp({ icon, label, sub, tone }: { icon: ReactNode; label: string; sub: ReactNode; tone: RiskTone }) {
+  return (
+    <div className={`risk-lamp ${tone}`}>
+      <span>{icon}</span>
+      <b>{label}</b>
+      <em>{sub}</em>
+    </div>
+  );
+}
+
 function MiniBar({ value, tone = 'ok' }: { value: number; tone?: RiskTone }) {
   return (
     <span className={`risk-mini-bar ${tone}`}>
@@ -173,6 +183,19 @@ export function Risk() {
     { label: 'Typed confirm', sub: 'server re-check', tone: 'ok', icon: <IconKeyboard size={16} /> },
     { label: 'Ledger', sub: 'every action', tone: 'ok', icon: <IconBook size={16} /> },
   ] as const;
+  const gateVerdict = cfg.killSwitch
+    ? { label: 'HALTED', tone: 'bad' as const, detail: 'Kill switch is on. Every live send is rejected before order routing.' }
+    : !cfg.liveTradingEnabled
+      ? { label: 'MANUAL ONLY', tone: 'warn' as const, detail: 'Preview and dry-run are available; live sends stay hidden.' }
+      : cfg.allowedSymbols.length === 0
+        ? { label: 'ARMED / BLOCKED', tone: 'bad' as const, detail: 'Live is armed, but an empty allowlist blocks every symbol.' }
+        : { label: 'GATE READY', tone: 'ok' as const, detail: 'Live sends can only continue after all server-side checks pass.' };
+  const instrumentStats = [
+    { label: 'Daily used', value: fmtPrice(state.risk.dailyNotionalUsedUsd), sub: `${fmtPrice(remainingDaily)} left`, tone: usedPct >= 100 ? 'bad' : usedPct > 70 ? 'warn' : 'ok' },
+    { label: 'Per order', value: fmtPrice(perOrderLimit), sub: 'hard cap', tone: perOrderLimit > 0 ? 'ok' : 'bad' },
+    { label: 'Open slots', value: `${state.openOrders.length}/${cfg.maxOpenOrders}`, sub: 'live orders', tone: openOrderPct >= 100 ? 'bad' : openOrderPct > 70 ? 'warn' : 'ok' },
+    { label: 'Rejects today', value: String(state.risk.rejectionsToday), sub: 'risk denials', tone: state.risk.rejectionsToday > 0 ? 'bad' : 'ok' },
+  ] satisfies { label: string; value: string; sub: string; tone: RiskTone }[];
 
   const suggestedSymbols = useMemo(() => {
     const fromProposals = state.proposals.map((p) => p.symbol);
@@ -213,78 +236,63 @@ export function Risk() {
 
   return (
     <div className="container page risk-page">
-      <section className={`risk-hero card ${cfg.killSwitch ? 'halted' : cfg.liveTradingEnabled ? 'live' : 'manual'}`}>
-        <div className="risk-hero-copy">
-          <span className="risk-eyebrow">Server-side risk gate</span>
-          <h1 className="page-title">Risk</h1>
-          <p>Every live send must pass the kill switch, arm state, allowlist, limits, cooldown, typed confirmation, and a server re-check.</p>
-          <div className="risk-hero-actions">
-            <button className="cta-pill danger" disabled={cfg.killSwitch} onClick={() => void setKill(true)} title={cfg.killSwitch ? 'Already halted' : 'Instantly halt every send'}>
-              <IconPower size={15} />
-              Halt
-            </button>
-            <button className="mini-btn" onClick={() => setPage('ledger')}>
-              <IconBook size={14} />
-              Open ledger
-            </button>
-            <button className="mini-btn" onClick={() => setPage('trade')}>
-              <IconTicket size={14} />
-              Dry-run ticket
-            </button>
-          </div>
-        </div>
-        <div className="risk-mode-orb">
-          <span className="risk-orb-ring" style={{ '--risk-used': `${clampPct(usedPct)}%` } as CSSProperties}>
-            <IconShield size={34} />
-          </span>
-          <b>{mode}</b>
-          <em>{cfg.killSwitch ? 'all sends blocked' : cfg.liveTradingEnabled ? 'live possible after gates' : 'manual preview only'}</em>
-        </div>
-      </section>
-
-      <section className="risk-metrics">
-        <RiskMetric
-          icon={<IconPercent size={16} />}
-          label="Daily notional"
-          value={fmtPrice(state.risk.dailyNotionalUsedUsd)}
-          sub={<>{fmtPrice(remainingDaily)} left of {fmtPrice(dailyLimit)}</>}
-          tone={usedPct >= 100 ? 'bad' : usedPct > 70 ? 'warn' : 'ok'}
-        />
-        <RiskMetric
-          icon={<IconLock size={16} />}
-          label="Per-order cap"
-          value={fmtPrice(perOrderLimit)}
-          sub="hard server cap"
-          tone={perOrderLimit > 0 ? 'ok' : 'bad'}
-        />
-        <RiskMetric
-          icon={<IconClock size={16} />}
-          label="Cooldown"
-          value={cooldownLeft > 0 ? `${cooldownLeft}s` : 'clear'}
-          sub={state.risk.lastOrderTs ? `last order ${timeAgo(state.risk.lastOrderTs)}` : 'no prior sends'}
-          tone={cooldownLeft > 0 ? 'warn' : 'ok'}
-        />
-        <RiskMetric
-          icon={<IconAlert size={16} />}
-          label="Today rejects"
-          value={state.risk.rejectionsToday}
-          sub={`${state.openOrders.length}/${cfg.maxOpenOrders} open orders`}
-          tone={state.risk.rejectionsToday > 0 ? 'bad' : 'ok'}
-        />
-      </section>
-
-      <section className="card risk-chain-card">
-        <div className="risk-section-head">
+      <section className={`card risk-instrument ${gateVerdict.tone}`}>
+        <div className="risk-instrument-head">
           <div>
-            <h2>Live-send chain</h2>
-            <span>These are the checks a real send must clear before Binance is called.</span>
+            <span className="risk-eyebrow">Server-side risk console</span>
+            <h1 className="page-title">Risk</h1>
+            <p>{gateVerdict.detail}</p>
           </div>
-          <StatePill tone={cfg.killSwitch ? 'bad' : cfg.liveTradingEnabled ? 'ok' : 'warn'}>
-            {cfg.killSwitch ? 'Halted' : cfg.liveTradingEnabled ? 'Armed' : 'Manual only'}
-          </StatePill>
+          <StatePill tone={gateVerdict.tone}>{gateVerdict.label}</StatePill>
         </div>
-        <div className="risk-gate-chain">
-          {gateSteps.map((s) => <GateStep key={s.label} icon={s.icon} label={s.label} sub={s.sub} tone={s.tone} />)}
+
+        <div className="risk-instrument-grid">
+          <div className="risk-verdict-panel">
+            <span className="risk-verdict-icon" style={{ '--risk-used': `${clampPct(usedPct)}%` } as CSSProperties}>
+              <IconShield size={34} />
+            </span>
+            <div>
+              <b>{gateVerdict.label}</b>
+              <em>{mode}</em>
+            </div>
+            <div className="risk-verdict-actions">
+              {cfg.killSwitch ? (
+                <button className="cta-pill" onClick={() => setModal('resume')}>Resume...</button>
+              ) : (
+                <button className="cta-pill danger" onClick={() => void setKill(true)}>
+                  <IconPower size={15} />
+                  Halt now
+                </button>
+              )}
+              <button className="mini-btn" onClick={() => setPage('trade')}>
+                <IconTicket size={14} />
+                Probe ticket
+              </button>
+              <button className="mini-btn" onClick={() => setPage('ledger')}>
+                <IconBook size={14} />
+                Audit trail
+              </button>
+            </div>
+          </div>
+
+          <div className="risk-stat-board">
+            {instrumentStats.map((item) => (
+              <div className={`risk-stat-line ${item.tone}`} key={item.label}>
+                <span>{item.label}</span>
+                <b className="num">{item.value}</b>
+                <em>{item.sub}</em>
+              </div>
+            ))}
+            <div className="risk-stat-line span">
+              <span>Daily utilization</span>
+              <b className="num">{clampPct(usedPct).toFixed(0)}%</b>
+              <MiniBar value={usedPct} tone={usedPct >= 100 ? 'bad' : usedPct > 70 ? 'warn' : 'ok'} />
+            </div>
+          </div>
+
+          <div className="risk-lamp-board">
+            {gateSteps.map((s) => <GateLamp key={s.label} icon={s.icon} label={s.label} sub={s.sub} tone={s.tone} />)}
+          </div>
         </div>
       </section>
 

@@ -134,6 +134,40 @@ export function ManualTrade() {
   const hasSize = type === 'MARKET' ? positiveInput(qty) || positiveInput(quoteQty) : positiveInput(qty);
   const canPreview = symbolValid && hasPrice && hasSize && !busy;
   const canValidate = canPreview && keysPresent;
+  const previewDisabledReason = busy
+    ? 'Request in progress'
+    : !symbolValid
+      ? 'Enter a valid Binance symbol such as BTCUSDT'
+      : !hasPrice
+        ? 'Enter a limit price or switch to market'
+        : !hasSize
+          ? type === 'MARKET'
+            ? 'Enter base quantity or USDT quote amount'
+            : 'Enter a base quantity'
+          : '';
+  const validateDisabledReason = !keysPresent
+    ? 'Signed validation is locked until Binance keys exist on the server'
+    : previewDisabledReason || '';
+  const liveDisabledReason = canShowLiveButton
+    ? busy
+      ? 'Request in progress'
+      : !riskPassed
+        ? 'Run a passing preview before the live confirmation can open'
+        : ''
+    : liveHint;
+  const modeSummary =
+    mode === 'HALTED'
+      ? 'Paper mode: kill switch and missing keys keep live send unavailable.'
+      : mode === 'MANUAL'
+        ? 'Manual mode: ticket can be prepared, live send still needs arming and keys.'
+        : 'Live armed: preview, risk pass, and typed confirmation are still required.';
+  const ticketReady = symbolValid && hasPrice && hasSize;
+  const ticketReview =
+    draftNotional !== null && Number.isFinite(draftNotional)
+      ? `${type} ${side} estimated at ${fmtPrice(draftNotional)}`
+      : type === 'MARKET'
+        ? 'Market order needs a base quantity or USDT quote amount.'
+        : 'Limit order needs price and base quantity.';
   const notionalPct = capPct(draftNotional, maxPerOrder);
   const dailyPct = capPct(dailyUsed, dailyLimit);
   const quoteFresh = !!quote;
@@ -291,6 +325,24 @@ export function ManualTrade() {
               <div className="trade-state-stack">
                 <StatePill tone={liveTone}>{mode === 'LIVE_ARMED' ? 'Live armed' : mode.toLowerCase()}</StatePill>
                 <StatePill tone={keysTone}>{keysPresent ? 'Keys present' : 'No keys'}</StatePill>
+              </div>
+            </div>
+
+            <div className="trade-mode-strip" aria-label="Manual trade execution state">
+              <div>
+                <span>Mode</span>
+                <b>{mode === 'LIVE_ARMED' ? 'Live armed' : mode === 'MANUAL' ? 'Manual only' : 'Paper / halted'}</b>
+                <small>{modeSummary}</small>
+              </div>
+              <div>
+                <span>Risk cap</span>
+                <b className="num">{fmtPrice(maxPerOrder)} per order</b>
+                <small>{dailyRemaining !== null ? `${fmtPrice(dailyRemaining)} daily room remains` : 'Daily room unavailable until state syncs'}</small>
+              </div>
+              <div>
+                <span>Live send</span>
+                <b>{canShowLiveButton ? 'Confirm-gated' : 'Locked'}</b>
+                <small>{canShowLiveButton ? 'Requires preview pass and typed symbol.' : liveHint}</small>
               </div>
             </div>
 
@@ -463,6 +515,21 @@ export function ManualTrade() {
               )}
             </div>
 
+            <div className={`trade-review-panel ${ticketReady ? 'ready' : 'blocked'}`}>
+              <div>
+                <span>Ticket review</span>
+                <b>
+                  <SideTag side={side} /> {type} {symbol}
+                </b>
+                <small>{ticketReview}</small>
+              </div>
+              <div>
+                <span>Next required</span>
+                <b>{ticketReady ? 'Preview risk gate' : 'Complete ticket'}</b>
+                <small>{previewDisabledReason || 'Server preview will show filters, risk checks, and estimated notional.'}</small>
+              </div>
+            </div>
+
             <div className="ticket-actions">
               <button
                 className="cta-pill"
@@ -471,7 +538,7 @@ export function ManualTrade() {
                 onClick={doPreview}
               >
                 <IconTicket size={15} />
-                Preview
+                Preview risk
               </button>
               <button className="mini-btn" disabled={busy} onClick={reset} title="Clear the ticket">
                 <IconRefresh size={14} />
@@ -507,6 +574,13 @@ export function ManualTrade() {
               ) : (
                 <span className="trade-live-note">{liveHint}</span>
               )}
+            </div>
+            <div className={`trade-action-reason ${ticketReady ? 'ready' : 'blocked'}`}>
+              {canPreview
+                ? 'Preview is available. Live send remains locked until the preview passes and the server re-checks the same intent.'
+                : `Preview disabled: ${previewDisabledReason}`}
+              {canValidate ? ' Signed validation is also available.' : ` Validate disabled: ${validateDisabledReason || 'preview-ready ticket required'}.`}
+              {liveDisabledReason ? ` Live send: ${liveDisabledReason}` : ' Live send can open only through typed confirmation.'}
             </div>
             {canShowLiveButton && <div className="trade-live-note trade-live-note-row">{liveHint}</div>}
 

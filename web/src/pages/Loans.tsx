@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetSt
 import { useStore } from '../store';
 import { TokenIcon } from '../components/TokenIcon';
 import { ConfirmModal } from '../components/Modal';
-import { EmptyState, SetupChecklist, StatePill, StatTile, StatusDot } from '../components/ui';
+import { EmptyState, SetupChecklist, StatePill, StatTile } from '../components/ui';
 import {
   IconAlert,
   IconBook,
@@ -84,6 +84,17 @@ export function Loans() {
   const maxLtv = hasFlexibleData ? (snap?.ongoing.reduce((s, o) => Math.max(s, o.currentLTV), 0) ?? 0) : null;
   const loanable = (snap?.loanable ?? []).filter((l) => !search || l.loanCoin.includes(search.toUpperCase()));
   const margin = snap?.margin ?? null;
+  const reverseProposals = useMemo(() => (state?.proposals ?? []).filter((p) => p.side === 'LONG_PERP_SHORT_SPOT'), [state?.proposals]);
+  const reverseAssets = useMemo(() => Array.from(new Set(reverseProposals.map((p) => baseOf(p.symbol)))).slice(0, 5), [reverseProposals]);
+  const blockers = [
+    !keysPresent,
+    !margin?.available,
+    mode !== 'LIVE_ARMED',
+    Boolean(state?.config.killSwitch),
+  ].filter(Boolean).length;
+  const marginTone: Tone = !keysPresent ? 'idle' : margin?.available ? 'ok' : 'warn';
+  const borrowTone: Tone = blockers === 0 ? 'ok' : reverseProposals.length ? 'warn' : 'idle';
+  const modeTone: Tone = mode === 'LIVE_ARMED' && !state?.config.killSwitch ? 'ok' : 'bad';
 
   const readiness = useMemo(
     () => [
@@ -117,35 +128,23 @@ export function Loans() {
 
   return (
     <div className="container page loans-page">
-      <section className="loan-hero card">
-        <div className="loan-hero-main">
-          <span className="loan-hero-icon">
-            <IconCoins size={28} />
-          </span>
-          <div>
-            <div className="loan-kicker">Borrow desk</div>
-            <h1 className="page-title">Loans / Borrow</h1>
-            <p className="loan-copy">
-              Binance Flexible Loan and Cross Margin control surface for reverse-basis trades. No fake rates, no
-              placeholder balances: every table is wired to real account endpoints and stays locked until the server can
-              read Binance safely.
-            </p>
-            <div className="loan-hero-pills">
-              <StatePill tone={keysPresent ? 'ok' : 'bad'}>{keysPresent ? 'keys present' : 'keys missing'}</StatePill>
-              <StatePill tone={mode === 'LIVE_ARMED' ? 'ok' : 'bad'}>{mode.toLowerCase().replace('_', ' ')}</StatePill>
-              <StatePill tone={snap?.available ? 'ok' : keysPresent ? 'warn' : 'idle'}>
-                {snap?.available ? 'flexible loan online' : keysPresent ? 'loan permission pending' : 'loan data locked'}
-              </StatePill>
-              {snap?.fetchedAt && <span className="loan-updated">updated {timeAgo(snap.fetchedAt)}</span>}
-            </div>
-          </div>
-        </div>
-
-        <div className="loan-hero-side">
-          <div className="loan-hero-actions">
-            <button className="mini-btn strong" type="button" onClick={() => void load(true)}>
+      <section className="loan-preflight card">
+        <div className="loan-preflight-main">
+          <div className="loan-preflight-kicker"><IconShield size={15} /> reverse-basis borrow preflight</div>
+          <h1 className="page-title">Borrow Preflight</h1>
+          <p className="loan-copy">
+            This page answers one trading question first: can a Long perp / Short spot proposal borrow the base asset,
+            survive LTV limits, and reach the manual ticket without bypassing risk. Flexible Loan catalog data stays
+            secondary until a real account source proves it.
+          </p>
+          <div className="loan-preflight-actions">
+            <button className="cta-pill" type="button" onClick={() => setTab('margin')}>
+              <IconRadar size={14} />
+              Check borrowability
+            </button>
+            <button className="mini-btn" type="button" onClick={() => void load(true)}>
               <IconRefresh size={14} />
-              Refresh
+              Refresh sources
             </button>
             <button className="mini-btn" type="button" onClick={() => setPage('risk')}>
               <IconShield size={14} />
@@ -156,27 +155,105 @@ export function Loans() {
               Loan ledger
             </button>
           </div>
-          <div className="loan-hero-metrics">
-            <LoanMiniMetric label="Ongoing" value={hasFlexibleData ? snap!.ongoing.length : '—'} sub="flexible loans" />
-            <LoanMiniMetric label="Debt" value={hasFlexibleData ? fmtQty(totalDebt) : '—'} sub="loan coin sum" />
-            <LoanMiniMetric label="Max LTV" value={hasFlexibleData ? fmtPct((maxLtv ?? 0) * 100, 1, false) : '—'} sub={stateText(ltvTone(maxLtv))} tone={ltvTone(maxLtv)} />
-          </div>
+        </div>
+
+        <div className="loan-preflight-board">
+          <LoanMiniMetric
+            label="Borrow-required"
+            value={reverseProposals.length}
+            sub={reverseAssets.length ? reverseAssets.join(', ') : 'no reverse-basis queue'}
+            tone={reverseProposals.length ? 'warn' : 'idle'}
+          />
+          <LoanMiniMetric
+            label="Borrow visibility"
+            value={margin?.available ? 'online' : keysPresent ? 'permission' : 'locked'}
+            sub={margin?.available ? 'max-borrowable checks enabled' : keysPresent ? margin?.error ?? 'margin scope pending' : 'server keys missing'}
+            tone={marginTone}
+          />
+          <LoanMiniMetric
+            label="Live borrow gate"
+            value={mode === 'LIVE_ARMED' && !state?.config.killSwitch ? 'armed' : 'blocked'}
+            sub={state?.config.killSwitch ? 'kill switch on' : mode.toLowerCase().replace('_', ' ')}
+            tone={modeTone}
+          />
+          <LoanMiniMetric
+            label="Flexible debt"
+            value={hasFlexibleData ? fmtQty(totalDebt) : '—'}
+            sub={hasFlexibleData ? `${snap!.ongoing.length} loan orders · max LTV ${fmtPct((maxLtv ?? 0) * 100, 1, false)}` : 'not sourced yet'}
+            tone={ltvTone(maxLtv)}
+          />
         </div>
       </section>
 
-      <div className="loan-readiness card">
-        {readiness.map((step) => (
-          <div key={step.label} className={`loan-step ${step.tone}`}>
-            <span className="loan-step-icon">{step.icon}</span>
-            <span className="loan-step-copy">
-              <b>{step.label}</b>
-              <em>{step.sub}</em>
-            </span>
-            <span className={`chip-tag ${step.tone === 'ok' ? 'ok' : step.tone === 'bad' ? 'bad' : step.tone === 'warn' ? 'gold' : ''}`}>
-              {stateText(step.tone)}
-            </span>
+      <div className="loan-preflight-layout">
+        <section className="loan-borrow-queue card">
+          <PanelHead
+            icon={<IconRadar size={16} />}
+            title="Borrow-required proposals"
+            note="Reverse-basis candidates cannot move toward a ticket until base-asset borrowability is visible."
+            right={<StatePill tone={borrowTone}>{blockers ? `${blockers} blocker${blockers === 1 ? '' : 's'}` : 'clear'}</StatePill>}
+          />
+          {reverseProposals.length === 0 ? (
+            <div className="loan-empty-queue">
+              <EmptyState title="No reverse-basis borrow queue">
+                When the scanner finds Long perp / Short spot, the base asset lands here first for margin permission,
+                max-borrowable, LTV, and risk posture checks.
+              </EmptyState>
+              <div className="loan-queue-steps">
+                <span><b>1</b><em>Signal requires borrowed spot</em></span>
+                <span><b>2</b><em>Margin max-borrowable confirms size</em></span>
+                <span><b>3</b><em>Risk gate decides manual ticket readiness</em></span>
+              </div>
+            </div>
+          ) : (
+            <div className="loan-proposal-list">
+              {reverseProposals.map((p) => (
+                <ProposalRow
+                  key={p.id}
+                  proposal={p}
+                  status={margin?.available ? 'open margin checks below' : keysPresent ? 'margin permission pending' : 'server keys missing'}
+                  action={
+                    <button className="mini-btn" type="button" onClick={() => setTab('margin')}>
+                      Open checks
+                    </button>
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <aside className="loan-preflight-rail card">
+          <div className="loan-rail-head">
+            <h2>Preflight chain</h2>
+            <span>{snap?.fetchedAt ? `sources updated ${timeAgo(snap.fetchedAt)}` : 'waiting for account sources'}</span>
           </div>
-        ))}
+          <div className="loan-state-stack">
+            {readiness.map((step) => (
+              <LoanStateRow key={step.label} icon={step.icon} label={step.label} value={stateText(step.tone)} tone={step.tone} />
+            ))}
+          </div>
+          <div className="loan-rail-actions">
+            <button className="mini-btn" type="button" onClick={() => setPage('settings')}>
+              <IconKey size={14} />
+              Server setup
+            </button>
+            <button className="mini-btn" type="button" onClick={() => setPage('opportunities')}>
+              <IconRadar size={14} />
+              Proposals
+            </button>
+          </div>
+        </aside>
+      </div>
+
+      <div className="loan-workspace-head">
+        <div>
+          <span>Operational loan views</span>
+          <h2>Account-scoped borrow data</h2>
+        </div>
+        <StatePill tone={snap?.available || margin?.available ? 'ok' : keysPresent ? 'warn' : 'idle'}>
+          {snap?.available || margin?.available ? 'source online' : keysPresent ? 'permission review' : 'locked'}
+        </StatePill>
       </div>
 
       <div className="loan-tabs" role="tablist" aria-label="Loans workspace">

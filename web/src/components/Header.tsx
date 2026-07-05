@@ -23,17 +23,13 @@ import {
   IconWifi,
 } from './Icons';
 
-/* One flat glyph, no container, no gradients — the way Binance/Uniswap mark
-   their brand. Cosmos = a planet on its orbit, single accent color. */
+/* One flat glyph, no container, no gradients. Mirrors the owner-provided mark
+   without embedding a low-resolution screenshot. */
 const BRAND_MARK = (
-  <svg viewBox="0 0 32 32" width={26} height={26} className="brand-mark" aria-hidden>
-    <ellipse
-      cx="16" cy="16" rx="14.4" ry="5.4"
-      fill="none" stroke="var(--accent)" strokeWidth="2"
-      transform="rotate(-24 16 16)"
-      opacity=".55"
-    />
-    <circle cx="16" cy="16" r="8.2" fill="var(--accent)" />
+  <svg viewBox="0 0 32 32" width={52} height={52} className="brand-mark" aria-hidden shapeRendering="geometricPrecision">
+    <circle cx="16" cy="16" r="8.6" fill="#1f5eff" />
+    <circle cx="16" cy="16" r="4.9" fill="#fff" />
+    <circle cx="16" cy="16" r="2.15" fill="#f7d046" />
   </svg>
 );
 
@@ -119,9 +115,9 @@ export function Sidebar() {
     <aside className="snav">
       <div className="snav-brand" onClick={() => setPage('dashboard')}>
         {BRAND_MARK}
-        <div>
-          <div className="brand-name">Cosmos Arbitrage</div>
-          <div className="brand-sub">Private Binance</div>
+        <div className="brand-lockup">
+          <div className="brand-name">Cosmos Control</div>
+          <div className="brand-sub"><span className="brand-sub-dot" />Private Cockpit</div>
         </div>
       </div>
       <nav className="snav-nav">

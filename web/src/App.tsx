@@ -51,7 +51,7 @@ function Shell() {
         </main>
         <footer className="footer">
           <div className="container ftr-line">
-            <span>Cosmos Arbitrage Control Room</span>
+            <span>Cosmos Control Room</span>
             <span>private · one account · no withdrawals</span>
             <span>every action ledgered</span>
             <span className="num">engine UTC</span>

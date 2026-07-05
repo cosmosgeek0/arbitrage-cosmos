@@ -252,8 +252,8 @@ export function Settings() {
                   CA
                 </span>
                 <div>
-                  <span className="settings-account-label">Private Binance</span>
-                  <h1>Cosmos Arbitrage</h1>
+                  <span className="settings-account-label">Private Trading Cockpit</span>
+                  <h1>Cosmos Control Room</h1>
                   <p>Local interface controls for this browser. Live arming, risk limits, and kill switch remain on Risk.</p>
                 </div>
               </div>

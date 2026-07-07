@@ -13,7 +13,6 @@ import {
   IconKey,
   IconList,
   IconPulse,
-  IconRadar,
   IconRefresh,
   IconShield,
   IconTicket,
@@ -175,18 +174,6 @@ function SourceRow({
   );
 }
 
-function CheckStep({ n, label, detail, tone: stepTone }: { n: string; label: string; detail: string; tone: Tone }) {
-  return (
-    <div className={`sys-check-step ${stepTone}`}>
-      <i>{n}</i>
-      <span>
-        <b>{label}</b>
-        <em>{detail}</em>
-      </span>
-    </div>
-  );
-}
-
 export function SystemHealth() {
   const { connected, setPage } = useStore();
   const [info, setInfo] = useState<SystemInfo | null>(null);
@@ -228,7 +215,6 @@ export function SystemHealth() {
   const accountTone: Tone = info.binance.keysPresent ? (info.binance.connected ? 'ok' : 'bad') : 'idle';
   const userStreamTone: Tone = info.binance.userStream === 'open' ? 'ok' : info.binance.keysPresent ? 'warn' : 'idle';
   const modeLabel = info.killSwitch ? 'Halted' : info.liveTradingEnabled ? 'Live armed' : 'Manual only';
-  const modeTone: Tone = info.killSwitch ? 'warn' : info.liveTradingEnabled ? 'bad' : 'ok';
   const overallTone: Tone =
     !info.dbOk || clockTone === 'bad' || degradedFeeds > 1
       ? 'bad'
@@ -262,8 +248,8 @@ export function SystemHealth() {
     },
     {
       icon: <IconWallet />,
-      label: 'Account truth',
-      sub: 'balances, open orders, fills, and permission reality',
+      label: 'Account sync age',
+      sub: info.binance.lastSyncTs ? `last account read ${timeAgo(info.binance.lastSyncTs)}` : 'no account sync timestamp',
       rowTone: accountTone,
       value: info.binance.keysPresent
         ? info.binance.connected
@@ -289,10 +275,10 @@ export function SystemHealth() {
     },
     {
       icon: <IconBrain />,
-      label: 'Proposal scanner',
-      sub: `${info.pairs} spot/perp pairs scanned every 2s`,
+      label: 'Market cache age',
+      sub: `${info.pairs} spot/perp pairs in the market cache`,
       rowTone: scannerTone,
-      value: info.lastScannerTickTs ? `tick ${timeAgo(info.lastScannerTickTs)}` : 'never',
+      value: info.lastScannerTickTs ? timeAgo(info.lastScannerTickTs) : 'unknown',
     },
     {
       icon: <IconTicket />,
@@ -303,10 +289,12 @@ export function SystemHealth() {
     },
     {
       icon: <IconShield />,
-      label: 'Risk engine',
-      sub: 'in-process gate that must pass before every live send',
-      rowTone: modeTone,
-      value: info.killSwitch ? 'gating halted' : info.liveTradingEnabled ? 'gating live armed' : 'gating manual',
+      label: 'Engine heartbeat',
+      sub: info.lastScannerTickTs
+        ? `Dedicated engine heartbeat is not exposed; scanner tick was ${timeAgo(info.lastScannerTickTs)}`
+        : 'Dedicated engine heartbeat is not configured in /api/system',
+      rowTone: 'idle',
+      value: 'not configured',
     },
     {
       icon: <IconBook />,
@@ -322,38 +310,14 @@ export function SystemHealth() {
       rowTone: usedWeightTone,
       value: info.usedWeight1m === null ? 'unknown' : `${Math.round(weightPct ?? 0)}%`,
     },
+    {
+      icon: <IconAlert />,
+      label: 'Last Binance error',
+      sub: info.binance.lastError ?? (info.binance.keysPresent ? 'no Binance error reported' : 'no signed account source configured'),
+      rowTone: info.binance.lastError ? 'bad' : info.binance.keysPresent ? 'ok' : 'idle',
+      value: info.binance.lastError ? 'recorded' : 'none',
+    },
   ];
-
-  const preflight = [
-    {
-      n: '1',
-      label: 'Market data can explain proposals',
-      detail: `${liveFeeds}/${feedEntries.length || 0} feeds live; scanner ${info.lastScannerTickTs ? timeAgo(info.lastScannerTickTs) : 'never ticked'}.`,
-      tone: liveFeeds > 0 && scannerTone !== 'bad' ? scannerTone === 'ok' ? 'ok' : 'warn' : 'bad',
-    },
-    {
-      n: '2',
-      label: 'Account truth is separated from public data',
-      detail: info.binance.keysPresent
-        ? info.binance.connected
-          ? `account synced ${timeAgo(info.binance.lastSyncTs)}`
-          : info.binance.lastError ?? 'account REST is failing'
-        : 'no server keys; balances/orders/fills stay intentionally locked',
-      tone: accountTone,
-    },
-    {
-      n: '3',
-      label: 'Order path is blocked until risk allows it',
-      detail: info.killSwitch ? 'kill switch is on; live sends are blocked' : info.liveTradingEnabled ? 'live manual mode is armed; keep typed confirmation in path' : 'manual mode only; live sends not armed',
-      tone: modeTone,
-    },
-    {
-      n: '4',
-      label: 'Every decision can be audited',
-      detail: info.dbOk ? 'ledger writes are available' : 'ledger write failure blocks trust',
-      tone: info.dbOk ? 'ok' : 'bad',
-    },
-  ] satisfies { n: string; label: string; detail: string; tone: Tone }[];
 
   return (
     <div className="container page system-page">
@@ -365,8 +329,8 @@ export function SystemHealth() {
           </span>
           <h1 className="page-title">System Health</h1>
           <p>
-            A trading impact view of the app, Binance streams, account sync, risk gate, and ledger writes. It shows
-            whether the cockpit can trust its inputs before any manual action.
+            Trust status for the app link, Binance sources, account sync, request budget, engine heartbeat placeholder,
+            and ledger writes.
           </p>
           <div className="sys-hero-actions">
             <button className="cta-pill" type="button" onClick={() => void load()} disabled={loading}>
@@ -376,10 +340,6 @@ export function SystemHealth() {
             <button className="mini-btn" type="button" onClick={() => setPage('ledger')}>
               <IconBook size={14} />
               Audit ledger
-            </button>
-            <button className="mini-btn" type="button" onClick={() => setPage('risk')}>
-              <IconShield size={14} />
-              Risk gate
             </button>
           </div>
         </div>
@@ -436,20 +396,6 @@ export function SystemHealth() {
           <section className="sys-panel card">
             <div className="sys-section-head compact">
               <div>
-                <h2>Critical path</h2>
-                <span>market, account, risk, ledger</span>
-              </div>
-            </div>
-            <div className="sys-check-list">
-              {preflight.slice(0, 4).map((step) => (
-                <CheckStep key={step.n} n={step.n} label={step.label} detail={step.detail} tone={step.tone} />
-              ))}
-            </div>
-          </section>
-
-          <section className="sys-panel card">
-            <div className="sys-section-head compact">
-              <div>
                 <h2>Rate budget</h2>
                 <span>Binance weight window</span>
               </div>
@@ -459,33 +405,6 @@ export function SystemHealth() {
               <span><i style={{ width: `${weightPct ?? 0}%` }} /></span>
               <b className="num">{info.usedWeight1m ?? 'unknown'}</b>
               <em>of 6000 one-minute request weight tracked from Binance headers</em>
-            </div>
-          </section>
-
-          <section className="sys-panel card">
-            <div className="sys-section-head compact">
-              <div>
-                <h2>Safe routes</h2>
-                <span>working cockpit actions</span>
-              </div>
-            </div>
-            <div className="sys-action-list">
-              <button type="button" onClick={() => setPage('account')}>
-                <span><IconKey size={15} /> Account setup</span>
-                <b>keys</b>
-              </button>
-              <button type="button" onClick={() => setPage('risk')}>
-                <span><IconShield size={15} /> Risk gate</span>
-                <b>policy</b>
-              </button>
-              <button type="button" onClick={() => setPage('orders')}>
-                <span><IconTicket size={15} /> Orders</span>
-                <b>cache</b>
-              </button>
-              <button type="button" onClick={() => setPage('ledger')}>
-                <span><IconBook size={15} /> Ledger</span>
-                <b>audit</b>
-              </button>
             </div>
           </section>
         </aside>

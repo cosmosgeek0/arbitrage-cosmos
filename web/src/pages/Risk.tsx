@@ -1,22 +1,19 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import { useStore } from '../store';
-import { GovernanceSection } from './Rules';
 import { ConfirmModal } from '../components/Modal';
 import { IconPower, IconShield, IconZapOff } from '../components/RiskIcons';
 import { TokenIcon } from '../components/TokenIcon';
 import { StatePill } from '../components/ui';
 import {
-  IconAlert,
   IconBook,
   IconClock,
   IconKeyboard,
   IconList,
-  IconLock,
   IconPercent,
   IconSearch,
   IconTicket,
 } from '../components/Icons';
-import { fmtPrice, timeAgo } from '../format';
+import { fmtPrice } from '../format';
 import type { AppConfig, PreviewResult, RiskCheck } from '../types';
 
 type RiskTone = 'ok' | 'bad' | 'warn' | 'idle';
@@ -30,11 +27,13 @@ const LIMIT_FIELDS: { key: keyof AppConfig; label: string; help: string; unit: s
   { key: 'staleOrderMaxMin', label: 'Stale order flag', help: 'Orders older than this are marked stale.', unit: 'm', min: 1, step: '1' },
 ];
 
-const SCANNER_FIELDS: { key: keyof AppConfig; label: string; help: string; unit: string; min: number; step: string }[] = [
-  { key: 'feesPct', label: 'Est. fees', help: 'Estimated four-leg taker round trip.', unit: '%', min: 0, step: '0.01' },
-  { key: 'minNetBasisPct', label: 'Min net edge', help: 'Required basis edge above fees.', unit: '%', min: 0, step: '0.01' },
-  { key: 'persistTicks', label: 'Persistence', help: 'Two-second ticks before opening or closing a proposal.', unit: 'ticks', min: 1, step: '1' },
-  { key: 'minQuoteVolume24h', label: '24h volume floor', help: 'Scanner ignores thinner symbols below this quote volume.', unit: '$', min: 0, step: '1' },
+const MISSING_GUARD_FIELDS = [
+  { label: 'Max symbol exposure', unit: '$', reason: 'Not exposed by /api/config in this build.' },
+  { label: 'Max open positions', unit: '#', reason: 'Position-count limit is not exposed by /api/config yet.' },
+  { label: 'Order rate', unit: '/m', reason: 'Order-rate throttle is not exposed by /api/config yet.' },
+  { label: 'Spread guard', unit: '%', reason: 'Spread limit is not exposed by /api/config yet.' },
+  { label: 'Slippage guard', unit: '%', reason: 'Depth/slippage limit is not exposed by /api/config yet.' },
+  { label: 'Borrow cap', unit: '$', reason: 'Borrow cap is not exposed by /api/config yet.' },
 ];
 
 function clampPct(v: number): number {
@@ -53,31 +52,6 @@ function sanitizeSymbol(raw: string): string {
 
 function uniqueSymbols(list: string[]): string[] {
   return [...new Set(list.map(sanitizeSymbol).filter((s) => s.length >= 5))];
-}
-
-function RiskMetric({ icon, label, value, sub, tone = 'idle' }: { icon: ReactNode; label: string; value: ReactNode; sub: ReactNode; tone?: RiskTone }) {
-  return (
-    <div className={`risk-metric ${tone}`}>
-      <span className="risk-metric-icon">{icon}</span>
-      <span className="risk-metric-body">
-        <span className="risk-metric-label">{label}</span>
-        <span className="risk-metric-value num">{value}</span>
-        <span className="risk-metric-sub">{sub}</span>
-      </span>
-    </div>
-  );
-}
-
-function GateStep({ icon, label, sub, tone }: { icon: ReactNode; label: string; sub: ReactNode; tone: RiskTone }) {
-  return (
-    <div className={`risk-gate-step ${tone}`}>
-      <span className="risk-gate-icon">{icon}</span>
-      <span>
-        <b>{label}</b>
-        <em>{sub}</em>
-      </span>
-    </div>
-  );
 }
 
 function GateLamp({ icon, label, sub, tone }: { icon: ReactNode; label: string; sub: ReactNode; tone: RiskTone }) {
@@ -105,7 +79,7 @@ function FieldCard({
   setDraft,
   setSaved,
 }: {
-  field: (typeof LIMIT_FIELDS)[number] | (typeof SCANNER_FIELDS)[number];
+  field: (typeof LIMIT_FIELDS)[number];
   cfg: AppConfig;
   draft: Record<string, number>;
   setDraft: (v: Record<string, number>) => void;
@@ -130,6 +104,19 @@ function FieldCard({
         }}
       />
       <span className="risk-field-help">{field.help}</span>
+    </label>
+  );
+}
+
+function DisabledGuardField({ label, unit, reason }: { label: string; unit: string; reason: string }) {
+  return (
+    <label className="risk-field risk-field-disabled" title={reason}>
+      <span className="risk-field-top">
+        <span>{label}</span>
+        <em>{unit}</em>
+      </span>
+      <input disabled readOnly value="Not wired" />
+      <span className="risk-field-help">{reason}</span>
     </label>
   );
 }
@@ -174,7 +161,6 @@ export function Risk() {
     state.risk.lastOrderTs && cfg.cooldownSec > 0
       ? Math.max(0, Math.ceil((state.risk.lastOrderTs + cfg.cooldownSec * 1000 - Date.now()) / 1000))
       : 0;
-  const grossThreshold = cfgNum(cfg, draft, 'feesPct') + cfgNum(cfg, draft, 'minNetBasisPct');
   const gateSteps = [
     { label: 'Kill switch', sub: cfg.killSwitch ? 'HALTED' : 'ready', tone: cfg.killSwitch ? 'bad' : 'ok', icon: <IconPower size={16} /> },
     { label: 'Live arm', sub: cfg.liveTradingEnabled ? 'armed' : 'manual only', tone: cfg.liveTradingEnabled ? 'ok' : 'warn', icon: <IconZapOff size={16} armed={cfg.liveTradingEnabled} /> },
@@ -198,12 +184,12 @@ export function Risk() {
     { label: 'Rejects today', value: String(state.risk.rejectionsToday), sub: 'risk denials', tone: state.risk.rejectionsToday > 0 ? 'bad' : 'ok' },
   ] satisfies { label: string; value: string; sub: string; tone: RiskTone }[];
 
-  const suggestedSymbols = useMemo(() => {
-    const fromProposals = state.proposals.map((p) => p.symbol);
-    const fromWatch = cfg.watchlist;
-    const fromMarkets = state.proposals.length === 0 ? [] : state.proposals.slice(0, 4).map((p) => p.symbol);
-    return uniqueSymbols([...fromProposals, ...fromWatch, ...fromMarkets]).filter((s) => !cfg.allowedSymbols.includes(s)).slice(0, 8);
-  }, [state.proposals, cfg.watchlist, cfg.allowedSymbols]);
+  const fromProposals = state.proposals.map((p) => p.symbol);
+  const fromWatch = cfg.watchlist;
+  const fromMarkets = state.proposals.length === 0 ? [] : state.proposals.slice(0, 4).map((p) => p.symbol);
+  const suggestedSymbols = uniqueSymbols([...fromProposals, ...fromWatch, ...fromMarkets])
+    .filter((s) => !cfg.allowedSymbols.includes(s))
+    .slice(0, 8);
 
   const patchList = async (key: 'allowedSymbols' | 'blockedSymbols', list: string[]) => {
     await saveConfig({ [key]: uniqueSymbols(list) });
@@ -271,7 +257,7 @@ export function Risk() {
               </button>
               <button className="mini-btn" onClick={() => setPage('ledger')}>
                 <IconBook size={14} />
-                Audit trail
+                Open logs
               </button>
             </div>
           </div>
@@ -397,7 +383,7 @@ export function Risk() {
               Reset edits
             </button>
             <button className="cta-pill" disabled={Object.keys(draft).length === 0} onClick={saveDraft}>
-              {saved ? 'Saved' : 'Save changes'}
+              {saved ? 'Saved' : 'Save limits'}
             </button>
           </div>
         </div>
@@ -417,28 +403,8 @@ export function Risk() {
           {LIMIT_FIELDS.map((field) => (
             <FieldCard key={field.key} field={field} cfg={cfg} draft={draft} setDraft={setDraft} setSaved={setSaved} />
           ))}
-        </div>
-      </section>
-
-      <section className="card risk-scanner-card">
-        <div className="risk-section-head">
-          <div>
-            <h2>Scanner edge policy</h2>
-            <span>Proposal quality gate before anything reaches manual approval.</span>
-          </div>
-          <span className="risk-threshold num">{grossThreshold.toFixed(2)}% gross basis required</span>
-        </div>
-        <div className="risk-edge-stack">
-          <div style={{ '--w': `${clampPct((cfgNum(cfg, draft, 'feesPct') / Math.max(grossThreshold, 0.01)) * 100)}%` } as CSSProperties}>
-            <span>Fees</span><b>{cfgNum(cfg, draft, 'feesPct').toFixed(2)}%</b>
-          </div>
-          <div style={{ '--w': `${clampPct((cfgNum(cfg, draft, 'minNetBasisPct') / Math.max(grossThreshold, 0.01)) * 100)}%` } as CSSProperties}>
-            <span>Net edge</span><b>{cfgNum(cfg, draft, 'minNetBasisPct').toFixed(2)}%</b>
-          </div>
-        </div>
-        <div className="risk-field-grid scanner">
-          {SCANNER_FIELDS.map((field) => (
-            <FieldCard key={field.key} field={field} cfg={cfg} draft={draft} setDraft={setDraft} setSaved={setSaved} />
+          {MISSING_GUARD_FIELDS.map((field) => (
+            <DisabledGuardField key={field.label} label={field.label} unit={field.unit} reason={field.reason} />
           ))}
         </div>
       </section>
@@ -471,7 +437,7 @@ export function Risk() {
                 setAllowInput('');
               }}
             >
-              Allow
+              Add allow
             </button>
           </div>
           {suggestedSymbols.length > 0 && (
@@ -516,21 +482,11 @@ export function Risk() {
                 setBlockInput('');
               }}
             >
-              Block
+              Add block
             </button>
           </div>
         </section>
       </div>
-
-      <section className="card risk-governance-card">
-        <div className="risk-section-head">
-          <div>
-            <h2>Rules &amp; governance</h2>
-            <span>Everything this cockpit may and may not do — platform rules plus your own. Ledgered on change.</span>
-          </div>
-        </div>
-        <GovernanceSection />
-      </section>
 
       {modal === 'resume' && (
         <ConfirmModal

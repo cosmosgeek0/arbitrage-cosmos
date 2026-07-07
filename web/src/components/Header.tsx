@@ -652,6 +652,8 @@ interface SystemLite {
   serverTimeDiffMs: number | null;
   usedWeight1m: number | null;
   feeds?: Record<string, string>;
+  dbOk?: boolean;
+  lastScannerTickTs?: number | null;
 }
 function msLabel(v: number | null | undefined): string {
   return v === null || v === undefined || !isFinite(v) ? '—' : `${Math.round(v)} ms`;
@@ -1348,19 +1350,39 @@ export function RefreshDock() {
   const feedsOk = feedVals.length > 0 && feedVals.every((s) => s === 'open');
   const rest = sys?.restLatencyMs ?? null;
   const drift = sys?.serverTimeDiffMs ?? null;
+  const b = state?.binance;
+  const acctTs = b?.lastSyncTs ?? null;
+  const userStream = b?.userStream ?? 'unknown';
+  const lastError = b?.lastError ?? null;
+  const weight = sys?.usedWeight1m ?? null;
+  const dbOk = sys?.dbOk;
+
+  const ageTier = (ts: number | null, freshMs: number): ConnTier =>
+    !ts ? 'bad' : Date.now() - ts <= freshMs ? 'good' : Date.now() - ts <= freshMs * 3 ? 'avg' : Date.now() - ts <= freshMs * 6 ? 'slow' : 'bad';
+  const streamTier: ConnTier = userStream === 'open' ? 'good' : userStream === 'failed' ? 'slow' : 'avg';
+  const weightTier: ConnTier = weight == null ? 'avg' : weight >= 4800 ? 'bad' : weight >= 3000 ? 'slow' : 'good';
 
   const conns: { key: string; label: string; value: string; tier: ConnTier }[] = [
     { key: 'app', label: 'Browser → server', value: appRtt != null ? msLabel(appRtt) : 'offline', tier: latTier(appRtt, 120, 350, 800) },
     { key: 'binance', label: 'Binance REST', value: rest != null ? msLabel(rest) : '—', tier: latTier(rest, 300, 600, 1100) },
     { key: 'socket', label: 'Live socket', value: connected ? 'live' : 'reconnecting', tier: connected ? 'good' : 'bad' },
     { key: 'feed', label: 'Market feed', value: feedVals.length ? (feedsOk ? `${feedVals.length} open` : 'degraded') : 'idle', tier: feedVals.length ? (feedsOk ? 'good' : 'slow') : 'avg' },
+    { key: 'account', label: 'Account sync', value: b?.keysPresent ? (acctTs ? timeAgo(acctTs) : 'no sync') : 'no key', tier: b?.keysPresent ? ageTier(acctTs, 90_000) : 'avg' },
+    { key: 'stream', label: 'User stream', value: String(userStream), tier: streamTier },
     { key: 'drift', label: 'Clock drift', value: drift != null ? msLabel(drift) : '—', tier: latTier(drift != null ? Math.abs(drift) : null, 400, 1200, 2500) },
+    { key: 'weight', label: 'Rate budget · 1m', value: weight != null ? String(weight) : '—', tier: weightTier },
+    { key: 'db', label: 'Ledger DB', value: dbOk === undefined ? '—' : dbOk ? 'writable' : 'broken', tier: dbOk === undefined ? 'avg' : dbOk ? 'good' : 'bad' },
   ];
 
+  // Overall button colour: hard red on a real outage; otherwise average the CORE
+  // connection scores. The user-data stream + rate budget are shown but excluded
+  // from the average — the stream stays 'failed' on a read-only key (the server
+  // polls instead), so it must not keep the button perpetually red/orange.
   let overall: ConnTier;
-  if (!connected) overall = 'bad';
+  if (!connected || dbOk === false || !!lastError || (b?.keysPresent && !b?.connected)) overall = 'bad';
   else {
-    const avg = conns.reduce((s, c) => s + TIER_SCORE[c.tier], 0) / conns.length;
+    const core = conns.filter((c) => c.key !== 'stream' && c.key !== 'weight');
+    const avg = core.reduce((s, c) => s + TIER_SCORE[c.tier], 0) / core.length;
     overall = avg >= 2.6 ? 'good' : avg >= 1.8 ? 'avg' : avg >= 0.9 ? 'slow' : 'bad';
   }
 
@@ -1392,6 +1414,13 @@ export function RefreshDock() {
               <span className={`rdock-conn-val num t-${c.tier}`}>{c.value}</span>
             </div>
           ))}
+          {lastError && (
+            <div className="rdock-conn rdock-conn-err" title={lastError}>
+              <span className="rdock-conn-dot t-bad" />
+              <span className="rdock-conn-name">Last error</span>
+              <span className="rdock-conn-val t-bad">{lastError}</span>
+            </div>
+          )}
           <div className="rdock-pop-foot">Click to refresh &amp; reconnect everything</div>
         </div>
       )}

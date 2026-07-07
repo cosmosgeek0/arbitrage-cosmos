@@ -16996,10 +16996,6 @@ button.runtime-lane:hover b {
 }
 .vol-board-empty { color: var(--muted); font-size: 12.5px; padding: 22px 10px; }
 
-/* Risk — embedded governance section */
-.risk-governance-card { margin-top: 14px; padding: 16px; }
-.risk-governance-card .rules-section:first-child { margin-top: 8px; }
-
 /* ===== AWS CloudShell quick-view overlay (terminal-styled launcher) ===== */
 .cs-modal { width: min(840px, 94vw); }
 .cs-head .cs-region {
@@ -17340,20 +17336,24 @@ button.runtime-lane:hover b {
 
 /* hover latency popover — small, unobtrusive */
 .rdock-pop {
-  position: absolute; right: 2px; bottom: calc(100% + 12px); width: 246px;
+  position: absolute; right: 2px; bottom: calc(100% + 12px); width: 258px;
+  max-height: min(74vh, 500px); overflow-y: auto;
   background: color-mix(in srgb, var(--panel) 97%, transparent);
   border: 1px solid var(--glass-border); border-radius: 14px; padding: 9px 10px 8px;
   box-shadow: var(--shadow-pop), 0 0 0 .5px var(--glass-edge);
   animation: rdockPopIn .16s ease both;
 }
+.rdock-pop::-webkit-scrollbar { width: 7px; }
+.rdock-pop::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--muted) 28%, transparent); border-radius: 7px; }
 @keyframes rdockPopIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .rdock-pop-head { display: flex; align-items: center; justify-content: space-between; padding: 2px 3px 8px; font-size: 10px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; color: var(--faint); }
 .rdock-pop-tag { font-size: 9px; font-weight: 800; padding: 2px 7px; border-radius: 999px; }
 .rdock-conn { display: flex; align-items: center; gap: 8px; padding: 5px 4px; }
 .rdock-conn + .rdock-conn { border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
 .rdock-conn-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
-.rdock-conn-name { font-size: 12px; color: var(--text-2); font-weight: 600; }
-.rdock-conn-val { margin-left: auto; font-size: 11.5px; font-weight: 720; letter-spacing: .2px; }
+.rdock-conn-name { font-size: 12px; color: var(--text-2); font-weight: 600; white-space: nowrap; }
+.rdock-conn-val { margin-left: auto; font-size: 11.5px; font-weight: 720; letter-spacing: .2px; white-space: nowrap; }
+.rdock-conn-err .rdock-conn-val { max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
 .rdock-pop-foot { margin-top: 7px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 10.5px; color: var(--faint); text-align: center; }
 
 /* tier colours (dots / values / tag) */
@@ -17366,3 +17366,128 @@ button.runtime-lane:hover b {
 .rdock-conn-val.t-avg  { color: var(--text-2); }
 .rdock-conn-val.t-slow { color: #d67d1c; }
 .rdock-conn-val.t-bad  { color: var(--down); }
+
+/* ===== Control cleanup — Risk disabled guard fields ===== */
+.risk-field-disabled {
+  opacity: .78;
+  border-style: dashed;
+}
+.risk-field-disabled input:disabled {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--tile) 72%, transparent);
+  cursor: not-allowed;
+}
+
+/* ===== Control cleanup — Logs audit filters/details ===== */
+.ledger-console-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.ledger-query-row {
+  grid-template-columns: minmax(120px, 160px) minmax(180px, 1fr) repeat(4, minmax(132px, 170px));
+}
+.ledger-query-actions .mini-btn.on {
+  color: var(--text);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+.ledger-severity {
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 7px;
+  border-radius: var(--r-pill);
+  font-size: 10px;
+  font-weight: 820;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+.ledger-severity.critical { color: var(--down); background: var(--down-soft); }
+.ledger-severity.warning { color: var(--accent-ink); background: var(--accent-soft); }
+.ledger-severity.info { color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 62%, transparent); }
+.ledger-severity.debug { color: var(--muted); background: var(--tile); }
+.ledger-raw-drawer {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg) 62%, var(--tile));
+  overflow: hidden;
+}
+.ledger-raw-drawer summary {
+  cursor: pointer;
+  padding: 9px 12px;
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 780;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+.ledger-raw.compact {
+  max-height: 190px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  white-space: pre-wrap;
+}
+.ledger-inspector-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.ledger-inspector-actions .mini-btn {
+  flex: 1 1 112px;
+}
+@media (max-width: 1180px) {
+  .ledger-console-body {
+    grid-template-columns: 1fr;
+  }
+  .ledger-query-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 680px) {
+  .ledger-console-stats,
+  .ledger-query-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ===== Control cleanup — Settings local-only note ===== */
+.settings-boundary-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  color: var(--text-2);
+  background: var(--tile);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+.settings-boundary-note svg {
+  flex: none;
+  color: var(--accent);
+}
+
+
+/* ===================== Cockpit — render error boundary ======================
+   Shown instead of a blank white/black screen when a view throws. Recoverable. */
+.crash-screen { display: grid; place-items: center; padding: 48px 20px; min-height: 300px; }
+.crash-card {
+  max-width: 460px; width: 100%; text-align: center;
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
+  border: 1px solid var(--line); border-radius: 16px; padding: 26px 24px;
+  box-shadow: var(--shadow-pop);
+}
+.crash-title { font-size: 16px; font-weight: 750; color: var(--text); }
+.crash-sub { font-size: 12.5px; color: var(--muted); line-height: 1.55; margin: 8px 0 14px; }
+.crash-msg {
+  text-align: left; font-size: 11.5px; color: var(--down); background: var(--down-soft, color-mix(in srgb, var(--down) 10%, transparent));
+  border: 1px solid color-mix(in srgb, var(--down) 30%, transparent); border-radius: 9px;
+  padding: 9px 11px; margin: 0 0 16px; white-space: pre-wrap; word-break: break-word; max-height: 120px; overflow: auto;
+}
+.crash-actions { display: flex; gap: 10px; justify-content: center; }
+.crash-btn { padding: 9px 16px; border-radius: 10px; font-size: 13px; font-weight: 650; cursor: pointer; border: 1px solid var(--line-2, var(--line)); background: var(--tile); color: var(--text-2); }
+.crash-btn:hover { color: var(--text); }
+.crash-btn.primary { border: 0; background: var(--accent); color: var(--cta-fg, #fff); }

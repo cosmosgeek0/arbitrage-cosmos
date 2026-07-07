@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useStore, type Page } from '../store';
 import { KindChip, EmptyState } from '../components/ui';
 import { eventSummary } from '../lib/eventText';
 import { fmtDateTime, fmtPrice, timeAgo } from '../format';
@@ -59,6 +60,25 @@ const DETAIL_KEYS = [
   'mode',
 ];
 
+type Severity = 'Critical' | 'Warning' | 'Info' | 'Debug';
+type AuditGroup = 'all' | 'strategy' | 'order' | 'account' | 'system';
+type TimeRange = 'all' | '1h' | '24h' | '7d';
+
+const SEVERITY_OPTIONS: ('all' | Severity)[] = ['all', 'Critical', 'Warning', 'Info', 'Debug'];
+const GROUP_OPTIONS: { value: AuditGroup; label: string }[] = [
+  { value: 'all', label: 'All groups' },
+  { value: 'strategy', label: 'Strategy' },
+  { value: 'order', label: 'Order' },
+  { value: 'account', label: 'Account' },
+  { value: 'system', label: 'System' },
+];
+const TIME_OPTIONS: { value: TimeRange; label: string; ms: number | null }[] = [
+  { value: 'all', label: 'All time', ms: null },
+  { value: '1h', label: 'Last hour', ms: 60 * 60 * 1000 },
+  { value: '24h', label: 'Last 24h', ms: 24 * 60 * 60 * 1000 },
+  { value: '7d', label: 'Last 7d', ms: 7 * 24 * 60 * 60 * 1000 },
+];
+
 type LedgerDayGroup = {
   label: string;
   events: LedgerEvent[];
@@ -95,14 +115,80 @@ function reasonText(ev: LedgerEvent): string {
   return 'ledger event recorded';
 }
 
-function eventTone(ev: LedgerEvent): 'ok' | 'bad' | 'warn' | 'purple' | 'info' {
+function sourceText(ev: LedgerEvent): string {
   const d = asRecord(ev.data);
-  if (ev.kind.includes('error') || ev.kind === 'ws.closed') return 'bad';
+  const source = [d.source, d.feed, d.stage, d.service].find((v) => typeof v === 'string' && v.trim().length > 0);
+  if (typeof source === 'string') return source;
+  if (ev.kind.startsWith('ws') || ev.kind.includes('feed')) return 'market stream';
+  if (ev.kind === 'account_snapshot' || ev.kind === 'user_stream') return 'account sync';
+  if (ev.kind.startsWith('order') || ev.kind === 'fill_event') return 'execution';
+  if (ev.kind === 'risk_decision') return 'risk gate';
+  if (ev.kind === 'strategy_signal') return 'scanner';
+  return 'system';
+}
+
+function eventSeverity(ev: LedgerEvent): Severity {
+  const d = asRecord(ev.data);
+  const kind = ev.kind.toLowerCase();
+  const status = String(d.status ?? d.result ?? d.state ?? '').toLowerCase();
+  const source = String(d.source ?? d.feed ?? '').toLowerCase();
+  if (
+    kind.includes('error') ||
+    kind.includes('failure') ||
+    kind.includes('failed') ||
+    kind === 'ws.closed' ||
+    status.includes('fail') ||
+    status.includes('closed') ||
+    source.includes('failure')
+  ) {
+    return 'Critical';
+  }
+  if (
+    (ev.kind === 'risk_decision' && d.allowed === false) ||
+    ev.kind === 'config_change' ||
+    kind.includes('cancel') ||
+    String(d.action ?? '').toLowerCase().includes('cancel')
+  ) {
+    return 'Warning';
+  }
+  if (
+    ev.kind === 'heartbeat' ||
+    ev.kind === 'ws.open' ||
+    ev.kind === 'feed.open' ||
+    ev.kind === 'feed-open' ||
+    source === 'heartbeat'
+  ) {
+    return 'Debug';
+  }
+  return 'Info';
+}
+
+function eventGroup(ev: LedgerEvent): AuditGroup {
+  const kind = ev.kind.toLowerCase();
+  if (kind.includes('strategy') || kind.includes('proposal') || kind.includes('scanner')) return 'strategy';
+  if (kind.startsWith('order') || kind.includes('fill') || kind.includes('cancel') || ev.kind === 'risk_decision') return 'order';
+  if (ev.kind === 'account_snapshot' || kind.includes('account') || ev.kind === 'user_stream' || kind.includes('balance')) return 'account';
+  return 'system';
+}
+
+function eventTone(ev: LedgerEvent): 'ok' | 'bad' | 'warn' | 'purple' | 'info' {
+  const severity = eventSeverity(ev);
+  if (severity === 'Critical') return 'bad';
+  if (severity === 'Warning') return 'warn';
+  const d = asRecord(ev.data);
   if (ev.kind === 'risk_decision') return d.allowed === true ? 'ok' : 'bad';
   if (ev.kind.startsWith('order') || ev.kind.startsWith('fill') || ev.kind.startsWith('loan')) return 'ok';
   if (ev.kind.startsWith('strategy')) return 'purple';
-  if (ev.kind === 'manual_action' || ev.kind === 'config_change') return 'warn';
   return 'info';
+}
+
+function relatedPage(ev: LedgerEvent): { page: Page; label: string } {
+  const group = eventGroup(ev);
+  if (ev.kind === 'risk_decision' || ev.kind === 'config_change') return { page: 'risk', label: 'Open Risk' };
+  if (group === 'order') return { page: 'trade', label: 'Open Execution' };
+  if (group === 'account') return { page: 'account', label: 'Open Account' };
+  if (group === 'strategy') return { page: 'opportunities', label: 'Open Opportunities' };
+  return { page: 'system', label: 'Open Health' };
 }
 
 function eventIcon(kind: string): ReactNode {
@@ -168,8 +254,13 @@ function LedgerMetric({ label, value, sub, tone, icon }: { label: string; value:
 }
 
 export function LedgerPage() {
+  const { setPage } = useStore();
   const [events, setEvents] = useState<LedgerEvent[]>([]);
   const [kind, setKind] = useState('all');
+  const [severity, setSeverity] = useState<'all' | Severity>('all');
+  const [auditGroup, setAuditGroup] = useState<AuditGroup>('all');
+  const [timeRange, setTimeRange] = useState<TimeRange>('all');
+  const [showDebug, setShowDebug] = useState(false);
   const [symbol, setSymbol] = useState(() => {
     const v = sessionStorage.getItem('cosmos-ledger-symbol') ?? '';
     sessionStorage.removeItem('cosmos-ledger-symbol');
@@ -184,6 +275,7 @@ export function LedgerPage() {
   const [copied, setCopied] = useState<number | null>(null);
   const [copying, setCopying] = useState<number | null>(null);
   const [copyFailed, setCopyFailed] = useState<number | null>(null);
+  const [rawOpen, setRawOpen] = useState(false);
 
   const load = useCallback(() => {
     const params = new URLSearchParams({ limit: '400' });
@@ -210,11 +302,17 @@ export function LedgerPage() {
   }, [load]);
 
   const visible = useMemo(() => events.filter((ev) => {
+    const evSeverity = eventSeverity(ev);
+    if (!showDebug && severity !== 'Debug' && evSeverity === 'Debug') return false;
+    if (severity !== 'all' && evSeverity !== severity) return false;
+    if (auditGroup !== 'all' && eventGroup(ev) !== auditGroup) return false;
+    const selectedRange = TIME_OPTIONS.find((opt) => opt.value === timeRange);
+    if (selectedRange?.ms !== null && selectedRange?.ms !== undefined && Date.now() - ev.ts > selectedRange.ms) return false;
     if (decision === 'all') return true;
     const allowed = (ev.data as { allowed?: boolean } | null)?.allowed;
     if (allowed === undefined) return false;
     return decision === 'accepted' ? allowed : !allowed;
-  }), [events, decision]);
+  }), [events, decision, severity, auditGroup, timeRange, showDebug]);
 
   const kindCounts = useMemo(() => {
     const m = new Map<string, number>();
@@ -237,16 +335,23 @@ export function LedgerPage() {
     }
     return groups;
   }, [visible]);
-  const groupTotals = useMemo(() => KIND_GROUPS.map((group) => ({
-    title: group.title,
-    count: group.kinds.reduce((sum, k) => sum + (kindCounts.find(([kk]) => kk === k)?.[1] ?? 0), 0),
-  })), [kindCounts]);
+  const groupTotals = useMemo(() => GROUP_OPTIONS.filter((group) => group.value !== 'all').map((group) => ({
+    title: group.label,
+    value: group.value,
+    count: visible.filter((ev) => eventGroup(ev) === group.value).length,
+  })), [visible]);
   const selected = visible.find((ev) => ev.id === expanded) ?? visible[0] ?? null;
-  const errorCount = visible.filter((ev) => eventTone(ev) === 'bad').length;
+  const criticalCount = visible.filter((ev) => eventSeverity(ev) === 'Critical').length;
+  const warningCount = visible.filter((ev) => eventSeverity(ev) === 'Warning').length;
   const riskRejected = visible.filter((ev) => ev.kind === 'risk_decision' && asRecord(ev.data).allowed === false).length;
   const executionCount = visible.filter((ev) => ev.kind.startsWith('order') || ev.kind === 'fill_event').length;
+  const accountSnapshotCount = visible.filter((ev) => ev.kind === 'account_snapshot').length;
   const symbolCount = new Set(visible.map((ev) => ev.symbol).filter(Boolean)).size;
-  const canClear = kind !== 'all' || symbol !== '' || q !== '' || decision !== 'all';
+  const canClear = kind !== 'all' || severity !== 'all' || auditGroup !== 'all' || timeRange !== 'all' || symbol !== '' || q !== '' || decision !== 'all' || showDebug;
+
+  useEffect(() => {
+    setRawOpen(false);
+  }, [selected?.id]);
 
   async function copyEvent(ev: LedgerEvent): Promise<void> {
     const payload = JSON.stringify(ev, null, 2);
@@ -289,6 +394,10 @@ export function LedgerPage() {
 
   function clearFilters(): void {
     setKind('all');
+    setSeverity('all');
+    setAuditGroup('all');
+    setTimeRange('all');
+    setShowDebug(false);
     setSymbol('');
     setQ('');
     setDecision('all');
@@ -300,8 +409,8 @@ export function LedgerPage() {
       <section className="card ledger-console-card">
         <div className="ledger-console-head">
           <div>
-          <h1 className="page-title">Ledger / Logs</h1>
-            <p>Every decision, order, fill, error and config change in one audit timeline.</p>
+            <h1 className="page-title">Logs</h1>
+            <p>Operator audit surface for decisions, orders, fills, rejects, config changes, and source failures.</p>
           </div>
           <div className="ledger-live">
             <span className={`state-dot ${loadError ? 'bad' : loading ? 'warn' : 'ok'}`} />
@@ -311,10 +420,12 @@ export function LedgerPage() {
 
         <div className="ledger-console-body">
           <div className="ledger-console-stats">
-            <LedgerMetric label="Shown" value={visible.length.toLocaleString('en-US')} sub={`${symbolCount} symbols`} icon={<IconList size={16} />} />
+            <LedgerMetric label="Critical" value={criticalCount.toLocaleString('en-US')} sub="errors/source failures" tone={criticalCount > 0 ? 'bad' : 'ok'} icon={<IconAlert size={16} />} />
+            <LedgerMetric label="Warnings" value={warningCount.toLocaleString('en-US')} sub="rejects/config/cancels" tone={warningCount > 0 ? 'warn' : 'ok'} icon={<IconShield size={16} />} />
             <LedgerMetric label="Latest" value={selected ? timeAgo(selected.ts) : 'none'} sub={selected ? kindLabel(selected.kind) : 'no events'} icon={<IconClock size={16} />} />
-            <LedgerMetric label="Execution" value={executionCount.toLocaleString('en-US')} sub="orders and fills" tone="ok" icon={<IconReceipt size={16} />} />
-            <LedgerMetric label="Rejected/errors" value={(riskRejected + errorCount).toLocaleString('en-US')} sub={`${riskRejected} risk rejects`} tone={riskRejected + errorCount > 0 ? 'bad' : 'ok'} icon={<IconShield size={16} />} />
+            <LedgerMetric label="Account snapshots" value={accountSnapshotCount.toLocaleString('en-US')} sub={`${symbolCount} symbols shown`} icon={<IconWallet size={16} />} />
+            <LedgerMetric label="Orders / fills" value={executionCount.toLocaleString('en-US')} sub="order path events" tone="ok" icon={<IconReceipt size={16} />} />
+            <LedgerMetric label="Risk rejects" value={riskRejected.toLocaleString('en-US')} sub="server risk denials" tone={riskRejected > 0 ? 'warn' : 'ok'} icon={<IconShield size={16} />} />
           </div>
 
           <div className="ledger-query-console">
@@ -337,6 +448,30 @@ export function LedgerPage() {
                   ))}
                 </select>
               </label>
+              <label className="ledger-kind-select">
+                <span>Severity</span>
+                <select value={severity} onChange={(e) => setSeverity(e.target.value as 'all' | Severity)}>
+                  {SEVERITY_OPTIONS.map((s) => (
+                    <option value={s} key={s}>{s === 'all' ? 'All severities' : s}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="ledger-kind-select">
+                <span>Group</span>
+                <select value={auditGroup} onChange={(e) => setAuditGroup(e.target.value as AuditGroup)}>
+                  {GROUP_OPTIONS.map((g) => (
+                    <option value={g.value} key={g.value}>{g.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="ledger-kind-select">
+                <span>Time</span>
+                <select value={timeRange} onChange={(e) => setTimeRange(e.target.value as TimeRange)}>
+                  {TIME_OPTIONS.map((opt) => (
+                    <option value={opt.value} key={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </label>
             </div>
             <div className="ledger-query-actions">
               <span className="seg ledger-decision">
@@ -346,6 +481,9 @@ export function LedgerPage() {
                   </button>
                 ))}
               </span>
+              <button className={`mini-btn ${showDebug ? 'on' : ''}`} type="button" onClick={() => setShowDebug((v) => !v)}>
+                Debug / system noise
+              </button>
               <button className="mini-btn" onClick={() => void load()} disabled={loading}>
                 <IconRefresh size={14} />
                 {loading ? 'Refreshing' : 'Refresh'}
@@ -358,7 +496,7 @@ export function LedgerPage() {
 
           <div className="ledger-category-summary compact" aria-label="Ledger category counts">
             {groupTotals.map((g) => (
-              <button key={g.title} type="button" onClick={() => setKind(g.title === 'Trading' ? 'order_intent' : g.title === 'Control' ? 'strategy_signal' : 'ws.open')}>
+              <button key={g.title} type="button" onClick={() => setAuditGroup(g.value)}>
                 <b>{g.count.toLocaleString('en-US')}</b>
                 <em>{g.title}</em>
               </button>
@@ -401,6 +539,7 @@ export function LedgerPage() {
                       <span className="ledger-event-body">
                         <span className="ledger-event-top">
                           <KindChip kind={ev.kind} />
+                          <span className={`ledger-severity ${eventSeverity(ev).toLowerCase()}`}>{eventSeverity(ev)}</span>
                           <span className="ledger-time">{fmtDateTime(ev.ts)} · {timeAgo(ev.ts)}</span>
                         </span>
                         <strong>{eventSummary(ev.kind, ev.data as Record<string, unknown> | null, ev.symbol)}</strong>
@@ -415,7 +554,8 @@ export function LedgerPage() {
                             <span className="ledger-symbol system">system</span>
                           )}
                           <span>#{ev.id}</span>
-                          <span>{fields.length} fields</span>
+                          <span>{eventGroup(ev)}</span>
+                          <span>{sourceText(ev)}</span>
                         </span>
                       </span>
                       <span className="ledger-open-mark">{open ? 'Hide' : 'Open'}</span>
@@ -428,12 +568,24 @@ export function LedgerPage() {
                             <em>{ev.id}</em>
                           </span>
                           <span>
+                            <b>Severity</b>
+                            <em>{eventSeverity(ev)}</em>
+                          </span>
+                          <span>
                             <b>Kind</b>
                             <em>{kindLabel(ev.kind)}</em>
                           </span>
                           <span>
                             <b>Symbol</b>
                             <em>{ev.symbol ?? 'system'}</em>
+                          </span>
+                          <span>
+                            <b>Source</b>
+                            <em>{sourceText(ev)}</em>
+                          </span>
+                          <span>
+                            <b>Reason</b>
+                            <em>{reasonText(ev)}</em>
                           </span>
                           <span>
                             <b>Recorded</b>
@@ -447,12 +599,15 @@ export function LedgerPage() {
                           ))}
                         </div>
                         <div className="ledger-json-head">
-                          <span>Raw ledger payload</span>
+                          <span>Payload tools</span>
                           <button className="mini-btn" onClick={() => void copyEvent(ev)}>
                             {copying === ev.id ? 'Copying' : copyFailed === ev.id ? 'Copy failed' : copied === ev.id ? 'Copied' : 'Copy JSON'}
                           </button>
                         </div>
-                        <pre className="ledger-raw">{JSON.stringify(ev.data ?? {}, null, 2)}</pre>
+                        <details className="ledger-raw-drawer">
+                          <summary>Raw compact JSON</summary>
+                          <pre className="ledger-raw compact">{JSON.stringify(ev.data ?? {})}</pre>
+                        </details>
                       </div>
                     )}
                   </article>
@@ -477,6 +632,14 @@ export function LedgerPage() {
                   <p>{eventSummary(selected.kind, selected.data as Record<string, unknown> | null, selected.symbol)}</p>
                   <div className="ledger-inspector-meta">
                     <span>
+                      <b>Event ID</b>
+                      <em>{selected.id}</em>
+                    </span>
+                    <span>
+                      <b>Time</b>
+                      <em>{fmtDateTime(selected.ts)}</em>
+                    </span>
+                    <span>
                       <b>Kind</b>
                       <em>{kindLabel(selected.kind)}</em>
                     </span>
@@ -485,13 +648,30 @@ export function LedgerPage() {
                       <em>{selected.symbol ?? 'system'}</em>
                     </span>
                     <span>
-                      <b>Event ID</b>
-                      <em>{selected.id}</em>
+                      <b>Severity</b>
+                      <em>{eventSeverity(selected)}</em>
+                    </span>
+                    <span>
+                      <b>Source</b>
+                      <em>{sourceText(selected)}</em>
+                    </span>
+                    <span>
+                      <b>Reason</b>
+                      <em>{reasonText(selected)}</em>
                     </span>
                   </div>
-                  <button className="mini-btn wide" onClick={() => setExpanded(selected.id)}>
-                    Open in stream
-                  </button>
+                  <div className="ledger-inspector-actions">
+                    <button className="mini-btn" onClick={() => setExpanded(selected.id)}>
+                      Open in stream
+                    </button>
+                    <button className="mini-btn" onClick={() => setPage(relatedPage(selected).page)}>
+                      {relatedPage(selected).label}
+                    </button>
+                    <button className="mini-btn" onClick={() => setRawOpen((v) => !v)}>
+                      {rawOpen ? 'Hide raw JSON' : 'Raw JSON'}
+                    </button>
+                  </div>
+                  {rawOpen && <pre className="ledger-raw compact">{JSON.stringify(selected.data ?? {})}</pre>}
                 </>
               ) : (
                 <span className="ledger-side-empty">No matching ledger rows.</span>

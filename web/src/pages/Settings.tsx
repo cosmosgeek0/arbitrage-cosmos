@@ -2,12 +2,10 @@
    trading limits remain on Risk, and Binance keys never enter the browser. */
 import type { ReactNode } from 'react';
 import { useStore } from '../store';
-import { SetupChecklist } from '../components/ui';
 import {
   IconChart,
   IconClock,
   IconGrid,
-  IconKey,
   IconKeyboard,
   IconLayers,
   IconPercent,
@@ -15,9 +13,7 @@ import {
   IconRefresh,
   IconShield,
 } from '../components/Icons';
-import type { Prefs } from '../lib/prefs';
-
-type Tone = 'ok' | 'warn' | 'bad' | 'idle';
+import { CURRENCIES, type Prefs } from '../lib/prefs';
 
 function Seg<T extends string>({
   value,
@@ -158,31 +154,6 @@ function RailItem({
   );
 }
 
-function FactRow({
-  label,
-  value,
-  detail,
-  tone,
-  action,
-}: {
-  label: string;
-  value: ReactNode;
-  detail: ReactNode;
-  tone?: Tone;
-  action?: ReactNode;
-}) {
-  return (
-    <div className={`settings-fact-row ${tone ?? 'idle'}`}>
-      <div className="settings-fact-copy">
-        <span>{label}</span>
-        <b>{value}</b>
-        <em>{detail}</em>
-      </div>
-      {action && <div className="settings-fact-action">{action}</div>}
-    </div>
-  );
-}
-
 function DisabledReason({ children, reason }: { children: ReactNode; reason: string }) {
   return (
     <button className="mini-btn settings-disabled-control" type="button" disabled title={reason} aria-label={`${children}: ${reason}`}>
@@ -206,15 +177,7 @@ function Section({ id, title, note, children }: { id: string; title: string; not
 }
 
 export function Settings() {
-  const { state, prefs, updatePref, setPage } = useStore();
-  const keysPresent = state?.binance.keysPresent ?? false;
-  const connected = state?.binance.connected ?? false;
-  const streamOpen = state?.binance.userStream === 'open';
-  const canWithdraw = state?.binance.canWithdraw;
-  const canTrade = state?.binance.canTrade;
-  const keyPosture = keysPresent ? (connected ? 'Synced' : 'Keys set') : 'Read-only';
-  const withdrawalCopy = canWithdraw === true ? 'Key permits withdrawals' : canWithdraw === false ? 'Disabled on key' : 'Blocked in app';
-  const tradeCopy = canTrade === true ? 'Trading permission visible' : canTrade === false ? 'Read-only key' : 'Unknown until connected';
+  const { prefs, updatePref } = useStore();
   const platform = typeof navigator !== 'undefined' ? (navigator.platform || 'Desktop') : 'Desktop';
   const browser = typeof navigator !== 'undefined'
     ? (navigator.userAgent.match(/(Chrome|Firefox|Safari)\/([\d.]+)/)?.slice(1).join(' ') ?? 'Desktop browser')
@@ -233,23 +196,23 @@ export function Settings() {
             <em>local cockpit controls</em>
           </div>
           <nav className="settings-rail-list">
-            <RailItem href="#settings-account" icon={<IconGrid />} color="#111827" label="Account" active />
+            <RailItem href="#settings-local" icon={<IconGrid />} color="#111827" label="Local" active />
             <RailItem href="#settings-appearance" icon={<IconChart />} color="#8257e0" label="Appearance" />
             <RailItem href="#settings-data" icon={<IconClock />} color="#2a7de0" label="Data" />
-            <RailItem href="#settings-safety" icon={<IconShield />} color="#0a9b64" label="Safety" />
+            <RailItem href="#settings-about" icon={<IconShield />} color="#0a9b64" label="About" />
           </nav>
           <div className="settings-rail-status">
-            <span className={`mode-dot ${keysPresent ? (connected ? 'ok' : 'warn') : 'idle'}`} />
-            <b>{keyPosture}</b>
-            <em>{keysPresent ? 'server env only' : 'browser has no keys'}</em>
+            <span className="mode-dot ok" />
+            <b>Browser prefs</b>
+            <em>local only</em>
           </div>
         </aside>
 
         <div className="settings-content-pane">
           <Section
-            id="settings-account"
-            title="Account"
-            note="One private Binance cockpit. Browser preferences are local; account and order truth stays server-side."
+            id="settings-local"
+            title="Local preferences"
+            note="This page changes how the cockpit is displayed in this browser."
           >
             <div className="settings-account-panel">
               <div className="settings-account-hero">
@@ -257,50 +220,14 @@ export function Settings() {
                   CA
                 </span>
                 <div>
-                  <span className="settings-account-label">Private Trading Cockpit</span>
+                  <span className="settings-account-label">Browser-only settings</span>
                   <h1>Arbitrage Control Room</h1>
-                  <p>Local interface controls for this browser. Live arming, risk limits, and kill switch remain on Risk.</p>
+                  <p>Theme, density, motion, refresh cadence, display units, timezone, currency, and default page.</p>
                 </div>
               </div>
-              <div className="settings-fact-list" aria-label="Current account posture">
-                <FactRow
-                  label="API keys"
-                  value={keysPresent ? 'Server environment' : 'Not configured'}
-                  detail={keysPresent ? 'Signed requests stay on the backend.' : 'Read-only market data; no key material in the browser.'}
-                  tone={keysPresent ? 'ok' : 'idle'}
-                />
-                <FactRow
-                  label="Account link"
-                  value={connected ? 'Online' : keysPresent ? 'Waiting for sync' : 'Not linked'}
-                  detail={connected ? 'Balances and account state are coming from Binance.' : 'The cockpit falls back to public data and safe empty states.'}
-                  tone={connected ? 'ok' : keysPresent ? 'warn' : 'idle'}
-                />
-                <FactRow
-                  label="User stream"
-                  value={streamOpen ? 'Open' : 'Polling or closed'}
-                  detail={streamOpen ? 'Private account events can arrive over the listen key.' : 'The server can still poll once keys exist.'}
-                  tone={streamOpen ? 'ok' : 'idle'}
-                />
-                <FactRow
-                  label="Active session"
-                  value="This browser"
-                  detail={`${platform} · ${zone} · ${browser}`}
-                  tone="ok"
-                />
-                <FactRow
-                  label="Withdrawal posture"
-                  value={withdrawalCopy}
-                  detail={canWithdraw === true ? 'Recreate the Binance key without withdrawal permission.' : 'No withdrawal or transfer-out UI exists here.'}
-                  tone={canWithdraw === true ? 'bad' : 'ok'}
-                />
-              </div>
-              <div className="settings-pane-actions">
-                <button className="cta-pill" onClick={() => setPage('risk')} type="button">
-                  Open Risk controls
-                </button>
-                <button className="mini-btn" onClick={() => setPage('system')} type="button">
-                  View System Health
-                </button>
+              <div className="settings-boundary-note">
+                <IconShield size={16} />
+                <span>Keys are server-only. Account posture lives on Account; source health lives on Health.</span>
               </div>
             </div>
           </Section>
@@ -426,6 +353,19 @@ export function Settings() {
                 }
               />
               <Row
+                icon={<IconGrid />}
+                color="#111827"
+                label="Currency"
+                sub="Display currency for money values"
+                control={
+                  <Seg<string>
+                    value={prefs.currency}
+                    options={Object.keys(CURRENCIES).map((code) => ({ v: code, label: code }))}
+                    onChange={(v) => updatePref('currency', v)}
+                  />
+                }
+              />
+              <Row
                 icon={<IconPercent />}
                 color="#0a9b64"
                 label="Basis units"
@@ -479,105 +419,14 @@ export function Settings() {
             </div>
           </Section>
 
-          <Section id="settings-safety" title="API and safety" note="Server-only credentials, no withdrawal path, and visible risk posture.">
-            <div className="settings-group">
-              <Row
-                icon={<IconKey />}
-                color={keysPresent ? '#0a9b64' : '#697079'}
-                label="Binance API key entry"
-                sub={keysPresent ? 'Configured outside the browser. Rotate by updating the server environment and restarting.' : 'Disabled here by design. Add keys only on the server environment.'}
-                control={
-                  <DisabledReason reason="API keys are server-only and must never be typed into the browser.">
-                    {keysPresent ? 'Server env' : 'Disabled'}
-                  </DisabledReason>
-                }
-              />
-            </div>
-            {!keysPresent && (
-              <div className="settings-setup-card">
-                <SetupChecklist />
-              </div>
-            )}
-
-            <div className="settings-posture-strip">
-              <div>
-                <span className="posture-medal ok">50</span>
-                <b>Gate tests</b>
-                <em>Required before done</em>
-              </div>
-              <div>
-                <span className={`posture-medal ${keysPresent ? 'ok' : 'idle'}`}>{keysPresent ? 'ENV' : 'RO'}</span>
-                <b>Key boundary</b>
-                <em>Server-side only</em>
-              </div>
-              <div>
-                <span className={`posture-medal ${canWithdraw === true ? 'bad' : 'ok'}`}>{canWithdraw === true ? '!' : '0'}</span>
-                <b>Withdrawal paths</b>
-                <em>{canWithdraw === true ? 'Key must be recreated' : 'UI/API blocked'}</em>
-              </div>
-            </div>
-            <div className="settings-group">
-              <Row
-                icon={<IconShield />}
-                color="#0a9b64"
-                label="Active browser session"
-                sub={`${platform} · ${zone} · ${browser}`}
-                control={<span className="sr-value up">Active now</span>}
-              />
-              <Row
-                icon={<IconPulse />}
-                color="#697079"
-                label="Suspicious sign-in alerts"
-                sub="Delivery channel is not wired here yet; Cloudflare Access remains the upstream gate."
-                control={<DisabledReason reason="Cockpit alert delivery is not built yet.">Not wired</DisabledReason>}
-              />
-              <Row
-                icon={<IconKey />}
-                color="#697079"
-                label="Log out everywhere"
-                sub="App-owned session revocation will live here once backend sessions exist."
-                control={<DisabledReason reason="Session revocation is handled outside this app for now.">External gate</DisabledReason>}
-              />
-              {[
-                { k: 'Keys never leave the server', v: 'Signed server-side; no key material in the browser or bundle', ok: true, status: keysPresent ? 'Server env' : 'Not set' },
-                { k: 'No withdrawal code', v: 'No withdrawal or transfer-out method exists in the client or server', ok: true, status: 'Blocked' },
-                {
-                  k: 'Withdrawal permission on key',
-                  v:
-                    state?.binance.canWithdraw === true
-                      ? 'ENABLED: recreate the key'
-                      : state?.binance.canWithdraw === false
-                        ? 'Disabled on the Binance side'
-                        : 'Unknown until connected, blocked in app',
-                  ok: state?.binance.canWithdraw !== true,
-                  status: state?.binance.canWithdraw === true ? 'Recreate key' : state?.binance.canWithdraw === false ? 'Disabled' : 'Unknown',
-                },
-                { k: 'Trading permission', v: 'The app still requires Risk arming and typed confirmation before any live send', ok: canTrade !== false, status: tradeCopy },
-                { k: 'Live sends', v: 'Kill switch + arm + allowlist + typed confirmation + server re-check', ok: true, status: 'Risk-gated' },
-                { k: 'Access', v: 'Cloudflare Access in front of the private hostname', ok: true, status: 'External gate' },
-                { k: 'Audit', v: 'Every decision, order, error, and config change is ledgered', ok: true, status: 'Ledgered' },
-              ].map((r) => (
-                <Row
-                  key={r.k}
-                  icon={<IconShield />}
-                  color={r.ok ? '#0a9b64' : '#e0414b'}
-                  label={r.k}
-                  sub={r.v}
-                  control={<span className={`sr-value ${r.ok ? 'up' : 'bad'}`}>{r.status}</span>}
-                />
-              ))}
-              <Row
-                icon={<IconShield />}
-                color="#e0414b"
-                label="Withdraw or transfer out"
-                sub="Disabled with reason: this cockpit is allowed to view, propose, and risk-gate orders, never move funds out."
-                control={<DisabledReason reason="Withdrawals and transfers out are forbidden in this app.">Unavailable</DisabledReason>}
-              />
-            </div>
-          </Section>
-
           <Section id="settings-about" title="About" note="Scope of this settings surface.">
             <div className="settings-group">
+              <div className="settings-row">
+                <span className="sr-main">
+                  <span className="sr-label">This browser</span>
+                  <span className="sr-sub">{platform} · {zone} · {browser}</span>
+                </span>
+              </div>
               <div className="settings-row">
                 <span className="sr-main">
                   <span className="sr-label">Control boundary</span>

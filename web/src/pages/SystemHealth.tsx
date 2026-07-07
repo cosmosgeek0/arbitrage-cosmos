@@ -173,17 +173,17 @@ function modeLabel(info: SystemInfo): string {
 }
 
 function tradeDecision(state: HealthState): string {
-  if (state === 'healthy') return 'Data trusted';
+  if (state === 'healthy') return 'Ready';
   if (state === 'degraded') return 'Review required';
-  if (state === 'broken') return 'Do not trust';
-  return 'Setup blocked';
+  if (state === 'broken') return 'Unavailable';
+  return 'Setup required';
 }
 
 function decisionCopy(state: HealthState): string {
-  if (state === 'healthy') return 'Configured sources are inside tolerance. Execution decisions can use this data path.';
-  if (state === 'degraded') return 'A live source is slow or stale. Validate the blocker before opening an order ticket.';
-  if (state === 'broken') return 'A source has failed. Treat scanner, account, and execution surfaces as untrusted.';
-  return 'Market data is visible, but account or engine truth is absent. Do not treat this as trade-ready.';
+  if (state === 'healthy') return 'All configured sources are within the expected range.';
+  if (state === 'degraded') return 'A live source is stale or slow. Review the listed issue before using this data.';
+  if (state === 'broken') return 'A required source is failing. Treat the cockpit as unavailable until it recovers.';
+  return 'Market data is available. Account and engine signals still need setup.';
 }
 
 function HealthDot({ state }: { state: HealthState }) {
@@ -192,6 +192,11 @@ function HealthDot({ state }: { state: HealthState }) {
 
 function stateForIds(checks: HealthCheck[], ids: string[]): HealthState {
   return worstState(checks.filter((check) => ids.includes(check.id)).map((check) => check.state));
+}
+
+function healthCount(checks: HealthCheck[], ids: string[]): string {
+  const rows = checks.filter((check) => ids.includes(check.id));
+  return `${rows.filter((check) => check.state === 'healthy').length}/${rows.length} ready`;
 }
 
 export function SystemHealth() {
@@ -312,7 +317,7 @@ export function SystemHealth() {
             : binance.lastError ?? 'Keys exist but account polling is not connected.'
           : 'Server-side Binance read keys are absent.',
         state: accountSyncState,
-        fix: 'Configure read-only Binance keys on the server, then confirm the account polling loop completes.',
+        fix: 'Add read-only Binance keys on the server to enable account polling.',
         icon: <IconWallet />,
       },
       {
@@ -436,12 +441,14 @@ export function SystemHealth() {
     },
     { healthy: 0, degraded: 0, broken: 0, not_configured: 0 } as Record<HealthState, number>,
   );
+  const exchangeIds = ['rest-latency', 'public-stream-age', 'rate-budget', 'clock-drift', 'binance-error'];
+  const accountIds = ['account-sync', 'user-stream', 'key-scope', 'order-cache'];
   const evidence = [
-    { label: 'Path', value: browserLatencyMs === null ? 'not measured' : `${browserLatencyMs}ms`, state: stateForIds(checks, ['browser-server']) },
-    { label: 'Exchange', value: `${counts.healthy}/${checks.length} green`, state: stateForIds(checks, ['rest-latency', 'public-stream-age', 'rate-budget', 'clock-drift', 'binance-error']) },
-    { label: 'Account', value: state?.binance.keysPresent || info.binance.keysPresent ? 'keys present' : 'no key', state: stateForIds(checks, ['account-sync', 'user-stream', 'key-scope', 'order-cache']) },
-    { label: 'Ledger', value: info.dbOk ? 'writable' : 'blocked', state: stateForIds(checks, ['ledger-db']) },
-    { label: 'Engine', value: 'not started', state: stateForIds(checks, ['engine-heartbeat']) },
+    { id: 'path', label: 'Connection', detail: 'Browser and control server', value: browserLatencyMs === null ? 'not measured' : `${browserLatencyMs}ms`, state: stateForIds(checks, ['browser-server']), icon: <IconPulse /> },
+    { id: 'exchange', label: 'Exchange data', detail: 'REST, stream, budget, and clock', value: healthCount(checks, exchangeIds), state: stateForIds(checks, exchangeIds), icon: <IconChart /> },
+    { id: 'account', label: 'Account data', detail: 'Keys, account sync, and user events', value: state?.binance.keysPresent || info.binance.keysPresent ? healthCount(checks, accountIds) : 'not connected', state: stateForIds(checks, accountIds), icon: <IconWallet /> },
+    { id: 'ledger', label: 'Ledger', detail: 'Database read and write probe', value: info.dbOk ? 'writable' : 'blocked', state: stateForIds(checks, ['ledger-db']), icon: <IconDatabase /> },
+    { id: 'engine', label: 'Engine', detail: 'Dedicated heartbeat source', value: 'not started', state: stateForIds(checks, ['engine-heartbeat']), icon: <IconBrain /> },
   ];
 
   return (
@@ -449,7 +456,8 @@ export function SystemHealth() {
       <header className="health-page-heading">
         <div>
           <span className="health-eyebrow"><IconShield size={14} /> pre-trade trust instrument</span>
-          <h1>System Trust</h1>
+          <h1>System Health</h1>
+          <p>Live source status for market data, account sync, ledger storage, and engine readiness.</p>
         </div>
         <div className="health-runline">
           <span>v{info.version}</span>
@@ -459,13 +467,14 @@ export function SystemHealth() {
         </div>
       </header>
 
+      <span className="health-group-label">Status</span>
       <section className={`health-console health-settings-group health-${overallState}`}>
         <div className="health-setting-row health-verdict-row">
-          <span className={`health-setting-icon health-${overallState}`}>
+          <span className={`health-setting-icon health-icon-status health-${overallState}`}>
             <IconShield size={22} />
           </span>
           <div className="health-row-main">
-            <span>Can I trust this machine right now?</span>
+            <span>System status</span>
             <b>{tradeDecision(overallState)}</b>
             <p>{decisionCopy(overallState)}</p>
           </div>
@@ -476,28 +485,28 @@ export function SystemHealth() {
         </div>
 
         <div className={`health-setting-row health-${topBlocker.state}`}>
-          <span className={`health-setting-icon health-${topBlocker.state}`}>
+          <span className={`health-setting-icon health-icon-action health-${topBlocker.state}`}>
             {topBlocker.icon}
           </span>
           <div className="health-row-main">
-            <span>What to fix next</span>
+            <span>Next action</span>
             <b>{topBlocker.state === 'healthy' ? 'No current blocker' : topBlocker.source}</b>
             <p>{topBlocker.state === 'healthy' ? 'All configured sources are inside their trust bands.' : topBlocker.fix}</p>
           </div>
           <div className="health-row-action">
             <StatePill tone={stateTone[topBlocker.state]}>{stateLabel[topBlocker.state]}</StatePill>
-            <span>{topBlocker.measurement}: {topBlocker.value}</span>
+            <span>{topBlocker.value}</span>
           </div>
         </div>
 
         <div className="health-setting-row">
-          <span className="health-setting-icon health-posture-icon">
+          <span className="health-setting-icon health-icon-mode">
             <IconTerminal size={22} />
           </span>
           <div className="health-row-main">
-            <span>Operating posture</span>
+            <span>Execution mode</span>
             <b>{modeLabel(info)}</b>
-            <p>{info.killSwitch ? 'Kill switch is on. Live sends remain blocked.' : info.liveTradingEnabled ? 'Live mode is armed.' : 'Manual-only mode.'}</p>
+            <p>{info.killSwitch ? 'Kill switch is on. Live order routes are blocked.' : info.liveTradingEnabled ? 'Live mode is armed.' : 'Manual-only mode.'}</p>
           </div>
           <div className="health-row-action">
             <span>{loading ? 'refreshing' : readTs ? `last read ${timeAgo(readTs)}` : 'waiting'}</span>
@@ -505,12 +514,12 @@ export function SystemHealth() {
         </div>
 
         <div className="health-setting-row health-state-summary">
-          <span className="health-setting-icon">
+          <span className="health-setting-icon health-icon-summary">
             <IconList size={22} />
           </span>
           <div className="health-titlelock">
-            <span>Source states</span>
-            <p>Worst source wins the verdict. Gray remains setup or missing data, never green.</p>
+            <span>Source summary</span>
+            <p>Worst source wins the status. Missing signals remain unconfigured until connected.</p>
           </div>
           <div className="health-counts" aria-label="Health state counts">
             <span><HealthDot state="broken" />{counts.broken} broken</span>
@@ -521,11 +530,19 @@ export function SystemHealth() {
         </div>
       </section>
 
+      <span className="health-group-label">Data path</span>
       <section className="health-evidence-strip" aria-label="Data-path summary">
         {evidence.map((item) => (
           <div key={item.label} className={`health-evidence health-setting-row health-${item.state}`}>
-            <span><HealthDot state={item.state} />{item.label}</span>
-            <b>{item.value}</b>
+            <span className={`health-evidence-icon health-evidence-${item.id} health-${item.state}`}>{item.icon}</span>
+            <span className="health-evidence-copy">
+              <b>{item.label}</b>
+              <small>{item.detail}</small>
+            </span>
+            <span className="health-evidence-value">
+              <HealthDot state={item.state} />
+              {item.value}
+            </span>
           </div>
         ))}
       </section>
@@ -537,6 +554,7 @@ export function SystemHealth() {
         </section>
       )}
 
+      <span className="health-group-label">Source table</span>
       <section className="health-table-panel">
         <div className="health-section-head">
           <div>
@@ -587,6 +605,7 @@ export function SystemHealth() {
         </div>
       </section>
 
+      <span className="health-group-label">Admin utility</span>
       <section className="health-utility">
         <div className="health-utility-copy">
           <span className="health-eyebrow">aws / cloudshell utility</span>

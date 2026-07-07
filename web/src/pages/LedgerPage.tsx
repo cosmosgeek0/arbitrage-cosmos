@@ -521,45 +521,39 @@ export function LedgerPage() {
 
   return (
     <div className="container page ledger-page logs-page">
-      <section className="logs-console">
-        <div className="logs-console-head">
-          <div className="logs-title-block">
-            <h1 className="page-title">Logs</h1>
-            <p>Review recent account, order, risk, and system activity.</p>
-          </div>
+      <header className="logs-head">
+        <span className="logs-mark"><IconBook size={22} /></span>
+        <div className="logs-head-copy">
+          <h1>Logs</h1>
+          <p>What happened, what failed, and why — every recorded event behind the desk.</p>
         </div>
+        <div className="logs-head-meta">
+          <span className={`logs-live ${loadError ? 'logs-sev-critical' : loading ? 'logs-sev-warning' : 'logs-sev-info'}`}>
+            <span className="logs-live-dot" />
+            {loadError ? 'Unavailable' : loading ? 'Updating' : 'Live'}
+          </span>
+          <span>
+            {visible.length.toLocaleString('en-US')} of {baseEvents.length.toLocaleString('en-US')} events ·{' '}
+            {loadError ?? (lastLoaded ? `updated ${timeAgo(lastLoaded)}` : stateEvents.length ? 'cached' : 'waiting')}
+          </span>
+        </div>
+      </header>
 
-        <div className="logs-preference-group" aria-label="Audit controls">
+      <section className="logs-console">
+        <div className="logs-preference-group" aria-label="View controls">
           <div className="logs-pref-row">
-            <span className="logs-pref-icon logs-pref-index"><IconDatabase size={20} /></span>
+            <span className="logs-pref-icon logs-pref-alert"><IconAlert size={17} /></span>
             <span className="logs-pref-copy">
-              <b>Event feed</b>
-              <em>
-                {visible.length.toLocaleString('en-US')} visible of {baseEvents.length.toLocaleString('en-US')} events
-              </em>
+              <b>Errors and warnings first</b>
+              <em>{latestCritical ? `Latest critical event ${timeAgo(latestCritical.ts)}` : 'Hide routine activity — show only critical and warning events'}</em>
             </span>
-            <span className="logs-pref-status">
-              <span className={`logs-sync-dot ${loadError ? 'logs-sev-critical' : loading ? 'logs-sev-warning' : 'logs-sev-info'}`} />
-              <span>
-                <b>{loadError ? 'Unavailable' : loading ? 'Updating' : 'Live'}</b>
-                <em>{loadError ?? (lastLoaded ? timeAgo(lastLoaded) : stateEvents.length ? 'Cached' : 'Waiting')}</em>
-              </span>
-            </span>
-          </div>
-
-          <div className="logs-pref-row">
-            <span className="logs-pref-icon logs-pref-alert"><IconAlert size={20} /></span>
-            <span className="logs-pref-copy">
-              <b>Priority filter</b>
-              <em>{latestCritical ? `Latest critical event ${timeAgo(latestCritical.ts)}` : 'Show only critical and warning events'}</em>
-            </span>
-            <button type="button" className={`logs-switch ${errorFirst ? 'logs-on' : ''}`} aria-label="Toggle priority filter" aria-pressed={errorFirst} onClick={toggleErrorFirst}>
+            <button type="button" className={`logs-switch ${errorFirst ? 'logs-on' : ''}`} aria-label="Toggle errors and warnings first" aria-pressed={errorFirst} onClick={toggleErrorFirst}>
               <span />
             </button>
           </div>
 
           <div className="logs-pref-row">
-            <span className="logs-pref-icon logs-pref-debug"><IconWifi size={20} /></span>
+            <span className="logs-pref-icon logs-pref-debug"><IconWifi size={17} /></span>
             <span className="logs-pref-copy">
               <b>Connection records</b>
               <em>{showDebug ? 'Heartbeat and connection-open records are visible' : `${debugHiddenCount.toLocaleString('en-US')} connection records hidden`}</em>

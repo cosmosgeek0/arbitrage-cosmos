@@ -435,13 +435,22 @@ export function Risk() {
   return (
     <div className="container page risk-page">
       <section className="risk-pref">
-        <header className="risk-pref-header">
-          <h1>Risk</h1>
-          <p>
-            {blockers.length
-              ? `Live orders are blocked by ${blockers.length} item${blockers.length === 1 ? '' : 's'}. Review ${riskCheckLabel(blockers[0].label).toLowerCase()} before resuming.`
-              : 'Live orders can reach the global gate. Every order is still checked before routing.'}
-          </p>
+        <header className="risk-head">
+          <span className={`risk-mark ${postureTone}`}>
+            <IconShieldLine size={22} />
+          </span>
+          <div className="risk-head-copy">
+            <h1>Risk</h1>
+            <p>Can anything act? The kill switch, the live-arm gate, and every limit that stands before a live order.</p>
+          </div>
+          <div className="risk-head-meta">
+            <StatePill tone={postureTone}>{postureLabel}</StatePill>
+            <span>
+              {blockers.length
+                ? `${blockers.length} blocker${blockers.length === 1 ? '' : 's'} before live`
+                : 'gate clear'}
+            </span>
+          </div>
         </header>
 
         <span className="risk-pref-caption">Control</span>

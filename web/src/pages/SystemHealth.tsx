@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
 import { useRefreshSignal } from '../lib/refresh';
-import { StatePill } from '../components/ui';
+import { Group, GRow, StatePill } from '../components/ui';
 import {
   IconAlert,
   IconBook,
@@ -81,6 +81,15 @@ const stateTone: Record<HealthState, Tone> = {
   degraded: 'warn',
   broken: 'bad',
   not_configured: 'idle',
+};
+
+// Solid tile colors — a saturated fill with a white glyph, matching the
+// native settings-list icons used across the rest of the cockpit.
+const stateSolid: Record<HealthState, string> = {
+  healthy: 'var(--up)',
+  degraded: '#d98a25',
+  broken: 'var(--down)',
+  not_configured: '#6b7482',
 };
 
 const stateRank: Record<HealthState, number> = {
@@ -273,7 +282,7 @@ export function SystemHealth() {
       {
         id: 'browser-server',
         group: 'Path',
-        source: 'Browser -> server latency',
+        source: 'Browser → server latency',
         measurement: 'HTTP round trip for /api/system',
         value: browserLatencyMs === null ? 'not measured' : `${browserLatencyMs}ms`,
         detail: connected ? 'WebSocket state is live.' : 'HTTP may answer, but the app WebSocket is reconnecting.',
@@ -284,7 +293,7 @@ export function SystemHealth() {
       {
         id: 'rest-latency',
         group: 'Exchange',
-        source: 'Server -> Binance REST latency',
+        source: 'Server → Binance REST latency',
         measurement: 'Binance server-time probe latency',
         value: fmtMs(info.restLatencyMs),
         detail: 'Measured by the backend, not estimated in the browser.',
@@ -422,9 +431,16 @@ export function SystemHealth() {
   if (!info) {
     return (
       <div className="container page health-page">
+        <header className="health-head">
+          <span className="health-mark health-not_configured"><IconShield size={22} /></span>
+          <div className="health-head-copy">
+            <h1>System Health</h1>
+            <p>Can I trust the system right now? Live status for every source behind a trade.</p>
+          </div>
+        </header>
         <div className="health-loading">
-          <StatePill tone={loadError ? 'bad' : 'idle'}>{loadError ? 'Broken' : 'Reading'}</StatePill>
-          <b>{loadError ? 'System state unavailable' : 'Reading system state'}</b>
+          <StatePill tone={loadError ? 'bad' : 'idle'}>{loadError ? 'Unreachable' : 'Reading'}</StatePill>
+          <b>{loadError ? 'System state unavailable' : 'Reading system state…'}</b>
           <span>{loadError ?? 'Waiting for /api/system.'}</span>
         </div>
       </div>
@@ -443,137 +459,116 @@ export function SystemHealth() {
   );
   const exchangeIds = ['rest-latency', 'public-stream-age', 'rate-budget', 'clock-drift', 'binance-error'];
   const accountIds = ['account-sync', 'user-stream', 'key-scope', 'order-cache'];
+  const keysPresent = state?.binance.keysPresent || info.binance.keysPresent;
   const evidence = [
-    { id: 'path', label: 'Connection', detail: 'Browser and control server', value: browserLatencyMs === null ? 'not measured' : `${browserLatencyMs}ms`, state: stateForIds(checks, ['browser-server']), icon: <IconPulse /> },
-    { id: 'exchange', label: 'Exchange data', detail: 'REST, stream, budget, and clock', value: healthCount(checks, exchangeIds), state: stateForIds(checks, exchangeIds), icon: <IconChart /> },
-    { id: 'account', label: 'Account data', detail: 'Keys, account sync, and user events', value: state?.binance.keysPresent || info.binance.keysPresent ? healthCount(checks, accountIds) : 'not connected', state: stateForIds(checks, accountIds), icon: <IconWallet /> },
-    { id: 'ledger', label: 'Ledger', detail: 'Database read and write probe', value: info.dbOk ? 'writable' : 'blocked', state: stateForIds(checks, ['ledger-db']), icon: <IconDatabase /> },
+    { id: 'path', label: 'Connection', detail: 'Browser to control server', value: browserLatencyMs === null ? 'not measured' : `${browserLatencyMs}ms`, state: stateForIds(checks, ['browser-server']), icon: <IconPulse /> },
+    { id: 'exchange', label: 'Exchange data', detail: 'REST latency, market stream, rate budget, clock', value: healthCount(checks, exchangeIds), state: stateForIds(checks, exchangeIds), icon: <IconChart /> },
+    { id: 'account', label: 'Account data', detail: 'Read keys, account sync, and user events', value: keysPresent ? healthCount(checks, accountIds) : 'not connected', state: stateForIds(checks, accountIds), icon: <IconWallet /> },
+    { id: 'ledger', label: 'Ledger', detail: 'Local database read and write probe', value: info.dbOk ? 'writable' : 'blocked', state: stateForIds(checks, ['ledger-db']), icon: <IconDatabase /> },
     { id: 'engine', label: 'Engine', detail: 'Dedicated heartbeat source', value: 'not started', state: stateForIds(checks, ['engine-heartbeat']), icon: <IconBrain /> },
   ];
 
+  const execTone: Tone = info.killSwitch ? 'bad' : info.liveTradingEnabled ? 'ok' : 'idle';
+  const execColor = info.killSwitch ? 'var(--down)' : info.liveTradingEnabled ? 'var(--up)' : '#5363d8';
+
   return (
     <div className="container page health-page">
-      <header className="health-page-heading">
-        <div>
-          <span className="health-eyebrow"><IconShield size={14} /> pre-trade trust instrument</span>
+      <header className="health-head">
+        <span className={`health-mark health-${overallState}`}>
+          <IconShield size={22} />
+        </span>
+        <div className="health-head-copy">
           <h1>System Health</h1>
-          <p>Live source status for market data, account sync, ledger storage, and engine readiness.</p>
+          <p>Can I trust the system right now? Live status for every source behind a trade.</p>
         </div>
-        <div className="health-runline">
-          <span>v{info.version}</span>
-          <span>{info.env}</span>
-          <span>uptime {fmtUptime(info.uptimeSec)}</span>
-          <span>{readTs ? `read ${timeAgo(readTs)}` : loading ? 'reading' : 'waiting'}</span>
+        <div className="health-head-meta">
+          <StatePill tone={stateTone[overallState]}>{stateLabel[overallState]}</StatePill>
+          <span>
+            v{info.version} · {info.env} · up {fmtUptime(info.uptimeSec)} ·{' '}
+            {readTs ? `read ${timeAgo(readTs)}` : loading ? 'reading…' : 'waiting'}
+          </span>
         </div>
       </header>
 
-      <span className="health-group-label">Status</span>
-      <section className={`health-console health-settings-group health-${overallState}`}>
-        <div className="health-setting-row health-verdict-row">
-          <span className={`health-setting-icon health-icon-status health-${overallState}`}>
-            <IconShield size={22} />
-          </span>
-          <div className="health-row-main">
-            <span>System status</span>
-            <b>{tradeDecision(overallState)}</b>
-            <p>{decisionCopy(overallState)}</p>
-          </div>
-          <div className="health-row-action">
-            <StatePill tone={stateTone[overallState]}>{stateLabel[overallState]}</StatePill>
-            <span>{blockers.length ? `${blockers.length} source${blockers.length === 1 ? '' : 's'} require action` : 'all configured sources clear'}</span>
-          </div>
+      <section className={`health-verdict health-${overallState}`}>
+        <div className="health-verdict-lead">
+          <span className="health-verdict-eyebrow">System status</span>
+          <b className="health-verdict-word">{tradeDecision(overallState)}</b>
+          <p>{decisionCopy(overallState)}</p>
         </div>
-
-        <div className={`health-setting-row health-${topBlocker.state}`}>
-          <span className={`health-setting-icon health-icon-action health-${topBlocker.state}`}>
-            {topBlocker.icon}
-          </span>
-          <div className="health-row-main">
-            <span>Next action</span>
-            <b>{topBlocker.state === 'healthy' ? 'No current blocker' : topBlocker.source}</b>
-            <p>{topBlocker.state === 'healthy' ? 'All configured sources are inside their trust bands.' : topBlocker.fix}</p>
-          </div>
-          <div className="health-row-action">
-            <StatePill tone={stateTone[topBlocker.state]}>{stateLabel[topBlocker.state]}</StatePill>
-            <span>{topBlocker.value}</span>
-          </div>
+        <div className="health-verdict-side">
+          <StatePill tone={stateTone[overallState]}>{stateLabel[overallState]}</StatePill>
+          <span>{blockers.length ? `${blockers.length} source${blockers.length === 1 ? '' : 's'} need action` : 'all sources clear'}</span>
         </div>
-
-        <div className="health-setting-row">
-          <span className="health-setting-icon health-icon-mode">
-            <IconTerminal size={22} />
-          </span>
-          <div className="health-row-main">
-            <span>Execution mode</span>
-            <b>{modeLabel(info)}</b>
-            <p>{info.killSwitch ? 'Kill switch is on. Live order routes are blocked.' : info.liveTradingEnabled ? 'Live mode is armed.' : 'Manual-only mode.'}</p>
-          </div>
-          <div className="health-row-action">
-            <span>{loading ? 'refreshing' : readTs ? `last read ${timeAgo(readTs)}` : 'waiting'}</span>
-          </div>
+        <div className="health-tally" aria-label="Source state counts">
+          <span><HealthDot state="broken" />{counts.broken} broken</span>
+          <span><HealthDot state="degraded" />{counts.degraded} degraded</span>
+          <span><HealthDot state="not_configured" />{counts.not_configured} not configured</span>
+          <span><HealthDot state="healthy" />{counts.healthy} healthy</span>
         </div>
-
-        <div className="health-setting-row health-state-summary">
-          <span className="health-setting-icon health-icon-summary">
-            <IconList size={22} />
-          </span>
-          <div className="health-titlelock">
-            <span>Source summary</span>
-            <p>Worst source wins the status. Missing signals remain unconfigured until connected.</p>
-          </div>
-          <div className="health-counts" aria-label="Health state counts">
-            <span><HealthDot state="broken" />{counts.broken} broken</span>
-            <span><HealthDot state="degraded" />{counts.degraded} degraded</span>
-            <span><HealthDot state="not_configured" />{counts.not_configured} not configured</span>
-            <span><HealthDot state="healthy" />{counts.healthy} healthy</span>
-          </div>
-        </div>
-      </section>
-
-      <span className="health-group-label">Data path</span>
-      <section className="health-evidence-strip" aria-label="Data-path summary">
-        {evidence.map((item) => (
-          <div key={item.label} className={`health-evidence health-setting-row health-${item.state}`}>
-            <span className={`health-evidence-icon health-evidence-${item.id} health-${item.state}`}>{item.icon}</span>
-            <span className="health-evidence-copy">
-              <b>{item.label}</b>
-              <small>{item.detail}</small>
-            </span>
-            <span className="health-evidence-value">
-              <HealthDot state={item.state} />
-              {item.value}
-            </span>
-          </div>
-        ))}
       </section>
 
       {loadError && (
-        <section className="health-alert health-broken">
+        <div className="health-alert">
           <IconAlert size={16} />
           <span>/api/system read failed: {loadError}</span>
-        </section>
+        </div>
       )}
 
-      <span className="health-group-label">Source table</span>
-      <section className="health-table-panel">
-        <div className="health-section-head">
+      <Group title="Next action">
+        <GRow
+          icon={topBlocker.icon}
+          color={stateSolid[topBlocker.state]}
+          label={topBlocker.state === 'healthy' ? 'No current blocker' : topBlocker.source}
+          sub={topBlocker.state === 'healthy' ? 'All configured sources are inside their trust bands.' : topBlocker.fix}
+          control={
+            <>
+              <span className="sr-value">{topBlocker.value}</span>
+              <StatePill tone={stateTone[topBlocker.state]}>{stateLabel[topBlocker.state]}</StatePill>
+            </>
+          }
+        />
+        <GRow
+          icon={<IconTerminal />}
+          color={execColor}
+          label="Execution mode"
+          sub={info.killSwitch ? 'Kill switch is on. Live order routes are blocked.' : info.liveTradingEnabled ? 'Live mode is armed.' : 'Manual-only mode. No automated sends.'}
+          control={<StatePill tone={execTone}>{modeLabel(info)}</StatePill>}
+        />
+      </Group>
+
+      <Group title="Data path">
+        {evidence.map((item) => (
+          <GRow
+            key={item.id}
+            icon={item.icon}
+            color={stateSolid[item.state]}
+            label={item.label}
+            sub={item.detail}
+            control={<span className="health-val"><HealthDot state={item.state} />{item.value}</span>}
+          />
+        ))}
+      </Group>
+
+      <div className="settings-sec">All sources</div>
+      <section className="health-sources">
+        <div className="health-sources-head">
           <div>
             <h2>Evidence matrix</h2>
-            <span>Every row is a real source. Gray means missing or not exposed; it is never treated as healthy.</span>
+            <p>Every row is a real source. Gray means missing or not exposed — never treated as healthy.</p>
           </div>
-          <button className="health-ledger-button" type="button" onClick={() => setPage('ledger')}>
+          <button className="health-ledger-btn" type="button" onClick={() => setPage('ledger')}>
             <IconBook size={14} />
             Audit ledger
           </button>
         </div>
-
         <div className="health-table-wrap">
-          <table className="health-source-table">
+          <table className="health-table">
             <thead>
               <tr>
                 <th>State</th>
                 <th>Layer</th>
-                <th>Signal</th>
+                <th>Source</th>
                 <th>Measurement</th>
                 <th>Value</th>
                 <th>Interpretation</th>
@@ -581,22 +576,22 @@ export function SystemHealth() {
             </thead>
             <tbody>
               {checks.map((check) => (
-                <tr key={check.id} className={`health-${check.state}`}>
+                <tr key={check.id}>
                   <td>
                     <span className="health-state-cell">
                       <HealthDot state={check.state} />
                       {stateLabel[check.state]}
                     </span>
                   </td>
-                  <td>{check.group}</td>
+                  <td className="health-col-layer">{check.group}</td>
                   <td>
-                    <span className="health-source-name">
-                      <span className="health-source-icon">{check.icon}</span>
+                    <span className="health-src-name">
+                      <span className={`health-src-ic health-${check.state}`}>{check.icon}</span>
                       {check.source}
                     </span>
                   </td>
                   <td>{check.measurement}</td>
-                  <td className="num">{check.value}</td>
+                  <td className="health-col-value num">{check.value}</td>
                   <td>{check.detail}</td>
                 </tr>
               ))}
@@ -605,40 +600,35 @@ export function SystemHealth() {
         </div>
       </section>
 
-      <span className="health-group-label">Admin utility</span>
-      <section className="health-utility">
-        <div className="health-utility-copy">
-          <span className="health-eyebrow">aws / cloudshell utility</span>
-          <h2>Cost &amp; usage</h2>
-          <p>
-            AWS billing is not connected to this cockpit. This panel stays at setup state until a read-only server-side
-            Cost Explorer source exists.
-          </p>
-        </div>
-        <div className="health-utility-status">
-          <div>
-            <span>Current month</span>
-            <b>not connected</b>
-          </div>
-          <div>
-            <span>Forecast</span>
-            <b>not connected</b>
-          </div>
-        </div>
-        <div className="health-utility-links">
-          <a href="https://console.aws.amazon.com/billing/home" target="_blank" rel="noreferrer noopener">
-            <IconExternal size={14} />
-            AWS Billing
-          </a>
-          <a href="https://console.aws.amazon.com/cloudshell/home" target="_blank" rel="noreferrer noopener">
-            <IconTerminal size={14} />
-            CloudShell
-          </a>
-        </div>
-      </section>
+      <Group title="Cost & usage · AWS">
+        <GRow
+          icon={<IconChart />}
+          color="#6b7482"
+          label="Current month"
+          sub="Read-only Cost Explorer source is not connected to this cockpit."
+          control={<StatePill tone="idle">Not connected</StatePill>}
+        />
+        <GRow
+          icon={<IconClock />}
+          color="#6b7482"
+          label="Forecast"
+          sub="No billing numbers are shown until a real server-side source exists."
+          control={<StatePill tone="idle">Not connected</StatePill>}
+        />
+      </Group>
+      <div className="health-links">
+        <a href="https://console.aws.amazon.com/billing/home" target="_blank" rel="noreferrer noopener">
+          <IconExternal size={14} />
+          AWS Billing
+        </a>
+        <a href="https://console.aws.amazon.com/cloudshell/home" target="_blank" rel="noreferrer noopener">
+          <IconTerminal size={14} />
+          CloudShell
+        </a>
+      </div>
 
-      <p className="health-source-line">
-        Source model: /api/system plus state.binance. The bottom-right RefreshDock still owns force refresh and reconnect.
+      <p className="health-foot">
+        Source model: <code>/api/system</code> + <code>state.binance</code>. The bottom-right refresh dock owns force refresh and reconnect.
       </p>
     </div>
   );

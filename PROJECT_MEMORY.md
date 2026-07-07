@@ -72,6 +72,15 @@ Owner directive (2026-07-07):
 
 ## 7. Run log (newest first)
 
+### 2026-07-07 — Full account + project audit (pre tab-by-tab pass)
+- Purpose: confirm nothing broken/missing before editing each tab.
+- Build clean; gates 50/50. All 15 sidebar surfaces render (no error boundaries, none empty); Execution's 5 sub-tabs (Ticket/Orders/Positions/Fills/PnL) all switch correctly (earlier "sticking" was a stale-DOM-ref test artifact — `<main key={page}>` remounts).
+- Endpoint parity: every frontend `/api/*` call has a matching server route. All 14 read endpoints return 200 with real data: markets 442 rows, events 200, loans 166 loanable/119 collateral, account 5 assets / $50.03, feeds all open (spot-miniticker, futures-markprice, futures-liquidations), proposals 2, open orders 0, fills 0 (honest — no recent spot trades). No console errors/warnings.
+- **Known limitation (not a blocker):** user data stream = `listenKey unavailable: Gone` — Binance returns **410 Gone**; the legacy listenKey user-stream endpoint is deprecated. App correctly falls back to 30s polling (account data stays live). Real fix = migrate to Binance WebSocket-API user data stream (own task; note the current HMAC key can't do the Ed25519 `session.logon` the new WS API wants).
+- Cosmetic: some token icons are ORB-blocked from external CDNs (jsdelivr/coincap) in the preview sandbox → letter-avatar fallback; production uses the server icon resolver + CSP allowlist.
+- Stale data: old ledger `error_event` "API key has WITHDRAWAL permission enabled" warnings are historical (pre key-scope fix, when it read account-level canWithdraw). New syncs no longer emit them.
+- Verdict: **ready for tab-by-tab editing** — builds, tests, renders, real data all green.
+
 ### 2026-07-07 — Fix Binance key-permission detection (key-scope truth)
 - Asked: stop judging safety by account-level `canTrade`/`canWithdraw`; use per-KEY `/sapi/v1/account/apiRestrictions` fields and posture rules; fingerprint 6+4; update Account permission map + System Health; keep trading/withdrawals blocked.
 - Changed: `client.ts` — `maskApiKey` → first6+last4; defensive `coerceBool`/`normalizeRestrictions` ("false" string is truthy → would invert a check); exported `keyPosture()` (worst-wins: withdrawals→unsafe, universal/internal transfer→unsafe, spot&margin→trading, margin/futures/options→elevated, reading-only→"Read-only key OK"; carries ipRestricted). `account.ts` — `canTrade`/`canWithdraw` now sourced from key flags (`enableSpotAndMarginTrading`/`enableWithdrawals`), account-level only as fallback. `index.ts` — expose `keyPermissions` + `keyPosture` on `/api/state` and `/api/system`. `types.ts` + `Account.tsx` (full per-key permission map, posture badge, IP-restricted chip, unsafe warn only on real unsafe) + `SystemHealth.tsx` ("API key scope" row).

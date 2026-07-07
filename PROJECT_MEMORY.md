@@ -72,6 +72,12 @@ Owner directive (2026-07-07):
 
 ## 7. Run log (newest first)
 
+### 2026-07-07 — Missed-file fix: settings worker's Header.tsx (topbar quick-settings)
+- Owner caught a merge gap: the settings worker's FINAL commit (7273d1a) also reworked `Header.tsx` — compact topbar quick-settings popover (theme+accent, zoom, currency chips, basis, refresh, table density, motion, "Open settings →"), alert toggles folded into notifications, redundant network/alerts/currency/zoom/theme popovers removed. First reconcile only took page tsx + css, so the component was dropped (its CSS had merged, orphaned).
+- Fixed: `git checkout 7273d1a -- web/src/components/Header.tsx` → commit `8755803`, pushed. Build clean, gates 50/50, popover verified live, no console errors.
+- Exhaustive audit after fix: every file changed by each worker-final (7273d1a/2d22560/8833b93/d93fff8 vs base ba804d8) is now byte-identical on current-main, and each worker's styles.css appended block is byte-contained in the merged styles.css (verified non-empty, literal SHAs).
+- **Lesson:** when merging worker branches, enumerate `git diff --name-only <base> <tip>` at the FINAL tip — never assume the file list from an earlier tip; workers add files (esp. shared ones like Header.tsx) in later commits.
+
 ### 2026-07-07 — Merged all four Control rebuilds into current-main
 - Four Codex 5.5 workers finished (worktrees cosmos-{risk,logs,health,settings}). Merged one at a time, squashed, into `current-main`: Settings `119b9aa`, Health `9fe42e7`, Logs `87de7b2`, Risk `2689268`; then reconcile fix `2eb1f80`.
 - Result: Risk = pre-trade safety console (posture + blocker stack, kill switch, live-arm gate, wired limits + six "not wired" guards disabled-with-reason, gate probe, allow/blocklist, rejections→Logs); Logs = incident/audit console (severity strip, debug hidden, event table + inspector + JSON drawer, error-first); Health = machine trust dashboard (overall verdict + data-path checks green/amber/red/gray + "what to fix next"); Settings = boring local prefs only. build clean, gates 50/50, all four verified styled in-browser, no console errors.

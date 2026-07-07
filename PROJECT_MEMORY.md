@@ -81,6 +81,14 @@ Owner directive (2026-07-07):
 
 ## 7. Run log (newest first)
 
+### 2026-07-08 — BOTH OVERDRIVE ENGINES MERGED (synthetic-proof baseline)
+- BASIS agent (branch engine-overdrive, 7a48d4e) merged as `abce24e`: 17 modules ~3,349 lines in `server/src/engine/basis/`. 73/73 proofs. Inventions: gap-stability CV, funding flip-risk + capture factor, cross-leg timestamp skew, mark-book divergence, book pressure. Research: spot bookTicker has NO event time → per-leg receive-clock staleness; maxBorrowable is weight-50 → borrow = injected cached data.
+- VOLUME agent (branch engine-volume-overdrive, 6ce84b2) merged as `131fc32`: 17 modules ~2,961 lines in `server/src/engine/volume/`. 88/88 proofs. Inventions: wash_uniformity_suspect, depth_vanished, aggregate_single_print, absolute activation quote floor, verification grace window. Research: miniTicker@arr universe at 1s; ~226 streams worst case; kline backfill ~6000 weight → staggered/lazy.
+- Director-verified both in Main: build clean, 50/50 app gates, 73/73 + 88/88 engine proofs coexisting. Territories clean (zero collisions). Tag: `checkpoint-engines-v0-synthetic`.
+- Agent flags to reconcile later: v0 RejectCode lacks their detail codes (ride in evidence.detailCode); v0 EngineEventKind lacks kill_switch_changed; BorrowVerdict could graduate to v0.
+- **HONEST STATUS: engines are synthetic-proof decision brains — NOT wired to live Binance streams, never seen a real market, zero live trading.** Next pass: live WS adapters behind their TradeSource/BookSource interfaces, kline baseline backfill, borrow provider, risk-gate hookup, express routes, then PAPER mode + ledger evidence before any money.
+
+
 ### 2026-07-07 — UI phase close-out + engine setup
 - Merged the three worktrees' final UNCOMMITTED polish (risk/logs/health — committed in worktrees as 3a17c79/33b5f9e/6fa6afd, merged as `80e2c27`; styles.css consolidated −~108KB). Byte-parity verified across all worker files.
 - Fixed localhost:8080: the Logs agent's leftover dev server (cwd `cosmos-logs/server`, no web/dist → "Cannot GET /") was killed; Main's server now on 8080 (HTTP 200, keys present, connected). Killed remaining stray cosmos-logs vite/tsx dev servers.

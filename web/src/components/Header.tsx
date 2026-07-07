@@ -992,10 +992,9 @@ function TrustedAdvisor() {
 // A single box: centered under the hovered trigger with a pointer aimed at it.
 // Moving to another trigger doesn't close/reopen — the same box slides, resizes
 // (via the per-key width) and the pointer re-aims; only the contents cross-fade.
-type MK = 'clock' | 'shell' | 'apikey' | 'apikey2' | 'network' | 'data' | 'alerts' | 'currency' | 'advisor' | 'notif' | 'power' | 'zoom' | 'settings' | 'theme';
+type MK = 'clock' | 'shell' | 'apikey' | 'apikey2' | 'data' | 'advisor' | 'notif' | 'power' | 'settings';
 const MENU_W: Record<MK, number> = {
-  clock: 248, shell: 276, apikey: 300, apikey2: 300, network: 288, data: 290, alerts: 302, currency: 240,
-  advisor: 300, notif: 328, power: 250, zoom: 208, settings: 236, theme: 222,
+  clock: 248, shell: 276, apikey: 300, apikey2: 300, data: 290, advisor: 300, notif: 368, power: 250, settings: 348,
 };
 
 export interface ApiKeyInfo {
@@ -1116,7 +1115,7 @@ function SharedTopBar() {
   const latTone = lat === null ? '' : lat < 400 ? 'ok' : lat < 900 ? 'warn' : 'bad';
   const events = state?.events ?? []; const unread = events.filter((e) => e.id > seen).length;
   const zone = ZONES.find((z) => z.id === prefs.clockZone) ?? ZONES[1];
-  const cur = CURRENCIES[prefs.currency] ? prefs.currency : 'USD'; const sym = CURRENCIES[cur].symbol.trim() || cur;
+  const cur = CURRENCIES[prefs.currency] ? prefs.currency : 'USD';
   const al = prefs.alerts; const alertsOn = Object.values(al).filter(Boolean).length;
   const zoomv = prefs.zoom || 1;
   const mode = state?.mode ?? 'HALTED';
@@ -1127,6 +1126,8 @@ function SharedTopBar() {
     { key: 'risk', label: 'Risk rejects', sub: 'Gate blocks & kill-switch trips' },
     { key: 'news', label: 'Binance announcements', sub: 'Listings, delistings, maintenance' },
   ];
+  const refreshChoices = [3, 6, 12, 30];
+  const setZoom = (v: number) => updatePref('zoom', Math.min(1.5, Math.max(0.8, Math.round(v * 100) / 100)));
   const dhSources = [
     { name: 'Binance market feed', ok: connected && feedsOk, detail: `${Object.keys(feeds).length} streams · ${msLabel(lat)}` },
     { name: 'Binance account', ok: !!b?.connected, detail: b?.keysPresent ? (b?.connected ? 'synced' : 'error') : 'no keys' },
@@ -1153,7 +1154,7 @@ function SharedTopBar() {
   // resize — NOT every clock tick. (The clock uses tabular figures so ticking
   // seconds keep a constant width; otherwise every tick would shift the triggers
   // and restart the slide transition, leaving the box perpetually mid-flight.)
-  const placeSig = `${alertsOn > 0}|${unread > 0}|${advA.length > 0}|${sym}|${zone.label}|${prefs.zoom}`;
+  const placeSig = `${alertsOn > 0}|${unread > 0}|${advA.length > 0}|${zone.label}|${prefs.zoom}`;
   useLayoutEffect(() => {
     if (!active) return;
     const place = () => { const g = computeGeo(active); if (g) setGeo(g); };
@@ -1202,29 +1203,12 @@ function SharedTopBar() {
           <button className="adv-fix" style={{ width: '100%', marginTop: 10 }} onClick={() => { setActive(null); openOverlay('cloudshell'); }}>Open in-app CloudShell →</button></>);
       case 'apikey': return keyBody(roKey, IconKey);
       case 'apikey2': return keyBody(fullKey, IconLock);
-      case 'network':
-        return (<><div className="np-head"><span className={`np-title ${netGrade}`}><span className="net-dot" />{!connected ? 'Signal offline' : netGrade === 'ok' ? 'Signal healthy' : 'Signal degraded'}</span><span className="np-lat num">{!connected ? 'offline' : msLabel(lat)}</span></div>
-          <div className="np-row"><span className="k">Binance REST latency</span><span className={`v num ${latTone}`}>{msLabel(lat)}</span></div>
-          <div className="np-row"><span className="k">Clock drift</span><span className="v num">{msLabel(sys?.serverTimeDiffMs)}</span></div>
-          <div className="np-row"><span className="k">Cockpit link</span><span className={`v ${connected ? 'ok' : 'bad'}`}>{connected ? 'live' : 'reconnecting'}</span></div>
-          {feedList.map(([n, s]) => (<div key={n} className="np-row"><span className="k">{n}</span><span className={`v ${s === 'open' ? 'ok' : 'warn'}`}>{s}</span></div>))}
-          <div className="np-row"><span className="k">Rate weight · 1m</span><span className="v num">{sys?.usedWeight1m ?? '—'}</span></div></>);
       case 'data':
         return (<><div className="np-head"><span className={`np-title ${netGrade}`}><LiveDot ok={netGrade !== 'bad'} /> Data health</span><span className="np-sub">source: Binance</span></div>
           {dhSources.map((s) => (<div key={s.name} className="dh-row"><span className={`dh-dot ${s.ok ? 'ok' : 'bad'}`} /><span className="dh-name">{s.name}</span><span className={`dh-detail ${s.ok ? '' : 'muted'}`}>{s.detail}</span></div>))}
           <div className="dh-params"><div className="menu-head">Parameters</div>
             <div className="np-row"><span className="k">Clock drift</span><span className="v num">{msLabel(sys?.serverTimeDiffMs)}</span></div>
             <div className="np-row"><span className="k">Pairs scanned</span><span className="v num">{state?.scanner.pairs ?? '—'}</span></div></div></>);
-      case 'alerts':
-        return (<><div className="np-head"><span className="np-title">Alerts</span><span className="np-sub">{alertsOn} on</span></div>
-          {alertRows.map((r) => (<div key={r.key} className="alert-row"><div className="alert-meta"><span className="alert-label">{r.label}</span><span className="alert-sub">{r.sub}</span></div>
-            <button className={`toggle ${al[r.key] ? 'on' : ''}`} onClick={() => updatePref('alerts', { ...al, [r.key]: !al[r.key] })}><span className="knob" /></button></div>))}
-          <div className="menu-foot">Delivery wiring lands with live mode — toggles are saved.</div></>);
-      case 'currency':
-        return (<><div className="menu-head">Display currency</div>{Object.entries(CURRENCIES).map(([code, c]) => (
-          <button key={code} className={`menu-item ${code === cur ? 'sel' : ''}`} onClick={() => updatePref('currency', code)}>
-            <span className="cur-sym">{c.symbol.trim() || code}</span><span className="cur-label">{c.label}</span><span className="cur-code num">{code}</span></button>))}
-          <div className="menu-foot">Rates: live, USD base · applied to money values</div></>);
       case 'advisor':
         return (<><div className="np-head"><span className="np-title"><IconShield size={14} /> Trusted Advisor</span></div>
           <div className="adv-stats">
@@ -1238,7 +1222,26 @@ function SharedTopBar() {
         return (<><div className="np-head"><span className="np-title">Notifications</span><button className="np-link" onClick={() => { setActive(null); setPage('ledger'); }}>Ledger →</button></div>
           <div className="np-sub-line">Your cockpit only — proposals, fills, risk.</div>
           {events.length === 0 ? <div className="snn-empty">No events yet</div> : events.slice(0, 7).map((e) => { const tone = e.kind.includes('error') ? 'bad' : e.kind.includes('fill') ? 'ok' : e.kind.includes('risk') ? 'warn' : '';
-            return (<button key={e.id} className="notif-row" onClick={() => { setActive(null); setPage('ledger'); }}><span className={`notif-dot ${tone}`} /><span className="notif-text">{eventSummary(e.kind, (e.data as Record<string, unknown> | null) ?? null, e.symbol)}</span><span className="notif-time num">{timeAgo(e.ts)}</span></button>); })}</>);
+            return (<button key={e.id} className="notif-row" onClick={() => { setActive(null); setPage('ledger'); }}><span className={`notif-dot ${tone}`} /><span className="notif-text">{eventSummary(e.kind, (e.data as Record<string, unknown> | null) ?? null, e.symbol)}</span><span className="notif-time num">{timeAgo(e.ts)}</span></button>); })}
+          <div className="notif-pref-box">
+            <div className="menu-head">What kind of notification do you need?</div>
+            {alertRows.map((r) => (
+              <div key={r.key} className="alert-row alert-row-compact">
+                <div className="alert-meta">
+                  <span className="alert-label">{r.label}</span>
+                  <span className="alert-sub">{r.sub}</span>
+                </div>
+                <button
+                  className={`toggle ${al[r.key] ? 'on' : ''}`}
+                  onClick={() => updatePref('alerts', { ...al, [r.key]: !al[r.key] })}
+                  aria-label={`Toggle ${r.label}`}
+                >
+                  <span className="knob" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </>);
       case 'power':
         return (<><div className="np-head"><span className={`np-title ${mode === 'HALTED' ? 'bad' : 'ok'}`}><span className="net-dot" />{mode === 'LIVE_ARMED' ? 'Live armed' : mode === 'HALTED' ? 'Halted' : 'Manual mode'}</span></div>
           <div className="np-sub-line">{mode === 'HALTED' ? 'Kill switch is ON — every send is blocked.' : 'Sends pass to the risk gate.'}</div>
@@ -1246,16 +1249,52 @@ function SharedTopBar() {
             ? <button className="adv-fix" style={{ width: '100%' }} onClick={() => { void setKill(false); }}>Arm manual mode</button>
             : <button className="adv-fix" style={{ width: '100%', background: 'var(--down)' }} onClick={() => { void setKill(true); }}>Kill switch — halt now</button>}</div>
           <button className="adv-scan" style={{ width: '100%', marginTop: 6 }} onClick={() => { setActive(null); setPage('risk'); }}>Open Risk →</button></>);
-      case 'zoom':
-        return (<><div className="menu-head">Zoom</div><div className="zoom-row"><button className="zoom-btn" onClick={() => updatePref('zoom', Math.max(0.8, Math.round((zoomv - 0.05) * 100) / 100))}>−</button><span className="zoom-val num">{Math.round(zoomv * 100)}%</span><button className="zoom-btn" onClick={() => updatePref('zoom', Math.min(1.5, Math.round((zoomv + 0.05) * 100) / 100))}>+</button></div><button className="zoom-reset" onClick={() => updatePref('zoom', 1)}>Reset to 100%</button></>);
       case 'settings':
-        return (<><div className="menu-head">Settings</div>
-          <button className="menu-item" onClick={() => { setActive(null); setPage('settings'); }}><span className="cur-label">Open full settings</span><span className="cur-code">→</span></button>
-          <button className="menu-item" onClick={() => { setActive(null); setPage('risk'); }}><span className="cur-label">Risk & gate</span><span className="cur-code">→</span></button>
-          <button className="menu-item" onClick={() => { setActive(null); setPage('system'); }}><span className="cur-label">System health</span><span className="cur-code">→</span></button></>);
-      case 'theme':
-        return (<><div className="menu-head">Appearance</div><div className="theme-seg">{([{ id: 'light', label: 'Light' }, { id: 'dark', label: 'Dark' }, { id: 'system', label: 'Auto' }] as const).map((m) => (<button key={m.id} className={prefs.theme === m.id ? 'on' : ''} onClick={() => updatePref('theme', m.id)}>{m.label}</button>))}</div>
-          <div className="menu-head">Accent</div><div className="accent-dots">{ACCENT_ORDER.map((kk) => (<button key={kk} className={`accent-dot ${prefs.accent === kk ? 'sel' : ''}`} style={{ '--dot': ACCENTS[kk].hex } as CSSProperties} onClick={() => updatePref('accent', kk)} />))}</div></>);
+        return (<>
+          <div className="np-head">
+            <span className="np-title"><IconGear size={14} /> Settings</span>
+            <button className="np-link" onClick={() => { setActive(null); setPage('settings'); }}>Open settings →</button>
+          </div>
+          <div className="quick-settings">
+            <div className="qs-row">
+              <span><b>Theme</b><em>{prefs.theme === 'system' ? 'Auto' : prefs.theme}</em></span>
+              <div className="theme-seg qs-mini qs-theme">{([{ id: 'light', label: 'Light' }, { id: 'dark', label: 'Dark' }, { id: 'system', label: 'Auto' }] as const).map((m) => (<button key={m.id} className={prefs.theme === m.id ? 'on' : ''} onClick={() => updatePref('theme', m.id)}>{m.label}</button>))}</div>
+            </div>
+            <div className="qs-accent-row" role="group" aria-label="Accent color">
+              {ACCENT_ORDER.map((kk) => (<button key={kk} className={`accent-dot ${prefs.accent === kk ? 'sel' : ''}`} style={{ '--dot': ACCENTS[kk].hex } as CSSProperties} onClick={() => updatePref('accent', kk)} title={ACCENTS[kk].label} aria-label={`${ACCENTS[kk].label} accent`} />))}
+            </div>
+            <div className="qs-row">
+              <span><b>Zoom</b><em>{Math.round(zoomv * 100)}%</em></span>
+              <div className="zoom-row qs-zoom"><button className="zoom-btn" onClick={() => setZoom(zoomv - 0.05)} aria-label="Zoom out">−</button><button className="zoom-reset" onClick={() => setZoom(1)}>100%</button><button className="zoom-btn" onClick={() => setZoom(zoomv + 0.05)} aria-label="Zoom in">+</button></div>
+            </div>
+            <div className="qs-row">
+              <span><b>Currency</b><em>{cur}</em></span>
+              <div className="qs-currency-grid" role="group" aria-label="Currency">
+                {Object.keys(CURRENCIES).map((code) => (
+                  <button key={code} className={`qs-chip ${code === cur ? 'on' : ''}`} type="button" onClick={() => updatePref('currency', code)}>
+                    {code}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="qs-row">
+              <span><b>Basis units</b><em>{prefs.basisUnit === 'bps' ? 'Basis points' : 'Percent'}</em></span>
+              <div className="theme-seg qs-mini"><button className={prefs.basisUnit === 'pct' ? 'on' : ''} onClick={() => updatePref('basisUnit', 'pct')}>Percent</button><button className={prefs.basisUnit === 'bps' ? 'on' : ''} onClick={() => updatePref('basisUnit', 'bps')}>Bps</button></div>
+            </div>
+            <div className="qs-row">
+              <span><b>Refresh</b><em>{prefs.refreshSec}s</em></span>
+              <div className="theme-seg qs-mini">{refreshChoices.map((sec) => <button key={sec} className={prefs.refreshSec === sec ? 'on' : ''} onClick={() => updatePref('refreshSec', sec)}>{sec}s</button>)}</div>
+            </div>
+            <div className="qs-row">
+              <span><b>Table density</b><em>{prefs.density}</em></span>
+              <div className="theme-seg qs-mini"><button className={prefs.density === 'comfortable' ? 'on' : ''} onClick={() => updatePref('density', 'comfortable')}>Comfort</button><button className={prefs.density === 'compact' ? 'on' : ''} onClick={() => updatePref('density', 'compact')}>Compact</button></div>
+            </div>
+            <div className="qs-row">
+              <span><b>Motion</b><em>{prefs.motion}</em></span>
+              <div className="theme-seg qs-mini"><button className={prefs.motion === 'full' ? 'on' : ''} onClick={() => updatePref('motion', 'full')}>Full</button><button className={prefs.motion === 'reduced' ? 'on' : ''} onClick={() => updatePref('motion', 'reduced')}>Reduced</button></div>
+            </div>
+          </div>
+        </>);
     }
   };
 
@@ -1265,16 +1304,11 @@ function SharedTopBar() {
       {trig('shell', 'hdr-ic tint-shell', <IconTerminal size={16} />)}
       {trig('apikey', 'apikey-pill ro', <><IconKey size={15} /><span className={`apikey-dot s-${roKey?.status ?? 'declared'}`} /></>)}
       {trig('apikey2', 'apikey-pill full', <><IconLock size={15} /><span className={`apikey-dot s-${fullKey?.status ?? 'planned'}`} /></>)}
-      {trig('network', `net-btn wifi ${netGrade}`, <WifiSignal grade={netGrade} />)}
       {trig('data', `hdr-ic tint-data grade-${netGrade}`, <IconDatabase size={18} />)}
-      {trig('alerts', 'hdr-ic', <><IconAlarm size={16} />{alertsOn > 0 && <span className="ic-dot accent" />}</>)}
-      {trig('currency', 'ic-pill cur-pill', <span className="cur-glyph">{sym}</span>)}
       {trig('advisor', 'hdr-ic tint-advisor', <><IconShield size={16} />{advA.length > 0 && <span className="ic-badge">{advA.length}</span>}</>)}
-      {trig('notif', 'hdr-ic', <><IconBell size={16} />{unread > 0 && <span className="ic-badge">{unread > 9 ? '9+' : unread}</span>}</>)}
+      {trig('notif', `hdr-ic notif-trigger ${alertsOn > 0 ? 'alerts-on' : ''}`, <><IconBell size={16} />{unread > 0 ? <span className="ic-badge">{unread > 9 ? '9+' : unread}</span> : alertsOn > 0 && <span className="ic-dot accent" />}</>)}
       {trig('power', `hdr-ic ${modeClass}`, <><IconPower size={15} /><span className="ic-dot" /></>)}
-      {trig('zoom', 'hdr-ic', <IconMaximize size={16} />)}
-      {trig('settings', 'icon-btn', <IconGear size={16} />)}
-      {trig('theme', 'icon-btn', theme === 'light' ? <IconMoon size={15} /> : <IconSun size={15} />)}
+      {trig('settings', 'icon-btn settings-trigger', <IconGear size={16} />)}
       {active && (
         <div className="smenu" style={{ left: geo.left, width: geo.width }} onMouseEnter={cancelClose} onMouseLeave={scheduleClose}>
           <span className="smenu-arrow" style={{ left: geo.pointer }} />

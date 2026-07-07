@@ -72,6 +72,17 @@ Owner directive (2026-07-07):
 
 ## 7. Run log (newest first)
 
+### 2026-07-07 — READ-ONLY BINANCE API PHASE
+- Asked: show real Binance read-only account state from server-side env; no trading, no withdrawals/transfers, no frontend keys, no secrets in git/logs.
+- Env names (already standard, no rename): **`BINANCE_API_KEY`**, **`BINANCE_API_SECRET`**. Server has a no-dependency `.env` loader (`server/src/index.ts` `loadDotEnv`). `.env` present, gitignored, untracked.
+- Found: backend already had a full read-only account service (balances, equity, positions, PnL from ledger, permissions `canTrade`/`canWithdraw`, open orders, fills, user-stream+polling). Only gap = masked key fingerprint.
+- Changed: `maskApiKey()` (first4••••last4 of the KEY only, never the secret); `keyFingerprint` added to `/api/state` + `/api/system` binance blocks; web type + Account "API keys" card show it; recreated `.env.example` (placeholders + read-only posture); README "Local read-only Binance setup"; `SKIP_DOTENV` flag so the gates harness boots keyless deterministically (real `.env` had broken the 8 disconnected-state gates).
+- Verified live (real key): `connected=true`, masked fingerprint `MGVM••••VSPa`, 5 assets + live equity, open orders 0, `mode=HALTED`. build clean, gates 50/50. No console errors.
+- SECURITY finding: the loaded key reports **`canTrade=true` AND `canWithdraw=true`**. The app blocks all of it (kill switch ON, no withdrawal/transfer route exists) and flags it loudly ("unsafe key scope" badge, warn strip, ledger warning), but the key is over-permissioned — owner should recreate it as Reading-only, trading OFF, withdrawals OFF.
+- `userStream=failed` → polling fallback active (account data live via ~30s poll).
+- Still blocked: trading (kill switch + live-off + risk gate), withdrawals/universal transfer/margin loan-repay-transfer (no routes exist).
+- Next action: owner recreates the Binance key with read-only permissions; optionally revisit user-stream vs polling.
+
 ### 2026-07-07 — Commit animated top-bar menus
 - Asked: push the current on-disk state cleanly — the other chat animated the top bar.
 - Changed (concurrent-session UI work, not Director-authored): `web/src/components/Header.tsx` (unified top-bar menu/popover with slide+fade animation, rAF-tweened left/width), `web/src/styles.css` (`smIn`/`smFade` keyframes), `web/index.html` (favicon → arbitrage mark, title → "Arbitrage Control Room").

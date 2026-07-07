@@ -116,7 +116,7 @@ export function Account() {
               icon={<IconLock />}
               label="API keys"
               value={b.keysPresent ? 'present' : 'absent'}
-              sub="environment only, never browser input"
+              sub={b.keysPresent && b.keyFingerprint ? `key ${b.keyFingerprint} · server-side only` : 'environment only, never browser input'}
               tone={b.keysPresent ? 'ok' : 'idle'}
             />
             <SignalCard

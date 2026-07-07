@@ -21,7 +21,7 @@ import {
   type BookTicker,
   type Futures24hTicker,
 } from './binance/rest.js';
-import { BinanceClient, credsFromEnv, rateLimit } from './binance/client.js';
+import { BinanceClient, credsFromEnv, maskApiKey, rateLimit } from './binance/client.js';
 import { resolveIcons } from './binance/icons.js';
 import { UserStream, type ExecutionReport } from './binance/userStream.js';
 import { AccountService } from './services/account.js';
@@ -32,7 +32,10 @@ import { BookStreamHub } from './services/bookStream.js';
 import type { AppConfig, OrderIntent } from './types.js';
 
 // Minimal .env loader (no dependency). Never logs values.
+// SKIP_DOTENV lets the gates harness boot deterministically keyless, ignoring
+// any developer .env on disk so the disconnected-state gates stay valid.
 function loadDotEnv(): void {
+  if (process.env.SKIP_DOTENV) return;
   try {
     const txt = fs.readFileSync(path.resolve(process.cwd(), '.env'), 'utf8');
     for (const line of txt.split('\n')) {
@@ -152,6 +155,7 @@ function buildState() {
       canWithdraw: account.canWithdraw,
       canTrade: account.canTrade,
       userStream: userStream?.status ?? 'off',
+      keyFingerprint: creds ? maskApiKey(creds.apiKey) : null,
     },
     feeds: engine.feeds,
     config,
@@ -971,6 +975,7 @@ app.get('/api/system', (req, res) => {
         lastSyncTs: account.lastSyncTs,
         lastError: account.lastError,
         userStream: userStream?.status ?? 'off',
+        keyFingerprint: creds ? maskApiKey(creds.apiKey) : null,
       },
       restLatencyMs: timeSync?.latencyMs ?? null,
       serverTimeDiffMs: timeSync?.diffMs ?? null,

@@ -98,7 +98,9 @@ check('no withdrawal/transfer-out feature in source', noWithdrawFeature);
 console.log('\nBooting server (no keys, isolated data dir)…');
 const dataDir = mkdtempSync(path.join(tmpdir(), 'cosmos-gates-'));
 const child = spawn(process.execPath, ['server/dist/index.js'], {
-  env: { PATH: process.env.PATH, PORT: String(PORT), DATA_DIR: dataDir },
+  // SKIP_DOTENV keeps gates deterministic/keyless even when a real .env exists,
+  // so the disconnected-state contract is what gets tested.
+  env: { PATH: process.env.PATH, PORT: String(PORT), DATA_DIR: dataDir, SKIP_DOTENV: '1' },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 let bootLog = '';

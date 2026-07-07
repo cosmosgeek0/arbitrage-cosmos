@@ -14,6 +14,16 @@ export function credsFromEnv(): BinanceCreds | null {
   return { apiKey, apiSecret };
 }
 
+/**
+ * Non-sensitive fingerprint of the API KEY (never the secret) for the UI, so the
+ * owner can confirm which key is loaded without exposing it. Shows first/last 4
+ * only. The secret is never surfaced anywhere.
+ */
+export function maskApiKey(apiKey: string): string {
+  if (apiKey.length <= 8) return '••••';
+  return `${apiKey.slice(0, 4)}••••${apiKey.slice(-4)}`;
+}
+
 export class BinanceApiError extends Error {
   constructor(
     readonly httpStatus: number,

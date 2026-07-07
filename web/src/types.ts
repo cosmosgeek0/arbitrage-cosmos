@@ -229,6 +229,7 @@ export interface ServerState {
     canWithdraw: boolean | null;
     canTrade: boolean | null;
     userStream: string;
+    keyFingerprint: string | null;
   };
   feeds: Record<string, string>;
   config: AppConfig;

@@ -72,6 +72,18 @@ Owner directive (2026-07-07):
 
 ## 7. Run log (newest first)
 
+### 2026-07-07 — Session-tracking checkpoint (formalized) + concurrent-edit note
+- current branch: `current-main`.
+- latest clean commit before the WIP: `75b10ee` (bootstrap audit).
+- WIP summary: **active session tracking** — server `GET /api/sessions` (per-device, IP+UA, Cloudflare-aware, 30-min TTL) + account-card "Active sessions" list + `TrustedAdvisor` panel. Real request-derived data.
+- files changed (in the WIP commit `c7d10d7`): `server/src/index.ts`, `web/src/components/Header.tsx`, `web/src/styles.css`.
+- build/test result: **build clean, gates 50/50** — verified last turn at the exact content now committed as `c7d10d7`. Not re-run this turn because another agent is mid-edit on `Header.tsx` (would test a half-written file, not the committed checkpoint).
+- GitHub state: default branch is now **`current-main`** (owner set it via the UI after last turn — origin HEAD symref confirms). Old `main` untouched @ `80c234f`.
+- Director capability note: **can** push branches and tags over SSH; **cannot** change GitHub repo settings (default branch, etc.) or hit the REST API without `gh` or a Personal Access Token. Can read the remote default branch via `git ls-remote --symref origin HEAD` (no token needed).
+- Concurrent-tree hazard: two agents share this working tree; `Header.tsx` observed flipping clean→modified in seconds. Do not stage/commit another session's files; commit only Director-owned docs.
+- Checkpoint tags: `checkpoint-skeleton-pass1-current-main` (last turn) and `checkpoint-current-main-session-tracking` (this turn) both point at the committed session-tracking state.
+- next exact step: let the other session finish `Header.tsx`; then, if a fresher checkpoint is wanted, re-run build/test on a clean tree and move the tag or cut a new one.
+
 ### 2026-07-07 — Source checkpoint tag (skeleton pass 1)
 - Asked: create a recoverable source checkpoint tag `checkpoint-skeleton-pass1-current-main` on `current-main`; don't commit node_modules/dist/data/.env/secrets; leave old `main` untouched.
 - Blocker found: working tree was NOT clean — ~298 lines of uncommitted "active session tracking + TrustedAdvisor" feature (server `/api/sessions`, account-card session list, styles), almost certainly from the other chat running a dev server in this folder.

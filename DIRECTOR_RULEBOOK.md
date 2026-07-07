@@ -560,3 +560,18 @@ For any future task whose worker prompt is longer than **40 lines**, the Directo
    > Read TASK_BRIEF.md and execute exactly that scoped task.
 
 `TASK_BRIEF.md` is disposable and single-use — it is overwritten per task and is git-ignored. Do not commit it unless it is explicitly useful as a reusable template, in which case commit it deliberately with a message that says why. This keeps huge prompts out of chat context and out of the durable docs.
+
+---
+
+## 24. Capability logging & checkpoint discipline
+
+Recoverability rests on the docs, never on chat memory (see §20, §21). Reinforcing rules:
+
+Capability logging. Whenever the Director discovers a new capability or limitation of its own tools/access, record it in `PROJECT_MEMORY.md`. Known so far: the Director **can** push branches and tags over SSH and read the remote default branch via `git ls-remote --symref origin HEAD`; it **cannot** change GitHub repo settings (default branch, visibility, etc.) or call the REST API without `gh` or a Personal Access Token.
+
+Checkpoint discipline. When asked to create a checkpoint and the working tree is dirty with real WIP:
+1. Do **not** silently tag an older clean commit — that produces a checkpoint that doesn't match disk.
+2. Run `npm run build` and `npm test` first.
+3. If green, commit the WIP and tag that commit; if red, do **not** commit to the branch — save a patch outside the repo (`git diff > ../<name>.patch`) and record the failure/blocker in `PROJECT_MEMORY.md`.
+
+Concurrent-tree safety. If another agent is actively editing files in this shared working tree, do not stage, commit, stash, or discard their files. Commit only Director-owned files (usually the docs), and never destroy another session's uncommitted work. Prefer worktrees over sharing one tree (§10).

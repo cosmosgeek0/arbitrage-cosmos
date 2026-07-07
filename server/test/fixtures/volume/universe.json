@@ -1,0 +1,47 @@
+{
+  "note": "Synthetic universe fixture for engine-volume.mjs — contract-shaped SymbolMeta rows, zero network.",
+  "symbols": [
+    {
+      "symbol": "WAKEUSDT",
+      "base": "WAKE",
+      "quote": "USDT",
+      "hasSpot": true,
+      "hasPerp": false,
+      "marginBorrowable": null,
+      "minNotionalUsd": 5,
+      "tickSize": 0.00001,
+      "stepSize": 0.1,
+      "quoteVolume24hUsd": 4200000,
+      "eligible": true,
+      "ineligibleReason": null
+    },
+    {
+      "symbol": "DEADUSDT",
+      "base": "DEAD",
+      "quote": "USDT",
+      "hasSpot": true,
+      "hasPerp": false,
+      "marginBorrowable": false,
+      "minNotionalUsd": 5,
+      "tickSize": 0.00001,
+      "stepSize": 1,
+      "quoteVolume24hUsd": 3100000,
+      "eligible": true,
+      "ineligibleReason": null
+    },
+    {
+      "symbol": "DUSTUSDT",
+      "base": "DUST",
+      "quote": "USDT",
+      "hasSpot": true,
+      "hasPerp": false,
+      "marginBorrowable": null,
+      "minNotionalUsd": 5,
+      "tickSize": 0.000001,
+      "stepSize": 1,
+      "quoteVolume24hUsd": 90000,
+      "eligible": false,
+      "ineligibleReason": "quote_volume_below_min"
+    }
+  ]
+}

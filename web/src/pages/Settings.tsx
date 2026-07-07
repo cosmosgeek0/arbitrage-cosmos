@@ -1,453 +1,309 @@
-/* Settings is a local cockpit control surface: preferences apply immediately,
-   trading limits remain on Risk, and Binance keys never enter the browser. */
-import type { ReactNode } from 'react';
-import { useStore } from '../store';
+import { useMemo, type ReactNode } from 'react';
 import {
-  IconChart,
   IconClock,
+  IconCoins,
+  IconGear,
   IconGrid,
-  IconKeyboard,
   IconLayers,
   IconPercent,
   IconPulse,
   IconRefresh,
   IconShield,
+  IconSun,
 } from '../components/Icons';
+import { useStore, type Page } from '../store';
 import { CURRENCIES, type Prefs } from '../lib/prefs';
 
-function Seg<T extends string>({
+type Choice<T extends string | number> = {
+  value: T;
+  label: string;
+};
+
+const THEME_CHOICES: Choice<Prefs['theme']>[] = [
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+  { value: 'system', label: 'System' },
+];
+
+const MOTION_CHOICES: Choice<Prefs['motion']>[] = [
+  { value: 'full', label: 'Full' },
+  { value: 'reduced', label: 'Reduced' },
+];
+
+const TABLE_DENSITY_CHOICES: Choice<Prefs['density']>[] = [
+  { value: 'comfortable', label: 'Comfortable' },
+  { value: 'compact', label: 'Compact' },
+];
+
+const BASIS_UNIT_CHOICES: Choice<Prefs['basisUnit']>[] = [
+  { value: 'pct', label: 'Percent' },
+  { value: 'bps', label: 'Basis points' },
+];
+
+const TIMEZONE_CHOICES: Choice<Prefs['timezone']>[] = [
+  { value: 'local', label: 'Local' },
+  { value: 'utc', label: 'UTC' },
+];
+
+const REFRESH_CHOICES: Choice<number>[] = [
+  { value: 3, label: '3s' },
+  { value: 6, label: '6s' },
+  { value: 12, label: '12s' },
+  { value: 30, label: '30s' },
+];
+
+const DENSITY_CHOICES: Array<Choice<'compact' | 'standard' | 'large'> & { zoom: number }> = [
+  { value: 'compact', label: 'Compact', zoom: 0.95 },
+  { value: 'standard', label: 'Standard', zoom: 1.05 },
+  { value: 'large', label: 'Large', zoom: 1.15 },
+];
+
+const DEFAULT_PAGE_CHOICES: Choice<Page>[] = [
+  { value: 'dashboard', label: 'Dashboard' },
+  { value: 'account', label: 'Account' },
+  { value: 'markets', label: 'Markets' },
+  { value: 'strategies', label: 'Basis scanner' },
+  { value: 'opportunities', label: 'Opportunities' },
+  { value: 'trade', label: 'Execution' },
+  { value: 'settings', label: 'Settings' },
+];
+
+function densityValue(zoom: number): 'compact' | 'standard' | 'large' {
+  if (zoom <= 0.99) return 'compact';
+  if (zoom >= 1.1) return 'large';
+  return 'standard';
+}
+
+function clearActivePage(): void {
+  try {
+    localStorage.removeItem('cosmos-active-page');
+  } catch {
+    // Ignore blocked storage. The pref itself still updates through the store.
+  }
+}
+
+function resetLocalPreferences(): void {
+  try {
+    localStorage.removeItem('cosmos-prefs');
+    localStorage.removeItem('cosmos-active-page');
+    localStorage.removeItem('cosmos-detail-symbol');
+  } catch {
+    // Reload still restores in-memory defaults when storage is unavailable.
+  }
+  location.reload();
+}
+
+function Segmented<T extends string | number>({
   value,
   options,
   onChange,
+  compact = false,
+  ariaLabel,
 }: {
   value: T;
-  options: { v: T; label: string }[];
-  onChange: (v: T) => void;
+  options: Choice<T>[];
+  onChange: (value: T) => void;
+  compact?: boolean;
+  ariaLabel: string;
 }) {
   return (
-    <span className="seg">
-      {options.map((o) => (
-        <button key={o.v} className={value === o.v ? 'on' : ''} onClick={() => onChange(o.v)} type="button">
-          {o.label}
+    <div className={`settings-segment ${compact ? 'settings-segment-compact' : ''}`} aria-label={ariaLabel} role="group">
+      {options.map((option) => (
+        <button
+          key={String(option.value)}
+          className={`settings-choice ${Object.is(value, option.value) ? 'settings-choice-active' : ''}`}
+          onClick={() => onChange(option.value)}
+          aria-pressed={Object.is(value, option.value)}
+          type="button"
+        >
+          {option.label}
         </button>
       ))}
-    </span>
-  );
-}
-
-function Row({
-  icon,
-  color,
-  label,
-  sub,
-  control,
-}: {
-  icon: ReactNode;
-  color: string;
-  label: string;
-  sub?: string;
-  control: ReactNode;
-}) {
-  return (
-    <div className="settings-row">
-      <span className="sr-icon" style={{ background: color }}>
-        {icon}
-      </span>
-      <span className="sr-main">
-        <span className="sr-label">{label}</span>
-        {sub && <span className="sr-sub">{sub}</span>}
-      </span>
-      <span className="sr-ctl">{control}</span>
     </div>
   );
 }
 
-function ThemePreview({
-  value,
-  label,
-  sub,
-  active,
-  onClick,
-}: {
-  value: Prefs['theme'];
-  label: string;
-  sub: string;
-  active: boolean;
-  onClick: () => void;
-}) {
+function SettingGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <button className={`settings-preview-card theme-${value} ${active ? 'active' : ''}`} onClick={onClick} type="button">
-      <span className="settings-preview-frame" aria-hidden="true">
-        <span className="preview-sidebar" />
-        <span className="preview-window">
-          <span className="preview-dot-row">
-            <i />
-            <i />
-            <i />
-          </span>
-          <span className="preview-line wide" />
-          <span className="preview-line" />
-          <span className="preview-chart" />
-        </span>
-      </span>
-      <span className="settings-preview-copy">
-        <b>{label}</b>
-        <em>{sub}</em>
-      </span>
-    </button>
-  );
-}
-
-function DensityPreview({
-  value,
-  label,
-  sub,
-  active,
-  onClick,
-}: {
-  value: Prefs['density'];
-  label: string;
-  sub: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  const rows = value === 'compact' ? 5 : 3;
-  return (
-    <button className={`settings-density-card ${value} ${active ? 'active' : ''}`} onClick={onClick} type="button">
-      <span className="density-list" aria-hidden="true">
-        {Array.from({ length: rows }).map((_, i) => (
-          <span key={i}>
-            <i />
-            <b />
-            <em />
-          </span>
-        ))}
-      </span>
-      <span>
-        <b>{label}</b>
-        <em>{sub}</em>
-      </span>
-    </button>
-  );
-}
-
-function RailItem({
-  href,
-  icon,
-  label,
-  color,
-  active = false,
-}: {
-  href: string;
-  icon: ReactNode;
-  label: string;
-  color: string;
-  active?: boolean;
-}) {
-  return (
-    <a className={`settings-rail-item ${active ? 'active' : ''}`} href={href} aria-current={active ? 'true' : undefined}>
-      <span className="sr-icon" style={{ background: color }}>
-        {icon}
-      </span>
-      <span>{label}</span>
-    </a>
-  );
-}
-
-function DisabledReason({ children, reason }: { children: ReactNode; reason: string }) {
-  return (
-    <button className="mini-btn settings-disabled-control" type="button" disabled title={reason} aria-label={`${children}: ${reason}`}>
-      {children}
-    </button>
-  );
-}
-
-function Section({ id, title, note, children }: { id: string; title: string; note?: string; children: ReactNode }) {
-  return (
-    <section className="settings-section" id={id}>
-      <div className="settings-section-head">
-        <div>
-          <h2>{title}</h2>
-          {note && <p>{note}</p>}
-        </div>
-      </div>
-      {children}
+    <section className="settings-group-block" aria-label={title}>
+      <h2 className="settings-group-title">{title}</h2>
+      <div className="settings-panel">{children}</div>
     </section>
+  );
+}
+
+function SettingRow({
+  icon,
+  tone,
+  title,
+  detail,
+  children,
+}: {
+  icon: ReactNode;
+  tone: string;
+  title: string;
+  detail: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="settings-row">
+      <div className={`settings-icon settings-icon-${tone}`} aria-hidden="true">
+        {icon}
+      </div>
+      <div className="settings-row-copy">
+        <div className="settings-row-title">{title}</div>
+        <div className="settings-row-detail">{detail}</div>
+      </div>
+      <div className="settings-row-control">{children}</div>
+    </div>
   );
 }
 
 export function Settings() {
   const { prefs, updatePref } = useStore();
-  const platform = typeof navigator !== 'undefined' ? (navigator.platform || 'Desktop') : 'Desktop';
-  const browser = typeof navigator !== 'undefined'
-    ? (navigator.userAgent.match(/(Chrome|Firefox|Safari)\/([\d.]+)/)?.slice(1).join(' ') ?? 'Desktop browser')
-    : 'Desktop browser';
-  const zone = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'local';
+
+  const currencyChoices = useMemo(
+    () =>
+      Object.entries(CURRENCIES).map(([code, currency]) => ({
+        value: code,
+        label: `${code} - ${currency.label}`,
+      })),
+    []
+  );
+
+  const currentDensity = densityValue(prefs.zoom || 1.05);
+  const currentDefaultPage = DEFAULT_PAGE_CHOICES.some((choice) => choice.value === prefs.defaultPage)
+    ? (prefs.defaultPage as Page)
+    : 'dashboard';
 
   return (
     <div className="container page settings-page">
-      <section className="settings-shell" aria-label="Settings workbench">
-        <aside className="settings-left-rail" aria-label="Settings sections">
-          <div className="settings-identity">
-            <span className="settings-app-mark" aria-hidden="true">
-              CA
-            </span>
-            <b>Settings</b>
-            <em>local cockpit controls</em>
-          </div>
-          <nav className="settings-rail-list">
-            <RailItem href="#settings-local" icon={<IconGrid />} color="#111827" label="Local" active />
-            <RailItem href="#settings-appearance" icon={<IconChart />} color="#8257e0" label="Appearance" />
-            <RailItem href="#settings-data" icon={<IconClock />} color="#2a7de0" label="Data" />
-            <RailItem href="#settings-about" icon={<IconShield />} color="#0a9b64" label="About" />
-          </nav>
-          <div className="settings-rail-status">
-            <span className="mode-dot ok" />
-            <b>Browser prefs</b>
-            <em>local only</em>
-          </div>
-        </aside>
+      <header className="settings-header">
+        <h1 className="settings-title">Display</h1>
+        <p className="settings-subtitle">
+          Local browser preferences only. Keys are server-only; account posture lives on Account and source health lives
+          on Health.
+        </p>
+      </header>
 
-        <div className="settings-content-pane">
-          <Section
-            id="settings-local"
-            title="Local preferences"
-            note="This page changes how the cockpit is displayed in this browser."
-          >
-            <div className="settings-account-panel">
-              <div className="settings-account-hero">
-                <span className="settings-app-mark large" aria-hidden="true">
-                  CA
-                </span>
-                <div>
-                  <span className="settings-account-label">Browser-only settings</span>
-                  <h1>Arbitrage Control Room</h1>
-                  <p>Theme, density, motion, refresh cadence, display units, timezone, currency, and default page.</p>
-                </div>
-              </div>
-              <div className="settings-boundary-note">
-                <IconShield size={16} />
-                <span>Keys are server-only. Account posture lives on Account; source health lives on Health.</span>
-              </div>
-            </div>
-          </Section>
+      <div className="settings-stack" aria-label="Local browser preferences">
+        <SettingGroup title="Appearance">
+          <SettingRow icon={<IconSun />} tone="theme" title="Theme" detail="Light, dark, or device setting.">
+            <Segmented
+              value={prefs.theme}
+              options={THEME_CHOICES}
+              ariaLabel="Theme"
+              onChange={(value) => updatePref('theme', value)}
+            />
+          </SettingRow>
 
-          <Section
-            id="settings-appearance"
-            title="Appearance"
-            note="Terminal chrome, motion, and density. These are local browser preferences."
-          >
-            <div className="settings-control-surface">
-              <div className="settings-control-head">
-                <span>
-                  <b>Theme and density</b>
-                  <em>Preview before changing theme. System follows the device theme.</em>
-                </span>
-                <span className="settings-current-pill">{prefs.theme}</span>
-              </div>
-              <div className="settings-preview-grid">
-                <ThemePreview
-                  value="light"
-                  label="Clear"
-                  sub="Bright trading desk"
-                  active={prefs.theme === 'light'}
-                  onClick={() => updatePref('theme', 'light')}
-                />
-                <ThemePreview
-                  value="dark"
-                  label="Graphite"
-                  sub="Low-glare trading"
-                  active={prefs.theme === 'dark'}
-                  onClick={() => updatePref('theme', 'dark')}
-                />
-                <ThemePreview
-                  value="system"
-                  label="System"
-                  sub="Device theme"
-                  active={prefs.theme === 'system'}
-                  onClick={() => updatePref('theme', 'system')}
-                />
-              </div>
-              <div className="settings-density-grid">
-                <DensityPreview
-                  value="comfortable"
-                  label="Comfortable"
-                  sub="Readable review mode"
-                  active={prefs.density === 'comfortable'}
-                  onClick={() => updatePref('density', 'comfortable')}
-                />
-                <DensityPreview
-                  value="compact"
-                  label="Compact"
-                  sub="Exchange-style density"
-                  active={prefs.density === 'compact'}
-                  onClick={() => updatePref('density', 'compact')}
-                />
-              </div>
-            </div>
-            <div className="settings-group">
-              <Row
-                icon={<IconPulse />}
-                color="#e0568c"
-                label="Motion"
-                sub="Reduced disables draw-in, flash, and tape movement"
-                control={
-                  <Seg<Prefs['motion']>
-                    value={prefs.motion}
-                    options={[{ v: 'full', label: 'Full' }, { v: 'reduced', label: 'Reduced' }]}
-                    onChange={(v) => updatePref('motion', v)}
-                  />
-                }
-              />
-              <Row
-                icon={<IconLayers />}
-                color="#0aa5a5"
-                label="Table density"
-                sub="Also available as visual cards above"
-                control={
-                  <Seg<Prefs['density']>
-                    value={prefs.density}
-                    options={[{ v: 'comfortable', label: 'Comfortable' }, { v: 'compact', label: 'Compact' }]}
-                    onChange={(v) => updatePref('density', v)}
-                  />
-                }
-              />
-              <Row
-                icon={<IconChart />}
-                color="#e08a2a"
-                label="Ticker tape"
-                sub="Small optional price tape under the top bar"
-                control={
-                  <button className={`switch ${prefs.tape ? 'on' : ''}`} onClick={() => updatePref('tape', !prefs.tape)} aria-label="tape" type="button" />
-                }
-              />
-            </div>
-          </Section>
+          <SettingRow icon={<IconGrid />} tone="density" title="Density" detail="Global cockpit scale for this browser.">
+            <Segmented
+              value={currentDensity}
+              options={DENSITY_CHOICES}
+              ariaLabel="Density"
+              onChange={(value) => {
+                const next = DENSITY_CHOICES.find((choice) => choice.value === value)?.zoom ?? 1.05;
+                updatePref('zoom', next);
+              }}
+            />
+          </SettingRow>
 
-          <Section id="settings-data" title="Data and time" note="How market data and timestamps are presented in the cockpit.">
-            <div className="settings-group">
-              <Row
-                icon={<IconRefresh />}
-                color="#2a7de0"
-                label="Markets refresh"
-                sub="Poll rate for markets and tape data"
-                control={
-                  <Seg
-                    value={String(prefs.refreshSec)}
-                    options={[{ v: '3', label: '3s' }, { v: '6', label: '6s' }, { v: '12', label: '12s' }]}
-                    onChange={(v) => updatePref('refreshSec', Number(v))}
-                  />
-                }
-              />
-              <Row
-                icon={<IconClock />}
-                color="#697079"
-                label="Timestamps"
-                sub="Engine always logs UTC internally"
-                control={
-                  <Seg<Prefs['timezone']>
-                    value={prefs.timezone}
-                    options={[{ v: 'local', label: 'Local' }, { v: 'utc', label: 'UTC' }]}
-                    onChange={(v) => updatePref('timezone', v)}
-                  />
-                }
-              />
-              <Row
-                icon={<IconGrid />}
-                color="#111827"
-                label="Currency"
-                sub="Display currency for money values"
-                control={
-                  <Seg<string>
-                    value={prefs.currency}
-                    options={Object.keys(CURRENCIES).map((code) => ({ v: code, label: code }))}
-                    onChange={(v) => updatePref('currency', v)}
-                  />
-                }
-              />
-              <Row
-                icon={<IconPercent />}
-                color="#0a9b64"
-                label="Basis units"
-                sub="Percent or basis points, everywhere basis is shown"
-                control={
-                  <Seg<Prefs['basisUnit']>
-                    value={prefs.basisUnit}
-                    options={[{ v: 'pct', label: '%' }, { v: 'bps', label: 'bps' }]}
-                    onChange={(v) => updatePref('basisUnit', v)}
-                  />
-                }
-              />
-              <Row
-                icon={<IconGrid />}
-                color="#8257e0"
-                label="Default page"
-                sub="Where the app opens"
-                control={
-                  <Seg
-                    value={prefs.defaultPage}
-                    options={[{ v: 'dashboard', label: 'Dashboard' }, { v: 'markets', label: 'Markets' }, { v: 'trade', label: 'Execution' }]}
-                    onChange={(v) => updatePref('defaultPage', v)}
-                  />
-                }
-              />
-              <Row
-                icon={<IconKeyboard />}
-                color="#697079"
-                label="Keyboard"
-                sub="Global command palette shortcuts are fixed in this build"
-                control={<DisabledReason reason="Keyboard shortcut editing is not built; use Command-K, slash, and Escape.">Fixed</DisabledReason>}
-              />
-              <Row
-                icon={<IconRefresh />}
-                color="#e0414b"
-                label="Reset preferences"
-                sub="Clears local UI prefs only, never trading config"
-                control={
-                  <button
-                    className="mini-btn"
-                    onClick={() => {
-                      localStorage.removeItem('cosmos-prefs');
-                      location.reload();
-                    }}
-                    type="button"
-                  >
-                    Reset
-                  </button>
-                }
-              />
-            </div>
-          </Section>
+          <SettingRow icon={<IconPulse />} tone="motion" title="Motion" detail="Reduce animation when the cockpit should stay quiet.">
+            <Segmented
+              value={prefs.motion}
+              options={MOTION_CHOICES}
+              ariaLabel="Motion"
+              onChange={(value) => updatePref('motion', value)}
+            />
+          </SettingRow>
 
-          <Section id="settings-about" title="About" note="Scope of this settings surface.">
-            <div className="settings-group">
-              <div className="settings-row">
-                <span className="sr-main">
-                  <span className="sr-label">This browser</span>
-                  <span className="sr-sub">{platform} · {zone} · {browser}</span>
-                </span>
-              </div>
-              <div className="settings-row">
-                <span className="sr-main">
-                  <span className="sr-label">Control boundary</span>
-                  <span className="sr-sub">
-                    This page changes browser presentation only. Risk, live trading, kill switch, and execution rules
-                    remain on server-backed surfaces.
-                  </span>
-                </span>
-              </div>
-              <div className="settings-row">
-                <span className="sr-main">
-                  <span className="sr-label">Version</span>
-                </span>
-                <span className="sr-ctl">
-                  <span className="chip-tag gold">v2 · cockpit + markets + loans + margin</span>
-                </span>
-              </div>
-            </div>
-          </Section>
-        </div>
-      </section>
+          <SettingRow icon={<IconLayers />} tone="rows" title="Table density" detail="Row height for scanner, market, and log tables.">
+            <Segmented
+              value={prefs.density}
+              options={TABLE_DENSITY_CHOICES}
+              ariaLabel="Table density"
+              onChange={(value) => updatePref('density', value)}
+            />
+          </SettingRow>
+        </SettingGroup>
+
+        <SettingGroup title="Market Display">
+          <SettingRow icon={<IconRefresh />} tone="refresh" title="Refresh cadence" detail="Market and tape polling interval.">
+            <Segmented
+              value={prefs.refreshSec}
+              options={REFRESH_CHOICES}
+              ariaLabel="Refresh cadence"
+              onChange={(value) => updatePref('refreshSec', value)}
+              compact
+            />
+          </SettingRow>
+
+          <SettingRow icon={<IconClock />} tone="time" title="Timezone" detail="Local time or UTC display.">
+            <Segmented
+              value={prefs.timezone}
+              options={TIMEZONE_CHOICES}
+              ariaLabel="Timezone"
+              onChange={(value) => {
+                updatePref('timezone', value);
+                updatePref('clockZone', value === 'utc' ? 'UTC' : 'local');
+              }}
+            />
+          </SettingRow>
+
+          <SettingRow icon={<IconCoins />} tone="currency" title="Currency" detail="Fiat display for balances and PnL.">
+            <select
+              className="settings-select"
+              aria-label="Currency"
+              value={prefs.currency}
+              onChange={(event) => updatePref('currency', event.target.value)}
+            >
+              {currencyChoices.map((choice) => (
+                <option key={choice.value} value={choice.value}>
+                  {choice.label}
+                </option>
+              ))}
+            </select>
+          </SettingRow>
+
+          <SettingRow icon={<IconPercent />} tone="basis" title="Basis units" detail="Percent or basis points for spreads.">
+            <Segmented
+              value={prefs.basisUnit}
+              options={BASIS_UNIT_CHOICES}
+              ariaLabel="Basis units"
+              onChange={(value) => updatePref('basisUnit', value)}
+            />
+          </SettingRow>
+        </SettingGroup>
+
+        <SettingGroup title="Startup">
+          <SettingRow icon={<IconGear />} tone="startup" title="Default page" detail="First page after a fresh browser session.">
+            <select
+              className="settings-select settings-select-page"
+              aria-label="Default page"
+              value={currentDefaultPage}
+              onChange={(event) => {
+                updatePref('defaultPage', event.target.value);
+                clearActivePage();
+              }}
+            >
+              {DEFAULT_PAGE_CHOICES.map((choice) => (
+                <option key={choice.value} value={choice.value}>
+                  {choice.label}
+                </option>
+              ))}
+            </select>
+          </SettingRow>
+        </SettingGroup>
+
+        <SettingGroup title="Reset">
+          <SettingRow icon={<IconShield />} tone="reset" title="Reset local preferences" detail="Restore browser display defaults. No server write.">
+            <button className="settings-reset-button" type="button" onClick={resetLocalPreferences}>
+              Reset
+            </button>
+          </SettingRow>
+        </SettingGroup>
+      </div>
     </div>
   );
 }

@@ -72,6 +72,13 @@ Owner directive (2026-07-07):
 
 ## 7. Run log (newest first)
 
+### 2026-07-07 — Merged all four Control rebuilds into current-main
+- Four Codex 5.5 workers finished (worktrees cosmos-{risk,logs,health,settings}). Merged one at a time, squashed, into `current-main`: Settings `119b9aa`, Health `9fe42e7`, Logs `87de7b2`, Risk `2689268`; then reconcile fix `2eb1f80`.
+- Result: Risk = pre-trade safety console (posture + blocker stack, kill switch, live-arm gate, wired limits + six "not wired" guards disabled-with-reason, gate probe, allow/blocklist, rejections→Logs); Logs = incident/audit console (severity strip, debug hidden, event table + inspector + JSON drawer, error-first); Health = machine trust dashboard (overall verdict + data-path checks green/amber/red/gray + "what to fix next"); Settings = boring local prefs only. build clean, gates 50/50, all four verified styled in-browser, no console errors.
+- **Merge lesson (record):** each worker made 4-5 iterative commits that each APPENDED a marked block to `styles.css`; the squash-union of four such files left **+5 unbalanced braces** → a CSS parse break that silently unstyled Risk. Also workers kept committing after I merged (tips moved), so merged tsx/css drifted. Fix pattern that worked: reconstruct `styles.css` deterministically = base (verified clean prefix) + each worker-final's appended block, and pull the page `.tsx` from the SAME worker-final commit. Note: `git show $VAR:path` fails in this sandbox — use literal SHAs.
+- Worktrees still registered (cosmos-*); agents may still be committing. Prune when confirmed idle.
+- Next: **Engine Part 0** (scanner-only, no trading) per ENGINE.md §16.
+
 ### 2026-07-07 — Worktrees + briefs for Control page rebuild (routing, not building)
 - Owner rejected the current Control pages on product-seriousness grounds (not build/test). Director routes the rebuild via isolated worktrees; does NOT rebuild pages in-chat.
 - Created 4 git worktrees off `current-main` @ ba804d8, one branch each:

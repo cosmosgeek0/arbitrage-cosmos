@@ -34,6 +34,8 @@ interface SystemInfo {
     lastSyncTs: number | null;
     lastError: string | null;
     userStream: string;
+    keyFingerprint: string | null;
+    keyPosture: { level: string; label: string; tone: Tone; ipRestricted: boolean };
   };
   restLatencyMs: number | null;
   serverTimeDiffMs: number | null;
@@ -275,6 +277,15 @@ export function SystemHealth() {
       sub: 'order and balance updates during volatility',
       rowTone: userStreamTone,
       value: info.binance.userStream,
+    },
+    {
+      icon: <IconShield />,
+      label: 'API key scope',
+      sub: info.binance.keyFingerprint
+        ? `key ${info.binance.keyFingerprint}${info.binance.keyPosture.ipRestricted ? ' · IP restricted' : ''}`
+        : 'per-key permissions from Binance apiRestrictions',
+      rowTone: info.binance.keysPresent ? info.binance.keyPosture.tone : 'idle',
+      value: info.binance.keysPresent ? info.binance.keyPosture.label : 'no key',
     },
     {
       icon: <IconBrain />,

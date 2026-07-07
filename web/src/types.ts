@@ -230,6 +230,23 @@ export interface ServerState {
     canTrade: boolean | null;
     userStream: string;
     keyFingerprint: string | null;
+    keyPermissions: {
+      ipRestrict: boolean;
+      enableReading: boolean;
+      enableWithdrawals: boolean;
+      enableInternalTransfer: boolean;
+      enableMargin: boolean;
+      enableSpotAndMarginTrading: boolean;
+      enableFutures: boolean;
+      permitsUniversalTransfer: boolean;
+      enableVanillaOptions?: boolean;
+    } | null;
+    keyPosture: {
+      level: 'no_key' | 'unknown' | 'read_only' | 'trading' | 'elevated' | 'unsafe';
+      label: string;
+      tone: 'ok' | 'warn' | 'bad' | 'idle';
+      ipRestricted: boolean;
+    };
   };
   feeds: Record<string, string>;
   config: AppConfig;

@@ -46,17 +46,18 @@ export class AccountService {
         const locked = Number(b.locked);
         if (free > 0 || locked > 0) this.balances.set(b.asset, { free, locked });
       }
-      this.canTrade = acct.canTrade;
-      // /api/v3/account.canWithdraw is ACCOUNT-level and stays true for a
-      // read-only key. Prefer the KEY-level flag from apiRestrictions so the UI
-      // never falsely warns that a read-only key "can withdraw". Fetched
-      // best-effort — a failure here must not break the balance sync.
+      // /api/v3/account.canTrade/canWithdraw are ACCOUNT-level and stay true for a
+      // read-only key. Prefer the KEY-level flags from apiRestrictions so the UI
+      // reflects the real key scope, not the account. Fetched best-effort — a
+      // failure here must not break the balance sync.
       try {
         this.keyRestrictions = await this.client.apiRestrictions();
         this.canWithdraw = this.keyRestrictions.enableWithdrawals;
+        this.canTrade = this.keyRestrictions.enableSpotAndMarginTrading;
       } catch {
         this.keyRestrictions = null;
-        this.canWithdraw = acct.canWithdraw; // fallback: account-level flag
+        this.canWithdraw = acct.canWithdraw; // fallback: account-level flags
+        this.canTrade = acct.canTrade;
       }
       const wasConnected = this.connected;
       this.connected = true;

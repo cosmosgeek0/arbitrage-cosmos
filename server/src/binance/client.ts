@@ -16,12 +16,12 @@ export function credsFromEnv(): BinanceCreds | null {
 
 /**
  * Non-sensitive fingerprint of the API KEY (never the secret) for the UI, so the
- * owner can confirm which key is loaded without exposing it. Shows first/last 4
- * only. The secret is never surfaced anywhere.
+ * owner can confirm which key is loaded without exposing it. Shows first 6 + last
+ * 4 only. The secret is never surfaced anywhere.
  */
 export function maskApiKey(apiKey: string): string {
-  if (apiKey.length <= 8) return '••••';
-  return `${apiKey.slice(0, 4)}••••${apiKey.slice(-4)}`;
+  if (apiKey.length <= 10) return '••••';
+  return `${apiKey.slice(0, 6)}••••${apiKey.slice(-4)}`;
 }
 
 export class BinanceApiError extends Error {
@@ -58,6 +58,52 @@ export interface ApiRestrictions {
   permitsUniversalTransfer: boolean;
   enableVanillaOptions?: boolean;
   createTime?: number;
+}
+
+// Binance has historically returned some of these flags as the STRINGS
+// "true"/"false" rather than booleans — and "false" is truthy in JS, which would
+// invert a safety check. Coerce every flag to a real boolean.
+function coerceBool(v: unknown): boolean {
+  return v === true || v === 'true' || v === 1 || v === '1';
+}
+function normalizeRestrictions(r: Record<string, unknown>): ApiRestrictions {
+  return {
+    ipRestrict: coerceBool(r.ipRestrict),
+    enableReading: coerceBool(r.enableReading),
+    enableWithdrawals: coerceBool(r.enableWithdrawals),
+    enableInternalTransfer: coerceBool(r.enableInternalTransfer),
+    enableMargin: coerceBool(r.enableMargin),
+    enableSpotAndMarginTrading: coerceBool(r.enableSpotAndMarginTrading),
+    enableFutures: coerceBool(r.enableFutures),
+    permitsUniversalTransfer: coerceBool(r.permitsUniversalTransfer),
+    enableVanillaOptions: coerceBool(r.enableVanillaOptions),
+    createTime: typeof r.createTime === 'number' ? r.createTime : undefined,
+  };
+}
+
+export type KeyPostureLevel = 'no_key' | 'unknown' | 'read_only' | 'trading' | 'elevated' | 'unsafe';
+export interface KeyPosture {
+  level: KeyPostureLevel;
+  label: string;
+  tone: 'ok' | 'warn' | 'bad' | 'idle';
+  ipRestricted: boolean;
+}
+
+/**
+ * Single source of truth for the key-scope posture badge, derived only from the
+ * authoritative per-KEY apiRestrictions flags (never account-level canTrade/
+ * canWithdraw). Worst case wins.
+ */
+export function keyPosture(r: ApiRestrictions | null, keysPresent: boolean): KeyPosture {
+  if (!keysPresent) return { level: 'no_key', label: 'No key', tone: 'idle', ipRestricted: false };
+  if (!r) return { level: 'unknown', label: 'Permissions unknown', tone: 'warn', ipRestricted: false };
+  const ipRestricted = r.ipRestrict;
+  if (r.enableWithdrawals) return { level: 'unsafe', label: 'Withdrawals enabled — recreate key', tone: 'bad', ipRestricted };
+  if (r.permitsUniversalTransfer || r.enableInternalTransfer) return { level: 'unsafe', label: 'Transfer-out permitted — recreate key', tone: 'bad', ipRestricted };
+  if (r.enableSpotAndMarginTrading) return { level: 'trading', label: 'Trading-capable key', tone: 'warn', ipRestricted };
+  if (r.enableMargin || r.enableFutures || r.enableVanillaOptions) return { level: 'elevated', label: 'Elevated permissions', tone: 'warn', ipRestricted };
+  if (r.enableReading) return { level: 'read_only', label: 'Read-only key OK', tone: 'ok', ipRestricted };
+  return { level: 'unknown', label: 'No reading permission', tone: 'warn', ipRestricted };
 }
 
 export interface OpenOrder {
@@ -151,8 +197,9 @@ export class BinanceClient {
   }
 
   // Authoritative per-key permissions (the real "can this key withdraw/trade").
-  apiRestrictions(): Promise<ApiRestrictions> {
-    return this.request('GET', '/sapi/v1/account/apiRestrictions', {}, true);
+  async apiRestrictions(): Promise<ApiRestrictions> {
+    const raw = await this.request<Record<string, unknown>>('GET', '/sapi/v1/account/apiRestrictions', {}, true);
+    return normalizeRestrictions(raw);
   }
 
   openOrders(): Promise<OpenOrder[]> {

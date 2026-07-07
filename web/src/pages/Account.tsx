@@ -34,25 +34,22 @@ export function Account() {
 
   const acct = state.account;
   const b = state.binance;
+  const kp = b.keyPermissions; // authoritative per-KEY scope (apiRestrictions)
+  const posture = b.keyPosture;
   const entries = acct?.entries ?? [];
   const topEntries = useMemo(() => entries.slice().sort((a, z) => z.valueUsdt - a.valueUsdt).slice(0, 6), [entries]);
   const lockedValue = entries.reduce((sum, e) => sum + (e.priceUsdt ?? 0) * e.locked, 0);
   const checks = [
     { label: 'server keys', pass: b.keysPresent },
     { label: 'account sync', pass: b.connected },
-    { label: 'withdrawals off', pass: b.canWithdraw === false || b.canWithdraw === null },
+    { label: 'withdrawals off', pass: kp ? !kp.enableWithdrawals : b.canWithdraw !== true },
+    { label: 'transfers off', pass: kp ? !(kp.permitsUniversalTransfer || kp.enableInternalTransfer) : true },
     { label: 'risk gated', pass: true },
     { label: 'ledger active', pass: state.events.length >= 0 },
   ];
   const score = checks.filter((c) => c.pass).length;
-  const statusTone: Tone = b.canWithdraw === true ? 'bad' : b.connected ? 'ok' : b.keysPresent ? 'warn' : 'idle';
-  const statusText = b.canWithdraw === true
-    ? 'unsafe key scope'
-    : b.connected
-      ? 'account synced'
-      : b.keysPresent
-        ? 'sync needs attention'
-        : 'read access pending';
+  const statusTone: Tone = !b.keysPresent ? 'idle' : !b.connected ? 'warn' : posture.tone;
+  const statusText = !b.keysPresent ? 'read access pending' : !b.connected ? 'sync needs attention' : posture.label;
 
   return (
     <div className="container page account-page">
@@ -71,14 +68,15 @@ export function Account() {
         </div>
       </div>
 
-      {b.canWithdraw === true && (
-        <WarnStrip>Recreate this Binance key with withdrawals disabled. This app contains no withdrawal path, and the key should not have that permission either.</WarnStrip>
+      {posture.level === 'unsafe' && (
+        <WarnStrip>{posture.label}. This app has no withdrawal or transfer-out route regardless, but the key itself should not carry that permission — recreate it as read-only.</WarnStrip>
       )}
 
       <section className={`card account-hero ${statusTone}`}>
         <div className="account-hero-main">
           <div className="account-eyebrow">
             <StatePill tone={statusTone}>{statusText}</StatePill>
+            {posture.ipRestricted && <span>IP restricted</span>}
             <span>{state.mode.toLowerCase()}</span>
             <span>{state.config.killSwitch ? 'kill switch on' : 'kill switch off'}</span>
           </div>
@@ -145,28 +143,58 @@ export function Account() {
         </section>
 
         <section className="card account-panel">
-          <PanelHead icon={<IconShield />} title="Permission map" note="Binance scopes and app-side hard stops." />
+          <PanelHead icon={<IconShield />} title="Permission map" note="Authoritative per-KEY scope from Binance apiRestrictions — not account-level flags." />
           <div className="account-permission-list">
             <PermissionRow
               label="Reading"
               detail="Required for balances, order history, fills, and permissions."
-              value={b.keysPresent ? 'configured' : 'absent'}
-              tone={b.keysPresent ? 'ok' : 'idle'}
+              value={kp === null ? 'unknown' : kp.enableReading ? 'enabled' : 'disabled'}
+              tone={toneForBool(kp === null ? null : kp.enableReading)}
             />
             <PermissionRow
-              label="Spot trading"
-              detail="Only useful after live trading is deliberately armed; risk gate still runs first."
-              value={b.canTrade === null ? 'unknown' : b.canTrade ? 'enabled' : 'disabled'}
-              tone={toneForBool(b.canTrade)}
+              label="Spot & margin trading"
+              detail="Off for a read-only key. Even if on, trading here still needs Risk arming + typed confirmation."
+              value={kp === null ? 'unknown' : kp.enableSpotAndMarginTrading ? 'ENABLED' : 'disabled'}
+              tone={toneForBool(kp === null ? null : kp.enableSpotAndMarginTrading, true)}
+            />
+            <PermissionRow
+              label="Margin"
+              detail="Elevated permission. Should be off for a pure read-only key."
+              value={kp === null ? 'unknown' : kp.enableMargin ? 'ENABLED' : 'disabled'}
+              tone={toneForBool(kp === null ? null : kp.enableMargin, true)}
+            />
+            <PermissionRow
+              label="Futures"
+              detail="Elevated permission. Should be off for a pure read-only key."
+              value={kp === null ? 'unknown' : kp.enableFutures ? 'ENABLED' : 'disabled'}
+              tone={toneForBool(kp === null ? null : kp.enableFutures, true)}
+            />
+            <PermissionRow
+              label="Universal transfer"
+              detail="Moves funds between wallets/accounts. Must be off."
+              value={kp === null ? 'unknown' : kp.permitsUniversalTransfer ? 'ENABLED' : 'disabled'}
+              tone={toneForBool(kp === null ? null : kp.permitsUniversalTransfer, true)}
+            />
+            <PermissionRow
+              label="Internal transfer"
+              detail="Sub-account / internal transfer. Must be off."
+              value={kp === null ? 'unknown' : kp.enableInternalTransfer ? 'ENABLED' : 'disabled'}
+              tone={toneForBool(kp === null ? null : kp.enableInternalTransfer, true)}
             />
             <PermissionRow
               label="Withdrawals"
-              detail="Should be disabled on Binance. This frontend/backend exposes no withdrawal route."
-              value={b.canWithdraw === null ? 'unknown' : b.canWithdraw ? 'ENABLED' : 'disabled'}
-              tone={toneForBool(b.canWithdraw, true)}
+              detail="Must be disabled on Binance. This frontend/backend exposes no withdrawal route either."
+              value={kp === null ? 'unknown' : kp.enableWithdrawals ? 'ENABLED' : 'disabled'}
+              tone={toneForBool(kp === null ? null : kp.enableWithdrawals, true)}
             />
             <PermissionRow
-              label="Transfers out"
+              label="IP restricted"
+              detail="Key is limited to whitelisted IPs. Recommended for a server-side key."
+              value={kp === null ? 'unknown' : kp.ipRestrict ? 'restricted' : 'unrestricted'}
+              tone={kp === null ? 'idle' : kp.ipRestrict ? 'ok' : 'warn'}
+            />
+            <PermissionRow
+              label="Transfers out (app)"
               detail="No transfer-out UI or Binance client method exists in this app."
               value="not implemented"
               tone="ok"

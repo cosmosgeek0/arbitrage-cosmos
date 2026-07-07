@@ -72,6 +72,14 @@ Owner directive (2026-07-07):
 
 ## 7. Run log (newest first)
 
+### 2026-07-07 — Fix Binance key-permission detection (key-scope truth)
+- Asked: stop judging safety by account-level `canTrade`/`canWithdraw`; use per-KEY `/sapi/v1/account/apiRestrictions` fields and posture rules; fingerprint 6+4; update Account permission map + System Health; keep trading/withdrawals blocked.
+- Changed: `client.ts` — `maskApiKey` → first6+last4; defensive `coerceBool`/`normalizeRestrictions` ("false" string is truthy → would invert a check); exported `keyPosture()` (worst-wins: withdrawals→unsafe, universal/internal transfer→unsafe, spot&margin→trading, margin/futures/options→elevated, reading-only→"Read-only key OK"; carries ipRestricted). `account.ts` — `canTrade`/`canWithdraw` now sourced from key flags (`enableSpotAndMarginTrading`/`enableWithdrawals`), account-level only as fallback. `index.ts` — expose `keyPermissions` + `keyPosture` on `/api/state` and `/api/system`. `types.ts` + `Account.tsx` (full per-key permission map, posture badge, IP-restricted chip, unsafe warn only on real unsafe) + `SystemHealth.tsx` ("API key scope" row).
+- Verified live (real key): `keyPosture=Read-only key OK` (level read_only), `ipRestrict=true`, all trade/transfer/withdraw flags false, fingerprint `MGVMfD••••VSPa`, Account posture 6/6, no console errors. build clean, gates 50/50.
+- README: setup wording already correct (Reading only / withdrawals+transfer+trading off / IP restrict) — unchanged.
+- Still blocked: trading (kill switch + risk gate), withdrawals/transfer-out (no routes). No raw key/secret exposed.
+- Note: signed read-only endpoints need BOTH key + secret (HMAC signature) — `.env` has both, confirmed working.
+
 ### 2026-07-07 — Refresh/reconnect dock + authoritative per-key permissions
 - Asked: cleanly push another chat's additions — top-bar key manifest, a bottom refresh/reconnect dock, connection-health.
 - Changed (concurrent-session work, not Director-authored): 13 files + new `web/src/lib/refresh.ts`. Highlights: `RefreshDock` (bottom, WAA-driven spin, success/fail marks, health popover) + global `fireRefresh`/`useRefreshSignal`; `POST /api/refresh` (server resync); `GET /api/apikey` (key manifest — masked fingerprint + first-8 prefix only, never full key/secret); new client `apiRestrictions()` → `/sapi/v1/account/apiRestrictions` for **authoritative per-key** permissions.

@@ -21,7 +21,7 @@ import {
   type BookTicker,
   type Futures24hTicker,
 } from './binance/rest.js';
-import { BinanceClient, credsFromEnv, maskApiKey, rateLimit } from './binance/client.js';
+import { BinanceClient, credsFromEnv, maskApiKey, keyPosture, rateLimit } from './binance/client.js';
 import { resolveIcons } from './binance/icons.js';
 import { UserStream, type ExecutionReport } from './binance/userStream.js';
 import { AccountService } from './services/account.js';
@@ -156,6 +156,8 @@ function buildState() {
       canTrade: account.canTrade,
       userStream: userStream?.status ?? 'off',
       keyFingerprint: creds ? maskApiKey(creds.apiKey) : null,
+      keyPermissions: account.keyRestrictions,
+      keyPosture: keyPosture(account.keyRestrictions, account.keysPresent),
     },
     feeds: engine.feeds,
     config,
@@ -976,6 +978,8 @@ app.get('/api/system', (req, res) => {
         lastError: account.lastError,
         userStream: userStream?.status ?? 'off',
         keyFingerprint: creds ? maskApiKey(creds.apiKey) : null,
+        keyPermissions: account.keyRestrictions,
+        keyPosture: keyPosture(account.keyRestrictions, account.keysPresent),
       },
       restLatencyMs: timeSync?.latencyMs ?? null,
       serverTimeDiffMs: timeSync?.diffMs ?? null,

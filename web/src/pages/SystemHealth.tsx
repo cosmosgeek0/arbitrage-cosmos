@@ -1,6 +1,4 @@
-/* System Health is the cockpit source monitor: every status explains whether
-   account truth, market freshness, risk gating, or ledger writes can be trusted. */
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
 import { useRefreshSignal } from '../lib/refresh';
 import { StatePill } from '../components/ui';
@@ -10,16 +8,27 @@ import {
   IconBrain,
   IconChart,
   IconClock,
+  IconDatabase,
+  IconExternal,
   IconKey,
   IconList,
   IconPulse,
-  IconRefresh,
   IconShield,
-  IconTicket,
+  IconTerminal,
   IconWallet,
   IconWifi,
 } from '../components/Icons';
 import { timeAgo } from '../format';
+
+type Tone = 'ok' | 'bad' | 'warn' | 'idle';
+type HealthState = 'healthy' | 'degraded' | 'broken' | 'not_configured';
+
+interface KeyPosture {
+  level: string;
+  label: string;
+  tone: Tone;
+  ipRestricted: boolean;
+}
 
 interface SystemInfo {
   uptimeSec: number;
@@ -34,7 +43,7 @@ interface SystemInfo {
     lastError: string | null;
     userStream: string;
     keyFingerprint: string | null;
-    keyPosture: { level: string; label: string; tone: Tone; ipRestricted: boolean };
+    keyPosture: KeyPosture;
   };
   restLatencyMs: number | null;
   serverTimeDiffMs: number | null;
@@ -48,7 +57,38 @@ interface SystemInfo {
   cfUser: string | null;
 }
 
-type Tone = 'ok' | 'bad' | 'warn' | 'idle';
+interface HealthCheck {
+  id: string;
+  group: 'Path' | 'Exchange' | 'Account' | 'Persistence' | 'Engine';
+  source: string;
+  measurement: string;
+  value: ReactNode;
+  detail: string;
+  state: HealthState;
+  fix: string;
+  icon: ReactNode;
+}
+
+const stateLabel: Record<HealthState, string> = {
+  healthy: 'Healthy',
+  degraded: 'Degraded',
+  broken: 'Broken',
+  not_configured: 'Not configured',
+};
+
+const stateTone: Record<HealthState, Tone> = {
+  healthy: 'ok',
+  degraded: 'warn',
+  broken: 'bad',
+  not_configured: 'idle',
+};
+
+const stateRank: Record<HealthState, number> = {
+  broken: 4,
+  degraded: 3,
+  not_configured: 2,
+  healthy: 1,
+};
 
 function fmtUptime(sec: number): string {
   const d = Math.floor(sec / 86400);
@@ -57,397 +97,529 @@ function fmtUptime(sec: number): string {
   return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m ${sec % 60}s`;
 }
 
-const tone = (s: string): Tone =>
-  s === 'live' || s === 'open' ? 'ok' : s === 'connecting' ? 'warn' : s === 'closed' || s === 'failed' ? 'bad' : 'idle';
-
-function ageTone(ts: number | null, freshMs: number): Tone {
-  if (!ts) return 'idle';
-  const age = Date.now() - ts;
-  if (age <= freshMs) return 'ok';
-  if (age <= freshMs * 3) return 'warn';
-  return 'bad';
+function fmtMs(ms: number | null): string {
+  return ms === null ? 'not exposed' : `${Math.round(ms)}ms`;
 }
 
-function latencyTone(ms: number | null): Tone {
-  if (ms === null) return 'idle';
-  if (ms <= 500) return 'ok';
-  if (ms <= 1500) return 'warn';
-  return 'bad';
+function fmtSignedMs(ms: number | null): string {
+  if (ms === null) return 'not exposed';
+  return `${ms > 0 ? '+' : ''}${Math.round(ms)}ms`;
 }
 
-function driftTone(ms: number | null): Tone {
-  if (ms === null) return 'idle';
+function fmtAge(ts: number | null): string {
+  return ts ? timeAgo(ts) : 'not exposed';
+}
+
+function latencyState(ms: number | null): HealthState {
+  if (ms === null) return 'not_configured';
+  if (ms <= 500) return 'healthy';
+  if (ms <= 1500) return 'degraded';
+  return 'broken';
+}
+
+function driftState(ms: number | null): HealthState {
+  if (ms === null) return 'not_configured';
   const abs = Math.abs(ms);
-  if (abs <= 1000) return 'ok';
-  if (abs <= 5000) return 'warn';
-  return 'bad';
+  if (abs <= 1000) return 'healthy';
+  if (abs <= 5000) return 'degraded';
+  return 'broken';
 }
 
-function weightTone(weight: number | null): Tone {
-  if (weight === null) return 'idle';
-  if (weight >= 4800) return 'bad';
-  if (weight >= 3000) return 'warn';
-  return 'ok';
+function ageState(ts: number | null, healthyMs: number, degradedMs: number, missing: HealthState): HealthState {
+  if (!ts) return missing;
+  const age = Date.now() - ts;
+  if (age <= healthyMs) return 'healthy';
+  if (age <= degradedMs) return 'degraded';
+  return 'broken';
 }
 
-function msLabel(ms: number | null): string {
-  return ms === null ? '-' : `${ms}ms`;
+function weightState(weight: number | null): HealthState {
+  if (weight === null) return 'not_configured';
+  if (weight >= 4800) return 'broken';
+  if (weight >= 3000) return 'degraded';
+  return 'healthy';
 }
 
-function HealthMetric({
-  icon,
-  label,
-  value,
-  sub,
-  tone: metricTone,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: ReactNode;
-  sub: ReactNode;
-  tone: Tone;
-}) {
-  return (
-    <div className={`sys-metric ${metricTone}`}>
-      <span className="sys-metric-icon">{icon}</span>
-      <span>
-        <em>{label}</em>
-        <b className="num">{value}</b>
-        <small>{sub}</small>
-      </span>
-    </div>
-  );
+function postureState(posture: KeyPosture | null, keysPresent: boolean): HealthState {
+  if (!keysPresent) return 'not_configured';
+  if (!posture) return 'not_configured';
+  if (posture.tone === 'bad') return 'broken';
+  if (posture.tone === 'warn') return 'degraded';
+  if (posture.tone === 'ok') return 'healthy';
+  return 'not_configured';
 }
 
-function ImpactCard({
-  icon,
-  title,
-  value,
-  detail,
-  tone: cardTone,
-  action,
-  onClick,
-}: {
-  icon: ReactNode;
-  title: string;
-  value: ReactNode;
-  detail: string;
-  tone: Tone;
-  action: string;
-  onClick: () => void;
-}) {
-  return (
-    <button className={`sys-impact-card ${cardTone}`} type="button" onClick={onClick}>
-      <span className="sys-impact-icon">{icon}</span>
-      <span className="sys-impact-copy">
-        <span>{title}</span>
-        <b>{value}</b>
-        <em>{detail}</em>
-      </span>
-      <span className="sys-impact-action">{action}</span>
-    </button>
-  );
+function feedState(status: string): HealthState {
+  if (status === 'live' || status === 'open') return 'healthy';
+  if (status === 'connecting') return 'degraded';
+  if (status === 'failed' || status === 'closed') return 'broken';
+  return 'not_configured';
 }
 
-function SourceRow({
-  icon,
-  label,
-  sub,
-  value,
-  tone: rowTone,
-}: {
-  icon: ReactNode;
-  label: string;
-  sub: ReactNode;
-  value: ReactNode;
-  tone: Tone;
-}) {
-  return (
-    <div className={`sys-source-row ${rowTone}`}>
-      <span className="sys-source-icon">{icon}</span>
-      <span className="sys-source-copy">
-        <b>{label}</b>
-        <em>{sub}</em>
-      </span>
-      <StatePill tone={rowTone}>{value}</StatePill>
-    </div>
-  );
+function worstState(states: HealthState[]): HealthState {
+  if (states.some((s) => s === 'broken')) return 'broken';
+  if (states.some((s) => s === 'degraded')) return 'degraded';
+  if (states.some((s) => s === 'not_configured')) return 'not_configured';
+  return 'healthy';
+}
+
+function combineState(...states: HealthState[]): HealthState {
+  return states.reduce((worst, next) => (stateRank[next] > stateRank[worst] ? next : worst), 'healthy' as HealthState);
+}
+
+function modeLabel(info: SystemInfo): string {
+  if (info.killSwitch) return 'Halted';
+  return info.liveTradingEnabled ? 'Live armed' : 'Manual only';
+}
+
+function tradeDecision(state: HealthState): string {
+  if (state === 'healthy') return 'Data trusted';
+  if (state === 'degraded') return 'Review required';
+  if (state === 'broken') return 'Do not trust';
+  return 'Setup blocked';
+}
+
+function decisionCopy(state: HealthState): string {
+  if (state === 'healthy') return 'Configured sources are inside tolerance. Execution decisions can use this data path.';
+  if (state === 'degraded') return 'A live source is slow or stale. Validate the blocker before opening an order ticket.';
+  if (state === 'broken') return 'A source has failed. Treat scanner, account, and execution surfaces as untrusted.';
+  return 'Market data is visible, but account or engine truth is absent. Do not treat this as trade-ready.';
+}
+
+function HealthDot({ state }: { state: HealthState }) {
+  return <span className={`health-dot health-${state}`} aria-hidden="true" />;
+}
+
+function stateForIds(checks: HealthCheck[], ids: string[]): HealthState {
+  return worstState(checks.filter((check) => ids.includes(check.id)).map((check) => check.state));
 }
 
 export function SystemHealth() {
-  const { connected, setPage } = useStore();
+  const { state, connected, setPage } = useStore();
   const [info, setInfo] = useState<SystemInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [readTs, setReadTs] = useState<number | null>(null);
+  const [browserLatencyMs, setBrowserLatencyMs] = useState<number | null>(null);
 
-  const load = useCallback(() => {
+  const load = useCallback(async () => {
     setLoading(true);
-    return fetch('/api/system')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((d) => {
-        setInfo(d as SystemInfo);
-        setLoadError(null);
-        setReadTs(Date.now());
-      })
-      .catch((err) => setLoadError(err instanceof Error ? err.message : 'Failed to read system state'))
-      .finally(() => setLoading(false));
+    const started = performance.now();
+    try {
+      const res = await fetch('/api/system');
+      setBrowserLatencyMs(Math.round(performance.now() - started));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setInfo((await res.json()) as SystemInfo);
+      setLoadError(null);
+      setReadTs(Date.now());
+    } catch (err) {
+      setBrowserLatencyMs(Math.round(performance.now() - started));
+      setLoadError(err instanceof Error ? err.message : 'Failed to read system state');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     void load();
-    const t = setInterval(load, 10_000);
+    const t = setInterval(() => void load(), 10_000);
     return () => clearInterval(t);
   }, [load]);
+
   useRefreshSignal(() => void load());
 
-  if (!info) return <div className="container page page-narrow"><div className="empty-state">Reading system state...</div></div>;
+  const checks = useMemo<HealthCheck[]>(() => {
+    if (!info) return [];
 
-  const feedEntries = Object.entries(info.feeds);
-  const liveFeeds = feedEntries.filter(([, s]) => s === 'live' || s === 'open').length;
-  const degradedFeeds = feedEntries.filter(([, s]) => tone(s) === 'warn' || tone(s) === 'bad').length;
-  const scannerTone = ageTone(info.lastScannerTickTs, 30_000);
-  const ordersTone = ageTone(info.lastOrdersSyncTs, 90_000);
-  const restTone = latencyTone(info.restLatencyMs);
-  const clockTone = driftTone(info.serverTimeDiffMs);
-  const usedWeightTone = weightTone(info.usedWeight1m);
-  const weightPct = info.usedWeight1m === null ? null : Math.min(100, (info.usedWeight1m / 6000) * 100);
-  const accountTone: Tone = info.binance.keysPresent ? (info.binance.connected ? 'ok' : 'bad') : 'idle';
-  const userStreamTone: Tone = info.binance.userStream === 'open' ? 'ok' : info.binance.keysPresent ? 'warn' : 'idle';
-  const modeLabel = info.killSwitch ? 'Halted' : info.liveTradingEnabled ? 'Live armed' : 'Manual only';
-  const overallTone: Tone =
-    !info.dbOk || clockTone === 'bad' || degradedFeeds > 1
-      ? 'bad'
-      : !connected || scannerTone !== 'ok' || accountTone === 'bad' || restTone === 'warn'
-        ? 'warn'
-        : 'ok';
+    const binance = state?.binance ?? info.binance;
+    const feedEntries = Object.entries(info.feeds);
+    const feedStates = feedEntries.map(([, status]) => feedState(status));
+    const feedLive = feedStates.filter((s) => s === 'healthy').length;
+    const feedConfigured = feedEntries.length > 0;
+    const marketAgeTs = info.lastScannerTickTs ?? state?.scanner.lastTickTs ?? null;
+    const marketAgeState = ageState(marketAgeTs, 30_000, 90_000, 'not_configured');
+    const publicStreamState = feedConfigured ? combineState(worstState(feedStates), marketAgeState) : 'not_configured';
 
-  const feedNames = feedEntries.map(([name]) => name.replace(/-/g, ' ')).join(', ') || 'no public feeds configured';
-  const restClockTone: Tone = restTone === 'bad' || clockTone === 'bad' ? 'bad' : restTone === 'warn' || clockTone === 'warn' ? 'warn' : restTone === 'idle' && clockTone === 'idle' ? 'idle' : 'ok';
-  const comp: { icon: ReactNode; label: string; sub: ReactNode; rowTone: Tone; value: ReactNode }[] = [
-    {
-      icon: <IconPulse />,
-      label: 'Cockpit WebSocket',
-      sub: 'state pushes, book subscriptions, and cockpit freshness',
-      rowTone: connected ? 'ok' : 'bad',
-      value: connected ? 'live' : 'reconnecting',
+    const accountSyncState = !binance.keysPresent
+      ? 'not_configured'
+      : !binance.connected
+        ? 'broken'
+        : ageState(binance.lastSyncTs, 90_000, 5 * 60_000, 'broken');
+
+    const userStreamOpen = binance.userStream === 'open' || binance.userStream === 'live';
+    const userStreamState: HealthState = !binance.keysPresent
+      ? 'not_configured'
+      : userStreamOpen
+        ? 'healthy'
+        : accountSyncState === 'healthy' || accountSyncState === 'degraded'
+          ? 'degraded'
+          : 'broken';
+
+    const keyState = postureState(binance.keyPosture, binance.keysPresent);
+    const browserState = loadError ? 'broken' : combineState(latencyState(browserLatencyMs), connected ? 'healthy' : 'degraded');
+    const restState = latencyState(info.restLatencyMs);
+    const clockState = driftState(info.serverTimeDiffMs);
+    const budgetState = weightState(info.usedWeight1m);
+    const orderSyncState = !binance.keysPresent
+      ? 'not_configured'
+      : ageState(info.lastOrdersSyncTs, 90_000, 5 * 60_000, 'degraded');
+
+    return [
+      {
+        id: 'browser-server',
+        group: 'Path',
+        source: 'Browser -> server latency',
+        measurement: 'HTTP round trip for /api/system',
+        value: browserLatencyMs === null ? 'not measured' : `${browserLatencyMs}ms`,
+        detail: connected ? 'WebSocket state is live.' : 'HTTP may answer, but the app WebSocket is reconnecting.',
+        state: browserState,
+        fix: 'Check the local server process, browser network panel, and Cloudflare/Tunnel path if this turns red.',
+        icon: <IconPulse />,
+      },
+      {
+        id: 'rest-latency',
+        group: 'Exchange',
+        source: 'Server -> Binance REST latency',
+        measurement: 'Binance server-time probe latency',
+        value: fmtMs(info.restLatencyMs),
+        detail: 'Measured by the backend, not estimated in the browser.',
+        state: restState,
+        fix: 'Confirm Binance API reachability from the server and watch for rate-limit or WAF responses.',
+        icon: <IconChart />,
+      },
+      {
+        id: 'public-stream-age',
+        group: 'Exchange',
+        source: 'Public market stream age',
+        measurement: 'Feed states plus latest scanner/cache tick',
+        value: marketAgeTs ? fmtAge(marketAgeTs) : 'not exposed',
+        detail: feedConfigured
+          ? `${feedLive}/${feedEntries.length} feeds live: ${feedEntries.map(([name, status]) => `${name}=${status}`).join(', ')}`
+          : 'No public feed states were returned by /api/system.',
+        state: publicStreamState,
+        fix: 'Restart the market stream adapter or inspect the Binance WebSocket stream connections.',
+        icon: <IconWifi />,
+      },
+      {
+        id: 'account-sync',
+        group: 'Account',
+        source: 'Account sync age',
+        measurement: 'state.binance.lastSyncTs',
+        value: binance.lastSyncTs ? fmtAge(binance.lastSyncTs) : 'not configured',
+        detail: binance.keysPresent
+          ? binance.connected
+            ? 'Signed read-only account polling is connected.'
+            : binance.lastError ?? 'Keys exist but account polling is not connected.'
+          : 'Server-side Binance read keys are absent.',
+        state: accountSyncState,
+        fix: 'Configure read-only Binance keys on the server, then confirm the account polling loop completes.',
+        icon: <IconWallet />,
+      },
+      {
+        id: 'user-stream',
+        group: 'Account',
+        source: 'User stream or polling fallback',
+        measurement: 'state.binance.userStream plus account poll age',
+        value: userStreamOpen ? binance.userStream : binance.keysPresent ? 'polling fallback' : 'not configured',
+        detail: userStreamOpen
+          ? 'Account events are coming from the user stream.'
+          : binance.keysPresent
+            ? `User stream is ${binance.userStream}; account truth depends on polling.`
+            : 'No account stream can start until server keys exist.',
+        state: userStreamState,
+        fix: 'Use the account polling fallback while the user stream is unavailable; migrate to Binance WebSocket API user data stream when ready.',
+        icon: <IconList />,
+      },
+      {
+        id: 'key-scope',
+        group: 'Account',
+        source: 'API key scope',
+        measurement: 'state.binance.keyPosture',
+        value: binance.keysPresent ? binance.keyPosture.label : 'not configured',
+        detail: binance.keyFingerprint
+          ? `Key ${binance.keyFingerprint}${binance.keyPosture.ipRestricted ? ' is IP restricted.' : ' is not confirmed IP restricted.'}`
+          : 'No key fingerprint returned to the browser.',
+        state: keyState,
+        fix: 'Use a server-only read key with withdrawals and transfers disabled; verify apiRestrictions posture.',
+        icon: <IconKey />,
+      },
+      {
+        id: 'ledger-db',
+        group: 'Persistence',
+        source: 'DB / ledger writable',
+        measurement: 'SQLite config read probe',
+        value: info.dbOk ? 'writable' : 'write/read failure',
+        detail: 'Ledger truth must be available before operator decisions are trustworthy.',
+        state: info.dbOk ? 'healthy' : 'broken',
+        fix: 'Inspect data/cosmos.db permissions and disk health, then restart the server after the ledger probe is clean.',
+        icon: <IconDatabase />,
+      },
+      {
+        id: 'rate-budget',
+        group: 'Exchange',
+        source: 'Rate budget / request weight',
+        measurement: 'X-MBX-USED-WEIGHT-1M header snapshot',
+        value: info.usedWeight1m === null ? 'not configured' : info.usedWeight1m,
+        detail: info.usedWeightTs
+          ? `Last request-weight header was seen ${fmtAge(info.usedWeightTs)}. /api/system exposes usage, not the exchange limit.`
+          : 'No signed Binance call has reported request-weight headers yet.',
+        state: budgetState,
+        fix: 'Reduce polling or cache heavier signed endpoints if request weight approaches the local guard band.',
+        icon: <IconShield />,
+      },
+      {
+        id: 'clock-drift',
+        group: 'Exchange',
+        source: 'Clock drift',
+        measurement: 'Binance server time minus backend time',
+        value: fmtSignedMs(info.serverTimeDiffMs),
+        detail: 'Signed Binance requests depend on a sane timestamp window.',
+        state: clockState,
+        fix: 'Check host time sync/NTP and retry the Binance server-time probe.',
+        icon: <IconClock />,
+      },
+      {
+        id: 'binance-error',
+        group: 'Exchange',
+        source: 'Latest Binance error',
+        measurement: 'state.binance.lastError',
+        value: binance.lastError ? 'recorded' : binance.keysPresent ? 'none' : 'not configured',
+        detail: binance.lastError ?? (binance.keysPresent ? 'No latest Binance error is reported.' : 'No signed account source is configured.'),
+        state: binance.lastError ? 'broken' : binance.keysPresent ? 'healthy' : 'not_configured',
+        fix: 'Read the exact error, check key scope/IP restriction/rate limits, and confirm the signed account endpoint recovers.',
+        icon: <IconAlert />,
+      },
+      {
+        id: 'order-cache',
+        group: 'Account',
+        source: 'Order cache age',
+        measurement: 'latest open-orders sync',
+        value: info.lastOrdersSyncTs ? fmtAge(info.lastOrdersSyncTs) : 'not configured',
+        detail: binance.keysPresent ? 'Open-order truth comes from signed account sync.' : 'Order sync is unavailable without server-side keys.',
+        state: orderSyncState,
+        fix: 'Once keys exist, confirm open-order polling completes and ledger entries remain writable.',
+        icon: <IconBook />,
+      },
+      {
+        id: 'engine-heartbeat',
+        group: 'Engine',
+        source: 'Engine heartbeat',
+        measurement: 'dedicated engine process heartbeat',
+        value: 'not started',
+        detail: 'The current /api/system snapshot has scanner ticks, but no dedicated engine heartbeat source.',
+        state: 'not_configured',
+        fix: 'Start or wire the engine heartbeat endpoint before treating scanner proposals as engine-owned truth.',
+        icon: <IconBrain />,
+      },
+    ];
+  }, [browserLatencyMs, connected, info, loadError, state?.binance, state?.scanner.lastTickTs]);
+
+  if (!info) {
+    return (
+      <div className="container page health-page">
+        <div className="health-loading">
+          <StatePill tone={loadError ? 'bad' : 'idle'}>{loadError ? 'Broken' : 'Reading'}</StatePill>
+          <b>{loadError ? 'System state unavailable' : 'Reading system state'}</b>
+          <span>{loadError ?? 'Waiting for /api/system.'}</span>
+        </div>
+      </div>
+    );
+  }
+
+  const overallState = worstState(checks.map((check) => check.state));
+  const topBlocker = [...checks].sort((a, b) => stateRank[b.state] - stateRank[a.state])[0];
+  const blockers = checks.filter((check) => check.state !== 'healthy');
+  const counts = checks.reduce(
+    (acc, check) => {
+      acc[check.state] += 1;
+      return acc;
     },
-    {
-      icon: <IconWifi />,
-      label: 'Binance public streams',
-      sub: feedNames,
-      rowTone: degradedFeeds ? 'warn' : liveFeeds ? 'ok' : 'idle',
-      value: `${liveFeeds}/${feedEntries.length || 0} live`,
-    },
-    {
-      icon: <IconChart />,
-      label: 'REST and clock',
-      sub: `latency ${msLabel(info.restLatencyMs)} · drift ${msLabel(info.serverTimeDiffMs)}`,
-      rowTone: restClockTone,
-      value: restClockTone === 'ok' ? 'ready' : restClockTone === 'warn' ? 'watch' : restClockTone === 'bad' ? 'bad' : 'unknown',
-    },
-    {
-      icon: <IconWallet />,
-      label: 'Account sync age',
-      sub: info.binance.lastSyncTs ? `last account read ${timeAgo(info.binance.lastSyncTs)}` : 'no account sync timestamp',
-      rowTone: accountTone,
-      value: info.binance.keysPresent
-        ? info.binance.connected
-          ? `synced ${timeAgo(info.binance.lastSyncTs)}`
-          : `failing: ${info.binance.lastError ?? 'unknown'}`
-        : 'no keys',
-    },
-    {
-      icon: <IconWifi />,
-      label: 'User data stream',
-      sub: 'order and balance updates during volatility',
-      rowTone: userStreamTone,
-      value: info.binance.userStream,
-    },
-    {
-      icon: <IconShield />,
-      label: 'API key scope',
-      sub: info.binance.keyFingerprint
-        ? `key ${info.binance.keyFingerprint}${info.binance.keyPosture.ipRestricted ? ' · IP restricted' : ''}`
-        : 'per-key permissions from Binance apiRestrictions',
-      rowTone: info.binance.keysPresent ? info.binance.keyPosture.tone : 'idle',
-      value: info.binance.keysPresent ? info.binance.keyPosture.label : 'no key',
-    },
-    {
-      icon: <IconBrain />,
-      label: 'Market cache age',
-      sub: `${info.pairs} spot/perp pairs in the market cache`,
-      rowTone: scannerTone,
-      value: info.lastScannerTickTs ? timeAgo(info.lastScannerTickTs) : 'unknown',
-    },
-    {
-      icon: <IconTicket />,
-      label: 'Order cache',
-      sub: info.lastOrdersSyncTs ? `open-orders cache ${timeAgo(info.lastOrdersSyncTs)}` : 'no order sync has completed',
-      rowTone: ordersTone,
-      value: ordersTone === 'ok' ? 'fresh' : info.lastOrdersSyncTs ? 'old' : 'empty',
-    },
-    {
-      icon: <IconShield />,
-      label: 'Engine heartbeat',
-      sub: info.lastScannerTickTs
-        ? `Dedicated engine heartbeat is not exposed; scanner tick was ${timeAgo(info.lastScannerTickTs)}`
-        : 'Dedicated engine heartbeat is not configured in /api/system',
-      rowTone: 'idle',
-      value: 'not configured',
-    },
-    {
-      icon: <IconBook />,
-      label: 'Ledger SQLite',
-      sub: 'append-only audit store for decisions, orders, fills, errors',
-      rowTone: info.dbOk ? 'ok' : 'bad',
-      value: info.dbOk ? 'writable' : 'write failure',
-    },
-    {
-      icon: <IconList />,
-      label: 'Rate budget',
-      sub: info.usedWeightTs ? `weight seen ${timeAgo(info.usedWeightTs)}` : 'no signed call has reported headers yet',
-      rowTone: usedWeightTone,
-      value: info.usedWeight1m === null ? 'unknown' : `${Math.round(weightPct ?? 0)}%`,
-    },
-    {
-      icon: <IconAlert />,
-      label: 'Last Binance error',
-      sub: info.binance.lastError ?? (info.binance.keysPresent ? 'no Binance error reported' : 'no signed account source configured'),
-      rowTone: info.binance.lastError ? 'bad' : info.binance.keysPresent ? 'ok' : 'idle',
-      value: info.binance.lastError ? 'recorded' : 'none',
-    },
+    { healthy: 0, degraded: 0, broken: 0, not_configured: 0 } as Record<HealthState, number>,
+  );
+  const evidence = [
+    { label: 'Path', value: browserLatencyMs === null ? 'not measured' : `${browserLatencyMs}ms`, state: stateForIds(checks, ['browser-server']) },
+    { label: 'Exchange', value: `${counts.healthy}/${checks.length} green`, state: stateForIds(checks, ['rest-latency', 'public-stream-age', 'rate-budget', 'clock-drift', 'binance-error']) },
+    { label: 'Account', value: state?.binance.keysPresent || info.binance.keysPresent ? 'keys present' : 'no key', state: stateForIds(checks, ['account-sync', 'user-stream', 'key-scope', 'order-cache']) },
+    { label: 'Ledger', value: info.dbOk ? 'writable' : 'blocked', state: stateForIds(checks, ['ledger-db']) },
+    { label: 'Engine', value: 'not started', state: stateForIds(checks, ['engine-heartbeat']) },
   ];
 
   return (
-    <div className="container page system-page">
-      <section className="sys-hero card">
-        <div className="sys-hero-copy">
-          <span className="sys-eyebrow">
-            <IconPulse size={15} />
-            source monitor
+    <div className="container page health-page">
+      <header className="health-page-heading">
+        <div>
+          <span className="health-eyebrow"><IconShield size={14} /> pre-trade trust instrument</span>
+          <h1>System Trust</h1>
+        </div>
+        <div className="health-runline">
+          <span>v{info.version}</span>
+          <span>{info.env}</span>
+          <span>uptime {fmtUptime(info.uptimeSec)}</span>
+          <span>{readTs ? `read ${timeAgo(readTs)}` : loading ? 'reading' : 'waiting'}</span>
+        </div>
+      </header>
+
+      <section className={`health-console health-settings-group health-${overallState}`}>
+        <div className="health-setting-row health-verdict-row">
+          <span className={`health-setting-icon health-${overallState}`}>
+            <IconShield size={22} />
           </span>
-          <h1 className="page-title">System Health</h1>
-          <p>
-            Trust status for the app link, Binance sources, account sync, request budget, engine heartbeat placeholder,
-            and ledger writes.
-          </p>
-          <div className="sys-hero-actions">
-            <button className="cta-pill" type="button" onClick={() => void load()} disabled={loading}>
-              <IconRefresh size={14} />
-              {loading ? 'Refreshing' : 'Refresh'}
-            </button>
-            <button className="mini-btn" type="button" onClick={() => setPage('ledger')}>
-              <IconBook size={14} />
-              Audit ledger
-            </button>
+          <div className="health-row-main">
+            <span>Can I trust this machine right now?</span>
+            <b>{tradeDecision(overallState)}</b>
+            <p>{decisionCopy(overallState)}</p>
+          </div>
+          <div className="health-row-action">
+            <StatePill tone={stateTone[overallState]}>{stateLabel[overallState]}</StatePill>
+            <span>{blockers.length ? `${blockers.length} source${blockers.length === 1 ? '' : 's'} require action` : 'all configured sources clear'}</span>
           </div>
         </div>
 
-        <div className="sys-hero-panel">
-          <StatePill tone={overallTone}>{overallTone === 'ok' ? 'operational' : overallTone === 'warn' ? 'degraded' : 'attention'}</StatePill>
-          <span>Trading posture</span>
-          <b className="num">{modeLabel}</b>
-          <em>
-            v{info.version} · {info.env} · up {fmtUptime(info.uptimeSec)}
-            {info.cfUser ? ` · ${info.cfUser}` : ''}
-          </em>
-          <div className="sys-mode-ladder">
-            <span className={info.killSwitch ? 'on' : ''}>kill switch</span>
-            <span className={!info.killSwitch && !info.liveTradingEnabled ? 'on' : ''}>manual</span>
-            <span className={!info.killSwitch && info.liveTradingEnabled ? 'on warn' : ''}>live armed</span>
+        <div className={`health-setting-row health-${topBlocker.state}`}>
+          <span className={`health-setting-icon health-${topBlocker.state}`}>
+            {topBlocker.icon}
+          </span>
+          <div className="health-row-main">
+            <span>What to fix next</span>
+            <b>{topBlocker.state === 'healthy' ? 'No current blocker' : topBlocker.source}</b>
+            <p>{topBlocker.state === 'healthy' ? 'All configured sources are inside their trust bands.' : topBlocker.fix}</p>
+          </div>
+          <div className="health-row-action">
+            <StatePill tone={stateTone[topBlocker.state]}>{stateLabel[topBlocker.state]}</StatePill>
+            <span>{topBlocker.measurement}: {topBlocker.value}</span>
           </div>
         </div>
+
+        <div className="health-setting-row">
+          <span className="health-setting-icon health-posture-icon">
+            <IconTerminal size={22} />
+          </span>
+          <div className="health-row-main">
+            <span>Operating posture</span>
+            <b>{modeLabel(info)}</b>
+            <p>{info.killSwitch ? 'Kill switch is on. Live sends remain blocked.' : info.liveTradingEnabled ? 'Live mode is armed.' : 'Manual-only mode.'}</p>
+          </div>
+          <div className="health-row-action">
+            <span>{loading ? 'refreshing' : readTs ? `last read ${timeAgo(readTs)}` : 'waiting'}</span>
+          </div>
+        </div>
+
+        <div className="health-setting-row health-state-summary">
+          <span className="health-setting-icon">
+            <IconList size={22} />
+          </span>
+          <div className="health-titlelock">
+            <span>Source states</span>
+            <p>Worst source wins the verdict. Gray remains setup or missing data, never green.</p>
+          </div>
+          <div className="health-counts" aria-label="Health state counts">
+            <span><HealthDot state="broken" />{counts.broken} broken</span>
+            <span><HealthDot state="degraded" />{counts.degraded} degraded</span>
+            <span><HealthDot state="not_configured" />{counts.not_configured} not configured</span>
+            <span><HealthDot state="healthy" />{counts.healthy} healthy</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="health-evidence-strip" aria-label="Data-path summary">
+        {evidence.map((item) => (
+          <div key={item.label} className={`health-evidence health-setting-row health-${item.state}`}>
+            <span><HealthDot state={item.state} />{item.label}</span>
+            <b>{item.value}</b>
+          </div>
+        ))}
       </section>
 
       {loadError && (
-        <section className="sys-alert card">
+        <section className="health-alert health-broken">
           <IconAlert size={16} />
-          <span>{loadError}</span>
+          <span>/api/system read failed: {loadError}</span>
         </section>
       )}
 
-      <div className="sys-compressed-layout">
-        <main className="sys-main card sys-ops-board">
-          <div className="sys-section-head">
-            <div>
-              <h2>Operations board</h2>
-              <span>one line per trust source; duplicate status noise removed</span>
-            </div>
-            <StatePill tone={readTs && !loadError ? 'ok' : loadError ? 'bad' : 'idle'}>
-              {readTs && !loadError ? `read ${timeAgo(readTs)}` : loadError ? 'read failed' : 'waiting'}
-            </StatePill>
+      <section className="health-table-panel">
+        <div className="health-section-head">
+          <div>
+            <h2>Evidence matrix</h2>
+            <span>Every row is a real source. Gray means missing or not exposed; it is never treated as healthy.</span>
           </div>
-          <div className="sys-source-list">
-            {comp.map((c) => (
-              <SourceRow
-                key={c.label}
-                icon={c.icon}
-                label={c.label}
-                sub={c.sub}
-                tone={c.rowTone}
-                value={c.value}
-              />
-            ))}
-          </div>
-        </main>
-
-        <aside className="sys-rail">
-          <section className="sys-panel card">
-            <div className="sys-section-head compact">
-              <div>
-                <h2>Rate budget</h2>
-                <span>Binance weight window</span>
-              </div>
-              <StatePill tone={usedWeightTone}>{info.usedWeight1m === null ? 'unknown' : `${Math.round(weightPct ?? 0)}%`}</StatePill>
-            </div>
-            <div className={`sys-weight ${usedWeightTone}`}>
-              <span><i style={{ width: `${weightPct ?? 0}%` }} /></span>
-              <b className="num">{info.usedWeight1m ?? 'unknown'}</b>
-              <em>of 6000 one-minute request weight tracked from Binance headers</em>
-            </div>
-          </section>
-        </aside>
-      </div>
-
-      {/* Infra cost & usage — AWS-style card, honest setup state until billing
-          creds are connected. Reserved home for the Cost Explorer chart later. */}
-      <section className="cost-card card">
-        <div className="cost-head">
-          <h2>Cost &amp; usage</h2>
-          <span className="cost-scope">EC2 cockpit box · AWS</span>
+          <button className="health-ledger-button" type="button" onClick={() => setPage('ledger')}>
+            <IconBook size={14} />
+            Audit ledger
+          </button>
         </div>
-        <div className="cost-body">
-          <div className="cost-stats">
-            <div className="cost-stat">
-              <em>Current month</em>
-              <b>not connected</b>
-              <small>AWS Cost Explorer</small>
-            </div>
-            <div className="cost-stat">
-              <em>Forecasted month end</em>
-              <b>—</b>
-              <small>needs billing access</small>
-            </div>
-          </div>
-          <div className="cost-setup">
-            <p>
-              This panel is reserved for the AWS bill behind this cockpit (EC2, VPC, support). Connect read-only Cost
-              Explorer credentials on the server and the monthly bars render here — real numbers only, never estimates
-              invented by the UI.
-            </p>
-            <a className="ov-btn" href="https://console.aws.amazon.com/billing/home" target="_blank" rel="noreferrer noopener">
-              Open AWS Billing
-            </a>
-            <a className="ov-btn" href="https://console.aws.amazon.com/cloudshell/home" target="_blank" rel="noreferrer noopener">
-              AWS CloudShell
-            </a>
-          </div>
+
+        <div className="health-table-wrap">
+          <table className="health-source-table">
+            <thead>
+              <tr>
+                <th>State</th>
+                <th>Layer</th>
+                <th>Signal</th>
+                <th>Measurement</th>
+                <th>Value</th>
+                <th>Interpretation</th>
+              </tr>
+            </thead>
+            <tbody>
+              {checks.map((check) => (
+                <tr key={check.id} className={`health-${check.state}`}>
+                  <td>
+                    <span className="health-state-cell">
+                      <HealthDot state={check.state} />
+                      {stateLabel[check.state]}
+                    </span>
+                  </td>
+                  <td>{check.group}</td>
+                  <td>
+                    <span className="health-source-name">
+                      <span className="health-source-icon">{check.icon}</span>
+                      {check.source}
+                    </span>
+                  </td>
+                  <td>{check.measurement}</td>
+                  <td className="num">{check.value}</td>
+                  <td>{check.detail}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
 
-      <p className="sys-source-line">
-        Source model: Binance WebSocket/rate-limit behavior and the app's `/api/system` snapshot. Status is graded by trading impact.
+      <section className="health-utility">
+        <div className="health-utility-copy">
+          <span className="health-eyebrow">aws / cloudshell utility</span>
+          <h2>Cost &amp; usage</h2>
+          <p>
+            AWS billing is not connected to this cockpit. This panel stays at setup state until a read-only server-side
+            Cost Explorer source exists.
+          </p>
+        </div>
+        <div className="health-utility-status">
+          <div>
+            <span>Current month</span>
+            <b>not connected</b>
+          </div>
+          <div>
+            <span>Forecast</span>
+            <b>not connected</b>
+          </div>
+        </div>
+        <div className="health-utility-links">
+          <a href="https://console.aws.amazon.com/billing/home" target="_blank" rel="noreferrer noopener">
+            <IconExternal size={14} />
+            AWS Billing
+          </a>
+          <a href="https://console.aws.amazon.com/cloudshell/home" target="_blank" rel="noreferrer noopener">
+            <IconTerminal size={14} />
+            CloudShell
+          </a>
+        </div>
+      </section>
+
+      <p className="health-source-line">
+        Source model: /api/system plus state.binance. The bottom-right RefreshDock still owns force refresh and reconnect.
       </p>
     </div>
   );

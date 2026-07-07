@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useStore, type Page } from '../store';
-import { KindChip, EmptyState } from '../components/ui';
+import { EmptyState, KindChip } from '../components/ui';
 import { eventSummary } from '../lib/eventText';
 import { fmtDateTime, fmtPrice, timeAgo } from '../format';
 import type { LedgerEvent } from '../types';
@@ -10,9 +10,9 @@ import {
   IconBook,
   IconChart,
   IconClock,
+  IconDatabase,
   IconGear,
   IconList,
-  IconPulse,
   IconReceipt,
   IconRefresh,
   IconSearch,
@@ -22,186 +22,110 @@ import {
   IconWifi,
 } from '../components/Icons';
 
-const KIND_GROUPS = [
-  {
-    title: 'Trading',
-    kinds: ['order_intent', 'risk_decision', 'order_request', 'order_response', 'fill_event'],
-  },
-  {
-    title: 'Control',
-    kinds: ['manual_action', 'config_change', 'strategy_signal', 'loan_request', 'loan_response'],
-  },
-  {
-    title: 'System',
-    kinds: ['account_snapshot', 'binance.connected', 'user_stream', 'ws.open', 'ws.closed', 'engine.start', 'error_event'],
-  },
+type Severity = 'Critical' | 'Warning' | 'Info' | 'Debug';
+type SeverityFilter = 'all' | Severity;
+type DecisionFilter = 'all' | 'accepted' | 'rejected';
+type TimeRange = 'all' | '15m' | '1h' | '24h' | '7d';
+
+const SEVERITIES: Severity[] = ['Critical', 'Warning', 'Info', 'Debug'];
+const SEVERITY_COPY: Record<Severity, { label: string; sub: string; icon: ReactNode }> = {
+  Critical: { label: 'Critical', sub: 'Needs immediate review', icon: <IconAlert size={15} /> },
+  Warning: { label: 'Warning', sub: 'Review before trading', icon: <IconShield size={15} /> },
+  Info: { label: 'Info', sub: 'Recorded activity', icon: <IconReceipt size={15} /> },
+  Debug: { label: 'Debug', sub: 'Connection records', icon: <IconWifi size={15} /> },
+};
+
+const TIME_OPTIONS: { value: TimeRange; label: string; ms: number | null }[] = [
+  { value: 'all', label: 'All time', ms: null },
+  { value: '15m', label: 'Last 15 minutes', ms: 15 * 60 * 1000 },
+  { value: '1h', label: 'Last hour', ms: 60 * 60 * 1000 },
+  { value: '24h', label: 'Last 24 hours', ms: 24 * 60 * 60 * 1000 },
+  { value: '7d', label: 'Last 7 days', ms: 7 * 24 * 60 * 60 * 1000 },
 ];
 
-const KNOWN_KINDS = ['all', ...KIND_GROUPS.flatMap((g) => g.kinds)];
+const KNOWN_KINDS = [
+  'account_snapshot',
+  'binance.connected',
+  'config_change',
+  'engine.start',
+  'error_event',
+  'feed-open',
+  'feed.open',
+  'fill_event',
+  'heartbeat',
+  'loan_request',
+  'loan_response',
+  'manual_action',
+  'order_intent',
+  'order_request',
+  'order_response',
+  'risk_decision',
+  'strategy_signal',
+  'user_stream',
+  'ws.closed',
+  'ws.open',
+];
+
 const DETAIL_KEYS = [
+  'allowed',
   'action',
   'stage',
-  'result',
   'status',
-  'side',
-  'type',
+  'result',
+  'state',
   'source',
-  'allowed',
-  'estNotionalUsd',
-  'executedQuoteUsd',
+  'feed',
+  'service',
+  'reason',
+  'reasonCode',
+  'message',
+  'detail',
   'orderId',
   'proposalId',
+  'side',
+  'type',
+  'estNotionalUsd',
+  'executedQuoteUsd',
   'imported',
   'fetched',
-  'feed',
-  'message',
   'pairs',
   'assets',
   'mode',
 ];
 
-type Severity = 'Critical' | 'Warning' | 'Info' | 'Debug';
-type AuditGroup = 'all' | 'strategy' | 'order' | 'account' | 'system';
-type TimeRange = 'all' | '1h' | '24h' | '7d';
-
-const SEVERITY_OPTIONS: ('all' | Severity)[] = ['all', 'Critical', 'Warning', 'Info', 'Debug'];
-const GROUP_OPTIONS: { value: AuditGroup; label: string }[] = [
-  { value: 'all', label: 'All groups' },
-  { value: 'strategy', label: 'Strategy' },
-  { value: 'order', label: 'Order' },
-  { value: 'account', label: 'Account' },
-  { value: 'system', label: 'System' },
-];
-const TIME_OPTIONS: { value: TimeRange; label: string; ms: number | null }[] = [
-  { value: 'all', label: 'All time', ms: null },
-  { value: '1h', label: 'Last hour', ms: 60 * 60 * 1000 },
-  { value: '24h', label: 'Last 24h', ms: 24 * 60 * 60 * 1000 },
-  { value: '7d', label: 'Last 7d', ms: 7 * 24 * 60 * 60 * 1000 },
-];
-
-type LedgerDayGroup = {
-  label: string;
-  events: LedgerEvent[];
-};
-
 function asRecord(data: unknown): Record<string, unknown> {
   return data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, unknown>) : {};
 }
 
+function textValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function lowerValue(value: unknown): string {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function safeJson(value: unknown, spacing = 0): string {
+  try {
+    return JSON.stringify(value, null, spacing);
+  } catch {
+    return String(value);
+  }
+}
+
 function kindLabel(kind: string): string {
   return kind
-    .replace(/[._]/g, ' ')
+    .replace(/[._-]/g, ' ')
     .replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
-function reasonText(ev: LedgerEvent): string {
-  const d = asRecord(ev.data);
-  const candidates = [
-    d.reason,
-    d.reasonCode,
-    d.message,
-    d.detail,
-    d.status,
-    d.result,
-  ];
-  const list = Array.isArray(d.reasons) ? d.reasons.filter(Boolean).join(' / ') : null;
-  const value = candidates.find((v) => typeof v === 'string' && v.trim().length > 0);
-  if (typeof value === 'string') return value;
-  if (list) return list;
-  if (ev.kind === 'risk_decision') return d.allowed === true ? 'risk gate accepted the intent' : 'risk gate rejected the intent';
-  if (ev.kind === 'strategy_signal') return 'strategy signal recorded for review';
-  if (ev.kind.startsWith('order')) return 'order path event recorded';
-  if (ev.kind.includes('error')) return 'error captured in the audit log';
-  return 'ledger event recorded';
+function sentenceLabel(value: string): string {
+  const label = value.replace(/[._-]/g, ' ').trim();
+  return label ? label.charAt(0).toUpperCase() + label.slice(1) : value;
 }
 
-function sourceText(ev: LedgerEvent): string {
-  const d = asRecord(ev.data);
-  const source = [d.source, d.feed, d.stage, d.service].find((v) => typeof v === 'string' && v.trim().length > 0);
-  if (typeof source === 'string') return source;
-  if (ev.kind.startsWith('ws') || ev.kind.includes('feed')) return 'market stream';
-  if (ev.kind === 'account_snapshot' || ev.kind === 'user_stream') return 'account sync';
-  if (ev.kind.startsWith('order') || ev.kind === 'fill_event') return 'execution';
-  if (ev.kind === 'risk_decision') return 'risk gate';
-  if (ev.kind === 'strategy_signal') return 'scanner';
-  return 'system';
-}
-
-function eventSeverity(ev: LedgerEvent): Severity {
-  const d = asRecord(ev.data);
-  const kind = ev.kind.toLowerCase();
-  const status = String(d.status ?? d.result ?? d.state ?? '').toLowerCase();
-  const source = String(d.source ?? d.feed ?? '').toLowerCase();
-  if (
-    kind.includes('error') ||
-    kind.includes('failure') ||
-    kind.includes('failed') ||
-    kind === 'ws.closed' ||
-    status.includes('fail') ||
-    status.includes('closed') ||
-    source.includes('failure')
-  ) {
-    return 'Critical';
-  }
-  if (
-    (ev.kind === 'risk_decision' && d.allowed === false) ||
-    ev.kind === 'config_change' ||
-    kind.includes('cancel') ||
-    String(d.action ?? '').toLowerCase().includes('cancel')
-  ) {
-    return 'Warning';
-  }
-  if (
-    ev.kind === 'heartbeat' ||
-    ev.kind === 'ws.open' ||
-    ev.kind === 'feed.open' ||
-    ev.kind === 'feed-open' ||
-    source === 'heartbeat'
-  ) {
-    return 'Debug';
-  }
-  return 'Info';
-}
-
-function eventGroup(ev: LedgerEvent): AuditGroup {
-  const kind = ev.kind.toLowerCase();
-  if (kind.includes('strategy') || kind.includes('proposal') || kind.includes('scanner')) return 'strategy';
-  if (kind.startsWith('order') || kind.includes('fill') || kind.includes('cancel') || ev.kind === 'risk_decision') return 'order';
-  if (ev.kind === 'account_snapshot' || kind.includes('account') || ev.kind === 'user_stream' || kind.includes('balance')) return 'account';
-  return 'system';
-}
-
-function eventTone(ev: LedgerEvent): 'ok' | 'bad' | 'warn' | 'purple' | 'info' {
-  const severity = eventSeverity(ev);
-  if (severity === 'Critical') return 'bad';
-  if (severity === 'Warning') return 'warn';
-  const d = asRecord(ev.data);
-  if (ev.kind === 'risk_decision') return d.allowed === true ? 'ok' : 'bad';
-  if (ev.kind.startsWith('order') || ev.kind.startsWith('fill') || ev.kind.startsWith('loan')) return 'ok';
-  if (ev.kind.startsWith('strategy')) return 'purple';
-  return 'info';
-}
-
-function relatedPage(ev: LedgerEvent): { page: Page; label: string } {
-  const group = eventGroup(ev);
-  if (ev.kind === 'risk_decision' || ev.kind === 'config_change') return { page: 'risk', label: 'Open Risk' };
-  if (group === 'order') return { page: 'trade', label: 'Open Execution' };
-  if (group === 'account') return { page: 'account', label: 'Open Account' };
-  if (group === 'strategy') return { page: 'opportunities', label: 'Open Opportunities' };
-  return { page: 'system', label: 'Open Health' };
-}
-
-function eventIcon(kind: string): ReactNode {
-  if (kind === 'risk_decision') return <IconShield size={16} />;
-  if (kind.startsWith('order')) return <IconTicket size={16} />;
-  if (kind === 'fill_event') return <IconReceipt size={16} />;
-  if (kind.startsWith('loan')) return <IconWallet size={16} />;
-  if (kind === 'strategy_signal') return <IconChart size={16} />;
-  if (kind === 'manual_action') return <IconPulse size={16} />;
-  if (kind === 'config_change') return <IconGear size={16} />;
-  if (kind.includes('error')) return <IconAlert size={16} />;
-  if (kind.startsWith('ws') || kind === 'user_stream') return <IconWifi size={16} />;
-  return <IconBook size={16} />;
+function sourceLabel(value: string): string {
+  return sentenceLabel(value);
 }
 
 function formatDetailValue(key: string, value: unknown): string {
@@ -212,13 +136,169 @@ function formatDetailValue(key: string, value: unknown): string {
     return Number.isInteger(value) ? value.toLocaleString('en-US') : value.toLocaleString('en-US', { maximumFractionDigits: 8 });
   }
   if (typeof value === 'string') return value;
-  if (Array.isArray(value)) return `${value.length} items`;
-  try {
-    const s = JSON.stringify(value);
-    return s.length > 90 ? `${s.slice(0, 90)}...` : s;
-  } catch {
-    return String(value);
+  if (Array.isArray(value)) return value.length ? value.map((item) => formatDetailValue(key, item)).join(', ') : 'empty';
+  const encoded = safeJson(value);
+  return encoded.length > 120 ? `${encoded.slice(0, 120)}...` : encoded;
+}
+
+function sourceText(ev: LedgerEvent): string {
+  const d = asRecord(ev.data);
+  const source = [d.source, d.feed, d.stage, d.service, d.module].map(textValue).find(Boolean);
+  if (source) return source;
+  const kind = ev.kind.toLowerCase();
+  if (kind === 'risk_decision') return 'risk gate';
+  if (kind === 'strategy_signal') return 'scanner';
+  if (kind.startsWith('order') || kind === 'fill_event') return 'execution';
+  if (kind === 'account_snapshot' || kind === 'binance.connected' || kind === 'user_stream') return 'account sync';
+  if (kind.startsWith('ws') || kind.includes('feed')) return 'market stream';
+  if (kind === 'config_change') return 'operator config';
+  if (kind === 'manual_action') return 'operator action';
+  return 'system';
+}
+
+function reasonText(ev: LedgerEvent): string {
+  const d = asRecord(ev.data);
+  const reasons = Array.isArray(d.reasons) ? d.reasons.map((r) => String(r)).filter(Boolean).join(' / ') : '';
+  const direct = [d.reason, d.reasonCode, d.message, d.detail, d.error, d.status, d.result].map(textValue).find(Boolean);
+  if (reasons) return reasons;
+  if (direct) return direct;
+  if (ev.kind === 'risk_decision') return d.allowed === true ? 'risk gate accepted the intent' : 'risk gate rejected the intent';
+  if (ev.kind === 'config_change') return 'operator configuration changed';
+  if (ev.kind === 'strategy_signal') return 'Scanner proposal recorded';
+  if (ev.kind === 'order_intent') return 'order preview created';
+  if (ev.kind === 'order_request') return 'order send path requested';
+  if (ev.kind === 'order_response') return 'exchange/order response recorded';
+  if (ev.kind === 'fill_event') return 'fill recorded in the execution ledger';
+  if (ev.kind === 'account_snapshot') return 'account snapshot stored';
+  if (ev.kind === 'engine.start') return 'engine process started';
+  if (ev.kind === 'ws.open') return 'websocket/feed opened';
+  if (ev.kind === 'ws.closed') return 'websocket/feed closed';
+  return 'ledger event recorded';
+}
+
+function statusText(ev: LedgerEvent): string {
+  const d = asRecord(ev.data);
+  if (ev.kind === 'risk_decision' && d.allowed !== undefined) return d.allowed === true ? 'accepted' : 'rejected';
+  const value = [d.status, d.result, d.state, d.action].map(textValue).find(Boolean);
+  if (value) return value;
+  if (ev.kind === 'order_intent') return 'preview';
+  if (ev.kind === 'order_request') return 'sent';
+  if (ev.kind === 'fill_event') return 'filled';
+  if (ev.kind === 'strategy_signal') return 'proposal';
+  if (ev.kind === 'config_change') return 'changed';
+  if (ev.kind === 'ws.open') return 'open';
+  if (ev.kind === 'ws.closed') return 'closed';
+  return 'recorded';
+}
+
+function statusLabel(ev: LedgerEvent): string {
+  return sentenceLabel(statusText(ev));
+}
+
+function eventTitle(ev: LedgerEvent): string {
+  const d = asRecord(ev.data);
+  const action = textValue(d.action);
+  if (ev.kind === 'strategy_signal') return action ? `Proposal ${action}` : 'Proposal recorded';
+  if (ev.kind === 'risk_decision') return d.allowed === true ? 'Risk check approved' : 'Risk check blocked';
+  if (ev.kind === 'account_snapshot') return 'Account snapshot';
+  if (ev.kind === 'order_intent') return 'Order preview';
+  if (ev.kind === 'order_request') return 'Order request';
+  if (ev.kind === 'order_response') return 'Order response';
+  if (ev.kind === 'fill_event') return 'Fill recorded';
+  if (ev.kind === 'config_change') return 'Configuration updated';
+  if (ev.kind === 'manual_action') return 'Manual action';
+  if (ev.kind === 'engine.start') return 'Engine started';
+  if (ev.kind === 'ws.open' || ev.kind === 'feed-open' || ev.kind === 'feed.open') return 'Connection opened';
+  if (ev.kind === 'ws.closed') return 'Connection closed';
+  if (ev.kind === 'heartbeat') return 'Heartbeat';
+  if (ev.kind === 'user_stream') return 'User stream event';
+  if (ev.kind === 'error_event') return 'Error recorded';
+  return kindLabel(ev.kind);
+}
+
+function eventCaption(ev: LedgerEvent): string {
+  return reasonText(ev)
+    .replace(/\|basis\|/gi, 'Basis')
+    .replace(/\bws\.open\b/gi, 'connection opened')
+    .replace(/\bws\.closed\b/gi, 'connection closed');
+}
+
+function isCancelEvent(ev: LedgerEvent): boolean {
+  const d = asRecord(ev.data);
+  const hay = [ev.kind, d.action, d.status, d.result, d.message].map(lowerValue).join(' ');
+  return hay.includes('cancel') || hay.includes('canceled') || hay.includes('cancelled');
+}
+
+function eventSeverity(ev: LedgerEvent): Severity {
+  const d = asRecord(ev.data);
+  const kind = ev.kind.toLowerCase();
+  const status = lowerValue(d.status || d.result || d.state);
+  const source = lowerValue(d.source || d.feed || d.service);
+  const message = lowerValue(d.message || d.detail || d.error || d.reason);
+
+  if (
+    kind === 'heartbeat' ||
+    kind.includes('heartbeat') ||
+    kind === 'ws.open' ||
+    kind === 'feed-open' ||
+    kind === 'feed.open' ||
+    kind === 'feed_open' ||
+    source === 'heartbeat'
+  ) {
+    return 'Debug';
   }
+
+  if ((ev.kind === 'risk_decision' && d.allowed === false) || ev.kind === 'config_change' || isCancelEvent(ev)) {
+    return 'Warning';
+  }
+
+  if (
+    kind === 'ws.closed' ||
+    kind.includes('error') ||
+    kind.includes('failure') ||
+    kind.includes('failed') ||
+    status.includes('fail') ||
+    status.includes('down') ||
+    source.includes('failure') ||
+    source.includes('failed') ||
+    message.includes('source failure') ||
+    message.includes('unavailable')
+  ) {
+    return 'Critical';
+  }
+
+  return 'Info';
+}
+
+function eventTone(ev: LedgerEvent): string {
+  return `logs-sev-${eventSeverity(ev).toLowerCase()}`;
+}
+
+function decisionState(ev: LedgerEvent): 'accepted' | 'rejected' | 'unknown' {
+  const d = asRecord(ev.data);
+  if (d.allowed === true) return 'accepted';
+  if (d.allowed === false) return 'rejected';
+  const hay = [statusText(ev), d.reason, d.message, d.result, d.status].map(lowerValue).join(' ');
+  if (/\b(reject|rejected|blocked|denied|invalid)\b/.test(hay)) return 'rejected';
+  if (/\b(accept|accepted|approved|valid|ok|filled|sent|opened)\b/.test(hay)) return 'accepted';
+  return 'unknown';
+}
+
+function eventMatchesText(ev: LedgerEvent, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const hay = [
+    ev.id,
+    ev.kind,
+    ev.symbol,
+    eventSeverity(ev),
+    sourceText(ev),
+    reasonText(ev),
+    statusText(ev),
+    eventSummary(ev.kind, asRecord(ev.data), ev.symbol),
+    safeJson(ev.data),
+  ].join(' ').toLowerCase();
+  return hay.includes(q);
 }
 
 function detailFields(ev: LedgerEvent): { key: string; value: string }[] {
@@ -226,478 +306,527 @@ function detailFields(ev: LedgerEvent): { key: string; value: string }[] {
   return DETAIL_KEYS.filter((key) => key in d).map((key) => ({ key: kindLabel(key), value: formatDetailValue(key, d[key]) }));
 }
 
-function dayKey(ts: number): string {
-  return new Date(ts).toLocaleDateString('en-CA');
+function relatedIds(ev: LedgerEvent): { orderId: string | null; proposalId: string | null } {
+  const d = asRecord(ev.data);
+  const intent = asRecord(d.intent);
+  const params = asRecord(d.params);
+  const proposalId = d.proposalId ?? d.proposal_id ?? (ev.kind === 'strategy_signal' ? d.id : null);
+  const orderId = d.orderId ?? d.order_id ?? params.orderId ?? intent.orderId;
+  return {
+    orderId: orderId === null || orderId === undefined ? null : String(orderId),
+    proposalId: proposalId === null || proposalId === undefined ? null : String(proposalId),
+  };
 }
 
-function dayLabel(ts: number): string {
-  const date = new Date(ts);
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
-  if (dayKey(ts) === dayKey(today.getTime())) return 'Today';
-  if (dayKey(ts) === dayKey(yesterday.getTime())) return 'Yesterday';
-  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+function contextAction(ev: LedgerEvent): { page: Page; label: string } {
+  const severity = eventSeverity(ev);
+  if (severity === 'Critical' || ev.kind.startsWith('ws') || ev.kind === 'user_stream') return { page: 'system', label: 'Inspect source health' };
+  if (ev.kind === 'risk_decision' || ev.kind === 'config_change') return { page: 'risk', label: 'Inspect risk guard' };
+  if (ev.kind.startsWith('order') || ev.kind === 'fill_event') return { page: 'orders', label: 'Inspect execution path' };
+  if (ev.kind === 'account_snapshot' || ev.kind === 'binance.connected') return { page: 'account', label: 'Inspect account state' };
+  if (ev.kind === 'strategy_signal') return { page: 'opportunities', label: 'Inspect proposal board' };
+  return { page: 'system', label: 'Inspect system health' };
 }
 
-function LedgerMetric({ label, value, sub, tone, icon }: { label: string; value: ReactNode; sub?: ReactNode; tone?: string; icon: ReactNode }) {
+function sortEvents(events: LedgerEvent[]): LedgerEvent[] {
+  return [...events].sort((a, b) => b.id - a.id || b.ts - a.ts);
+}
+
+function SeverityPill({ severity }: { severity: Severity }) {
+  return <span className={`logs-severity-pill ${eventTone({ id: 0, ts: 0, kind: severity === 'Debug' ? 'ws.open' : severity === 'Warning' ? 'config_change' : severity === 'Critical' ? 'error_event' : 'engine.start', symbol: null, data: null })}`}>{severity}</span>;
+}
+
+function IncidentButton({
+  severity,
+  count,
+  active,
+  onClick,
+}: {
+  severity: Severity;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const meta = SEVERITY_COPY[severity];
   return (
-    <div className={`ledger-metric ${tone ?? ''}`}>
-      <span className="ledger-metric-icon">{icon}</span>
-      <span>
-        <span className="ledger-metric-label">{label}</span>
-        <span className="ledger-metric-value num">{value}</span>
-        {sub && <span className="ledger-metric-sub">{sub}</span>}
+    <button type="button" className={`logs-incident ${active ? 'logs-active' : ''} logs-sev-${severity.toLowerCase()}`} onClick={onClick}>
+      <span className="logs-incident-icon">{meta.icon}</span>
+      <span className="logs-incident-copy">
+        <b>{meta.label}</b>
+        <em>{meta.sub}</em>
       </span>
-    </div>
+      <strong>{count.toLocaleString('en-US')}</strong>
+    </button>
   );
 }
 
 export function LedgerPage() {
-  const { setPage } = useStore();
-  const [events, setEvents] = useState<LedgerEvent[]>([]);
+  const { setPage, openDetail, state } = useStore();
+  const stateEvents = state?.events ?? [];
+  const [apiEvents, setApiEvents] = useState<LedgerEvent[]>(() => stateEvents);
   const [kind, setKind] = useState('all');
-  const [severity, setSeverity] = useState<'all' | Severity>('all');
-  const [auditGroup, setAuditGroup] = useState<AuditGroup>('all');
-  const [timeRange, setTimeRange] = useState<TimeRange>('all');
-  const [showDebug, setShowDebug] = useState(false);
+  const [severity, setSeverity] = useState<SeverityFilter>('all');
   const [symbol, setSymbol] = useState(() => {
     const v = sessionStorage.getItem('cosmos-ledger-symbol') ?? '';
     sessionStorage.removeItem('cosmos-ledger-symbol');
     return v;
   });
-  const [q, setQ] = useState('');
-  const [decision, setDecision] = useState<'all' | 'accepted' | 'rejected'>('all');
-  const [expanded, setExpanded] = useState<number | null>(null);
+  const [query, setQuery] = useState('');
+  const [timeRange, setTimeRange] = useState<TimeRange>('all');
+  const [decision, setDecision] = useState<DecisionFilter>('all');
+  const [showDebug, setShowDebug] = useState(false);
+  const [errorFirst, setErrorFirst] = useState(false);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [rawOpen, setRawOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [lastLoaded, setLastLoaded] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [copied, setCopied] = useState<number | null>(null);
-  const [copying, setCopying] = useState<number | null>(null);
-  const [copyFailed, setCopyFailed] = useState<number | null>(null);
-  const [rawOpen, setRawOpen] = useState(false);
+
+  useEffect(() => {
+    if (stateEvents.length && apiEvents.length === 0) setApiEvents(stateEvents);
+  }, [apiEvents.length, stateEvents]);
 
   const load = useCallback(() => {
-    const params = new URLSearchParams({ limit: '400' });
+    const params = new URLSearchParams({ limit: '1000' });
+    const normalizedSymbol = symbol.trim().toUpperCase();
     if (kind !== 'all') params.set('kind', kind);
-    if (/^[A-Z0-9]{5,20}$/.test(symbol)) params.set('symbol', symbol);
-    if (q.trim()) params.set('q', q.trim());
-    const url = `/api/events?${params}`;
+    if (/^[A-Z0-9]{5,24}$/.test(normalizedSymbol)) params.set('symbol', normalizedSymbol);
+    if (query.trim()) params.set('q', query.trim().slice(0, 60));
+
     setLoading(true);
-    return fetch(url)
+    return fetch(`/api/events?${params}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((d) => {
-        setEvents(d as LedgerEvent[]);
+      .then((payload) => {
+        setApiEvents(Array.isArray(payload) ? payload as LedgerEvent[] : []);
         setLoadError(null);
         setLastLoaded(Date.now());
       })
       .catch((err) => setLoadError(err instanceof Error ? err.message : 'Failed to load events'))
       .finally(() => setLoading(false));
-  }, [kind, symbol, q]);
+  }, [kind, query, symbol]);
 
   useEffect(() => {
     void load();
-    const t = setInterval(load, 5000);
-    return () => clearInterval(t);
+    const t = window.setInterval(() => void load(), 5000);
+    return () => window.clearInterval(t);
   }, [load]);
 
-  const visible = useMemo(() => events.filter((ev) => {
-    const evSeverity = eventSeverity(ev);
-    if (!showDebug && severity !== 'Debug' && evSeverity === 'Debug') return false;
-    if (severity !== 'all' && evSeverity !== severity) return false;
-    if (auditGroup !== 'all' && eventGroup(ev) !== auditGroup) return false;
-    const selectedRange = TIME_OPTIONS.find((opt) => opt.value === timeRange);
-    if (selectedRange?.ms !== null && selectedRange?.ms !== undefined && Date.now() - ev.ts > selectedRange.ms) return false;
-    if (decision === 'all') return true;
-    const allowed = (ev.data as { allowed?: boolean } | null)?.allowed;
-    if (allowed === undefined) return false;
-    return decision === 'accepted' ? allowed : !allowed;
-  }), [events, decision, severity, auditGroup, timeRange, showDebug]);
+  const events = useMemo(() => {
+    const map = new Map<number, LedgerEvent>();
+    for (const ev of stateEvents) map.set(ev.id, ev);
+    for (const ev of apiEvents) map.set(ev.id, ev);
+    return sortEvents([...map.values()]);
+  }, [apiEvents, stateEvents]);
 
-  const kindCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const ev of events) m.set(ev.kind, (m.get(ev.kind) ?? 0) + 1);
-    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  const kindOptions = useMemo(() => {
+    const seen = new Set([...KNOWN_KINDS, ...events.map((ev) => ev.kind)]);
+    return ['all', ...[...seen].sort((a, b) => kindLabel(a).localeCompare(kindLabel(b)))];
   }, [events]);
 
-  const unknownKinds = useMemo(() => kindCounts.map(([k]) => k).filter((k) => !KNOWN_KINDS.includes(k)), [kindCounts]);
-  const kindOptions = useMemo(() => ['all', ...KIND_GROUPS.flatMap((g) => g.kinds), ...unknownKinds], [unknownKinds]);
-  const groupedVisible = useMemo<LedgerDayGroup[]>(() => {
-    const groups: LedgerDayGroup[] = [];
-    for (const ev of visible) {
-      const label = dayLabel(ev.ts);
-      const last = groups[groups.length - 1];
-      if (last?.label === label) {
-        last.events.push(ev);
-      } else {
-        groups.push({ label, events: [ev] });
-      }
+  const baseEvents = useMemo(() => {
+    const selectedRange = TIME_OPTIONS.find((opt) => opt.value === timeRange);
+    const symbolQuery = symbol.trim().toUpperCase();
+    const now = Date.now();
+    return events.filter((ev) => {
+      if (kind !== 'all' && ev.kind !== kind) return false;
+      if (symbolQuery && !(ev.symbol ?? '').toUpperCase().includes(symbolQuery)) return false;
+      if (!eventMatchesText(ev, query)) return false;
+      if (selectedRange?.ms !== null && selectedRange?.ms !== undefined && now - ev.ts > selectedRange.ms) return false;
+      if (decision !== 'all' && decisionState(ev) !== decision) return false;
+      return true;
+    });
+  }, [decision, events, kind, query, symbol, timeRange]);
+
+  const severityCounts = useMemo(() => {
+    const counts: Record<Severity, number> = { Critical: 0, Warning: 0, Info: 0, Debug: 0 };
+    for (const ev of baseEvents) counts[eventSeverity(ev)] += 1;
+    return counts;
+  }, [baseEvents]);
+
+  const kindCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const ev of baseEvents) counts.set(ev.kind, (counts.get(ev.kind) ?? 0) + 1);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  }, [baseEvents]);
+
+  const sourceCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const ev of baseEvents) {
+      const source = sourceText(ev);
+      counts.set(source, (counts.get(source) ?? 0) + 1);
     }
-    return groups;
-  }, [visible]);
-  const groupTotals = useMemo(() => GROUP_OPTIONS.filter((group) => group.value !== 'all').map((group) => ({
-    title: group.label,
-    value: group.value,
-    count: visible.filter((ev) => eventGroup(ev) === group.value).length,
-  })), [visible]);
-  const selected = visible.find((ev) => ev.id === expanded) ?? visible[0] ?? null;
-  const criticalCount = visible.filter((ev) => eventSeverity(ev) === 'Critical').length;
-  const warningCount = visible.filter((ev) => eventSeverity(ev) === 'Warning').length;
-  const riskRejected = visible.filter((ev) => ev.kind === 'risk_decision' && asRecord(ev.data).allowed === false).length;
-  const executionCount = visible.filter((ev) => ev.kind.startsWith('order') || ev.kind === 'fill_event').length;
-  const accountSnapshotCount = visible.filter((ev) => ev.kind === 'account_snapshot').length;
-  const symbolCount = new Set(visible.map((ev) => ev.symbol).filter(Boolean)).size;
-  const canClear = kind !== 'all' || severity !== 'all' || auditGroup !== 'all' || timeRange !== 'all' || symbol !== '' || q !== '' || decision !== 'all' || showDebug;
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
+  }, [baseEvents]);
+
+  const visible = useMemo(() => baseEvents.filter((ev) => {
+    const evSeverity = eventSeverity(ev);
+    if (!showDebug && evSeverity === 'Debug') return false;
+    if (errorFirst && evSeverity !== 'Critical' && evSeverity !== 'Warning') return false;
+    if (!errorFirst && severity !== 'all' && evSeverity !== severity) return false;
+    return true;
+  }), [baseEvents, errorFirst, severity, showDebug]);
+
+  const selected = visible.find((ev) => ev.id === selectedId) ?? visible[0] ?? null;
+  const selectedDetailFields = selected ? detailFields(selected) : [];
+  const latestCritical = baseEvents.find((ev) => eventSeverity(ev) === 'Critical') ?? null;
+  const debugHiddenCount = showDebug ? 0 : severityCounts.Debug;
+  const canClear = kind !== 'all' || severity !== 'all' || symbol !== '' || query !== '' || timeRange !== 'all' || decision !== 'all' || showDebug || errorFirst;
+  const activeFilterCount = [
+    kind !== 'all',
+    severity !== 'all',
+    symbol !== '',
+    query !== '',
+    timeRange !== 'all',
+    decision !== 'all',
+    showDebug,
+    errorFirst,
+  ].filter(Boolean).length;
 
   useEffect(() => {
     setRawOpen(false);
   }, [selected?.id]);
 
-  async function copyEvent(ev: LedgerEvent): Promise<void> {
-    const payload = JSON.stringify(ev, null, 2);
-    setCopied(null);
-    setCopyFailed(null);
-    setCopying(ev.id);
-    let ok = false;
-    const nativeWrite = navigator.clipboard?.writeText?.bind(navigator.clipboard);
-    if (nativeWrite) {
-      ok = await Promise.race([
-        nativeWrite(payload).then(() => true).catch(() => false),
-        new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), 300)),
-      ]);
-    }
-    if (!ok) {
-      const area = document.createElement('textarea');
-      area.value = payload;
-      area.setAttribute('readonly', '');
-      area.style.position = 'fixed';
-      area.style.left = '-9999px';
-      area.style.top = '0';
-      document.body.appendChild(area);
-      area.select();
-      try {
-        ok = document.execCommand('copy');
-      } catch {
-        ok = false;
-      } finally {
-        area.remove();
-      }
-    }
-    setCopying((id) => (id === ev.id ? null : id));
-    setCopied(ok ? ev.id : null);
-    setCopyFailed(ok ? null : ev.id);
-    window.setTimeout(() => {
-      setCopied((id) => (id === ev.id ? null : id));
-      setCopyFailed((id) => (id === ev.id ? null : id));
-    }, 1400);
-  }
-
   function clearFilters(): void {
     setKind('all');
     setSeverity('all');
-    setAuditGroup('all');
-    setTimeRange('all');
-    setShowDebug(false);
     setSymbol('');
-    setQ('');
+    setQuery('');
+    setTimeRange('all');
     setDecision('all');
-    setExpanded(null);
+    setShowDebug(false);
+    setErrorFirst(false);
+    setSelectedId(null);
+  }
+
+  function chooseSeverity(next: SeverityFilter): void {
+    setSeverity(next);
+    setErrorFirst(false);
+    if (next === 'Debug') setShowDebug(true);
+  }
+
+  function focusSeverity(next: Severity): void {
+    setSeverity(next);
+    setErrorFirst(false);
+    if (next === 'Debug') setShowDebug(true);
+  }
+
+  function toggleErrorFirst(): void {
+    setErrorFirst((v) => !v);
+    setSeverity('all');
+  }
+
+  function inspectSymbol(sym: string): void {
+    openDetail(sym);
   }
 
   return (
-    <div className="container page ledger-page">
-      <section className="card ledger-console-card">
-        <div className="ledger-console-head">
-          <div>
+    <div className="container page ledger-page logs-page">
+      <section className="logs-console">
+        <div className="logs-console-head">
+          <div className="logs-title-block">
             <h1 className="page-title">Logs</h1>
-            <p>Operator audit surface for decisions, orders, fills, rejects, config changes, and source failures.</p>
-          </div>
-          <div className="ledger-live">
-            <span className={`state-dot ${loadError ? 'bad' : loading ? 'warn' : 'ok'}`} />
-            <span>{loadError ? loadError : loading ? 'syncing ledger' : `synced ${timeAgo(lastLoaded)}`}</span>
+            <p>Review recent account, order, risk, and system activity.</p>
           </div>
         </div>
 
-        <div className="ledger-console-body">
-          <div className="ledger-console-stats">
-            <LedgerMetric label="Critical" value={criticalCount.toLocaleString('en-US')} sub="errors/source failures" tone={criticalCount > 0 ? 'bad' : 'ok'} icon={<IconAlert size={16} />} />
-            <LedgerMetric label="Warnings" value={warningCount.toLocaleString('en-US')} sub="rejects/config/cancels" tone={warningCount > 0 ? 'warn' : 'ok'} icon={<IconShield size={16} />} />
-            <LedgerMetric label="Latest" value={selected ? timeAgo(selected.ts) : 'none'} sub={selected ? kindLabel(selected.kind) : 'no events'} icon={<IconClock size={16} />} />
-            <LedgerMetric label="Account snapshots" value={accountSnapshotCount.toLocaleString('en-US')} sub={`${symbolCount} symbols shown`} icon={<IconWallet size={16} />} />
-            <LedgerMetric label="Orders / fills" value={executionCount.toLocaleString('en-US')} sub="order path events" tone="ok" icon={<IconReceipt size={16} />} />
-            <LedgerMetric label="Risk rejects" value={riskRejected.toLocaleString('en-US')} sub="server risk denials" tone={riskRejected > 0 ? 'warn' : 'ok'} icon={<IconShield size={16} />} />
-          </div>
-
-          <div className="ledger-query-console">
-            <div className="ledger-query-row">
-              <label className={`ledger-input ${symbol && !/^[A-Z0-9]{5,20}$/.test(symbol) ? 'warn' : ''}`}>
-                <IconSearch size={14} />
-                <span>Symbol</span>
-                <input placeholder="BTCUSDT" value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} spellCheck={false} />
-              </label>
-              <label className="ledger-input wide">
-                <IconSearch size={14} />
-                <span>Text</span>
-                <input placeholder="risk, cancel, funding, error..." value={q} onChange={(e) => setQ(e.target.value)} spellCheck={false} />
-              </label>
-              <label className="ledger-kind-select">
-                <span>Kind</span>
-                <select value={kind} onChange={(e) => setKind(e.target.value)}>
-                  {kindOptions.map((k) => (
-                    <option value={k} key={k}>{k === 'all' ? 'All events' : kindLabel(k)}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="ledger-kind-select">
-                <span>Severity</span>
-                <select value={severity} onChange={(e) => setSeverity(e.target.value as 'all' | Severity)}>
-                  {SEVERITY_OPTIONS.map((s) => (
-                    <option value={s} key={s}>{s === 'all' ? 'All severities' : s}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="ledger-kind-select">
-                <span>Group</span>
-                <select value={auditGroup} onChange={(e) => setAuditGroup(e.target.value as AuditGroup)}>
-                  {GROUP_OPTIONS.map((g) => (
-                    <option value={g.value} key={g.value}>{g.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="ledger-kind-select">
-                <span>Time</span>
-                <select value={timeRange} onChange={(e) => setTimeRange(e.target.value as TimeRange)}>
-                  {TIME_OPTIONS.map((opt) => (
-                    <option value={opt.value} key={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className="ledger-query-actions">
-              <span className="seg ledger-decision">
-                {(['all', 'accepted', 'rejected'] as const).map((d) => (
-                  <button key={d} className={decision === d ? 'on' : ''} onClick={() => setDecision(d)}>
-                    {d}
-                  </button>
-                ))}
+        <div className="logs-preference-group" aria-label="Audit controls">
+          <div className="logs-pref-row">
+            <span className="logs-pref-icon logs-pref-index"><IconDatabase size={20} /></span>
+            <span className="logs-pref-copy">
+              <b>Event feed</b>
+              <em>
+                {visible.length.toLocaleString('en-US')} visible of {baseEvents.length.toLocaleString('en-US')} events
+              </em>
+            </span>
+            <span className="logs-pref-status">
+              <span className={`logs-sync-dot ${loadError ? 'logs-sev-critical' : loading ? 'logs-sev-warning' : 'logs-sev-info'}`} />
+              <span>
+                <b>{loadError ? 'Unavailable' : loading ? 'Updating' : 'Live'}</b>
+                <em>{loadError ?? (lastLoaded ? timeAgo(lastLoaded) : stateEvents.length ? 'Cached' : 'Waiting')}</em>
               </span>
-              <button className={`mini-btn ${showDebug ? 'on' : ''}`} type="button" onClick={() => setShowDebug((v) => !v)}>
-                Debug / system noise
-              </button>
-              <button className="mini-btn" onClick={() => void load()} disabled={loading}>
-                <IconRefresh size={14} />
-                {loading ? 'Refreshing' : 'Refresh'}
-              </button>
-              <button className="mini-btn" onClick={clearFilters} disabled={!canClear}>
-                Clear
-              </button>
-            </div>
+            </span>
           </div>
 
-          <div className="ledger-category-summary compact" aria-label="Ledger category counts">
-            {groupTotals.map((g) => (
-              <button key={g.title} type="button" onClick={() => setAuditGroup(g.value)}>
-                <b>{g.count.toLocaleString('en-US')}</b>
-                <em>{g.title}</em>
-              </button>
-            ))}
+          <div className="logs-pref-row">
+            <span className="logs-pref-icon logs-pref-alert"><IconAlert size={20} /></span>
+            <span className="logs-pref-copy">
+              <b>Priority filter</b>
+              <em>{latestCritical ? `Latest critical event ${timeAgo(latestCritical.ts)}` : 'Show only critical and warning events'}</em>
+            </span>
+            <button type="button" className={`logs-switch ${errorFirst ? 'logs-on' : ''}`} aria-label="Toggle priority filter" aria-pressed={errorFirst} onClick={toggleErrorFirst}>
+              <span />
+            </button>
+          </div>
+
+          <div className="logs-pref-row">
+            <span className="logs-pref-icon logs-pref-debug"><IconWifi size={20} /></span>
+            <span className="logs-pref-copy">
+              <b>Connection records</b>
+              <em>{showDebug ? 'Heartbeat and connection-open records are visible' : `${debugHiddenCount.toLocaleString('en-US')} connection records hidden`}</em>
+            </span>
+            <button type="button" className={`logs-switch ${!showDebug ? 'logs-on' : ''}`} aria-label="Toggle connection records" aria-pressed={!showDebug} onClick={() => setShowDebug((v) => !v)}>
+              <span />
+            </button>
+          </div>
+        </div>
+
+        <div className="logs-filter-panel">
+          <div className="logs-filter-grid">
+            <label className="logs-field">
+              <span>Severity</span>
+              <select value={severity} onChange={(e) => chooseSeverity(e.target.value as SeverityFilter)} disabled={errorFirst}>
+                <option value="all">All severities</option>
+                {SEVERITIES.map((sev) => <option key={sev} value={sev}>{sev}</option>)}
+              </select>
+            </label>
+            <label className="logs-field">
+              <span>Kind</span>
+              <select value={kind} onChange={(e) => setKind(e.target.value)}>
+                {kindOptions.map((item) => <option key={item} value={item}>{item === 'all' ? 'All kinds' : kindLabel(item)}</option>)}
+              </select>
+            </label>
+            <label className="logs-field">
+              <span>Symbol</span>
+              <input value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} placeholder="BTCUSDT" spellCheck={false} />
+            </label>
+            <label className="logs-field logs-field-wide">
+              <span>Search</span>
+              <IconSearch size={13} />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search events" spellCheck={false} />
+            </label>
+            <label className="logs-field">
+              <span>Time range</span>
+              <select value={timeRange} onChange={(e) => setTimeRange(e.target.value as TimeRange)}>
+                {TIME_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+              </select>
+            </label>
+            <label className="logs-field">
+              <span>Decision</span>
+              <select value={decision} onChange={(e) => setDecision(e.target.value as DecisionFilter)}>
+                <option value="all">All decisions</option>
+                <option value="accepted">Accepted only</option>
+                <option value="rejected">Rejected only</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="logs-filter-actions">
+            <button type="button" className="logs-button" onClick={() => void load()} disabled={loading}>
+              <IconRefresh size={14} />
+              {loading ? 'Refreshing' : 'Refresh'}
+            </button>
+            <button type="button" className="logs-button" onClick={clearFilters} disabled={!canClear} title={!canClear ? 'No active filters to clear' : 'Reset all Logs filters'}>
+              Clear
+            </button>
           </div>
         </div>
       </section>
 
-      {visible.length === 0 ? (
-        <EmptyState title="No events for this filter">
-          <button className="mini-btn" onClick={clearFilters} disabled={!canClear}>
-            Clear filters
-          </button>
-        </EmptyState>
-      ) : (
-        <div className="ledger-layout">
-          <section className="card ledger-stream-card">
-            <div className="ledger-stream-head">
-              <div>
-                <h2>Event timeline</h2>
-                <span>{visible.length.toLocaleString('en-US')} events shown with reasons first</span>
-              </div>
-              <span className="chip-tag">{decision === 'all' ? 'all decisions' : decision}</span>
-            </div>
-            <div className="ledger-timeline">
-              {groupedVisible.map((group) => (
-                <div className="ledger-day-section" key={group.label}>
-                  <div className="ledger-day-label">
-                    <span>{group.label}</span>
-                    <b>{group.events.length.toLocaleString('en-US')} events</b>
-                  </div>
-                  {group.events.map((ev) => {
-                    const tone = eventTone(ev);
-                    const open = expanded === ev.id;
-                    const fields = detailFields(ev);
-                return (
-                  <article key={ev.id} className={`ledger-event ${tone} ${open ? 'open' : ''}`}>
-                    <button className="ledger-event-main" onClick={() => setExpanded(open ? null : ev.id)} aria-expanded={open}>
-                      <span className="ledger-event-icon">{eventIcon(ev.kind)}</span>
-                      <span className="ledger-event-body">
-                        <span className="ledger-event-top">
-                          <KindChip kind={ev.kind} />
-                          <span className={`ledger-severity ${eventSeverity(ev).toLowerCase()}`}>{eventSeverity(ev)}</span>
-                          <span className="ledger-time">{fmtDateTime(ev.ts)} · {timeAgo(ev.ts)}</span>
-                        </span>
-                        <strong>{eventSummary(ev.kind, ev.data as Record<string, unknown> | null, ev.symbol)}</strong>
-                        <span className="ledger-reason-line">{reasonText(ev)}</span>
-                        <span className="ledger-event-meta">
-                          {ev.symbol ? (
-                            <span className="ledger-symbol">
-                              <TokenIcon symbol={ev.symbol} size={20} />
-                              {ev.symbol}
-                            </span>
-                          ) : (
-                            <span className="ledger-symbol system">system</span>
-                          )}
-                          <span>#{ev.id}</span>
-                          <span>{eventGroup(ev)}</span>
-                          <span>{sourceText(ev)}</span>
-                        </span>
-                      </span>
-                      <span className="ledger-open-mark">{open ? 'Hide' : 'Open'}</span>
-                    </button>
-                    {open && (
-                      <div className="ledger-event-detail">
-                        <div className="ledger-field-grid">
-                          <span>
-                            <b>Event ID</b>
-                            <em>{ev.id}</em>
-                          </span>
-                          <span>
-                            <b>Severity</b>
-                            <em>{eventSeverity(ev)}</em>
-                          </span>
-                          <span>
-                            <b>Kind</b>
-                            <em>{kindLabel(ev.kind)}</em>
-                          </span>
-                          <span>
-                            <b>Symbol</b>
-                            <em>{ev.symbol ?? 'system'}</em>
-                          </span>
-                          <span>
-                            <b>Source</b>
-                            <em>{sourceText(ev)}</em>
-                          </span>
-                          <span>
-                            <b>Reason</b>
-                            <em>{reasonText(ev)}</em>
-                          </span>
-                          <span>
-                            <b>Recorded</b>
-                            <em>{fmtDateTime(ev.ts)}</em>
-                          </span>
-                          {fields.map((f) => (
-                            <span key={f.key}>
-                              <b>{f.key}</b>
-                              <em>{f.value}</em>
-                            </span>
-                          ))}
-                        </div>
-                        <div className="ledger-json-head">
-                          <span>Payload tools</span>
-                          <button className="mini-btn" onClick={() => void copyEvent(ev)}>
-                            {copying === ev.id ? 'Copying' : copyFailed === ev.id ? 'Copy failed' : copied === ev.id ? 'Copied' : 'Copy JSON'}
-                          </button>
-                        </div>
-                        <details className="ledger-raw-drawer">
-                          <summary>Raw compact JSON</summary>
-                          <pre className="ledger-raw compact">{JSON.stringify(ev.data ?? {})}</pre>
-                        </details>
-                      </div>
-                    )}
-                  </article>
-                );
-                  })}
-                </div>
+      <div className="logs-workbench">
+        <aside className="logs-facets" aria-label="Logs facets">
+          <section className="logs-facet-panel">
+            <div className="logs-facet-title">Severity</div>
+            <div className="logs-incident-strip" aria-label="Incident severity counts">
+              {SEVERITIES.map((sev) => (
+                <IncidentButton
+                  key={sev}
+                  severity={sev}
+                  count={severityCounts[sev]}
+                  active={!errorFirst && severity === sev}
+                  onClick={() => focusSeverity(sev)}
+                />
               ))}
             </div>
           </section>
 
-          <aside className="ledger-side">
-            <section className="card ledger-inspector">
-              <div className="ledger-inspector-head">
-                <span className={`ledger-event-icon ${selected ? eventTone(selected) : ''}`}>{selected ? eventIcon(selected.kind) : <IconBook size={16} />}</span>
-                <div>
-                  <h2>{selected ? 'Selected event' : 'No event selected'}</h2>
-                  <span>{selected ? `${fmtDateTime(selected.ts)} · ${timeAgo(selected.ts)}` : 'Open an event to inspect it'}</span>
-                </div>
-              </div>
-              {selected ? (
-                <>
-                  <p>{eventSummary(selected.kind, selected.data as Record<string, unknown> | null, selected.symbol)}</p>
-                  <div className="ledger-inspector-meta">
-                    <span>
-                      <b>Event ID</b>
-                      <em>{selected.id}</em>
-                    </span>
-                    <span>
-                      <b>Time</b>
-                      <em>{fmtDateTime(selected.ts)}</em>
-                    </span>
-                    <span>
-                      <b>Kind</b>
-                      <em>{kindLabel(selected.kind)}</em>
-                    </span>
-                    <span>
-                      <b>Symbol</b>
-                      <em>{selected.symbol ?? 'system'}</em>
-                    </span>
-                    <span>
-                      <b>Severity</b>
-                      <em>{eventSeverity(selected)}</em>
-                    </span>
-                    <span>
-                      <b>Source</b>
-                      <em>{sourceText(selected)}</em>
-                    </span>
-                    <span>
-                      <b>Reason</b>
-                      <em>{reasonText(selected)}</em>
-                    </span>
-                  </div>
-                  <div className="ledger-inspector-actions">
-                    <button className="mini-btn" onClick={() => setExpanded(selected.id)}>
-                      Open in stream
-                    </button>
-                    <button className="mini-btn" onClick={() => setPage(relatedPage(selected).page)}>
-                      {relatedPage(selected).label}
-                    </button>
-                    <button className="mini-btn" onClick={() => setRawOpen((v) => !v)}>
-                      {rawOpen ? 'Hide raw JSON' : 'Raw JSON'}
-                    </button>
-                  </div>
-                  {rawOpen && <pre className="ledger-raw compact">{JSON.stringify(selected.data ?? {})}</pre>}
-                </>
-              ) : (
-                <span className="ledger-side-empty">No matching ledger rows.</span>
-              )}
-            </section>
+          <section className="logs-facet-panel">
+            <div className="logs-facet-title">Kinds</div>
+            <div className="logs-facet-list">
+              {kindCounts.map(([item, count]) => (
+                <button type="button" key={item} className={kind === item ? 'logs-active' : ''} onClick={() => setKind(item)}>
+                  <span>{kindLabel(item)}</span>
+                  <b>{count.toLocaleString('en-US')}</b>
+                </button>
+              ))}
+            </div>
+          </section>
 
-            <section className="card ledger-inspector">
-              <div className="ledger-inspector-head">
-                <span className="ledger-event-icon info"><IconList size={16} /></span>
+          <section className="logs-facet-panel">
+            <div className="logs-facet-title">Sources</div>
+            <div className="logs-facet-list">
+              {sourceCounts.map(([item, count]) => (
+                <button type="button" key={item} className={query === item ? 'logs-active' : ''} onClick={() => setQuery(item)}>
+                  <span>{sourceLabel(item)}</span>
+                  <b>{count.toLocaleString('en-US')}</b>
+                </button>
+              ))}
+            </div>
+          </section>
+        </aside>
+
+        <section className="logs-table-shell">
+          <div className="logs-table-head">
+            <div>
+              <h2>Event activity</h2>
+              <span>Recent records from the event feed</span>
+            </div>
+            <div className="logs-table-head-meta">
+              <span>{visible.length.toLocaleString('en-US')} rows</span>
+            </div>
+          </div>
+
+          {visible.length === 0 ? (
+            <EmptyState title="No matching events">
+              <button type="button" className="logs-button" onClick={clearFilters} disabled={!canClear}>
+                Clear
+              </button>
+            </EmptyState>
+          ) : (
+            <div className="logs-event-list" role="listbox" aria-label="Event activity">
+              {visible.map((ev) => {
+                const evSeverity = eventSeverity(ev);
+                const selectedRow = selected?.id === ev.id;
+                return (
+                  <div
+                    key={ev.id}
+                    className={`logs-event-item ${eventTone(ev)} ${selectedRow ? 'logs-selected' : ''}`}
+                    onClick={() => setSelectedId(ev.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedId(ev.id);
+                      }
+                    }}
+                    role="option"
+                    tabIndex={0}
+                    aria-selected={selectedRow}
+                  >
+                    <span className="logs-event-glyph">
+                      {evSeverity === 'Critical' ? <IconAlert size={18} /> : evSeverity === 'Warning' ? <IconShield size={18} /> : evSeverity === 'Debug' ? <IconWifi size={18} /> : <IconReceipt size={18} />}
+                    </span>
+                    <span className="logs-event-copy">
+                      <b>{eventTitle(ev)}</b>
+                      <em>{eventCaption(ev)}</em>
+                    </span>
+                    <span className="logs-event-context">
+                      <span>{fmtDateTime(ev.ts)}</span>
+                      <em>{timeAgo(ev.ts)} · {kindLabel(ev.kind)} · {sourceLabel(sourceText(ev))}</em>
+                    </span>
+                    <span className="logs-event-token">
+                      {ev.symbol ? (
+                        <button type="button" className="logs-symbol" onClick={(e) => { e.stopPropagation(); inspectSymbol(ev.symbol as string); }} title={`Inspect ${ev.symbol} market detail`}>
+                          <TokenIcon symbol={ev.symbol} size={18} />
+                          <span className="logs-symbol-text">{ev.symbol}</span>
+                        </button>
+                      ) : (
+                        <span className="logs-system-symbol">system</span>
+                      )}
+                    </span>
+                    <span className="logs-event-state">
+                      <SeverityPill severity={evSeverity} />
+                      <b>{statusLabel(ev)}</b>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        <aside className="logs-inspector">
+          <div className="logs-inspector-head">
+            <span className="logs-inspector-icon"><IconList size={16} /></span>
+            <div>
+              <h2>Event details</h2>
+              <span>{selected ? `event #${selected.id}` : 'select a row'}</span>
+            </div>
+          </div>
+
+          {selected ? (
+            <>
+              <div className={`logs-inspector-summary ${eventTone(selected)}`}>
+                <SeverityPill severity={eventSeverity(selected)} />
+                <strong>{eventTitle(selected)}</strong>
+                <span>{kindLabel(selected.kind)}</span>
+              </div>
+
+              <dl className="logs-inspector-grid">
                 <div>
-                  <h2>Kind breakdown</h2>
-                  <span>Counts from the current backend query</span>
+                  <dt>ID</dt>
+                  <dd>{selected.id}</dd>
                 </div>
-              </div>
-              <div className="ledger-count-list">
-                {kindCounts.slice(0, 10).map(([k, count]) => (
-                  <button key={k} className={kind === k ? 'active' : ''} onClick={() => setKind(k)}>
-                    <span>{kindLabel(k)}</span>
-                    <b>{count}</b>
-                  </button>
+                <div>
+                  <dt>Time</dt>
+                  <dd>{fmtDateTime(selected.ts)} · {timeAgo(selected.ts)}</dd>
+                </div>
+                <div>
+                  <dt>Source</dt>
+                  <dd>{sourceLabel(sourceText(selected))}</dd>
+                </div>
+                <div>
+                  <dt>Reason</dt>
+                  <dd>{eventCaption(selected)}</dd>
+                </div>
+                <div>
+                  <dt>Status</dt>
+                  <dd>{statusLabel(selected)}</dd>
+                </div>
+                <div>
+                  <dt>Symbol</dt>
+                  <dd>{selected.symbol ?? 'system'}</dd>
+                </div>
+                {selectedDetailFields.map((field) => (
+                  <div key={field.key}>
+                    <dt>{field.key}</dt>
+                    <dd>{field.value}</dd>
+                  </div>
                 ))}
+              </dl>
+
+              <div className="logs-related">
+                <span>Related navigation</span>
+                {(() => {
+                  const ids = relatedIds(selected);
+                  const ctx = contextAction(selected);
+                  return (
+                    <>
+                      {ids.proposalId ? (
+                        <button type="button" className="logs-button" onClick={() => setPage('opportunities')}>
+                          <IconChart size={14} />
+                          Open proposal #{ids.proposalId}
+                        </button>
+                      ) : null}
+                      {ids.orderId ? (
+                        <button type="button" className="logs-button" onClick={() => setPage('orders')}>
+                          <IconTicket size={14} />
+                          Open order #{ids.orderId}
+                        </button>
+                      ) : null}
+                      {!ids.proposalId && !ids.orderId ? (
+                        <button type="button" className="logs-button" disabled title="This event does not carry an orderId or proposalId">
+                          <IconBook size={14} />
+                          No order/proposal id recorded
+                        </button>
+                      ) : null}
+                      <button type="button" className="logs-button" onClick={() => setPage(ctx.page)}>
+                        {ctx.page === 'system' ? <IconDatabase size={14} /> : ctx.page === 'risk' ? <IconShield size={14} /> : ctx.page === 'account' ? <IconWallet size={14} /> : <IconReceipt size={14} />}
+                        {ctx.label}
+                      </button>
+                    </>
+                  );
+                })()}
               </div>
-            </section>
-          </aside>
-        </div>
-      )}
+
+              <details className="logs-raw-drawer" open={rawOpen} onToggle={(e) => setRawOpen(e.currentTarget.open)}>
+                <summary>Raw JSON drawer</summary>
+                <pre>{safeJson(selected, 2)}</pre>
+              </details>
+            </>
+          ) : (
+            <span className="logs-empty-note">No matching events.</span>
+          )}
+        </aside>
+      </div>
     </div>
   );
 }

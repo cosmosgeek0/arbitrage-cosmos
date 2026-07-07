@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
+import { useRefreshSignal } from '../lib/refresh';
 import { EmptyState, SideTag, StatePill } from '../components/ui';
 import { TokenIcon } from '../components/TokenIcon';
 import {
@@ -145,6 +146,7 @@ export function Fills() {
     const t = window.setInterval(load, 30_000);
     return () => window.clearInterval(t);
   }, [load, state?.recentFills.length]);
+  useRefreshSignal(() => void load());
 
   useEffect(() => {
     if (!selectedKey && fills.length > 0) setSelectedKey(fillKey(fills[0]));

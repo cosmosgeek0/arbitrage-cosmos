@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
+import { useRefreshSignal } from '../lib/refresh';
 import { TokenIcon } from '../components/TokenIcon';
 import { Donut } from '../components/Donut';
 import { EmptyState, SetupChecklist, StatePill } from '../components/ui';
@@ -47,13 +48,15 @@ export function Wallets() {
   const [sortKey, setSortKey] = useState<SortKey>('value');
   const [sortDesc, setSortDesc] = useState(true);
 
+  const [refreshTick, setRefreshTick] = useState(0);
+  useRefreshSignal(() => setRefreshTick((n) => n + 1));
   useEffect(() => {
     if (tab !== 'margin') return;
     void fetch('/api/loans')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && setLoans(d as LoansSnapshot))
       .catch(() => undefined);
-  }, [tab]);
+  }, [tab, refreshTick]);
 
   const acct = state?.account;
   const keysPresent = state?.binance.keysPresent ?? false;

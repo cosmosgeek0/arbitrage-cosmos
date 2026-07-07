@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
+import { useRefreshSignal } from '../lib/refresh';
 import { EmptyState, SetupChecklist, StatePill, WarnStrip } from '../components/ui';
 import { TokenIcon } from '../components/TokenIcon';
 import { Donut } from '../components/Donut';
@@ -292,11 +293,13 @@ function AccountSecurity() {
   const { state } = useStore();
   const [sys, setSys] = useState<SysInfo | null>(null);
   const [alerts, setAlerts] = useState<boolean>(() => localStorage.getItem('cosmos-signin-alerts') !== '0');
+  const [refreshTick, setRefreshTick] = useState(0);
+  useRefreshSignal(() => setRefreshTick((n) => n + 1));
   useEffect(() => {
     let alive = true;
     void fetch('/api/system').then((r) => (r.ok ? r.json() : null)).then((s) => alive && s && setSys(s as SysInfo)).catch(() => undefined);
     return () => { alive = false; };
-  }, []);
+  }, [refreshTick]);
   const dev = deviceInfo();
   const b = state?.binance;
   const email = sys?.cfUser ?? null;

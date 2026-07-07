@@ -17176,3 +17176,193 @@ button.runtime-lane:hover b {
 [data-theme="dark"] .np-link { color: var(--accent); }
 .adv-actions { display: flex; gap: 8px; padding: 8px 4px 2px; }
 .adv-actions .adv-scan, .adv-actions .adv-fix { flex: 1; padding: 8px 10px; border-radius: 9px; font-size: 12px; font-weight: 720; cursor: pointer; }
+
+/* ===================== Cockpit v11 — API key tab ============================
+   A compact top-bar "tab" that shows which Binance key is live (name, HMAC type,
+   first chars only, IP restriction, and the six permissions the owner tracks).
+   Hover = full detail inline; Expand = the big ApiKeyModal. Never shows the key
+   or secret — only enough prefix to spot a rotation. */
+/* icon-only key chips — no text on the bar; identity/permissions live in the
+   hover popover. Two distinct kinds: read-only key vs the full AWS-Secrets key. */
+.apikey-pill {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 28px; border-radius: 9px; border: 1px solid transparent; background: transparent;
+  color: var(--muted); cursor: pointer; transition: background .12s, color .12s, border-color .12s, transform .12s;
+}
+.apikey-pill svg { width: 15px; height: 15px; }
+.apikey-pill:hover { transform: translateY(-1px); }
+.apikey-pill.ro { color: var(--accent-ink); }
+[data-theme="dark"] .apikey-pill.ro { color: var(--accent); }
+.apikey-pill.full { color: #c98a12; }
+[data-theme="dark"] .apikey-pill.full { color: #e5b048; }
+.apikey-pill.ro:hover, .apikey-pill.ro.on { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 24%, transparent); }
+.apikey-pill.full:hover, .apikey-pill.full.on { background: color-mix(in srgb, #e5b048 16%, transparent); border-color: color-mix(in srgb, #e5b048 34%, transparent); }
+.apikey-dot { position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); border: 1.5px solid var(--panel); }
+.apikey-dot.s-live { background: var(--up); animation: hbPulse 2.4s ease-out infinite; }
+.apikey-dot.s-declared { background: var(--accent); }
+.apikey-dot.s-planned { background: #e5b048; }
+
+/* HMAC-style type tag (mirrors Binance's green tag) */
+.ak-type {
+  margin-left: auto; font-size: 9.5px; font-weight: 800; letter-spacing: .5px;
+  background: color-mix(in srgb, var(--up) 16%, transparent); color: var(--up);
+  padding: 2px 6px; border-radius: 5px;
+}
+
+.ak-idrow { display: flex; align-items: center; gap: 8px; padding: 8px 10px 6px; }
+.ak-prefix { font-size: 13px; font-weight: 700; color: var(--text); letter-spacing: .3px; }
+.ak-dots { color: var(--faint); margin-left: 2px; letter-spacing: 1px; }
+.ak-live {
+  margin-left: auto; font-size: 9.5px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 999px; background: var(--tile); color: var(--muted);
+}
+.ak-live.s-live { background: color-mix(in srgb, var(--up) 18%, transparent); color: var(--up); }
+.ak-live.s-declared { background: var(--accent-soft); color: var(--accent-ink); }
+[data-theme="dark"] .ak-live.s-declared { color: var(--accent); }
+.ak-live.s-planned { background: color-mix(in srgb, #e5b048 20%, transparent); color: #b9820f; }
+[data-theme="dark"] .ak-live.s-planned { color: #e5b048; }
+
+.ak-ip { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 2px 10px 8px; font-size: 11.5px; color: var(--text-2); font-weight: 600; }
+.ak-ip svg { color: var(--muted); flex: none; }
+.ak-ip small { flex-basis: 100%; padding-left: 18px; color: var(--faint); font-size: 10.5px; font-weight: 500; }
+
+.ak-perms { display: grid; grid-template-columns: 1fr; gap: 4px; padding: 2px 6px 4px; }
+.ak-perm {
+  display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-radius: 8px;
+  font-size: 11.5px; font-weight: 600; background: var(--tile); color: var(--muted);
+}
+.ak-perm-ic { width: 15px; height: 15px; display: grid; place-items: center; border-radius: 5px; font-size: 10px; font-weight: 900; flex: none; background: color-mix(in srgb, var(--muted) 22%, transparent); color: var(--muted); }
+.ak-perm.on { color: var(--text); background: color-mix(in srgb, var(--up) 9%, var(--tile)); }
+.ak-perm.on .ak-perm-ic { background: color-mix(in srgb, var(--up) 20%, transparent); color: var(--up); }
+.ak-perm.off .ak-perm-ic { background: color-mix(in srgb, var(--down) 14%, transparent); color: var(--down); }
+
+.ak-expand {
+  width: 100%; margin-top: 8px; padding: 8px 10px; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--line-2); background: var(--tile); color: var(--text-2); font-size: 12px; font-weight: 700;
+}
+.ak-expand:hover { color: var(--accent); border-color: var(--accent-line); }
+
+/* ---- big expand modal ---- */
+.ak-modal { width: min(560px, 92vw); }
+.ak-modal-body { padding: 14px 16px 4px; }
+.ak-modal-intro { font-size: 12px; color: var(--muted); line-height: 1.5; margin: 0 0 12px; }
+.ak-empty { padding: 20px; text-align: center; color: var(--muted); }
+.ak-card { border: 1px solid var(--line); border-radius: 12px; padding: 12px 13px; background: color-mix(in srgb, var(--panel) 70%, transparent); }
+.ak-card + .ak-card { margin-top: 10px; }
+.ak-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.ak-card-name { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 750; color: var(--text); }
+.ak-badges { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+.ak-badges .ak-type { margin-left: 0; }
+.ak-scope { font-size: 9.5px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; padding: 2px 7px; border-radius: 5px; background: var(--accent-soft); color: var(--accent-ink); }
+[data-theme="dark"] .ak-scope { color: var(--accent); }
+.ak-card-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.ak-crow { display: flex; align-items: baseline; gap: 10px; font-size: 12px; }
+.ak-crow .k { width: 74px; flex: none; color: var(--muted); font-weight: 600; }
+.ak-crow .v { color: var(--text); font-weight: 640; }
+.ak-crow .v em { color: var(--faint); font-style: normal; font-weight: 500; font-size: 11px; margin-left: 4px; }
+.ak-card-perms { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ak-card-note { margin-top: 10px; font-size: 11px; color: var(--faint); }
+
+/* ===================== Cockpit v12 — top-bar refresh button =================
+   Binance-style in-place refresh. Idle = quiet gray. Hover = green. Click =
+   green + arrows spin one round, then morph to a green check, then settle back
+   to gray. If a Binance/API connection is unhealthy it turns red (and the
+   problem is surfaced in the alert feed via the server's error events). */
+.refresh-btn {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 28px; border-radius: 9px; border: 1px solid transparent;
+  background: transparent; color: var(--muted); cursor: pointer;
+  transition: background .2s ease, color .2s ease, border-color .2s ease, transform .1s ease;
+}
+.refresh-btn svg { width: 16px; height: 16px; }
+.refresh-btn:hover { color: var(--up); background: color-mix(in srgb, var(--up) 12%, transparent); }
+.refresh-btn:active { transform: scale(.92); }
+.refresh-btn.spin { color: var(--up); background: color-mix(in srgb, var(--up) 12%, transparent); }
+.refresh-btn.spin svg { animation: refreshSpin .72s cubic-bezier(.5,.15,.4,.9) infinite; }
+@keyframes refreshSpin { to { transform: rotate(360deg); } }
+.refresh-btn.ok {
+  color: #fff; background: var(--up); border-color: var(--up);
+  animation: refreshPop .34s cubic-bezier(.34,1.56,.55,1) both;
+}
+.refresh-btn.ok svg { animation: refreshCheck .32s ease both; }
+@keyframes refreshPop { 0% { transform: scale(.72); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
+@keyframes refreshCheck { from { opacity: 0; stroke-dashoffset: 24; } to { opacity: 1; stroke-dashoffset: 0; } }
+.refresh-btn.ok svg path { stroke-dasharray: 24; }
+.refresh-btn.err {
+  color: var(--down); background: color-mix(in srgb, var(--down) 15%, transparent);
+  border-color: color-mix(in srgb, var(--down) 42%, transparent);
+  animation: refreshShake .4s ease;
+}
+@keyframes refreshShake { 0%,100%{transform:translateX(0);} 20%{transform:translateX(-2px);} 60%{transform:translateX(2px);} 80%{transform:translateX(-1px);} }
+
+/* ===================== Cockpit v13 — floating connection dock ===============
+   Always-on bottom-right button. Resting colour tracks overall connection
+   health (neutral → green strong, orange slow, red laggy/down). Hover = small
+   latency popover. Click = a few slow smooth spins while everything re-pulls &
+   reconnects, then a payment-style green tick (or red cross) that settles back
+   to the health colour. */
+.rdock { position: fixed; right: 22px; bottom: 22px; z-index: 140; }
+@media (max-width: 640px) { .rdock { bottom: 76px; right: 16px; } }
+
+.rdock-btn {
+  position: relative; width: 46px; height: 46px; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer; padding: 0;
+  background: var(--panel); border: 1.5px solid var(--rd-color, var(--muted)); color: var(--rd-color, var(--muted));
+  box-shadow: 0 8px 22px -8px rgba(16,20,28,.34), 0 1px 3px rgba(0,0,0,.06);
+  /* Colour changes run via keyframes, not transitions: CSS transitions freeze
+     under the :root zoom (a Chrome quirk), so a transitioned border/background
+     never repaints. Keyframe animations DO run under zoom. */
+  transition: box-shadow .2s ease, transform .16s ease;
+}
+.rdock-btn.t-good { --rd-color: var(--up); }
+.rdock-btn.t-avg  { --rd-color: color-mix(in srgb, var(--muted) 82%, var(--text-2)); }
+.rdock-btn.t-slow { --rd-color: #e2892a; }
+.rdock-btn.t-bad  { --rd-color: var(--down); }
+.rdock:hover .rdock-btn { transform: translateY(-2px); box-shadow: 0 12px 28px -8px rgba(16,20,28,.4), 0 2px 4px rgba(0,0,0,.08); }
+.rdock-btn:active { transform: translateY(0) scale(.95); }
+.rdock-ic { display: grid; place-items: center; transform-origin: 50% 50%; }
+.rdock-ic svg { width: 19px; height: 19px; }
+
+/* click → the spin is driven in JS (rAF) for a steady slow turn under :root zoom */
+.rdock-btn.spin { --rd-color: var(--accent); }
+
+/* success → green fill (static, so it repaints under zoom) + a pop and a drawn
+   tick (payment style). Reverts to the health colour when the state clears. */
+.rdock-btn.ok { background-color: var(--up); border-color: var(--up); color: #fff; animation: rdockPop .46s cubic-bezier(.34,1.5,.5,1); }
+.rdock-btn.ok .rdock-ic svg path { stroke-dasharray: 28; animation: rdockDraw .42s ease .06s both; }
+@keyframes rdockPop { 0% { transform: scale(.82); } 55% { transform: scale(1.12); } 100% { transform: scale(1); } }
+@keyframes rdockDraw { from { stroke-dashoffset: 28; } to { stroke-dashoffset: 0; } }
+
+/* failure → red fill (static) + a drawn cross + shake */
+.rdock-btn.err { background-color: var(--down); border-color: var(--down); color: #fff; animation: rdockShake .5s ease; }
+.rdock-btn.err .rdock-ic svg path { stroke-dasharray: 28; animation: rdockDraw .36s ease both; }
+@keyframes rdockShake { 0%,100% { transform: translateX(0); } 22% { transform: translateX(-2px); } 62% { transform: translateX(2px); } 84% { transform: translateX(-1px); } }
+
+/* hover latency popover — small, unobtrusive */
+.rdock-pop {
+  position: absolute; right: 2px; bottom: calc(100% + 12px); width: 246px;
+  background: color-mix(in srgb, var(--panel) 97%, transparent);
+  border: 1px solid var(--glass-border); border-radius: 14px; padding: 9px 10px 8px;
+  box-shadow: var(--shadow-pop), 0 0 0 .5px var(--glass-edge);
+  animation: rdockPopIn .16s ease both;
+}
+@keyframes rdockPopIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.rdock-pop-head { display: flex; align-items: center; justify-content: space-between; padding: 2px 3px 8px; font-size: 10px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; color: var(--faint); }
+.rdock-pop-tag { font-size: 9px; font-weight: 800; padding: 2px 7px; border-radius: 999px; }
+.rdock-conn { display: flex; align-items: center; gap: 8px; padding: 5px 4px; }
+.rdock-conn + .rdock-conn { border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.rdock-conn-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.rdock-conn-name { font-size: 12px; color: var(--text-2); font-weight: 600; }
+.rdock-conn-val { margin-left: auto; font-size: 11.5px; font-weight: 720; letter-spacing: .2px; }
+.rdock-pop-foot { margin-top: 7px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 10.5px; color: var(--faint); text-align: center; }
+
+/* tier colours (dots / values / tag) */
+.rdock-conn-dot.t-good, .rdock-pop-tag.t-good { background: var(--up); }
+.rdock-conn-dot.t-avg,  .rdock-pop-tag.t-avg  { background: color-mix(in srgb, var(--muted) 82%, var(--text-2)); }
+.rdock-conn-dot.t-slow, .rdock-pop-tag.t-slow { background: #e2892a; }
+.rdock-conn-dot.t-bad,  .rdock-pop-tag.t-bad  { background: var(--down); }
+.rdock-pop-tag { color: #fff; text-transform: uppercase; }
+.rdock-conn-val.t-good { color: var(--up); }
+.rdock-conn-val.t-avg  { color: var(--text-2); }
+.rdock-conn-val.t-slow { color: #d67d1c; }
+.rdock-conn-val.t-bad  { color: var(--down); }

@@ -996,6 +996,97 @@ app.get('/api/system', (req, res) => {
   })();
 });
 
+// ---- API key inventory (top-bar "API Key" tab) -----------------------------
+// A small, editable manifest describing the Binance API key(s) this deployment
+// uses, so the owner can confirm at a glance WHICH key is live and what it may
+// do — without ever exposing the key or secret. The prefix is the REAL first 8
+// chars of the loaded key when one is present (so a key swap is visible);
+// otherwise it falls back to the declared prefix. Rotate the key or add the
+// full-access key by editing these env vars (or the defaults below).
+function apiKeyManifest() {
+  const declaredPrefix = process.env.BINANCE_KEY_PREFIX || 'MGVMfDMZ';
+  const ips = (process.env.BINANCE_KEY_IPS || '223.181.45.88')
+    .split(',').map((s) => s.trim()).filter(Boolean);
+  // Prefer the LIVE per-key permissions from Binance apiRestrictions; fall back
+  // to this key's declared read-only posture until a real fetch lands.
+  const r = account.keyRestrictions;
+  const permissions = r
+    ? {
+        reading: r.enableReading,
+        spotMargin: r.enableSpotAndMarginTrading,
+        marginLoan: r.enableMargin,
+        withdrawals: r.enableWithdrawals,
+        universalTransfer: r.permitsUniversalTransfer,
+        futures: r.enableFutures,
+      }
+    : { reading: true, spotMargin: false, marginLoan: false, withdrawals: false, universalTransfer: false, futures: false };
+  const fullIps = (process.env.BINANCE_FULL_KEY_IPS || '13.235.86.162')
+    .split(',').map((s) => s.trim()).filter(Boolean);
+  return [
+    {
+      id: 'read-only',
+      name: process.env.BINANCE_KEY_NAME || 'cosmos-local-read-only',
+      type: process.env.BINANCE_KEY_TYPE || 'HMAC',
+      scope: 'Read-only',
+      status: r ? 'live' : creds ? 'declared' : 'declared',
+      live: !!r, // permissions are the real, cross-checkable ones from Binance
+      keysPresent: !!creds,
+      prefix: creds ? creds.apiKey.slice(0, 8) : declaredPrefix, // first 8 only — never the full key
+      fingerprint: creds ? maskApiKey(creds.apiKey) : null,
+      ipRestrict: r ? r.ipRestrict : ips.length > 0,
+      ips,
+      ipNote: creds ? 'Trusted IP (server env)' : 'Local machine IP — temporary',
+      permissions,
+      note: creds ? (r ? null : 'Live permissions pending first account sync — showing declared read-only posture.') : 'Declared config — no key wired into this server yet.',
+      updatedAt: bootTs,
+    },
+    {
+      // The full-access engine key, created later in AWS Secrets Manager and
+      // restricted to the EC2 IP. Shown as PLANNED until it is actually wired.
+      // Withdrawals stay OFF by policy even on the full key.
+      id: 'secrets-full',
+      name: process.env.BINANCE_FULL_KEY_NAME || 'aws-secrets-manager',
+      type: process.env.BINANCE_FULL_KEY_TYPE || 'HMAC',
+      scope: 'Full access',
+      status: 'planned',
+      live: false,
+      keysPresent: false,
+      prefix: process.env.BINANCE_FULL_KEY_PREFIX || '—',
+      fingerprint: null,
+      ipRestrict: true,
+      ips: fullIps,
+      ipNote: 'AWS EC2 IP (planned)',
+      permissions: { reading: true, spotMargin: true, marginLoan: true, withdrawals: false, universalTransfer: true, futures: true },
+      note: 'Planned — will be created in AWS Secrets Manager for the deployed engine. Withdrawals stay OFF.',
+      updatedAt: bootTs,
+    },
+  ];
+}
+
+// On-demand "refresh everything" for the top-bar button: force a Binance
+// account + open-orders resync now, push a fresh state snapshot to all sockets,
+// and report whether anything is unhealthy so the button can go red.
+app.post('/api/refresh', (_req, res) => {
+  void (async () => {
+    await account.sync();
+    await orders.syncOpenOrders().catch(() => undefined);
+    broadcast({ type: 'state', payload: buildState() });
+    const feeds = engine.feeds;
+    const feedVals = Object.values(feeds);
+    const feedsOk = feedVals.length > 0 && feedVals.every((s) => s === 'open');
+    const issues: string[] = [];
+    if (account.keysPresent && !account.connected) {
+      issues.push(account.lastError ? `Binance account: ${account.lastError}` : 'Binance account not synced');
+    }
+    if (!feedsOk) issues.push('Market data feed degraded');
+    res.json({ ok: issues.length === 0, binanceConnected: account.connected, feedsOk, keysPresent: account.keysPresent, issues, ts: Date.now() });
+  })();
+});
+
+app.get('/api/apikey', (_req, res) => {
+  res.json({ keys: apiKeyManifest(), activeId: 'read-only', ts: Date.now() });
+});
+
 app.get('/api/config', (_req, res) => {
   res.json(config);
 });

@@ -41,6 +41,25 @@ export interface AccountInfo {
   canWithdraw: boolean;
 }
 
+/**
+ * Per-API-KEY permission flags from /sapi/v1/account/apiRestrictions. This is
+ * the authoritative source for what THE KEY can do — unlike /api/v3/account's
+ * `canWithdraw`, which is an ACCOUNT-level flag and stays true for a read-only
+ * key. Binance does not return the whitelisted IPs themselves, only ipRestrict.
+ */
+export interface ApiRestrictions {
+  ipRestrict: boolean;
+  enableReading: boolean;
+  enableWithdrawals: boolean;
+  enableInternalTransfer: boolean;
+  enableMargin: boolean;
+  enableSpotAndMarginTrading: boolean;
+  enableFutures: boolean;
+  permitsUniversalTransfer: boolean;
+  enableVanillaOptions?: boolean;
+  createTime?: number;
+}
+
 export interface OpenOrder {
   symbol: string;
   orderId: number;
@@ -129,6 +148,11 @@ export class BinanceClient {
 
   account(): Promise<AccountInfo> {
     return this.request('GET', '/api/v3/account', { omitZeroBalances: 'true' }, true);
+  }
+
+  // Authoritative per-key permissions (the real "can this key withdraw/trade").
+  apiRestrictions(): Promise<ApiRestrictions> {
+    return this.request('GET', '/sapi/v1/account/apiRestrictions', {}, true);
   }
 
   openOrders(): Promise<OpenOrder[]> {

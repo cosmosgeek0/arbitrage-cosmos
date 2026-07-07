@@ -135,6 +135,10 @@ Removed from the sidebar: Tokens (Token Detail opens from Markets rows / search 
 
 Topbar (fixed set — do not add more buttons): search, clock, currency, news quick-view, calendar quick-view, **CloudShell quick-view**, network signal, data health, alerts, notifications, kill/power, zoom, settings, theme, account/profile.
 
+Refresh dock: a persistent bottom control (`RefreshDock`) that re-pulls shared state/markets and forces a server-side resync (`POST /api/refresh`), broadcasting a global `fireRefresh` signal so any page can re-pull; it shows connection health with success/fail marks.
+
+Key manifest / permissions: `GET /api/apikey` returns a masked key manifest (fingerprint + first-8 prefix only — never the full key/secret). Per-key scope comes from the authoritative `/sapi/v1/account/apiRestrictions` (client `apiRestrictions()`), which is the real "can this key trade/withdraw" — unlike account-level `canWithdraw`. The Account page shows these per-key permissions.
+
 CloudShell: the topbar terminal icon opens an in-app AWS CloudShell-styled overlay (`CloudShellModal`, via the same `openOverlay` mechanism as News/Calendar), not a new browser tab. It is an honest launcher — dark terminal chrome grounded in the real deploy target (instance `cg-arbitrage-01`, `/opt/arbitrage-cosmos`, user `ubuntu`, SSM access) with a live host prompt; it does not fake an attached session. "Open in AWS" / Enter starts the real console session. The System → Cost & usage admin CloudShell link also remains.
 
 ### Content responsibilities (8-surface reference)

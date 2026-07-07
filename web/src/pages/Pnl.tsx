@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
+import { useRefreshSignal } from '../lib/refresh';
 import { EmptyState, StatePill } from '../components/ui';
 import { TokenIcon } from '../components/TokenIcon';
 import { SparkArea } from '../components/Spark';
@@ -256,6 +257,8 @@ export function Pnl() {
   const [data, setData] = useState<PnlData | null>(null);
   const [fills, setFills] = useState<FillRow[]>([]);
   const [lens, setLens] = useState<Lens>('realized');
+  const [refreshTick, setRefreshTick] = useState(0);
+  useRefreshSignal(() => setRefreshTick((n) => n + 1));
 
   useEffect(() => {
     const load = () => {
@@ -271,7 +274,7 @@ export function Pnl() {
     load();
     const t = window.setInterval(load, 30_000);
     return () => window.clearInterval(t);
-  }, [state?.recentFills.length]);
+  }, [state?.recentFills.length, refreshTick]);
 
   const days = data?.realizedByDay ?? [];
   const symbols = data?.realizedBySymbol ?? [];

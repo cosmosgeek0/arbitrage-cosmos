@@ -19,6 +19,8 @@ import {
   IconExternal,
   IconGear,
   IconGrid,
+  IconKey,
+  IconLock,
   IconLayers,
   IconList,
   IconMaximize,
@@ -27,6 +29,7 @@ import {
   IconPower,
   IconPulse,
   IconRadar,
+  IconRefresh,
   IconReceipt,
   IconSearch,
   IconShield,
@@ -984,11 +987,29 @@ function TrustedAdvisor() {
 // A single box: centered under the hovered trigger with a pointer aimed at it.
 // Moving to another trigger doesn't close/reopen — the same box slides, resizes
 // (via the per-key width) and the pointer re-aims; only the contents cross-fade.
-type MK = 'clock' | 'shell' | 'network' | 'data' | 'alerts' | 'currency' | 'advisor' | 'notif' | 'power' | 'zoom' | 'settings' | 'theme';
+type MK = 'clock' | 'shell' | 'apikey' | 'apikey2' | 'network' | 'data' | 'alerts' | 'currency' | 'advisor' | 'notif' | 'power' | 'zoom' | 'settings' | 'theme';
 const MENU_W: Record<MK, number> = {
-  clock: 248, shell: 276, network: 288, data: 290, alerts: 302, currency: 240,
+  clock: 248, shell: 276, apikey: 300, apikey2: 300, network: 288, data: 290, alerts: 302, currency: 240,
   advisor: 300, notif: 328, power: 250, zoom: 208, settings: 236, theme: 222,
 };
+
+export interface ApiKeyInfo {
+  id: string; name: string; type: string; scope: string;
+  status: 'live' | 'declared' | 'planned'; live: boolean; keysPresent?: boolean;
+  prefix: string; fingerprint: string | null;
+  ipRestrict: boolean; ips: string[]; ipNote: string;
+  permissions: { reading: boolean; spotMargin: boolean; marginLoan: boolean; withdrawals: boolean; universalTransfer: boolean; futures: boolean };
+  note: string | null;
+}
+// The six permissions the owner wants visible, in display order.
+export const API_PERMS: { key: keyof ApiKeyInfo['permissions']; label: string }[] = [
+  { key: 'reading', label: 'Reading' },
+  { key: 'spotMargin', label: 'Spot & Margin & Stock Trading' },
+  { key: 'marginLoan', label: 'Margin Loan, Repay & Transfer' },
+  { key: 'withdrawals', label: 'Withdrawals' },
+  { key: 'universalTransfer', label: 'Permits Universal Transfer' },
+  { key: 'futures', label: 'Futures' },
+];
 
 function SharedTopBar() {
   const { state, connected, prefs, updatePref, setPage, setKill } = useStore();
@@ -1008,9 +1029,17 @@ function SharedTopBar() {
   const [sys, setSys] = useState<SystemLite | null>(null);
   const [srv, setSrv] = useState({ news: false, cal: false, fx: false });
   const [seen, setSeen] = useState(() => Number(localStorage.getItem('cosmos-notif-seen') || 0));
+  const [apiKeys, setApiKeys] = useState<ApiKeyInfo[]>([]);
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
   useEffect(() => { let al = true; const load = () => fetch('/api/system').then((r) => (r.ok ? r.json() : null)).then((s) => al && s && setSys(s as SystemLite)).catch(() => undefined); void load(); const t = setInterval(load, 5000); return () => { al = false; clearInterval(t); }; }, []);
+  useEffect(() => {
+    let al = true;
+    fetch('/api/apikey').then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (al && d?.keys?.length) setApiKeys(d.keys as ApiKeyInfo[]);
+    }).catch(() => undefined);
+    return () => { al = false; };
+  }, []);
   useEffect(() => {
     if (active !== 'data') return; let al = true;
     const p = (u: string, k: 'news' | 'cal' | 'fx') => fetch(u).then((r) => al && setSrv((x) => ({ ...x, [k]: r.ok }))).catch(() => al && setSrv((x) => ({ ...x, [k]: false })));
@@ -1073,6 +1102,8 @@ function SharedTopBar() {
   const cancelClose = () => window.clearTimeout(closeT.current);
 
   const b = state?.binance; const cfg = state?.config;
+  const roKey = apiKeys.find((k) => k.id === 'read-only') ?? apiKeys[0] ?? null;
+  const fullKey = apiKeys.find((k) => k.id === 'secrets-full') ?? apiKeys[1] ?? null;
   const feeds = state?.feeds ?? {}; const feedList = Object.entries(feeds);
   const feedsOk = feedList.length > 0 && feedList.every(([, s]) => s === 'open');
   const lat = sys?.restLatencyMs ?? null;
@@ -1133,6 +1164,24 @@ function SharedTopBar() {
     </button>
   );
 
+  const keyBody = (ak: ApiKeyInfo | null, Icon: (p: { size?: number }) => JSX.Element) => {
+    if (!ak) return (<><div className="np-head"><span className="np-title"><Icon size={14} /> API key</span></div><div className="np-sub-line">No key manifest yet — check the server.</div></>);
+    const statusLbl = ak.status === 'live' ? 'live' : ak.status === 'planned' ? 'planned' : 'declared';
+    return (<>
+      <div className="np-head"><span className="np-title"><Icon size={14} /> {ak.name}</span><span className="ak-type">{ak.type}</span></div>
+      <div className="ak-idrow">
+        <span className="ak-prefix num">{ak.prefix}<span className="ak-dots">••••••••••</span></span>
+        <span className={`ak-live s-${ak.status}`}>{statusLbl}</span>
+      </div>
+      <div className="ak-ip"><IconShield size={12} />{ak.ipRestrict ? `Restricted · ${ak.ips.join(', ')}` : 'Unrestricted — any IP'}<small>{ak.ipNote}</small></div>
+      <div className="menu-head">Permissions</div>
+      <div className="ak-perms">{API_PERMS.map((p) => { const on = ak.permissions[p.key]; return (
+        <span key={p.key} className={`ak-perm ${on ? 'on' : 'off'}`}><span className="ak-perm-ic">{on ? '✓' : '✕'}</span>{p.label}</span>); })}</div>
+      {ak.note && <div className="menu-foot">{ak.note}</div>}
+      <button className="ak-expand" onClick={() => { setActive(null); openOverlay('apikey'); }}>Expand ⤢</button>
+    </>);
+  };
+
   const content = (k: MK) => {
     switch (k) {
       case 'clock':
@@ -1146,6 +1195,8 @@ function SharedTopBar() {
           <div className="np-row"><span className="k">Runtime</span><span className="v">/opt/arbitrage-cosmos</span></div>
           <div className="np-row"><span className="k">Access</span><span className="v">SSM · Session Manager</span></div>
           <button className="adv-fix" style={{ width: '100%', marginTop: 10 }} onClick={() => { setActive(null); openOverlay('cloudshell'); }}>Open in-app CloudShell →</button></>);
+      case 'apikey': return keyBody(roKey, IconKey);
+      case 'apikey2': return keyBody(fullKey, IconLock);
       case 'network':
         return (<><div className="np-head"><span className={`np-title ${netGrade}`}><span className="net-dot" />{!connected ? 'Signal offline' : netGrade === 'ok' ? 'Signal healthy' : 'Signal degraded'}</span><span className="np-lat num">{!connected ? 'offline' : msLabel(lat)}</span></div>
           <div className="np-row"><span className="k">Binance REST latency</span><span className={`v num ${latTone}`}>{msLabel(lat)}</span></div>
@@ -1207,6 +1258,8 @@ function SharedTopBar() {
     <div className="smenu-bar" ref={rowRef} onMouseLeave={scheduleClose}>
       {trig('clock', 'hdr-clock-btn', <><span className="num">{fmtClockZone(zone.id, now)}</span><span className="hcb-zone">{zone.label}</span></>)}
       {trig('shell', 'hdr-ic tint-shell', <IconTerminal size={16} />)}
+      {trig('apikey', 'apikey-pill ro', <><IconKey size={15} /><span className={`apikey-dot s-${roKey?.status ?? 'declared'}`} /></>)}
+      {trig('apikey2', 'apikey-pill full', <><IconLock size={15} /><span className={`apikey-dot s-${fullKey?.status ?? 'planned'}`} /></>)}
       {trig('network', `net-btn wifi ${netGrade}`, <WifiSignal grade={netGrade} />)}
       {trig('data', `hdr-ic tint-data grade-${netGrade}`, <IconDatabase size={18} />)}
       {trig('alerts', 'hdr-ic', <><IconAlarm size={16} />{alertsOn > 0 && <span className="ic-dot accent" />}</>)}
@@ -1223,6 +1276,128 @@ function SharedTopBar() {
           <div className="smenu-content" key={active}>{content(active)}</div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Payment-app style success / failure marks for the refresh dock.
+const IconCheck = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.8} strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+);
+const IconCross = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.8} strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+);
+
+type ConnTier = 'good' | 'avg' | 'slow' | 'bad';
+const TIER_SCORE: Record<ConnTier, number> = { good: 3, avg: 2, slow: 1, bad: 0 };
+function latTier(ms: number | null | undefined, good: number, avg: number, slow: number): ConnTier {
+  if (ms === null || ms === undefined) return 'bad';
+  if (ms < good) return 'good';
+  if (ms < avg) return 'avg';
+  if (ms < slow) return 'slow';
+  return 'bad';
+}
+
+// Always-on floating dock (bottom-right). Its resting colour reflects overall
+// connection health (neutral → green when strong, orange when slow, red when
+// laggy/down). Hover shows a small popover listing each connection's latency.
+// Click spins a few slow, smooth turns while it re-pulls + reconnects EVERYTHING
+// in the background (no page reload), then draws a green tick (payment-app style)
+// that fades back to the health colour — or a red cross if something failed.
+export function RefreshDock() {
+  const { state, connected, refresh } = useStore();
+  const [sys, setSys] = useState<SystemLite | null>(null);
+  const [appRtt, setAppRtt] = useState<number | null>(null);
+  const [st, setSt] = useState<'idle' | 'spin' | 'ok' | 'err'>('idle');
+  const [open, setOpen] = useState(false);
+  const busy = useRef(false);
+  const icRef = useRef<HTMLSpanElement>(null);
+
+  // Drive the spin with the Web Animations API rather than a CSS class: under the
+  // :root zoom, a CSS keyframe rotation restarts on every React re-render (the
+  // dock re-renders on each WS state push), which reads as a crazy-fast jitter.
+  // This animation is created ONCE per spin, so it turns steadily — one calm
+  // rotation every 1.25s — regardless of the render cycle.
+  useEffect(() => {
+    const el = icRef.current;
+    if (st !== 'spin' || !el) return;
+    const anim = el.animate(
+      [{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }],
+      { duration: 1250, iterations: Infinity, easing: 'linear' }
+    );
+    return () => anim.cancel();
+  }, [st]);
+
+  useEffect(() => {
+    let alive = true;
+    const ping = async () => {
+      const t0 = performance.now();
+      try { const r = await fetch('/api/health', { cache: 'no-store' }); if (!r.ok) throw new Error(); if (alive) setAppRtt(performance.now() - t0); }
+      catch { if (alive) setAppRtt(null); }
+    };
+    void ping(); const t = window.setInterval(ping, 5000); return () => { alive = false; window.clearInterval(t); };
+  }, []);
+  useEffect(() => {
+    let alive = true;
+    const load = () => fetch('/api/system').then((r) => (r.ok ? r.json() : null)).then((s) => alive && s && setSys(s as SystemLite)).catch(() => undefined);
+    void load(); const t = window.setInterval(load, 5000); return () => { alive = false; window.clearInterval(t); };
+  }, []);
+
+  const feeds = state?.feeds ?? {};
+  const feedVals = Object.values(feeds);
+  const feedsOk = feedVals.length > 0 && feedVals.every((s) => s === 'open');
+  const rest = sys?.restLatencyMs ?? null;
+  const drift = sys?.serverTimeDiffMs ?? null;
+
+  const conns: { key: string; label: string; value: string; tier: ConnTier }[] = [
+    { key: 'app', label: 'Browser → server', value: appRtt != null ? msLabel(appRtt) : 'offline', tier: latTier(appRtt, 120, 350, 800) },
+    { key: 'binance', label: 'Binance REST', value: rest != null ? msLabel(rest) : '—', tier: latTier(rest, 300, 600, 1100) },
+    { key: 'socket', label: 'Live socket', value: connected ? 'live' : 'reconnecting', tier: connected ? 'good' : 'bad' },
+    { key: 'feed', label: 'Market feed', value: feedVals.length ? (feedsOk ? `${feedVals.length} open` : 'degraded') : 'idle', tier: feedVals.length ? (feedsOk ? 'good' : 'slow') : 'avg' },
+    { key: 'drift', label: 'Clock drift', value: drift != null ? msLabel(drift) : '—', tier: latTier(drift != null ? Math.abs(drift) : null, 400, 1200, 2500) },
+  ];
+
+  let overall: ConnTier;
+  if (!connected) overall = 'bad';
+  else {
+    const avg = conns.reduce((s, c) => s + TIER_SCORE[c.tier], 0) / conns.length;
+    overall = avg >= 2.6 ? 'good' : avg >= 1.8 ? 'avg' : avg >= 0.9 ? 'slow' : 'bad';
+  }
+
+  const run = async () => {
+    if (busy.current) return;
+    busy.current = true; setSt('spin');
+    const t0 = Date.now();
+    let res: { ok: boolean; issues: string[] };
+    try { res = await refresh(); } catch { res = { ok: false, issues: ['Refresh failed'] }; }
+    const wait = Math.max(0, 2050 - (Date.now() - t0)); // let it spin a few smooth turns
+    window.setTimeout(() => {
+      if (res.ok) { setSt('ok'); window.setTimeout(() => setSt('idle'), 1500); }
+      else { setSt('err'); window.setTimeout(() => setSt('idle'), 2400); }
+      busy.current = false;
+    }, wait);
+  };
+
+  const label = st === 'spin' ? 'Refreshing all connections…' : st === 'ok' ? 'All connections refreshed' : st === 'err' ? 'Some connections failed — try again' : `Connection health: ${overall}`;
+
+  return (
+    <div className="rdock" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      {open && (st === 'idle' || st === 'err') && (
+        <div className="rdock-pop">
+          <div className="rdock-pop-head"><span>Connection health</span><span className={`rdock-pop-tag t-${overall}`}>{overall}</span></div>
+          {conns.map((c) => (
+            <div key={c.key} className="rdock-conn">
+              <span className={`rdock-conn-dot t-${c.tier}`} />
+              <span className="rdock-conn-name">{c.label}</span>
+              <span className={`rdock-conn-val num t-${c.tier}`}>{c.value}</span>
+            </div>
+          ))}
+          <div className="rdock-pop-foot">Click to refresh &amp; reconnect everything</div>
+        </div>
+      )}
+      <button className={`rdock-btn t-${overall} ${st}`} onClick={run} title={label} aria-label={label}>
+        <span className="rdock-ic" ref={icRef}>{st === 'ok' ? <IconCheck size={20} /> : st === 'err' ? <IconCross size={20} /> : <IconRefresh size={19} />}</span>
+      </button>
     </div>
   );
 }
@@ -1460,12 +1635,51 @@ function CloudShellModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+function ApiKeyModal({ onClose }: { onClose: () => void }) {
+  const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
+  useEffect(() => {
+    let al = true;
+    fetch('/api/apikey').then((r) => (r.ok ? r.json() : null)).then((d) => { if (al && d?.keys) setKeys(d.keys as ApiKeyInfo[]); }).catch(() => undefined);
+    return () => { al = false; };
+  }, []);
+  return (
+    <div className="ov-backdrop" onMouseDown={onClose}>
+      <div className="ov-modal ak-modal" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="ov-head">
+          <div className="ov-title"><IconKey size={16} /> API keys</div>
+          <div className="ov-actions"><button className="ov-close" onClick={onClose} aria-label="Close"><IconClose size={16} /></button></div>
+        </div>
+        <div className="ak-modal-body">
+          <p className="ak-modal-intro">Which Binance key is wired into this deployment and what it may do. The key and secret are never shown — only the first characters, so you can confirm a rotation.</p>
+          {keys.length === 0 ? <div className="ak-empty">No key manifest available.</div> : keys.map((ak) => (
+            <div key={ak.id} className="ak-card">
+              <div className="ak-card-head">
+                <span className="ak-card-name"><IconKey size={15} /> {ak.name}</span>
+                <span className="ak-badges"><span className="ak-type">{ak.type}</span><span className="ak-scope">{ak.scope}</span><span className={`ak-live s-${ak.status}`}>{ak.status}</span></span>
+              </div>
+              <div className="ak-card-rows">
+                <div className="ak-crow"><span className="k">Key</span><span className="v num">{ak.prefix}<span className="ak-dots">••••••••••••••••</span></span></div>
+                <div className="ak-crow"><span className="k">IP access</span><span className="v">{ak.ipRestrict ? `Restricted · ${ak.ips.join(', ')}` : 'Unrestricted — any IP'} <em>{ak.ipNote}</em></span></div>
+              </div>
+              <div className="ak-card-perms">{API_PERMS.map((p) => { const on = ak.permissions[p.key]; return (
+                <span key={p.key} className={`ak-perm ${on ? 'on' : 'off'}`}><span className="ak-perm-ic">{on ? '✓' : '✕'}</span>{p.label}</span>); })}</div>
+              {ak.note && <div className="ak-card-note">{ak.note}</div>}
+            </div>
+          ))}
+        </div>
+        <div className="cs-foot">Edit the manifest server-side (env: BINANCE_KEY_NAME / _TYPE / _IPS) when you rotate or add a key.</div>
+      </div>
+    </div>
+  );
+}
+
 // Rendered once at the app root so fixed overlays escape the sidebar box.
 export function Overlays() {
   const [kind, set] = useOverlay();
   if (kind === 'news') return <NewsModal onClose={() => set(null)} />;
   if (kind === 'calendar') return <CalendarModal onClose={() => set(null)} />;
   if (kind === 'cloudshell') return <CloudShellModal onClose={() => set(null)} />;
+  if (kind === 'apikey') return <ApiKeyModal onClose={() => set(null)} />;
   return null;
 }
 

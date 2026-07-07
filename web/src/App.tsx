@@ -1,5 +1,5 @@
 import { StoreProvider, useStore } from './store';
-import { Sidebar, Topbar, BottomNav, Overlays } from './components/Header';
+import { Sidebar, Topbar, BottomNav, Overlays, RefreshDock } from './components/Header';
 import { Tape } from './components/Tape';
 import { Palette } from './components/Palette';
 import { Dashboard } from './pages/Dashboard';
@@ -58,6 +58,7 @@ function Shell() {
       <BottomNav />
       <Palette />
       <Overlays />
+      <RefreshDock />
     </div>
   );
 }

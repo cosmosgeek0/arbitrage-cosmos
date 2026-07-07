@@ -72,6 +72,14 @@ Owner directive (2026-07-07):
 
 ## 7. Run log (newest first)
 
+### 2026-07-07 — Refresh/reconnect dock + authoritative per-key permissions
+- Asked: cleanly push another chat's additions — top-bar key manifest, a bottom refresh/reconnect dock, connection-health.
+- Changed (concurrent-session work, not Director-authored): 13 files + new `web/src/lib/refresh.ts`. Highlights: `RefreshDock` (bottom, WAA-driven spin, success/fail marks, health popover) + global `fireRefresh`/`useRefreshSignal`; `POST /api/refresh` (server resync); `GET /api/apikey` (key manifest — masked fingerprint + first-8 prefix only, never full key/secret); new client `apiRestrictions()` → `/sapi/v1/account/apiRestrictions` for **authoritative per-key** permissions.
+- Security **correction** to prior run: the active key is genuinely **read-only** — per-key `apiRestrictions` = `{reading:true, spotMargin:false, marginLoan:false, withdrawals:false, universalTransfer:false, futures:false}`. Last turn's `canWithdraw:true` was the *account-level* flag (true even for read-only keys); the new per-key check is the real scope. No over-permissioned key. A second "secrets-full" manifest entry is a *planned* AWS-Secrets key (withdrawals still false), not active.
+- Safety: no withdrawal/transfer/trade routes added; no secret in responses/logs. build clean, gates 50/50. Browser-verified: dock renders, no console errors, `/api/apikey` masked, dashboard shows real $50.031 equity, posture 5/6 "withdrawals disabled".
+- Committed & pushed to `current-main`. Old `main` untouched.
+- Next action: owner review; user-stream still on polling fallback; optionally wire the planned AWS-Secrets key later.
+
 ### 2026-07-07 — READ-ONLY BINANCE API PHASE
 - Asked: show real Binance read-only account state from server-side env; no trading, no withdrawals/transfers, no frontend keys, no secrets in git/logs.
 - Env names (already standard, no rename): **`BINANCE_API_KEY`**, **`BINANCE_API_SECRET`**. Server has a no-dependency `.env` loader (`server/src/index.ts` `loadDotEnv`). `.env` present, gitignored, untracked.

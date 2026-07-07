@@ -2,6 +2,7 @@
    account truth, market freshness, risk gating, or ledger writes can be trusted. */
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
+import { useRefreshSignal } from '../lib/refresh';
 import { StatePill } from '../components/ui';
 import {
   IconAlert,
@@ -209,6 +210,7 @@ export function SystemHealth() {
     const t = setInterval(load, 10_000);
     return () => clearInterval(t);
   }, [load]);
+  useRefreshSignal(() => void load());
 
   if (!info) return <div className="container page page-narrow"><div className="empty-state">Reading system state...</div></div>;
 

@@ -1,4 +1,4 @@
-import type { BinanceClient } from '../binance/client.js';
+import type { BinanceClient, ApiRestrictions } from '../binance/client.js';
 import type { Ledger, FillRow } from '../ledger.js';
 import type { BalanceEntry, PositionEntry } from '../types.js';
 
@@ -13,8 +13,9 @@ export class AccountService {
   connected = false;
   lastSyncTs: number | null = null;
   lastError: string | null = null;
-  canWithdraw: boolean | null = null; // surfaced so the user can verify it's FALSE
+  canWithdraw: boolean | null = null; // KEY-level withdraw permission (see sync)
   canTrade: boolean | null = null;
+  keyRestrictions: ApiRestrictions | null = null; // authoritative per-key permissions
   private balances = new Map<string, { free: number; locked: number }>();
   private lastSnapshotTs = 0;
   private pnlCacheDirty = true;
@@ -45,8 +46,18 @@ export class AccountService {
         const locked = Number(b.locked);
         if (free > 0 || locked > 0) this.balances.set(b.asset, { free, locked });
       }
-      this.canWithdraw = acct.canWithdraw;
       this.canTrade = acct.canTrade;
+      // /api/v3/account.canWithdraw is ACCOUNT-level and stays true for a
+      // read-only key. Prefer the KEY-level flag from apiRestrictions so the UI
+      // never falsely warns that a read-only key "can withdraw". Fetched
+      // best-effort — a failure here must not break the balance sync.
+      try {
+        this.keyRestrictions = await this.client.apiRestrictions();
+        this.canWithdraw = this.keyRestrictions.enableWithdrawals;
+      } catch {
+        this.keyRestrictions = null;
+        this.canWithdraw = acct.canWithdraw; // fallback: account-level flag
+      }
       const wasConnected = this.connected;
       this.connected = true;
       this.lastSyncTs = Date.now();
@@ -55,9 +66,9 @@ export class AccountService {
         this.ledger.logEvent('binance.connected', null, {
           assets: this.balances.size,
           canTrade: acct.canTrade,
-          canWithdraw: acct.canWithdraw,
+          canWithdraw: this.canWithdraw,
         });
-        if (acct.canWithdraw) {
+        if (this.canWithdraw) {
           this.ledger.logEvent('error_event', null, {
             severity: 'warning',
             message:

@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { applyPrefs, getPrefs, onPrefs, resolvedTheme, setPref, CURRENCIES, type Prefs } from './lib/prefs';
 import { setBasisBps, setDisplayUtc, setFxRate } from './format';
+import { fireRefresh } from './lib/refresh';
 import type {
   AppConfig,
   MarketRow,
@@ -55,6 +56,8 @@ interface Store {
   marketsUpdatedAt: number | null;
   marketsError: string | null;
   connected: boolean;
+  dataNonce: number;
+  refresh: () => Promise<{ ok: boolean; issues: string[] }>;
   page: Page;
   setPage: (p: Page) => void;
   detailSymbol: string;
@@ -139,14 +142,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setBasisBps(p.basisUnit === 'bps');
     return p;
   });
-  const [page, setPage] = useState<Page>(() =>
-    PAGE_IDS.includes(getPrefs().defaultPage as Page) ? (getPrefs().defaultPage as Page) : 'dashboard'
-  );
-  const [detailSymbol, setDetailSymbol] = useState('BTCUSDT');
+  // Restore the tab the owner was on across a hard refresh (localStorage),
+  // falling back to their configured default page, then the dashboard.
+  const [page, setPage] = useState<Page>(() => {
+    const saved = localStorage.getItem('cosmos-active-page');
+    if (saved && PAGE_IDS.includes(saved as Page)) return saved as Page;
+    return PAGE_IDS.includes(getPrefs().defaultPage as Page) ? (getPrefs().defaultPage as Page) : 'dashboard';
+  });
+  const [detailSymbol, setDetailSymbol] = useState(() => localStorage.getItem('cosmos-detail-symbol') || 'BTCUSDT');
+  const [dataNonce, setDataNonce] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [ticket, setTicket] = useState<TicketPrefill | null>(null);
   const [, bumpFx] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
+  const connectRef = useRef<(() => void) | null>(null);
 
   // Display currency → live FX rate (USD base). USD is identity; others fetch.
   useEffect(() => {
@@ -224,6 +233,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       };
       ws.onerror = () => ws.close();
     }
+    connectRef.current = connect;
     connect();
 
     return () => {
@@ -259,16 +269,60 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const openDetail = useCallback((symbol: string) => {
     setDetailSymbol(symbol);
+    localStorage.setItem('cosmos-detail-symbol', symbol);
     setPage('detail');
+    localStorage.setItem('cosmos-active-page', 'detail');
     window.scrollTo({ top: 0 });
   }, []);
 
   const changePage = useCallback((p: Page) => {
     setPage(p);
+    localStorage.setItem('cosmos-active-page', p);
     window.scrollTo({ top: 0 });
   }, []);
 
   const saveConfig = useCallback((patch: Partial<AppConfig>) => post<AppConfig>('/api/config', patch), []);
+
+  // In-place "refresh everything" for the top-bar button: force a server-side
+  // Binance/account resync, re-pull the shared snapshot + markets, reconnect a
+  // dead socket, and fan a signal out to per-page fetchers — all WITHOUT a page
+  // reload. Returns a health verdict so the button can go green or red.
+  const refresh = useCallback(async (): Promise<{ ok: boolean; issues: string[] }> => {
+    const issues: string[] = [];
+    let health: { ok?: boolean; issues?: string[] } | null = null;
+    try {
+      health = await post<{ ok: boolean; issues: string[] }>('/api/refresh', {});
+    } catch {
+      issues.push('Server refresh request failed');
+    }
+    try {
+      const s = await fetch('/api/state').then((r) => (r.ok ? r.json() : null));
+      if (s) setState(s as ServerState);
+      else issues.push('State snapshot unavailable');
+    } catch {
+      issues.push('State snapshot failed');
+    }
+    try {
+      const m = await fetch('/api/markets').then((r) => (r.ok ? r.json() : null));
+      if (m) {
+        const payload = m as { updatedAt?: number; rows: MarketRow[] };
+        setMarkets(payload.rows);
+        setMarketsUpdatedAt(payload.updatedAt ?? Date.now());
+        setMarketsError(null);
+      }
+    } catch {
+      issues.push('Market refresh failed');
+    }
+    // Reconnect the live socket if it dropped.
+    const ws = wsRef.current;
+    if (!ws || (ws.readyState !== WebSocket.OPEN && ws.readyState !== WebSocket.CONNECTING)) {
+      connectRef.current?.();
+    }
+    setDataNonce((n) => n + 1);
+    fireRefresh();
+    if (health?.issues?.length) for (const i of health.issues) issues.push(i);
+    return { ok: issues.length === 0, issues };
+  }, []);
 
   const store: Store = {
     state,
@@ -276,6 +330,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     marketsUpdatedAt,
     marketsError,
     connected,
+    dataNonce,
+    refresh,
     page,
     setPage: changePage,
     detailSymbol,

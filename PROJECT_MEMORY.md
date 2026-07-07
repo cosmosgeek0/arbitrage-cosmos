@@ -72,6 +72,14 @@ Owner directive (2026-07-07):
 
 ## 7. Run log (newest first)
 
+### 2026-07-07 — Commit animated top-bar menus
+- Asked: push the current on-disk state cleanly — the other chat animated the top bar.
+- Changed (concurrent-session UI work, not Director-authored): `web/src/components/Header.tsx` (unified top-bar menu/popover with slide+fade animation, rAF-tweened left/width), `web/src/styles.css` (`smIn`/`smFade` keyframes), `web/index.html` (favicon → arbitrage mark, title → "Arbitrage Control Room").
+- Safeguard: build clean, gates 50/50 before commit. Tree was stable (last edit ~4 min prior).
+- Committed `53ba5d5` (ui: animated top-bar menus + arbitrage favicon/title); pushed to `current-main`. Working tree now clean.
+- Topbar control *set* unchanged (animation polish only) → no BLUEPRINT structural change. Old `main` untouched @ `80c234f`.
+- Next action: resume skeleton/visual pass or Engine v0 Part 0; tag a fresh checkpoint if a pinned recovery point is wanted at `53ba5d5`.
+
 ### 2026-07-07 — Session-tracking checkpoint (formalized) + concurrent-edit note
 - current branch: `current-main`.
 - latest clean commit before the WIP: `75b10ee` (bootstrap audit).

@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "cosmos",
+      "runtimeExecutable": "/Users/cosmosgeek/.local/node22/bin/node",
+      "runtimeArgs": ["server/dist/index.js"],
+      "port": 8080,
+      "autoPort": true
+    }
+  ]
+}

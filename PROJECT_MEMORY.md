@@ -72,6 +72,16 @@ Owner directive (2026-07-07):
 
 ## 7. Run log (newest first)
 
+### 2026-07-07 — Source checkpoint tag (skeleton pass 1)
+- Asked: create a recoverable source checkpoint tag `checkpoint-skeleton-pass1-current-main` on `current-main`; don't commit node_modules/dist/data/.env/secrets; leave old `main` untouched.
+- Blocker found: working tree was NOT clean — ~298 lines of uncommitted "active session tracking + TrustedAdvisor" feature (server `/api/sessions`, account-card session list, styles), almost certainly from the other chat running a dev server in this folder.
+- Owner decision: commit the WIP with safeguards (do NOT tag the old clean commit over real WIP).
+- Safeguards run before committing: verified feature is wired end-to-end; build clean; gates 50/50.
+- Changed: committed the 3 WIP files as `c7d10d7` (feat: active session tracking + trusted advisor panel). Then tagged `checkpoint-skeleton-pass1-current-main` and pushed branch + tag.
+- Note for authoring session: BLUEPRINT.md still needs a proper entry for the new `/api/sessions` contract + account-card "Active sessions" / TrustedAdvisor UI — I committed but did not design it, so I left the product doc to the author.
+- Old `main` @ `80c234f`: untouched.
+- Next action: owner review; resume skeleton/visual pass or Engine v0 Part 0.
+
 ### 2026-07-07 — DIRECTOR BOOTSTRAP AUDIT
 - Asked: prove the project survives if this chat dies — verify repo truth, docs-vs-code match, and that a fresh Director can resume from files alone; no UI/engine work.
 - Verified: path `/Users/cosmosgeek/Desktop/Main`, branch `current-main`, head `be7a7f8`, remote `git@github.com:cosmosgeek0/arbitrage-cosmos.git`, clean tree; node_modules/data/.env/dist ignored, nothing forbidden tracked. Code sidebar (6 groups) + topbar + pages match BLUEPRINT §6; README → 4 core docs.

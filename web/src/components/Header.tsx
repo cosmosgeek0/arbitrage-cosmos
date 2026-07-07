@@ -213,8 +213,8 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
     group: 'Control',
     items: [
       { id: 'risk', label: 'Risk', icon: <IconShield size={17} /> },
-      { id: 'ledger', label: 'Ledger', icon: <IconList size={17} /> },
-      { id: 'system', label: 'System', icon: <IconWifi size={17} /> },
+      { id: 'ledger', label: 'Logs', icon: <IconList size={17} /> },
+      { id: 'system', label: 'Health', icon: <IconWifi size={17} /> },
       { id: 'settings', label: 'Settings', icon: <IconGear size={17} /> },
     ],
   },

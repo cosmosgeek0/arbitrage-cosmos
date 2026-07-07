@@ -72,6 +72,16 @@ Owner directive (2026-07-07):
 
 ## 7. Run log (newest first)
 
+### 2026-07-07 — Control cleanup pass: sidebar rename + brief (A done, B–E briefed)
+- Asked: clean the Control section (Risk/Ledger/System/Settings) to operator-grade; keep four surfaces; rename Ledger→Logs, System→Health; scope B–E to Codex 5.5 via TASK_BRIEF.md.
+- Gate: branch `current-main`, tree clean, no concurrent editing (last edits were the committed permission fix).
+- Director did directly (tiny + docs): sidebar labels **Ledger→Logs**, **System→Health** (`Header.tsx`, page ids unchanged `ledger`/`system`); BLUEPRINT §6 Control responsibilities + Sync/Health bubble spec + Settings-local-only + Logs-hides-debug + Earn-belongs-Wallets.
+- Wrote `TASK_BRIEF.md` (gitignored/disposable) for Codex 5.5 covering B (Risk = guard controls only, drop the embedded Rules&governance section, add Open-logs link), C (Logs severity model + filters + summary + hide debug by default), D (Health cleanup + new bottom-right `SyncHub` bubble, don't break API-key icon/RefreshDock), E (Settings = local UI prefs only, move API/security/health out).
+- Build/test: run after the rename (see report). Current URL: local preview autoport.
+- Next step: paste `TASK_BRIEF.md` into a Codex 5.5 chat to execute B–E; Director verifies + commits `ui: simplify control surfaces and health refresh model`.
+
+**TODO (Wallets/Capital future pass):** Earn balance is NOT part of normal spot balances. A future read-only Wallets pass should add Simple Earn flexible/locked position adapters and **cache** them (endpoints are signed + high request-weight — do not poll Earn aggressively).
+
 ### 2026-07-07 — Full account + project audit (pre tab-by-tab pass)
 - Purpose: confirm nothing broken/missing before editing each tab.
 - Build clean; gates 50/50. All 15 sidebar surfaces render (no error boundaries, none empty); Execution's 5 sub-tabs (Ticket/Orders/Positions/Fills/PnL) all switch correctly (earlier "sticking" was a stale-DOM-ref test artifact — `<main key={page}>` remounts).

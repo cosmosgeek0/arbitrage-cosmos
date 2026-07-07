@@ -127,7 +127,17 @@ The shipped sidebar is 14 items in 6 labeled groups (owner directive; supersedes
 - **MARKET** — Markets, Borrow
 - **ENGINE** — Basis Scanner (was Strategies), Volume Scanner (honest placeholder until Engine v0 Part 11), Opportunities
 - **EXECUTION** — Execution (one page, internal tabs: Ticket, Orders, Positions, Fills, PnL; old page ids stay valid internal routes so deep links land on the right tab)
-- **CONTROL** — Risk, Ledger, System, Settings
+- **CONTROL** — Risk, Logs (was Ledger), Health (was System), Settings
+
+Control section responsibilities (four distinct surfaces — never merged):
+- **Risk** — "can anything act?" Execution guard controls only: kill switch, live/paper mode, order/daily-notional/daily-loss/symbol-exposure caps, max open orders/positions, cooldown, order rate, spread/slippage/borrow guards, allowlist/blocklist, dry-run probe, save/reset. No API-key info (→ Account), no local UI prefs (→ Settings), no governance essays. Links to Logs for rejected decisions.
+- **Logs** (page id `ledger`, title may stay "Ledger / Logs") — "what happened and why?" Operator audit surface with a severity model (Critical/Warning/Info/Debug); **debug/system-noise (heartbeats, ws.open) is hidden by default** behind a toggle; filters by severity/kind/symbol/text/time/accepted-rejected/group; summary counts; useful selected-event detail. Not a raw spam feed.
+- **Health** (page id `system`, title may stay "System Health") — "can we trust the data/system?" Streams, account read/user-stream-or-polling, REST latency, clock drift, rate budget, DB/ledger writable, cache/sync age, last error, engine heartbeat, AWS/CloudShell admin area. State colors: green healthy / amber degraded-or-stale / red broken / gray not-configured.
+- **Settings** — "how does the local UI behave?" **Local UI preferences ONLY**: theme, density, motion, refresh interval, timezone, currency, basis units, default page, reset. No API/security/health/risk dashboards (those live in Account/Health/Risk).
+
+Bottom-right **Sync / Health bubble** (planned/`SyncHub`): fixed bottom-right, hover opens a status micro-panel (browser→server latency, server→Binance REST latency, account sync age, market stream age, user stream state, DB writable, rate budget, last error), click triggers a refresh (reuses `fireRefresh`/`/api/refresh`) with smooth spin + green-check/amber-red result; never invents latency (shows "unknown" if unmeasured). It owns detailed refresh/health so the topbar keeps only compact status indicators. Must not break the existing API-key icon or RefreshDock.
+
+Earn belongs in Wallets/Capital, not Control: Simple Earn flexible/locked positions are a future read-only Wallets adapter (signed, high request-weight — cache, don't poll aggressively).
 
 Kept below the nav (bottom-left `snav-utils`): News and Calendar full-page tiles (owner restored 2026-07-07 — they coexist with the topbar quick-views).
 

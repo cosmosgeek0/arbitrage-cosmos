@@ -55,12 +55,12 @@ Owner directive (2026-07-07):
 
 ## 5. Active phase and next actions
 
-**PHASE SNAPSHOT (2026-07-07 evening): UI/COCKPIT PHASE COMPLETE — ENGINE PHASE STARTING.**
-- Cockpit is done to owner's product-truth standard: 6-group sidebar + bottom utility; four Control surfaces rebuilt by parallel Codex 5.5 workers and fully merged (byte-parity verified, including their final uncommitted polish + topbar quick-settings Header rework); read-only Binance account live (key-scope permission truth, masked fingerprint); RefreshDock = sync/health bubble; build clean, gates 50/50.
-- Recovery checkpoint tag: `checkpoint-ui-complete-pre-engine` (see tags on origin).
-- localhost:8080 serves the app from Main (a stale worktree server that squatted 8080 was killed; watch for agent worktree dev servers grabbing ports).
-- `cosmos-{risk,logs,health,settings}` worktrees: fully merged + clean; Codex chat processes still attached — safe to `git worktree remove` once those windows close.
-- **NEXT: Engine Part 0 — planning-only survey per ENGINE.md §16/§17** (no code, no trading). Worktree + brief prepared: `../cosmos-engine` / `TASK_ENGINE_PART0.md`.
+**PHASE SNAPSHOT (2026-07-07 night): UI PHASE CLOSED + WORKSPACE CLEANED — ENGINE SPRINT READY.**
+- Cockpit done to owner's product-truth standard (see run log); read-only Binance live; build clean, gates 50/50; localhost:8080 serving HTTP 200 with 3 feeds + account connected.
+- Recovery tags on origin: `checkpoint-ui-complete-pre-engine` (latest), skeleton-pass1, session-tracking.
+- **Workspace cleaned for the engine sprint:** all `cosmos-*` worktree folders removed (owner deleted; registry pruned); all `rebuild-*` + `engine-part0` branches deleted (content byte-verified on current-main, pushed + tagged); stale worktree dev servers killed; stale TASK briefs removed; old `Main-safety-*` copy gone (covered by pushed commit 68b28c7). Single worktree = Main, single branch = current-main. Clean highway.
+- Engine Part 0 brief parked at `TASK_ENGINE_PART0.md` in Main root (gitignored) — planning-only per ENGINE.md §16/§17.
+- **INCOMING: multi-Fable-5 engine sprint** (instructions from owner's 5.5-pro planner). Collision rules when it starts: one worktree per Fable tab (`git worktree add -b engine-<module> ../cosmos-<module> current-main` + `npm install` in each); one module per brief per ENGINE.md §16 build order; **Director-owned merge points for engine work: `server/src/index.ts`, `server/src/types.ts`, `server/src/ledger.ts`, `package.json`, shared web files** — workers create NEW module files under `server/src/engine/` and NEW test files, never edit shared files unless the brief says so; Director merges sequentially with build+gates between each; before declaring any worker merged, check its worktree for UNCOMMITTED files and enumerate `git diff --name-only <base> <final-tip>`.
 
 
 - Phase A (docs + state lock): four core docs present; Git bookkeeping established. **Done.**

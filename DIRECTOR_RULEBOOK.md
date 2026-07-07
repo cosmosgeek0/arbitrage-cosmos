@@ -534,3 +534,29 @@ Required final Director response format. Every final Director response must stat
 - commit hash if committed
 - push status
 - next exact step
+
+---
+
+## 22. Worker routing policy
+
+Who does what. The Director never hands a worker a job outside its lane.
+
+- **Director** (Claude Code, this seat) — planning, audits, repo/path truth, commits, pushes, docs, orchestration, and browser verification. The Director does not do large UI grinds itself; it scopes and reviews them.
+- **Codex 5.5** — scoped UI/page edits (TSX/CSS for a single surface at a time).
+- **Codex Spark / 5.3 (or any weaker/faster model)** — must NOT rewrite TSX/CSS or design UI. Allowed only for read-only scans, running tests, grep/search, and tiny mechanical fixes (typo, import path, single-line rename) after a commit.
+- **Fable 5** — engine architecture and engine modules (ENGINE.md scope).
+- **Opus 4.8** — security and architecture review.
+
+Blast-radius cap: no worker edits more than **one page surface plus shared CSS** in a single run, unless `TASK_BRIEF.md` explicitly authorizes a wider scope. Shared files (`styles.css`, `store.tsx`, router/shell, `server/src/index.ts`, core types) are serialized through the Director (see §10).
+
+---
+
+## 23. Context discipline — TASK_BRIEF.md protocol
+
+For any future task whose worker prompt is longer than **40 lines**, the Director must:
+
+1. Create/overwrite `TASK_BRIEF.md` in the repo root with the full worker prompt (scope, allowed files, forbidden files, tests, screenshots, stop condition).
+2. Give the worker only this short instruction:
+   > Read TASK_BRIEF.md and execute exactly that scoped task.
+
+`TASK_BRIEF.md` is disposable and single-use — it is overwritten per task and is git-ignored. Do not commit it unless it is explicitly useful as a reusable template, in which case commit it deliberately with a message that says why. This keeps huge prompts out of chat context and out of the durable docs.

@@ -55,10 +55,10 @@ Owner directive (2026-07-07):
 
 ## 5. Active phase and next actions
 
-- Phase A (docs + state lock): docs present (now four core docs); Git bookkeeping established. **Done.**
-- Next (Phase B): run the app and screenshot every current surface (light/dark) to capture the real current UI before any skeleton work.
-- Then Phase C/D: compare to owner's reference screenshots; collapse to the 8-surface skeleton (Command Center, Capital, Scanners, Opportunities, Execution, Risk, Ledger, System).
-- Engine work stays planning-only until the skeleton is clean (ENGINE.md §16 Part 0).
+- Phase A (docs + state lock): four core docs present; Git bookkeeping established. **Done.**
+- SKELETON PASS 1 (6-group sidebar, merged Execution page, Basis/Volume scanners, News/Calendar tiles restored, in-app CloudShell overlay): **Done** — committed & pushed, current head `be7a7f8` on `current-main`.
+- Current phase: skeleton shipped, builds clean, gates 50/50; awaiting owner review before the next surface work.
+- Next options (owner picks): (a) reference-image visual polish pass, surface-by-surface; (b) dark-mode pass; or (c) Engine v0 Part 0 planning-only survey (ENGINE.md §16). Engine coding stays gated until the skeleton is signed off.
 
 ---
 
@@ -71,6 +71,14 @@ Owner directive (2026-07-07):
 ---
 
 ## 7. Run log (newest first)
+
+### 2026-07-07 — DIRECTOR BOOTSTRAP AUDIT
+- Asked: prove the project survives if this chat dies — verify repo truth, docs-vs-code match, and that a fresh Director can resume from files alone; no UI/engine work.
+- Verified: path `/Users/cosmosgeek/Desktop/Main`, branch `current-main`, head `be7a7f8`, remote `git@github.com:cosmosgeek0/arbitrage-cosmos.git`, clean tree; node_modules/data/.env/dist ignored, nothing forbidden tracked. Code sidebar (6 groups) + topbar + pages match BLUEPRINT §6; README → 4 core docs.
+- Doc gaps closed: PROJECT_MEMORY §5 phase was stale (still said "next = screenshot") → updated to skeleton-done; RULEBOOK §22 Worker routing policy added (Director/Codex 5.5/Spark-restricted/Fable/Opus + 1-surface blast-radius cap); RULEBOOK §23 TASK_BRIEF.md context rule added (>40-line prompts go to TASK_BRIEF, worker gets one-line instruction); `.gitignore` now ignores `TASK_BRIEF.md`.
+- Code changed: none (no doc-vs-code drift found).
+- Bootstrap test: a fresh Director can answer all 12 questions from files alone → PASS.
+- Next action: owner review; then reference-image visual pass, dark-mode pass, or Engine v0 Part 0.
 
 ### 2026-07-07 — Restore News/Calendar tiles + in-app CloudShell overlay
 - Asked (owner correction to SKELETON PASS 1): put the bottom-left News/Calendar sidebar tiles back; put the topbar Cloud Shell button back; and make that top button open an in-app AWS CloudShell-style popup (like the News quick-view), not a new tab.

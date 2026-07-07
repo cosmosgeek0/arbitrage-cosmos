@@ -72,6 +72,16 @@ Owner directive (2026-07-07):
 
 ## 7. Run log (newest first)
 
+### 2026-07-07 — PRODUCT TRUTH PASS: sidebar restructure + 5 rebuild briefs
+- Directive: the Control cleanup polished existing pages instead of rebuilding them from their job. Now rebuild each Control page from its operator job; restructure the sidebar; Settings is bottom utility, not Control.
+- Director did directly (tiny + docs): restructured sidebar in `Header.tsx` — **Borrow moved Market→Capital** (Capital = Account/Wallets/Borrow), **Market = Markets only**, **Control = Risk/Logs/Health** (Settings removed), **Settings moved to bottom utility** (`snav-utils` = News/Calendar/Settings). Updated BLUEPRINT §6 to this source-of-truth. `.gitignore` now ignores `TASK_*.md`.
+- Wrote 5 single-surface worker briefs (gitignored/local, for Codex 5.5, one worktree each): `TASK_RISK_REBUILD.md`, `TASK_LOGS_REBUILD.md`, `TASK_HEALTH_REBUILD.md`, `TASK_SETTINGS_REBUILD.md`, `TASK_SIDEBAR_AND_REFRESH_DOCK.md`. Each: rebuild-from-job (not preserve), one file only, disabled-with-reason instead of fake numbers, no Header/App/store/server unless explicit.
+- Each page rebuilt from its single question: Risk="can anything act?"; Logs="what happened/failed/why?" (incident console, severity, hide debug); Health="can I trust the system now?" (green/amber/red/gray); Settings="how does this browser display the cockpit?" (local UI only).
+- RefreshDock already meets the Sync/Health Dock spec (verified prior run) — no rebuild needed; remaining dock work = optional topbar compaction (dedupe Wi-Fi/data-health icons).
+- Execution model: **sequential or one git worktree per worker** (agents must not share Header/App/store/styles/server — those are Director merge points). Recommended order if sequential: Risk → Logs → Health → Settings.
+- build clean, gates 50/50. Sidebar committed; page rebuilds pending Codex 5.5.
+- Next step: run the 4 page briefs (parallel worktrees or sequential); Director verifies + merges each with build/test/screenshot before the next.
+
 ### 2026-07-07 — Verify + commit Control cleanup (B–E done) + parallel-agent lessons
 - Codex 5.5 executed the B–E brief (18 min, ~99% context — one 4-surface brief was too big for a single agent).
 - Verified on disk + browser (build clean, gates 50/50, no console errors):

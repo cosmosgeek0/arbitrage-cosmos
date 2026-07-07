@@ -186,13 +186,13 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
     items: [
       { id: 'account', label: 'Account', icon: <IconWallet size={17} /> },
       { id: 'wallets', label: 'Wallets', icon: <IconLayers size={17} /> },
+      { id: 'loans', label: 'Borrow', icon: <IconCoins size={17} /> },
     ],
   },
   {
     group: 'Market',
     items: [
       { id: 'markets', label: 'Markets', icon: <IconChart size={17} />, match: ['detail'] },
-      { id: 'loans', label: 'Borrow', icon: <IconCoins size={17} /> },
     ],
   },
   {
@@ -215,7 +215,6 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
       { id: 'risk', label: 'Risk', icon: <IconShield size={17} /> },
       { id: 'ledger', label: 'Logs', icon: <IconList size={17} /> },
       { id: 'system', label: 'Health', icon: <IconWifi size={17} /> },
-      { id: 'settings', label: 'Settings', icon: <IconGear size={17} /> },
     ],
   },
 ];
@@ -538,6 +537,10 @@ export function Sidebar() {
         <button className={`snav-util ${page === 'calendar' ? 'active' : ''}`} onClick={() => setPage('calendar')} title="Economic calendar — full page">
           <span className="snav-ic"><IconCalendar size={18} /></span>
           <span className="snav-label">Calendar</span>
+        </button>
+        <button className={`snav-util ${page === 'settings' ? 'active' : ''}`} onClick={() => setPage('settings')} title="Local UI preferences">
+          <span className="snav-ic"><IconGear size={18} /></span>
+          <span className="snav-label">Settings</span>
         </button>
       </div>
     </aside>

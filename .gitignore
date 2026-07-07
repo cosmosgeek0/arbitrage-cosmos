@@ -6,6 +6,6 @@ data/
 .env
 .env.*
 !.env.example
-TASK_BRIEF.md
+TASK_*.md
 binance-signal-lab-public copy 2/
 hey/

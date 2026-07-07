@@ -120,20 +120,21 @@ Memory: SQLite ledger/state database. If it is not in the ledger, it did not hap
 
 ### Implemented sidebar skeleton (SKELETON PASS 1 — 2026-07-07)
 
-The shipped sidebar is 14 items in 6 labeled groups (owner directive; supersedes the earlier flat 8-button plan — the 8-surface content responsibilities below still apply, mapped as noted):
+The sidebar source-of-truth (Product Truth Pass, 2026-07-07) — **Settings is NOT a Control page; it is bottom utility**:
 
-- **OVERVIEW** — Dashboard (kept as "Dashboard", not "Command Center")
-- **CAPITAL** — Account, Wallets
-- **MARKET** — Markets, Borrow
-- **ENGINE** — Basis Scanner (was Strategies), Volume Scanner (honest placeholder until Engine v0 Part 11), Opportunities
-- **EXECUTION** — Execution (one page, internal tabs: Ticket, Orders, Positions, Fills, PnL; old page ids stay valid internal routes so deep links land on the right tab)
-- **CONTROL** — Risk, Logs (was Ledger), Health (was System), Settings
+- **OVERVIEW** — Dashboard
+- **CAPITAL** — Account, Wallets, **Borrow** (Borrow lives with capital, not Market — reverse-basis borrowability is a capital question)
+- **MARKET** — Markets
+- **ENGINE** — Basis Scanner, Volume Scanner, Opportunities
+- **EXECUTION** — Execution (one page, internal tabs: Ticket, Orders, Positions, Fills, PnL)
+- **CONTROL** — Risk, Logs, Health (three real operator pages — no Settings)
+- **BOTTOM / UTILITY** (`snav-utils`) — News, Calendar, **Settings** (local UI preferences, utility not a brain page)
 
-Control section responsibilities (four distinct surfaces — never merged):
+Control section responsibilities (three operator pages — never merged; Settings is utility, not Control):
 - **Risk** — "can anything act?" Execution guard controls only: kill switch, live/paper mode, order/daily-notional/daily-loss/symbol-exposure caps, max open orders/positions, cooldown, order rate, spread/slippage/borrow guards, allowlist/blocklist, dry-run probe, save/reset. No API-key info (→ Account), no local UI prefs (→ Settings), no governance essays. Links to Logs for rejected decisions.
 - **Logs** (page id `ledger`, title may stay "Ledger / Logs") — "what happened and why?" Operator audit surface with a severity model (Critical/Warning/Info/Debug); **debug/system-noise (heartbeats, ws.open) is hidden by default** behind a toggle; filters by severity/kind/symbol/text/time/accepted-rejected/group; summary counts; useful selected-event detail. Not a raw spam feed.
 - **Health** (page id `system`, title may stay "System Health") — "can we trust the data/system?" Streams, account read/user-stream-or-polling, REST latency, clock drift, rate budget, DB/ledger writable, cache/sync age, last error, engine heartbeat, AWS/CloudShell admin area. State colors: green healthy / amber degraded-or-stale / red broken / gray not-configured.
-- **Settings** — "how does the local UI behave?" **Local UI preferences ONLY**: theme, density, motion, refresh interval, timezone, currency, basis units, default page, reset. No API/security/health/risk dashboards (those live in Account/Health/Risk).
+**Settings** (bottom utility, page id `settings`) — "how does this browser display the cockpit?" **Local UI preferences ONLY**: theme, density, motion, table density, ticker tape, refresh cadence, timezone, currency, basis units, default page, keyboard note, reset local preferences, plus a small "keys are server-only" reminder. No API/security dashboard, no permission map, no session/security center, no risk controls, no source-health table (those live in Account/Health/Risk).
 
 Bottom-right **Sync / Health bubble = the existing `RefreshDock`** (one component, not a separate SyncHub). Fixed bottom-right; hover opens a status micro-panel (browser→server latency, Binance REST latency, live socket, market feed, account sync age, user stream state, clock drift, rate budget, Ledger DB writable, last error); click refreshes + reconnects (`refresh()` → `/api/refresh`) with a smooth spin then green-check/red-cross. Never invents latency (shows "—"/"offline" if unmeasured). The overall colour deliberately excludes the read-only user-stream (`failed` is expected — server polls) so the button isn't perpetually red. It owns detailed refresh/health; the topbar keeps only compact indicators. A standalone `SyncHub` component is NOT used — do not add a second bottom-right bubble.
 

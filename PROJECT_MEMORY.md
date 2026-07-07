@@ -72,6 +72,18 @@ Owner directive (2026-07-07):
 
 ## 7. Run log (newest first)
 
+### 2026-07-07 — Worktrees + briefs for Control page rebuild (routing, not building)
+- Owner rejected the current Control pages on product-seriousness grounds (not build/test). Director routes the rebuild via isolated worktrees; does NOT rebuild pages in-chat.
+- Created 4 git worktrees off `current-main` @ ba804d8, one branch each:
+  - `../cosmos-risk` (branch `rebuild-risk`) → `TASK_RISK_REBUILD.md`
+  - `../cosmos-logs` (branch `rebuild-logs`) → `TASK_LOGS_REBUILD.md`
+  - `../cosmos-health` (branch `rebuild-health`) → `TASK_HEALTH_REBUILD.md`
+  - `../cosmos-settings` (branch `rebuild-settings`) → `TASK_SETTINGS_REBUILD.md`
+- Each brief (in its own worktree, gitignored) rewritten to the higher "product truth" standard: Risk = pre-trade safety console with blocker stack + rejections; Logs = incident console with severity strip + error-first mode + JSON drawer; Health = trust dashboard with overall verdict + "what to fix next"; Settings = boring/local only. Each: one page file only, scoped CSS appended under a marked block, npm install→build→test→screenshot→commit to its branch, no engine/secrets/live-trading/other-pages.
+- Worker = Codex 5.5 only (no Spark/5.3 for UI). Workers run in their worktrees so they cannot clobber Header/App/store/styles/server.
+- Merge order (Director merges one branch at a time into current-main; build/test/screenshot/commit/push + update BLUEPRINT/PROJECT_MEMORY after each accepted page): **Settings → Health → Logs → Risk** (simplest → most complex; styles.css conflicts resolved append-only by Director).
+- current-main clean @ ba804d8; page rebuilds pending workers.
+
 ### 2026-07-07 — PRODUCT TRUTH PASS: sidebar restructure + 5 rebuild briefs
 - Directive: the Control cleanup polished existing pages instead of rebuilding them from their job. Now rebuild each Control page from its operator job; restructure the sidebar; Settings is bottom utility, not Control.
 - Director did directly (tiny + docs): restructured sidebar in `Header.tsx` — **Borrow moved Market→Capital** (Capital = Account/Wallets/Borrow), **Market = Markets only**, **Control = Risk/Logs/Health** (Settings removed), **Settings moved to bottom utility** (`snav-utils` = News/Calendar/Settings). Updated BLUEPRINT §6 to this source-of-truth. `.gitignore` now ignores `TASK_*.md`.

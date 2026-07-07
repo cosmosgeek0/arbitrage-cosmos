@@ -199,9 +199,9 @@ export function Strategies() {
             <IconBrain size={15} />
             basis engine · monitor only
           </span>
-          <h1 className="page-title">Strategies</h1>
+          <h1 className="page-title">Basis Scanner</h1>
           <p>
-            One strategy runs today: the spot/perp basis scanner. It proposes, never trades — every order still passes
+            The spot/perp basis scanner. It proposes, never trades — every order still passes
             manual review, the risk gate, allowlist, and typed confirmation, and everything lands in the ledger.
           </p>
           <div className="strategy-hero-actions">

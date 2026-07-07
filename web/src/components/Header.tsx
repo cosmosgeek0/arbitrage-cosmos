@@ -8,7 +8,6 @@ import {
   IconActivity,
   IconAlarm,
   IconBell,
-  IconBook,
   IconBrain,
   IconCalendar,
   IconCamera,
@@ -32,7 +31,6 @@ import {
   IconSearch,
   IconShield,
   IconSun,
-  IconTerminal,
   IconTicket,
   IconUser,
   IconWallet,
@@ -63,8 +61,6 @@ export const NEWS_TABS: { id: number; label: string }[] = [
   { id: 51, label: 'API update' },
   { id: 128, label: 'Crypto airdrop' },
 ];
-
-const CLOUD_SHELL_URL = 'https://console.aws.amazon.com/cloudshell/home';
 
 // Small popover controller: open state + a ref that closes on outside click / Esc.
 function useMenu<T extends HTMLElement>() {
@@ -119,13 +115,14 @@ const TITLES: Record<Page, string> = {
   wallets: 'Wallets & Assets',
   markets: 'Markets',
   detail: 'Token Detail',
-  loans: 'Loans',
+  loans: 'Borrow / Margin',
   trade: 'Execution',
-  orders: 'Orders',
-  positions: 'Positions',
-  fills: 'Fills',
-  pnl: 'PnL',
-  strategies: 'Strategies',
+  orders: 'Execution · Orders',
+  positions: 'Execution · Positions',
+  fills: 'Execution · Fills',
+  pnl: 'Execution · PnL',
+  strategies: 'Basis Scanner',
+  volume: 'Volume Scanner',
   opportunities: 'Opportunities',
   risk: 'Risk',
   ledger: 'Ledger / Logs',
@@ -133,54 +130,53 @@ const TITLES: Record<Page, string> = {
   settings: 'Settings',
   news: 'Binance News',
   calendar: 'Economic Calendar',
-  rules: 'Rules',
 };
 
-type NavItem = { id?: Page; href?: string; label: string; icon: JSX.Element };
-// Three zones, top→bottom: (1) COCKPIT — the big things you monitor;
-// (2) STRATEGY BRAIN — where the background scripts live and are watched;
-// (3) GUARD & SYSTEM — the security/system layer (news + calendar tiles and the
-// HALTED pill render just below this in the Sidebar). Small labels, no boxes.
+// `match` marks extra page ids that keep an item highlighted (Execution owns
+// the trade/orders/positions/fills/pnl internal routes).
+type NavItem = { id?: Page; label: string; icon: JSX.Element; match?: Page[] };
+// Six zones: OVERVIEW / CAPITAL / MARKET / ENGINE / EXECUTION / CONTROL.
+// One sidebar item per operator surface — detail routes (Token Detail,
+// Execution tabs) open from within pages, not from the sidebar.
 const NAV: { group: string | null; items: NavItem[] }[] = [
   {
-    group: null,
+    group: 'Overview',
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: <IconGrid size={17} /> },
+    ],
+  },
+  {
+    group: 'Capital',
+    items: [
       { id: 'account', label: 'Account', icon: <IconWallet size={17} /> },
       { id: 'wallets', label: 'Wallets', icon: <IconLayers size={17} /> },
     ],
   },
   {
-    group: 'Markets',
+    group: 'Market',
     items: [
-      { id: 'markets', label: 'Markets', icon: <IconChart size={17} /> },
-      { id: 'detail', label: 'Tokens', icon: <IconRadar size={17} /> },
+      { id: 'markets', label: 'Markets', icon: <IconChart size={17} />, match: ['detail'] },
+      { id: 'loans', label: 'Borrow', icon: <IconCoins size={17} /> },
+    ],
+  },
+  {
+    group: 'Engine',
+    items: [
+      { id: 'strategies', label: 'Basis Scanner', icon: <IconBrain size={17} /> },
+      { id: 'volume', label: 'Volume Scanner', icon: <IconPulse size={17} /> },
+      { id: 'opportunities', label: 'Opportunities', icon: <IconRadar size={17} /> },
     ],
   },
   {
     group: 'Execution',
     items: [
-      { id: 'trade', label: 'Trade', icon: <IconTicket size={17} /> },
-      { id: 'orders', label: 'Orders', icon: <IconList size={17} /> },
-      { id: 'positions', label: 'Positions', icon: <IconLayers size={17} /> },
-      { id: 'fills', label: 'Fills', icon: <IconReceipt size={17} /> },
-      { id: 'pnl', label: 'PnL', icon: <IconChart size={17} /> },
+      { id: 'trade', label: 'Execution', icon: <IconTicket size={17} />, match: ['orders', 'positions', 'fills', 'pnl'] },
     ],
   },
   {
-    group: 'Strategy Brain',
-    items: [
-      { id: 'strategies', label: 'Strategies', icon: <IconBrain size={17} /> },
-      { id: 'opportunities', label: 'Signals', icon: <IconPulse size={17} /> },
-      { id: 'loans', label: 'Borrow', icon: <IconCoins size={17} /> },
-      { href: CLOUD_SHELL_URL, label: 'Cloud Shell', icon: <IconTerminal size={17} /> },
-    ],
-  },
-  {
-    group: 'Guard & Security',
+    group: 'Control',
     items: [
       { id: 'risk', label: 'Risk', icon: <IconShield size={17} /> },
-      { id: 'rules', label: 'Rules', icon: <IconBook size={17} /> },
       { id: 'ledger', label: 'Ledger', icon: <IconList size={17} /> },
       { id: 'system', label: 'System', icon: <IconWifi size={17} /> },
       { id: 'settings', label: 'Settings', icon: <IconGear size={17} /> },
@@ -317,7 +313,11 @@ function buildIndex(): SearchEntry[] {
     { label: 'Display currency', hint: 'Settings · money units', page: 'settings', keywords: 'currency inr usd eur fiat display settings' },
     { label: 'Kill switch', hint: 'Risk · halt everything', page: 'risk', keywords: 'kill switch halt stop emergency risk' },
     { label: 'Risk limits', hint: 'Risk · caps & allowlist', page: 'risk', keywords: 'risk limits caps notional allowlist symbols' },
-    { label: 'Rule creator', hint: 'Rules · governance', page: 'rules', keywords: 'rules allowed blocked strict governance create' },
+    { label: 'Rules & governance', hint: 'Risk · owner rules', page: 'risk', keywords: 'rules allowed blocked strict governance create' },
+    { label: 'Orders', hint: 'Execution · open & history', page: 'orders', keywords: 'orders open history cancel execution' },
+    { label: 'Positions', hint: 'Execution · holdings', page: 'positions', keywords: 'positions holdings unrealized execution' },
+    { label: 'Fills', hint: 'Execution · executions', page: 'fills', keywords: 'fills executions trades execution' },
+    { label: 'PnL', hint: 'Execution · profit & loss', page: 'pnl', keywords: 'pnl profit loss equity daily execution' },
   );
   return out;
 }
@@ -433,40 +433,21 @@ export function Sidebar() {
         {NAV.map((g, i) => (
           <div key={i} className="snav-group">
             {g.group && <div className="snav-group-title">{g.group}</div>}
-            {g.items.map((n) =>
-              n.href ? (
-                <a key={n.label} className="snav-item" href={n.href} target="_blank" rel="noreferrer noopener" title={`${n.label} — opens AWS console`}>
-                  <span className="snav-ic">{n.icon}</span>
-                  <span className="snav-label">{n.label}</span>
-                  <IconExternal size={11} />
-                </a>
-              ) : (
-                <button
-                  key={n.id}
-                  className={`snav-item ${page === n.id ? 'active' : ''}`}
-                  onClick={() => setPage(n.id!)}
-                  title={n.label}
-                >
-                  <span className="snav-ic">{n.icon}</span>
-                  <span className="snav-label">{n.label}</span>
-                  {n.id === 'opportunities' && proposals > 0 && <span className="nav-badge">{proposals}</span>}
-                </button>
-              )
-            )}
+            {g.items.map((n) => (
+              <button
+                key={n.id}
+                className={`snav-item ${page === n.id || n.match?.includes(page) ? 'active' : ''}`}
+                onClick={() => setPage(n.id!)}
+                title={n.label}
+              >
+                <span className="snav-ic">{n.icon}</span>
+                <span className="snav-label">{n.label}</span>
+                {n.id === 'opportunities' && proposals > 0 && <span className="nav-badge">{proposals}</span>}
+              </button>
+            ))}
           </div>
         ))}
       </nav>
-      <div className="snav-utils">
-        <button className={`snav-util ${page === 'news' ? 'active' : ''}`} onClick={() => setPage('news')} title="Binance news — full page">
-          <span className="snav-ic"><IconNewspaper size={18} /></span>
-          <span className="snav-label">News</span>
-          <LiveDot />
-        </button>
-        <button className={`snav-util ${page === 'calendar' ? 'active' : ''}`} onClick={() => setPage('calendar')} title="Economic calendar — full page">
-          <span className="snav-ic"><IconCalendar size={18} /></span>
-          <span className="snav-label">Calendar</span>
-        </button>
-      </div>
     </aside>
   );
 }
@@ -849,9 +830,6 @@ export function Topbar() {
           <button className="hdr-ic tint-cal" onClick={() => openOverlay('calendar')} title="Economic calendar — quick view" aria-label="Economic calendar quick view">
             <IconCalendar size={16} />
           </button>
-          <a className="hdr-ic tint-shell" href={CLOUD_SHELL_URL} target="_blank" rel="noreferrer noopener" title="AWS CloudShell — opens the AWS console" aria-label="AWS CloudShell">
-            <IconTerminal size={16} />
-          </a>
           <NetworkStatus />
           <DataHealthMenu />
           <AlertsMenu />

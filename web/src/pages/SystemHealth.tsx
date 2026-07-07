@@ -507,6 +507,9 @@ export function SystemHealth() {
             <a className="ov-btn" href="https://console.aws.amazon.com/billing/home" target="_blank" rel="noreferrer noopener">
               Open AWS Billing
             </a>
+            <a className="ov-btn" href="https://console.aws.amazon.com/cloudshell/home" target="_blank" rel="noreferrer noopener">
+              AWS CloudShell
+            </a>
           </div>
         </div>
       </section>

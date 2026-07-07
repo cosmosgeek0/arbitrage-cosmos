@@ -118,7 +118,22 @@ Memory: SQLite ledger/state database. If it is not in the ledger, it did not hap
 
 ## 6. Final information architecture
 
-Use 8 primary surfaces.
+### Implemented sidebar skeleton (SKELETON PASS 1 — 2026-07-07)
+
+The shipped sidebar is 14 items in 6 labeled groups (owner directive; supersedes the earlier flat 8-button plan — the 8-surface content responsibilities below still apply, mapped as noted):
+
+- **OVERVIEW** — Dashboard (kept as "Dashboard", not "Command Center")
+- **CAPITAL** — Account, Wallets
+- **MARKET** — Markets, Borrow
+- **ENGINE** — Basis Scanner (was Strategies), Volume Scanner (honest placeholder until Engine v0 Part 11), Opportunities
+- **EXECUTION** — Execution (one page, internal tabs: Ticket, Orders, Positions, Fills, PnL; old page ids stay valid internal routes so deep links land on the right tab)
+- **CONTROL** — Risk, Ledger, System, Settings
+
+Removed from the sidebar: Tokens (Token Detail opens from Markets rows / search only), Rules (folded into Risk as "Rules & governance" section), Cloud Shell (now an admin link inside System's Cost & usage card), and the bottom News/Calendar tiles (topbar quick-views own news/calendar; full pages remain reachable from the overlays and search).
+
+Topbar (unchanged set): search, clock, currency, news quick-view, calendar quick-view, network signal, data health, alerts, notifications, kill/power, zoom, settings, theme, account/profile. Do not add more topbar buttons.
+
+### Content responsibilities (8-surface reference)
 
 ### 1. Command Center
 

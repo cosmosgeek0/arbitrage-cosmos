@@ -1,5 +1,6 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { useStore } from '../store';
+import { GovernanceSection } from './Rules';
 import { ConfirmModal } from '../components/Modal';
 import { IconPower, IconShield, IconZapOff } from '../components/RiskIcons';
 import { TokenIcon } from '../components/TokenIcon';
@@ -520,6 +521,16 @@ export function Risk() {
           </div>
         </section>
       </div>
+
+      <section className="card risk-governance-card">
+        <div className="risk-section-head">
+          <div>
+            <h2>Rules &amp; governance</h2>
+            <span>Everything this cockpit may and may not do — platform rules plus your own. Ledgered on change.</span>
+          </div>
+        </div>
+        <GovernanceSection />
+      </section>
 
       {modal === 'resume' && (
         <ConfirmModal

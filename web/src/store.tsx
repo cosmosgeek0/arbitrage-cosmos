@@ -18,6 +18,9 @@ import type {
   TicketPrefill,
 } from './types';
 
+// 'trade' | 'orders' | 'positions' | 'fills' | 'pnl' are internal routes that all
+// render the merged Execution page (each id = its active tab), so existing
+// setPage(...) call sites keep working. 'detail' opens from Markets rows only.
 export type Page =
   | 'dashboard'
   | 'account'
@@ -31,19 +34,19 @@ export type Page =
   | 'fills'
   | 'pnl'
   | 'strategies'
+  | 'volume'
   | 'opportunities'
   | 'risk'
   | 'ledger'
   | 'system'
   | 'settings'
   | 'news'
-  | 'calendar'
-  | 'rules';
+  | 'calendar';
 
 const PAGE_IDS: Page[] = [
   'dashboard', 'account', 'wallets', 'markets', 'detail', 'loans', 'trade', 'orders',
-  'positions', 'fills', 'pnl', 'strategies', 'opportunities', 'risk', 'ledger', 'system', 'settings',
-  'news', 'calendar', 'rules',
+  'positions', 'fills', 'pnl', 'strategies', 'volume', 'opportunities', 'risk', 'ledger', 'system', 'settings',
+  'news', 'calendar',
 ];
 
 interface Store {

@@ -552,10 +552,10 @@ export function Dashboard() {
     {
       label: 'Strict owner rules',
       value: 'Persisted',
-      detail: 'Creator exists; risk-gate consumption is still the next money-path task.',
+      detail: 'Creator lives under Risk; risk-gate consumption is still the next money-path task.',
       tone: 'warn',
       icon: <IconKey />,
-      onClick: () => setPage('rules'),
+      onClick: () => setPage('risk'),
     },
   ];
   const marketContextRows: ControlRow[] = [

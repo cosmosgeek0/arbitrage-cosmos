@@ -4,11 +4,13 @@ import { fmtPrice, fmtDateTime } from '../format';
 import { IconBook, IconShield } from '../components/Icons';
 import type { CustomRule } from '../types';
 
-// Governance: what this cockpit is allowed to do.
+// Governance: what this cockpit is allowed to do. Rendered inside the Risk
+// page (Risk owns every operational control — the old standalone Rules page
+// is gone from the sidebar).
 // Top: platform rules — hard-coded / config-driven and ENFORCED today.
 // Bottom: owner-authored rules — persisted server-side + ledgered now; the
 // risk gate starts consuming `strict` ones when live mode lands (labeled, not fake).
-export function Rules() {
+export function GovernanceSection() {
   const { state, saveConfig } = useStore();
   const cfg = state?.config;
   const rules = cfg?.customRules ?? [];
@@ -20,7 +22,7 @@ export function Rules() {
   const [strict, setStrict] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  if (!state || !cfg) return <div className="container page"><div className="empty-state">Connecting to engine…</div></div>;
+  if (!state || !cfg) return null;
 
   const platform = [
     { name: 'Withdrawals & transfers-out', detail: 'No code path exists. Not configurable.', state: 'blocked', tone: 'ok' },
@@ -52,18 +54,10 @@ export function Rules() {
   };
 
   return (
-    <div className="container page rules-page">
-      <div className="page-head">
-        <div>
-          <div className="page-kicker">Security &amp; Governance</div>
-          <h1 className="page-title">Rules</h1>
-          <div className="page-sub">What this cockpit may and may not do. Every change is written to the ledger.</div>
-        </div>
-      </div>
-
+    <div className="rules-page">
       <section className="rules-section">
         <h2 className="rules-h"><IconShield size={16} /> Platform rules <span className="rule-badge enforced">enforced</span></h2>
-        <p className="rules-sub">Hard limits from the risk gate and server config. Edit the numbers on the Risk page.</p>
+        <p className="rules-sub">Hard limits from the risk gate and server config. Edit the numbers in the sections above.</p>
         <div className="rules-list">
           {platform.map((r) => (
             <div key={r.name} className="rule-row">

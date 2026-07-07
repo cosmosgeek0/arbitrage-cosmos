@@ -72,6 +72,25 @@ Owner directive (2026-07-07):
 
 ## 7. Run log (newest first)
 
+### 2026-07-07 — SKELETON PASS 1 (done)
+- Asked: collapse cockpit into 6-group sidebar (OVERVIEW/CAPITAL/MARKET/ENGINE/EXECUTION/CONTROL); merge Trade/Orders/Positions/Fills into one Execution page with tabs; remove Tokens/Rules/Cloud Shell/News/Calendar from sidebar; rename Strategies→Basis Scanner; create Volume Scanner placeholder; keep topbar as-is (no additions).
+- Started from clean tree @ 6131312 on `current-main`.
+- Inspected: App.tsx routing, Header.tsx (sidebar/topbar/search), store.tsx Page ids, Palette, Rules/Risk/Dashboard/Strategies/SystemHealth pages.
+- Changed:
+  - Sidebar → 14 items / 6 groups exactly per spec. Tokens, Rules, Cloud Shell, News/Calendar tiles removed. Cloud Shell topbar icon also removed (not in the keep-list); admin link added inside System → Cost & usage.
+  - New `web/src/pages/Execution.tsx`: tabs Ticket/Orders/Positions/Fills/**PnL**. PnL kept as a 5th tab (blueprint requires PnL under Execution; it had no other home) — flag to owner if unwanted. Old page ids stay valid internal routes → all existing setPage()/openTicket() deep links land on the right tab; sidebar keeps Execution highlighted via `match` list.
+  - New `web/src/pages/VolumeScanner.tsx`: honest placeholder, 11 exact decision-board columns, no fake engine (page id `volume`).
+  - Strategies renamed Basis Scanner (nav label, page title, doc titles). Page id stays `strategies`.
+  - Rules page → `GovernanceSection` embedded at the bottom of Risk ("Rules & governance"); `rules` page id deleted from store/Palette/search; Dashboard links repointed to Risk.
+  - Palette + sidebar search entries updated to the new skeleton; Token Detail reachable via Markets rows and token search only.
+  - Page-scoped CSS appended to styles.css (exec-tabs, vol-*, risk-governance-card) — no global token changes.
+- Tests: root build clean (tsc + vite); `npm test` gates **50/50 passed**. Browser-verified on session preview (port auto-assigned): Dashboard, Markets, Execution (tab switching works), Risk (governance section: 9 rule rows), Volume Scanner, Basis Scanner — zero console errors.
+- Screenshots: Dashboard, Markets, Execution, Risk captured in-session (light mode).
+- Failed: nothing.
+- Blockers: none for skeleton. Next-step blockers: dark-mode screenshot pass not done this run; owner decision whether PnL stays a 5th Execution tab.
+- Next action: owner review of skeleton → then Phase C/F visual pass with reference screenshots, or start Engine v0 Part 0 planning survey.
+- New facts: another session's dev server occupies port 8080 in this folder; this session's preview auto-assigned a free port (launch.json `autoPort` works).
+
 ### 2026-07-07 11:17 IST — DOC SYNC protocol adopted
 - Asked: make a DOC SYNC mandatory at the end of every Director run — define which of the four docs updates when, the grinder/`TASK_BRIEF.md` boundary, and the required final-response format.
 - Inspected: RULEBOOK doc-ownership sections (§8, §20) for consistency with the new protocol.

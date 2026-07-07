@@ -1,5 +1,7 @@
 # ENGINE.md — Cosmos Arbitrage Control Room Engine
 
+Status (2026-07-07): engine NOT started — Part 0 planning-only survey is the next step; cockpit/UI phase is complete.
+
 Last updated: 2026-07-06  
 Permanent role of this file: engine/algorithm/brain blueprint for Fable, Opus, Claude Code, Codex, or any future agent.
 

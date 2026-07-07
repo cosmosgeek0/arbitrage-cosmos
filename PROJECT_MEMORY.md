@@ -55,6 +55,14 @@ Owner directive (2026-07-07):
 
 ## 5. Active phase and next actions
 
+**PHASE SNAPSHOT (2026-07-07 evening): UI/COCKPIT PHASE COMPLETE — ENGINE PHASE STARTING.**
+- Cockpit is done to owner's product-truth standard: 6-group sidebar + bottom utility; four Control surfaces rebuilt by parallel Codex 5.5 workers and fully merged (byte-parity verified, including their final uncommitted polish + topbar quick-settings Header rework); read-only Binance account live (key-scope permission truth, masked fingerprint); RefreshDock = sync/health bubble; build clean, gates 50/50.
+- Recovery checkpoint tag: `checkpoint-ui-complete-pre-engine` (see tags on origin).
+- localhost:8080 serves the app from Main (a stale worktree server that squatted 8080 was killed; watch for agent worktree dev servers grabbing ports).
+- `cosmos-{risk,logs,health,settings}` worktrees: fully merged + clean; Codex chat processes still attached — safe to `git worktree remove` once those windows close.
+- **NEXT: Engine Part 0 — planning-only survey per ENGINE.md §16/§17** (no code, no trading). Worktree + brief prepared: `../cosmos-engine` / `TASK_ENGINE_PART0.md`.
+
+
 - Phase A (docs + state lock): four core docs present; Git bookkeeping established. **Done.**
 - SKELETON PASS 1 (6-group sidebar, merged Execution page, Basis/Volume scanners, News/Calendar tiles restored, in-app CloudShell overlay): **Done** — committed & pushed, current head `be7a7f8` on `current-main`.
 - Current phase: skeleton shipped, builds clean, gates 50/50; awaiting owner review before the next surface work.
@@ -71,6 +79,13 @@ Owner directive (2026-07-07):
 ---
 
 ## 7. Run log (newest first)
+
+### 2026-07-07 — UI phase close-out + engine setup
+- Merged the three worktrees' final UNCOMMITTED polish (risk/logs/health — committed in worktrees as 3a17c79/33b5f9e/6fa6afd, merged as `80e2c27`; styles.css consolidated −~108KB). Byte-parity verified across all worker files.
+- Fixed localhost:8080: the Logs agent's leftover dev server (cwd `cosmos-logs/server`, no web/dist → "Cannot GET /") was killed; Main's server now on 8080 (HTTP 200, keys present, connected). Killed remaining stray cosmos-logs vite/tsx dev servers.
+- Tagged recovery checkpoint `checkpoint-ui-complete-pre-engine`; ENGINE.md got a one-line status (engine not started; Part 0 next).
+- Created engine worktree `../cosmos-engine` (branch `engine-part0`) + `TASK_ENGINE_PART0.md` (planning-only survey per ENGINE.md §16 Part 0 / §17 — NO code).
+- Worktrees cosmos-{risk,logs,health,settings}: merged + clean, left in place because Codex chats still hold processes there; remove after windows close.
 
 ### 2026-07-07 — Missed-file fix: settings worker's Header.tsx (topbar quick-settings)
 - Owner caught a merge gap: the settings worker's FINAL commit (7273d1a) also reworked `Header.tsx` — compact topbar quick-settings popover (theme+accent, zoom, currency chips, basis, refresh, table density, motion, "Open settings →"), alert toggles folded into notifications, redundant network/alerts/currency/zoom/theme popovers removed. First reconcile only took page tsx + css, so the component was dropped (its CSS had merged, orphaned).

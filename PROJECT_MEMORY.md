@@ -72,6 +72,18 @@ Owner directive (2026-07-07):
 
 ## 7. Run log (newest first)
 
+### 2026-07-07 — Verify + commit Control cleanup (B–E done) + parallel-agent lessons
+- Codex 5.5 executed the B–E brief (18 min, ~99% context — one 4-surface brief was too big for a single agent).
+- Verified on disk + browser (build clean, gates 50/50, no console errors):
+  - Risk = execution-guard controls only, embedded Rules&governance removed.
+  - Logs = operator audit surface: severity model (Critical/Warning/Info/Debug), filters (severity/kind/symbol/text/time/accepted-rejected/group), summary counts, reasons-first timeline, useful event detail + Raw JSON. Debug/system-noise hidden by default.
+  - Health = trust/status board, duplicate Safe-routes removed, gray engine-heartbeat placeholder.
+  - Settings = local UI prefs only (+currency), all API/withdrawal/health/risk posture moved out; tiny "keys are server-only → Account/Health" reminder.
+- **Sync/Health bubble = the existing `RefreshDock`** (bottom-right). Codex folded brief-D's health model into it (browser→server, Binance REST, socket, feed, account sync, user stream, clock drift, rate budget, Ledger DB, last error) + click-refresh spin/ok/err. The flickering `SyncHub.tsx` was a scratch attempt, correctly discarded — NOT a missing piece (no duplicate bubble).
+- Also captured a **parallel agent's reliability work**: `ErrorBoundary.tsx` + window error/rejection breadcrumbs (`main.tsx`) + static-asset cache policy (`server/index.ts`, fixes blank-white after rebuild).
+- Commits: `2def993` (fix: error boundary + breadcrumbs + cache policy), `a2518e1` (ui: simplify control surfaces + health refresh model). Pushed.
+- **Lesson (parallel agents):** multiple agents in ONE working tree collided — the ErrorBoundary agent's `App.tsx` overwrote Codex's `<SyncHub/>` mount, and files flickered in/out. Going forward: one **git worktree per agent**, one **surface per brief** (small context), and never let concurrent agents share `App.tsx`/`styles.css`/`store.tsx`/`Header.tsx`/`server/index.ts` — those are Director-owned merge points.
+
 ### 2026-07-07 — Control cleanup pass: sidebar rename + brief (A done, B–E briefed)
 - Asked: clean the Control section (Risk/Ledger/System/Settings) to operator-grade; keep four surfaces; rename Ledger→Logs, System→Health; scope B–E to Codex 5.5 via TASK_BRIEF.md.
 - Gate: branch `current-main`, tree clean, no concurrent editing (last edits were the committed permission fix).

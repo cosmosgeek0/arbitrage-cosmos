@@ -17050,3 +17050,72 @@ button.runtime-lane:hover b {
   border-top: 1px solid var(--line);
   background: var(--surface, var(--bg));
 }
+
+/* ---- account popover: active sessions ---- */
+/* active sessions — clean 3-column rows (dot · name/place · status), name
+   truncates so the layout never breaks; "This device" chip sits under status. */
+.acct-sess-warn { font-size: 10px; font-weight: 700; color: var(--accent-ink); text-transform: none; letter-spacing: 0; margin-left: 5px; }
+[data-theme="dark"] .acct-sess-warn { color: var(--accent); }
+.acct-sess-list { display: flex; flex-direction: column; gap: 1px; padding: 4px 0 6px; }
+.acct-sess {
+  display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 11px;
+  padding: 9px 10px; border-radius: 11px;
+}
+.acct-sess.me { background: color-mix(in srgb, var(--accent-soft) 34%, transparent); }
+.acct-sess-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); }
+.acct-sess-dot.on { background: var(--up); box-shadow: 0 0 0 3px var(--up-soft); }
+.acct-sess-info { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.acct-sess-name { font-size: 12.5px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acct-sess-place { font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acct-sess-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.acct-sess-time { font-size: 11px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.acct-sess-time.on { color: var(--up); }
+.acct-sess-you {
+  font-size: 8px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; white-space: nowrap;
+  color: var(--accent-ink); background: var(--accent-soft); padding: 2px 7px; border-radius: 999px;
+}
+[data-theme="dark"] .acct-sess-you { color: var(--accent); }
+.acct-sess-empty { padding: 10px; font-size: 11.5px; color: var(--muted); }
+
+/* ========================================================================
+   Cockpit v9 — hover top-bar menus: uniform size + smooth appear so switching
+   between icons reads as one box, plus the Trusted Advisor scanner popover.
+   ======================================================================== */
+
+/* uniform width + soft fade/slide-in for every top-bar hover popover */
+.hdr-right .menu-pop.right {
+  width: 284px !important; min-width: 0 !important; max-width: 284px !important;
+  transform-origin: top right;
+  animation: hoverPopIn .16s cubic-bezier(.3,.7,.2,1) both;
+}
+@keyframes hoverPopIn { from { opacity: 0; transform: translateY(-5px) scale(.985); } to { opacity: 1; transform: none; } }
+
+/* Trusted Advisor */
+.hdr-ic.tint-advisor { color: color-mix(in srgb, #14b8a6 55%, var(--muted)); }
+.hdr-ic.tint-advisor:hover { color: var(--accent); }
+.adv-pop { padding: 8px 12px 12px; }
+.adv-stats { display: flex; flex-direction: column; gap: 9px; padding: 6px 2px 11px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.adv-stat { display: grid; grid-template-columns: 22px auto 1fr; align-items: center; gap: 11px; }
+.adv-stat .adv-ic { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; color: #fff; }
+.adv-stat.action .adv-ic { background: var(--down); }
+.adv-stat.invest .adv-ic { background: #f59e0b; }
+.adv-stat.pass .adv-ic { background: var(--up); }
+.adv-stat b { font-size: 18px; font-weight: 760; color: var(--text); }
+.adv-stat em { font-style: normal; font-size: 11.5px; color: var(--muted); }
+.adv-list { display: flex; flex-direction: column; gap: 2px; max-height: 172px; overflow-y: auto; }
+.adv-row { display: flex; align-items: flex-start; gap: 9px; width: 100%; padding: 7px 6px; border: 0; background: none; border-radius: 9px; cursor: pointer; text-align: left; }
+.adv-row:hover { background: var(--tile); }
+.adv-row-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; margin-top: 4px; background: var(--muted); }
+.adv-row.action .adv-row-dot { background: var(--down); }
+.adv-row.invest .adv-row-dot { background: #f59e0b; }
+.adv-row-meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.adv-row-meta b { font-size: 12.5px; font-weight: 680; color: var(--text); }
+.adv-row-meta small { font-size: 10.5px; color: var(--muted); line-height: 1.35; }
+.adv-clean { padding: 14px 6px; font-size: 12.5px; color: var(--up); font-weight: 640; }
+.adv-actions { display: flex; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.adv-scan, .adv-fix { flex: 1; height: 32px; border-radius: 9px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.adv-scan { border: 1px solid var(--line-2); background: var(--tile); color: var(--text-2); }
+.adv-scan:hover { color: var(--accent); border-color: var(--accent-line); }
+.adv-scan:disabled { opacity: .5; cursor: default; }
+.adv-fix { border: 0; background: var(--accent); color: var(--cta-fg); }
+.adv-fix:disabled { opacity: .45; cursor: default; }

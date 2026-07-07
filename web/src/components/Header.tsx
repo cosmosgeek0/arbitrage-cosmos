@@ -65,10 +65,28 @@ export const NEWS_TABS: { id: number; label: string }[] = [
   { id: 128, label: 'Crypto airdrop' },
 ];
 
-// Small popover controller: open state + a ref that closes on outside click / Esc.
-function useMenu<T extends HTMLElement>() {
+// Popover controller: opens on HOVER (and click), closes on leave / outside / Esc.
+// `hover` opt-out lets a control keep click-only behavior. A shared, slightly
+// delayed close makes moving between adjacent top-bar buttons feel like one box
+// gliding across rather than separate popups flashing.
+function useMenu<T extends HTMLElement>(hover = true) {
   const [open, setOpen] = useState(false);
   const ref = useRef<T>(null);
+  const closeT = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (!hover) return;
+    const el = ref.current;
+    if (!el) return;
+    const enter = () => { window.clearTimeout(closeT.current); setOpen(true); };
+    const leave = () => { closeT.current = window.setTimeout(() => setOpen(false), 130); };
+    el.addEventListener('mouseenter', enter);
+    el.addEventListener('mouseleave', leave);
+    return () => {
+      el.removeEventListener('mouseenter', enter);
+      el.removeEventListener('mouseleave', leave);
+      window.clearTimeout(closeT.current);
+    };
+  }, [hover]);
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
@@ -187,6 +205,18 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
   },
 ];
 
+interface SessionRow {
+  id: string; ip: string | null; country: string | null; system: string; browser: string;
+  firstSeen: number; lastSeen: number; current: boolean; active: boolean;
+}
+const COUNTRY_NAMES: Record<string, string> = {
+  IN: 'India', US: 'United States', GB: 'United Kingdom', SG: 'Singapore', DE: 'Germany',
+  AE: 'UAE', JP: 'Japan', CA: 'Canada', AU: 'Australia', FR: 'France', NL: 'Netherlands',
+};
+function sessionPlace(s: SessionRow): string {
+  return [s.country ? COUNTRY_NAMES[s.country] ?? s.country : null, s.ip ?? 'local network'].filter(Boolean).join(' · ');
+}
+
 // ---- account card (Binance-style profile chip + details) --------------------
 function AccountCard({ compact = false }: { compact?: boolean }) {
   const { state, saveConfig, setPage } = useStore();
@@ -195,10 +225,22 @@ function AccountCard({ compact = false }: { compact?: boolean }) {
   const profile = state?.config.profile ?? { name: '', avatar: null };
   const [preview, setPreview] = useState<string | null>(null); // instant feedback before the 2s state tick
   const [editName, setEditName] = useState<string | null>(null);
+  const [sessList, setSessList] = useState<SessionRow[]>([]);
   const avatar = preview ?? profile.avatar;
   const name = profile.name || 'Operator';
   const connected = !!state?.binance.keysPresent;
   const sub = connected ? (state?.binance.connected ? 'Binance · read-only' : 'Binance · error') : 'Binance · not linked';
+
+  // Real active-session list (server-tracked). Polled only while the popover is open.
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    const load = () => fetch('/api/sessions').then((r) => (r.ok ? r.json() : null)).then((d) => { if (alive && d) setSessList(d.sessions ?? []); }).catch(() => undefined);
+    load();
+    const t = setInterval(load, 5000);
+    return () => { alive = false; clearInterval(t); };
+  }, [open]);
+  const otherActive = sessList.filter((s) => s.active && !s.current).length;
 
   const onFile = (f: File | undefined) => {
     if (!f || !f.type.startsWith('image/')) return;
@@ -270,11 +312,7 @@ function AccountCard({ compact = false }: { compact?: boolean }) {
                 {connected ? (state?.binance.connected ? 'active' : 'error') : 'connect'}
               </span>
             </div>
-            {[
-              { key: 'by', name: 'Bybit' },
-              { key: 'cb', name: 'Coinbase' },
-              { key: 'ok', name: 'OKX' },
-            ].map((e) => (
+            {[{ key: 'by', name: 'Bybit' }].map((e) => (
               <div key={e.key} className="acct-ex soon">
                 <span className={`acct-ex-badge ${e.key}`}>{e.name[0]}</span>
                 <span className="acct-ex-info"><b>{e.name}</b><small>not yet supported</small></span>
@@ -282,6 +320,31 @@ function AccountCard({ compact = false }: { compact?: boolean }) {
               </div>
             ))}
           </div>
+
+          <div className="menu-head">
+            Active sessions
+            {otherActive > 0 && <span className="acct-sess-warn">· {otherActive} other device{otherActive > 1 ? 's' : ''} active</span>}
+          </div>
+          <div className="acct-sess-list">
+            {sessList.length === 0 ? (
+              <div className="acct-sess-empty">Checking…</div>
+            ) : (
+              sessList.slice(0, 5).map((s) => (
+                <div key={s.id} className={`acct-sess ${s.current ? 'me' : ''}`}>
+                  <span className={`acct-sess-dot ${s.active ? 'on' : ''}`} />
+                  <span className="acct-sess-info">
+                    <span className="acct-sess-name">{s.system} · {s.browser}</span>
+                    <span className="acct-sess-place">{sessionPlace(s)}</span>
+                  </span>
+                  <span className="acct-sess-right">
+                    <span className={`acct-sess-time ${s.active ? 'on' : ''}`}>{s.active ? 'Active now' : timeAgo(s.lastSeen)}</span>
+                    {s.current && <span className="acct-sess-you">This device</span>}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+
           <button className="acct-ex-manage" onClick={() => { setOpen(false); setPage('account'); }}>
             Account &amp; security →
           </button>
@@ -820,6 +883,91 @@ function ThemeMenu() {
   );
 }
 
+// ---- Trusted Advisor: whole-cockpit safety scan (real checks, popup only) ----
+type Sev = 'action' | 'invest' | 'pass';
+function TrustedAdvisor() {
+  const { state, connected, setPage } = useStore();
+  const { open, setOpen, ref } = useMenu<HTMLDivElement>();
+  const [sys, setSys] = useState<SystemLite | null>(null);
+  const [scanTs, setScanTs] = useState<number | null>(null);
+  const [scanning, setScanning] = useState(false);
+
+  const scan = () => {
+    setScanning(true);
+    fetch('/api/system')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s) => { setSys(s as SystemLite); setScanTs(Date.now()); })
+      .catch(() => undefined)
+      .finally(() => setScanning(false));
+  };
+  useEffect(() => { if (open && !scanTs) scan(); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const b = state?.binance;
+  const cfg = state?.config;
+  const feeds = state?.feeds ?? {};
+  const feedsOk = Object.values(feeds).length > 0 && Object.values(feeds).every((s) => s === 'open');
+  const lat = sys?.restLatencyMs ?? null;
+
+  const raw: ({ sev: Sev; name: string; detail: string; page?: Page } | null)[] = [
+    b?.canWithdraw ? { sev: 'action', name: 'Withdrawals enabled on key', detail: 'Rotate to a read-only key with withdrawals OFF.', page: 'account' } : { sev: 'pass', name: 'Withdrawals disabled', detail: 'The key cannot move funds.' },
+    cfg && !cfg.killSwitch && cfg.liveTradingEnabled && (cfg.allowedSymbols?.length ?? 0) === 0 ? { sev: 'action', name: 'Live armed, allowlist empty', detail: 'Nothing can trade — set an allowlist or halt.', page: 'risk' } : null,
+    b?.keysPresent && !b?.connected ? { sev: 'action', name: 'Account sync failing', detail: b?.lastError ?? 'Keys present but not syncing.', page: 'system' } : null,
+    !connected ? { sev: 'invest', name: 'Cockpit socket offline', detail: 'Reconnecting to the server.', page: 'system' } : null,
+    !feedsOk ? { sev: 'invest', name: 'Market feed degraded', detail: 'One or more Binance streams are not open.', page: 'system' } : { sev: 'pass', name: 'Market feeds live', detail: `${Object.keys(feeds).length} streams open.` },
+    lat !== null && lat > 900 ? { sev: 'invest', name: 'High Binance latency', detail: `${Math.round(lat)}ms REST round-trip.`, page: 'system' } : null,
+    !b?.keysPresent ? { sev: 'invest', name: 'No read key set', detail: 'Balances, orders and fills stay hidden.', page: 'account' } : { sev: 'pass', name: 'Read key configured', detail: 'Account data is available.' },
+    (cfg?.allowedSymbols?.length ?? 0) === 0 ? { sev: 'invest', name: 'Allowlist empty', detail: 'Risk gate rejects every symbol (safe default).', page: 'risk' } : { sev: 'pass', name: `Allowlist: ${cfg?.allowedSymbols.length}`, detail: 'Only listed symbols may trade.' },
+    { sev: 'pass', name: cfg?.killSwitch ? 'Kill switch ON' : 'Kill switch armed', detail: cfg?.killSwitch ? 'Every send is blocked.' : 'Sends pass to the risk gate.' },
+    { sev: 'pass', name: 'No browser key form', detail: 'Keys never touch the frontend.' },
+    { sev: 'pass', name: 'Cloudflare-gated', detail: 'Hardware-key auth before load.' },
+  ];
+  const checks = raw.filter(Boolean) as { sev: Sev; name: string; detail: string; page?: Page }[];
+  const actions = checks.filter((c) => c.sev === 'action');
+  const invest = checks.filter((c) => c.sev === 'invest');
+  const passed = checks.filter((c) => c.sev === 'pass');
+  const attention = [...actions, ...invest];
+  const topFix = attention[0];
+  const badge = actions.length;
+
+  return (
+    <div className="menu-wrap" ref={ref}>
+      <button className={`hdr-ic tint-advisor ${open ? 'on' : ''}`} onClick={() => setOpen(!open)} title="Trusted Advisor — safety scan" aria-label="Trusted Advisor">
+        <IconShield size={16} />
+        {badge > 0 && <span className="ic-badge">{badge}</span>}
+      </button>
+      {open && (
+        <div className="menu-pop right adv-pop">
+          <div className="np-head">
+            <span className="np-title"><IconShield size={14} /> Trusted Advisor</span>
+            <span className="np-sub">{scanTs ? `scanned ${timeAgo(scanTs)}` : 'scanning…'}</span>
+          </div>
+          <div className="adv-stats">
+            <div className="adv-stat action"><span className="adv-ic">✕</span><b>{actions.length}</b><em>Action recommended</em></div>
+            <div className="adv-stat invest"><span className="adv-ic">!</span><b>{invest.length}</b><em>Investigation recommended</em></div>
+            <div className="adv-stat pass"><span className="adv-ic">✓</span><b>{passed.length}</b><em>Passed items</em></div>
+          </div>
+          <div className="adv-list">
+            {attention.length === 0 ? (
+              <div className="adv-clean">✓ All clear — nothing needs attention.</div>
+            ) : (
+              attention.slice(0, 5).map((c) => (
+                <button key={c.name} className={`adv-row ${c.sev}`} onClick={() => { if (c.page) { setOpen(false); setPage(c.page); } }}>
+                  <span className="adv-row-dot" />
+                  <span className="adv-row-meta"><b>{c.name}</b><small>{c.detail}</small></span>
+                </button>
+              ))
+            )}
+          </div>
+          <div className="adv-actions">
+            <button className="adv-scan" onClick={scan} disabled={scanning}>{scanning ? 'Scanning…' : 'Scan again'}</button>
+            <button className="adv-fix" disabled={!topFix?.page} onClick={() => { if (topFix?.page) { setOpen(false); setPage(topFix.page); } }}>Fix top issue →</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Topbar() {
   const { state, page, setPage, setKill } = useStore();
   const mode = state?.mode ?? 'HALTED';
@@ -837,22 +985,14 @@ export function Topbar() {
         </div>
         <div className="hdr-right">
           <ClockMenu />
-          <CurrencyMenu />
-          <button className="hdr-ic tint-news" onClick={() => openOverlay('news')} title="Binance news — quick view" aria-label="Binance news quick view">
-            <IconNewspaper size={16} />
-          </button>
-          <button className="hdr-ic tint-cal" onClick={() => openOverlay('calendar')} title="Economic calendar — quick view" aria-label="Economic calendar quick view">
-            <IconCalendar size={16} />
-          </button>
-          <button className="hdr-ic tint-shell" onClick={() => openOverlay('cloudshell')} title="AWS CloudShell — quick view" aria-label="AWS CloudShell quick view">
-            <IconTerminal size={16} />
-          </button>
           <NetworkStatus />
           <DataHealthMenu />
           <AlertsMenu />
+          <CurrencyMenu />
+          <TrustedAdvisor />
           <NotificationMenu />
           {mode === 'HALTED' ? (
-            <button className="hdr-ic m-halted" onClick={() => setPage('risk')} title="Halted — open Risk to resume" aria-label="Halted — resume on Risk">
+            <button className="hdr-ic m-halted" onClick={() => void setKill(false)} title="Halted — click to arm manual mode" aria-label="Halted — arm">
               <IconPower size={15} />
               <span className="ic-dot" />
             </button>

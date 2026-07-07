@@ -217,6 +217,77 @@ app.use((_req, res, next) => {
   next();
 });
 
+// ---- active session tracking ------------------------------------------------
+// Records each visiting device by (IP + user-agent) so the account panel can
+// show who is currently on the cockpit. Cloudflare injects the real IP + country
+// in prod; on localhost it collapses to a single "local" session. Real, not faked.
+interface Sess {
+  id: string; ip: string; country: string | null; ua: string;
+  system: string; browser: string; firstSeen: number; lastSeen: number; reqs: number;
+}
+const sessions = new Map<string, Sess>();
+
+function parseUA(ua: string): { system: string; browser: string } {
+  let system = 'Unknown OS';
+  if (/iPhone|iPad/i.test(ua)) system = 'iOS';
+  else if (/Android/i.test(ua)) system = 'Android';
+  else if (/Mac OS X|Macintosh/i.test(ua)) system = 'macOS';
+  else if (/Windows/i.test(ua)) system = 'Windows';
+  else if (/Linux/i.test(ua)) system = 'Linux';
+  const bm = ua.match(/(Edg|OPR|Chrome|Firefox|Safari)\/([\d.]+)/);
+  const map: Record<string, string> = { Edg: 'Edge', OPR: 'Opera', Chrome: 'Chrome', Firefox: 'Firefox', Safari: 'Safari' };
+  const bkey = bm ? Object.keys(map).find((k) => bm[0].startsWith(k)) ?? '' : '';
+  const browser = bm ? `${map[bkey] ?? 'Browser'} ${bm[2].split('.')[0]}` : 'Browser';
+  return { system, browser };
+}
+function sessKey(ip: string, ua: string): string {
+  let h = 0;
+  const s = `${ip}|${ua}`;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+function reqIdent(req: express.Request): { id: string; ip: string; ua: string; country: string | null } {
+  const ip = (req.headers['cf-connecting-ip'] as string) || 'local';
+  const ua = (req.headers['user-agent'] as string) || 'unknown';
+  const country = (req.headers['cf-ipcountry'] as string) || null;
+  return { id: sessKey(ip, ua), ip, ua, country };
+}
+
+app.use((req, _res, next) => {
+  const { id, ip, ua, country } = reqIdent(req);
+  const now = Date.now();
+  const s = sessions.get(id);
+  if (s) {
+    s.lastSeen = now;
+    s.reqs++;
+    if (country) s.country = country;
+  } else {
+    const { system, browser } = parseUA(ua);
+    sessions.set(id, { id, ip, country, ua, system, browser, firstSeen: now, lastSeen: now, reqs: 1 });
+  }
+  for (const [k, v] of sessions) if (now - v.lastSeen > 30 * 60_000) sessions.delete(k);
+  next();
+});
+
+app.get('/api/sessions', (req, res) => {
+  const now = Date.now();
+  const meId = reqIdent(req).id;
+  const list = [...sessions.values()]
+    .sort((a, b) => b.lastSeen - a.lastSeen)
+    .map((s) => ({
+      id: s.id,
+      ip: s.ip === 'local' ? null : s.ip,
+      country: s.country,
+      system: s.system,
+      browser: s.browser,
+      firstSeen: s.firstSeen,
+      lastSeen: s.lastSeen,
+      current: s.id === meId,
+      active: now - s.lastSeen < 120_000,
+    }));
+  res.json({ sessions: list, now });
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,

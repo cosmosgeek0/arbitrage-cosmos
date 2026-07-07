@@ -1246,11 +1246,36 @@ app.post('/api/orders/cancel', (req, res) => {
 });
 
 // Serve the built dashboard (web/dist) with SPA fallback.
+//
+// Cache policy matters here: index.html must NEVER be served stale, or a rebuild
+// (which mints a new hashed bundle and deletes the old one) leaves a browser
+// holding a cached index.html that points at a now-missing JS file → the script
+// 404s and the page renders blank white. So: index.html always revalidates,
+// while the content-hashed /assets/* files are safe to cache immutably forever.
 const webDist = path.resolve(process.cwd(), 'web/dist');
 if (fs.existsSync(webDist)) {
-  app.use(express.static(webDist));
+  app.use(
+    express.static(webDist, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('index.html')) {
+          res.setHeader('Cache-Control', 'no-cache');
+        } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      },
+    })
+  );
   app.use((req, res, next) => {
     if (req.path.startsWith('/api') || req.path.startsWith('/ws')) return next();
+    // Never serve the HTML shell in place of a missing static asset. A stale
+    // cached index.html requesting a deleted hashed bundle must 404 cleanly —
+    // otherwise the browser receives HTML where it expects JS/CSS, fails to
+    // parse it, and the page goes blank white. Only extensionless routes (the
+    // SPA itself, served from "/") get the shell.
+    if (req.path.startsWith('/assets/') || path.extname(req.path)) {
+      return res.status(404).end();
+    }
+    res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(webDist, 'index.html'));
   });
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
 import { useRefreshSignal } from '../lib/refresh';
 import { EmptyState, SetupChecklist, StatePill, WarnStrip } from '../components/ui';
@@ -37,7 +37,7 @@ export function Account() {
   const kp = b.keyPermissions; // authoritative per-KEY scope (apiRestrictions)
   const posture = b.keyPosture;
   const entries = acct?.entries ?? [];
-  const topEntries = useMemo(() => entries.slice().sort((a, z) => z.valueUsdt - a.valueUsdt).slice(0, 6), [entries]);
+  const topEntries = entries.slice().sort((a, z) => z.valueUsdt - a.valueUsdt).slice(0, 6);
   const lockedValue = entries.reduce((sum, e) => sum + (e.priceUsdt ?? 0) * e.locked, 0);
   const checks = [
     { label: 'server keys', pass: b.keysPresent },

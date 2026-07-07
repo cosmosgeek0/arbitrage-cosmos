@@ -1,5 +1,6 @@
 import { StoreProvider, useStore } from './store';
 import { Sidebar, Topbar, BottomNav, Overlays, RefreshDock } from './components/Header';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Tape } from './components/Tape';
 import { Palette } from './components/Palette';
 import { Dashboard } from './pages/Dashboard';
@@ -29,22 +30,24 @@ function Shell() {
         <Topbar />
         {prefs.tape && <Tape />}
         <main key={`${page}-${page === 'detail' ? detailSymbol : ''}`}>
-          {page === 'dashboard' && <Dashboard />}
-          {page === 'account' && <Account />}
-          {page === 'wallets' && <Wallets />}
-          {page === 'markets' && <Markets />}
-          {page === 'detail' && <TokenDetail symbol={detailSymbol} />}
-          {page === 'loans' && <Loans />}
-          {EXECUTION_PAGES.includes(page) && <Execution />}
-          {page === 'strategies' && <Strategies />}
-          {page === 'volume' && <VolumeScanner />}
-          {page === 'opportunities' && <Opportunities />}
-          {page === 'risk' && <Risk />}
-          {page === 'ledger' && <LedgerPage />}
-          {page === 'system' && <SystemHealth />}
-          {page === 'settings' && <Settings />}
-          {page === 'news' && <News />}
-          {page === 'calendar' && <CalendarPage />}
+          <ErrorBoundary resetKey={`${page}-${detailSymbol}`} label={page}>
+            {page === 'dashboard' && <Dashboard />}
+            {page === 'account' && <Account />}
+            {page === 'wallets' && <Wallets />}
+            {page === 'markets' && <Markets />}
+            {page === 'detail' && <TokenDetail symbol={detailSymbol} />}
+            {page === 'loans' && <Loans />}
+            {EXECUTION_PAGES.includes(page) && <Execution />}
+            {page === 'strategies' && <Strategies />}
+            {page === 'volume' && <VolumeScanner />}
+            {page === 'opportunities' && <Opportunities />}
+            {page === 'risk' && <Risk />}
+            {page === 'ledger' && <LedgerPage />}
+            {page === 'system' && <SystemHealth />}
+            {page === 'settings' && <Settings />}
+            {page === 'news' && <News />}
+            {page === 'calendar' && <CalendarPage />}
+          </ErrorBoundary>
         </main>
         <footer className="footer">
           <div className="container ftr-line">

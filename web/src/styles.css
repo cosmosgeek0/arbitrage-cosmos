@@ -17119,3 +17119,60 @@ button.runtime-lane:hover b {
 .adv-scan:disabled { opacity: .5; cursor: default; }
 .adv-fix { border: 0; background: var(--accent); color: var(--cta-fg); }
 .adv-fix:disabled { opacity: .45; cursor: default; }
+
+/* ===================== Cockpit v10 — shared morphing popover ================
+   One box for the whole top bar. It is CENTERED under the hovered trigger with
+   a pointer aimed at it. Moving to another trigger does NOT close/reopen — the
+   same element slides (left), resizes (width) and re-aims (arrow left) with a
+   soft transition, while only the inner content cross-fades. Nothing pops. */
+.smenu-bar { position: relative; display: flex; align-items: center; gap: 5px; }
+/* tabular figures so ticking seconds keep a constant width and never nudge the
+   triggers (which would restart the box's slide transition every second). */
+.smenu-bar .hdr-clock-btn .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+.smenu {
+  position: absolute; top: calc(100% + 11px); z-index: 90; box-sizing: border-box;
+  /* more opaque than the generic glass so dashboard text never bleeds through */
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
+  border: 1px solid var(--glass-border); border-radius: 16px;
+  backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-pop), var(--glass-highlight), 0 0 0 .5px var(--glass-edge);
+  padding: 7px; overflow: visible;
+  /* left/width are tweened in JS (rAF) — CSS transitions freeze under :root zoom. */
+  animation: smIn .18s ease both;
+}
+@keyframes smIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+/* the pointer — a rotated square that glides along the box top edge */
+.smenu-arrow {
+  position: absolute; top: -6px; width: 12px; height: 12px; margin-left: -6px;
+  background: color-mix(in srgb, var(--panel) 96%, transparent); border-left: 1px solid var(--glass-border); border-top: 1px solid var(--glass-border);
+  border-top-left-radius: 3px; transform: rotate(45deg);
+  backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.smenu-content { position: relative; max-height: min(68vh, 500px); overflow-y: auto; overflow-x: hidden; animation: smFade .20s ease both; }
+@keyframes smFade { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+.smenu-content::-webkit-scrollbar { width: 8px; }
+.smenu-content::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--muted) 30%, transparent); border-radius: 8px; }
+
+/* triggers inside the bar reuse .hdr-clock-btn / .hdr-ic / .net-btn / .ic-pill /
+   .icon-btn styling already defined above; only the open state needs a nudge. */
+.smenu-bar .ic-pill.on,
+.smenu-bar .icon-btn.on { color: var(--text); background: var(--tile); }
+.smenu-bar .hdr-ic.on { color: var(--text); background: var(--tile); }
+
+/* small badge on advisor / notification triggers */
+.smenu-bar .ic-badge {
+  position: absolute; top: 2px; right: 2px; min-width: 14px; height: 14px; padding: 0 3px;
+  display: grid; place-items: center; border-radius: 7px; font-size: 9px; font-weight: 800;
+  background: var(--down); color: #fff; border: 1.5px solid var(--panel);
+}
+.smenu-bar .ic-dot.accent { position: absolute; top: 4px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); border: 1.5px solid var(--panel); }
+
+/* generic rows used by the morphing content (np / dh / alert / zoom / theme) */
+.np-sub-line { font-size: 11.5px; color: var(--muted); padding: 2px 10px 8px; line-height: 1.4; }
+.np-link { margin-left: auto; border: 0; background: none; color: var(--accent-ink); font-size: 11px; font-weight: 750; cursor: pointer; }
+[data-theme="dark"] .np-link { color: var(--accent); }
+.adv-actions { display: flex; gap: 8px; padding: 8px 4px 2px; }
+.adv-actions .adv-scan, .adv-actions .adv-fix { flex: 1; padding: 8px 10px; border-radius: 9px; font-size: 12px; font-weight: 720; cursor: pointer; }

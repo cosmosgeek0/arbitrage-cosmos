@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useStore, useResolvedTheme, type Page } from '../store';
 import { fmtClockZone, timeAgo } from '../format';
 import { eventSummary } from '../lib/eventText';
@@ -65,20 +65,31 @@ export const NEWS_TABS: { id: number; label: string }[] = [
   { id: 128, label: 'Crypto airdrop' },
 ];
 
+// Only ONE hover popover may be open at a time across the whole top bar. Opening
+// any menu immediately closes the previously open one — no stacking, no overlap
+// (that was the "garbage" of multiple boxes showing at once). Aave-style single
+// panel: leaving triggers a short close so gliding to the next feels continuous.
+let currentCloser: (() => void) | null = null;
+
 // Popover controller: opens on HOVER (and click), closes on leave / outside / Esc.
-// `hover` opt-out lets a control keep click-only behavior. A shared, slightly
-// delayed close makes moving between adjacent top-bar buttons feel like one box
-// gliding across rather than separate popups flashing.
+// `hover = false` keeps a control click-only (e.g. the big account panel).
 function useMenu<T extends HTMLElement>(hover = true) {
   const [open, setOpen] = useState(false);
   const ref = useRef<T>(null);
   const closeT = useRef<number | undefined>(undefined);
+  const closer = useRef<() => void>(() => {});
+  closer.current = () => setOpen(false);
+  const openExclusive = () => {
+    if (currentCloser && currentCloser !== closer.current) currentCloser();
+    currentCloser = closer.current;
+    setOpen(true);
+  };
   useEffect(() => {
     if (!hover) return;
     const el = ref.current;
     if (!el) return;
-    const enter = () => { window.clearTimeout(closeT.current); setOpen(true); };
-    const leave = () => { closeT.current = window.setTimeout(() => setOpen(false), 130); };
+    const enter = () => { window.clearTimeout(closeT.current); openExclusive(); };
+    const leave = () => { closeT.current = window.setTimeout(() => setOpen(false), 110); };
     el.addEventListener('mouseenter', enter);
     el.addEventListener('mouseleave', leave);
     return () => {
@@ -86,7 +97,7 @@ function useMenu<T extends HTMLElement>(hover = true) {
       el.removeEventListener('mouseleave', leave);
       window.clearTimeout(closeT.current);
     };
-  }, [hover]);
+  }, [hover]); // openExclusive reads only refs + stable setState
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
@@ -102,7 +113,8 @@ function useMenu<T extends HTMLElement>(hover = true) {
       document.removeEventListener('keydown', onKey);
     };
   }, [open]);
-  return { open, setOpen, ref };
+  const setOpenExclusive = (v: boolean) => (v ? openExclusive() : setOpen(false));
+  return { open, setOpen: setOpenExclusive, ref };
 }
 
 // A small live-pulsing dot for anything that refreshes continuously.
@@ -220,7 +232,7 @@ function sessionPlace(s: SessionRow): string {
 // ---- account card (Binance-style profile chip + details) --------------------
 function AccountCard({ compact = false }: { compact?: boolean }) {
   const { state, saveConfig, setPage } = useStore();
-  const { open, setOpen, ref } = useMenu<HTMLDivElement>();
+  const { open, setOpen, ref } = useMenu<HTMLDivElement>(); // hover-open, like the rest of the bar
   const fileRef = useRef<HTMLInputElement>(null);
   const profile = state?.config.profile ?? { name: '', avatar: null };
   const [preview, setPreview] = useState<string | null>(null); // instant feedback before the 2s state tick
@@ -968,10 +980,255 @@ function TrustedAdvisor() {
   );
 }
 
-export function Topbar() {
-  const { state, page, setPage, setKill } = useStore();
+// ---- ONE shared morphing popover for the whole top bar (Aave-style) ---------
+// A single box: centered under the hovered trigger with a pointer aimed at it.
+// Moving to another trigger doesn't close/reopen — the same box slides, resizes
+// (via the per-key width) and the pointer re-aims; only the contents cross-fade.
+type MK = 'clock' | 'shell' | 'network' | 'data' | 'alerts' | 'currency' | 'advisor' | 'notif' | 'power' | 'zoom' | 'settings' | 'theme';
+const MENU_W: Record<MK, number> = {
+  clock: 248, shell: 276, network: 288, data: 290, alerts: 302, currency: 240,
+  advisor: 300, notif: 328, power: 250, zoom: 208, settings: 236, theme: 222,
+};
+
+function SharedTopBar() {
+  const { state, connected, prefs, updatePref, setPage, setKill } = useStore();
+  const theme = useResolvedTheme();
+  const rowRef = useRef<HTMLDivElement>(null);
+  const btnRefs = useRef<Partial<Record<MK, HTMLButtonElement | null>>>({});
+  const closeT = useRef<number | undefined>(undefined);
+  const rafRef = useRef<number | undefined>(undefined);
+  const [active, setActive] = useState<MK | null>(null);
+  const [geo, setGeo] = useState({ left: 0, width: 260, pointer: 130 });
+  const geoRef = useRef(geo); geoRef.current = geo;
+  // Register with the shared single-open closer so opening the box closes any
+  // other popover (the account panel) and vice-versa — never two open at once.
+  const closerRef = useRef<() => void>(() => {});
+  closerRef.current = () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); setActive(null); };
+  const [now, setNow] = useState(() => new Date());
+  const [sys, setSys] = useState<SystemLite | null>(null);
+  const [srv, setSrv] = useState({ news: false, cal: false, fx: false });
+  const [seen, setSeen] = useState(() => Number(localStorage.getItem('cosmos-notif-seen') || 0));
+
+  useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
+  useEffect(() => { let al = true; const load = () => fetch('/api/system').then((r) => (r.ok ? r.json() : null)).then((s) => al && s && setSys(s as SystemLite)).catch(() => undefined); void load(); const t = setInterval(load, 5000); return () => { al = false; clearInterval(t); }; }, []);
+  useEffect(() => {
+    if (active !== 'data') return; let al = true;
+    const p = (u: string, k: 'news' | 'cal' | 'fx') => fetch(u).then((r) => al && setSrv((x) => ({ ...x, [k]: r.ok }))).catch(() => al && setSrv((x) => ({ ...x, [k]: false })));
+    void p('/api/news', 'news'); void p('/api/calendar', 'cal'); void p('/api/fx', 'fx');
+    return () => { al = false; };
+  }, [active]);
+
+  // Compute the box geometry for a trigger, in the row's LOCAL (pre-zoom) space.
+  const computeGeo = (k: MK) => {
+    const btn = btnRefs.current[k]; const row = rowRef.current;
+    if (!btn || !row) return null;
+    const w = MENU_W[k];
+    // The app is CSS-zoomed on :root, so getBoundingClientRect is post-zoom while
+    // the box's `left`/`width` are pre-zoom. Position via offsetLeft/Width (local
+    // px, same system as `left`); only the viewport clamp needs the zoom factor.
+    const rr = row.getBoundingClientRect();
+    const zoom = rr.width / (row.offsetWidth || 1) || 1;
+    const triggerCenter = btn.offsetLeft + btn.offsetWidth / 2;
+    let left = triggerCenter - w / 2;
+    const minLeft = (10 - rr.left) / zoom;
+    const maxLeft = (window.innerWidth - 10 - rr.left) / zoom - w;
+    if (maxLeft > minLeft) left = Math.max(minLeft, Math.min(left, maxLeft));
+    const pointer = Math.max(18, Math.min(w - 18, triggerCenter - left));
+    return { left, width: w, pointer };
+  };
+
+  // CSS transitions on left/width freeze under the :root `zoom` (a Chrome quirk —
+  // the layout stays at the old value until a reflow). So we tween the box with
+  // requestAnimationFrame: each frame is a React state commit, which reflows
+  // correctly and slides smoothly. Opening from closed snaps into place instantly.
+  const animateTo = (target: { left: number; width: number; pointer: number }, immediate: boolean) => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (immediate) { setGeo(target); return; }
+    const start = geoRef.current; const t0 = performance.now(); const dur = 340;
+    const ease = (t: number) => 1 - Math.pow(1 - t, 3); // easeOutCubic
+    const step = (nowT: number) => {
+      const p = Math.min(1, (nowT - t0) / dur); const e = ease(p);
+      setGeo({
+        left: start.left + (target.left - start.left) * e,
+        width: start.width + (target.width - start.width) * e,
+        pointer: start.pointer + (target.pointer - start.pointer) * e,
+      });
+      if (p < 1) rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+  };
+
+  const openK = (k: MK) => {
+    window.clearTimeout(closeT.current);
+    if (currentCloser && currentCloser !== closerRef.current) currentCloser(); // close account/other
+    const wasClosed = active === null;
+    currentCloser = closerRef.current;
+    const g = computeGeo(k);
+    if (g) animateTo(g, wasClosed); // snap when opening fresh, slide when morphing
+    setActive(k);
+    if (k === 'notif' && state?.events?.[0]) { setSeen(state.events[0].id); localStorage.setItem('cosmos-notif-seen', String(state.events[0].id)); }
+  };
+  const scheduleClose = () => { closeT.current = window.setTimeout(() => { if (currentCloser === closerRef.current) currentCloser = null; closerRef.current(); }, 120); };
+  useEffect(() => () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); }, []);
+  const cancelClose = () => window.clearTimeout(closeT.current);
+
+  const b = state?.binance; const cfg = state?.config;
+  const feeds = state?.feeds ?? {}; const feedList = Object.entries(feeds);
+  const feedsOk = feedList.length > 0 && feedList.every(([, s]) => s === 'open');
+  const lat = sys?.restLatencyMs ?? null;
+  const netGrade = !connected ? 'bad' : !feedsOk || (lat !== null && lat > 900) ? 'warn' : 'ok';
+  const latTone = lat === null ? '' : lat < 400 ? 'ok' : lat < 900 ? 'warn' : 'bad';
+  const events = state?.events ?? []; const unread = events.filter((e) => e.id > seen).length;
+  const zone = ZONES.find((z) => z.id === prefs.clockZone) ?? ZONES[1];
+  const cur = CURRENCIES[prefs.currency] ? prefs.currency : 'USD'; const sym = CURRENCIES[cur].symbol.trim() || cur;
+  const al = prefs.alerts; const alertsOn = Object.values(al).filter(Boolean).length;
+  const zoomv = prefs.zoom || 1;
   const mode = state?.mode ?? 'HALTED';
   const modeClass = mode === 'HALTED' ? 'm-halted' : mode === 'LIVE_ARMED' ? 'm-live' : 'm-manual';
+  const alertRows: { key: keyof typeof al; label: string; sub: string }[] = [
+    { key: 'proposals', label: 'Strategy proposals', sub: 'New basis / spread signals' },
+    { key: 'fills', label: 'Order fills', sub: 'Executions on your account' },
+    { key: 'risk', label: 'Risk rejects', sub: 'Gate blocks & kill-switch trips' },
+    { key: 'news', label: 'Binance announcements', sub: 'Listings, delistings, maintenance' },
+  ];
+  const dhSources = [
+    { name: 'Binance market feed', ok: connected && feedsOk, detail: `${Object.keys(feeds).length} streams · ${msLabel(lat)}` },
+    { name: 'Binance account', ok: !!b?.connected, detail: b?.keysPresent ? (b?.connected ? 'synced' : 'error') : 'no keys' },
+    { name: 'Binance announcements', ok: srv.news, detail: srv.news ? 'reachable' : 'checking' },
+    { name: 'Economic calendar', ok: srv.cal, detail: srv.cal ? 'reachable' : 'checking' },
+    { name: 'FX rates', ok: srv.fx, detail: srv.fx ? 'reachable' : 'checking' },
+  ];
+  const advRaw: ({ sev: Sev; name: string; detail: string; page?: Page } | null)[] = [
+    b?.canWithdraw ? { sev: 'action', name: 'Withdrawals enabled on key', detail: 'Rotate to a read-only key.', page: 'account' } : { sev: 'pass', name: 'Withdrawals disabled', detail: 'Key cannot move funds.' },
+    b?.keysPresent && !b?.connected ? { sev: 'action', name: 'Account sync failing', detail: b?.lastError ?? 'Not syncing.', page: 'system' } : null,
+    !connected ? { sev: 'invest', name: 'Cockpit socket offline', detail: 'Reconnecting.', page: 'system' } : null,
+    !feedsOk ? { sev: 'invest', name: 'Market feed degraded', detail: 'A stream is not open.', page: 'system' } : { sev: 'pass', name: 'Market feeds live', detail: `${Object.keys(feeds).length} open.` },
+    !b?.keysPresent ? { sev: 'invest', name: 'No read key set', detail: 'Account data hidden.', page: 'account' } : { sev: 'pass', name: 'Read key set', detail: 'Account data available.' },
+    (cfg?.allowedSymbols?.length ?? 0) === 0 ? { sev: 'invest', name: 'Allowlist empty', detail: 'Safe default.', page: 'risk' } : { sev: 'pass', name: `Allowlist: ${cfg?.allowedSymbols.length}`, detail: 'Listed symbols only.' },
+    { sev: 'pass', name: cfg?.killSwitch ? 'Kill switch ON' : 'Kill switch armed', detail: cfg?.killSwitch ? 'Sends blocked.' : 'Passes to risk gate.' },
+    { sev: 'pass', name: 'Cloudflare-gated', detail: 'Hardware-key auth.' },
+  ];
+  const advChecks = advRaw.filter(Boolean) as { sev: Sev; name: string; detail: string; page?: Page }[];
+  const advA = advChecks.filter((c) => c.sev === 'action'); const advI = advChecks.filter((c) => c.sev === 'invest'); const advP = advChecks.filter((c) => c.sev === 'pass');
+  const advAtt = [...advA, ...advI];
+
+  // Reposition only when the ACTIVE menu changes, when a trigger's width could
+  // change (badges toggling, currency symbol, zone label), on zoom, or on window
+  // resize — NOT every clock tick. (The clock uses tabular figures so ticking
+  // seconds keep a constant width; otherwise every tick would shift the triggers
+  // and restart the slide transition, leaving the box perpetually mid-flight.)
+  const placeSig = `${alertsOn > 0}|${unread > 0}|${advA.length > 0}|${sym}|${zone.label}|${prefs.zoom}`;
+  useLayoutEffect(() => {
+    if (!active) return;
+    const place = () => { const g = computeGeo(active); if (g) setGeo(g); };
+    place();
+    window.addEventListener('resize', place);
+    return () => window.removeEventListener('resize', place);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, placeSig]);
+
+  const trig = (k: MK, cls: string, inner: JSX.Element) => (
+    <button ref={(el) => { btnRefs.current[k] = el; }} className={`${cls} ${active === k ? 'on' : ''}`} onMouseEnter={() => openK(k)} onClick={() => (active === k ? setActive(null) : openK(k))} aria-label={k}>
+      {inner}
+    </button>
+  );
+
+  const content = (k: MK) => {
+    switch (k) {
+      case 'clock':
+        return (<><div className="menu-head">Clock timezone</div>{ZONES.map((zz) => (
+          <button key={zz.id} className={`menu-item ${zz.id === zone.id ? 'sel' : ''}`} onClick={() => { updatePref('clockZone', zz.id); }}>
+            <span className="zp-code">{zz.label}</span><span className="zp-city">{zz.city}</span><span className="zp-time num">{fmtClockZone(zz.id, now)}</span>
+          </button>))}</>);
+      case 'shell':
+        return (<><div className="np-head"><span className="np-title"><IconTerminal size={14} /> AWS CloudShell</span><span className="np-sub">cg-arbitrage-01</span></div>
+          <div className="np-row"><span className="k">Instance</span><span className="v">cg-arbitrage-01</span></div>
+          <div className="np-row"><span className="k">Runtime</span><span className="v">/opt/arbitrage-cosmos</span></div>
+          <div className="np-row"><span className="k">Access</span><span className="v">SSM · Session Manager</span></div>
+          <button className="adv-fix" style={{ width: '100%', marginTop: 10 }} onClick={() => { setActive(null); openOverlay('cloudshell'); }}>Open in-app CloudShell →</button></>);
+      case 'network':
+        return (<><div className="np-head"><span className={`np-title ${netGrade}`}><span className="net-dot" />{!connected ? 'Signal offline' : netGrade === 'ok' ? 'Signal healthy' : 'Signal degraded'}</span><span className="np-lat num">{!connected ? 'offline' : msLabel(lat)}</span></div>
+          <div className="np-row"><span className="k">Binance REST latency</span><span className={`v num ${latTone}`}>{msLabel(lat)}</span></div>
+          <div className="np-row"><span className="k">Clock drift</span><span className="v num">{msLabel(sys?.serverTimeDiffMs)}</span></div>
+          <div className="np-row"><span className="k">Cockpit link</span><span className={`v ${connected ? 'ok' : 'bad'}`}>{connected ? 'live' : 'reconnecting'}</span></div>
+          {feedList.map(([n, s]) => (<div key={n} className="np-row"><span className="k">{n}</span><span className={`v ${s === 'open' ? 'ok' : 'warn'}`}>{s}</span></div>))}
+          <div className="np-row"><span className="k">Rate weight · 1m</span><span className="v num">{sys?.usedWeight1m ?? '—'}</span></div></>);
+      case 'data':
+        return (<><div className="np-head"><span className={`np-title ${netGrade}`}><LiveDot ok={netGrade !== 'bad'} /> Data health</span><span className="np-sub">source: Binance</span></div>
+          {dhSources.map((s) => (<div key={s.name} className="dh-row"><span className={`dh-dot ${s.ok ? 'ok' : 'bad'}`} /><span className="dh-name">{s.name}</span><span className={`dh-detail ${s.ok ? '' : 'muted'}`}>{s.detail}</span></div>))}
+          <div className="dh-params"><div className="menu-head">Parameters</div>
+            <div className="np-row"><span className="k">Clock drift</span><span className="v num">{msLabel(sys?.serverTimeDiffMs)}</span></div>
+            <div className="np-row"><span className="k">Pairs scanned</span><span className="v num">{state?.scanner.pairs ?? '—'}</span></div></div></>);
+      case 'alerts':
+        return (<><div className="np-head"><span className="np-title">Alerts</span><span className="np-sub">{alertsOn} on</span></div>
+          {alertRows.map((r) => (<div key={r.key} className="alert-row"><div className="alert-meta"><span className="alert-label">{r.label}</span><span className="alert-sub">{r.sub}</span></div>
+            <button className={`toggle ${al[r.key] ? 'on' : ''}`} onClick={() => updatePref('alerts', { ...al, [r.key]: !al[r.key] })}><span className="knob" /></button></div>))}
+          <div className="menu-foot">Delivery wiring lands with live mode — toggles are saved.</div></>);
+      case 'currency':
+        return (<><div className="menu-head">Display currency</div>{Object.entries(CURRENCIES).map(([code, c]) => (
+          <button key={code} className={`menu-item ${code === cur ? 'sel' : ''}`} onClick={() => updatePref('currency', code)}>
+            <span className="cur-sym">{c.symbol.trim() || code}</span><span className="cur-label">{c.label}</span><span className="cur-code num">{code}</span></button>))}
+          <div className="menu-foot">Rates: live, USD base · applied to money values</div></>);
+      case 'advisor':
+        return (<><div className="np-head"><span className="np-title"><IconShield size={14} /> Trusted Advisor</span></div>
+          <div className="adv-stats">
+            <div className="adv-stat action"><span className="adv-ic">✕</span><b>{advA.length}</b><em>Action recommended</em></div>
+            <div className="adv-stat invest"><span className="adv-ic">!</span><b>{advI.length}</b><em>Investigation recommended</em></div>
+            <div className="adv-stat pass"><span className="adv-ic">✓</span><b>{advP.length}</b><em>Passed items</em></div></div>
+          <div className="adv-list">{advAtt.length === 0 ? <div className="adv-clean">✓ All clear.</div> : advAtt.slice(0, 4).map((c) => (
+            <button key={c.name} className={`adv-row ${c.sev}`} onClick={() => { if (c.page) { setActive(null); setPage(c.page); } }}><span className="adv-row-dot" /><span className="adv-row-meta"><b>{c.name}</b><small>{c.detail}</small></span></button>))}</div>
+          <div className="adv-actions"><button className="adv-scan" onClick={() => setActive(null)}>Close</button><button className="adv-fix" disabled={!advAtt[0]?.page} onClick={() => { if (advAtt[0]?.page) { setActive(null); setPage(advAtt[0].page!); } }}>Fix top issue →</button></div></>);
+      case 'notif':
+        return (<><div className="np-head"><span className="np-title">Notifications</span><button className="np-link" onClick={() => { setActive(null); setPage('ledger'); }}>Ledger →</button></div>
+          <div className="np-sub-line">Your cockpit only — proposals, fills, risk.</div>
+          {events.length === 0 ? <div className="snn-empty">No events yet</div> : events.slice(0, 7).map((e) => { const tone = e.kind.includes('error') ? 'bad' : e.kind.includes('fill') ? 'ok' : e.kind.includes('risk') ? 'warn' : '';
+            return (<button key={e.id} className="notif-row" onClick={() => { setActive(null); setPage('ledger'); }}><span className={`notif-dot ${tone}`} /><span className="notif-text">{eventSummary(e.kind, (e.data as Record<string, unknown> | null) ?? null, e.symbol)}</span><span className="notif-time num">{timeAgo(e.ts)}</span></button>); })}</>);
+      case 'power':
+        return (<><div className="np-head"><span className={`np-title ${mode === 'HALTED' ? 'bad' : 'ok'}`}><span className="net-dot" />{mode === 'LIVE_ARMED' ? 'Live armed' : mode === 'HALTED' ? 'Halted' : 'Manual mode'}</span></div>
+          <div className="np-sub-line">{mode === 'HALTED' ? 'Kill switch is ON — every send is blocked.' : 'Sends pass to the risk gate.'}</div>
+          <div className="adv-actions">{mode === 'HALTED'
+            ? <button className="adv-fix" style={{ width: '100%' }} onClick={() => { void setKill(false); }}>Arm manual mode</button>
+            : <button className="adv-fix" style={{ width: '100%', background: 'var(--down)' }} onClick={() => { void setKill(true); }}>Kill switch — halt now</button>}</div>
+          <button className="adv-scan" style={{ width: '100%', marginTop: 6 }} onClick={() => { setActive(null); setPage('risk'); }}>Open Risk →</button></>);
+      case 'zoom':
+        return (<><div className="menu-head">Zoom</div><div className="zoom-row"><button className="zoom-btn" onClick={() => updatePref('zoom', Math.max(0.8, Math.round((zoomv - 0.05) * 100) / 100))}>−</button><span className="zoom-val num">{Math.round(zoomv * 100)}%</span><button className="zoom-btn" onClick={() => updatePref('zoom', Math.min(1.5, Math.round((zoomv + 0.05) * 100) / 100))}>+</button></div><button className="zoom-reset" onClick={() => updatePref('zoom', 1)}>Reset to 100%</button></>);
+      case 'settings':
+        return (<><div className="menu-head">Settings</div>
+          <button className="menu-item" onClick={() => { setActive(null); setPage('settings'); }}><span className="cur-label">Open full settings</span><span className="cur-code">→</span></button>
+          <button className="menu-item" onClick={() => { setActive(null); setPage('risk'); }}><span className="cur-label">Risk & gate</span><span className="cur-code">→</span></button>
+          <button className="menu-item" onClick={() => { setActive(null); setPage('system'); }}><span className="cur-label">System health</span><span className="cur-code">→</span></button></>);
+      case 'theme':
+        return (<><div className="menu-head">Appearance</div><div className="theme-seg">{([{ id: 'light', label: 'Light' }, { id: 'dark', label: 'Dark' }, { id: 'system', label: 'Auto' }] as const).map((m) => (<button key={m.id} className={prefs.theme === m.id ? 'on' : ''} onClick={() => updatePref('theme', m.id)}>{m.label}</button>))}</div>
+          <div className="menu-head">Accent</div><div className="accent-dots">{ACCENT_ORDER.map((kk) => (<button key={kk} className={`accent-dot ${prefs.accent === kk ? 'sel' : ''}`} style={{ '--dot': ACCENTS[kk].hex } as CSSProperties} onClick={() => updatePref('accent', kk)} />))}</div></>);
+    }
+  };
+
+  return (
+    <div className="smenu-bar" ref={rowRef} onMouseLeave={scheduleClose}>
+      {trig('clock', 'hdr-clock-btn', <><span className="num">{fmtClockZone(zone.id, now)}</span><span className="hcb-zone">{zone.label}</span></>)}
+      {trig('shell', 'hdr-ic tint-shell', <IconTerminal size={16} />)}
+      {trig('network', `net-btn wifi ${netGrade}`, <WifiSignal grade={netGrade} />)}
+      {trig('data', `hdr-ic tint-data grade-${netGrade}`, <IconDatabase size={18} />)}
+      {trig('alerts', 'hdr-ic', <><IconAlarm size={16} />{alertsOn > 0 && <span className="ic-dot accent" />}</>)}
+      {trig('currency', 'ic-pill cur-pill', <span className="cur-glyph">{sym}</span>)}
+      {trig('advisor', 'hdr-ic tint-advisor', <><IconShield size={16} />{advA.length > 0 && <span className="ic-badge">{advA.length}</span>}</>)}
+      {trig('notif', 'hdr-ic', <><IconBell size={16} />{unread > 0 && <span className="ic-badge">{unread > 9 ? '9+' : unread}</span>}</>)}
+      {trig('power', `hdr-ic ${modeClass}`, <><IconPower size={15} /><span className="ic-dot" /></>)}
+      {trig('zoom', 'hdr-ic', <IconMaximize size={16} />)}
+      {trig('settings', 'icon-btn', <IconGear size={16} />)}
+      {trig('theme', 'icon-btn', theme === 'light' ? <IconMoon size={15} /> : <IconSun size={15} />)}
+      {active && (
+        <div className="smenu" style={{ left: geo.left, width: geo.width }} onMouseEnter={cancelClose} onMouseLeave={scheduleClose}>
+          <span className="smenu-arrow" style={{ left: geo.pointer }} />
+          <div className="smenu-content" key={active}>{content(active)}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Topbar() {
+  const { page } = useStore();
 
   useEffect(() => {
     document.title = `Arbitrage Control · ${TITLES[page]}`;
@@ -984,29 +1241,7 @@ export function Topbar() {
           <SidebarSearch placement="topbar" />
         </div>
         <div className="hdr-right">
-          <ClockMenu />
-          <NetworkStatus />
-          <DataHealthMenu />
-          <AlertsMenu />
-          <CurrencyMenu />
-          <TrustedAdvisor />
-          <NotificationMenu />
-          {mode === 'HALTED' ? (
-            <button className="hdr-ic m-halted" onClick={() => void setKill(false)} title="Halted — click to arm manual mode" aria-label="Halted — arm">
-              <IconPower size={15} />
-              <span className="ic-dot" />
-            </button>
-          ) : (
-            <button className={`hdr-ic ${modeClass}`} onClick={() => void setKill(true)} title="Kill switch — halt all sends now" aria-label="Kill switch — halt now">
-              <IconPower size={15} />
-              <span className="ic-dot" />
-            </button>
-          )}
-          <ZoomMenu />
-          <button className={`icon-btn ${page === 'settings' ? 'on' : ''}`} onClick={() => setPage('settings')} title="Settings" aria-label="Settings">
-            <IconGear size={16} />
-          </button>
-          <ThemeMenu />
+          <SharedTopBar />
           <AccountCard compact />
         </div>
       </div>

@@ -1,6 +1,6 @@
 # PROJECT_MEMORY.md — Cosmos Arbitrage Control Room
 
-Last updated: 2026-07-07
+Last updated: 2026-07-07 11:17 IST
 Permanent role of this file: the durable living-state log for the project. The other three core docs are mostly static blueprints; this file records what is *true right now* — current source-of-truth folder, git/deploy state, active phase, outstanding decisions, and a dated changelog. A new Director should read this file to learn the present state without any old chat history.
 
 Update this file whenever the project state changes. When in doubt, this file wins on "what is the current state"; the blueprints win on "what is the intended design."
@@ -70,7 +70,26 @@ Owner directive (2026-07-07):
 
 ---
 
-## 7. Changelog
+## 7. Run log (newest first)
 
-- 2026-07-07 — Owner set `Main` as source-of-truth. Safety copy taken. `git init` in `Main`; remote `origin` attached (SSH auth OK); published to `current-main` (no force, old `main` untouched). Added `PROJECT_MEMORY.md` as 4th core doc; updated `README.md` and `DIRECTOR_RULEBOOK.md` §8 to reference four core docs.
-- 2026-07-06 — Three core docs (`DIRECTOR_RULEBOOK`, `BLUEPRINT`, `ENGINE`) authored/installed in `Main`.
+### 2026-07-07 11:17 IST — DOC SYNC protocol adopted
+- Asked: make a DOC SYNC mandatory at the end of every Director run — define which of the four docs updates when, the grinder/`TASK_BRIEF.md` boundary, and the required final-response format.
+- Inspected: RULEBOOK doc-ownership sections (§8, §20) for consistency with the new protocol.
+- Changed: added `DIRECTOR_RULEBOOK.md` §21 (DOC SYNC protocol, doc ownership, grinder/`TASK_BRIEF.md` boundary, required final-response format); fixed §20 to send end-of-context state updates to `PROJECT_MEMORY.md` instead of the rulebook; added this run log.
+- Committed/pushed: pushed to `current-main` this run (hash in `git log` / Director report).
+- Failed: nothing.
+- Current state: `Main` = git-tracked source of truth, branch `current-main`, clean tree, four core docs. App not run yet this session.
+- Next action: Phase B — run the app and screenshot every current surface (light/dark).
+- New facts: workflow rule — grinders never read `PROJECT_MEMORY.md`; Director issues one scoped `TASK_BRIEF.md` per worker.
+
+### 2026-07-07 (~11:14 IST) — Main established as source-of-truth git repo
+- Asked: make `Main` the committable/recoverable source-of-truth; init git if absent; attach remote without overwriting old history.
+- Inspected: `.git` absence, tree sizes, GitHub SSH auth, `.claude/launch.json`, staged-file safety.
+- Changed: added `PROJECT_MEMORY.md` (4th core doc); updated `README.md` + `DIRECTOR_RULEBOOK.md` §8 to four core docs.
+- Committed/pushed: `68b28c7` initial import → pushed to new branch `current-main` (no force). Safety copy at `~/Desktop/Main-safety-20260707-111420` (excludes `node_modules/`).
+- Failed: nothing.
+- Current state: remote has `current-main @ 68b28c7` and untouched `main @ 80c234f`.
+- New facts: GitHub SSH auth works as `cosmosgeek0`; `origin = git@github.com:cosmosgeek0/arbitrage-cosmos.git`.
+
+### 2026-07-06 — Core docs authored
+- Three core docs (`DIRECTOR_RULEBOOK`, `BLUEPRINT`, `ENGINE`) authored/installed in `Main`.

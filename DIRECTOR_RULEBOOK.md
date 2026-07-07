@@ -507,6 +507,30 @@ Never create a frontend API key form.
 
 ## 20. Context lifespan rule
 
-The Director’s chat is disposable. The repo docs are durable. If Director starts running out of context, it must update this file with current state, active branch, commits, outstanding tasks, and next action before retiring. A new Director should be able to continue from the docs and repo without old chat history.
+The Director’s chat is disposable. The repo docs are durable. If Director starts running out of context, it must update `PROJECT_MEMORY.md` with current state, active branch, commits, outstanding tasks, and next action before retiring. A new Director should be able to continue from the docs and repo without old chat history.
 
 Do not let the project memory live only in chat again.
+
+---
+
+## 21. DOC SYNC protocol (run at the end of every Director run, before the final response)
+
+Doc ownership is strict. Each doc changes only for its own reason. Do not scatter the same fact across all four.
+
+`PROJECT_MEMORY.md` — update every run. Append a dated run-log entry with: date/time, what was asked, what was inspected, what changed, what was committed/pushed, what failed, current repo/app state, exact next action, and any new facts discovered.
+
+`BLUEPRINT.md` — update only when product structure changes: sidebar/page skeleton, route/page responsibilities, topbar controls, frontend/backend file map, a page removed or merged, or a new API contract added.
+
+`ENGINE.md` — update only when engine/algorithm/execution/risk design changes: basis scanner logic, volume scanner logic, focus model, risk reason codes, executor path, or Binance endpoint assumptions.
+
+`DIRECTOR_RULEBOOK.md` — update only when the Director workflow/rules change. Never put daily logs here; logs live in `PROJECT_MEMORY.md`.
+
+Grinder boundary. Codex/Fable/Opus grinders must NOT read `PROJECT_MEMORY.md` unless explicitly told. The Director writes a small scoped, paste-ready `TASK_BRIEF.md` per worker. A grinder reads only: its task brief, the relevant `BLUEPRINT.md`/`ENGINE.md` section, and the relevant files. Grinders must not be confused into acting like the Director.
+
+Required final Director response format. Every final Director response must state:
+- docs updated: yes/no (and which)
+- files changed
+- tests run
+- commit hash if committed
+- push status
+- next exact step

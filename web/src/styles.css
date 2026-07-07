@@ -16999,3 +16999,54 @@ button.runtime-lane:hover b {
 /* Risk — embedded governance section */
 .risk-governance-card { margin-top: 14px; padding: 16px; }
 .risk-governance-card .rules-section:first-child { margin-top: 8px; }
+
+/* ===== AWS CloudShell quick-view overlay (terminal-styled launcher) ===== */
+.cs-modal { width: min(840px, 94vw); }
+.cs-head .cs-region {
+  font: 600 11px var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  color: var(--muted);
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+}
+.cs-term {
+  background: #0b0f14;
+  color: #d7e0e8;
+  font: 13px/1.55 var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  padding: 16px 18px 14px;
+  min-height: 320px;
+  max-height: 60vh;
+  overflow-y: auto;
+  cursor: text;
+}
+.cs-banner {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #ff9900; /* AWS orange */
+  margin-bottom: 8px;
+}
+.cs-line { white-space: pre-wrap; }
+.cs-line.muted { color: #7d8a97; }
+.cs-line b { color: #eaf1f7; font-weight: 600; }
+.cs-k { color: #57b6ff; }
+.cs-promptline { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.cs-prompt { color: #46d67f; white-space: nowrap; }
+.cs-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: #eaf1f7;
+  font: inherit;
+  caret-color: #46d67f;
+  padding: 0;
+}
+.cs-foot {
+  padding: 9px 18px;
+  font-size: 11.5px;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  background: var(--surface, var(--bg));
+}

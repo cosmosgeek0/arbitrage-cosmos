@@ -31,6 +31,7 @@ import {
   IconSearch,
   IconShield,
   IconSun,
+  IconTerminal,
   IconTicket,
   IconUser,
   IconWallet,
@@ -49,6 +50,8 @@ const ZONES: { id: string; label: string; city: string }[] = [
 ];
 
 const ACCENT_ORDER: AccentKey[] = ['r', 'o', 'y', 'g', 'b', 'i', 'v'];
+
+const CLOUD_SHELL_URL = 'https://console.aws.amazon.com/cloudshell/home';
 
 // Binance announcement categories → real catalog IDs (shared with the News page).
 export const NEWS_TABS: { id: number; label: string }[] = [
@@ -448,6 +451,17 @@ export function Sidebar() {
           </div>
         ))}
       </nav>
+      <div className="snav-utils">
+        <button className={`snav-util ${page === 'news' ? 'active' : ''}`} onClick={() => setPage('news')} title="Binance news — full page">
+          <span className="snav-ic"><IconNewspaper size={18} /></span>
+          <span className="snav-label">News</span>
+          <LiveDot />
+        </button>
+        <button className={`snav-util ${page === 'calendar' ? 'active' : ''}`} onClick={() => setPage('calendar')} title="Economic calendar — full page">
+          <span className="snav-ic"><IconCalendar size={18} /></span>
+          <span className="snav-label">Calendar</span>
+        </button>
+      </div>
     </aside>
   );
 }
@@ -830,6 +844,9 @@ export function Topbar() {
           <button className="hdr-ic tint-cal" onClick={() => openOverlay('calendar')} title="Economic calendar — quick view" aria-label="Economic calendar quick view">
             <IconCalendar size={16} />
           </button>
+          <button className="hdr-ic tint-shell" onClick={() => openOverlay('cloudshell')} title="AWS CloudShell — quick view" aria-label="AWS CloudShell quick view">
+            <IconTerminal size={16} />
+          </button>
           <NetworkStatus />
           <DataHealthMenu />
           <AlertsMenu />
@@ -1017,11 +1034,63 @@ function CalendarModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+// AWS CloudShell quick-view. Terminal-styled launcher — it looks like AWS
+// CloudShell and is grounded in the real deploy target, but it does not fake an
+// attached session: "Open in AWS" (or Enter) starts the real console session.
+function CloudShellModal({ onClose }: { onClose: () => void }) {
+  const [cmd, setCmd] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const launch = () => window.open(CLOUD_SHELL_URL, '_blank', 'noopener,noreferrer');
+
+  return (
+    <div className="ov-backdrop" onMouseDown={onClose}>
+      <div className="ov-modal cs-modal" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="ov-head cs-head">
+          <div className="ov-title"><IconTerminal size={16} /> AWS CloudShell</div>
+          <div className="ov-actions">
+            <span className="cs-region">cg-arbitrage-01</span>
+            <button className="ov-btn" onClick={launch}><IconExternal size={14} /> Open in AWS</button>
+            <button className="ov-close" onClick={onClose} aria-label="Close"><IconClose size={16} /></button>
+          </div>
+        </div>
+        <div className="cs-term" onMouseDown={() => inputRef.current?.focus()}>
+          <div className="cs-banner">AWS CloudShell</div>
+          <div className="cs-line muted">Cosmos Arbitrage Control Room · deploy target (not a live session)</div>
+          <div className="cs-line">&nbsp;</div>
+          <div className="cs-line"><span className="cs-k">instance</span> <b>cg-arbitrage-01</b></div>
+          <div className="cs-line"><span className="cs-k">runtime&nbsp;</span> <b>/opt/arbitrage-cosmos</b></div>
+          <div className="cs-line"><span className="cs-k">user&nbsp;&nbsp;&nbsp;</span> <b>ubuntu</b></div>
+          <div className="cs-line"><span className="cs-k">access&nbsp;</span> <b>AWS Systems Manager · Session Manager</b></div>
+          <div className="cs-line">&nbsp;</div>
+          <div className="cs-line muted">Commands run in the real console — press Enter to open a live session ↗</div>
+          <div className="cs-promptline">
+            <span className="cs-prompt">ubuntu@ip-172-31-2-134:~$</span>
+            <input
+              ref={inputRef}
+              className="cs-input"
+              autoFocus
+              value={cmd}
+              spellCheck={false}
+              aria-label="CloudShell launcher"
+              onChange={(e) => setCmd(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { launch(); setCmd(''); } }}
+            />
+          </div>
+        </div>
+        <div className="cs-foot">
+          In-browser execution isn’t attached — this is a launcher. “Open in AWS” starts a real CloudShell session.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Rendered once at the app root so fixed overlays escape the sidebar box.
 export function Overlays() {
   const [kind, set] = useOverlay();
   if (kind === 'news') return <NewsModal onClose={() => set(null)} />;
   if (kind === 'calendar') return <CalendarModal onClose={() => set(null)} />;
+  if (kind === 'cloudshell') return <CloudShellModal onClose={() => set(null)} />;
   return null;
 }
 

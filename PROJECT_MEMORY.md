@@ -72,6 +72,18 @@ Owner directive (2026-07-07):
 
 ## 7. Run log (newest first)
 
+### 2026-07-07 — Restore News/Calendar tiles + in-app CloudShell overlay
+- Asked (owner correction to SKELETON PASS 1): put the bottom-left News/Calendar sidebar tiles back; put the topbar Cloud Shell button back; and make that top button open an in-app AWS CloudShell-style popup (like the News quick-view), not a new tab.
+- Changed:
+  - `Header.tsx`: restored `snav-utils` News/Calendar tiles; restored topbar CloudShell button (wired to `openOverlay('cloudshell')`); re-added `IconTerminal` import + `CLOUD_SHELL_URL`; new `CloudShellModal` (terminal-styled honest launcher) added to `Overlays()`.
+  - `lib/overlay.ts`: `OverlayKind` now includes `'cloudshell'`.
+  - `styles.css`: appended `.cs-*` terminal overlay styles (dark, AWS-orange banner, green prompt, native caret).
+  - `BLUEPRINT.md` §6 updated: News/Calendar tiles kept; topbar set now lists CloudShell quick-view; CloudShell honesty note.
+- CloudShell overlay is an honest launcher — real deploy-target facts (cg-arbitrage-01, /opt/arbitrage-cosmos, ubuntu, SSM), live host prompt `ubuntu@ip-172-31-2-134:~$`; "Open in AWS"/Enter opens the real console. No faked attached session.
+- Tests: build clean; gates **50/50**. Browser-verified: bottom tiles visible, top button opens overlay (banner/region/prompt correct), zero console errors.
+- Failed: nothing.
+- Next action: owner review; then dark-mode screenshot pass or Engine v0 Part 0.
+
 ### 2026-07-07 — SKELETON PASS 1 (done)
 - Asked: collapse cockpit into 6-group sidebar (OVERVIEW/CAPITAL/MARKET/ENGINE/EXECUTION/CONTROL); merge Trade/Orders/Positions/Fills into one Execution page with tabs; remove Tokens/Rules/Cloud Shell/News/Calendar from sidebar; rename Strategies→Basis Scanner; create Volume Scanner placeholder; keep topbar as-is (no additions).
 - Started from clean tree @ 6131312 on `current-main`.

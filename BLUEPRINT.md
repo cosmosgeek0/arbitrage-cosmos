@@ -129,9 +129,13 @@ The shipped sidebar is 14 items in 6 labeled groups (owner directive; supersedes
 - **EXECUTION** — Execution (one page, internal tabs: Ticket, Orders, Positions, Fills, PnL; old page ids stay valid internal routes so deep links land on the right tab)
 - **CONTROL** — Risk, Ledger, System, Settings
 
-Removed from the sidebar: Tokens (Token Detail opens from Markets rows / search only), Rules (folded into Risk as "Rules & governance" section), Cloud Shell (now an admin link inside System's Cost & usage card), and the bottom News/Calendar tiles (topbar quick-views own news/calendar; full pages remain reachable from the overlays and search).
+Kept below the nav (bottom-left `snav-utils`): News and Calendar full-page tiles (owner restored 2026-07-07 — they coexist with the topbar quick-views).
 
-Topbar (unchanged set): search, clock, currency, news quick-view, calendar quick-view, network signal, data health, alerts, notifications, kill/power, zoom, settings, theme, account/profile. Do not add more topbar buttons.
+Removed from the sidebar: Tokens (Token Detail opens from Markets rows / search only) and Rules (folded into Risk as "Rules & governance" section).
+
+Topbar (fixed set — do not add more buttons): search, clock, currency, news quick-view, calendar quick-view, **CloudShell quick-view**, network signal, data health, alerts, notifications, kill/power, zoom, settings, theme, account/profile.
+
+CloudShell: the topbar terminal icon opens an in-app AWS CloudShell-styled overlay (`CloudShellModal`, via the same `openOverlay` mechanism as News/Calendar), not a new browser tab. It is an honest launcher — dark terminal chrome grounded in the real deploy target (instance `cg-arbitrage-01`, `/opt/arbitrage-cosmos`, user `ubuntu`, SSM access) with a live host prompt; it does not fake an attached session. "Open in AWS" / Enter starts the real console session. The System → Cost & usage admin CloudShell link also remains.
 
 ### Content responsibilities (8-surface reference)
 

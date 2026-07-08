@@ -1,0 +1,258 @@
+# DESIGN_PLAYBOOK.md — how this cockpit's UI actually gets built
+
+READ THIS BEFORE TOUCHING ANY web/src FILE. It was earned over ~20 brutal
+iterations on 2026-07-08. The Account page is the owner's ONLY explicitly
+approved surface ("that's what I call real quality, the real deal") — every
+rule below is what produced it. A fresh agent that follows this file can hit
+that bar on the first try; one that free-styles will produce what the owner
+calls garbage and will redo the work five times.
+
+---
+
+## 0. THE SHIP GATE (run before claiming ANY surface done — all measurements)
+
+1. Judge in REAL Chrome at the owner's window (2940 CSS px, app zoom 1.25) —
+   the preview tool's small viewport is for wiring only; it hid a half-width
+   page and 25 bogus row lines in one day.
+2. Copy = measure: getComputedStyle the Markets tab LIVE and use those values.
+3. Type voices: numbers 16/430 ink · names 16/550 · headers/labels 14/440
+   muted · subs 13.5-14/430 · status words 14/430. Nothing else exists.
+4. ONE left rail: getBoundingClientRect().left of every block = one x.
+   Wrappers get zero horizontal padding; tables flush first/last cell;
+   header text over the icon column.
+5. Lines: zero borders between data rows (Markets has NONE anywhere);
+   exactly one ruled divider between sections.
+6. Asset tables always carry: Star watchlist column (shared Star in
+   components/PillSelect.tsx + toggleWatch/config.watchlist), 36px TokenIcon,
+   name-over-fullname, Title Case heads, PillSelect chrome, Coinbase pager.
+7. Monitor + kill-switches only — NO manual money-action UI ever (trading,
+   borrow, repay, collateral). Action routes belong to the engine.
+8. Click every control in real Chrome; restore any state you flipped.
+9. Log the pass in PROJECT_MEMORY.md before moving on.
+
+## 0.5 KNOWN FAILURE MODES OF THE AGENT (the owner should not have to babysit these)
+
+Each of these happened repeatedly on 2026-07-08 and cost a rage round. The
+countermeasure column is the ONLY known fix — apply it mechanically.
+
+1. SHIPS BLIND. Verifies wiring in the preview tool, never opens the owner's
+   real Chrome. Hid: a half-width page, four left rails, 25 bogus row lines.
+   → Countermeasure: no "done" without real-Chrome screenshots + measurements
+   at his window (§0.1).
+2. INVENTS DECORATION. Adds lines, borders, paddings, underlines the
+   reference does NOT have (row hairlines, quartet vertical dividers,
+   full-width tab underline, 26px hero padding). The reference is minimal;
+   every addition is noise. → Countermeasure: if Markets doesn't show the
+   element, it does not exist. Measure Markets first, then write CSS.
+3. STYLES FROM RECALL. Drifts sizes/weights within hours (15px cells, 480
+   weights, 12px labels against a written 16/430/14/440 law).
+   → Countermeasure: only the five §0.3 values; measure, never remember.
+4. ADDS UNASKED FEATURES. Repay buttons, Adjust-LTV modal, a dustbin
+   chip-wall — all deleted on sight. The product is monitor + kill-switches.
+   → Countermeasure: no new control without an explicit owner order.
+5. FIXES THE INSTANCE, NOT THE CLASS. Aligns the pointed-at element, leaves
+   the same violation elsewhere on the page (hero fixed, table indents kept;
+   one line removed, others kept). → Countermeasure: when one violation of a
+   rule is found, sweep the ENTIRE page for that rule before replying.
+6. TRUSTS COMPRESSED SCREENSHOTS. 800px JPEGs "look fine" while geometry is
+   broken. → Countermeasure: rects and computed styles are the only proof;
+   screenshots are illustration.
+7. WRITES DIARIES, NOT GATES. Logged what happened instead of what to check
+   next time. → Countermeasure: every lesson becomes a numbered, measurable
+   item in §0 or this list — nothing else counts as "recorded".
+
+## 1. How the owner judges quality (the meta-skill)
+
+- **"Copy" means MEASURE.** When given a reference screenshot (Coinbase,
+  Binance, Flow, the RefreshDock), extract per-element sizes/weights/colors
+  and apply them verbatim. "Looks about right" one weight-notch off reads as
+  *random and thick* to him. He zooms into screenshots and compares glyphs.
+- **Verify on the element that OWNS the text node.** Wrappers override
+  context (the global `.num` class forces weight 620/tabular — measure the
+  span, not the cell). `getComputedStyle` on the glyph span is the only proof.
+- **Click every control and look at what opens before claiming done.** He
+  found the native `<select>` popup, the dead PnL buttons, the empty-inspector
+  card, and the invisible 6M chart — all things a click test catches in
+  seconds.
+- **Screenshot and judge with your own eyes at HIS viewing conditions**:
+  1920+ width AND 100% AND 125% zoom, light and dark. `.hp-page.wide` was
+  strangled to 1240px for weeks because nobody looked at a big monitor.
+- **Real data beats derived data, and honesty beats decoration.** When an
+  upstream source publishes NO history (Binance liquidations), RECORD YOUR OWN
+  from the live stream, persist it, and print "Recording since <ts>" — never
+  fake a backfill, never show an unexplained empty chart. The balance
+  was "wrong" until /api/earn asked Binance directly. A red "−$0.00" is a lie
+  of rounding; a zero-row Futures bucket is fine but a fabricated $0.00 for
+  an unreadable wallet is not (use `--` + tooltip). A range button must never
+  render an empty-looking chart — clamp to real data and say why.
+- **Few exact decisions repeated > many approximate ones.** Coinbase's entire
+  order is a two-weight system. When something looks "designed", find the
+  small rule-set behind it and encode it; never sprinkle values.
+
+## 2. The locked type voices (do not invent new ones)
+
+**CASING LAW (owner directive, non-negotiable):** every label, heading,
+button, column header, stat caption, chip, and pill is TITLE CASE — first
+letter of every word capitalized, exactly like Binance ("Total Debt",
+"Margin Call", "Low Risk", "All Loanable", "25 Rows"). Sentence-form subs and
+notes get a capital first letter. Lowercase label soup ("bot-operated",
+"loanable coins") is what gets work thrown back. Sole exception: the small
+lowercase MONO status values inside dock/topbar panels (live / synced /
+writable) — that treatment was explicitly owner-approved.
+
+**THIN-NUMERALS LAW (owner ruling 2026-07-09, repeated rage):** numbers always
+wear LESS weight than words at the same size. Large price displays are weight
+430 even at 40px — the "h1 40/520" rule applies to WORD titles only. Range
+chips 13.5/440, card h3 17/560, stat values 16/440. When the owner says
+"thick", the only answer is less weight. Chart lines never fill their box
+edge-to-edge: pad the y-domain ~22% (Coinbase headroom). Card cells: measure
+cell-bottom minus content-bottom in real Chrome and tune chart heights until
+slack ≤ 16px — no dead space, no overflow.
+
+**A. Data pages (Coinbase voice — Markets, Account, any table surface):**
+- Font: InterVariable (loaded; variable weights are honored exactly).
+- Two-weight discipline: REGULAR (430–440) for every number and secondary
+  label; MEDIUM (550–560) for identity (names). NOTHING above 560 on a data
+  surface. Numbers are proportional `lining-nums` — NEVER tabular on display
+  tables (tabular Inter reads condensed/thick). Sizes: numbers 16/430,
+  names 16/550 (ls -0.006em), table headers 14/440 muted, subs 13.5/430
+  muted, page h1 40/520 (-0.018em), section h2 28/560, card h3 17-18/620,
+  body 15/430 lh1.55. Rows 66–84px, borderless, hover wash, radius on hover
+  row ends. Values that round to 0.00% → plain neutral, no arrow/color.
+- App-wide weight ceiling: 680 (the global flatten). Never reintroduce 700+.
+
+**B. Panels/popovers (dock voice — tbp- classes, every topbar panel):**
+- Tracked-caps header 11/600 + colored status tag (10/620 pill), dot rows
+  (7px dot · 12/500 label · 11px mono tabular value right, colored by state),
+  faint centered 11px footer, quiet tile buttons 34px (primary=accent,
+  danger=red). Opaque `var(--panel)` ALWAYS — never frosted (see §4).
+
+**C. Account-v3 row recipe (the approved gold standard, acb-bl-row):**
+- Bare 19px glyph (no tile box) · name 16/550 -0.006em var(--text) · nothing
+  else on the line · right: value 16/430 + 13.5 muted sub · unreadable = faint
+  `--` + title tooltip. SMALL-SIZE SCALING: at 13.5px (sidebar) the same
+  recipe becomes weight 500 + ink `color-mix(in srgb, var(--text-2) 62%,
+  var(--muted))` — small glyphs pack more ink; full ink/550 "pops too much".
+  Active nav item: full var(--text) at 550.
+
+**D. Shell scale (8px rhythm):** topbar 64px, 38px icon boxes (19px glyphs),
+search = Coinbase pill 42px r21 "Search for an asset" + ⌘K chip, sidebar
+218px (37px rows), content `--maxw` 1600px with 32px symmetric gutters,
+RefreshDock 28px off both edges. Footer = 12.5px all-muted whisper
+(navigation words carry ink; chrome/legal lines carry gray — never reversed).
+
+**THE STRETCH LAW (owner 2026-07-09):** no page caps its width — `.container`
+has `max-width: none`. Stretching the window stretches the CONTENT (fluid
+minmax grids, width:100% charts); the gutters (sidebar→content, edges,
+card gaps) stay constant-pixel. Fixed gaps + fluid boxes = the Account feel,
+everywhere. Never reintroduce a --maxw cap on a page.
+
+**THE EDGE LAW (owner 2026-07-09, "the edge looks so high quality"):** every
+major page surface wears the SAME razor-thin boundary — 1px var(--line-2),
+panel background, radius 12, 14px margins between cards — in BOTH themes.
+Dark --line-2 must stay visible (#262d38); never theme-strip borders
+(`border-color: transparent` in dark was the "quality dropping" bug). No page
+ships with floating borderless sections.
+
+**E. Color:** semantic dictionary only (red=danger/kill, green=money/ok,
+orange=caution/keys, blue=connectivity, indigo=engine, teal=volume,
+slate=neutral). ROYGBIV accent pref drives --accent/--cta. Charts: smooth
+Catmull-Rom bezier 2px round stroke, downsample ~26pts — never raw tick
+polylines; stablecoin sparks flat-line when range/mean < 0.1%.
+
+## 3. Product decisions (owner rulings — do not relitigate)
+
+- NO trading anywhere ("I can trade on Binance") — no tickets, no Trade/Buy/
+  Sell buttons. Execution tab deleted; Orders/Positions/Fills/PnL ids route
+  to Account. The withdrawal GATE bans `capital/withdraw/apply` (action);
+  read-only `withdraw/history` is allowed for the equity chart.
+- NO Settings page/gear — market-refresh/currency/basis are topbar triggers
+  in the shared morphing popover; theme+accent live in the profile popover.
+  Dead prefs forever: zoom/interface-size, motion, density, timestamps,
+  default page, reset.
+- Account = money only (keys/connection/permissions/sessions live in the
+  API-keys panel, RefreshDock, Health, profile popover). Account View only
+  (no Asset View tab) with ALL nine Binance buckets listed; allocation is ONE
+  big donut. Hero: eye-mask, ≈BTC line, Today's PnL from equity snapshots
+  (`account.dayChangeUsd`), 1W/1M/3M/6M chart.
+- Markets = the differentiated screener: sortable asset/price/chart-growth/
+  change/volume/OI/funding; tick-flash cells pulse in the TICK direction with
+  a matching arrow then revert to 24h truth (arrow may never contradict
+  flash); Coinbase Explore anatomy (mkx- classes) with PillSelect dropdowns
+  (never native selects in visible chrome).
+
+## 4. Gotcha catalog (each one cost real time)
+
+1. `:root zoom` family (owner runs 125%): CSS transitions freeze, color
+   keyframes freeze (remove flash classes via setTimeout), sticky paints
+   wrong (hence fixed shell: window never scrolls, `main` scrolls),
+   backdrop-filter samples a MISALIGNED region → ghost text: floating
+   surfaces are always opaque. Media queries see the UNZOOMED window —
+   responsive column hiding must use container queries
+   (`container-type: inline-size` on the page root).
+2. Equal-width segmented controls: grid `auto-flow: column; auto-columns:
+   1fr` — `flex: 1 1 0` in a shrink-wrapped track under-sizes and clips.
+3. `display:flex` on a `<td>` + `text-overflow: ellipsis` paints a stray "…"
+   dot (Chrome) → tds get `clip`; inner spans ellipsize.
+4. The `.num` flash wrapper forces 620/tabular globally — neutralize inside
+   any new surface (`font-weight/variant: inherit`). TODO: someday remove
+   weight from `.num` app-wide with a full visual sweep.
+5. LEGACY !IMPORTANT PINS (~styles.css 10890 & 11063): sidebar width, row
+   size, bullet width. When a shell override "doesn't take": enumerate
+   `document.styleSheets` + `getPropertyPriority`, then edit the legacy pin
+   IN PLACE. Never stack another !important.
+6. Hooks ABOVE loading early-returns, always ("Rendered more hooks" crash).
+7. `fmtPct` defaults withSign=true — beside a direction arrow always pass
+   `(abs, 2, false)` or you print "down +0.82%".
+8. fmtPrice/fmtMoney are FX-converted (fxRate/fxSymbol); any NEW money
+   formatter must route through them (fmtPrice was FX-blind for weeks).
+9. Preview/server traps: launch.json `cosmos` has autoPort → a STALE server
+   can serve OLD dist on a random port with the preview attached. Before
+   debugging "broken" behavior: `preview_list` + check which port the page's
+   network requests hit. Vite (5273, "web") proxies /api→8080. After editing
+   the 390KB styles.css an immediate reload can race the rebuild — rebuild,
+   reload again before concluding a fix failed. Preview tab is HIDDEN: rAF/
+   CSS motion can't be sampled; verify timing via getAnimations/computed.
+10. CoinGecko: keyless search throttles hard (4.5s gap) and its index DRIFTS
+    ("stepn" stopped returning GMT) — verify aliases against live search;
+    exact-symbol match only; ambiguous symbols (4× "BROCCOLI") stay monogram
+    rather than risk the wrong logo. LD-prefixed assets are Simple-Earn
+    wrappers: share qty ≠ underlying amount — value via /api/earn, never
+    derive.
+11. Binance API truths: accountSnapshot = 30 days max (the 6M chart is
+    reconstructed backward from deposit/withdraw history, zero-clamped,
+    labeled honestly); earn positions need /sapi/v1/simple-earn/flexible/
+    position; per-key flags come from apiRestrictions (account.canWithdraw
+    is account-level and lies about keys).
+12. When a reconstruction/algorithm misbehaves: DUMP THE RAW DATA first
+    (node --env-file=.env with the built client) — the data explains itself.
+
+## 5. Where everything lives
+
+- `web/src/components/px.tsx` — shared kit (PageHead/Sec/Group/Row/Pill/Seg/
+  Empty + TINT). `Header.tsx` — topbar, sidebar NAV, all tbp- panels, search,
+  account popover, RefreshDock. `TokenIcon.tsx` — logo chain + monogram +
+  stock badges + LD/rename ALIAS. `Donut.tsx`, `Num.tsx` (flash), `PerfChart.tsx`.
+- `web/src/pages/Markets.tsx/.css` (mkx-), `Account.tsx` (acb-, gold
+  standard), `lib/tokenNames.ts` (display names), `lib/iconManifest.ts`.
+- `web/src/styles.css` — hp- system + appended blocks (SHELL SCALE, tbp-,
+  acb-, GLOBAL TYPE DISCIPLINE at EOF). Later blocks win; beware §4.5 pins.
+- `server/src/binance/icons.ts` — logo resolver (aliases/gap/disk cache at
+  data/icon_cache.json, cwd-relative). `client.ts` — signed endpoints incl.
+  earnFlexiblePositions, accountSnapshots, deposit/withdrawHistory.
+  `index.ts` — /api/earn (60s cache), /api/equity-history (1h cache, flow
+  reconstruction), CSP img-src hosts.
+- Gates: `server/test/gates.mjs` (`npm test` from root, 50 must pass).
+
+## 6. The loop (run it EVERY pass, no exceptions)
+
+1. Reference in hand → extract exact values (or reuse §2 voices).
+2. Edit. Imports FIRST when scripting edits (HMR executes mid-edit states).
+3. `npm run build` (web and/or server) + `npx tsc --noEmit` (vite doesn't
+   typecheck!). Server changes: rebuild dist + restart the 8080 process.
+4. Verify in preview: computed styles on glyph spans, click every control,
+   screenshot at 125% AND 100%, 1440 AND 1920, light AND dark.
+5. Nav crash sweep (click all sidebar items, check for error boundary),
+   console errors, `npm test` → 50/50.
+6. Log the pass in PROJECT_MEMORY.md (what/why/gotchas) BEFORE moving on —
+   update as you move, not at the end.

@@ -5,6 +5,7 @@ Paste this into the fresh Director chat. Attach or ensure the repo contains:
 - DIRECTOR_RULEBOOK.md
 - BLUEPRINT.md
 - ENGINE.md
+- DESIGN_PLAYBOOK.md  ← MANDATORY before any web/src (UI) work; the owner's quality bar is encoded there
 
 Then run this prompt.
 

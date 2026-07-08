@@ -1,18 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
-import { EmptyState, SideTag, StatePill } from '../components/ui';
+import { Dot, Empty, Pill, Seg } from '../components/px';
 import { TokenIcon } from '../components/TokenIcon';
-import {
-  IconAlert,
-  IconBook,
-  IconChart,
-  IconClock,
-  IconPulse,
-  IconRefresh,
-  IconSearch,
-  IconShield,
-  IconTicket,
-} from '../components/Icons';
+import { IconRefresh } from '../components/Icons';
 import { baseOf, fmtDateTime, fmtMoney, fmtPrice, fmtQty, timeAgo } from '../format';
 import type { OpenOrderRow } from '../types';
 
@@ -46,6 +36,10 @@ function orderKey(order: Pick<AnyOrder, 'origin' | 'symbol' | 'orderId'>): strin
   return `${order.origin}-${order.symbol}-${order.orderId}`;
 }
 
+function isStale(order: AnyOrder): boolean {
+  return 'stale' in order && Boolean((order as OpenOrderRow).stale);
+}
+
 function orderNotional(order: OpenOrderRow | HistOrder): number {
   const quote = num((order as HistOrder).cummulativeQuoteQty);
   if (quote > 0) return quote;
@@ -73,51 +67,8 @@ function remainingQty(order: OpenOrderRow | HistOrder): number {
   return Math.max(0, num(order.origQty) - num(order.executedQty));
 }
 
-function OrderDeskStat({
-  label,
-  value,
-  sub,
-  tone = 'idle',
-}: {
-  label: string;
-  value: ReactNode;
-  sub: ReactNode;
-  tone?: 'ok' | 'bad' | 'warn' | 'idle';
-}) {
-  return (
-    <div className={`order-desk-stat ${tone}`}>
-      <em>{label}</em>
-      <b className="num">{value}</b>
-      <small>{sub}</small>
-    </div>
-  );
-}
-
-function OrderBars({ orders }: { orders: AnyOrder[] }) {
-  const recent = orders.slice(0, 26).reverse();
-  const max = Math.max(1e-9, ...recent.map(orderNotional));
-  if (recent.length === 0) {
-    return (
-      <div className="order-flow-empty">
-        <span />
-        <b>Order flow is ready.</b>
-        <em>Open orders and loaded Binance history will form the tape here.</em>
-      </div>
-    );
-  }
-  return (
-    <div className="order-flow-bars">
-      {recent.map((o) => (
-        <span key={orderKey(o)} className={`order-flow-bar ${o.side === 'BUY' ? 'buy' : 'sell'}`} title={`${o.side} ${o.symbol} ${fmtMoney(orderNotional(o))}`}>
-          <i style={{ height: `${Math.max(8, (orderNotional(o) / max) * 100)}%` }} />
-        </span>
-      ))}
-    </div>
-  );
-}
-
 export function Orders() {
-  const { state, cancelOrder, cancelAll, openLedger, openDetail, setPage } = useStore();
+  const { state, cancelOrder, cancelAll, openLedger, openDetail } = useStore();
   const [tab, setTab] = useState<OrdersTab>('open');
   const [histSymbol, setHistSymbol] = useState('BTCUSDT');
   const [hist, setHist] = useState<HistOrder[] | null>(null);
@@ -132,7 +83,6 @@ export function Orders() {
   const openOrders = useMemo<AnyOrder[]>(() => (state?.openOrders ?? []).map((o) => ({ ...o, origin: 'open' })), [state?.openOrders]);
   const histOrders = useMemo<AnyOrder[]>(() => (hist ?? []).map((o) => ({ ...o, origin: 'history' })), [hist]);
   const currentOrders = tab === 'open' ? openOrders : histOrders;
-  const allKnownOrders = [...openOrders, ...histOrders];
   const keysPresent = !!state?.binance.keysPresent;
   const symbol = histSymbol.trim().toUpperCase();
   const symbolValid = /^[A-Z0-9]{5,20}$/.test(symbol);
@@ -141,22 +91,6 @@ export function Orders() {
     : !symbolValid
       ? 'Enter a Binance symbol such as BTCUSDT'
       : '';
-  const modeLabel =
-    state?.mode === 'LIVE_ARMED'
-      ? 'Live armed'
-      : state?.mode === 'MANUAL'
-        ? 'Manual only'
-        : 'Paper / halted';
-  const cancelDisabledReason = !keysPresent
-    ? 'Cancel is locked until server-side Binance keys are configured'
-    : openOrders.length
-      ? ''
-      : 'No open orders to cancel';
-  const orderDataTruth = keysPresent
-    ? state?.binance.connected
-      ? 'Account stream or polling is connected; rows are server snapshots.'
-      : 'Keys exist, but account sync needs attention before rows are fresh.'
-    : 'Paper mode shows no simulated orders; configure server keys to unlock account data.';
 
   const statuses = useMemo(() => {
     const s = Array.from(new Set(currentOrders.map((o) => o.status).filter(Boolean))).sort();
@@ -180,19 +114,7 @@ export function Orders() {
 
   const selected = filtered.find((o) => orderKey(o) === selectedKey) ?? filtered[0] ?? currentOrders[0] ?? null;
   const openNotional = openOrders.reduce((acc, o) => acc + orderNotional(o), 0);
-  const staleOpen = openOrders.filter((o) => o.stale).length;
-  const partialOpen = openOrders.filter((o) => o.status === 'PARTIALLY_FILLED').length;
-  const workingKnown = allKnownOrders.filter((o) => isWorkingStatus(o.status)).length;
-  const terminalKnown = allKnownOrders.filter((o) => !isWorkingStatus(o.status)).length;
-  const filledHistory = histOrders.filter((o) => o.status === 'FILLED').length;
-  const cancelableSymbols = Array.from(new Set(openOrders.map((o) => o.symbol))).sort();
-  const buyCount = currentOrders.filter((o) => o.side === 'BUY').length;
-  const sellCount = currentOrders.filter((o) => o.side === 'SELL').length;
-  const latestTs = currentOrders[0]?.time ?? null;
-  const syncTone = state?.binance.connected ? 'ok' : keysPresent ? 'warn' : 'idle';
-  const manualTone = state?.config.killSwitch ? 'warn' : 'ok';
-  const historyTone = hist ? 'ok' : keysPresent ? 'warn' : 'idle';
-  const cancelTone = openOrders[0] ? (staleOpen ? 'bad' : 'warn') : 'ok';
+  const staleOpen = openOrders.filter(isStale).length;
 
   useEffect(() => {
     if (!selectedKey && currentOrders.length > 0) setSelectedKey(orderKey(currentOrders[0]));
@@ -218,290 +140,152 @@ export function Orders() {
     }
   };
 
-  const clearFilters = () => {
-    setQuery('');
-    setSide('ALL');
-    setStatus('ALL');
-  };
-
   return (
-    <div className="container page orders-page">
-      <section className="orders-desk card">
-        <div className="orders-desk-main">
-          <div className="orders-desk-copy">
-            <span className="orders-eyebrow"><IconTicket size={15} /> execution control</span>
-            <h1 className="page-title">Order desk</h1>
-            <p>
-              Working orders, cancel readiness, held notional, and loaded Binance history stay in one operational view.
-              Nothing here signs from the browser; every live action remains server-side, risk-gated, and ledgered.
-            </p>
-          </div>
-          <div className="orders-desk-hold">
-            <StatePill tone={keysPresent ? 'ok' : 'idle'}>{keysPresent ? 'Binance keys present' : 'keys absent'}</StatePill>
-            <span>Held by open orders</span>
-            <b className="num">{fmtMoney(openNotional)}</b>
-            <em>{openOrders.length} working · {partialOpen} partial · {staleOpen} stale</em>
-            <OrderBars orders={allKnownOrders} />
-          </div>
-        </div>
-
-        <div className="orders-desk-stats">
-          <OrderDeskStat label="Open limit" value={`${openOrders.length} / ${state?.config.maxOpenOrders ?? '—'}`} sub={latestTs ? `latest ${timeAgo(latestTs)}` : 'waiting for account sync'} tone={openOrders.length ? 'warn' : 'idle'} />
-          <OrderDeskStat label="Flow sample" value={`${buyCount} buy / ${sellCount} sell`} sub={tab === 'open' ? 'working orders only' : 'loaded history sample'} tone={buyCount || sellCount ? 'ok' : 'idle'} />
-          <OrderDeskStat label="History" value={hist ? hist.length.toLocaleString('en-US') : '—'} sub={hist ? `${filledHistory} filled · ${symbol}` : 'per-symbol last 100'} tone={historyTone} />
-          <OrderDeskStat label="Known states" value={`${workingKnown} / ${terminalKnown}`} sub="working / terminal" tone={workingKnown ? 'warn' : terminalKnown ? 'ok' : 'idle'} />
-        </div>
-
-        <div className="orders-command-row">
-          <button
-            className={`orders-command-card ${syncTone}`}
-            type="button"
-            onClick={() => setPage(state?.binance.connected ? 'system' : 'account')}
-          >
-            <span className="orders-command-icon"><IconPulse size={15} /></span>
-            <span className="orders-command-copy">
-              <span>Account feed</span>
-              <b>{state?.binance.connected ? 'Live sync' : keysPresent ? 'Needs attention' : 'Keys absent'}</b>
-              <em>
-                {state?.binance.connected
-                  ? `Open orders refresh from Binance; latest state ${timeAgo(state?.binance.lastSyncTs ?? null)}.`
-                  : keysPresent
-                    ? state?.binance.lastError ?? 'Keys exist but account polling is not healthy.'
-                    : 'Configure read-only server keys before orders, fills, and balances populate.'}
-              </em>
-            </span>
-            <span className="orders-command-action">{state?.binance.connected ? 'System health' : 'Account setup'}</span>
-          </button>
-          <button
-            className={`orders-command-card ${manualTone}`}
-            type="button"
-            onClick={() => setPage(state?.config.killSwitch ? 'risk' : 'trade')}
-          >
-            <span className="orders-command-icon"><IconShield size={15} /></span>
-            <span className="orders-command-copy">
-              <span>Manual order path</span>
-              <b>{state?.config.killSwitch ? 'Halted' : 'Risk-gated'}</b>
-              <em>
-                {state?.config.killSwitch
-                  ? 'Live sends are blocked. Keep this on until you intentionally arm manual mode.'
-                  : `Ticket can be prepared; every send still obeys the ${fmtMoney(state?.config.maxOrderNotionalUsd ?? 0)} risk cap.`}
-              </em>
-            </span>
-            <span className="orders-command-action">{state?.config.killSwitch ? 'Risk gate' : 'Manual trade'}</span>
-          </button>
-          <button
-            className={`orders-command-card ${historyTone}`}
-            type="button"
-            onClick={() => {
-              if (!keysPresent) setPage('account');
-              else void loadHistory();
-            }}
-            title={historyDisabledReason || `Load ${symbol} order history`}
-          >
-            <span className="orders-command-icon"><IconRefresh size={15} /></span>
-            <span className="orders-command-copy">
-              <span>History request</span>
-              <b>{hist ? `${hist.length} loaded` : keysPresent ? symbol : 'Locked'}</b>
-              <em>{historyDisabledReason || `Request the last 100 Binance orders for ${symbol} and switch to history view.`}</em>
-            </span>
-            <span className="orders-command-action">{keysPresent ? (loadingHist ? 'Loading' : 'Load history') : 'Account setup'}</span>
-          </button>
-          <button
-            className={`orders-command-card ${cancelTone}`}
-            type="button"
-            onClick={() => {
-              const first = openOrders[0];
-              if (first) {
-                setTab('open');
-                setStatus('ALL');
-                setSelectedKey(orderKey(first));
-              } else {
-                setPage('ledger');
-              }
-            }}
-          >
-            <span className="orders-command-icon"><IconAlert size={15} /></span>
-            <span className="orders-command-copy">
-              <span>Cancel review</span>
-              <b>{openOrders[0] ? `${openOrders.length} open` : 'Clear'}</b>
-              <em>
-                {openOrders[0]
-                  ? `${openOrders[0].symbol} is ready for inspection; cancel actions stay server-side and ledgered.`
-                  : 'No open orders are exposed in current state, so there is nothing to cancel.'}
-              </em>
-            </span>
-            <span className="orders-command-action">{openOrders[0] ? 'Inspect open' : 'Open ledger'}</span>
-          </button>
-        </div>
-      </section>
-
-      <section className="orders-tools card">
-        <div className="orders-tabbar">
-          <button type="button" className={tab === 'open' ? 'on' : ''} onClick={() => {
-            setTab('open');
+    <>
+      <div className="lg-filters">
+        <Seg
+          value={tab}
+          options={[
+            { id: 'open', label: `Open · ${openOrders.length}` },
+            { id: 'history', label: hist ? `History · ${hist.length}` : 'History' },
+          ]}
+          onChange={(t) => {
+            setTab(t);
             setStatus('ALL');
-          }}>
-            <span>Open</span>
-            <b className="num">{openOrders.length}</b>
-          </button>
-          <button type="button" className={tab === 'history' ? 'on' : ''} onClick={() => {
-            setTab('history');
-            setStatus('ALL');
-          }}>
-            <span>History</span>
-            <b className="num">{hist?.length ?? '—'}</b>
-          </button>
-        </div>
-        <div className="orders-filter-row">
-          <label className="orders-search">
-            <IconSearch size={14} />
-            <input placeholder="Search symbol, order id, client id" value={query} onChange={(e) => setQuery(e.target.value)} spellCheck={false} />
-          </label>
-          <div className="seg orders-seg">
-            {(['ALL', 'BUY', 'SELL'] as SideFilter[]).map((s) => (
-              <button key={s} type="button" className={side === s ? `on ${s === 'BUY' ? 'buy' : s === 'SELL' ? 'sell' : ''}` : ''} onClick={() => setSide(s)}>
-                {s === 'ALL' ? 'All sides' : s}
-              </button>
-            ))}
-          </div>
-          <div className="seg orders-seg status">
-            {statuses.map((s) => (
-              <button key={s} type="button" className={status === s ? 'on' : ''} onClick={() => setStatus(s)}>
-                {s === 'ALL' ? 'All status' : s}
-              </button>
-            ))}
-          </div>
-          <button className="mini-btn" type="button" disabled={!query && side === 'ALL' && status === 'ALL'} onClick={clearFilters}>
-            Clear
-          </button>
-        </div>
-        <div className="orders-history-loader">
-          <div>
-            <b>{historyDisabledReason ? 'History locked' : 'Load Binance order history'}</b>
-            <span>{historyDisabledReason || 'Binance serves order history per symbol; this requests the last 100 orders.'}</span>
-          </div>
-          <label className="orders-symbol-input">
-            <span>Symbol</span>
-            <input
-              value={histSymbol}
-              onChange={(e) => setHistSymbol(e.target.value.toUpperCase())}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void loadHistory();
-              }}
-              spellCheck={false}
-            />
-          </label>
-          <button className="cta-pill" type="button" disabled={!!historyDisabledReason || loadingHist} title={historyDisabledReason || `Load ${symbol} order history`} onClick={() => void loadHistory()}>
-            <IconRefresh size={14} />
-            {loadingHist ? 'Loading' : historyDisabledReason ? 'Keys required' : 'Load history'}
-          </button>
-        </div>
-        <div className="orders-readiness-strip">
-          <div>
-            <span>Mode</span>
-            <b>{modeLabel}</b>
-            <small>{orderDataTruth}</small>
-          </div>
-          <div>
-            <span>Cancel capability</span>
-            <b>{cancelDisabledReason ? 'Locked' : 'Server action ready'}</b>
-            <small>{cancelDisabledReason || `${cancelableSymbols.length} open symbol${cancelableSymbols.length === 1 ? '' : 's'} can be reviewed.`}</small>
-          </div>
-          <div>
-            <span>History source</span>
-            <b>{hist ? `${hist.length} cached` : historyDisabledReason ? 'Not loaded' : 'Ready to request'}</b>
-            <small>{hist ? `Current symbol ${symbol}; loaded rows stay searchable here.` : historyDisabledReason || 'Rows are requested per symbol from the server.'}</small>
-          </div>
-        </div>
-        {histErr && <div className="result-strip bad">{histErr}</div>}
-        {msg && <div className={`result-strip ${msg.tone}`}>{msg.text}</div>}
-      </section>
+          }}
+        />
+        <input
+          className="hp-input lg-search"
+          placeholder="Search symbol, order id, client id"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          spellCheck={false}
+        />
+        <Seg
+          value={side}
+          options={[
+            { id: 'ALL', label: 'All' },
+            { id: 'BUY', label: 'Buy' },
+            { id: 'SELL', label: 'Sell' },
+          ]}
+          onChange={setSide}
+        />
+        <select className="hp-input" value={status} onChange={(e) => setStatus(e.target.value)}>
+          {statuses.map((s) => (
+            <option key={s} value={s}>{s === 'ALL' ? 'All status' : s}</option>
+          ))}
+        </select>
+        <span className="lg-filter-gap" />
+        <input
+          className="hp-input lg-symbol"
+          value={histSymbol}
+          onChange={(e) => setHistSymbol(e.target.value.toUpperCase())}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void loadHistory();
+          }}
+          spellCheck={false}
+          placeholder="BTCUSDT"
+        />
+        <button
+          className="hp-btn"
+          type="button"
+          disabled={!!historyDisabledReason || loadingHist}
+          title={historyDisabledReason || `Request the last 100 Binance orders for ${symbol}`}
+          onClick={() => void loadHistory()}
+        >
+          <IconRefresh size={13} />
+          {loadingHist ? 'Loading…' : 'Load history'}
+        </button>
+      </div>
 
-      <div className="orders-layout">
-        <main className="orders-main card">
-          <div className="orders-table-head">
-            <div>
-              <h2>{tab === 'open' ? 'Open order blotter' : 'Binance order history'}</h2>
-              <span>{filtered.length} shown from {currentOrders.length} {tab === 'open' ? 'open orders' : 'loaded orders'}</span>
-            </div>
-            <StatePill tone={filtered.length ? 'ok' : currentOrders.length ? 'warn' : 'idle'}>
-              {filtered.length ? tab : currentOrders.length ? 'no match' : 'empty'}
-            </StatePill>
-          </div>
+      {histErr && <div className="hp-alert" style={{ marginBottom: 12 }}>{histErr}</div>}
+      {msg && msg.tone === 'bad' && <div className="hp-alert" style={{ marginBottom: 12 }}>{msg.text}</div>}
 
+      <div className={`lg-grid exec-grid ${selected ? '' : 'solo'}`}>
+        <section className="hp-group lg-feed" aria-label="Order blotter">
+          <div className="lg-feed-head">
+            <h3>{tab === 'open' ? 'Open orders' : `Order history · ${symbol}`}</h3>
+            <span className="hp-val">
+              {tab === 'open' ? (
+                <>
+                  <Dot tone={openOrders.length ? 'warn' : 'ok'} />
+                  {openOrders.length}/{state?.config.maxOpenOrders ?? '—'} open · {fmtMoney(openNotional)} held{staleOpen ? ` · ${staleOpen} stale` : ''}
+                </>
+              ) : (
+                <>{filtered.length} of {currentOrders.length} rows</>
+              )}
+            </span>
+          </div>
           {currentOrders.length === 0 ? (
-            <div className="orders-empty">
-              <EmptyState title={tab === 'open' ? 'No open orders' : hist === null ? 'Load a symbol history' : `No orders for ${symbol}`}>
+            <div className="lg-empty-pad">
+              <Empty title={tab === 'open' ? 'No open orders' : hist === null ? 'No history loaded' : `No orders for ${symbol}`}>
                 {tab === 'open'
                   ? keysPresent
-                    ? 'Live orders will appear here from the user stream or polling sync. Manual trade tickets stay gated by risk before they become orders.'
-                    : 'Configure server-side Binance keys to see and manage open orders. The UI is ready, but the account is intentionally disconnected.'
+                    ? 'Live orders appear here from account sync. Tickets stay gated by risk before they become orders.'
+                    : 'Configure server-side Binance keys to see open orders. No frontend key input exists by design.'
                   : keysPresent
-                    ? 'Pick a symbol and load its Binance order history. Filled, canceled, rejected, and expired rows will render here.'
-                    : 'Order history is locked until Binance keys exist on the server. No frontend key input is provided by design.'}
-              </EmptyState>
-              <div className="orders-empty-steps">
-                <div><i>1</i><b>Manual trade creates intent</b><span>risk gate validates before any live send</span></div>
-                <div><i>2</i><b>Binance sync updates state</b><span>open orders stream or poll into this blotter</span></div>
-                <div><i>3</i><b>History audits outcomes</b><span>per-symbol orders and ledger events stay searchable</span></div>
-              </div>
-              <p className="orders-empty-foot">{orderDataTruth}</p>
+                    ? 'Pick a symbol and load its last 100 Binance orders.'
+                    : 'History is locked until server-side Binance keys exist.'}
+              </Empty>
             </div>
           ) : filtered.length === 0 ? (
-            <EmptyState title="No orders match these filters">Clear filters or search a different symbol, order id, or client id.</EmptyState>
+            <div className="lg-empty-pad">
+              <Empty title="No orders match these filters">Clear filters or search a different symbol or id.</Empty>
+            </div>
           ) : (
-            <div className="orders-table-wrap">
-              <table className="orders-table">
+            <div className="hp-table-wrap">
+              <table className="hp-table exec-table">
+                <colgroup>
+                  <col style={{ width: 150 }} />
+                  <col style={{ width: 64 }} />
+                  <col style={{ width: 76 }} />
+                  <col style={{ width: 96 }} />
+                  <col style={{ width: 96 }} />
+                  <col style={{ width: 72 }} />
+                  <col style={{ width: 100 }} />
+                  <col style={{ width: 110 }} />
+                  <col style={{ width: 84 }} />
+                  {tab === 'open' && <col style={{ width: 84 }} />}
+                </colgroup>
                 <thead>
                   <tr>
-                    <th className="l">Order</th>
-                    <th className="l">Side</th>
-                    <th className="l">Type</th>
-                    <th>Price</th>
-                    <th>Quantity</th>
-                    <th>Filled</th>
-                    <th>Remaining</th>
-                    <th>Notional</th>
-                    <th className="l">Status</th>
-                    <th className="l">Time</th>
-                    {tab === 'open' && <th className="l">Action</th>}
+                    <th>Order</th>
+                    <th>Side</th>
+                    <th className="num-r">Price</th>
+                    <th className="num-r">Qty</th>
+                    <th className="num-r">Filled</th>
+                    <th className="num-r">Left</th>
+                    <th className="num-r">Notional</th>
+                    <th>Status</th>
+                    <th>Time</th>
+                    {tab === 'open' && <th />}
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((o) => {
-                    const pct = fillPct(o);
                     const active = selected && orderKey(selected) === orderKey(o);
                     return (
                       <tr key={orderKey(o)} className={active ? 'selected' : ''} onClick={() => setSelectedKey(orderKey(o))}>
-                        <td className="l">
-                          <span className="orders-token-cell">
-                            <TokenIcon symbol={o.symbol} size={32} />
-                            <span>
-                              <b>{o.symbol}</b>
-                              <em>{String(o.clientOrderId ?? `#${o.orderId}`).slice(0, 18)}</em>
-                            </span>
+                        <td className="t-source">
+                          <span className="exec-sym">
+                            <TokenIcon symbol={o.symbol} size={16} />
+                            {o.symbol}
                           </span>
                         </td>
-                        <td className="l"><SideTag side={o.side} /></td>
-                        <td className="l muted">{o.type}</td>
-                        <td className="num">{fmtPrice(num(o.price))}</td>
-                        <td className="num">{fmtQty(num(o.origQty))}</td>
-                        <td>
-                          <span className="orders-fill-cell">
-                            <b className="num">{fmtQty(num(o.executedQty))}</b>
-                            <i><span style={{ width: `${pct}%` }} /></i>
-                          </span>
-                        </td>
-                        <td className="num">{fmtQty(remainingQty(o))}</td>
-                        <td className="num order-notional">{fmtMoney(orderNotional(o))}</td>
-                        <td className="l"><span className={`chip-tag ${statusTone(o.status)}`}>{o.status}</span></td>
-                        <td className="l muted" title={fmtDateTime(o.time)}>
-                          {timeAgo(o.time)} {'stale' in o && o.stale && <span className="chip-tag gold">stale</span>}
+                        <td><Pill tone={o.side === 'BUY' ? 'ok' : 'bad'}>{o.side === 'BUY' ? 'Buy' : 'Sell'}</Pill></td>
+                        <td className="t-value num-r">{fmtPrice(num(o.price))}</td>
+                        <td className="t-value num-r">{fmtQty(num(o.origQty))}</td>
+                        <td className="t-value num-r">{fillPct(o).toFixed(0)}%</td>
+                        <td className="t-value num-r">{fmtQty(remainingQty(o))}</td>
+                        <td className="t-value num-r">{fmtMoney(orderNotional(o))}</td>
+                        <td><Pill tone={statusTone(o.status)}>{o.status.replace(/_/g, ' ').toLowerCase()}</Pill></td>
+                        <td className="t-layer" title={fmtDateTime(o.time)}>
+                          {timeAgo(o.time)}{isStale(o) ? ' · stale' : ''}
                         </td>
                         {tab === 'open' && (
-                          <td className="l">
+                          <td>
                             <button
-                              className="mini-btn"
+                              className="hp-btn danger exec-cancel"
                               type="button"
                               disabled={!keysPresent}
                               title={keysPresent ? `Cancel ${o.symbol} order ${o.orderId}` : 'Cancel locked: server-side Binance keys are not configured'}
@@ -512,7 +296,7 @@ export function Orders() {
                                 setMsg(res.ok ? { tone: 'ok', text: `Cancel requested for ${o.symbol} order ${o.orderId}` } : { tone: 'bad', text: res.error ?? 'Cancel failed' });
                               }}
                             >
-                              {keysPresent ? 'Cancel' : 'Keys required'}
+                              Cancel
                             </button>
                           </td>
                         )}
@@ -523,100 +307,50 @@ export function Orders() {
               </table>
             </div>
           )}
-        </main>
+        </section>
 
-        <aside className="orders-rail">
-          <section className="orders-inspector card">
-            <div className="orders-rail-head">
-              <h2>Order inspector</h2>
-              <span>{selected ? selected.origin : 'no order selected'}</span>
-            </div>
-            {selected ? (
-              <>
-                <div className="orders-selected-token">
-                  <TokenIcon symbol={selected.symbol} size={42} />
-                  <span>
-                    <b>{baseOf(selected.symbol)}</b>
-                    <em>{selected.symbol}</em>
-                  </span>
-                  <SideTag side={selected.side} />
-                </div>
-                <div className="orders-inspector-grid">
-                  <span><em>Status</em><b>{selected.status}</b></span>
-                  <span><em>Type</em><b>{selected.type}</b></span>
-                  <span><em>Price</em><b className="num">{fmtPrice(num(selected.price))}</b></span>
-                  <span><em>Notional</em><b className="num">{fmtMoney(orderNotional(selected))}</b></span>
-                  <span><em>Original qty</em><b className="num">{fmtQty(num(selected.origQty))}</b></span>
-                  <span><em>Executed qty</em><b className="num">{fmtQty(num(selected.executedQty))}</b></span>
-                  <span><em>Order id</em><b className="num">{selected.orderId}</b></span>
-                  <span><em>Time</em><b>{fmtDateTime(selected.time)}</b></span>
-                </div>
-                <div className="orders-progress-panel">
-                  <span>
-                    <b className="num">{fillPct(selected).toFixed(0)}%</b>
-                    <em>filled</em>
-                  </span>
-                  <i><span style={{ width: `${fillPct(selected)}%` }} /></i>
-                  <small>{fmtQty(remainingQty(selected))} remaining · {isWorkingStatus(selected.status) ? 'actionable while open' : 'terminal outcome'}</small>
-                </div>
-                <div className="orders-inspector-actions">
-                  <button className="cta-pill" type="button" onClick={() => openDetail(selected.symbol)}>Open market</button>
-                  <button className="mini-btn" type="button" onClick={() => openLedger(selected.symbol)}>Ledger</button>
-                  {selected.origin === 'open' && (
-                    <button
-                      className="mini-btn danger"
-                      type="button"
-                      disabled={!keysPresent}
-                      title={keysPresent ? `Cancel all open ${selected.symbol} orders` : 'Cancel-all locked: server-side Binance keys are not configured'}
-                      onClick={async () => {
-                        if (!keysPresent) return;
-                        const res = await cancelAll(selected.symbol);
-                        setMsg(res.ok ? { tone: 'ok', text: `Cancel-all requested for ${selected.symbol}` } : { tone: 'bad', text: res.error ?? 'Cancel-all failed' });
-                      }}
-                    >
-                      {keysPresent ? 'Cancel all' : 'Keys required'}
-                    </button>
-                  )}
-                </div>
-              </>
-            ) : (
-              <EmptyState title="No order selected">Select a row to inspect fill progress, status, order id, and ledger trail.</EmptyState>
-            )}
-          </section>
-
-          <section className="orders-inspector card">
-            <div className="orders-rail-head">
-              <h2>Order sources</h2>
-              <span>what is live now</span>
-            </div>
-            <div className="orders-source-list">
-              <button type="button" onClick={() => {
-                setTab('open');
-                setStatus('ALL');
-              }}>
-                <span><IconPulse size={15} /> Open orders</span>
-                <b className="num">{openOrders.length}</b>
-              </button>
-              <button type="button" onClick={() => {
-                setTab('history');
-                setStatus('ALL');
-              }}>
-                <span><IconClock size={15} /> History cache</span>
-                <b className="num">{hist?.length ?? 0}</b>
-              </button>
-              <button type="button" onClick={() => setPage('ledger')}>
-                <span><IconBook size={15} /> Ledger events</span>
-                <b>view</b>
-              </button>
-              <button type="button" onClick={() => setPage('system')}>
-                <span><IconChart size={15} /> Sync health</span>
-                <b>open</b>
-              </button>
-            </div>
-          </section>
-        </aside>
+        {selected && <aside className="hp-group lg-inspect" aria-label="Order inspector">
+          {selected ? (
+            <>
+              <div className="lg-inspect-head">
+                <Pill tone={statusTone(selected.status)}>{selected.status.replace(/_/g, ' ').toLowerCase()}</Pill>
+                <h3>
+                  {baseOf(selected.symbol)} · {selected.side === 'BUY' ? 'Buy' : 'Sell'} {selected.type}
+                </h3>
+                <span>#{selected.orderId} · {selected.origin === 'open' ? 'open order' : 'history'}</span>
+              </div>
+              <dl className="lg-facts">
+                <div><dt>Price</dt><dd className="num">{fmtPrice(num(selected.price))}</dd></div>
+                <div><dt>Notional</dt><dd className="num">{fmtMoney(orderNotional(selected))}</dd></div>
+                <div><dt>Quantity</dt><dd className="num">{fmtQty(num(selected.origQty))}</dd></div>
+                <div><dt>Executed</dt><dd className="num">{fmtQty(num(selected.executedQty))} · {fillPct(selected).toFixed(0)}%</dd></div>
+                <div><dt>Remaining</dt><dd className="num">{fmtQty(remainingQty(selected))}</dd></div>
+                <div><dt>Time</dt><dd>{fmtDateTime(selected.time)}</dd></div>
+                <div><dt>State</dt><dd>{isWorkingStatus(selected.status) ? 'working — actionable while open' : 'terminal outcome'}</dd></div>
+              </dl>
+              <div className="lg-related">
+                <button className="hp-btn" type="button" onClick={() => openDetail(selected.symbol)}>Open market</button>
+                <button className="hp-btn" type="button" onClick={() => openLedger(selected.symbol)}>Ledger trail</button>
+                {selected.origin === 'open' && (
+                  <button
+                    className="hp-btn danger"
+                    type="button"
+                    disabled={!keysPresent}
+                    title={keysPresent ? `Cancel all open ${selected.symbol} orders` : 'Cancel-all locked: server-side Binance keys are not configured'}
+                    onClick={async () => {
+                      if (!keysPresent) return;
+                      const res = await cancelAll(selected.symbol);
+                      setMsg(res.ok ? { tone: 'ok', text: `Cancel-all requested for ${selected.symbol}` } : { tone: 'bad', text: res.error ?? 'Cancel-all failed' });
+                    }}
+                  >
+                    Cancel all {baseOf(selected.symbol)}
+                  </button>
+                )}
+              </div>
+            </>
+          ) : null}
+        </aside>}
       </div>
-      <p className="orders-source-note">Source: server-side Binance order snapshots, user-stream/polling cache, and the local audit ledger.</p>
-    </div>
+    </>
   );
 }

@@ -69,6 +69,7 @@ export interface AppConfig {
   allowedSymbols: string[]; // empty = nothing may trade
   blockedSymbols: string[];
   staleOrderMaxMin: number; // orders older than this are flagged in the UI
+  borrowGuard: BorrowGuardConfig;
   watchlist: string[]; // starred symbols on the Markets page
   // owner profile (avatar stored as a small data URL so it follows the server,
   // not the browser)
@@ -76,6 +77,17 @@ export interface AppConfig {
   // owner-authored governance rules. Recorded + ledgered now; the risk engine
   // starts consuming `strict` rules when live mode lands.
   customRules: CustomRule[];
+}
+
+export interface BorrowGuardConfig {
+  enabled: boolean;
+  newBorrowPaused: boolean;
+  repayOnly: boolean;
+  maxLtvPct: number;
+  maxAprPct: number;
+  requireLiveCatalog: boolean;
+  allowedCollateralCoins: string[];
+  blockedLoanCoins: string[];
 }
 
 export interface CustomRule {

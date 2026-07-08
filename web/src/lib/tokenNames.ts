@@ -1,0 +1,48 @@
+// Display names for Binance bases — public token metadata, majors only.
+// Unknown bases fall back to the ticker itself; nothing is invented.
+const NAMES: Record<string, string> = {
+  BTC: 'Bitcoin', ETH: 'Ethereum', BNB: 'Build and Build', SOL: 'Solana', XRP: 'XRP',
+  USDT: 'Tether', USDC: 'USD Coin', FDUSD: 'First Digital USD', TUSD: 'TrueUSD',
+  DOGE: 'Dogecoin', ADA: 'Cardano', TRX: 'TRON', AVAX: 'Avalanche', LINK: 'Chainlink',
+  DOT: 'Polkadot', MATIC: 'Polygon', POL: 'Polygon', LTC: 'Litecoin', BCH: 'Bitcoin Cash',
+  SHIB: 'Shiba Inu', UNI: 'Uniswap', ATOM: 'Cosmos', XLM: 'Stellar', ETC: 'Ethereum Classic',
+  FIL: 'Filecoin', APT: 'Aptos', ARB: 'Arbitrum', OP: 'Optimism', NEAR: 'NEAR Protocol',
+  ICP: 'Internet Computer', VET: 'VeChain', AAVE: 'Aave', MKR: 'Maker', COMP: 'Compound',
+  ALGO: 'Algorand', GRT: 'The Graph', SAND: 'The Sandbox', MANA: 'Decentraland',
+  APE: 'ApeCoin', AXS: 'Axie Infinity', FTM: 'Fantom', RUNE: 'THORChain', INJ: 'Injective',
+  SUI: 'Sui', SEI: 'Sei', TIA: 'Celestia', PEPE: 'Pepe', WIF: 'dogwifhat', BONK: 'Bonk',
+  FLOKI: 'FLOKI', JUP: 'Jupiter', PYTH: 'Pyth Network', JTO: 'Jito', WLD: 'Worldcoin',
+  ENA: 'Ethena', ONDO: 'Ondo', TAO: 'Bittensor', FET: 'Fetch.ai', RENDER: 'Render',
+  IMX: 'Immutable', STX: 'Stacks', HBAR: 'Hedera', KAS: 'Kaspa', TON: 'Toncoin',
+  EGLD: 'MultiversX', FLOW: 'Flow', THETA: 'Theta Network', XTZ: 'Tezos', EOS: 'EOS',
+  NEO: 'Neo', IOTA: 'IOTA', ZEC: 'Zcash', DASH: 'Dash', XMR: 'Monero', KSM: 'Kusama',
+  MINA: 'Mina', ROSE: 'Oasis Network', ZIL: 'Zilliqa', ONE: 'Harmony', CELO: 'Celo',
+  KAVA: 'Kava', SNX: 'Synthetix', CRV: 'Curve DAO', LDO: 'Lido DAO', RPL: 'Rocket Pool',
+  SSV: 'SSV Network', DYDX: 'dYdX', GMX: 'GMX', PENDLE: 'Pendle', SUSHI: 'SushiSwap',
+  '1INCH': '1inch', CAKE: 'PancakeSwap', BAL: 'Balancer', YFI: 'yearn.finance',
+  ZRX: '0x Protocol', ENS: 'Ethereum Name Service', BLUR: 'Blur', MEME: 'Memecoin',
+  ORDI: 'ORDI', '1000SATS': 'SATS', BTTC: 'BitTorrent', BEAMX: 'Beam', GALA: 'Gala',
+  CHZ: 'Chiliz', HOT: 'Holo', ENJ: 'Enjin Coin', BAT: 'Basic Attention Token',
+  QNT: 'Quant', AR: 'Arweave', ID: 'SPACE ID', IO: 'io.net', W: 'Wormhole',
+  G: 'Gravity', S: 'Sonic', A: 'Vaulta', C: 'Chainbase', F: 'SynFutures',
+  T: 'Threshold', LA: 'Lagrange', THE: 'THENA', STO: 'StakeStone', USUAL: 'Usual',
+  VELODROME: 'Velodrome', RONIN: 'Ronin', ACH: 'Alchemy Pay', AI: 'Sleepless AI',
+  GMT: 'STEPN', WOO: 'WOO', OG: 'OG Fan Token', RAD: 'Radworks', NOM: 'Onomy',
+  EUR: 'Euro', GBP: 'Pound Sterling', AUD: 'Australian Dollar', TRY: 'Turkish Lira',
+  HYPE: 'Hyperliquid', HYPER: 'Hyperlane', VIRTUAL: 'Virtuals Protocol', AIXBT: 'aixbt', GRIFFAIN: 'Griffain',
+  MOVE: 'Movement', ME: 'Magic Eden', PENGU: 'Pudgy Penguins', TRUMP: 'Official Trump',
+  BERA: 'Berachain', IP: 'Story', KAITO: 'KAITO', WAL: 'Walrus', DEEP: 'DeepBook',
+  ETHFI: 'Ether.fi', EIGEN: 'EigenLayer', ZK: 'ZKsync', STRK: 'Starknet',
+  MNT: 'Mantle', BLAST: 'Blast', SCR: 'Scroll', LINEA: 'Linea', TAIKO: 'Taiko',
+  OM: 'MANTRA', PORTAL: 'Portal', PIXEL: 'Pixels', SAGA: 'Saga', OMNI: 'Omni Network',
+  REZ: 'Renzo', BB: 'BounceBit', NOT: 'Notcoin', DOGS: 'Dogs', TON2: 'Toncoin',
+  CATI: 'Catizen', HMSTR: 'Hamster Kombat', X: 'X Empire', MAJOR: 'Major',
+  USD1: 'World Liberty USD', AMDB: 'AMD (tokenized)', COINB: 'Coinbase (tokenized)',
+  MSFTB: 'Microsoft (tokenized)', MSTRB: 'MicroStrategy (tokenized)',
+  INTCB: 'Intel (tokenized)', QCOMB: 'Qualcomm (tokenized)', WDCB: 'Western Digital (tokenized)',
+  EWYB: 'iShares Korea (tokenized)',
+};
+
+export function tokenName(base: string): string {
+  return NAMES[base.toUpperCase()] ?? base;
+}

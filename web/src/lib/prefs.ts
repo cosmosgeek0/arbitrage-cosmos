@@ -40,11 +40,15 @@ export const CURRENCIES: Record<string, { symbol: string; label: string }> = {
   USD: { symbol: '$', label: 'US Dollar' },
   INR: { symbol: '₹', label: 'Indian Rupee' },
   EUR: { symbol: '€', label: 'Euro' },
-  GBP: { symbol: '£', label: 'British Pound' },
   JPY: { symbol: '¥', label: 'Japanese Yen' },
-  AED: { symbol: 'AED ', label: 'UAE Dirham' },
-  SGD: { symbol: 'S$', label: 'Singapore Dollar' },
 };
+
+function normalizePrefs(raw: Partial<Prefs>): Prefs {
+  const next = { ...DEFAULTS, ...raw };
+  if (!CURRENCIES[next.currency]) next.currency = DEFAULTS.currency;
+  if (next.defaultPage === 'trade' || next.defaultPage === 'settings') next.defaultPage = DEFAULTS.defaultPage; // pages removed 2026-07
+  return next;
+}
 
 // ROYGBIV accent swatches. `rgb` drives the soft/line tints; `ink` is a
 // readable-on-light text shade; `ctaFg` is the primary-button text color.
@@ -65,7 +69,11 @@ const subs = new Set<(p: Prefs) => void>();
 export function getPrefs(): Prefs {
   if (cache) return cache;
   try {
-    cache = { ...DEFAULTS, ...(JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<Prefs>) };
+    const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<Prefs>;
+    cache = normalizePrefs(saved);
+    if (saved.currency && saved.currency !== cache.currency) {
+      localStorage.setItem(KEY, JSON.stringify(cache));
+    }
   } catch {
     cache = { ...DEFAULTS };
   }
@@ -112,5 +120,7 @@ export function applyPrefs(): void {
   // keep fitting the real viewport — that's what was "breaking into pieces".
   const z = Math.min(1.5, Math.max(0.8, p.zoom || 1));
   (document.documentElement.style as CSSStyleDeclaration & { zoom?: string }).zoom = String(z);
+  // vh units ignore CSS zoom — expose the factor so layout can divide it out
+  document.documentElement.style.setProperty('--z', String(z));
   s.setProperty('--uiz', String(z));
 }

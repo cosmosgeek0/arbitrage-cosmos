@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
-import { LiveDot, calVal, flag, type CalItem } from '../components/Header';
+import { calVal, flag, type CalItem } from '../components/Header';
+import { Pill } from '../components/px';
 import { IconCalendar, IconExternal, IconRefresh } from '../components/Icons';
 import { timeAgo } from '../format';
+import './Markets.css';
 
 // Full-page economic calendar (TradingView feed, server-proxied). More context
 // than the quick view: importance + country filters and full week grouping.
@@ -56,29 +58,30 @@ export function CalendarPage() {
   }, [filtered, zone]);
 
   return (
-    <div className="container page cal-page">
-      <div className="page-head">
-        <div>
-          <div className="page-kicker">Intelligence</div>
-          <h1 className="page-title">Economic calendar <LiveDot /></h1>
-          <div className="page-sub">
-            Next 6 days · times in {prefs.clockZone === 'local' ? 'local time' : prefs.clockZone} · cached 10 min ·{' '}
-            {fetchedAt ? `fetched ${timeAgo(fetchedAt)}` : 'fetching…'}
+    <div className="container page mkx cal-page clx-page">
+      <header className="bwx-hero bsx-hero">
+        <div className="bwx-hero-top">
+          <div className="bwx-hero-title">
+            <div className="bwx-title-row">
+              <h1>Calendar</h1>
+              <Pill tone={failed ? 'bad' : 'ok'}>{failed ? 'Feed Unreachable' : fetchedAt ? `Live · Fetched ${timeAgo(fetchedAt)}` : 'Fetching…'}</Pill>
+            </div>
+            <p>Economic Events For The Next 6 Days · Times In {prefs.clockZone === 'local' ? 'Local Time' : prefs.clockZone} · Refreshed Every 10 Minutes</p>
           </div>
+          <span className="tdx-head-right">
+            <button className="mkx-pill" onClick={() => setNonce((n) => n + 1)} title="Refresh"><IconRefresh size={13} /> Refresh</button>
+            <a className="mkx-pill" href="https://www.tradingview.com/economic-calendar/" target="_blank" rel="noreferrer noopener">
+              TradingView <IconExternal size={12} />
+            </a>
+          </span>
         </div>
-        <div className="head-actions">
-          <button className="ov-btn" onClick={() => setNonce((n) => n + 1)} title="Refresh"><IconRefresh size={14} /> Refresh</button>
-          <a className="ov-btn" href="https://www.tradingview.com/economic-calendar/" target="_blank" rel="noreferrer noopener">
-            <IconExternal size={14} /> TradingView
-          </a>
-        </div>
-      </div>
+      </header>
 
-      <div className="cal-filters">
+      <div className="cal-filters clx-filters">
         <div className="news-tabs">
-          <button className={`news-tab ${minImp === -1 ? 'on' : ''}`} onClick={() => setMinImp(-1)}>All events</button>
+          <button className={`news-tab ${minImp === -1 ? 'on' : ''}`} onClick={() => setMinImp(-1)}>All Events</button>
           <button className={`news-tab ${minImp === 0 ? 'on' : ''}`} onClick={() => setMinImp(0)}>Medium +</button>
-          <button className={`news-tab ${minImp === 1 ? 'on' : ''}`} onClick={() => setMinImp(1)}>High impact</button>
+          <button className={`news-tab ${minImp === 1 ? 'on' : ''}`} onClick={() => setMinImp(1)}>High Impact</button>
         </div>
         <div className="news-tabs">
           <button className={`news-tab ${country === null ? 'on' : ''}`} onClick={() => setCountry(null)}>🌐 All</button>

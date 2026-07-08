@@ -24,6 +24,16 @@ export const DEFAULTS: AppConfig = {
   allowedSymbols: [], // empty allowlist = risk engine rejects every symbol
   blockedSymbols: [],
   staleOrderMaxMin: 60,
+  borrowGuard: {
+    enabled: true,
+    newBorrowPaused: true,
+    repayOnly: true,
+    maxLtvPct: 80,
+    maxAprPct: 12,
+    requireLiveCatalog: true,
+    allowedCollateralCoins: ['USDT', 'USDC', 'FDUSD'],
+    blockedLoanCoins: [],
+  },
   watchlist: ['BTCUSDT', 'ETHUSDT'],
   profile: { name: '', avatar: null },
   customRules: [],
@@ -35,7 +45,14 @@ export function loadConfig(ledger: Ledger): AppConfig {
   const raw = ledger.getConfigValue(CONFIG_KEY);
   if (!raw) return structuredClone(DEFAULTS);
   try {
-    return { ...structuredClone(DEFAULTS), ...(JSON.parse(raw) as Partial<AppConfig>) };
+    const parsed = JSON.parse(raw) as Partial<AppConfig>;
+    const base = structuredClone(DEFAULTS);
+    return {
+      ...base,
+      ...parsed,
+      borrowGuard: { ...base.borrowGuard, ...(parsed.borrowGuard ?? {}) },
+      profile: { ...base.profile, ...(parsed.profile ?? {}) },
+    };
   } catch {
     return structuredClone(DEFAULTS);
   }

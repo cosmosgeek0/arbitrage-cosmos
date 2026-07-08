@@ -68,8 +68,10 @@ check('frontend bundle reads no key material', bundleClean);
 
 // No withdrawal/transfer-out FEATURE anywhere. Safety copy saying
 // "withdrawals disabled" is required, so match action patterns instead.
+// READ-ONLY history (capital/withdraw/history — past records for the equity
+// chart) is allowed; the ACTION endpoint (capital/withdraw/apply) is banned.
 const actionPatterns = [
-  /capital\/withdraw/i,
+  /capital\/withdraw\/apply/i,
   /\/api\/withdraw/i,
   /withdrawApply/i,
   /\bwithdraw\s*\(/i,

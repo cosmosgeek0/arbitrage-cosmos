@@ -1,25 +1,20 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStore, type Page } from '../store';
-import { EmptyState, KindChip } from '../components/ui';
+import { Dot, Empty, PageHead, Pill, type Tone } from '../components/px';
 import { eventSummary } from '../lib/eventText';
 import { fmtDateTime, fmtPrice, timeAgo } from '../format';
 import type { LedgerEvent } from '../types';
 import { TokenIcon } from '../components/TokenIcon';
+import { PillSelect } from '../components/PillSelect';
 import {
-  IconAlert,
   IconBook,
   IconChart,
-  IconClock,
   IconDatabase,
-  IconGear,
-  IconList,
   IconReceipt,
   IconRefresh,
-  IconSearch,
   IconShield,
   IconTicket,
   IconWallet,
-  IconWifi,
 } from '../components/Icons';
 
 type Severity = 'Critical' | 'Warning' | 'Info' | 'Debug';
@@ -28,19 +23,19 @@ type DecisionFilter = 'all' | 'accepted' | 'rejected';
 type TimeRange = 'all' | '15m' | '1h' | '24h' | '7d';
 
 const SEVERITIES: Severity[] = ['Critical', 'Warning', 'Info', 'Debug'];
-const SEVERITY_COPY: Record<Severity, { label: string; sub: string; icon: ReactNode }> = {
-  Critical: { label: 'Critical', sub: 'Needs immediate review', icon: <IconAlert size={15} /> },
-  Warning: { label: 'Warning', sub: 'Review before trading', icon: <IconShield size={15} /> },
-  Info: { label: 'Info', sub: 'Recorded activity', icon: <IconReceipt size={15} /> },
-  Debug: { label: 'Debug', sub: 'Connection records', icon: <IconWifi size={15} /> },
+const SEVERITY_TONE: Record<Severity, Tone> = {
+  Critical: 'bad',
+  Warning: 'warn',
+  Info: 'idle',
+  Debug: 'idle',
 };
 
 const TIME_OPTIONS: { value: TimeRange; label: string; ms: number | null }[] = [
-  { value: 'all', label: 'All time', ms: null },
-  { value: '15m', label: 'Last 15 minutes', ms: 15 * 60 * 1000 },
-  { value: '1h', label: 'Last hour', ms: 60 * 60 * 1000 },
-  { value: '24h', label: 'Last 24 hours', ms: 24 * 60 * 60 * 1000 },
-  { value: '7d', label: 'Last 7 days', ms: 7 * 24 * 60 * 60 * 1000 },
+  { value: 'all', label: 'All Time', ms: null },
+  { value: '15m', label: 'Last 15 Minutes', ms: 15 * 60 * 1000 },
+  { value: '1h', label: 'Last Hour', ms: 60 * 60 * 1000 },
+  { value: '24h', label: 'Last 24 Hours', ms: 24 * 60 * 60 * 1000 },
+  { value: '7d', label: 'Last 7 Days', ms: 7 * 24 * 60 * 60 * 1000 },
 ];
 
 const KNOWN_KINDS = [
@@ -270,10 +265,6 @@ function eventSeverity(ev: LedgerEvent): Severity {
   return 'Info';
 }
 
-function eventTone(ev: LedgerEvent): string {
-  return `logs-sev-${eventSeverity(ev).toLowerCase()}`;
-}
-
 function decisionState(ev: LedgerEvent): 'accepted' | 'rejected' | 'unknown' {
   const d = asRecord(ev.data);
   if (d.allowed === true) return 'accepted';
@@ -330,34 +321,6 @@ function contextAction(ev: LedgerEvent): { page: Page; label: string } {
 
 function sortEvents(events: LedgerEvent[]): LedgerEvent[] {
   return [...events].sort((a, b) => b.id - a.id || b.ts - a.ts);
-}
-
-function SeverityPill({ severity }: { severity: Severity }) {
-  return <span className={`logs-severity-pill ${eventTone({ id: 0, ts: 0, kind: severity === 'Debug' ? 'ws.open' : severity === 'Warning' ? 'config_change' : severity === 'Critical' ? 'error_event' : 'engine.start', symbol: null, data: null })}`}>{severity}</span>;
-}
-
-function IncidentButton({
-  severity,
-  count,
-  active,
-  onClick,
-}: {
-  severity: Severity;
-  count: number;
-  active: boolean;
-  onClick: () => void;
-}) {
-  const meta = SEVERITY_COPY[severity];
-  return (
-    <button type="button" className={`logs-incident ${active ? 'logs-active' : ''} logs-sev-${severity.toLowerCase()}`} onClick={onClick}>
-      <span className="logs-incident-icon">{meta.icon}</span>
-      <span className="logs-incident-copy">
-        <b>{meta.label}</b>
-        <em>{meta.sub}</em>
-      </span>
-      <strong>{count.toLocaleString('en-US')}</strong>
-    </button>
-  );
 }
 
 export function LedgerPage() {
@@ -466,21 +429,11 @@ export function LedgerPage() {
     return true;
   }), [baseEvents, errorFirst, severity, showDebug]);
 
-  const selected = visible.find((ev) => ev.id === selectedId) ?? visible[0] ?? null;
+  const shown = useMemo(() => visible.slice(0, 200), [visible]);
+  const selected = visible.find((ev) => ev.id === selectedId) ?? shown[0] ?? null;
   const selectedDetailFields = selected ? detailFields(selected) : [];
-  const latestCritical = baseEvents.find((ev) => eventSeverity(ev) === 'Critical') ?? null;
   const debugHiddenCount = showDebug ? 0 : severityCounts.Debug;
   const canClear = kind !== 'all' || severity !== 'all' || symbol !== '' || query !== '' || timeRange !== 'all' || decision !== 'all' || showDebug || errorFirst;
-  const activeFilterCount = [
-    kind !== 'all',
-    severity !== 'all',
-    symbol !== '',
-    query !== '',
-    timeRange !== 'all',
-    decision !== 'all',
-    showDebug,
-    errorFirst,
-  ].filter(Boolean).length;
 
   useEffect(() => {
     setRawOpen(false);
@@ -498,192 +451,158 @@ export function LedgerPage() {
     setSelectedId(null);
   }
 
-  function chooseSeverity(next: SeverityFilter): void {
-    setSeverity(next);
-    setErrorFirst(false);
-    if (next === 'Debug') setShowDebug(true);
-  }
-
   function focusSeverity(next: Severity): void {
-    setSeverity(next);
+    setSeverity(severity === next ? 'all' : next);
     setErrorFirst(false);
     if (next === 'Debug') setShowDebug(true);
   }
 
-  function toggleErrorFirst(): void {
-    setErrorFirst((v) => !v);
-    setSeverity('all');
-  }
-
-  function inspectSymbol(sym: string): void {
-    openDetail(sym);
-  }
+  const liveTone: Tone = loadError ? 'bad' : loading ? 'warn' : 'ok';
 
   return (
-    <div className="container page ledger-page logs-page">
-      <header className="logs-head">
-        <span className="logs-mark"><IconBook size={22} /></span>
-        <div className="logs-head-copy">
-          <h1>Logs</h1>
-          <p>What happened, what failed, and why — every recorded event behind the desk.</p>
-        </div>
-        <div className="logs-head-meta">
-          <span className={`logs-live ${loadError ? 'logs-sev-critical' : loading ? 'logs-sev-warning' : 'logs-sev-info'}`}>
-            <span className="logs-live-dot" />
-            {loadError ? 'Unavailable' : loading ? 'Updating' : 'Live'}
-          </span>
-          <span>
-            {visible.length.toLocaleString('en-US')} of {baseEvents.length.toLocaleString('en-US')} events ·{' '}
-            {loadError ?? (lastLoaded ? `updated ${timeAgo(lastLoaded)}` : stateEvents.length ? 'cached' : 'waiting')}
-          </span>
-        </div>
-      </header>
-
-      <section className="logs-console">
-        <div className="logs-preference-group" aria-label="View controls">
-          <div className="logs-pref-row">
-            <span className="logs-pref-icon logs-pref-alert"><IconAlert size={17} /></span>
-            <span className="logs-pref-copy">
-              <b>Errors and warnings first</b>
-              <em>{latestCritical ? `Latest critical event ${timeAgo(latestCritical.ts)}` : 'Hide routine activity — show only critical and warning events'}</em>
+    <div className="container page hp-page wide lg-page">
+      <PageHead
+        mark={<IconBook size={18} />}
+        tone={loadError ? 'bad' : 'idle'}
+        title="Logs"
+        sub="Every recorded event behind the desk — what happened, what failed, and why."
+        meta={
+          <>
+            <Pill tone={liveTone}>{loadError ? 'Unavailable' : loading ? 'Updating' : 'Live'}</Pill>
+            <span>
+              {visible.length.toLocaleString('en-US')} of {baseEvents.length.toLocaleString('en-US')} events ·{' '}
+              {loadError ?? (lastLoaded ? `updated ${timeAgo(lastLoaded)}` : stateEvents.length ? 'cached' : 'waiting')}
             </span>
-            <button type="button" className={`logs-switch ${errorFirst ? 'logs-on' : ''}`} aria-label="Toggle errors and warnings first" aria-pressed={errorFirst} onClick={toggleErrorFirst}>
-              <span />
-            </button>
-          </div>
+          </>
+        }
+      />
 
-          <div className="logs-pref-row">
-            <span className="logs-pref-icon logs-pref-debug"><IconWifi size={17} /></span>
-            <span className="logs-pref-copy">
-              <b>Connection records</b>
-              <em>{showDebug ? 'Heartbeat and connection-open records are visible' : `${debugHiddenCount.toLocaleString('en-US')} connection records hidden`}</em>
-            </span>
-            <button type="button" className={`logs-switch ${!showDebug ? 'logs-on' : ''}`} aria-label="Toggle connection records" aria-pressed={!showDebug} onClick={() => setShowDebug((v) => !v)}>
-              <span />
-            </button>
-          </div>
-        </div>
+      <div className="lg-filters">
+        <input
+          className="hp-input lg-search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search events"
+          spellCheck={false}
+        />
+        <PillSelect
+          value={severity}
+          options={[{ id: 'all' as SeverityFilter, label: 'All Severities' }, ...SEVERITIES.map((sev) => ({ id: sev as SeverityFilter, label: sev }))]}
+          onChange={(v) => { setSeverity(v); setErrorFirst(false); if (v === 'Debug') setShowDebug(true); }}
+          ariaLabel="Severity filter"
+        />
+        <PillSelect
+          value={kind}
+          options={kindOptions.map((item) => ({ id: item, label: item === 'all' ? 'All Kinds' : kindLabel(item) }))}
+          onChange={setKind}
+          ariaLabel="Kind filter"
+        />
+        <input
+          className="hp-input lg-symbol"
+          value={symbol}
+          onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+          placeholder="BTCUSDT"
+          spellCheck={false}
+        />
+        <PillSelect
+          value={timeRange}
+          options={TIME_OPTIONS.map((opt) => ({ id: opt.value, label: opt.label }))}
+          onChange={(v) => setTimeRange(v)}
+          ariaLabel="Time range"
+        />
+        <PillSelect
+          value={decision}
+          options={[
+            { id: 'all' as DecisionFilter, label: 'All Decisions' },
+            { id: 'accepted' as DecisionFilter, label: 'Accepted Only' },
+            { id: 'rejected' as DecisionFilter, label: 'Rejected Only' },
+          ]}
+          onChange={setDecision}
+          ariaLabel="Decision filter"
+        />
+        <span className="lg-filter-gap" />
+        <button
+          type="button"
+          className={`hp-btn lg-toggle${errorFirst ? ' active' : ''}`}
+          aria-pressed={errorFirst}
+          title="Show only critical and warning events"
+          onClick={() => { setErrorFirst((v) => !v); setSeverity('all'); }}
+        >
+          Errors First
+        </button>
+        <button
+          type="button"
+          className={`hp-btn lg-toggle${showDebug ? ' active' : ''}`}
+          aria-pressed={showDebug}
+          title={showDebug ? 'Connection/heartbeat records are visible' : `${debugHiddenCount.toLocaleString('en-US')} connection records hidden`}
+          onClick={() => setShowDebug((v) => !v)}
+        >
+          Connections
+        </button>
+        <button type="button" className="hp-btn" onClick={() => void load()} disabled={loading}>
+          <IconRefresh size={13} />
+          Refresh
+        </button>
+        <button type="button" className="hp-btn" onClick={clearFilters} disabled={!canClear} title={!canClear ? 'No active filters to clear' : 'Reset all Logs filters'}>
+          Clear
+        </button>
+      </div>
 
-        <div className="logs-filter-panel">
-          <div className="logs-filter-grid">
-            <label className="logs-field">
-              <span>Severity</span>
-              <select value={severity} onChange={(e) => chooseSeverity(e.target.value as SeverityFilter)} disabled={errorFirst}>
-                <option value="all">All severities</option>
-                {SEVERITIES.map((sev) => <option key={sev} value={sev}>{sev}</option>)}
-              </select>
-            </label>
-            <label className="logs-field">
-              <span>Kind</span>
-              <select value={kind} onChange={(e) => setKind(e.target.value)}>
-                {kindOptions.map((item) => <option key={item} value={item}>{item === 'all' ? 'All kinds' : kindLabel(item)}</option>)}
-              </select>
-            </label>
-            <label className="logs-field">
-              <span>Symbol</span>
-              <input value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} placeholder="BTCUSDT" spellCheck={false} />
-            </label>
-            <label className="logs-field logs-field-wide">
-              <span>Search</span>
-              <IconSearch size={13} />
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search events" spellCheck={false} />
-            </label>
-            <label className="logs-field">
-              <span>Time range</span>
-              <select value={timeRange} onChange={(e) => setTimeRange(e.target.value as TimeRange)}>
-                {TIME_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-              </select>
-            </label>
-            <label className="logs-field">
-              <span>Decision</span>
-              <select value={decision} onChange={(e) => setDecision(e.target.value as DecisionFilter)}>
-                <option value="all">All decisions</option>
-                <option value="accepted">Accepted only</option>
-                <option value="rejected">Rejected only</option>
-              </select>
-            </label>
-          </div>
-
-          <div className="logs-filter-actions">
-            <button type="button" className="logs-button" onClick={() => void load()} disabled={loading}>
-              <IconRefresh size={14} />
-              {loading ? 'Refreshing' : 'Refresh'}
-            </button>
-            <button type="button" className="logs-button" onClick={clearFilters} disabled={!canClear} title={!canClear ? 'No active filters to clear' : 'Reset all Logs filters'}>
-              Clear
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <div className="logs-workbench">
-        <aside className="logs-facets" aria-label="Logs facets">
-          <section className="logs-facet-panel">
-            <div className="logs-facet-title">Severity</div>
-            <div className="logs-incident-strip" aria-label="Incident severity counts">
-              {SEVERITIES.map((sev) => (
-                <IncidentButton
-                  key={sev}
-                  severity={sev}
-                  count={severityCounts[sev]}
-                  active={!errorFirst && severity === sev}
-                  onClick={() => focusSeverity(sev)}
-                />
-              ))}
-            </div>
+      <div className="lg-grid">
+        <aside className="lg-facets" aria-label="Logs facets">
+          <section className="hp-group lg-facet">
+            <h3>Severity</h3>
+            {SEVERITIES.map((sev) => (
+              <button
+                type="button"
+                key={sev}
+                className={!errorFirst && severity === sev ? 'active' : ''}
+                onClick={() => focusSeverity(sev)}
+              >
+                <Dot tone={SEVERITY_TONE[sev]} />
+                <span>{sev}</span>
+                <b>{severityCounts[sev].toLocaleString('en-US')}</b>
+              </button>
+            ))}
           </section>
-
-          <section className="logs-facet-panel">
-            <div className="logs-facet-title">Kinds</div>
-            <div className="logs-facet-list">
-              {kindCounts.map(([item, count]) => (
-                <button type="button" key={item} className={kind === item ? 'logs-active' : ''} onClick={() => setKind(item)}>
-                  <span>{kindLabel(item)}</span>
-                  <b>{count.toLocaleString('en-US')}</b>
-                </button>
-              ))}
-            </div>
+          <section className="hp-group lg-facet">
+            <h3>Kinds</h3>
+            {kindCounts.map(([item, count]) => (
+              <button type="button" key={item} className={kind === item ? 'active' : ''} onClick={() => setKind(kind === item ? 'all' : item)}>
+                <span>{kindLabel(item)}</span>
+                <b>{count.toLocaleString('en-US')}</b>
+              </button>
+            ))}
           </section>
-
-          <section className="logs-facet-panel">
-            <div className="logs-facet-title">Sources</div>
-            <div className="logs-facet-list">
-              {sourceCounts.map(([item, count]) => (
-                <button type="button" key={item} className={query === item ? 'logs-active' : ''} onClick={() => setQuery(item)}>
-                  <span>{sourceLabel(item)}</span>
-                  <b>{count.toLocaleString('en-US')}</b>
-                </button>
-              ))}
-            </div>
+          <section className="hp-group lg-facet">
+            <h3>Sources</h3>
+            {sourceCounts.map(([item, count]) => (
+              <button type="button" key={item} className={query === item ? 'active' : ''} onClick={() => setQuery(query === item ? '' : item)}>
+                <span>{sourceLabel(item)}</span>
+                <b>{count.toLocaleString('en-US')}</b>
+              </button>
+            ))}
           </section>
         </aside>
 
-        <section className="logs-table-shell">
-          <div className="logs-table-head">
-            <div>
-              <h2>Event activity</h2>
-              <span>Recent records from the event feed</span>
-            </div>
-            <div className="logs-table-head-meta">
-              <span>{visible.length.toLocaleString('en-US')} rows</span>
-            </div>
+        <section className="hp-group lg-feed" aria-label="Event Activity">
+          <div className="lg-feed-head">
+            <h3>Event Activity</h3>
+            <span>{shown.length < visible.length ? `First ${shown.length} Of ${visible.length.toLocaleString('en-US')} Rows` : `${visible.length.toLocaleString('en-US')} Rows`}</span>
           </div>
-
-          {visible.length === 0 ? (
-            <EmptyState title="No matching events">
-              <button type="button" className="logs-button" onClick={clearFilters} disabled={!canClear}>
-                Clear
-              </button>
-            </EmptyState>
+          {shown.length === 0 ? (
+            <div className="lg-empty-pad">
+              <Empty title="No matching events">Adjust or clear the filters to see recorded activity.</Empty>
+            </div>
           ) : (
-            <div className="logs-event-list" role="listbox" aria-label="Event activity">
-              {visible.map((ev) => {
+            <div className="lg-list" role="listbox" aria-label="Event Activity">
+              {shown.map((ev) => {
                 const evSeverity = eventSeverity(ev);
                 const selectedRow = selected?.id === ev.id;
                 return (
                   <div
                     key={ev.id}
-                    className={`logs-event-item ${eventTone(ev)} ${selectedRow ? 'logs-selected' : ''}`}
+                    className={`lg-row${selectedRow ? ' selected' : ''}`}
                     onClick={() => setSelectedId(ev.id)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
@@ -695,31 +614,27 @@ export function LedgerPage() {
                     tabIndex={0}
                     aria-selected={selectedRow}
                   >
-                    <span className="logs-event-glyph">
-                      {evSeverity === 'Critical' ? <IconAlert size={18} /> : evSeverity === 'Warning' ? <IconShield size={18} /> : evSeverity === 'Debug' ? <IconWifi size={18} /> : <IconReceipt size={18} />}
-                    </span>
-                    <span className="logs-event-copy">
+                    <span className="lg-time" title={fmtDateTime(ev.ts)}>{timeAgo(ev.ts)}</span>
+                    <Dot tone={SEVERITY_TONE[evSeverity]} />
+                    <span className="lg-main" title={`${eventTitle(ev)} — ${eventCaption(ev)}`}>
                       <b>{eventTitle(ev)}</b>
-                      <em>{eventCaption(ev)}</em>
+                      <em> — {eventCaption(ev)}</em>
                     </span>
-                    <span className="logs-event-context">
-                      <span>{fmtDateTime(ev.ts)}</span>
-                      <em>{timeAgo(ev.ts)} · {kindLabel(ev.kind)} · {sourceLabel(sourceText(ev))}</em>
-                    </span>
-                    <span className="logs-event-token">
-                      {ev.symbol ? (
-                        <button type="button" className="logs-symbol" onClick={(e) => { e.stopPropagation(); inspectSymbol(ev.symbol as string); }} title={`Inspect ${ev.symbol} market detail`}>
-                          <TokenIcon symbol={ev.symbol} size={18} />
-                          <span className="logs-symbol-text">{ev.symbol}</span>
-                        </button>
-                      ) : (
-                        <span className="logs-system-symbol">system</span>
-                      )}
-                    </span>
-                    <span className="logs-event-state">
-                      <SeverityPill severity={evSeverity} />
-                      <b>{statusLabel(ev)}</b>
-                    </span>
+                    {ev.symbol ? (
+                      <button
+                        type="button"
+                        className="lg-sym"
+                        onClick={(e) => { e.stopPropagation(); openDetail(ev.symbol as string); }}
+                        title={`Inspect ${ev.symbol} market detail`}
+                      >
+                        <TokenIcon symbol={ev.symbol} size={14} />
+                        {ev.symbol}
+                      </button>
+                    ) : (
+                      <span className="lg-sym system">system</span>
+                    )}
+                    <span className="lg-src" title={`${kindLabel(ev.kind)} · ${sourceLabel(sourceText(ev))}`}>{sourceLabel(sourceText(ev))}</span>
+                    <span className="lg-status">{statusLabel(ev)}</span>
                   </div>
                 );
               })}
@@ -727,97 +642,59 @@ export function LedgerPage() {
           )}
         </section>
 
-        <aside className="logs-inspector">
-          <div className="logs-inspector-head">
-            <span className="logs-inspector-icon"><IconList size={16} /></span>
-            <div>
-              <h2>Event details</h2>
-              <span>{selected ? `event #${selected.id}` : 'select a row'}</span>
-            </div>
-          </div>
-
+        <aside className="hp-group lg-inspect" aria-label="Event details">
           {selected ? (
             <>
-              <div className={`logs-inspector-summary ${eventTone(selected)}`}>
-                <SeverityPill severity={eventSeverity(selected)} />
-                <strong>{eventTitle(selected)}</strong>
-                <span>{kindLabel(selected.kind)}</span>
+              <div className="lg-inspect-head">
+                <Pill tone={SEVERITY_TONE[eventSeverity(selected)]}>{eventSeverity(selected)}</Pill>
+                <h3>{eventTitle(selected)}</h3>
+                <span>#{selected.id} · {kindLabel(selected.kind)}</span>
               </div>
-
-              <dl className="logs-inspector-grid">
-                <div>
-                  <dt>ID</dt>
-                  <dd>{selected.id}</dd>
-                </div>
-                <div>
-                  <dt>Time</dt>
-                  <dd>{fmtDateTime(selected.ts)} · {timeAgo(selected.ts)}</dd>
-                </div>
-                <div>
-                  <dt>Source</dt>
-                  <dd>{sourceLabel(sourceText(selected))}</dd>
-                </div>
-                <div>
-                  <dt>Reason</dt>
-                  <dd>{eventCaption(selected)}</dd>
-                </div>
-                <div>
-                  <dt>Status</dt>
-                  <dd>{statusLabel(selected)}</dd>
-                </div>
-                <div>
-                  <dt>Symbol</dt>
-                  <dd>{selected.symbol ?? 'system'}</dd>
-                </div>
+              <dl className="lg-facts">
+                <div><dt>Time</dt><dd>{fmtDateTime(selected.ts)} · {timeAgo(selected.ts)}</dd></div>
+                <div><dt>Source</dt><dd>{sourceLabel(sourceText(selected))}</dd></div>
+                <div><dt>Reason</dt><dd>{eventCaption(selected)}</dd></div>
+                <div><dt>Status</dt><dd>{statusLabel(selected)}</dd></div>
+                <div><dt>Symbol</dt><dd>{selected.symbol ?? 'system'}</dd></div>
                 {selectedDetailFields.map((field) => (
-                  <div key={field.key}>
-                    <dt>{field.key}</dt>
-                    <dd>{field.value}</dd>
-                  </div>
+                  <div key={field.key}><dt>{field.key}</dt><dd>{field.value}</dd></div>
                 ))}
               </dl>
-
-              <div className="logs-related">
-                <span>Related navigation</span>
+              <div className="lg-related">
                 {(() => {
                   const ids = relatedIds(selected);
                   const ctx = contextAction(selected);
                   return (
                     <>
                       {ids.proposalId ? (
-                        <button type="button" className="logs-button" onClick={() => setPage('opportunities')}>
-                          <IconChart size={14} />
+                        <button type="button" className="hp-btn" onClick={() => setPage('opportunities')}>
+                          <IconChart size={13} />
                           Open proposal #{ids.proposalId}
                         </button>
                       ) : null}
                       {ids.orderId ? (
-                        <button type="button" className="logs-button" onClick={() => setPage('orders')}>
-                          <IconTicket size={14} />
+                        <button type="button" className="hp-btn" onClick={() => setPage('orders')}>
+                          <IconTicket size={13} />
                           Open order #{ids.orderId}
                         </button>
                       ) : null}
-                      {!ids.proposalId && !ids.orderId ? (
-                        <button type="button" className="logs-button" disabled title="This event does not carry an orderId or proposalId">
-                          <IconBook size={14} />
-                          No order/proposal id recorded
-                        </button>
-                      ) : null}
-                      <button type="button" className="logs-button" onClick={() => setPage(ctx.page)}>
-                        {ctx.page === 'system' ? <IconDatabase size={14} /> : ctx.page === 'risk' ? <IconShield size={14} /> : ctx.page === 'account' ? <IconWallet size={14} /> : <IconReceipt size={14} />}
+                      <button type="button" className="hp-btn" onClick={() => setPage(ctx.page)}>
+                        {ctx.page === 'system' ? <IconDatabase size={13} /> : ctx.page === 'risk' ? <IconShield size={13} /> : ctx.page === 'account' ? <IconWallet size={13} /> : <IconReceipt size={13} />}
                         {ctx.label}
                       </button>
                     </>
                   );
                 })()}
               </div>
-
-              <details className="logs-raw-drawer" open={rawOpen} onToggle={(e) => setRawOpen(e.currentTarget.open)}>
-                <summary>Raw JSON drawer</summary>
+              <details className="lg-raw" open={rawOpen} onToggle={(e) => setRawOpen(e.currentTarget.open)}>
+                <summary>Raw JSON</summary>
                 <pre>{safeJson(selected, 2)}</pre>
               </details>
             </>
           ) : (
-            <span className="logs-empty-note">No matching events.</span>
+            <div className="lg-empty-pad">
+              <Empty title="No event selected">Select a row to inspect its ledger record.</Empty>
+            </div>
           )}
         </aside>
       </div>

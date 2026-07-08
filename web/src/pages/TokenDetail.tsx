@@ -1,1097 +1,1138 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+/* Token page — Coinbase chart anatomy on top, Binance token-data base below:
+   Money Flow Analysis (real spot aggTrades, size-bucketed, animated sweep),
+   Open Interest (bars + notional line), and Basis (futures/index/basis area)
+   — all straight from Binance endpoints, one template for every token, with
+   honest spot-only fallbacks. The second base row is reserved (owner). */
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../store';
-import { TokenIcon, brandColor } from '../components/TokenIcon';
-import type { ChartPoint } from '../components/BigChart';
-import { Num } from '../components/Num';
-import { OrderBook } from '../components/OrderBook';
+import { TokenIcon } from '../components/TokenIcon';
+import { PillSelect, Star } from '../components/PillSelect';
 import { TradingViewChart, type TvCandle } from '../components/TradingViewChart';
-import { TradingViewWidget } from '../components/TradingViewWidget';
-import { DepthChart } from '../components/DepthChart';
-import { SideTag } from '../components/ui';
-import { fmtPrice, fmtPct, fmtBasis, fmtMoney, fmtFunding, fmtQty, signClass, countdown, baseOf, fmtTimeShort, fmtDateTime, timeAgo } from '../format';
-import type { FillRow, MarketDetail, SignalRecord, Side, OrderType, TicketPrefill } from '../types';
+import { IconExternal, IconSearch } from '../components/Icons';
+import { fmtPrice, fmtPct, baseOf } from '../format';
+import { tokenName } from '../lib/tokenNames';
+import './Markets.css';
 
-const WINDOWS = {
-  '1s': { interval: '1s', limit: 500 },
-  '1m': { interval: '1m', limit: 720 },
-  '5m': { interval: '5m', limit: 576 },
-  '15m': { interval: '15m', limit: 672 },
-  '1H': { interval: '1h', limit: 720 },
-  '4H': { interval: '4h', limit: 720 },
-  '1D': { interval: '1d', limit: 365 },
-  '1W': { interval: '1w', limit: 260 },
+/* Coinbase lookback ranges — 1S through ALL, every one real Binance klines. */
+const RANGES = {
+  '1S': { interval: '1s', limit: 600 },
+  '1H': { interval: '1m', limit: 60 },
+  '1D': { interval: '5m', limit: 288 },
+  '1W': { interval: '1h', limit: 168 },
+  '1M': { interval: '4h', limit: 180 },
+  '1Y': { interval: '1d', limit: 365 },
+  ALL: { interval: '1w', limit: 1000 },
 } as const;
-type WinKey = keyof typeof WINDOWS;
-type ChartMode = 'tradingview' | 'price' | 'depth' | 'basis' | 'funding' | 'volume';
-type RailMode = OrderType | 'TWAP' | 'SCALE';
-const TV_WINS = ['1m', '5m', '15m', '1H', '4H', '1D', '1W'] as const satisfies readonly WinKey[];
-const BINANCE_WINS = Object.keys(WINDOWS) as WinKey[];
+type RangeKey = keyof typeof RANGES;
+const RANGE_KEYS = Object.keys(RANGES) as RangeKey[];
+
+/* The full Binance interval menu (the TradingView picker set): 1s → 1 month. */
+const INTERVALS = ['1s', '1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M'] as const;
+type IntervalKey = (typeof INTERVALS)[number];
+const INTERVAL_LIMIT: Record<IntervalKey, number> = {
+  '1s': 600, '1m': 720, '3m': 640, '5m': 576, '15m': 672, '30m': 672,
+  '1h': 720, '2h': 540, '4h': 540, '6h': 500, '8h': 500, '12h': 500,
+  '1d': 365, '3d': 400, '1w': 520, '1M': 120,
+};
+const INTERVAL_LABEL: Record<IntervalKey, string> = {
+  '1s': '1s', '1m': '1m', '3m': '3m', '5m': '5m', '15m': '15m', '30m': '30m',
+  '1h': '1H', '2h': '2H', '4h': '4H', '6h': '6H', '8h': '8H', '12h': '12H',
+  '1d': '1D', '3d': '3D', '1w': '1W', '1M': '1Mo',
+};
 
 interface BinanceKlineMsg {
-  k?: {
-    t: number;
-    o: string;
-    h: string;
-    l: string;
-    c: string;
-    v: string;
-    q: string;
-  };
+  k?: { t: number; o: string; h: string; l: string; c: string; v: string; q: string };
 }
 
-interface SymbolContext {
-  openOrders: { orderId: number; side: string; type: string; price: number; origQty: number; time: number }[];
-  fills: FillRow[];
-  signals: SignalRecord[];
-  balances: { base: number; usdtFree: number | null };
-  allowlisted: boolean;
-  blocklisted: boolean;
+interface TokenProfile {
+  name: string;
+  rank: number | null;
+  homepage: string | null;
+  whitepaper: string | null;
 }
 
-interface FuturesTelemetry {
+interface MoneyFlow {
   symbol: string;
-  period: string;
-  updatedAt: number;
-  available: boolean;
-  errors: string[];
-  openInterest: { t: number; contracts: number; notional: number }[];
-  topAccountRatio: { t: number; ratio: number; longPct: number; shortPct: number }[];
-  topPositionRatio: { t: number; ratio: number; longPct: number; shortPct: number }[];
-  globalRatio: { t: number; ratio: number; longPct: number; shortPct: number }[];
-  takerFlow: { t: number; buyVol: number; sellVol: number; ratio: number }[];
+  window: string;
+  large: { buy: number; sell: number };
+  medium: { buy: number; sell: number };
+  small: { buy: number; sell: number };
+  totalBuy: number;
+  totalSell: number;
+  inflow: number;
+  trades: number;
+  coveredMs: number;
+  windowMs: number;
+  sampled: boolean;
 }
 
-function Star({ on, onClick }: { on: boolean; onClick: () => void }) {
-  return (
-    <button className="star-btn" onClick={onClick} title={on ? 'Remove from watchlist' : 'Add to watchlist'}>
-      <span className={`star ${on ? 'on' : ''}`}>
-        <svg viewBox="0 0 24 24" width="17" height="17" fill={on ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round">
-          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-        </svg>
-      </span>
-    </button>
-  );
-}
-
-function StripMetric({ label, value, tone = '', sub }: { label: string; value: ReactNode; tone?: string; sub?: ReactNode }) {
-  return (
-    <div className="strip-metric">
-      <div className="strip-label">{label}</div>
-      <div className={`strip-value num ${tone}`}>{value}</div>
-      {sub && <div className="strip-sub">{sub}</div>}
-    </div>
-  );
-}
-
-function DataPanel({ title, kicker, children, className = '' }: { title: string; kicker?: string; children: ReactNode; className?: string }) {
-  return (
-    <section className={`card token-panel ${className}`}>
-      <div className="token-panel-head">
-        <h3>{title}</h3>
-        {kicker && <span>{kicker}</span>}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function DataRow({
-  label,
-  value,
-  tone = '',
-  sub,
-  control,
-}: {
-  label: string;
-  value: ReactNode;
-  tone?: string;
-  sub?: ReactNode;
-  control?: ReactNode;
-}) {
-  return (
-    <div className="token-data-row">
-      <span>
-        <span className="td-label">{label}</span>
-        {sub && <span className="td-sub">{sub}</span>}
-      </span>
-      <span className={`td-value num ${tone}`}>{control ?? value}</span>
-    </div>
-  );
-}
+interface OiPoint { t: number; contracts: number; notional: number }
+interface BasisPoint { t: number; futuresPrice: number; indexPrice: number; basis: number; basisRatePct: number }
 
 function fmtCompact(v: number | null | undefined): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return '—';
   return Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(v);
 }
 
-function fmtSignedPrice(v: number | null | undefined): string {
-  if (v === null || v === undefined || !Number.isFinite(v)) return '—';
-  const abs = fmtPrice(Math.abs(v));
-  return `${v > 0 ? '+' : v < 0 ? '-' : ''}${abs}`;
-}
-
 function lastOf<T>(arr: T[] | undefined): T | undefined {
   return arr && arr.length ? arr[arr.length - 1] : undefined;
 }
 
-function TokenRailTicket({
-  symbol,
-  base,
-  bid,
-  ask,
-  last,
-  maxOrderNotional,
-  openTicket,
-}: {
-  symbol: string;
-  base: string;
-  bid: number | null | undefined;
-  ask: number | null | undefined;
-  last: number | null | undefined;
-  maxOrderNotional: number | null | undefined;
-  openTicket: (t: TicketPrefill) => void;
-}) {
-  const [side, setSide] = useState<Side>('BUY');
-  const [mode, setMode] = useState<RailMode>('LIMIT');
-  const [price, setPrice] = useState('');
-  const [qty, setQty] = useState('');
-  const [orderValue, setOrderValue] = useState('');
-  const cap = maxOrderNotional && maxOrderNotional > 0 ? maxOrderNotional : 10;
-  const reference = last ?? (bid && ask ? (bid + ask) / 2 : bid ?? ask ?? null);
-  const px = Number(price) > 0 ? Number(price) : reference;
-  const typedQty = Number(qty);
-  const typedValue = Number(orderValue);
-  const derivedQty =
-    Number.isFinite(typedQty) && typedQty > 0
-      ? typedQty
-      : Number.isFinite(typedValue) && typedValue > 0 && px && px > 0
-        ? typedValue / px
-        : null;
-  const derivedValue =
-    Number.isFinite(typedValue) && typedValue > 0
-      ? typedValue
-      : derivedQty && px
-        ? derivedQty * px
-        : null;
-  const unsupported = mode === 'TWAP' || mode === 'SCALE';
-  const ready = Boolean(!unsupported && symbol && px && px > 0 && ((mode === 'MARKET' && derivedValue && derivedValue > 0) || (mode === 'LIMIT' && derivedQty && derivedQty > 0)));
-  const disabledReason = unsupported
-    ? `${mode === 'TWAP' ? 'TWAP' : 'Scaled orders'} need a backend executor before live or paper routing is honest.`
-    : ready
-      ? 'Open this draft in the guarded manual ticket'
-      : 'Choose price and size first';
-
-  useEffect(() => {
-    setPrice('');
-    setQty('');
-    setOrderValue('');
-    setMode('LIMIT');
-    setSide('BUY');
-  }, [symbol]);
-
-  useEffect(() => {
-    if (!price && reference) setPrice(String(reference));
-  }, [price, reference]);
-
-  const setValuePct = (pct: number) => {
-    const value = Math.max(0, (cap * pct) / 100);
-    setOrderValue(value ? String(Number(value.toFixed(2))) : '');
-    if (px && px > 0) {
-      const q = value / px;
-      setQty(q ? (q >= 1 ? String(Number(q.toFixed(5))) : q.toPrecision(6).replace(/0+$/, '')) : '');
-    }
-  };
-
-  const usePrice = (kind: 'mid' | 'bbo') => {
-    if (kind === 'mid' && bid && ask) setPrice(String((bid + ask) / 2));
-    if (kind === 'bbo') {
-      const next = side === 'BUY' ? ask ?? bid ?? reference : bid ?? ask ?? reference;
-      if (next) setPrice(String(next));
-    }
-  };
-
-  const open = () => {
-    if (!ready) return;
-    openTicket({
-      symbol,
-      side,
-      type: mode as OrderType,
-      price: mode === 'LIMIT' && px ? px : undefined,
-      quantity: mode === 'LIMIT' && derivedQty ? derivedQty : undefined,
-      quoteQty: mode === 'MARKET' && derivedValue ? derivedValue : undefined,
-      source: 'manual',
-    });
-  };
-
+/** Colored change fragment: arrow + value, green/red/neutral. */
+function Chg({ pct, children }: { pct: number | null | undefined; children?: React.ReactNode }) {
+  if (pct === null || pct === undefined || !Number.isFinite(pct) || Math.abs(pct) < 0.005) {
+    return <span className="tdx-chg flat">{children ?? '0.00%'}</span>;
+  }
+  const up = pct > 0;
   return (
-    <section className="card rail-ticket-card" data-side={side}>
-      <div className="rail-ticket-side">
-        <button className={`buy ${side === 'BUY' ? 'on' : ''}`} type="button" onClick={() => setSide('BUY')}>
-          Buy
-        </button>
-        <button className={`sell ${side === 'SELL' ? 'on' : ''}`} type="button" onClick={() => setSide('SELL')}>
-          Sell
-        </button>
-      </div>
-      <div className="rail-ticket-modes">
-        {(['LIMIT', 'MARKET', 'TWAP', 'SCALE'] as RailMode[]).map((m) => {
-          const blocked = m === 'TWAP' || m === 'SCALE';
-          return (
-            <button key={m} className={mode === m ? 'on' : ''} type="button" disabled={blocked} onClick={() => setMode(m)} title={blocked ? `${m} is designed but not wired to the Binance spot sender yet` : `Draft a ${m.toLowerCase()} ticket`}>
-              {m === 'SCALE' ? 'Scale' : m[0] + m.slice(1).toLowerCase()}
-            </button>
-          );
-        })}
-      </div>
-      <div className="rail-ticket-field">
-        <span>
-          Price
-          <em>
-            <button type="button" onClick={() => usePrice('mid')} disabled={!bid || !ask}>
-              Mid
-            </button>
-            <button type="button" onClick={() => usePrice('bbo')} disabled={!bid && !ask}>
-              BBO
-            </button>
-          </em>
-        </span>
-        <label>
-          <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} disabled={mode === 'MARKET'} placeholder={reference ? String(reference) : '0.00'} />
-          <b>$</b>
-        </label>
-      </div>
-      <div className="rail-ticket-field">
-        <span>Quantity</span>
-        <label>
-          <input type="number" value={qty} onChange={(e) => setQty(e.target.value)} placeholder={`0 ${base}`} />
-          <b>{base}</b>
-        </label>
-      </div>
-      <div className="rail-ticket-field">
-        <span>Order value</span>
-        <label>
-          <input type="number" value={orderValue} onChange={(e) => setOrderValue(e.target.value)} placeholder="0.00" />
-          <b>USDT</b>
-        </label>
-      </div>
-      <div className="rail-ticket-slider">
-        <input type="range" min="0" max="100" step="25" value={derivedValue ? Math.min(100, Math.round((derivedValue / cap) * 100)) : 0} onChange={(e) => setValuePct(Number(e.target.value))} />
-        <span>
-          <i>0</i>
-          <i>25</i>
-          <i>50</i>
-          <i>75</i>
-          <i>100%</i>
-        </span>
-      </div>
-      <div className="rail-ticket-summary">
-        <span>
-          <b className="num">{derivedQty ? fmtQty(derivedQty) : '—'}</b>
-          <em>{base} size</em>
-        </span>
-        <span>
-          <b className="num">{fmtPrice(derivedValue)}</b>
-          <em>draft value</em>
-        </span>
-      </div>
-      <button className={`cta-pill ${side === 'BUY' ? 'buy' : 'danger'} rail-ticket-submit`} type="button" disabled={!ready} title={disabledReason} onClick={open}>
-        Open guarded {side === 'BUY' ? 'buy' : 'sell'} ticket
-      </button>
-      <p>{unsupported ? disabledReason : 'No live send here. This opens Manual Trade with risk preview, filters, and typed confirmation.'}</p>
-    </section>
+    <span className={`tdx-chg ${up ? 'up' : 'down'}`}>
+      <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden>
+        {up ? <path d="M2 8.5L6 4l4 4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            : <path d="M2 3.5L6 8l4-4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />}
+      </svg>
+      {children ?? fmtPct(Math.abs(pct), 2, false)}
+    </span>
   );
 }
 
-function MiniTelemetryChart({
-  title,
-  kicker,
-  points,
-  value,
-  tone = '',
-  kind = 'line',
-}: {
-  title: string;
-  kicker?: string;
-  points: { t: number; v: number; v2?: number }[];
-  value: ReactNode;
-  tone?: string;
-  kind?: 'line' | 'bars';
-}) {
+/** The Coinbase chart: smooth line over a dotted area fill, axis right. */
+function PriceChart({ points, up }: { points: { t: number; v: number }[]; up: boolean }) {
+  const W = 1080;
+  const H = 430;
+  const PAD_R = 110;
+  const PAD_B = 34;
   const model = useMemo(() => {
-    const clean = points.filter((p) => Number.isFinite(p.v)).slice(-44);
-    if (clean.length < 2) return null;
-    const vals = kind === 'bars' ? clean.flatMap((p) => [p.v, p.v2 ?? 0]) : clean.map((p) => p.v);
-    const min = Math.min(...vals, kind === 'bars' ? 0 : Infinity);
-    const max = Math.max(...vals, 0);
-    const span = Math.max(max - min, 1e-12);
-    const w = 220;
-    const h = 76;
-    const x = (i: number) => (i / Math.max(clean.length - 1, 1)) * w;
-    const y = (v: number) => h - ((v - min) / span) * (h - 10) - 5;
-    const path = clean.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(2)} ${y(p.v).toFixed(2)}`).join(' ');
-    return { clean, w, h, min, max, x, y, path };
-  }, [points, kind]);
+    if (points.length < 2) return null;
+    const vs = points.map((p) => p.v);
+    let mn = Math.min(...vs);
+    let mx = Math.max(...vs);
+    if (mx - mn < mx * 1e-9) { mx *= 1.0005; mn *= 0.9995; }
+    const span = mx - mn;
+    mn -= span * 0.22; mx += span * 0.22; // Coinbase-style headroom — the line never fills edge to edge
+    const y = (v: number) => ((mx - v) / (mx - mn)) * (H - PAD_B);
+    let pts = points;
+    if (pts.length > 160) {
+      const step = (pts.length - 1) / 159;
+      pts = Array.from({ length: 160 }, (_, i) => points[Math.round(i * step)]);
+    }
+    const xy = pts.map((p, i) => [(i / (pts.length - 1)) * (W - PAD_R), y(p.v)] as const);
+    let d = `M${xy[0][0]},${xy[0][1]}`;
+    for (let i = 0; i < xy.length - 1; i++) {
+      const p0 = xy[Math.max(0, i - 1)];
+      const p1 = xy[i];
+      const p2 = xy[i + 1];
+      const p3 = xy[Math.min(xy.length - 1, i + 2)];
+      const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+      const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+      d += ` C${c1[0]},${c1[1]} ${c2[0]},${c2[1]} ${p2[0]},${p2[1]}`;
+    }
+    const area = `${d} L${xy[xy.length - 1][0]},${H - PAD_B} L${xy[0][0]},${H - PAD_B} Z`;
+    const ticks = Array.from({ length: 5 }, (_, i) => mn + ((i + 0.5) / 5) * (mx - mn));
+    const times = Array.from({ length: 7 }, (_, i) => points[Math.round((i / 6) * (points.length - 1))].t);
+    const spanMs = points[points.length - 1].t - points[0].t;
+    const timeFmt = (t: number) => {
+      const dte = new Date(t);
+      if (spanMs < 864e5 * 2) return dte.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      if (spanMs < 864e5 * 400) return dte.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return dte.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+    };
+    const last = xy[xy.length - 1];
+    return { d, area, ticks, y, times, timeFmt, last };
+  }, [points]);
 
+  if (!model) return <div className="tdx-chart-empty">Waiting For Candles…</div>;
+  const stroke = up ? 'var(--up)' : 'var(--down)';
   return (
-    <div className="tele-card">
-      <div className="tele-head">
-        <span>
-          <b>{title}</b>
-          {kicker && <em>{kicker}</em>}
-        </span>
-        <strong className={`num ${tone}`}>{value}</strong>
-      </div>
-      <svg className="tele-chart" viewBox="0 0 220 76" preserveAspectRatio="none" aria-label={`${title} mini chart`}>
-        {[18, 38, 58].map((y) => (
-          <line key={y} x1="0" x2="220" y1={y} y2={y} className="tele-axis" />
-        ))}
-        {!model ? (
-          <text x="110" y="42" textAnchor="middle" className="tele-empty">
-            no data
-          </text>
-        ) : kind === 'bars' ? (
-          model.clean.map((p, i) => {
-            const bw = Math.max(2, 150 / model.clean.length);
-            const x = model.x(i) - bw / 2;
-            const y1 = model.y(p.v);
-            const y2 = model.y(p.v2 ?? 0);
-            return (
-              <g key={`${p.t}-${i}`}>
-                <rect x={x} y={y1} width={bw} height={Math.max(1, model.h - 5 - y1)} className="tele-bar up" />
-                <rect x={x + bw + 1} y={y2} width={bw} height={Math.max(1, model.h - 5 - y2)} className="tele-bar down" />
-              </g>
-            );
-          })
-        ) : (
-          <>
-            <path d={`${model.path} L 220 76 L 0 76 Z`} className="tele-fill" />
-            <path d={model.path} className="tele-line" />
-          </>
-        )}
-      </svg>
+    <svg className="tdx-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden>
+      <defs>
+        <pattern id="tdx-dots" width="7" height="7" patternUnits="userSpaceOnUse">
+          <circle cx="1.4" cy="1.4" r="1.15" fill={stroke} opacity="0.22" />
+        </pattern>
+      </defs>
+      {model.ticks.map((v, i) => (
+        <g key={i}>
+          <line x1={0} x2={W - PAD_R} y1={model.y(v)} y2={model.y(v)} stroke="var(--line)" strokeWidth="1" />
+          <text x={W - PAD_R + 12} y={model.y(v) + 4} className="tdx-axis">{fmtPrice(v)}</text>
+        </g>
+      ))}
+      <path d={model.area} fill="url(#tdx-dots)" />
+      <path d={model.d} fill="none" stroke={stroke} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={model.last[0]} cy={model.last[1]} r="4.5" fill={stroke} />
+      {model.times.map((t, i) => (
+        <text key={i} x={(i / 6) * (W - PAD_R)} y={H - 8} className="tdx-axis" textAnchor={i === 0 ? 'start' : i === 6 ? 'end' : 'middle'}>
+          {model.timeFmt(t)}
+        </text>
+      ))}
+    </svg>
+  );
+}
+
+/* ==== Binance hover tooltip (measured on binance.com trading-data):
+   floating opaque box — "MM/DD HH:mm" header + one full-precision row per
+   series — following the cursor, nearest point highlighted. ==== */
+function fmtFull(v: number, dec = 2): string {
+  return v.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+
+function tipTime(t: number): string {
+  const d = new Date(t);
+  return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function ChartTip({ x, w, title, rows }: { x: number; w: number; title: string; rows: { dot: string; label: string; value: string }[] }) {
+  const right = x > w * 0.55;
+  return (
+    <div className="tdx-tip" style={right ? { right: w - x + 14 } : { left: x + 14 }}>
+      <b>{title}</b>
+      {rows.map((r) => (
+        <span key={r.label}><i style={{ background: r.dot }} />{r.label}: <em>{r.value}</em></span>
+      ))}
     </div>
   );
 }
 
-export function TokenDetail({ symbol }: { symbol: string }) {
-  const { markets, state, openTicket, toggleWatch, setPage, openLedger, importFills } = useStore();
-  const [win, setWin] = useState<WinKey>('1m');
-  const [mode, setMode] = useState<ChartMode>('tradingview');
-  const [candles, setCandles] = useState<TvCandle[]>([]);
-  const [chartStream, setChartStream] = useState<'connecting' | 'live' | 'poll'>('connecting');
-  const [futK, setFutK] = useState<ChartPoint[]>([]);
-  const [funding, setFunding] = useState<ChartPoint[]>([]);
-  const [telemetry, setTelemetry] = useState<FuturesTelemetry | null>(null);
-  const [telemetryBasis, setTelemetryBasis] = useState<ChartPoint[]>([]);
-  const [detail, setDetail] = useState<MarketDetail | null>(null);
-  const [ctx, setCtx] = useState<SymbolContext | null>(null);
-  const [importMsg, setImportMsg] = useState<string | null>(null);
+/* ==== TASK 1: Money Flow Analysis — Binance widget, real aggTrades ======== */
+const FLOW_COLORS = {
+  largeBuy: 'color-mix(in srgb, var(--up) 88%, black)',
+  mediumBuy: 'var(--up)',
+  smallBuy: 'color-mix(in srgb, var(--up) 38%, white)',
+  smallSell: 'color-mix(in srgb, var(--down) 32%, white)',
+  mediumSell: 'var(--down)',
+  largeSell: 'color-mix(in srgb, var(--down) 85%, black)',
+} as const;
+type FlowKey = keyof typeof FLOW_COLORS;
+const FLOW_LABEL: Record<FlowKey, string> = {
+  largeBuy: 'Large Buy', mediumBuy: 'Medium Buy', smallBuy: 'Small Buy',
+  smallSell: 'Small Sell', mediumSell: 'Medium Sell', largeSell: 'Large Sell',
+};
 
-  const live = markets.find((m) => m.symbol === symbol);
-  const base = baseOf(symbol);
-  const watchlisted = state?.config.watchlist.includes(symbol) ?? false;
-  const hasPerp = live?.hasPerp ?? live?.perpMark !== null;
+function MoneyFlowCard({ symbol, base }: { symbol: string; base: string }) {
+  const [win, setWin] = useState<'15m' | '1h' | '4h' | '1d'>('15m');
+  const [flow, setFlow] = useState<MoneyFlow | null>(null);
+  const [sweep, setSweep] = useState(0);
+  const [hov, setHov] = useState<FlowKey | null>(null);
+  const [hovBucket, setHovBucket] = useState<'Large' | 'Medium' | 'Small' | null>(null);
+  const [mouse, setMouse] = useState<{ x: number; y: number } | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number | null>(null);
 
-  const spotK = useMemo<ChartPoint[]>(() => candles.map((c) => ({ t: c.t, v: c.c })), [candles]);
-  const volK = useMemo<ChartPoint[]>(() => candles.map((c) => ({ t: c.t, v: c.qv || c.v * c.c })), [candles]);
-
-  // OHLCV candles (spot) + futures closes for basis. Spot uses real Binance
-  // 1s candles when selected; futures 1s is not requested because USD-M REST
-  // intervals are not consistently available at that granularity.
   useEffect(() => {
-    const { interval, limit } = WINDOWS[win];
     let alive = true;
+    setFlow(null);
     const load = () => {
-      void fetch(`/api/candles?symbol=${symbol}&interval=${interval}&limit=${limit}`)
+      void fetch(`/api/token/moneyflow?symbol=${symbol}&window=${win}`)
         .then((r) => (r.ok ? r.json() : null))
-        .then((d) => alive && Array.isArray(d) && setCandles(d as TvCandle[]))
+        .then((d) => alive && d && setFlow(d as MoneyFlow))
         .catch(() => undefined);
-      if (interval === '1s') {
-        setFutK([]);
-      } else {
-        void fetch(`/api/klines?symbol=${symbol}&interval=${interval}&limit=${limit}&market=futures`)
-          .then((r) => (r.ok ? r.json() : null))
-          .then((d) => alive && d && setFutK(d as ChartPoint[]))
-          .catch(() => setFutK([]));
-      }
     };
     load();
     const t = setInterval(load, 60_000);
-    return () => {
-      alive = false;
-      clearInterval(t);
-    };
+    return () => { alive = false; clearInterval(t); };
   }, [symbol, win]);
 
+  // The Binance sweep: rAF-driven (CSS keyframes freeze at fractional zoom).
+  // Animates on load and window/symbol change only — a background 60s poll
+  // must never reset a drawn donut (rAF freezes in hidden tabs).
+  const animKey = `${symbol}:${win}`;
+  const lastAnimRef = useRef('');
   useEffect(() => {
-    const { interval, limit } = WINDOWS[win];
+    if (!flow) return;
+    if (lastAnimRef.current === animKey) {
+      setSweep(1);
+      return;
+    }
+    lastAnimRef.current = animKey;
+    setSweep(0);
+    const t0 = performance.now();
+    const DUR = 750;
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - t0) / DUR);
+      setSweep(1 - Math.pow(1 - p, 3)); // easeOutCubic
+      if (p < 1) rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [flow, animKey]);
+
+  const total = flow ? flow.totalBuy + flow.totalSell : 0;
+  const segs = flow && total > 0
+    ? ([
+        { key: 'largeBuy' as FlowKey, v: flow.large.buy },
+        { key: 'mediumBuy' as FlowKey, v: flow.medium.buy },
+        { key: 'smallBuy' as FlowKey, v: flow.small.buy },
+        { key: 'smallSell' as FlowKey, v: flow.small.sell },
+        { key: 'mediumSell' as FlowKey, v: flow.medium.sell },
+        { key: 'largeSell' as FlowKey, v: flow.large.sell },
+      ])
+    : [];
+
+  const R = 46;
+  const CIRC = 2 * Math.PI * R;
+  let acc = 0;
+  const drawn = segs.map((s) => {
+    const frac = s.v / total;
+    const seg = { ...s, frac, start: acc, color: FLOW_COLORS[s.key] };
+    acc += frac;
+    return seg;
+  });
+
+  const bucketOf = (k: FlowKey): 'Large' | 'Medium' | 'Small' =>
+    k.startsWith('large') ? 'Large' : k.startsWith('medium') ? 'Medium' : 'Small';
+  const isHot = (k: FlowKey) => hov === k || (hovBucket !== null && bucketOf(k) === hovBucket);
+  const hovSeg = drawn.find((s) => s.key === hov) ?? null;
+
+  const rows = flow
+    ? [
+        { label: 'Large' as const, buy: flow.large.buy, sell: flow.large.sell, kb: 'largeBuy' as FlowKey, ks: 'largeSell' as FlowKey },
+        { label: 'Medium' as const, buy: flow.medium.buy, sell: flow.medium.sell, kb: 'mediumBuy' as FlowKey, ks: 'mediumSell' as FlowKey },
+        { label: 'Small' as const, buy: flow.small.buy, sell: flow.small.sell, kb: 'smallBuy' as FlowKey, ks: 'smallSell' as FlowKey },
+      ]
+    : [];
+
+  return (
+    <section className="tdx-cell tdx-third">
+      <div className="tdx-cardhead">
+        <h3 title="Taker-side spot volume by order size. Large ≥ $100K · Medium $10K–$100K · Small < $10K per aggregate trade. Source: Binance aggTrades.">
+          Money Flow Analysis <em className="tdx-src">Binance Spot</em>
+        </h3>
+        <PillSelect
+          value={win}
+          options={[{ id: '15m' as const, label: '15m' }, { id: '1h' as const, label: '1H' }, { id: '4h' as const, label: '4H' }, { id: '1d' as const, label: '1D' }]}
+          onChange={setWin}
+          ariaLabel="Money flow window"
+        />
+      </div>
+      {!flow ? (
+        <div className="tdx-chart-empty small">Reading Trades…</div>
+      ) : total <= 0 ? (
+        <p className="tdx-dimnote">No trades in the window.</p>
+      ) : (
+        <>
+          <div
+            ref={wrapRef}
+            className="tdx-flow-donutwrap"
+            onMouseMove={(e) => {
+              const r = wrapRef.current?.getBoundingClientRect();
+              if (r) setMouse({ x: e.clientX - r.left, y: e.clientY - r.top });
+            }}
+            onMouseLeave={() => { setHov(null); setMouse(null); }}
+          >
+            <svg viewBox="0 0 300 158" className="tdx-flow-donut" aria-hidden>
+              <g transform="translate(150,79)">
+                {drawn.map((s) => {
+                  const visFrac = Math.max(0, Math.min(s.frac, sweep - s.start));
+                  if (visFrac <= 0.0001) return null;
+                  return (
+                    <circle
+                      key={s.key}
+                      r={R}
+                      fill="none"
+                      stroke={s.color}
+                      strokeWidth={isHot(s.key) ? 25 : 19}
+                      opacity={hov === null && hovBucket === null ? 1 : isHot(s.key) ? 1 : 0.35}
+                      strokeDasharray={`${visFrac * CIRC} ${CIRC}`}
+                      transform={`rotate(${s.start * 360 - 90})`}
+                      style={{ cursor: 'pointer' }}
+                      onMouseEnter={() => setHov(s.key)}
+                      onMouseLeave={() => setHov(null)}
+                    />
+                  );
+                })}
+                {drawn.filter((s) => s.frac > 0.0005).map((s) => {
+                  const mid = (s.start + s.frac / 2) * 2 * Math.PI - Math.PI / 2;
+                  const x1 = Math.cos(mid) * (R + 13);
+                  const y1 = Math.sin(mid) * (R + 13);
+                  const x2 = Math.cos(mid) * (R + 22);
+                  const y2 = Math.sin(mid) * (R + 22);
+                  const right = Math.cos(mid) >= 0;
+                  return (
+                    <g key={`lbl-${s.key}`} opacity={sweep > s.start + s.frac / 2 ? 1 : 0}>
+                      <path d={`M${x1},${y1} L${x2},${y2} L${x2 + (right ? 8 : -8)},${y2}`} fill="none" stroke={s.color} strokeWidth="1.1" />
+                      <text x={x2 + (right ? 11 : -11)} y={y2 + 3.5} textAnchor={right ? 'start' : 'end'} className="tdx-flow-pct">
+                        {(s.frac * 100).toFixed(2)} %
+                      </text>
+                    </g>
+                  );
+                })}
+              </g>
+            </svg>
+            {hovSeg && mouse && (
+              <ChartTip
+                x={mouse.x}
+                w={wrapRef.current?.clientWidth ?? 300}
+                title={FLOW_LABEL[hovSeg.key]}
+                rows={[{ dot: hovSeg.color, label: base, value: `${fmtFull(hovSeg.v, hovSeg.v < 100 ? 4 : 2)} (${(hovSeg.frac * 100).toFixed(2)}%)` }]}
+              />
+            )}
+          </div>
+          <div className="tdx-flow-table">
+            <div className="tdx-flow-row head">
+              <span>Orders</span>
+              <span>Buy ({base})</span>
+              <span>Sell ({base})</span>
+              <span>Inflow</span>
+            </div>
+            {rows.map((r) => (
+              <div
+                key={r.label}
+                className={`tdx-flow-row${hovBucket === r.label ? ' hot' : ''}`}
+                onMouseEnter={() => setHovBucket(r.label)}
+                onMouseLeave={() => setHovBucket(null)}
+              >
+                <span>{r.label}</span>
+                <span><i style={{ background: FLOW_COLORS[r.kb] }} />{fmtCompact(r.buy)}</span>
+                <span><i style={{ background: FLOW_COLORS[r.ks] }} />{fmtCompact(r.sell)}</span>
+                <span>{fmtCompact(r.buy - r.sell)}</span>
+              </div>
+            ))}
+            <div className="tdx-flow-row total">
+              <span>Total</span>
+              <span>{fmtCompact(flow.totalBuy)}</span>
+              <span>{fmtCompact(flow.totalSell)}</span>
+              <span>{fmtCompact(flow.inflow)}</span>
+            </div>
+          </div>
+          {flow.sampled && (
+            <p className="tdx-updated">Most recent {Math.round((flow.coveredMs / flow.windowMs) * 100)}% of the window · {flow.trades.toLocaleString('en-US')} trades</p>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+/* ==== TASK 2: Open Interest — Binance futures token data ================== */
+function OiCard({ symbol, base, hasPerp }: { symbol: string; base: string; hasPerp: boolean }) {
+  const [period, setPeriod] = useState<'5m' | '1h' | '4h' | '1d'>('1d');
+  const [rows, setRows] = useState<OiPoint[]>([]);
+  const [hov, setHov] = useState<number | null>(null);
+  const [mouse, setMouse] = useState<{ x: number } | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!hasPerp) return;
     let alive = true;
-    setChartStream('connecting');
-    const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${interval}`);
-    ws.onopen = () => alive && setChartStream('live');
+    setRows([]);
+    setHov(null);
+    const load = () => {
+      void fetch(`/api/futures/oi-hist?symbol=${symbol}&period=${period}&limit=${period === '1d' ? 30 : 48}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => alive && Array.isArray(d) && setRows(d as OiPoint[]))
+        .catch(() => undefined);
+    };
+    load();
+    const t = setInterval(load, 60_000);
+    return () => { alive = false; clearInterval(t); };
+  }, [symbol, period, hasPerp]);
+
+  const W = 560;
+  const H = 380;
+  const PAD_L = 58;
+  const PAD_R = 74;
+  const PAD_B = 30;
+  const PAD_T = 12;
+  const model = useMemo(() => {
+    if (rows.length < 3) return null;
+    const cs = rows.map((r) => r.contracts);
+    const ns = rows.map((r) => r.notional);
+    const cMin = Math.min(...cs) * 0.995;
+    const cMax = Math.max(...cs) * 1.005;
+    const nMin = Math.min(...ns) * 0.995;
+    const nMax = Math.max(...ns) * 1.005;
+    const x = (i: number) => PAD_L + ((i + 0.5) / rows.length) * (W - PAD_L - PAD_R);
+    const cy = (v: number) => PAD_T + ((cMax - v) / (cMax - cMin)) * (H - PAD_T - PAD_B);
+    const ny = (v: number) => PAD_T + ((nMax - v) / (nMax - nMin)) * (H - PAD_T - PAD_B);
+    const bw = Math.max(2, ((W - PAD_L - PAD_R) / rows.length) * 0.45);
+    const line = rows.map((r, i) => `${i ? 'L' : 'M'}${x(i)},${ny(r.notional)}`).join(' ');
+    const cTicks = Array.from({ length: 3 }, (_, i) => cMin + ((i + 0.5) / 3) * (cMax - cMin));
+    const nTicks = Array.from({ length: 3 }, (_, i) => nMin + ((i + 0.5) / 3) * (nMax - nMin));
+    const times = [0, Math.floor(rows.length / 2), rows.length - 1];
+    return { x, cy, ny, bw, line, cTicks, nTicks, times };
+  }, [rows]);
+
+  const idxFromMouse = (clientX: number): number | null => {
+    const r = wrapRef.current?.getBoundingClientRect();
+    if (!r || !rows.length) return null;
+    const xv = ((clientX - r.left) / r.width) * W;
+    const i = Math.round(((xv - PAD_L) / (W - PAD_L - PAD_R)) * rows.length - 0.5);
+    return i >= 0 && i < rows.length ? i : null;
+  };
+
+  return (
+    <section className="tdx-cell tdx-third">
+      <div className="tdx-cardhead">
+        <h3 title="Binance USD-M open interest history: bars = open interest in base units (left axis), line = notional value in USDT (right axis).">
+          Open Interest <em className="tdx-src">Binance USD-M</em>
+        </h3>
+        {hasPerp && (
+          <PillSelect
+            value={period}
+            options={[{ id: '5m' as const, label: '5m' }, { id: '1h' as const, label: '1H' }, { id: '4h' as const, label: '4H' }, { id: '1d' as const, label: '1D' }]}
+            onChange={setPeriod}
+            ariaLabel="Open interest period"
+          />
+        )}
+      </div>
+      {!hasPerp ? (
+        <p className="tdx-dimnote">Spot Only — {base} has no Binance USD-M perpetual.</p>
+      ) : !model ? (
+        <div className="tdx-chart-empty small">Reading Open Interest…</div>
+      ) : (
+        <>
+          <div
+            ref={wrapRef}
+            className="tdx-chartwrap"
+            onMouseMove={(e) => {
+              const i = idxFromMouse(e.clientX);
+              setHov(i);
+              const r = wrapRef.current?.getBoundingClientRect();
+              if (r) setMouse({ x: e.clientX - r.left });
+            }}
+            onMouseLeave={() => { setHov(null); setMouse(null); }}
+          >
+            <svg viewBox={`0 0 ${W} ${H}`} className="tdx-datachart" aria-hidden>
+              {model.cTicks.map((v, i) => (
+                <text key={`c${i}`} x={PAD_L - 8} y={model.cy(v) + 4} textAnchor="end" className="tdx-axis">{fmtCompact(v)}</text>
+              ))}
+              {model.nTicks.map((v, i) => (
+                <g key={`n${i}`}>
+                  <line x1={PAD_L} x2={W - PAD_R} y1={model.ny(v)} y2={model.ny(v)} stroke="var(--line)" strokeWidth="1" />
+                  <text x={W - PAD_R + 8} y={model.ny(v) + 4} className="tdx-axis">{fmtCompact(v)}</text>
+                </g>
+              ))}
+              {hov !== null && (
+                <line x1={model.x(hov)} x2={model.x(hov)} y1={PAD_T} y2={H - PAD_B} stroke="var(--muted)" strokeWidth="1" strokeDasharray="3 3" />
+              )}
+              {rows.map((r, i) => (
+                <rect key={r.t} x={model.x(i) - model.bw / 2} y={model.cy(r.contracts)} width={model.bw} height={Math.max(1, H - PAD_B - model.cy(r.contracts))} fill="#F0B90B" opacity={hov === null ? 0.85 : hov === i ? 1 : 0.35} />
+              ))}
+              <path d={model.line} fill="none" stroke="var(--text)" strokeWidth="1.6" strokeLinejoin="round" />
+              {rows.map((r, i) => (
+                <circle key={`d${r.t}`} cx={model.x(i)} cy={model.ny(r.notional)} r={hov === i ? 4 : 2.6} fill="var(--panel)" stroke="var(--text)" strokeWidth={hov === i ? 1.8 : 1.3} />
+              ))}
+              {model.times.map((i) => (
+                <text key={`t${i}`} x={model.x(i)} y={H - 8} textAnchor="middle" className="tdx-axis">
+                  {new Date(rows[i].t).toLocaleDateString('en-US', period === '1d' ? { month: 'numeric', day: 'numeric' } : { hour: 'numeric', minute: '2-digit' })}
+                </text>
+              ))}
+            </svg>
+            {hov !== null && mouse && (
+              <ChartTip
+                x={mouse.x}
+                w={wrapRef.current?.clientWidth ?? W}
+                title={tipTime(rows[hov].t)}
+                rows={[
+                  { dot: '#F0B90B', label: `Open Interest (${base})`, value: fmtFull(rows[hov].contracts, 3) },
+                  { dot: 'var(--text)', label: 'Notional Value of OI (USDT)', value: fmtFull(rows[hov].notional, 2) },
+                ]}
+              />
+            )}
+          </div>
+          <div className="tdx-legend">
+            <span><i className="sw" style={{ background: '#F0B90B' }} />Open Interest ({base})</span>
+            <span><i className="dot" />Notional Value Of OI (USDT)</span>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+/* ==== TASK 3: Basis — Binance futures token data =========================== */
+function BasisCard({ symbol, base, hasPerp }: { symbol: string; base: string; hasPerp: boolean }) {
+  const [period, setPeriod] = useState<'5m' | '1h' | '4h' | '1d'>('1h');
+  const [rows, setRows] = useState<BasisPoint[]>([]);
+  const [hov, setHov] = useState<number | null>(null);
+  const [mouse, setMouse] = useState<{ x: number } | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!hasPerp) return;
+    let alive = true;
+    setRows([]);
+    setHov(null);
+    const load = () => {
+      void fetch(`/api/futures/basis-hist?symbol=${symbol}&period=${period}&limit=48`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => alive && Array.isArray(d) && setRows((d as BasisPoint[]).filter((p) => p.futuresPrice > 0)))
+        .catch(() => undefined);
+    };
+    load();
+    const t = setInterval(load, 60_000);
+    return () => { alive = false; clearInterval(t); };
+  }, [symbol, period, hasPerp]);
+
+  const W = 560;
+  const H = 380;
+  const PAD_L = 74;
+  const PAD_R = 58;
+  const PAD_B = 30;
+  const PAD_T = 12;
+  const model = useMemo(() => {
+    if (rows.length < 3) return null;
+    const prices = rows.flatMap((r) => [r.futuresPrice, r.indexPrice]);
+    let pMin = Math.min(...prices);
+    let pMax = Math.max(...prices);
+    const pad = Math.max((pMax - pMin) * 0.08, pMax * 1e-6);
+    pMin -= pad; pMax += pad;
+    const bs = rows.map((r) => r.basis);
+    let bMin = Math.min(...bs, 0);
+    let bMax = Math.max(...bs, 0);
+    const bPad = Math.max((bMax - bMin) * 0.15, 1e-9);
+    bMin -= bPad; bMax += bPad;
+    const x = (i: number) => PAD_L + (i / (rows.length - 1)) * (W - PAD_L - PAD_R);
+    const py = (v: number) => PAD_T + ((pMax - v) / (pMax - pMin)) * (H - PAD_T - PAD_B);
+    const by = (v: number) => PAD_T + ((bMax - v) / (bMax - bMin)) * (H - PAD_T - PAD_B);
+    const futLine = rows.map((r, i) => `${i ? 'L' : 'M'}${x(i)},${py(r.futuresPrice)}`).join(' ');
+    const idxLine = rows.map((r, i) => `${i ? 'L' : 'M'}${x(i)},${py(r.indexPrice)}`).join(' ');
+    const basisArea =
+      rows.map((r, i) => `${i ? 'L' : 'M'}${x(i)},${by(r.basis)}`).join(' ') +
+      ` L${x(rows.length - 1)},${by(0)} L${x(0)},${by(0)} Z`;
+    const pTicks = Array.from({ length: 3 }, (_, i) => pMin + ((i + 0.5) / 3) * (pMax - pMin));
+    const bTicks = Array.from({ length: 3 }, (_, i) => bMin + ((i + 0.5) / 3) * (bMax - bMin));
+    const times = [0, Math.floor(rows.length / 2), rows.length - 1];
+    return { x, py, by, futLine, idxLine, basisArea, pTicks, bTicks, times };
+  }, [rows]);
+
+  const idxFromMouse = (clientX: number): number | null => {
+    const r = wrapRef.current?.getBoundingClientRect();
+    if (!r || rows.length < 2) return null;
+    const xv = ((clientX - r.left) / r.width) * W;
+    const i = Math.round(((xv - PAD_L) / (W - PAD_L - PAD_R)) * (rows.length - 1));
+    return i >= 0 && i < rows.length ? i : null;
+  };
+
+  return (
+    <section className="tdx-cell tdx-third">
+      <div className="tdx-cardhead">
+        <h3 title="Binance USD-M basis history: perpetual futures price vs the index price; the shaded band is the basis (futures − index) on the right axis.">
+          Basis <em className="tdx-src">Binance USD-M</em>
+        </h3>
+        {hasPerp && (
+          <PillSelect
+            value={period}
+            options={[{ id: '5m' as const, label: '5m' }, { id: '1h' as const, label: '1H' }, { id: '4h' as const, label: '4H' }, { id: '1d' as const, label: '1D' }]}
+            onChange={setPeriod}
+            ariaLabel="Basis period"
+          />
+        )}
+      </div>
+      {!hasPerp ? (
+        <p className="tdx-dimnote">Spot Only — {base} has no Binance USD-M perpetual.</p>
+      ) : !model ? (
+        <div className="tdx-chart-empty small">Reading Basis…</div>
+      ) : (
+        <>
+          <div
+            ref={wrapRef}
+            className="tdx-chartwrap"
+            onMouseMove={(e) => {
+              const i = idxFromMouse(e.clientX);
+              setHov(i);
+              const r = wrapRef.current?.getBoundingClientRect();
+              if (r) setMouse({ x: e.clientX - r.left });
+            }}
+            onMouseLeave={() => { setHov(null); setMouse(null); }}
+          >
+            <svg viewBox={`0 0 ${W} ${H}`} className="tdx-datachart" aria-hidden>
+              {model.pTicks.map((v, i) => (
+                <g key={`p${i}`}>
+                  <line x1={PAD_L} x2={W - PAD_R} y1={model.py(v)} y2={model.py(v)} stroke="var(--line)" strokeWidth="1" />
+                  <text x={PAD_L - 8} y={model.py(v) + 4} textAnchor="end" className="tdx-axis">{fmtPrice(v)}</text>
+                </g>
+              ))}
+              {model.bTicks.map((v, i) => (
+                <text key={`b${i}`} x={W - PAD_R + 8} y={model.by(v) + 4} className="tdx-axis">{v.toFixed(2)}</text>
+              ))}
+              <path d={model.basisArea} fill="#F0B90B" opacity="0.14" />
+              {hov !== null && (
+                <line x1={model.x(hov)} x2={model.x(hov)} y1={PAD_T} y2={H - PAD_B} stroke="var(--muted)" strokeWidth="1" strokeDasharray="3 3" />
+              )}
+              <path d={model.futLine} fill="none" stroke="#F0B90B" strokeWidth="1.6" strokeLinejoin="round" />
+              <path d={model.idxLine} fill="none" stroke="var(--text)" strokeWidth="1.6" strokeLinejoin="round" />
+              {rows.map((r, i) => (
+                <circle key={`f${r.t}`} cx={model.x(i)} cy={model.py(r.futuresPrice)} r={hov === i ? 3.6 : 2.2} fill="var(--panel)" stroke="#F0B90B" strokeWidth={hov === i ? 1.8 : 1.2} />
+              ))}
+              {rows.map((r, i) => (
+                <circle key={`x${r.t}`} cx={model.x(i)} cy={model.py(r.indexPrice)} r={hov === i ? 3.6 : 2.2} fill="var(--panel)" stroke="var(--text)" strokeWidth={hov === i ? 1.8 : 1.2} />
+              ))}
+              {model.times.map((i) => (
+                <text key={`t${i}`} x={model.x(i)} y={H - 8} textAnchor="middle" className="tdx-axis">
+                  {new Date(rows[i].t).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                </text>
+              ))}
+            </svg>
+            {hov !== null && mouse && (
+              <ChartTip
+                x={mouse.x}
+                w={wrapRef.current?.clientWidth ?? W}
+                title={tipTime(rows[hov].t)}
+                rows={[
+                  { dot: '#F0B90B', label: 'Futures Price', value: fmtFull(rows[hov].futuresPrice, 2) },
+                  { dot: 'var(--text)', label: 'Price Index', value: fmtFull(rows[hov].indexPrice, 2) },
+                  { dot: 'rgba(240,185,11,0.4)', label: 'Basis', value: fmtFull(rows[hov].basis, 2) },
+                ]}
+              />
+            )}
+          </div>
+          <div className="tdx-legend">
+            <span><i className="dot" style={{ borderColor: '#F0B90B' }} />Futures Price</span>
+            <span><i className="dot" />Price Index</span>
+            <span><i className="sw" style={{ background: '#F0B90B', opacity: 0.3 }} />Basis</span>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+/* ==== The Coinglass panel — funding / open interest / volume / liquidations
+   (owner reference: coinglass.com/currencies/BTC). One dual-axis chart, the
+   token price overlaid, extended ranges, interval switching, Binance-format
+   hover tooltips. Liquidations are OUR recording of the live !forceOrder
+   stream — Binance publishes no history, so the panel says since when. ==== */
+type CgxTab = 'funding' | 'oi' | 'volume' | 'liq';
+
+interface CgxPoint { t: number; a: number; b?: number }
+
+function CgxPanel({ symbol, base, name, hasPerp }: { symbol: string; base: string; name: string; hasPerp: boolean }) {
+  const [tab, setTab] = useState<CgxTab>('volume');
+  const [opt, setOpt] = useState<string>('1d');
+  const [points, setPoints] = useState<CgxPoint[]>([]);
+  const [price, setPrice] = useState<{ t: number; v: number }[]>([]);
+  const [liqSince, setLiqSince] = useState<number | null>(null);
+  const [hov, setHov] = useState<number | null>(null);
+  const [mouse, setMouse] = useState<{ x: number } | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  const OPTS: Record<CgxTab, { id: string; label: string }[]> = {
+    funding: [{ id: '30d', label: '30D' }, { id: '90d', label: '90D' }, { id: 'all', label: 'All' }],
+    oi: [{ id: '5m', label: '5m' }, { id: '15m', label: '15m' }, { id: '30m', label: '30m' }, { id: '1h', label: '1H' }, { id: '4h', label: '4H' }, { id: '12h', label: '12H' }, { id: '1d', label: '1D' }],
+    volume: [{ id: '1m', label: '1m' }, { id: '5m', label: '5m' }, { id: '15m', label: '15m' }, { id: '30m', label: '30m' }, { id: '1h', label: '1H' }, { id: '4h', label: '4H' }, { id: '12h', label: '12H' }, { id: '1d', label: '1D' }, { id: '1w', label: 'All' }],
+    liq: [{ id: '5m', label: '5m' }, { id: '15m', label: '15m' }, { id: '1h', label: '1H' }, { id: '4h', label: '4H' }, { id: '12h', label: '12H' }, { id: '1d', label: '1D' }],
+  };
+  const DEFAULT_OPT: Record<CgxTab, string> = { funding: 'all', oi: '1h', volume: '1d', liq: '1h' };
+
+  const switchTab = (next: CgxTab) => {
+    setTab(next);
+    setOpt(DEFAULT_OPT[next]);
+    setHov(null);
+  };
+
+  useEffect(() => {
+    let alive = true;
+    setPoints([]);
+    setPrice([]);
+    const priceFor = (interval: string, limit: number) =>
+      fetch(`/api/candles?symbol=${symbol}&interval=${interval}&limit=${limit}`)
+        .then((r) => (r.ok ? r.json() : []))
+        .then((d: TvCandle[]) => (Array.isArray(d) ? d.map((c) => ({ t: c.t, v: c.c })) : []));
+
+    const load = async () => {
+      try {
+        if (tab === 'volume') {
+          const candles = (await fetch(`/api/candles?symbol=${symbol}&interval=${opt}&limit=1000`).then((r) => (r.ok ? r.json() : []))) as TvCandle[];
+          if (!alive || !Array.isArray(candles)) return;
+          setPoints(candles.map((c) => ({ t: c.t, a: c.qv || c.v * c.c })));
+          setPrice(candles.map((c) => ({ t: c.t, v: c.c })));
+        } else if (tab === 'oi' && hasPerp) {
+          const rows = (await fetch(`/api/futures/oi-hist?symbol=${symbol}&period=${opt}&limit=500`).then((r) => (r.ok ? r.json() : []))) as OiPoint[];
+          if (!alive || !Array.isArray(rows)) return;
+          setPoints(rows.map((r) => ({ t: r.t, a: r.notional })));
+          setPrice(await priceFor(opt === '12h' ? '12h' : opt, 500));
+        } else if (tab === 'funding' && hasPerp) {
+          const rows = (await fetch(`/api/futures/funding-hist?symbol=${symbol}&limit=1000`).then((r) => (r.ok ? r.json() : []))) as { t: number; ratePct: number }[];
+          if (!alive || !Array.isArray(rows)) return;
+          const cut = opt === '30d' ? Date.now() - 30 * 864e5 : opt === '90d' ? Date.now() - 90 * 864e5 : 0;
+          setPoints(rows.filter((r) => r.t >= cut).map((r) => ({ t: r.t, a: r.ratePct })));
+          setPrice(await priceFor('8h', 1000));
+        } else if (tab === 'liq' && hasPerp) {
+          const ms: Record<string, number> = { '5m': 3e5, '15m': 9e5, '1h': 36e5, '4h': 144e5, '12h': 432e5, '1d': 864e5 };
+          const d = (await fetch(`/api/futures/liquidations?symbol=${symbol}&bucketMs=${ms[opt] ?? 36e5}`).then((r) => (r.ok ? r.json() : null))) as { since: number; points: { t: number; long: number; short: number }[] } | null;
+          if (!alive || !d) return;
+          setLiqSince(d.since);
+          setPoints(d.points.map((p) => ({ t: p.t, a: p.long, b: p.short })));
+          setPrice(await priceFor(opt === '5m' ? '5m' : opt === '15m' ? '15m' : '1h', 1000));
+        }
+      } catch { /* honest empty */ }
+    };
+    void load();
+    const timer = setInterval(() => void load(), 60_000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [symbol, tab, opt, hasPerp]);
+
+  const W = 1160;
+  const H = 380;
+  const PAD_L = 80;
+  const PAD_R = 80;
+  const PAD_B = 30;
+  const PAD_T = 14;
+
+  const model = useMemo(() => {
+    if (points.length < 3) return null;
+    const t0 = points[0].t;
+    const t1 = points[points.length - 1].t;
+    const x = (t: number) => PAD_L + ((t - t0) / Math.max(1, t1 - t0)) * (W - PAD_L - PAD_R);
+    const xi = (i: number) => x(points[i].t);
+    let aMin: number;
+    let aMax: number;
+    if (tab === 'funding') {
+      const vs = points.map((p) => p.a);
+      const m = Math.max(Math.abs(Math.min(...vs, 0)), Math.abs(Math.max(...vs, 0)), 1e-9);
+      aMin = -m * 1.1; aMax = m * 1.1;
+    } else if (tab === 'liq') {
+      const m = Math.max(...points.map((p) => Math.max(p.a, p.b ?? 0)), 1e-9);
+      aMin = -m * 1.1; aMax = m * 1.1;
+    } else {
+      aMin = 0;
+      aMax = Math.max(...points.map((p) => p.a), 1e-9) * 1.06;
+    }
+    const ay = (v: number) => PAD_T + ((aMax - v) / (aMax - aMin)) * (H - PAD_T - PAD_B);
+    const inRange = price.filter((p) => p.t >= t0 - 864e5 && p.t <= t1 + 864e5);
+    let pMin = Infinity;
+    let pMax = -Infinity;
+    for (const p of inRange) { if (p.v < pMin) pMin = p.v; if (p.v > pMax) pMax = p.v; }
+    if (!Number.isFinite(pMin)) { pMin = 0; pMax = 1; }
+    const span = Math.max(pMax - pMin, pMax * 1e-9, 1e-12);
+    pMin -= span * 0.08; pMax += span * 0.08;
+    const py = (v: number) => PAD_T + ((pMax - v) / (pMax - pMin)) * (H - PAD_T - PAD_B);
+    const priceLine = inRange.filter((p) => p.t >= t0 && p.t <= t1).map((p, i) => `${i ? 'L' : 'M'}${x(p.t)},${py(p.v)}`).join(' ');
+    const bw = Math.max(1.2, ((W - PAD_L - PAD_R) / points.length) * (tab === 'oi' ? 1 : 0.55));
+    const areaPath = tab === 'oi'
+      ? points.map((p, i) => `${i ? 'L' : 'M'}${xi(i)},${ay(p.a)}`).join(' ') + ` L${xi(points.length - 1)},${H - PAD_B} L${xi(0)},${H - PAD_B} Z`
+      : '';
+    const aTicks = Array.from({ length: 4 }, (_, i) => aMin + ((i + 0.5) / 4) * (aMax - aMin));
+    const pTicks = Array.from({ length: 4 }, (_, i) => pMin + ((i + 0.5) / 4) * (pMax - pMin));
+    const times = [0, Math.floor(points.length / 3), Math.floor((2 * points.length) / 3), points.length - 1];
+    const priceAt = (t: number): number | null => {
+      if (!inRange.length) return null;
+      let best = inRange[0];
+      for (const p of inRange) if (Math.abs(p.t - t) < Math.abs(best.t - t)) best = p;
+      return best.v;
+    };
+    return { x, xi, ay, py, priceLine, bw, areaPath, aTicks, pTicks, times, priceAt, zeroY: ay(0) };
+  }, [points, price, tab]);
+
+  const idxFromMouse = (clientX: number): number | null => {
+    const r = wrapRef.current?.getBoundingClientRect();
+    if (!r || points.length < 2) return null;
+    const xv = ((clientX - r.left) / r.width) * W;
+    let best = 0;
+    let bd = Infinity;
+    for (let i = 0; i < points.length; i++) {
+      const d = Math.abs((model?.xi(i) ?? 0) - xv);
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+  };
+
+  const fmtA = (v: number): string =>
+    tab === 'funding' ? `${v.toFixed(4)}%` : '$' + fmtCompact(v);
+
+  const TAB_TITLE: Record<CgxTab, string> = {
+    funding: 'Funding Rate',
+    oi: 'Open Interest (USD)',
+    volume: 'Volume',
+    liq: 'Perpetual Liquidations',
+  };
+  const needsPerp = tab !== 'volume';
+  const p = hov !== null ? points[hov] : null;
+
+  return (
+    <section className="tdx-cell tdx-cgx">
+      <div className="tdx-cardhead">
+        <div className="cgx-tabs" role="tablist" aria-label="Derivatives data">
+          <button type="button" role="tab" aria-selected={tab === 'funding'} className={tab === 'funding' ? 'on' : ''} onClick={() => switchTab('funding')}>Funding Rate</button>
+          <button type="button" role="tab" aria-selected={tab === 'oi'} className={tab === 'oi' ? 'on' : ''} onClick={() => switchTab('oi')}>Open Interest</button>
+          <button type="button" role="tab" aria-selected={tab === 'volume'} className={tab === 'volume' ? 'on' : ''} onClick={() => switchTab('volume')}>Volume</button>
+        <button type="button" role="tab" aria-selected={tab === 'liq'} className={tab === 'liq' ? 'on' : ''} onClick={() => switchTab('liq')}>Liquidation</button>
+        </div>
+        <PillSelect value={opt} options={OPTS[tab]} onChange={setOpt} ariaLabel="Data interval" />
+      </div>
+      <h3 className="cgx-title">{name} {TAB_TITLE[tab]} <em className="tdx-src">{tab === 'volume' ? 'Binance Spot' : 'Binance USD-M'}{tab === 'oi' ? ' · 30d Max Upstream' : ''}</em></h3>
+      {needsPerp && !hasPerp ? (
+        <p className="tdx-dimnote">Spot Only — {base} has no Binance USD-M perpetual.</p>
+      ) : !model ? (
+        tab === 'liq' ? (
+          <p className="tdx-dimnote">Recording live liquidations{liqSince ? ` since ${new Date(liqSince).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''} — Binance publishes no history. Buckets appear as events arrive.</p>
+        ) : (
+          <div className="tdx-chart-empty small">Reading…</div>
+        )
+      ) : (
+        <>
+          <div
+            ref={wrapRef}
+            className="tdx-chartwrap"
+            onMouseMove={(e) => {
+              setHov(idxFromMouse(e.clientX));
+              const r = wrapRef.current?.getBoundingClientRect();
+              if (r) setMouse({ x: e.clientX - r.left });
+            }}
+            onMouseLeave={() => { setHov(null); setMouse(null); }}
+          >
+            <svg viewBox={`0 0 ${W} ${H}`} className="tdx-datachart" aria-hidden>
+              {model.aTicks.map((v, i) => (
+                <g key={`a${i}`}>
+                  <line x1={PAD_L} x2={W - PAD_R} y1={model.ay(v)} y2={model.ay(v)} stroke="var(--line)" strokeWidth="1" />
+                  <text x={PAD_L - 8} y={model.ay(v) + 4} textAnchor="end" className="tdx-axis">{fmtA(v)}</text>
+                </g>
+              ))}
+              {model.pTicks.map((v, i) => (
+                <text key={`p${i}`} x={W - PAD_R + 8} y={model.py(v) + 4} className="tdx-axis">{fmtPrice(v)}</text>
+              ))}
+              {hov !== null && (
+                <line x1={model.xi(hov)} x2={model.xi(hov)} y1={PAD_T} y2={H - PAD_B} stroke="var(--muted)" strokeWidth="1" strokeDasharray="3 3" />
+              )}
+              {tab === 'oi' && <path d={model.areaPath} fill="var(--up)" opacity="0.16" />}
+              {tab === 'oi' && <path d={points.map((pt, i) => `${i ? 'L' : 'M'}${model.xi(i)},${model.ay(pt.a)}`).join(' ')} fill="none" stroke="var(--up)" strokeWidth="1.6" />}
+              {tab === 'volume' && points.map((pt, i) => (
+                <rect key={pt.t} x={model.xi(i) - model.bw / 2} y={model.ay(pt.a)} width={model.bw} height={Math.max(1, H - PAD_B - model.ay(pt.a))} fill="var(--up)" opacity={hov === null ? 0.6 : hov === i ? 1 : 0.25} />
+              ))}
+              {tab === 'funding' && points.map((pt, i) => (
+                <rect key={pt.t} x={model.xi(i) - model.bw / 2} y={pt.a >= 0 ? model.ay(pt.a) : model.zeroY} width={model.bw} height={Math.max(1, Math.abs(model.ay(pt.a) - model.zeroY))} fill={pt.a >= 0 ? 'var(--up)' : 'var(--down)'} opacity={hov === null ? 0.75 : hov === i ? 1 : 0.3} />
+              ))}
+              {tab === 'liq' && points.map((pt, i) => (
+                <g key={pt.t}>
+                  <rect x={model.xi(i) - model.bw / 2} y={model.ay(pt.a)} width={model.bw} height={Math.max(0.5, model.zeroY - model.ay(pt.a))} fill="var(--up)" opacity={hov === null ? 0.8 : hov === i ? 1 : 0.3} />
+                  <rect x={model.xi(i) - model.bw / 2} y={model.zeroY} width={model.bw} height={Math.max(0.5, model.ay(-(pt.b ?? 0)) - model.zeroY)} fill="var(--down)" opacity={hov === null ? 0.8 : hov === i ? 1 : 0.3} />
+                </g>
+              ))}
+              {(tab === 'funding' || tab === 'liq') && (
+                <line x1={PAD_L} x2={W - PAD_R} y1={model.zeroY} y2={model.zeroY} stroke="var(--line-2)" strokeWidth="1" />
+              )}
+              <path d={model.priceLine} fill="none" stroke="#F0B90B" strokeWidth="1.7" strokeLinejoin="round" />
+              {model.times.map((i) => (
+                <text key={`t${i}`} x={model.xi(i)} y={H - 8} textAnchor="middle" className="tdx-axis">
+                  {new Date(points[i].t).toLocaleDateString('en-US', points[points.length - 1].t - points[0].t > 300 * 864e5 ? { month: 'short', year: '2-digit' } : { month: 'short', day: 'numeric' })}
+                </text>
+              ))}
+            </svg>
+            {p && mouse && (
+              <ChartTip
+                x={mouse.x}
+                w={wrapRef.current?.clientWidth ?? W}
+                title={tipTime(p.t)}
+                rows={[
+                  ...(tab === 'liq'
+                    ? [
+                        { dot: 'var(--up)', label: 'Long Liquidations', value: '$' + fmtFull(p.a, 0) },
+                        { dot: 'var(--down)', label: 'Short Liquidations', value: '$' + fmtFull(p.b ?? 0, 0) },
+                      ]
+                    : [{ dot: tab === 'funding' ? (p.a >= 0 ? 'var(--up)' : 'var(--down)') : 'var(--up)', label: TAB_TITLE[tab], value: tab === 'funding' ? `${p.a.toFixed(4)}%` : '$' + fmtFull(p.a, 0) }]),
+                  ...(model.priceAt(p.t) !== null ? [{ dot: '#F0B90B', label: `${base} Price`, value: fmtFull(model.priceAt(p.t) as number, 2) }] : []),
+                ]}
+              />
+            )}
+          </div>
+          <div className="tdx-legend">
+            {tab === 'liq' ? (
+              <>
+                <span><i className="sw" style={{ background: 'var(--up)' }} />Long</span>
+                <span><i className="sw" style={{ background: 'var(--down)' }} />Short</span>
+              </>
+            ) : (
+              <span><i className="sw" style={{ background: 'var(--up)', opacity: tab === 'oi' ? 0.4 : 0.8 }} />{TAB_TITLE[tab]}</span>
+            )}
+            <span><i className="dot" style={{ borderColor: '#F0B90B' }} />{base} Price</span>
+            {tab === 'liq' && liqSince ? <span className="cgx-note">Recording Since {new Date(liqSince).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · No Upstream History</span> : null}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+export function TokenDetail({ symbol }: { symbol: string }) {
+  const { markets, state, toggleWatch, setPage, openDetail } = useStore();
+  const [range, setRange] = useState<RangeKey>('1D');
+  const [ivl, setIvl] = useState<'auto' | IntervalKey>('auto');
+  const [tv, setTv] = useState(false);
+  const [src, setSrc] = useState<'spot' | 'futures'>('spot');
+  const [candles, setCandles] = useState<TvCandle[]>([]);
+  const [profile, setProfile] = useState<TokenProfile | null>(null);
+  const [q, setQ] = useState('');
+
+  const live = markets.find((m) => m.symbol === symbol);
+  const base = baseOf(symbol);
+  const name = profile?.name ?? tokenName(base);
+  const watchlisted = state?.config.watchlist.includes(symbol) ?? false;
+  const hasPerp = live?.hasPerp ?? false;
+
+  // Futures klines have no 1s granularity — coerce to 1m on that source.
+  const raw = ivl === 'auto' ? RANGES[range] : { interval: ivl, limit: INTERVAL_LIMIT[ivl] };
+  const effective = src === 'futures' && raw.interval === '1s' ? { interval: '1m', limit: 60 } : raw;
+
+  // ---- price series: real klines + the live public kline stream -----------
+  useEffect(() => {
+    const { interval, limit } = effective;
+    let alive = true;
+    setCandles([]);
+    const load = () => {
+      void fetch(`/api/candles?symbol=${symbol}&interval=${interval}&limit=${limit}&market=${src}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => alive && Array.isArray(d) && setCandles(d as TvCandle[]))
+        .catch(() => undefined);
+    };
+    load();
+    const t = setInterval(load, 60_000);
+    return () => { alive = false; clearInterval(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [symbol, range, ivl, src]);
+
+  useEffect(() => {
+    const { interval, limit } = effective;
+    let alive = true;
+    const host = src === 'futures' ? 'wss://fstream.binance.com/ws' : 'wss://stream.binance.com:9443/ws';
+    const ws = new WebSocket(`${host}/${symbol.toLowerCase()}@kline_${interval}`);
     ws.onmessage = (ev) => {
       if (!alive) return;
       try {
         const msg = JSON.parse(String(ev.data)) as BinanceKlineMsg;
         const k = msg.k;
         if (!k) return;
-        const nextCandle: TvCandle = {
-          t: k.t,
-          o: Number(k.o),
-          h: Number(k.h),
-          l: Number(k.l),
-          c: Number(k.c),
-          v: Number(k.v),
-          qv: Number(k.q) || Number(k.v) * Number(k.c),
-        };
+        const next: TvCandle = { t: k.t, o: Number(k.o), h: Number(k.h), l: Number(k.l), c: Number(k.c), v: Number(k.v), qv: Number(k.q) || Number(k.v) * Number(k.c) };
         setCandles((prev) => {
-          const next = [...prev];
-          const idx = next.findIndex((c) => c.t === nextCandle.t);
-          if (idx >= 0) next[idx] = nextCandle;
-          else next.push(nextCandle);
-          next.sort((a, b) => a.t - b.t);
-          return next.length > limit ? next.slice(next.length - limit) : next;
+          const out = [...prev];
+          const idx = out.findIndex((c) => c.t === next.t);
+          if (idx >= 0) out[idx] = next;
+          else out.push(next);
+          out.sort((a, b) => a.t - b.t);
+          return out.length > limit ? out.slice(out.length - limit) : out;
         });
-      } catch {
-        // malformed stream frame; ignore and wait for the next public tick
-      }
+      } catch { /* malformed frame */ }
     };
     ws.onerror = () => ws.close();
-    ws.onclose = () => alive && setChartStream('poll');
-    return () => {
-      alive = false;
-      ws.close();
-    };
-  }, [symbol, win]);
+    return () => { alive = false; ws.close(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [symbol, range, ivl, src]);
 
+  // profile: name + whitepaper/homepage for the header (retry until warmed)
   useEffect(() => {
     let alive = true;
-    void fetch(`/api/funding/history?symbol=${symbol}`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then((d) => alive && setFunding(d as ChartPoint[]))
-      .catch(() => undefined);
-    return () => {
-      alive = false;
-    };
-  }, [symbol]);
-
-  useEffect(() => {
-    let alive = true;
-    const load = () => {
-      if (!hasPerp) {
-        setTelemetry(null);
-        return;
-      }
-      void fetch(`/api/futures/telemetry?symbol=${symbol}&period=5m&limit=40`)
+    let timer: number | null = null;
+    const loadProfile = () => {
+      void fetch(`/api/token/profile?base=${base}`)
         .then((r) => (r.ok ? r.json() : null))
-        .then((d) => alive && d && setTelemetry(d as FuturesTelemetry))
-        .catch(() => alive && setTelemetry(null));
-    };
-    load();
-    const t = setInterval(load, 60_000);
-    return () => {
-      alive = false;
-      clearInterval(t);
-    };
-  }, [symbol, hasPerp]);
-
-  useEffect(() => {
-    let alive = true;
-    const load = () => {
-      if (!hasPerp) {
-        setTelemetryBasis([]);
-        return;
-      }
-      void Promise.all([
-        fetch(`/api/klines?symbol=${symbol}&interval=5m&limit=40&market=spot`).then((r) => (r.ok ? r.json() : [])),
-        fetch(`/api/klines?symbol=${symbol}&interval=5m&limit=40&market=futures`).then((r) => (r.ok ? r.json() : [])),
-      ])
-        .then(([spot, fut]) => {
-          if (!alive || !Array.isArray(spot) || !Array.isArray(fut)) return;
-          const spotMap = new Map((spot as ChartPoint[]).map((p) => [p.t, p.v]));
-          const out: ChartPoint[] = [];
-          for (const f of fut as ChartPoint[]) {
-            const s = spotMap.get(f.t);
-            if (s && s > 0) out.push({ t: f.t, v: ((f.v - s) / s) * 100 });
-          }
-          setTelemetryBasis(out);
+        .then((d) => {
+          if (!alive) return;
+          if (d?.profile) setProfile(d.profile as TokenProfile);
+          else timer = window.setTimeout(loadProfile, 10_000);
         })
-        .catch(() => alive && setTelemetryBasis([]));
+        .catch(() => { if (alive) timer = window.setTimeout(loadProfile, 15_000); });
     };
-    load();
-    const t = setInterval(load, 60_000);
-    return () => {
-      alive = false;
-      clearInterval(t);
-    };
-  }, [symbol, hasPerp]);
+    setProfile(null);
+    loadProfile();
+    return () => { alive = false; if (timer) window.clearTimeout(timer); };
+  }, [base, symbol]);
 
-  // detail + account context, polled (depth/trades live in <OrderBook> via WS)
-  useEffect(() => {
-    let alive = true;
-    const load = () => {
-      void fetch(`/api/market/detail?symbol=${symbol}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => alive && d && setDetail(d as MarketDetail));
-      void fetch(`/api/symbol/context?symbol=${symbol}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => alive && d && setCtx(d as SymbolContext));
-    };
-    load();
-    const t = setInterval(load, 4000);
-    return () => {
-      alive = false;
-      clearInterval(t);
-    };
-  }, [symbol]);
+  const points = useMemo(() => candles.map((c) => ({ t: c.t, v: c.c })), [candles]);
+  const price = live?.spot ?? lastOf(points)?.v ?? null;
+  const first = points[0]?.v ?? null;
+  const rangeAbs = price !== null && first !== null ? price - first : null;
+  const rangePct = price !== null && first && first > 0 ? ((price - first) / first) * 100 : null;
+  const up = (rangePct ?? 0) >= 0;
 
-  const basisSeries = useMemo(() => {
-    if (spotK.length < 2 || futK.length < 2) return [];
-    const spotMap = new Map(spotK.map((p) => [p.t, p.v]));
-    const out: ChartPoint[] = [];
-    for (const f of futK) {
-      const s = spotMap.get(f.t);
-      if (s && s > 0) out.push({ t: f.t, v: ((f.v - s) / s) * 100 });
-    }
-    return out;
-  }, [spotK, futK]);
-
-  const chartData = mode === 'tradingview' || mode === 'price' || mode === 'depth' ? spotK : mode === 'basis' ? basisSeries : mode === 'volume' ? volK : funding;
-  const pctFmt = (v: number) => {
-    let s = v.toFixed(3);
-    if (parseFloat(s) === 0) s = s.replace('-', '');
-    return `${parseFloat(s) > 0 ? '+' : ''}${s}%`;
-  };
-
-  // Range-aware axis/crosshair precision: a stablecoin's day trades in a
-  // ±0.05% band — fmtPrice's default decimals would label every gridline
-  // "$1.00". Widen decimals until the plotted range actually resolves.
-  const chartPriceFmt = useMemo(() => {
-    if (spotK.length < 2) return fmtPrice;
-    let mn = Infinity;
-    let mx = -Infinity;
-    for (const p of spotK) {
-      if (p.v < mn) mn = p.v;
-      if (p.v > mx) mx = p.v;
-    }
-    const span = mx - mn;
-    if (!(span > 0)) return fmtPrice;
-    const needed = Math.ceil(-Math.log10(span / 30)); // ~30 distinguishable steps
-      const dec = Math.max(2, Math.min(8, needed));
-    return (v: number) => '$' + v.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
-  }, [spotK]);
-  const spread =
-    detail?.book && detail.book.bidPrice > 0
-      ? ((detail.book.askPrice - detail.book.bidPrice) / detail.book.bidPrice) * 100
-      : null;
-  const spreadLabel = spread !== null ? `${spread.toFixed(4)}%` : '—';
-  const chartFirst = chartData.length ? chartData[0].v : null;
-  const chartLast = chartData.length ? chartData[chartData.length - 1].v : null;
-  const chartMove =
-    chartFirst !== null && chartLast !== null
-      ? mode === 'price' || mode === 'volume'
-        ? chartFirst !== 0
-          ? ((chartLast - chartFirst) / Math.abs(chartFirst)) * 100
-          : null
-        : chartLast - chartFirst
-      : null;
-  const chartSource =
-    mode === 'depth'
-      ? 'Binance spot depth20@100ms order book'
-    : mode === 'tradingview'
-        ? `TradingView Advanced Chart · BINANCE:${symbol}`
-      : mode === 'basis'
-      ? 'Binance spot + USD-M futures klines'
-      : mode === 'funding'
-        ? 'Binance settled funding history'
-        : mode === 'volume'
-          ? 'Binance spot quote-volume candles'
-          : `TradingView canvas · Binance spot ${WINDOWS[win].interval} OHLCV`;
-  const chartLatest =
-    mode === 'tradingview'
-      ? chartLast === null
-        ? 'TradingView'
-        : chartPriceFmt(chartLast)
-      : mode === 'depth'
-      ? detail?.book
-        ? `${chartPriceFmt(detail.book.bidPrice)} / ${chartPriceFmt(detail.book.askPrice)}`
-        : '—'
-      : chartLast === null
-        ? '—'
-        : mode === 'price'
-          ? chartPriceFmt(chartLast)
-          : mode === 'volume'
-            ? fmtMoney(chartLast)
-            : pctFmt(chartLast);
-  const chartMoveLabel =
-    mode === 'tradingview'
-      ? `TV interval ${win}`
-      : mode === 'depth'
-      ? `spread ${spreadLabel}`
-      : chartMove === null
-      ? '—'
-      : mode === 'price' || mode === 'volume'
-        ? fmtPct(chartMove, 2)
-        : `${chartMove >= 0 ? '+' : ''}${chartMove.toFixed(3)} pts`;
-  const dayAnchor =
-    live?.spot !== null && live?.spot !== undefined && live?.change24hPct !== null && live?.change24hPct !== undefined && live.change24hPct !== -100
-      ? live.spot / (1 + live.change24hPct / 100)
-      : null;
-  const dayMoveUsd = live?.spot !== null && live?.spot !== undefined && dayAnchor !== null ? live.spot - dayAnchor : null;
-  const spotFirst = spotK.length ? spotK[0].v : null;
-  const spotLast = spotK.length ? spotK[spotK.length - 1].v : null;
-  const spotMove = spotFirst !== null && spotLast !== null && spotFirst !== 0 ? ((spotLast - spotFirst) / Math.abs(spotFirst)) * 100 : null;
-  const chartRange =
-    mode === 'tradingview'
-      ? 'hosted live chart'
-      : chartData.length
-        ? `${fmtTimeShort(chartData[0].t)} → ${fmtTimeShort(chartData[chartData.length - 1].t)}`
-        : 'Waiting for klines';
-  const openOrders = ctx?.openOrders ?? [];
-  const fills = ctx?.fills ?? [];
-  const signals = ctx?.signals ?? [];
-  const accountBaseValue = ctx && live?.spot !== null && live?.spot !== undefined ? ctx.balances.base * live.spot : null;
-  const usdtFree = ctx?.balances.usdtFree ?? null;
-  const importDisabledReason = !state?.binance.keysPresent ? 'Read-only Binance keys must be present on the server to import fills' : 'Import Binance fill history';
-  const topSource = hasPerp ? 'Spot + USD-M perp' : 'Spot only';
-  const chartModes = (hasPerp && win !== '1s' ? ['tradingview', 'price', 'depth', 'basis', 'funding', 'volume'] : ['tradingview', 'price', 'depth', 'volume']) as ChartMode[];
-  const windowKeys = mode === 'tradingview' ? [...TV_WINS] : BINANCE_WINS;
-
-  const chooseMode = (next: ChartMode) => {
-    if ((next === 'tradingview' || next === 'basis' || next === 'funding') && win === '1s') setWin('1m');
-    setMode(next);
-  };
-
-  const openOneSecond = () => {
-    setMode('price');
-    setWin('1s');
-  };
-
-  // If a spot-only token is opened while a perp-mode chart is selected, snap back.
-  useEffect(() => {
-    if (mode === 'tradingview' && win === '1s') setWin('1m');
-    if (((live && !hasPerp) || win === '1s') && (mode === 'basis' || mode === 'funding')) setMode('price');
-  }, [live, hasPerp, win, mode]);
-
-  const oiLast = lastOf(telemetry?.openInterest);
-  const oiFirst = telemetry?.openInterest?.[0];
-  const topAccLast = lastOf(telemetry?.topAccountRatio);
-  const topPosLast = lastOf(telemetry?.topPositionRatio);
-  const globalLast = lastOf(telemetry?.globalRatio);
-  const takerLast = lastOf(telemetry?.takerFlow);
-  const fundingLast = lastOf(funding);
-  const telemetryBasisSeries = basisSeries.length ? basisSeries : telemetryBasis;
-  const basisLast = lastOf(telemetryBasisSeries);
-  const oiMove =
-    oiLast && oiFirst && oiFirst.notional > 0
-      ? ((oiLast.notional - oiFirst.notional) / Math.abs(oiFirst.notional)) * 100
-      : null;
-  const telemetryLive = Boolean(telemetry?.available);
+  const searchMatches = useMemo(() => {
+    const needle = q.trim().toUpperCase();
+    if (!needle) return [];
+    return markets
+      .filter((m) => m.base.includes(needle) || tokenName(m.base).toUpperCase().includes(needle))
+      .slice(0, 8);
+  }, [markets, q]);
 
   return (
-    <div className="container page token-detail-shell">
-      <button className="back-link" onClick={() => setPage('markets')}>
-        ← Markets
-      </button>
-
-      <section className="card token-market-strip">
-        <div className="market-strip-main">
-          <span className="tok token-strip-id">
-            <TokenIcon symbol={symbol} size={84} />
-            <span className="tok-meta">
-              <span className="detail-name">{base}</span>
-              <span className="detail-sub">
-                <b>{symbol}</b>
-                <span>{topSource}</span>
-                {live?.status === 'signal' && <span className="chip-tag gold">SIGNAL</span>}
-                {ctx?.blocklisted && <span className="chip-tag bad">blocklisted</span>}
-              </span>
-            </span>
-          </span>
-          <div className="strip-price">
-            <Num value={live?.spot ?? null} className="headline-val">
-              {fmtPrice(live?.spot)}
-            </Num>
-            <span className={`strip-change num ${signClass(live?.change24hPct)}`}>
-              {dayMoveUsd !== null ? `${fmtSignedPrice(dayMoveUsd)} ` : ''}
-              {fmtPct(live?.change24hPct)} 24h
-            </span>
-          </div>
-        </div>
-        <div className="strip-metrics">
-          {hasPerp ? (
-            <>
-              <StripMetric label="Perp mark" value={fmtPrice(live?.perpMark)} />
-              <StripMetric label="Basis" value={fmtBasis(live?.basisPct)} tone={signClass(live?.basisPct)} />
-              <StripMetric label="Funding" value={fmtFunding(live?.fundingRate)} tone={signClass(live?.fundingRate)} sub={`next ${countdown(live?.nextFundingTime)}`} />
-            </>
-          ) : (
-            <StripMetric label="Market" value="Spot only" sub="no USD-M perp listed" />
-          )}
-          <StripMetric label="24h high" value={fmtPrice(live?.high24h)} />
-          <StripMetric label="24h low" value={fmtPrice(live?.low24h)} />
-          <StripMetric label="24h volume" value={fmtMoney(live?.quoteVolume24h)} />
-        </div>
-        <div className="detail-head-actions">
-          <Star on={watchlisted} onClick={() => void toggleWatch(symbol)} />
-          <button className="cta-pill buy" onClick={() => openTicket({ symbol, side: 'BUY', source: 'manual' })}>
-            Buy
-          </button>
-          <button className="cta-pill danger" onClick={() => openTicket({ symbol, side: 'SELL', source: 'manual' })}>
-            Sell
-          </button>
-        </div>
-      </section>
-
-      <nav className="token-section-tabs" aria-label={`${base} detail shortcuts`}>
-        <button className={mode === 'tradingview' ? 'on' : ''} type="button" onClick={() => chooseMode('tradingview')}>
-          Live TradingView
-        </button>
-        <button className={mode === 'price' && win === '1s' ? 'on' : ''} type="button" onClick={openOneSecond}>
-          Binance 1s
-        </button>
-        <button className={mode === 'depth' ? 'on' : ''} type="button" onClick={() => chooseMode('depth')}>
-          Depth
-        </button>
-        {hasPerp && (
-          <button className={mode === 'basis' ? 'on' : ''} type="button" onClick={() => chooseMode('basis')}>
-            Basis
-          </button>
-        )}
-        <button type="button" onClick={() => openTicket({ symbol, side: 'BUY', source: 'manual' })}>
-          Ticket
-        </button>
-        <button type="button" onClick={() => setPage('orders')}>
-          Orders
-        </button>
-        <button type="button" onClick={() => openLedger(symbol)}>
-          Ledger
-        </button>
-      </nav>
-
-      <div className="token-workspace">
-        <aside className="card token-asset-card">
-          <div className="asset-identity">
-            <TokenIcon symbol={symbol} size={58} />
-            <span>
-              <span className="asset-title">Execution dock</span>
-              <span className="asset-subtitle">{base}/USDT · private account context</span>
-            </span>
-          </div>
-          <p className="asset-copy">
-            One-symbol workspace for price, depth, funding, account exposure, open orders, fills, and the manual ticket.
-          </p>
-          <div className="asset-action-stack">
-            <button className="cta-pill buy" onClick={() => openTicket({ symbol, side: 'BUY', source: 'manual' })}>
-              Open buy ticket
-            </button>
-            <button className="cta-pill danger" onClick={() => openTicket({ symbol, side: 'SELL', source: 'manual' })}>
-              Open sell ticket
-            </button>
-            <button className="mini-btn" onClick={() => setPage('risk')}>
-              Risk controls →
-            </button>
-            <button className="mini-btn" onClick={() => openLedger(symbol)}>
-              Ledger trail →
-            </button>
-          </div>
-          <div className="asset-status-list">
-            <DataRow
-              label="Risk allowlist"
-              value={ctx?.allowlisted ? 'allowed' : 'not allowed'}
-              control={ctx?.allowlisted ? <span className="chip-tag ok">allowed</span> : <button className="mini-btn" onClick={() => setPage('risk')}>configure</button>}
-            />
-            <DataRow
-              label={`${base} balance`}
-              value={ctx ? fmtQty(ctx.balances.base) : '—'}
-              sub={accountBaseValue !== null ? fmtPrice(accountBaseValue) : undefined}
-            />
-            <DataRow label="USDT free" value={ctx ? (usdtFree !== null ? fmtPrice(usdtFree) : '—') : '—'} />
-            <DataRow label="Open orders" value={openOrders.length} />
-          </div>
-          <button
-            className="mini-btn wide"
-            title={importDisabledReason}
-            disabled={!state?.binance.keysPresent}
-            onClick={async () => {
-              const res = await importFills(symbol);
-              setImportMsg(res.error ? `Failed: ${res.error}` : `Imported ${res.imported} fills`);
-            }}
-          >
-            Import Binance fills
-          </button>
-          {importMsg && <div className="result-strip ok">{importMsg}</div>}
-        </aside>
-
-        <section className="card token-chart-card">
-          <div className="token-chart-title">
-            <span>
-              <h2>{base} market tape</h2>
-              <span>
-              {chartSource} · {chartRange}
-              {mode === 'price' && (
-                  <span className={`chart-stream-state ${chartStream === 'live' ? 'on' : ''}`}>
-                    <span />
-                    {chartStream === 'live' ? 'live kline' : chartStream === 'connecting' ? 'connecting' : 'REST fallback'}
-                  </span>
-                )}
-              </span>
-            </span>
-            <span className={`chart-latest num ${signClass(chartMove)}`}>
-              {chartLatest}
-              <small>{chartMoveLabel}</small>
-            </span>
-          </div>
-          <div className="chart-head token-chart-controls">
-            <div className="seg">
-              {chartModes.map((m) => (
-                <button key={m} className={mode === m ? 'on' : ''} onClick={() => chooseMode(m)}>
-                  {m === 'tradingview' ? 'TradingView' : m === 'price' ? 'Binance spot' : m === 'depth' ? 'Depth' : m === 'basis' ? 'Basis' : m === 'funding' ? 'Funding' : 'Volume'}
-                </button>
-              ))}
-            </div>
-            {mode !== 'funding' && (
-              <div className="win">
-                {windowKeys.map((w) => (
-                  <button key={w} className={win === w ? 'on' : ''} onClick={() => setWin(w)}>
-                    {w}
+    <div className="container page mkx tdx-page">
+      {/* ---- header strip: identity + whitepaper + watchlist + search ------ */}
+      <header className="tdx-head">
+        <TokenIcon symbol={symbol} size={40} />
+        <h1>{name} Price ({base})</h1>
+        <Star on={watchlisted} onClick={() => void toggleWatch(symbol)} />
+        {profile?.whitepaper ? (
+          <a className="mkx-pill tdx-headlink" href={profile.whitepaper} target="_blank" rel="noreferrer noopener">Whitepaper</a>
+        ) : null}
+        {profile?.homepage ? (
+          <a className="mkx-pill tdx-headlink" href={profile.homepage} target="_blank" rel="noreferrer noopener">Official Website <IconExternal size={12} /></a>
+        ) : null}
+        <span className="tdx-head-right">
+          <span className="tdx-searchwrap">
+            <label className="mkx-search tdx-search">
+              <IconSearch size={16} />
+              <input placeholder="Search for an asset" value={q} onChange={(e) => setQ(e.target.value)} spellCheck={false} />
+              {q && <button aria-label="Clear search" onClick={() => setQ('')}>×</button>}
+            </label>
+            {searchMatches.length > 0 && (
+              <div className="tdx-search-menu" role="listbox" aria-label="Assets">
+                {searchMatches.map((m) => (
+                  <button key={m.symbol} type="button" role="option" aria-selected={m.symbol === symbol} onClick={() => { setQ(''); openDetail(m.symbol); }}>
+                    <TokenIcon symbol={m.symbol} size={26} />
+                    <b>{m.base}</b>
+                    <em>{tokenName(m.base)}</em>
+                    <span>{m.spot !== null ? fmtPrice(m.spot) : '—'}</span>
                   </button>
                 ))}
               </div>
             )}
-            <div className="spacer" />
-            <span className="sec-note num">
-              {mode === 'tradingview'
-                ? 'official TradingView widget; use Binance spot for 1s'
-                : mode === 'depth'
-                ? 'live top-20 spot depth, centered on mid'
-                : mode === 'basis'
-                ? 'spot vs perp close, same candles'
-                : mode === 'funding'
-                  ? 'settled funding, last 120 intervals'
-                : mode === 'volume'
-                  ? 'quote volume per candle'
-                    : win === '1s'
-                      ? 'real Binance 1s spot candles'
-                      : hasPerp
-                        ? `funding ${fmtFunding(live?.fundingRate)} in ${countdown(live?.nextFundingTime)}`
-                        : 'spot market · no perp funding'}
-            </span>
-          </div>
-          {mode === 'tradingview' ? (
-            <TradingViewWidget symbol={symbol} win={win} height={520} />
-          ) : mode === 'depth' ? (
-            <DepthChart symbol={symbol} base={base} height={520} />
-          ) : (
-            <TradingViewChart
-              candles={mode === 'price' ? candles : undefined}
-              points={mode === 'price' ? undefined : chartData}
-              kind={mode === 'price' ? 'candles' : mode === 'volume' ? 'histogram' : 'line'}
-              height={520}
-              color={mode === 'price' || mode === 'volume' ? brandColor(symbol) : undefined}
-              valueFmt={mode === 'price' ? chartPriceFmt : mode === 'volume' ? fmtMoney : pctFmt}
-              resetKey={`${symbol}-${win}-${mode}`}
-            />
-          )}
-        </section>
+          </span>
+          <button type="button" className="mkx-pill" onClick={() => setPage('markets')}>All Markets</button>
+        </span>
+      </header>
 
-        <aside className="token-rail-stack">
-          <TokenRailTicket
-            symbol={symbol}
-            base={base}
-            bid={detail?.book?.bidPrice}
-            ask={detail?.book?.askPrice}
-            last={live?.spot ?? detail?.last}
-            maxOrderNotional={state?.config.maxOrderNotionalUsd}
-            openTicket={openTicket}
-          />
-          <OrderBook
-            symbol={symbol}
-            base={base}
-            footerActions={
-              <>
-                <button className="mini-btn" type="button" onClick={() => setPage('fills')}>
-                  Fills
-                </button>
-                <button className="mini-btn" type="button" onClick={() => setPage('orders')}>
-                  Orders
-                </button>
-                <button className="cta-pill buy micro-ticket-btn" type="button" onClick={() => openTicket({ symbol, side: 'BUY', source: 'manual' })}>
-                  Ticket
-                </button>
-              </>
-            }
-          />
-        </aside>
-      </div>
-
-      {hasPerp && (
-        <section className="card futures-telemetry-panel">
-          <div className="token-panel-head telemetry-head">
-            <span>
-              <h3>Futures telemetry</h3>
-              <span>
-                Binance USD-M public data · {telemetry?.period ?? '5m'} modules
-                {telemetry?.errors?.length ? ` · partial (${telemetry.errors.length})` : ''}
+      <div className="tdx-grid">
+        {/* ---- row 1: the chart, full width --------------------------------- */}
+        <section className="tdx-cell tdx-chartcell">
+          <div className="tdx-price-row">
+            <div className="tdx-price">
+              <b>{price !== null ? fmtPrice(price) : '—'}</b>
+              <span className="tdx-delta">
+                <Chg pct={rangePct}>
+                  {rangeAbs !== null ? `${fmtPrice(Math.abs(rangeAbs))} (${fmtPct(Math.abs(rangePct ?? 0), 2, false)})` : '—'}
+                </Chg>
               </span>
-            </span>
-            <span className={`chart-stream-state ${telemetryLive ? 'on' : ''}`}>
-              <span />
-              {telemetryLive ? 'public data live' : 'waiting'}
-            </span>
-          </div>
-          <div className="tele-grid">
-            <MiniTelemetryChart
-              title="Open Interest"
-              kicker={oiMove === null ? 'contracts + notional' : `${fmtPct(oiMove, 2)} window`}
-              points={(telemetry?.openInterest ?? []).map((p) => ({ t: p.t, v: p.notional }))}
-              value={fmtCompact(oiLast?.notional)}
-              tone={signClass(oiMove)}
-            />
-            <MiniTelemetryChart
-              title="Top Trader L/S"
-              kicker="accounts"
-              points={(telemetry?.topAccountRatio ?? []).map((p) => ({ t: p.t, v: p.ratio }))}
-              value={topAccLast ? `${topAccLast.ratio.toFixed(2)}x` : '—'}
-              tone={topAccLast ? (topAccLast.ratio >= 1 ? 'up' : 'down') : ''}
-            />
-            <MiniTelemetryChart
-              title="Top Position L/S"
-              kicker="positions"
-              points={(telemetry?.topPositionRatio ?? []).map((p) => ({ t: p.t, v: p.ratio }))}
-              value={topPosLast ? `${topPosLast.ratio.toFixed(2)}x` : '—'}
-              tone={topPosLast ? (topPosLast.ratio >= 1 ? 'up' : 'down') : ''}
-            />
-            <MiniTelemetryChart
-              title="Global L/S"
-              kicker={globalLast ? `${globalLast.longPct.toFixed(1)}% long` : 'accounts'}
-              points={(telemetry?.globalRatio ?? []).map((p) => ({ t: p.t, v: p.ratio }))}
-              value={globalLast ? `${globalLast.ratio.toFixed(2)}x` : '—'}
-              tone={globalLast ? (globalLast.ratio >= 1 ? 'up' : 'down') : ''}
-            />
-            <MiniTelemetryChart
-              title="Taker Flow"
-              kicker="buy vs sell volume"
-              kind="bars"
-              points={(telemetry?.takerFlow ?? []).map((p) => ({ t: p.t, v: p.buyVol, v2: p.sellVol }))}
-              value={takerLast ? `${takerLast.ratio.toFixed(2)}x` : '—'}
-              tone={takerLast ? (takerLast.ratio >= 1 ? 'up' : 'down') : ''}
-            />
-            <MiniTelemetryChart
-              title="Basis"
-              kicker="spot vs perp"
-              points={telemetryBasisSeries.map((p) => ({ t: p.t, v: p.v }))}
-              value={basisLast ? fmtBasis(basisLast.v, 3) : fmtBasis(live?.basisPct, 3)}
-              tone={signClass(basisLast?.v ?? live?.basisPct)}
-            />
-            <MiniTelemetryChart
-              title="Funding Rate"
-              kicker="settled intervals"
-              points={funding.map((p) => ({ t: p.t, v: p.v }))}
-              value={fundingLast ? pctFmt(fundingLast.v) : fmtFunding(live?.fundingRate)}
-              tone={signClass(fundingLast?.v ?? live?.fundingRate)}
-            />
-          </div>
-        </section>
-      )}
-
-      <div className="token-data-grid">
-        <DataPanel title="Trading insights" kicker="basis scanner">
-          {hasPerp ? (
-            <>
-              <DataRow label="Scanner state" value={live?.status ?? '—'} control={<span className={`chip-tag ${live?.status === 'signal' ? 'gold' : 'ok'}`}>{live?.status ?? 'unknown'}</span>} />
-              <DataRow label="Basis" value={fmtBasis(live?.basisPct)} tone={signClass(live?.basisPct)} sub="spot/perp mark spread" />
-              <DataRow label="Funding carry" value={fmtFunding(live?.fundingRate)} tone={signClass(live?.fundingRate)} sub={`next ${countdown(live?.nextFundingTime)}`} />
-            </>
-          ) : (
-            <DataRow label="Perp market" value="not listed" sub="basis scanner needs a USD-M perp" control={<span className="chip-tag">spot only</span>} />
-          )}
-          <DataRow label="Spot 24h move" value={fmtPct(live?.change24hPct)} tone={signClass(live?.change24hPct)} />
-        </DataPanel>
-
-        <DataPanel title="Market stats" kicker="direct Binance">
-          <DataRow label="Spot last" value={fmtPrice(live?.spot ?? detail?.last)} />
-          {hasPerp && <DataRow label="Perp mark" value={fmtPrice(live?.perpMark)} />}
-          <DataRow label="24h high / low" value={live?.high24h != null && live?.low24h != null ? `${fmtPrice(live.high24h)} / ${fmtPrice(live.low24h)}` : '—'} />
-          <DataRow label="24h quote volume" value={fmtMoney(live?.quoteVolume24h)} />
-          <DataRow label="Best bid / ask" value={detail?.book ? `${fmtPrice(detail.book.bidPrice)} / ${fmtPrice(detail.book.askPrice)}` : '—'} />
-          <DataRow label="Spread" value={spreadLabel} />
-        </DataPanel>
-
-        <DataPanel title="Trading rules" kicker="exchange filters">
-          <DataRow label="Min notional" value={detail?.filters ? `$${detail.filters.minNotional}` : '—'} />
-          <DataRow label="Min quantity" value={detail?.filters ? fmtQty(detail.filters.minQty) : '—'} />
-          <DataRow label="Step size" value={detail?.filters ? fmtQty(detail.filters.stepSize) : '—'} />
-          <DataRow label="Tick size" value={detail?.filters ? fmtQty(detail.filters.tickSize) : '—'} />
-        </DataPanel>
-
-        <DataPanel title="Account here" kicker={state?.binance.keysPresent ? 'server keys present' : 'read-only unavailable'}>
-          <DataRow label={`${base} balance`} value={ctx ? fmtQty(ctx.balances.base) : '—'} sub={accountBaseValue !== null ? fmtPrice(accountBaseValue) : undefined} />
-          <DataRow label="USDT free" value={ctx ? (usdtFree !== null ? fmtPrice(usdtFree) : '—') : '—'} />
-          <DataRow label="Allowlisted" value={ctx?.allowlisted ? 'yes' : 'no'} tone={ctx?.allowlisted ? 'up' : 'down'} />
-          <DataRow label="Blocklisted" value={ctx?.blocklisted ? 'yes' : 'no'} tone={ctx?.blocklisted ? 'down' : ''} />
-        </DataPanel>
-
-        <DataPanel title="Orders & fills" kicker="local ledger">
-          {openOrders.length === 0 && fills.length === 0 ? (
-            <div className="token-empty-action">
-              <span>No orders or fills for {symbol} yet.</span>
-              <button className="mini-btn" type="button" onClick={() => setPage('orders')}>Open orders</button>
-              <button className="mini-btn" type="button" onClick={() => setPage('fills')}>Open fills</button>
             </div>
-          ) : (
-            <>
-              {openOrders.slice(0, 4).map((o) => (
-                <div key={o.orderId} className="xrow">
-                  <SideTag side={o.side} />
-                  <span>
-                    <div className="k num">{fmtQty(o.origQty)} @ {fmtPrice(o.price)}</div>
-                    <div className="t">{o.type} · {timeAgo(o.time)}</div>
-                  </span>
-                  <span className="v">
-                    <button className="mini-btn" onClick={() => setPage('orders')}>Manage</button>
-                  </span>
-                </div>
-              ))}
-              {fills.slice(0, 5).map((f) => (
-                <div key={f.tradeId} className="xrow">
-                  <SideTag side={f.side} />
-                  <span>
-                    <div className="k num">{fmtQty(f.qty)} @ {fmtPrice(f.price)}</div>
-                    <div className="t">{fmtDateTime(f.ts)}</div>
-                  </span>
-                  <span className="v num">{fmtPrice(f.quoteQty)}</span>
-                </div>
-              ))}
-            </>
-          )}
-        </DataPanel>
-
-        <DataPanel title="Strategy signals" kicker="proposals only">
-          {signals.length === 0 ? (
-            <div className="muted small">
-              No proposal has been opened for {base}. The scanner only proposes after basis clears the configured
-              threshold and persists.
-            </div>
-          ) : (
-            signals.map((s) => (
-              <div key={s.id} className="xrow">
-                <span>
-                  <div className="k">{s.side === 'SHORT_PERP_LONG_SPOT' ? 'Short perp · Long spot' : 'Long perp · Short spot'}</div>
-                  <div className="t">{fmtDateTime(s.openedTs)} {s.closedTs ? '· closed' : '· open'}</div>
-                </span>
-                <span className={`v num ${signClass(s.basisPeak)}`}>peak {fmtBasis(s.basisPeak, 2)}</span>
+            <div className="tdx-controls">
+              <div className="tdx-ranges" role="tablist" aria-label="Chart range">
+                {RANGE_KEYS.map((k) => (
+                  <button key={k} type="button" role="tab" aria-selected={ivl === 'auto' && range === k} className={ivl === 'auto' && range === k ? 'on' : ''} disabled={src === 'futures' && k === '1S'} title={src === 'futures' && k === '1S' ? 'Spot-Only Granularity' : undefined} onClick={() => { setRange(k); setIvl('auto'); }}>
+                    {k}
+                  </button>
+                ))}
               </div>
-            ))
+              {hasPerp && (
+                <div className="tdx-kind tdx-srcseg" role="tablist" aria-label="Chart source">
+                  <button type="button" role="tab" aria-selected={src === 'spot'} className={src === 'spot' ? 'on' : ''} onClick={() => setSrc('spot')}>Spot</button>
+                  <button type="button" role="tab" aria-selected={src === 'futures'} className={src === 'futures' ? 'on' : ''} onClick={() => setSrc('futures')}>Futures</button>
+                </div>
+              )}
+              <PillSelect
+                value={ivl}
+                options={[{ id: 'auto' as const, label: 'Auto' }, ...INTERVALS.map((i) => ({ id: i, label: INTERVAL_LABEL[i] }))]}
+                onChange={setIvl}
+                ariaLabel="Chart interval"
+              />
+              <div className="tdx-kind" role="tablist" aria-label="Chart type">
+                <button type="button" role="tab" aria-selected={!tv} className={tv ? '' : 'on'} title="Line chart" onClick={() => setTv(false)}>
+                  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden><path d="M1.5 11.5l4-5 3 3 5.5-6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </button>
+                <button type="button" role="tab" aria-selected={tv} className={tv ? 'on' : ''} title="TradingView candles" onClick={() => setTv(true)}>
+                  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden><path d="M4 3v10M2.5 5.5h3v5h-3zM12 2v12M10.5 4.5h3v6h-3z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          {tv ? (
+            <TradingViewChart candles={candles} kind="candles" height={430} valueFmt={fmtPrice} resetKey={`${symbol}-${range}-${ivl}-${src}`} tools />
+          ) : (
+            <PriceChart points={points} up={up} />
           )}
-        </DataPanel>
+        </section>
 
-        <DataPanel title="Price history" kicker={win}>
-          <DataRow label="Window open" value={spotFirst !== null ? fmtPrice(spotFirst) : '—'} sub={spotK[0] ? fmtTimeShort(spotK[0].t) : undefined} />
-          <DataRow label="Latest plotted" value={spotLast !== null ? fmtPrice(spotLast) : '—'} sub={spotK.length ? fmtTimeShort(spotK[spotK.length - 1].t) : undefined} />
-          <DataRow label="Window move" value={fmtPct(spotMove, 2)} tone={signClass(spotMove)} />
-          <DataRow label="Candles" value={spotK.length} />
-        </DataPanel>
+        {/* ---- row 2: money flow | open interest | basis -------------------- */}
+        <MoneyFlowCard symbol={symbol} base={base} />
+        <OiCard symbol={symbol} base={base} hasPerp={hasPerp} />
+        <BasisCard symbol={symbol} base={base} hasPerp={hasPerp} />
+
+        {/* ---- row 3: the Coinglass panel ----------------------------------- */}
+        <CgxPanel symbol={symbol} base={base} name={name} hasPerp={hasPerp} />
       </div>
     </div>
   );

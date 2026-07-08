@@ -1,23 +1,12 @@
-/* Opportunities is the proposal queue: every card is a real scanner signal
+/* Opportunities is the proposal queue: every row is a real scanner signal
    with the engine's own numbers — nothing is scored or ranked by invented
    client-side formulas. Radar tabs are labeled market context, not signals. */
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { TokenIcon, brandColor } from '../components/TokenIcon';
 import { SparkArea, Sparkline } from '../components/Spark';
-import { EmptyState, StatePill } from '../components/ui';
-import {
-  IconAlert,
-  IconBook,
-  IconChart,
-  IconLayers,
-  IconPercent,
-  IconPulse,
-  IconRadar,
-  IconSearch,
-  IconShield,
-  IconTicket,
-} from '../components/Icons';
+import { Dot, Empty, PageHead, Pill, Seg, type Tone } from '../components/px';
+import { IconRadar } from '../components/Icons';
 import { baseOf, fmtBasis, fmtFunding, fmtMoney, fmtPct, fmtPrice, signClass, timeAgo } from '../format';
 import type { MarketRow, Proposal } from '../types';
 
@@ -35,7 +24,7 @@ const SIDE_SHORT: Record<Proposal['side'], string> = {
 };
 
 const VIEWS: { id: View; label: string }[] = [
-  { id: 'active', label: 'Active proposals' },
+  { id: 'active', label: 'Proposals' },
   { id: 'basis', label: 'Basis radar' },
   { id: 'funding', label: 'Funding radar' },
   { id: 'volume', label: 'Liquidity' },
@@ -53,165 +42,10 @@ function sideForBasis(v: number | null | undefined): Proposal['side'] {
   return (v ?? 0) >= 0 ? 'SHORT_PERP_LONG_SPOT' : 'LONG_PERP_SHORT_SPOT';
 }
 
-function edgeDistance(m: MarketRow, threshold: number): number {
-  return abs(m.basisPct) - threshold;
-}
-
 /** Same arithmetic the scanner uses: gross |basis| minus round-trip fees. */
 function netAfterFees(m: MarketRow, feesPct: number): number | null {
   if (!finite(m.basisPct)) return null;
   return abs(m.basisPct) - feesPct;
-}
-
-function Metric({ label, value, tone, sub }: { label: string; value: ReactNode; tone?: string; sub?: ReactNode }) {
-  return (
-    <div className="opp-metric">
-      <span>{label}</span>
-      <b className={`num ${tone ?? ''}`}>{value}</b>
-      {sub && <em>{sub}</em>}
-    </div>
-  );
-}
-
-function ProposalCard({
-  p,
-  market,
-  watchlisted,
-  selected,
-  onSelect,
-  onApprove,
-  onDetail,
-  onWatch,
-  onReject,
-}: {
-  p: Proposal;
-  market?: MarketRow;
-  watchlisted: boolean;
-  selected: boolean;
-  onSelect: () => void;
-  onApprove: () => void;
-  onDetail: () => void;
-  onWatch: () => void;
-  onReject: () => void;
-}) {
-  const borrowRequired = p.side === 'LONG_PERP_SHORT_SPOT';
-  const sideTone = borrowRequired ? 'purple' : 'ok';
-  return (
-    <article className={`opp-proposal-card ${selected ? 'selected' : ''}`}>
-      <button className="opp-proposal-main" type="button" onClick={onSelect}>
-        <span className="opp-rank-orb">
-          <TokenIcon symbol={p.symbol} size={42} />
-        </span>
-        <span className="opp-title-block">
-          <span className="opp-symbol-line">
-            <b>{baseOf(p.symbol)}</b>
-            <em>{p.symbol}</em>
-            <span className={`chip-tag ${sideTone}`}>{SIDE_SHORT[p.side]}</span>
-          </span>
-          <span className="opp-subline">
-            {SIDE_LABEL[p.side]} / opened {timeAgo(p.openedTs)}
-          </span>
-        </span>
-        <span className="opp-score-cell">
-          <span>Net edge</span>
-          <b className={`num ${signClass(p.netEdgePct)}`}>{fmtPct(p.netEdgePct, 2)}</b>
-          <em>after fees {fmtPct(p.feesPct, 2, false)}</em>
-        </span>
-      </button>
-
-      <div className="opp-proposal-grid">
-        <Metric label="Basis now / peak" value={`${fmtBasis(p.basisNow, 2)} / ${fmtBasis(p.basisPeak, 2)}`} tone={signClass(p.basisNow)} />
-        <Metric label="Funding" value={fmtFunding(p.fundingRate)} tone={signClass(p.fundingRate)} sub={borrowRequired ? 'borrow leg required' : 'perp carry input'} />
-        <Metric label="Confidence" value={`${Math.round(p.confidence * 100)}%`} sub="persistence + liquidity" />
-        <Metric label="24h volume" value={fmtMoney(p.quoteVolume24h)} sub="spot quote volume" />
-      </div>
-
-      <div className="opp-mini-chart">
-        <SparkArea values={market?.spark ?? []} color={brandColor(p.symbol)} dots endDot />
-      </div>
-
-      <div className="opp-brief">
-        <span>
-          <IconAlert size={14} />
-          {p.reason}
-        </span>
-        <span>
-          <IconShield size={14} />
-          {borrowRequired ? p.borrow : 'No spot borrow required for this direction.'}
-        </span>
-      </div>
-
-      <div className="opp-actions">
-        <button className="cta-pill" type="button" onClick={onApprove}>
-          <IconTicket size={14} />
-          Approve ticket
-        </button>
-        <button className="mini-btn" type="button" onClick={onDetail}>
-          <IconChart size={14} />
-          Market
-        </button>
-        <button className={`mini-btn ${watchlisted ? 'strong' : ''}`} type="button" onClick={onWatch}>
-          <IconRadar size={14} />
-          {watchlisted ? 'Watching' : 'Watch'}
-        </button>
-        <button className="mini-btn" type="button" title="Dismiss this proposal and ledger the action" onClick={onReject}>
-          Reject
-        </button>
-      </div>
-    </article>
-  );
-}
-
-function CandidateRow({
-  m,
-  kind,
-  threshold,
-  feesPct,
-  watchlisted,
-  onDetail,
-  onWatch,
-}: {
-  m: MarketRow;
-  kind: CandidateKind;
-  threshold: number;
-  feesPct: number;
-  watchlisted: boolean;
-  onDetail: () => void;
-  onWatch: () => void;
-}) {
-  const side = sideForBasis(m.basisPct);
-  const distance = edgeDistance(m, threshold);
-  const net = netAfterFees(m, feesPct);
-  const mainMetric =
-    kind === 'funding' ? fmtFunding(m.fundingRate) : kind === 'volume' ? fmtMoney(m.quoteVolume24h) : fmtBasis(m.basisPct, 2);
-  const tone = kind === 'funding' ? signClass(m.fundingRate) : kind === 'volume' ? '' : signClass(m.basisPct);
-  return (
-    <div className="opp-candidate-row">
-      <button className="opp-candidate-token" type="button" onClick={onDetail}>
-        <TokenIcon symbol={m.symbol} size={32} />
-        <span>
-          <b>{m.base}</b>
-          <em>{m.symbol}</em>
-        </span>
-      </button>
-      <span className="opp-candidate-spark">
-        <Sparkline values={m.spark} color={brandColor(m.symbol)} />
-      </span>
-      <span className={`opp-candidate-value num ${tone}`}>{mainMetric}</span>
-      <span className="opp-candidate-detail">
-        <b>{SIDE_SHORT[side]}</b>
-        <em>{kind === 'basis' ? `${fmtPct(distance, 2)} vs threshold` : `${fmtBasis(m.basisPct, 2)} basis / ${fmtMoney(m.quoteVolume24h)} vol`}</em>
-      </span>
-      <span className="opp-candidate-score">
-        <span>net of fees</span>
-        <b className={`num ${net !== null && net >= threshold - feesPct ? 'up' : ''}`}>{net !== null ? fmtPct(net, 2) : '—'}</b>
-      </span>
-      <span className="opp-candidate-actions">
-        <button className="mini-btn" type="button" onClick={onDetail}>Open</button>
-        <button className={`mini-btn ${watchlisted ? 'strong' : ''}`} type="button" onClick={onWatch}>{watchlisted ? 'Watching' : 'Watch'}</button>
-      </span>
-    </div>
-  );
 }
 
 export function Opportunities() {
@@ -258,10 +92,8 @@ export function Opportunities() {
 
   const avgAbsBasis = liquidPerpRows.length ? liquidPerpRows.reduce((sum, m) => sum + abs(m.basisPct), 0) / liquidPerpRows.length : 0;
   const aboveThreshold = basisRows.filter((m) => abs(m.basisPct) >= threshold).length;
-  const bestBasis = basisRows[0] ?? null;
-  const bestFunding = fundingRows[0] ?? null;
-  const bestVolume = volumeRows[0] ?? null;
-  const modeTone = s?.mode === 'HALTED' ? 'bad' : s?.mode === 'LIVE_ARMED' ? 'ok' : 'warn';
+  const modeTone: Tone = s?.mode === 'HALTED' ? 'bad' : s?.mode === 'LIVE_ARMED' ? 'ok' : 'warn';
+  const candidateKind: CandidateKind = view === 'funding' ? 'funding' : view === 'volume' ? 'volume' : 'basis';
 
   const reject = async (id: number) => {
     await fetch(`/api/proposals/${id}/reject`, {
@@ -273,180 +105,250 @@ export function Opportunities() {
   };
 
   if (!s) {
-    return <div className="container page"><div className="empty-state">Connecting...</div></div>;
+    return (
+      <div className="container page hp-page">
+        <PageHead mark={<IconRadar size={18} />} tone="idle" title="Opportunities" sub="The proposal queue — where scanner signals become inspectable action." />
+        <div className="hp-loading">
+          <Pill tone="idle">Connecting</Pill>
+          <b>Waiting for server state…</b>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="container page opportunities-page">
-      <section className="opp-hero card">
-        <div className="opp-hero-copy">
-          <span className="opp-eyebrow">
-            <IconRadar size={14} />
-            basis scanner
-          </span>
-          <h1 className="page-title">Opportunities</h1>
-          <p>
-            A proposal is only a scanner signal. Approving one opens a manual ticket; the risk gate, allowlist,
-            typed confirmation, and ledger still control anything live.
-          </p>
-          <div className="opp-search">
-            <IconSearch size={15} />
-            <input placeholder="Search symbol or asset" value={search} onChange={(e) => setSearch(e.target.value)} spellCheck={false} />
+    <div className="container page mkx opx-page">
+      <header className="bwx-hero bsx-hero">
+        <div className="bwx-hero-top">
+          <div className="bwx-hero-title">
+            <div className="bwx-title-row">
+              <h1>Opportunities</h1>
+              <Pill tone={modeTone}>{s.mode === 'HALTED' ? 'Halted' : s.mode === 'LIVE_ARMED' ? 'Live Armed' : 'Manual Only'}</Pill>
+            </div>
+            <p>The Proposal Queue — Where Scanner Signals Become Inspectable Action · Net Edge Is The Scanner's Own Number</p>
           </div>
         </div>
-        <div className="opp-hero-panel">
-          <span className="opp-orb">
-            <IconPulse size={34} />
-          </span>
-          <b className="num">{active.length}</b>
-          <em>active proposals</em>
-          <StatePill tone={modeTone}>{s.mode === 'HALTED' ? 'halted' : s.mode === 'LIVE_ARMED' ? 'armed' : 'manual only'}</StatePill>
+        <div className="bwx-hero-metrics">
+          <div className="bwx-hero-metric">
+            <em>Active Proposals</em>
+            <b>{active.length}</b>
+            <small>Ranked By Net Edge After Fees</small>
+          </div>
+          <div className="bwx-hero-metric">
+            <em>Threshold</em>
+            <b>{threshold.toFixed(2)}%</b>
+            <small>{s.config.persistTicks} Ticks Persistence Required</small>
+          </div>
+          <div className="bwx-hero-metric">
+            <em>Above Threshold</em>
+            <b>{aboveThreshold}</b>
+            <small>Avg |Basis| {fmtBasis(avgAbsBasis, 3)}</small>
+          </div>
+          <div className="bwx-hero-metric">
+            <em>Watching</em>
+            <b>{s.scanner.watching}</b>
+            <small>{s.scanner.pairs} Exact Spot/Perp Pairs</small>
+          </div>
         </div>
-      </section>
+      </header>
 
-      <section className="opp-summary-grid">
-        <Metric label="Threshold" value={`${threshold.toFixed(2)}%`} sub={`${s.config.persistTicks} ticks persistence`} />
-        <Metric label="Watching" value={s.scanner.watching} sub={`${s.scanner.pairs} exact spot/perp pairs`} />
-        <Metric label="Above threshold" value={aboveThreshold} tone={aboveThreshold ? 'up' : ''} sub={`avg |basis| ${fmtBasis(avgAbsBasis, 3)}`} />
-        <Metric label="Top volume" value={bestVolume ? fmtMoney(bestVolume.quoteVolume24h) : '-'} sub={bestVolume?.symbol ?? 'waiting for feed'} />
-      </section>
-
-      <div className="opp-viewbar card">
-        <div className="seg">
-          {VIEWS.map((v) => (
-            <button key={v.id} className={view === v.id ? 'on' : ''} type="button" onClick={() => setView(v.id)}>
-              {v.label}
-            </button>
-          ))}
-        </div>
-        <div className="opp-viewbar-stats">
-          <span><b>{filteredActive.length}</b> proposals</span>
-          <span><b>{filteredCandidates.length}</b> radar rows</span>
-          <span><b>{watchlist.length}</b> watchlisted</span>
-        </div>
+      <div className="lg-filters">
+        <Seg value={view} options={VIEWS} onChange={setView} />
+        <input
+          className="hp-input lg-search"
+          placeholder="Search symbol or asset"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          spellCheck={false}
+        />
+        <span className="lg-filter-gap" />
+        <span className="pnl-lens-note">
+          {view === 'active'
+            ? 'net edge is the scanner’s own number — nothing invented client-side'
+            : 'radar rows are market context, not active proposals'}
+        </span>
       </div>
 
-      <div className="opp-layout">
+      <div className="lg-grid exec-grid">
         <main className="opp-main">
-          <section className="opp-section-head">
-            <div>
-              <h2>{view === 'active' ? 'Active proposal queue' : view === 'basis' ? 'Basis radar' : view === 'funding' ? 'Funding radar' : 'Liquidity radar'}</h2>
-              <span>
-                {view === 'active'
-                  ? 'Ranked by net edge after fees — the scanner\'s own number, nothing invented.'
-                  : 'Candidate rows are market context, not active proposals. Use detail before approving anything.'}
-              </span>
-            </div>
-            <StatePill tone={active.length ? 'ok' : 'idle'}>{active.length ? 'signals live' : 'standby'}</StatePill>
-          </section>
-
           {view === 'active' ? (
             filteredActive.length > 0 ? (
-              <div className="opp-proposal-grid-list">
-                {filteredActive.map((p) => (
-                  <ProposalCard
-                    key={p.id}
-                    p={p}
-                    market={marketBySymbol.get(p.symbol)}
-                    watchlisted={watchlist.includes(p.symbol)}
-                    selected={selected?.id === p.id}
-                    onSelect={() => setSelectedId(p.id)}
-                    onApprove={() => void approveProposal(p.id)}
-                    onDetail={() => openDetail(p.symbol)}
-                    onWatch={() => void toggleWatch(p.symbol)}
-                    onReject={() => void reject(p.id)}
-                  />
-                ))}
+              <div className="opp-list">
+                {filteredActive.map((p) => {
+                  const borrowRequired = p.side === 'LONG_PERP_SHORT_SPOT';
+                  const market = marketBySymbol.get(p.symbol);
+                  const watching = watchlist.includes(p.symbol);
+                  return (
+                    <article
+                      key={p.id}
+                      className={`hp-group opp-card${selected?.id === p.id ? ' selected' : ''}`}
+                      onClick={() => setSelectedId(p.id)}
+                    >
+                      <div className="opp-card-head">
+                        <span className="exec-sym">
+                          <TokenIcon symbol={p.symbol} size={18} />
+                          <b>{baseOf(p.symbol)}</b>
+                          <em>{SIDE_LABEL[p.side]}</em>
+                        </span>
+                        <Pill tone={borrowRequired ? 'warn' : 'ok'}>{SIDE_SHORT[p.side]}</Pill>
+                        <span className="opp-edge">
+                          <span>net edge</span>
+                          <b className={`num ${signClass(p.netEdgePct)}`}>{fmtPct(p.netEdgePct, 2)}</b>
+                        </span>
+                      </div>
+                      <div className="opp-card-spark">
+                        <SparkArea values={market?.spark ?? []} color={brandColor(p.symbol)} />
+                      </div>
+                      <dl className="opp-card-facts">
+                        <div><dt>Basis now / peak</dt><dd className={signClass(p.basisNow)}>{fmtBasis(p.basisNow, 2)} / {fmtBasis(p.basisPeak, 2)}</dd></div>
+                        <div><dt>Funding</dt><dd className={signClass(p.fundingRate)}>{fmtFunding(p.fundingRate)}</dd></div>
+                        <div><dt>Confidence</dt><dd>{Math.round(p.confidence * 100)}%</dd></div>
+                        <div><dt>24h volume</dt><dd>{fmtMoney(p.quoteVolume24h)}</dd></div>
+                        <div><dt>Fees</dt><dd>{fmtPct(p.feesPct, 2, false)}</dd></div>
+                        <div><dt>Opened</dt><dd>{timeAgo(p.openedTs)}</dd></div>
+                      </dl>
+                      <p className="opp-card-reason" title={p.reason}>
+                        {p.reason}
+                        {borrowRequired ? ` — ${p.borrow}` : ''}
+                      </p>
+                      <div className="opp-card-actions">
+                        <button className="hp-btn primary" type="button" onClick={(e) => { e.stopPropagation(); void approveProposal(p.id); }}>
+                          Approve ticket
+                        </button>
+                        <button className="hp-btn" type="button" onClick={(e) => { e.stopPropagation(); openDetail(p.symbol); }}>
+                          Market
+                        </button>
+                        <button className={`hp-btn${watching ? ' lg-toggle active' : ''}`} type="button" onClick={(e) => { e.stopPropagation(); void toggleWatch(p.symbol); }}>
+                          {watching ? 'Watching' : 'Watch'}
+                        </button>
+                        <button className="hp-btn danger" type="button" title="Dismiss this proposal and ledger the action" onClick={(e) => { e.stopPropagation(); void reject(p.id); }}>
+                          Reject
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             ) : (
-              <div className="opp-empty-card card">
-                <EmptyState title={query ? 'No proposal matches that search' : 'No active proposals right now'}>
-                  The scanner is still working. Nothing gets invented here; use the radar boards below to inspect real
-                  Binance basis, funding, and liquidity candidates while waiting for persistence.
-                </EmptyState>
-              </div>
+              <Empty title={query ? 'No proposal matches that search' : 'No active proposals right now'}>
+                The scanner opens proposals only after threshold and persistence are met. Use the radar views for live market context while waiting.
+              </Empty>
             )
           ) : (
-            <div className="opp-candidate-board card">
-              {filteredCandidates.length > 0 ? (
-                filteredCandidates.slice(0, 12).map((m) => (
-                  <CandidateRow
-                    key={`${view}-${m.symbol}`}
-                    m={m}
-                    kind={view === 'funding' ? 'funding' : view === 'volume' ? 'volume' : 'basis'}
-                    threshold={threshold}
-                    feesPct={s.config.feesPct}
-                    watchlisted={watchlist.includes(m.symbol)}
-                    onDetail={() => openDetail(m.symbol)}
-                    onWatch={() => void toggleWatch(m.symbol)}
-                  />
-                ))
+            <section className="hp-group lg-feed">
+              <div className="lg-feed-head">
+                <h3>{view === 'basis' ? 'Basis radar' : view === 'funding' ? 'Funding radar' : 'Liquidity radar'}</h3>
+                <span>{filteredCandidates.length} rows · market context only</span>
+              </div>
+              {filteredCandidates.length === 0 ? (
+                <div className="lg-empty-pad">
+                  <Empty title="No radar rows">The market feed is connected, but this filter has no rows matching the current search.</Empty>
+                </div>
               ) : (
-                <EmptyState title="No radar rows">
-                  The market feed is connected, but this filter has no rows matching the current search.
-                </EmptyState>
+                <div className="hp-table-wrap">
+                  <table className="hp-table exec-table">
+                    <colgroup>
+                      <col style={{ width: 130 }} />
+                      <col style={{ width: 110 }} />
+                      <col style={{ width: 110 }} />
+                      <col style={{ width: 130 }} />
+                      <col />
+                      <col style={{ width: 110 }} />
+                      <col style={{ width: 150 }} />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th>Symbol</th>
+                        <th>Trend</th>
+                        <th className="num-r">{candidateKind === 'funding' ? 'Funding' : candidateKind === 'volume' ? '24h volume' : 'Basis'}</th>
+                        <th>Setup</th>
+                        <th>Context</th>
+                        <th className="num-r">Net of fees</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredCandidates.slice(0, 12).map((m) => {
+                        const side = sideForBasis(m.basisPct);
+                        const net = netAfterFees(m, s.config.feesPct);
+                        const mainMetric = candidateKind === 'funding' ? fmtFunding(m.fundingRate) : candidateKind === 'volume' ? fmtMoney(m.quoteVolume24h) : fmtBasis(m.basisPct, 2);
+                        const tone = candidateKind === 'funding' ? signClass(m.fundingRate) : candidateKind === 'volume' ? '' : signClass(m.basisPct);
+                        const watching = watchlist.includes(m.symbol);
+                        return (
+                          <tr key={`${view}-${m.symbol}`} onClick={() => openDetail(m.symbol)}>
+                            <td className="t-source">
+                              <span className="exec-sym">
+                                <TokenIcon symbol={m.symbol} size={16} />
+                                {m.base}
+                              </span>
+                            </td>
+                            <td><Sparkline values={m.spark} color={brandColor(m.symbol)} /></td>
+                            <td className={`t-value num-r ${tone}`}>{mainMetric}</td>
+                            <td className="t-layer">{SIDE_SHORT[side]}</td>
+                            <td className="t-detail">
+                              {candidateKind === 'basis'
+                                ? `${fmtPct(abs(m.basisPct) - threshold, 2)} vs threshold`
+                                : `${fmtBasis(m.basisPct, 2)} basis · ${fmtMoney(m.quoteVolume24h)} vol`}
+                            </td>
+                            <td className={`t-value num-r ${net !== null && net >= threshold - s.config.feesPct ? 'up' : ''}`}>
+                              {net !== null ? fmtPct(net, 2) : '—'}
+                            </td>
+                            <td>
+                              <span className="exec-row-actions">
+                                <button className="hp-btn exec-cancel" type="button" onClick={(e) => { e.stopPropagation(); openDetail(m.symbol); }}>Open</button>
+                                <button className={`hp-btn exec-cancel${watching ? ' lg-toggle active' : ''}`} type="button" onClick={(e) => { e.stopPropagation(); void toggleWatch(m.symbol); }}>
+                                  {watching ? 'Watching' : 'Watch'}
+                                </button>
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
-            </div>
+            </section>
           )}
         </main>
 
-        <aside className="opp-rail">
-          <section className="opp-rail-card card">
-            <div className="opp-rail-head">
-              <h3>Best live edges</h3>
-              <span>real Binance feed</span>
-            </div>
-            <button className="opp-edge-row" type="button" disabled={!bestBasis} onClick={() => bestBasis && openDetail(bestBasis.symbol)}>
-              <IconPercent size={16} />
-              <span><b>{bestBasis?.symbol ?? 'No basis row'}</b><em>basis leader</em></span>
-              <strong className={signClass(bestBasis?.basisPct)}>{fmtBasis(bestBasis?.basisPct, 2)}</strong>
-            </button>
-            <button className="opp-edge-row" type="button" disabled={!bestFunding} onClick={() => bestFunding && openDetail(bestFunding.symbol)}>
-              <IconPulse size={16} />
-              <span><b>{bestFunding?.symbol ?? 'No funding row'}</b><em>funding extreme</em></span>
-              <strong className={signClass(bestFunding?.fundingRate)}>{fmtFunding(bestFunding?.fundingRate)}</strong>
-            </button>
-            <button className="opp-edge-row" type="button" disabled={!bestVolume} onClick={() => bestVolume && openDetail(bestVolume.symbol)}>
-              <IconLayers size={16} />
-              <span><b>{bestVolume?.symbol ?? 'No volume row'}</b><em>liquidity leader</em></span>
-              <strong>{fmtMoney(bestVolume?.quoteVolume24h)}</strong>
-            </button>
-          </section>
-
-          <section className="opp-rail-card card">
-            <div className="opp-rail-head">
-              <h3>Execution discipline</h3>
-              <span>proposal to order</span>
-            </div>
-            <div className="opp-check-list">
-              <div><IconRadar size={15} /><span><b>Scanner only</b><em>proposal opens after persistence</em></span></div>
-              <div><IconTicket size={15} /><span><b>Manual ticket</b><em>approve only prefills the spot leg</em></span></div>
-              <div><IconShield size={15} /><span><b>Risk gate</b><em>limits and allowlist re-check server-side</em></span></div>
-              <div><IconBook size={15} /><span><b>Ledger</b><em>approve, reject, risk, and order actions are recorded</em></span></div>
-            </div>
-            <button className="cta-pill" type="button" onClick={() => setPage('risk')}>Open risk controls</button>
+        <aside className="lg-facets">
+          <section className="hp-group lg-facet">
+            <h3>Best live edges</h3>
+            {[
+              { m: basisRows[0], label: 'basis leader', value: basisRows[0] ? fmtBasis(basisRows[0].basisPct, 2) : '—', tone: signClass(basisRows[0]?.basisPct) },
+              { m: fundingRows[0], label: 'funding extreme', value: fundingRows[0] ? fmtFunding(fundingRows[0].fundingRate) : '—', tone: signClass(fundingRows[0]?.fundingRate) },
+              { m: volumeRows[0], label: 'liquidity leader', value: volumeRows[0] ? fmtMoney(volumeRows[0].quoteVolume24h) : '—', tone: '' },
+            ].map((row) => (
+              <button key={row.label} type="button" disabled={!row.m} onClick={() => row.m && openDetail(row.m.symbol)}>
+                <span>{row.m?.symbol ?? '—'} · {row.label}</span>
+                <b className={row.tone}>{row.value}</b>
+              </button>
+            ))}
           </section>
 
           {selected && (
-            <section className="opp-rail-card card">
-              <div className="opp-rail-head">
-                <h3>Selected brief</h3>
-                <span>{selected.symbol}</span>
+            <section className="hp-group lg-inspect opp-brief-card">
+              <div className="lg-inspect-head">
+                <Pill tone={selected.side === 'LONG_PERP_SHORT_SPOT' ? 'warn' : 'ok'}>{SIDE_SHORT[selected.side]}</Pill>
+                <h3>{baseOf(selected.symbol)} brief</h3>
+                <span>{SIDE_LABEL[selected.side]}</span>
               </div>
-              <div className="opp-selected-token">
-                <TokenIcon symbol={selected.symbol} size={38} />
-                <span><b>{baseOf(selected.symbol)}</b><em>{SIDE_LABEL[selected.side]}</em></span>
-              </div>
-              <div className="opp-selected-grid">
-                <Metric label="Spot" value={fmtPrice(selected.spotPrice)} />
-                <Metric label="Perp mark" value={fmtPrice(selected.perpMark)} />
-                <Metric label="Confidence" value={`${Math.round(selected.confidence * 100)}%`} />
-                <Metric label="Borrow" value={selected.side === 'LONG_PERP_SHORT_SPOT' ? 'Required' : 'None'} />
+              <dl className="lg-facts">
+                <div><dt>Spot</dt><dd className="num">{fmtPrice(selected.spotPrice)}</dd></div>
+                <div><dt>Perp mark</dt><dd className="num">{fmtPrice(selected.perpMark)}</dd></div>
+                <div><dt>Net edge</dt><dd className={`num ${signClass(selected.netEdgePct)}`}>{fmtPct(selected.netEdgePct, 2)}</dd></div>
+                <div><dt>Confidence</dt><dd>{Math.round(selected.confidence * 100)}%</dd></div>
+                <div><dt>Borrow</dt><dd>{selected.side === 'LONG_PERP_SHORT_SPOT' ? 'Required' : 'None'}</dd></div>
+              </dl>
+              <div className="lg-related">
+                <button className="hp-btn" type="button" onClick={() => setPage('risk')}>Open risk controls</button>
               </div>
             </section>
           )}
         </aside>
       </div>
+
     </div>
   );
 }

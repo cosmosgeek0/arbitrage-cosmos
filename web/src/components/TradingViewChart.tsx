@@ -6,6 +6,7 @@ import {
   HistogramSeries,
   LastPriceAnimationMode,
   LineSeries,
+  PriceScaleMode,
   createChart,
   type CandlestickData,
   type HistogramData,
@@ -66,6 +67,7 @@ export function TradingViewChart({
   color,
   valueFmt,
   resetKey,
+  tools = false,
 }: {
   candles?: TvCandle[];
   points?: TvPoint[];
@@ -74,6 +76,8 @@ export function TradingViewChart({
   color?: string;
   valueFmt: (v: number) => string;
   resetKey: string;
+  /** Interactive tool rail (zoom/fit/live/log/volume/MA) — token page only. */
+  tools?: boolean;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -83,7 +87,11 @@ export function TradingViewChart({
   const histRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const fmtRef = useRef(valueFmt);
   const fittedKeyRef = useRef<string | null>(null);
+  const maRef = useRef<ISeriesApi<'Line'> | null>(null);
   const [themeTick, setThemeTick] = useState(0);
+  const [logScale, setLogScale] = useState(false);
+  const [showVol, setShowVol] = useState(true);
+  const [showMa, setShowMa] = useState(false);
 
   fmtRef.current = valueFmt;
 
@@ -172,6 +180,7 @@ export function TradingViewChart({
     volumeRef.current = null;
     lineRef.current = null;
     histRef.current = null;
+    maRef.current = null;
     fittedKeyRef.current = null;
 
     if (kind === 'candles') {
@@ -240,6 +249,49 @@ export function TradingViewChart({
     }
   }, [kind, candleData, volumeData, lineData, histData, resetKey]);
 
+  // ---- tool rail wiring (token page TV mode only) --------------------------
+  useEffect(() => {
+    chartRef.current?.priceScale('right').applyOptions({ mode: logScale ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal });
+  }, [logScale, themeTick, kind]);
+
+  useEffect(() => {
+    volumeRef.current?.applyOptions({ visible: showVol });
+  }, [showVol, themeTick, kind, candleData]);
+
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || kind !== 'candles') return;
+    if (showMa && candleData.length >= 20) {
+      if (!maRef.current) {
+        maRef.current = chart.addSeries(LineSeries, {
+          color: '#8257e0',
+          lineWidth: 1,
+          lastValueVisible: false,
+          priceLineVisible: false,
+          crosshairMarkerVisible: false,
+        });
+      }
+      const ma: LineData[] = [];
+      let sum = 0;
+      for (let i = 0; i < candleData.length; i++) {
+        sum += (candleData[i] as { close: number }).close;
+        if (i >= 20) sum -= (candleData[i - 20] as { close: number }).close;
+        if (i >= 19) ma.push({ time: candleData[i].time, value: sum / 20 });
+      }
+      maRef.current.setData(ma);
+    } else if (maRef.current) {
+      chartRef.current?.removeSeries(maRef.current);
+      maRef.current = null;
+    }
+  }, [showMa, candleData, kind, themeTick]);
+
+  const zoom = (factor: number) => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    const cur = chart.timeScale().options().barSpacing;
+    chart.timeScale().applyOptions({ barSpacing: Math.max(0.5, Math.min(60, cur * factor)) });
+  };
+
   const empty =
     kind === 'candles'
       ? candleData.length < 2
@@ -250,6 +302,22 @@ export function TradingViewChart({
   return (
     <div className="tv-chart-wrap" style={{ height }}>
       <div ref={hostRef} className="tv-chart-canvas" />
+      {tools && (
+        <div className="tvx-rail" role="toolbar" aria-label="Chart tools">
+          <button type="button" title="Zoom In" onClick={() => zoom(1.35)}>＋</button>
+          <button type="button" title="Zoom Out" onClick={() => zoom(1 / 1.35)}>－</button>
+          <button type="button" title="Fit All" onClick={() => chartRef.current?.timeScale().fitContent()}>⤢</button>
+          <button type="button" title="Jump To Live" onClick={() => chartRef.current?.timeScale().scrollToRealTime()}>▶</button>
+          <span className="tvx-sep" />
+          <button type="button" title="Log Scale" className={logScale ? 'on' : ''} aria-pressed={logScale} onClick={() => setLogScale((v) => !v)}>Log</button>
+          {kind === 'candles' && (
+            <>
+              <button type="button" title="Volume" className={showVol ? 'on' : ''} aria-pressed={showVol} onClick={() => setShowVol((v) => !v)}>Vol</button>
+              <button type="button" title="20-Bar Moving Average" className={showMa ? 'on' : ''} aria-pressed={showMa} onClick={() => setShowMa((v) => !v)}>MA</button>
+            </>
+          )}
+        </div>
+      )}
       {empty && <div className="tv-chart-empty">Waiting for Binance candles…</div>}
     </div>
   );

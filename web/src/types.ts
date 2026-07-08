@@ -16,9 +16,21 @@ export interface AppConfig {
   allowedSymbols: string[];
   blockedSymbols: string[];
   staleOrderMaxMin: number;
+  borrowGuard: BorrowGuardConfig;
   watchlist: string[];
   profile: { name: string; avatar: string | null };
   customRules: CustomRule[];
+}
+
+export interface BorrowGuardConfig {
+  enabled: boolean;
+  newBorrowPaused: boolean;
+  repayOnly: boolean;
+  maxLtvPct: number;
+  maxAprPct: number;
+  requireLiveCatalog: boolean;
+  allowedCollateralCoins: string[];
+  blockedLoanCoins: string[];
 }
 
 export interface CustomRule {
@@ -113,6 +125,16 @@ export interface LoansSnapshot {
   ongoing: { loanCoin: string; collateralCoin: string; totalDebt: number; collateralAmount: number; currentLTV: number }[];
   loanable: { loanCoin: string; hourlyRatePct: number; yearlyRatePct: number; minLimit: number; maxLimit: number }[];
   collateral: { collateralCoin: string; initialLTV: number; marginCallLTV: number; liquidationLTV: number; maxLimit: number }[];
+  activity: {
+    ts: number;
+    kind: 'flex_borrow' | 'flex_repay' | 'ltv_adjust' | 'margin_borrow' | 'margin_repay' | 'margin_interest';
+    loanCoin: string;
+    collateralCoin: string | null;
+    amount: number;
+    collateralAmount: number | null;
+    status: string | null;
+    detail: string | null;
+  }[];
   margin: MarginSnapshot;
 }
 

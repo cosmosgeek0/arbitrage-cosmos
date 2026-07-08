@@ -1,1149 +1,652 @@
-import { useMemo, useState, type ReactNode } from 'react';
+/* Command Center — a strategy control room, not a homepage.
+   Zone 1 (overview): equity + quant performance truth from the ledger —
+   cumulative PnL, daily bars, distribution, attribution, profit structure.
+   Zone 2 (strategy brain): the engines and their live output. Small names,
+   no boxes — this is where behind-the-scenes scripts are monitored.
+   Zone 3 (ops): control & security, system sources, market intelligence.
+   Every number is server truth. Metrics that need more history say so. */
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
-import { TokenIcon } from '../components/TokenIcon';
-import { Num } from '../components/Num';
+import { useRefreshSignal } from '../lib/refresh';
+import { Dot, Empty, Group, PageHead, Pill, Row, Sec, Seg, TINT, type Tone } from '../components/px';
+import { PerfChart, DistChart, EquityChart, WinLoseBar, type PerfDay } from '../components/PerfChart';
 import { Donut } from '../components/Donut';
-import { EmptyState, SideTag, WarnStrip } from '../components/ui';
-import { eventSummary } from '../lib/eventText';
-import { openOverlay } from '../lib/overlay';
+import { TokenIcon, brandColor } from '../components/TokenIcon';
+import { Num } from '../components/Num';
 import {
-  fmtBasis,
-  fmtPrice,
-  fmtPct,
-  fmtQty,
-  fmtTimeShort,
-  signClass,
-  timeAgo,
-  baseOf,
-} from '../format';
-import {
+  IconBook,
+  IconTerminal,
   IconBrain,
   IconCalendar,
   IconChart,
-  IconClock,
-  IconDatabase,
+  IconGrid,
   IconKey,
-  IconLayers,
   IconList,
   IconNewspaper,
   IconPower,
   IconPulse,
   IconRadar,
-  IconReceipt,
   IconShield,
   IconTicket,
   IconWallet,
   IconWifi,
 } from '../components/Icons';
+import { baseOf, duration, fmtMoney, fmtPct, fmtPrice, signClass, timeAgo } from '../format';
+import type { LedgerEvent } from '../types';
 
-type Tone = 'ok' | 'bad' | 'warn' | 'idle';
+interface PnlData {
+  realizedByDay: PerfDay[];
+  realizedBySymbol: { symbol: string; usd: number }[];
+  feesByAsset: { asset: string; amount: number }[];
+  equitySnapshots: { ts: number; totalUsdt: number }[];
+}
 
-type DecisionItem = {
-  tone: Tone;
-  icon: ReactNode;
-  title: string;
-  detail: string;
-  meta: string;
-  action: string;
-  primary?: boolean;
-  onClick: () => void;
-};
+interface NewsItem { id: string; title: string; url: string; date?: string }
+interface CalItem { id: string; title: string; country: string; date: string; importance: number }
 
-type CommandKpi = {
-  label: string;
-  value: ReactNode;
-  sub: string;
-  tone: Tone;
-  meter?: number;
-};
+function num(v: number | string | null | undefined): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
 
-type ControlRow = {
-  label: string;
-  value: string;
-  detail: string;
-  tone: Tone;
-  icon: ReactNode;
-  onClick?: () => void;
-  live?: boolean;
-};
+function rejectionInfo(ev: LedgerEvent): string {
+  const d = (ev.data && typeof ev.data === 'object' ? ev.data : {}) as Record<string, unknown>;
+  const reasons = Array.isArray(d.reasons) ? d.reasons.map(String).filter(Boolean).join(' / ') : '';
+  return reasons || 'risk gate rejected the intent';
+}
 
-type RuntimeLane = {
-  label: string;
-  value: string;
-  detail: string;
-  tone: Tone;
-  onClick?: () => void;
-  live?: boolean;
-};
+function maxDrawdown(values: number[]): { pct: number; usd: number } | null {
+  if (values.length < 2) return null;
+  let peak = -Infinity;
+  let ddPct = 0;
+  let ddUsd = 0;
+  for (const v of values) {
+    peak = Math.max(peak, v);
+    if (peak > 0) {
+      ddPct = Math.max(ddPct, ((peak - v) / peak) * 100);
+      ddUsd = Math.max(ddUsd, peak - v);
+    }
+  }
+  return { pct: ddPct, usd: ddUsd };
+}
 
-function statusTone(status: string): Tone {
-  if (status === 'open' || status === 'live') return 'ok';
-  if (status === 'closed' || status === 'failed') return 'bad';
-  if (status === 'connecting') return 'warn';
-  return 'idle';
+/** Annualized Sharpe from equity snapshot day-over-day returns. Honest: null until enough points. */
+function sharpe(equity: number[]): number | null {
+  if (equity.length < 8) return null;
+  const rets: number[] = [];
+  for (let i = 1; i < equity.length; i++) {
+    if (equity[i - 1] > 0) rets.push(equity[i] / equity[i - 1] - 1);
+  }
+  if (rets.length < 7) return null;
+  const mean = rets.reduce((s, r) => s + r, 0) / rets.length;
+  const varr = rets.reduce((s, r) => s + (r - mean) ** 2, 0) / (rets.length - 1);
+  const sd = Math.sqrt(varr);
+  if (sd === 0) return null;
+  // snapshots are ~15min; scale to daily (96 per day) then annualize
+  return (mean / sd) * Math.sqrt(96 * 365);
 }
 
 export function Dashboard() {
-  const { state, markets, marketsUpdatedAt, connected, setPage, openTicket, openDetail } = useStore();
-  const [quickSymbol, setQuickSymbol] = useState('BTCUSDT');
+  const { state, setPage, openDetail, approveProposal } = useStore();
+  const [pnl, setPnl] = useState<PnlData | null>(null);
+  const [news, setNews] = useState<NewsItem[] | null>(null);
+  const [cal, setCal] = useState<CalItem[] | null>(null);
+  const [perfMode, setPerfMode] = useState<'usd' | 'pct' | 'equity'>('usd');
+  const [btcCloses, setBtcCloses] = useState<{ t: number; v: number }[] | null>(null);
+  const [tick, setTick] = useState(0);
+  useRefreshSignal(() => setTick((n) => n + 1));
 
-  const topMarkets = useMemo(
+  useEffect(() => {
+    let alive = true;
+    void fetch('/api/pnl').then((r) => (r.ok ? r.json() : null)).then((d) => alive && d && setPnl(d as PnlData)).catch(() => undefined);
+    const t = window.setInterval(() => {
+      void fetch('/api/pnl').then((r) => (r.ok ? r.json() : null)).then((d) => alive && d && setPnl(d as PnlData)).catch(() => undefined);
+    }, 30_000);
+    return () => { alive = false; window.clearInterval(t); };
+  }, [tick]);
+
+  useEffect(() => {
+    let alive = true;
+    void fetch('/api/news?catalog=48').then((r) => (r.ok ? r.json() : null))
+      .then((d) => alive && d && setNews(((d as { items: NewsItem[] }).items ?? []).slice(0, 3)))
+      .catch(() => alive && setNews([]));
+    void fetch('/api/klines?symbol=BTCUSDT&interval=1d&limit=120')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => alive && Array.isArray(d) && setBtcCloses(d as { t: number; v: number }[]))
+      .catch(() => undefined);
+    void fetch('/api/calendar').then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!alive || !d) return;
+        const items = ((d as { items: CalItem[] }).items ?? []).filter((it) => it.importance >= 1 && new Date(it.date).getTime() > Date.now());
+        setCal(items.slice(0, 3));
+      })
+      .catch(() => alive && setCal([]));
+    return () => { alive = false; };
+  }, [tick]);
+
+  const s = state;
+  const days = pnl?.realizedByDay ?? [];
+  useEffect(() => {
+    if (days.length < 2 && (pnl?.equitySnapshots.length ?? 0) >= 2) setPerfMode('equity');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pnl === null]);
+  const equity = (pnl?.equitySnapshots ?? []).map((x) => x.totalUsdt).filter((v) => Number.isFinite(v));
+  const bySymbol = pnl?.realizedBySymbol ?? [];
+  const proposals = useMemo(() => [...(s?.proposals ?? [])].sort((a, b) => b.netEdgePct - a.netEdgePct), [s?.proposals]);
+  const openOrders = s?.openOrders ?? [];
+  const positions = s?.positions ?? [];
+  const exposure = positions.reduce((acc, p) => acc + p.valueUsdt, 0);
+  const heldNotional = openOrders.reduce((acc, o) => acc + num(o.price) * num(o.origQty), 0);
+  const lastRejection = useMemo(
     () =>
-      markets
-        .filter((m) => Number.isFinite(m.change24hPct))
-        .slice()
-        .sort((a, z) => Math.abs(z.change24hPct ?? 0) - Math.abs(a.change24hPct ?? 0))
-        .slice(0, 4),
-    [markets]
+      (s?.events ?? []).find((ev) => {
+        if (ev.kind !== 'risk_decision') return false;
+        const d = (ev.data && typeof ev.data === 'object' ? ev.data : {}) as Record<string, unknown>;
+        return d.allowed === false;
+      }) ?? null,
+    [s?.events],
   );
 
-  if (!state) return <div className="container page"><div className="empty-state">Connecting to engine…</div></div>;
+  // ---- honest quant metrics -------------------------------------------
+  const totalRealized = days.reduce((acc, d) => acc + d.usd, 0);
+  const winDays = days.filter((d) => d.usd > 0);
+  const lossDays = days.filter((d) => d.usd < 0);
+  const grossProfit = winDays.reduce((acc, d) => acc + d.usd, 0);
+  const grossLoss = Math.abs(lossDays.reduce((acc, d) => acc + d.usd, 0));
+  const winRate = days.length ? (winDays.length / days.length) * 100 : null;
+  const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : winDays.length > 0 ? Infinity : null;
+  const dd = maxDrawdown(equity);
+  const sr = sharpe(equity);
+  const baseEquity = equity[0] ?? null;
+  const totalPct = baseEquity && baseEquity > 0 ? (totalRealized / baseEquity) * 100 : null;
+  const usdtFees = pnl?.feesByAsset.find((f) => f.asset === 'USDT')?.amount ?? 0;
+  const otherFeeAssets = (pnl?.feesByAsset ?? []).filter((f) => f.asset !== 'USDT').length;
+  const winnersBySymbol = bySymbol.filter((r) => r.usd > 0);
 
-  const acct = state.account;
-  const feedEntries = Object.entries(state.feeds);
-  const feedLive = feedEntries.filter(([, status]) => status === 'open' || status === 'live').length;
-  const exposure = state.positions.reduce((s, p) => s + p.valueUsdt, 0);
-  const unrealized = state.positions.some((p) => p.unrealizedUsd !== null)
-    ? state.positions.reduce((s, p) => s + (p.unrealizedUsd ?? 0), 0)
-    : null;
-  const dayPct =
-    acct && acct.dayOpenEquity && acct.dayOpenEquity > 0 && acct.dayChangeUsd !== null
-      ? (acct.dayChangeUsd / acct.dayOpenEquity) * 100
-      : null;
-  const dailyRiskPct = state.config.maxDailyNotionalUsd > 0
-    ? Math.min(100, (state.risk.dailyNotionalUsedUsd / state.config.maxDailyNotionalUsd) * 100)
-    : 0;
-  const isTradeSymbolReady = quickSymbol.trim().length > 0;
-  const modeTone: Tone = state.mode === 'LIVE_ARMED' ? 'ok' : state.mode === 'HALTED' ? 'bad' : 'warn';
-  const accountTone: Tone = state.binance.connected ? 'ok' : state.binance.keysPresent ? 'bad' : 'idle';
-  const scannerAge = state.scanner.lastTickTs ? timeAgo(state.scanner.lastTickTs) : '—';
-  const accountLine = !state.binance.keysPresent
-    ? 'Read keys absent'
-    : state.binance.connected
-      ? `Synced ${timeAgo(state.binance.lastSyncTs)}`
-      : 'Sync failing';
-  const postureLine = state.config.killSwitch
-    ? 'Safe halt'
-    : state.mode === 'LIVE_ARMED'
-      ? 'Live armed'
-      : 'Manual only';
+  // BTC buy & hold benchmark: real daily closes aligned to the PnL days.
+  const bench = useMemo(() => {
+    if (!btcCloses?.length || !days.length) return null;
+    const closeByDay = new Map<string, number>();
+    for (const k of btcCloses) closeByDay.set(new Date(k.t).toISOString().slice(0, 10), k.v);
+    const first = closeByDay.get(days[0].day);
+    if (!first || first <= 0) return null;
+    let last = first;
+    return days.map((d) => {
+      const c = closeByDay.get(d.day);
+      if (c && c > 0) last = c;
+      return (last / first - 1) * 100;
+    });
+  }, [btcCloses, days]);
 
-  const readiness = [
-    {
-      label: 'Market stream',
-      detail: connected ? `${feedLive}/${feedEntries.length} feeds` : 'reconnecting',
-      tone: connected && feedLive > 0 ? 'ok' : 'warn',
-      icon: <IconWifi />,
-    },
-    {
-      label: 'Server keys',
-      detail: state.binance.keysPresent ? 'env ready' : 'not set',
-      tone: state.binance.keysPresent ? 'ok' : 'idle',
-      icon: <IconKey />,
-    },
-    {
-      label: 'Account sync',
-      detail: state.binance.connected ? `synced ${timeAgo(state.binance.lastSyncTs)}` : state.binance.lastError ?? 'waiting',
-      tone: accountTone,
-      icon: <IconWallet />,
-    },
-    {
-      label: 'Withdrawals',
-      detail: state.binance.canWithdraw === true ? 'permission on' : 'disabled',
-      tone: state.binance.canWithdraw === true ? 'bad' : 'ok',
-      icon: <IconPower />,
-    },
-    {
-      label: 'Risk gate',
-      detail: `${fmtPrice(state.config.maxOrderNotionalUsd)} cap`,
-      tone: 'ok',
-      icon: <IconShield />,
-    },
-    {
-      label: 'Kill switch',
-      detail: state.config.killSwitch ? 'blocking sends' : 'manual ready',
-      tone: state.config.killSwitch ? 'warn' : 'ok',
-      icon: <IconPulse />,
-    },
-  ] satisfies { label: string; detail: string; tone: Tone; icon: ReactNode }[];
-  const readinessScore = readiness.filter((r) => r.tone === 'ok').length;
-  const readinessWaiting = readiness.filter((r) => r.tone === 'idle').length;
-  const readinessAttention = readiness.filter((r) => r.tone === 'warn' || r.tone === 'bad').length;
+  // Run-up / drawdown segments from equity snapshots (peak/trough walk).
+  const segs = useMemo(() => {
+    const snaps = pnl?.equitySnapshots ?? [];
+    if (snaps.length < 3) return null;
+    const ups: { ms: number; pct: number }[] = [];
+    const downs: { ms: number; pct: number }[] = [];
+    let start = 0;
+    let dir: 'up' | 'down' | null = null;
+    for (let i = 1; i < snaps.length; i++) {
+      const step: 'up' | 'down' = snaps[i].totalUsdt >= snaps[i - 1].totalUsdt ? 'up' : 'down';
+      if (dir === null) dir = step;
+      if (step !== dir || i === snaps.length - 1) {
+        const endIdx = i === snaps.length - 1 && step === dir ? i : i - 1;
+        const pct = snaps[start].totalUsdt > 0 ? (snaps[endIdx].totalUsdt / snaps[start].totalUsdt - 1) * 100 : 0;
+        const ms = snaps[endIdx].ts - snaps[start].ts;
+        if (Math.abs(pct) >= 0.01 && ms > 0) (dir === 'up' ? ups : downs).push({ ms, pct });
+        start = endIdx;
+        dir = step;
+      }
+    }
+    const avg = (arr: { ms: number }[]) => (arr.length ? arr.reduce((x, y) => x + y.ms, 0) / arr.length : null);
+    const maxUp = ups.length ? Math.max(...ups.map((u) => u.pct)) : null;
+    return { ups, downs, avgUpMs: avg(ups), avgDownMs: avg(downs), maxUp };
+  }, [pnl?.equitySnapshots]);
 
-  const sortedHoldings = acct?.entries.slice().sort((a, z) => z.valueUsdt - a.valueUsdt).slice(0, 5) ?? [];
-  const topProposals = state.proposals.slice(0, 5);
-  const recentEvents = state.events.slice(0, 9);
-  const topMover = topMarkets[0] ?? null;
-  const primaryProposal = topProposals[0] ?? null;
-  const focusCount = markets.filter((m) => m.status === 'signal').length;
-  const activeWork = state.openOrders.length + state.positions.length;
-  const browser = typeof navigator !== 'undefined'
-    ? (navigator.userAgent.match(/(Chrome|Firefox|Safari)\/([\d.]+)/)?.slice(1).join(' ') ?? 'Desktop browser')
-    : 'Desktop browser';
-  const platform = typeof navigator !== 'undefined' ? (navigator.platform || 'Desktop') : 'Desktop';
-  const zone = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'local';
-  const decisionItems: DecisionItem[] = [
-    !state.binance.keysPresent
-      ? {
-          tone: 'warn',
-          icon: <IconKey />,
-          title: 'Connect read-only Binance',
-          detail: 'Unlock balances, orders, fills, and equity snapshots without any browser key form.',
-          meta: 'setup first',
-          action: 'Account setup',
-          primary: true,
-          onClick: () => setPage('account'),
-        }
-      : !state.binance.connected
-        ? {
-            tone: 'bad',
-            icon: <IconWifi />,
-            title: 'Fix account sync',
-            detail: state.binance.lastError ?? 'Keys exist, but account polling is not healthy.',
-            meta: 'attention',
-            action: 'System health',
-            primary: true,
-            onClick: () => setPage('system'),
-          }
-        : {
-            tone: 'ok',
-            icon: <IconWallet />,
-            title: 'Account sync is live',
-            detail: `Balances and orders last synced ${timeAgo(state.binance.lastSyncTs)}.`,
-            meta: 'ready',
-            action: 'Wallets',
-            primary: true,
-            onClick: () => setPage('wallets'),
-          },
-    state.config.killSwitch
-      ? {
-          tone: 'warn',
-          icon: <IconShield />,
-          title: 'Kill switch is blocking live sends',
-          detail: 'This is safe by default. Use Risk only when you intentionally want manual live mode.',
-          meta: 'halted',
-          action: 'Risk gate',
-          onClick: () => setPage('risk'),
-        }
-      : {
-          tone: state.mode === 'LIVE_ARMED' ? 'ok' : 'warn',
-          icon: <IconTicket />,
-          title: state.mode === 'LIVE_ARMED' ? 'Manual live flow armed' : 'Manual mode ready',
-          detail: `Allowlist has ${state.config.allowedSymbols.length} symbols; every send still needs typed confirmation.`,
-          meta: state.mode === 'LIVE_ARMED' ? 'armed' : 'manual',
-          action: 'New ticket',
-          onClick: () => openTicket({ symbol: quickSymbol.trim() || 'BTCUSDT', side: 'BUY', source: 'manual' }),
-        },
-    primaryProposal
-      ? {
-          tone: 'warn',
-          icon: <IconRadar />,
-          title: `${baseOf(primaryProposal.symbol)} basis proposal`,
-          detail: `${primaryProposal.side === 'SHORT_PERP_LONG_SPOT' ? 'Short perp / long spot' : 'Long perp / short spot'} at ${fmtBasis(primaryProposal.basisNow, 2)}.`,
-          meta: 'proposal',
-          action: 'Review',
-          onClick: () => setPage('opportunities'),
-        }
-      : {
-          tone: 'idle',
-          icon: <IconBrain />,
-          title: 'No proposal needs approval',
-          detail: `Scanner is watching ${state.scanner.watching} pairs; threshold ${fmtBasis(state.scanner.grossThresholdPct, 2)}.`,
-          meta: 'scanning',
-          action: 'Strategies',
-          onClick: () => setPage('strategies'),
-        },
-    state.recentFills.length
-      ? {
-          tone: 'ok',
-          icon: <IconReceipt />,
-          title: 'Recent fills are ledgered',
-          detail: `${state.recentFills.length} latest fills are feeding PnL and position cost basis.`,
-          meta: 'audit',
-          action: 'Open fills',
-          onClick: () => setPage('fills'),
-        }
-      : {
-          tone: 'idle',
-          icon: <IconReceipt />,
-          title: 'Fill history not loaded',
-          detail: 'Import symbol history after keys are set so PnL and average cost stop showing blanks.',
-          meta: 'cost basis',
-          action: 'Fills',
-          onClick: () => setPage('fills'),
-        },
-    topMover
-      ? {
-          tone: Math.abs(topMover.change24hPct ?? 0) > 10 ? 'warn' : 'ok',
-          icon: <IconPulse />,
-          title: `${topMover.base} is moving`,
-          detail: `${topMover.hasPerp ? 'spot + perp' : 'spot only'} · 24h change ${fmtPct(topMover.change24hPct, 2)}.`,
-          meta: 'market',
-          action: 'Inspect',
-          onClick: () => openDetail(topMover.symbol),
-        }
-      : {
-          tone: 'idle',
-          icon: <IconPulse />,
-          title: 'Market cache warming up',
-          detail: 'Public Binance rows populate here as the market engine streams.',
-          meta: 'market',
-          action: 'Markets',
-          onClick: () => setPage('markets'),
-      },
-  ];
-  const commandKpis: CommandKpi[] = [
-    {
-      label: 'Free USDT',
-      value: acct ? <Num value={acct.availableUsdt}>{fmtPrice(acct.availableUsdt)}</Num> : 'read keys',
-      sub: acct ? 'available balance' : 'server-side only',
-      tone: acct ? 'ok' : 'idle',
-    },
-    {
-      label: 'Day PnL',
-      value: acct ? (
-        <span className={signClass(acct.dayChangeUsd ?? acct.realizedTodayUsd)}>
-          {acct.dayChangeUsd !== null ? fmtPrice(acct.dayChangeUsd) : fmtPrice(acct.realizedTodayUsd)}
-        </span>
-      ) : 'pending',
-      sub: dayPct !== null ? fmtPct(dayPct, 2) : 'fills/equity needed',
-      tone: acct ? ((acct.dayChangeUsd ?? acct.realizedTodayUsd) >= 0 ? 'ok' : 'bad') : 'idle',
-    },
-    {
-      label: 'Orders',
-      value: String(state.openOrders.length),
-      sub: state.binance.keysPresent ? 'open account orders' : 'unloaded',
-      tone: state.openOrders.length ? 'warn' : 'idle',
-    },
-    {
-      label: 'Exposure',
-      value: acct ? fmtPrice(exposure) : 'pending',
-      sub: `${state.positions.length} position${state.positions.length === 1 ? '' : 's'}`,
-      tone: exposure > 0 ? 'warn' : 'idle',
-    },
-    {
-      label: 'Risk used',
-      value: fmtPrice(state.risk.dailyNotionalUsedUsd),
-      sub: `${Math.round(dailyRiskPct)}% of ${fmtPrice(state.config.maxDailyNotionalUsd)}`,
-      tone: dailyRiskPct > 80 ? 'bad' : dailyRiskPct > 50 ? 'warn' : 'ok',
-      meter: dailyRiskPct,
-    },
-    {
-      label: 'Proposals',
-      value: String(state.proposals.length),
-      sub: `${state.scanner.watching} watched pairs`,
-      tone: state.proposals.length > 0 ? 'warn' : 'idle',
-    },
-  ];
-  const capitalRows: ControlRow[] = [
-    {
-      label: 'Account truth',
-      value: acct ? fmtPrice(acct.totalUsdt) : 'Read keys absent',
-      detail: acct ? `${fmtPrice(acct.availableUsdt)} free USDT` : 'Balances unlock only from server-side Binance read keys.',
-      tone: acct ? 'ok' : 'idle',
-      icon: <IconWallet />,
-      onClick: () => setPage('account'),
-    },
-    {
-      label: 'Execution queue',
-      value: `${state.openOrders.length} orders`,
-      detail: `${state.positions.length} positions · ${state.recentFills.length} recent fills`,
-      tone: state.openOrders.length || state.positions.length ? 'warn' : 'idle',
-      icon: <IconTicket />,
-      onClick: () => setPage('orders'),
-    },
-    {
-      label: 'Manual handoff',
-      value: state.mode === 'HALTED' ? 'Halted' : state.mode === 'LIVE_ARMED' ? 'Live armed' : 'Manual only',
-      detail: 'Typed confirmation and risk gate still stand between dashboard and Binance.',
-      tone: modeTone,
-      icon: <IconShield />,
-      onClick: () => setPage('trade'),
-    },
-  ];
-  const performanceRows: ControlRow[] = [
-    {
-      label: 'Open PnL checkpoint',
-      value: unrealized !== null ? fmtPrice(unrealized) : 'Waiting',
-      detail: unrealized !== null ? `${state.positions.length} live positions included.` : 'Needs live positions or imported fills before this can move.',
-      tone: unrealized !== null ? (unrealized >= 0 ? 'ok' : 'bad') : 'idle',
-      icon: <IconChart />,
-      onClick: () => setPage('positions'),
-    },
-    {
-      label: 'Max drawdown',
-      value: 'Not wired',
-      detail: 'Requires persisted equity curve; no placeholder drawdown is shown.',
-      tone: 'idle',
-      icon: <IconPulse />,
-      onClick: () => setPage('ledger'),
-    },
-    {
-      label: 'Profit factor / win rate',
-      value: 'Waiting for closed trades',
-      detail: 'TradingView-style ratios stay blank until closed-trade history is real.',
-      tone: 'idle',
-      icon: <IconReceipt />,
-      onClick: () => setPage('fills'),
-    },
-  ];
-  const brainRows: ControlRow[] = [
-    {
-      label: 'Basis spread engine',
-      value: topProposals.length ? `${topProposals.length} proposals` : `${state.scanner.watching} watching`,
-      detail: `${state.scanner.pairs} pairs · threshold ${fmtBasis(state.scanner.grossThresholdPct, 2)} · tick ${scannerAge}`,
-      tone: topProposals.length ? 'warn' : state.scanner.lastTickTs ? 'ok' : 'idle',
-      icon: <IconRadar />,
-      onClick: () => setPage('strategies'),
-      live: !!state.scanner.lastTickTs,
-    },
-    {
-      label: 'Volume ignition watch',
-      value: 'Design slot',
-      detail: 'Needs rolling 1s/5s/60s buckets, trade-count spike, aggression, spread and depth inputs.',
-      tone: 'idle',
-      icon: <IconPulse />,
-      onClick: () => setPage('strategies'),
-    },
-    {
-      label: 'Borrow / reverse-basis preflight',
-      value: 'Preflight',
-      detail: 'Borrow availability, funding pressure, and margin checks belong here before proposals.',
-      tone: 'idle',
-      icon: <IconLayers />,
-      onClick: () => setPage('loans'),
-    },
-    {
-      label: 'Proposal queue',
-      value: primaryProposal ? `${baseOf(primaryProposal.symbol)} ${fmtBasis(primaryProposal.basisNow, 2)}` : 'Empty',
-      detail: primaryProposal ? 'Risk evidence is waiting in Opportunities.' : 'No strategy has persisted past threshold yet.',
-      tone: primaryProposal ? 'warn' : 'idle',
-      icon: <IconBrain />,
-      onClick: () => setPage('opportunities'),
-    },
-  ];
-  const runtimeLanes: RuntimeLane[] = [
-    {
-      label: 'Markets',
-      value: String(state.scanner.pairs),
-      detail: 'eligible pairs',
-      tone: state.scanner.pairs > 0 ? 'ok' : 'idle',
-      onClick: () => setPage('markets'),
-      live: !!state.scanner.lastTickTs,
-    },
-    {
-      label: 'Watch',
-      value: String(state.scanner.watching),
-      detail: 'above filters',
-      tone: state.scanner.watching > 0 ? 'ok' : 'idle',
-      onClick: () => setPage('strategies'),
-      live: !!state.scanner.lastTickTs,
-    },
-    {
-      label: 'Focus',
-      value: String(focusCount),
-      detail: 'market signals',
-      tone: focusCount > 0 ? 'warn' : 'idle',
-      onClick: () => setPage('markets'),
-    },
-    {
-      label: 'Propose',
-      value: String(state.proposals.length),
-      detail: 'approval queue',
-      tone: state.proposals.length > 0 ? 'warn' : 'idle',
-      onClick: () => setPage('opportunities'),
-    },
-    {
-      label: 'Active',
-      value: String(activeWork),
-      detail: 'orders + positions',
-      tone: activeWork > 0 ? 'warn' : 'idle',
-      onClick: () => setPage(activeWork > 0 ? 'orders' : 'positions'),
-    },
-    {
-      label: 'Cooldown',
-      value: 'Not wired',
-      detail: 'engine state slot',
-      tone: 'idle',
-      onClick: () => setPage('strategies'),
-    },
-  ];
-  const guardRows: ControlRow[] = [
-    {
-      label: 'Risk layer',
-      value: state.config.killSwitch ? 'Kill switch on' : 'Gate ready',
-      detail: `${fmtPrice(state.risk.dailyNotionalUsedUsd)} used of ${fmtPrice(state.config.maxDailyNotionalUsd)} daily notional.`,
-      tone: state.config.killSwitch ? 'warn' : 'ok',
-      icon: <IconPower />,
-      onClick: () => setPage('risk'),
-      live: true,
-    },
-    {
-      label: 'Active session',
-      value: 'This browser',
-      detail: `${platform} · ${zone} · ${browser}`,
-      tone: 'ok',
-      icon: <IconShield />,
-      onClick: () => setPage('settings'),
-    },
-    {
-      label: 'News / calendar',
-      value: 'Market context',
-      detail: 'Binance announcements and macro events are server-proxied quick views.',
-      tone: 'idle',
-      icon: <IconNewspaper />,
-      onClick: () => openOverlay('news'),
-    },
-    {
-      label: 'System heartbeat',
-      value: connected ? 'Cockpit live' : 'Reconnecting',
-      detail: `${feedLive}/${feedEntries.length} feeds · market cache ${markets.length} rows`,
-      tone: connected ? 'ok' : 'bad',
-      icon: <IconDatabase />,
-      onClick: () => setPage('system'),
-      live: connected,
-    },
-  ];
-  const liveHygieneRows: ControlRow[] = [
-    {
-      label: 'Engine heartbeat',
-      value: connected ? 'Live' : 'Reconnecting',
-      detail: `${feedLive}/${feedEntries.length} feeds · cache ${markets.length} rows`,
-      tone: connected ? 'ok' : 'bad',
-      icon: <IconDatabase />,
-      onClick: () => setPage('system'),
-      live: connected,
-    },
-    {
-      label: 'State restore',
-      value: 'Design slot',
-      detail: 'Warm-up and persisted script state are needed before redeploy confidence.',
-      tone: 'idle',
-      icon: <IconClock />,
-      onClick: () => setPage('system'),
-    },
-    {
-      label: 'Ledger + logs',
-      value: `${recentEvents.length} rows`,
-      detail: recentEvents.length ? 'Recent decisions are visible in the stream.' : 'No decisions have been ledgered yet.',
-      tone: recentEvents.length ? 'ok' : 'idle',
-      icon: <IconReceipt />,
-      onClick: () => setPage('ledger'),
-    },
-  ];
-  const riskLabRows: ControlRow[] = [
-    {
-      label: 'What-if risk lab',
-      value: 'Design slot',
-      detail: 'Pre-send exposure shocks and size changes belong before order intent.',
-      tone: 'idle',
-      icon: <IconShield />,
-      onClick: () => setPage('risk'),
-    },
-    {
-      label: 'Daily notional',
-      value: `${Math.round(dailyRiskPct)}% used`,
-      detail: `${fmtPrice(state.risk.dailyNotionalUsedUsd)} of ${fmtPrice(state.config.maxDailyNotionalUsd)}.`,
-      tone: dailyRiskPct > 80 ? 'bad' : dailyRiskPct > 50 ? 'warn' : 'ok',
-      icon: <IconWallet />,
-      onClick: () => setPage('risk'),
-      live: true,
-    },
-    {
-      label: 'Strict owner rules',
-      value: 'Persisted',
-      detail: 'Creator lives under Risk; risk-gate consumption is still the next money-path task.',
-      tone: 'warn',
-      icon: <IconKey />,
-      onClick: () => setPage('risk'),
-    },
-  ];
-  const marketContextRows: ControlRow[] = [
-    {
-      label: 'Exchange matrix',
-      value: 'Binance now',
-      detail: 'Bybit/OKX adapter slots can land later; no cross-exchange prices are fabricated.',
-      tone: 'idle',
-      icon: <IconLayers />,
-      onClick: () => setPage('account'),
-    },
-    {
-      label: 'Announcement filter',
-      value: 'Quick view',
-      detail: 'Binance news is available beside proposals; it is not an automatic blocker yet.',
-      tone: 'idle',
-      icon: <IconNewspaper />,
-      onClick: () => openOverlay('news'),
-    },
-    {
-      label: 'Calendar shock',
-      value: 'Quick view',
-      detail: 'Macro events are visible for the operator; hidden auto-rules are not invented.',
-      tone: 'idle',
-      icon: <IconCalendar />,
-      onClick: () => openOverlay('calendar'),
-    },
-  ];
+  // Day analysis (TradingView "trades analysis", honestly per-day).
+  const dayStats = useMemo(() => {
+    if (!days.length) return null;
+    const best = days.reduce((a, b) => (b.usd > a.usd ? b : a));
+    const worst = days.reduce((a, b) => (b.usd < a.usd ? b : a));
+    const winsArr = days.filter((d) => d.usd > 0).map((d) => d.usd);
+    const lossArr = days.filter((d) => d.usd < 0).map((d) => d.usd);
+    const avgWin = winsArr.length ? winsArr.reduce((a, b) => a + b, 0) / winsArr.length : null;
+    const avgLoss = lossArr.length ? Math.abs(lossArr.reduce((a, b) => a + b, 0) / lossArr.length) : null;
+    let streak = 0;
+    let maxStreak = 0;
+    for (const d of days) {
+      streak = d.usd > 0 ? streak + 1 : 0;
+      maxStreak = Math.max(maxStreak, streak);
+    }
+    return { best, worst, avgWin, avgLoss, plRatio: avgWin !== null && avgLoss ? avgWin / avgLoss : null, maxStreak, curStreak: streak };
+  }, [days]);
 
-  return (
-    <div className="container page dashboard-page">
-      <div className="page-head dashboard-head">
-        <div>
-          <h1 className="page-title">Dashboard</h1>
-          <div className="page-sub">
-            Account, scanner scripts, risk, execution, sessions, and ledger truth in one operator view.
-          </div>
-        </div>
-        <div className="head-actions">
-          <button className="mini-btn" type="button" onClick={() => setPage('risk')}>
-            <IconShield /> Risk gate
-          </button>
-          <button className="cta-pill" type="button" onClick={() => setPage('trade')}>
-            <IconTicket /> New order
-          </button>
+  if (!s) {
+    return (
+      <div className="container page hp-page">
+        <PageHead mark={<IconGrid size={18} />} tone="idle" title="Dashboard" sub="Strategy control room — engines, risk, and ledger truth in one view." />
+        <div className="hp-loading">
+          <Pill tone="idle">Connecting</Pill>
+          <b>Waiting for server state…</b>
         </div>
       </div>
+    );
+  }
 
-      {state.binance.canWithdraw === true && (
-        <WarnStrip>
-          This API key can WITHDRAW. The app has no withdrawal route, but the Binance key should be recreated with that permission disabled.
-        </WarnStrip>
-      )}
-      {state.binance.keysPresent && !state.binance.connected && (
-        <WarnStrip>Account sync failing: {state.binance.lastError ?? 'unknown error'}</WarnStrip>
-      )}
+  const modeTone: Tone = s.config.killSwitch ? 'bad' : s.config.liveTradingEnabled ? 'ok' : 'warn';
+  const modeLabel = s.config.killSwitch ? 'Halted' : s.config.liveTradingEnabled ? 'Live armed' : 'Manual only';
+  const scannerFresh = s.scanner.lastTickTs ? Date.now() - s.scanner.lastTickTs < 45_000 : false;
+  const acct = s.account;
+  const posture = s.binance.keyPosture;
 
-      <section className="control-room-stack" aria-label="Control room skeleton">
-        <div className="cr-band cr-band-top">
-          <ControlBandHead
-            overline="Top layer"
-            title="Account and execution"
-            sub="Money state, open work, and the guarded manual handoff stay above the fold."
-          />
-          <div className="cr-line-grid compact">
-            {capitalRows.map((row) => <ControlLine key={row.label} {...row} />)}
-          </div>
-          <div className="cr-matrix-grid cr-matrix-grid-top">
-            <MiniMatrix title="Return checkpoint" rows={performanceRows} />
-          </div>
-        </div>
+  const structureRows = [
+    { label: 'Total profit', value: grossProfit, cls: 'pos' },
+    { label: 'Total loss', value: -grossLoss, cls: 'neg' },
+    { label: 'Fees (USDT)', value: -usdtFees, cls: 'fee' },
+    { label: 'Net PnL', value: totalRealized - usdtFees, cls: totalRealized - usdtFees >= 0 ? 'pos' : 'neg' },
+  ];
+  const structureMax = Math.max(1e-9, ...structureRows.map((r) => Math.abs(r.value)));
 
-        <div className="cr-band cr-band-brain">
-          <ControlBandHead
-            overline="Middle layer"
-            title="Strategy brain"
-            sub="The dashboard watches server-side scripts and scanner tiers; scripts themselves stay behind the scenes."
-            action={<button className="sec-link" type="button" onClick={() => setPage('strategies')}>Open scanners →</button>}
-          />
-          <div className="cr-line-grid brain">
-            {brainRows.map((row) => <ControlLine key={row.label} {...row} />)}
-          </div>
-          <div className="runtime-console" aria-label="Strategy runtime lanes">
-            <div className="runtime-head">
-              <span>Runtime lanes</span>
-              <b>{state.mode === 'HALTED' ? 'halted' : 'paper/manual'}</b>
-            </div>
-            <div className="runtime-lanes">
-              {runtimeLanes.map((lane) => <RuntimeLaneItem key={lane.label} {...lane} />)}
-            </div>
-          </div>
-        </div>
+  return (
+    <div className="container page hp-page wide dash-page">
+      <PageHead
+        mark={<IconGrid size={18} />}
+        tone={modeTone}
+        title="Dashboard"
+        sub="Strategy control room — engines, risk, and ledger truth in one view."
+        meta={
+          <>
+            <Pill tone={modeTone}>{modeLabel}</Pill>
+            <span>
+              {s.binance.connected ? `account synced ${timeAgo(s.binance.lastSyncTs)}` : s.binance.keysPresent ? 'account sync failing' : 'account disconnected'}
+            </span>
+            <span className="hp-head-btns">
+              <button className="hp-btn" type="button" onClick={() => setPage('opportunities')}>
+                <IconRadar size={13} /> Queue{proposals.length ? ` · ${proposals.length}` : ''}
+              </button>
+            </span>
+          </>
+        }
+      />
 
-        <div className="cr-band cr-band-guard">
-          <ControlBandHead
-            overline="Bottom layer"
-            title="Security, sessions, and context"
-            sub="Risk, active browser session, source health, news, calendar, and the ledger live below the strategy layer."
-            action={<button className="sec-link" type="button" onClick={() => openOverlay('calendar')}><IconCalendar size={13} /> Calendar</button>}
-          />
-          <div className="cr-line-grid guard">
-            {guardRows.map((row) => <ControlLine key={row.label} {...row} />)}
-          </div>
-          <div className="cr-matrix-grid">
-            <MiniMatrix title="Live hygiene" rows={liveHygieneRows} />
-            <MiniMatrix title="Risk what-if" rows={riskLabRows} />
-            <MiniMatrix title="Market context" rows={marketContextRows} />
-          </div>
-        </div>
-      </section>
-
-      <section className={`card dash-command-center mode-${state.mode.toLowerCase()}`}>
-        <div className="dash-command-top">
-          <div className="dash-truth-panel">
-            <div className="dash-truth-meta">
-              <span className={`dash-mode-text ${modeTone}`}>{postureLine}</span>
-              <span>{state.config.killSwitch ? 'kill switch on' : 'kill switch off'}</span>
-              <span>{state.config.allowedSymbols.length} allowed</span>
-            </div>
-            <div className="dash-truth-main">
-              <span>{acct ? 'Total equity' : 'Account sync'}</span>
-              {acct ? (
-                <b className="num"><Num value={acct.totalUsdt}>{fmtPrice(acct.totalUsdt)}</Num></b>
-              ) : (
-                <b className="dash-truth-empty">{accountLine}</b>
-              )}
-              <em>
-                {acct?.dayChangeUsd !== null && acct?.dayChangeUsd !== undefined
-                  ? `${acct.dayChangeUsd >= 0 ? '+' : '-'}${fmtPrice(Math.abs(acct.dayChangeUsd))}${dayPct !== null ? ` ${fmtPct(dayPct, 2)}` : ''} today`
-                  : 'Public data is live; balances, orders, fills, and equity unlock only after server-side read keys.'}
-              </em>
-            </div>
-            {!state.binance.keysPresent && (
-              <div className="dash-truth-note">
-                No browser key form. No withdrawals. Configure read keys only on the server.
-              </div>
+      {/* ================= ZONE 1 · OVERVIEW ============================ */}
+      <section className="hp-group lg-feed dash-perf">
+        <div className="lg-feed-head">
+          <h3>Key stats</h3>
+          <span className="hp-val">
+            {perfMode === 'equity' ? (
+              <>
+                <span className="pc-key pos" /> live equity · {pnl?.equitySnapshots.length ?? 0} snapshots
+              </>
+            ) : perfMode === 'usd' ? (
+              <>
+                <span className="pc-key pos" /> cumulative PnL
+                <span className="pc-key bars" /> daily realized
+              </>
+            ) : (
+              <>
+                <span className="pc-key pos" /> strategy %
+                <span className="pc-key bench" /> BTC buy &amp; hold
+              </>
             )}
-          </div>
-
-          <aside className="dash-posture-panel">
-            <div className="dash-posture-score">
-              <span>Posture</span>
-              <b className="num">{readinessScore}/{readiness.length}</b>
-              <em>{readinessAttention} attention · {readinessWaiting} waiting</em>
-            </div>
-            <div className="dash-posture-list">
-              {readiness.map((item) => (
-                <ReadinessItem key={item.label} {...item} />
-              ))}
-            </div>
-          </aside>
+            <Seg
+              value={perfMode}
+              options={[
+                { id: 'equity', label: 'Equity' },
+                { id: 'usd', label: 'PnL' },
+                { id: 'pct', label: 'ROI %' },
+              ]}
+              onChange={setPerfMode}
+            />
+          </span>
         </div>
-
-        <div className="dash-kpi-strip">
-          {commandKpis.map((item) => (
-            <CommandKpi key={item.label} {...item} />
-          ))}
+      <div className="hp-stats dash-keystats">
+        <div className="hp-stat">
+          <span className="k">Total equity</span>
+          <span className="v">{acct ? <Num value={acct.totalUsdt}>{fmtPrice(acct.totalUsdt)}</Num> : '—'}</span>
+          <span className="s">{acct ? `${fmtPrice(acct.availableUsdt)} free · ${fmtPrice(exposure)} exposed` : 'read sync pending'}</span>
         </div>
+        <div className="hp-stat">
+          <span className="k">Total PnL</span>
+          <span className={`v ${days.length ? signClass(totalRealized) : ''}`}>
+            {days.length ? fmtPrice(totalRealized) : '—'}
+          </span>
+          <span className="s">{totalPct !== null && days.length ? `${totalPct >= 0 ? '+' : ''}${totalPct.toFixed(2)}% on starting equity` : `realized · ${days.length} day${days.length === 1 ? '' : 's'} of history`}</span>
+        </div>
+        <div className="hp-stat">
+          <span className="k">Max drawdown</span>
+          <span className="v">{dd ? `${dd.pct.toFixed(2)}%` : '—'}</span>
+          <span className="s">{dd ? `${fmtPrice(dd.usd)} peak to trough` : 'needs equity snapshots'}</span>
+        </div>
+        <div className="hp-stat">
+          <span className="k">Win rate</span>
+          <span className="v">{winRate !== null ? `${winRate.toFixed(0)}%` : '—'}</span>
+          <span className="s">{days.length ? `${winDays.length}W / ${lossDays.length}L days` : 'no closed PnL days yet'}</span>
+        </div>
+        <div className="hp-stat">
+          <span className="k">Profit factor</span>
+          <span className="v">{profitFactor === null ? '—' : profitFactor === Infinity ? '∞' : profitFactor.toFixed(2)}</span>
+          <span className="s">{profitFactor === Infinity ? 'no losing day recorded yet' : 'gross profit / gross loss'}</span>
+        </div>
+        <div className="hp-stat">
+          <span className="k">Sharpe</span>
+          <span className="v">{sr !== null ? sr.toFixed(2) : '—'}</span>
+          <span className="s">{sr !== null ? 'annualized from snapshots' : `needs ${Math.max(0, 8 - equity.length)} more snapshots`}</span>
+        </div>
+      </div>
 
-        <div className="dash-decision-stack">
-          <div className="dash-decision-head">
-            <div>
-              <span>Decision stack</span>
-              <h2>Next action</h2>
+
+        {perfMode === 'equity' ? (
+          (pnl?.equitySnapshots.length ?? 0) >= 2 ? (
+            <div className="dash-perf-body">
+              <EquityChart snaps={pnl!.equitySnapshots} />
             </div>
-            <button className="sec-link" type="button" onClick={() => setPage('opportunities')}>
-              Open queue →
-            </button>
+          ) : (
+            <div className="lg-empty-pad">
+              <Empty title="Equity snapshots are warming up">The account is snapshotted every 15 minutes once connected.</Empty>
+            </div>
+          )
+        ) : days.length >= 2 ? (
+          <div className="dash-perf-body">
+            <PerfChart days={days} mode={baseEquity && perfMode === 'pct' ? 'pct' : 'usd'} base={baseEquity} bench={bench} />
+            {perfMode === 'pct' && !bench && <p className="loan-console-note">Benchmark needs BTC daily closes covering the PnL window.</p>}
           </div>
-          <div className="dash-decision-grid">
-            {decisionItems.map((item, idx) => (
-              <button
-                key={`${item.meta}-${item.title}`}
-                className={`dash-decision-item ${item.tone} ${item.primary ? 'primary' : ''}`}
-                type="button"
-                onClick={item.onClick}
-              >
-                <span className="dash-decision-rank num">{String(idx + 1).padStart(2, '0')}</span>
-                <span className="dash-decision-icon">{item.icon}</span>
-                <span className="dash-decision-copy">
-                  <span className="dash-decision-meta">{item.meta}</span>
-                  <b>{item.title}</b>
-                  <em>{item.detail}</em>
-                </span>
-                <span className="dash-decision-action">{item.action}</span>
-              </button>
-            ))}
+        ) : (
+          <div className="lg-empty-pad">
+            <Empty title="Realized PnL curve arms after the first closed round-trips">
+              Switch to Equity for the live account curve — realized PnL and daily bars draw from ledgered fills only, never simulated.
+            </Empty>
           </div>
-        </div>
+        )}
       </section>
 
-      <div className="dashboard-grid">
-        <main className="dash-main-lane">
-          <section className="card dash-ops-card">
-            <PanelHead
-              icon={<IconList />}
-              title="Orders and fills"
-              sub="Live account workbench, compact enough to scan while strategies are running."
-              action={<button className="sec-link" type="button" onClick={() => setPage('orders')}>Open orders →</button>}
-            />
-            <div className="dash-op-columns">
-              <div className="dash-op-panel">
-                <div className="dash-op-head">
-                  <span>Open orders</span>
-                  <b className="num">{state.openOrders.length}</b>
-                </div>
-                {state.openOrders.length === 0 ? (
-                  <CompactEmpty title="No open orders" body={state.binance.keysPresent ? 'New orders appear here live within seconds.' : 'Connect Binance to manage orders.'} />
-                ) : (
-                  <div className="table-scroll">
-                    <table className="mkt dense">
-                      <thead>
-                        <tr>
-                          <th className="l">Symbol</th>
-                          <th className="l">Side</th>
-                          <th>Price</th>
-                          <th>Qty</th>
-                          <th>Age</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {state.openOrders.slice(0, 6).map((o) => (
-                          <tr key={o.orderId} className="rowlink" onClick={() => setPage('orders')}>
-                            <td className="l val-strong">{o.symbol}</td>
-                            <td className="l"><SideTag side={o.side} /></td>
-                            <td><span className="num">{fmtPrice(o.price)}</span></td>
-                            <td><span className="num">{fmtQty(o.origQty)}</span></td>
-                            <td className="muted">{timeAgo(o.time)} {o.stale && <span className="chip-tag gold">stale</span>}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-              <div className="dash-op-panel">
-                <div className="dash-op-head">
-                  <span>Recent fills</span>
-                  <b className="num">{state.recentFills.length}</b>
-                </div>
-                {state.recentFills.length === 0 ? (
-                  <CompactEmpty title="No fills recorded" body="Fills stream after Binance connects; history import lives on the Fills page." />
-                ) : (
-                  <div className="table-scroll">
-                    <table className="mkt dense">
-                      <thead>
-                        <tr>
-                          <th className="l">Symbol</th>
-                          <th className="l">Side</th>
-                          <th>Price</th>
-                          <th>Value</th>
-                          <th>Time</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {state.recentFills.slice(0, 6).map((f) => (
-                          <tr key={`${f.symbol}-${f.tradeId}`}>
-                            <td className="l val-strong">{f.symbol}</td>
-                            <td className="l"><SideTag side={f.side} /></td>
-                            <td><span className="num">{fmtPrice(f.price)}</span></td>
-                            <td><span className="num">{fmtPrice(f.quoteQty)}</span></td>
-                            <td className="muted">{timeAgo(f.ts)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+      {days.length === 0 && winnersBySymbol.length === 0 ? (
+        <div className="hp-note dash-arming">
+          Realized analytics — distribution, attribution, profit structure, day analysis — arm automatically when the first round-trips close. Nothing here is simulated.
+        </div>
+      ) : (
+      <div className="dash-analytics">
+        <section className="hp-group lg-feed">
+          <div className="lg-feed-head">
+            <h3>Returns distribution</h3>
+            <span>{days.length ? `${days.length} daily results` : 'waiting'}</span>
+          </div>
+          {days.length >= 3 ? (
+            <div className="dash-chart-pad"><DistChart days={days} /></div>
+          ) : (
+            <div className="lg-empty-pad"><Empty title="Needs 3+ PnL days">The histogram of daily results appears with history.</Empty></div>
+          )}
+        </section>
+
+        <section className="hp-group lg-feed">
+          <div className="lg-feed-head">
+            <h3>Attribution</h3>
+            <span>{winnersBySymbol.length ? `${bySymbol.length} symbols` : 'waiting'}</span>
+          </div>
+          {winnersBySymbol.length ? (
+            <div className="dash-donut">
+              <Donut slices={winnersBySymbol.map((r) => ({ label: baseOf(r.symbol), value: r.usd }))} size={124} />
+              <div className="dash-donut-legend">
+                {bySymbol.slice(0, 5).map((r) => (
+                  <button key={r.symbol} type="button" onClick={() => openDetail(r.symbol)}>
+                    <span><i style={{ background: brandColor(r.symbol) }} />{baseOf(r.symbol)}</span>
+                    <b className={signClass(r.usd)}>{fmtPrice(r.usd)}</b>
+                  </button>
+                ))}
               </div>
             </div>
-          </section>
+          ) : (
+            <div className="lg-empty-pad"><Empty title="No closed symbol PnL">Attribution starts after the first sell fill matches average cost.</Empty></div>
+          )}
+        </section>
 
-          <section className="card dash-stream-card">
-            <PanelHead
-              icon={<IconClock />}
-              title="Event stream"
-              sub="Human-readable ledger pulse, newest first."
-              action={<button className="sec-link" type="button" onClick={() => setPage('ledger')}>Full ledger →</button>}
-            />
-            <div className="dash-timeline">
-              {recentEvents.length === 0 ? (
-                <EmptyState title="No ledger events yet">Risk checks, proposals, order intents, and config changes will appear here.</EmptyState>
-              ) : (
-                recentEvents.map((ev) => (
-                  <button key={ev.id} className="dash-timeline-row" type="button" onClick={() => setPage('ledger')}>
-                    <span className="dash-timeline-time num">{fmtTimeShort(ev.ts)}</span>
-                    <span className="dash-timeline-dot" />
-                    <span className="dash-timeline-copy">{eventSummary(ev.kind, ev.data as Record<string, unknown> | null, ev.symbol)}</span>
-                    {ev.symbol && <span className="dash-timeline-symbol">{ev.symbol}</span>}
-                  </button>
-                ))
-              )}
-            </div>
-          </section>
-        </main>
-
-        <aside className="dash-side-lane">
-          <section className="card dash-ticket-card">
-            <PanelHead icon={<IconTicket />} title="Manual ticket" sub="Shortcut into the guarded trade flow." />
-            <label className="dash-symbol-field">
-              <span>Symbol</span>
-              <input value={quickSymbol} onChange={(e) => setQuickSymbol(e.target.value.toUpperCase())} spellCheck={false} />
-            </label>
-            <div className="dash-ticket-actions">
-              <button
-                className="cta-pill buy"
-                type="button"
-                disabled={!isTradeSymbolReady}
-                onClick={() => openTicket({ symbol: quickSymbol.trim(), side: 'BUY', source: 'manual' })}
-              >
-                Buy
-              </button>
-              <button
-                className="cta-pill danger"
-                type="button"
-                disabled={!isTradeSymbolReady}
-                onClick={() => openTicket({ symbol: quickSymbol.trim(), side: 'SELL', source: 'manual' })}
-              >
-                Sell
-              </button>
-            </div>
-            <div className="dash-guard-note">
-              <IconShield /> Risk gate, allowlist, kill switch, and typed-symbol confirmation still apply.
-            </div>
-          </section>
-
-          <section className="card dash-pulse-card">
-            <PanelHead
-              icon={<IconBrain />}
-              title="Strategy pulse"
-              sub={`${state.proposals.length} active proposals · threshold ${fmtBasis(state.scanner.grossThresholdPct, 2)}`}
-              action={<button className="sec-link" type="button" onClick={() => setPage('strategies')}>Strategies →</button>}
-            />
-            <div className="dash-system-row">
-              <span>Basis monitor</span>
-              <b>{state.proposals.length} proposing</b>
-            </div>
-            <div className="dash-system-row">
-              <span>Volume spike</span>
-              <b>in development</b>
-            </div>
-            <div className="dash-proposal-list">
-              {topProposals.length === 0 ? (
-                <CompactEmpty title="No active proposals" body="Scanner will surface basis/funding setups here when thresholds persist." />
-              ) : (
-                topProposals.map((p) => (
-                  <button key={p.id} className="dash-proposal-row" type="button" onClick={() => setPage('opportunities')}>
-                    <TokenIcon symbol={p.symbol} size={28} />
-                    <span>
-                      <b>{baseOf(p.symbol)}</b>
-                      <em>{p.side === 'SHORT_PERP_LONG_SPOT' ? 'short perp / long spot' : 'long perp / short spot'}</em>
-                    </span>
-                    <strong className={`num ${signClass(p.basisNow)}`}>{fmtBasis(p.basisNow, 2)}</strong>
-                  </button>
-                ))
-              )}
-            </div>
-          </section>
-
-          <section className="card dash-system-card">
-            <PanelHead icon={<IconWifi />} title="System state" sub="Feeds, account stream, and market refresh." />
-            {feedEntries.map(([name, status]) => (
-              <div key={name} className={`dash-system-row tone-${statusTone(status)}`}>
-                <span>{name}</span>
-                <b>{status}</b>
+        <section className="hp-group lg-feed">
+          <div className="lg-feed-head">
+            <h3>Profit structure</h3>
+            <span>{otherFeeAssets ? `+${otherFeeAssets} non-USDT fee asset${otherFeeAssets === 1 ? '' : 's'}` : 'ledger totals'}</span>
+          </div>
+          <div className="dash-structure">
+            {structureRows.map((r) => (
+              <div key={r.label} className="dash-struct-row">
+                <span className="dash-struct-label">{r.label}</span>
+                <span className="dash-struct-track">
+                  <i className={r.cls} style={{ width: `${Math.max(days.length ? 2 : 0, (Math.abs(r.value) / structureMax) * 100)}%` }} />
+                </span>
+                <b className={`num ${r.value > 0 ? 'up' : r.value < 0 ? 'down' : ''}`}>{days.length ? fmtPrice(r.value) : '—'}</b>
               </div>
             ))}
-            <div className={`dash-system-row tone-${accountTone}`}>
-              <span>binance account</span>
-              <b>{state.binance.keysPresent ? (state.binance.connected ? 'synced' : 'error') : 'no keys'}</b>
-            </div>
-            <div className={`dash-system-row tone-${state.binance.userStream === 'open' ? 'ok' : 'idle'}`}>
-              <span>user stream</span>
-              <b>{state.binance.userStream}</b>
-            </div>
-            <div className={`dash-system-row tone-${markets.length > 0 ? 'ok' : 'idle'}`}>
-              <span>market cache</span>
-              <b>{markets.length} rows · {marketsUpdatedAt ? timeAgo(marketsUpdatedAt) : '—'}</b>
-            </div>
-          </section>
+          </div>
+        </section>
+      </div>
 
-          {sortedHoldings.length > 0 ? (
-            <section className="card dash-holdings-card">
-              <PanelHead
-                icon={<IconWallet />}
-                title="Holdings"
-                sub={`${sortedHoldings.length} largest balances`}
-                action={<button className="sec-link" type="button" onClick={() => setPage('wallets')}>Wallet →</button>}
-              />
-              <div className="dash-donut-line">
-                <Donut slices={acct!.entries.map((e) => ({ label: e.asset, value: e.valueUsdt }))} size={104} />
-              </div>
-              {sortedHoldings.map((b) => (
-                <button key={b.asset} className="dash-asset-row" type="button" onClick={() => openDetail(`${b.asset}USDT`)}>
-                  <TokenIcon symbol={`${b.asset}USDT`} size={26} />
-                  <span>
-                    <b>{b.asset}</b>
-                    <em>{fmtQty(b.free + b.locked)}</em>
-                  </span>
-                  <strong className="num">{fmtPrice(b.valueUsdt)}</strong>
-                </button>
-              ))}
-            </section>
+      )}
+
+      <div className="dash-analytics dash-analytics2">
+        <section className="hp-group lg-feed">
+          <div className="lg-feed-head">
+            <h3>Run-ups &amp; drawdowns</h3>
+            <span>{segs ? `${segs.ups.length} run-ups · ${segs.downs.length} drawdowns` : 'needs equity snapshots'}</span>
+          </div>
+          {segs ? (
+            <dl className="lg-facts dash-facts">
+              <div><dt>Avg run-up</dt><dd className="num">{segs.avgUpMs !== null ? duration(0, segs.avgUpMs) : '—'}</dd></div>
+              <div><dt>Avg drawdown</dt><dd className="num">{segs.avgDownMs !== null ? duration(0, segs.avgDownMs) : '—'}</dd></div>
+              <div><dt>Max run-up</dt><dd className="num up">{segs.maxUp !== null ? `+${segs.maxUp.toFixed(2)}%` : '—'}</dd></div>
+              <div><dt>Max DD of capital</dt><dd className="num down">{dd && baseEquity ? `${((dd.usd / baseEquity) * 100).toFixed(2)}%` : '—'}</dd></div>
+              <div><dt>Return / max DD</dt><dd className="num">{dd && dd.usd > 0 ? (totalRealized / dd.usd).toFixed(2) : '—'}</dd></div>
+            </dl>
           ) : (
-            <section className="card dash-market-card">
-              <PanelHead
-                icon={<IconRadar />}
-                title="Market movers"
-                sub="Public data while the account is disconnected."
-                action={<button className="sec-link" type="button" onClick={() => setPage('markets')}>Markets →</button>}
-              />
-              {topMarkets.length === 0 ? (
-                <CompactEmpty title="Markets loading" body="The market cache will populate once the public feed responds." />
-              ) : (
-                topMarkets.map((m) => (
-                  <button key={m.symbol} className="dash-asset-row" type="button" onClick={() => openDetail(m.symbol)}>
-                    <TokenIcon symbol={m.symbol} size={26} />
-                    <span>
-                      <b>{m.base}</b>
-                      <em>{m.hasPerp ? 'spot + perp' : 'spot'}</em>
-                    </span>
-                    <strong className={`num ${signClass(m.change24hPct)}`}>{fmtPct(m.change24hPct, 2)}</strong>
-                  </button>
-                ))
-              )}
-            </section>
+            <div className="lg-empty-pad"><Empty title="Needs 3+ equity snapshots">Run-up and drawdown durations are measured on the real equity curve.</Empty></div>
           )}
-        </aside>
+        </section>
+
+        <section className="hp-group lg-feed">
+          <div className="lg-feed-head">
+            <h3>Day analysis</h3>
+            <span>{days.length ? `${days.length} PnL days` : 'waiting'}</span>
+          </div>
+          {dayStats ? (
+            <>
+            <div className="dash-wl"><WinLoseBar win={winDays.length} lose={lossDays.length} winLabel="Win days" loseLabel="Loss days" /></div>
+            <dl className="lg-facts dash-facts">
+              <div><dt>Best day</dt><dd className="num up">{fmtPrice(dayStats.best.usd)} <em>{dayStats.best.day.slice(5)}</em></dd></div>
+              <div><dt>Worst day</dt><dd className={`num ${dayStats.worst.usd < 0 ? 'down' : ''}`}>{fmtPrice(dayStats.worst.usd)} <em>{dayStats.worst.day.slice(5)}</em></dd></div>
+              <div><dt>Avg win / loss day</dt><dd className="num">{dayStats.avgWin !== null ? fmtPrice(dayStats.avgWin) : '—'} / {dayStats.avgLoss !== null ? fmtPrice(-dayStats.avgLoss) : '—'}</dd></div>
+              <div><dt>Win : loss ratio</dt><dd className="num">{dayStats.plRatio !== null ? `${dayStats.plRatio.toFixed(2)} : 1` : '—'}</dd></div>
+              <div><dt>Win streak</dt><dd className="num">{dayStats.curStreak} now · {dayStats.maxStreak} best</dd></div>
+            </dl>
+            </>
+          ) : (
+            <div className="lg-empty-pad"><Empty title="No PnL days yet">Best/worst days, averages, and streaks appear with closed round-trips.</Empty></div>
+          )}
+        </section>
       </div>
-    </div>
-  );
-}
 
-function PanelHead({ icon, title, sub, action }: { icon: ReactNode; title: string; sub: string; action?: ReactNode }) {
-  return (
-    <div className="dash-panel-head">
-      <span className="dash-panel-icon">{icon}</span>
-      <span className="dash-panel-copy">
-        <span className="dash-panel-title">{title}</span>
-        <span className="dash-panel-sub">{sub}</span>
-      </span>
-      {action && <span className="dash-panel-action">{action}</span>}
-    </div>
-  );
-}
+      {/* ================= ZONE 2 · STRATEGY BRAIN ====================== */}
+      <Sec>Strategy brain</Sec>
+      <Group>
+        <Row
+          icon={<IconBrain size={15} />}
+          tint={TINT.indigo}
+          label="basis-scanner"
+          sub={`${s.scanner.pairs} pairs · ${s.scanner.watching} watching · gate ${s.scanner.grossThresholdPct.toFixed(2)}% · tick ${s.scanner.lastTickTs ? timeAgo(s.scanner.lastTickTs) : '—'}`}
+          end={
+            <>
+              <span className="hp-val">{proposals.length} proposal{proposals.length === 1 ? '' : 's'}</span>
+              <Pill tone={scannerFresh ? 'ok' : 'bad'}>{scannerFresh ? 'running' : 'stale'}</Pill>
+              <button className="hp-btn" type="button" onClick={() => setPage('strategies')}>Monitor</button>
+            </>
+          }
+        />
+        <Row
+          icon={<IconPulse size={15} />}
+          tint={TINT.teal}
+          label="volume-scanner"
+          sub="88/88 synthetic proofs · live stream adapters pending — never simulated."
+          end={
+            <>
+              <Pill tone="idle">not wired</Pill>
+              <button className="hp-btn" type="button" onClick={() => setPage('volume')}>Board</button>
+            </>
+          }
+        />
+        {proposals.slice(0, 3).map((p) => (
+          <Row
+            key={p.id}
+            icon={<TokenIcon symbol={p.symbol} size={16} />}
+            label={`${baseOf(p.symbol)} · ${p.side === 'SHORT_PERP_LONG_SPOT' ? 'carry' : 'borrow'} setup`}
+            sub={p.reason}
+            end={
+              <>
+                <span className={`hp-val ${signClass(p.netEdgePct)}`}>{fmtPct(p.netEdgePct, 2)}</span>
+                <button className="hp-btn" type="button" onClick={() => void approveProposal(p.id)}>Ticket</button>
+                <button className="hp-btn" type="button" onClick={() => setPage('opportunities')}>Inspect</button>
+              </>
+            }
+          />
+        ))}
+        <Row
+          icon={<IconShield size={15} />}
+          tint={TINT.red}
+          label="risk-gate"
+          sub={lastRejection ? `last reject ${timeAgo(lastRejection.ts)} — ${rejectionInfo(lastRejection)}` : 'No rejected decisions in the current snapshot.'}
+          end={
+            <>
+              <span className="hp-val">{s.risk.rejectionsToday} today</span>
+              <button className="hp-btn" type="button" onClick={() => setPage('ledger')}>Logs</button>
+            </>
+          }
+        />
+      </Group>
 
-function ReadinessItem({ icon, label, detail, tone }: { icon: ReactNode; label: string; detail: string; tone: Tone }) {
-  return (
-    <div className={`dash-readiness-item ${tone}`}>
-      <span>{icon}</span>
-      <span>
-        <b>{label}</b>
-        <em>{detail}</em>
-      </span>
-    </div>
-  );
-}
+      {/* ================= ZONE 3 · OPS & CONTEXT ======================= */}
+      <div className="dash-grid">
+        <div className="dash-col">
+          <Sec>Control &amp; security</Sec>
+          <Group>
+            <Row
+              icon={<IconPower size={15} />}
+              tint={TINT.red}
+              label="Kill switch"
+              sub={s.config.killSwitch ? 'Live orders stop before routing.' : 'Off — the server risk gate still checks every order.'}
+              end={
+                <>
+                  <Pill tone={s.config.killSwitch ? 'bad' : 'ok'}>{s.config.killSwitch ? 'On' : 'Off'}</Pill>
+                  <button className="hp-btn" type="button" onClick={() => setPage('risk')}>Risk</button>
+                </>
+              }
+            />
+            <Row
+              icon={<IconKey size={15} />}
+              tint={TINT.orange}
+              label="Key posture"
+              sub={s.binance.keyFingerprint ? `key ${s.binance.keyFingerprint} · server-side only` : 'no server keys configured'}
+              end={<Pill tone={posture.tone as Tone}>{posture.label}</Pill>}
+            />
+            <Row
+              icon={<IconList size={15} />}
+              tint={TINT.blue}
+              label="Execution truth"
+              sub={`${openOrders.length}/${s.config.maxOpenOrders} open orders · ${fmtMoney(heldNotional)} held · ${positions.length} position${positions.length === 1 ? '' : 's'}`}
+              end={<button className="hp-btn" type="button" onClick={() => setPage('orders')}>Execution</button>}
+            />
+            <Row
+              icon={<IconWallet size={15} />}
+              tint={TINT.green}
+              label="Daily notional"
+              sub={`${fmtMoney(s.risk.dailyNotionalUsedUsd)} used of ${fmtMoney(s.config.maxDailyNotionalUsd)} cap`}
+              end={
+                <span className="hp-val">
+                  <Dot tone={s.risk.dailyNotionalUsedUsd < s.config.maxDailyNotionalUsd ? 'ok' : 'bad'} />
+                  {fmtMoney(Math.max(0, s.config.maxDailyNotionalUsd - s.risk.dailyNotionalUsedUsd))} left
+                </span>
+              }
+            />
+          </Group>
+        </div>
 
-function CommandKpi({
-  label,
-  value,
-  sub,
-  tone,
-  meter,
-}: {
-  label: string;
-  value: ReactNode;
-  sub: string;
-  tone: Tone;
-  meter?: number;
-}) {
-  return (
-    <section className={`dash-command-kpi ${tone}`}>
-      <span className="dash-kpi-label">{label}</span>
-      <b className="dash-kpi-value num">{value}</b>
-      <span className="dash-kpi-sub">{sub}</span>
-        {meter !== undefined && (
-          <span className="dash-meter"><i style={{ width: `${Math.max(0, Math.min(100, meter))}%` }} /></span>
-        )}
-    </section>
-  );
-}
+        <div className="dash-col">
+          <Sec>System</Sec>
+          <Group>
+            <Row
+              icon={<IconWifi size={15} />}
+              tint={TINT.blue}
+              label="Account stream"
+              sub={s.binance.userStream === 'open' ? 'User stream live.' : 'Signed polling keeps account truth fresh.'}
+              end={<Pill tone={s.binance.connected ? (s.binance.userStream === 'open' ? 'ok' : 'warn') : 'bad'}>{s.binance.connected ? (s.binance.userStream === 'open' ? 'stream' : 'polling') : 'down'}</Pill>}
+            />
+            <Row
+              icon={<IconPulse size={15} />}
+              tint={TINT.green}
+              label="Market feed"
+              sub={s.scanner.lastTickTs ? `scanner tick ${timeAgo(s.scanner.lastTickTs)}` : 'waiting for first tick'}
+              end={<Pill tone={scannerFresh ? 'ok' : 'bad'}>{scannerFresh ? 'live' : 'stale'}</Pill>}
+            />
+            <Row
+              icon={<IconBrain size={15} />}
+              tint={TINT.indigo}
+              label="Engine heartbeat"
+              sub="Engine process heartbeat not started."
+              end={
+                <>
+                  <Pill tone="idle">not started</Pill>
+                  <button className="hp-btn" type="button" onClick={() => setPage('system')}>Health</button>
+                </>
+              }
+            />
+            <Row
+              icon={<IconBook size={15} />}
+              tint={TINT.indigo}
+              label="Ledger"
+              sub={`${s.events.length} events in state · every action recorded`}
+              end={<button className="hp-btn" type="button" onClick={() => setPage('ledger')}>Logs</button>}
+            />
+            <Row
+              icon={<IconTerminal size={15} />}
+              tint={TINT.orange}
+              label="AWS cost &amp; usage"
+              sub="Cost Explorer not connected — no invented billing numbers."
+              end={<Pill tone="idle">not connected</Pill>}
+            />
+          </Group>
+        </div>
 
-function ControlBandHead({
-  overline,
-  title,
-  sub,
-  action,
-}: {
-  overline: string;
-  title: string;
-  sub: string;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="cr-band-head">
-      <span className="cr-overline">{overline}</span>
-      <div>
-        <h2>{title}</h2>
-        <p>{sub}</p>
+        <div className="dash-col">
+          <Sec>Intelligence</Sec>
+          <section className="hp-group lg-facet dash-events">
+            <h3><IconNewspaper size={12} /> Latest listings</h3>
+            {news === null ? (
+              <div className="lg-empty-pad"><Empty title="Fetching news…" /></div>
+            ) : news.length === 0 ? (
+              <div className="lg-empty-pad"><Empty title="News feed unavailable">Binance could not be reached — nothing is invented.</Empty></div>
+            ) : (
+              news.map((it) => (
+                <a key={it.id} href={it.url} target="_blank" rel="noreferrer noopener" title={it.title}>
+                  <span>{it.title}</span>
+                </a>
+              ))
+            )}
+            <h3><IconCalendar size={12} /> High-impact events</h3>
+            {cal === null ? (
+              <div className="lg-empty-pad"><Empty title="Fetching calendar…" /></div>
+            ) : cal.length === 0 ? (
+              <div className="lg-empty-pad"><Empty title="No upcoming high-impact events" /></div>
+            ) : (
+              cal.map((it) => (
+                <button key={it.id} type="button" onClick={() => setPage('calendar')} title={it.title}>
+                  <span>{it.country} · {it.title}</span>
+                  <b>{new Date(it.date).toLocaleString('en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</b>
+                </button>
+              ))
+            )}
+            <button type="button" onClick={() => setPage('news')}>
+              <span>Open News &amp; Calendar</span>
+              <b>→</b>
+            </button>
+          </section>
+        </div>
       </div>
-      {action && <span className="cr-band-action">{action}</span>}
-    </div>
-  );
-}
 
-function ControlLine({ label, value, detail, tone, icon, onClick, live }: ControlRow) {
-  const content = (
-    <>
-      <span className={`cr-line-icon ${live ? 'live' : ''}`}>{icon}</span>
-      <span className="cr-line-copy">
-        <span>{label}</span>
-        <b>{value}</b>
-        <em>{detail}</em>
-      </span>
-      <span className={`cr-line-state ${tone}`} />
-    </>
-  );
-  if (onClick) {
-    return (
-      <button className={`cr-line ${tone}`} type="button" onClick={onClick}>
-        {content}
-      </button>
-    );
-  }
-  return <div className={`cr-line ${tone}`}>{content}</div>;
-}
-
-function RuntimeLaneItem({ label, value, detail, tone, onClick, live }: RuntimeLane) {
-  const content = (
-    <>
-      <span className={`runtime-dot ${tone} ${live ? 'live' : ''}`} />
-      <span>
-        <b>{label}</b>
-        <em>{detail}</em>
-      </span>
-      <strong className="num">{value}</strong>
-    </>
-  );
-  if (onClick) {
-    return (
-      <button className={`runtime-lane ${tone}`} type="button" onClick={onClick}>
-        {content}
-      </button>
-    );
-  }
-  return <div className={`runtime-lane ${tone}`}>{content}</div>;
-}
-
-function MiniMatrix({ title, rows }: { title: string; rows: ControlRow[] }) {
-  return (
-    <section className="cr-mini-panel">
-      <div className="cr-mini-head">
-        <span>{title}</span>
-      </div>
-      <div className="cr-mini-rows">
-        {rows.map((row) => <MiniMatrixRow key={row.label} {...row} />)}
-      </div>
-    </section>
-  );
-}
-
-function MiniMatrixRow({ label, value, detail, tone, icon, onClick, live }: ControlRow) {
-  const content = (
-    <>
-      <span className={`cr-mini-icon ${tone} ${live ? 'live' : ''}`}>{icon}</span>
-      <span className="cr-mini-copy">
-        <span>{label}</span>
-        <b>{value}</b>
-        <em>{detail}</em>
-      </span>
-    </>
-  );
-  if (onClick) {
-    return (
-      <button className={`cr-mini-row ${tone}`} type="button" onClick={onClick}>
-        {content}
-      </button>
-    );
-  }
-  return <div className={`cr-mini-row ${tone}`}>{content}</div>;
-}
-
-function CompactEmpty({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="dash-compact-empty">
-      <b>{title}</b>
-      <span>{body}</span>
     </div>
   );
 }

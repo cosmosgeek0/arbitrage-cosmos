@@ -1,19 +1,9 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { useRefreshSignal } from '../lib/refresh';
-import { EmptyState, SideTag, StatePill } from '../components/ui';
+import { Empty, Pill, Seg } from '../components/px';
 import { TokenIcon } from '../components/TokenIcon';
-import {
-  IconBook,
-  IconChart,
-  IconCoins,
-  IconList,
-  IconPulse,
-  IconReceipt,
-  IconRefresh,
-  IconSearch,
-  IconShield,
-} from '../components/Icons';
+import { IconReceipt, IconRefresh } from '../components/Icons';
 import { baseOf, fmtDateTime, fmtMoney, fmtPrice, fmtQty, timeAgo } from '../format';
 import type { FillRow } from '../types';
 
@@ -43,77 +33,6 @@ function feeSummary(fills: FillRow[]): string {
   if (entries.length === 0) return 'No fees';
   const [asset, amount] = entries[0];
   return entries.length === 1 ? `${fmtQty(amount)} ${asset}` : `${fmtQty(amount)} ${asset} +${entries.length - 1}`;
-}
-
-function FillMetric({
-  icon,
-  label,
-  value,
-  sub,
-  tone,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: ReactNode;
-  sub: ReactNode;
-  tone?: 'ok' | 'bad' | 'warn' | 'idle';
-}) {
-  return (
-    <div className={`fill-metric ${tone ?? 'idle'}`}>
-      <span>{icon}</span>
-      <div>
-        <em>{label}</em>
-        <b className="num">{value}</b>
-        <small>{sub}</small>
-      </div>
-    </div>
-  );
-}
-
-function SourceTile({
-  label,
-  value,
-  sub,
-  tone,
-}: {
-  label: string;
-  value: ReactNode;
-  sub: ReactNode;
-  tone: 'ok' | 'warn' | 'idle';
-}) {
-  return (
-    <div className={`fill-source-tile ${tone}`}>
-      <StatePill tone={tone}>{label}</StatePill>
-      <b className="num">{value}</b>
-      <span>{sub}</span>
-    </div>
-  );
-}
-
-function FlowBars({ fills }: { fills: FillRow[] }) {
-  const recent = fills.slice(0, 24).reverse();
-  const max = Math.max(1e-9, ...recent.map((f) => Math.abs(f.quoteQty)));
-  if (recent.length === 0) {
-    return (
-      <div className="fill-flow-empty">
-        <span />
-        <b>Execution flow is ready.</b>
-        <em>Bars appear as live fills or imported Binance trades enter the ledger.</em>
-      </div>
-    );
-  }
-  return (
-    <div className="fill-flow-bars">
-      {recent.map((f) => {
-        const h = Math.max(7, (Math.abs(f.quoteQty) / max) * 100);
-        return (
-          <span key={fillKey(f)} className={`fill-flow-bar ${f.side === 'BUY' ? 'buy' : 'sell'}`} title={`${f.side} ${f.symbol} ${fmtPrice(f.quoteQty)}`}>
-            <i style={{ height: `${h}%` }} />
-          </span>
-        );
-      })}
-    </div>
-  );
 }
 
 export function Fills() {
@@ -184,18 +103,6 @@ export function Fills() {
   const sellNotional = sum(sellFills.map((f) => f.quoteQty));
   const uniqueSymbols = new Set(fills.map((f) => f.symbol)).size;
   const lastTs = fills[0]?.ts ?? null;
-  const topSymbols = useMemo(() => {
-    const map = new Map<string, { symbol: string; notional: number; count: number; buy: number; sell: number }>();
-    for (const f of fills) {
-      const row = map.get(f.symbol) ?? { symbol: f.symbol, notional: 0, count: 0, buy: 0, sell: 0 };
-      row.notional += f.quoteQty;
-      row.count += 1;
-      if (f.side === 'BUY') row.buy += f.quoteQty;
-      else row.sell += f.quoteQty;
-      map.set(f.symbol, row);
-    }
-    return Array.from(map.values()).sort((a, b) => b.notional - a.notional).slice(0, 5);
-  }, [fills]);
 
   const runImport = async () => {
     if (importDisabledReason) return;
@@ -215,153 +122,121 @@ export function Fills() {
     }
   };
 
-  const clearFilters = () => {
-    setQuery('');
-    setSide('ALL');
-    setSource('ALL');
-  };
-
   return (
-    <div className="container page fills-page">
-      <section className="fills-hero card">
-        <div className="fills-hero-copy">
-          <span className="fills-eyebrow"><IconReceipt size={15} /> execution ledger</span>
-          <h1 className="page-title">Fills</h1>
-          <p>
-            Binance-style execution history with Coinbase-grade clarity: every fill is ledgered, filterable, inspectable,
-            and wired back into PnL attribution.
-          </p>
-          <div className="fills-hero-actions">
-            <button className="cta-pill" type="button" onClick={() => setPage('pnl')}>
-              <IconChart size={14} />
-              PnL impact
-            </button>
-            <button className="mini-btn" type="button" onClick={() => setPage('ledger')}>
-              <IconBook size={14} />
-              Audit ledger
-            </button>
-            <button className="mini-btn" type="button" onClick={load} disabled={loading}>
-              <IconRefresh size={14} />
-              {loading ? 'Refreshing' : 'Refresh'}
-            </button>
-          </div>
+    <>
+      <div className="hp-stats exec-stats">
+        <div className="hp-stat">
+          <span className="k">Executed notional</span>
+          <span className="v">{fmtMoney(totalNotional)}</span>
+          <span className="s">{fills.length ? `${fills.length} fills · ${uniqueSymbols} symbols · last ${lastTs ? timeAgo(lastTs) : '—'}` : 'waiting for live fills or import'}</span>
         </div>
-        <div className="fills-hero-panel">
-          <StatePill tone={fills.length ? 'ok' : keysPresent ? 'warn' : 'idle'}>
-            {fills.length ? 'ledger active' : keysPresent ? 'ready to import' : 'keys not set'}
-          </StatePill>
-          <span>Executed notional</span>
-          <b className="num">{fmtMoney(totalNotional)}</b>
-          <em>{fills.length ? `${fills.length} fills across ${uniqueSymbols} symbols` : 'waiting for live fills or import'}</em>
-          <FlowBars fills={fills} />
+        <div className="hp-stat">
+          <span className="k">Buy / sell flow</span>
+          <span className="v">{fmtMoney(buyNotional)} / {fmtMoney(sellNotional)}</span>
+          <span className="s">{buyFills.length} buys · {sellFills.length} sells</span>
         </div>
-      </section>
+        <div className="hp-stat">
+          <span className="k">Commissions</span>
+          <span className="v">{feeSummary(fills)}</span>
+          <span className="s">as reported by Binance trades</span>
+        </div>
+      </div>
 
-      <section className="fill-metric-grid">
-        <FillMetric icon={<IconList size={16} />} label="Fills tracked" value={fills.length.toLocaleString('en-US')} sub={lastTs ? `last ${timeAgo(lastTs)}` : 'empty local ledger'} tone={fills.length ? 'ok' : 'idle'} />
-        <FillMetric icon={<IconPulse size={16} />} label="Buy / sell flow" value={`${fmtMoney(buyNotional)} / ${fmtMoney(sellNotional)}`} sub={`${buyFills.length} buys · ${sellFills.length} sells`} tone={buyFills.length || sellFills.length ? 'ok' : 'idle'} />
-        <FillMetric icon={<IconCoins size={16} />} label="Commissions" value={feeSummary(fills)} sub="as reported by Binance trades" tone={fills.length ? 'warn' : 'idle'} />
-        <FillMetric icon={<IconShield size={16} />} label="Safety" value={state?.mode ?? 'HALTED'} sub="read-only view, no withdrawal path" tone={state?.mode === 'LIVE_ARMED' ? 'warn' : 'ok'} />
-      </section>
-
-      <section className="fills-source-strip">
-        <SourceTile label="Stream" value={state?.binance.connected ? 'online' : 'offline'} sub="user stream or polling fallback" tone={state?.binance.connected ? 'ok' : keysPresent ? 'warn' : 'idle'} />
-        <SourceTile label="Import" value={keysPresent ? 'available' : 'locked'} sub={keysPresent ? 'last 200 trades per symbol' : 'server keys missing'} tone={keysPresent ? 'ok' : 'idle'} />
-        <SourceTile label="Coverage" value={uniqueSymbols || '—'} sub="symbols with executions" tone={uniqueSymbols ? 'ok' : 'idle'} />
-        <SourceTile label="Source" value={sources.length || '—'} sub={sources.length ? sources.join(', ') : 'no fill sources yet'} tone={sources.length ? 'ok' : 'idle'} />
-      </section>
-
-      <section className="fills-tools card">
-        <div className="fills-filter-row">
-          <label className="fills-search">
-            <IconSearch size={14} />
-            <input
-              placeholder="Search symbol, order id, trade id"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              spellCheck={false}
-            />
-          </label>
-          <div className="seg fills-seg">
-            {(['ALL', 'BUY', 'SELL'] as SideFilter[]).map((s) => (
-              <button key={s} className={side === s ? `on ${s === 'BUY' ? 'buy' : s === 'SELL' ? 'sell' : ''}` : ''} type="button" onClick={() => setSide(s)}>
-                {s === 'ALL' ? 'All sides' : s}
-              </button>
-            ))}
-          </div>
-          <div className="seg fills-seg source">
-            <button className={source === 'ALL' ? 'on' : ''} type="button" onClick={() => setSource('ALL')}>All sources</button>
+      <div className="lg-filters">
+        <input
+          className="hp-input lg-search"
+          placeholder="Search symbol, order id, trade id"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          spellCheck={false}
+        />
+        <Seg
+          value={side}
+          options={[
+            { id: 'ALL', label: 'All' },
+            { id: 'BUY', label: 'Buy' },
+            { id: 'SELL', label: 'Sell' },
+          ]}
+          onChange={setSide}
+        />
+        {sources.length > 0 && (
+          <select className="hp-input" value={source} onChange={(e) => setSource(e.target.value)}>
+            <option value="ALL">All sources</option>
             {sources.map((s) => (
-              <button key={s} className={source === s ? 'on' : ''} type="button" onClick={() => setSource(s)}>{s}</button>
+              <option key={s} value={s}>{s}</option>
             ))}
-          </div>
-          <button className="mini-btn" type="button" onClick={clearFilters} disabled={!query && side === 'ALL' && source === 'ALL'}>
-            Clear
-          </button>
+          </select>
+        )}
+        <button className="hp-btn" type="button" onClick={() => void load()} disabled={loading}>
+          <IconRefresh size={13} />
+          Refresh
+        </button>
+        <span className="lg-filter-gap" />
+        <input
+          className="hp-input lg-symbol"
+          placeholder="BTCUSDT"
+          value={importSymbol}
+          onChange={(e) => setImportSymbol(e.target.value.toUpperCase())}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void runImport();
+          }}
+          spellCheck={false}
+        />
+        <button
+          className="hp-btn"
+          type="button"
+          disabled={!!importDisabledReason || importing}
+          title={importDisabledReason || 'Import the last 200 Binance trades for this symbol into the ledger'}
+          onClick={runImport}
+        >
+          <IconReceipt size={13} />
+          {importing ? 'Importing…' : 'Import history'}
+        </button>
+      </div>
+
+      {importMsg && (
+        <div className={importMsg.tone === 'bad' ? 'hp-alert' : 'hp-note'} style={{ marginBottom: 12 }}>
+          {importMsg.text}
         </div>
+      )}
 
-        <div className="fills-import-row">
-          <div>
-            <b>Import Binance trade history</b>
-            <span>{importDisabledReason || 'Uses server-side read-only keys and writes every new fill to the ledger.'}</span>
+      <div className={`lg-grid exec-grid ${selected ? '' : 'solo'}`}>
+        <section className="hp-group lg-feed" aria-label="Execution tape">
+          <div className="lg-feed-head">
+            <h3>Execution tape</h3>
+            <span className="hp-val">{filtered.length} of {fills.length} ledger fills</span>
           </div>
-          <label className="fills-import-input">
-            <span>Symbol</span>
-            <input
-              placeholder="BTCUSDT"
-              value={importSymbol}
-              onChange={(e) => setImportSymbol(e.target.value.toUpperCase())}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void runImport();
-              }}
-              spellCheck={false}
-            />
-          </label>
-          <button className="cta-pill" type="button" disabled={!!importDisabledReason || importing} title={importDisabledReason || 'Import Binance fills'} onClick={runImport}>
-            <IconReceipt size={14} />
-            {importing ? 'Importing' : 'Import history'}
-          </button>
-        </div>
-        {importMsg && <div className={`result-strip ${importMsg.tone}`}>{importMsg.text}</div>}
-      </section>
-
-      <div className="fills-layout">
-        <main className="fills-main card">
-          <div className="fills-table-head">
-            <div>
-              <h2>Execution tape</h2>
-              <span>{filtered.length} shown from {fills.length} ledger fills</span>
-            </div>
-            <StatePill tone={filtered.length ? 'ok' : fills.length ? 'warn' : 'idle'}>
-              {filtered.length ? 'filtered' : fills.length ? 'no match' : 'empty'}
-            </StatePill>
-          </div>
-
           {fills.length === 0 ? (
-            <div className="fills-empty">
-              <EmptyState title="No fills in the ledger">
-                Live executions will stream here once Binance is connected. If you already traded this account, configure read-only server keys and import a symbol to backfill history.
-              </EmptyState>
-              <div className="fills-empty-steps">
-                <div><i>1</i><b>Connect read-only keys</b><span>server only; no frontend key input</span></div>
-                <div><i>2</i><b>Import per symbol</b><span>Binance trade rows become immutable ledger fills</span></div>
-                <div><i>3</i><b>Inspect execution quality</b><span>side, source, fee, notional, order id, trade id</span></div>
-              </div>
+            <div className="lg-empty-pad">
+              <Empty title="No fills in the ledger">
+                Live executions stream here once Binance is connected. Already traded on this account? Import a symbol to backfill history — rows become immutable ledger fills.
+              </Empty>
             </div>
           ) : filtered.length === 0 ? (
-            <EmptyState title="No fills match these filters">Clear the filters or search a different symbol, trade id, or order id.</EmptyState>
+            <div className="lg-empty-pad">
+              <Empty title="No fills match these filters">Clear the filters or search a different symbol, trade id, or order id.</Empty>
+            </div>
           ) : (
-            <div className="fills-table-wrap">
-              <table className="fills-table">
+            <div className="hp-table-wrap">
+              <table className="hp-table exec-table">
+                <colgroup>
+                  <col style={{ width: 150 }} />
+                  <col style={{ width: 70 }} />
+                  <col style={{ width: 110 }} />
+                  <col style={{ width: 110 }} />
+                  <col style={{ width: 110 }} />
+                  <col style={{ width: 120 }} />
+                  <col />
+                </colgroup>
                 <thead>
                   <tr>
-                    <th className="l">Execution</th>
-                    <th className="l">Side</th>
-                    <th>Price</th>
-                    <th>Quantity</th>
-                    <th>Notional</th>
-                    <th>Fee</th>
-                    <th className="l">Source</th>
+                    <th>Execution</th>
+                    <th>Side</th>
+                    <th className="num-r">Price</th>
+                    <th className="num-r">Quantity</th>
+                    <th className="num-r">Notional</th>
+                    <th className="num-r">Fee</th>
+                    <th>Source</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -369,21 +244,18 @@ export function Fills() {
                     const active = selected && fillKey(selected) === fillKey(f);
                     return (
                       <tr key={fillKey(f)} className={active ? 'selected' : ''} onClick={() => setSelectedKey(fillKey(f))}>
-                        <td className="l">
-                          <span className="fills-token-cell">
-                            <TokenIcon symbol={f.symbol} size={32} />
-                            <span>
-                              <b>{f.symbol}</b>
-                              <em>{fmtDateTime(f.ts)}</em>
-                            </span>
+                        <td className="t-source" title={fmtDateTime(f.ts)}>
+                          <span className="exec-sym">
+                            <TokenIcon symbol={f.symbol} size={16} />
+                            {f.symbol}
                           </span>
                         </td>
-                        <td className="l"><SideTag side={f.side} /></td>
-                        <td className="num">{fmtPrice(f.price)}</td>
-                        <td className="num">{fmtQty(f.qty)}</td>
-                        <td className="num fill-notional">{fmtPrice(f.quoteQty)}</td>
-                        <td className="num muted">{fmtQty(f.commission)} {f.commissionAsset ?? ''}</td>
-                        <td className="l"><span className="chip-tag">{f.source}</span></td>
+                        <td><Pill tone={f.side === 'BUY' ? 'ok' : 'bad'}>{f.side === 'BUY' ? 'Buy' : 'Sell'}</Pill></td>
+                        <td className="t-value num-r">{fmtPrice(f.price)}</td>
+                        <td className="t-value num-r">{fmtQty(f.qty)}</td>
+                        <td className="t-value num-r">{fmtPrice(f.quoteQty)}</td>
+                        <td className="t-value num-r t-layer">{fmtQty(f.commission)} {f.commissionAsset ?? ''}</td>
+                        <td className="t-layer">{f.source}</td>
                       </tr>
                     );
                   })}
@@ -391,68 +263,33 @@ export function Fills() {
               </table>
             </div>
           )}
-        </main>
+        </section>
 
-        <aside className="fills-rail">
-          <section className="fills-inspector card">
-            <div className="fills-rail-head">
-              <h2>Fill inspector</h2>
-              <span>{selected ? 'selected execution' : 'no execution selected'}</span>
-            </div>
-            {selected ? (
-              <>
-                <div className="fills-selected-token">
-                  <TokenIcon symbol={selected.symbol} size={42} />
-                  <span>
-                    <b>{baseOf(selected.symbol)}</b>
-                    <em>{selected.symbol}</em>
-                  </span>
-                  <SideTag side={selected.side} />
-                </div>
-                <div className="fills-inspector-grid">
-                  <span><em>Price</em><b className="num">{fmtPrice(selected.price)}</b></span>
-                  <span><em>Quantity</em><b className="num">{fmtQty(selected.qty)}</b></span>
-                  <span><em>Notional</em><b className="num">{fmtPrice(selected.quoteQty)}</b></span>
-                  <span><em>Fee</em><b className="num">{fmtQty(selected.commission)} {selected.commissionAsset ?? ''}</b></span>
-                  <span><em>Order id</em><b className="num">{selected.orderId ?? '—'}</b></span>
-                  <span><em>Trade id</em><b className="num">{selected.tradeId}</b></span>
-                  <span><em>Source</em><b>{selected.source}</b></span>
-                  <span><em>Time</em><b>{fmtDateTime(selected.ts)}</b></span>
-                </div>
-                <div className="fills-inspector-actions">
-                  <button className="cta-pill" type="button" onClick={() => openDetail(selected.symbol)}>Open market</button>
-                  <button className="mini-btn" type="button" onClick={() => setPage('pnl')}>View PnL</button>
-                </div>
-              </>
-            ) : (
-              <EmptyState title="No fill selected">Select an execution row to inspect order id, trade id, fee, and source.</EmptyState>
-            )}
-          </section>
-
-          <section className="fills-inspector card">
-            <div className="fills-rail-head">
-              <h2>Symbol flow</h2>
-              <span>notional by market</span>
-            </div>
-            {topSymbols.length === 0 ? (
-              <EmptyState title="No symbol flow yet" />
-            ) : (
-              <div className="fills-symbol-flow">
-                {topSymbols.map((r) => (
-                  <button key={r.symbol} type="button" onClick={() => openDetail(r.symbol)}>
-                    <span>
-                      <TokenIcon symbol={r.symbol} size={28} />
-                      <span><b>{r.symbol}</b><em>{r.count} fills</em></span>
-                    </span>
-                    <strong className="num">{fmtMoney(r.notional)}</strong>
-                    <i style={{ width: `${Math.max(8, (r.notional / Math.max(1, topSymbols[0].notional)) * 100)}%` }} />
-                  </button>
-                ))}
+        {selected && <aside className="hp-group lg-inspect" aria-label="Fill inspector">
+          {selected ? (
+            <>
+              <div className="lg-inspect-head">
+                <Pill tone={selected.side === 'BUY' ? 'ok' : 'bad'}>{selected.side === 'BUY' ? 'Buy' : 'Sell'}</Pill>
+                <h3>{baseOf(selected.symbol)} fill</h3>
+                <span>trade #{selected.tradeId} · {timeAgo(selected.ts)}</span>
               </div>
-            )}
-          </section>
-        </aside>
+              <dl className="lg-facts">
+                <div><dt>Price</dt><dd className="num">{fmtPrice(selected.price)}</dd></div>
+                <div><dt>Quantity</dt><dd className="num">{fmtQty(selected.qty)}</dd></div>
+                <div><dt>Notional</dt><dd className="num">{fmtPrice(selected.quoteQty)}</dd></div>
+                <div><dt>Fee</dt><dd className="num">{fmtQty(selected.commission)} {selected.commissionAsset ?? ''}</dd></div>
+                <div><dt>Order id</dt><dd className="num">{selected.orderId ?? '—'}</dd></div>
+                <div><dt>Source</dt><dd>{selected.source}</dd></div>
+                <div><dt>Time</dt><dd>{fmtDateTime(selected.ts)}</dd></div>
+              </dl>
+              <div className="lg-related">
+                <button className="hp-btn" type="button" onClick={() => openDetail(selected.symbol)}>Open market</button>
+                <button className="hp-btn" type="button" onClick={() => setPage('pnl')}>PnL impact</button>
+              </div>
+            </>
+          ) : null}
+        </aside>}
       </div>
-    </div>
+    </>
   );
 }

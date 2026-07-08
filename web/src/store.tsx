@@ -16,10 +16,9 @@ import type {
   PreviewResult,
   SendResult,
   ServerState,
-  TicketPrefill,
 } from './types';
 
-// 'trade' | 'orders' | 'positions' | 'fills' | 'pnl' are internal routes that all
+// 'orders' | 'positions' | 'fills' | 'pnl' are deep links that all
 // render the merged Execution page (each id = its active tab), so existing
 // setPage(...) call sites keep working. 'detail' opens from Markets rows only.
 export type Page =
@@ -29,7 +28,6 @@ export type Page =
   | 'markets'
   | 'detail'
   | 'loans'
-  | 'trade'
   | 'orders'
   | 'positions'
   | 'fills'
@@ -40,13 +38,12 @@ export type Page =
   | 'risk'
   | 'ledger'
   | 'system'
-  | 'settings'
   | 'news'
   | 'calendar';
 
 const PAGE_IDS: Page[] = [
-  'dashboard', 'account', 'wallets', 'markets', 'detail', 'loans', 'trade', 'orders',
-  'positions', 'fills', 'pnl', 'strategies', 'volume', 'opportunities', 'risk', 'ledger', 'system', 'settings',
+  'dashboard', 'account', 'wallets', 'markets', 'detail', 'loans', 'orders',
+  'positions', 'fills', 'pnl', 'strategies', 'volume', 'opportunities', 'risk', 'ledger', 'system',
   'news', 'calendar',
 ];
 
@@ -67,9 +64,6 @@ interface Store {
   updatePref: <K extends keyof Prefs>(k: K, v: Prefs[K]) => void;
   paletteOpen: boolean;
   setPaletteOpen: (v: boolean) => void;
-  ticket: TicketPrefill | null;
-  openTicket: (t: TicketPrefill) => void;
-  clearTicket: () => void;
   toggleWatch: (symbol: string) => Promise<void>;
   saveConfig: (patch: Partial<AppConfig>) => Promise<AppConfig | null>;
   setKill: (on: boolean) => Promise<void>;
@@ -152,7 +146,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [detailSymbol, setDetailSymbol] = useState(() => localStorage.getItem('cosmos-detail-symbol') || 'BTCUSDT');
   const [dataNonce, setDataNonce] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [ticket, setTicket] = useState<TicketPrefill | null>(null);
   const [, bumpFx] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const connectRef = useRef<(() => void) | null>(null);
@@ -261,27 +254,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(t);
   }, [prefs.refreshSec]);
 
-  const openTicket = useCallback((t: TicketPrefill) => {
-    setTicket(t);
-    setPage('trade');
-    window.scrollTo({ top: 0 });
-  }, []);
-
   const openDetail = useCallback((symbol: string) => {
     setDetailSymbol(symbol);
     localStorage.setItem('cosmos-detail-symbol', symbol);
     setPage('detail');
     localStorage.setItem('cosmos-active-page', 'detail');
     window.scrollTo({ top: 0 });
+    document.querySelector('.app-main main')?.scrollTo({ top: 0 });
   }, []);
 
   const changePage = useCallback((p: Page) => {
     setPage(p);
     localStorage.setItem('cosmos-active-page', p);
     window.scrollTo({ top: 0 });
+    document.querySelector('.app-main main')?.scrollTo({ top: 0 });
   }, []);
 
-  const saveConfig = useCallback((patch: Partial<AppConfig>) => post<AppConfig>('/api/config', patch), []);
+  const saveConfig = useCallback(async (patch: Partial<AppConfig>) => {
+    const next = await post<AppConfig>('/api/config', patch);
+    if (next) setState((s) => (s ? { ...s, config: next, mode: next.killSwitch ? 'HALTED' : next.liveTradingEnabled ? 'LIVE_ARMED' : 'MANUAL' } : s));
+    return next;
+  }, []);
 
   // In-place "refresh everything" for the top-bar button: force a server-side
   // Binance/account resync, re-pull the shared snapshot + markets, reconnect a
@@ -349,9 +342,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }, []),
     paletteOpen,
     setPaletteOpen,
-    ticket,
-    openTicket,
-    clearTicket: useCallback(() => setTicket(null), []),
     toggleWatch: useCallback(
       async (symbol: string) => {
         const cur = state?.config.watchlist ?? [];
@@ -362,10 +352,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     ),
     saveConfig,
     setKill: useCallback(async (on) => {
-      await post('/api/kill', { on });
+      const next = await post<{ killSwitch: boolean }>('/api/kill', { on });
+      if (next) setState((s) => (s ? { ...s, config: { ...s.config, killSwitch: next.killSwitch }, mode: next.killSwitch ? 'HALTED' : s.config.liveTradingEnabled ? 'LIVE_ARMED' : 'MANUAL' } : s));
     }, []),
     setLive: useCallback(async (on) => {
-      await post('/api/live', { on });
+      const next = await post<{ liveTradingEnabled: boolean }>('/api/live', { on });
+      if (next) setState((s) => (s ? { ...s, config: { ...s.config, liveTradingEnabled: next.liveTradingEnabled }, mode: s.config.killSwitch ? 'HALTED' : next.liveTradingEnabled ? 'LIVE_ARMED' : 'MANUAL' } : s));
     }, []),
     preview: useCallback((intent) => post<PreviewResult>('/api/trade/preview', intent), []),
     testOrder: useCallback(
@@ -396,10 +388,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     ),
     approveProposal: useCallback(
       async (id) => {
-        const res = await post<{ intent: TicketPrefill }>(`/api/proposals/${id}/approve`, {});
-        if (res?.intent) openTicket({ ...res.intent, source: 'proposal' });
+        // approval is server-side; with execution removed the returned intent
+        // is informational only — orders go through Binance itself
+        await post(`/api/proposals/${id}/approve`, {});
       },
-      [openTicket]
+      []
     ),
     importFills: useCallback(
       async (symbol) =>

@@ -1,455 +1,402 @@
-import { useEffect, useState, type ReactNode } from 'react';
+/* Account v3 — the Binance wallet page, exactly:
+   HERO: Est. Total Value (maskable) + ≈BTC + Today's PnL, range chips
+   (1W/1M/3M/6M), full-width equity chart with date axis + hover readout.
+   MY ASSETS: Account View ONLY — every Binance bucket in tight rows (bare
+   glyph + name, value + ratio) — plus one big allocation donut on the right.
+   ACTIVITY: live open orders + recent fills, straight from Binance sync.
+   Earn value comes from /api/earn (signed Simple-Earn positions) — real
+   numbers, not derived guesses. No trading affordances anywhere. */
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../store';
 import { useRefreshSignal } from '../lib/refresh';
-import { EmptyState, SetupChecklist, StatePill, WarnStrip } from '../components/ui';
-import { TokenIcon } from '../components/TokenIcon';
+import { WarnStrip } from '../components/ui';
+import { Pill } from '../components/px';
 import { Donut } from '../components/Donut';
 import { Num } from '../components/Num';
 import {
-  IconBook,
-  IconChart,
-  IconClock,
-  IconKey,
-  IconLayers,
-  IconLock,
-  IconPower,
-  IconPulse,
-  IconShield,
-  IconWallet,
-  IconWifi,
+  IconBook, IconChart, IconCoins, IconExchange, IconGrid,
+  IconLayers, IconPulse, IconReceipt, IconWallet,
 } from '../components/Icons';
-import { fmtPrice, fmtQty, timeAgo } from '../format';
+import { fmtPct, fmtPrice, fmtQty, signClass, timeAgo } from '../format';
+import type { FillRow, LoansSnapshot } from '../types';
 
-type Tone = 'ok' | 'bad' | 'warn' | 'idle';
+const STABLE_ASSETS = new Set(['USDT', 'USDC', 'FDUSD', 'TUSD', 'BUSD', 'DAI']);
+const finite = (v: number | null | undefined): v is number => typeof v === 'number' && Number.isFinite(v);
 
-function toneForBool(v: boolean | null | undefined, invert = false): Tone {
-  if (v === null || v === undefined) return 'idle';
-  const pass = invert ? !v : v;
-  return pass ? 'ok' : 'bad';
+function pctOf(value: number, total: number): number {
+  if (!total) return 0;
+  return (value / total) * 100;
+}
+
+const EyeIcon = ({ off }: { off: boolean }) => (
+  <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden>
+    <path d="M2 10s3-5.5 8-5.5S18 10 18 10s-3 5.5-8 5.5S2 10 2 10z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <circle cx="10" cy="10" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    {off && <path d="M4 16L16 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />}
+  </svg>
+);
+
+type RangeId = '1W' | '1M' | '3M' | '6M';
+const RANGES: { id: RangeId; ms: number }[] = [
+  { id: '1W', ms: 7 * 86_400_000 },
+  { id: '1M', ms: 30 * 86_400_000 },
+  { id: '3M', ms: 90 * 86_400_000 },
+  { id: '6M', ms: 180 * 86_400_000 },
+];
+
+/** Full-width equity chart: accent area over the selected range with a date
+ * axis and a hover readout (crosshair + value + timestamp). The line starts
+ * where history starts — no invented flat prehistory. */
+function EquityChart({ points, rangeMs, mask, rebuiltBefore }: { points: { ts: number; v: number }[]; rangeMs: number; mask: boolean; rebuiltBefore: number | null }) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [hover, setHover] = useState<{ frac: number; v: number; ts: number } | null>(null);
+
+  const now = Date.now();
+  // The domain CLAMPS to where history begins — a 6M ask with 30 days of data
+  // draws those 30 days full-width (with a note), never a sliver at the edge.
+  const requestedStart = now - rangeMs;
+  const firstTs = points[0]?.ts ?? now;
+  const start = Math.max(requestedStart, firstTs);
+  const data = points.filter((p) => p.ts >= start);
+  const clamped = firstTs > requestedStart;
+
+  if (data.length < 2) {
+    return <div className="acb-chart-empty">Equity history arms after a few snapshots (every 15 minutes).</div>;
+  }
+
+  const W = 1000;
+  const H = 150;
+  const vs = data.map((p) => p.v);
+  const min = Math.min(...vs);
+  const max = Math.max(...vs);
+  const pad = (max - min || Math.max(1, max * 0.02)) * 0.15;
+  const lo = min - pad;
+  const hi = max + pad;
+  const x = (ts: number) => ((ts - start) / (now - start)) * W;
+  const y = (v: number) => H - ((v - lo) / (hi - lo)) * (H - 8) - 4;
+  let d = `M${x(data[0].ts).toFixed(1)} ${y(data[0].v).toFixed(1)}`;
+  for (let i = 1; i < data.length; i++) d += ` L${x(data[i].ts).toFixed(1)} ${y(data[i].v).toFixed(1)}`;
+  const area = `${d} L${x(data[data.length - 1].ts).toFixed(1)} ${H} L${x(data[0].ts).toFixed(1)} ${H} Z`;
+
+  const onMove = (e: { clientX: number }) => {
+    const rect = wrapRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    const ts = start + frac * (now - start);
+    let best = data[0];
+    for (const p of data) if (Math.abs(p.ts - ts) < Math.abs(best.ts - ts)) best = p;
+    setHover({ frac: (best.ts - start) / (now - start), v: best.v, ts: best.ts });
+  };
+
+  const ticks = Array.from({ length: 6 }, (_, i) => start + ((i + 0.5) / 6) * (now - start));
+  const fmtTick = (ts: number) => new Date(ts).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' }).replace('/', '-');
+
+  return (
+    <div className="acb-chartwrap">
+      <div className="acb-chartplot" ref={wrapRef} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden>
+          <path d={area} fill="var(--accent-soft)" />
+          <path d={d} fill="none" stroke="var(--accent)" strokeWidth="1.6" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        </svg>
+        {hover && (
+          <>
+            <span className="acb-cross" style={{ left: `${hover.frac * 100}%` }} />
+            <span className={`acb-tip ${hover.frac > 0.72 ? 'flip' : ''}`} style={{ left: `${hover.frac * 100}%` }}>
+              <b>{mask ? '••••••' : fmtPrice(hover.v)}</b>
+              <em>{new Date(hover.ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</em>
+            </span>
+          </>
+        )}
+      </div>
+      <div className="acb-axis">
+        {ticks.map((t) => <span key={t}>{fmtTick(t)}</span>)}
+      </div>
+      {rebuiltBefore !== null && start < rebuiltBefore ? (
+        <div className="acb-chart-note">
+          before {new Date(rebuiltBefore).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}: rebuilt from your real deposit &amp; withdrawal history · after: Binance daily snapshots + live feed
+        </div>
+      ) : clamped ? (
+        <div className="acb-chart-note">
+          history begins {new Date(firstTs).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function Account() {
-  const { state, setPage, openDetail } = useStore();
-  if (!state) return <div className="container page account-page"><div className="empty-state">Connecting…</div></div>;
+  const { state, markets } = useStore();
+  const [loans, setLoans] = useState<LoansSnapshot | null>(null);
+  const [earnRows, setEarnRows] = useState<{ asset: string; amount: number; apr: number }[]>([]);
+  const [equity, setEquity] = useState<{ ts: number; v: number }[]>([]);
+  const [dailyHist, setDailyHist] = useState<{ ts: number; v: number }[]>([]);
+  const [rebuiltBefore, setRebuiltBefore] = useState<number | null>(null);
+  const [fills, setFills] = useState<FillRow[]>([]);
+  const [range, setRange] = useState<RangeId>('1W');
+  const [mask, setMask] = useState(() => localStorage.getItem('cosmos-balance-mask') === '1');
+  const [refreshTick, setRefreshTick] = useState(0);
+  useRefreshSignal(() => setRefreshTick((n) => n + 1));
 
-  const acct = state.account;
-  const b = state.binance;
-  const kp = b.keyPermissions; // authoritative per-KEY scope (apiRestrictions)
-  const posture = b.keyPosture;
-  const entries = acct?.entries ?? [];
-  const topEntries = entries.slice().sort((a, z) => z.valueUsdt - a.valueUsdt).slice(0, 6);
-  const lockedValue = entries.reduce((sum, e) => sum + (e.priceUsdt ?? 0) * e.locked, 0);
-  const checks = [
-    { label: 'server keys', pass: b.keysPresent },
-    { label: 'account sync', pass: b.connected },
-    { label: 'withdrawals off', pass: kp ? !kp.enableWithdrawals : b.canWithdraw !== true },
-    { label: 'transfers off', pass: kp ? !(kp.permitsUniversalTransfer || kp.enableInternalTransfer) : true },
-    { label: 'risk gated', pass: true },
-    { label: 'ledger active', pass: state.events.length >= 0 },
-  ];
-  const score = checks.filter((c) => c.pass).length;
-  const statusTone: Tone = !b.keysPresent ? 'idle' : !b.connected ? 'warn' : posture.tone;
-  const statusText = !b.keysPresent ? 'read access pending' : !b.connected ? 'sync needs attention' : posture.label;
+  useEffect(() => {
+    let alive = true;
+    const grab = <T,>(url: string, fn: (d: T) => void) =>
+      fetch(url).then((r) => (r.ok ? r.json() : null)).then((d) => alive && d && fn(d as T)).catch(() => undefined);
+    void grab<LoansSnapshot>('/api/loans', setLoans);
+    void grab<{ rows: { asset: string; amount: number; apr: number }[] }>('/api/earn', (d) => setEarnRows(d.rows ?? []));
+    void grab<{ equitySnapshots?: { ts: number; totalUsdt: number }[] }>('/api/pnl', (d) =>
+      setEquity((d.equitySnapshots ?? []).filter((s) => finite(s.totalUsdt)).map((s) => ({ ts: s.ts, v: s.totalUsdt }))));
+    void grab<{ rows?: { ts: number; totalUsdt: number }[]; reconstructedBefore?: number | null }>('/api/equity-history', (d) => {
+      setDailyHist((d.rows ?? []).filter((r) => finite(r.totalUsdt)).map((r) => ({ ts: r.ts, v: r.totalUsdt })));
+      setRebuiltBefore(d.reconstructedBefore ?? null);
+    });
+    void grab<FillRow[]>('/api/fills', (d) => setFills(d.slice(0, 8)));
+    return () => { alive = false; };
+  }, [refreshTick]);
 
-  return (
-    <div className="container page account-page">
-      <div className="page-head">
-        <div>
-          <h1 className="page-title">Account</h1>
-          <div className="page-sub">Binance access, permissions, sync, and account data custody</div>
-        </div>
-        <div className="head-actions">
-          <button className="mini-btn" type="button" onClick={() => setPage('system')}>
-            <IconPulse /> System health
-          </button>
-          <button className="mini-btn" type="button" onClick={() => setPage('risk')}>
-            <IconShield /> Risk gate
-          </button>
+  const toggleMask = () => {
+    setMask((m) => {
+      localStorage.setItem('cosmos-balance-mask', m ? '0' : '1');
+      return !m;
+    });
+  };
+
+  const acct = state?.account;
+  const btcSpot = markets.find((m) => m.base === 'BTC')?.spot ?? null;
+  const priceOf = (asset: string): number | null =>
+    asset === 'USDT' || STABLE_ASSETS.has(asset) ? 1 : markets.find((m) => m.symbol === `${asset}USDT`)?.spot ?? null;
+
+  // Earn valued from Binance's own Simple-Earn positions (authoritative).
+  const earnTotal = useMemo(
+    () => earnRows.reduce((sum, r) => sum + r.amount * (priceOf(r.asset) ?? 0), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [earnRows, markets],
+  );
+
+  // Spot rows minus LD wrappers (their value is the Earn bucket, from the API).
+  const spotEntries = useMemo(
+    () => (acct?.entries ?? []).filter((e) => !(e.asset.startsWith('LD') && e.asset.length > 3)),
+    [acct?.entries],
+  );
+  const spotTotal = spotEntries.reduce((s, e) => s + e.valueUsdt, 0);
+  const margin = loans?.margin ?? null;
+  const marginValue = margin?.available && finite(btcSpot) ? margin.totalNetAssetBtc * btcSpot : 0;
+  const grandTotal = spotTotal + earnTotal + marginValue;
+  const btcEquiv = finite(btcSpot) && btcSpot > 0 ? grandTotal / btcSpot : null;
+  const today = acct?.dayChangeUsd ?? null;
+  const todayPct = finite(today) && grandTotal > 0 ? (today / grandTotal) * 100 : null;
+  const todayFlat = !finite(today) || Math.abs(today) < 0.005;
+
+  // Allocation = every real holding: spot entries + earn positions, merged.
+  const allocation = useMemo(() => {
+    const byAsset = new Map<string, number>();
+    for (const e of spotEntries) byAsset.set(e.asset, (byAsset.get(e.asset) ?? 0) + e.valueUsdt);
+    for (const r of earnRows) {
+      const v = r.amount * (priceOf(r.asset) ?? 0);
+      byAsset.set(r.asset, (byAsset.get(r.asset) ?? 0) + v);
+    }
+    return Array.from(byAsset.entries()).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spotEntries, earnRows, markets]);
+
+  const series = useMemo(() => {
+    const firstLive = equity[0]?.ts ?? Number.POSITIVE_INFINITY;
+    return [...dailyHist.filter((p) => p.ts < firstLive), ...equity];
+  }, [dailyHist, equity]);
+
+  const money = (v: number | null | undefined) => (mask ? '••••••' : fmtPrice(v));
+
+  if (!state) {
+    return (
+      <div className="container page hp-page wide acb-page">
+        <div className="hp-loading">
+          <Pill tone="idle">Connecting</Pill>
+          <b>Waiting for server state…</b>
         </div>
       </div>
+    );
+  }
 
+  const b = state.binance;
+  const posture = b.keyPosture;
+  const syncTone = !b.keysPresent ? 'idle' : b.connected ? 'ok' : 'bad';
+  const openOrders = state.openOrders ?? [];
+  const earnApr = earnRows.length ? earnRows.reduce((s, r) => s + r.apr, 0) / earnRows.length : null;
+
+  const buckets: { id: string; icon: JSX.Element; name: string; value: number | null; note?: string }[] = [
+    { id: 'earn', icon: <IconCoins size={19} />, name: 'Earn', value: earnTotal, note: earnApr !== null && earnTotal > 0 ? `${(earnApr * 100).toFixed(2)}% APR` : undefined },
+    { id: 'spot', icon: <IconWallet size={19} />, name: 'Spot', value: spotTotal },
+    { id: 'margin', icon: <IconLayers size={19} />, name: 'Cross Margin', value: marginValue },
+    { id: 'isolated', icon: <IconExchange size={19} />, name: 'Isolated Margin', value: null },
+    { id: 'funding', icon: <IconReceipt size={19} />, name: 'Funding', value: null },
+    { id: 'usdm', icon: <IconChart size={19} />, name: 'USDⓈ-M Futures', value: null },
+    { id: 'coinm', icon: <IconPulse size={19} />, name: 'COIN-M Futures', value: null },
+    { id: 'options', icon: <IconBook size={19} />, name: 'Options', value: null },
+    { id: 'alpha', icon: <IconGrid size={19} />, name: 'Alpha', value: null },
+  ];
+
+  return (
+    <div className="container page hp-page wide acb-page">
       {posture.level === 'unsafe' && (
         <WarnStrip>{posture.label}. This app has no withdrawal or transfer-out route regardless, but the key itself should not carry that permission — recreate it as read-only.</WarnStrip>
       )}
 
-      <section className={`card account-hero ${statusTone}`}>
-        <div className="account-hero-main">
-          <div className="account-eyebrow">
-            <StatePill tone={statusTone}>{statusText}</StatePill>
-            {posture.ipRestricted && <span>IP restricted</span>}
-            <span>{state.mode.toLowerCase()}</span>
-            <span>{state.config.killSwitch ? 'kill switch on' : 'kill switch off'}</span>
-          </div>
-          <h2>{b.connected ? 'Binance account synced' : b.keysPresent ? 'Key present, account not synced' : 'Read access not connected'}</h2>
-          <p>
-            API keys stay on the server, account data is read from Binance USER_DATA endpoints, and every trading path remains behind the risk gate.
-          </p>
-          <div className="account-actions">
-            <button className="cta-pill" type="button" onClick={() => setPage('wallets')}>
-              Wallets & assets
-            </button>
-            <button className="mini-btn" type="button" onClick={() => setPage('ledger')}>
-              Audit ledger
-            </button>
-            <button className="mini-btn" type="button" onClick={() => setPage('settings')}>
-              Settings
-            </button>
-          </div>
-        </div>
-        <div className="account-score">
-          <div className="account-score-ring" style={{ '--score': `${(score / checks.length) * 100}%` } as React.CSSProperties}>
-            <span className="num">{score}/{checks.length}</span>
-          </div>
-          <div>
-            <div className="account-score-title">Access posture</div>
-            <div className="account-score-sub">Safety checks shown from current server state. Unknown exchange permissions are not guessed.</div>
-          </div>
-        </div>
-      </section>
-
-      <div className="account-grid">
-        <section className="card account-panel">
-          <PanelHead icon={<IconKey />} title="Connection" note="What the server can currently see from Binance." />
-          <div className="account-signal-grid">
-            <SignalCard
-              icon={<IconLock />}
-              label="API keys"
-              value={b.keysPresent ? 'present' : 'absent'}
-              sub={b.keysPresent && b.keyFingerprint ? `key ${b.keyFingerprint} · server-side only` : 'environment only, never browser input'}
-              tone={b.keysPresent ? 'ok' : 'idle'}
-            />
-            <SignalCard
-              icon={<IconWallet />}
-              label="Account sync"
-              value={b.connected ? 'synced' : b.keysPresent ? 'failing' : 'waiting'}
-              sub={b.lastSyncTs ? `last ${timeAgo(b.lastSyncTs)}` : '30s polling cadence'}
-              tone={b.connected ? 'ok' : b.keysPresent ? 'bad' : 'idle'}
-            />
-            <SignalCard
-              icon={<IconWifi />}
-              label="User stream"
-              value={b.userStream}
-              sub="falls back to polling"
-              tone={b.userStream === 'open' ? 'ok' : 'idle'}
-            />
-            <SignalCard
-              icon={<IconClock />}
-              label="Last event"
-              value={state.events[0] ? timeAgo(state.events[0].ts) : '—'}
-              sub={`${state.events.length} ledger rows in state`}
-              tone="idle"
-            />
-          </div>
-        </section>
-
-        <section className="card account-panel">
-          <PanelHead icon={<IconShield />} title="Permission map" note="Authoritative per-KEY scope from Binance apiRestrictions — not account-level flags." />
-          <div className="account-permission-list">
-            <PermissionRow
-              label="Reading"
-              detail="Required for balances, order history, fills, and permissions."
-              value={kp === null ? 'unknown' : kp.enableReading ? 'enabled' : 'disabled'}
-              tone={toneForBool(kp === null ? null : kp.enableReading)}
-            />
-            <PermissionRow
-              label="Spot & margin trading"
-              detail="Off for a read-only key. Even if on, trading here still needs Risk arming + typed confirmation."
-              value={kp === null ? 'unknown' : kp.enableSpotAndMarginTrading ? 'ENABLED' : 'disabled'}
-              tone={toneForBool(kp === null ? null : kp.enableSpotAndMarginTrading, true)}
-            />
-            <PermissionRow
-              label="Margin"
-              detail="Elevated permission. Should be off for a pure read-only key."
-              value={kp === null ? 'unknown' : kp.enableMargin ? 'ENABLED' : 'disabled'}
-              tone={toneForBool(kp === null ? null : kp.enableMargin, true)}
-            />
-            <PermissionRow
-              label="Futures"
-              detail="Elevated permission. Should be off for a pure read-only key."
-              value={kp === null ? 'unknown' : kp.enableFutures ? 'ENABLED' : 'disabled'}
-              tone={toneForBool(kp === null ? null : kp.enableFutures, true)}
-            />
-            <PermissionRow
-              label="Universal transfer"
-              detail="Moves funds between wallets/accounts. Must be off."
-              value={kp === null ? 'unknown' : kp.permitsUniversalTransfer ? 'ENABLED' : 'disabled'}
-              tone={toneForBool(kp === null ? null : kp.permitsUniversalTransfer, true)}
-            />
-            <PermissionRow
-              label="Internal transfer"
-              detail="Sub-account / internal transfer. Must be off."
-              value={kp === null ? 'unknown' : kp.enableInternalTransfer ? 'ENABLED' : 'disabled'}
-              tone={toneForBool(kp === null ? null : kp.enableInternalTransfer, true)}
-            />
-            <PermissionRow
-              label="Withdrawals"
-              detail="Must be disabled on Binance. This frontend/backend exposes no withdrawal route either."
-              value={kp === null ? 'unknown' : kp.enableWithdrawals ? 'ENABLED' : 'disabled'}
-              tone={toneForBool(kp === null ? null : kp.enableWithdrawals, true)}
-            />
-            <PermissionRow
-              label="IP restricted"
-              detail="Key is limited to whitelisted IPs. Recommended for a server-side key."
-              value={kp === null ? 'unknown' : kp.ipRestrict ? 'restricted' : 'unrestricted'}
-              tone={kp === null ? 'idle' : kp.ipRestrict ? 'ok' : 'warn'}
-            />
-            <PermissionRow
-              label="Transfers out (app)"
-              detail="No transfer-out UI or Binance client method exists in this app."
-              value="not implemented"
-              tone="ok"
-            />
-          </div>
-        </section>
-      </div>
-
-      {!b.keysPresent ? (
-        <div className="account-grid setup">
-          <section className="card account-panel">
-            <PanelHead icon={<IconBook />} title="Set up read access" note="Follow this without exposing keys to the browser." />
-            <SetupChecklist />
-          </section>
-          <section className="card account-panel account-custody">
-            <PanelHead icon={<IconPower />} title="Custody rules" note="The page is useful before keys, but it will not fake account data." />
-            <CustodyItem label="No key form" detail="Secrets are read from server env only. There is deliberately no browser input field." />
-            <CustodyItem label="No withdrawals" detail="The Binance client has no withdraw or transfer-out method." />
-            <CustodyItem label="No live action" detail="This page is read-only; trading requires the separate guarded manual flow." />
-          </section>
-        </div>
-      ) : (
-        <section className="card account-panel account-balances">
-          <PanelHead
-            icon={<IconChart />}
-            title="Balances"
-            note={`total ${fmtPrice(acct?.totalUsdt)} · available USDT ${fmtPrice(acct?.availableUsdt)} · locked ${fmtPrice(lockedValue)}`}
-            right={<button className="mini-btn" type="button" onClick={() => setPage('wallets')}>Open full wallet</button>}
-          />
-          {!acct || entries.length === 0 ? (
-            <EmptyState title="No balances">Deposit on Binance externally and the account poll will populate this section.</EmptyState>
-          ) : (
-            <div className="account-balance-layout">
-              <div className="account-donut">
-                <Donut slices={entries.map((e) => ({ label: e.asset, value: e.valueUsdt }))} size={150} />
-              </div>
-              <div className="table-scroll">
-                <table className="mkt dense">
-                  <thead>
-                    <tr>
-                      <th className="l">Asset</th>
-                      <th>Free</th>
-                      <th>Locked</th>
-                      <th>Price</th>
-                      <th>Value</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {topEntries.map((e) => (
-                      <tr key={e.asset} className="rowlink" onClick={() => openDetail(`${e.asset}USDT`)}>
-                        <td className="l">
-                          <span className="tok">
-                            <TokenIcon symbol={`${e.asset}USDT`} size={30} />
-                            <span className="tok-name">{e.asset}</span>
-                          </span>
-                        </td>
-                        <td><Num value={e.free}>{fmtQty(e.free)}</Num></td>
-                        <td className={e.locked ? 'val-strong' : 'muted'}><Num value={e.locked}>{e.locked ? fmtQty(e.locked) : '—'}</Num></td>
-                        <td><Num value={e.priceUsdt}>{e.priceUsdt !== null ? fmtPrice(e.priceUsdt) : '—'}</Num></td>
-                        <td className="val-strong"><Num value={e.valueUsdt}>{fmtPrice(e.valueUsdt)}</Num></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+      {/* ---- portfolio hero --------------------------------------------- */}
+      <section className="hp-group acb-hero2">
+        <div className="acb-hero2-top">
+          <div className="acb-hero2-id">
+            <div className="acb-label-row">
+              <span className="acb-label">Est. Total Value</span>
+              <button className="acb-eye" onClick={toggleMask} title={mask ? 'Show balances' : 'Hide balances'} aria-label={mask ? 'Show balances' : 'Hide balances'}>
+                <EyeIcon off={mask} />
+              </button>
+              <Pill tone={syncTone}>{b.keysPresent ? (b.connected ? `synced ${timeAgo(b.lastSyncTs)}` : 'sync failing') : 'keys absent'}</Pill>
             </div>
-          )}
-        </section>
-      )}
+            <div className="acb-value">
+              {acct ? <Num value={mask ? null : grandTotal}>{money(grandTotal)}</Num> : 'Read sync pending'}
+            </div>
+            <div className="acb-approx">{btcEquiv !== null && acct ? `≈ ${mask ? '••••' : btcEquiv.toFixed(8)} BTC` : 'BTC equivalent arrives with the market feed'}</div>
+            <div className="acb-today">
+              <span className="acb-today-k">Today's PnL</span>
+              {finite(today) && acct ? (
+                todayFlat ? (
+                  <span className="acb-today-v">{mask ? '••••' : `${fmtPrice(0)} (0.00%)`}</span>
+                ) : (
+                  <span className={`acb-today-v ${signClass(today)}`}>
+                    {mask ? '••••' : `${today >= 0 ? '+' : '−'}${fmtPrice(Math.abs(today))}${todayPct !== null ? ` (${fmtPct(Math.abs(todayPct), 2, false)})` : ''}`}
+                  </span>
+                )
+              ) : (
+                <span className="acb-today-v idle">—</span>
+              )}
+            </div>
+          </div>
+          <div className="acb-ranges" role="tablist">
+            {RANGES.map((rr) => (
+              <button key={rr.id} role="tab" aria-selected={range === rr.id} className={range === rr.id ? 'on' : ''} onClick={() => setRange(rr.id)}>{rr.id}</button>
+            ))}
+          </div>
+        </div>
+        <EquityChart points={series} rangeMs={RANGES.find((r) => r.id === range)!.ms} mask={mask} rebuiltBefore={rebuiltBefore} />
+      </section>
 
-      <section className="card account-flow">
-        <PanelHead icon={<IconLayers />} title="Live-send chain" note="A compact reminder of the account-side safety sequence." />
-        <div className="account-flow-steps">
-          <FlowStep label="Keys stay server-side" detail={b.keysPresent ? 'configured' : 'waiting'} tone={b.keysPresent ? 'ok' : 'idle'} />
-          <FlowStep label="Allowlist + typed symbol" detail={`${state.config.allowedSymbols.length} allowed`} tone={state.config.allowedSymbols.length ? 'ok' : 'idle'} />
-          <FlowStep label="Risk gate evaluates" detail={`${state.risk.rejectionsToday} rejects today`} tone="ok" />
-          <FlowStep label="Kill switch gates send" detail={state.config.killSwitch ? 'halted' : 'manual mode'} tone={state.config.killSwitch ? 'warn' : 'ok'} />
+      {/* ---- my assets: account view + allocation ------------------------ */}
+      <section className="hp-group acb-assets2">
+        <h3 className="acb-h3">My Assets</h3>
+        <div className="acb-assets2-grid">
+          <div className="acb-bucketlist">
+            <div className="acb-bl-head">
+              <span className="l">Account</span>
+              <span className="r">Amount</span>
+              <span className="r">Ratio</span>
+            </div>
+            {buckets.map((bk) => (
+              <div key={bk.id} className="acb-bl-row" title={bk.value === null ? 'Not readable with this read-only spot key' : undefined}>
+                <span className="acb-bl-ic">{bk.icon}</span>
+                <span className="acb-bl-name">{bk.name}{bk.note && <em>{bk.note}</em>}</span>
+                <span className="acb-bl-amt">
+                  {bk.value === null ? <i>--</i> : (
+                    <>
+                      <b>{money(bk.value)}</b>
+                      <small>{mask ? '••••' : finite(btcSpot) && btcSpot > 0 ? `${(bk.value / btcSpot).toFixed(8)} BTC` : '—'}</small>
+                    </>
+                  )}
+                </span>
+                <span className="acb-bl-ratio">{bk.value === null ? <i>--</i> : fmtPct(pctOf(bk.value, grandTotal || 1), 2, false)}</span>
+              </div>
+            ))}
+          </div>
+          <div className="acb-allocwrap">
+            <span className="acb-alloc-title">Allocation</span>
+            {allocation.length > 0 && !mask ? (
+              <Donut slices={allocation} size={172} topN={5} />
+            ) : mask ? (
+              <div className="acb-chart-empty">Hidden</div>
+            ) : (
+              <div className="acb-chart-empty">Allocation appears after read sync.</div>
+            )}
+          </div>
         </div>
       </section>
 
-      <AccountSecurity />
-    </div>
-  );
-}
-
-const COUNTRY: Record<string, string> = {
-  IN: 'India', US: 'United States', GB: 'United Kingdom', SG: 'Singapore', DE: 'Germany',
-  AE: 'UAE', JP: 'Japan', CA: 'Canada', AU: 'Australia', FR: 'France', NL: 'Netherlands',
-};
-
-function maskEmail(e: string | null): string {
-  if (!e) return '—';
-  const [u, d] = e.split('@');
-  if (!d) return e;
-  const mu = u.length <= 2 ? u : u.slice(0, 2) + '•'.repeat(Math.max(3, u.length - 2));
-  const [dn, ...rest] = d.split('.');
-  const md = dn.length <= 2 ? dn : dn.slice(0, 2) + '•'.repeat(Math.max(3, dn.length - 2));
-  return `${mu}@${md}${rest.length ? '.' + rest.join('.') : ''}`;
-}
-
-function deviceInfo(): { os: string; browser: string; tz: string } {
-  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
-  const plat = typeof navigator !== 'undefined' ? navigator.platform || '' : '';
-  let os = 'Unknown OS';
-  if (/iPhone|iPad/i.test(ua)) os = 'iOS';
-  else if (/Android/i.test(ua)) os = 'Android';
-  else if (/Mac/i.test(plat) || /Mac OS/i.test(ua)) os = 'macOS';
-  else if (/Win/i.test(plat)) os = 'Windows';
-  else if (/Linux/i.test(plat)) os = 'Linux';
-  const bm = ua.match(/(Edg|OPR|Chrome|Firefox|Version.*Safari|Safari)\/([\d.]+)/);
-  const map: Record<string, string> = { Edg: 'Edge', OPR: 'Opera', Chrome: 'Chrome', Firefox: 'Firefox', Safari: 'Safari' };
-  const bkey = bm ? Object.keys(map).find((k) => bm[0].startsWith(k)) ?? 'Safari' : '';
-  const bver = bm ? bm[2].split('.')[0] : '';
-  const tz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'local';
-  return { os, browser: `${map[bkey] ?? 'Browser'}${bver ? ' ' + bver : ''}`, tz };
-}
-
-interface SysInfo { cfUser: string | null; cfIp: string | null; cfCountry: string | null }
-
-// Security & sessions — honest for a Cloudflare-Access-gated cockpit: real
-// current device, real edge identity/IP when present, edge-enforced 2FA. No
-// fabricated session lists and no fake app-level password/2FA toggles.
-function AccountSecurity() {
-  const { state } = useStore();
-  const [sys, setSys] = useState<SysInfo | null>(null);
-  const [alerts, setAlerts] = useState<boolean>(() => localStorage.getItem('cosmos-signin-alerts') !== '0');
-  const [refreshTick, setRefreshTick] = useState(0);
-  useRefreshSignal(() => setRefreshTick((n) => n + 1));
-  useEffect(() => {
-    let alive = true;
-    void fetch('/api/system').then((r) => (r.ok ? r.json() : null)).then((s) => alive && s && setSys(s as SysInfo)).catch(() => undefined);
-    return () => { alive = false; };
-  }, [refreshTick]);
-  const dev = deviceInfo();
-  const b = state?.binance;
-  const email = sys?.cfUser ?? null;
-  const country = sys?.cfCountry ? COUNTRY[sys.cfCountry] ?? sys.cfCountry : null;
-  const ip = sys?.cfIp ?? null;
-  const edge = !!email;
-  const sessionLine = [country, ip ?? 'local network', dev.tz].filter(Boolean).join(' · ');
-
-  return (
-    <>
-      <section className="card account-panel">
-        <PanelHead icon={<IconKey />} title="Binance connection" note="What the read-only key can see — and what it honestly cannot." />
-        <div className="sec-rows">
-          <div className="sec-row">
-            <span className="sec-meta"><b>Read-only API key</b><small>server env only, never entered in the browser</small></span>
-            <StatePill tone={b?.keysPresent ? 'ok' : 'idle'}>{b?.keysPresent ? 'configured' : 'not set'}</StatePill>
-          </div>
-          <div className="sec-row">
-            <span className="sec-meta"><b>Account sync</b><small>{b?.connected ? 'balances, orders, fills reading live' : b?.keysPresent ? 'key present, sync unhealthy' : 'connect a read key to unlock account data'}</small></span>
-            <StatePill tone={b?.connected ? 'ok' : b?.keysPresent ? 'bad' : 'idle'}>{b?.connected ? 'synced' : b?.keysPresent ? 'failing' : 'waiting'}</StatePill>
-          </div>
-          <div className="sec-row">
-            <span className="sec-meta"><b>Withdrawals</b><small>no withdrawal route exists in this app; the key should disable it too</small></span>
-            <StatePill tone={b?.canWithdraw ? 'bad' : 'ok'}>{b?.canWithdraw ? 'ENABLED' : 'disabled'}</StatePill>
-          </div>
-        </div>
-        <div className="sec-foot">
-          <b>Binance login sessions are not shown here — the API doesn’t expose them.</b> Who else is logged into your
-          Binance account, from which IP, and what they’re doing is only visible on binance.com under Security → Devices.
-          A read key can’t see it, so this cockpit won’t pretend to.
-        </div>
-      </section>
-
-      <section className="card account-panel">
-        <PanelHead icon={<IconShield />} title="This cockpit session" note="Access to this dashboard is gated by Cloudflare — no app password or 2FA to manage here." />
-        <div className="sec-row sec-toggle-row">
-          <span className="sec-meta"><b>Suspicious sign-in alerts</b><small>Unusual-access alerts are configured in Cloudflare Access; this mirrors your local preference for surfacing them in-app.</small></span>
-          <button
-            className={`toggle ${alerts ? 'on' : ''}`}
-            onClick={() => { const n = !alerts; setAlerts(n); localStorage.setItem('cosmos-signin-alerts', n ? '1' : '0'); }}
-            aria-label="Suspicious sign-in alerts"
-          >
-            <span className="knob" />
-          </button>
-        </div>
-        <div className="sec-session">
-          <span className="sec-session-ic"><IconWifi /></span>
-          <span className="sec-session-meta">
-            <b>{dev.os} · {dev.browser}</b>
-            <small>{edge ? `${maskEmail(email)} · ${sessionLine}` : sessionLine}</small>
+      {/* ---- activity: live Binance truth -------------------------------- */}
+      <section className="hp-group acb-activity2">
+        <div className="acb-act-head">
+          <h3 className="acb-h3">Activity</h3>
+          <span className={`acb-act-live ${openOrders.length > 0 ? 'on' : ''}`}>
+            <i />{openOrders.length > 0 ? `${openOrders.length} Open Order${openOrders.length > 1 ? 's' : ''}` : 'No Open Orders'}
           </span>
-          <span className="sec-session-now"><i />Active now</span>
         </div>
-        <div className="sec-foot">Cloudflare Access (hardware key + email) verifies you before the app loads, and handles session revocation. There’s no weaker app-level password or 2FA to phish.</div>
+
+        <span className="acb-act-sub">Open Orders</span>
+        {openOrders.length === 0 ? (
+          <div className="acb-act-empty">Nothing working right now — the moment a bot places an order on Binance, it appears here from account sync.</div>
+        ) : (
+          <table className="acb-table acb-act-table">
+            <thead>
+              <tr>
+                <th className="l">Order</th>
+                <th className="r">Price</th>
+                <th className="r">Quantity</th>
+                <th className="r">Filled</th>
+                <th className="r">Status</th>
+                <th className="r">Age</th>
+              </tr>
+            </thead>
+            <tbody>
+              {openOrders.map((o) => (
+                <tr key={`${o.symbol}-${o.orderId}`}>
+                  <td className="l">
+                    <span className="acb-act-sym">
+                      <b className={o.side === 'BUY' ? 'up' : 'down'}>{o.side === 'BUY' ? 'Buy' : 'Sell'}</b>
+                      {o.symbol}
+                      <em>{o.type.toLowerCase()}</em>
+                    </span>
+                  </td>
+                  <td className="r acb-num"><span className="acb-cell-main">{fmtPrice(o.price)}</span></td>
+                  <td className="r acb-num"><span className="acb-cell-main">{fmtQty(o.origQty)}</span></td>
+                  <td className="r acb-num"><span className="acb-cell-main">{fmtPct(o.origQty > 0 ? (o.executedQty / o.origQty) * 100 : 0, 0, false)}</span></td>
+                  <td className="r"><span className={`acb-act-status ${o.stale ? 'warn' : ''}`}>{o.stale ? 'stale' : o.status.toLowerCase()}</span></td>
+                  <td className="r acb-num"><span className="acb-cell-sub">{timeAgo(o.time)}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        <span className="acb-act-sub">Recent Fills</span>
+        {fills.length === 0 ? (
+          <div className="acb-act-empty">No recorded executions yet. Fills stream in live and past Binance trades can be imported per symbol.</div>
+        ) : (
+          <table className="acb-table acb-act-table">
+            <thead>
+              <tr>
+                <th className="l">Fill</th>
+                <th className="r">Price</th>
+                <th className="r">Quantity</th>
+                <th className="r">Value</th>
+                <th className="r">Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {fills.map((f) => (
+                <tr key={`${f.symbol}-${f.tradeId}`}>
+                  <td className="l">
+                    <span className="acb-act-sym">
+                      <b className={f.side === 'BUY' ? 'up' : 'down'}>{f.side === 'BUY' ? 'Buy' : 'Sell'}</b>
+                      {f.symbol}
+                      <em>{f.source}</em>
+                    </span>
+                  </td>
+                  <td className="r acb-num"><span className="acb-cell-main">{fmtPrice(f.price)}</span></td>
+                  <td className="r acb-num"><span className="acb-cell-main">{fmtQty(f.qty)}</span></td>
+                  <td className="r acb-num"><span className="acb-cell-main">{money(f.quoteQty)}</span></td>
+                  <td className="r acb-num"><span className="acb-cell-sub">{timeAgo(f.ts)}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </section>
-    </>
-  );
-}
-
-function PanelHead({ icon, title, note, right }: { icon: ReactNode; title: string; note: string; right?: ReactNode }) {
-  return (
-    <div className="account-panel-head">
-      <span className="account-panel-icon">{icon}</span>
-      <span>
-        <span className="account-panel-title">{title}</span>
-        <span className="account-panel-note">{note}</span>
-      </span>
-      {right && <span className="account-panel-right">{right}</span>}
-    </div>
-  );
-}
-
-function SignalCard({
-  icon,
-  label,
-  value,
-  sub,
-  tone,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  sub: string;
-  tone: Tone;
-}) {
-  return (
-    <div className={`account-signal-card ${tone}`}>
-      <span className="account-signal-icon">{icon}</span>
-      <span className="account-signal-label">{label}</span>
-      <b>{value}</b>
-      <small>{sub}</small>
-    </div>
-  );
-}
-
-function PermissionRow({ label, detail, value, tone }: { label: string; detail: string; value: string; tone: Tone }) {
-  return (
-    <div className="account-permission-row">
-      <span>
-        <b>{label}</b>
-        <small>{detail}</small>
-      </span>
-      <StatePill tone={tone}>{value}</StatePill>
-    </div>
-  );
-}
-
-function CustodyItem({ label, detail }: { label: string; detail: string }) {
-  return (
-    <div className="account-custody-item">
-      <span>{label}</span>
-      <b>{detail}</b>
-    </div>
-  );
-}
-
-function FlowStep({ label, detail, tone }: { label: string; detail: string; tone: Tone }) {
-  return (
-    <div className={`account-flow-step ${tone}`}>
-      <i />
-      <span>{label}</span>
-      <b>{detail}</b>
     </div>
   );
 }

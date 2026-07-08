@@ -30,6 +30,7 @@ export function brandColor(symbol: string): string {
 
 // Manual alias map for bases whose icon lives under a different ticker.
 const ALIAS: Record<string, string> = {
+  LDUSDT: 'USDT', LDUSDC: 'USDC', LDBTC: 'BTC', LDETH: 'ETH', LDBNB: 'BNB',
   RENDER: 'RNDR',
   IOTA: 'MIOTA',
   BEAMX: 'BEAM',
@@ -44,16 +45,26 @@ const SPOTHQ = (base: string) =>
   `https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/svg/color/${base.toLowerCase()}.svg`;
 const COINCAP = (base: string) => `https://assets.coincap.io/assets/icons/${base.toLowerCase()}@2x.png`;
 
+// Binance tokenized equities (…B suffix): stocks, not crypto — no logo CDN has
+// them. They get a deliberate dark "stock badge" with the real equity ticker.
+const STOCK_TOKENS = new Set([
+  'AMDB', 'COINB', 'EWYB', 'INTCB', 'MSFTB', 'MSTRB', 'QCOMB', 'WDCB',
+  'METAB', 'PLTRB', 'QQQB', 'LITEB', 'TSLAB', 'NVDAB', 'AAPLB', 'GOOGB',
+  'AMZNB', 'HOODB', 'CRCLB', 'SPYB',
+]);
+
 /** Premium monogram chip — solid brand-hued fill with a subtle top light and
  * crisp initials (TradingView-style fallback). A missing logo reads as a
  * designed token badge, never an empty or muddy circle. */
 export function Monogram({ base, size }: { base: string; size: number }) {
   const gid = useId().replace(/:/g, '');
   const b = (base || '?').toUpperCase();
-  // 1–3 crisp letters: strip leading multiplier digits (1000SATS → SATS)
-  const clean = b.replace(/^\d+/, '') || b;
+  const stock = STOCK_TOKENS.has(b);
+  // 1–3 crisp letters: strip leading multiplier digits (1000SATS → SATS);
+  // tokenized stocks show the underlying equity ticker (MSTRB → MSTR)
+  const clean = stock ? b.slice(0, -1) : b.replace(/^\d+/, '') || b;
   const text = clean.length > 4 ? clean.slice(0, 3) : clean.length === 4 ? clean.slice(0, 4) : clean;
-  const c = brandColor(`${b}USDT`);
+  const c = stock ? '#1e2733' : brandColor(`${b}USDT`);
   const fs = text.length >= 4 ? 12 : text.length === 3 ? 14.5 : 18;
   return (
     <span className="tok-mono" style={{ width: size, height: size }} aria-hidden>

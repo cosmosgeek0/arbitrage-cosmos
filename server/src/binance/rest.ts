@@ -490,3 +490,81 @@ export async function fetchBinanceServerTime(): Promise<{ diffMs: number; latenc
   const { serverTime } = (await res.json()) as { serverTime: number };
   return { diffMs: serverTime - Math.round((t0 + t1) / 2), latencyMs: t1 - t0 };
 }
+
+
+// ---- basis history (futures/data/basis — pair + contractType) --------------
+export interface BasisPoint {
+  t: number;
+  futuresPrice: number;
+  indexPrice: number;
+  basis: number;
+  basisRatePct: number;
+}
+
+const basisCache = new Map<string, { fetchedAt: number; rows: BasisPoint[] }>();
+
+export async function fetchBasisHist(pair: string, period: string, limit: number): Promise<BasisPoint[]> {
+  const key = `${pair}:${period}:${limit}`;
+  const hit = basisCache.get(key);
+  if (hit && Date.now() - hit.fetchedAt < 60_000) return hit.rows;
+  const url =
+    `${FAPI}/futures/data/basis?pair=${encodeURIComponent(pair)}&contractType=PERPETUAL` +
+    `&period=${encodeURIComponent(period)}&limit=${Math.max(5, Math.min(limit, 200))}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`basis HTTP ${res.status}`);
+  const raw = (await res.json()) as { timestamp: number; futuresPrice: string; indexPrice: string; basis: string; basisRate: string }[];
+  const rows = raw.map((p) => ({
+    t: Number(p.timestamp),
+    futuresPrice: Number(p.futuresPrice),
+    indexPrice: Number(p.indexPrice),
+    basis: Number(p.basis),
+    basisRatePct: Number(p.basisRate) * 100,
+  }));
+  basisCache.set(key, { fetchedAt: Date.now(), rows });
+  return rows;
+}
+
+// ---- open-interest history with caller-chosen period ------------------------
+export interface OiHistPoint {
+  t: number;
+  contracts: number;
+  notional: number;
+}
+
+const oiHistCache = new Map<string, { fetchedAt: number; rows: OiHistPoint[] }>();
+
+export async function fetchOiHist(symbol: string, period: string, limit: number): Promise<OiHistPoint[]> {
+  const key = `${symbol}:${period}:${limit}`;
+  const hit = oiHistCache.get(key);
+  if (hit && Date.now() - hit.fetchedAt < 60_000) return hit.rows;
+  type OI = { sumOpenInterest: string; sumOpenInterestValue: string; timestamp: string | number };
+  const raw = await fetchFuturesData<OI>('openInterestHist', symbol, period, Math.max(5, Math.min(limit, 200)));
+  const rows = raw.map((p) => ({
+    t: Number(p.timestamp),
+    contracts: Number(p.sumOpenInterest),
+    notional: Number(p.sumOpenInterestValue),
+  }));
+  oiHistCache.set(key, { fetchedAt: Date.now(), rows });
+  return rows;
+}
+
+
+// ---- funding rate history (fapi fundingRate — up to 1000 records ≈ 333d) ---
+export interface FundingHistPoint {
+  t: number;
+  ratePct: number;
+}
+
+const fundingHistCache = new Map<string, { fetchedAt: number; rows: FundingHistPoint[] }>();
+
+export async function fetchFundingHist(symbol: string, limit: number): Promise<FundingHistPoint[]> {
+  const key = `${symbol}:${limit}`;
+  const hit = fundingHistCache.get(key);
+  if (hit && Date.now() - hit.fetchedAt < 10 * 60_000) return hit.rows;
+  const res = await fetch(`${FAPI}/fapi/v1/fundingRate?symbol=${encodeURIComponent(symbol)}&limit=${Math.max(10, Math.min(limit, 1000))}`);
+  if (!res.ok) throw new Error(`fundingRate HTTP ${res.status}`);
+  const raw = (await res.json()) as { fundingTime: number; fundingRate: string }[];
+  const rows = raw.map((p) => ({ t: Number(p.fundingTime), ratePct: Number(p.fundingRate) * 100 }));
+  fundingHistCache.set(key, { fetchedAt: Date.now(), rows });
+  return rows;
+}

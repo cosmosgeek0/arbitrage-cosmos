@@ -228,6 +228,39 @@ export class BinanceClient {
 
   // ---- Cross margin (read-only visibility; borrow eligibility for the
   // reverse-basis leg). No transfer methods exist.
+  /** Deposit history (successful only filtering is the caller's job).
+   * Each call covers up to a 90-day window; page backward for older data. */
+  depositHistory(startTime: number, endTime: number): Promise<{ coin: string; amount: string; status: number; insertTime: number }[]> {
+    return this.request('GET', '/sapi/v1/capital/deposit/hisrec', { startTime, endTime, limit: 1000 }, true) as Promise<
+      { coin: string; amount: string; status: number; insertTime: number }[]
+    >;
+  }
+
+  /** Withdrawal history — same 90-day windowing. applyTime is a UTC string. */
+  withdrawHistory(startTime: number, endTime: number): Promise<{ coin: string; amount: string; transactionFee: string; status: number; applyTime: string }[]> {
+    return this.request('GET', '/sapi/v1/capital/withdraw/history', { startTime, endTime, limit: 1000 }, true) as Promise<
+      { coin: string; amount: string; transactionFee: string; status: number; applyTime: string }[]
+    >;
+  }
+
+  /** Daily SPOT account snapshots — Binance keeps ~30 days. Readable with the
+   * Reading permission; totalAssetOfBtc is the whole account valued in BTC. */
+  accountSnapshots(): Promise<{ snapshotVos: { updateTime: number; data: { totalAssetOfBtc: string } }[] }> {
+    return this.request('GET', '/sapi/v1/accountSnapshot', { type: 'SPOT', limit: 30 }, true) as Promise<{
+      snapshotVos: { updateTime: number; data: { totalAssetOfBtc: string } }[];
+    }>;
+  }
+
+  /** Simple Earn flexible positions — readable with the Reading permission.
+   * totalAmount is denominated in the underlying asset. */
+  earnFlexiblePositions(): Promise<{
+    rows: { asset: string; totalAmount: string; latestAnnualPercentageRate: string; canRedeem: boolean }[];
+  }> {
+    return this.request('GET', '/sapi/v1/simple-earn/flexible/position', { size: 100 }, true).then(
+      (d) => ({ rows: ((d as { rows?: { asset: string; totalAmount: string; latestAnnualPercentageRate: string; canRedeem: boolean }[] }).rows ?? []) }),
+    );
+  }
+
   marginAccount(): Promise<{
     borrowEnabled: boolean;
     marginLevel: string;
@@ -267,6 +300,23 @@ export class BinanceClient {
 
   ongoingLoans(): Promise<{ rows?: Record<string, string>[] }> {
     return this.request('GET', '/sapi/v2/loan/flexible/ongoing/orders', { limit: 100 }, true);
+  }
+
+  flexibleBorrowHistory(): Promise<{ rows?: Record<string, string | number>[] }> {
+    return this.request('GET', '/sapi/v2/loan/flexible/borrow/history', { limit: 100 }, true);
+  }
+
+  flexibleRepayHistory(): Promise<{ rows?: Record<string, string | number>[] }> {
+    return this.request('GET', '/sapi/v2/loan/flexible/repay/history', { limit: 100 }, true);
+  }
+
+  flexibleLtvAdjustmentHistory(): Promise<{ rows?: Record<string, string | number>[] }> {
+    return this.request('GET', '/sapi/v2/loan/flexible/ltv/adjustment/history', { limit: 100 }, true);
+  }
+
+  /** Add or remove collateral on a flexible loan (moves LTV). */
+  flexibleAdjustLtv(loanCoin: string, collateralCoin: string, adjustmentAmount: number, direction: 'ADDITIONAL' | 'REDUCED'): Promise<unknown> {
+    return this.request('POST', '/sapi/v2/loan/flexible/adjust/ltv', { loanCoin, collateralCoin, adjustmentAmount, direction }, true);
   }
 
   flexibleBorrow(loanCoin: string, collateralCoin: string, loanAmount: number): Promise<unknown> {

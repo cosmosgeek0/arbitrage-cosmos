@@ -4,6 +4,7 @@ import { fmtClockZone, timeAgo } from '../format';
 import { eventSummary } from '../lib/eventText';
 import { ACCENTS, CURRENCIES, type AccentKey } from '../lib/prefs';
 import { openOverlay, useOverlay } from '../lib/overlay';
+import { TokenIcon } from './TokenIcon';
 import {
   IconActivity,
   IconAlarm,
@@ -20,12 +21,12 @@ import {
   IconGear,
   IconGrid,
   IconKey,
-  IconLock,
   IconLayers,
   IconList,
   IconMaximize,
   IconMoon,
   IconNewspaper,
+  IconPercent,
   IconPower,
   IconPulse,
   IconRadar,
@@ -44,7 +45,7 @@ import {
 // Top-bar clock zones. `id` is 'local' | 'UTC' | an IANA zone.
 const ZONES: { id: string; label: string; city: string }[] = [
   { id: 'local', label: 'LOC', city: 'Local time' },
-  { id: 'UTC', label: 'UTC', city: 'Coordinated Universal' },
+  { id: 'UTC', label: 'UTC', city: 'Universal time' },
   { id: 'Asia/Kolkata', label: 'IST', city: 'India · Mumbai' },
   { id: 'America/New_York', label: 'NY', city: 'New York' },
   { id: 'Europe/London', label: 'LDN', city: 'London' },
@@ -55,6 +56,8 @@ const ZONES: { id: string; label: string; city: string }[] = [
 const ACCENT_ORDER: AccentKey[] = ['r', 'o', 'y', 'g', 'b', 'i', 'v'];
 
 const CLOUD_SHELL_URL = 'https://console.aws.amazon.com/cloudshell/home';
+const DEFAULT_PROFILE_LOGO = '/profile-logo.png';
+const DEPLOYED_APP_HOST = 'arbitrage.cosmosgeek.org';
 
 // Binance announcement categories → real catalog IDs (shared with the News page).
 export const NEWS_TABS: { id: number; label: string }[] = [
@@ -131,39 +134,46 @@ export function flag(cc: string): string {
   return String.fromCodePoint(...[...cc.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
 }
 
-/* Owner-provided mark: three leaning market bars (light→dark blue) with two
-   white up-arrows — the arbitrage/uptick motif. Fixed blue palette by design. */
+/* Premium brand mark: three leaning market rails, no decorative status dots. */
 const BRAND_MARK = (
-  <svg viewBox="0 0 40 40" className="brand-mark" aria-hidden shapeRendering="geometricPrecision">
-    {/* three leaning market bars, light→dark blue, with gaps */}
-    <path d="M8.4 15 12.6 13.4 10.4 30.6 6.2 32.2Z" fill="#5ea0f7" />
-    <path d="M27.4 14 31.6 12.4 29.4 27.6 25.2 29.2Z" fill="#2f4fca" />
-    <path d="M17.9 9.6 22.1 8 19.9 33 15.7 34.6Z" fill="#4179ee" />
-    {/* two white up-arrows */}
-    <path d="M12.6 29.5v-6.2H9.5l4.6-5.3 4.6 5.3h-3.1v6.2z" fill="#fff" />
-    <path d="M21.6 32.4v-8.1h-3.6l5.4-6.2 5.4 6.2h-3.6v8.1z" fill="#fff" />
+  <svg viewBox="0 0 44 44" className="brand-mark" aria-hidden shapeRendering="geometricPrecision">
+    <defs>
+      <linearGradient id="brandRailA" x1="7" y1="33" x2="18" y2="9" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stopColor="#6ba4ff" />
+        <stop offset="1" stopColor="#2f6bff" />
+      </linearGradient>
+      <linearGradient id="brandRailB" x1="17" y1="35" x2="28" y2="7" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stopColor="#4f7dff" />
+        <stop offset="1" stopColor="#174eea" />
+      </linearGradient>
+      <linearGradient id="brandRailC" x1="28" y1="32" x2="37" y2="12" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stopColor="#2f6bff" />
+        <stop offset="1" stopColor="#0d2e9d" />
+      </linearGradient>
+    </defs>
+    <path className="brand-rail rail-a" d="M9.1 16.4 15.1 13.7 12.6 31.2 6.6 33.9Z" fill="url(#brandRailA)" />
+    <path className="brand-rail rail-b" d="M19.6 9.1 25.8 6.4 22.6 36.1 16.5 38.8Z" fill="url(#brandRailB)" />
+    <path className="brand-rail rail-c" d="M30.9 14.1 36.9 11.4 34.2 28.8 28.2 31.5Z" fill="url(#brandRailC)" />
   </svg>
 );
 
 const TITLES: Record<Page, string> = {
   dashboard: 'Dashboard',
   account: 'Account',
-  wallets: 'Wallets & Assets',
+  wallets: 'Account',
   markets: 'Markets',
   detail: 'Token Detail',
   loans: 'Borrow / Margin',
-  trade: 'Execution',
-  orders: 'Execution · Orders',
-  positions: 'Execution · Positions',
-  fills: 'Execution · Fills',
-  pnl: 'Execution · PnL',
-  strategies: 'Basis Scanner',
-  volume: 'Volume Scanner',
+  orders: 'Account · Orders',
+  positions: 'Account · Positions',
+  fills: 'Account · Fills',
+  pnl: 'Account · PnL',
+  strategies: 'Basis',
+  volume: 'Volume',
   opportunities: 'Opportunities',
   risk: 'Risk',
   ledger: 'Ledger / Logs',
   system: 'System Health',
-  settings: 'Settings',
   news: 'Binance News',
   calendar: 'Economic Calendar',
 };
@@ -171,7 +181,8 @@ const TITLES: Record<Page, string> = {
 // `match` marks extra page ids that keep an item highlighted (Execution owns
 // the trade/orders/positions/fills/pnl internal routes).
 type NavItem = { id?: Page; label: string; icon: JSX.Element; match?: Page[] };
-// Six zones: OVERVIEW / CAPITAL / MARKET / ENGINE / EXECUTION / CONTROL.
+// Four zones (owner order 2026-07-08): OVERVIEW carries the money surfaces —
+// Dashboard, Account, Borrow, Markets — then ENGINE / CONTROL / UTILITY.
 // One sidebar item per operator surface — detail routes (Token Detail,
 // Execution tabs) open from within pages, not from the sidebar.
 const NAV: { group: string | null; items: NavItem[] }[] = [
@@ -179,34 +190,18 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
     group: 'Overview',
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: <IconGrid size={17} /> },
-    ],
-  },
-  {
-    group: 'Capital',
-    items: [
       { id: 'account', label: 'Account', icon: <IconWallet size={17} /> },
-      { id: 'wallets', label: 'Wallets', icon: <IconLayers size={17} /> },
       { id: 'loans', label: 'Borrow', icon: <IconCoins size={17} /> },
-    ],
-  },
-  {
-    group: 'Market',
-    items: [
-      { id: 'markets', label: 'Markets', icon: <IconChart size={17} />, match: ['detail'] },
+      { id: 'markets', label: 'Markets', icon: <IconChart size={17} /> },
+      { id: 'detail', label: 'Token', icon: <IconLayers size={17} /> },
     ],
   },
   {
     group: 'Engine',
     items: [
-      { id: 'strategies', label: 'Basis Scanner', icon: <IconBrain size={17} /> },
-      { id: 'volume', label: 'Volume Scanner', icon: <IconPulse size={17} /> },
+      { id: 'strategies', label: 'Basis', icon: <IconBrain size={17} /> },
+      { id: 'volume', label: 'Volume', icon: <IconPulse size={17} /> },
       { id: 'opportunities', label: 'Opportunities', icon: <IconRadar size={17} /> },
-    ],
-  },
-  {
-    group: 'Execution',
-    items: [
-      { id: 'trade', label: 'Execution', icon: <IconTicket size={17} />, match: ['orders', 'positions', 'fills', 'pnl'] },
     ],
   },
   {
@@ -217,11 +212,38 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
       { id: 'system', label: 'Health', icon: <IconWifi size={17} /> },
     ],
   },
+  {
+    group: 'Utility',
+    items: [
+      { id: 'news', label: 'News', icon: <IconNewspaper size={17} /> },
+      { id: 'calendar', label: 'Calendar', icon: <IconCalendar size={17} /> },
+    ],
+  },
 ];
 
 interface SessionRow {
   id: string; ip: string | null; country: string | null; system: string; browser: string;
   firstSeen: number; lastSeen: number; current: boolean; active: boolean;
+}
+interface AccountExchangeRow {
+  id: string;
+  name: string;
+  type: string;
+  scope: string;
+  status: string;
+  live: boolean;
+  keysPresent: boolean;
+  prefix: string;
+  fingerprint: string | null;
+  ipRestrict: boolean;
+  permissions?: {
+    reading?: boolean;
+    spotMargin?: boolean;
+    marginLoan?: boolean;
+    withdrawals?: boolean;
+    universalTransfer?: boolean;
+    futures?: boolean;
+  };
 }
 const COUNTRY_NAMES: Record<string, string> = {
   IN: 'India', US: 'United States', GB: 'United Kingdom', SG: 'Singapore', DE: 'Germany',
@@ -229,6 +251,17 @@ const COUNTRY_NAMES: Record<string, string> = {
 };
 function sessionPlace(s: SessionRow): string {
   return [s.country ? COUNTRY_NAMES[s.country] ?? s.country : null, s.ip ?? 'local network'].filter(Boolean).join(' · ');
+}
+function keyScopeCode(k: AccountExchangeRow): string {
+  if (/read/i.test(k.scope)) return 'RO';
+  if (/full/i.test(k.scope)) return 'FULL';
+  return k.scope.toUpperCase();
+}
+function keyMeta(k: AccountExchangeRow): string {
+  return [keyScopeCode(k), k.type, k.fingerprint ?? `${k.prefix}...`].filter(Boolean).join(' · ');
+}
+function deviceMeta(s: SessionRow): string {
+  return [s.system, s.country ? COUNTRY_NAMES[s.country] ?? s.country : 'local'].filter(Boolean).join(' · ');
 }
 
 // ---- account card (Binance-style profile chip + details) --------------------
@@ -240,21 +273,51 @@ function AccountCard({ compact = false }: { compact?: boolean }) {
   const [preview, setPreview] = useState<string | null>(null); // instant feedback before the 2s state tick
   const [editName, setEditName] = useState<string | null>(null);
   const [sessList, setSessList] = useState<SessionRow[]>([]);
-  const avatar = preview ?? profile.avatar;
+  const [linkedKeys, setLinkedKeys] = useState<AccountExchangeRow[]>([]);
+  const avatar = preview ?? profile.avatar ?? DEFAULT_PROFILE_LOGO;
+  const usesDefaultLogo = !preview && !profile.avatar;
   const name = profile.name || 'Operator';
+  const initial = name.trim().slice(0, 1).toUpperCase() || 'O';
   const connected = !!state?.binance.keysPresent;
   const sub = connected ? (state?.binance.connected ? 'Binance · read-only' : 'Binance · error') : 'Binance · not linked';
+  const liveKeys = linkedKeys.filter((k) => k.live || k.keysPresent || k.status === 'live');
+  const accountTone = connected ? (state?.binance.connected ? 'live' : 'warn') : 'off';
+  const activeSessions = sessList.filter((s) => s.active);
+  const currentSession = sessList.find((s) => s.current);
+  const syncLabel = connected ? (state?.binance.connected ? 'Synced' : 'Check') : 'Unlinked';
+  const keyLabel = liveKeys.length ? `${liveKeys.length} Live` : linkedKeys.length ? `${linkedKeys.length} Declared` : 'No Keys';
+  const deviceLabel = sessList.length ? `${activeSessions.length || sessList.length} Active` : 'Checking';
+  const logoutHref = typeof window !== 'undefined' && window.location.hostname === DEPLOYED_APP_HOST
+    ? '/cdn-cgi/access/logout'
+    : `https://${DEPLOYED_APP_HOST}/cdn-cgi/access/logout`;
 
   // Real active-session list (server-tracked). Polled only while the popover is open.
   useEffect(() => {
     if (!open) return;
     let alive = true;
-    const load = () => fetch('/api/sessions').then((r) => (r.ok ? r.json() : null)).then((d) => { if (alive && d) setSessList(d.sessions ?? []); }).catch(() => undefined);
+    const load = () => {
+      void fetch('/api/sessions')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (alive && d) setSessList(d.sessions ?? []); })
+        .catch(() => undefined);
+      void fetch('/api/apikey')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (alive && d) setLinkedKeys(d.keys ?? []); })
+        .catch(() => undefined);
+    };
     load();
     const t = setInterval(load, 5000);
     return () => { alive = false; clearInterval(t); };
   }, [open]);
   const otherActive = sessList.filter((s) => s.active && !s.current).length;
+  const shownKeys = linkedKeys.slice(0, 2);
+  const hiddenKeys = Math.max(0, linkedKeys.length - shownKeys.length);
+  const shownSessions = sessList.slice(0, 2);
+  const hiddenSessions = Math.max(0, sessList.length - shownSessions.length);
+  const goAccount = () => {
+    setOpen(false);
+    setPage('account');
+  };
 
   const onFile = (f: File | undefined) => {
     if (!f || !f.type.startsWith('image/')) return;
@@ -279,25 +342,37 @@ function AccountCard({ compact = false }: { compact?: boolean }) {
 
   return (
     <div className={`acct-wrap ${compact ? 'top' : ''}`} ref={ref}>
-      <button className={`acct-card ${compact ? 'top' : ''} ${open ? 'on' : ''}`} onClick={() => setOpen(!open)} title="Account details">
-        <span className="acct-avatar">
-          {avatar ? <img src={avatar} alt="" /> : <IconUser size={16} />}
-        </span>
-        <span className="acct-meta">
-          <span className="acct-name">{name}</span>
-          <span className="acct-sub"><span className={`acct-dot ${connected ? (state?.binance.connected ? 'ok' : 'bad') : ''}`} />{sub}</span>
-        </span>
+      <button className={`acct-card ${compact ? 'top acct-pro-trigger' : ''} ${open ? 'on' : ''} s-${accountTone}`} onClick={() => setOpen(!open)} title={`Account Details — ${sub}`} aria-label="Account Details">
+        {compact ? (
+          <span className={`acct-top-orb ${usesDefaultLogo ? 'profile-logo' : ''} s-${accountTone}`}>
+            <span className="acct-top-ring" />
+            <span className="acct-top-face">
+              {avatar ? <img src={avatar} alt="" /> : <IconUser size={16} />}
+            </span>
+            <span className="acct-top-dot" />
+          </span>
+        ) : (
+          <>
+            <span className={`acct-avatar ${usesDefaultLogo ? 'profile-logo' : ''}`}>
+              {avatar ? <img src={avatar} alt="" /> : <IconUser size={16} />}
+            </span>
+            <span className="acct-meta">
+              <span className="acct-name">{name}</span>
+              <span className="acct-sub"><span className={`acct-dot ${connected ? (state?.binance.connected ? 'ok' : 'bad') : ''}`} />{sub}</span>
+            </span>
+          </>
+        )}
       </button>
       {open && (
-        <div className="menu-pop acct-pop">
-          <div className="acct-pop-head">
-            <button className="acct-avatar lg" onClick={() => fileRef.current?.click()} title="Upload profile photo">
-              {avatar ? <img src={avatar} alt="" /> : <IconUser size={22} />}
+        <div className="menu-pop acct-pop cb-acct-pop">
+          <div className={`cb-acct-head cb-acct-pro-head s-${accountTone}`}>
+            <button className={`cb-acct-avatar ${usesDefaultLogo ? 'profile-logo' : ''}`} onClick={() => fileRef.current?.click()} title="Upload profile photo">
+              {avatar ? <img src={avatar} alt="" /> : initial}
               <span className="acct-cam"><IconCamera size={11} /></span>
             </button>
-            <div className="acct-pop-id">
+            <div className="cb-acct-id">
               {editName === null ? (
-                <button className="acct-pop-name" onClick={() => setEditName(profile.name || '')} title="Edit display name">{name}</button>
+                <button className="cb-acct-name" onClick={() => setEditName(profile.name || '')} title="Edit display name">{name}</button>
               ) : (
                 <form
                   className="acct-name-form"
@@ -311,57 +386,80 @@ function AccountCard({ compact = false }: { compact?: boolean }) {
                   <button type="submit">Save</button>
                 </form>
               )}
-              <span className="acct-pop-sub">Private cockpit owner</span>
+              <span className="cb-acct-sub"><span className={`acct-dot ${state?.binance.connected ? 'ok' : connected ? 'bad' : ''}`} />{sub}</span>
             </div>
-          </div>
-          <div className="menu-head">Linked exchanges</div>
-          <div className="acct-ex-list">
-            <div className="acct-ex">
-              <span className="acct-ex-badge bn">B</span>
-              <span className="acct-ex-info">
-                <b>Binance</b>
-                <small>{connected ? (state?.binance.connected ? `read-only · synced ${timeAgo(state.binance.lastSyncTs)}` : 'key error') : 'read-only key not set'}</small>
-              </span>
-              <span className={`acct-ex-pill ${connected ? (state?.binance.connected ? 'ok' : 'bad') : 'idle'}`}>
-                {connected ? (state?.binance.connected ? 'active' : 'error') : 'connect'}
-              </span>
+            <div className="cb-acct-actions">
+              <button className="cb-acct-manage" type="button" onClick={goAccount} title="Account & Security" aria-label="Account & Security"><IconShield size={15} /></button>
+              <a className="cb-logout" href={logoutHref} title="Sign out of the deployed Cloudflare Access session" aria-label="Sign out">
+                <IconPower size={15} />
+              </a>
             </div>
-            {[{ key: 'by', name: 'Bybit' }].map((e) => (
-              <div key={e.key} className="acct-ex soon">
-                <span className={`acct-ex-badge ${e.key}`}>{e.name[0]}</span>
-                <span className="acct-ex-info"><b>{e.name}</b><small>not yet supported</small></span>
-                <span className="acct-ex-pill soon">soon</span>
-              </div>
-            ))}
           </div>
 
-          <div className="menu-head">
-            Active sessions
-            {otherActive > 0 && <span className="acct-sess-warn">· {otherActive} other device{otherActive > 1 ? 's' : ''} active</span>}
+          <div className="cb-acct-strip cb-acct-matrix">
+            <span className={`s-${accountTone}`}>
+              <i />
+              <em>SYNC</em>
+              <b className={`s-${accountTone}`}>{syncLabel}</b>
+            </span>
+            <span>
+              <i />
+              <em>KEYS</em>
+              <b>{keyLabel}</b>
+            </span>
+            <span>
+              <i />
+              <em>DEV</em>
+              <b>{deviceLabel}</b>
+            </span>
           </div>
-          <div className="acct-sess-list">
-            {sessList.length === 0 ? (
-              <div className="acct-sess-empty">Checking…</div>
-            ) : (
-              sessList.slice(0, 5).map((s) => (
-                <div key={s.id} className={`acct-sess ${s.current ? 'me' : ''}`}>
-                  <span className={`acct-sess-dot ${s.active ? 'on' : ''}`} />
-                  <span className="acct-sess-info">
-                    <span className="acct-sess-name">{s.system} · {s.browser}</span>
-                    <span className="acct-sess-place">{sessionPlace(s)}</span>
+
+          <div className="cb-link-block">
+            <div className="cb-link-head">
+              <span><IconKey size={14} /><b>KEYS</b></span>
+              <b>{hiddenKeys > 0 ? `+${hiddenKeys}` : liveKeys.length ? `${liveKeys.length} Live` : linkedKeys.length ? 'Set' : 'None'}</b>
+            </div>
+            <div className="cb-link-list">
+              {linkedKeys.length === 0 ? (
+                <div className="cb-empty">No keys</div>
+              ) : shownKeys.map((k) => (
+                <div className="cb-exchange-row" key={k.id}>
+                  <span className={`cb-exchange-mark ${k.live || k.keysPresent ? 'on' : ''}`}>{k.name.slice(0, 1).toUpperCase()}</span>
+                  <span className="cb-exchange-main">
+                    <b>{k.name}</b>
+                    <em>{keyMeta(k)}</em>
                   </span>
-                  <span className="acct-sess-right">
-                    <span className={`acct-sess-time ${s.active ? 'on' : ''}`}>{s.active ? 'Active now' : timeAgo(s.lastSeen)}</span>
-                    {s.current && <span className="acct-sess-you">This device</span>}
+                  <span className={`cb-status ${k.live || k.keysPresent ? (k.status === 'live' || state?.binance.connected ? 'ok' : 'warn') : 'idle'}`}>
+                    {k.live || k.keysPresent ? (k.status === 'live' || state?.binance.connected ? 'ON' : 'CHK') : 'OFF'}
                   </span>
                 </div>
-              ))
-            )}
+              ))}
+            </div>
           </div>
 
-          <button className="acct-ex-manage" onClick={() => { setOpen(false); setPage('account'); }}>
-            Account &amp; security →
-          </button>
+          <div className="cb-link-block">
+            <div className="cb-link-head">
+              <span><IconWifi size={14} /><b>DEVICES</b></span>
+              <b>{hiddenSessions > 0 ? `+${hiddenSessions}` : currentSession ? 'Current' : otherActive > 0 ? `+${otherActive}` : sessList.length ? 'Live' : '...'}</b>
+            </div>
+            <div className="cb-link-list">
+              {sessList.length === 0 ? (
+                <div className="cb-empty">Checking</div>
+              ) : shownSessions.map((s) => (
+                <div key={s.id} className={`cb-device-row ${s.current ? 'me' : ''}`}>
+                  <span className={`cb-device-dot ${s.active ? 'on' : ''}`} />
+                  <span className="cb-device-main">
+                    <b>{s.browser}</b>
+                    <em>{deviceMeta(s)}</em>
+                  </span>
+                  <span className="cb-device-right">
+                    {s.current && <i>THIS</i>}
+                    <b>{s.active ? 'NOW' : timeAgo(s.lastSeen)}</b>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => onFile(e.target.files?.[0])} />
         </div>
       )}
@@ -376,9 +474,40 @@ interface SearchEntry {
   page?: Page;
   overlay?: 'news' | 'calendar';
   symbol?: string;
+  base?: string;
+  spot?: number | null;
+  perpMark?: number | null;
+  volume?: number | null;
+  changePct?: number | null;
+  fundingRate?: number | null;
   keywords: string;
-  kind?: 'token' | 'page';
+  kind?: 'token' | 'perp' | 'page' | 'setting';
 }
+type SearchTab = 'top' | 'crypto' | 'perps' | 'settings';
+const compactMoney = (v: number | null | undefined) => {
+  if (!Number.isFinite(v ?? NaN)) return '—';
+  const n = Number(v);
+  const abs = Math.abs(n);
+  const body = abs >= 1e12 ? `${(n / 1e12).toFixed(abs >= 10e12 ? 1 : 2)}T`
+    : abs >= 1e9 ? `${(n / 1e9).toFixed(abs >= 10e9 ? 1 : 2)}B`
+      : abs >= 1e6 ? `${(n / 1e6).toFixed(abs >= 10e6 ? 1 : 2)}M`
+        : abs >= 1e3 ? `${(n / 1e3).toFixed(abs >= 10e3 ? 1 : 2)}K`
+          : abs >= 1 ? n.toLocaleString(undefined, { maximumFractionDigits: 2 })
+            : n.toPrecision(3);
+  return `$${body}`;
+};
+const searchPrice = (v: number | null | undefined) => {
+  if (!Number.isFinite(v ?? NaN)) return '—';
+  const n = Number(v);
+  return `$${n.toLocaleString(undefined, {
+    minimumFractionDigits: n >= 100 ? 2 : n >= 1 ? 3 : 6,
+    maximumFractionDigits: n >= 100 ? 2 : n >= 1 ? 3 : 6,
+  })}`;
+};
+const searchPct = (v: number | null | undefined, digits = 2) => {
+  if (!Number.isFinite(v ?? NaN)) return '—';
+  return `${Number(v) >= 0 ? '↗' : '↘'} ${Math.abs(Number(v)).toFixed(digits)}%`;
+};
 function buildIndex(): SearchEntry[] {
   const out: SearchEntry[] = [];
   for (const g of NAV) {
@@ -389,8 +518,6 @@ function buildIndex(): SearchEntry[] {
   out.push(
     { label: 'News', hint: 'Binance announcements', page: 'news', keywords: 'news binance announcements listing delisting maintenance airdrop' },
     { label: 'Calendar', hint: 'Economic events', page: 'calendar', keywords: 'calendar economic events cpi fomc pmi tradingview' },
-    { label: 'Appearance', hint: 'Settings · theme & accent', page: 'settings', keywords: 'appearance theme dark light accent color settings' },
-    { label: 'Display currency', hint: 'Settings · money units', page: 'settings', keywords: 'currency inr usd eur fiat display settings' },
     { label: 'Kill switch', hint: 'Risk · halt everything', page: 'risk', keywords: 'kill switch halt stop emergency risk' },
     { label: 'Risk limits', hint: 'Risk · caps & allowlist', page: 'risk', keywords: 'risk limits caps notional allowlist symbols' },
     { label: 'Rules & governance', hint: 'Risk · owner rules', page: 'risk', keywords: 'rules allowed blocked strict governance create' },
@@ -398,6 +525,14 @@ function buildIndex(): SearchEntry[] {
     { label: 'Positions', hint: 'Execution · holdings', page: 'positions', keywords: 'positions holdings unrealized execution' },
     { label: 'Fills', hint: 'Execution · executions', page: 'fills', keywords: 'fills executions trades execution' },
     { label: 'PnL', hint: 'Execution · profit & loss', page: 'pnl', keywords: 'pnl profit loss equity daily execution' },
+    { label: 'Account & Security', hint: 'Profile · linked exchanges · devices', page: 'account', kind: 'setting', keywords: 'account security profile linked exchanges devices sessions logout sign out coinbase' },
+    { label: 'Appearance', hint: 'Theme · accent · scale', page: 'account', kind: 'setting', keywords: 'appearance theme dark light accent color scale zoom display account settings' },
+    { label: 'Display Currency', hint: 'USD · INR · EUR · account values', page: 'account', kind: 'setting', keywords: 'currency fiat usd inr eur gbp jpy display money account settings' },
+    { label: 'Basis Units', hint: 'Percent · basis points', page: 'account', kind: 'setting', keywords: 'basis unit bps percent percentage account settings' },
+    { label: 'Market Refresh', hint: 'Polling speed · manual refresh', page: 'system', kind: 'setting', keywords: 'market refresh polling speed custom refresh data system settings' },
+    { label: 'Notifications', hint: 'Account feed · custom alerts', page: 'ledger', kind: 'setting', keywords: 'notifications alerts account feed custom alerts ledger settings' },
+    { label: 'Borrow Guard', hint: 'Loan guardrails · LTV monitor', page: 'loans', kind: 'setting', keywords: 'borrow guard loan ltv block loans margin collateral settings' },
+    { label: 'API Keys', hint: 'Linked exchange permissions', page: 'account', kind: 'setting', keywords: 'api keys hmac read only linked exchange permissions binance account settings' },
   );
   return out;
 }
@@ -405,33 +540,81 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
   const { setPage, setPaletteOpen, markets, openDetail } = useStore();
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(0);
+  const [tab, setTab] = useState<SearchTab>('top');
+  const [focused, setFocused] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const isTopbar = placement === 'topbar';
   // Global index: nav/settings/actions PLUS every tradable token, so typing any
   // letter finds tokens across the whole app (not just the menu).
   const index = useMemo(() => {
     const pages = buildIndex();
-    const tokens: SearchEntry[] = markets.map((m) => ({
+    const tokens: SearchEntry[] = markets.filter((m) => m.hasSpot || m.spot !== null).map((m) => ({
       label: m.base,
-      hint: `${m.symbol} · token`,
+      hint: `${m.symbol} · Crypto`,
       symbol: m.symbol,
+      base: m.base,
+      spot: m.spot,
+      volume: m.quoteVolume24h,
+      changePct: m.change24hPct,
       kind: 'token' as const,
-      keywords: `${m.base} ${m.symbol}`.toLowerCase(),
+      keywords: `${m.base} ${m.symbol} crypto spot token asset coin`.toLowerCase(),
     }));
-    return [...pages, ...tokens];
+    const perps: SearchEntry[] = markets.filter((m) => m.hasPerp || m.perpMark !== null).map((m) => ({
+      label: `${m.base} Perpetual`,
+      hint: `${m.symbol} · Perpetual`,
+      symbol: m.symbol,
+      base: m.base,
+      perpMark: m.perpMark ?? m.perpLast ?? m.spot,
+      volume: m.perpVolume24h,
+      changePct: m.perpChange24hPct ?? m.change24hPct,
+      fundingRate: m.fundingRate,
+      kind: 'perp' as const,
+      keywords: `${m.base} ${m.symbol} perp perpetual futures funding leverage`.toLowerCase(),
+    }));
+    return [...pages, ...tokens, ...perps];
   }, [markets]);
-  // close on outside click (more reliable than focus state)
+  // Close on outside click even when the query is empty. The panel opens on
+  // focus, so tying outside-close only to `q` leaves an empty focused search
+  // stuck open.
   useEffect(() => {
-    if (!q) return;
-    const onDown = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setQ('');
+    if (!focused && !q) return;
+    const close = () => {
+      setQ('');
+      setFocused(false);
+      wrapRef.current?.querySelector('input')?.blur();
     };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [q]);
+    const onDown = (e: PointerEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) close();
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [focused, q]);
   const ql = q.trim().toLowerCase();
   const results = useMemo(() => {
-    if (!ql) return [];
+    const source = ql ? index : index.filter((e) => e.kind === 'token' || e.kind === 'perp' || e.kind === 'setting');
+    const scoped = source.filter((e) => {
+      if (tab === 'crypto') return e.kind === 'token';
+      if (tab === 'perps') return e.kind === 'perp';
+      if (tab === 'settings') return e.kind === 'setting' || e.kind === 'page';
+      return true;
+    });
+    if (!ql) {
+      return scoped
+        .filter((e) => e.kind === 'token' || e.kind === 'perp' || e.kind === 'setting')
+        .sort((a, b) => {
+          if (tab === 'settings') return a.label.localeCompare(b.label);
+          if (a.kind === 'setting' || b.kind === 'setting') return a.kind === 'setting' ? 1 : -1;
+          return (b.volume ?? 0) - (a.volume ?? 0);
+        })
+        .slice(0, isTopbar ? 8 : 8);
+    }
     const scored = index
+      .filter((e) => {
+        if (tab === 'crypto') return e.kind === 'token';
+        if (tab === 'perps') return e.kind === 'perp';
+        if (tab === 'settings') return e.kind === 'setting' || e.kind === 'page';
+        return true;
+      })
       .map((e) => {
         const l = e.label.toLowerCase();
         let score = -1;
@@ -442,12 +625,21 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
         return { e, score };
       })
       .filter((x) => x.score >= 0)
-      // pages rank above tokens at equal score, so menu items surface first
-      .sort((a, b) => a.score - b.score || (a.e.kind === 'token' ? 1 : 0) - (b.e.kind === 'token' ? 1 : 0))
-      .slice(0, 9)
+      .sort((a, b) => {
+        const rank = (e: SearchEntry) => e.kind === 'setting' ? 0 : e.kind === 'page' ? 1 : e.kind === 'token' ? 2 : 3;
+        return a.score - b.score || rank(a.e) - rank(b.e) || (b.e.volume ?? 0) - (a.e.volume ?? 0);
+      })
+      .slice(0, isTopbar ? 12 : 9)
       .map((x) => x.e);
     return scored;
-  }, [ql, index]);
+  }, [ql, index, tab, isTopbar]);
+  useEffect(() => { setSel(0); }, [tab, ql]);
+  const panelOpen = isTopbar ? focused || ql.length > 0 : ql.length > 0;
+  const groupedResults = useMemo(() => ({
+    settings: results.filter((r) => r.kind === 'setting' || r.kind === 'page'),
+    crypto: results.filter((r) => r.kind === 'token'),
+    perps: results.filter((r) => r.kind === 'perp'),
+  }), [results]);
 
   const go = (e: SearchEntry) => {
     if (e.symbol) openDetail(e.symbol);
@@ -455,15 +647,57 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
     else if (e.page) setPage(e.page);
     setQ('');
     setSel(0);
+    setFocused(false);
   };
+  const renderRow = (r: SearchEntry, i: number) => {
+    const isMarket = r.kind === 'token' || r.kind === 'perp';
+    const change = r.changePct ?? null;
+    return (
+      <button key={`${r.kind}-${r.label}-${r.symbol ?? r.page ?? i}`} className={`ssr-row ${i === sel ? 'sel' : ''} ${isMarket ? 'market' : 'command'}`} onMouseEnter={() => setSel(i)} onMouseDown={(e) => { e.preventDefault(); go(r); }}>
+        {isMarket ? (
+          <>
+            <TokenIcon symbol={r.symbol ?? r.base ?? r.label} size={34} />
+            <span className="ssr-asset">
+              <span className="ssr-label">{r.label}{r.kind === 'perp' && <em>50X</em>}</span>
+              <span className="ssr-hint">{r.kind === 'perp' ? 'INTX' : r.hint.replace(' · Crypto', '')}</span>
+            </span>
+            <span className="ssr-mid">
+              <b>{compactMoney(r.volume)} vol</b>
+              <small>{r.kind === 'perp' ? `${searchPct((r.fundingRate ?? 0) * 100, 4).replace('↗ ', '').replace('↘ ', '')}/hr funding` : r.symbol}</small>
+            </span>
+            <span className="ssr-price">
+              <b>{searchPrice(r.kind === 'perp' ? r.perpMark : r.spot)}</b>
+              <small className={change !== null && change < 0 ? 'neg' : 'pos'}>{searchPct(change)}</small>
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="ssr-command-mark"><IconGear size={14} /></span>
+            <span className="ssr-asset">
+              <span className="ssr-label">{r.label}</span>
+              <span className="ssr-hint">{r.hint}</span>
+            </span>
+            <span className="ssr-price single">Open</span>
+          </>
+        )}
+      </button>
+    );
+  };
+  const renderGroup = (title: string, rows: SearchEntry[]) => rows.length > 0 && (
+    <div className="ssr-group" key={title}>
+      <div className="ssr-group-title">{title}</div>
+      {rows.map((r) => renderRow(r, results.indexOf(r)))}
+    </div>
+  );
 
   return (
-    <div className={`snav-search ${placement === 'topbar' ? 'topbar-search' : ''}`} ref={wrapRef}>
-      <div className={`snav-search-box ${ql ? 'on' : ''}`}>
+    <div className={`snav-search ${isTopbar ? 'topbar-search' : ''} ${panelOpen ? 'open' : ''}`} ref={wrapRef}>
+      <div className={`snav-search-box ${ql || focused ? 'on' : ''}`} onMouseDown={() => setFocused(true)} onClick={() => setFocused(true)}>
         <IconSearch size={14} />
         <input
           value={q}
-          placeholder="Search cockpit"
+          placeholder={isTopbar ? 'Search tokens, settings, commands' : 'Search for an asset'}
+          onFocus={() => setFocused(true)}
           onChange={(e) => {
             setQ(e.target.value);
             setSel(0);
@@ -472,22 +706,40 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
             if (e.key === 'ArrowDown') { e.preventDefault(); setSel((s) => Math.min(s + 1, results.length - 1)); }
             else if (e.key === 'ArrowUp') { e.preventDefault(); setSel((s) => Math.max(s - 1, 0)); }
             else if (e.key === 'Enter' && results[sel]) go(results[sel]);
-            else if (e.key === 'Escape') setQ('');
+            else if (e.key === 'Escape') { setQ(''); setFocused(false); }
           }}
-          aria-label="Search cockpit"
+          aria-label="Search tokens and account settings"
+          aria-expanded={panelOpen}
         />
         <button className="snav-search-k" onClick={() => setPaletteOpen(true)} title="Full command palette (⌘K)" tabIndex={-1}>⌘K</button>
       </div>
-      {ql && (
+      {panelOpen && (
         <div className="snav-search-pop">
+          {isTopbar && (
+            <div className="ssr-tabs" role="tablist" aria-label="Search categories">
+              {[
+                ['top', 'Top'],
+                ['crypto', 'Crypto'],
+                ['perps', 'Perpetuals'],
+                ['settings', 'Settings'],
+              ].map(([id, label]) => (
+                <button key={id} type="button" className={tab === id ? 'on' : ''} onMouseDown={(e) => { e.preventDefault(); setTab(id as SearchTab); }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           {results.length === 0 ? (
-            <div className="ssr-empty">No matches — try ⌘K for symbols</div>
+            <div className="ssr-empty">No matches. Try a token, page, alert, refresh, currency, or risk setting.</div>
+          ) : isTopbar ? (
+            <>
+              {renderGroup('Settings', groupedResults.settings)}
+              {renderGroup('Crypto', groupedResults.crypto)}
+              {renderGroup('Perpetuals', groupedResults.perps)}
+            </>
           ) : (
             results.map((r, i) => (
-              <button key={r.label + r.hint} className={`ssr-row ${i === sel ? 'sel' : ''}`} onMouseEnter={() => setSel(i)} onMouseDown={(e) => { e.preventDefault(); go(r); }}>
-                <span className="ssr-label">{r.label}</span>
-                <span className="ssr-hint">{r.hint}</span>
-              </button>
+              renderRow(r, i)
             ))
           )}
         </div>
@@ -502,13 +754,6 @@ export function Sidebar() {
 
   return (
     <aside className="snav">
-      <div className="snav-brand" onClick={() => setPage('dashboard')} title="Arbitrage Control Room">
-        {BRAND_MARK}
-        <div className="brand-lockup">
-          <div className="brand-name">Arbitrage</div>
-          <div className="brand-sub">Control Room</div>
-        </div>
-      </div>
       <nav className="snav-nav">
         {NAV.map((g, i) => (
           <div key={i} className="snav-group">
@@ -519,30 +764,15 @@ export function Sidebar() {
                 className={`snav-item ${page === n.id || n.match?.includes(page) ? 'active' : ''}`}
                 onClick={() => setPage(n.id!)}
                 title={n.label}
+                aria-current={page === n.id || n.match?.includes(page) ? 'page' : undefined}
               >
                 <span className="snav-ic">{n.icon}</span>
                 <span className="snav-label">{n.label}</span>
-                {n.id === 'opportunities' && proposals > 0 && <span className="nav-badge">{proposals}</span>}
               </button>
             ))}
           </div>
         ))}
       </nav>
-      <div className="snav-utils">
-        <button className={`snav-util ${page === 'news' ? 'active' : ''}`} onClick={() => setPage('news')} title="Binance news — full page">
-          <span className="snav-ic"><IconNewspaper size={18} /></span>
-          <span className="snav-label">News</span>
-          <LiveDot />
-        </button>
-        <button className={`snav-util ${page === 'calendar' ? 'active' : ''}`} onClick={() => setPage('calendar')} title="Economic calendar — full page">
-          <span className="snav-ic"><IconCalendar size={18} /></span>
-          <span className="snav-label">Calendar</span>
-        </button>
-        <button className={`snav-util ${page === 'settings' ? 'active' : ''}`} onClick={() => setPage('settings')} title="Local UI preferences">
-          <span className="snav-ic"><IconGear size={18} /></span>
-          <span className="snav-label">Settings</span>
-        </button>
-      </div>
     </aside>
   );
 }
@@ -992,9 +1222,48 @@ function TrustedAdvisor() {
 // A single box: centered under the hovered trigger with a pointer aimed at it.
 // Moving to another trigger doesn't close/reopen — the same box slides, resizes
 // (via the per-key width) and the pointer re-aims; only the contents cross-fade.
-type MK = 'clock' | 'shell' | 'apikey' | 'apikey2' | 'data' | 'advisor' | 'notif' | 'power' | 'settings';
+const TbpCheck = () => (
+  <svg className="tbp-check" viewBox="0 0 16 16" width="14" height="14" aria-hidden>
+    <path d="M3 8.5l3.2 3.2L13 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const IconDollar = ({ size = 16 }: { size?: number }) => (
+  <svg viewBox="0 0 20 20" width={size} height={size} aria-hidden>
+    <circle cx="10" cy="10" r="8.1" fill="none" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M12.3 7.3c-.4-.8-1.2-1.2-2.3-1.2-1.3 0-2.2.7-2.2 1.7 0 2.5 5 1.1 5 3.9 0 1.1-1 1.8-2.6 1.8-1.2 0-2.1-.5-2.5-1.4M10 4.9v10.2" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
+type MK = 'clock' | 'shell' | 'apikey' | 'data' | 'advisor' | 'notif' | 'power' | 'mrefresh' | 'currency' | 'basisu' | 'appearance';
 const MENU_W: Record<MK, number> = {
-  clock: 248, shell: 276, apikey: 300, apikey2: 300, data: 290, advisor: 300, notif: 368, power: 250, settings: 348,
+  clock: 360, shell: 320, apikey: 320, data: 320, advisor: 320, notif: 340, power: 270, mrefresh: 300, currency: 280, basisu: 260, appearance: 260,
+};
+
+const clockParts = (zoneId: string, d: Date) => {
+  const raw = fmtClockZone(zoneId, d);
+  const [hh = '00', mm = '00', ss = '00'] = raw.split(':');
+  return { raw, hm: `${hh}:${mm}`, ss };
+};
+const clockOffset = (zoneId: string, d: Date) => {
+  try {
+    const opts: Intl.DateTimeFormatOptions = { timeZoneName: 'shortOffset', hour: '2-digit', minute: '2-digit', hour12: false };
+    if (zoneId && zoneId !== 'local') opts.timeZone = zoneId;
+    const part = new Intl.DateTimeFormat('en-US', opts).formatToParts(d).find((p) => p.type === 'timeZoneName')?.value;
+    const normalized = part?.replace('GMT', 'UTC') ?? 'UTC';
+    return normalized === 'UTC+0' || normalized === 'UTC-0' ? 'UTC' : normalized;
+  } catch {
+    return zoneId === 'UTC' ? 'UTC' : 'local';
+  }
+};
+const clockDate = (zoneId: string, d: Date) => {
+  try {
+    const opts: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: '2-digit' };
+    if (zoneId && zoneId !== 'local') opts.timeZone = zoneId;
+    return new Intl.DateTimeFormat('en-US', opts).format(d);
+  } catch {
+    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit' });
+  }
 };
 
 export interface ApiKeyInfo {
@@ -1016,7 +1285,7 @@ export const API_PERMS: { key: keyof ApiKeyInfo['permissions']; label: string }[
 ];
 
 function SharedTopBar() {
-  const { state, connected, prefs, updatePref, setPage, setKill } = useStore();
+  const { state, connected, page, prefs, updatePref, setPage, setKill, saveConfig, refresh } = useStore();
   const theme = useResolvedTheme();
   const rowRef = useRef<HTMLDivElement>(null);
   const btnRefs = useRef<Partial<Record<MK, HTMLButtonElement | null>>>({});
@@ -1031,11 +1300,30 @@ function SharedTopBar() {
   closerRef.current = () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); setActive(null); };
   const [now, setNow] = useState(() => new Date());
   const [sys, setSys] = useState<SystemLite | null>(null);
-  const [srv, setSrv] = useState({ news: false, cal: false, fx: false });
+  const [srv, setSrv] = useState<{ news: boolean | null; cal: boolean | null; fx: boolean | null }>({ news: null, cal: null, fx: null });
   const [seen, setSeen] = useState(() => Number(localStorage.getItem('cosmos-notif-seen') || 0));
   const [apiKeys, setApiKeys] = useState<ApiKeyInfo[]>([]);
+  const [notifTab, setNotifTab] = useState<'all' | 'account' | 'risk' | 'custom'>('all');
+  const [refreshCustom, setRefreshCustom] = useState(() => String(prefs.refreshSec));
+  const [menuRefreshState, setMenuRefreshState] = useState<'idle' | 'spin' | 'ok' | 'err'>('idle');
+  const menuRefreshBusy = useRef(false);
+  const [currencyFx, setCurrencyFx] = useState<{ ok: boolean | null; rates: Record<string, number>; fetchedAt: number | null }>({ ok: null, rates: {}, fetchedAt: null });
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
+  useEffect(() => { if (active === 'mrefresh') setRefreshCustom(String(prefs.refreshSec)); }, [active, prefs.refreshSec]);
+  useEffect(() => {
+    if (active !== 'currency') return;
+    let alive = true;
+    fetch('/api/fx')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { rates?: Record<string, number>; fetchedAt?: number } | null) => {
+        if (!alive) return;
+        if (d?.rates) setCurrencyFx({ ok: true, rates: d.rates, fetchedAt: d.fetchedAt ?? null });
+        else setCurrencyFx((x) => ({ ...x, ok: false }));
+      })
+      .catch(() => { if (alive) setCurrencyFx((x) => ({ ...x, ok: false })); });
+    return () => { alive = false; };
+  }, [active]);
   useEffect(() => { let al = true; const load = () => fetch('/api/system').then((r) => (r.ok ? r.json() : null)).then((s) => al && s && setSys(s as SystemLite)).catch(() => undefined); void load(); const t = setInterval(load, 5000); return () => { al = false; clearInterval(t); }; }, []);
   useEffect(() => {
     let al = true;
@@ -1101,6 +1389,11 @@ function SharedTopBar() {
     setActive(k);
     if (k === 'notif' && state?.events?.[0]) { setSeen(state.events[0].id); localStorage.setItem('cosmos-notif-seen', String(state.events[0].id)); }
   };
+  const closeMenu = () => {
+    window.clearTimeout(closeT.current);
+    if (currentCloser === closerRef.current) currentCloser = null;
+    closerRef.current();
+  };
   const scheduleClose = () => { closeT.current = window.setTimeout(() => { if (currentCloser === closerRef.current) currentCloser = null; closerRef.current(); }, 120); };
   useEffect(() => () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); }, []);
   const cancelClose = () => window.clearTimeout(closeT.current);
@@ -1115,26 +1408,187 @@ function SharedTopBar() {
   const latTone = lat === null ? '' : lat < 400 ? 'ok' : lat < 900 ? 'warn' : 'bad';
   const events = state?.events ?? []; const unread = events.filter((e) => e.id > seen).length;
   const zone = ZONES.find((z) => z.id === prefs.clockZone) ?? ZONES[1];
+  const activeClock = clockParts(zone.id, now);
+  const activeClockOffset = clockOffset(zone.id, now);
+  const activeClockSub = activeClockOffset === zone.label ? 'Live' : activeClockOffset;
+  const utcClock = clockParts('UTC', now);
+  const localClock = clockParts('local', now);
   const cur = CURRENCIES[prefs.currency] ? prefs.currency : 'USD';
+  const curInfo = CURRENCIES[cur] ?? CURRENCIES.USD;
+  const curSymbol = curInfo.symbol.trim() || cur;
+  const curRate = cur === 'USD' ? 1 : currencyFx.rates[cur] ?? null;
+  const curTone = cur === 'USD' || curRate ? 'ok' : currencyFx.ok === false ? 'bad' : 'warn';
+  const curRateText = cur === 'USD'
+    ? '1.0000'
+    : curRate
+      ? curRate.toLocaleString('en-US', { maximumFractionDigits: curRate >= 100 ? 2 : 4 })
+      : currencyFx.ok === false
+        ? 'Unavailable'
+        : 'Loading';
+  const curFxCode = cur === 'USD' ? 'BASE' : curTone === 'ok' ? 'FX' : curTone === 'bad' ? 'OFF' : 'WAIT';
+  const curAgeCode = cur === 'USD' ? 'USD' : currencyFx.fetchedAt ? timeAgo(currencyFx.fetchedAt).replace(/\s+ago$/i, '') : curTone === 'bad' ? 'OFF' : '...';
+  const currencyRateText = (code: string) => {
+    if (code === 'USD') return '1.0000';
+    const r = currencyFx.rates[code];
+    if (!r) return currencyFx.ok === false ? 'OFF' : 'FX';
+    return r.toLocaleString('en-US', { maximumFractionDigits: r >= 100 ? 2 : 4 });
+  };
+  const basisIsBps = prefs.basisUnit === 'bps';
+  const basisMark = basisIsBps ? 'bp' : '%';
+  const basisPreview = basisIsBps ? '+4.2 bps' : '+0.042%';
+  const basisCode = basisIsBps ? 'BPS' : 'PCT';
+  const basisAltPreview = basisIsBps ? '+0.042%' : '+4.2bp';
+  const activeAccent = ACCENTS[prefs.accent] ?? ACCENTS.b;
+  const appearanceZoom = Math.round((prefs.zoom || 1) * 100);
   const al = prefs.alerts; const alertsOn = Object.values(al).filter(Boolean).length;
-  const zoomv = prefs.zoom || 1;
   const mode = state?.mode ?? 'HALTED';
   const modeClass = mode === 'HALTED' ? 'm-halted' : mode === 'LIVE_ARMED' ? 'm-live' : 'm-manual';
+  const modeTone = mode === 'HALTED' ? 'bad' : mode === 'LIVE_ARMED' ? 'ok' : 'warn';
+  const allowCount = cfg?.allowedSymbols?.length ?? 0;
+  const modeCode = mode === 'HALTED' ? 'OFF' : mode === 'LIVE_ARMED' ? 'LIVE' : 'MAN';
+  const modeStamp = mode === 'HALTED' ? 'HALT' : mode === 'LIVE_ARMED' ? 'ARM' : 'HOLD';
+  const modeSend = mode === 'HALTED' ? 'BLOCK' : mode === 'LIVE_ARMED' ? 'GATE' : 'MAN';
+  const modeNet = b?.connected ? 'UP' : 'OFF';
+  const liveDisabled = !b?.connected || allowCount === 0;
+  const liveTitle = !b?.connected ? 'Binance account sync is required' : allowCount === 0 ? 'Add allowed symbols in Risk first' : 'Arm live trading';
+  const setManualMode = () => { void saveConfig({ killSwitch: false, liveTradingEnabled: false }); };
+  const setLiveMode = () => { void saveConfig({ killSwitch: false, liveTradingEnabled: true }); };
   const alertRows: { key: keyof typeof al; label: string; sub: string }[] = [
-    { key: 'proposals', label: 'Strategy proposals', sub: 'New basis / spread signals' },
-    { key: 'fills', label: 'Order fills', sub: 'Executions on your account' },
-    { key: 'risk', label: 'Risk rejects', sub: 'Gate blocks & kill-switch trips' },
-    { key: 'news', label: 'Binance announcements', sub: 'Listings, delistings, maintenance' },
+    { key: 'proposals', label: 'Strategy Proposals', sub: 'New basis and spread signals' },
+    { key: 'fills', label: 'Account Fills', sub: 'Executions on your Binance account' },
+    { key: 'risk', label: 'Risk Blocks', sub: 'Risk gate and kill-switch blocks' },
+    { key: 'news', label: 'Binance Announcements', sub: 'Listings, delistings, maintenance' },
   ];
-  const refreshChoices = [3, 6, 12, 30];
-  const setZoom = (v: number) => updatePref('zoom', Math.min(1.5, Math.max(0.8, Math.round(v * 100) / 100)));
-  const dhSources = [
-    { name: 'Binance market feed', ok: connected && feedsOk, detail: `${Object.keys(feeds).length} streams · ${msLabel(lat)}` },
-    { name: 'Binance account', ok: !!b?.connected, detail: b?.keysPresent ? (b?.connected ? 'synced' : 'error') : 'no keys' },
-    { name: 'Binance announcements', ok: srv.news, detail: srv.news ? 'reachable' : 'checking' },
-    { name: 'Economic calendar', ok: srv.cal, detail: srv.cal ? 'reachable' : 'checking' },
-    { name: 'FX rates', ok: srv.fx, detail: srv.fx ? 'reachable' : 'checking' },
+  const alertShort: Record<keyof typeof al, string> = {
+    proposals: 'Signals',
+    fills: 'Fills',
+    risk: 'Risk',
+    news: 'News',
+  };
+  const notifTabs: { id: typeof notifTab; label: string; code: string }[] = [
+    { id: 'all', label: 'All', code: 'All' },
+    { id: 'account', label: 'Account', code: 'A' },
+    { id: 'risk', label: 'Risk', code: 'R' },
+    { id: 'custom', label: 'Custom alerts', code: 'C' },
   ];
+  const notifMeta = (kind: string) => {
+    const k = kind.toLowerCase();
+    if (k.includes('risk') || k.includes('error') || k.includes('reject') || k.includes('kill')) {
+      return { bucket: 'risk' as const, scope: 'Risk Alert', title: 'Control Room Alert', tone: 'risk', mark: '!' };
+    }
+    if (k.includes('order') || k.includes('fill') || k.includes('loan') || k.includes('account') || k.includes('binance') || k.includes('user_stream')) {
+      return { bucket: 'account' as const, scope: 'Account Activity', title: 'Account Update', tone: 'account', mark: 'A' };
+    }
+    if (k.includes('strategy') || k.includes('proposal') || k.includes('signal')) {
+      return { bucket: 'account' as const, scope: 'Trading Insight', title: 'Strategy Update', tone: 'trading', mark: 'S' };
+    }
+    return { bucket: 'system' as const, scope: 'System Update', title: 'System Notice', tone: 'system', mark: 'C' };
+  };
+  const filteredNotifEvents = events.filter((e) => {
+    if (notifTab === 'all') return true;
+    if (notifTab === 'custom') return false;
+    return notifMeta(e.kind).bucket === notifTab;
+  });
+  const notifTone = unread > 0 ? 'hot' : events.length > 0 ? 'live' : alertsOn > 0 ? 'armed' : 'idle';
+  const refreshChoices = [
+    { sec: 3, label: 'Fast', sub: 'Market Poll' },
+    { sec: 6, label: 'Live', sub: 'Default' },
+    { sec: 12, label: 'Balanced', sub: 'Lower Load' },
+    { sec: 30, label: 'Light', sub: 'Quiet Mode' },
+  ];
+  const clampRefresh = (sec: number) => Math.min(120, Math.max(3, Math.round(sec)));
+  const setMarketRefresh = (sec: number) => {
+    const next = clampRefresh(sec);
+    updatePref('refreshSec', next);
+    setRefreshCustom(String(next));
+  };
+  const applyCustomRefresh = () => {
+    const parsed = Number(refreshCustom);
+    if (!Number.isFinite(parsed)) {
+      setRefreshCustom(String(prefs.refreshSec));
+      return;
+    }
+    setMarketRefresh(parsed);
+  };
+  const runMenuRefresh = async () => {
+    if (menuRefreshBusy.current) return;
+    menuRefreshBusy.current = true;
+    setMenuRefreshState('spin');
+    let ok = false;
+    try {
+      const res = await refresh();
+      ok = res.ok;
+    } catch {
+      ok = false;
+    }
+    setMenuRefreshState(ok ? 'ok' : 'err');
+    window.setTimeout(() => {
+      setMenuRefreshState('idle');
+      menuRefreshBusy.current = false;
+    }, ok ? 1200 : 1800);
+  };
+  const refreshFeedCount = Object.keys(feeds).length;
+  const refreshTone = menuRefreshState === 'err'
+    ? 'bad'
+    : menuRefreshState === 'spin'
+      ? 'warn'
+      : !connected
+        ? 'bad'
+        : !feedsOk || latTone === 'warn' || latTone === 'bad'
+          ? 'warn'
+          : 'ok';
+  const refreshLabel = menuRefreshState === 'spin'
+    ? 'Refreshing'
+    : menuRefreshState === 'ok'
+      ? 'Synced'
+      : menuRefreshState === 'err'
+        ? 'Issue'
+        : refreshTone === 'ok'
+          ? 'Live'
+          : refreshTone === 'warn'
+            ? 'Watch'
+            : 'Offline';
+  const refreshCode = `${prefs.refreshSec}s`;
+  const refreshStamp = menuRefreshState === 'spin' ? 'POLL' : menuRefreshState === 'ok' ? 'SYNC' : menuRefreshState === 'err' ? 'ERR' : refreshLabel.toUpperCase();
+  const refreshNetCode = menuRefreshState === 'spin' ? 'RUN' : menuRefreshState === 'ok' ? 'SYNC' : menuRefreshState === 'err' ? 'ERR' : refreshTone === 'ok' ? 'LIVE' : refreshTone === 'warn' ? 'WARN' : 'OFF';
+  const refreshActionText = menuRefreshState === 'spin' ? 'Run' : menuRefreshState === 'ok' ? 'OK' : menuRefreshState === 'err' ? 'Retry' : 'Now';
+  const refreshDetail = !connected
+    ? 'Socket reconnecting'
+    : !feedsOk
+      ? 'Market feed degraded'
+      : `${refreshFeedCount} streams / ${msLabel(lat)}`;
+  type DataTier = 'good' | 'warn' | 'bad' | 'idle';
+  const dataLabel = netGrade === 'ok' ? 'Good' : netGrade === 'bad' ? 'Down' : 'Watch';
+  const dataSub = connected
+    ? feedsOk
+      ? `${feedList.length} market streams · ${msLabel(lat)}`
+      : 'One or more market streams is not open'
+    : 'Cockpit socket is reconnecting';
+  const probeTier = (ok: boolean | null): DataTier => ok === null ? 'idle' : ok ? 'good' : 'bad';
+  const probeDetail = (ok: boolean | null) => ok === null ? 'Checking' : ok ? 'Reachable' : 'Down';
+  const driftAbs = sys?.serverTimeDiffMs == null ? null : Math.abs(sys.serverTimeDiffMs);
+  const driftTier: DataTier = driftAbs == null ? 'idle' : driftAbs < 500 ? 'good' : driftAbs < 1500 ? 'warn' : 'bad';
+  const latTier: DataTier = lat === null ? 'idle' : lat < 400 ? 'good' : lat < 900 ? 'warn' : 'bad';
+  const dataRows: { name: string; sub: string; value: string; tier: DataTier }[] = [
+    { name: 'Binance Market Feed', sub: feedList.length ? `${feedList.length} streams observed` : 'No streams reported', value: feedsOk ? 'Open' : feedList.length ? 'Degraded' : 'Idle', tier: connected && feedsOk ? 'good' : connected ? 'warn' : 'bad' },
+    { name: 'Binance Account', sub: b?.keysPresent ? 'Read-only account sync' : 'Read key not configured', value: b?.keysPresent ? (b?.connected ? 'Synced' : 'Error') : 'No Key', tier: b?.connected ? 'good' : b?.keysPresent ? 'bad' : 'idle' },
+    { name: 'Announcements', sub: 'Binance news probe', value: probeDetail(srv.news), tier: probeTier(srv.news) },
+    { name: 'Economic Calendar', sub: 'Macro event probe', value: probeDetail(srv.cal), tier: probeTier(srv.cal) },
+    { name: 'FX Rates', sub: 'Currency conversion probe', value: probeDetail(srv.fx), tier: probeTier(srv.fx) },
+    { name: 'Clock Drift', sub: 'Server time offset', value: msLabel(sys?.serverTimeDiffMs), tier: driftTier },
+    { name: 'Pairs Scanned', sub: 'Scanner universe', value: String(state?.scanner.pairs ?? '—'), tier: state?.scanner.pairs ? 'good' : 'idle' },
+  ];
+  const dataCode = netGrade === 'ok' ? 'OK' : netGrade === 'bad' ? 'DWN' : 'WAT';
+  const dataScore = dataRows.length ? Math.round((dataRows.filter((r) => r.tier === 'good').length / dataRows.length) * 100) : 100;
+  const dataShort: Record<string, string> = {
+    'Binance Market Feed': 'Feed',
+    'Binance Account': 'Account',
+    'Announcements': 'News',
+    'Economic Calendar': 'Calendar',
+    'FX Rates': 'FX',
+    'Clock Drift': 'Drift',
+    'Pairs Scanned': 'Pairs',
+  };
   const advRaw: ({ sev: Sev; name: string; detail: string; page?: Page } | null)[] = [
     b?.canWithdraw ? { sev: 'action', name: 'Withdrawals enabled on key', detail: 'Rotate to a read-only key.', page: 'account' } : { sev: 'pass', name: 'Withdrawals disabled', detail: 'Key cannot move funds.' },
     b?.keysPresent && !b?.connected ? { sev: 'action', name: 'Account sync failing', detail: b?.lastError ?? 'Not syncing.', page: 'system' } : null,
@@ -1148,6 +1602,9 @@ function SharedTopBar() {
   const advChecks = advRaw.filter(Boolean) as { sev: Sev; name: string; detail: string; page?: Page }[];
   const advA = advChecks.filter((c) => c.sev === 'action'); const advI = advChecks.filter((c) => c.sev === 'invest'); const advP = advChecks.filter((c) => c.sev === 'pass');
   const advAtt = [...advA, ...advI];
+  const advTone = advA.length ? 'bad' : advI.length ? 'warn' : 'ok';
+  const advScore = advChecks.length ? Math.round((advP.length / advChecks.length) * 100) : 100;
+  const advCode = advTone === 'bad' ? 'ACT' : advTone === 'warn' ? 'REV' : 'OK';
 
   // Reposition only when the ACTIVE menu changes, when a trigger's width could
   // change (badges toggling, currency symbol, zone label), on zoom, or on window
@@ -1164,151 +1621,637 @@ function SharedTopBar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, placeSig]);
 
-  const trig = (k: MK, cls: string, inner: JSX.Element) => (
-    <button ref={(el) => { btnRefs.current[k] = el; }} className={`${cls} ${active === k ? 'on' : ''}`} onMouseEnter={() => openK(k)} onClick={() => (active === k ? setActive(null) : openK(k))} aria-label={k}>
+  const trig = (k: MK, cls: string, inner: JSX.Element, opts: { title?: string; onClick?: () => void } = {}) => (
+    <button
+      ref={(el) => { btnRefs.current[k] = el; }}
+      className={`${cls} ${active === k ? 'on' : ''}`}
+      onMouseEnter={() => openK(k)}
+      onClick={() => {
+        if (opts.onClick) {
+          closeMenu();
+          opts.onClick();
+          return;
+        }
+        active === k ? closeMenu() : openK(k);
+      }}
+      title={opts.title ?? k}
+      aria-label={opts.title ?? k}
+    >
       {inner}
     </button>
   );
 
-  const keyBody = (ak: ApiKeyInfo | null, Icon: (p: { size?: number }) => JSX.Element) => {
-    if (!ak) return (<><div className="np-head"><span className="np-title"><Icon size={14} /> API key</span></div><div className="np-sub-line">No key manifest yet — check the server.</div></>);
-    const statusLbl = ak.status === 'live' ? 'live' : ak.status === 'planned' ? 'planned' : 'declared';
-    return (<>
-      <div className="np-head"><span className="np-title"><Icon size={14} /> {ak.name}</span><span className="ak-type">{ak.type}</span></div>
-      <div className="ak-idrow">
-        <span className="ak-prefix num">{ak.prefix}<span className="ak-dots">••••••••••</span></span>
-        <span className={`ak-live s-${ak.status}`}>{statusLbl}</span>
+  // ONE panel for both keys: identity lines in the dock voice, then a single
+  // permission matrix (read-only vs full) instead of two stacks of chips.
+  const PERM_SHORT: Record<string, string> = {
+    reading: 'Read',
+    spotMargin: 'Spot',
+    marginLoan: 'Loan',
+    withdrawals: 'Withdraw',
+    universalTransfer: 'Transfer',
+    futures: 'Futures',
+  };
+  const keysBody = () => {
+    if (!roKey && !fullKey) {
+      return (
+        <div className="keyx-pop keyx-empty">
+          <div className="keyx-vault">
+            <span className="keyx-vault-mark"><IconKey size={18} /></span>
+            <span className="keyx-vault-copy"><b>API</b><em>missing</em></span>
+            <button className="keyx-action" type="button" title="Open API Security" aria-label="Open API Security" onClick={() => { setActive(null); openOverlay('apikey'); }}>
+              <IconShield size={15} />
+            </button>
+          </div>
+          <div className="keyx-empty-line"><span /><span /><span /></div>
+        </div>
+      );
+    }
+    const rows = API_PERMS.map((p) => ({
+      key: p.key as string,
+      label: PERM_SHORT[p.key] ?? p.label,
+      ro: !!roKey?.permissions[p.key],
+      full: !!fullKey?.permissions[p.key],
+    }));
+    const visibleKeys = [roKey, fullKey].filter(Boolean) as ApiKeyInfo[];
+    const liveCount = visibleKeys.filter((ak) => ak.status === 'live').length;
+    const ipLocked = visibleKeys.every((ak) => ak.ipRestrict);
+    const withdrawalsOpen = rows.some((r) => r.key === 'withdrawals' && (r.ro || r.full));
+    return (
+      <div className="keyx-pop">
+        <div className="keyx-vault">
+          <span className={`keyx-vault-mark ${roKey?.status ?? 'declared'}`}><IconKey size={18} /></span>
+          <span className="keyx-vault-copy"><b>API</b><em>{withdrawalsOpen ? 'review' : 'locked'}</em></span>
+          <span className={`keyx-vault-ring ${withdrawalsOpen ? 'warn' : 'ok'}`} aria-hidden>
+            <i /><i /><i />
+          </span>
+          <button className="keyx-action" type="button" title="Open API Security" aria-label="Open API Security" onClick={() => { setActive(null); openOverlay('apikey'); }}>
+            <IconShield size={15} />
+          </button>
+        </div>
+        <div className="keyx-strip">
+          <span><em>Keys</em><b>{visibleKeys.length}</b></span>
+          <span><em>Live</em><b>{liveCount}</b></span>
+          <span><em>IP</em><b>{ipLocked ? 'Lock' : 'Open'}</b></span>
+        </div>
+        <div className="keyx-key-stack">
+          {visibleKeys.map((ak) => (
+            <div key={ak.id} className={`keyx-card ${ak.status}`}>
+              <span className="keyx-led" />
+              <span className="keyx-main">
+                <b>{ak.name}</b>
+                <em>{ak.prefix ? `${ak.prefix}····${ak.fingerprint ? ` ${ak.fingerprint}` : ''}` : 'pending'}</em>
+              </span>
+              <span className={`keyx-side ${ak.status}`} title={ak.status} aria-label={ak.status} />
+            </div>
+          ))}
+        </div>
+        <div className="keyx-matrix">
+          <div className="keyx-mhead"><span /><em>R</em><em>F</em></div>
+          {rows.map((r) => (
+            <div key={r.key} className={`keyx-mrow ${r.key === 'withdrawals' ? (withdrawalsOpen ? 'risk' : 'locked') : ''}`}>
+              <span>{r.label}</span>
+              <i className={`keyx-bit ${r.ro ? 'on' : 'off'}`} title={`Read ${r.label}: ${r.ro ? 'enabled' : 'disabled'}`} aria-label={`Read ${r.label}: ${r.ro ? 'enabled' : 'disabled'}`} />
+              <i className={`keyx-bit ${r.full ? 'on' : 'off'}`} title={`Full ${r.label}: ${r.full ? 'enabled' : 'disabled'}`} aria-label={`Full ${r.label}: ${r.full ? 'enabled' : 'disabled'}`} />
+            </div>
+          ))}
+        </div>
       </div>
-      <div className="ak-ip"><IconShield size={12} />{ak.ipRestrict ? `Restricted · ${ak.ips.join(', ')}` : 'Unrestricted — any IP'}<small>{ak.ipNote}</small></div>
-      <div className="menu-head">Permissions</div>
-      <div className="ak-perms">{API_PERMS.map((p) => { const on = ak.permissions[p.key]; return (
-        <span key={p.key} className={`ak-perm ${on ? 'on' : 'off'}`}><span className="ak-perm-ic">{on ? '✓' : '✕'}</span>{p.label}</span>); })}</div>
-      {ak.note && <div className="menu-foot">{ak.note}</div>}
-      <button className="ak-expand" onClick={() => { setActive(null); openOverlay('apikey'); }}>Expand ⤢</button>
-    </>);
+    );
   };
 
   const content = (k: MK) => {
     switch (k) {
       case 'clock':
-        return (<><div className="menu-head">Clock timezone</div>{ZONES.map((zz) => (
-          <button key={zz.id} className={`menu-item ${zz.id === zone.id ? 'sel' : ''}`} onClick={() => { updatePref('clockZone', zz.id); }}>
-            <span className="zp-code">{zz.label}</span><span className="zp-city">{zz.city}</span><span className="zp-time num">{fmtClockZone(zz.id, now)}</span>
-          </button>))}</>);
-      case 'shell':
-        return (<><div className="np-head"><span className="np-title"><IconTerminal size={14} /> AWS CloudShell</span><span className="np-sub">cg-arbitrage-01</span></div>
-          <div className="np-row"><span className="k">Instance</span><span className="v">cg-arbitrage-01</span></div>
-          <div className="np-row"><span className="k">Runtime</span><span className="v">/opt/arbitrage-cosmos</span></div>
-          <div className="np-row"><span className="k">Access</span><span className="v">SSM · Session Manager</span></div>
-          <button className="adv-fix" style={{ width: '100%', marginTop: 10 }} onClick={() => { setActive(null); openOverlay('cloudshell'); }}>Open in-app CloudShell →</button></>);
-      case 'apikey': return keyBody(roKey, IconKey);
-      case 'apikey2': return keyBody(fullKey, IconLock);
-      case 'data':
-        return (<><div className="np-head"><span className={`np-title ${netGrade}`}><LiveDot ok={netGrade !== 'bad'} /> Data health</span><span className="np-sub">source: Binance</span></div>
-          {dhSources.map((s) => (<div key={s.name} className="dh-row"><span className={`dh-dot ${s.ok ? 'ok' : 'bad'}`} /><span className="dh-name">{s.name}</span><span className={`dh-detail ${s.ok ? '' : 'muted'}`}>{s.detail}</span></div>))}
-          <div className="dh-params"><div className="menu-head">Parameters</div>
-            <div className="np-row"><span className="k">Clock drift</span><span className="v num">{msLabel(sys?.serverTimeDiffMs)}</span></div>
-            <div className="np-row"><span className="k">Pairs scanned</span><span className="v num">{state?.scanner.pairs ?? '—'}</span></div></div></>);
-      case 'advisor':
-        return (<><div className="np-head"><span className="np-title"><IconShield size={14} /> Trusted Advisor</span></div>
-          <div className="adv-stats">
-            <div className="adv-stat action"><span className="adv-ic">✕</span><b>{advA.length}</b><em>Action recommended</em></div>
-            <div className="adv-stat invest"><span className="adv-ic">!</span><b>{advI.length}</b><em>Investigation recommended</em></div>
-            <div className="adv-stat pass"><span className="adv-ic">✓</span><b>{advP.length}</b><em>Passed items</em></div></div>
-          <div className="adv-list">{advAtt.length === 0 ? <div className="adv-clean">✓ All clear.</div> : advAtt.slice(0, 4).map((c) => (
-            <button key={c.name} className={`adv-row ${c.sev}`} onClick={() => { if (c.page) { setActive(null); setPage(c.page); } }}><span className="adv-row-dot" /><span className="adv-row-meta"><b>{c.name}</b><small>{c.detail}</small></span></button>))}</div>
-          <div className="adv-actions"><button className="adv-scan" onClick={() => setActive(null)}>Close</button><button className="adv-fix" disabled={!advAtt[0]?.page} onClick={() => { if (advAtt[0]?.page) { setActive(null); setPage(advAtt[0].page!); } }}>Fix top issue →</button></div></>);
-      case 'notif':
-        return (<><div className="np-head"><span className="np-title">Notifications</span><button className="np-link" onClick={() => { setActive(null); setPage('ledger'); }}>Ledger →</button></div>
-          <div className="np-sub-line">Your cockpit only — proposals, fills, risk.</div>
-          {events.length === 0 ? <div className="snn-empty">No events yet</div> : events.slice(0, 7).map((e) => { const tone = e.kind.includes('error') ? 'bad' : e.kind.includes('fill') ? 'ok' : e.kind.includes('risk') ? 'warn' : '';
-            return (<button key={e.id} className="notif-row" onClick={() => { setActive(null); setPage('ledger'); }}><span className={`notif-dot ${tone}`} /><span className="notif-text">{eventSummary(e.kind, (e.data as Record<string, unknown> | null) ?? null, e.symbol)}</span><span className="notif-time num">{timeAgo(e.ts)}</span></button>); })}
-          <div className="notif-pref-box">
-            <div className="menu-head">What kind of notification do you need?</div>
-            {alertRows.map((r) => (
-              <div key={r.key} className="alert-row alert-row-compact">
-                <div className="alert-meta">
-                  <span className="alert-label">{r.label}</span>
-                  <span className="alert-sub">{r.sub}</span>
-                </div>
-                <button
-                  className={`toggle ${al[r.key] ? 'on' : ''}`}
-                  onClick={() => updatePref('alerts', { ...al, [r.key]: !al[r.key] })}
-                  aria-label={`Toggle ${r.label}`}
-                >
-                  <span className="knob" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </>);
-      case 'power':
-        return (<><div className="np-head"><span className={`np-title ${mode === 'HALTED' ? 'bad' : 'ok'}`}><span className="net-dot" />{mode === 'LIVE_ARMED' ? 'Live armed' : mode === 'HALTED' ? 'Halted' : 'Manual mode'}</span></div>
-          <div className="np-sub-line">{mode === 'HALTED' ? 'Kill switch is ON — every send is blocked.' : 'Sends pass to the risk gate.'}</div>
-          <div className="adv-actions">{mode === 'HALTED'
-            ? <button className="adv-fix" style={{ width: '100%' }} onClick={() => { void setKill(false); }}>Arm manual mode</button>
-            : <button className="adv-fix" style={{ width: '100%', background: 'var(--down)' }} onClick={() => { void setKill(true); }}>Kill switch — halt now</button>}</div>
-          <button className="adv-scan" style={{ width: '100%', marginTop: 6 }} onClick={() => { setActive(null); setPage('risk'); }}>Open Risk →</button></>);
-      case 'settings':
-        return (<>
-          <div className="np-head">
-            <span className="np-title"><IconGear size={14} /> Settings</span>
-            <button className="np-link" onClick={() => { setActive(null); setPage('settings'); }}>Open settings →</button>
-          </div>
-          <div className="quick-settings">
-            <div className="qs-row">
-              <span><b>Theme</b><em>{prefs.theme === 'system' ? 'Auto' : prefs.theme}</em></span>
-              <div className="theme-seg qs-mini qs-theme">{([{ id: 'light', label: 'Light' }, { id: 'dark', label: 'Dark' }, { id: 'system', label: 'Auto' }] as const).map((m) => (<button key={m.id} className={prefs.theme === m.id ? 'on' : ''} onClick={() => updatePref('theme', m.id)}>{m.label}</button>))}</div>
+        return (
+          <div className="clock-pop">
+            <div className="clock-pop-hero">
+              <span className="clock-orbit lg"><span /></span>
+              <span className="clock-hero-copy">
+                <small>Execution Time</small>
+                <b>{activeClock.raw}</b>
+                <em>{zone.city} · {activeClockOffset} · {clockDate(zone.id, now)}</em>
+              </span>
+              <span className="clock-live">Live</span>
             </div>
-            <div className="qs-accent-row" role="group" aria-label="Accent color">
-              {ACCENT_ORDER.map((kk) => (<button key={kk} className={`accent-dot ${prefs.accent === kk ? 'sel' : ''}`} style={{ '--dot': ACCENTS[kk].hex } as CSSProperties} onClick={() => updatePref('accent', kk)} title={ACCENTS[kk].label} aria-label={`${ACCENTS[kk].label} accent`} />))}
+            <div className="clock-twins">
+              <span><em>UTC</em><b>{utcClock.raw}</b></span>
+              <span><em>Local</em><b>{localClock.raw}</b></span>
             </div>
-            <div className="qs-row">
-              <span><b>Zoom</b><em>{Math.round(zoomv * 100)}%</em></span>
-              <div className="zoom-row qs-zoom"><button className="zoom-btn" onClick={() => setZoom(zoomv - 0.05)} aria-label="Zoom out">−</button><button className="zoom-reset" onClick={() => setZoom(1)}>100%</button><button className="zoom-btn" onClick={() => setZoom(zoomv + 0.05)} aria-label="Zoom in">+</button></div>
-            </div>
-            <div className="qs-row">
-              <span><b>Currency</b><em>{cur}</em></span>
-              <div className="qs-currency-grid" role="group" aria-label="Currency">
-                {Object.keys(CURRENCIES).map((code) => (
-                  <button key={code} className={`qs-chip ${code === cur ? 'on' : ''}`} type="button" onClick={() => updatePref('currency', code)}>
-                    {code}
+            <div className="clock-zone-list">
+              {ZONES.map((zz) => {
+                const p = clockParts(zz.id, now);
+                const selected = zz.id === zone.id;
+                return (
+                  <button key={zz.id} className={`clock-zone-row ${selected ? 'on' : ''}`} onClick={() => { updatePref('clockZone', zz.id); }}>
+                    <span className="clock-zone-mark">{zz.label}</span>
+                    <span className="clock-zone-copy">
+                      <b>{zz.city}</b>
+                      <small>{clockOffset(zz.id, now)}</small>
+                    </span>
+                    <span className="clock-zone-time">{p.raw}</span>
+                    {selected && <TbpCheck />}
                   </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      case 'shell':
+        return (
+          <div className="shell-pop shell-premium">
+            <div className="shell-stage" aria-hidden>
+              <div className="shell-stage-bar">
+                <span className="shell-leds"><i /><i /><i /></span>
+                <b>AWS CLI</b>
+                <em>ready</em>
+              </div>
+              <div className="shell-stage-body">
+                <div className="shell-path"><span>ubuntu</span><b>@cg-arbitrage-01</b><i>~</i></div>
+                <div className="shell-command"><em>$</em><span>aws sts get-caller-identity</span><i /></div>
+                <div className="shell-rail"><span /><span /><span /></div>
+              </div>
+            </div>
+            <div className="shell-pills" aria-hidden>
+              <span><em>host</em><b>cg-arb-01</b></span>
+              <span><em>path</em><b>/opt/arbitrage</b></span>
+              <span><em>auth</em><b>ssm</b></span>
+            </div>
+            <div className="shell-actions">
+              <button className="shell-open primary icon-only" type="button" onClick={() => { setActive(null); openOverlay('cloudshell'); }} title="Open in-app CloudShell" aria-label="Open in-app CloudShell">
+                <IconTerminal size={15} />
+              </button>
+              <a className="shell-open icon-only" href={CLOUD_SHELL_URL} target="_blank" rel="noreferrer noopener" onClick={() => setActive(null)} title="Open AWS Console" aria-label="Open AWS Console">
+                <IconExternal size={14} />
+              </a>
+            </div>
+          </div>
+        );
+      case 'apikey': return keysBody();
+      case 'data':
+        return (
+          <div className={`datax-pop ${netGrade}`}>
+            <div className={`datax-hero ${netGrade}`}>
+              <span className="datax-mark"><IconDatabase size={18} /></span>
+              <span className="datax-score">
+                <b>{dataScore}</b>
+                <em>{dataCode}</em>
+              </span>
+              <span className="datax-signal" aria-hidden><i /><i /><i /></span>
+            </div>
+            <div className="datax-counters">
+              <span><i /><b>{feedList.length || '—'}</b><em>S</em></span>
+              <span className={latTier}><i /><b>{msLabel(lat)}</b><em>L</em></span>
+              <span><i /><b>{sys?.usedWeight1m ?? '—'}</b><em>W</em></span>
+            </div>
+            <div className="datax-list">
+              {dataRows.map((row) => (
+                <div key={row.name} className={`datax-row ${row.tier}`}>
+                  <span className={`datax-dot ${row.tier}`} />
+                  <span className="datax-row-copy">
+                    <b>{dataShort[row.name] ?? row.name}</b>
+                    <em>{row.value}</em>
+                  </span>
+                  <span className={`datax-chip ${row.tier}`} />
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      case 'advisor':
+        return (
+          <div className={`advx-pop ${advTone}`}>
+            <div className={`advx-hero ${advTone}`}>
+              <span className="advx-seal"><IconShield size={18} /></span>
+              <span className="advx-score">
+                <b>{advScore}</b>
+                <em>{advCode}</em>
+              </span>
+              <span className="advx-pulse" aria-hidden><i /><i /><i /></span>
+              <button className="advx-action" type="button" title="Open Risk" aria-label="Open Risk" onClick={() => { setActive(null); setPage('risk'); }}>
+                <IconRadar size={15} />
+              </button>
+            </div>
+            <div className="advx-counters">
+              <span className="bad"><i /><b>{advA.length}</b><em>A</em></span>
+              <span className="warn"><i /><b>{advI.length}</b><em>R</em></span>
+              <span className="ok"><i /><b>{advP.length}</b><em>P</em></span>
+            </div>
+            <div className="advx-list">
+              {advAtt.length === 0 ? (
+                <div className="advx-clean">
+                  <span className="advx-dot ok" />
+                  <b>Checks clean</b>
+                  <em>{advP.length}/{advChecks.length}</em>
+                </div>
+              ) : advAtt.slice(0, 4).map((c) => (
+                <button key={c.name} className={`advx-row ${c.sev}`} type="button" onClick={() => { if (c.page) { setActive(null); setPage(c.page); } }}>
+                  <span className={`advx-dot ${c.sev === 'action' ? 'bad' : 'warn'}`} />
+                  <span className="advx-row-copy">
+                    <b>{c.name}</b>
+                    <em>{c.page ?? 'scan'}</em>
+                  </span>
+                  <span className={`advx-chip ${c.sev === 'action' ? 'bad' : 'warn'}`} />
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      case 'notif':
+        return (
+          <div className={`ntfx-pop ${notifTone}`}>
+            <div className={`ntfx-hero ${notifTone}`}>
+              <span className="ntfx-mark"><IconBell size={18} /></span>
+              <span className="ntfx-score">
+                <b>{unread || events.length}</b>
+                <em>{unread ? 'NEW' : events.length ? 'LOG' : 'CLR'}</em>
+              </span>
+              <span className="ntfx-signal" aria-hidden><i /><i /><i /></span>
+              <button className="ntfx-action" type="button" onClick={() => { setActive(null); setPage('ledger'); }} title="Open Ledger" aria-label="Open notification ledger">
+                <IconReceipt size={15} />
+              </button>
+            </div>
+            <div className="ntfx-counters" aria-label="Notification summary">
+              <span><i /><b>{events.length}</b><em>T</em></span>
+              <span className={unread ? 'hot' : ''}><i /><b>{unread}</b><em>N</em></span>
+              <span><i /><b>{alertsOn}</b><em>R</em></span>
+            </div>
+            <div className="ntfx-tabs" role="tablist" aria-label="Notification filters">
+              {notifTabs.map((t) => (
+                <button
+                  key={t.id}
+                  data-testid={`notif-tab-${t.id}`}
+                  className={`ntfx-tab ${notifTab === t.id ? 'on' : ''}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={notifTab === t.id}
+                  aria-label={t.label}
+                  title={t.label}
+                  onClick={() => setNotifTab(t.id)}
+                >
+                  {t.code}
+                </button>
+              ))}
+            </div>
+
+            {notifTab === 'custom' ? (
+              <div className="ntfx-rules">
+                {alertRows.map((r) => (
+                  <div key={r.key} className="ntfx-rule">
+                    <span className={`ntfx-dot ${al[r.key] ? 'on' : ''}`} />
+                    <span className="ntfx-rule-copy">
+                      <b>{alertShort[r.key]}</b>
+                      <em>{al[r.key] ? 'ON' : 'OFF'}</em>
+                    </span>
+                    <button
+                      data-testid={`notif-alert-${r.key}`}
+                      className={`toggle ${al[r.key] ? 'on' : ''}`}
+                      type="button"
+                      onClick={() => updatePref('alerts', { ...al, [r.key]: !al[r.key] })}
+                      aria-label={`Toggle ${r.label}`}
+                    >
+                      <span className="knob" />
+                    </button>
+                  </div>
                 ))}
               </div>
+            ) : (
+              <div className="ntfx-list">
+                {filteredNotifEvents.length === 0 ? (
+                  <div className="ntfx-empty">
+                    <span className="ntfx-dot idle" />
+                    <b>Quiet</b>
+                    <em>{notifTab === 'all' ? '0' : notifTab.toUpperCase()}</em>
+                  </div>
+                ) : filteredNotifEvents.slice(0, 4).map((e) => {
+                  const meta = notifMeta(e.kind);
+                  const summary = eventSummary(e.kind, (e.data as Record<string, unknown> | null) ?? null, e.symbol);
+                  return (
+                    <button key={e.id} className="ntfx-event" type="button" title={summary} aria-label={summary} onClick={() => { setActive(null); setPage('ledger'); }}>
+                      <span className={`ntfx-dot ${meta.tone}`} aria-hidden="true" />
+                      <span className="ntfx-copy">
+                        <b>{meta.scope}</b>
+                        <em>{meta.mark} · {timeAgo(e.ts)}</em>
+                      </span>
+                      <span className={`ntfx-chip ${meta.tone}`} />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      case 'power':
+        return (
+          <div className={`modex-pop ${modeTone}`}>
+            <div className={`modex-hero ${modeTone}`}>
+              <span className="modex-mark"><IconPower size={18} /></span>
+              <span className="modex-score">
+                <b>{modeCode}</b>
+                <em>{modeStamp}</em>
+              </span>
+              <span className={`modex-bars ${modeTone}`} aria-hidden="true"><i /><i /><i /></span>
             </div>
-            <div className="qs-row">
-              <span><b>Basis units</b><em>{prefs.basisUnit === 'bps' ? 'Basis points' : 'Percent'}</em></span>
-              <div className="theme-seg qs-mini"><button className={prefs.basisUnit === 'pct' ? 'on' : ''} onClick={() => updatePref('basisUnit', 'pct')}>Percent</button><button className={prefs.basisUnit === 'bps' ? 'on' : ''} onClick={() => updatePref('basisUnit', 'bps')}>Bps</button></div>
+            <div className="modex-counters" aria-label="Trading mode telemetry">
+              <span><i /><b>{allowCount}</b><em>SYM</em></span>
+              <span className={modeTone}><i /><b>{modeSend}</b><em>ORD</em></span>
+              <span className={b?.connected ? 'ok' : 'bad'}><i /><b>{modeNet}</b><em>API</em></span>
             </div>
-            <div className="qs-row">
-              <span><b>Refresh</b><em>{prefs.refreshSec}s</em></span>
-              <div className="theme-seg qs-mini">{refreshChoices.map((sec) => <button key={sec} className={prefs.refreshSec === sec ? 'on' : ''} onClick={() => updatePref('refreshSec', sec)}>{sec}s</button>)}</div>
-            </div>
-            <div className="qs-row">
-              <span><b>Table density</b><em>{prefs.density}</em></span>
-              <div className="theme-seg qs-mini"><button className={prefs.density === 'comfortable' ? 'on' : ''} onClick={() => updatePref('density', 'comfortable')}>Comfort</button><button className={prefs.density === 'compact' ? 'on' : ''} onClick={() => updatePref('density', 'compact')}>Compact</button></div>
-            </div>
-            <div className="qs-row">
-              <span><b>Motion</b><em>{prefs.motion}</em></span>
-              <div className="theme-seg qs-mini"><button className={prefs.motion === 'full' ? 'on' : ''} onClick={() => updatePref('motion', 'full')}>Full</button><button className={prefs.motion === 'reduced' ? 'on' : ''} onClick={() => updatePref('motion', 'reduced')}>Reduced</button></div>
+            <div className="modex-actions" role="group" aria-label="Bot trading mode controls">
+              <button
+                className={`modex-action bad ${mode === 'HALTED' ? 'on' : ''}`}
+                type="button"
+                aria-pressed={mode === 'HALTED'}
+                title="Halt trading"
+                onClick={() => { void setKill(true); }}
+              >
+                <IconPower size={14} /><b>Halt</b>
+              </button>
+              <button
+                className={`modex-action warn ${mode === 'MANUAL' ? 'on' : ''}`}
+                type="button"
+                aria-pressed={mode === 'MANUAL'}
+                title="Manual only"
+                onClick={setManualMode}
+              >
+                <IconShield size={14} /><b>Manual</b>
+              </button>
+              <button
+                className={`modex-action ok ${mode === 'LIVE_ARMED' ? 'on' : ''}`}
+                type="button"
+                aria-pressed={mode === 'LIVE_ARMED'}
+                disabled={liveDisabled}
+                title={liveTitle}
+                onClick={setLiveMode}
+              >
+                <IconPulse size={14} /><b>Live</b>
+              </button>
             </div>
           </div>
-        </>);
+        );
+      case 'mrefresh':
+        return (
+          <div className={`mrefx-pop ${refreshTone}`}>
+            <div className={`mrefx-hero ${refreshTone}`}>
+              <span className={`mrefx-mark ${menuRefreshState === 'spin' ? 'spin' : ''}`}><IconRefresh size={18} /></span>
+              <span className="mrefx-score">
+                <b>{refreshCode}</b>
+                <em>{refreshStamp}</em>
+              </span>
+              <span className={`mrefx-bars ${refreshTone}`} aria-hidden="true"><i /><i /><i /></span>
+            </div>
+            <div className="mrefx-counters" aria-label="Market refresh telemetry">
+              <span className={feedsOk ? 'ok' : 'warn'}><i /><b>{refreshFeedCount}</b><em>STR</em></span>
+              <span className={latTone || 'idle'}><i /><b>{msLabel(lat)}</b><em>LAT</em></span>
+              <span className={refreshTone}><i /><b>{refreshNetCode}</b><em>NET</em></span>
+            </div>
+            <div className="mrefx-presets" role="radiogroup" aria-label="Market refresh interval">
+              {refreshChoices.map((r) => (
+                <button
+                  key={r.sec}
+                  data-testid={`mrefresh-${r.sec}`}
+                  className={`mrefx-preset ${prefs.refreshSec === r.sec ? 'on' : ''}`}
+                  type="button"
+                  role="radio"
+                  aria-checked={prefs.refreshSec === r.sec}
+                  aria-label={`${r.label} market refresh, ${r.sec} seconds`}
+                  title={`${r.label} / ${r.sub}`}
+                  onClick={() => setMarketRefresh(r.sec)}
+                >
+                  <b>{r.sec}</b><em>s</em>
+                </button>
+              ))}
+            </div>
+            <div className="mrefx-custom" aria-label="Custom market refresh seconds">
+              <button data-testid="mrefresh-decrease" type="button" onClick={() => setMarketRefresh(prefs.refreshSec - 3)} aria-label="Decrease market refresh">-</button>
+              <input data-testid="mrefresh-custom-input" value={refreshCustom} inputMode="numeric" type="number" min={3} max={120} step={1} onChange={(e) => setRefreshCustom(e.currentTarget.value)} onBlur={applyCustomRefresh} onKeyDown={(e) => { if (e.key === 'Enter') applyCustomRefresh(); }} aria-label="Custom market refresh seconds" />
+              <button data-testid="mrefresh-increase" type="button" onClick={() => setMarketRefresh(prefs.refreshSec + 3)} aria-label="Increase market refresh">+</button>
+              <button data-testid="mrefresh-now" className={`mrefx-now ${menuRefreshState}`} type="button" disabled={menuRefreshState === 'spin'} onClick={() => { void runMenuRefresh(); }} aria-label="Refresh market data now">
+                <span className={menuRefreshState === 'spin' ? 'spin' : ''}><IconRefresh size={14} /></span>
+                <b>{refreshActionText}</b>
+              </button>
+            </div>
+          </div>
+        );
+      case 'currency':
+        return (
+          <div className={`curfx-pop ${curTone}`}>
+            <div className={`curfx-hero ${curTone}`}>
+              <span className="curfx-mark">{curSymbol}</span>
+              <span className="curfx-score">
+                <b>{cur}</b>
+                <em>{curFxCode}</em>
+              </span>
+              <span className={`curfx-bars ${curTone}`} aria-hidden="true"><i /><i /><i /></span>
+            </div>
+            <div className="curfx-counters" aria-label="Display currency telemetry">
+              <span className={curTone}><i /><b>{curRateText}</b><em>RATE</em></span>
+              <span className={curTone}><i /><b>{curFxCode}</b><em>FX</em></span>
+              <span><i /><b>{curAgeCode}</b><em>AGE</em></span>
+            </div>
+            <div className="curfx-grid" role="radiogroup" aria-label="Display currency">
+              {Object.entries(CURRENCIES).map(([code, c]) => (
+                <button
+                  key={code}
+                  data-testid={`currency-${code}`}
+                  className={`curfx-option ${cur === code ? 'on' : ''}`}
+                  type="button"
+                  role="radio"
+                  aria-checked={cur === code}
+                  aria-label={`${c.label} display currency`}
+                  title={`${code} / ${currencyRateText(code)}`}
+                  onClick={() => updatePref('currency', code)}
+                >
+                  <i>{c.symbol.trim() || code}</i>
+                  <span><b>{code}</b><em>{currencyRateText(code)}</em></span>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      case 'appearance':
+        const themeModes = [
+          { id: 'system', label: 'System', mark: 'A' },
+          { id: 'light', label: 'Light', mark: '☼' },
+          { id: 'dark', label: 'Dark', mark: '◐' },
+        ] as const;
+        const setZoom = (next: number) => updatePref('zoom', Math.min(1.5, Math.max(0.8, Math.round(next * 100) / 100)));
+        return (
+          <div className={`apx-pop apx-premium ${theme}`} style={{ '--apx-accent': activeAccent.hex } as CSSProperties}>
+            <div className={`apx-stage ${prefs.theme}`}>
+              <span className="apx-window" aria-hidden="true"><i /><i /><i /></span>
+              <span className="apx-rail" aria-hidden="true"><i /><i /><i /></span>
+              <span className="apx-orb" aria-hidden="true" />
+              <b>{appearanceZoom}%</b>
+            </div>
+            <div className="apx-modes" role="radiogroup" aria-label="Theme mode">
+              {themeModes.map((m) => (
+                <button
+                  key={m.id}
+                  data-testid={`appearance-theme-${m.id}`}
+                  className={`apx-mode ${prefs.theme === m.id ? 'on' : ''}`}
+                  type="button"
+                  role="radio"
+                  aria-checked={prefs.theme === m.id}
+                  aria-label={`${m.label} theme`}
+                  title={m.label}
+                  onClick={() => updatePref('theme', m.id)}
+                >
+                  <span className={`apx-mode-art ${m.id}`} aria-hidden="true"><i /><i /><i /></span>
+                  <b>{m.mark}</b>
+                </button>
+              ))}
+            </div>
+            <div className="apx-dots" role="radiogroup" aria-label="Accent">
+              {ACCENT_ORDER.map((kk) => {
+                const a = ACCENTS[kk];
+                const selected = prefs.accent === kk;
+                return (
+                  <button
+                    key={kk}
+                    data-testid={`appearance-accent-${kk}`}
+                    className={`apx-dot ${selected ? 'on' : ''}`}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => updatePref('accent', kk)}
+                    title={a.label}
+                    aria-label={`${a.label} accent`}
+                    style={{ '--dot': a.hex } as CSSProperties}
+                  >
+                    <span />
+                    <i />
+                  </button>
+                );
+              })}
+            </div>
+            <div className="apx-scale" aria-label="Interface scale">
+              <button data-testid="appearance-zoom-out" type="button" onClick={() => setZoom((prefs.zoom || 1) - 0.05)} aria-label="Zoom out">−</button>
+              <strong>{appearanceZoom}%</strong>
+              <button data-testid="appearance-zoom-in" type="button" onClick={() => setZoom((prefs.zoom || 1) + 0.05)} aria-label="Zoom in">+</button>
+              <button data-testid="appearance-zoom-reset" className="reset" type="button" onClick={() => updatePref('zoom', 1.05)} aria-label="Reset scale" title="Reset scale">↺</button>
+            </div>
+          </div>
+        );
+      case 'basisu':
+        return (
+          <div className={`basisx-pop ${basisIsBps ? 'bps' : 'pct'}`}>
+            <div className={`basisx-hero ${basisIsBps ? 'bps' : 'pct'}`}>
+              <span className="basisx-mark">{basisMark}</span>
+              <span className="basisx-score">
+                <b>{basisCode}</b>
+                <em>{basisPreview}</em>
+              </span>
+              <span className={`basisx-bars ${basisIsBps ? 'bps' : 'pct'}`} aria-hidden="true"><i /><i /><i /></span>
+            </div>
+            <div className="basisx-counters" aria-label="Basis conversion telemetry">
+              <span><i /><b>1bp</b><em>.01%</em></span>
+              <span><i /><b>100</b><em>bp/%</em></span>
+              <span className={basisIsBps ? 'bps' : 'pct'}><i /><b>{basisAltPreview}</b><em>ALT</em></span>
+            </div>
+            <div className="basisx-options" role="radiogroup" aria-label="Basis display unit">
+              <button
+                data-testid="basis-unit-pct"
+                className={`basisx-option pct ${!basisIsBps ? 'on' : ''}`}
+                type="button"
+                role="radio"
+                aria-checked={!basisIsBps}
+                aria-label="Percent basis display"
+                title="Percent"
+                onClick={() => updatePref('basisUnit', 'pct')}
+              >
+                <i>%</i>
+                <span><b>PCT</b><em>+0.042%</em></span>
+              </button>
+              <button
+                data-testid="basis-unit-bps"
+                className={`basisx-option bps ${basisIsBps ? 'on' : ''}`}
+                type="button"
+                role="radio"
+                aria-checked={basisIsBps}
+                aria-label="Basis points display"
+                title="Basis points"
+                onClick={() => updatePref('basisUnit', 'bps')}
+              >
+                <i>bp</i>
+                <span><b>BPS</b><em>+4.2</em></span>
+              </button>
+            </div>
+          </div>
+        );
     }
   };
 
   return (
     <div className="smenu-bar" ref={rowRef} onMouseLeave={scheduleClose}>
-      {trig('clock', 'hdr-clock-btn', <><span className="num">{fmtClockZone(zone.id, now)}</span><span className="hcb-zone">{zone.label}</span></>)}
-      {trig('shell', 'hdr-ic tint-shell', <IconTerminal size={16} />)}
-      {trig('apikey', 'apikey-pill ro', <><IconKey size={15} /><span className={`apikey-dot s-${roKey?.status ?? 'declared'}`} /></>)}
-      {trig('apikey2', 'apikey-pill full', <><IconLock size={15} /><span className={`apikey-dot s-${fullKey?.status ?? 'planned'}`} /></>)}
-      {trig('data', `hdr-ic tint-data grade-${netGrade}`, <IconDatabase size={18} />)}
-      {trig('advisor', 'hdr-ic tint-advisor', <><IconShield size={16} />{advA.length > 0 && <span className="ic-badge">{advA.length}</span>}</>)}
-      {trig('notif', `hdr-ic notif-trigger ${alertsOn > 0 ? 'alerts-on' : ''}`, <><IconBell size={16} />{unread > 0 ? <span className="ic-badge">{unread > 9 ? '9+' : unread}</span> : alertsOn > 0 && <span className="ic-dot accent" />}</>)}
-      {trig('power', `hdr-ic ${modeClass}`, <><IconPower size={15} /><span className="ic-dot" /></>)}
-      {trig('settings', 'icon-btn settings-trigger', <IconGear size={16} />)}
+      {trig('clock', 'hdr-clock-btn clock-pro-btn', <>
+        <span className="clock-orbit"><span /></span>
+        <span className="clock-pro-time"><b>{activeClock.hm}</b><small>{activeClockSub}</small></span>
+        <span className="clock-pro-sec">{activeClock.ss}</span>
+        <span className="clock-pro-zone">{zone.label}</span>
+      </>, { title: `Clock & timezone — ${zone.city}` })}
+      {trig('shell', 'hdr-ic tint-shell shell-ghost shell-premium-trigger', <>
+        <span className="shell-trigger-core">
+          <IconTerminal size={16} />
+          <i />
+        </span>
+      </>, { title: 'AWS CloudShell' })}
+      {trig('apikey', `hdr-ic apikey-ghost apikey-premium-trigger s-${roKey?.status ?? 'declared'}`, <>
+        <span className={`key-trigger-core s-${roKey?.status ?? 'declared'}`}>
+          <IconKey size={16} />
+          <i />
+        </span>
+      </>, { title: 'API keys — read-only live · full planned' })}
+      {trig('data', `hdr-ic data-ghost data-pro grade-${netGrade}`, <>
+        <span className={`data-pro-core ${netGrade}`}>
+          <IconDatabase size={16} />
+          <span className={`data-pro-pulse ${netGrade}`} />
+        </span>
+      </>, { title: `Data Health — ${dataLabel} · ${dataSub}` })}
+      {trig('advisor', `hdr-ic advisor-ghost advisor-premium-trigger grade-${advTone}`, <>
+        <span className={`advisor-trigger-core ${advTone}`}>
+          <IconShield size={16} />
+          <i />
+          {advA.length > 0 && <b>{advA.length}</b>}
+        </span>
+      </>, { title: 'Trusted advisor — cockpit safety scan' })}
+      {trig('notif', `hdr-ic notif-trigger notif-ghost notif-premium-trigger ${notifTone}`, <>
+        <span className={`notif-trigger-core ${notifTone}`}>
+          <IconBell size={16} />
+          <i />
+          {unread > 0 && <b>{unread > 9 ? '9+' : unread}</b>}
+        </span>
+      </>, { title: 'Notifications & alerts' })}
+      {trig('power', `hdr-ic power-ghost power-premium-trigger ${modeClass}`, <>
+        <span className={`power-trigger-core ${modeTone}`}>
+          <IconPower size={16} />
+          <i />
+        </span>
+      </>, { title: 'Kill switch & trading mode' })}
+      {trig('mrefresh', `hdr-ic refresh-ghost refresh-premium-trigger ${refreshTone} ${menuRefreshState === 'spin' ? 'spinning' : ''}`, <>
+        <span className={`refresh-trigger-core ${refreshTone}`}>
+          <IconRefresh size={16} />
+          <i />
+        </span>
+      </>, { title: `Market refresh — every ${prefs.refreshSec}s` })}
+      {trig('currency', `hdr-ic currency-ghost currency-premium-trigger ${curTone}`, <>
+        <span className={`currency-trigger-core ${curTone}`}>
+          <b>{curSymbol}</b>
+          <i />
+        </span>
+      </>, { title: `Display currency — ${cur}` })}
+      {trig('basisu', `hdr-ic basis-ghost basis-premium-trigger ${basisIsBps ? 'basis-bps' : 'basis-pct'}`, <>
+        <span className={`basis-trigger-core ${basisIsBps ? 'bps' : 'pct'}`}>
+          <b>{basisMark}</b>
+          <i />
+        </span>
+      </>, { title: `Basis units — ${basisIsBps ? 'basis points' : 'percent'}` })}
+      {trig('appearance', `hdr-ic appearance-ghost appearance-premium-trigger ${theme}`, <>
+        <span className={`appearance-trigger-core ${theme}`} style={{ '--apx-accent': activeAccent.hex } as CSSProperties}>
+          <span aria-hidden="true" />
+          <b>{theme === 'dark' ? '◐' : '☼'}</b>
+          <i />
+        </span>
+      </>, { title: `Appearance — ${prefs.theme === 'system' ? 'auto' : prefs.theme} · ${appearanceZoom}%` })}
       {active && (
         <div className="smenu" style={{ left: geo.left, width: geo.width }} onMouseEnter={cancelClose} onMouseLeave={scheduleClose}>
           <span className="smenu-arrow" style={{ left: geo.pointer }} />
@@ -1469,15 +2412,22 @@ export function RefreshDock() {
 }
 
 export function Topbar() {
-  const { page } = useStore();
+  const { page, setPage } = useStore();
 
   useEffect(() => {
-    document.title = `Arbitrage Control · ${TITLES[page]}`;
+    document.title = `Arbitrage Control Room · ${TITLES[page]}`;
   }, [page]);
 
   return (
     <header className="hdr">
       <div className="hdr-in">
+        <div className="hdr-brand" onClick={() => setPage('dashboard')} title="Arbitrage Control Room" role="button" aria-label="Arbitrage Control Room home">
+          {BRAND_MARK}
+          <div className="brand-lockup">
+            <div className="brand-name">Arbitrage</div>
+            <div className="brand-sub">Control Room</div>
+          </div>
+        </div>
         <div className="tb-left">
           <SidebarSearch placement="topbar" />
         </div>
@@ -1754,7 +2704,6 @@ export function BottomNav() {
   const items: { id: Page; label: string; icon: JSX.Element }[] = [
     { id: 'dashboard', label: 'Home', icon: <IconGrid /> },
     { id: 'markets', label: 'Markets', icon: <IconChart /> },
-    { id: 'trade', label: 'Trade', icon: <IconTicket /> },
     { id: 'risk', label: 'Risk', icon: <IconShield /> },
   ];
   return (

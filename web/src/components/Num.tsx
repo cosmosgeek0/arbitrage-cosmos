@@ -26,6 +26,11 @@ export function Num({
     el.classList.remove('flash-up', 'flash-down');
     void el.offsetWidth; // restart animation
     el.classList.add(value > p ? 'flash-up' : 'flash-down');
+    // Under the app's :root zoom, color keyframes can freeze at their final
+    // frame instead of reverting — remove the class once the pulse is over so
+    // the value returns to neutral ink (static class changes always repaint).
+    const t = window.setTimeout(() => el.classList.remove('flash-up', 'flash-down'), 950);
+    return () => window.clearTimeout(t);
   }, [value]);
 
   return (

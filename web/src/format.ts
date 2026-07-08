@@ -9,19 +9,21 @@ export function baseOf(symbol: string | null | undefined): string {
   return s;
 }
 
-// Adaptive price precision, exchange-style.
+// Adaptive price precision, exchange-style. FX-converted like fmtMoney —
+// the display-currency pref must move EVERY money figure, not just compacts.
 export function fmtPrice(v: number | null | undefined): string {
   const n = Number(v);
   if (!isFinite(n) || v === null || v === undefined) return '—';
-  if (n === 0) return '$0.00';
-  const a = Math.abs(n);
+  if (n === 0) return fxSymbol + '0.00';
+  const c = n * fxRate;
+  const a = Math.abs(c);
   let d: number;
   if (a >= 1000) d = 2;
   else if (a >= 1) d = a >= 100 ? 2 : 3;
   else if (a >= 0.1) d = 4;
   else if (a >= 0.001) d = 6;
   else d = 8;
-  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+  return fxSymbol + c.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 }
 
 export function fmtQty(v: number | null | undefined): string {

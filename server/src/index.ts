@@ -14,7 +14,10 @@ import {
   fetchBookTicker,
   fetchDepth,
   fetchFundingHistory,
+  fetchBasisHist,
+  fetchFundingHist,
   fetchFuturesTelemetry,
+  fetchOiHist,
   fetchKlineCandles,
   fetchKlines,
   fetchTrades,
@@ -22,7 +25,10 @@ import {
   type Futures24hTicker,
 } from './binance/rest.js';
 import { BinanceClient, credsFromEnv, maskApiKey, keyPosture, rateLimit } from './binance/client.js';
-import { resolveIcons } from './binance/icons.js';
+import { resolveIcons, STOCK_TOKENS } from './binance/icons.js';
+import { tokenProfile, warmAllProfiles, profileWarmStatus } from './binance/profile.js';
+import { fetchMoneyFlow, FLOW_WINDOWS } from './binance/moneyflow.js';
+import { startLiquidationCollector, liquidationSeries, liquidationStats } from './binance/liquidations.js';
 import { UserStream, type ExecutionReport } from './binance/userStream.js';
 import { AccountService } from './services/account.js';
 import { RiskService } from './services/risk.js';
@@ -532,6 +538,143 @@ function gapPct(a: number | null, b: number | null, den: number | null): number 
 // Full market list for the Markets page: all exact spot+perp pairs plus
 // spot-only Binance USDT symbols. The account WS payload stays light while
 // this endpoint carries screener-grade market facts.
+// Simple Earn flexible positions — the money Binance holds in Earn. Real
+// values from the signed endpoint, 60s cache; empty rows when keys are absent.
+// Real balance history: Binance's daily SPOT account snapshots (~30 days is
+// all their API exposes) converted to USD with daily BTCUSDT closes. Our own
+// 15-minute snapshots take over from wherever these end.
+let eqHistCache: { ts: number; rows: { ts: number; totalUsdt: number }[]; reconstructedBefore: number | null } | null = null;
+const STABLE_FLOW = new Set(['USDT', 'USDC', 'FDUSD', 'TUSD', 'BUSD', 'DAI']);
+app.get('/api/equity-history', (_req, res) => {
+  void (async () => {
+    const now = Date.now();
+    if (eqHistCache && now - eqHistCache.ts < 3_600_000) {
+      res.json({ rows: eqHistCache.rows, reconstructedBefore: eqHistCache.reconstructedBefore, fetchedAt: eqHistCache.ts });
+      return;
+    }
+    if (!client) {
+      res.json({ rows: [], reconstructedBefore: null, fetchedAt: null });
+      return;
+    }
+    try {
+      // 1. last ~30 days of REAL daily snapshots, valued at daily BTC closes
+      const [snaps, btcCandles] = await Promise.all([
+        client.accountSnapshots(),
+        fetchKlineCandles('BTCUSDT', '1d', 40, 'spot'),
+      ]);
+      const closeByDay = new Map<string, number>();
+      for (const k of btcCandles) closeByDay.set(new Date(k.t).toISOString().slice(0, 10), k.c);
+      const dailies = (snaps.snapshotVos ?? [])
+        .map((v) => {
+          const btc = Number(v.data?.totalAssetOfBtc) || 0;
+          const day = new Date(v.updateTime).toISOString().slice(0, 10);
+          const close = closeByDay.get(day) ?? btcCandles[btcCandles.length - 1]?.c ?? null;
+          return close ? { ts: v.updateTime, totalUsdt: btc * close } : null;
+        })
+        .filter((r): r is { ts: number; totalUsdt: number } => r !== null)
+        .sort((a, b) => a.ts - b.ts);
+
+      // 2. REAL external flows over ~190 days (deposits + withdrawals, 90d pages)
+      const windows: [number, number][] = [
+        [now - 90 * 86_400_000, now],
+        [now - 180 * 86_400_000, now - 90 * 86_400_000],
+        [now - 200 * 86_400_000, now - 180 * 86_400_000],
+      ];
+      const flows: { ts: number; usd: number }[] = []; // +usd entered the account
+      const priceCache = new Map<string, Map<string, number>>();
+      const flowUsd = async (coin: string, amount: number, ts: number): Promise<number> => {
+        if (STABLE_FLOW.has(coin)) return amount;
+        let closes = priceCache.get(coin);
+        if (!closes) {
+          closes = new Map<string, number>();
+          try {
+            for (const k of await fetchKlineCandles(`${coin}USDT`, '1d', 220, 'spot')) {
+              closes.set(new Date(k.t).toISOString().slice(0, 10), k.c);
+            }
+          } catch { /* no pair — valued 0, noted by honesty of omission */ }
+          priceCache.set(coin, closes);
+        }
+        return amount * (closes.get(new Date(ts).toISOString().slice(0, 10)) ?? 0);
+      };
+      for (const [a, b] of windows) {
+        const [deps, wds] = await Promise.all([
+          client.depositHistory(a, b).catch(() => []),
+          client.withdrawHistory(a, b).catch(() => []),
+        ]);
+        for (const d of deps) {
+          if (d.status !== 1) continue;
+          flows.push({ ts: d.insertTime, usd: await flowUsd(d.coin, Number(d.amount) || 0, d.insertTime) });
+        }
+        for (const w of wds) {
+          if (w.status !== 6) continue;
+          const ts = Date.parse(w.applyTime.replace(' ', 'T') + 'Z');
+          const amt = (Number(w.amount) || 0) + (Number(w.transactionFee) || 0);
+          flows.push({ ts, usd: -(await flowUsd(w.coin, amt, ts)) });
+        }
+      }
+
+      // 3. walk BACKWARD from the oldest real snapshot, undoing each flow —
+      //    a step series identical in shape to Binance's own wallet chart
+      const rows: { ts: number; totalUsdt: number }[] = [...dailies];
+      let reconstructedBefore: number | null = null;
+      if (dailies.length > 0) {
+        const anchor = dailies[0];
+        const horizon = now - 185 * 86_400_000;
+        // dedupe (overlapping windows) + keep only flows inside the chart span
+        const seen = new Set<string>();
+        const older = flows
+          .filter((f) => {
+            if (f.ts >= anchor.ts || f.ts < horizon) return false;
+            const key = `${f.ts}:${f.usd.toFixed(6)}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          })
+          .sort((x, y) => y.ts - x.ts);
+        reconstructedBefore = anchor.ts;
+        let running = anchor.totalUsdt;
+        const back: { ts: number; totalUsdt: number }[] = [];
+        for (const f of older) {
+          back.push({ ts: f.ts, totalUsdt: running });
+          // clamp: tiny negatives are valuation noise (flows valued at daily
+          // closes vs real execution prices + trading pnl between flows)
+          running = Math.max(0, running - f.usd);
+          back.push({ ts: f.ts - 1, totalUsdt: running });
+        }
+        back.push({ ts: horizon, totalUsdt: running });
+        rows.unshift(...back.sort((x, y) => x.ts - y.ts));
+      }
+      eqHistCache = { ts: now, rows, reconstructedBefore };
+      res.json({ rows, reconstructedBefore, fetchedAt: now });
+    } catch (e) {
+      res.json({ rows: eqHistCache?.rows ?? [], reconstructedBefore: eqHistCache?.reconstructedBefore ?? null, fetchedAt: eqHistCache?.ts ?? null, error: e instanceof Error ? e.message : 'history failed' });
+    }
+  })();
+});
+
+let earnCache: { ts: number; rows: { asset: string; amount: number; apr: number }[] } | null = null;
+app.get('/api/earn', (_req, res) => {
+  void (async () => {
+    const now = Date.now();
+    if (earnCache && now - earnCache.ts < 60_000) {
+      res.json({ rows: earnCache.rows, fetchedAt: earnCache.ts });
+      return;
+    }
+    if (!client) {
+      res.json({ rows: [], fetchedAt: null });
+      return;
+    }
+    try {
+      const d = await client.earnFlexiblePositions();
+      const rows = d.rows.map((r) => ({ asset: r.asset, amount: Number(r.totalAmount) || 0, apr: Number(r.latestAnnualPercentageRate) || 0 }));
+      earnCache = { ts: now, rows };
+      res.json({ rows, fetchedAt: now });
+    } catch (e) {
+      res.json({ rows: earnCache?.rows ?? [], fetchedAt: earnCache?.ts ?? null, error: e instanceof Error ? e.message : 'earn fetch failed' });
+    }
+  })();
+});
+
 app.get('/api/markets', (_req, res) => {
   void (async () => {
     const [spotBookRes, perpBookRes, perp24hRes] = await Promise.allSettled([
@@ -658,6 +801,21 @@ app.post('/api/loans/borrow', (req, res) => {
   })();
 });
 
+app.post('/api/loans/adjust-ltv', (req, res) => {
+  void (async () => {
+    const b = req.body as Record<string, unknown>;
+    const loanCoin = String(b.loanCoin ?? '').toUpperCase();
+    const collateralCoin = String(b.collateralCoin ?? '').toUpperCase();
+    const amount = Number(b.amount);
+    const direction = b.direction === 'REDUCED' ? 'REDUCED' as const : 'ADDITIONAL' as const;
+    if (!/^[A-Z0-9]{2,10}$/.test(loanCoin) || !/^[A-Z0-9]{2,10}$/.test(collateralCoin) || !(amount > 0)) {
+      res.status(400).json({ error: 'bad adjust request' });
+      return;
+    }
+    res.json(await loans.adjustLtv(loanCoin, collateralCoin, amount, direction));
+  })();
+});
+
 app.post('/api/loans/repay', (req, res) => {
   void (async () => {
     const b = req.body as Record<string, unknown>;
@@ -745,6 +903,109 @@ app.post('/api/proposals/:id/reject', (req, res) => {
 
 // Token icon manifest: resolved real logo URLs (CoinGecko) for the requested
 // bases. Unknown ones resolve in the background and appear on a later call.
+app.get('/api/token/moneyflow', (req, res) => {
+  void (async () => {
+    const symbol = String(req.query.symbol ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
+    const window = String(req.query.window ?? '15m');
+    if (!symbol || !FLOW_WINDOWS[window]) {
+      res.status(400).json({ error: 'symbol + window (15m|1h|4h|1d) required' });
+      return;
+    }
+    try {
+      res.json(await fetchMoneyFlow(symbol, window));
+    } catch (err) {
+      res.status(502).json({ error: String(err) });
+    }
+  })();
+});
+
+app.get('/api/futures/funding-hist', (req, res) => {
+  void (async () => {
+    const symbol = String(req.query.symbol ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
+    const limit = Number(req.query.limit ?? 1000);
+    if (!symbol) {
+      res.status(400).json({ error: 'symbol required' });
+      return;
+    }
+    try {
+      res.json(await fetchFundingHist(symbol, Number.isFinite(limit) ? limit : 1000));
+    } catch (err) {
+      res.status(502).json({ error: String(err) });
+    }
+  })();
+});
+
+app.get('/api/futures/liquidations', (req, res) => {
+  const symbol = String(req.query.symbol ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
+  const bucketMs = Math.max(5 * 60_000, Math.min(Number(req.query.bucketMs ?? 3_600_000), 24 * 3_600_000));
+  if (!symbol) {
+    res.status(400).json({ error: 'symbol required' });
+    return;
+  }
+  res.json(liquidationSeries(symbol, bucketMs));
+});
+
+app.get('/api/futures/liquidations/stats', (_req, res) => {
+  res.json(liquidationStats());
+});
+
+app.get('/api/futures/oi-hist', (req, res) => {
+  void (async () => {
+    const symbol = String(req.query.symbol ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
+    const period = String(req.query.period ?? '1d');
+    const limit = Number(req.query.limit ?? 30);
+    if (!symbol || !/^(5m|15m|30m|1h|2h|4h|6h|12h|1d)$/.test(period)) {
+      res.status(400).json({ error: 'symbol + valid period required' });
+      return;
+    }
+    try {
+      res.json(await fetchOiHist(symbol, period, Number.isFinite(limit) ? limit : 30));
+    } catch (err) {
+      res.status(502).json({ error: String(err) });
+    }
+  })();
+});
+
+app.get('/api/futures/basis-hist', (req, res) => {
+  void (async () => {
+    const symbol = String(req.query.symbol ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
+    const period = String(req.query.period ?? '1h');
+    const limit = Number(req.query.limit ?? 48);
+    if (!symbol || !/^(5m|15m|30m|1h|2h|4h|6h|12h|1d)$/.test(period)) {
+      res.status(400).json({ error: 'symbol + valid period required' });
+      return;
+    }
+    try {
+      res.json(await fetchBasisHist(symbol, period, Number.isFinite(limit) ? limit : 48));
+    } catch (err) {
+      res.status(502).json({ error: String(err) });
+    }
+  })();
+});
+
+app.get('/api/token/profiles/status', (_req, res) => {
+  res.json(profileWarmStatus());
+});
+
+app.post('/api/token/profiles/warm', (_req, res) => {
+  const rows = engine.allRows();
+  const prices = new Map(rows.map((r) => [r.base, r.spot]));
+  void warmAllProfiles(rows.map((r) => r.base), (b) => prices.get(b) ?? null, STOCK_TOKENS);
+  res.json({ started: true, total: new Set(rows.map((r) => r.base)).size });
+});
+
+app.get('/api/token/profile', (req, res) => {
+  void (async () => {
+    const base = String(req.query.base ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
+    if (!base) {
+      res.status(400).json({ error: 'base required' });
+      return;
+    }
+    const profile = await tokenProfile(base);
+    res.json({ ok: !!profile, profile });
+  })();
+});
+
 app.get('/api/icons', (req, res) => {
   const bases = String(req.query.bases ?? '')
     .split(',')
@@ -772,7 +1033,7 @@ app.get('/api/market/quote', (req, res) => {
   })();
 });
 
-const KLINE_INTERVALS = new Set(['1s', '1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '1d', '1w']);
+const KLINE_INTERVALS = new Set(['1s', '1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M']);
 const FUTURES_DATA_PERIODS = new Set(['5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d']);
 app.get('/api/klines', (req, res) => {
   void (async () => {
@@ -1108,6 +1369,16 @@ const NUMERIC_KEYS: (keyof AppConfig)[] = [
   'staleOrderMaxMin',
 ];
 const LIST_KEYS: (keyof AppConfig)[] = ['allowedSymbols', 'blockedSymbols', 'watchlist'];
+const COIN_RE = /^[A-Z0-9]{1,20}$/;
+
+function parseCoinList(v: unknown, max = 40): string[] | null {
+  if (!Array.isArray(v)) return null;
+  const rows = v
+    .map((x) => String(x ?? '').trim().toUpperCase())
+    .filter((x) => COIN_RE.test(x))
+    .slice(0, max);
+  return [...new Set(rows)];
+}
 
 app.post('/api/config', (req, res) => {
   const body = req.body as Record<string, unknown>;
@@ -1126,6 +1397,31 @@ app.post('/api/config', (req, res) => {
       patch[key] = [...new Set(v)];
       logPatch[key] = patch[key];
     }
+  }
+  if (body.borrowGuard && typeof body.borrowGuard === 'object') {
+    const g = body.borrowGuard as Record<string, unknown>;
+    const cur = config.borrowGuard;
+    const next = { ...cur };
+    if (typeof g.enabled === 'boolean') next.enabled = g.enabled;
+    if (typeof g.newBorrowPaused === 'boolean') next.newBorrowPaused = g.newBorrowPaused;
+    if (typeof g.repayOnly === 'boolean') next.repayOnly = g.repayOnly;
+    if (typeof g.requireLiveCatalog === 'boolean') next.requireLiveCatalog = g.requireLiveCatalog;
+    if (typeof g.maxLtvPct === 'number' && Number.isFinite(g.maxLtvPct)) next.maxLtvPct = Math.min(90, Math.max(10, g.maxLtvPct));
+    if (typeof g.maxAprPct === 'number' && Number.isFinite(g.maxAprPct)) next.maxAprPct = Math.min(200, Math.max(0, g.maxAprPct));
+    const allowedCollateralCoins = parseCoinList(g.allowedCollateralCoins, 12);
+    const blockedLoanCoins = parseCoinList(g.blockedLoanCoins, 80);
+    if (allowedCollateralCoins) next.allowedCollateralCoins = allowedCollateralCoins;
+    if (blockedLoanCoins) next.blockedLoanCoins = blockedLoanCoins;
+    patch.borrowGuard = next;
+    logPatch.borrowGuard = {
+      enabled: next.enabled,
+      newBorrowPaused: next.newBorrowPaused,
+      repayOnly: next.repayOnly,
+      maxLtvPct: next.maxLtvPct,
+      maxAprPct: next.maxAprPct,
+      allowedCollateralCoins: next.allowedCollateralCoins,
+      blockedLoanCoins: next.blockedLoanCoins,
+    };
   }
   // owner profile: short name + small data-URL avatar (server-side, follows the box)
   if (body.profile && typeof body.profile === 'object') {
@@ -1305,6 +1601,32 @@ function broadcast(msg: unknown): void {
 
 setInterval(() => broadcast({ type: 'state', payload: buildState() }), TICK_MS);
 ledger.on('event', (ev) => broadcast({ type: 'event', payload: ev }));
+
+// Prime the icon resolver with the full market universe so logo coverage
+// converges in the background without waiting for a browser to ask, and new
+// listings resolve within the hour.
+function primeIconUniverse(): void {
+  try {
+    resolveIcons(engine.allRows().map((r) => r.base));
+  } catch {
+    // non-fatal — the client-driven path still works
+  }
+}
+setTimeout(primeIconUniverse, 20_000);
+function warmProfileUniverse(): void {
+  try {
+    const rows = engine.allRows();
+    if (!rows.length) return;
+    const prices = new Map(rows.map((r) => [r.base, r.spot]));
+    void warmAllProfiles(rows.map((r) => r.base), (b) => prices.get(b) ?? null, STOCK_TOKENS);
+  } catch {
+    // non-fatal
+  }
+}
+setTimeout(warmProfileUniverse, 45_000);
+startLiquidationCollector();
+setInterval(warmProfileUniverse, 24 * 3_600_000);
+setInterval(primeIconUniverse, 3_600_000);
 
 server.listen(PORT, () => {
   console.log(`cosmos control room listening on http://localhost:${PORT}`);

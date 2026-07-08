@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { NEWS_TABS, LiveDot, type NewsRow } from '../components/Header';
+import { NEWS_TABS, type NewsRow } from '../components/Header';
+import { Pill } from '../components/px';
 import { IconExternal, IconNewspaper, IconRefresh, IconSearch } from '../components/Icons';
 import { timeAgo } from '../format';
+import './Markets.css';
 
 // Full-page Binance announcements browser. Same real feed as the quick view,
 // with more room: search filter, category counts, fetch freshness, refresh.
@@ -48,25 +50,26 @@ export function News() {
   );
 
   return (
-    <div className="container page news-page">
-      <div className="page-head">
-        <div>
-          <div className="page-kicker">Intelligence</div>
-          <h1 className="page-title">Binance news <LiveDot /></h1>
-          <div className="page-sub">
-            Real announcements from Binance's own feed · cached 5 min ·{' '}
-            {fetchedAt ? `fetched ${timeAgo(fetchedAt)}` : 'fetching…'}
+    <div className="container page mkx news-page nwx-page">
+      <header className="bwx-hero bsx-hero">
+        <div className="bwx-hero-top">
+          <div className="bwx-hero-title">
+            <div className="bwx-title-row">
+              <h1>News</h1>
+              <Pill tone={failed ? 'bad' : 'ok'}>{failed ? 'Feed Unreachable' : fetchedAt ? `Live · Fetched ${timeAgo(fetchedAt)}` : 'Fetching…'}</Pill>
+            </div>
+            <p>Official Binance Announcements · Refreshed Every 5 Minutes · Never Invented, Never Summarized</p>
           </div>
+          <span className="tdx-head-right">
+            <button className="mkx-pill" onClick={() => setNonce((n) => n + 1)} title="Refresh"><IconRefresh size={13} /> Refresh</button>
+            <a className="mkx-pill" href="https://www.binance.com/en/support/announcement" target="_blank" rel="noreferrer noopener">
+              Binance <IconExternal size={12} />
+            </a>
+          </span>
         </div>
-        <div className="head-actions">
-          <button className="ov-btn" onClick={() => setNonce((n) => n + 1)} title="Refresh"><IconRefresh size={14} /> Refresh</button>
-          <a className="ov-btn" href="https://www.binance.com/en/support/announcement" target="_blank" rel="noreferrer noopener">
-            <IconExternal size={14} /> Open on Binance
-          </a>
-        </div>
-      </div>
+      </header>
 
-      <div className="news-page-bar">
+      <div className="news-page-bar nwx-bar">
         <div className="news-tabs">
           {NEWS_TABS.map((t) => (
             <button key={t.id} className={`news-tab ${tab === t.id ? 'on' : ''}`} onClick={() => setTab(t.id)}>{t.label}</button>
@@ -90,16 +93,13 @@ export function News() {
             <span className="news-item-ic"><IconNewspaper size={15} /></span>
             <span className="news-item-body">
               <span className="news-item-title">{it.title}</span>
-              <span className="news-item-sub">{NEWS_TABS.find((t) => t.id === tab)?.label}{it.date ? ` · ${it.date}` : ''}</span>
+              <span className="news-item-sub">{NEWS_TABS.find((t) => t.id === tab)?.label}</span>
             </span>
-            <span className="news-item-meta"><IconExternal size={14} /></span>
+            <span className="news-item-meta">{it.date && <span className="news-item-date">{it.date}</span>}<IconExternal size={14} /></span>
           </a>
         ))}
       </div>
-      <p className="news-source-note">
-        Source: Binance announcement catalog (server-proxied, never fabricated). If Binance changes the feed this page
-        shows “unavailable” — it will not invent items.
-      </p>
+      <p className="news-source-note">Source: Binance's announcement catalog. If the feed is unreachable this page says so — it never invents items.</p>
     </div>
   );
 }

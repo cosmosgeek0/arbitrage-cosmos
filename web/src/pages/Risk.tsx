@@ -1,8 +1,11 @@
-import { useState, type ReactNode } from 'react';
+/* Risk — the kill switch, the live-arm gate, and every limit before a live
+   order. Markets-voice anatomy: h1 hero + kill-switch guard tile + stat
+   quartet, then side-by-side working columns. Full container width, one left
+   rail, two ruled dividers, borderless rows, tonal Google-style icon tiles. */
+import { useState } from 'react';
 import { ConfirmModal } from '../components/Modal';
 import {
   IconActivity,
-  IconAlert,
   IconBook,
   IconChart,
   IconClock,
@@ -10,16 +13,15 @@ import {
   IconLock,
   IconPulse,
   IconSearch,
-  IconShield as IconShieldLine,
 } from '../components/Icons';
-import { IconPower, IconZapOff } from '../components/RiskIcons';
+import { IconZapOff } from '../components/RiskIcons';
 import { TokenIcon } from '../components/TokenIcon';
-import { StatePill } from '../components/ui';
+import { Pill, Seg, TINT, type Tone } from '../components/px';
 import { fmtDateTime, fmtPrice, timeAgo } from '../format';
 import { useStore } from '../store';
 import type { AppConfig, LedgerEvent, PreviewResult, RiskCheck } from '../types';
+import './Markets.css';
 
-type RiskTone = 'ok' | 'bad' | 'warn' | 'idle';
 type LimitKey =
   | 'maxOrderNotionalUsd'
   | 'maxDailyNotionalUsd'
@@ -38,91 +40,37 @@ const LIMIT_FIELDS: {
   step: string;
   reason: string;
 }[] = [
-  {
-    key: 'maxOrderNotionalUsd',
-    label: 'Max order notional',
-    serverName: 'maxOrderNotionalUsd',
-    unit: 'USD',
-    min: 0,
-    step: '0.01',
-    reason: 'Single-order hard cap.',
-  },
-  {
-    key: 'maxDailyNotionalUsd',
-    label: 'Max daily notional',
-    serverName: 'maxDailyNotionalUsd',
-    unit: 'USD',
-    min: 0,
-    step: '0.01',
-    reason: 'UTC day order cap.',
-  },
-  {
-    key: 'maxDailyLossUsd',
-    label: 'Max daily loss',
-    serverName: 'maxDailyLossUsd',
-    unit: 'USD',
-    min: 0,
-    step: '0.01',
-    reason: 'Daily loss stop.',
-  },
-  {
-    key: 'maxOpenOrders',
-    label: 'Max open orders',
-    serverName: 'maxOpenOrders',
-    unit: 'count',
-    min: 0,
-    step: '1',
-    reason: 'Concurrent order cap.',
-  },
-  {
-    key: 'cooldownSec',
-    label: 'Cooldown',
-    serverName: 'cooldownSec',
-    unit: 'sec',
-    min: 0,
-    step: '1',
-    reason: 'Minimum time between orders.',
-  },
-  {
-    key: 'staleOrderMaxMin',
-    label: 'Stale order max age',
-    serverName: 'staleOrderMaxMin',
-    unit: 'min',
-    min: 1,
-    step: '1',
-    reason: 'Stale open-order flag.',
-  },
+  { key: 'maxOrderNotionalUsd', label: 'Max Order Notional', serverName: 'maxOrderNotionalUsd', unit: 'USD', min: 0, step: '0.01', reason: 'Single-order hard cap.' },
+  { key: 'maxDailyNotionalUsd', label: 'Max Daily Notional', serverName: 'maxDailyNotionalUsd', unit: 'USD', min: 0, step: '0.01', reason: 'UTC day order cap.' },
+  { key: 'maxDailyLossUsd', label: 'Max Daily Loss', serverName: 'maxDailyLossUsd', unit: 'USD', min: 0, step: '0.01', reason: 'Daily loss stop.' },
+  { key: 'maxOpenOrders', label: 'Max Open Orders', serverName: 'maxOpenOrders', unit: 'Count', min: 0, step: '1', reason: 'Concurrent order cap.' },
+  { key: 'cooldownSec', label: 'Cooldown', serverName: 'cooldownSec', unit: 'Sec', min: 0, step: '1', reason: 'Minimum time between orders.' },
+  { key: 'staleOrderMaxMin', label: 'Stale Order Max Age', serverName: 'staleOrderMaxMin', unit: 'Min', min: 1, step: '1', reason: 'Stale open-order flag.' },
 ];
 
-const UNWIRED_LIMITS = [
-  { label: 'Max symbol exposure', unit: 'USD', reason: 'Server config does not expose this limit.' },
-  { label: 'Max open positions', unit: 'count', reason: 'Position-count guard is not wired.' },
-  { label: 'Order rate', unit: 'per min', reason: 'Order-rate throttle is not wired.' },
-  { label: 'Spread guard', unit: 'pct', reason: 'Spread guard is not wired.' },
-  { label: 'Slippage guard', unit: 'pct', reason: 'Depth and slippage guard is not wired.' },
-  { label: 'Borrow cap', unit: 'USD', reason: 'Borrow cap is not wired.' },
-];
+/** Guards the server does not expose yet — one honest line, not six placeholder rows. */
+const UNWIRED_GUARDS = 'Symbol Exposure · Open Positions · Order Rate · Spread · Slippage · Borrow Cap';
 
 const RISK_CHECK_LABELS: Record<string, string> = {
-  kill_switch_off: 'Kill switch',
-  live_trading_enabled: 'Live trading',
-  symbol_allowed: 'Allowed symbols',
-  symbol_blocked: 'Blocked symbols',
-  max_order_notional: 'Order size',
-  max_daily_notional: 'Daily notional',
-  max_daily_loss: 'Daily loss',
-  max_open_orders: 'Open orders',
+  kill_switch_off: 'Kill Switch',
+  live_trading_enabled: 'Live Trading',
+  symbol_allowed: 'Allowed Symbols',
+  symbol_blocked: 'Blocked Symbols',
+  max_order_notional: 'Order Size',
+  max_daily_notional: 'Daily Notional',
+  max_daily_loss: 'Daily Loss',
+  max_open_orders: 'Open Orders',
   cooldown: 'Cooldown',
-  exchange_filters: 'Exchange filters',
-  stale_order: 'Stale order',
+  exchange_filters: 'Exchange Filters',
+  stale_order: 'Stale Order',
 };
 
 const STAGE_LABELS: Record<string, string> = {
-  risk_decision: 'Risk decision',
+  risk_decision: 'Risk Decision',
   preview: 'Preview',
-  order_intent: 'Order intent',
-  order_request: 'Order request',
-  order_response: 'Order response',
+  order_intent: 'Order Intent',
+  order_request: 'Order Request',
+  order_response: 'Order Response',
 };
 
 function sanitizeSymbol(raw: string): string {
@@ -152,10 +100,6 @@ function parseLimitDraft(draft: LimitDraft): Partial<AppConfig> {
     }
   }
   return patch;
-}
-
-function checkTone(pass: boolean): RiskTone {
-  return pass ? 'ok' : 'bad';
 }
 
 function sentenceCase(value: string): string {
@@ -200,73 +144,66 @@ function riskDecisionData(ev: LedgerEvent): { allowed: boolean | null; stage: st
   };
 }
 
-function StatusLine({
-  label,
-  detail,
-  tone,
-  icon,
-}: {
-  label: string;
-  detail: ReactNode;
-  tone: RiskTone;
-  icon?: ReactNode;
-}) {
+/** Tonal icon tile — soft wash + colored glyph, never a saturated block. */
+function Ico({ tint, children }: { tint: string; children: React.ReactNode }) {
   return (
-    <li className={`risk-status-line ${tone}`}>
-      <span className="risk-status-mark">{icon ?? (tone === 'ok' ? 'Pass' : tone === 'bad' ? 'Fail' : 'Wait')}</span>
-      <b>{label}</b>
-      <em>{detail}</em>
-    </li>
+    <span className="rsx-ico" style={{ color: tint, background: `color-mix(in srgb, ${tint} 11%, transparent)` }}>
+      {children}
+    </span>
   );
 }
 
-function RiskFact({
+function RsxRow({
+  icon,
   label,
-  value,
-  detail,
-  tone,
+  sub,
+  end,
 }: {
+  icon?: React.ReactNode;
   label: string;
-  value: ReactNode;
-  detail: ReactNode;
-  tone: RiskTone;
+  sub?: string;
+  end?: React.ReactNode;
 }) {
   return (
-    <div className={`risk-fact ${tone}`}>
-      <span>{label}</span>
-      <b>{value}</b>
-      <em>{detail}</em>
+    <div className="rsx-row">
+      {icon}
+      <span className="rsx-main">
+        <b>{label}</b>
+        {sub ? <em title={sub}>{sub}</em> : null}
+      </span>
+      <span className="rsx-end">{end}</span>
     </div>
   );
 }
 
 function RiskCheckTable({ checks }: { checks: RiskCheck[] }) {
   if (checks.length === 0) {
-    return <div className="risk-empty-inline">No risk checks returned by preview.</div>;
+    return <div className="rsx-empty">The preview response contained no gate checks.</div>;
   }
   return (
-    <div className="risk-table-wrap">
-      <table className="risk-check-table">
-        <thead>
-          <tr>
-            <th>Check</th>
-            <th>Status</th>
-            <th>Reason</th>
+    <table className="rsx-table">
+      <colgroup>
+        <col style={{ width: 170 }} />
+        <col style={{ width: 90 }} />
+        <col />
+      </colgroup>
+      <thead>
+        <tr>
+          <th>Check</th>
+          <th>Status</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody>
+        {checks.map((c) => (
+          <tr key={c.name}>
+            <td className="strong">{riskCheckLabel(c.name)}</td>
+            <td><Pill tone={c.pass ? 'ok' : 'bad'}>{c.pass ? 'Pass' : 'Fail'}</Pill></td>
+            <td className="dim" title={cleanRiskText(c.detail)}>{cleanRiskText(c.detail)}</td>
           </tr>
-        </thead>
-        <tbody>
-          {checks.map((c) => (
-            <tr key={c.name} className={c.pass ? 'risk-row-pass' : 'risk-row-fail'}>
-              <td>{riskCheckLabel(c.name)}</td>
-              <td>
-                <span className={`risk-check-badge ${c.pass ? 'ok' : 'bad'}`}>{c.pass ? 'Pass' : 'Fail'}</span>
-              </td>
-              <td>{cleanRiskText(c.detail)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
@@ -286,8 +223,18 @@ export function Risk() {
 
   if (!state) {
     return (
-      <div className="container page risk-page">
-        <div className="empty-state">Connecting...</div>
+      <div className="container page mkx rsx-page">
+        <header className="bwx-hero">
+          <div className="bwx-hero-top">
+            <div className="bwx-hero-title">
+              <div className="bwx-title-row">
+                <h1>Risk</h1>
+                <Pill tone="idle">Connecting</Pill>
+              </div>
+              <p>Waiting for server state…</p>
+            </div>
+          </div>
+        </header>
       </div>
     );
   }
@@ -305,74 +252,56 @@ export function Risk() {
       : 0;
 
   const posture: 'HALTED' | 'PAPER' | 'LIVE' = cfg.killSwitch ? 'HALTED' : cfg.liveTradingEnabled ? 'LIVE' : 'PAPER';
-  const postureOptions = [
-    { key: 'HALTED', label: 'Halted' },
-    { key: 'PAPER', label: 'Paper' },
-    { key: 'LIVE', label: 'Live' },
-  ] as const;
-  const postureLabel = postureOptions.find((item) => item.key === posture)?.label ?? 'Paper';
-  const postureTone: RiskTone = cfg.killSwitch ? 'bad' : cfg.liveTradingEnabled ? 'ok' : 'warn';
+  const postureLabel = posture === 'HALTED' ? 'Halted' : posture === 'LIVE' ? 'Live Armed' : 'Paper';
+  const postureTone: Tone = cfg.killSwitch ? 'bad' : cfg.liveTradingEnabled ? 'ok' : 'warn';
 
-  const blockers = [
-    cfg.killSwitch
-      ? { label: 'kill_switch_off', detail: 'Live orders are paused before routing.' }
-      : null,
-    !cfg.liveTradingEnabled
-      ? { label: 'live_trading_enabled', detail: 'Live trading is not armed.' }
-      : null,
-    cfg.allowedSymbols.length === 0
-      ? { label: 'symbol_allowed', detail: 'No symbols are allowed for live orders.' }
-      : null,
-    perOrderLimit <= 0
-      ? { label: 'max_order_notional', detail: 'Order size must be greater than $0.' }
-      : null,
-    dailyLimit <= 0
-      ? { label: 'max_daily_notional', detail: 'Daily notional must be greater than $0.' }
-      : dailyUsed >= dailyLimit
-        ? { label: 'max_daily_notional', detail: `${fmtPrice(dailyUsed)} used of ${fmtPrice(dailyLimit)}.` }
-        : null,
-    openOrderLimit <= 0
-      ? { label: 'max_open_orders', detail: 'Open-order capacity must be greater than 0.' }
-      : openOrdersCount >= openOrderLimit
-        ? { label: 'max_open_orders', detail: `${openOrdersCount} open orders against a limit of ${openOrderLimit}.` }
-        : null,
-    cooldownLeft > 0 ? { label: 'cooldown', detail: `${cooldownLeft}s remaining before another order can be submitted.` } : null,
-  ].filter((b): b is { label: string; detail: string } => Boolean(b));
-
-  const armConditions = [
+  // One list of gate conditions — the single source for "why can't anything act?".
+  const gateConditions = [
     {
-      label: 'Kill switch off',
+      label: 'Kill Switch Off',
       pass: !cfg.killSwitch,
-      detail: cfg.killSwitch ? 'Resume live orders first.' : 'Live orders are not paused.',
+      detail: cfg.killSwitch ? 'Live orders are paused before routing.' : 'Live orders may enter the risk gate.',
     },
     {
-      label: 'Allowed symbols',
+      label: 'Live Trading Armed',
+      pass: cfg.liveTradingEnabled,
+      detail: cfg.liveTradingEnabled ? 'Live trading is armed.' : 'Live trading is not armed.',
+    },
+    {
+      label: 'Allowed Symbols',
       pass: cfg.allowedSymbols.length > 0,
-      detail: cfg.allowedSymbols.length ? `${cfg.allowedSymbols.length} symbol${cfg.allowedSymbols.length === 1 ? '' : 's'} allowed.` : 'Add at least one symbol.',
+      detail: cfg.allowedSymbols.length
+        ? `${cfg.allowedSymbols.length} symbol${cfg.allowedSymbols.length === 1 ? '' : 's'} allowed.`
+        : 'Add at least one symbol.',
     },
     {
-      label: 'Order size limit',
+      label: 'Order Size Limit',
       pass: perOrderLimit > 0,
       detail: perOrderLimit > 0 ? `${fmtPrice(perOrderLimit)} per order.` : 'Set a positive per-order limit.',
     },
     {
-      label: 'Daily notional available',
+      label: 'Daily Notional Available',
       pass: dailyLimit > dailyUsed,
       detail: dailyLimit > dailyUsed ? `${fmtPrice(dailyRemaining)} available today.` : `${fmtPrice(dailyUsed)} used of ${fmtPrice(dailyLimit)}.`,
     },
     {
-      label: 'Open-order capacity',
+      label: 'Open-Order Capacity',
       pass: openOrderLimit > openOrdersCount,
-      detail: openOrderLimit > openOrdersCount ? `${openOrderLimit - openOrdersCount} slots available.` : `${openOrdersCount} open orders against a limit of ${openOrderLimit}.`,
+      detail: openOrderLimit > openOrdersCount
+        ? `${openOrderLimit - openOrdersCount} slot${openOrderLimit - openOrdersCount === 1 ? '' : 's'} available.`
+        : `${openOrdersCount} open orders against a limit of ${openOrderLimit}.`,
     },
     {
-      label: 'Cooldown clear',
+      label: 'Cooldown Clear',
       pass: cooldownLeft === 0,
       detail: cooldownLeft > 0 ? `${cooldownLeft}s remaining.` : 'Ready now.',
     },
   ];
-  const firstFailedArmCondition = armConditions.find((c) => !c.pass);
-  const canArmLive = !cfg.liveTradingEnabled && !firstFailedArmCondition;
+  const failedConditions = gateConditions.filter((c) => !c.pass);
+  // "Armable" excludes the live-arm condition itself.
+  const armBlocker = failedConditions.find((c) => c.label !== 'Live Trading Armed');
+  const canArmLive = !cfg.liveTradingEnabled && !armBlocker;
+  const sortedConditions = [...gateConditions].sort((a, b) => Number(a.pass) - Number(b.pass));
 
   const dirtyLimitKeys = LIMIT_FIELDS.filter((f) => draft[f.key] !== undefined);
   const invalidLimitKeys = LIMIT_FIELDS.filter((f) => {
@@ -387,10 +316,7 @@ export function Risk() {
     .filter((ev) => ev.kind === 'risk_decision' && riskDecisionData(ev).allowed === false)
     .sort((a, b) => b.ts - a.ts)
     .slice(0, 5);
-  const livePathTone: RiskTone = blockers.length ? 'bad' : 'ok';
-  const livePathLabel = blockers.length ? 'Blocked' : 'Ready';
-  const livePathDetail = blockers.length ? blockers[0].detail : 'No global blocker is active.';
-  const lastOrderText = state.risk.lastOrderTs ? timeAgo(state.risk.lastOrderTs) : 'None';
+  const lastOrderText = state.risk.lastOrderTs ? timeAgo(state.risk.lastOrderTs) : '—';
   const lastOrderDetail = state.risk.lastOrderTs ? fmtDateTime(state.risk.lastOrderTs) : 'No order response in the ledger.';
 
   const patchList = async (key: 'allowedSymbols' | 'blockedSymbols', list: string[]) => {
@@ -433,215 +359,172 @@ export function Risk() {
     .map((v) => Math.min(v, perOrderLimit > 0 ? perOrderLimit : v));
 
   return (
-    <div className="container page risk-page">
-      <section className="risk-pref">
-        <header className="risk-head">
-          <span className={`risk-mark ${postureTone}`}>
-            <IconShieldLine size={22} />
-          </span>
-          <div className="risk-head-copy">
-            <h1>Risk</h1>
-            <p>Can anything act? The kill switch, the live-arm gate, and every limit that stands before a live order.</p>
+    <div className="container page mkx rsx-page">
+      {/* ---- hero: posture truth + the owner's kill switch ---------------- */}
+      <header className="bwx-hero">
+        <div className="bwx-hero-top">
+          <div className="bwx-hero-title">
+            <div className="bwx-title-row">
+              <h1>Risk</h1>
+              <Pill tone={postureTone}>{postureLabel}</Pill>
+            </div>
+            <p>
+              {failedConditions.length
+                ? `${failedConditions.length} Condition${failedConditions.length === 1 ? '' : 's'} Block Live · Every Order Passes The Server Gate`
+                : 'Gate Clear · Every Order Passes The Server Gate'}
+            </p>
           </div>
-          <div className="risk-head-meta">
-            <StatePill tone={postureTone}>{postureLabel}</StatePill>
-            <span>
-              {blockers.length
-                ? `${blockers.length} blocker${blockers.length === 1 ? '' : 's'} before live`
-                : 'gate clear'}
+          <div className="bwx-guard">
+            <span className="bwx-guard-copy">
+              <b>Kill Switch</b>
+              <em className={cfg.killSwitch ? 'blocked' : 'open'}>{cfg.killSwitch ? 'Halted' : 'Trading Possible'}</em>
             </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={cfg.killSwitch}
+              aria-label="Kill Switch"
+              className={`bwx-switch2 ${cfg.killSwitch ? 'blocked' : 'open'}`}
+              onClick={() => (cfg.killSwitch ? setModal('resume') : void setKill(true))}
+            >
+              <span aria-hidden="true" />
+            </button>
           </div>
-        </header>
+        </div>
 
-        <span className="risk-pref-caption">Control</span>
-        <section className="risk-pref-group" aria-label="Control">
-          <div className="risk-pref-row">
-            <span className={`risk-pref-icon ${postureTone}`}>
-              <IconShieldLine size={19} />
-            </span>
-            <div className="risk-pref-copy">
-              <b>Trading mode</b>
-              <span>{postureLabel} mode. Live orders also require a clear gate.</span>
-            </div>
-            <div className="risk-pref-segment" aria-label="Trading mode">
-              {postureOptions.map((item) => (
-                <span key={item.key} className={posture === item.key ? 'on' : ''}>{item.label}</span>
-              ))}
-            </div>
+        <div className="bwx-hero-metrics">
+          <div className="bwx-hero-metric">
+            <em>Daily Notional</em>
+            <b>{fmtPrice(dailyUsed)}</b>
+            <small>Of {fmtPrice(dailyLimit)} · {fmtPrice(dailyRemaining)} Available</small>
           </div>
+          <div className="bwx-hero-metric">
+            <em>Open Orders</em>
+            <b>{openOrdersCount} Of {openOrderLimit}</b>
+            <small>Concurrent Order Cap</small>
+          </div>
+          <div className="bwx-hero-metric">
+            <em>Cooldown</em>
+            <b>{cooldownLeft > 0 ? `${cooldownLeft}s` : 'Ready'}</b>
+            <small>Minimum Time Between Orders</small>
+          </div>
+          <div className="bwx-hero-metric">
+            <em>Last Live Order</em>
+            <b>{lastOrderText}</b>
+            <small>{lastOrderDetail}</small>
+          </div>
+        </div>
+      </header>
 
-          <div className="risk-pref-row">
-            <span className={`risk-pref-icon ${livePathTone}`}>
-              <IconPulse size={19} />
-            </span>
-            <div className="risk-pref-copy">
-              <b>Order gate</b>
-              <span>{livePathDetail}</span>
-            </div>
-            <span className={`risk-pref-token ${livePathTone}`}>{livePathLabel}</span>
-          </div>
+      {/* ---- working columns: control + gate | limits + symbols ----------- */}
+      <section className="rsx-band">
+        <div className="rsx-cols">
+          <div className="rsx-col">
+            <h3>Control</h3>
+            <RsxRow
+              icon={<Ico tint={TINT.green}><IconZapOff size={16} armed={canArmLive} /></Ico>}
+              label="Live Arm"
+              sub={
+                cfg.liveTradingEnabled
+                  ? 'Live trading is armed.'
+                  : canArmLive
+                    ? 'Ready to arm after confirmation.'
+                    : armBlocker
+                      ? `${armBlocker.label}: ${armBlocker.detail}`
+                      : 'Locked.'
+              }
+              end={
+                cfg.liveTradingEnabled ? (
+                  <button type="button" className="hp-btn" onClick={() => void setLive(false)}>Disarm</button>
+                ) : (
+                  <button
+                    type="button"
+                    className="hp-btn primary"
+                    disabled={!canArmLive}
+                    title={armBlocker ? `${armBlocker.label}: ${armBlocker.detail}` : 'Ready to arm live trading'}
+                    onClick={() => setModal('arm')}
+                  >
+                    Arm Live
+                  </button>
+                )
+              }
+            />
+            <RsxRow
+              icon={<Ico tint={TINT.blue}><IconPulse size={16} /></Ico>}
+              label="Order Gate"
+              sub={failedConditions.length ? failedConditions[0].detail : 'No global blocker is active. Per-order checks still run on every send.'}
+              end={<Pill tone={failedConditions.length ? 'bad' : 'ok'}>{failedConditions.length ? 'Blocked' : 'Ready'}</Pill>}
+            />
 
-          <div className="risk-pref-row">
-            <span className={`risk-pref-icon ${cfg.killSwitch ? 'bad' : 'ok'}`}>
-              <IconPower size={19} />
-            </span>
-            <div className="risk-pref-copy">
-              <b>Kill switch</b>
-              <span>{cfg.killSwitch ? 'Live orders stop before routing. Preview remains available.' : 'Live orders may enter the server risk gate.'}</span>
-            </div>
-            {cfg.killSwitch ? (
-              <button type="button" className="risk-pref-button primary" onClick={() => setModal('resume')}>
-                Resume
-              </button>
-            ) : (
-              <button type="button" className="risk-pref-button danger" onClick={() => void setKill(true)}>
-                Halt
-              </button>
-            )}
-          </div>
-
-          <div className="risk-pref-row">
-            <span className={`risk-pref-icon ${cfg.liveTradingEnabled ? 'ok' : canArmLive ? 'warn' : 'bad'}`}>
-              <IconZapOff size={19} armed={canArmLive} />
-            </span>
-            <div className="risk-pref-copy">
-              <b>Live arm</b>
-              <span>{cfg.liveTradingEnabled ? 'Live trading is armed.' : canArmLive ? 'Ready to arm after confirmation.' : firstFailedArmCondition ? `${firstFailedArmCondition.label}: ${firstFailedArmCondition.detail}` : 'Locked.'}</span>
-            </div>
-            {cfg.liveTradingEnabled ? (
-              <button type="button" className="risk-pref-button" onClick={() => void setLive(false)}>
-                Disarm
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="risk-pref-button primary"
-                disabled={!canArmLive}
-                title={firstFailedArmCondition ? `${firstFailedArmCondition.label}: ${firstFailedArmCondition.detail}` : 'Ready to arm live trading'}
-                onClick={() => setModal('arm')}
-              >
-                Arm live
-              </button>
-            )}
-          </div>
-        </section>
-
-        <span className="risk-pref-caption">Gate status</span>
-        <section className="risk-pref-group" aria-label="Gate status">
-          <div className="risk-pref-row">
-            <span className={`risk-pref-icon ${blockers.length ? 'bad' : 'ok'}`}>
-              <IconAlert size={19} />
-            </span>
-            <div className="risk-pref-copy">
-              <b>Blocking items</b>
-              <span>The first failed condition explains why live orders cannot pass.</span>
-            </div>
-            <StatePill tone={blockers.length ? 'bad' : 'ok'}>{blockers.length ? 'Blocked' : 'Ready'}</StatePill>
-          </div>
-          <ol className="risk-pref-stack">
-            {blockers.length === 0 ? (
-              <li>
-                <span className="ok">Ready</span>
-                <b>No global blocker</b>
-                <em>Symbols, blocked symbols, notional, filters, and daily loss are still checked per order.</em>
-              </li>
-            ) : (
-              blockers.map((b, index) => (
-                <li key={`${b.label}-${index}`}>
-                  <span>{index + 1}</span>
-                  <b>{riskCheckLabel(b.label)}</b>
-                  <em>{b.detail}</em>
-                </li>
-              ))
-            )}
-          </ol>
-          <div className="risk-pref-checks">
-            {armConditions.map((c) => (
-              <div key={c.label} className="risk-pref-check">
-                <span className={c.pass ? 'ok' : 'bad'}>{c.pass ? 'Pass' : 'Fail'}</span>
-                <b>{c.label}</b>
-                <em>{c.detail}</em>
-              </div>
+            <h3>Gate Conditions</h3>
+            {sortedConditions.map((c) => (
+              <RsxRow
+                key={c.label}
+                label={c.label}
+                sub={c.detail}
+                end={<Pill tone={c.pass ? 'ok' : 'bad'}>{c.pass ? 'Pass' : 'Fail'}</Pill>}
+              />
             ))}
-          </div>
-        </section>
 
-        <span className="risk-pref-caption">Exposure</span>
-        <section className="risk-pref-group" aria-label="Exposure">
-          <div className="risk-pref-row">
-            <span className="risk-pref-icon ok">
-              <IconChart size={19} />
-            </span>
-            <div className="risk-pref-copy">
-              <b>Daily notional</b>
-              <span>{fmtPrice(dailyRemaining)} remaining from configured daily cap.</span>
-            </div>
-            <span className={`risk-pref-meter ${dailyLimit > dailyUsed ? 'ok' : 'bad'}`}>
-              {fmtPrice(dailyUsed)} / {fmtPrice(dailyLimit)}
-            </span>
+            <h3>Exposure</h3>
+            <RsxRow
+              icon={<Ico tint={TINT.green}><IconChart size={16} /></Ico>}
+              label="Daily Notional"
+              sub={`${fmtPrice(dailyRemaining)} remaining from the configured daily cap.`}
+              end={<span className="rsx-val">{fmtPrice(dailyUsed)} / {fmtPrice(dailyLimit)}</span>}
+            />
+            <RsxRow
+              icon={<Ico tint={TINT.slate}><IconClock size={16} /></Ico>}
+              label="Last Live Order"
+              sub={lastOrderDetail}
+              end={<span className="rsx-val">{lastOrderText}</span>}
+            />
           </div>
-          <div className="risk-pref-row">
-            <span className="risk-pref-icon warn">
-              <IconClock size={19} />
-            </span>
-            <div className="risk-pref-copy">
-              <b>Last live order</b>
-              <span>{lastOrderDetail}</span>
-            </div>
-            <span className="risk-pref-token idle">{lastOrderText}</span>
-          </div>
-        </section>
 
-        <span className="risk-pref-caption">Limits</span>
-        <section className="risk-pref-group" aria-label="Risk limits">
-          <div className="risk-pref-row risk-pref-actions-row">
-            <span className="risk-pref-icon warn">
-              <IconLock size={19} />
-            </span>
-            <div className="risk-pref-copy">
-              <b>Server limits</b>
-              <span>Only wired server limits can be saved.</span>
-            </div>
-            <div className="risk-pref-actions">
-              <button
-                type="button"
-                className="risk-pref-button"
-                disabled={dirtyLimitKeys.length === 0}
-                title={dirtyLimitKeys.length === 0 ? 'No edits to reset' : 'Reset local edits'}
-                onClick={() => {
-                  setDraft({});
-                  setSaved(false);
-                }}
-              >
-                Reset
-              </button>
-              <button
-                type="button"
-                className="risk-pref-button primary"
-                disabled={!canSaveLimits}
-                title={invalidLimitKeys.length ? `Invalid: ${invalidLimitKeys.map((f) => f.label).join(', ')}` : dirtyLimitKeys.length ? 'Save wired limits' : 'No edits to save'}
-                onClick={saveDraft}
-              >
-                {saved && dirtyLimitKeys.length === 0 ? 'Saved' : 'Save'}
-              </button>
-            </div>
-          </div>
-          <div className="risk-pref-limits">
+          <div className="rsx-col">
+            <h3>Limits</h3>
+            <RsxRow
+              icon={<Ico tint={TINT.orange}><IconLock size={16} /></Ico>}
+              label="Server Limits"
+              sub="Saved to the server risk gate. Only wired limits are editable."
+              end={
+                <>
+                  <button
+                    type="button"
+                    className="hp-btn"
+                    disabled={dirtyLimitKeys.length === 0}
+                    title={dirtyLimitKeys.length === 0 ? 'No edits to reset' : 'Reset local edits'}
+                    onClick={() => {
+                      setDraft({});
+                      setSaved(false);
+                    }}
+                  >
+                    Reset
+                  </button>
+                  <button
+                    type="button"
+                    className="hp-btn primary"
+                    disabled={!canSaveLimits}
+                    title={invalidLimitKeys.length ? `Invalid: ${invalidLimitKeys.map((f) => f.label).join(', ')}` : dirtyLimitKeys.length ? 'Save wired limits' : 'No edits to save'}
+                    onClick={saveDraft}
+                  >
+                    {saved && dirtyLimitKeys.length === 0 ? 'Saved' : 'Save'}
+                  </button>
+                </>
+              }
+            />
             {LIMIT_FIELDS.map((field) => {
               const dirty = draft[field.key] !== undefined;
               const invalid = invalidLimitKeys.some((f) => f.key === field.key);
               return (
-                <label
-                  key={field.key}
-                  className={`risk-pref-limit ${dirty ? 'dirty' : ''} ${invalid ? 'bad' : ''}`}
-                  title={`Server field: ${field.serverName}`}
-                >
-                  <span>
+                <div key={field.key} className={`rsx-row${dirty ? ' dirty' : ''}`} title={`Server field: ${field.serverName}`}>
+                  <span className="rsx-main">
                     <b>{field.label}</b>
                     <em>{field.reason}</em>
                   </span>
-                  <span className="risk-pref-limit-control">
+                  <span className="rsx-end">
                     <input
+                      className={`hp-input num${invalid ? ' bad' : ''}`}
                       type="number"
                       min={field.min}
                       step={field.step}
@@ -651,202 +534,193 @@ export function Risk() {
                         setDraft({ ...draft, [field.key]: e.target.value });
                       }}
                     />
-                    <small>{field.unit}</small>
+                    <span className="rsx-unit">{field.unit}</span>
                   </span>
-                </label>
+                </div>
               );
             })}
-            {UNWIRED_LIMITS.map((field) => (
-              <div key={field.label} className="risk-pref-limit unwired">
-                <span>
-                  <b>{field.label}</b>
-                  <em>{field.reason}</em>
-                </span>
-                <span className="risk-pref-token idle">Not wired</span>
-              </div>
-            ))}
-          </div>
-        </section>
+            <RsxRow label="Unwired Guards" sub={UNWIRED_GUARDS} end={<Pill tone="idle">Not Wired</Pill>} />
 
-        <span className="risk-pref-caption">Symbols</span>
-        <section className="risk-pref-group risk-pref-symbol-group" aria-label="Allowed and blocked symbols">
-          <div className="risk-pref-row">
-            <span className={`risk-pref-icon ${cfg.allowedSymbols.length ? 'ok' : 'bad'}`}>
-              <IconList size={19} />
-            </span>
-            <div className="risk-pref-copy">
-              <b>Allowed symbols</b>
-              <span>{cfg.allowedSymbols.length ? `${cfg.allowedSymbols.length} symbol${cfg.allowedSymbols.length === 1 ? '' : 's'} allowed.` : 'Live orders need at least one allowed symbol.'}</span>
-            </div>
-            <div className="risk-symbol-add compact">
-              <input placeholder="BTCUSDT" value={allowInput} onChange={(e) => setAllowInput(sanitizeSymbol(e.target.value))} spellCheck={false} />
-              <button
-                type="button"
-                className="risk-pref-button primary"
-                disabled={allowInput.length < 4 || cfg.allowedSymbols.includes(allowInput)}
-                title={allowInput.length < 4 ? 'Enter a symbol first' : cfg.allowedSymbols.includes(allowInput) ? 'Already allowed' : `Add ${allowInput}`}
-                onClick={async () => {
-                  await patchList('allowedSymbols', [...cfg.allowedSymbols, allowInput]);
-                  setAllowInput('');
-                }}
-              >
-                Add
-              </button>
-            </div>
-          </div>
-          <div className="risk-pref-pills">
-            {cfg.allowedSymbols.length === 0 ? (
-              <span className="risk-empty-inline">No allowed symbols</span>
-            ) : (
-              cfg.allowedSymbols.map((s) => (
-                <button
-                  type="button"
-                  key={s}
-                  className="risk-symbol-pill"
-                  title={`Remove ${s} from allowed symbols`}
-                  onClick={() => void patchList('allowedSymbols', cfg.allowedSymbols.filter((x) => x !== s))}
-                >
-                  <TokenIcon symbol={s} size={18} />
-                  {s}
-                  <span>remove</span>
-                </button>
-              ))
-            )}
-          </div>
-          <div className="risk-pref-row">
-            <span className={`risk-pref-icon ${cfg.blockedSymbols.length ? 'bad' : 'idle'}`}>
-              <IconLock size={19} />
-            </span>
-            <div className="risk-pref-copy">
-              <b>Blocked symbols</b>
-              <span>{cfg.blockedSymbols.length ? `${cfg.blockedSymbols.length} symbol${cfg.blockedSymbols.length === 1 ? '' : 's'} blocked.` : 'No symbol-specific blocks.'}</span>
-            </div>
-            <div className="risk-symbol-add compact">
-              <input placeholder="DOGEUSDT" value={blockInput} onChange={(e) => setBlockInput(sanitizeSymbol(e.target.value))} spellCheck={false} />
-              <button
-                type="button"
-                className="risk-pref-button danger"
-                disabled={blockInput.length < 4 || cfg.blockedSymbols.includes(blockInput)}
-                title={blockInput.length < 4 ? 'Enter a symbol first' : cfg.blockedSymbols.includes(blockInput) ? 'Already blocked' : `Block ${blockInput}`}
-                onClick={async () => {
-                  await patchList('blockedSymbols', [...cfg.blockedSymbols, blockInput]);
-                  setBlockInput('');
-                }}
-              >
-                Block
-              </button>
-            </div>
-          </div>
-          <div className="risk-pref-pills">
-            {cfg.blockedSymbols.length === 0 ? (
-              <span className="risk-empty-inline">No blocked symbols</span>
-            ) : (
-              cfg.blockedSymbols.map((s) => (
-                <button
-                  type="button"
-                  key={s}
-                  className="risk-symbol-pill blocked"
-                  title={`Remove ${s} from blocked symbols`}
-                  onClick={() => void patchList('blockedSymbols', cfg.blockedSymbols.filter((x) => x !== s))}
-                >
-                  <TokenIcon symbol={s} size={18} />
-                  {s}
-                  <span>remove</span>
-                </button>
-              ))
-            )}
-          </div>
-        </section>
-
-        <span className="risk-pref-caption">Preview</span>
-        <section className="risk-pref-group" aria-label="Gate probe">
-          <div className="risk-pref-row risk-pref-probe-row">
-            <span className="risk-pref-icon warn">
-              <IconSearch size={19} />
-            </span>
-            <div className="risk-pref-copy">
-              <b>Preview an order</b>
-              <span>Preview only. Nothing is sent.</span>
-            </div>
-            <StatePill tone={probeResult ? (probeResult.risk.allowed ? 'ok' : 'bad') : 'idle'}>
-              {probeResult ? (probeResult.risk.allowed ? 'Pass' : 'Fail') : 'Idle'}
-            </StatePill>
-          </div>
-          <div className="risk-pref-probe-form">
-            <label>
-              <span>Symbol</span>
-              <input value={probeSymbol} onChange={(e) => setProbeSymbol(sanitizeSymbol(e.target.value))} spellCheck={false} />
-            </label>
-            <label>
-              <span>Side</span>
-              <span className="risk-side-toggle">
-                {(['BUY', 'SELL'] as const).map((side) => (
+            <h3>Symbols</h3>
+            <RsxRow
+              icon={<Ico tint={TINT.blue}><IconList size={16} /></Ico>}
+              label="Allowed Symbols"
+              sub={cfg.allowedSymbols.length ? `${cfg.allowedSymbols.length} symbol${cfg.allowedSymbols.length === 1 ? '' : 's'} allowed for live orders.` : 'Live orders need at least one allowed symbol.'}
+              end={
+                <>
+                  <input
+                    className="hp-input"
+                    placeholder="BTCUSDT"
+                    value={allowInput}
+                    onChange={(e) => setAllowInput(sanitizeSymbol(e.target.value))}
+                    spellCheck={false}
+                  />
                   <button
                     type="button"
-                    key={side}
-                    className={probeSide === side ? 'on' : ''}
-                    onClick={() => setProbeSide(side)}
+                    className="hp-btn primary"
+                    disabled={allowInput.length < 4 || cfg.allowedSymbols.includes(allowInput)}
+                    title={allowInput.length < 4 ? 'Enter a symbol first' : cfg.allowedSymbols.includes(allowInput) ? 'Already allowed' : `Add ${allowInput}`}
+                    onClick={async () => {
+                      await patchList('allowedSymbols', [...cfg.allowedSymbols, allowInput]);
+                      setAllowInput('');
+                    }}
                   >
-                    {side === 'BUY' ? 'Buy' : 'Sell'}
+                    Add
+                  </button>
+                </>
+              }
+            />
+            {cfg.allowedSymbols.length > 0 && (
+              <div className="rsx-chips">
+                {cfg.allowedSymbols.map((s) => (
+                  <button
+                    type="button"
+                    key={s}
+                    className="risk-chip"
+                    title={`Remove ${s} from allowed symbols`}
+                    onClick={() => void patchList('allowedSymbols', cfg.allowedSymbols.filter((x) => x !== s))}
+                  >
+                    <TokenIcon symbol={s} size={15} />
+                    {s}
+                    <span aria-hidden="true">×</span>
                   </button>
                 ))}
-              </span>
-            </label>
-            <label>
-              <span>Notional USDT</span>
-              <input type="number" min="0" step="0.01" value={probeNotional} onChange={(e) => setProbeNotional(e.target.value)} />
-            </label>
-            <button type="button" className="risk-pref-button primary" disabled={probeBusy} onClick={runProbe}>
-              <IconSearch size={14} />
-              {probeBusy ? 'Checking' : 'Preview'}
-            </button>
-          </div>
-          <div className="risk-quick-row">
-            {quickAmounts.map((amount) => (
-              <button type="button" className="risk-pref-button" key={amount} onClick={() => setProbeNotional(String(amount))}>
-                {fmtPrice(amount)}
-              </button>
-            ))}
-          </div>
-          {probeError && <div className="risk-result-strip bad">{probeError}</div>}
-          {probeResult && (
-            <div className="risk-probe-result">
-              <div className="risk-probe-summary">
-                <span>
-                  <TokenIcon symbol={probeResult.symbol} size={20} />
-                  {probeResult.symbol} {probeResult.side === 'BUY' ? 'Buy' : 'Sell'}
-                </span>
-                <b>{fmtPrice(probeResult.estNotionalUsd)}</b>
-                <em>{probeResult.risk.reasons.map(cleanRiskText).join(' / ') || 'All returned checks passed.'}</em>
               </div>
-              <RiskCheckTable checks={probeResult.risk.checks} />
-            </div>
-          )}
-        </section>
-
-        <span className="risk-pref-caption">Recent rejections</span>
-        <section className="risk-pref-group" aria-label="Recent rejections">
-          <div className="risk-pref-row">
-            <span className="risk-pref-icon bad">
-              <IconActivity size={19} />
-            </span>
-            <div className="risk-pref-copy">
-              <b>Rejected decisions</b>
-              <span>Last five risk decisions rejected by the order gate.</span>
-            </div>
-            <button type="button" className="risk-pref-button" onClick={() => setPage('ledger')}>
-              <IconBook size={14} />
-              Open logs
-            </button>
+            )}
+            <RsxRow
+              icon={<Ico tint={TINT.red}><IconLock size={16} /></Ico>}
+              label="Blocked Symbols"
+              sub={cfg.blockedSymbols.length ? `${cfg.blockedSymbols.length} symbol${cfg.blockedSymbols.length === 1 ? '' : 's'} blocked.` : 'No symbol-specific blocks.'}
+              end={
+                <>
+                  <input
+                    className="hp-input"
+                    placeholder="DOGEUSDT"
+                    value={blockInput}
+                    onChange={(e) => setBlockInput(sanitizeSymbol(e.target.value))}
+                    spellCheck={false}
+                  />
+                  <button
+                    type="button"
+                    className="hp-btn danger"
+                    disabled={blockInput.length < 4 || cfg.blockedSymbols.includes(blockInput)}
+                    title={blockInput.length < 4 ? 'Enter a symbol first' : cfg.blockedSymbols.includes(blockInput) ? 'Already blocked' : `Block ${blockInput}`}
+                    onClick={async () => {
+                      await patchList('blockedSymbols', [...cfg.blockedSymbols, blockInput]);
+                      setBlockInput('');
+                    }}
+                  >
+                    Block
+                  </button>
+                </>
+              }
+            />
+            {cfg.blockedSymbols.length > 0 && (
+              <div className="rsx-chips">
+                {cfg.blockedSymbols.map((s) => (
+                  <button
+                    type="button"
+                    key={s}
+                    className="risk-chip blocked"
+                    title={`Remove ${s} from blocked symbols`}
+                    onClick={() => void patchList('blockedSymbols', cfg.blockedSymbols.filter((x) => x !== s))}
+                  >
+                    <TokenIcon symbol={s} size={15} />
+                    {s}
+                    <span aria-hidden="true">×</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          {rejections.length === 0 ? (
-            <div className="risk-empty-state">
-              <IconActivity size={18} />
-              <span>No recent risk rejections in the current snapshot.</span>
+        </div>
+      </section>
+
+      {/* ---- preview probe | recent rejections ---------------------------- */}
+      <section className="rsx-band">
+        <div className="rsx-cols">
+          <div className="rsx-col">
+            <h3>Preview</h3>
+            <RsxRow
+              icon={<Ico tint={TINT.slate}><IconSearch size={16} /></Ico>}
+              label="Preview An Order"
+              sub="Runs the full gate against a hypothetical order. Nothing is sent."
+              end={
+                <Pill tone={probeResult ? (probeResult.risk.allowed ? 'ok' : 'bad') : 'idle'}>
+                  {probeResult ? (probeResult.risk.allowed ? 'Pass' : 'Fail') : 'Idle'}
+                </Pill>
+              }
+            />
+            <div className="rsx-probe">
+              <label>
+                <span>Symbol</span>
+                <input className="hp-input" value={probeSymbol} onChange={(e) => setProbeSymbol(sanitizeSymbol(e.target.value))} spellCheck={false} />
+              </label>
+              <label>
+                <span>Side</span>
+                <Seg
+                  value={probeSide}
+                  options={[
+                    { id: 'BUY', label: 'Buy' },
+                    { id: 'SELL', label: 'Sell' },
+                  ]}
+                  onChange={setProbeSide}
+                />
+              </label>
+              <label>
+                <span>Notional USDT</span>
+                <input className="hp-input num" type="number" min="0" step="0.01" value={probeNotional} onChange={(e) => setProbeNotional(e.target.value)} />
+              </label>
+              <div className="rsx-probe-go">
+                <button type="button" className="hp-btn primary" disabled={probeBusy} onClick={runProbe}>
+                  {probeBusy ? 'Checking…' : 'Preview'}
+                </button>
+              </div>
             </div>
-          ) : (
-            <div className="risk-table-wrap">
-              <table className="risk-rejection-table">
+            <div className="rsx-quick">
+              {quickAmounts.map((amount) => (
+                <button type="button" className="hp-btn" key={amount} onClick={() => setProbeNotional(String(amount))}>
+                  {fmtPrice(amount)}
+                </button>
+              ))}
+            </div>
+            {probeError && <div className="rsx-alert">{probeError}</div>}
+            {probeResult && (
+              <>
+                <RsxRow
+                  icon={<TokenIcon symbol={probeResult.symbol} size={30} />}
+                  label={`${probeResult.symbol} ${probeResult.side === 'BUY' ? 'Buy' : 'Sell'}`}
+                  sub={probeResult.risk.reasons.map(cleanRiskText).join(' / ') || 'All returned checks passed.'}
+                  end={<span className="rsx-val">{fmtPrice(probeResult.estNotionalUsd)}</span>}
+                />
+                <RiskCheckTable checks={probeResult.risk.checks} />
+              </>
+            )}
+          </div>
+
+          <div className="rsx-col">
+            <h3>Recent Rejections</h3>
+            <RsxRow
+              icon={<Ico tint={TINT.red}><IconActivity size={16} /></Ico>}
+              label="Rejected Decisions"
+              sub="Last five risk decisions rejected by the order gate."
+              end={
+                <button type="button" className="hp-btn" onClick={() => setPage('ledger')}>
+                  <IconBook size={13} />
+                  Open Logs
+                </button>
+              }
+            />
+            {rejections.length === 0 ? (
+              <div className="rsx-empty">The current snapshot has no rejected risk decisions.</div>
+            ) : (
+              <table className="rsx-table">
+                <colgroup>
+                  <col style={{ width: 100 }} />
+                  <col style={{ width: 120 }} />
+                  <col style={{ width: 130 }} />
+                  <col />
+                </colgroup>
                 <thead>
                   <tr>
                     <th>Time</th>
@@ -861,22 +735,24 @@ export function Risk() {
                     return (
                       <tr key={ev.id}>
                         <td title={fmtDateTime(ev.ts)}>{timeAgo(ev.ts)}</td>
-                        <td>{ev.symbol ?? '-'}</td>
+                        <td className="strong">{ev.symbol ?? '—'}</td>
                         <td>{stageLabel(data.stage)}</td>
-                        <td>{data.reasons.length ? data.reasons.map(cleanRiskText).join(' / ') : 'No reason returned.'}</td>
+                        <td className="dim" title={data.reasons.map(cleanRiskText).join(' / ')}>
+                          {data.reasons.length ? data.reasons.map(cleanRiskText).join(' / ') : 'No reason returned.'}
+                        </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
-            </div>
-          )}
-        </section>
+            )}
+          </div>
+        </div>
       </section>
 
       {modal === 'resume' && (
         <ConfirmModal
-          title="Resume live orders"
+          title="Resume Live Orders"
           requireText="RESUME"
           confirmLabel="Resume"
           onConfirm={async () => {
@@ -893,9 +769,9 @@ export function Risk() {
 
       {modal === 'arm' && (
         <ConfirmModal
-          title="Arm live trading"
+          title="Arm Live Trading"
           requireText="ARM"
-          confirmLabel="Arm live"
+          confirmLabel="Arm Live"
           danger
           onConfirm={async () => {
             await setLive(true);

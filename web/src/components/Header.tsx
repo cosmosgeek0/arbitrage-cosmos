@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useStore, useResolvedTheme, type Page } from '../store';
 import { fmtClockZone, timeAgo } from '../format';
 import { eventSummary } from '../lib/eventText';
@@ -1755,8 +1755,8 @@ function SharedTopBar() {
     void saveConfig({ borrowGuard: { ...cur, enabled: true, newBorrowPaused: !on, repayOnly: !on } });
   };
   const markNotificationsRead = () => {
-    const latest = events[0]?.id;
-    if (latest === undefined) return;
+    if (!events.length) return;
+    const latest = Math.max(...events.map((e) => e.id));
     setSeen(latest);
     localStorage.setItem('cosmos-notif-seen', String(latest));
   };
@@ -1968,7 +1968,7 @@ function SharedTopBar() {
   const dataBad = dataRows.filter((r) => r.tier === 'bad').length;
   const dataGrade = !connected || dataBad > 1 ? 'bad' : dataBad || dataWarn ? 'warn' : 'ok';
   const dataLabel = dataGrade === 'ok' ? 'Good' : dataGrade === 'bad' ? 'Down' : 'Watch';
-  const dataSub = `${dataGood}/${dataRows.length} sources passing · ${feedList.length || 0} streams`;
+  const dataSub = `${dataGood}/${dataRows.length} sources passing`;
   const advRaw: ({ sev: Sev; name: string; detail: string; page?: Page } | null)[] = [
     b?.canWithdraw ? { sev: 'action', name: 'Withdrawals enabled on key', detail: 'Rotate to a read-only key.', page: 'account' } : { sev: 'pass', name: 'Withdrawals disabled', detail: 'Key cannot move funds.' },
     b?.keysPresent && !b?.connected ? { sev: 'action', name: 'Account sync failing', detail: b?.lastError ?? 'Not syncing.', page: 'system' } : null,
@@ -2101,9 +2101,9 @@ function SharedTopBar() {
                 <div className="keyx-card-head">
                   <span className="keyx-source-mark"><BinanceLogo size={32} /></span>
                   <span className="keyx-card-title">
-                    <span className="keyx-name-row"><b>{apiKeyRole(ak)}</b><span className="keyx-type-pill">{ak.type}</span></span>
+                    <span className="keyx-name-row"><b>{ak.name}</b><span className="keyx-type-pill">{apiKeyRole(ak)}</span></span>
+                    <em>{ak.type} · {apiKeyFingerprint(ak)}</em>
                     <em className="keyx-ip-line">{apiKeyIpLine(ak)}</em>
-                    <em>{ak.name} · {apiKeySourceLine(ak)}</em>
                   </span>
                   <span className={`keyx-state ${ak.status}`}>{ak.status}</span>
                 </div>
@@ -2162,22 +2162,24 @@ function SharedTopBar() {
       case 'shell':
         return (
           <div className="shell-pop shell-premium">
-            <button className="shell-stage shell-stage-open" type="button" onClick={() => { setActive(null); openOverlay('cloudshell'); }}>
-              <div className="shell-stage-bar">
-                <span className="shell-leds"><i /><i /><i /></span>
-                <b>AWS CLI</b>
-                <em>ready</em>
-              </div>
-              <div className="shell-stage-body">
-                <div className="shell-path"><span>ubuntu</span><b>@cg-arbitrage-01</b><i>~</i></div>
-                <div className="shell-command"><em>$</em><span>aws sts get-caller-identity</span><i /></div>
-                <div className="shell-rail"><span /><span /><span /></div>
-              </div>
+            <TopPanelHeader
+              className="shell-head"
+              logo={<IconTerminal size={21} />}
+              title="AWS CLI"
+              sub="CloudShell · Session Manager"
+              status="Ready"
+            />
+            <button className="shell-command-card" type="button" onClick={() => { setActive(null); openOverlay('cloudshell'); }}>
+              <span className="shell-command-copy">
+                <b>cg-arbitrage-01</b>
+                <em>ubuntu · /opt/arbitrage</em>
+              </span>
+              <span className="shell-command-line"><i>$</i> aws sts get-caller-identity</span>
             </button>
-            <div className="shell-pills shell-strip" aria-hidden>
-              <span><em>host</em><b>cg-arb-01</b></span>
-              <span><em>path</em><b>/opt/arb</b></span>
-              <span><em>auth</em><b>ssm</b></span>
+            <div className="shell-status-list" aria-label="AWS CloudShell session details">
+              <div><span>Host</span><b>cg-arb-01</b></div>
+              <div><span>Auth</span><b>SSM</b></div>
+              <div><span>Region</span><b>ap-south-1</b></div>
             </div>
             <div className="shell-actions">
               <button className="shell-open primary" type="button" onClick={() => { setActive(null); openOverlay('cloudshell'); }} title="Open in-app CloudShell" aria-label="Open in-app CloudShell">
@@ -2193,13 +2195,17 @@ function SharedTopBar() {
       case 'apikey': return keysBody();
       case 'data':
         return (
-          <div className={`datax-pop datax-slim ${dataGrade}`}>
+          <div className={`datax-pop datax-slim data-health-card ${dataGrade}`}>
             <TopPanelHeader
               className={`datax-hero ${dataGrade}`}
               logo={<IconDatabase size={21} />}
               title="Data Health"
-              status={dataLabel}
+              sub={`Binance · ${dataSub}`}
             />
+            <div className="datax-section-head">
+              <span><IconWifi size={15} />Sources</span>
+              <b className="ok">{dataGood} Active</b>
+            </div>
             <div className="datax-source-list" aria-label="Measured data sources">
               {dataRows.map((row) => (
                 <div key={row.name} className={`datax-source-row ${row.tier}`} title={row.sub} aria-label={`${row.name}: ${row.value}. ${row.sub}`}>
@@ -2215,9 +2221,9 @@ function SharedTopBar() {
               ))}
             </div>
             <div className="datax-foot">
-              <button type="button" onClick={() => { setActive(null); setPage('system'); }}>
-                <IconPulse size={13} />
-                Health
+              <button type="button" onClick={() => { setActive(null); setPage('system'); }} aria-label="Open Health page">
+                <IconPulse size={15} />
+                Open Health
               </button>
               <span>{sys?.usedWeightTs ? `Weight ${timeAgo(sys.usedWeightTs)}` : 'Live Probes'}</span>
             </div>
@@ -2289,7 +2295,7 @@ function SharedTopBar() {
               status={unread ? `${unread} New` : events.length ? `${events.length} Total` : 'Clear'}
               action={(
                 <span className="ntfx-head-actions">
-                  <button className="ntfx-clear" type="button" onClick={markNotificationsRead} disabled={unread === 0} title="Clear unread notifications" aria-label="Clear unread notifications">
+                  <button className="ntfx-clear" type="button" onClick={markNotificationsRead} disabled={events.length === 0} title="Clear notifications" aria-label="Clear notifications">
                     Clear
                   </button>
                   <button className="ntfx-iconbtn" type="button" onClick={openNotificationCenter} title="Expand notifications" aria-label="Expand notifications">
@@ -2311,7 +2317,7 @@ function SharedTopBar() {
                   title={t.label}
                   onClick={() => setNotifTab(t.id)}
                 >
-                  {t.id === 'opportunity' ? 'Signals' : t.label}
+                  {t.id === 'opportunity' ? 'Signals' : t.id === 'critical' ? 'Critical' : t.label}
                 </button>
               ))}
             </div>
@@ -2372,11 +2378,6 @@ function SharedTopBar() {
                 <i className="cb-switch" aria-hidden><span /></i>
               </button>
             </div>
-            <div className="modex-foot">
-              <button type="button" onClick={() => { setActive(null); setPage('risk'); }}><IconShield size={13} />Risk Limits</button>
-              <button type="button" onClick={() => { setActive(null); setPage('loans'); }}><IconCoins size={13} />Borrow Guard</button>
-              <span>{modeNet}</span>
-            </div>
           </div>
         );
       case 'mrefresh':
@@ -2389,15 +2390,6 @@ function SharedTopBar() {
               sub={refreshDetail}
               status={refreshLabel}
             />
-            <div className="mrefx-custom-row top" aria-label="Custom data cadence seconds">
-              <button data-testid="mrefresh-decrease" type="button" onClick={() => applyCadence(selectedCadence - 1, cadenceTarget)} aria-label="Decrease cadence">-</button>
-              <label>
-                <span>{selectedCadenceLabel}</span>
-                <input data-testid="mrefresh-custom-input" value={refreshCustom} inputMode="decimal" type="number" min={0.5} max={300} step={0.5} onChange={(e) => setRefreshCustom(e.currentTarget.value)} onBlur={applyCustomRefresh} onKeyDown={(e) => { if (e.key === 'Enter') applyCustomRefresh(); }} aria-label="Custom data cadence seconds" />
-              </label>
-              <button data-testid="mrefresh-increase" type="button" onClick={() => applyCadence(selectedCadence + 1, cadenceTarget)} aria-label="Increase cadence">+</button>
-              <button data-testid="mrefresh-apply" className="mrefx-apply" type="button" onClick={applyCustomRefresh}>Set</button>
-            </div>
             <div className="mrefx-source-list" aria-label="Data source cadences">
               {cadenceRows.map((row) => (
                 <div key={row.key} className={`mrefx-source-row ${row.tone}`} title={row.sub} aria-label={`${row.label}: ${row.value}. ${row.sub}`}>
@@ -2545,15 +2537,11 @@ function SharedTopBar() {
               })}
             </div>
             <div className="apx-scale" aria-label="Interface scale">
+              <span className="apx-scale-label">Scale</span>
               <button data-testid="appearance-zoom-out" type="button" onClick={() => setZoom((prefs.zoom || 1) - 0.05)} aria-label="Zoom out">−</button>
               <strong>{appearanceZoom}%</strong>
               <button data-testid="appearance-zoom-in" type="button" onClick={() => setZoom((prefs.zoom || 1) + 0.05)} aria-label="Zoom in">+</button>
               <button data-testid="appearance-zoom-reset" className="reset" type="button" onClick={() => updatePref('zoom', 1.05)} aria-label="Reset scale" title="Reset scale">↺</button>
-            </div>
-            <div className="apx-summary-line" aria-label="Appearance state">
-              <span><b>Mode</b><em>{prefs.theme === 'system' ? 'Auto' : prefs.theme}</em></span>
-              <span><b>Accent</b><em>{activeAccent.label}</em></span>
-              <span><b>Scale</b><em>{appearanceZoom}%</em></span>
             </div>
           </div>
         );
@@ -3053,6 +3041,8 @@ export function RefreshDock() {
   const [appRtt, setAppRtt] = useState<number | null>(null);
   const [st, setSt] = useState<'idle' | 'spin' | 'ok' | 'err'>('idle');
   const [open, setOpen] = useState(false);
+  const [lastRefreshTs, setLastRefreshTs] = useState<number | null>(null);
+  const [lastRefreshIssues, setLastRefreshIssues] = useState<string[]>([]);
   const busy = useRef(false);
   const icRef = useRef<HTMLSpanElement>(null);
 
@@ -3071,20 +3061,41 @@ export function RefreshDock() {
     return () => anim.cancel();
   }, [st]);
 
-  useEffect(() => {
-    let alive = true;
-    const ping = async () => {
-      const t0 = performance.now();
-      try { const r = await fetch('/api/health', { cache: 'no-store' }); if (!r.ok) throw new Error(); if (alive) setAppRtt(performance.now() - t0); }
-      catch { if (alive) setAppRtt(null); }
-    };
-    void ping(); const t = window.setInterval(ping, 5000); return () => { alive = false; window.clearInterval(t); };
+  const pingHealthNow = useCallback(async (): Promise<number | null> => {
+    const t0 = performance.now();
+    try {
+      const r = await fetch('/api/health', { cache: 'no-store' });
+      if (!r.ok) throw new Error();
+      const ms = performance.now() - t0;
+      setAppRtt(ms);
+      return ms;
+    } catch {
+      setAppRtt(null);
+      return null;
+    }
   }, []);
-  useEffect(() => {
-    let alive = true;
-    const load = () => fetch('/api/system').then((r) => (r.ok ? r.json() : null)).then((s) => alive && s && setSys(s as SystemLite)).catch(() => undefined);
-    void load(); const t = window.setInterval(load, 5000); return () => { alive = false; window.clearInterval(t); };
+
+  const loadSystemNow = useCallback(async (): Promise<SystemLite | null> => {
+    try {
+      const r = await fetch('/api/system', { cache: 'no-store' });
+      const s = r.ok ? ((await r.json()) as SystemLite) : null;
+      if (s) setSys(s);
+      return s;
+    } catch {
+      return null;
+    }
   }, []);
+
+  useEffect(() => {
+    void pingHealthNow();
+    const t = window.setInterval(() => void pingHealthNow(), 5000);
+    return () => window.clearInterval(t);
+  }, [pingHealthNow]);
+  useEffect(() => {
+    void loadSystemNow();
+    const t = window.setInterval(() => void loadSystemNow(), 5000);
+    return () => window.clearInterval(t);
+  }, [loadSystemNow]);
 
   const feeds = state?.feeds ?? {};
   const feedVals = Object.values(feeds);
@@ -3104,14 +3115,15 @@ export function RefreshDock() {
   const weightTier: ConnTier = weight == null ? 'avg' : weight >= 4800 ? 'bad' : weight >= 3000 ? 'slow' : 'good';
 
   const conns: { key: string; label: string; value: string; tier: ConnTier }[] = [
-    { key: 'app', label: 'Browser → server', value: appRtt != null ? msLabel(appRtt) : 'offline', tier: latTier(appRtt, 120, 350, 800) },
+    { key: 'app', label: 'Browser → Server', value: appRtt != null ? msLabel(appRtt) : 'offline', tier: latTier(appRtt, 120, 350, 800) },
     { key: 'binance', label: 'Binance REST', value: rest != null ? msLabel(rest) : '—', tier: latTier(rest, 300, 600, 1100) },
-    { key: 'socket', label: 'Live socket', value: connected ? 'live' : 'reconnecting', tier: connected ? 'good' : 'bad' },
-    { key: 'feed', label: 'Market feed', value: feedVals.length ? (feedsOk ? `${feedVals.length} open` : 'degraded') : 'idle', tier: feedVals.length ? (feedsOk ? 'good' : 'slow') : 'avg' },
-    { key: 'account', label: 'Account sync', value: b?.keysPresent ? (acctTs ? timeAgo(acctTs) : 'no sync') : 'no key', tier: b?.keysPresent ? ageTier(acctTs, 90_000) : 'avg' },
-    { key: 'stream', label: 'User stream', value: String(userStream), tier: streamTier },
-    { key: 'drift', label: 'Clock drift', value: drift != null ? msLabel(drift) : '—', tier: latTier(drift != null ? Math.abs(drift) : null, 400, 1200, 2500) },
-    { key: 'weight', label: 'Rate budget · 1m', value: weight != null ? String(weight) : '—', tier: weightTier },
+    { key: 'socket', label: 'Live Socket', value: connected ? 'live' : 'reconnecting', tier: connected ? 'good' : 'bad' },
+    { key: 'feed', label: 'Market Feed', value: feedVals.length ? (feedsOk ? `${feedVals.length} open` : 'degraded') : 'idle', tier: feedVals.length ? (feedsOk ? 'good' : 'slow') : 'avg' },
+    { key: 'account', label: 'Account Sync', value: b?.keysPresent ? (acctTs ? timeAgo(acctTs) : 'no sync') : 'no key', tier: b?.keysPresent ? ageTier(acctTs, 90_000) : 'avg' },
+    { key: 'refresh', label: 'Last Refresh', value: lastRefreshTs ? timeAgo(lastRefreshTs) : 'not run', tier: lastRefreshTs ? (lastRefreshIssues.length ? 'slow' : 'good') : 'avg' },
+    { key: 'stream', label: 'User Stream', value: String(userStream), tier: streamTier },
+    { key: 'drift', label: 'Clock Drift', value: drift != null ? msLabel(drift) : '—', tier: latTier(drift != null ? Math.abs(drift) : null, 400, 1200, 2500) },
+    { key: 'weight', label: 'Rate Budget · 1m', value: weight != null ? String(weight) : '—', tier: weightTier },
     { key: 'db', label: 'Ledger DB', value: dbOk === undefined ? '—' : dbOk ? 'writable' : 'broken', tier: dbOk === undefined ? 'avg' : dbOk ? 'good' : 'bad' },
   ];
 
@@ -3131,8 +3143,14 @@ export function RefreshDock() {
     if (busy.current) return;
     busy.current = true; setSt('spin');
     const t0 = Date.now();
-    let res: { ok: boolean; issues: string[] };
-    try { res = await refresh(); } catch { res = { ok: false, issues: ['Refresh failed'] }; }
+    let res: { ok: boolean; issues: string[]; ts?: number };
+    try { res = await refresh(); } catch { res = { ok: false, issues: ['Refresh failed'], ts: Date.now() }; }
+    const [healthPing, systemPayload] = await Promise.all([pingHealthNow(), loadSystemNow()]);
+    if (healthPing == null) res.issues.push('Health probe failed');
+    if (!systemPayload) res.issues.push('System probe failed');
+    setLastRefreshTs(res.ts ?? Date.now());
+    setLastRefreshIssues(res.issues);
+    res.ok = res.issues.length === 0;
     const wait = Math.max(0, 2050 - (Date.now() - t0)); // let it spin a few smooth turns
     window.setTimeout(() => {
       if (res.ok) { setSt('ok'); window.setTimeout(() => setSt('idle'), 1500); }
@@ -3141,13 +3159,13 @@ export function RefreshDock() {
     }, wait);
   };
 
-  const label = st === 'spin' ? 'Refreshing all connections…' : st === 'ok' ? 'All connections refreshed' : st === 'err' ? 'Some connections failed — try again' : `Connection health: ${overall}`;
+  const label = st === 'spin' ? 'Refreshing Backend State…' : st === 'ok' ? 'Backend State Refreshed' : st === 'err' ? 'Refresh Issues — Try Again' : `Connection Health: ${overall}`;
 
   return (
     <div className="rdock" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
       {open && (st === 'idle' || st === 'err') && (
         <div className="rdock-pop">
-          <div className="rdock-pop-head"><span>Connection health</span><span className={`rdock-pop-tag t-${overall}`}>{overall}</span></div>
+          <div className="rdock-pop-head"><span>Connection Health</span><span className={`rdock-pop-tag t-${overall}`}>{overall}</span></div>
           {conns.map((c) => (
             <div key={c.key} className="rdock-conn">
               <span className={`rdock-conn-dot t-${c.tier}`} />
@@ -3162,10 +3180,11 @@ export function RefreshDock() {
               <span className="rdock-conn-val t-bad">{lastError}</span>
             </div>
           )}
-          <div className="rdock-pop-foot">Click to refresh &amp; reconnect everything</div>
+          <div className="rdock-pop-foot">Click To Refresh Backend State</div>
         </div>
       )}
       <button className={`rdock-btn t-${overall} ${st}`} onClick={run} title={label} aria-label={label}>
+        <span className="rdock-motion" aria-hidden="true" />
         <span className="rdock-ic" ref={icRef}>{st === 'ok' ? <IconCheck size={20} /> : st === 'err' ? <IconCross size={20} /> : <IconRefresh size={19} />}</span>
       </button>
     </div>

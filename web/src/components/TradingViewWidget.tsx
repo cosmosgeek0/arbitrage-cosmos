@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-const TV_SCRIPT = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+const TV_WIDGET_URL = 'https://www.tradingview-widget.com/embed-widget/advanced-chart/';
 
 function currentTheme(): 'light' | 'dark' {
   return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
@@ -9,15 +9,20 @@ function currentTheme(): 'light' | 'dark' {
 function tvInterval(win: string): string {
   if (win === '1s') return '1';
   if (win.endsWith('m')) return win.replace('m', '');
-  if (win === '1H') return '60';
-  if (win === '4H') return '240';
-  if (win === '1D') return 'D';
-  if (win === '1W') return 'W';
+  if (win.endsWith('h')) return String(Number(win.replace('h', '')) * 60);
+  if (win.endsWith('H')) return String(Number(win.replace('H', '')) * 60);
+  if (win === '1d' || win === '1D') return 'D';
+  if (win === '3d' || win === '3D') return '3D';
+  if (win === '1w' || win === '1W') return 'W';
+  if (win === '1M') return 'M';
   return '60';
 }
 
+function tvSymbol(symbol: string): string {
+  return symbol.includes(':') ? symbol : `BINANCE:${symbol}`;
+}
+
 export function TradingViewWidget({ symbol, win, height = 520 }: { symbol: string; win: string; height?: number }) {
-  const hostRef = useRef<HTMLDivElement>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => currentTheme());
 
   useEffect(() => {
@@ -29,7 +34,7 @@ export function TradingViewWidget({ symbol, win, height = 520 }: { symbol: strin
   const config = useMemo(
     () => ({
       autosize: true,
-      symbol: `BINANCE:${symbol}`,
+      symbol: tvSymbol(symbol),
       interval: tvInterval(win),
       timezone: 'Etc/UTC',
       theme,
@@ -39,41 +44,34 @@ export function TradingViewWidget({ symbol, win, height = 520 }: { symbol: strin
       gridColor: theme === 'dark' ? 'rgba(148, 163, 184, 0.14)' : 'rgba(15, 23, 42, 0.08)',
       withdateranges: true,
       hide_side_toolbar: false,
+      hide_top_toolbar: false,
       allow_symbol_change: true,
-      save_image: false,
+      save_image: true,
       calendar: false,
+      details: false,
+      hotlist: false,
+      studies: ['Volume@tv-basicstudies'],
+      show_popup_button: true,
+      popup_width: '1280',
+      popup_height: '820',
+      enabled_features: ['header_fullscreen_button'],
       support_host: 'https://www.tradingview.com',
     }),
     [symbol, theme, win]
   );
 
-  useEffect(() => {
-    const host = hostRef.current;
-    if (!host) return;
-    host.innerHTML = '';
-
-    const widget = document.createElement('div');
-    widget.className = 'tradingview-widget-container__widget';
-    widget.style.height = '100%';
-    widget.style.width = '100%';
-
-    const script = document.createElement('script');
-    script.type = 'text/javascript';
-    script.async = true;
-    script.src = TV_SCRIPT;
-    script.innerHTML = JSON.stringify(config);
-
-    host.appendChild(widget);
-    host.appendChild(script);
-
-    return () => {
-      host.innerHTML = '';
-    };
-  }, [config]);
+  const frameSrc = useMemo(() => `${TV_WIDGET_URL}?locale=en#${encodeURIComponent(JSON.stringify(config))}`, [config]);
 
   return (
     <div className="tv-widget-wrap" style={{ height }}>
-      <div ref={hostRef} className="tradingview-widget-container" />
+      <iframe
+        key={frameSrc}
+        title={`${tvSymbol(symbol)} TradingView Advanced Chart`}
+        src={frameSrc}
+        loading="eager"
+        referrerPolicy="origin"
+        allowFullScreen
+      />
       <div className="tv-widget-fallback">Loading TradingView chart…</div>
     </div>
   );

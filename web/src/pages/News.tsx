@@ -1,4 +1,4 @@
-import { memo, useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { Pill } from '../components/px';
 import { IconExternal, IconNewspaper, IconRefresh, IconSearch } from '../components/Icons';
 import { liveAge } from '../format';
@@ -63,16 +63,19 @@ const READ_KEY = 'cosmos-news-read-v3';
 const FEED_CACHE_KEY = 'cosmos-news-feed-cache-v1';
 const NEWS_CONTEXT_LIMIT = 900;
 const NEWS_AUTO_REFRESH_SEC = 5;
+const NEWS_FRESH_ANIMATION_MAX_AGE_MS = 10 * 60_000;
+const NEWS_FRESH_ANIMATION_MAX_INDEX = 12;
+const NEWS_KNOWN_ID_LIMIT = 1800;
 const PAGE_SIZE_OPTIONS: NewsPageSize[] = [25, 50, 100];
 
 const NEWS_BUCKETS: { id: NewsBucket; label: string; shortLabel: string }[] = [
+  { id: 'all', label: 'All Buckets', shortLabel: 'All' },
   { id: 'must-know', label: 'Must Know', shortLabel: 'Must Know' },
   { id: 'exchange', label: 'Exchange Notices', shortLabel: 'Exchange' },
   { id: 'macro-policy', label: 'Macro / Policy', shortLabel: 'Macro' },
   { id: 'crypto-market', label: 'Crypto Market News', shortLabel: 'Crypto' },
   { id: 'onchain-security', label: 'On-Chain / Security', shortLabel: 'On-Chain' },
   { id: 'long-research', label: 'Long-Term Research', shortLabel: 'Research' },
-  { id: 'all', label: 'All Buckets', shortLabel: 'All' },
 ];
 
 const SOURCE_FILTERS: { id: SourceFilter; label: string }[] = [
@@ -520,6 +523,20 @@ function mergeNewsItems(context: NewsContextPayload | null, binance: BinanceNews
   return merged.sort(compareNewsItems);
 }
 
+function shouldAnimateIncoming(item: NewsContextItem, index: number): boolean {
+  const ts = itemSortTs(item);
+  return ts > 0 && Date.now() - ts <= NEWS_FRESH_ANIMATION_MAX_AGE_MS && index < NEWS_FRESH_ANIMATION_MAX_INDEX;
+}
+
+function stablePageKeys(pageItems: NewsContextItem[]): string[] {
+  const seen = new Map<string, number>();
+  return pageItems.map((item) => {
+    const count = seen.get(item.id) ?? 0;
+    seen.set(item.id, count + 1);
+    return count ? `${item.id}:dup-${count}` : item.id;
+  });
+}
+
 function itemHasAnyTag(item: NewsContextItem, tags: string[]): boolean {
   return tags.some((tag) => item.tags.includes(tag));
 }
@@ -598,7 +615,7 @@ export function News() {
   const [binanceFailed, setBinanceFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [checking, setChecking] = useState(false);
-  const [bucket, setBucket] = useState<NewsBucket>('must-know');
+  const [bucket, setBucket] = useState<NewsBucket>('all');
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [pageSize, setPageSize] = useState<NewsPageSize>(25);
   const [page, setPage] = useState(0);
@@ -606,6 +623,7 @@ export function News() {
   const [refreshCycle, setRefreshCycle] = useState({ seq: 0, force: false });
   const [readIds, setReadIds] = useState<Set<string>>(() => readSet());
   const [freshIds, setFreshIds] = useState<Set<string>>(new Set());
+  const knownIdsRef = useRef<Set<string>>(new Set(mergeNewsItems(initialFeed.context, initialFeed.binance).map((item) => item.id)));
   const newsCadenceSec = Math.min(NEWS_AUTO_REFRESH_SEC, Math.max(0.5, prefs.dataCadence?.news ?? NEWS_AUTO_REFRESH_SEC));
 
   useEffect(() => {
@@ -622,7 +640,6 @@ export function News() {
     const checkStartedAt = Date.now();
     const isRefresh = refreshCycle.seq > 0;
     const isForced = refreshCycle.force;
-    const previousIds = new Set(mergeNewsItems(context, binance).map((item) => item.id));
     setFailed(false);
     setBinanceFailed(false);
     setRefreshing(isRefresh);
@@ -637,9 +654,18 @@ export function News() {
       }, delay);
     };
 
-    const markIncoming = (nextContext: NewsContextPayload | null, nextBinance: BinanceNewsPayload | null) => {
-      if (!isRefresh) return;
-      const incoming = mergeNewsItems(nextContext, nextBinance).filter((item) => !previousIds.has(item.id)).map((item) => item.id);
+    const reconcileIncoming = (nextContext: NewsContextPayload | null, nextBinance: BinanceNewsPayload | null, animate: boolean) => {
+      const nextItems = mergeNewsItems(nextContext, nextBinance);
+      const known = knownIdsRef.current;
+      const incoming = animate && isRefresh
+        ? nextItems
+          .filter((item, index) => !known.has(item.id) && shouldAnimateIncoming(item, index))
+          .map((item) => item.id)
+        : [];
+      nextItems.forEach((item) => known.add(item.id));
+      if (known.size > NEWS_KNOWN_ID_LIMIT) {
+        knownIdsRef.current = new Set(nextItems.slice(0, NEWS_KNOWN_ID_LIMIT).map((item) => item.id));
+      }
       if (incoming.length) {
         setFreshIds(new Set(incoming));
         if (freshTimer !== null) window.clearTimeout(freshTimer);
@@ -666,7 +692,7 @@ export function News() {
       }
       else setBinanceFailed(true);
       if (reachedSource) setLastCheckedAt(Date.now());
-      if (animate) markIncoming(nextContext, nextBinance);
+      reconcileIncoming(nextContext, nextBinance, animate);
       persistFeedCache(nextContext, nextBinance);
     };
 
@@ -739,6 +765,7 @@ export function News() {
   const pageStart = safePage * activePageSize;
   const pageEnd = Math.min(filtered.length, pageStart + activePageSize);
   const pageItems = filtered.slice(pageStart, pageEnd).slice(0, activePageSize);
+  const pageRowKeys = useMemo(() => stablePageKeys(pageItems), [pageItems]);
   const visibleUnread = pageItems.filter((it) => !readIds.has(it.id)).length;
   const status = failed && binanceFailed ? 'Feed Unreachable' : lastCheckedAt ? `Live · ${liveAge(lastCheckedAt)}` : 'Fetching';
   const tone: NewsTone = failed && binanceFailed ? 'bad' : context || binance ? 'ok' : 'idle';
@@ -872,7 +899,7 @@ export function News() {
         {failed && binanceFailed && <div className="ov-empty">News unavailable. Source feeds could not be reached.</div>}
         {(context || binance) && filtered.length === 0 && <div className="ov-empty">{ql ? `Nothing Matches "${q}".` : 'No Headlines Match These Filters.'}</div>}
         {pageItems.map((it, index) => (
-          <NewsRow key={`${it.id}:${pageStart + index}`} item={it} read={readIds.has(it.id)} fresh={freshIds.has(it.id)} onRead={markRead} />
+          <NewsRow key={pageRowKeys[index]} item={it} read={readIds.has(it.id)} fresh={freshIds.has(it.id)} onRead={markRead} />
         ))}
       </div>
 

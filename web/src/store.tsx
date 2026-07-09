@@ -18,6 +18,15 @@ import type {
   ServerState,
 } from './types';
 
+export type RefreshResult = {
+  ok: boolean;
+  issues: string[];
+  ts?: number;
+  binanceConnected?: boolean;
+  feedsOk?: boolean;
+  keysPresent?: boolean;
+};
+
 // 'orders' | 'positions' | 'fills' | 'pnl' are deep links that all
 // render the merged Execution page (each id = its active tab), so existing
 // setPage(...) call sites keep working. 'detail' opens from Markets rows only.
@@ -54,7 +63,7 @@ interface Store {
   marketsError: string | null;
   connected: boolean;
   dataNonce: number;
-  refresh: () => Promise<{ ok: boolean; issues: string[] }>;
+  refresh: () => Promise<RefreshResult>;
   page: Page;
   setPage: (p: Page) => void;
   detailSymbol: string;
@@ -285,11 +294,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Binance/account resync, re-pull the shared snapshot + markets, reconnect a
   // dead socket, and fan a signal out to per-page fetchers — all WITHOUT a page
   // reload. Returns a health verdict so the button can go green or red.
-  const refresh = useCallback(async (): Promise<{ ok: boolean; issues: string[] }> => {
+  const refresh = useCallback(async (): Promise<RefreshResult> => {
     const issues: string[] = [];
-    let health: { ok?: boolean; issues?: string[] } | null = null;
+    let health: RefreshResult | null = null;
     try {
-      health = await post<{ ok: boolean; issues: string[] }>('/api/refresh', {});
+      health = await post<RefreshResult>('/api/refresh', {});
     } catch {
       issues.push('Server refresh request failed');
     }
@@ -319,7 +328,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setDataNonce((n) => n + 1);
     fireRefresh();
     if (health?.issues?.length) for (const i of health.issues) issues.push(i);
-    return { ok: issues.length === 0, issues };
+    return {
+      ok: issues.length === 0,
+      issues,
+      ts: health?.ts ?? Date.now(),
+      binanceConnected: health?.binanceConnected,
+      feedsOk: health?.feedsOk,
+      keysPresent: health?.keysPresent,
+    };
   }, []);
 
   const store: Store = {

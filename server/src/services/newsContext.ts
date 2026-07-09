@@ -46,6 +46,8 @@ const PRIMARY_DEFAULT_MIN_FETCH_MS = 90_000;
 const VENUE_DEFAULT_MIN_FETCH_MS = 75_000;
 const PROTOCOL_DEFAULT_MIN_FETCH_MS = 185_000;
 const ISSUER_DEFAULT_MIN_FETCH_MS = 185_000;
+const OFFICIAL_SOURCE_CONCURRENCY = 4;
+const RSS_SOURCE_CONCURRENCY = 6;
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
 interface FeedConfig {
@@ -771,7 +773,11 @@ async function fetchOfficialSources(
   maxItems: number,
 ): Promise<{ items: NewsContextItem[]; sources: NewsContextSource[] }> {
   const fetchedAt = Date.now();
-  const settled = await Promise.all(sources.map((source) => fetchOfficialSource(source, fetchedAt, channel, sourceCache, defaultMinFetchMs)));
+  const settled = await mapWithConcurrency(
+    sources,
+    OFFICIAL_SOURCE_CONCURRENCY,
+    (source) => fetchOfficialSource(source, fetchedAt, channel, sourceCache, defaultMinFetchMs),
+  );
   const items = settled
     .flatMap((res) => res.items)
     .sort(compareContextItems)
@@ -983,7 +989,7 @@ async function fetchLookonchain(): Promise<{ items: NewsContextItem[]; source: N
 
 async function fetchRssBundle(): Promise<{ items: NewsContextItem[]; sources: NewsContextSource[] }> {
   const fetchedAt = Date.now();
-  const settled = await Promise.all(RSS_FEEDS.map((feed) => fetchRssFeed(feed, fetchedAt)));
+  const settled = await mapWithConcurrency(RSS_FEEDS, RSS_SOURCE_CONCURRENCY, (feed) => fetchRssFeed(feed, fetchedAt));
   const items = settled
     .flatMap((res) => res.items)
     .sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0))
@@ -1163,7 +1169,8 @@ function parseFeed(xml: string, feed: FeedConfig, channel: NewsContextChannel = 
   const rssItems = matchBlocks(xml, 'item');
   const atomItems = rssItems.length ? [] : matchBlocks(xml, 'entry');
   const maxBlocks = feed.includeKeywords?.length ? 60 : channel === 'primary' || channel === 'venue' ? 20 : 8;
-  return (rssItems.length ? rssItems : atomItems)
+  const feedBuildTs = parseDateMillis(readTag(xml, 'lastBuildDate') ?? readTag(xml, 'updated') ?? '');
+  const rows = (rssItems.length ? rssItems : atomItems)
     .slice(0, maxBlocks)
     .map((block) => {
       const title = cleanText(readTag(block, 'title') ?? '');
@@ -1186,6 +1193,21 @@ function parseFeed(xml: string, feed: FeedConfig, channel: NewsContextChannel = 
       });
     })
     .filter((row): row is NewsContextItem => Boolean(row));
+  return guardFeedBuildTimestamps(rows, feedBuildTs);
+}
+
+function guardFeedBuildTimestamps(items: NewsContextItem[], feedBuildTs: number | null): NewsContextItem[] {
+  if (!feedBuildTs || items.length < 3) return items;
+  const now = Date.now();
+  if (Math.abs(now - feedBuildTs) > 5 * 60_000) return items;
+  const isBuildStamped = (item: NewsContextItem) => Boolean(item.ts && Math.abs(item.ts - feedBuildTs) <= 2_000);
+  const buildStampedCount = items.filter(isBuildStamped).length;
+  if (buildStampedCount < 3) return items;
+
+  return items.map((item) => {
+    if (!isBuildStamped(item)) return item;
+    return { ...item, ts: null, timeLabel: 'No Time' };
+  });
 }
 
 function parseOfficialPage(
@@ -1755,6 +1777,24 @@ function rssDetail(feed: RssFeed): string {
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  limit: number,
+  worker: (value: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(Math.max(1, limit), values.length) }, async () => {
+    while (nextIndex < values.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await worker(values[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 function sourceAgeLabel(ts: number): string {

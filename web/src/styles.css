@@ -5674,10 +5674,14 @@ button.market-live-metric:hover { background: var(--tile-hover); }
   width: 100%;
 }
 .tv-widget-wrap iframe {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   border: 0 !important;
   width: 100% !important;
   height: 100% !important;
   display: block;
+  background: var(--panel);
 }
 .tv-widget-fallback {
   position: absolute;
@@ -5688,6 +5692,7 @@ button.market-live-metric:hover { background: var(--tile-hover); }
   font-size: 13px;
   font-weight: 650;
   z-index: 0;
+  pointer-events: none;
 }
 .tv-chart-canvas {
   position: absolute;
@@ -20777,6 +20782,20 @@ button.cb-notif-row:hover {
 .cgx-tabs button.on { background: var(--accent); color: #fff; font-weight: 510; }
 .cgx-title { margin: 2px 0 14px; }
 .cgx-note { color: var(--faint); }
+.tdx-cgx-empty {
+  display: grid;
+  place-items: center;
+  min-height: clamp(620px, 28vw, 860px);
+  border-top: 1px solid var(--line);
+}
+.tdx-cgx-empty .tdx-dimnote {
+  max-width: 620px;
+  margin: 0;
+  text-align: center;
+}
+.tdx-cgx-empty .tdx-chart-empty.small {
+  height: auto;
+}
 
 /* ==== BASIS SCANNER (bsx-) — Markets voice, blueprint columns ==== */
 .bsx-hero { padding-top: 24px; }
@@ -25756,6 +25775,7 @@ body::after {
   contain-intrinsic-size: 78px;
   content-visibility: auto;
   text-decoration: none;
+  transition: background-color .16s ease, opacity .16s ease, border-color .16s ease;
 }
 .nwx-line:last-child {
   border-bottom: 0;
@@ -25768,7 +25788,11 @@ body::after {
 }
 .nwx-line.fresh {
   overflow: hidden;
-  animation: nwxInsertLine .95s cubic-bezier(.22, 1, .36, 1) both;
+  animation: nwxInsertLine .72s cubic-bezier(.22, 1, .36, 1) both;
+  will-change: max-height, opacity, transform;
+}
+.nwx-line.fresh > * {
+  animation: nwxInsertContent .72s cubic-bezier(.22, 1, .36, 1) both;
 }
 .nwx-line.fresh::before {
   content: "";
@@ -25784,11 +25808,11 @@ body::after {
     max-height: 0;
     padding-top: 0;
     padding-bottom: 0;
-    opacity: 0;
-    transform: translateY(-14px);
+    opacity: 1;
+    transform: translateY(-6px);
     background: color-mix(in srgb, var(--accent) 12%, var(--panel));
   }
-  45% {
+  58% {
     min-height: 74px;
     max-height: 112px;
     padding-top: 13px;
@@ -25805,6 +25829,16 @@ body::after {
     opacity: 1;
     transform: translateY(0);
     background: transparent;
+  }
+}
+@keyframes nwxInsertContent {
+  0%, 34% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 .nwx-line.read {
@@ -34546,7 +34580,7 @@ body::after {
 
 /* ==== CLOCK SELECTOR - one purpose, one selected time, clean zone rows ====== */
 .smenu-content:has(.clock-select-pop) {
-  max-height: min(72vh, 430px) !important;
+  max-height: min(76vh, 470px) !important;
   overflow-x: hidden !important;
   overflow-y: auto !important;
 }
@@ -34568,7 +34602,7 @@ body::after {
 .smenu-content:has(.clock-select-pop) .clock-zone-list {
   display: grid !important;
   min-height: 0 !important;
-  overflow: hidden !important;
+  overflow: visible !important;
   border-top: 1px solid var(--line) !important;
 }
 
@@ -36687,9 +36721,9 @@ body::after {
   display: grid !important;
   grid-template-columns: 38px minmax(0, 1fr) 98px 18px !important;
   align-items: center !important;
-  min-height: 46px !important;
+  min-height: 43px !important;
   gap: 10px !important;
-  padding: 7px 2px !important;
+  padding: 5px 2px !important;
   border-bottom: 1px solid var(--line) !important;
   border-radius: 0 !important;
   background: transparent !important;
@@ -36784,4 +36818,1453 @@ body::after {
 
 .clock-face.lg::after {
   animation-duration: 2.2s !important;
+}
+
+/* ==== PAGE SURFACE PIXEL LOCK — Account clearance baseline ================
+   Measured at the current browser zoom:
+   page inset 22px, first real surface x=228.88 y=107.08, inner pad 22/24,
+   surface radius 12px, vertical surface gap 16px. Keep Dashboard, Account,
+   Borrow, Markets, and Token on this frame so route changes do not jump. */
+.app-page-frame > .container.page {
+  padding: 22px 22px 24px !important;
+}
+
+.app-page-frame > .container.page > :is(
+  .hp-group,
+  .acb-hero2,
+  .acb-assets2,
+  .acb-activity2,
+  .bwx-hero,
+  .bwx-console,
+  .bwx-market,
+  .mkx-hero,
+  .mkx-stats,
+  .mkx-prices,
+  .tdx-head,
+  .tdx-grid
+) {
+  box-sizing: border-box !important;
+  border: 1px solid var(--line-2) !important;
+  border-radius: 12px !important;
+  background: var(--panel) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+[data-theme="dark"] .app-page-frame > .container.page > :is(
+  .hp-group,
+  .acb-hero2,
+  .acb-assets2,
+  .acb-activity2,
+  .bwx-hero,
+  .bwx-console,
+  .bwx-market,
+  .mkx-hero,
+  .mkx-stats,
+  .mkx-prices,
+  .tdx-head,
+  .tdx-grid
+) {
+  box-shadow: none !important;
+}
+
+.app-page-frame > .container.page > :is(.hp-group, .acb-hero2, .acb-assets2, .bwx-hero, .bwx-console, .mkx-hero, .mkx-stats, .tdx-head) {
+  margin-top: 0 !important;
+  margin-bottom: 16px !important;
+}
+
+.app-page-frame > .container.page > :is(.acb-activity2, .bwx-market, .mkx-prices, .tdx-grid) {
+  margin-top: 0 !important;
+}
+
+.app-page-frame > .container.page > :is(.bwx-hero, .mkx-hero) {
+  padding: 22px 24px 18px !important;
+}
+
+.app-page-frame > .container.page > .mkx-stats {
+  padding: 22px 24px 20px !important;
+  border-bottom: 1px solid var(--line-2) !important;
+}
+
+.app-page-frame > .container.page > .mkx-prices,
+.app-page-frame > .container.page > .bwx-market {
+  padding: 20px 24px 16px !important;
+}
+
+.app-page-frame > .container.page > .bwx-console.hp-group {
+  padding: 24px 24px 28px !important;
+  margin-bottom: 16px !important;
+  border-top: 1px solid var(--line-2) !important;
+}
+
+.app-page-frame > .container.page > .bwx-console.hp-group + .bwx-market.hp-group {
+  margin-top: 0 !important;
+}
+
+.app-page-frame > .container.page > .tdx-head {
+  padding: 22px 24px !important;
+  border-bottom: 1px solid var(--line-2) !important;
+}
+
+.app-page-frame > .container.page > .tdx-grid {
+  overflow: hidden !important;
+  border-color: var(--line-2) !important;
+}
+
+.tdx-grid > .tdx-cell {
+  border-color: var(--line) !important;
+}
+
+/* Markets and Token top rows: content starts on the same 24px inner rail as
+   Account, rather than sitting hard against the surface edge. */
+.mkx-hero,
+.mkx-stats,
+.mkx-prices,
+.tdx-head,
+.tdx-cell {
+  color: var(--text);
+}
+
+.mkx-hero h1,
+.mkx-stats h2,
+.mkx-prices-head h2 {
+  font-weight: 540 !important;
+}
+
+/* Dashboard first tab: remove the scoreboard weight without removing the
+   live equity chart. */
+.dash-page .dash-keystats .hp-stat .v,
+.dash-page .dash-keystats .hp-stat .v .num {
+  font-size: 17px !important;
+  font-weight: 430 !important;
+  line-height: 22px !important;
+  letter-spacing: 0 !important;
+  font-variant-numeric: lining-nums !important;
+}
+
+.dash-page .dash-keystats .hp-stat .k {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: .08em !important;
+}
+
+.dash-page .dash-keystats .hp-stat .s {
+  font-size: 12.5px !important;
+  font-weight: 430 !important;
+  line-height: 17px !important;
+  font-variant-numeric: lining-nums !important;
+}
+
+.dash-page .pc-axis {
+  fill: var(--muted) !important;
+  font-size: 9px !important;
+  font-weight: 430 !important;
+}
+
+.dash-page .pc-chip-text {
+  font-size: 9px !important;
+  font-weight: 500 !important;
+}
+
+/* Token chart: custom line mode should sit in the TradingView family. */
+.tdx-price b {
+  font-size: 30px !important;
+  font-weight: 430 !important;
+  line-height: 36px !important;
+  letter-spacing: 0 !important;
+  font-variant-numeric: lining-nums !important;
+}
+
+.tdx-delta {
+  font-size: 13.5px !important;
+  font-weight: 430 !important;
+}
+
+.tdx-axis {
+  fill: var(--faint) !important;
+  font-size: 10.75px !important;
+  font-weight: 410 !important;
+  letter-spacing: 0 !important;
+  font-variant-numeric: lining-nums !important;
+}
+
+.tdx-chartcell {
+  padding-top: 24px !important;
+  padding-bottom: 28px !important;
+}
+
+.app-page-frame > .container.page > .tdx-grid {
+  overflow: visible !important;
+}
+
+.tdx-page .tdx-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+}
+
+.tdx-page .tdx-chartcell {
+  grid-column: 1 / -1 !important;
+  min-height: 0 !important;
+}
+
+.tdx-page .tdx-third {
+  grid-column: span 2 !important;
+}
+
+.tdx-page .tdx-cgx {
+  grid-column: 1 / -1 !important;
+}
+
+.tdx-chartcell .tv-widget-wrap {
+  height: clamp(620px, 28vw, 780px) !important;
+  min-height: 620px !important;
+  border-radius: 9px !important;
+  background: var(--panel) !important;
+  box-shadow: inset 0 0 0 1px var(--line) !important;
+}
+
+.tdx-chartcell .tv-widget-fallback {
+  font-size: 13px !important;
+  font-weight: 430 !important;
+}
+
+.tdx-line-frame {
+  width: 100%;
+  margin: 0;
+}
+
+.tdx-line-frame .tdx-chart {
+  width: 100% !important;
+  height: auto !important;
+  max-height: none !important;
+  aspect-ratio: auto !important;
+}
+
+.tdx-datachart {
+  width: 100% !important;
+  height: 340px !important;
+  max-height: none !important;
+}
+
+.tdx-cgx .tdx-datachart {
+  height: auto !important;
+}
+
+.tdx-focus-btn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.tdx-focus-btn:hover {
+  color: var(--text);
+  border-color: var(--line);
+  background: var(--tile);
+}
+
+.tdx-chart-modal {
+  position: fixed;
+  inset: 76px 18px 18px;
+  z-index: 300;
+  display: grid;
+  grid-template-rows: 56px minmax(0, 1fr);
+  padding: 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: 0 26px 80px rgba(15, 23, 42, .24);
+}
+
+[data-theme="dark"] .tdx-chart-modal {
+  box-shadow: none;
+}
+
+.tdx-chart-modal::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: rgba(15, 23, 42, .34);
+}
+
+.tdx-chart-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 10px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tdx-chart-modal-head > span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tdx-chart-modal-head b {
+  font-size: 15px;
+  font-weight: 560;
+  color: var(--text);
+}
+
+.tdx-chart-modal-head em {
+  font-style: normal;
+  font-size: 12.5px;
+  font-weight: 430;
+  color: var(--muted);
+}
+
+.tdx-chart-modal-head button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.tdx-chart-modal-head button:hover {
+  background: var(--tile);
+  color: var(--text);
+}
+
+.tdx-chart-modal .tv-widget-wrap {
+  height: 100% !important;
+  min-height: 0 !important;
+  border-radius: 10px !important;
+  background: var(--panel) !important;
+  box-shadow: inset 0 0 0 1px var(--line) !important;
+}
+
+/* ==== REFRESH DOCK PREMIUM MOTION LOCK ====================================
+   Bottom-right connection health is a real control, not a decorative badge:
+   keep it off the corner, keep fills neutral, and let thin orbit/sweep motion
+   communicate live backend refresh without competing with the data surface. */
+.rdock {
+  right: 40px !important;
+  bottom: 40px !important;
+  width: 58px !important;
+  height: 58px !important;
+  display: grid !important;
+  place-items: center !important;
+}
+
+@media (max-width: 640px) {
+  .rdock {
+    right: 24px !important;
+    bottom: 92px !important;
+  }
+}
+
+.rdock-btn {
+  width: 52px !important;
+  height: 52px !important;
+  overflow: visible !important;
+  isolation: isolate !important;
+  background: var(--panel) !important;
+  border: 1px solid color-mix(in srgb, var(--rd-color, var(--muted)) 58%, var(--line-2)) !important;
+  box-shadow:
+    0 18px 34px -20px color-mix(in srgb, var(--rd-color, var(--text)) 34%, transparent),
+    0 8px 18px -14px rgba(16, 20, 28, .38),
+    inset 0 1px 0 rgba(255, 255, 255, .78) !important;
+  transition: box-shadow .22s ease, border-color .22s ease, transform .14s ease !important;
+}
+
+[data-theme="dark"] .rdock-btn {
+  box-shadow:
+    0 16px 30px -22px color-mix(in srgb, var(--rd-color, var(--text)) 42%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, .08) !important;
+}
+
+.rdock:hover .rdock-btn {
+  transform: none !important;
+  box-shadow:
+    0 22px 42px -22px color-mix(in srgb, var(--rd-color, var(--text)) 45%, transparent),
+    0 10px 24px -16px rgba(16, 20, 28, .46),
+    inset 0 1px 0 rgba(255, 255, 255, .82) !important;
+}
+
+.rdock-btn:active {
+  transform: scale(.97) !important;
+}
+
+.rdock-motion {
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--rd-color, var(--muted)) 24%, transparent);
+  pointer-events: none;
+  animation: rdockOrbit 8.4s linear infinite;
+  z-index: 0;
+}
+
+.rdock-motion::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: inherit;
+  background:
+    conic-gradient(
+      from 0deg,
+      transparent 0deg 204deg,
+      color-mix(in srgb, var(--rd-color, var(--muted)) 0%, transparent) 224deg,
+      color-mix(in srgb, var(--rd-color, var(--muted)) 52%, transparent) 274deg,
+      transparent 318deg 360deg
+    );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px));
+  opacity: .72;
+}
+
+.rdock-motion::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 1px solid color-mix(in srgb, var(--rd-color, var(--muted)) 68%, var(--panel));
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--rd-color, var(--muted)) 10%, transparent),
+    0 0 12px color-mix(in srgb, var(--rd-color, var(--muted)) 25%, transparent);
+  transform: translateX(-50%);
+}
+
+.rdock-btn::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: inherit;
+  border: 1px solid color-mix(in srgb, var(--rd-color, var(--muted)) 18%, transparent);
+  opacity: .56;
+  transform: scale(.86);
+  animation: rdockBreath 4.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.rdock-ic {
+  position: relative !important;
+  z-index: 1 !important;
+  color: var(--rd-color, var(--text-2));
+}
+
+.rdock-ic svg {
+  width: 18px !important;
+  height: 18px !important;
+  stroke-width: 1.9 !important;
+}
+
+.rdock-btn.spin {
+  --rd-color: color-mix(in srgb, var(--accent) 78%, var(--text-2)) !important;
+  background: var(--panel) !important;
+}
+
+.rdock-btn.spin .rdock-motion {
+  animation-duration: 1.7s;
+}
+
+.rdock-btn.spin .rdock-motion::before {
+  opacity: .92;
+}
+
+.rdock-btn.ok,
+.rdock-btn.err {
+  background: var(--panel) !important;
+  color: var(--rd-color) !important;
+}
+
+.rdock-btn.ok {
+  --rd-color: var(--up) !important;
+  border-color: color-mix(in srgb, var(--up) 64%, var(--line-2)) !important;
+  animation: rdockSettle .5s cubic-bezier(.2, 1, .25, 1) both !important;
+}
+
+.rdock-btn.err {
+  --rd-color: var(--down) !important;
+  border-color: color-mix(in srgb, var(--down) 64%, var(--line-2)) !important;
+  animation: rdockShake .42s ease both !important;
+}
+
+.rdock-btn.ok .rdock-ic svg path,
+.rdock-btn.err .rdock-ic svg path {
+  stroke-dasharray: 28 !important;
+  animation: rdockDraw .36s ease .05s both !important;
+}
+
+.rdock-pop {
+  right: 0 !important;
+  bottom: calc(100% + 16px) !important;
+  width: 292px !important;
+  border-radius: 13px !important;
+  box-shadow:
+    0 26px 54px -32px rgba(16, 20, 28, .45),
+    0 10px 22px -18px rgba(16, 20, 28, .28) !important;
+}
+
+[data-theme="dark"] .rdock-pop {
+  box-shadow: none !important;
+}
+
+.rdock-pop-head {
+  padding: 11px 14px !important;
+  font-size: 10.5px !important;
+  font-weight: 620 !important;
+  letter-spacing: .09em !important;
+}
+
+.rdock-pop-tag {
+  font-size: 9.5px !important;
+  font-weight: 620 !important;
+  padding: 2px 7px !important;
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent) !important;
+}
+
+.rdock-conn {
+  height: 32px !important;
+  padding: 0 14px !important;
+  gap: 10px !important;
+}
+
+.rdock-conn-name {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+.rdock-conn-val {
+  font-size: 10.75px !important;
+  font-weight: 500 !important;
+}
+
+.rdock-pop-foot {
+  padding: 9px 14px 10px !important;
+  font-size: 10.75px !important;
+  font-weight: 460 !important;
+}
+
+@keyframes rdockOrbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes rdockBreath {
+  0%, 100% { opacity: .28; transform: scale(.86); }
+  45% { opacity: .7; transform: scale(1); }
+}
+
+@keyframes rdockSettle {
+  0% { transform: scale(.92); }
+  58% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rdock-motion,
+  .rdock-btn::before,
+  .rdock-btn.ok,
+  .rdock-btn.err,
+  .rdock-btn.ok .rdock-ic svg path,
+  .rdock-btn.err .rdock-ic svg path {
+    animation: none !important;
+  }
+}
+
+/* ==== TOPBAR POPOVER REPAIR PASS — account/profile density baseline ======== */
+.smenu-bar .hdr-clock-btn.clock-pro-btn,
+.smenu-bar .hdr-clock-btn.clock-pro-btn:hover,
+.smenu-bar .hdr-clock-btn.clock-pro-btn.active,
+.smenu-bar .hdr-clock-btn.clock-pro-btn.on {
+  justify-content: center !important;
+  padding: 0 12px !important;
+  gap: 8px !important;
+}
+
+.smenu-bar .clock-pro-time {
+  align-items: center !important;
+  justify-items: center !important;
+  min-width: 92px !important;
+  text-align: center !important;
+}
+
+.smenu-bar .clock-pro-time b,
+.smenu-bar .clock-pro-time small {
+  text-align: center !important;
+}
+
+.clock-face::after {
+  display: none !important;
+  content: none !important;
+  animation: none !important;
+}
+
+.clock-face .tick,
+.clock-face .hand,
+.clock-face .pin {
+  z-index: 2 !important;
+}
+
+.clock-face .hand.second {
+  background: color-mix(in srgb, #059669 82%, var(--text)) !important;
+  height: 8px !important;
+  opacity: .94 !important;
+  transition: transform 180ms linear !important;
+}
+
+.smenu-content .top-panel-head,
+.smenu-content:has(.shell-pop) .shell-head.top-panel-head,
+.smenu-content:has(.keyx-pop) .keyx-vault.top-panel-head,
+.smenu-content:has(.datax-pop) .datax-hero.top-panel-head,
+.smenu-content:has(.datax-slim) .datax-hero.top-panel-head,
+.smenu-content:has(.advx-pop.advisor-audit) .advx-audit-head.top-panel-head,
+.smenu-content:has(.ntfx-pop) .ntfx-head.top-panel-head,
+.smenu-content:has(.modex-pop) .modex-head.top-panel-head,
+.smenu-content:has(.mrefx-pop) .mrefx-cadence-head.top-panel-head,
+.smenu-content:has(.curfx-pop) .curfx-hero.top-panel-head,
+.smenu-content:has(.basisx-pop) .basisx-hero.top-panel-head,
+.smenu-content:has(.apx-pop) .apx-stage.top-panel-head,
+.smenu-content:has(.clock-select-pop) .clock-pop-hero.top-panel-head {
+  box-sizing: border-box !important;
+  min-height: 70px !important;
+  height: 70px !important;
+  max-height: 70px !important;
+  margin: 0 0 10px !important;
+  padding: 10px 13px !important;
+  border-radius: 12px !important;
+}
+
+.smenu-content .top-panel-copy b,
+.smenu-content .top-panel-copy em,
+.smenu-content .top-panel-copy strong {
+  max-width: 100% !important;
+}
+
+.smenu-content:has(.shell-pop) .shell-pop {
+  display: grid !important;
+  gap: 8px !important;
+}
+
+.smenu-content:has(.shell-pop) .shell-head.top-panel-head {
+  --panel-tone: #16a34a;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, #16a34a 7%, var(--panel)) 0%, var(--panel) 76%),
+    var(--panel) !important;
+}
+
+.shell-command-card {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 8px !important;
+  width: 100% !important;
+  min-height: 76px !important;
+  padding: 11px 12px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 12px !important;
+  background:
+    linear-gradient(180deg, var(--panel), color-mix(in srgb, #16a34a 4%, var(--tile))) !important;
+  color: var(--text) !important;
+  text-align: left !important;
+  box-shadow: none !important;
+}
+
+.shell-command-copy {
+  display: grid !important;
+  gap: 2px !important;
+  min-width: 0 !important;
+}
+
+.shell-command-copy b {
+  color: rgb(44, 49, 58) !important;
+  font-family: var(--ref-ui-font, var(--font)) !important;
+  font-size: 12px !important;
+  font-weight: 560 !important;
+  line-height: 16px !important;
+}
+
+.shell-command-copy em {
+  color: var(--muted) !important;
+  font-family: var(--ref-ui-font, var(--font)) !important;
+  font-size: 12px !important;
+  font-style: normal !important;
+  font-weight: 430 !important;
+  line-height: 16px !important;
+}
+
+.shell-command-line {
+  display: block !important;
+  overflow: hidden !important;
+  padding: 8px 10px !important;
+  border: 1px solid color-mix(in srgb, #16a34a 16%, var(--line)) !important;
+  border-radius: 10px !important;
+  background: color-mix(in srgb, #16a34a 5%, var(--panel)) !important;
+  color: color-mix(in srgb, var(--text) 86%, #16a34a) !important;
+  font-family: var(--ref-mono-font, var(--mono)) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: 16px !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.shell-command-line i {
+  color: #059669 !important;
+  font-style: normal !important;
+  margin-right: 6px !important;
+}
+
+.shell-status-list {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 7px !important;
+}
+
+.shell-status-list div {
+  display: grid !important;
+  gap: 3px !important;
+  min-width: 0 !important;
+  min-height: 42px !important;
+  padding: 8px 9px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 11px !important;
+  background: var(--tile) !important;
+}
+
+.shell-status-list span {
+  color: var(--muted) !important;
+  font-family: var(--ref-ui-font, var(--font)) !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: .07em !important;
+  line-height: 12px !important;
+  text-transform: uppercase !important;
+}
+
+.shell-status-list b {
+  overflow: hidden !important;
+  color: rgb(44, 49, 58) !important;
+  font-family: var(--ref-ui-font, var(--font)) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: 16px !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.smenu-content:has(.shell-pop) .shell-actions {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 42px !important;
+  gap: 7px !important;
+  margin-top: 0 !important;
+}
+
+.smenu-content:has(.shell-pop) .shell-open {
+  height: 38px !important;
+  border-radius: 11px !important;
+}
+
+.smenu-content:has(.keyx-pop) .keyx-card-stack {
+  display: grid !important;
+  gap: 8px !important;
+}
+
+.smenu-content:has(.keyx-pop) .keyx-card2 {
+  display: grid !important;
+  gap: 10px !important;
+  min-height: 0 !important;
+  padding: 11px 12px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 12px !important;
+  background: var(--panel) !important;
+  box-shadow: none !important;
+}
+
+.smenu-content:has(.keyx-pop) .keyx-card-head {
+  display: grid !important;
+  grid-template-columns: 34px minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+
+.smenu-content:has(.keyx-pop) .keyx-card-title {
+  display: grid !important;
+  gap: 2px !important;
+  min-width: 0 !important;
+}
+
+.smenu-content:has(.keyx-pop) .keyx-name-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  min-width: 0 !important;
+}
+
+.smenu-content:has(.keyx-pop) .keyx-name-row b {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.smenu-content:has(.keyx-pop) .keyx-type-pill,
+.smenu-content:has(.keyx-pop) .keyx-state {
+  flex: 0 0 auto !important;
+  height: 22px !important;
+  padding: 0 8px !important;
+  border-radius: 999px !important;
+  font-family: var(--ref-ui-font, var(--font)) !important;
+  font-size: 9.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: .06em !important;
+  line-height: 22px !important;
+  text-transform: uppercase !important;
+}
+
+.smenu-content:has(.keyx-pop) .keyx-enabled-list {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 6px 12px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  list-style: none !important;
+}
+
+.smenu-content:has(.keyx-pop) .keyx-enabled-list li {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  min-height: 18px !important;
+  color: color-mix(in srgb, var(--up) 72%, var(--text)) !important;
+  font-family: var(--ref-ui-font, var(--font)) !important;
+  font-size: 11.5px !important;
+  font-weight: 500 !important;
+  line-height: 15px !important;
+}
+
+.smenu-content:has(.keyx-pop) .keyx-enabled-list li i {
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 50% !important;
+  background: currentColor !important;
+}
+
+.smenu-content:has(.datax-pop) .datax-source-row,
+.smenu-content:has(.datax-slim) .datax-source-row,
+.smenu-content:has(.advx-pop.advisor-audit) .advx-status-row,
+.smenu-content:has(.advx-pop.advisor-audit) .advx-focus-row,
+.smenu-content:has(.ntfx-pop) .ntfx-event,
+.smenu-content:has(.modex-pop) .modex-row {
+  min-height: 54px !important;
+  padding: 8px 2px !important;
+}
+
+.smenu-content:has(.advx-pop.advisor-audit) .advx-status-row {
+  grid-template-columns: 24px minmax(0, 1fr) 24px 52px !important;
+  gap: 10px !important;
+}
+
+.smenu-content:has(.advx-pop.advisor-audit) .advx-status-link {
+  justify-self: end !important;
+  color: var(--text) !important;
+  font-size: 11.5px !important;
+  font-weight: 560 !important;
+  text-decoration: none !important;
+}
+
+.smenu-content:has(.advx-pop.advisor-audit) .advx-focus-head {
+  min-height: 30px !important;
+  padding: 8px 0 6px !important;
+  border-bottom: 1px solid var(--line) !important;
+}
+
+.smenu-content:has(.ntfx-pop) .ntfx-head-actions {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.smenu-content:has(.ntfx-pop) .ntfx-clear,
+.smenu-content:has(.ntfx-pop) .ntfx-iconbtn {
+  height: 28px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 999px !important;
+  background: var(--tile) !important;
+  color: var(--text) !important;
+}
+
+.smenu-content:has(.ntfx-pop) .ntfx-clear {
+  padding: 0 11px !important;
+  font-family: var(--ref-ui-font, var(--font)) !important;
+  font-size: 11.5px !important;
+  font-weight: 560 !important;
+}
+
+.smenu-content:has(.ntfx-pop) .ntfx-iconbtn {
+  width: 30px !important;
+  padding: 0 !important;
+}
+
+.smenu-content:has(.ntfx-pop) .ntfx-tabs {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 7px !important;
+  margin: 0 0 8px !important;
+}
+
+.smenu-content:has(.ntfx-pop) .ntfx-tab {
+  min-width: 0 !important;
+  height: 36px !important;
+  padding: 0 8px !important;
+  border-radius: 11px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.smenu-content:has(.modex-pop) .modex-rows {
+  margin-top: 0 !important;
+}
+
+.smenu-content:has(.modex-pop) .modex-pop {
+  gap: 0 !important;
+}
+
+.smenu-content:has(.modex-pop) .modex-foot {
+  display: none !important;
+}
+
+.smenu-content:has(.mrefx-pop) {
+  max-height: min(76vh, 520px) !important;
+}
+
+.smenu-content:has(.mrefx-pop) .mrefx-source-row {
+  grid-template-columns: 8px minmax(92px, 1fr) 166px !important;
+  min-height: 48px !important;
+  padding: 6px 2px !important;
+}
+
+.mrefx-row-presets {
+  gap: 4px !important;
+}
+
+.mrefx-row-presets button {
+  min-width: 30px !important;
+  height: 27px !important;
+  padding: 0 6px !important;
+}
+
+.smenu-content:has(.apx-pop) .apx-pop {
+  gap: 8px !important;
+}
+
+.smenu-content:has(.apx-pop) .apx-modes {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  padding: 0 !important;
+}
+
+.smenu-content:has(.apx-pop) .apx-mode {
+  min-height: 36px !important;
+  border-radius: 11px !important;
+  background: transparent !important;
+}
+
+.smenu-content:has(.apx-pop) .apx-mode.on {
+  background: color-mix(in srgb, var(--apx-accent, var(--accent)) 8%, var(--panel)) !important;
+}
+
+.smenu-content:has(.apx-pop) .apx-dots {
+  padding: 4px 2px !important;
+}
+
+.smenu-content:has(.apx-pop) .apx-scale {
+  grid-template-columns: minmax(0, 1fr) 34px 84px 34px 34px !important;
+  align-items: center !important;
+  gap: 7px !important;
+  min-height: 38px !important;
+  padding-top: 2px !important;
+  border-top: 1px solid var(--line) !important;
+}
+
+.apx-scale-label {
+  color: var(--muted) !important;
+  font-family: var(--ref-ui-font, var(--font)) !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  line-height: 14px !important;
+}
+
+/* ==== TOPBAR POPOVER FINAL DENSITY PATCH — remove stale layout drift ====== */
+.smenu-content:has(.shell-pop) .shell-pop.shell-premium {
+  grid-template-rows: none !important;
+  grid-auto-rows: auto !important;
+  align-content: start !important;
+  min-height: 0 !important;
+}
+
+.smenu-content:has(.shell-pop) .shell-command-card {
+  order: 2 !important;
+  min-height: 72px !important;
+  margin: 0 !important;
+}
+
+.smenu-content:has(.shell-pop) .shell-status-list {
+  order: 3 !important;
+  min-height: 0 !important;
+}
+
+.smenu-content:has(.shell-pop) .shell-actions {
+  order: 4 !important;
+}
+
+.smenu-content:has(.shell-pop) .top-panel-head {
+  order: 1 !important;
+}
+
+.smenu-content:has(.ntfx-pop) .ntfx-head.top-panel-head {
+  grid-template-columns: 34px minmax(152px, 1fr) auto auto !important;
+  gap: 10px !important;
+}
+
+.smenu-content:has(.ntfx-pop) .ntfx-head .top-panel-copy em {
+  white-space: nowrap !important;
+}
+
+.smenu-content:has(.ntfx-pop) .ntfx-head .top-panel-status {
+  min-width: 58px !important;
+  padding: 0 9px !important;
+}
+
+.smenu-content:has(.ntfx-pop) .ntfx-head-actions {
+  flex: 0 0 auto !important;
+}
+
+.smenu-content:has(.ntfx-pop) .ntfx-clear {
+  text-transform: uppercase !important;
+  letter-spacing: .04em !important;
+}
+
+.smenu-content:has(.keyx-pop) .keyx-card2 {
+  min-height: 128px !important;
+  align-content: start !important;
+}
+
+.smenu-content:has(.keyx-pop) .keyx-card-title em {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.smenu-content:has(.keyx-pop) .keyx-enabled {
+  padding-top: 8px !important;
+  border-top: 1px solid var(--line) !important;
+}
+
+.smenu-content:has(.datax-pop) .datax-source-row,
+.smenu-content:has(.datax-slim) .datax-source-row,
+.smenu-content:has(.advx-pop.advisor-audit) .advx-status-row,
+.smenu-content:has(.advx-pop.advisor-audit) .advx-focus-row,
+.smenu-content:has(.mrefx-pop) .mrefx-source-row {
+  box-sizing: border-box !important;
+}
+
+.smenu-content:has(.datax-pop) .datax-source-row b,
+.smenu-content:has(.datax-slim) .datax-source-row b,
+.smenu-content:has(.advx-pop.advisor-audit) .advx-status-copy b,
+.smenu-content:has(.advx-pop.advisor-audit) .advx-focus-copy b,
+.smenu-content:has(.mrefx-pop) .mrefx-source-copy b,
+.smenu-content:has(.modex-pop) .modex-row b {
+  color: rgb(44, 49, 58) !important;
+  font-family: var(--ref-ui-font, var(--font)) !important;
+  font-size: 12px !important;
+  font-weight: 560 !important;
+  letter-spacing: 0 !important;
+  line-height: 16px !important;
+}
+
+.smenu-content:has(.datax-pop) .datax-source-row em,
+.smenu-content:has(.datax-slim) .datax-source-row em,
+.smenu-content:has(.advx-pop.advisor-audit) .advx-status-copy em,
+.smenu-content:has(.advx-pop.advisor-audit) .advx-focus-copy em,
+.smenu-content:has(.mrefx-pop) .mrefx-source-copy em,
+.smenu-content:has(.modex-pop) .modex-row em {
+  color: var(--muted) !important;
+  font-family: var(--ref-ui-font, var(--font)) !important;
+  font-size: 11.5px !important;
+  font-weight: 430 !important;
+  letter-spacing: 0 !important;
+  line-height: 15px !important;
+}
+
+/* ==== DATA HEALTH — account profile density and source truth =============== */
+.smenu:has(.data-health-card) {
+  width: 385px !important;
+  height: auto !important;
+  max-height: min(430px, calc(100vh - 72px)) !important;
+}
+
+.smenu-content:has(.data-health-card) {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: min(410px, calc(100vh - 92px)) !important;
+  padding: 6px !important;
+  overflow: visible !important;
+}
+
+.smenu-content:has(.data-health-card) .data-health-card {
+  box-sizing: border-box !important;
+  display: grid !important;
+  grid-template-rows: auto auto minmax(0, auto) auto !important;
+  gap: 0 !important;
+  width: 100% !important;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: min(398px, calc(100vh - 120px)) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  background: transparent !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-hero.top-panel-head {
+  display: grid !important;
+  grid-template-columns: 44px minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 12px !important;
+  min-height: 62px !important;
+  height: auto !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 9px 10px !important;
+  border: 1px solid color-mix(in srgb, #2563eb 22%, var(--line-2)) !important;
+  border-radius: 12px !important;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(37, 99, 235, .10), transparent 50%),
+    linear-gradient(180deg, var(--panel), color-mix(in srgb, #2563eb 4%, var(--tile))) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .76) !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-hero.top-panel-head::before,
+.smenu-content:has(.data-health-card) .datax-hero.top-panel-head::after {
+  display: none !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-hero .top-panel-logo {
+  display: grid !important;
+  place-items: center !important;
+  width: 40px !important;
+  height: 40px !important;
+  min-width: 40px !important;
+  border: 1px solid color-mix(in srgb, #2563eb 22%, var(--line-2)) !important;
+  border-radius: 50% !important;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(255, 255, 255, .92), transparent 42%),
+    color-mix(in srgb, #2563eb 7%, var(--tile)) !important;
+  color: #2563eb !important;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, .10) !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-hero .top-panel-logo svg {
+  width: 21px !important;
+  height: 21px !important;
+  stroke-width: 2 !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-hero .top-panel-copy {
+  display: grid !important;
+  min-width: 0 !important;
+  gap: 3px !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-hero .top-panel-copy b {
+  overflow: hidden !important;
+  color: color-mix(in srgb, var(--accent) 76%, var(--text)) !important;
+  font-family: var(--ref-ui-font, var(--font)) !important;
+  font-size: 11px !important;
+  font-weight: 680 !important;
+  letter-spacing: 1.1px !important;
+  line-height: 14px !important;
+  text-overflow: ellipsis !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-hero .top-panel-copy em {
+  display: block !important;
+  overflow: hidden !important;
+  color: var(--muted) !important;
+  font-family: var(--ref-ui-font, var(--font)) !important;
+  font-size: 13px !important;
+  font-style: normal !important;
+  font-weight: 430 !important;
+  letter-spacing: 0 !important;
+  line-height: 17px !important;
+  text-overflow: ellipsis !important;
+  text-transform: none !important;
+  white-space: nowrap !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-hero .top-panel-copy strong {
+  display: none !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-hero .top-panel-right {
+  display: none !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-hero .top-panel-status {
+  display: inline-grid !important;
+  place-items: center !important;
+  min-width: 58px !important;
+  height: 24px !important;
+  padding: 0 11px !important;
+  border: 1px solid color-mix(in srgb, var(--panel-tone) 16%, transparent) !important;
+  border-radius: 999px !important;
+  background: color-mix(in srgb, var(--panel-tone) 8%, var(--panel)) !important;
+  color: color-mix(in srgb, var(--panel-tone) 82%, var(--text)) !important;
+  font-family: var(--ref-ui-font, var(--font)) !important;
+  font-size: 10px !important;
+  font-weight: 720 !important;
+  letter-spacing: .08em !important;
+  line-height: 12px !important;
+  text-transform: uppercase !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-section-head {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  min-height: 28px !important;
+  margin-top: 13px !important;
+  padding: 0 0 7px !important;
+  border-bottom: 1px solid var(--line) !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-section-head span {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  color: var(--text) !important;
+  font-family: var(--ref-ui-font, var(--font)) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  line-height: 15px !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-section-head svg {
+  color: #2563eb !important;
+  stroke-width: 2 !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-section-head b {
+  color: var(--muted) !important;
+  font-family: var(--ref-ui-font, var(--font)) !important;
+  font-size: 10.5px !important;
+  font-weight: 620 !important;
+  letter-spacing: .04em !important;
+  line-height: 13px !important;
+  text-transform: uppercase !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-section-head b.ok {
+  color: var(--up) !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-source-list {
+  display: grid !important;
+  align-content: start !important;
+  min-height: 0 !important;
+  max-height: 184px !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  border: 0 !important;
+  background: transparent !important;
+  scrollbar-width: thin !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-source-row {
+  display: grid !important;
+  grid-template-columns: 10px minmax(0, 1fr) 66px !important;
+  align-items: center !important;
+  gap: 8px !important;
+  min-height: 46px !important;
+  padding: 5px 0 !important;
+  border-bottom: 1px solid var(--line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-source-row:last-child {
+  border-bottom: 0 !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-source-row:hover {
+  background: linear-gradient(90deg, color-mix(in srgb, #2563eb 5%, transparent), transparent 76%) !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-source-dot {
+  justify-self: center !important;
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 50% !important;
+  background: color-mix(in srgb, var(--muted) 44%, transparent) !important;
+  box-shadow: none !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-source-row.good .datax-source-dot {
+  background: var(--up) !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--up) 10%, transparent) !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-source-row.warn .datax-source-dot {
+  background: #d97706 !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb, #d97706 10%, transparent) !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-source-row.bad .datax-source-dot {
+  background: #dc2626 !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb, #dc2626 10%, transparent) !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-source-copy {
+  display: grid !important;
+  min-width: 0 !important;
+  gap: 1px !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-source-copy b {
+  overflow: hidden !important;
+  color: var(--text) !important;
+  font-family: var(--ref-ui-font, var(--font)) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  line-height: 16px !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-source-copy em {
+  display: block !important;
+  overflow: hidden !important;
+  color: var(--muted) !important;
+  font-family: var(--ref-ui-font, var(--font)) !important;
+  font-size: 12px !important;
+  font-style: normal !important;
+  font-weight: 430 !important;
+  letter-spacing: 0 !important;
+  line-height: 16px !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-source-value {
+  display: grid !important;
+  justify-items: end !important;
+  min-width: 66px !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-source-value em {
+  overflow: hidden !important;
+  max-width: 66px !important;
+  color: #2563eb !important;
+  font-family: var(--ref-ui-font, var(--font)) !important;
+  font-size: 10.5px !important;
+  font-style: normal !important;
+  font-weight: 700 !important;
+  letter-spacing: .075em !important;
+  line-height: 10.5px !important;
+  text-align: right !important;
+  text-overflow: ellipsis !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-source-row.warn .datax-source-value em {
+  color: #d97706 !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-source-row.bad .datax-source-value em {
+  color: #dc2626 !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-source-row.idle .datax-source-value em {
+  color: var(--muted) !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-foot {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 6px !important;
+  min-height: 40px !important;
+  padding-top: 0 !important;
+  border-top: 0 !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-foot button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  width: 100% !important;
+  height: 38px !important;
+  margin: 0 !important;
+  padding: 0 12px !important;
+  border: 1px solid color-mix(in srgb, #2563eb 18%, transparent) !important;
+  border-radius: 11px !important;
+  background: color-mix(in srgb, #2563eb 6%, var(--panel)) !important;
+  color: #2563eb !important;
+  font-family: var(--ref-ui-font, var(--font)) !important;
+  font-size: 12.5px !important;
+  font-weight: 620 !important;
+  letter-spacing: 0 !important;
+  line-height: 15px !important;
+  text-transform: none !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-foot button:hover {
+  border-color: color-mix(in srgb, #2563eb 28%, transparent) !important;
+  background: color-mix(in srgb, #2563eb 10%, var(--panel)) !important;
+  color: #1d4ed8 !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-foot button svg {
+  width: 16px !important;
+  height: 16px !important;
+  stroke-width: 2 !important;
+}
+
+.smenu-content:has(.data-health-card) .datax-foot span {
+  display: none !important;
+}
+
+@media (max-width: 680px) {
+  .smenu:has(.data-health-card) {
+    width: min(405px, calc(100vw - 24px)) !important;
+  }
+}
+
+.smenu-content:has(.advx-pop.advisor-audit) .advx-pop.advisor-audit {
+  align-content: start !important;
+}
+
+.smenu-content:has(.advx-pop.advisor-audit) .advx-status-stack,
+.smenu-content:has(.advx-pop.advisor-audit) .advx-focus-list {
+  margin: 0 !important;
+}
+
+.smenu-content:has(.advx-pop.advisor-audit) .advx-footer-actions {
+  margin-top: 8px !important;
+}
+
+.smenu-content:has(.modex-pop) .modex-row:first-child {
+  border-top: 0 !important;
 }

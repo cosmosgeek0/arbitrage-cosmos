@@ -7,8 +7,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../store';
 import { TokenIcon } from '../components/TokenIcon';
 import { PillSelect, Star } from '../components/PillSelect';
-import { TradingViewChart, type TvCandle } from '../components/TradingViewChart';
-import { IconExternal, IconSearch } from '../components/Icons';
+import { type TvCandle } from '../components/TradingViewChart';
+import { TradingViewWidget } from '../components/TradingViewWidget';
+import { IconClose, IconExternal, IconMaximize, IconSearch } from '../components/Icons';
 import { fmtPrice, fmtPct, baseOf } from '../format';
 import { tokenName } from '../lib/tokenNames';
 import './Markets.css';
@@ -97,8 +98,29 @@ function Chg({ pct, children }: { pct: number | null | undefined; children?: Rea
 
 /** The Coinbase chart: smooth line over a dotted area fill, axis right. */
 function PriceChart({ points, up }: { points: { t: number; v: number }[]; up: boolean }) {
-  const W = 1080;
-  const H = 430;
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [chartWidth, setChartWidth] = useState(1080);
+  useEffect(() => {
+    const host = svgRef.current?.parentElement;
+    if (!host) return;
+    const measure = () => {
+      const width = host.getBoundingClientRect().width;
+      if (Number.isFinite(width) && width > 0) {
+        setChartWidth((prev) => {
+          const next = Math.round(width);
+          return Math.abs(prev - next) > 2 ? next : prev;
+        });
+      }
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, []);
+
+  const W = chartWidth;
+  const H = Math.round(Math.max(480, Math.min(780, W * 0.32)));
   const PAD_R = 110;
   const PAD_B = 34;
   const model = useMemo(() => {
@@ -138,12 +160,12 @@ function PriceChart({ points, up }: { points: { t: number; v: number }[]; up: bo
     };
     const last = xy[xy.length - 1];
     return { d, area, ticks, y, times, timeFmt, last };
-  }, [points]);
+  }, [H, W, points]);
 
   if (!model) return <div className="tdx-chart-empty">Waiting For Candles…</div>;
   const stroke = up ? 'var(--up)' : 'var(--down)';
   return (
-    <svg className="tdx-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden>
+    <svg ref={svgRef} className="tdx-chart" viewBox={`0 0 ${W} ${H}`} width={W} height={H} preserveAspectRatio="xMidYMid meet" aria-hidden>
       <defs>
         <pattern id="tdx-dots" width="7" height="7" patternUnits="userSpaceOnUse">
           <circle cx="1.4" cy="1.4" r="1.15" fill={stroke} opacity="0.22" />
@@ -704,6 +726,7 @@ function CgxPanel({ symbol, base, name, hasPerp }: { symbol: string; base: strin
   const [hov, setHov] = useState<number | null>(null);
   const [mouse, setMouse] = useState<{ x: number } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const [chartBox, setChartBox] = useState({ width: 1160, height: 620 });
 
   const OPTS: Record<CgxTab, { id: string; label: string }[]> = {
     funding: [{ id: '30d', label: '30D' }, { id: '90d', label: '90D' }, { id: 'all', label: 'All' }],
@@ -761,8 +784,29 @@ function CgxPanel({ symbol, base, name, hasPerp }: { symbol: string; base: strin
     return () => { alive = false; clearInterval(timer); };
   }, [symbol, tab, opt, hasPerp]);
 
-  const W = 1160;
-  const H = 380;
+  useEffect(() => {
+    const host = wrapRef.current;
+    if (!host) return;
+    const measure = () => {
+      const width = host.getBoundingClientRect().width;
+      if (!Number.isFinite(width) || width <= 0) return;
+      const next = {
+        width: Math.round(width),
+        height: Math.round(Math.max(620, Math.min(860, width * 0.32))),
+      };
+      setChartBox((prev) => (
+        Math.abs(prev.width - next.width) > 2 || Math.abs(prev.height - next.height) > 2 ? next : prev
+      ));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, [points.length, tab]);
+
+  const W = chartBox.width;
+  const H = chartBox.height;
   const PAD_L = 80;
   const PAD_R = 80;
   const PAD_B = 30;
@@ -842,10 +886,10 @@ function CgxPanel({ symbol, base, name, hasPerp }: { symbol: string; base: strin
     <section className="tdx-cell tdx-cgx">
       <div className="tdx-cardhead">
         <div className="cgx-tabs" role="tablist" aria-label="Derivatives data">
-          <button type="button" role="tab" aria-selected={tab === 'funding'} className={tab === 'funding' ? 'on' : ''} onClick={() => switchTab('funding')}>Funding Rate</button>
-          <button type="button" role="tab" aria-selected={tab === 'oi'} className={tab === 'oi' ? 'on' : ''} onClick={() => switchTab('oi')}>Open Interest</button>
-          <button type="button" role="tab" aria-selected={tab === 'volume'} className={tab === 'volume' ? 'on' : ''} onClick={() => switchTab('volume')}>Volume</button>
-        <button type="button" role="tab" aria-selected={tab === 'liq'} className={tab === 'liq' ? 'on' : ''} onClick={() => switchTab('liq')}>Liquidation</button>
+          <button type="button" role="tab" aria-selected={tab === 'funding'} className={tab === 'funding' ? 'on' : ''} data-testid="token-cgx-funding" onClick={() => switchTab('funding')}>Funding Rate</button>
+          <button type="button" role="tab" aria-selected={tab === 'oi'} className={tab === 'oi' ? 'on' : ''} data-testid="token-cgx-oi" onClick={() => switchTab('oi')}>Open Interest</button>
+          <button type="button" role="tab" aria-selected={tab === 'volume'} className={tab === 'volume' ? 'on' : ''} data-testid="token-cgx-volume" onClick={() => switchTab('volume')}>Volume</button>
+        <button type="button" role="tab" aria-selected={tab === 'liq'} className={tab === 'liq' ? 'on' : ''} data-testid="token-cgx-liquidation" onClick={() => switchTab('liq')}>Liquidation</button>
         </div>
         <PillSelect value={opt} options={OPTS[tab]} onChange={setOpt} ariaLabel="Data interval" />
       </div>
@@ -854,9 +898,13 @@ function CgxPanel({ symbol, base, name, hasPerp }: { symbol: string; base: strin
         <p className="tdx-dimnote">Spot Only — {base} has no Binance USD-M perpetual.</p>
       ) : !model ? (
         tab === 'liq' ? (
-          <p className="tdx-dimnote">Recording live liquidations{liqSince ? ` since ${new Date(liqSince).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''} — Binance publishes no history. Buckets appear as events arrive.</p>
+          <div className="tdx-cgx-empty">
+            <p className="tdx-dimnote">Recording live liquidations{liqSince ? ` since ${new Date(liqSince).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''} — Binance publishes no history. Buckets appear as events arrive.</p>
+          </div>
         ) : (
-          <div className="tdx-chart-empty small">Reading…</div>
+          <div className="tdx-cgx-empty">
+            <div className="tdx-chart-empty small">Reading…</div>
+          </div>
         )
       ) : (
         <>
@@ -870,7 +918,7 @@ function CgxPanel({ symbol, base, name, hasPerp }: { symbol: string; base: strin
             }}
             onMouseLeave={() => { setHov(null); setMouse(null); }}
           >
-            <svg viewBox={`0 0 ${W} ${H}`} className="tdx-datachart" aria-hidden>
+            <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="tdx-datachart" aria-hidden>
               {model.aTicks.map((v, i) => (
                 <g key={`a${i}`}>
                   <line x1={PAD_L} x2={W - PAD_R} y1={model.ay(v)} y2={model.ay(v)} stroke="var(--line)" strokeWidth="1" />
@@ -946,8 +994,9 @@ export function TokenDetail({ symbol }: { symbol: string }) {
   const { markets, state, toggleWatch, setPage, openDetail, prefs } = useStore();
   const [range, setRange] = useState<RangeKey>('1D');
   const [ivl, setIvl] = useState<'auto' | IntervalKey>('auto');
-  const [tv, setTv] = useState(false);
+  const [tv, setTv] = useState(true);
   const [src, setSrc] = useState<'spot' | 'futures'>('spot');
+  const [chartFocus, setChartFocus] = useState(false);
   const [candles, setCandles] = useState<TvCandle[]>([]);
   const [profile, setProfile] = useState<TokenProfile | null>(null);
   const [q, setQ] = useState('');
@@ -961,6 +1010,8 @@ export function TokenDetail({ symbol }: { symbol: string }) {
   // Futures klines have no 1s granularity — coerce to 1m on that source.
   const raw = ivl === 'auto' ? RANGES[range] : { interval: ivl, limit: INTERVAL_LIMIT[ivl] };
   const effective = src === 'futures' && raw.interval === '1s' ? { interval: '1m', limit: 60 } : raw;
+  const tvSymbol = src === 'futures' && hasPerp ? `BINANCE:${symbol}.P` : `BINANCE:${symbol}`;
+  const tvInterval = effective.interval;
 
   // ---- price series: real klines + the live public kline stream -----------
   useEffect(() => {
@@ -1110,19 +1161,24 @@ export function TokenDetail({ symbol }: { symbol: string }) {
                 ariaLabel="Chart interval"
               />
               <div className="tdx-kind" role="tablist" aria-label="Chart type">
-                <button type="button" role="tab" aria-selected={!tv} className={tv ? '' : 'on'} title="Line chart" onClick={() => setTv(false)}>
+                <button type="button" role="tab" aria-selected={!tv} className={tv ? '' : 'on'} title="Line chart" data-testid="token-line-chart" onClick={() => setTv(false)}>
                   <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden><path d="M1.5 11.5l4-5 3 3 5.5-6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 </button>
-                <button type="button" role="tab" aria-selected={tv} className={tv ? 'on' : ''} title="TradingView candles" onClick={() => setTv(true)}>
+                <button type="button" role="tab" aria-selected={tv} className={tv ? 'on' : ''} title="TradingView candles" data-testid="token-tradingview-chart" onClick={() => setTv(true)}>
                   <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden><path d="M4 3v10M2.5 5.5h3v5h-3zM12 2v12M10.5 4.5h3v6h-3z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
                 </button>
               </div>
+              <button type="button" className="tdx-focus-btn" title="Open Full Chart" aria-label="Open Full Chart" data-testid="token-full-chart" onClick={() => setChartFocus(true)}>
+                <IconMaximize size={15} />
+              </button>
             </div>
           </div>
           {tv ? (
-            <TradingViewChart candles={candles} kind="candles" height={430} valueFmt={fmtPrice} resetKey={`${symbol}-${range}-${ivl}-${src}`} tools />
+            <TradingViewWidget symbol={tvSymbol} win={tvInterval} height={560} />
           ) : (
-            <PriceChart points={points} up={up} />
+            <div className="tdx-line-frame">
+              <PriceChart points={points} up={up} />
+            </div>
           )}
         </section>
 
@@ -1134,6 +1190,19 @@ export function TokenDetail({ symbol }: { symbol: string }) {
         {/* ---- row 3: the Coinglass panel ----------------------------------- */}
         <CgxPanel symbol={symbol} base={base} name={name} hasPerp={hasPerp} />
       </div>
+      {chartFocus && (
+        <div className="tdx-chart-modal" role="dialog" aria-modal="true" aria-label={`${base} Full Chart`}>
+          <div className="tdx-chart-modal-head">
+            <span>
+              <TokenIcon symbol={symbol} size={28} />
+              <b>{base} TradingView Workspace</b>
+              <em>{src === 'futures' && hasPerp ? 'Binance USD-M Perpetual' : 'Binance Spot'} · {INTERVAL_LABEL[(effective.interval as IntervalKey)] ?? effective.interval}</em>
+            </span>
+            <button type="button" aria-label="Close Full Chart" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setChartFocus(false); }}><IconClose size={17} /></button>
+          </div>
+          <TradingViewWidget symbol={tvSymbol} win={tvInterval} height={Math.round(window.innerHeight * 0.78)} />
+        </div>
+      )}
     </div>
   );
 }

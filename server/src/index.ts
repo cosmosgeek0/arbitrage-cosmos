@@ -421,17 +421,17 @@ app.get('/api/news', (req, res) => {
   })();
 });
 
-// ---- Market news context proxy (primary + venue + Tree/RSS/Lookonchain) ----
+// ---- Market news context proxy (primary + venue + protocol + issuer + Tree/RSS/Lookonchain) ----
 app.get('/api/news-context', (req, res) => {
   void (async () => {
     try {
       const force = req.query.refresh === '1' || req.query.refresh === 'true';
-      const limit = Math.max(20, Math.min(Number(req.query.limit ?? 220), 520));
+      const limit = Math.max(20, Math.min(Number(req.query.limit ?? 220), 1200));
       const payload = await getNewsContext(force);
       res.json({ ...payload, items: payload.items.slice(0, limit) });
     } catch (err) {
       ledger.logEvent('error_event', null, { source: 'news-context.fetch', message: String(err) });
-      res.status(503).json({ error: 'news context unavailable', source: 'primary+venue+tree+rss+lookonchain', items: [], sources: [] });
+      res.status(503).json({ error: 'news context unavailable', source: 'primary+venue+protocol+issuer+tree+rss+lookonchain', items: [], sources: [] });
     }
   })();
 });

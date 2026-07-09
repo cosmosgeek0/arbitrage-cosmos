@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { Pill } from '../components/px';
 import { IconExternal, IconNewspaper, IconRefresh, IconSearch } from '../components/Icons';
 import { liveAge } from '../format';
@@ -6,9 +6,11 @@ import { useStore } from '../store';
 import './Markets.css';
 
 type NewsTone = 'ok' | 'warn' | 'bad' | 'idle';
-type ContextChannel = 'primary' | 'venue' | 'tree' | 'rss' | 'lookonchain';
+type ContextChannel = 'primary' | 'venue' | 'protocol' | 'issuer' | 'tree' | 'rss' | 'lookonchain';
 type FeedChannel = ContextChannel | 'binance';
 type SourceFilter = string;
+type NewsBucket = 'must-know' | 'exchange' | 'macro-policy' | 'crypto-market' | 'onchain-security' | 'long-research' | 'all';
+type NewsPageSize = 25 | 50 | 100;
 
 interface NewsContextItem {
   id: string;
@@ -59,6 +61,19 @@ interface BinanceNewsPayload {
 
 const READ_KEY = 'cosmos-news-read-v3';
 const FEED_CACHE_KEY = 'cosmos-news-feed-cache-v1';
+const NEWS_CONTEXT_LIMIT = 900;
+const NEWS_AUTO_REFRESH_SEC = 5;
+const PAGE_SIZE_OPTIONS: NewsPageSize[] = [25, 50, 100];
+
+const NEWS_BUCKETS: { id: NewsBucket; label: string; shortLabel: string }[] = [
+  { id: 'must-know', label: 'Must Know', shortLabel: 'Must Know' },
+  { id: 'exchange', label: 'Exchange Notices', shortLabel: 'Exchange' },
+  { id: 'macro-policy', label: 'Macro / Policy', shortLabel: 'Macro' },
+  { id: 'crypto-market', label: 'Crypto Market News', shortLabel: 'Crypto' },
+  { id: 'onchain-security', label: 'On-Chain / Security', shortLabel: 'On-Chain' },
+  { id: 'long-research', label: 'Long-Term Research', shortLabel: 'Research' },
+  { id: 'all', label: 'All Buckets', shortLabel: 'All' },
+];
 
 const SOURCE_FILTERS: { id: SourceFilter; label: string }[] = [
   { id: 'all', label: 'All Sources' },
@@ -85,6 +100,36 @@ const SOURCE_FILTERS: { id: SourceFilter; label: string }[] = [
   { id: 'deribit', label: 'Deribit' },
   { id: 'cme-crypto', label: 'CME Group Crypto Notices' },
   { id: 'exchange-status', label: 'Exchange Status Pages' },
+  { id: 'ethereum-foundation', label: 'Ethereum Foundation' },
+  { id: 'bitcoin-core', label: 'Bitcoin Core' },
+  { id: 'geth', label: 'Geth' },
+  { id: 'nethermind', label: 'Nethermind' },
+  { id: 'prysm', label: 'Prysm' },
+  { id: 'lighthouse', label: 'Lighthouse' },
+  { id: 'solana-agave', label: 'Solana Agave' },
+  { id: 'arbitrum-nitro', label: 'Arbitrum Nitro' },
+  { id: 'optimism', label: 'Optimism' },
+  { id: 'base-status', label: 'Base Status' },
+  { id: 'polygon-status', label: 'Polygon Status' },
+  { id: 'avalanchego', label: 'AvalancheGo' },
+  { id: 'cosmos-gaia', label: 'Cosmos Gaia' },
+  { id: 'celestia-node', label: 'Celestia Node' },
+  { id: 'sui', label: 'Sui' },
+  { id: 'aptos-core', label: 'Aptos Core' },
+  { id: 'chainlink', label: 'Chainlink' },
+  { id: 'uniswap-v4', label: 'Uniswap v4' },
+  { id: 'aave-v3', label: 'Aave v3' },
+  { id: 'lido', label: 'Lido' },
+  { id: 'eigenlayer', label: 'EigenLayer' },
+  { id: 'sky-forum', label: 'Sky / Maker Forum' },
+  { id: 'dydx', label: 'dYdX' },
+  { id: 'jito-solana', label: 'Jito Solana' },
+  { id: 'jupiter-cpi', label: 'Jupiter' },
+  { id: 'wormhole', label: 'Wormhole' },
+  { id: 'layerzero-v2', label: 'LayerZero v2' },
+  { id: 'tether', label: 'Tether' },
+  { id: 'paypal-usd', label: 'PayPal USD' },
+  { id: 'fidelity-digital-assets', label: 'Fidelity Digital Assets' },
   { id: 'tree', label: 'Tree Of Alpha Relay' },
   { id: 'financialjuice', label: 'FinancialJuice' },
   { id: 'wsj-markets', label: 'WSJ Markets RSS' },
@@ -98,23 +143,30 @@ const SOURCE_FILTERS: { id: SourceFilter; label: string }[] = [
   { id: 'ap-business', label: 'AP Business' },
   { id: 'coindesk', label: 'CoinDesk' },
   { id: 'the-block', label: 'The Block' },
+  { id: 'blockworks', label: 'Blockworks' },
+  { id: 'dl-news', label: 'DL News' },
+  { id: 'unchained', label: 'Unchained' },
+  { id: 'protos', label: 'Protos' },
+  { id: 'the-defiant', label: 'The Defiant' },
+  { id: 'glassnode-insights', label: 'Glassnode Insights' },
+  { id: 'chainalysis', label: 'Chainalysis' },
+  { id: 'trm-labs', label: 'TRM Labs' },
+  { id: 'elliptic', label: 'Elliptic' },
   { id: 'wublockchain', label: 'WuBlockchain / Substack' },
   { id: 'lookonchain', label: 'Lookonchain' },
-  { id: 'zerohedge', label: 'ZeroHedge' },
-  { id: 'watcherguru', label: 'WatcherGuru' },
   { id: 'cointelegraph', label: 'Cointelegraph' },
   { id: 'decrypt', label: 'Decrypt' },
   { id: 'cryptoslate', label: 'CryptoSlate' },
-  { id: 'bitcoin-magazine', label: 'Bitcoin Magazine' },
-  { id: 'crypto-briefing', label: 'Crypto Briefing' },
 ];
 const SOURCE_PRIORITY: Record<FeedChannel, number> = {
   primary: 0,
   venue: 1,
-  binance: 2,
-  tree: 3,
-  lookonchain: 4,
-  rss: 5,
+  protocol: 2,
+  issuer: 3,
+  binance: 4,
+  tree: 5,
+  lookonchain: 6,
+  rss: 7,
 };
 const PRIMARY_SOURCE_KEYS = new Set([
   'fed', 'bls', 'bea', 'sec', 'cftc', 'treasury', 'ofac', 'ecb', 'boe',
@@ -124,7 +176,26 @@ const VENUE_SOURCE_KEYS = new Set([
   'coinbase-assets', 'kraken', 'okx', 'bybit', 'upbit-bithumb', 'deribit',
   'cme-crypto', 'exchange-status',
 ]);
-const SOURCE_DIVERSITY_WINDOW_MS = 45 * 60_000;
+const PROTOCOL_SOURCE_KEYS = new Set([
+  'ethereum-foundation', 'bitcoin-core', 'geth', 'nethermind', 'prysm', 'lighthouse',
+  'solana-agave', 'arbitrum-nitro', 'optimism', 'base-status', 'polygon-status',
+  'avalanchego', 'cosmos-gaia', 'celestia-node', 'sui', 'aptos-core', 'chainlink',
+  'uniswap-v4', 'aave-v3', 'lido', 'eigenlayer', 'sky-forum', 'dydx', 'jito-solana',
+  'jupiter-cpi', 'wormhole', 'layerzero-v2',
+]);
+const ISSUER_SOURCE_KEYS = new Set([
+  'tether', 'paypal-usd', 'fidelity-digital-assets',
+]);
+const CRYPTO_MARKET_SOURCE_KEYS = new Set([
+  'coindesk', 'the-block', 'blockworks', 'dl-news', 'wublockchain', 'cointelegraph',
+  'decrypt', 'cryptoslate', 'unchained', 'the-defiant',
+]);
+const ONCHAIN_SECURITY_SOURCE_KEYS = new Set([
+  'lookonchain', 'chainalysis', 'trm-labs', 'elliptic', 'protos',
+]);
+const LONG_RESEARCH_SOURCE_KEYS = new Set([
+  'glassnode-insights', 'fidelity-digital-assets',
+]);
 
 const SOURCE_DOMAINS: Record<string, string> = {
   fed: 'federalreserve.gov',
@@ -170,6 +241,53 @@ const SOURCE_DOMAINS: Record<string, string> = {
   'kraken status': 'status.kraken.com',
   'okx status': 'okx.com',
   'bybit system status': 'bybit.com',
+  'ethereum-foundation': 'ethereum.org',
+  'ethereum foundation': 'ethereum.org',
+  'bitcoin-core': 'bitcoincore.org',
+  'bitcoin core': 'bitcoincore.org',
+  geth: 'geth.ethereum.org',
+  nethermind: 'nethermind.io',
+  prysm: 'offchainlabs.com',
+  lighthouse: 'sigmaprime.io',
+  'solana-agave': 'solana.com',
+  'solana agave': 'solana.com',
+  'arbitrum-nitro': 'arbitrum.io',
+  'arbitrum nitro': 'arbitrum.io',
+  optimism: 'optimism.io',
+  'base-status': 'base.org',
+  'base status': 'base.org',
+  'polygon-status': 'polygon.technology',
+  'polygon status': 'polygon.technology',
+  avalanchego: 'avax.network',
+  'cosmos-gaia': 'cosmos.network',
+  'cosmos gaia': 'cosmos.network',
+  'celestia-node': 'celestia.org',
+  'celestia node': 'celestia.org',
+  sui: 'sui.io',
+  'aptos-core': 'aptosfoundation.org',
+  'aptos core': 'aptosfoundation.org',
+  chainlink: 'chain.link',
+  'uniswap-v4': 'uniswap.org',
+  'uniswap v4': 'uniswap.org',
+  'aave-v3': 'aave.com',
+  'aave v3': 'aave.com',
+  lido: 'lido.fi',
+  eigenlayer: 'eigenlayer.xyz',
+  'sky-forum': 'forum.sky.money',
+  'sky / maker forum': 'forum.sky.money',
+  dydx: 'dydx.exchange',
+  'jito-solana': 'jito.network',
+  'jito solana': 'jito.network',
+  'jupiter-cpi': 'jup.ag',
+  jupiter: 'jup.ag',
+  wormhole: 'wormhole.com',
+  'layerzero-v2': 'layerzero.network',
+  'layerzero v2': 'layerzero.network',
+  tether: 'tether.io',
+  'paypal-usd': 'paypal.com',
+  'paypal usd': 'paypal.com',
+  'fidelity-digital-assets': 'fidelitydigitalassets.com',
+  'fidelity digital assets': 'fidelitydigitalassets.com',
   financialjuice: 'financialjuice.com',
   'wsj markets rss': 'wsj.com',
   'ft-alphaville': 'ft.com',
@@ -188,18 +306,26 @@ const SOURCE_DOMAINS: Record<string, string> = {
   'ap business': 'apnews.com',
   'tree of alpha relay': 'treeofalpha.com',
   'wublockchain / substack': 'wublock.substack.com',
-  watcherguru: 'watcher.guru',
   'binance news / announcements': 'binance.com',
-  'bitcoin magazine': 'bitcoinmagazine.com',
-  'crypto briefing': 'cryptobriefing.com',
   tree: 'treeofalpha.com',
   rss: 'financialjuice.com',
   lookonchain: 'lookonchain.com',
   'wsj markets': 'wsj.com',
   benzinga: 'benzinga.com',
-  'watcher guru': 'watcher.guru',
-  zerohedge: 'zerohedge.com',
   coindesk: 'coindesk.com',
+  blockworks: 'blockworks.com',
+  'dl-news': 'dlnews.com',
+  'dl news': 'dlnews.com',
+  unchained: 'unchainedcrypto.com',
+  protos: 'protos.com',
+  'the-defiant': 'thedefiant.io',
+  'the defiant': 'thedefiant.io',
+  'glassnode-insights': 'research.glassnode.com',
+  'glassnode insights': 'research.glassnode.com',
+  chainalysis: 'chainalysis.com',
+  'trm-labs': 'trmlabs.com',
+  'trm labs': 'trmlabs.com',
+  elliptic: 'elliptic.co',
   cointelegraph: 'cointelegraph.com',
   'the block': 'theblock.co',
   decrypt: 'decrypt.co',
@@ -270,7 +396,7 @@ function logoUrl(domain: string | null): string | null {
   return domain ? `/api/source-logo?domain=${encodeURIComponent(domain)}&sz=64` : null;
 }
 
-function SourceLogo({ domain, label, size = 28 }: { domain: string | null; label: string; size?: number }) {
+const SourceLogo = memo(function SourceLogo({ domain, label, size = 28 }: { domain: string | null; label: string; size?: number }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [domain]);
   const src = !failed ? logoUrl(domain) : null;
@@ -283,11 +409,13 @@ function SourceLogo({ domain, label, size = 28 }: { domain: string | null; label
       )}
     </span>
   );
-}
+});
 
 function channelLabel(channel: FeedChannel): string {
   if (channel === 'primary') return 'Primary';
   if (channel === 'venue') return 'Venue';
+  if (channel === 'protocol') return 'Protocol';
+  if (channel === 'issuer') return 'Issuer';
   if (channel === 'binance') return 'Official';
   if (channel === 'tree') return 'Tree';
   if (channel === 'lookonchain') return 'Lookonchain';
@@ -368,58 +496,76 @@ function itemSortTs(item: NewsContextItem): number {
   return item.ts > Date.now() ? 0 : item.ts;
 }
 
-function itemSortScore(item: NewsContextItem): number {
-  const ts = itemSortTs(item);
-  const key = sourceKeyForItem(item);
-  if (item.channel === 'primary' || PRIMARY_SOURCE_KEYS.has(key)) return ts + 6 * 60 * 60_000;
-  if (item.channel === 'venue' || VENUE_SOURCE_KEYS.has(key)) return ts + 5 * 60 * 60_000;
-  if (item.channel === 'binance' && /\b(delist|trading pair|margin|futures|launchpool|listing|remove|suspend)\b/i.test(item.title)) {
-    return ts + 5 * 60 * 60_000;
-  }
-  return ts;
+function newsAgeLabel(ts: number | null | undefined, fallback: string): string {
+  if (!ts || !Number.isFinite(ts) || ts > Date.now()) return fallback || 'Undated';
+  const seconds = Math.max(0, Math.floor((Date.now() - ts) / 1_000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
 }
 
 function compareNewsItems(a: NewsContextItem, b: NewsContextItem): number {
-  const byTime = itemSortScore(b) - itemSortScore(a);
+  const byTime = itemSortTs(b) - itemSortTs(a);
   if (byTime !== 0) return byTime;
   const bySource = SOURCE_PRIORITY[a.channel] - SOURCE_PRIORITY[b.channel];
   if (bySource !== 0) return bySource;
   return a.id.localeCompare(b.id);
 }
 
-function canPullDiverseCandidate(reference: NewsContextItem, candidate: NewsContextItem): boolean {
-  const refTs = itemSortTs(reference);
-  const candidateTs = itemSortTs(candidate);
-  if (!refTs || !candidateTs) return false;
-  return Math.abs(refTs - candidateTs) <= SOURCE_DIVERSITY_WINDOW_MS;
-}
-
-function spreadSourceBursts(items: NewsContextItem[]): NewsContextItem[] {
-  const pool = [...items];
-  const ordered: NewsContextItem[] = [];
-  while (pool.length) {
-    let pickIndex = 0;
-    const last = ordered[ordered.length - 1];
-    if (last && sourceKeyForItem(pool[0]) === sourceKeyForItem(last)) {
-      const alternateIndex = pool.findIndex((candidate) => sourceKeyForItem(candidate) !== sourceKeyForItem(last) && canPullDiverseCandidate(last, candidate));
-      if (alternateIndex > 0) pickIndex = alternateIndex;
-    }
-    ordered.push(pool.splice(pickIndex, 1)[0]);
-  }
-  return ordered;
-}
-
 function mergeNewsItems(context: NewsContextPayload | null, binance: BinanceNewsPayload | null): NewsContextItem[] {
   const merged = [...(context?.items ?? []), ...(binance?.items ?? []).map(mapBinanceItem)];
-  return spreadSourceBursts(merged.sort(compareNewsItems));
+  return merged.sort(compareNewsItems);
 }
 
-function NewsRow({ item, read, fresh, onRead }: { item: NewsContextItem; read: boolean; fresh: boolean; onRead: (id: string) => void }) {
+function itemHasAnyTag(item: NewsContextItem, tags: string[]): boolean {
+  return tags.some((tag) => item.tags.includes(tag));
+}
+
+function itemSearchText(item: NewsContextItem): string {
+  return `${item.title} ${item.summary ?? ''} ${item.source} ${item.tags.join(' ')}`.toLowerCase();
+}
+
+function matchesBucket(item: NewsContextItem, bucket: NewsBucket): boolean {
+  if (bucket === 'all') return true;
+  const key = sourceKeyForItem(item);
+  const text = itemSearchText(item);
+  if (bucket === 'exchange') {
+    return item.channel === 'venue' || item.channel === 'binance' || VENUE_SOURCE_KEYS.has(key) || key === 'binance';
+  }
+  if (bucket === 'macro-policy') {
+    return item.channel === 'primary' || PRIMARY_SOURCE_KEYS.has(key) || itemHasAnyTag(item, ['Macro', 'Policy']);
+  }
+  if (bucket === 'crypto-market') {
+    return CRYPTO_MARKET_SOURCE_KEYS.has(key) || (
+      item.channel === 'rss' &&
+      !itemHasAnyTag(item, ['Security', 'Release', 'Stablecoin', 'ETF']) &&
+      !ONCHAIN_SECURITY_SOURCE_KEYS.has(key) &&
+      !LONG_RESEARCH_SOURCE_KEYS.has(key)
+    );
+  }
+  if (bucket === 'onchain-security') {
+    return item.channel === 'protocol' || item.channel === 'lookonchain' || PROTOCOL_SOURCE_KEYS.has(key) ||
+      ONCHAIN_SECURITY_SOURCE_KEYS.has(key) || itemHasAnyTag(item, ['On-Chain', 'Security', 'Release', 'Governance']);
+  }
+  if (bucket === 'long-research') {
+    return item.channel === 'issuer' || ISSUER_SOURCE_KEYS.has(key) || LONG_RESEARCH_SOURCE_KEYS.has(key) ||
+      itemHasAnyTag(item, ['Stablecoin', 'ETF']);
+  }
+  return item.channel === 'primary' || item.channel === 'venue' || item.channel === 'protocol' || item.channel === 'issuer' ||
+    key === 'binance' || itemHasAnyTag(item, ['Macro', 'Policy', 'Security', 'Delisting', 'Stablecoin', 'ETF']) ||
+    /\b(hack|exploit|depeg|stablecoin|etf approval|legal ruling|court|lawsuit|outage|halt|pause|hard fork|client release)\b/.test(text);
+}
+
+const NewsRow = memo(function NewsRow({ item, read, fresh, onRead }: { item: NewsContextItem; read: boolean; fresh: boolean; onRead: (id: string) => void }) {
   const label = item.source || channelLabel(item.channel);
   const domain = sourceDomain(item.source, item.channel, item.url, item.sourceDomain);
+  const timeLabel = newsAgeLabel(item.ts, item.timeLabel);
   const content = (
     <>
-      <span className="nwx-time num">{item.timeLabel}</span>
+      <span className="nwx-time num">{timeLabel}</span>
       <span className="nwx-provider">
         <SourceLogo domain={domain} label={label} />
         <span><b>{label}</b><em>{channelLabel(item.channel)}</em></span>
@@ -440,26 +586,30 @@ function NewsRow({ item, read, fresh, onRead }: { item: NewsContextItem; read: b
       {content}
     </a>
   );
-}
+});
 
 export function News() {
   const { prefs } = useStore();
   const [initialFeed] = useState(readFeedCache);
   const [context, setContext] = useState<NewsContextPayload | null>(initialFeed.context);
   const [binance, setBinance] = useState<BinanceNewsPayload | null>(initialFeed.binance);
+  const [lastCheckedAt, setLastCheckedAt] = useState(() => Math.max(initialFeed.context?.fetchedAt ?? 0, initialFeed.binance?.fetchedAt ?? 0));
   const [failed, setFailed] = useState(false);
   const [binanceFailed, setBinanceFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [bucket, setBucket] = useState<NewsBucket>('must-know');
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
+  const [pageSize, setPageSize] = useState<NewsPageSize>(25);
+  const [page, setPage] = useState(0);
   const [q, setQ] = useState('');
   const [refreshCycle, setRefreshCycle] = useState({ seq: 0, force: false });
   const [readIds, setReadIds] = useState<Set<string>>(() => readSet());
   const [freshIds, setFreshIds] = useState<Set<string>>(new Set());
-  const newsCadenceSec = Math.min(10, Math.max(0.5, prefs.dataCadence?.news ?? 10));
+  const newsCadenceSec = Math.min(NEWS_AUTO_REFRESH_SEC, Math.max(0.5, prefs.dataCadence?.news ?? NEWS_AUTO_REFRESH_SEC));
 
   useEffect(() => {
-    const t = window.setInterval(() => setRefreshCycle((cycle) => ({ seq: cycle.seq + 1, force: false })), newsCadenceSec * 1000);
+    const t = window.setInterval(() => setRefreshCycle((cycle) => ({ seq: cycle.seq + 1, force: true })), newsCadenceSec * 1000);
     return () => window.clearInterval(t);
   }, [newsCadenceSec]);
 
@@ -502,6 +652,7 @@ export function News() {
       animate: boolean
     ) => {
       if (!alive) return;
+      const reachedSource = contextResult.status === 'fulfilled' || binanceResult.status === 'fulfilled';
       let nextContext = context;
       let nextBinance = binance;
       if (contextResult.status === 'fulfilled') {
@@ -514,13 +665,14 @@ export function News() {
         setBinance(binanceResult.value);
       }
       else setBinanceFailed(true);
+      if (reachedSource) setLastCheckedAt(Date.now());
       if (animate) markIncoming(nextContext, nextBinance);
       persistFeedCache(nextContext, nextBinance);
     };
 
     const scheduleFollowupRead = (delay: number, releaseAfterRead = false) => {
       const timer = window.setTimeout(() => {
-	        const followContextReq = fetch('/api/news-context?limit=520', { signal: ctrl.signal })
+	        const followContextReq = fetch(`/api/news-context?limit=${NEWS_CONTEXT_LIMIT}`, { signal: ctrl.signal })
           .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad')))) as Promise<NewsContextPayload>;
         const followBinanceReq = fetch('/api/news?catalog=all', { signal: ctrl.signal })
           .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad')))) as Promise<BinanceNewsPayload>;
@@ -533,7 +685,7 @@ export function News() {
     };
 
     const forceParam = isForced ? '&refresh=1' : '';
-	    const contextReq = fetch(`/api/news-context?limit=520${forceParam}`, { signal: ctrl.signal })
+	    const contextReq = fetch(`/api/news-context?limit=${NEWS_CONTEXT_LIMIT}${forceParam}`, { signal: ctrl.signal })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad')))) as Promise<NewsContextPayload>;
     const binanceReq = fetch(`/api/news?catalog=all${forceParam}`, { signal: ctrl.signal })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad')))) as Promise<BinanceNewsPayload>;
@@ -543,7 +695,7 @@ export function News() {
       commitResults(results, isRefresh);
       setRefreshing(false);
       if (isRefresh) {
-        [2200, 5200, 9200].forEach((delay, index) => scheduleFollowupRead(delay, index === 0));
+        [1800, 4200].forEach((delay, index) => scheduleFollowupRead(delay, index === 0));
       } else {
         setChecking(false);
       }
@@ -567,15 +719,28 @@ export function News() {
     });
   }, []);
 
-  const ql = q.trim().toLowerCase();
+  const deferredQuery = useDeferredValue(q);
+  const ql = deferredQuery.trim().toLowerCase();
   const items = useMemo(() => mergeNewsItems(context, binance), [binance?.items, context?.items]);
-  const filtered = useMemo(
+  const sourceAndSearchFiltered = useMemo(
     () => items.filter((it) => (sourceFilter === 'all' || sourceKeyForItem(it) === sourceFilter || it.channel === sourceFilter) && matchesQuery(it, ql)),
     [items, ql, sourceFilter]
   );
-  const visibleUnread = filtered.filter((it) => !readIds.has(it.id)).length;
-  const latestFetchedAt = Math.max(context?.fetchedAt ?? 0, binance?.fetchedAt ?? 0);
-  const status = failed && binanceFailed ? 'Feed Unreachable' : latestFetchedAt ? `Live · ${liveAge(latestFetchedAt)}` : 'Fetching';
+  const filtered = useMemo(
+    () => sourceAndSearchFiltered.filter((it) => matchesBucket(it, bucket)),
+    [bucket, sourceAndSearchFiltered]
+  );
+  const activePageSize: NewsPageSize = pageSize === 50 || pageSize === 100 ? pageSize : 25;
+  useEffect(() => {
+    setPage(0);
+  }, [bucket, activePageSize, ql, sourceFilter, items.length]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / activePageSize));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageStart = safePage * activePageSize;
+  const pageEnd = Math.min(filtered.length, pageStart + activePageSize);
+  const pageItems = filtered.slice(pageStart, pageEnd).slice(0, activePageSize);
+  const visibleUnread = pageItems.filter((it) => !readIds.has(it.id)).length;
+  const status = failed && binanceFailed ? 'Feed Unreachable' : lastCheckedAt ? `Live · ${liveAge(lastCheckedAt)}` : 'Fetching';
   const tone: NewsTone = failed && binanceFailed ? 'bad' : context || binance ? 'ok' : 'idle';
   const sourceStatus = useMemo(() => {
     const map = new Map<string, NewsContextSource>();
@@ -597,7 +762,7 @@ export function News() {
     items.forEach((item) => counts.set(sourceKeyForItem(item), (counts.get(sourceKeyForItem(item)) ?? 0) + 1));
     return counts;
   }, [items]);
-  const sourceOptions = SOURCE_FILTERS.map((src) => {
+  const sourceOptions = useMemo(() => SOURCE_FILTERS.map((src) => {
     const count = src.id === 'all' ? items.length : sourceCounts.get(src.id) ?? sourceStatus.get(src.id)?.count ?? 0;
     const source = sourceStatus.get(src.id);
     const suffix = src.id === 'all'
@@ -606,7 +771,18 @@ export function News() {
         ? 'Unavailable'
         : `${count}`;
     return { ...src, label: `${src.label} · ${suffix}` };
-  });
+  }), [items.length, sourceCounts, sourceStatus]);
+  const bucketCounts = useMemo(() => {
+    const counts = new Map<NewsBucket, number>();
+    NEWS_BUCKETS.forEach((option) => counts.set(option.id, 0));
+    sourceAndSearchFiltered.forEach((item) => {
+      NEWS_BUCKETS.forEach((option) => {
+        if (matchesBucket(item, option.id)) counts.set(option.id, (counts.get(option.id) ?? 0) + 1);
+      });
+    });
+    return counts;
+  }, [sourceAndSearchFiltered]);
+  const bucketOptions = NEWS_BUCKETS.map((option) => ({ ...option, count: bucketCounts.get(option.id) ?? 0 }));
   const listedSources = SOURCE_FILTERS.filter((src) => src.id !== 'all');
   const liveSources = listedSources.filter((src) => sourceStatus.get(src.id)?.status === 'live').length;
   const delayedSources = listedSources.filter((src) => sourceStatus.get(src.id)?.status === 'delayed').length;
@@ -627,7 +803,7 @@ export function News() {
   const markVisibleRead = () => {
     setReadIds((prev) => {
       const next = new Set(prev);
-      filtered.forEach((it) => next.add(it.id));
+      pageItems.forEach((it) => next.add(it.id));
       persistRead(next);
       return next;
     });
@@ -654,17 +830,35 @@ export function News() {
         </div>
       </header>
 
-      <div className="cal-filters clx-filters ux-filters nwx-filters">
-        <label className="ux-select-wrap nwx-source-control">
-          <IconNewspaper size={14} />
-          <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} aria-label="News Source Filter">
-            {sourceOptions.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}
-          </select>
-        </label>
-        <label className="nwx-calendar-search">
-          <IconSearch size={14} />
-          <input value={q} placeholder="Search headlines, sources, symbols" onChange={(e) => setQ(e.target.value)} aria-label="Search Headlines" />
-        </label>
+      <div className="nwx-command">
+        <div className="nwx-bucket-strip" aria-label="News Bucket Filter">
+          {bucketOptions.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className={`nwx-bucket ${bucket === option.id ? 'on' : ''}`}
+              onClick={() => setBucket(option.id)}
+              aria-pressed={bucket === option.id}
+              aria-label={`${option.label} ${option.count}`}
+              title={`${option.label} · ${option.count}`}
+            >
+              <span>{option.shortLabel}</span>
+              <b className="num">{option.count}</b>
+            </button>
+          ))}
+        </div>
+        <div className="nwx-tool-row">
+          <label className="ux-select-wrap nwx-source-control">
+            <IconNewspaper size={14} />
+            <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} aria-label="News Source Filter">
+              {sourceOptions.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}
+            </select>
+          </label>
+          <label className="nwx-calendar-search">
+            <IconSearch size={14} />
+            <input value={q} placeholder="Search Headlines, Sources, Symbols" onChange={(e) => setQ(e.target.value)} aria-label="Search Headlines" />
+          </label>
+        </div>
       </div>
 
       <div className="nwx-cols page-cols">
@@ -677,16 +871,25 @@ export function News() {
         {!context && !binance && !failed && !binanceFailed && <div className="ov-empty">Loading Headlines...</div>}
         {failed && binanceFailed && <div className="ov-empty">News unavailable. Source feeds could not be reached.</div>}
         {(context || binance) && filtered.length === 0 && <div className="ov-empty">{ql ? `Nothing Matches "${q}".` : 'No Headlines Match These Filters.'}</div>}
-        {filtered.map((it) => (
-          <NewsRow key={it.id} item={it} read={readIds.has(it.id)} fresh={freshIds.has(it.id)} onRead={markRead} />
+        {pageItems.map((it, index) => (
+          <NewsRow key={`${it.id}:${pageStart + index}`} item={it} read={readIds.has(it.id)} fresh={freshIds.has(it.id)} onRead={markRead} />
         ))}
       </div>
 
       <div className="nwx-footer-line">
-        <span title={sourceDetails}>{sourceTruth}</span>
-        <button type="button" onClick={markVisibleRead} disabled={filtered.length === 0 || visibleUnread === 0}>Mark Visible Read</button>
+        <span className="nwx-source-truth" title={sourceDetails}>{sourceTruth}</span>
+        <span className="nwx-page-window">Showing {filtered.length ? `${pageStart + 1}-${pageEnd}` : '0'} Of {filtered.length}</span>
+        <span className="nwx-footer-actions">
+          <button type="button" onClick={() => setPage((value) => Math.max(0, value - 1))} disabled={safePage === 0}>Previous</button>
+          <label className="nwx-page-size">
+            <select value={activePageSize} onChange={(e) => setPageSize(Number(e.target.value) as NewsPageSize)} aria-label="Rows Per Page">
+              {PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size} Rows</option>)}
+            </select>
+          </label>
+          <button type="button" onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))} disabled={safePage >= pageCount - 1}>Next</button>
+          <button type="button" onClick={markVisibleRead} disabled={pageItems.length === 0 || visibleUnread === 0}>Mark Visible Read</button>
+        </span>
       </div>
-      <p className="news-source-note">Primary and venue sources outrank media; the free headline layer adds FT Alphaville, CNBC, MarketWatch, Yahoo Finance, Investing.com, Nasdaq, AP Business, and WSJ Markets.</p>
     </div>
   );
 }

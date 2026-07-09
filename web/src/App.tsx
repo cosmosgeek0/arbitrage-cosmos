@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { StoreProvider, useStore } from './store';
 import { IconClock } from './components/Icons';
 import { Sidebar, Topbar, BottomNav, Overlays, RefreshDock } from './components/Header';
@@ -20,6 +21,12 @@ import { CalendarPage } from './pages/CalendarPage';
 
 function Shell() {
   const { page, detailSymbol, prefs } = useStore();
+  const mainRef = useRef<HTMLMainElement | null>(null);
+  const framePage = page === 'detail' ? 'detail' : page;
+
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, left: 0 });
+  }, [page, detailSymbol]);
 
   return (
     <div className="app-root">
@@ -28,44 +35,46 @@ function Shell() {
         <Sidebar />
         <div className="app-main">
           {prefs.tape && <Tape />}
-        <main key={`${page}-${page === 'detail' ? detailSymbol : ''}`}>
-          <ErrorBoundary resetKey={`${page}-${detailSymbol}`} label={page}>
-            {page === 'dashboard' && <Dashboard />}
-            {page === 'account' && <Account />}
-            {page === 'wallets' && <Account />}
-            {page === 'markets' && <Markets />}
-            {page === 'detail' && <TokenDetail symbol={detailSymbol} />}
-            {page === 'loans' && <Loans />}
-            {['orders', 'positions', 'fills', 'pnl'].includes(page) && <Account />}
-            {page === 'strategies' && <Strategies />}
-            {page === 'volume' && <VolumeScanner />}
-            {page === 'opportunities' && <Opportunities />}
-            {page === 'risk' && <Risk />}
-            {page === 'ledger' && <LedgerPage />}
-            {page === 'system' && <SystemHealth />}
-            {page === 'news' && <News />}
-            {page === 'calendar' && <CalendarPage />}
-          </ErrorBoundary>
-          <footer className="footer">
-            <div className="ftr-line">
-              <span className="ftr-left">
-                <span className="ftr-brand">© 2026 Arbitrage Control Room</span>
-                <i>•</i>
-                <span>Private</span>
-                <i>•</i>
-                <span>No withdrawals</span>
-                <i>•</i>
-                <span>Every action ledgered</span>
-              </span>
-              <span className="ftr-right">
-                <IconClock size={15} />
-                <span>Engine UTC</span>
-                <i>•</i>
-                <span>Binance</span>
-              </span>
-            </div>
-          </footer>
-        </main>
+          <main ref={mainRef} className={`app-page-main page-${framePage}`}>
+            <section className={`app-page-frame frame-${framePage}`} aria-label={`${framePage} workspace`}>
+              <ErrorBoundary resetKey={`${page}-${detailSymbol}`} label={page}>
+                {page === 'dashboard' && <Dashboard />}
+                {page === 'account' && <Account />}
+                {page === 'wallets' && <Account />}
+                {page === 'markets' && <Markets />}
+                {page === 'detail' && <TokenDetail symbol={detailSymbol} />}
+                {page === 'loans' && <Loans />}
+                {['orders', 'positions', 'fills', 'pnl'].includes(page) && <Account />}
+                {page === 'strategies' && <Strategies />}
+                {page === 'volume' && <VolumeScanner />}
+                {page === 'opportunities' && <Opportunities />}
+                {page === 'risk' && <Risk />}
+                {page === 'ledger' && <LedgerPage />}
+                {page === 'system' && <SystemHealth />}
+                {page === 'news' && <News />}
+                {page === 'calendar' && <CalendarPage />}
+              </ErrorBoundary>
+            </section>
+            <footer className="footer">
+              <div className="ftr-line">
+                <span className="ftr-left">
+                  <span className="ftr-brand">© 2026 Arbitrage Control Room</span>
+                  <i>•</i>
+                  <span>Private</span>
+                  <i>•</i>
+                  <span>No withdrawals</span>
+                  <i>•</i>
+                  <span>Every action ledgered</span>
+                </span>
+                <span className="ftr-right">
+                  <IconClock size={15} />
+                  <span>Engine UTC</span>
+                  <i>•</i>
+                  <span>Binance</span>
+                </span>
+              </div>
+            </footer>
+          </main>
         </div>
       </div>
       <BottomNav />

@@ -1,4 +1,4 @@
-export type NewsContextChannel = 'primary' | 'venue' | 'tree' | 'rss' | 'lookonchain';
+export type NewsContextChannel = 'primary' | 'venue' | 'protocol' | 'issuer' | 'tree' | 'rss' | 'lookonchain';
 export type NewsContextTone = 'bad' | 'warn' | 'ok' | 'idle';
 export type NewsSourceStatus = 'live' | 'delayed' | 'error';
 
@@ -30,7 +30,7 @@ export interface NewsContextSource {
 }
 
 export interface NewsContextPayload {
-  source: 'primary+venue+tree+rss+lookonchain';
+  source: 'primary+venue+protocol+issuer+tree+rss+lookonchain';
   fetchedAt: number;
   items: NewsContextItem[];
   sources: NewsContextSource[];
@@ -44,6 +44,8 @@ const TREE_MIN_FETCH_MS = 185_000;
 const RSS_DEFAULT_MIN_FETCH_MS = 60_000;
 const PRIMARY_DEFAULT_MIN_FETCH_MS = 90_000;
 const VENUE_DEFAULT_MIN_FETCH_MS = 75_000;
+const PROTOCOL_DEFAULT_MIN_FETCH_MS = 185_000;
+const ISSUER_DEFAULT_MIN_FETCH_MS = 185_000;
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
 interface FeedConfig {
@@ -57,7 +59,7 @@ interface FeedConfig {
   pageParser?: MediaPageParser;
 }
 
-type MediaPageParser = 'ap-business';
+type MediaPageParser = 'ap-business' | 'dl-news';
 type OfficialPageParser =
   | 'treasury-press'
   | 'ofac-actions'
@@ -356,6 +358,257 @@ const VENUE_SOURCES: OfficialSourceConfig[] = [
   },
 ];
 
+const PROTOCOL_SOURCES: OfficialSourceConfig[] = [
+  {
+    key: 'ethereum-foundation',
+    label: 'Ethereum Foundation',
+    domain: 'ethereum.org',
+    url: 'https://blog.ethereum.org/',
+    detail: 'Official Ethereum Foundation blog feed for protocol and ecosystem announcements.',
+    feeds: [{ url: 'https://blog.ethereum.org/feed.xml', label: 'Ethereum Foundation', domain: 'ethereum.org' }],
+  },
+  {
+    key: 'bitcoin-core',
+    label: 'Bitcoin Core',
+    domain: 'bitcoincore.org',
+    url: 'https://github.com/bitcoin/bitcoin/releases',
+    detail: 'Official Bitcoin Core GitHub release feed.',
+    feeds: [{ url: 'https://github.com/bitcoin/bitcoin/releases.atom', label: 'Bitcoin Core', domain: 'bitcoincore.org' }],
+  },
+  {
+    key: 'geth',
+    label: 'Geth',
+    domain: 'geth.ethereum.org',
+    url: 'https://github.com/ethereum/go-ethereum/releases',
+    detail: 'Official go-ethereum GitHub release feed.',
+    feeds: [{ url: 'https://github.com/ethereum/go-ethereum/releases.atom', label: 'Geth', domain: 'geth.ethereum.org' }],
+  },
+  {
+    key: 'nethermind',
+    label: 'Nethermind',
+    domain: 'nethermind.io',
+    url: 'https://github.com/NethermindEth/nethermind/releases',
+    detail: 'Official Nethermind GitHub release feed.',
+    feeds: [{ url: 'https://github.com/NethermindEth/nethermind/releases.atom', label: 'Nethermind', domain: 'nethermind.io' }],
+  },
+  {
+    key: 'prysm',
+    label: 'Prysm',
+    domain: 'offchainlabs.com',
+    url: 'https://github.com/OffchainLabs/prysm/releases',
+    detail: 'Official Prysm GitHub release feed.',
+    feeds: [{ url: 'https://github.com/OffchainLabs/prysm/releases.atom', label: 'Prysm', domain: 'offchainlabs.com' }],
+  },
+  {
+    key: 'lighthouse',
+    label: 'Lighthouse',
+    domain: 'sigmaprime.io',
+    url: 'https://github.com/sigp/lighthouse/releases',
+    detail: 'Official Lighthouse GitHub release feed.',
+    feeds: [{ url: 'https://github.com/sigp/lighthouse/releases.atom', label: 'Lighthouse', domain: 'sigmaprime.io' }],
+  },
+  {
+    key: 'solana-agave',
+    label: 'Solana Agave',
+    domain: 'solana.com',
+    url: 'https://github.com/anza-xyz/agave/releases',
+    detail: 'Official Anza Agave GitHub release feed for the Solana validator client.',
+    feeds: [{ url: 'https://github.com/anza-xyz/agave/releases.atom', label: 'Solana Agave', domain: 'solana.com' }],
+  },
+  {
+    key: 'arbitrum-nitro',
+    label: 'Arbitrum Nitro',
+    domain: 'arbitrum.io',
+    url: 'https://github.com/OffchainLabs/nitro/releases',
+    detail: 'Official Arbitrum Nitro GitHub release feed.',
+    feeds: [{ url: 'https://github.com/OffchainLabs/nitro/releases.atom', label: 'Arbitrum Nitro', domain: 'arbitrum.io' }],
+  },
+  {
+    key: 'optimism',
+    label: 'Optimism',
+    domain: 'optimism.io',
+    url: 'https://github.com/ethereum-optimism/optimism/releases',
+    detail: 'Official Optimism monorepo GitHub release feed.',
+    feeds: [{ url: 'https://github.com/ethereum-optimism/optimism/releases.atom', label: 'Optimism', domain: 'optimism.io' }],
+  },
+  {
+    key: 'base-status',
+    label: 'Base Status',
+    domain: 'base.org',
+    url: 'https://status.base.org/',
+    detail: 'Official Base incident and status history feed.',
+    feeds: [{ url: 'https://status.base.org/history.rss', label: 'Base Status', domain: 'base.org' }],
+  },
+  {
+    key: 'polygon-status',
+    label: 'Polygon Status',
+    domain: 'polygon.technology',
+    url: 'https://status.polygon.technology/',
+    detail: 'Official Polygon status history feed.',
+    feeds: [{ url: 'https://status.polygon.technology/history.rss', label: 'Polygon Status', domain: 'polygon.technology' }],
+  },
+  {
+    key: 'avalanchego',
+    label: 'AvalancheGo',
+    domain: 'avax.network',
+    url: 'https://github.com/ava-labs/avalanchego/releases',
+    detail: 'Official AvalancheGo GitHub release feed.',
+    feeds: [{ url: 'https://github.com/ava-labs/avalanchego/releases.atom', label: 'AvalancheGo', domain: 'avax.network' }],
+  },
+  {
+    key: 'cosmos-gaia',
+    label: 'Cosmos Gaia',
+    domain: 'cosmos.network',
+    url: 'https://github.com/cosmos/gaia/releases',
+    detail: 'Official Cosmos Gaia GitHub release feed.',
+    feeds: [{ url: 'https://github.com/cosmos/gaia/releases.atom', label: 'Cosmos Gaia', domain: 'cosmos.network' }],
+  },
+  {
+    key: 'celestia-node',
+    label: 'Celestia Node',
+    domain: 'celestia.org',
+    url: 'https://github.com/celestiaorg/celestia-node/releases',
+    detail: 'Official Celestia Node GitHub release feed.',
+    feeds: [{ url: 'https://github.com/celestiaorg/celestia-node/releases.atom', label: 'Celestia Node', domain: 'celestia.org' }],
+  },
+  {
+    key: 'sui',
+    label: 'Sui',
+    domain: 'sui.io',
+    url: 'https://github.com/MystenLabs/sui/releases',
+    detail: 'Official Sui GitHub release feed.',
+    feeds: [{ url: 'https://github.com/MystenLabs/sui/releases.atom', label: 'Sui', domain: 'sui.io' }],
+  },
+  {
+    key: 'aptos-core',
+    label: 'Aptos Core',
+    domain: 'aptosfoundation.org',
+    url: 'https://github.com/aptos-labs/aptos-core/releases',
+    detail: 'Official Aptos Core GitHub release feed.',
+    feeds: [{ url: 'https://github.com/aptos-labs/aptos-core/releases.atom', label: 'Aptos Core', domain: 'aptosfoundation.org' }],
+  },
+  {
+    key: 'chainlink',
+    label: 'Chainlink',
+    domain: 'chain.link',
+    url: 'https://github.com/smartcontractkit/chainlink/releases',
+    detail: 'Official Chainlink GitHub release feed.',
+    feeds: [{ url: 'https://github.com/smartcontractkit/chainlink/releases.atom', label: 'Chainlink', domain: 'chain.link' }],
+  },
+  {
+    key: 'uniswap-v4',
+    label: 'Uniswap v4',
+    domain: 'uniswap.org',
+    url: 'https://github.com/Uniswap/v4-core/releases',
+    detail: 'Official Uniswap v4 core GitHub release feed.',
+    feeds: [{ url: 'https://github.com/Uniswap/v4-core/releases.atom', label: 'Uniswap v4', domain: 'uniswap.org' }],
+  },
+  {
+    key: 'aave-v3',
+    label: 'Aave v3',
+    domain: 'aave.com',
+    url: 'https://github.com/aave/aave-v3-core/releases',
+    detail: 'Official Aave v3 core GitHub release feed.',
+    feeds: [{ url: 'https://github.com/aave/aave-v3-core/releases.atom', label: 'Aave v3', domain: 'aave.com' }],
+  },
+  {
+    key: 'lido',
+    label: 'Lido',
+    domain: 'lido.fi',
+    url: 'https://blog.lido.fi/',
+    detail: 'Official Lido blog feed for protocol and staking announcements.',
+    feeds: [{ url: 'https://blog.lido.fi/rss/', label: 'Lido', domain: 'lido.fi' }],
+  },
+  {
+    key: 'eigenlayer',
+    label: 'EigenLayer',
+    domain: 'eigenlayer.xyz',
+    url: 'https://blog.eigenlayer.xyz/',
+    detail: 'Official EigenLayer blog feed for protocol and ecosystem announcements.',
+    feeds: [{ url: 'https://blog.eigenlayer.xyz/rss/', label: 'EigenLayer', domain: 'eigenlayer.xyz' }],
+  },
+  {
+    key: 'sky-forum',
+    label: 'Sky / Maker Forum',
+    domain: 'forum.sky.money',
+    url: 'https://forum.sky.money/latest',
+    detail: 'Official Sky governance forum RSS feed.',
+    feeds: [{ url: 'https://forum.sky.money/latest.rss', label: 'Sky / Maker Forum', domain: 'forum.sky.money' }],
+  },
+  {
+    key: 'dydx',
+    label: 'dYdX',
+    domain: 'dydx.exchange',
+    url: 'https://github.com/dydxprotocol/v4-chain/releases',
+    detail: 'Official dYdX v4 chain GitHub release feed.',
+    feeds: [{ url: 'https://github.com/dydxprotocol/v4-chain/releases.atom', label: 'dYdX', domain: 'dydx.exchange' }],
+  },
+  {
+    key: 'jito-solana',
+    label: 'Jito Solana',
+    domain: 'jito.network',
+    url: 'https://github.com/jito-foundation/jito-solana/releases',
+    detail: 'Official Jito Solana GitHub release feed.',
+    feeds: [{ url: 'https://github.com/jito-foundation/jito-solana/releases.atom', label: 'Jito Solana', domain: 'jito.network' }],
+  },
+  {
+    key: 'jupiter-cpi',
+    label: 'Jupiter',
+    domain: 'jup.ag',
+    url: 'https://github.com/jup-ag/jupiter-cpi/releases',
+    detail: 'Official Jupiter GitHub release feed with currently published release rows.',
+    feeds: [{ url: 'https://github.com/jup-ag/jupiter-cpi/releases.atom', label: 'Jupiter', domain: 'jup.ag' }],
+  },
+  {
+    key: 'wormhole',
+    label: 'Wormhole',
+    domain: 'wormhole.com',
+    url: 'https://github.com/wormhole-foundation/wormhole/releases',
+    detail: 'Official Wormhole GitHub release feed.',
+    feeds: [{ url: 'https://github.com/wormhole-foundation/wormhole/releases.atom', label: 'Wormhole', domain: 'wormhole.com' }],
+  },
+  {
+    key: 'layerzero-v2',
+    label: 'LayerZero v2',
+    domain: 'layerzero.network',
+    url: 'https://github.com/LayerZero-Labs/LayerZero-v2/releases',
+    detail: 'Official LayerZero v2 GitHub release feed.',
+    feeds: [{ url: 'https://github.com/LayerZero-Labs/LayerZero-v2/releases.atom', label: 'LayerZero v2', domain: 'layerzero.network' }],
+  },
+];
+
+const ISSUER_SOURCES: OfficialSourceConfig[] = [
+  {
+    key: 'tether',
+    label: 'Tether',
+    domain: 'tether.io',
+    url: 'https://tether.io/news',
+    detail: 'Official Tether feed for issuer and reserve/newsroom announcements.',
+    feeds: [{ url: 'https://tether.io/feed/', label: 'Tether', domain: 'tether.io' }],
+  },
+  {
+    key: 'paypal-usd',
+    label: 'PayPal USD',
+    domain: 'paypal.com',
+    url: 'https://newsroom.paypal-corp.com/news',
+    detail: 'Official PayPal newsroom RSS filtered for PYUSD, stablecoin, and digital-asset terms.',
+    feeds: [{
+      url: 'https://newsroom.paypal-corp.com/news?pagetemplate=rss',
+      label: 'PayPal USD',
+      domain: 'paypal.com',
+      includeKeywords: ['pyusd', 'paypal usd', 'stablecoin', 'stable coin', 'crypto', 'cryptocurrency', 'digital asset', 'blockchain'],
+    }],
+  },
+  {
+    key: 'fidelity-digital-assets',
+    label: 'Fidelity Digital Assets',
+    domain: 'fidelitydigitalassets.com',
+    url: 'https://www.fidelitydigitalassets.com/',
+    detail: 'Official Fidelity Digital Assets RSS feed for institutional crypto research and product updates.',
+    feeds: [{ url: 'https://www.fidelitydigitalassets.com/rss.xml', label: 'Fidelity Digital Assets', domain: 'fidelitydigitalassets.com' }],
+  },
+];
+
 const RSS_FEEDS: FeedConfig[] = [
   { key: 'financialjuice', label: 'FinancialJuice', url: 'https://www.financialjuice.com/feed.ashx', domain: 'financialjuice.com' },
   { key: 'wsj-markets', label: 'WSJ Markets RSS', url: 'https://feeds.content.dowjones.io/public/rss/RSSMarketsMain', domain: 'wsj.com' },
@@ -403,14 +656,26 @@ const RSS_FEEDS: FeedConfig[] = [
   },
   { key: 'coindesk', label: 'CoinDesk', url: 'https://www.coindesk.com/arc/outboundfeeds/rss/', domain: 'coindesk.com' },
   { key: 'the-block', label: 'The Block', url: 'https://www.theblock.co/rss.xml', domain: 'theblock.co', minFetchMs: 185_000 },
+  { key: 'blockworks', label: 'Blockworks', url: 'https://blockworks.com/feed', domain: 'blockworks.com' },
+  {
+    key: 'dl-news',
+    label: 'DL News',
+    url: 'https://www.dlnews.com/rss/',
+    domain: 'dlnews.com',
+    pageParser: 'dl-news',
+    minFetchMs: 185_000,
+  },
+  { key: 'unchained', label: 'Unchained', url: 'https://unchainedcrypto.com/feed/', domain: 'unchainedcrypto.com' },
+  { key: 'protos', label: 'Protos', url: 'https://protos.com/feed/', domain: 'protos.com' },
+  { key: 'the-defiant', label: 'The Defiant', url: 'https://thedefiant.io/api/feed', domain: 'thedefiant.io' },
+  { key: 'glassnode-insights', label: 'Glassnode Insights', url: 'https://research.glassnode.com/rss/', domain: 'research.glassnode.com', minFetchMs: 185_000 },
+  { key: 'chainalysis', label: 'Chainalysis', url: 'https://www.chainalysis.com/feed/', domain: 'chainalysis.com', minFetchMs: 185_000 },
+  { key: 'trm-labs', label: 'TRM Labs', url: 'https://www.trmlabs.com/resources/blog/rss.xml', domain: 'trmlabs.com', minFetchMs: 185_000 },
+  { key: 'elliptic', label: 'Elliptic', url: 'https://www.elliptic.co/blog/rss.xml', domain: 'elliptic.co', minFetchMs: 185_000 },
   { key: 'wublockchain', label: 'WuBlockchain / Substack', url: 'https://wublock.substack.com/feed', domain: 'wublock.substack.com' },
-  { key: 'zerohedge', label: 'ZeroHedge', url: 'https://cms.zerohedge.com/fullrss2.xml', domain: 'zerohedge.com' },
-  { key: 'watcherguru', label: 'WatcherGuru', url: 'https://watcher.guru/news/feed', domain: 'watcher.guru' },
   { key: 'cointelegraph', label: 'Cointelegraph', url: 'https://cointelegraph.com/rss', domain: 'cointelegraph.com' },
   { key: 'decrypt', label: 'Decrypt', url: 'https://decrypt.co/feed', domain: 'decrypt.co' },
   { key: 'cryptoslate', label: 'CryptoSlate', url: 'https://cryptoslate.com/feed/', domain: 'cryptoslate.com', fallbackUrl: 'https://cryptoslate.com/news/' },
-  { key: 'bitcoin-magazine', label: 'Bitcoin Magazine', url: 'https://bitcoinmagazine.com/feed', domain: 'bitcoinmagazine.com' },
-  { key: 'crypto-briefing', label: 'Crypto Briefing', url: 'https://cryptobriefing.com/feed/', domain: 'cryptobriefing.com' },
 ] as const satisfies FeedConfig[];
 type RssFeed = FeedConfig;
 type RssFetchResult = { items: NewsContextItem[]; source: NewsContextSource };
@@ -427,6 +692,8 @@ let treeSourceCache: (RssFetchResult & { fetchedAt: number }) | null = null;
 const rssSourceCache = new Map<string, RssFetchResult & { fetchedAt: number }>();
 const primarySourceCache = new Map<string, RssFetchResult & { fetchedAt: number }>();
 const venueSourceCache = new Map<string, RssFetchResult & { fetchedAt: number }>();
+const protocolSourceCache = new Map<string, RssFetchResult & { fetchedAt: number }>();
+const issuerSourceCache = new Map<string, RssFetchResult & { fetchedAt: number }>();
 
 export async function getNewsContext(force = false): Promise<NewsContextPayload> {
   if (!force && cache && Date.now() - cache.fetchedAt < CACHE_MS) return cache;
@@ -452,15 +719,17 @@ function startRefresh(): Promise<NewsContextPayload> {
 }
 
 async function refreshNewsContext(): Promise<NewsContextPayload> {
-  const [primary, venue, tree, rss, lookonchain] = await Promise.all([
+  const [primary, venue, protocol, issuer, tree, rss, lookonchain] = await Promise.all([
     fetchPrimarySources(),
     fetchVenueSources(),
+    fetchProtocolSources(),
+    fetchIssuerSources(),
     fetchTree(),
     fetchRssBundle(),
     fetchLookonchain(),
   ]);
   const seen = new Set<string>();
-  const items = [...primary.items, ...venue.items, ...tree.items, ...rss.items, ...lookonchain.items]
+  const items = [...primary.items, ...venue.items, ...protocol.items, ...issuer.items, ...tree.items, ...rss.items, ...lookonchain.items]
     .filter((item) => {
       const key = normalizeKey(item.title);
       if (!key || seen.has(key)) return false;
@@ -468,13 +737,13 @@ async function refreshNewsContext(): Promise<NewsContextPayload> {
       return true;
     })
     .sort(compareContextItems)
-    .slice(0, 520);
+    .slice(0, 1200);
 
   return {
-    source: 'primary+venue+tree+rss+lookonchain',
+    source: 'primary+venue+protocol+issuer+tree+rss+lookonchain',
     fetchedAt: Date.now(),
     items,
-    sources: [...primary.sources, ...venue.sources, tree.source, ...rss.sources, lookonchain.source],
+    sources: [...primary.sources, ...venue.sources, ...protocol.sources, ...issuer.sources, tree.source, ...rss.sources, lookonchain.source],
   };
 }
 
@@ -484,6 +753,14 @@ async function fetchPrimarySources(): Promise<{ items: NewsContextItem[]; source
 
 async function fetchVenueSources(): Promise<{ items: NewsContextItem[]; sources: NewsContextSource[] }> {
   return fetchOfficialSources(VENUE_SOURCES, 'venue', venueSourceCache, VENUE_DEFAULT_MIN_FETCH_MS, 160);
+}
+
+async function fetchProtocolSources(): Promise<{ items: NewsContextItem[]; sources: NewsContextSource[] }> {
+  return fetchOfficialSources(PROTOCOL_SOURCES, 'protocol', protocolSourceCache, PROTOCOL_DEFAULT_MIN_FETCH_MS, 320);
+}
+
+async function fetchIssuerSources(): Promise<{ items: NewsContextItem[]; sources: NewsContextSource[] }> {
+  return fetchOfficialSources(ISSUER_SOURCES, 'issuer', issuerSourceCache, ISSUER_DEFAULT_MIN_FETCH_MS, 80);
 }
 
 async function fetchOfficialSources(
@@ -710,7 +987,7 @@ async function fetchRssBundle(): Promise<{ items: NewsContextItem[]; sources: Ne
   const items = settled
     .flatMap((res) => res.items)
     .sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0))
-    .slice(0, 180);
+    .slice(0, 260);
   return {
     items,
     sources: settled.map((res) => res.source),
@@ -1271,6 +1548,7 @@ function parseFallbackPage(html: string, feed: RssFeed): NewsContextItem[] {
 
 function parseMediaPage(html: string, feed: RssFeed): NewsContextItem[] {
   if (feed.pageParser === 'ap-business') return parseApBusinessPage(html, feed);
+  if (feed.pageParser === 'dl-news') return parseDlNewsPage(html, feed);
   return [];
 }
 
@@ -1295,6 +1573,33 @@ function parseApBusinessPage(html: string, feed: RssFeed): NewsContextItem[] {
       sourceDomain: feed.domain,
       channel: 'rss',
       ts: Number.isFinite(ts) ? ts : null,
+    }));
+    if (items.length >= 8) break;
+  }
+  return items;
+}
+
+function parseDlNewsPage(html: string, feed: RssFeed): NewsContextItem[] {
+  const seen = new Set<string>();
+  const items: NewsContextItem[] = [];
+  const rows = html.matchAll(/<a\b[^>]*class=["'][^"']*article-preview-image[^"']*["'][^>]*href=["']([^"']*\/articles\/[^"']+)["'][\s\S]{0,1200}?<img\b[^>]*alt=["']([^"']+)["']/gi);
+  for (const match of rows) {
+    const url = absolutizeUrl(match[1], feed.url);
+    const title = cleanText(stripHtml(match[2]));
+    if (!title || seen.has(url)) continue;
+    seen.add(url);
+    const nearbyText = cleanText(stripHtml(html.slice(match.index ?? 0, (match.index ?? 0) + 2600)));
+    const relativeAge = nearbyText.match(/\b\d+\s+(?:second|minute|hour|day|week|month|year)s?\s+ago\b/i)?.[0] ?? '';
+    items.push(buildItem({
+      id: `rss:${feed.key}:page:${url}`,
+      title,
+      summary: 'DL News official page headline',
+      url,
+      source: feed.label,
+      sourceKey: feed.key,
+      sourceDomain: feed.domain,
+      channel: 'rss',
+      ts: parseRelativeAge(relativeAge, Date.now()),
     }));
     if (items.length >= 8) break;
   }
@@ -1461,25 +1766,20 @@ function sourceAgeLabel(ts: number): string {
 }
 
 function compareContextItems(a: NewsContextItem, b: NewsContextItem): number {
-  const byScore = contextSortScore(b) - contextSortScore(a);
-  if (byScore !== 0) return byScore;
+  const byTime = (b.ts ?? 0) - (a.ts ?? 0);
+  if (byTime !== 0) return byTime;
   if (a.channel !== b.channel) return channelRank(a.channel) - channelRank(b.channel);
   return a.id.localeCompare(b.id);
-}
-
-function contextSortScore(item: NewsContextItem): number {
-  const ts = item.ts && Number.isFinite(item.ts) ? item.ts : 0;
-  if (item.channel === 'primary') return ts + 6 * 60 * 60_000;
-  if (item.channel === 'venue') return ts + 5 * 60 * 60_000;
-  return ts;
 }
 
 function channelRank(channel: NewsContextChannel): number {
   if (channel === 'primary') return 0;
   if (channel === 'venue') return 1;
-  if (channel === 'tree') return 2;
-  if (channel === 'lookonchain') return 3;
-  return 4;
+  if (channel === 'protocol') return 2;
+  if (channel === 'issuer') return 3;
+  if (channel === 'tree') return 4;
+  if (channel === 'lookonchain') return 5;
+  return 6;
 }
 
 function classifyTags(text: string): string[] {
@@ -1491,15 +1791,19 @@ function classifyTags(text: string): string[] {
   if (/(api|websocket|endpoint|request weight|maintenance|upgrade|suspend|deposit|withdrawal|wallet|network|outage|incident|service issue|점검|입출금)/.test(lower)) tags.push('Ops');
   if (/(whale|wallet|transfer|bought|sold|deposited|withdrew|smart money|on-chain|onchain)/.test(lower)) tags.push('On-Chain');
   if (/(hack|exploit|attack|phishing|security|stolen)/.test(lower)) tags.push('Security');
+  if (/(release|client|node|validator|version|upgrade|hard fork|soft fork|mainnet|testnet|consensus|execution layer|beacon|github)/.test(lower)) tags.push('Release');
+  if (/(governance|proposal|vote|dao|parameter|delegate|forum)/.test(lower)) tags.push('Governance');
+  if (/(stablecoin|stable coin|usdt|usdc|pyusd|usds|fdusd|depeg|peg|reserve|redemption|attestation)/.test(lower)) tags.push('Stablecoin');
   if (/\b(fed|fomc|bls|bea|cpi|ppi|pce|jolts|inflation|payroll|unemployment|rate|rates|gdp|employment|jobs|treasury|ofac|ecb|boe|boj|pboc|safe|fx reserve|yield|tariff|iran|strike|strikes|war)\b/.test(lower) || /\b(u\.s\.|us)\s+treasury\b/.test(lower)) tags.push('Macro');
   if (/\b(etf|sec|cftc|lawsuit|court|regulator|approval|enforcement|litigation|sanction|general license|trading suspension|stablecoin)\b/.test(lower)) tags.push('Policy');
+  if (/\b(ibit|fbtc|gbtc|bitb|arkb|ezbc|hodl|spot bitcoin etf|spot ether etf|bitcoin etf|ether etf)\b/.test(lower)) tags.push('ETF');
   if (!tags.length) tags.push('Market');
   return tags.slice(0, 4);
 }
 
 function toneForTags(tags: string[]): NewsContextTone {
   if (tags.some((tag) => tag === 'Delisting' || tag === 'Security' || tag === 'Macro')) return 'bad';
-  if (tags.some((tag) => tag === 'Ops' || tag === 'Policy' || tag === 'On-Chain')) return 'warn';
+  if (tags.some((tag) => tag === 'Ops' || tag === 'Policy' || tag === 'On-Chain' || tag === 'Release' || tag === 'Governance' || tag === 'Stablecoin' || tag === 'ETF')) return 'warn';
   if (tags.some((tag) => tag === 'Listing' || tag === 'Exchange')) return 'ok';
   return 'idle';
 }

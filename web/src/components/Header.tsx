@@ -6,7 +6,6 @@ import { ACCENTS, CURRENCIES, type AccentKey, type DataCadenceKey } from '../lib
 import { openOverlay, useOverlay } from '../lib/overlay';
 import { TokenIcon } from './TokenIcon';
 import {
-  IconActivity,
   IconAlarm,
   IconBell,
   IconBrain,
@@ -353,7 +352,6 @@ function AccountCard({ compact = false }: { compact?: boolean }) {
   const [preview, setPreview] = useState<string | null>(null); // instant feedback before the 2s state tick
   const [editName, setEditName] = useState<string | null>(null);
   const [sessions, setSessions] = useState<AccountSessionRow[]>([]);
-  const [sessionNow, setSessionNow] = useState(Date.now());
   const avatar = preview ?? profile.avatar ?? DEFAULT_PROFILE_LOGO;
   const usesDefaultLogo = !preview && !profile.avatar;
   const name = profile.name || 'Operator';
@@ -364,10 +362,7 @@ function AccountCard({ compact = false }: { compact?: boolean }) {
   const hostLabel = typeof window !== 'undefined' ? window.location.host : 'local';
   const accountId = '1029671855';
   const activeSessionCount = sessions.filter((s) => s.current || s.active).length;
-  const recentWindowMs = 10 * 60_000;
-  const deviceRows = sessions
-    .filter((s) => s.current || s.active || sessionNow - s.lastSeen < recentWindowMs)
-    .slice(0, 3);
+  const deviceRows = sessions.slice(0, 3);
   const logoutHref = typeof window !== 'undefined' && window.location.hostname === DEPLOYED_APP_HOST
     ? '/cdn-cgi/access/logout'
     : `https://${DEPLOYED_APP_HOST}/cdn-cgi/access/logout`;
@@ -382,7 +377,6 @@ function AccountCard({ compact = false }: { compact?: boolean }) {
         .then((d) => {
           if (!alive || !d) return;
           setSessions(d.sessions ?? []);
-          setSessionNow(Number(d.now) || Date.now());
         })
         .catch(() => undefined);
     };
@@ -822,7 +816,7 @@ function ClockMenu() {
   const { open, setOpen, ref } = useMenu<HTMLDivElement>();
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000);
+    const t = setInterval(() => setNow(new Date()), 250);
     return () => clearInterval(t);
   }, []);
   const zone = ZONES.find((z) => z.id === prefs.clockZone) ?? ZONES[1];
@@ -1316,6 +1310,16 @@ function PanelWebLogo({ domain, label, fallback, size = 31 }: { domain: string; 
   );
 }
 
+function CloudflareMark({ size = 31 }: { size?: number }) {
+  return (
+    <span className="cloudflare-mark" style={{ width: size, height: size }} aria-label="Cloudflare">
+      <svg role="img" viewBox="0 0 24 24" width={size} height={size} aria-hidden>
+        <path d="M16.5088 16.8447c.1475-.5068.0908-.9707-.1553-1.3154-.2246-.3164-.6045-.499-1.0615-.5205l-8.6592-.1123a.1559.1559 0 0 1-.1333-.0713c-.0283-.042-.0351-.0986-.021-.1553.0278-.084.1123-.1484.2036-.1562l8.7359-.1123c1.0351-.0489 2.1601-.8868 2.5537-1.9136l.499-1.3013c.0215-.0561.0293-.1128.0147-.168-.5625-2.5463-2.835-4.4453-5.5499-4.4453-2.5039 0-4.6284 1.6177-5.3876 3.8614-.4927-.3658-1.1187-.5625-1.794-.499-1.2026.119-2.1665 1.083-2.2861 2.2856-.0283.31-.0069.6128.0635.894C1.5683 13.171 0 14.7754 0 16.752c0 .1748.0142.3515.0352.5273.0141.083.0844.1475.1689.1475h15.9814c.0909 0 .1758-.0645.2032-.1553l.12-.4268zm2.7568-5.5634c-.0771 0-.1611 0-.2383.0112-.0566 0-.1054.0415-.127.0976l-.3378 1.1744c-.1475.5068-.0918.9707.1543 1.3164.2256.3164.6055.498 1.0625.5195l1.8437.1133c.0557 0 .1055.0263.1329.0703.0283.043.0351.1074.0214.1562-.0283.084-.1132.1485-.204.1553l-1.921.1123c-1.041.0488-2.1582.8867-2.5527 1.914l-.1406.3585c-.0283.0713.0215.1416.0986.1416h6.5977c.0771 0 .1474-.0489.169-.126.1122-.4082.1757-.837.1757-1.2803 0-2.6025-2.125-4.727-4.7344-4.727" />
+      </svg>
+    </span>
+  );
+}
+
 function TopPanelHeader({
   className = '',
   logo,
@@ -1386,7 +1390,7 @@ const clockParts = (zoneId: string, d: Date) => {
     const ampm = (parts.find((p) => p.type === 'dayPeriod')?.value ?? '').toUpperCase();
     const hour = Number(hh) || 0;
     const minute = Number(mm) || 0;
-    const second = Number(ss) || 0;
+    const second = (Number(ss) || 0) + d.getMilliseconds() / 1000;
     return {
       raw: `${hh}:${mm}:${ss} ${ampm}`.trim(),
       hm: `${hh}:${mm}`,
@@ -1395,7 +1399,7 @@ const clockParts = (zoneId: string, d: Date) => {
       hour,
       minute,
       second,
-      hourDeg: (hour % 12) * 30 + minute * 0.5,
+      hourDeg: (hour % 12) * 30 + minute * 0.5 + second / 120,
       minuteDeg: minute * 6 + second * 0.1,
       secondDeg: second * 6,
     };
@@ -1404,7 +1408,7 @@ const clockParts = (zoneId: string, d: Date) => {
     const [hh = '00', mm = '00', ss = '00'] = raw.split(':');
     const hour = Number(hh) || 0;
     const minute = Number(mm) || 0;
-    const second = Number(ss) || 0;
+    const second = (Number(ss) || 0) + d.getMilliseconds() / 1000;
     return {
       raw: `${hh}:${mm}:${ss}`,
       hm: `${hh}:${mm}`,
@@ -1413,7 +1417,7 @@ const clockParts = (zoneId: string, d: Date) => {
       hour,
       minute,
       second,
-      hourDeg: (hour % 12) * 30 + minute * 0.5,
+      hourDeg: (hour % 12) * 30 + minute * 0.5 + second / 120,
       minuteDeg: minute * 6 + second * 0.1,
       secondDeg: second * 6,
     };
@@ -1502,6 +1506,7 @@ function SharedTopBar() {
   const { state, connected, page, prefs, updatePref, setPage, setKill, saveConfig, refresh } = useStore();
   const theme = useResolvedTheme();
   const rowRef = useRef<HTMLDivElement>(null);
+  const menuContentRef = useRef<HTMLDivElement>(null);
   const btnRefs = useRef<Partial<Record<MK, HTMLButtonElement | null>>>({});
   const closeT = useRef<number | undefined>(undefined);
   const rafRef = useRef<number | undefined>(undefined);
@@ -1529,6 +1534,7 @@ function SharedTopBar() {
   const [notifTab, setNotifTab] = useState<NotifTab>('all');
   const [notifDetailOpen, setNotifDetailOpen] = useState(false);
   const [notifDraftAlerts, setNotifDraftAlerts] = useState(() => prefs.alerts);
+  const [cadenceTarget, setCadenceTarget] = useState<DataCadenceKey>('market');
   const [refreshCustom, setRefreshCustom] = useState(() => String(prefs.refreshSec));
   const [menuRefreshState, setMenuRefreshState] = useState<'idle' | 'spin' | 'ok' | 'err'>('idle');
   const menuRefreshBusy = useRef(false);
@@ -1537,11 +1543,12 @@ function SharedTopBar() {
   const [currencyNotional, setCurrencyNotional] = useState(1000);
   const [basisSamplePct, setBasisSamplePct] = useState(0.042);
 
-  useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
+  useEffect(() => { const t = setInterval(() => setNow(new Date()), 250); return () => clearInterval(t); }, []);
   useEffect(() => {
     if (active !== 'mrefresh') return;
-    setRefreshCustom(String(prefs.refreshSec));
-  }, [active, prefs.refreshSec]);
+    const value = prefs.dataCadence?.[cadenceTarget] ?? (cadenceTarget === 'market' ? prefs.refreshSec : cadenceTarget === 'news' ? 5 : 10);
+    setRefreshCustom(String(value));
+  }, [active, cadenceTarget, prefs.dataCadence, prefs.refreshSec]);
   useEffect(() => {
     if (active !== 'currency') return;
     let alive = true;
@@ -1659,15 +1666,8 @@ function SharedTopBar() {
   const latTone = lat === null ? '' : lat < 400 ? 'ok' : lat < 900 ? 'warn' : 'bad';
   const events = state?.events ?? []; const unread = events.filter((e) => e.id > seen).length;
   const zone = ZONES.find((z) => z.id === prefs.clockZone) ?? ZONES[1];
-  const clockPanelZones = ZONES.filter((z) => ['local', 'UTC', 'Asia/Kolkata', 'America/New_York'].includes(z.id));
-  const visibleClockZones = clockPanelZones.some((z) => z.id === zone.id) ? clockPanelZones : [zone, ...clockPanelZones].slice(0, 4);
   const activeClock = clockParts(zone.id, now);
   const activeClockOffset = clockOffset(zone.id, now);
-  const utcClock = clockParts('UTC', now);
-  const localClock = clockParts('local', now);
-  const marketClock = clockParts('America/New_York', now);
-  const marketClockOffset = clockOffset('America/New_York', now);
-  const marketClockDate = clockDate('America/New_York', now);
   const cur = CURRENCIES[prefs.currency] ? prefs.currency : 'USD';
   const curInfo = CURRENCIES[cur] ?? CURRENCIES.USD;
   const curSymbol = curInfo.symbol.trim() || cur;
@@ -1680,8 +1680,6 @@ function SharedTopBar() {
       : currencyFx.ok === false
         ? 'Unavailable'
         : 'Loading';
-  const curFxCode = cur === 'USD' ? 'BASE' : curTone === 'ok' ? 'FX' : curTone === 'bad' ? 'OFF' : 'WAIT';
-  const curAgeCode = cur === 'USD' ? 'USD' : currencyFx.fetchedAt ? timeAgo(currencyFx.fetchedAt).replace(/\s+ago$/i, '') : curTone === 'bad' ? 'OFF' : '...';
   const currencyRateText = (code: string) => {
     if (code === 'USD') return '1.0000';
     const r = currencyFx.rates[code];
@@ -1732,10 +1730,6 @@ function SharedTopBar() {
   ];
   const basisPreview = basisIsBps ? formatBasisBp(basisSamplePct).replace('bp', ' bps') : formatBasisPct(basisSamplePct);
   const basisCode = basisIsBps ? 'BPS' : 'PCT';
-  const basisAltPreview = basisIsBps ? formatBasisPct(basisSamplePct) : formatBasisBp(basisSamplePct);
-  const basisTrackPos = Math.max(6, Math.min(94, 50 + basisSamplePct * 70));
-  const basisTrackStart = Math.min(50, basisTrackPos);
-  const basisTrackSpan = Math.abs(basisTrackPos - 50);
   const activeAccent = ACCENTS[prefs.accent] ?? ACCENTS.b;
   const appearanceZoom = Math.round((prefs.zoom || 1) * 100);
   const al = prefs.alerts; const alertsOn = Object.values(al).filter(Boolean).length;
@@ -1835,31 +1829,34 @@ function SharedTopBar() {
   const cadenceChoices = [
     { sec: 0.5, label: '<1s' },
     { sec: 1, label: '1s' },
-    { sec: 2, label: '2s' },
     { sec: 3, label: '3s' },
     { sec: 5, label: '5s' },
     { sec: 10, label: '10s' },
   ];
   const clampRefresh = (sec: number) => Math.min(300, Math.max(0.5, Math.round(sec * 10) / 10));
-  const cadenceSec = (key: DataCadenceKey) => prefs.dataCadence?.[key] ?? (key === 'market' ? prefs.refreshSec : 10);
+  const cadenceSec = (key: DataCadenceKey) => {
+    const value = prefs.dataCadence?.[key] ?? (key === 'market' ? prefs.refreshSec : key === 'news' ? 5 : 10);
+    return key === 'news' ? Math.min(5, value) : value;
+  };
   const fmtCadence = (sec: number) => sec < 1 ? '<1s' : `${sec % 1 === 0 ? sec.toFixed(0) : sec.toFixed(1)}s`;
-  const setAllCadences = (sec: number) => {
+  const setSourceCadence = (key: DataCadenceKey, sec: number) => {
     const next = clampRefresh(sec);
-    const map = Object.fromEntries(cadenceKeys.map((key) => [key, next])) as Record<DataCadenceKey, number>;
+    const map = { ...(prefs.dataCadence ?? {}), [key]: next } as Record<DataCadenceKey, number>;
     updatePref('dataCadence', map);
-    updatePref('refreshSec', next);
+    if (key === 'market') updatePref('refreshSec', next);
     setRefreshCustom(String(next));
   };
-  const applyCadence = (sec: number) => {
-    setAllCadences(sec);
+  const applyCadence = (sec: number, key: DataCadenceKey = cadenceTarget) => {
+    setCadenceTarget(key);
+    setSourceCadence(key, sec);
   };
   const applyCustomRefresh = () => {
     const parsed = Number(refreshCustom);
     if (!Number.isFinite(parsed)) {
-      setRefreshCustom(String(prefs.refreshSec));
+      setRefreshCustom(String(cadenceSec(cadenceTarget)));
       return;
     }
-    applyCadence(parsed);
+    applyCadence(parsed, cadenceTarget);
   };
   const runMenuRefresh = async () => {
     if (menuRefreshBusy.current) return;
@@ -1903,8 +1900,17 @@ function SharedTopBar() {
   const minCadence = Math.min(...cadenceKeys.map((key) => cadenceSec(key)));
   const maxCadence = Math.max(...cadenceKeys.map((key) => cadenceSec(key)));
   const cadenceSpread = minCadence === maxCadence ? fmtCadence(minCadence) : `${fmtCadence(minCadence)}-${fmtCadence(maxCadence)}`;
-  const selectedCadence = minCadence === maxCadence ? minCadence : marketCadence;
-  const selectedCadenceLabel = 'All Sources';
+  const selectedCadence = cadenceSec(cadenceTarget);
+  const cadenceLabelFor = (key: DataCadenceKey) => ({
+    market: 'Market Prices',
+    account: 'Account Data',
+    news: 'News Sources',
+    calendar: 'Calendar',
+    fx: 'FX Rates',
+    health: 'Health & Logs',
+    token: 'Token Streams',
+  } satisfies Record<DataCadenceKey, string>)[key];
+  const selectedCadenceLabel = cadenceLabelFor(cadenceTarget);
   const refreshCode = fmtCadence(marketCadence);
   const refreshStamp = menuRefreshState === 'spin' ? 'POLL' : menuRefreshState === 'ok' ? 'SYNC' : menuRefreshState === 'err' ? 'ERR' : refreshLabel.toUpperCase();
   const refreshNetCode = menuRefreshState === 'spin' ? 'RUN' : menuRefreshState === 'ok' ? 'SYNC' : menuRefreshState === 'err' ? 'ERR' : refreshTone === 'ok' ? 'LIVE' : refreshTone === 'warn' ? 'WARN' : 'OFF';
@@ -2026,6 +2032,9 @@ function SharedTopBar() {
     return () => window.removeEventListener('resize', place);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, placeSig]);
+  useLayoutEffect(() => {
+    menuContentRef.current?.scrollTo({ top: 0, left: 0 });
+  }, [active, contentActive]);
 
   const trig = (k: MK, cls: string, inner: JSX.Element, opts: { title?: string; onClick?: () => void } = {}) => (
     <button
@@ -2122,29 +2131,17 @@ function SharedTopBar() {
     switch (k) {
       case 'clock':
         return (
-          <div className="clock-pop">
+          <div className="clock-pop clock-select-pop">
             <TopPanelHeader
               className="clock-pop-hero"
               logo={<ClockFace parts={activeClock} className="lg" />}
-              title="Execution Time"
+              title="Market Clock"
               value={activeClock.raw}
-              sub={`${activeClockOffset} · ${clockDate(zone.id, now)}`}
-              status="Live"
+              sub={`${zone.city} · ${activeClockOffset} · ${clockDate(zone.id, now)}`}
+              status={zone.label}
             />
-            <div className="clock-twins">
-              <span><em>UTC</em><b>{utcClock.raw}</b></span>
-              <span><em>Local</em><b>{localClock.raw}</b></span>
-            </div>
-            <div className="clock-market-card">
-              <ClockFace parts={marketClock} className="mini" />
-              <span>
-                <em>Market Clock</em>
-                <b>{marketClock.raw}</b>
-                <small>New York · {marketClockOffset} · {marketClockDate}</small>
-              </span>
-            </div>
             <div className="clock-zone-list">
-              {visibleClockZones.map((zz) => {
+              {ZONES.map((zz) => {
                 const p = clockParts(zz.id, now);
                 const selected = zz.id === zone.id;
                 return (
@@ -2196,17 +2193,16 @@ function SharedTopBar() {
       case 'apikey': return keysBody();
       case 'data':
         return (
-          <div className={`datax-pop ${dataGrade}`}>
+          <div className={`datax-pop datax-slim ${dataGrade}`}>
             <TopPanelHeader
               className={`datax-hero ${dataGrade}`}
-              logo={<DataHealthGlyph />}
+              logo={<IconDatabase size={21} />}
               title="Data Health"
-              sub={dataSub}
               status={dataLabel}
             />
             <div className="datax-source-list" aria-label="Measured data sources">
               {dataRows.map((row) => (
-                <div key={row.name} className={`datax-source-row ${row.tier}`}>
+                <div key={row.name} className={`datax-source-row ${row.tier}`} title={row.sub} aria-label={`${row.name}: ${row.value}. ${row.sub}`}>
                   <span className={`datax-source-dot ${row.tier}`} />
                   <span className="datax-source-copy">
                     <b>{row.name}</b>
@@ -2349,7 +2345,7 @@ function SharedTopBar() {
           <div className={`modex-pop ${modeTone}`}>
             <TopPanelHeader
               className="modex-head"
-              logo={<PanelWebLogo domain="cloudflare.com" label="Bot controls" fallback={<IconPower size={17} />} />}
+              logo={<CloudflareMark />}
               title="Bot Controls"
               sub={modeSub}
               status={modeLabel}
@@ -2385,45 +2381,49 @@ function SharedTopBar() {
         );
       case 'mrefresh':
         return (
-          <div className={`mrefx-pop cadence ${refreshTone}`}>
+          <div className={`mrefx-pop cadence mrefx-slim ${refreshTone}`}>
             <TopPanelHeader
               className="mrefx-cadence-head"
-              logo={<DataCadenceGlyph />}
+              logo={<IconRefresh size={21} />}
               title="Data Cadence"
               sub={refreshDetail}
               status={refreshLabel}
             />
             <div className="mrefx-custom-row top" aria-label="Custom data cadence seconds">
-              <button data-testid="mrefresh-decrease" type="button" onClick={() => applyCadence(selectedCadence - 1)} aria-label="Decrease cadence">-</button>
+              <button data-testid="mrefresh-decrease" type="button" onClick={() => applyCadence(selectedCadence - 1, cadenceTarget)} aria-label="Decrease cadence">-</button>
               <label>
                 <span>{selectedCadenceLabel}</span>
                 <input data-testid="mrefresh-custom-input" value={refreshCustom} inputMode="decimal" type="number" min={0.5} max={300} step={0.5} onChange={(e) => setRefreshCustom(e.currentTarget.value)} onBlur={applyCustomRefresh} onKeyDown={(e) => { if (e.key === 'Enter') applyCustomRefresh(); }} aria-label="Custom data cadence seconds" />
               </label>
-              <button data-testid="mrefresh-increase" type="button" onClick={() => applyCadence(selectedCadence + 1)} aria-label="Increase cadence">+</button>
-              <button data-testid="mrefresh-apply" className="mrefx-apply" type="button" onClick={applyCustomRefresh}>Apply</button>
-            </div>
-            <div className="mrefx-cadence-presets" role="radiogroup" aria-label={`${selectedCadenceLabel} cadence`}>
-              {cadenceChoices.map((r) => (
-                <button
-                  key={r.sec}
-                  data-testid={`mrefresh-${r.sec}`}
-                  className={`mrefx-cadence-preset ${selectedCadence === r.sec ? 'on' : ''}`}
-                  type="button"
-                  role="radio"
-                  aria-checked={selectedCadence === r.sec}
-                  aria-label={`${r.label} cadence for ${selectedCadenceLabel}`}
-                  onClick={() => applyCadence(r.sec)}
-                >
-                  {r.label}
-                </button>
-              ))}
+              <button data-testid="mrefresh-increase" type="button" onClick={() => applyCadence(selectedCadence + 1, cadenceTarget)} aria-label="Increase cadence">+</button>
+              <button data-testid="mrefresh-apply" className="mrefx-apply" type="button" onClick={applyCustomRefresh}>Set</button>
             </div>
             <div className="mrefx-source-list" aria-label="Data source cadences">
               {cadenceRows.map((row) => (
-                <div key={row.key} className={`mrefx-source-row ${row.tone}`}>
-                  <span className="mrefx-source-ic">{row.icon}</span>
-                  <span className="mrefx-source-copy"><b>{row.label}</b><em>{row.sub}</em></span>
-                  <strong>{row.value}</strong>
+                <div key={row.key} className={`mrefx-source-row ${row.tone}`} title={row.sub} aria-label={`${row.label}: ${row.value}. ${row.sub}`}>
+                  <span className={`mrefx-source-dot ${row.tone}`} />
+                  <button type="button" className="mrefx-source-copy" onClick={() => { setCadenceTarget(row.key); setRefreshCustom(String(cadenceSec(row.key))); }} aria-label={`Edit ${row.label} cadence`}>
+                    <b>{row.label}</b>
+                    <em>{row.sub}</em>
+                  </button>
+                  <span className="mrefx-row-presets" role="radiogroup" aria-label={`${row.label} cadence`}>
+                    {cadenceChoices.map((choice) => {
+                      const on = cadenceSec(row.key) === choice.sec;
+                      return (
+                        <button
+                          key={`${row.key}-${choice.sec}`}
+                          data-testid={`mrefresh-${row.key}-${choice.sec}`}
+                          className={on ? 'on' : ''}
+                          type="button"
+                          role="radio"
+                          aria-checked={on}
+                          onClick={() => applyCadence(choice.sec, row.key)}
+                        >
+                          {choice.label}
+                        </button>
+                      );
+                    })}
+                  </span>
                 </div>
               ))}
             </div>
@@ -2451,11 +2451,6 @@ function SharedTopBar() {
                 </button>
               )}
             />
-            <div className="curfx-counters" aria-label="Display currency telemetry">
-              <span className={curTone}><i /><b>{curRateText}</b><em>RATE</em></span>
-              <span className={curTone}><i /><b>{curFxCode}</b><em>FX</em></span>
-              <span><i /><b>{curAgeCode}</b><em>AGE</em></span>
-            </div>
             <div className="curfx-grid" role="radiogroup" aria-label="Display currency">
               {Object.entries(CURRENCIES).map(([code, c]) => (
                 <button
@@ -2474,21 +2469,9 @@ function SharedTopBar() {
                 </button>
               ))}
             </div>
-            <div className="curfx-converter" aria-label="Display currency conversion preview">
-              <div className="curfx-converter-head">
-                <span><b>Preview</b><em>{currencyBasePreview}</em></span>
-                <strong>{currencyConvertedPreview}</strong>
-              </div>
-              <div className="curfx-flow" aria-hidden="true">
-                <span />
-                <i />
-                <span />
-              </div>
-              <div className="curfx-pair">
-                <span><b>Base</b><em>USD</em></span>
-                <span><b>Display</b><em>{cur}</em></span>
-                <span><b>Cadence</b><em>{prefs.dataCadence?.fx ?? 300}s</em></span>
-              </div>
+            <div className="curfx-preview-line" aria-label="Display currency conversion preview">
+              <span><b>Preview</b><em>{currencyBasePreview}</em></span>
+              <strong>{currencyConvertedPreview}</strong>
             </div>
             <div className="curfx-amounts" role="group" aria-label="Preview amount">
               {[100, 1000, 10000].map((amount) => (
@@ -2506,16 +2489,16 @@ function SharedTopBar() {
         );
       case 'appearance':
         const themeModes = [
-          { id: 'system', label: 'System', mark: 'A' },
-          { id: 'light', label: 'Light', mark: '☼' },
-          { id: 'dark', label: 'Dark', mark: '◐' },
+          { id: 'system', label: 'System' },
+          { id: 'light', label: 'Light' },
+          { id: 'dark', label: 'Dark' },
         ] as const;
         const setZoom = (next: number) => updatePref('zoom', Math.min(1.5, Math.max(0.8, Math.round(next * 100) / 100)));
         return (
           <div className={`apx-pop apx-premium ${theme}`} style={{ '--apx-accent': activeAccent.hex } as CSSProperties}>
             <TopPanelHeader
               className={`apx-stage ${prefs.theme}`}
-              logo={<PanelWebLogo domain="apple.com" label="Appearance" fallback={theme === 'dark' ? <IconMoon size={17} /> : <IconSun size={17} />} />}
+              logo={theme === 'dark' ? <IconMoon size={21} /> : <IconSun size={21} />}
               title="Appearance"
               sub={`${prefs.theme === 'system' ? 'Auto' : prefs.theme} · ${activeAccent.label}`}
               status={`${appearanceZoom}%`}
@@ -2534,7 +2517,7 @@ function SharedTopBar() {
                   onClick={() => updatePref('theme', m.id)}
                 >
                   <span className={`apx-mode-art ${m.id}`} aria-hidden="true"><i /><i /><i /></span>
-                  <b>{m.mark}</b>
+                  <b>{m.label}</b>
                 </button>
               ))}
             </div>
@@ -2567,30 +2550,7 @@ function SharedTopBar() {
               <button data-testid="appearance-zoom-in" type="button" onClick={() => setZoom((prefs.zoom || 1) + 0.05)} aria-label="Zoom in">+</button>
               <button data-testid="appearance-zoom-reset" className="reset" type="button" onClick={() => updatePref('zoom', 1.05)} aria-label="Reset scale" title="Reset scale">↺</button>
             </div>
-            <div className="apx-preview" aria-label="Appearance preview">
-              <div className="apx-preview-nav" aria-hidden="true">
-                <i />
-                <i className="on" />
-                <i />
-              </div>
-              <div className="apx-preview-main">
-                <span className="apx-preview-title">
-                  <b>Control Room</b>
-                  <em>{activeAccent.label}</em>
-                </span>
-                <span className="apx-preview-row">
-                  <i />
-                  <b>Market Feed</b>
-                  <em>Live</em>
-                </span>
-                <span className="apx-preview-row">
-                  <i />
-                  <b>Risk Guard</b>
-                  <em>Armed</em>
-                </span>
-              </div>
-            </div>
-            <div className="apx-token-grid" aria-label="Appearance state">
+            <div className="apx-summary-line" aria-label="Appearance state">
               <span><b>Mode</b><em>{prefs.theme === 'system' ? 'Auto' : prefs.theme}</em></span>
               <span><b>Accent</b><em>{activeAccent.label}</em></span>
               <span><b>Scale</b><em>{appearanceZoom}%</em></span>
@@ -2607,11 +2567,6 @@ function SharedTopBar() {
               sub={basisPreview}
               status={basisCode}
             />
-            <div className="basisx-counters" aria-label="Basis conversion telemetry">
-              <span><i /><b>1bp</b><em>.01%</em></span>
-              <span><i /><b>100</b><em>bp/%</em></span>
-              <span className={basisIsBps ? 'bps' : 'pct'}><i /><b>{basisAltPreview}</b><em>ALT</em></span>
-            </div>
             <div className="basisx-options" role="radiogroup" aria-label="Basis display unit">
               <button
                 data-testid="basis-unit-pct"
@@ -2640,27 +2595,9 @@ function SharedTopBar() {
                 <span><b>BPS</b><em>{formatBasisBp(basisSamplePct)}</em></span>
               </button>
             </div>
-            <div
-              className="basisx-converter"
-              aria-label="Basis conversion preview"
-              style={{
-                '--basis-pos': `${basisTrackPos}%`,
-                '--basis-start': `${basisTrackStart}%`,
-                '--basis-span': `${basisTrackSpan}%`,
-              } as CSSProperties}
-            >
-              <div className="basisx-converter-head">
-                <span><b>Display</b><em>{basisIsBps ? 'Basis points' : 'Percent'}</em></span>
-                <strong>{basisPreview}</strong>
-              </div>
-              <div className="basisx-track" aria-hidden="true">
-                <i />
-                <b />
-              </div>
-              <div className="basisx-converter-foot">
-                <span><b>Percent</b><em>{formatBasisPct(basisSamplePct)}</em></span>
-                <span><b>Basis Points</b><em>{formatBasisBp(basisSamplePct)}</em></span>
-              </div>
+            <div className="basisx-preview-line" aria-label="Basis conversion preview">
+              <span><b>Preview</b><em>1bp = 0.01%</em></span>
+              <strong>{basisIsBps ? formatBasisBp(basisSamplePct) : formatBasisPct(basisSamplePct)}</strong>
             </div>
             <div className="basisx-samples" role="group" aria-label="Basis preview samples">
               {basisSamples.map((sample) => (
@@ -2673,10 +2610,6 @@ function SharedTopBar() {
                   {sample.label}
                 </button>
               ))}
-            </div>
-            <div className="basisx-rule" aria-label="Basis conversion rule">
-              <span><b>Rule</b><em>1bp = 0.01%</em></span>
-              <span><b>Active</b><em>{basisIsBps ? 'Basis points' : 'Percent'}</em></span>
             </div>
           </div>
         );
@@ -2913,7 +2846,7 @@ function SharedTopBar() {
       </>, { title: 'API keys — read-only live · full planned' })}
       {trig('data', `hdr-ic data-ghost data-pro grade-${dataGrade}`, <>
         <span className={`data-pro-core ${dataGrade}`}>
-          <DataHealthGlyph size={18} />
+          <IconDatabase size={18} />
         </span>
       </>, { title: `Data Health — ${dataLabel} · ${dataSub}` })}
       {trig('advisor', `hdr-ic advisor-ghost advisor-premium-trigger grade-${advTone}`, <>
@@ -2959,7 +2892,7 @@ function SharedTopBar() {
         aria-hidden={!active}
       >
         <span className="smenu-arrow" style={{ left: geo.pointer }} />
-        <div className={`smenu-content ${contentMorphing ? 'morphing' : ''}`}>
+        <div ref={menuContentRef} className={`smenu-content ${contentMorphing ? 'morphing' : ''}`}>
           {(contentActive ?? active) ? content((contentActive ?? active) as MK) : null}
         </div>
       </div>

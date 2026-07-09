@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { useRefreshSignal } from '../lib/refresh';
-import { Dot, Empty, Group, PageHead, Pill, Row, Sec, Seg, TINT, type Tone } from '../components/px';
+import { Dot, Empty, Group, Pill, Row, Sec, Seg, TINT, type Tone } from '../components/px';
 import { PerfChart, DistChart, EquityChart, WinLoseBar, type PerfDay } from '../components/PerfChart';
 import { Donut } from '../components/Donut';
 import { TokenIcon, brandColor } from '../components/TokenIcon';
@@ -19,13 +19,11 @@ import {
   IconBrain,
   IconCalendar,
   IconChart,
-  IconGrid,
   IconKey,
   IconList,
   IconNewspaper,
   IconPower,
   IconPulse,
-  IconRadar,
   IconShield,
   IconTicket,
   IconWallet,
@@ -224,7 +222,6 @@ export function Dashboard() {
   if (!s) {
     return (
       <div className="container page hp-page">
-        <PageHead mark={<IconGrid size={18} />} tone="idle" title="Dashboard" sub="Strategy control room — engines, risk, and ledger truth in one view." />
         <div className="hp-loading">
           <Pill tone="idle">Connecting</Pill>
           <b>Waiting for server state…</b>
@@ -233,8 +230,6 @@ export function Dashboard() {
     );
   }
 
-  const modeTone: Tone = s.config.killSwitch ? 'bad' : s.config.liveTradingEnabled ? 'ok' : 'warn';
-  const modeLabel = s.config.killSwitch ? 'Halted' : s.config.liveTradingEnabled ? 'Live armed' : 'Manual only';
   const scannerFresh = s.scanner.lastTickTs ? Date.now() - s.scanner.lastTickTs < 45_000 : false;
   const acct = s.account;
   const posture = s.binance.keyPosture;
@@ -249,26 +244,6 @@ export function Dashboard() {
 
   return (
     <div className="container page hp-page wide dash-page">
-      <PageHead
-        mark={<IconGrid size={18} />}
-        tone={modeTone}
-        title="Dashboard"
-        sub="Strategy control room — engines, risk, and ledger truth in one view."
-        meta={
-          <>
-            <Pill tone={modeTone}>{modeLabel}</Pill>
-            <span>
-              {s.binance.connected ? `account synced ${timeAgo(s.binance.lastSyncTs)}` : s.binance.keysPresent ? 'account sync failing' : 'account disconnected'}
-            </span>
-            <span className="hp-head-btns">
-              <button className="hp-btn" type="button" onClick={() => setPage('opportunities')}>
-                <IconRadar size={13} /> Queue{proposals.length ? ` · ${proposals.length}` : ''}
-              </button>
-            </span>
-          </>
-        }
-      />
-
       {/* ================= ZONE 1 · OVERVIEW ============================ */}
       <section className="hp-group lg-feed dash-perf">
         <div className="lg-feed-head">

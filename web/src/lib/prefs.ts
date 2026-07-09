@@ -8,7 +8,7 @@ export type DataCadence = Record<DataCadenceKey, number>;
 export const DATA_CADENCE_DEFAULTS: DataCadence = {
   market: 6,
   account: 30,
-  news: 10,
+  news: 5,
   calendar: 300,
   fx: 300,
   health: 10,

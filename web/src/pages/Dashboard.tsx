@@ -247,7 +247,7 @@ export function Dashboard() {
       {/* ================= ZONE 1 · OVERVIEW ============================ */}
       <section className="hp-group lg-feed dash-perf">
         <div className="lg-feed-head">
-          <h3>Key stats</h3>
+          <h3>Account performance</h3>
           <span className="hp-val">
             {perfMode === 'equity' ? (
               <>
@@ -395,47 +395,6 @@ export function Dashboard() {
       </div>
 
       )}
-
-      <div className="dash-analytics dash-analytics2">
-        <section className="hp-group lg-feed">
-          <div className="lg-feed-head">
-            <h3>Run-ups &amp; drawdowns</h3>
-            <span>{segs ? `${segs.ups.length} run-ups · ${segs.downs.length} drawdowns` : 'needs equity snapshots'}</span>
-          </div>
-          {segs ? (
-            <dl className="lg-facts dash-facts">
-              <div><dt>Avg run-up</dt><dd className="num">{segs.avgUpMs !== null ? duration(0, segs.avgUpMs) : '—'}</dd></div>
-              <div><dt>Avg drawdown</dt><dd className="num">{segs.avgDownMs !== null ? duration(0, segs.avgDownMs) : '—'}</dd></div>
-              <div><dt>Max run-up</dt><dd className="num up">{segs.maxUp !== null ? `+${segs.maxUp.toFixed(2)}%` : '—'}</dd></div>
-              <div><dt>Max DD of capital</dt><dd className="num down">{dd && baseEquity ? `${((dd.usd / baseEquity) * 100).toFixed(2)}%` : '—'}</dd></div>
-              <div><dt>Return / max DD</dt><dd className="num">{dd && dd.usd > 0 ? (totalRealized / dd.usd).toFixed(2) : '—'}</dd></div>
-            </dl>
-          ) : (
-            <div className="lg-empty-pad"><Empty title="Needs 3+ equity snapshots">Run-up and drawdown durations are measured on the real equity curve.</Empty></div>
-          )}
-        </section>
-
-        <section className="hp-group lg-feed">
-          <div className="lg-feed-head">
-            <h3>Day analysis</h3>
-            <span>{days.length ? `${days.length} PnL days` : 'waiting'}</span>
-          </div>
-          {dayStats ? (
-            <>
-            <div className="dash-wl"><WinLoseBar win={winDays.length} lose={lossDays.length} winLabel="Win days" loseLabel="Loss days" /></div>
-            <dl className="lg-facts dash-facts">
-              <div><dt>Best day</dt><dd className="num up">{fmtPrice(dayStats.best.usd)} <em>{dayStats.best.day.slice(5)}</em></dd></div>
-              <div><dt>Worst day</dt><dd className={`num ${dayStats.worst.usd < 0 ? 'down' : ''}`}>{fmtPrice(dayStats.worst.usd)} <em>{dayStats.worst.day.slice(5)}</em></dd></div>
-              <div><dt>Avg win / loss day</dt><dd className="num">{dayStats.avgWin !== null ? fmtPrice(dayStats.avgWin) : '—'} / {dayStats.avgLoss !== null ? fmtPrice(-dayStats.avgLoss) : '—'}</dd></div>
-              <div><dt>Win : loss ratio</dt><dd className="num">{dayStats.plRatio !== null ? `${dayStats.plRatio.toFixed(2)} : 1` : '—'}</dd></div>
-              <div><dt>Win streak</dt><dd className="num">{dayStats.curStreak} now · {dayStats.maxStreak} best</dd></div>
-            </dl>
-            </>
-          ) : (
-            <div className="lg-empty-pad"><Empty title="No PnL days yet">Best/worst days, averages, and streaks appear with closed round-trips.</Empty></div>
-          )}
-        </section>
-      </div>
 
       {/* ================= ZONE 2 · STRATEGY BRAIN ====================== */}
       <Sec>Strategy brain</Sec>
@@ -620,6 +579,48 @@ export function Dashboard() {
             </button>
           </section>
         </div>
+      </div>
+
+      <Sec>Performance diagnostics</Sec>
+      <div className="dash-analytics dash-analytics2">
+        <section className="hp-group lg-feed">
+          <div className="lg-feed-head">
+            <h3>Equity movement</h3>
+            <span>{segs ? `${segs.ups.length} run-ups · ${segs.downs.length} drawdowns` : 'needs equity snapshots'}</span>
+          </div>
+          {segs ? (
+            <dl className="lg-facts dash-facts">
+              <div><dt>Avg run-up</dt><dd className="num">{segs.avgUpMs !== null ? duration(0, segs.avgUpMs) : '—'}</dd></div>
+              <div><dt>Avg drawdown</dt><dd className="num">{segs.avgDownMs !== null ? duration(0, segs.avgDownMs) : '—'}</dd></div>
+              <div><dt>Max run-up</dt><dd className="num up">{segs.maxUp !== null ? `+${segs.maxUp.toFixed(2)}%` : '—'}</dd></div>
+              <div><dt>Max DD of capital</dt><dd className="num down">{dd && baseEquity ? `${((dd.usd / baseEquity) * 100).toFixed(2)}%` : '—'}</dd></div>
+              <div><dt>Return / max DD</dt><dd className="num">{dd && dd.usd > 0 ? (totalRealized / dd.usd).toFixed(2) : '—'}</dd></div>
+            </dl>
+          ) : (
+            <div className="lg-empty-pad"><Empty title="Needs 3+ equity snapshots">Run-up and drawdown durations are measured on the real equity curve.</Empty></div>
+          )}
+        </section>
+
+        <section className="hp-group lg-feed">
+          <div className="lg-feed-head">
+            <h3>Day analysis</h3>
+            <span>{days.length ? `${days.length} PnL days` : 'waiting'}</span>
+          </div>
+          {dayStats ? (
+            <>
+            <div className="dash-wl"><WinLoseBar win={winDays.length} lose={lossDays.length} winLabel="Win days" loseLabel="Loss days" /></div>
+            <dl className="lg-facts dash-facts">
+              <div><dt>Best day</dt><dd className="num up">{fmtPrice(dayStats.best.usd)} <em>{dayStats.best.day.slice(5)}</em></dd></div>
+              <div><dt>Worst day</dt><dd className={`num ${dayStats.worst.usd < 0 ? 'down' : ''}`}>{fmtPrice(dayStats.worst.usd)} <em>{dayStats.worst.day.slice(5)}</em></dd></div>
+              <div><dt>Avg win / loss day</dt><dd className="num">{dayStats.avgWin !== null ? fmtPrice(dayStats.avgWin) : '—'} / {dayStats.avgLoss !== null ? fmtPrice(-dayStats.avgLoss) : '—'}</dd></div>
+              <div><dt>Win : loss ratio</dt><dd className="num">{dayStats.plRatio !== null ? `${dayStats.plRatio.toFixed(2)} : 1` : '—'}</dd></div>
+              <div><dt>Win streak</dt><dd className="num">{dayStats.curStreak} now · {dayStats.maxStreak} best</dd></div>
+            </dl>
+            </>
+          ) : (
+            <div className="lg-empty-pad"><Empty title="No PnL days yet">Best/worst days, averages, and streaks appear with closed round-trips.</Empty></div>
+          )}
+        </section>
       </div>
 
     </div>

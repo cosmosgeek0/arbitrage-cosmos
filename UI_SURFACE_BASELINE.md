@@ -1,6 +1,6 @@
 # UI_SURFACE_BASELINE.md - Current Sidebar, Topbar, Search, Clock, And Profile Lessons
 
-Last audited: 2026-07-09 06:46 IST
+Last audited: 2026-07-10 03:04 IST
 
 Purpose: this file preserves the hard-won UI calibration for the surfaces that
 were edited repeatedly in the long polish pass: left sidebar, brand lockup,
@@ -22,17 +22,19 @@ Audited files:
 Audited rendered app:
 
 - `http://localhost:8080/`
-- Current root zoom/prefs make measured browser rectangles about 1.05x the CSS
-  values. The CSS intent matters more than the raw screenshot pixels.
+- The topbar typography baseline is measured at 100% root scale. Do not judge
+  text sharpness through fractional CSS `zoom`; 100% is now the default.
 
 Important code trap:
 
-- `SharedTopBar()` renders `content(active)`.
+- `SharedTopBar()` renders `premiumContent(contentActive)` inside overlapping
+  `.smenu-pane` layers. Account is the final shared `MK` key, not a separate
+  profile popover.
 - `contentClean()` still exists in `Header.tsx`, but it is not the rendered
   topbar panel path. Do not copy or edit that branch unless the render call is
   changed deliberately.
 - `styles.css` contains many older named blocks. The effective sidebar/search/
-  clock/profile rules are mostly the late override blocks near the bottom. When
+  clock/profile rules are mostly the late V4 override block at the bottom. When
   in doubt, inspect computed styles in the browser instead of trusting a section
   header in CSS.
 
@@ -51,15 +53,15 @@ Use these as first-pass guardrails before taking screenshots:
 
 | Surface | CSS Target | Current Measured Shape | Lesson |
 | --- | ---: | ---: | --- |
-| Header | 64px high | about 67px at current zoom | White, flat, no tint band. |
-| Sidebar | 178px wide | about 187px at current zoom | White nav rail, no gradient/tint exterior. |
-| Sidebar Row | 40px high | about 42px | Flow-style calm row rhythm. |
+| Header | 64px high | about 64px at 100% | Flat, no tint band. |
+| Sidebar | 178px wide | about 178px at 100% | Calm nav rail, no gradient/tint exterior. |
+| Sidebar Row | 40px high | about 40px | Flow-style calm row rhythm. |
 | Sidebar Label | 14px / 20px, 500 | active 560 | Crisp text matters more than background. |
 | Sidebar Group | 9px / 12px, 720, uppercase | muted caps | Small section labels, not huge category banners. |
 | Topbar Search | 42px high, about 440px wide | 44px x 462px | Coinbase pill aligned to content start. |
-| Topbar Icon | 38px target | about 40px | Icon-first, transparent hit target, color identity. |
-| Shared Popover | 14px padding, 12px radius | width from `MENU_W` | Same chrome for every topbar panel. |
-| Account Popover | 438px wide, 24px pad | about 460px | Binance/Coinbase profile menu spacing. |
+| Topbar Icon | 34px target + 4px halo | about 34px | Icon-first, transparent hit target, semantic color. |
+| Shared Popover | 400px, 14px radius | measured height | One persistent shell for every panel. |
+| Account Sheet | 400px shared shell | same as every trigger | Real profile, exchange, session, and logout rows. |
 
 Never judge these from memory. Use `getComputedStyle()` on the exact element and
 `getBoundingClientRect()` at the user's current zoom.
@@ -155,24 +157,21 @@ The clock is a precision instrument, not an animated toy.
 
 Current trigger:
 
-- Pill, about 168px wide CSS, 36px high measured at zoom.
-- Shows full time with AM/PM and short zone label, for example `06:40:25 AM LOC`.
-- Seconds stay in the same line as hour/minute, not in a separate weird box.
+- Compact instrument, 86px wide and 34px high at 100%.
+- Shows `HH:MM` and the short zone label, for example `06:40 LOC`.
 - No printed `UTC+5:30` in the trigger.
 
 Current motion:
 
-- Keep the small orbit because it gave the clock character.
-- Orbit is slow: about 28s.
-- Inner sweep is calm: about 18s.
-- No purple orbit, no aggressive one-second spinning ring.
+- The trigger itself is still. Time changes are the motion.
+- No orbit, glow, or aggressive second-hand decoration.
 
 Popover:
 
-- Width from `MENU_W.clock = 360`.
-- Hero says Execution Time, then full time, zone/date, and Live.
-- UTC and Local are paired in the same section.
-- Zone rows are about 49px CSS / 51px measured, with code, city/offset, and
+- Width is the shared 400px shell.
+- Header says Desk Clock and names the selected city/offset.
+- The dark instrument stage carries the full time and date.
+- Zone rows use the shared 52px rhythm, with code, city/offset, and
   current time.
 
 ## 7. Topbar Trigger Law
@@ -182,7 +181,7 @@ The topbar is for expert operator controls. It should look alive, but not noisy.
 Current trigger pattern:
 
 - Topbar triggers are icon-first.
-- Trigger targets are 38px CSS, transparent background, no visible box by
+- Trigger targets are 34px CSS with a 4px invisible halo, transparent background, no visible box by
   default.
 - Use color identity across the row, roughly ROYGBIV from AWS CLI through
   Appearance:
@@ -208,22 +207,17 @@ Current trigger pattern:
 
 All topbar panels use the same base chrome:
 
-- `.smenu`: 14px padding, 12px radius, 1px `var(--line-2)` border, opaque white
-  panel, compact shadow.
-- Width comes from `MENU_W` in `Header.tsx`:
-  - clock 360
-  - shell 320
-  - api 320
-  - data 320
-  - advisor 320
-  - notifications 340
-  - power 270
-  - market refresh 300
-  - currency 280
-  - basis 260
-  - appearance 260
-- Popovers may morph between triggers but should not become huge boxes that add
-  a page scrollbar.
+- `.smenu`: 400px wide, 14px radius, 1px neutral border, opaque sheet, and a
+  restrained light/dark shadow. It keeps `overflow: visible`; only the content
+  viewport clips so the 25px trigger bridge remains interactive.
+- All `MENU_W` entries are 400. Continuity matters more than saving 20px on a
+  short panel.
+- Moving between triggers changes the active key immediately. Incoming and
+  outgoing panes overlap for 200ms and slide 16px in travel direction. Never
+  fade the only mounted content, never fade the shared parent, and never use a
+  changing callback identity as the global closer.
+- Shell height is measured from the incoming pane and transitions for 200ms;
+  long panes scroll inside the viewport without adding a page scrollbar.
 - Use a hero/instrument area only when it communicates state.
 - Rows are usually 34-50px CSS depending on content density.
 - Labels and words are allowed when they clarify state or controls. "Less words"
@@ -402,15 +396,15 @@ Real behavior:
 
 Current profile layout:
 
-- Panel: 438px CSS wide, 24px padding, 16px radius, white, soft shadow.
-- Header: 58px avatar, 22px gap to identity text.
-- Name: 23px, weight 720.
-- Sub line: 15px, weight 470.
+- Panel: the same 400px shared shell used by Appearance and every other trigger.
+- Header: 42px avatar, 11px gap to identity text, 70px overall.
+- Name: 15px / 20px, weight 600.
+- Sub line: 12px / 16px, weight 400.
 - Sections:
   - Connected Exchange with real key row.
   - Linked Devices with real session rows.
   - Log Out full-width bar.
-- Exchange/device rows are about 58px CSS high with a hairline divider.
+- Exchange/device rows are 52-56px with a hairline divider.
 - No Dashboard, Assets, Orders, Risk, or Settings filler rows in this popover.
 
 ## 11. Failures To Avoid

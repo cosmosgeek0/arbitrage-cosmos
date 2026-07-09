@@ -35,7 +35,7 @@ import { RiskService } from './services/risk.js';
 import { OrderService } from './services/orders.js';
 import { LoanService } from './services/loans.js';
 import { BookStreamHub } from './services/bookStream.js';
-import { getNewsContext } from './services/newsContext.js';
+import { getNewsContext, subscribeNewsContext } from './services/newsContext.js';
 import type { AppConfig, OrderIntent } from './types.js';
 
 // Minimal .env loader (no dependency). Never logs values.
@@ -58,6 +58,7 @@ function loadDotEnv(): void {
 loadDotEnv();
 
 const PORT = Number(process.env.PORT ?? 8080);
+const HOST = process.env.HOST ?? '0.0.0.0';
 const TICK_MS = 2_000;
 const POLL_MS = 30_000;
 const SOURCE_LOGO_TTL_MS = 24 * 60 * 60 * 1000;
@@ -74,17 +75,22 @@ const config = loadConfig(ledger);
 const engine = new MarketEngine(ledger);
 const scanner = new Scanner(config, ledger);
 
-for (;;) {
-  try {
-    await engine.init();
-    break;
-  } catch (err) {
-    console.error('engine init failed, retrying in 15s:', err);
-    ledger.logEvent('error_event', null, { source: 'engine.init', message: String(err) });
-    await new Promise((r) => setTimeout(r, 15_000));
+// The control plane, News and Calendar must stay available when Binance is
+// temporarily unreachable. Market initialization retries in the background
+// instead of blocking the HTTP server and every non-market route.
+void (async () => {
+  for (;;) {
+    try {
+      await engine.init();
+      engine.start();
+      break;
+    } catch (err) {
+      console.error('engine init failed, retrying in 15s:', err);
+      ledger.logEvent('error_event', null, { source: 'engine.init', message: String(err) });
+      await new Promise((resolve) => setTimeout(resolve, 15_000));
+    }
   }
-}
-engine.start();
+})();
 
 const creds = credsFromEnv();
 const client = creds ? new BinanceClient(creds) : null;
@@ -399,7 +405,7 @@ async function ensureNewsCatalog(catalogId: number, force: boolean): Promise<voi
       .finally(() => newsInFlight.delete(catalogId));
     newsInFlight.set(catalogId, p);
   }
-  if (!newsCache.get(catalogId) && newsInFlight.has(catalogId)) await newsInFlight.get(catalogId)!.catch(() => undefined);
+  if ((force || !newsCache.get(catalogId)) && newsInFlight.has(catalogId)) await newsInFlight.get(catalogId)!.catch(() => undefined);
 }
 
 app.get('/api/news', (req, res) => {
@@ -436,20 +442,65 @@ app.get('/api/news-context', (req, res) => {
   })();
 });
 
-// ---- TradingView economic calendar proxy (real events; cached 10 min) -------
+// One refresh owner serves every connected browser. Upstream publishers keep
+// their own safe fetch floors; clients only subscribe to committed snapshots.
+let newsStreamClients = 0;
+let newsRefreshTimer: NodeJS.Timeout | null = null;
+
+function retainNewsRefreshLoop(): () => void {
+  newsStreamClients += 1;
+  if (!newsRefreshTimer) {
+    newsRefreshTimer = setInterval(() => { void getNewsContext(true).catch(() => undefined); }, 5_000);
+  }
+  return () => {
+    newsStreamClients = Math.max(0, newsStreamClients - 1);
+    if (newsStreamClients === 0 && newsRefreshTimer) {
+      clearInterval(newsRefreshTimer);
+      newsRefreshTimer = null;
+    }
+  };
+}
+
+app.get('/api/news-stream', (req, res) => {
+  const limit = Math.max(20, Math.min(Number(req.query.limit ?? 220), 1200));
+  res.status(200);
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const send = (payload: Awaited<ReturnType<typeof getNewsContext>>) => {
+    res.write(`event: news\ndata: ${JSON.stringify({ ...payload, items: payload.items.slice(0, limit) })}\n\n`);
+  };
+  const releaseRefreshLoop = retainNewsRefreshLoop();
+  const unsubscribe = subscribeNewsContext(send);
+  void getNewsContext(false).catch(() => undefined);
+  const heartbeat = setInterval(() => res.write(': keep-alive\n\n'), 15_000);
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    unsubscribe();
+    releaseRefreshLoop();
+  });
+});
+
+// ---- TradingView economic calendar proxy (real events; cached 60 sec) -------
 type CalItem = {
   id: string; title: string; country: string; indicator: string; importance: number;
   period: string; actual: number | null; forecast: number | null; previous: number | null;
-  unit: string | null; currency: string | null; date: string;
+  unit: string | null; scale: string | null; currency: string | null; date: string; category: string | null;
+  comment: string | null; source: string | null; sourceUrl: string | null;
 };
 let calCache: { at: number; items: CalItem[] } | null = null;
 let calInFlight: Promise<void> | null = null;
 
 async function refreshCalendar(): Promise<void> {
   const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-  const to = new Date(now.getTime() + 6 * 86400_000).toISOString();
-  const countries = 'US,EU,GB,JP,CN,IN,DE,CA,AU,FR';
+  const day = now.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  const currentMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset);
+  const from = new Date(currentMonday.getTime() - 7 * 86_400_000).toISOString();
+  const to = new Date(currentMonday.getTime() + 21 * 86_400_000).toISOString();
+  const countries = 'US,EU,GB,JP,CN,IN,DE,CA,AU,FR,KR,ID,TR,IT,MX,BR,CH,NZ,ZA,SA';
   const url = `https://economic-calendar.tradingview.com/events?from=${from}&to=${to}&countries=${countries}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 10_000);
@@ -471,23 +522,36 @@ async function refreshCalendar(): Promise<void> {
       forecast: typeof e.forecast === 'number' ? e.forecast : null,
       previous: typeof e.previous === 'number' ? e.previous : null,
       unit: (e.unit as string) ?? null,
+      scale: (e.scale as string) ?? null,
       currency: (e.currency as string) ?? null,
       date: String(e.date ?? ''),
-    }));
+      category: typeof e.category === 'string' ? e.category : null,
+      comment: typeof e.comment === 'string' ? e.comment : null,
+      source: typeof e.source === 'string' ? e.source : null,
+      sourceUrl: typeof e.source_url === 'string' ? e.source_url : null,
+    })).filter((item) => Number.isFinite(Date.parse(item.date))).sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
     calCache = { at: Date.now(), items };
   } finally {
     clearTimeout(timer);
   }
 }
 
-app.get('/api/calendar', (_req, res) => {
+function startCalendarRefresh(): Promise<void> {
+  if (!calInFlight) {
+    calInFlight = refreshCalendar()
+      .catch((err) => { ledger.logEvent('error_event', null, { source: 'calendar.fetch', message: String(err) }); })
+      .finally(() => { calInFlight = null; });
+  }
+  return calInFlight;
+}
+
+app.get('/api/calendar', (req, res) => {
   void (async () => {
-    const fresh = calCache && Date.now() - calCache.at < 10 * 60_000;
-    if (!fresh && !calInFlight) {
-      calInFlight = refreshCalendar()
-        .catch((err) => { ledger.logEvent('error_event', null, { source: 'calendar.fetch', message: String(err) }); })
-        .finally(() => { calInFlight = null; });
-    }
+    const force = req.query.refresh === '1' || req.query.refresh === 'true';
+    const fresh = !force && calCache && Date.now() - calCache.at < 60_000;
+    if (!fresh) void startCalendarRefresh();
+    // Cached responses stay instant. A requested refresh updates the shared
+    // cache in the background instead of making every browser wait upstream.
     if (!calCache && calInFlight) await calInFlight.catch(() => undefined);
     if (calCache) res.json({ items: calCache.items, fetchedAt: calCache.at });
     else res.status(503).json({ error: 'calendar unavailable', items: [] });
@@ -1370,8 +1434,8 @@ app.get('/api/system', (req, res) => {
 // otherwise it falls back to the declared prefix. Rotate the key or add the
 // full-access key by editing these env vars (or the defaults below).
 function apiKeyManifest() {
-  const declaredPrefix = process.env.BINANCE_KEY_PREFIX || 'MGVMfDMZ';
-  const ips = (process.env.BINANCE_KEY_IPS || '223.181.45.88')
+  const declaredPrefix = process.env.BINANCE_KEY_PREFIX || '—';
+  const ips = (process.env.BINANCE_KEY_IPS || '')
     .split(',').map((s) => s.trim()).filter(Boolean);
   // Prefer the LIVE per-key permissions from Binance apiRestrictions; fall back
   // to this key's declared read-only posture until a real fetch lands.
@@ -1386,7 +1450,7 @@ function apiKeyManifest() {
         futures: r.enableFutures,
       }
     : { reading: true, spotMargin: false, marginLoan: false, withdrawals: false, universalTransfer: false, futures: false };
-  const fullIps = (process.env.BINANCE_FULL_KEY_IPS || '13.235.86.162')
+  const fullIps = (process.env.BINANCE_FULL_KEY_IPS || '')
     .split(',').map((s) => s.trim()).filter(Boolean);
   return [
     {
@@ -1394,14 +1458,14 @@ function apiKeyManifest() {
       name: process.env.BINANCE_KEY_NAME || 'cosmos-local-read-only',
       type: process.env.BINANCE_KEY_TYPE || 'HMAC',
       scope: 'Read-only',
-      status: r ? 'live' : creds ? 'declared' : 'declared',
+      status: r ? 'live' : creds ? 'declared' : 'missing',
       live: !!r, // permissions are the real, cross-checkable ones from Binance
       keysPresent: !!creds,
       prefix: creds ? creds.apiKey.slice(0, 8) : declaredPrefix, // first 8 only — never the full key
       fingerprint: creds ? maskApiKey(creds.apiKey) : null,
       ipRestrict: r ? r.ipRestrict : ips.length > 0,
       ips,
-      ipNote: creds ? 'Trusted IP (server env)' : 'Local machine IP — temporary',
+      ipNote: creds ? 'Restriction declared by server environment' : 'No key is loaded',
       permissions,
       note: creds ? (r ? null : 'Live permissions pending first account sync — showing declared read-only posture.') : 'Declared config — no key wired into this server yet.',
       updatedAt: bootTs,
@@ -1411,7 +1475,7 @@ function apiKeyManifest() {
       // restricted to the EC2 IP. Shown as PLANNED until it is actually wired.
       // Withdrawals stay OFF by policy even on the full key.
       id: 'secrets-full',
-      name: process.env.BINANCE_FULL_KEY_NAME || 'aws-secrets-manager',
+      name: process.env.BINANCE_FULL_KEY_NAME || 'Automation key',
       type: process.env.BINANCE_FULL_KEY_TYPE || 'HMAC',
       scope: 'Automation',
       status: 'planned',
@@ -1419,11 +1483,11 @@ function apiKeyManifest() {
       keysPresent: false,
       prefix: process.env.BINANCE_FULL_KEY_PREFIX || '—',
       fingerprint: null,
-      ipRestrict: true,
+      ipRestrict: fullIps.length > 0,
       ips: fullIps,
-      ipNote: 'AWS EC2 IP (planned)',
-      permissions: { reading: false, spotMargin: true, marginLoan: true, withdrawals: false, universalTransfer: false, futures: true },
-      note: 'Planned in AWS Secrets Manager. Data stays read-only; withdrawals stay off.',
+      ipNote: 'No restriction is active',
+      permissions: { reading: false, spotMargin: false, marginLoan: false, withdrawals: false, universalTransfer: false, futures: false },
+      note: 'Planned only. No credential or permission is active.',
       updatedAt: bootTs,
     },
   ];
@@ -1722,6 +1786,10 @@ function primeIconUniverse(): void {
   }
 }
 setTimeout(primeIconUniverse, 20_000);
+setTimeout(() => {
+  void startCalendarRefresh();
+  void getNewsContext(false).catch(() => undefined);
+}, 250);
 function warmProfileUniverse(): void {
   try {
     const rows = engine.allRows();
@@ -1737,6 +1805,6 @@ startLiquidationCollector();
 setInterval(warmProfileUniverse, 24 * 3_600_000);
 setInterval(primeIconUniverse, 3_600_000);
 
-server.listen(PORT, () => {
-  console.log(`cosmos control room listening on http://localhost:${PORT}`);
+server.listen(PORT, HOST, () => {
+  console.log(`cosmos control room listening on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
 });

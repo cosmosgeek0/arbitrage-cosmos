@@ -48,6 +48,16 @@ function fmtCountdown(ts: number | null | undefined): string {
   return `In ${Math.floor(m / 60)}h ${m % 60}m`;
 }
 
+function proposalLine(p: Proposal): string {
+  const parts = [
+    `Basis Open ${fmtPct(p.basisOpen, 2)}`,
+    `Net ${fmtPct(p.netEdgePct, 2, false)}`,
+  ];
+  if (finite(p.quoteVolume24h)) parts.push(`Spot Vol ${fmtMoney(p.quoteVolume24h)}`);
+  if (finite(p.fundingRate)) parts.push(`Funding ${fmtFunding(p.fundingRate)}`);
+  return parts.join(' · ');
+}
+
 export function Strategies() {
   const { state, markets, setPage, openDetail } = useStore();
   const [history, setHistory] = useState<SignalRecord[]>([]);
@@ -137,29 +147,29 @@ export function Strategies() {
               <h1>Basis Scanner</h1>
               <Pill tone={!s ? 'idle' : scannerFresh ? 'ok' : 'bad'}>{!s ? 'Connecting' : scannerFresh ? `Scanning · Tick ${s.scanner.lastTickTs ? timeAgo(s.scanner.lastTickTs) : '—'}` : 'Stale Feed'}</Pill>
             </div>
-            <p>The Spot/Perp Basis Engine — It Proposes, Never Trades · Gate = Fees {fmtPct(feesPct, 2, false)} + Min Net {fmtPct(minNet, 2, false)} Held {persistTicks}+ Ticks</p>
+            <p>Spot Perp Gap · Proposal Only · Fees {fmtPct(feesPct, 2, false)} · Net {fmtPct(minNet, 2, false)} · Hold {persistTicks}+ Ticks</p>
           </div>
         </div>
         <div className="bwx-hero-metrics">
           <div className="bwx-hero-metric">
-            <em>Pairs Scanned</em>
+            <em>Pairs</em>
             <b>{s?.scanner.pairs ?? '—'}</b>
-            <small>Exact Spot + Perp Listings</small>
+            <small>Spot + Perp matched</small>
           </div>
           <div className="bwx-hero-metric">
-            <em>Pass Liquidity</em>
+            <em>Liquid Pairs</em>
             <b>{liquidPerps.length}</b>
-            <small>≥ {fmtMoney(minVolume)} 24h Volume</small>
+            <small>Min {fmtMoney(minVolume)} 24h volume</small>
           </div>
           <div className="bwx-hero-metric">
             <em>Watching</em>
             <b>{watchingRows}</b>
-            <small>|Basis| Above The {threshold.toFixed(2)}% Gate</small>
+            <small>Basis above {threshold.toFixed(2)}% gate</small>
           </div>
           <div className="bwx-hero-metric">
-            <em>Proposing</em>
+            <em>Proposals</em>
             <b>{rankedProposals.length}</b>
-            <small>Persisted {persistTicks}+ Ticks</small>
+            <small>Held {persistTicks}+ ticks</small>
           </div>
         </div>
       </header>
@@ -167,7 +177,7 @@ export function Strategies() {
       {/* ---- open proposals ------------------------------------------------ */}
       <section className="rsx-band">
         <div className="bsx-props-head">
-          <h2>Open Proposals <em>{rankedProposals.length ? `${rankedProposals.length} Open · Ranked By Net Edge` : 'None Open'}</em></h2>
+          <h2>Open Proposals <em>{rankedProposals.length ? `${rankedProposals.length} Open · Net Edge Rank` : 'None Open'}</em></h2>
           <button type="button" className="mkx-pill" onClick={() => setPage('opportunities')}>Open Queue</button>
         </div>
         {rankedProposals.length > 0 ? (
@@ -177,7 +187,7 @@ export function Strategies() {
                 <TokenIcon symbol={p.symbol} size={34} />
                 <span className="bsx-prop-main">
                   <b>{baseOf(p.symbol)} <Pill tone={p.side === 'SHORT_PERP_LONG_SPOT' ? 'ok' : 'warn'}>{SIDE_SHORT[p.side]}</Pill></b>
-                  <em title={p.reason}>{p.reason}</em>
+                  <em title={p.reason}>{proposalLine(p)}</em>
                 </span>
                 <span className={`bsx-prop-edge ${signClass(p.netEdgePct)}`}>
                   <Num value={p.netEdgePct}>{fmtPct(p.netEdgePct, 2)}</Num>
@@ -189,8 +199,8 @@ export function Strategies() {
         ) : (
           <p className="tdx-dimnote">
             {scannerFresh
-              ? `No basis gap has held above ${threshold.toFixed(2)}% for ${persistTicks} ticks. The board below shows how close the market is.`
-              : 'The market feed looks stale, so the scanner cannot judge anything right now.'}
+              ? `No proposal yet. The live board still shows every liquid pair near the ${threshold.toFixed(2)}% gate.`
+              : 'Market feed stale. Scanner is paused until live prices refresh.'}
           </p>
         )}
       </section>
@@ -198,7 +208,7 @@ export function Strategies() {
       {/* ---- the live board ------------------------------------------------ */}
       <section className="rsx-band">
         <div className="bwx-market-head">
-          <h2>Scanner Board <em>Top {board.length} Of {liquidPerps.length} Liquid Pairs</em></h2>
+          <h2>Live Board <em>{board.length} / {liquidPerps.length} Liquid Pairs</em></h2>
         </div>
         <table className="acb-table bsx-table">
           <thead>
@@ -207,9 +217,9 @@ export function Strategies() {
               <th className="r">Spot</th>
               <th className="r">Perp</th>
               <SortHead label="Basis" k="basis" />
-              <SortHead label="Net After Fees" k="net" />
+              <SortHead label="Net Edge" k="net" />
               <SortHead label="Funding" k="funding" />
-              <SortHead label="24h Volume" k="volume" />
+              <SortHead label="Volume" k="volume" />
               <th className="r">Status</th>
             </tr>
           </thead>
@@ -261,7 +271,7 @@ export function Strategies() {
             <h3>Funding Extremes</h3>
             <div className="bsx-fund-cols">
               <div>
-                <em className="bsx-fund-label">Longs Pay Most</em>
+                <em className="bsx-fund-label">Longs Pay</em>
                 {positiveFunding.map((m) => (
                   <button key={m.symbol} type="button" className="bsx-fund-row" onClick={() => openDetail(m.symbol)}>
                     <TokenIcon symbol={m.symbol} size={26} />
@@ -269,10 +279,10 @@ export function Strategies() {
                     <span className="up">{fmtFunding(m.fundingRate)}</span>
                   </button>
                 ))}
-                {!positiveFunding.length && <p className="tdx-dimnote">None Positive Right Now.</p>}
+                {!positiveFunding.length && <p className="tdx-dimnote">No Positive Funding.</p>}
               </div>
               <div>
-                <em className="bsx-fund-label">Shorts Pay Most</em>
+                <em className="bsx-fund-label">Shorts Pay</em>
                 {negativeFunding.map((m) => (
                   <button key={m.symbol} type="button" className="bsx-fund-row" onClick={() => openDetail(m.symbol)}>
                     <TokenIcon symbol={m.symbol} size={26} />
@@ -280,7 +290,7 @@ export function Strategies() {
                     <span className="down">{fmtFunding(m.fundingRate)}</span>
                   </button>
                 ))}
-                {!negativeFunding.length && <p className="tdx-dimnote">None Negative Right Now.</p>}
+                {!negativeFunding.length && <p className="tdx-dimnote">No Negative Funding.</p>}
               </div>
             </div>
           </div>
@@ -300,7 +310,7 @@ export function Strategies() {
                 ))}
               </div>
             ) : (
-              <p className="tdx-dimnote">No signals recorded yet — the ledger fills as gates trip.</p>
+              <p className="tdx-dimnote">No Signal History Yet.</p>
             )}
           </div>
         </div>

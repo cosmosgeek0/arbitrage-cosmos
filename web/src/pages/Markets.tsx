@@ -14,6 +14,7 @@ import './Markets.css';
 
 type View = 'overview' | 'derivatives' | 'basis' | 'liquidity';
 type Filter = 'all' | 'watchlist' | 'paired' | 'spotOnly' | 'movers';
+type MarketSource = 'binance' | 'all' | 'coinbase' | 'bybit' | 'coingecko';
 type SortKey =
   | 'base'
   | 'spot'
@@ -46,6 +47,20 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'paired', label: 'Spot + Perp' },
   { id: 'spotOnly', label: 'Spot Only' },
   { id: 'movers', label: 'Movers' },
+];
+
+const MARKET_SOURCES: {
+  id: MarketSource;
+  name: string;
+  domain: string | null;
+  detail: string;
+  enabled: boolean;
+}[] = [
+  { id: 'binance', name: 'Binance', domain: 'binance.com', detail: 'Spot, Perpetuals, OI & Funding', enabled: true },
+  { id: 'all', name: 'All Sources', domain: null, detail: 'Unified Multi-Source Market Universe', enabled: false },
+  { id: 'coinbase', name: 'Coinbase', domain: 'coinbase.com', detail: 'Advanced Trade Spot Markets', enabled: false },
+  { id: 'bybit', name: 'Bybit', domain: 'bybit.com', detail: 'Spot & Derivatives Coverage', enabled: false },
+  { id: 'coingecko', name: 'CoinGecko', domain: 'coingecko.com', detail: 'Broader Token Discovery', enabled: false },
 ];
 
 const finite = (v: number | null | undefined): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -121,6 +136,121 @@ const SortGlyph = ({ dir }: { dir: 'asc' | 'desc' | null }) => (
     <path d="M5 12.5L2 9h6z" fill="currentColor" opacity={dir === 'desc' ? 1 : 0.34} />
   </svg>
 );
+
+function SourceLogo({ source, size = 24 }: { source: (typeof MARKET_SOURCES)[number]; size?: number }) {
+  if (!source.domain) {
+    return (
+      <span className="mkx-source-logo mkx-source-logo-all" style={{ width: size, height: size }} aria-hidden>
+        <svg viewBox="0 0 20 20" width="14" height="14">
+          <rect x="2.5" y="2.5" width="6" height="6" rx="1.5" />
+          <rect x="11.5" y="2.5" width="6" height="6" rx="1.5" />
+          <rect x="2.5" y="11.5" width="6" height="6" rx="1.5" />
+          <rect x="11.5" y="11.5" width="6" height="6" rx="1.5" />
+        </svg>
+      </span>
+    );
+  }
+  return (
+    <span className="mkx-source-logo" style={{ width: size, height: size }} data-fallback={source.name.slice(0, 1)} aria-hidden>
+      <img
+        src={`/api/source-logo?domain=${encodeURIComponent(source.domain)}&sz=64`}
+        alt=""
+        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+      />
+    </span>
+  );
+}
+
+function MarketSourcePicker() {
+  const [source, setSource] = useState<MarketSource>('binance');
+  const [open, setOpen] = useState(false);
+  const [openUp, setOpenUp] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = MARKET_SOURCES.find((item) => item.id === source) ?? MARKET_SOURCES[0];
+
+  const toggleMenu = () => {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    const rect = ref.current?.getBoundingClientRect();
+    if (rect) {
+      const below = window.innerHeight - rect.bottom;
+      setOpenUp(below < 372 && rect.top > below);
+    }
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="mkx-source-picker" ref={ref}>
+      <button
+        type="button"
+        className="mkx-source-trigger"
+        aria-label={`Market data source: ${selected.name}`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={toggleMenu}
+      >
+        <SourceLogo source={selected} size={22} />
+        <span>{selected.name}</span>
+        <span className={`mkx-chev ${open ? 'up' : ''}`}><Chev /></span>
+      </button>
+      {open && (
+        <div className={`mkx-source-menu ${openUp ? 'upward' : ''}`} role="listbox" aria-label="Market data source">
+          <div className="mkx-source-menu-head">
+            <b>Market Data Source</b>
+            <span>Choose The Universe Behind This Table</span>
+          </div>
+          <div className="mkx-source-options">
+            {MARKET_SOURCES.map((item) => {
+              const active = item.id === source;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  disabled={!item.enabled}
+                  className={active ? 'selected' : ''}
+                  title={item.enabled ? `${item.name} Market Feed` : `${item.name} Integration Is Planned`}
+                  onClick={() => {
+                    setSource(item.id);
+                    setOpen(false);
+                  }}
+                >
+                  <SourceLogo source={item} size={30} />
+                  <span className="mkx-source-copy">
+                    <b>{item.name}</b>
+                    <em>{item.detail}</em>
+                  </span>
+                  <span className={`mkx-source-state ${item.enabled ? 'live' : 'planned'}`}>
+                    {item.enabled ? 'Live' : 'Planned'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 
 /** Downsample to ~n points, then a smooth Catmull-Rom→Bezier path — the
@@ -542,11 +672,14 @@ export function Markets() {
       {/* ---- Prices table ---- */}
       <section className="mkx-prices" aria-label="Market prices">
         <div className="mkx-prices-head">
-          <h2>Binance Market Prices <em>{fmtCount(markets.length)} Assets</em></h2>
-          <span className={`mkx-live ${live ? 'on' : ''}`}>
-            <i />
-            {marketsError ? 'Feed Error' : live ? `Live · ${fmtAgeMs(marketAgeMs)}` : 'Reconnecting'}
-          </span>
+          <div className="mkx-prices-title">
+            <h2>Market Prices <em>{fmtCount(markets.length)} Assets</em></h2>
+            <span className={`mkx-live ${live ? 'on' : ''}`}>
+              <i />
+              {marketsError ? 'Feed Error' : live ? `Live · ${fmtAgeMs(marketAgeMs)}` : 'Reconnecting'}
+            </span>
+          </div>
+          <MarketSourcePicker />
         </div>
 
         <div className="mkx-pills">

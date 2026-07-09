@@ -25,8 +25,8 @@ const SIDE_SHORT: Record<Proposal['side'], string> = {
 
 const VIEWS: { id: View; label: string }[] = [
   { id: 'active', label: 'Proposals' },
-  { id: 'basis', label: 'Basis radar' },
-  { id: 'funding', label: 'Funding radar' },
+  { id: 'basis', label: 'Basis' },
+  { id: 'funding', label: 'Funding' },
   { id: 'volume', label: 'Liquidity' },
 ];
 
@@ -46,6 +46,24 @@ function sideForBasis(v: number | null | undefined): Proposal['side'] {
 function netAfterFees(m: MarketRow, feesPct: number): number | null {
   if (!finite(m.basisPct)) return null;
   return abs(m.basisPct) - feesPct;
+}
+
+function displayReason(reason: string, borrow: string | null): string {
+  const cleanedReason = reason
+    .replace(/\|basis\|/gi, 'basis')
+    .replace(/24h spot vol/gi, '24h spot volume')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!borrow) return cleanedReason;
+
+  const cleanedBorrow = borrow
+    .replace(/availability NOT checked in v0/gi, 'availability pending')
+    .replace(/\s*—\s*/g, ' · ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return `${cleanedReason} · ${cleanedBorrow}`;
 }
 
 export function Opportunities() {
@@ -118,36 +136,36 @@ export function Opportunities() {
 
   return (
     <div className="container page mkx opx-page">
-      <header className="bwx-hero bsx-hero">
+      <header className="bwx-hero opx-hero">
         <div className="bwx-hero-top">
           <div className="bwx-hero-title">
             <div className="bwx-title-row">
               <h1>Opportunities</h1>
               <Pill tone={modeTone}>{s.mode === 'HALTED' ? 'Halted' : s.mode === 'LIVE_ARMED' ? 'Live Armed' : 'Manual Only'}</Pill>
             </div>
-            <p>The Proposal Queue — Where Scanner Signals Become Inspectable Action · Net Edge Is The Scanner's Own Number</p>
+            <p>Proposal queue · Scanner signals · Engine net edge</p>
           </div>
         </div>
         <div className="bwx-hero-metrics">
           <div className="bwx-hero-metric">
-            <em>Active Proposals</em>
+            <em>Active</em>
             <b>{active.length}</b>
-            <small>Ranked By Net Edge After Fees</small>
+            <small>Net edge after fees</small>
           </div>
           <div className="bwx-hero-metric">
-            <em>Threshold</em>
+            <em>Gate</em>
             <b>{threshold.toFixed(2)}%</b>
-            <small>{s.config.persistTicks} Ticks Persistence Required</small>
+            <small>{s.config.persistTicks} ticks required</small>
           </div>
           <div className="bwx-hero-metric">
-            <em>Above Threshold</em>
+            <em>Above Gate</em>
             <b>{aboveThreshold}</b>
             <small>Avg |Basis| {fmtBasis(avgAbsBasis, 3)}</small>
           </div>
           <div className="bwx-hero-metric">
-            <em>Watching</em>
+            <em>Pairs</em>
             <b>{s.scanner.watching}</b>
-            <small>{s.scanner.pairs} Exact Spot/Perp Pairs</small>
+            <small>{s.scanner.pairs} exact spot/perp</small>
           </div>
         </div>
       </header>
@@ -164,8 +182,8 @@ export function Opportunities() {
         <span className="lg-filter-gap" />
         <span className="pnl-lens-note">
           {view === 'active'
-            ? 'net edge is the scanner’s own number — nothing invented client-side'
-            : 'radar rows are market context, not active proposals'}
+            ? 'engine numbers only'
+            : 'market context only'}
         </span>
       </div>
 
@@ -208,8 +226,7 @@ export function Opportunities() {
                         <div><dt>Opened</dt><dd>{timeAgo(p.openedTs)}</dd></div>
                       </dl>
                       <p className="opp-card-reason" title={p.reason}>
-                        {p.reason}
-                        {borrowRequired ? ` — ${p.borrow}` : ''}
+                        {displayReason(p.reason, borrowRequired ? p.borrow : null)}
                       </p>
                       <div className="opp-card-actions">
                         <button className="hp-btn primary" type="button" onClick={(e) => { e.stopPropagation(); void approveProposal(p.id); }}>
@@ -238,7 +255,7 @@ export function Opportunities() {
             <section className="hp-group lg-feed">
               <div className="lg-feed-head">
                 <h3>{view === 'basis' ? 'Basis radar' : view === 'funding' ? 'Funding radar' : 'Liquidity radar'}</h3>
-                <span>{filteredCandidates.length} rows · market context only</span>
+                <span>{filteredCandidates.length} rows · context only</span>
               </div>
               {filteredCandidates.length === 0 ? (
                 <div className="lg-empty-pad">
@@ -316,9 +333,9 @@ export function Opportunities() {
           <section className="hp-group lg-facet">
             <h3>Best live edges</h3>
             {[
-              { m: basisRows[0], label: 'basis leader', value: basisRows[0] ? fmtBasis(basisRows[0].basisPct, 2) : '—', tone: signClass(basisRows[0]?.basisPct) },
-              { m: fundingRows[0], label: 'funding extreme', value: fundingRows[0] ? fmtFunding(fundingRows[0].fundingRate) : '—', tone: signClass(fundingRows[0]?.fundingRate) },
-              { m: volumeRows[0], label: 'liquidity leader', value: volumeRows[0] ? fmtMoney(volumeRows[0].quoteVolume24h) : '—', tone: '' },
+              { m: basisRows[0], label: 'basis', value: basisRows[0] ? fmtBasis(basisRows[0].basisPct, 2) : '—', tone: signClass(basisRows[0]?.basisPct) },
+              { m: fundingRows[0], label: 'funding', value: fundingRows[0] ? fmtFunding(fundingRows[0].fundingRate) : '—', tone: signClass(fundingRows[0]?.fundingRate) },
+              { m: volumeRows[0], label: 'liquidity', value: volumeRows[0] ? fmtMoney(volumeRows[0].quoteVolume24h) : '—', tone: '' },
             ].map((row) => (
               <button key={row.label} type="button" disabled={!row.m} onClick={() => row.m && openDetail(row.m.symbol)}>
                 <span>{row.m?.symbol ?? '—'} · {row.label}</span>
@@ -331,7 +348,7 @@ export function Opportunities() {
             <section className="hp-group lg-inspect opp-brief-card">
               <div className="lg-inspect-head">
                 <Pill tone={selected.side === 'LONG_PERP_SHORT_SPOT' ? 'warn' : 'ok'}>{SIDE_SHORT[selected.side]}</Pill>
-                <h3>{baseOf(selected.symbol)} brief</h3>
+                <h3>{baseOf(selected.symbol)} signal</h3>
                 <span>{SIDE_LABEL[selected.side]}</span>
               </div>
               <dl className="lg-facts">

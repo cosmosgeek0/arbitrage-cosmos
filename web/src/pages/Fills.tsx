@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { useRefreshSignal } from '../lib/refresh';
 import { Empty, Pill, Seg } from '../components/px';
+import { PillSelect } from '../components/PillSelect';
 import { TokenIcon } from '../components/TokenIcon';
 import { IconReceipt, IconRefresh } from '../components/Icons';
 import { baseOf, fmtDateTime, fmtMoney, fmtPrice, fmtQty, timeAgo } from '../format';
@@ -160,12 +161,14 @@ export function Fills() {
           onChange={setSide}
         />
         {sources.length > 0 && (
-          <select className="hp-input" value={source} onChange={(e) => setSource(e.target.value)}>
-            <option value="ALL">All sources</option>
-            {sources.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
+          <PillSelect
+            className="lg-select"
+            value={source}
+            options={[{ id: 'ALL', label: 'All sources' }, ...sources.map((s) => ({ id: s, label: s }))]}
+            onChange={setSource}
+            ariaLabel="Fill Source Filter"
+            testId="fills-source-filter"
+          />
         )}
         <button className="hp-btn" type="button" onClick={() => void load()} disabled={loading}>
           <IconRefresh size={13} />

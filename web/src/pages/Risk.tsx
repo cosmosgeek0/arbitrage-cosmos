@@ -223,15 +223,15 @@ export function Risk() {
 
   if (!state) {
     return (
-      <div className="container page mkx rsx-page">
+      <div className="container page mkx rsx-page rkx-page">
         <header className="bwx-hero">
           <div className="bwx-hero-top">
             <div className="bwx-hero-title">
               <div className="bwx-title-row">
-                <h1>Risk</h1>
+                <h1>Risk Gate</h1>
                 <Pill tone="idle">Connecting</Pill>
               </div>
-              <p>Waiting for server state…</p>
+              <p>Waiting for server state.</p>
             </div>
           </div>
         </header>
@@ -258,24 +258,24 @@ export function Risk() {
   // One list of gate conditions — the single source for "why can't anything act?".
   const gateConditions = [
     {
-      label: 'Kill Switch Off',
+      label: 'Kill Switch Clear',
       pass: !cfg.killSwitch,
-      detail: cfg.killSwitch ? 'Live orders are paused before routing.' : 'Live orders may enter the risk gate.',
+      detail: cfg.killSwitch ? 'Orders are halted before routing.' : 'Orders may enter the risk gate.',
     },
     {
-      label: 'Live Trading Armed',
+      label: 'Live Arm',
       pass: cfg.liveTradingEnabled,
-      detail: cfg.liveTradingEnabled ? 'Live trading is armed.' : 'Live trading is not armed.',
+      detail: cfg.liveTradingEnabled ? 'Live routing is armed.' : 'Live routing is not armed.',
     },
     {
-      label: 'Allowed Symbols',
+      label: 'Symbol Allowlist',
       pass: cfg.allowedSymbols.length > 0,
       detail: cfg.allowedSymbols.length
         ? `${cfg.allowedSymbols.length} symbol${cfg.allowedSymbols.length === 1 ? '' : 's'} allowed.`
         : 'Add at least one symbol.',
     },
     {
-      label: 'Order Size Limit',
+      label: 'Per-Order Cap',
       pass: perOrderLimit > 0,
       detail: perOrderLimit > 0 ? `${fmtPrice(perOrderLimit)} per order.` : 'Set a positive per-order limit.',
     },
@@ -359,19 +359,19 @@ export function Risk() {
     .map((v) => Math.min(v, perOrderLimit > 0 ? perOrderLimit : v));
 
   return (
-    <div className="container page mkx rsx-page">
+    <div className="container page mkx rsx-page rkx-page">
       {/* ---- hero: posture truth + the owner's kill switch ---------------- */}
       <header className="bwx-hero">
         <div className="bwx-hero-top">
           <div className="bwx-hero-title">
             <div className="bwx-title-row">
-              <h1>Risk</h1>
+              <h1>Risk Gate</h1>
               <Pill tone={postureTone}>{postureLabel}</Pill>
             </div>
             <p>
               {failedConditions.length
-                ? `${failedConditions.length} Condition${failedConditions.length === 1 ? '' : 's'} Block Live · Every Order Passes The Server Gate`
-                : 'Gate Clear · Every Order Passes The Server Gate'}
+                ? `${failedConditions.length} Blocker${failedConditions.length === 1 ? '' : 's'} · Server checks every order`
+                : 'Gate Clear · Server checks every order'}
             </p>
           </div>
           <div className="bwx-guard">
@@ -426,7 +426,7 @@ export function Risk() {
               label="Live Arm"
               sub={
                 cfg.liveTradingEnabled
-                  ? 'Live trading is armed.'
+                  ? 'Live routing is armed.'
                   : canArmLive
                     ? 'Ready to arm after confirmation.'
                     : armBlocker
@@ -469,7 +469,7 @@ export function Risk() {
             <h3>Exposure</h3>
             <RsxRow
               icon={<Ico tint={TINT.green}><IconChart size={16} /></Ico>}
-              label="Daily Notional"
+              label="Daily Usage"
               sub={`${fmtPrice(dailyRemaining)} remaining from the configured daily cap.`}
               end={<span className="rsx-val">{fmtPrice(dailyUsed)} / {fmtPrice(dailyLimit)}</span>}
             />
@@ -544,7 +544,7 @@ export function Risk() {
             <h3>Symbols</h3>
             <RsxRow
               icon={<Ico tint={TINT.blue}><IconList size={16} /></Ico>}
-              label="Allowed Symbols"
+              label="Symbol Allowlist"
               sub={cfg.allowedSymbols.length ? `${cfg.allowedSymbols.length} symbol${cfg.allowedSymbols.length === 1 ? '' : 's'} allowed for live orders.` : 'Live orders need at least one allowed symbol.'}
               end={
                 <>
@@ -640,10 +640,10 @@ export function Risk() {
       <section className="rsx-band">
         <div className="rsx-cols">
           <div className="rsx-col">
-            <h3>Preview</h3>
+            <h3>Order Preview</h3>
             <RsxRow
               icon={<Ico tint={TINT.slate}><IconSearch size={16} /></Ico>}
-              label="Preview An Order"
+              label="Run Preview"
               sub="Runs the full gate against a hypothetical order. Nothing is sent."
               end={
                 <Pill tone={probeResult ? (probeResult.risk.allowed ? 'ok' : 'bad') : 'idle'}>
@@ -699,10 +699,10 @@ export function Risk() {
           </div>
 
           <div className="rsx-col">
-            <h3>Recent Rejections</h3>
+            <h3>Rejected Decisions</h3>
             <RsxRow
               icon={<Ico tint={TINT.red}><IconActivity size={16} /></Ico>}
-              label="Rejected Decisions"
+              label="Risk Blocks"
               sub="Last five risk decisions rejected by the order gate."
               end={
                 <button type="button" className="hp-btn" onClick={() => setPage('ledger')}>
@@ -712,7 +712,7 @@ export function Risk() {
               }
             />
             {rejections.length === 0 ? (
-              <div className="rsx-empty">The current snapshot has no rejected risk decisions.</div>
+              <div className="rsx-empty">No rejected decisions in this snapshot.</div>
             ) : (
               <table className="rsx-table">
                 <colgroup>

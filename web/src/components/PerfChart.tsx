@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 /**
  * PerfChart — the control room's performance centerpiece.
@@ -33,6 +33,33 @@ function niceStep(range: number, n: number): number {
   return step * mag;
 }
 
+function useChartWidth(fallback: number) {
+  const ref = useRef<SVGSVGElement | null>(null);
+  const [width, setWidth] = useState(fallback);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+
+    const update = () => {
+      const next = Math.max(320, Math.round(el.getBoundingClientRect().width || fallback));
+      setWidth((prev) => (Math.abs(prev - next) > 1 ? next : prev));
+    };
+
+    update();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+    ro?.observe(el);
+    window.addEventListener('resize', update);
+
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [fallback]);
+
+  return [ref, width] as const;
+}
+
 export function PerfChart({
   days,
   height = 260,
@@ -49,7 +76,7 @@ export function PerfChart({
   /** aligned benchmark cumulative % per day (real closes, e.g. BTC buy & hold) */
   bench?: number[] | null;
 }) {
-  const W = 760;
+  const [svgRef, W] = useChartWidth(760);
   const H = height;
   const AXIS_W = 56;
   const PAD_T = 10;
@@ -97,7 +124,7 @@ export function PerfChart({
   const final = model.cum[n - 1] ?? 0;
 
   return (
-    <svg className="perf-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Cumulative realized PnL and daily results">
+    <svg ref={svgRef} className="perf-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Cumulative realized PnL and daily results">
       {/* gridlines + right axis labels */}
       {model.grid.map((v) => (
         <g key={v}>
@@ -112,7 +139,7 @@ export function PerfChart({
       <path className={`pc-area ${final >= 0 ? 'pos' : 'neg'}`} d={areaPath} />
       <path className={`pc-line ${final >= 0 ? 'pos' : 'neg'}`} d={linePath} />
       {/* end dot + last value chip */}
-      <circle className={`pc-dot ${final >= 0 ? 'pos' : 'neg'}`} cx={x(n - 1)} cy={yLine(final)} r={3.4} />
+      <circle className={`pc-dot ${final >= 0 ? 'pos' : 'neg'}`} cx={x(n - 1)} cy={yLine(final)} r={2.2} />
 
       {/* benchmark (real buy & hold closes) in pct mode */}
       {pctMode && model.benchVals.length > 1 && (
@@ -155,7 +182,7 @@ export function PerfChart({
 
 /** Histogram of daily returns, TradingView "returns distribution" style. */
 export function DistChart({ days, buckets = 9, height = 150 }: { days: PerfDay[]; buckets?: number; height?: number }) {
-  const W = 320;
+  const [svgRef, W] = useChartWidth(320);
   const H = height;
   const model = useMemo(() => {
     if (!days.length) return null;
@@ -177,7 +204,7 @@ export function DistChart({ days, buckets = 9, height = 150 }: { days: PerfDay[]
   const plotH = H - 22;
   const bw = (W / buckets) * 0.66;
   return (
-    <svg className="perf-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Daily returns distribution">
+    <svg ref={svgRef} className="perf-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Daily returns distribution">
       <line className="pc-grid" x1={0} x2={W} y1={plotH} y2={plotH} />
       {model.counts.map((c, i) => {
         const cx = (i + 0.5) * (W / buckets);
@@ -202,7 +229,7 @@ export function DistChart({ days, buckets = 9, height = 150 }: { days: PerfDay[]
  *  area, and a TradingView-style last-value chip pinned to the right axis.
  *  This is the hero chart while realized-PnL history is still short. */
 export function EquityChart({ snaps, height = 240 }: { snaps: { ts: number; totalUsdt: number }[]; height?: number }) {
-  const W = 760;
+  const [svgRef, W] = useChartWidth(760);
   const H = height;
   const AXIS_W = 74;
   const PAD_T = 12;
@@ -244,7 +271,7 @@ export function EquityChart({ snaps, height = 240 }: { snaps: { ts: number; tota
   const tIdx = [0, Math.floor((snaps.length - 1) / 2), snaps.length - 1];
 
   return (
-    <svg className="perf-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Account equity curve">
+    <svg ref={svgRef} className="perf-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Account equity curve">
       {model.grid.map((v) => (
         <g key={v}>
           <line className="pc-grid" x1={0} x2={plotW} y1={y(v)} y2={y(v)} />
@@ -253,7 +280,7 @@ export function EquityChart({ snaps, height = 240 }: { snaps: { ts: number; tota
       ))}
       <path className={`pc-area ${pos ? 'pos' : 'neg'}`} d={area} style={{ opacity: 0.12 }} />
       <path className={`pc-line ${pos ? 'pos' : 'neg'}`} d={line} />
-      <circle className={`pc-dot ${pos ? 'pos' : 'neg'}`} cx={x(snaps[snaps.length - 1].ts)} cy={y(last)} r={3.2} />
+      <circle className={`pc-dot ${pos ? 'pos' : 'neg'}`} cx={x(snaps[snaps.length - 1].ts)} cy={y(last)} r={2.1} />
       {/* last-value chip pinned to the axis, TradingView style */}
       <g>
         <rect className={`pc-chip-bg ${pos ? 'pos' : 'neg'}`} x={plotW + 2} y={lastY - 9} width={AXIS_W - 4} height={18} rx={4} />

@@ -460,24 +460,25 @@ export function LedgerPage() {
   const liveTone: Tone = loadError ? 'bad' : loading ? 'warn' : 'ok';
 
   return (
-    <div className="container page hp-page wide lg-page">
-      <PageHead
-        mark={<IconBook size={18} />}
-        tone={loadError ? 'bad' : 'idle'}
-        title="Logs"
-        sub="Every recorded event behind the desk — what happened, what failed, and why."
-        meta={
-          <>
-            <Pill tone={liveTone}>{loadError ? 'Unavailable' : loading ? 'Updating' : 'Live'}</Pill>
-            <span>
-              {visible.length.toLocaleString('en-US')} of {baseEvents.length.toLocaleString('en-US')} events ·{' '}
-              {loadError ?? (lastLoaded ? `updated ${timeAgo(lastLoaded)}` : stateEvents.length ? 'cached' : 'waiting')}
-            </span>
-          </>
-        }
-      />
+    <div className="container page mkx hp-page wide lg-page">
+      <section className="hp-group lg-console">
+        <PageHead
+          mark={<IconBook size={18} />}
+          tone={loadError ? 'bad' : 'idle'}
+          title="Logs"
+          sub="Recorded events, source state, and risk decisions."
+          meta={
+            <>
+              <Pill tone={liveTone}>{loadError ? 'Unavailable' : loading ? 'Updating' : 'Live'}</Pill>
+              <span>
+                {visible.length.toLocaleString('en-US')} Of {baseEvents.length.toLocaleString('en-US')} ·{' '}
+                {loadError ?? (lastLoaded ? timeAgo(lastLoaded) : stateEvents.length ? 'Cached' : 'Waiting')}
+              </span>
+            </>
+          }
+        />
 
-      <div className="lg-filters">
+        <div className="lg-filters">
         <input
           className="hp-input lg-search"
           value={query}
@@ -546,7 +547,8 @@ export function LedgerPage() {
         <button type="button" className="hp-btn" onClick={clearFilters} disabled={!canClear} title={!canClear ? 'No active filters to clear' : 'Reset all Logs filters'}>
           Clear
         </button>
-      </div>
+        </div>
+      </section>
 
       <div className="lg-grid">
         <aside className="lg-facets" aria-label="Logs facets">
@@ -587,12 +589,12 @@ export function LedgerPage() {
 
         <section className="hp-group lg-feed" aria-label="Event Activity">
           <div className="lg-feed-head">
-            <h3>Event Activity</h3>
-            <span>{shown.length < visible.length ? `First ${shown.length} Of ${visible.length.toLocaleString('en-US')} Rows` : `${visible.length.toLocaleString('en-US')} Rows`}</span>
+            <h3>Activity</h3>
+            <span>{shown.length < visible.length ? `${shown.length} / ${visible.length.toLocaleString('en-US')} Rows` : `${visible.length.toLocaleString('en-US')} Rows`}</span>
           </div>
           {shown.length === 0 ? (
             <div className="lg-empty-pad">
-              <Empty title="No matching events">Adjust or clear the filters to see recorded activity.</Empty>
+              <Empty title="No matching events">Adjust or clear filters.</Empty>
             </div>
           ) : (
             <div className="lg-list" role="listbox" aria-label="Event Activity">

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { Dot, Empty, Pill, Seg } from '../components/px';
+import { PillSelect } from '../components/PillSelect';
 import { TokenIcon } from '../components/TokenIcon';
 import { IconRefresh } from '../components/Icons';
 import { baseOf, fmtDateTime, fmtMoney, fmtPrice, fmtQty, timeAgo } from '../format';
@@ -170,11 +171,14 @@ export function Orders() {
           ]}
           onChange={setSide}
         />
-        <select className="hp-input" value={status} onChange={(e) => setStatus(e.target.value)}>
-          {statuses.map((s) => (
-            <option key={s} value={s}>{s === 'ALL' ? 'All status' : s}</option>
-          ))}
-        </select>
+        <PillSelect
+          className="lg-select"
+          value={status}
+          options={statuses.map((s) => ({ id: s, label: s === 'ALL' ? 'All status' : s }))}
+          onChange={setStatus}
+          ariaLabel="Order Status Filter"
+          testId="orders-status-filter"
+        />
         <span className="lg-filter-gap" />
         <input
           className="hp-input lg-symbol"

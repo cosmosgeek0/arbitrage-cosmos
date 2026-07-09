@@ -38,14 +38,15 @@ export interface NewsContextPayload {
 
 const TREE_URL = 'https://news.treeofalpha.com/api/news?limit=60';
 const LOOKONCHAIN_URL = 'https://www.lookonchain.com/ashx/index.ashx?type=1&page=1&pageSize=24';
-const CACHE_MS = 45_000;
+const CACHE_MS = 5_000;
 const FETCH_TIMEOUT_MS = 8_000;
-const TREE_MIN_FETCH_MS = 185_000;
-const RSS_DEFAULT_MIN_FETCH_MS = 60_000;
-const PRIMARY_DEFAULT_MIN_FETCH_MS = 90_000;
-const VENUE_DEFAULT_MIN_FETCH_MS = 75_000;
-const PROTOCOL_DEFAULT_MIN_FETCH_MS = 185_000;
-const ISSUER_DEFAULT_MIN_FETCH_MS = 185_000;
+const TREE_MIN_FETCH_MS = 15_000;
+const LOOKONCHAIN_MIN_FETCH_MS = 15_000;
+const RSS_DEFAULT_MIN_FETCH_MS = 30_000;
+const PRIMARY_DEFAULT_MIN_FETCH_MS = 60_000;
+const VENUE_DEFAULT_MIN_FETCH_MS = 30_000;
+const PROTOCOL_DEFAULT_MIN_FETCH_MS = 120_000;
+const ISSUER_DEFAULT_MIN_FETCH_MS = 120_000;
 const OFFICIAL_SOURCE_CONCURRENCY = 4;
 const RSS_SOURCE_CONCURRENCY = 6;
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
@@ -61,7 +62,7 @@ interface FeedConfig {
   pageParser?: MediaPageParser;
 }
 
-type MediaPageParser = 'ap-business' | 'dl-news';
+type MediaPageParser = 'ap-business' | 'dl-news' | 'kaiko-blog';
 type OfficialPageParser =
   | 'treasury-press'
   | 'ofac-actions'
@@ -71,7 +72,11 @@ type OfficialPageParser =
   | 'safe-home'
   | 'okx-announcements'
   | 'okx-status'
-  | 'bybit-announcements';
+  | 'bybit-announcements'
+  | 'circle-blog'
+  | 'paxos-blog'
+  | 'bitwise-insights'
+  | '21shares-insights';
 type OfficialJsonParser = 'coinbase-products' | 'upbit-announcements' | 'bithumb-notices' | 'bybit-system-status';
 type OfficialFeedEndpoint = string | { url: string; label?: string; domain?: string; includeKeywords?: string[] };
 type OfficialPageEndpoint = { url: string; parser: OfficialPageParser; label?: string; domain?: string };
@@ -538,6 +543,18 @@ const PROTOCOL_SOURCES: OfficialSourceConfig[] = [
     feeds: [{ url: 'https://forum.sky.money/latest.rss', label: 'Sky / Maker Forum', domain: 'forum.sky.money' }],
   },
   {
+    key: 'curve',
+    label: 'Curve Protocol',
+    domain: 'curve.fi',
+    url: 'https://github.com/curvefi',
+    detail: 'Official Curve contract and stablecoin GitHub release feeds.',
+    feeds: [
+      { url: 'https://github.com/curvefi/curve-contract/releases.atom', label: 'Curve Contracts', domain: 'curve.fi' },
+      { url: 'https://github.com/curvefi/curve-dao-contracts/releases.atom', label: 'Curve DAO', domain: 'curve.fi' },
+      { url: 'https://github.com/curvefi/curve-stablecoin/releases.atom', label: 'Curve Stablecoin', domain: 'curve.fi' },
+    ],
+  },
+  {
     key: 'dydx',
     label: 'dYdX',
     domain: 'dydx.exchange',
@@ -609,10 +626,45 @@ const ISSUER_SOURCES: OfficialSourceConfig[] = [
     detail: 'Official Fidelity Digital Assets RSS feed for institutional crypto research and product updates.',
     feeds: [{ url: 'https://www.fidelitydigitalassets.com/rss.xml', label: 'Fidelity Digital Assets', domain: 'fidelitydigitalassets.com' }],
   },
+  {
+    key: 'circle',
+    label: 'Circle',
+    domain: 'circle.com',
+    url: 'https://www.circle.com/blog',
+    detail: 'Official Circle blog metadata for stablecoin, payments, reserve, policy, and product announcements.',
+    pages: [{ url: 'https://www.circle.com/blog', parser: 'circle-blog' }],
+  },
+  {
+    key: 'paxos',
+    label: 'Paxos',
+    domain: 'paxos.com',
+    url: 'https://www.paxos.com/blog',
+    detail: 'Official Paxos newsroom for regulated stablecoin, brokerage, custody, and product announcements.',
+    pages: [{ url: 'https://www.paxos.com/blog', parser: 'paxos-blog' }],
+  },
+  {
+    key: 'bitwise',
+    label: 'Bitwise',
+    domain: 'bitwiseinvestments.com',
+    url: 'https://bitwiseinvestments.com/crypto-market-insights',
+    detail: 'Official Bitwise crypto market research and ETF insight pages.',
+    pages: [{ url: 'https://bitwiseinvestments.com/crypto-market-insights', parser: 'bitwise-insights' }],
+  },
+  {
+    key: '21shares',
+    label: '21Shares',
+    domain: '21shares.com',
+    url: 'https://www.21shares.com/en-us/insights',
+    detail: 'Official 21Shares digital-asset and ETF research pages.',
+    pages: [{ url: 'https://www.21shares.com/en-us/insights', parser: '21shares-insights' }],
+  },
 ];
 
 const RSS_FEEDS: FeedConfig[] = [
-  { key: 'financialjuice', label: 'FinancialJuice', url: 'https://www.financialjuice.com/feed.ashx', domain: 'financialjuice.com' },
+  {
+    key: 'financialjuice', label: 'FinancialJuice', url: 'https://www.financialjuice.com/feed.ashx', domain: 'financialjuice.com', minFetchMs: 15_000,
+    includeKeywords: ['fed', 'ecb', 'boj', 'rate', 'inflation', 'cpi', 'ppi', 'payroll', 'jobs', 'gdp', 'treasury', 'bond', 'oil', 'gold', 'dollar', 'bitcoin', 'ethereum', 'crypto'],
+  },
   { key: 'wsj-markets', label: 'WSJ Markets RSS', url: 'https://feeds.content.dowjones.io/public/rss/RSSMarketsMain', domain: 'wsj.com' },
   { key: 'benzinga', label: 'Benzinga', url: 'https://www.benzinga.com/feed', domain: 'benzinga.com' },
   { key: 'ft-alphaville', label: 'FT Alphaville', url: 'https://www.ft.com/alphaville?format=rss', domain: 'ft.com' },
@@ -647,7 +699,10 @@ const RSS_FEEDS: FeedConfig[] = [
       'economy', 'economic', 'oil', 'gold', 'dollar', 'treasury', 'bond', 'crypto', 'bitcoin', 'earnings',
     ],
   },
-  { key: 'nasdaq-news', label: 'Nasdaq News / Market Activity', url: 'https://www.nasdaq.com/feed/rssoutbound?category=Market%20Activity', domain: 'nasdaq.com' },
+  {
+    key: 'nasdaq-news', label: 'Nasdaq News / Market Activity', url: 'https://www.nasdaq.com/feed/rssoutbound?category=Market%20Activity', domain: 'nasdaq.com',
+    includeKeywords: ['market', 'nasdaq', 's&p', 'dow', 'fed', 'rate', 'inflation', 'treasury', 'bond', 'oil', 'gold', 'dollar', 'bitcoin', 'ethereum', 'crypto'],
+  },
   {
     key: 'ap-business',
     label: 'AP Business',
@@ -670,11 +725,36 @@ const RSS_FEEDS: FeedConfig[] = [
   { key: 'unchained', label: 'Unchained', url: 'https://unchainedcrypto.com/feed/', domain: 'unchainedcrypto.com' },
   { key: 'protos', label: 'Protos', url: 'https://protos.com/feed/', domain: 'protos.com' },
   { key: 'the-defiant', label: 'The Defiant', url: 'https://thedefiant.io/api/feed', domain: 'thedefiant.io' },
+  {
+    key: 'kaiko',
+    label: 'Kaiko Research',
+    url: 'https://www.kaiko.com/resources/categories/data-blog',
+    domain: 'kaiko.com',
+    pageParser: 'kaiko-blog',
+    minFetchMs: 185_000,
+  },
+  { key: 'bankless', label: 'Bankless', url: 'https://www.bankless.com/rss/feed', domain: 'bankless.com', minFetchMs: 60_000 },
   { key: 'glassnode-insights', label: 'Glassnode Insights', url: 'https://research.glassnode.com/rss/', domain: 'research.glassnode.com', minFetchMs: 185_000 },
   { key: 'chainalysis', label: 'Chainalysis', url: 'https://www.chainalysis.com/feed/', domain: 'chainalysis.com', minFetchMs: 185_000 },
   { key: 'trm-labs', label: 'TRM Labs', url: 'https://www.trmlabs.com/resources/blog/rss.xml', domain: 'trmlabs.com', minFetchMs: 185_000 },
   { key: 'elliptic', label: 'Elliptic', url: 'https://www.elliptic.co/blog/rss.xml', domain: 'elliptic.co', minFetchMs: 185_000 },
   { key: 'wublockchain', label: 'WuBlockchain / Substack', url: 'https://wublock.substack.com/feed', domain: 'wublock.substack.com' },
+  {
+    key: 'zerohedge',
+    label: 'ZeroHedge',
+    url: 'https://cms.zerohedge.com/fullrss2.xml',
+    domain: 'zerohedge.com',
+    minFetchMs: 60_000,
+    includeKeywords: ['market', 'fed', 'rate', 'inflation', 'treasury', 'bond', 'yield', 'oil', 'gold', 'dollar', 'bitcoin', 'ethereum', 'crypto'],
+  },
+  {
+    key: 'watcherguru',
+    label: 'WatcherGuru',
+    url: 'https://watcher.guru/news/feed',
+    domain: 'watcher.guru',
+    minFetchMs: 60_000,
+    includeKeywords: ['bitcoin', 'ethereum', 'crypto', 'blockchain', 'stablecoin', 'exchange', 'binance', 'coinbase', 'sec', 'etf', 'fed', 'market'],
+  },
   { key: 'cointelegraph', label: 'Cointelegraph', url: 'https://cointelegraph.com/rss', domain: 'cointelegraph.com' },
   { key: 'decrypt', label: 'Decrypt', url: 'https://decrypt.co/feed', domain: 'decrypt.co' },
   { key: 'cryptoslate', label: 'CryptoSlate', url: 'https://cryptoslate.com/feed/', domain: 'cryptoslate.com', fallbackUrl: 'https://cryptoslate.com/news/' },
@@ -691,6 +771,8 @@ const COMMON_SYMBOLS = new Set([
 let cache: NewsContextPayload | null = null;
 let inFlight: Promise<NewsContextPayload> | null = null;
 let treeSourceCache: (RssFetchResult & { fetchedAt: number }) | null = null;
+let lookonchainSourceCache: (RssFetchResult & { fetchedAt: number }) | null = null;
+const subscribers = new Set<(payload: NewsContextPayload) => void>();
 const rssSourceCache = new Map<string, RssFetchResult & { fetchedAt: number }>();
 const primarySourceCache = new Map<string, RssFetchResult & { fetchedAt: number }>();
 const venueSourceCache = new Map<string, RssFetchResult & { fetchedAt: number }>();
@@ -698,12 +780,17 @@ const protocolSourceCache = new Map<string, RssFetchResult & { fetchedAt: number
 const issuerSourceCache = new Map<string, RssFetchResult & { fetchedAt: number }>();
 
 export async function getNewsContext(force = false): Promise<NewsContextPayload> {
-  if (!force && cache && Date.now() - cache.fetchedAt < CACHE_MS) return cache;
-  if (force && cache) {
-    void startRefresh();
+  if (cache) {
+    if (force || Date.now() - cache.fetchedAt >= CACHE_MS) void startRefresh();
     return cache;
   }
   return startRefresh();
+}
+
+export function subscribeNewsContext(listener: (payload: NewsContextPayload) => void): () => void {
+  subscribers.add(listener);
+  if (cache) listener(cache);
+  return () => subscribers.delete(listener);
 }
 
 function startRefresh(): Promise<NewsContextPayload> {
@@ -711,6 +798,9 @@ function startRefresh(): Promise<NewsContextPayload> {
     inFlight = refreshNewsContext()
       .then((payload) => {
         cache = payload;
+        subscribers.forEach((listener) => {
+          try { listener(payload); } catch { /* stream disconnected */ }
+        });
         return payload;
       })
       .finally(() => {
@@ -731,9 +821,11 @@ async function refreshNewsContext(): Promise<NewsContextPayload> {
     fetchLookonchain(),
   ]);
   const seen = new Set<string>();
-  const items = [...primary.items, ...venue.items, ...protocol.items, ...issuer.items, ...tree.items, ...rss.items, ...lookonchain.items]
+  // First-party and original-publisher rows win over relay copies.
+  const items = [...primary.items, ...venue.items, ...protocol.items, ...issuer.items, ...rss.items, ...lookonchain.items, ...tree.items]
     .filter((item) => {
-      const key = normalizeKey(item.title);
+      if (!isUsefulNewsItem(item)) return false;
+      const key = canonicalNewsKey(item);
       if (!key || seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -956,6 +1048,16 @@ async function fetchTree(): Promise<{ items: NewsContextItem[]; source: NewsCont
 
 async function fetchLookonchain(): Promise<{ items: NewsContextItem[]; source: NewsContextSource }> {
   const fetchedAt = Date.now();
+  if (lookonchainSourceCache && fetchedAt - lookonchainSourceCache.fetchedAt < LOOKONCHAIN_MIN_FETCH_MS) {
+    return {
+      items: lookonchainSourceCache.items,
+      source: {
+        ...lookonchainSourceCache.source,
+        detail: `Public on-chain feed endpoint. Cached ${sourceAgeLabel(lookonchainSourceCache.fetchedAt)}.`,
+        count: lookonchainSourceCache.items.length,
+      },
+    };
+  }
   try {
     const text = await fetchText(LOOKONCHAIN_URL, {
       headers: {
@@ -969,7 +1071,7 @@ async function fetchLookonchain(): Promise<{ items: NewsContextItem[]; source: N
     const items = data.success === 'Y' && Array.isArray(data.content)
       ? data.content.map((row) => normalizeLookonchain(row, sourceNow)).filter((row): row is NewsContextItem => Boolean(row)).slice(0, 24)
       : [];
-    return {
+    const result: RssFetchResult = {
       items,
       source: {
         key: 'lookonchain',
@@ -982,7 +1084,15 @@ async function fetchLookonchain(): Promise<{ items: NewsContextItem[]; source: N
 	        domain: 'lookonchain.com',
 	      },
     };
+    if (items.length) lookonchainSourceCache = { ...result, fetchedAt };
+    return result;
   } catch (err) {
+	  if (lookonchainSourceCache) {
+      return {
+        items: lookonchainSourceCache.items,
+        source: { ...lookonchainSourceCache.source, status: 'delayed', detail: `Using cached on-chain rows; refresh hit ${errorMessage(err)}.` },
+      };
+    }
 	    return { items: [], source: sourceError('lookonchain', 'Lookonchain', err, LOOKONCHAIN_URL, 'lookonchain.com') };
   }
 }
@@ -1121,8 +1231,8 @@ async function fetchRssFallback(feed: RssFeed, fetchedAt: number, reason: string
 
 function normalizeTree(row: unknown): NewsContextItem | null {
   const data = row as Record<string, unknown>;
-  const title = cleanText(String(data.title ?? data.en ?? ''));
-  if (!title) return null;
+  const title = cleanRelayPrefix(cleanText(String(data.title ?? data.en ?? '')));
+  if (!title || !looksPrimarilyEnglish(title)) return null;
   const ts = typeof data.time === 'number' ? data.time : null;
   const sourceName = cleanText(String(data.sourceName ?? data.source ?? 'Tree'));
   const rawSymbols = Array.isArray(data.symbols) ? data.symbols.map(String) : [];
@@ -1225,6 +1335,10 @@ function parseOfficialPage(
   if (page.parser === 'okx-announcements') return parseOkxAnnouncementsPage(html, source, page, channel);
   if (page.parser === 'okx-status') return parseOkxStatusPage(html, source, page, channel);
   if (page.parser === 'bybit-announcements') return parseBybitAnnouncementsPage(html, source, page, channel);
+  if (page.parser === 'circle-blog') return parseCircleBlogPage(html, source, page, channel);
+  if (page.parser === 'paxos-blog') return parsePaxosBlogPage(html, source, page, channel);
+  if (page.parser === 'bitwise-insights') return parseBitwiseInsightsPage(html, source, page, channel);
+  if (page.parser === '21shares-insights') return parse21SharesInsightsPage(html, source, page, channel);
   return [];
 }
 
@@ -1263,6 +1377,69 @@ function buildOfficialPageItem(source: OfficialSourceConfig, input: {
     channel,
     ts: input.ts,
   });
+}
+
+function parseCircleBlogPage(html: string, source: OfficialSourceConfig, page: OfficialPageEndpoint, channel: NewsContextChannel): NewsContextItem[] {
+  const items: NewsContextItem[] = [];
+  const seen = new Set<string>();
+  const rows = html.matchAll(/"@type"\s*:\s*"BlogPosting"[\s\S]{0,900}?"headline"\s*:\s*"((?:\\.|[^"\\])+)"[\s\S]{0,900}?"url"\s*:\s*"([^"]+)"[\s\S]{0,900}?"datePublished"\s*:\s*"([^"]+)"/gi);
+  for (const match of rows) {
+    const title = decodeJsonText(match[1]);
+    const url = absolutizeUrl(match[2], page.url);
+    if (!title || seen.has(url)) continue;
+    seen.add(url);
+    items.push(buildOfficialPageItem(source, { idPart: url, title, url, ts: parseDateMillis(match[3]), channel }));
+    if (items.length >= 12) break;
+  }
+  return items;
+}
+
+function parsePaxosBlogPage(html: string, source: OfficialSourceConfig, page: OfficialPageEndpoint, channel: NewsContextChannel): NewsContextItem[] {
+  const items: NewsContextItem[] = [];
+  const seen = new Set<string>();
+  const rows = html.matchAll(/<a\b[^>]*href=["'](?:\.\/|\/)?(blog\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi);
+  for (const match of rows) {
+    const url = absolutizeUrl(`/${match[1]}`, page.url);
+    const title = cleanText(stripHtml(match[2].match(/<h3\b[^>]*>([\s\S]*?)<\/h3>/i)?.[1] ?? ''));
+    const date = match[2].match(/<time\b[^>]*datetime=["']([^"']+)["']/i)?.[1] ?? '';
+    if (!title || !date || seen.has(url)) continue;
+    seen.add(url);
+    items.push(buildOfficialPageItem(source, { idPart: url, title, url, ts: parseDateMillis(date), channel }));
+    if (items.length >= 12) break;
+  }
+  return items;
+}
+
+function parseBitwiseInsightsPage(html: string, source: OfficialSourceConfig, page: OfficialPageEndpoint, channel: NewsContextChannel): NewsContextItem[] {
+  const items: NewsContextItem[] = [];
+  const seen = new Set<string>();
+  const rows = html.matchAll(/<a\b[^>]*href=["'](\/crypto-market-insights\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi);
+  for (const match of rows) {
+    const url = absolutizeUrl(match[1], page.url);
+    const title = cleanText(decodeXml(match[2].match(/<img\b[^>]*alt=["']([^"']+)["']/i)?.[1] ?? ''));
+    if (!title || seen.has(url)) continue;
+    const date = cleanText(stripHtml(match[2])).match(/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},\s+\d{4}\b/i)?.[0] ?? '';
+    seen.add(url);
+    items.push(buildOfficialPageItem(source, { idPart: url, title, url, ts: parseNaturalDateMillis(date), channel }));
+    if (items.length >= 12) break;
+  }
+  return items;
+}
+
+function parse21SharesInsightsPage(html: string, source: OfficialSourceConfig, page: OfficialPageEndpoint, channel: NewsContextChannel): NewsContextItem[] {
+  const items: NewsContextItem[] = [];
+  const seen = new Set<string>();
+  const rows = html.matchAll(/<a\b[^>]*href=["'](\/en-(?:us|eu)\/insights\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi);
+  for (const match of rows) {
+    const url = absolutizeUrl(match[1], page.url);
+    const title = cleanText(stripHtml(match[2].match(/<p\b[^>]*class=["'][^"']*text-emphasis[^"']*["'][^>]*>([\s\S]*?)<\/p>/i)?.[1] ?? ''));
+    if (!title || /article page link/i.test(title) || seen.has(url)) continue;
+    const date = cleanText(stripHtml(match[2])).match(/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},\s+\d{4}\b/i)?.[0] ?? '';
+    seen.add(url);
+    items.push(buildOfficialPageItem(source, { idPart: url, title, url, ts: parseNaturalDateMillis(date), channel }));
+    if (items.length >= 12) break;
+  }
+  return items;
 }
 
 function parseTreasuryPressPage(html: string, source: OfficialSourceConfig, baseUrl: string, channel: NewsContextChannel): NewsContextItem[] {
@@ -1571,7 +1748,33 @@ function parseFallbackPage(html: string, feed: RssFeed): NewsContextItem[] {
 function parseMediaPage(html: string, feed: RssFeed): NewsContextItem[] {
   if (feed.pageParser === 'ap-business') return parseApBusinessPage(html, feed);
   if (feed.pageParser === 'dl-news') return parseDlNewsPage(html, feed);
+  if (feed.pageParser === 'kaiko-blog') return parseKaikoBlogPage(html, feed);
   return [];
+}
+
+function parseKaikoBlogPage(html: string, feed: RssFeed): NewsContextItem[] {
+  const seen = new Set<string>();
+  const items: NewsContextItem[] = [];
+  const rows = html.matchAll(/<a\b[^>]*href=["'](\/resources\/(?!categories\/|guides\/?)[^"']+)["'][^>]*class=["'][^"']*\btitle\b[^"']*["'][^>]*>[\s\S]{0,360}?<span\b[^>]*>([\s\S]*?)<\/span>/gi);
+  for (const match of rows) {
+    const url = absolutizeUrl(match[1], feed.url);
+    const title = cleanText(stripHtml(match[2]));
+    if (!title || seen.has(url)) continue;
+    seen.add(url);
+    items.push(buildItem({
+      id: `rss:${feed.key}:page:${url}`,
+      title,
+      summary: 'Kaiko first-party crypto market structure research',
+      url,
+      source: feed.label,
+      sourceKey: feed.key,
+      sourceDomain: feed.domain,
+      channel: 'rss',
+      ts: null,
+    }));
+    if (items.length >= 8) break;
+  }
+  return items;
 }
 
 function parseApBusinessPage(html: string, feed: RssFeed): NewsContextItem[] {
@@ -1887,7 +2090,10 @@ function cleanText(value: string): string {
 
 function matchesAnyKeyword(value: string, keywords: string[]): boolean {
   const lower = value.toLowerCase();
-  return keywords.some((keyword) => lower.includes(keyword.toLowerCase()));
+  return keywords.some((keyword) => {
+    const escaped = keyword.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(?:^|[^a-z0-9])${escaped}(?:$|[^a-z0-9])`, 'i').test(lower);
+  });
 }
 
 function readJsonScript(html: string, id: string): unknown | null {
@@ -2046,4 +2252,39 @@ function ageLabel(ts: number): string {
 
 function normalizeKey(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().slice(0, 180);
+}
+
+function decodeJsonText(value: string): string {
+  try {
+    return cleanText(JSON.parse(`"${value}"`) as string);
+  } catch {
+    return cleanText(value);
+  }
+}
+
+function cleanRelayPrefix(title: string): string {
+  return title
+    .replace(/^finance feeds?\s*[:\-–—]\s*/i, '')
+    .replace(/^(?:decrypt|cointelegraph|the block|coindesk|blockworks|reuters|bloomberg|wsj|cnbc)\s*[:\-–—]\s*/i, '')
+    .trim();
+}
+
+function looksPrimarilyEnglish(text: string): boolean {
+  const letters = text.match(/[A-Za-z]/g)?.length ?? 0;
+  const nonLatin = text.match(/[\u0400-\u04ff\u0600-\u06ff\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/g)?.length ?? 0;
+  return letters >= 12 && letters >= nonLatin * 2;
+}
+
+function canonicalNewsKey(item: NewsContextItem): string {
+  const title = cleanRelayPrefix(item.title)
+    .replace(/\b(?:breaking|update|exclusive)\b\s*[:\-–—]?\s*/gi, '')
+    .replace(/\s+(?:via|from)\s+@[a-z0-9_]+$/i, '');
+  return normalizeKey(title).slice(0, 150);
+}
+
+function isUsefulNewsItem(item: NewsContextItem): boolean {
+  if (item.channel !== 'tree') return true;
+  const text = `${item.title} ${item.summary ?? ''}`.toLowerCase();
+  if (/^finance feeds?\b/i.test(item.title)) return false;
+  return /\b(bitcoin|btc|ethereum|eth|crypto|token|stablecoin|blockchain|defi|exchange|binance|coinbase|kraken|bybit|okx|sec|cftc|fed|ecb|boj|rate|inflation|cpi|ppi|payroll|jobs|gdp|treasury|bond|yield|oil|gold|dollar|market|futures|options|nasdaq|s&p|dow|hack|exploit|listing|delist|wallet|on[ -]?chain)\b/.test(text);
 }

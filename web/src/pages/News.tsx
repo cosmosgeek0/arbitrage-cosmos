@@ -1,18 +1,15 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { Pill } from '../components/px';
-import { IconExternal, IconNewspaper, IconRefresh, IconSearch } from '../components/Icons';
+import { IconExternal, IconNewspaper, IconSearch } from '../components/Icons';
+import { PillSelect } from '../components/PillSelect';
 import { liveAge } from '../format';
 import { useStore } from '../store';
-import './Markets.css';
+import './LiveIntelligence.css';
 
 type NewsTone = 'ok' | 'warn' | 'bad' | 'idle';
-type ContextChannel = 'primary' | 'venue' | 'protocol' | 'issuer' | 'tree' | 'rss' | 'lookonchain';
-type FeedChannel = ContextChannel | 'binance';
-type SourceFilter = string;
-type NewsBucket = 'must-know' | 'exchange' | 'macro-policy' | 'crypto-market' | 'onchain-security' | 'long-research' | 'all';
-type NewsPageSize = 25 | 50 | 100;
+type FeedChannel = 'primary' | 'venue' | 'protocol' | 'issuer' | 'tree' | 'rss' | 'lookonchain' | 'binance';
+type NewsBucket = 'all' | 'must-know' | 'exchange' | 'macro-policy' | 'crypto-market' | 'onchain-security' | 'long-research';
 
-interface NewsContextItem {
+interface NewsItem {
   id: string;
   title: string;
   summary: string | null;
@@ -28,7 +25,7 @@ interface NewsContextItem {
   tone: NewsTone;
 }
 
-interface NewsContextSource {
+interface NewsSource {
   key: string;
   label: string;
   status: 'live' | 'delayed' | 'error';
@@ -39,884 +36,350 @@ interface NewsContextSource {
   domain?: string | null;
 }
 
-interface NewsContextPayload {
+interface NewsPayload {
   source: string;
   fetchedAt: number;
-  items: NewsContextItem[];
-  sources: NewsContextSource[];
+  items: NewsItem[];
+  sources: NewsSource[];
 }
 
-interface BinanceNewsItem {
-  id: number;
-  title: string;
-  date: string | null;
-  url: string;
-}
+interface BinanceItem { id: number; title: string; date: string | null; url: string }
+interface BinancePayload { catalog: number | string; fetchedAt?: number; items: BinanceItem[] }
 
-interface BinanceNewsPayload {
-  catalog: number | string;
-  fetchedAt?: number;
-  items: BinanceNewsItem[];
-}
-
+const FEED_CACHE_KEY = 'cosmos-news-feed-cache-v2';
 const READ_KEY = 'cosmos-news-read-v3';
-const FEED_CACHE_KEY = 'cosmos-news-feed-cache-v1';
-const NEWS_CONTEXT_LIMIT = 900;
-const NEWS_AUTO_REFRESH_SEC = 5;
-const NEWS_FRESH_ANIMATION_MAX_AGE_MS = 10 * 60_000;
-const NEWS_FRESH_ANIMATION_MAX_INDEX = 12;
-const NEWS_KNOWN_ID_LIMIT = 1800;
-const PAGE_SIZE_OPTIONS: NewsPageSize[] = [25, 50, 100];
-
-const NEWS_BUCKETS: { id: NewsBucket; label: string; shortLabel: string }[] = [
-  { id: 'all', label: 'All Buckets', shortLabel: 'All' },
-  { id: 'must-know', label: 'Must Know', shortLabel: 'Must Know' },
-  { id: 'exchange', label: 'Exchange Notices', shortLabel: 'Exchange' },
-  { id: 'macro-policy', label: 'Macro / Policy', shortLabel: 'Macro' },
-  { id: 'crypto-market', label: 'Crypto Market News', shortLabel: 'Crypto' },
-  { id: 'onchain-security', label: 'On-Chain / Security', shortLabel: 'On-Chain' },
-  { id: 'long-research', label: 'Long-Term Research', shortLabel: 'Research' },
-];
-
-const SOURCE_FILTERS: { id: SourceFilter; label: string }[] = [
-  { id: 'all', label: 'All Sources' },
-  { id: 'fed', label: 'Federal Reserve Board' },
-  { id: 'bls', label: 'BLS' },
-  { id: 'bea', label: 'BEA' },
-  { id: 'sec', label: 'SEC' },
-  { id: 'cftc', label: 'CFTC' },
-  { id: 'treasury', label: 'U.S. Treasury' },
-  { id: 'ofac', label: 'OFAC' },
-  { id: 'ecb', label: 'ECB' },
-  { id: 'boe', label: 'Bank of England' },
-  { id: 'boj', label: 'Bank of Japan' },
-  { id: 'japan-mof', label: 'Japan MOF' },
-  { id: 'china-nbs', label: 'China NBS' },
-  { id: 'pboc', label: 'PBoC' },
-  { id: 'safe', label: 'SAFE' },
-  { id: 'binance', label: 'Binance News / Announcements' },
-  { id: 'coinbase-assets', label: 'Coinbase / Coinbase Assets' },
-  { id: 'kraken', label: 'Kraken' },
-  { id: 'okx', label: 'OKX' },
-  { id: 'bybit', label: 'Bybit' },
-  { id: 'upbit-bithumb', label: 'Upbit / Bithumb' },
-  { id: 'deribit', label: 'Deribit' },
-  { id: 'cme-crypto', label: 'CME Group Crypto Notices' },
-  { id: 'exchange-status', label: 'Exchange Status Pages' },
-  { id: 'ethereum-foundation', label: 'Ethereum Foundation' },
-  { id: 'bitcoin-core', label: 'Bitcoin Core' },
-  { id: 'geth', label: 'Geth' },
-  { id: 'nethermind', label: 'Nethermind' },
-  { id: 'prysm', label: 'Prysm' },
-  { id: 'lighthouse', label: 'Lighthouse' },
-  { id: 'solana-agave', label: 'Solana Agave' },
-  { id: 'arbitrum-nitro', label: 'Arbitrum Nitro' },
-  { id: 'optimism', label: 'Optimism' },
-  { id: 'base-status', label: 'Base Status' },
-  { id: 'polygon-status', label: 'Polygon Status' },
-  { id: 'avalanchego', label: 'AvalancheGo' },
-  { id: 'cosmos-gaia', label: 'Cosmos Gaia' },
-  { id: 'celestia-node', label: 'Celestia Node' },
-  { id: 'sui', label: 'Sui' },
-  { id: 'aptos-core', label: 'Aptos Core' },
-  { id: 'chainlink', label: 'Chainlink' },
-  { id: 'uniswap-v4', label: 'Uniswap v4' },
-  { id: 'aave-v3', label: 'Aave v3' },
-  { id: 'lido', label: 'Lido' },
-  { id: 'eigenlayer', label: 'EigenLayer' },
-  { id: 'sky-forum', label: 'Sky / Maker Forum' },
-  { id: 'dydx', label: 'dYdX' },
-  { id: 'jito-solana', label: 'Jito Solana' },
-  { id: 'jupiter-cpi', label: 'Jupiter' },
-  { id: 'wormhole', label: 'Wormhole' },
-  { id: 'layerzero-v2', label: 'LayerZero v2' },
-  { id: 'tether', label: 'Tether' },
-  { id: 'paypal-usd', label: 'PayPal USD' },
-  { id: 'fidelity-digital-assets', label: 'Fidelity Digital Assets' },
-  { id: 'tree', label: 'Tree Of Alpha Relay' },
-  { id: 'financialjuice', label: 'FinancialJuice' },
-  { id: 'wsj-markets', label: 'WSJ Markets RSS' },
-  { id: 'benzinga', label: 'Benzinga' },
-  { id: 'ft-alphaville', label: 'FT Alphaville' },
-  { id: 'cnbc-markets', label: 'CNBC Markets' },
-  { id: 'marketwatch', label: 'MarketWatch' },
-  { id: 'yahoo-finance', label: 'Yahoo Finance' },
-  { id: 'investing-news', label: 'Investing.com News' },
-  { id: 'nasdaq-news', label: 'Nasdaq News / Market Activity' },
-  { id: 'ap-business', label: 'AP Business' },
-  { id: 'coindesk', label: 'CoinDesk' },
-  { id: 'the-block', label: 'The Block' },
-  { id: 'blockworks', label: 'Blockworks' },
-  { id: 'dl-news', label: 'DL News' },
-  { id: 'unchained', label: 'Unchained' },
-  { id: 'protos', label: 'Protos' },
-  { id: 'the-defiant', label: 'The Defiant' },
-  { id: 'glassnode-insights', label: 'Glassnode Insights' },
-  { id: 'chainalysis', label: 'Chainalysis' },
-  { id: 'trm-labs', label: 'TRM Labs' },
-  { id: 'elliptic', label: 'Elliptic' },
-  { id: 'wublockchain', label: 'WuBlockchain / Substack' },
-  { id: 'lookonchain', label: 'Lookonchain' },
-  { id: 'cointelegraph', label: 'Cointelegraph' },
-  { id: 'decrypt', label: 'Decrypt' },
-  { id: 'cryptoslate', label: 'CryptoSlate' },
+const CONTEXT_LIMIT = 900;
+const INITIAL_ROWS = 80;
+const BUCKETS: { id: NewsBucket; label: string }[] = [
+  { id: 'all', label: 'All News' },
+  { id: 'must-know', label: 'Must Know' },
+  { id: 'exchange', label: 'Exchange' },
+  { id: 'macro-policy', label: 'Macro / Policy' },
+  { id: 'crypto-market', label: 'Crypto' },
+  { id: 'onchain-security', label: 'Security' },
+  { id: 'long-research', label: 'Research' },
 ];
 const SOURCE_PRIORITY: Record<FeedChannel, number> = {
-  primary: 0,
-  venue: 1,
-  protocol: 2,
-  issuer: 3,
-  binance: 4,
-  tree: 5,
-  lookonchain: 6,
-  rss: 7,
+  primary: 0, venue: 1, issuer: 2, protocol: 3, binance: 4, rss: 5, lookonchain: 6, tree: 7,
 };
-const PRIMARY_SOURCE_KEYS = new Set([
-  'fed', 'bls', 'bea', 'sec', 'cftc', 'treasury', 'ofac', 'ecb', 'boe',
-  'boj', 'japan-mof', 'china-nbs', 'pboc', 'safe',
-]);
-const VENUE_SOURCE_KEYS = new Set([
-  'coinbase-assets', 'kraken', 'okx', 'bybit', 'upbit-bithumb', 'deribit',
-  'cme-crypto', 'exchange-status',
-]);
-const PROTOCOL_SOURCE_KEYS = new Set([
-  'ethereum-foundation', 'bitcoin-core', 'geth', 'nethermind', 'prysm', 'lighthouse',
-  'solana-agave', 'arbitrum-nitro', 'optimism', 'base-status', 'polygon-status',
-  'avalanchego', 'cosmos-gaia', 'celestia-node', 'sui', 'aptos-core', 'chainlink',
-  'uniswap-v4', 'aave-v3', 'lido', 'eigenlayer', 'sky-forum', 'dydx', 'jito-solana',
-  'jupiter-cpi', 'wormhole', 'layerzero-v2',
-]);
-const ISSUER_SOURCE_KEYS = new Set([
-  'tether', 'paypal-usd', 'fidelity-digital-assets',
-]);
-const CRYPTO_MARKET_SOURCE_KEYS = new Set([
-  'coindesk', 'the-block', 'blockworks', 'dl-news', 'wublockchain', 'cointelegraph',
-  'decrypt', 'cryptoslate', 'unchained', 'the-defiant',
-]);
-const ONCHAIN_SECURITY_SOURCE_KEYS = new Set([
-  'lookonchain', 'chainalysis', 'trm-labs', 'elliptic', 'protos',
-]);
-const LONG_RESEARCH_SOURCE_KEYS = new Set([
-  'glassnode-insights', 'fidelity-digital-assets',
-]);
 
-const SOURCE_DOMAINS: Record<string, string> = {
-  fed: 'federalreserve.gov',
-  'federal reserve board': 'federalreserve.gov',
-  bls: 'bls.gov',
-  bea: 'bea.gov',
-  sec: 'sec.gov',
-  cftc: 'cftc.gov',
-  treasury: 'home.treasury.gov',
-  'u.s. treasury': 'home.treasury.gov',
-  ofac: 'ofac.treasury.gov',
-  ecb: 'ecb.europa.eu',
-  boe: 'bankofengland.co.uk',
-  'bank of england': 'bankofengland.co.uk',
-  boj: 'boj.or.jp',
-  'bank of japan': 'boj.or.jp',
-  'japan mof': 'mof.go.jp',
-  'japan-mof': 'mof.go.jp',
-  'china nbs': 'stats.gov.cn',
-  'china-nbs': 'stats.gov.cn',
-  pboc: 'pbc.gov.cn',
-  safe: 'safe.gov.cn',
-  binance: 'binance.com',
-  'binance official': 'binance.com',
-  'coinbase-assets': 'coinbase.com',
-  'coinbase / coinbase assets': 'coinbase.com',
-  'coinbase exchange': 'coinbase.com',
-  kraken: 'blog.kraken.com',
-  okx: 'okx.com',
-  bybit: 'announcements.bybit.com',
-  'upbit-bithumb': 'upbit.com',
-  'upbit / bithumb': 'upbit.com',
-  upbit: 'upbit.com',
-  bithumb: 'bithumb.com',
-  deribit: 'insights.deribit.com',
-  'cme-crypto': 'cmegroup.com',
-  'cme group crypto notices': 'cmegroup.com',
-  'cme group press releases': 'cmegroup.com',
-  'cme globex notice': 'cmegroup.com',
-  'exchange-status': 'status.coinbase.com',
-  'exchange status pages': 'status.coinbase.com',
-  'coinbase status': 'status.coinbase.com',
-  'kraken status': 'status.kraken.com',
-  'okx status': 'okx.com',
-  'bybit system status': 'bybit.com',
-  'ethereum-foundation': 'ethereum.org',
-  'ethereum foundation': 'ethereum.org',
-  'bitcoin-core': 'bitcoincore.org',
-  'bitcoin core': 'bitcoincore.org',
-  geth: 'geth.ethereum.org',
-  nethermind: 'nethermind.io',
-  prysm: 'offchainlabs.com',
-  lighthouse: 'sigmaprime.io',
-  'solana-agave': 'solana.com',
-  'solana agave': 'solana.com',
-  'arbitrum-nitro': 'arbitrum.io',
-  'arbitrum nitro': 'arbitrum.io',
-  optimism: 'optimism.io',
-  'base-status': 'base.org',
-  'base status': 'base.org',
-  'polygon-status': 'polygon.technology',
-  'polygon status': 'polygon.technology',
-  avalanchego: 'avax.network',
-  'cosmos-gaia': 'cosmos.network',
-  'cosmos gaia': 'cosmos.network',
-  'celestia-node': 'celestia.org',
-  'celestia node': 'celestia.org',
-  sui: 'sui.io',
-  'aptos-core': 'aptosfoundation.org',
-  'aptos core': 'aptosfoundation.org',
-  chainlink: 'chain.link',
-  'uniswap-v4': 'uniswap.org',
-  'uniswap v4': 'uniswap.org',
-  'aave-v3': 'aave.com',
-  'aave v3': 'aave.com',
-  lido: 'lido.fi',
-  eigenlayer: 'eigenlayer.xyz',
-  'sky-forum': 'forum.sky.money',
-  'sky / maker forum': 'forum.sky.money',
-  dydx: 'dydx.exchange',
-  'jito-solana': 'jito.network',
-  'jito solana': 'jito.network',
-  'jupiter-cpi': 'jup.ag',
-  jupiter: 'jup.ag',
-  wormhole: 'wormhole.com',
-  'layerzero-v2': 'layerzero.network',
-  'layerzero v2': 'layerzero.network',
-  tether: 'tether.io',
-  'paypal-usd': 'paypal.com',
-  'paypal usd': 'paypal.com',
-  'fidelity-digital-assets': 'fidelitydigitalassets.com',
-  'fidelity digital assets': 'fidelitydigitalassets.com',
-  financialjuice: 'financialjuice.com',
-  'wsj markets rss': 'wsj.com',
-  'ft-alphaville': 'ft.com',
-  'ft alphaville': 'ft.com',
-  alphaville: 'ft.com',
-  'cnbc-markets': 'cnbc.com',
-  'cnbc markets': 'cnbc.com',
-  marketwatch: 'marketwatch.com',
-  'yahoo-finance': 'finance.yahoo.com',
-  'yahoo finance': 'finance.yahoo.com',
-  'investing-news': 'investing.com',
-  'investing.com news': 'investing.com',
-  'nasdaq-news': 'nasdaq.com',
-  'nasdaq news / market activity': 'nasdaq.com',
-  'ap-business': 'apnews.com',
-  'ap business': 'apnews.com',
-  'tree of alpha relay': 'treeofalpha.com',
-  'wublockchain / substack': 'wublock.substack.com',
-  'binance news / announcements': 'binance.com',
-  tree: 'treeofalpha.com',
-  rss: 'financialjuice.com',
-  lookonchain: 'lookonchain.com',
-  'wsj markets': 'wsj.com',
-  benzinga: 'benzinga.com',
-  coindesk: 'coindesk.com',
-  blockworks: 'blockworks.com',
-  'dl-news': 'dlnews.com',
-  'dl news': 'dlnews.com',
-  unchained: 'unchainedcrypto.com',
-  protos: 'protos.com',
-  'the-defiant': 'thedefiant.io',
-  'the defiant': 'thedefiant.io',
-  'glassnode-insights': 'research.glassnode.com',
-  'glassnode insights': 'research.glassnode.com',
-  chainalysis: 'chainalysis.com',
-  'trm-labs': 'trmlabs.com',
-  'trm labs': 'trmlabs.com',
-  elliptic: 'elliptic.co',
-  cointelegraph: 'cointelegraph.com',
-  'the block': 'theblock.co',
-  decrypt: 'decrypt.co',
-  beincrypto: 'beincrypto.com',
-  newsbtc: 'newsbtc.com',
-  ambcrypto: 'ambcrypto.com',
-  'u.today': 'u.today',
-  cryptoslate: 'cryptoslate.com',
-  wublockchain: 'wublock.substack.com',
-  twitter: 'x.com',
-  x: 'x.com',
-};
+function readFeedCache(): { context: NewsPayload | null; binance: BinancePayload | null } {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(FEED_CACHE_KEY) ?? 'null') as { context?: NewsPayload; binance?: BinancePayload } | null;
+    return { context: parsed?.context ?? null, binance: parsed?.binance ?? null };
+  } catch { return { context: null, binance: null }; }
+}
+
+function persistFeedCache(context: NewsPayload | null, binance: BinancePayload | null): void {
+  try { localStorage.setItem(FEED_CACHE_KEY, JSON.stringify({ context, binance })); } catch { /* storage is optional */ }
+}
 
 function readSet(): Set<string> {
-  try {
-    const ids = JSON.parse(localStorage.getItem(READ_KEY) || '[]') as string[];
-    return new Set(ids.filter((id) => typeof id === 'string'));
-  } catch {
-    return new Set();
-  }
+  try { return new Set(JSON.parse(localStorage.getItem(READ_KEY) ?? '[]') as string[]); } catch { return new Set(); }
 }
 
-function persistRead(ids: Set<string>) {
-  localStorage.setItem(READ_KEY, JSON.stringify(Array.from(ids).slice(-900)));
-}
-
-function readFeedCache(): { context: NewsContextPayload | null; binance: BinanceNewsPayload | null } {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(FEED_CACHE_KEY) || '{}') as Partial<{
-      context: NewsContextPayload;
-      binance: BinanceNewsPayload;
-    }>;
-    return {
-      context: parsed.context?.items ? parsed.context : null,
-      binance: parsed.binance?.items ? parsed.binance : null,
-    };
-  } catch {
-    return { context: null, binance: null };
-  }
-}
-
-function persistFeedCache(context: NewsContextPayload | null, binance: BinanceNewsPayload | null) {
-  try {
-    localStorage.setItem(FEED_CACHE_KEY, JSON.stringify({ context, binance }));
-  } catch {
-    // Cache is only for first-paint continuity; ignore quota/privacy failures.
-  }
+function persistRead(ids: Set<string>): void {
+  try { localStorage.setItem(READ_KEY, JSON.stringify([...ids].slice(-2_000))); } catch { /* storage is optional */ }
 }
 
 function cleanDomain(value: string | null | undefined): string | null {
   if (!value) return null;
-  try {
-    return new URL(value).hostname.toLowerCase().replace(/^www\./, '');
-  } catch {
-    return null;
-  }
+  try { return new URL(value).hostname.toLowerCase().replace(/^www\./, ''); } catch { return null; }
 }
 
-function sourceDomain(source: string | null | undefined, channel?: FeedChannel, url?: string | null, explicitDomain?: string | null): string | null {
-  if (explicitDomain) return explicitDomain;
-  const fromUrl = cleanDomain(url);
-  if (fromUrl) return fromUrl;
-  const key = (source ?? '').trim().toLowerCase();
-  return SOURCE_DOMAINS[key] ?? (channel ? SOURCE_DOMAINS[channel] : null) ?? null;
+function itemDomain(item: NewsItem): string | null {
+  return item.sourceDomain || cleanDomain(item.url);
 }
 
-function logoUrl(domain: string | null): string | null {
-  return domain ? `/api/source-logo?domain=${encodeURIComponent(domain)}&sz=64` : null;
+function itemSourceKey(item: NewsItem): string {
+  return item.sourceKey || item.source.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || item.channel;
 }
 
-const SourceLogo = memo(function SourceLogo({ domain, label, size = 28 }: { domain: string | null; label: string; size?: number }) {
-  const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [domain]);
-  const src = !failed ? logoUrl(domain) : null;
-  return (
-    <span className="nwx-logo" style={{ width: size, height: size }} title={domain ?? label} aria-label={`${label} Logo`}>
-      {src ? (
-        <img src={src} alt="" width={size} height={size} loading="lazy" decoding="async" onError={() => setFailed(true)} />
-      ) : (
-        <IconNewspaper size={Math.max(13, size - 10)} />
-      )}
-    </span>
-  );
-});
-
-function channelLabel(channel: FeedChannel): string {
-  if (channel === 'primary') return 'Primary';
-  if (channel === 'venue') return 'Venue';
-  if (channel === 'protocol') return 'Protocol';
-  if (channel === 'issuer') return 'Issuer';
-  if (channel === 'binance') return 'Official';
-  if (channel === 'tree') return 'Tree';
-  if (channel === 'lookonchain') return 'Lookonchain';
-  return 'RSS';
+function itemTimestamp(item: NewsItem): number {
+  return item.ts && Number.isFinite(item.ts) && item.ts <= Date.now() ? item.ts : 0;
 }
 
-function sourceKeyForItem(item: NewsContextItem): string {
-  if (item.sourceKey) return item.sourceKey;
-  if (item.channel === 'binance') return 'binance';
-  if (item.channel === 'tree') return 'tree';
-  if (item.channel === 'lookonchain') return 'lookonchain';
-  const label = item.source.trim().toLowerCase();
-  const match = SOURCE_FILTERS.find((src) => src.id !== 'all' && src.label.toLowerCase() === label);
-  if (match) return match.id;
-  const compact = label.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  return compact || item.channel;
-}
-
-function matchesQuery(item: NewsContextItem, q: string): boolean {
-  if (!q) return true;
-  const haystack = `${item.title} ${item.summary ?? ''} ${item.source} ${item.tags.join(' ')} ${item.symbols.join(' ')}`.toLowerCase();
-  return haystack.includes(q);
-}
-
-function displayHeadline(title: string): string {
-  const compact = title.replace(/\s+/g, ' ').trim();
-  if (compact.length <= 180) return compact;
-  const sentence = compact.match(/^.{90,180}?[.!?](?:\s|$)/)?.[0]?.trim();
-  const clipped = sentence ?? compact.slice(0, 176).replace(/[,\s;:-]+$/, '');
-  return `${clipped}...`;
-}
-
-function formatDateLabel(date: string | null): string {
-  if (!date) return 'Official';
-  const parsed = Date.parse(`${date}T00:00:00Z`);
-  if (!Number.isFinite(parsed)) return 'Official';
-  return new Date(parsed).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
-}
-
-function extractBinanceDate(title: string, date: string | null): string | null {
-  if (date) return date;
-  const match = title.match(/(?:\(|[-–—]\s*)(\d{4}-\d{2}-\d{2})\)?\s*$/);
-  return match?.[1] ?? null;
-}
-
-function cleanBinanceTitle(title: string): string {
-  return title.replace(/\s*(?:\(|[-–—]\s*)\d{4}-\d{2}-\d{2}\)?\s*$/, '').trim();
-}
-
-function binanceSortTimestamp(date: string | null): number | null {
+function binanceTimestamp(date: string | null): number | null {
   if (!date) return null;
   const parsed = Date.parse(`${date}T00:00:00Z`);
-  if (!Number.isFinite(parsed)) return null;
-  return parsed > Date.now() ? null : parsed;
+  return Number.isFinite(parsed) && parsed <= Date.now() ? parsed : null;
 }
 
-function mapBinanceItem(item: BinanceNewsItem): NewsContextItem {
-  const date = extractBinanceDate(item.title, item.date);
+function mapBinance(item: BinanceItem): NewsItem {
+  const titleDate = item.title.match(/(?:\(|[-–—]\s*)(\d{4}-\d{2}-\d{2})\)?\s*$/)?.[1] ?? item.date;
   return {
     id: `binance:${item.id}`,
-    title: cleanBinanceTitle(item.title),
+    title: item.title.replace(/\s*(?:\(|[-–—]\s*)\d{4}-\d{2}-\d{2}\)?\s*$/, '').trim(),
     summary: null,
     url: item.url,
     source: 'Binance',
     sourceKey: 'binance',
     sourceDomain: 'binance.com',
     channel: 'binance',
-    ts: binanceSortTimestamp(date),
-    timeLabel: formatDateLabel(date),
+    ts: binanceTimestamp(titleDate),
+    timeLabel: titleDate || 'Official',
     symbols: [],
-    tags: [],
+    tags: ['Exchange'],
     tone: 'idle',
   };
 }
 
-function itemSortTs(item: NewsContextItem): number {
-  if (!item.ts || !Number.isFinite(item.ts)) return 0;
-  return item.ts > Date.now() ? 0 : item.ts;
-}
-
-function newsAgeLabel(ts: number | null | undefined, fallback: string): string {
-  if (!ts || !Number.isFinite(ts) || ts > Date.now()) return fallback || 'Undated';
-  const seconds = Math.max(0, Math.floor((Date.now() - ts) / 1_000));
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 48) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
-}
-
-function compareNewsItems(a: NewsContextItem, b: NewsContextItem): number {
-  const byTime = itemSortTs(b) - itemSortTs(a);
-  if (byTime !== 0) return byTime;
+function compareItems(a: NewsItem, b: NewsItem): number {
+  const byTime = itemTimestamp(b) - itemTimestamp(a);
+  if (byTime) return byTime;
   const bySource = SOURCE_PRIORITY[a.channel] - SOURCE_PRIORITY[b.channel];
-  if (bySource !== 0) return bySource;
-  return a.id.localeCompare(b.id);
+  return bySource || a.id.localeCompare(b.id);
 }
 
-function mergeNewsItems(context: NewsContextPayload | null, binance: BinanceNewsPayload | null): NewsContextItem[] {
-  const merged = [...(context?.items ?? []), ...(binance?.items ?? []).map(mapBinanceItem)];
-  return merged.sort(compareNewsItems);
+function canonicalTitle(title: string): string {
+  return title
+    .replace(/^(?:finance feeds?|decrypt|cointelegraph|the block|coindesk|blockworks|reuters|bloomberg|wsj|cnbc)\s*[:\-–—]\s*/i, '')
+    .replace(/\b(?:breaking|update|exclusive)\b\s*[:\-–—]?\s*/gi, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().slice(0, 160);
 }
 
-function shouldAnimateIncoming(item: NewsContextItem, index: number): boolean {
-  const ts = itemSortTs(item);
-  return ts > 0 && Date.now() - ts <= NEWS_FRESH_ANIMATION_MAX_AGE_MS && index < NEWS_FRESH_ANIMATION_MAX_INDEX;
+function mergeItems(context: NewsPayload | null, binance: BinancePayload | null): NewsItem[] {
+  const seen = new Set<string>();
+  return [...(context?.items ?? []), ...(binance?.items ?? []).map(mapBinance)]
+    .sort(compareItems)
+    .filter((item) => {
+      const key = canonicalTitle(item.title);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
-function stablePageKeys(pageItems: NewsContextItem[]): string[] {
-  const seen = new Map<string, number>();
-  return pageItems.map((item) => {
-    const count = seen.get(item.id) ?? 0;
-    seen.set(item.id, count + 1);
-    return count ? `${item.id}:dup-${count}` : item.id;
-  });
+function mergeContextPayload(incoming: NewsPayload, current: NewsPayload | null): NewsPayload {
+  if (!current) return incoming;
+  const byId = new Map<string, NewsItem>();
+  [...incoming.items, ...current.items].forEach((item) => byId.set(item.id, item));
+  return { ...incoming, items: [...byId.values()].sort(compareItems).slice(0, CONTEXT_LIMIT) };
 }
 
-function itemHasAnyTag(item: NewsContextItem, tags: string[]): boolean {
-  return tags.some((tag) => item.tags.includes(tag));
+function classification(item: NewsItem): string {
+  const tags = item.tags.join(' ').toLowerCase();
+  const text = `${item.title} ${item.summary ?? ''} ${tags}`.toLowerCase();
+  if (/security|hack|exploit|phishing|stolen|attack|vulnerability/.test(text)) return 'Security';
+  if (item.channel === 'venue' || item.channel === 'binance' || /listing|delisting|maintenance|exchange/.test(tags)) return 'Exchange';
+  if (item.channel === 'primary' || /macro|policy|inflation|rates|treasury|regulation/.test(text)) return 'Macro';
+  if (item.channel === 'lookonchain' || /on-chain|whale|wallet flow/.test(text)) return 'On-Chain';
+  if (item.channel === 'protocol' || /release|governance/.test(tags)) return 'Protocol';
+  if (item.channel === 'issuer' || /research|etf|stablecoin/.test(tags)) return 'Research';
+  return 'Markets';
 }
 
-function itemSearchText(item: NewsContextItem): string {
-  return `${item.title} ${item.summary ?? ''} ${item.source} ${item.tags.join(' ')}`.toLowerCase();
-}
-
-function matchesBucket(item: NewsContextItem, bucket: NewsBucket): boolean {
+function matchesBucket(item: NewsItem, bucket: NewsBucket): boolean {
   if (bucket === 'all') return true;
-  const key = sourceKeyForItem(item);
-  const text = itemSearchText(item);
-  if (bucket === 'exchange') {
-    return item.channel === 'venue' || item.channel === 'binance' || VENUE_SOURCE_KEYS.has(key) || key === 'binance';
-  }
-  if (bucket === 'macro-policy') {
-    return item.channel === 'primary' || PRIMARY_SOURCE_KEYS.has(key) || itemHasAnyTag(item, ['Macro', 'Policy']);
-  }
-  if (bucket === 'crypto-market') {
-    return CRYPTO_MARKET_SOURCE_KEYS.has(key) || (
-      item.channel === 'rss' &&
-      !itemHasAnyTag(item, ['Security', 'Release', 'Stablecoin', 'ETF']) &&
-      !ONCHAIN_SECURITY_SOURCE_KEYS.has(key) &&
-      !LONG_RESEARCH_SOURCE_KEYS.has(key)
-    );
-  }
-  if (bucket === 'onchain-security') {
-    return item.channel === 'protocol' || item.channel === 'lookonchain' || PROTOCOL_SOURCE_KEYS.has(key) ||
-      ONCHAIN_SECURITY_SOURCE_KEYS.has(key) || itemHasAnyTag(item, ['On-Chain', 'Security', 'Release', 'Governance']);
-  }
-  if (bucket === 'long-research') {
-    return item.channel === 'issuer' || ISSUER_SOURCE_KEYS.has(key) || LONG_RESEARCH_SOURCE_KEYS.has(key) ||
-      itemHasAnyTag(item, ['Stablecoin', 'ETF']);
-  }
-  return item.channel === 'primary' || item.channel === 'venue' || item.channel === 'protocol' || item.channel === 'issuer' ||
-    key === 'binance' || itemHasAnyTag(item, ['Macro', 'Policy', 'Security', 'Delisting', 'Stablecoin', 'ETF']) ||
-    /\b(hack|exploit|depeg|stablecoin|etf approval|legal ruling|court|lawsuit|outage|halt|pause|hard fork|client release)\b/.test(text);
+  const type = classification(item);
+  if (bucket === 'exchange') return type === 'Exchange';
+  if (bucket === 'macro-policy') return type === 'Macro';
+  if (bucket === 'crypto-market') return type === 'Markets';
+  if (bucket === 'onchain-security') return type === 'Security' || type === 'On-Chain' || type === 'Protocol';
+  if (bucket === 'long-research') return type === 'Research';
+  const text = `${item.title} ${item.tags.join(' ')}`.toLowerCase();
+  const official = ['primary', 'venue', 'issuer', 'binance'].includes(item.channel);
+  return official || /hack|exploit|depeg|etf approval|legal ruling|trading suspension|delist|outage|withdrawal halt|bridge pause|hard fork/.test(text);
 }
 
-const NewsRow = memo(function NewsRow({ item, read, fresh, onRead }: { item: NewsContextItem; read: boolean; fresh: boolean; onRead: (id: string) => void }) {
-  const label = item.source || channelLabel(item.channel);
-  const domain = sourceDomain(item.source, item.channel, item.url, item.sourceDomain);
-  const timeLabel = newsAgeLabel(item.ts, item.timeLabel);
-  const content = (
-    <>
-      <span className="nwx-time num">{timeLabel}</span>
-      <span className="nwx-provider">
-        <SourceLogo domain={domain} label={label} />
-        <span><b>{label}</b><em>{channelLabel(item.channel)}</em></span>
-      </span>
-      <span className="nwx-headline-cell">
-        <b title={item.title}>{displayHeadline(item.title)}</b>
-      </span>
-      <span className="nwx-open">{item.url ? <IconExternal size={13} /> : null}</span>
-    </>
-  );
+function matchesQuery(item: NewsItem, query: string): boolean {
+  if (!query) return true;
+  const haystack = `${item.title} ${item.summary ?? ''} ${item.source} ${itemDomain(item) ?? ''} ${item.symbols.join(' ')} ${item.tags.join(' ')} ${classification(item)}`.toLowerCase();
+  return query.split(/\s+/).every((token) => haystack.includes(token));
+}
 
-  if (!item.url) {
-    return <div className={`nwx-line ${read ? 'read' : 'unread'} ${fresh ? 'fresh' : ''}`} onMouseEnter={() => onRead(item.id)}>{content}</div>;
+function ageLabel(item: NewsItem): string {
+  const timestamp = itemTimestamp(item);
+  if (!timestamp) return item.timeLabel || 'Undated';
+  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1_000));
+  if (seconds < 60) return `${seconds}s Ago`;
+  if (seconds < 3_600) return `${Math.floor(seconds / 60)}m Ago`;
+  if (seconds < 172_800) return `${Math.floor(seconds / 3_600)}h Ago`;
+  return `${Math.floor(seconds / 86_400)}d Ago`;
+}
+
+function publishedLabel(item: NewsItem): string {
+  const timestamp = itemTimestamp(item);
+  if (!timestamp) return '—';
+  if (new Date(timestamp).toDateString() === new Date().toDateString()) {
+    return new Date(timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   }
+  return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
 
-  return (
-    <a className={`nwx-line ${read ? 'read' : 'unread'} ${fresh ? 'fresh' : ''}`} href={item.url} target="_blank" rel="noreferrer noopener" onClick={() => onRead(item.id)}>
-      {content}
-    </a>
-  );
+const SourceLogo = memo(function SourceLogo({ domain, label }: { domain: string | null; label: string }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [domain]);
+  const url = domain && !failed ? `/api/source-logo?domain=${encodeURIComponent(domain)}&sz=48` : null;
+  return <span className="newsx-logo" aria-label={`${label} Logo`}>
+    {url ? <img src={url} alt="" width="24" height="24" loading="lazy" decoding="async" onError={() => setFailed(true)} /> : <IconNewspaper size={13} />}
+  </span>;
+});
+
+const NewsRow = memo(function NewsRow({ item, read, fresh, onRead }: { item: NewsItem; read: boolean; fresh: boolean; onRead: (id: string) => void }) {
+  const domain = itemDomain(item);
+  const type = classification(item);
+  const detail = [...item.symbols.slice(0, 3), ...item.tags.slice(0, 2)].filter((value, index, values) => value && values.indexOf(value) === index).join(' · ');
+  return <div className={`newsx-row ${read ? 'read' : ''} ${fresh ? 'fresh' : ''}`}>
+    <span className="newsx-time"><b>{publishedLabel(item)}</b><em>{ageLabel(item)}</em></span>
+    <span className="newsx-provider"><SourceLogo domain={domain} label={item.source} /><span><b>{item.source}</b><em>{domain || item.channel}</em></span></span>
+    <span className="newsx-headline">
+      {item.url ? <a href={item.url} target="_blank" rel="noreferrer noopener" onClick={() => onRead(item.id)} title={item.title}>{item.title}</a> : <b title={item.title}>{item.title}</b>}
+      {detail && <em>{detail}</em>}
+    </span>
+    <span className="newsx-type">{type}</span>
+    <span className="newsx-open">{item.url ? <IconExternal size={13} /> : null}</span>
+  </div>;
 });
 
 export function News() {
   const { prefs } = useStore();
-  const [initialFeed] = useState(readFeedCache);
-  const [context, setContext] = useState<NewsContextPayload | null>(initialFeed.context);
-  const [binance, setBinance] = useState<BinanceNewsPayload | null>(initialFeed.binance);
-  const [lastCheckedAt, setLastCheckedAt] = useState(() => Math.max(initialFeed.context?.fetchedAt ?? 0, initialFeed.binance?.fetchedAt ?? 0));
-  const [failed, setFailed] = useState(false);
+  const [initial] = useState(readFeedCache);
+  const [context, setContext] = useState<NewsPayload | null>(initial.context);
+  const [binance, setBinance] = useState<BinancePayload | null>(initial.binance);
+  const [lastCheckedAt, setLastCheckedAt] = useState(() => Math.max(initial.context?.fetchedAt ?? 0, initial.binance?.fetchedAt ?? 0));
+  const [contextFailed, setContextFailed] = useState(false);
   const [binanceFailed, setBinanceFailed] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [checking, setChecking] = useState(false);
-  const [bucket, setBucket] = useState<NewsBucket>('all');
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
-  const [pageSize, setPageSize] = useState<NewsPageSize>(25);
-  const [page, setPage] = useState(0);
-  const [q, setQ] = useState('');
-  const [refreshCycle, setRefreshCycle] = useState({ seq: 0, force: false });
-  const [readIds, setReadIds] = useState<Set<string>>(() => readSet());
+  const [streamConnected, setStreamConnected] = useState(false);
+  const [bucket, setBucket] = useState<NewsBucket>('must-know');
+  const [provider, setProvider] = useState('all');
+  const [query, setQuery] = useState('');
+  const [visibleLimit, setVisibleLimit] = useState(INITIAL_ROWS);
+  const [readIds, setReadIds] = useState(readSet);
   const [freshIds, setFreshIds] = useState<Set<string>>(new Set());
-  const knownIdsRef = useRef<Set<string>>(new Set(mergeNewsItems(initialFeed.context, initialFeed.binance).map((item) => item.id)));
-  const newsCadenceSec = Math.min(NEWS_AUTO_REFRESH_SEC, Math.max(0.5, prefs.dataCadence?.news ?? NEWS_AUTO_REFRESH_SEC));
+  const knownIdsRef = useRef(new Set(mergeItems(initial.context, initial.binance).map((item) => item.id)));
+  const contextRef = useRef(context);
+  const binanceRef = useRef(binance);
+  const freshTimerRef = useRef<number | null>(null);
+  const fallbackCadence = Math.max(5, prefs.dataCadence?.news ?? 5);
+
+  useEffect(() => { binanceRef.current = binance; }, [binance]);
+  useEffect(() => { contextRef.current = context; }, [context]);
+
+  const applyContext = useCallback((payload: NewsPayload, animate = true, mergeExisting = false) => {
+    const committed = mergeExisting ? mergeContextPayload(payload, contextRef.current) : payload;
+    const next = mergeItems(committed, binanceRef.current);
+    const incoming = animate ? next.slice(0, 16).filter((item) => !knownIdsRef.current.has(item.id)).map((item) => item.id) : [];
+    next.forEach((item) => knownIdsRef.current.add(item.id));
+    if (knownIdsRef.current.size > 2_000) knownIdsRef.current = new Set(next.slice(0, 1_800).map((item) => item.id));
+    setContext(committed);
+    contextRef.current = committed;
+    setLastCheckedAt(committed.fetchedAt);
+    setContextFailed(false);
+    persistFeedCache(committed, binanceRef.current);
+    if (incoming.length) {
+      setFreshIds(new Set(incoming));
+      if (freshTimerRef.current !== null) window.clearTimeout(freshTimerRef.current);
+      freshTimerRef.current = window.setTimeout(() => setFreshIds(new Set()), 1_400);
+    }
+  }, []);
 
   useEffect(() => {
-    const t = window.setInterval(() => setRefreshCycle((cycle) => ({ seq: cycle.seq + 1, force: true })), newsCadenceSec * 1000);
-    return () => window.clearInterval(t);
-  }, [newsCadenceSec]);
-
-  useEffect(() => {
-    let alive = true;
     const ctrl = new AbortController();
-    const followupTimers: number[] = [];
-    let freshTimer: number | null = null;
-    let checkingTimer: number | null = null;
-    const checkStartedAt = Date.now();
-    const isRefresh = refreshCycle.seq > 0;
-    const isForced = refreshCycle.force;
-    setFailed(false);
-    setBinanceFailed(false);
-    setRefreshing(isRefresh);
-    setChecking(isRefresh);
-
-    const releaseChecking = () => {
-      if (!isRefresh) return;
-      const delay = Math.max(0, 900 - (Date.now() - checkStartedAt));
-      if (checkingTimer !== null) window.clearTimeout(checkingTimer);
-      checkingTimer = window.setTimeout(() => {
-        if (alive) setChecking(false);
-      }, delay);
-    };
-
-    const reconcileIncoming = (nextContext: NewsContextPayload | null, nextBinance: BinanceNewsPayload | null, animate: boolean) => {
-      const nextItems = mergeNewsItems(nextContext, nextBinance);
-      const known = knownIdsRef.current;
-      const incoming = animate && isRefresh
-        ? nextItems
-          .filter((item, index) => !known.has(item.id) && shouldAnimateIncoming(item, index))
-          .map((item) => item.id)
-        : [];
-      nextItems.forEach((item) => known.add(item.id));
-      if (known.size > NEWS_KNOWN_ID_LIMIT) {
-        knownIdsRef.current = new Set(nextItems.slice(0, NEWS_KNOWN_ID_LIMIT).map((item) => item.id));
-      }
-      if (incoming.length) {
-        setFreshIds(new Set(incoming));
-        if (freshTimer !== null) window.clearTimeout(freshTimer);
-        freshTimer = window.setTimeout(() => setFreshIds(new Set()), 1400);
-      }
-    };
-
-    const commitResults = (
-      [contextResult, binanceResult]: [PromiseSettledResult<NewsContextPayload>, PromiseSettledResult<BinanceNewsPayload>],
-      animate: boolean
-    ) => {
-      if (!alive) return;
-      const reachedSource = contextResult.status === 'fulfilled' || binanceResult.status === 'fulfilled';
+    const contextRequest = fetch(`/api/news-context?limit=${CONTEXT_LIMIT}`, { signal: ctrl.signal }).then((response) => response.ok ? response.json() : Promise.reject()) as Promise<NewsPayload>;
+    const binanceRequest = fetch('/api/news?catalog=all', { signal: ctrl.signal }).then((response) => response.ok ? response.json() : Promise.reject()) as Promise<BinancePayload>;
+    Promise.allSettled([contextRequest, binanceRequest]).then(([contextResult, binanceResult]) => {
       let nextContext = context;
       let nextBinance = binance;
-      if (contextResult.status === 'fulfilled') {
-        nextContext = contextResult.value;
-        setContext(contextResult.value);
-      }
-      else setFailed(true);
-      if (binanceResult.status === 'fulfilled') {
-        nextBinance = binanceResult.value;
-        setBinance(binanceResult.value);
-      }
+      if (contextResult.status === 'fulfilled') { nextContext = contextResult.value; applyContext(contextResult.value, false); }
+      else setContextFailed(true);
+      if (binanceResult.status === 'fulfilled') { nextBinance = binanceResult.value; setBinance(binanceResult.value); setBinanceFailed(false); }
       else setBinanceFailed(true);
-      if (reachedSource) setLastCheckedAt(Date.now());
-      reconcileIncoming(nextContext, nextBinance, animate);
+      setLastCheckedAt(Math.max(nextContext?.fetchedAt ?? 0, nextBinance?.fetchedAt ?? 0, Date.now()));
       persistFeedCache(nextContext, nextBinance);
-    };
-
-    const scheduleFollowupRead = (delay: number, releaseAfterRead = false) => {
-      const timer = window.setTimeout(() => {
-	        const followContextReq = fetch(`/api/news-context?limit=${NEWS_CONTEXT_LIMIT}`, { signal: ctrl.signal })
-          .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad')))) as Promise<NewsContextPayload>;
-        const followBinanceReq = fetch('/api/news?catalog=all', { signal: ctrl.signal })
-          .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad')))) as Promise<BinanceNewsPayload>;
-        Promise.allSettled([followContextReq, followBinanceReq]).then((followResults) => {
-          commitResults(followResults, true);
-          if (releaseAfterRead) releaseChecking();
-        });
-      }, delay);
-      followupTimers.push(timer);
-    };
-
-    const forceParam = isForced ? '&refresh=1' : '';
-	    const contextReq = fetch(`/api/news-context?limit=${NEWS_CONTEXT_LIMIT}${forceParam}`, { signal: ctrl.signal })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad')))) as Promise<NewsContextPayload>;
-    const binanceReq = fetch(`/api/news?catalog=all${forceParam}`, { signal: ctrl.signal })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad')))) as Promise<BinanceNewsPayload>;
-
-    Promise.allSettled([contextReq, binanceReq]).then((results) => {
-      if (!alive) return;
-      commitResults(results, isRefresh);
-      setRefreshing(false);
-      if (isRefresh) {
-        [1800, 4200].forEach((delay, index) => scheduleFollowupRead(delay, index === 0));
-      } else {
-        setChecking(false);
-      }
     });
+    return () => ctrl.abort();
+  // Initial cache state is intentionally captured once.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applyContext]);
 
-    return () => {
-      alive = false;
-      followupTimers.forEach((timer) => window.clearTimeout(timer));
-      if (freshTimer !== null) window.clearTimeout(freshTimer);
-      if (checkingTimer !== null) window.clearTimeout(checkingTimer);
-      ctrl.abort();
+  useEffect(() => {
+    const stream = new EventSource('/api/news-stream?limit=220');
+    const onNews = (event: MessageEvent<string>) => {
+      try { applyContext(JSON.parse(event.data) as NewsPayload, true, true); } catch { /* REST fallback remains active */ }
     };
-  }, [refreshCycle]);
+    stream.onopen = () => setStreamConnected(true);
+    stream.onerror = () => setStreamConnected(false);
+    stream.addEventListener('news', onNews as EventListener);
+    return () => { stream.close(); if (freshTimerRef.current !== null) window.clearTimeout(freshTimerRef.current); };
+  }, [applyContext]);
+
+  useEffect(() => {
+    if (streamConnected) return;
+    const timer = window.setInterval(() => {
+      fetch(`/api/news-context?limit=${CONTEXT_LIMIT}&refresh=1`)
+        .then((response) => response.ok ? response.json() : Promise.reject())
+        .then((payload: NewsPayload) => applyContext(payload, true))
+        .catch(() => setContextFailed(true));
+    }, fallbackCadence * 1_000);
+    return () => window.clearInterval(timer);
+  }, [applyContext, fallbackCadence, streamConnected]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      fetch('/api/news?catalog=all&refresh=1')
+        .then((response) => response.ok ? response.json() : Promise.reject())
+        .then((payload: BinancePayload) => {
+          setBinance(payload);
+          setBinanceFailed(false);
+          persistFeedCache(contextRef.current, payload);
+        })
+        .catch(() => setBinanceFailed(true));
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const markRead = useCallback((id: string) => {
-    setReadIds((prev) => {
-      const next = new Set(prev);
+    setReadIds((current) => {
+      const next = new Set(current);
       next.add(id);
       persistRead(next);
       return next;
     });
   }, []);
 
-  const deferredQuery = useDeferredValue(q);
-  const ql = deferredQuery.trim().toLowerCase();
-  const items = useMemo(() => mergeNewsItems(context, binance), [binance?.items, context?.items]);
-  const sourceAndSearchFiltered = useMemo(
-    () => items.filter((it) => (sourceFilter === 'all' || sourceKeyForItem(it) === sourceFilter || it.channel === sourceFilter) && matchesQuery(it, ql)),
-    [items, ql, sourceFilter]
-  );
-  const filtered = useMemo(
-    () => sourceAndSearchFiltered.filter((it) => matchesBucket(it, bucket)),
-    [bucket, sourceAndSearchFiltered]
-  );
-  const activePageSize: NewsPageSize = pageSize === 50 || pageSize === 100 ? pageSize : 25;
-  useEffect(() => {
-    setPage(0);
-  }, [bucket, activePageSize, ql, sourceFilter, items.length]);
-  const pageCount = Math.max(1, Math.ceil(filtered.length / activePageSize));
-  const safePage = Math.min(page, pageCount - 1);
-  const pageStart = safePage * activePageSize;
-  const pageEnd = Math.min(filtered.length, pageStart + activePageSize);
-  const pageItems = filtered.slice(pageStart, pageEnd).slice(0, activePageSize);
-  const pageRowKeys = useMemo(() => stablePageKeys(pageItems), [pageItems]);
-  const visibleUnread = pageItems.filter((it) => !readIds.has(it.id)).length;
-  const status = failed && binanceFailed ? 'Feed Unreachable' : lastCheckedAt ? `Live · ${liveAge(lastCheckedAt)}` : 'Fetching';
-  const tone: NewsTone = failed && binanceFailed ? 'bad' : context || binance ? 'ok' : 'idle';
-  const sourceStatus = useMemo(() => {
-    const map = new Map<string, NewsContextSource>();
-    context?.sources.forEach((src) => map.set(src.key, src));
-    map.set('binance', {
-      key: 'binance',
-      label: 'Binance News / Announcements',
-      status: binanceFailed ? 'error' : binance ? 'live' : 'error',
-      detail: binanceFailed ? 'Official Binance announcements unavailable.' : binance ? 'Official Binance announcements API.' : 'Fetching Binance announcements.',
-      fetchedAt: binance?.fetchedAt ?? null,
-      count: binance?.items.length ?? 0,
-      url: 'https://www.binance.com/en/support/announcement',
-      domain: 'binance.com',
-    });
-    return map;
-  }, [binance, binanceFailed, context?.sources]);
-  const sourceCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    items.forEach((item) => counts.set(sourceKeyForItem(item), (counts.get(sourceKeyForItem(item)) ?? 0) + 1));
-    return counts;
+  const items = useMemo(() => mergeItems(context, binance), [context, binance]);
+  const deferredQuery = useDeferredValue(query).trim().toLowerCase();
+  const providers = useMemo(() => {
+    const map = new Map<string, string>();
+    items.forEach((item) => map.set(itemSourceKey(item), item.source));
+    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [items]);
-  const sourceOptions = useMemo(() => SOURCE_FILTERS.map((src) => {
-    const count = src.id === 'all' ? items.length : sourceCounts.get(src.id) ?? sourceStatus.get(src.id)?.count ?? 0;
-    const source = sourceStatus.get(src.id);
-    const suffix = src.id === 'all'
-      ? `${count}`
-      : source?.status === 'error'
-        ? 'Unavailable'
-        : `${count}`;
-    return { ...src, label: `${src.label} · ${suffix}` };
-  }), [items.length, sourceCounts, sourceStatus]);
-  const bucketCounts = useMemo(() => {
-    const counts = new Map<NewsBucket, number>();
-    NEWS_BUCKETS.forEach((option) => counts.set(option.id, 0));
-    sourceAndSearchFiltered.forEach((item) => {
-      NEWS_BUCKETS.forEach((option) => {
-        if (matchesBucket(item, option.id)) counts.set(option.id, (counts.get(option.id) ?? 0) + 1);
-      });
-    });
-    return counts;
-  }, [sourceAndSearchFiltered]);
-  const bucketOptions = NEWS_BUCKETS.map((option) => ({ ...option, count: bucketCounts.get(option.id) ?? 0 }));
-  const listedSources = SOURCE_FILTERS.filter((src) => src.id !== 'all');
-  const liveSources = listedSources.filter((src) => sourceStatus.get(src.id)?.status === 'live').length;
-  const delayedSources = listedSources.filter((src) => sourceStatus.get(src.id)?.status === 'delayed').length;
-  const unavailableSources = listedSources.filter((src) => {
-    const source = sourceStatus.get(src.id);
-    return source ? source.status === 'error' : false;
-  }).length;
-  const sourceDetails = listedSources
-    .map((src) => {
-      const source = sourceStatus.get(src.id);
-      const state = source?.status === 'delayed' ? 'Delayed' : source?.status === 'live' ? 'Live' : 'Unavailable';
-      const count = sourceCounts.get(src.id) ?? source?.count ?? 0;
-      return `${src.label}: ${state} · ${count}`;
-    })
-    .join(' / ');
-  const sourceTruth = `${liveSources}/${listedSources.length} Sources Live · ${delayedSources} Delayed · ${unavailableSources} Unavailable`;
+  const filtered = useMemo(() => items.filter((item) =>
+    matchesBucket(item, bucket) &&
+    (provider === 'all' || itemSourceKey(item) === provider) &&
+    matchesQuery(item, deferredQuery)
+  ), [bucket, deferredQuery, items, provider]);
+  const visible = filtered.slice(0, visibleLimit);
+  const failed = contextFailed && binanceFailed;
+  const status = failed ? 'Feed Unavailable' : lastCheckedAt ? `${streamConnected ? 'Streaming' : 'Live'} · ${liveAge(lastCheckedAt)}` : 'Loading';
 
-  const markVisibleRead = () => {
-    setReadIds((prev) => {
-      const next = new Set(prev);
-      pageItems.forEach((it) => next.add(it.id));
-      persistRead(next);
-      return next;
-    });
-  };
+  useEffect(() => { setVisibleLimit(INITIAL_ROWS); }, [bucket, deferredQuery, provider]);
 
-  return (
-    <div className="container page mkx ux-page nwx-page nwx-calendar">
-      <header className="bwx-hero bsx-hero ux-hero nwx-hero">
-        <div className="bwx-hero-top">
-          <div className="bwx-hero-title">
-            <div className="bwx-title-row">
-              <h1>News</h1>
-            </div>
-            <p>Primary macro, venue operations, on-chain, and market headlines in one live stack.</p>
-          </div>
-          <span className="tdx-head-right">
-            <Pill tone={tone} className={`ux-live-status ${checking ? 'syncing' : ''}`}>{status}</Pill>
-            <button className={`mkx-pill ux-refresh ${checking ? 'checking' : ''} ${refreshing ? 'refreshing' : ''}`} onClick={() => setRefreshCycle((cycle) => ({ seq: cycle.seq + 1, force: true }))} disabled={checking} title={checking ? 'Refreshing News Feed' : 'Refresh News Feed'}>
-              <span className="ux-refresh-beam" aria-hidden="true" />
-              <IconRefresh size={13} />
-              <span>Refresh</span>
-            </button>
-          </span>
-        </div>
-      </header>
+  return <div className="container page lix-page newsx-page">
+    <header className="lix-toolbar">
+      <div className="lix-title"><h1>News</h1><span className={`lix-live ${failed ? 'error' : ''}`}><i />{status}</span></div>
+      <label className="lix-search">
+        <IconSearch size={15} />
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" spellCheck={false} />
+        {query && <button type="button" aria-label="Clear Search" onClick={() => setQuery('')}>×</button>}
+      </label>
+    </header>
 
-      <div className="nwx-command">
-        <div className="nwx-bucket-strip" aria-label="News Bucket Filter">
-          {bucketOptions.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              className={`nwx-bucket ${bucket === option.id ? 'on' : ''}`}
-              onClick={() => setBucket(option.id)}
-              aria-pressed={bucket === option.id}
-              aria-label={`${option.label} ${option.count}`}
-              title={`${option.label} · ${option.count}`}
-            >
-              <span>{option.shortLabel}</span>
-              <b className="num">{option.count}</b>
-            </button>
-          ))}
-        </div>
-        <div className="nwx-tool-row">
-          <label className="ux-select-wrap nwx-source-control">
-            <IconNewspaper size={14} />
-            <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} aria-label="News Source Filter">
-              {sourceOptions.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}
-            </select>
-          </label>
-          <label className="nwx-calendar-search">
-            <IconSearch size={14} />
-            <input value={q} placeholder="Search Headlines, Sources, Symbols" onChange={(e) => setQ(e.target.value)} aria-label="Search Headlines" />
-          </label>
-        </div>
+    <section className="lix-filters newsx-filters" aria-label="News Filters">
+      <div className="lix-segments newsx-segments" role="group" aria-label="News Category">
+        {BUCKETS.map((option) => <button type="button" key={option.id} className={bucket === option.id ? 'selected' : ''} onClick={() => setBucket(option.id)}>{option.label}</button>)}
       </div>
+      <PillSelect value={provider} options={[{ id: 'all', label: 'All Providers' }, ...providers.map(([id, label]) => ({ id, label }))]} onChange={setProvider} ariaLabel="Provider" className="lix-select newsx-provider-select" />
+    </section>
 
-      <div className="nwx-cols page-cols">
-        <span>Time</span>
-        <span>Source</span>
-        <span>Headline</span>
-        <span>Link</span>
-      </div>
-      <div className="nwx-page-list">
-        {!context && !binance && !failed && !binanceFailed && <div className="ov-empty">Loading Headlines...</div>}
-        {failed && binanceFailed && <div className="ov-empty">News unavailable. Source feeds could not be reached.</div>}
-        {(context || binance) && filtered.length === 0 && <div className="ov-empty">{ql ? `Nothing Matches "${q}".` : 'No Headlines Match These Filters.'}</div>}
-        {pageItems.map((it, index) => (
-          <NewsRow key={pageRowKeys[index]} item={it} read={readIds.has(it.id)} fresh={freshIds.has(it.id)} onRead={markRead} />
-        ))}
-      </div>
-
-      <div className="nwx-footer-line">
-        <span className="nwx-source-truth" title={sourceDetails}>{sourceTruth}</span>
-        <span className="nwx-page-window">Showing {filtered.length ? `${pageStart + 1}-${pageEnd}` : '0'} Of {filtered.length}</span>
-        <span className="nwx-footer-actions">
-          <button type="button" onClick={() => setPage((value) => Math.max(0, value - 1))} disabled={safePage === 0}>Previous</button>
-          <label className="nwx-page-size">
-            <select value={activePageSize} onChange={(e) => setPageSize(Number(e.target.value) as NewsPageSize)} aria-label="Rows Per Page">
-              {PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size} Rows</option>)}
-            </select>
-          </label>
-          <button type="button" onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))} disabled={safePage >= pageCount - 1}>Next</button>
-          <button type="button" onClick={markVisibleRead} disabled={pageItems.length === 0 || visibleUnread === 0}>Mark Visible Read</button>
-        </span>
-      </div>
-    </div>
-  );
+    <section className="newsx-tape" aria-label="Live News Feed">
+      <div className="newsx-header"><span>Published</span><span>Provider</span><span>Headline</span><span>Category</span><span /></div>
+      {visible.map((item) => <NewsRow key={item.id} item={item} read={readIds.has(item.id)} fresh={freshIds.has(item.id)} onRead={markRead} />)}
+      {!context && !binance && !failed && <div className="lix-empty">Loading Headlines…</div>}
+      {failed && <div className="lix-empty">The News Feed Is Currently Unavailable.</div>}
+      {(context || binance) && filtered.length === 0 && <div className="lix-empty">{deferredQuery ? `Nothing Matches “${query}”.` : 'No Headlines Match These Filters.'}</div>}
+    </section>
+    {visible.length < filtered.length && <div className="newsx-more"><button type="button" onClick={() => setVisibleLimit((value) => value + INITIAL_ROWS)}>Load More</button><span>{visible.length.toLocaleString('en-US')} of {filtered.length.toLocaleString('en-US')}</span></div>}
+  </div>;
 }

@@ -14,12 +14,20 @@ export function PillSelect<T extends string>({
   options,
   onChange,
   ariaLabel,
+  className,
+  menuClassName,
+  buttonClassName,
+  testId,
 }: {
   icon?: ReactNode;
   value: T;
   options: { id: T; label: string }[];
   onChange: (id: T) => void;
   ariaLabel: string;
+  className?: string;
+  menuClassName?: string;
+  buttonClassName?: string;
+  testId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -40,14 +48,22 @@ export function PillSelect<T extends string>({
   }, [open]);
   const cur = options.find((o) => o.id === value);
   return (
-    <div className="mkx-pillwrap" ref={ref}>
-      <button type="button" className="mkx-pill" aria-haspopup="listbox" aria-expanded={open} aria-label={ariaLabel} onClick={() => setOpen((x) => !x)}>
+    <div className={`mkx-pillwrap${className ? ` ${className}` : ''}`} ref={ref}>
+      <button
+        type="button"
+        className={`mkx-pill${buttonClassName ? ` ${buttonClassName}` : ''}`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        data-testid={testId}
+        onClick={() => setOpen((x) => !x)}
+      >
         {icon}
         <span>{cur?.label ?? value}</span>
         <span className={`mkx-chev ${open ? 'up' : ''}`}><Chev /></span>
       </button>
       {open && (
-        <div className="mkx-menu" role="listbox" aria-label={ariaLabel}>
+        <div className={`mkx-menu${menuClassName ? ` ${menuClassName}` : ''}`} role="listbox" aria-label={ariaLabel}>
           {options.map((o) => (
             <button
               key={o.id}
@@ -57,7 +73,7 @@ export function PillSelect<T extends string>({
               className={o.id === value ? 'sel' : ''}
               onClick={() => { onChange(o.id); setOpen(false); }}
             >
-              {o.label}
+              <span className="mkx-menu-label">{o.label}</span>
               {o.id === value && (
                 <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden>
                   <path d="M3 8.5l3.2 3.2L13 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />

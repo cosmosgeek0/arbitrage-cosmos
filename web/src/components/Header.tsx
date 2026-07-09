@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { useStore, useResolvedTheme, type Page } from '../store';
 import { fmtClockZone, timeAgo } from '../format';
 import { eventSummary } from '../lib/eventText';
+import { calVal, flag, type CalItem } from '../lib/calendar';
 import { ACCENTS, CURRENCIES, type AccentKey, type DataCadenceKey } from '../lib/prefs';
 import { openOverlay, useOverlay } from '../lib/overlay';
 import { TokenIcon } from './TokenIcon';
@@ -12,6 +13,7 @@ import {
   IconCalendar,
   IconCamera,
   IconChart,
+  IconClock,
   IconClose,
   IconCoins,
   IconDatabase,
@@ -45,7 +47,7 @@ import {
 const ZONES: { id: string; label: string; city: string }[] = [
   { id: 'local', label: 'LOC', city: 'Local time' },
   { id: 'UTC', label: 'UTC', city: 'Universal time' },
-  { id: 'Asia/Kolkata', label: 'IST', city: 'India · Mumbai' },
+  { id: 'Asia/Kolkata', label: 'IST', city: 'India · Kolkata' },
   { id: 'America/New_York', label: 'NY', city: 'New York' },
   { id: 'Europe/London', label: 'LDN', city: 'London' },
   { id: 'Asia/Singapore', label: 'SGT', city: 'Singapore' },
@@ -82,19 +84,25 @@ function useMenu<T extends HTMLElement>(hover = true) {
   const [open, setOpen] = useState(false);
   const ref = useRef<T>(null);
   const closeT = useRef<number | undefined>(undefined);
-  const closer = useRef<() => void>(() => {});
-  closer.current = () => setOpen(false);
-  const openExclusive = () => {
-    if (currentCloser && currentCloser !== closer.current) currentCloser();
-    currentCloser = closer.current;
+  const close = useCallback(() => setOpen(false), []);
+  const openExclusive = useCallback(() => {
+    window.clearTimeout(closeT.current);
+    if (currentCloser && currentCloser !== close) currentCloser();
+    currentCloser = close;
     setOpen(true);
-  };
+  }, [close]);
   useEffect(() => {
     if (!hover) return;
     const el = ref.current;
     if (!el) return;
     const enter = () => { window.clearTimeout(closeT.current); openExclusive(); };
-    const leave = () => { closeT.current = window.setTimeout(() => setOpen(false), 110); };
+    const leave = () => {
+      window.clearTimeout(closeT.current);
+      closeT.current = window.setTimeout(() => {
+        if (currentCloser === close) currentCloser = null;
+        close();
+      }, 240);
+    };
     el.addEventListener('mouseenter', enter);
     el.addEventListener('mouseleave', leave);
     return () => {
@@ -102,14 +110,14 @@ function useMenu<T extends HTMLElement>(hover = true) {
       el.removeEventListener('mouseleave', leave);
       window.clearTimeout(closeT.current);
     };
-  }, [hover]); // openExclusive reads only refs + stable setState
+  }, [close, hover, openExclusive]);
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) close();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') close();
     };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
@@ -117,8 +125,8 @@ function useMenu<T extends HTMLElement>(hover = true) {
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open]);
-  const setOpenExclusive = (v: boolean) => (v ? openExclusive() : setOpen(false));
+  }, [close, open]);
+  const setOpenExclusive = useCallback((v: boolean) => (v ? openExclusive() : close()), [close, openExclusive]);
   return { open, setOpen: setOpenExclusive, ref };
 }
 
@@ -239,12 +247,6 @@ function NotificationCenterGlyph({ size = 31 }: { size?: number }) {
   );
 }
 
-// 2-letter ISO country code → flag emoji (EU included).
-export function flag(cc: string): string {
-  if (!cc || cc.length !== 2) return '🏳️';
-  return String.fromCodePoint(...[...cc.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
-}
-
 /* Premium brand mark: three leaning market rails, no decorative status dots. */
 const BRAND_MARK = (
   <svg viewBox="0 0 44 44" className="brand-mark" aria-hidden shapeRendering="geometricPrecision">
@@ -343,10 +345,12 @@ interface AccountSessionRow {
   current: boolean;
   active: boolean;
 }
-// ---- account card (Binance-style profile chip + details) --------------------
-function AccountCard({ compact = false }: { compact?: boolean }) {
+// ---- account sheet ----------------------------------------------------------
+// Account belongs to the same persistent topbar shell as every other operator
+// surface. Keeping its real session/profile logic in a dedicated sheet lets the
+// shared rail own hover, focus, motion, and dismissal without a second popover.
+function AccountSheet({ open }: { open: boolean }) {
   const { state, saveConfig } = useStore();
-  const { open, setOpen, ref } = useMenu<HTMLDivElement>(); // hover-open, like the rest of the bar
   const fileRef = useRef<HTMLInputElement>(null);
   const profile = state?.config.profile ?? { name: '', avatar: null };
   const [preview, setPreview] = useState<string | null>(null); // instant feedback before the 2s state tick
@@ -357,17 +361,17 @@ function AccountCard({ compact = false }: { compact?: boolean }) {
   const name = profile.name || 'Operator';
   const initial = name.trim().slice(0, 1).toUpperCase() || 'O';
   const connected = !!state?.binance.keysPresent;
-  const sub = connected ? (state?.binance.connected ? 'Binance · read-only' : 'Binance · error') : 'Binance · not linked';
   const accountTone = connected ? (state?.binance.connected ? 'live' : 'warn') : 'off';
   const hostLabel = typeof window !== 'undefined' ? window.location.host : 'local';
-  const accountId = '1029671855';
   const activeSessionCount = sessions.filter((s) => s.current || s.active).length;
-  const deviceRows = sessions.slice(0, 3);
+  const sessionRows = sessions.slice(0, 3);
+  const keyFingerprint = state?.binance.keyFingerprint ?? null;
+  const withdrawalsOff = !state?.binance.canWithdraw;
   const logoutHref = typeof window !== 'undefined' && window.location.hostname === DEPLOYED_APP_HOST
     ? '/cdn-cgi/access/logout'
     : `https://${DEPLOYED_APP_HOST}/cdn-cgi/access/logout`;
 
-  // Device posture is the only live data this popover owns; refresh it quickly.
+  // Recent browser request telemetry is the only live data this popover owns.
   useEffect(() => {
     if (!open) return;
     let alive = true;
@@ -407,39 +411,13 @@ function AccountCard({ compact = false }: { compact?: boolean }) {
   };
 
   return (
-    <div className={`acct-wrap ${compact ? 'top' : ''}`} ref={ref}>
-      <button
-        className={`acct-card ${compact ? 'top acct-pro-trigger' : ''} ${open ? 'on' : ''} s-${accountTone}`}
-        onClick={() => { if (!(compact && open)) setOpen(!open); }}
-        title={`Account Details — ${sub}`}
-        aria-label="Account Details"
-      >
-        {compact ? (
-          <span className={`acct-top-orb ${usesDefaultLogo ? 'profile-logo' : ''} s-${accountTone}`}>
-            <span className="acct-top-face">
-              {avatar ? <img src={avatar} alt="" /> : <IconUser size={16} />}
-            </span>
-          </span>
-        ) : (
-          <>
-            <span className={`acct-avatar ${usesDefaultLogo ? 'profile-logo' : ''}`}>
-              {avatar ? <img src={avatar} alt="" /> : <IconUser size={16} />}
-            </span>
-            <span className="acct-meta">
-              <span className="acct-name">{name}</span>
-              <span className="acct-sub"><span className={`acct-dot ${connected ? (state?.binance.connected ? 'ok' : 'bad') : ''}`} />{sub}</span>
-            </span>
-          </>
-        )}
-      </button>
-      {open && (
-        <div className="menu-pop acct-pop cb-acct-pop">
-          <div className="cb-profile-head">
-            <button className={`cb-profile-avatar ${usesDefaultLogo ? 'profile-logo' : ''}`} onClick={() => fileRef.current?.click()} title="Upload profile photo">
+    <div className="ops-sheet ops-account-sheet account-sheet-v3">
+          <header className="account-v3-head">
+            <button className={`cb-profile-avatar ${usesDefaultLogo ? 'profile-logo' : ''}`} onClick={() => fileRef.current?.click()} title="Change profile image">
               {avatar ? <img src={avatar} alt="" /> : initial}
               <span className="acct-cam"><IconCamera size={11} /></span>
             </button>
-            <div className="cb-profile-id">
+            <div className="account-v3-identity">
               {editName === null ? (
                 <button className="cb-profile-name" onClick={() => setEditName(profile.name || '')} title="Edit display name">{name}</button>
               ) : (
@@ -455,46 +433,62 @@ function AccountCard({ compact = false }: { compact?: boolean }) {
                   <button type="submit">Save</button>
                 </form>
               )}
-              <span className="cb-profile-sub">Binance · ID: {accountId}</span>
+              <span>Control room operator</span>
             </div>
-          </div>
+            <span className={`account-v3-state ${accountTone}`}><i />{state?.binance.connected ? 'Live' : connected ? 'Review' : 'Offline'}</span>
+          </header>
 
-          <div className="cb-profile-sections cb-device-only">
-            <section className="cb-profile-section" aria-label="Linked devices">
-              <div className="cb-profile-section-head">
-                <span><IconWifi size={16} />Devices</span>
-                <b className={activeSessionCount ? 'ok' : ''}>{activeSessionCount} Active</b>
+          <div className="account-v3-body">
+            <section className="account-v3-section" aria-label="Exchange posture">
+              <div className="account-v3-section-title">
+                <span>Exchange posture</span>
+                <em>{state?.binance.connected ? 'Verified now' : 'Needs attention'}</em>
               </div>
-              <div className="cb-link-list">
-                {deviceRows.length > 0 ? deviceRows.map((s) => {
+              <div className="account-v3-exchange">
+                <span className="account-v3-exchange-mark"><BinanceLogo size={28} /></span>
+                <span className="account-v3-exchange-copy">
+                  <b>Binance account</b>
+                  <em>{keyFingerprint ? `Key ${keyFingerprint}` : connected ? 'Key loaded · fingerprint pending' : 'No server key loaded'}</em>
+                </span>
+                <span className={`account-v3-exchange-value ${state?.binance.connected ? 'ok' : connected ? 'warn' : 'idle'}`}>
+                  <b>{state?.binance.connected ? 'Connected' : connected ? 'Sync error' : 'Not linked'}</b>
+                  <em>{withdrawalsOff ? 'Withdrawals off' : 'Withdrawals on'}</em>
+                </span>
+              </div>
+            </section>
+
+            <section className="account-v3-section" aria-label="Recent browser sessions">
+              <div className="account-v3-section-title">
+                <span>Recent browser sessions</span>
+                <em>{activeSessionCount ? `${activeSessionCount} recent` : 'None reported'}</em>
+              </div>
+              <div className="account-v3-session-list">
+                {sessionRows.length > 0 ? sessionRows.map((s) => {
                   const ipLine = s.ip ? [s.ip, s.country].filter(Boolean).join(' · ') : 'local network';
                   const isPast = !s.current && !s.active;
                   return (
-                    <div className={`cb-device-row ${isPast ? 'past' : 'active'}`} key={s.id}>
-                      <span className={`cb-device-dot ${s.active ? 'on' : ''}`} />
-                      <span className="cb-device-main">
+                    <div className={`account-v3-session ${isPast ? 'past' : 'active'}`} key={s.id}>
+                      <span className={`account-v3-session-dot ${s.active ? 'on' : ''}`} />
+                      <span className="account-v3-session-copy">
                         <b>{s.browser} on {s.system}</b>
                         <em>{ipLine} · {hostLabel}</em>
                       </span>
-                      <span className="cb-device-right">
-                        <i>{s.current ? 'This' : isPast ? 'Past' : 'Active'}</i>
-                        <b>{isPast ? timeAgo(s.lastSeen) : 'Now'}</b>
+                      <span className="account-v3-session-time">
+                        <b>{s.current ? 'This browser' : isPast ? timeAgo(s.lastSeen) : 'Recent'}</b>
                       </span>
                     </div>
                   );
                 }) : (
-                  <div className="cb-empty">No device sessions reported yet.</div>
+                  <div className="account-v3-empty">No recent browser telemetry.</div>
                 )}
               </div>
             </section>
 
-            <a className="cb-profile-logout-bar" href={logoutHref} title="Sign out of the deployed Cloudflare Access session">
-              <IconPower size={18} /><span>Log Out</span>
+            <a className="account-v3-logout" href={logoutHref} title="Sign out of the deployed Cloudflare Access session">
+              <IconPower size={16} /><span>Log out of access session</span>
             </a>
           </div>
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => onFile(e.target.files?.[0])} />
-        </div>
-      )}
     </div>
   );
 }
@@ -922,6 +916,10 @@ interface SystemLite {
   dbOk?: boolean;
   lastScannerTickTs?: number | null;
   lastOrdersSyncTs?: number | null;
+  cfUser?: string | null;
+  cfIp?: string | null;
+  cfCountry?: string | null;
+  cfRay?: string | null;
 }
 function msLabel(v: number | null | undefined): string {
   return v === null || v === undefined || !isFinite(v) ? '—' : `${Math.round(v)} ms`;
@@ -1355,20 +1353,79 @@ function TopPanelHeader({
   );
 }
 
-type MK = 'clock' | 'shell' | 'apikey' | 'data' | 'advisor' | 'notif' | 'power' | 'mrefresh' | 'currency' | 'basisu' | 'appearance';
-const TOPBAR_PANEL_W = 386;
+type OpsTone = 'ok' | 'warn' | 'bad' | 'idle' | 'accent';
+
+function OpsSheetHeader({
+  icon,
+  title,
+  subtitle,
+  status,
+  tone = 'idle',
+}: {
+  icon: ReactNode;
+  title: string;
+  subtitle: ReactNode;
+  status?: ReactNode;
+  tone?: OpsTone;
+}) {
+  return (
+    <header className="ops-sheet-head">
+      <span className="ops-sheet-icon">{icon}</span>
+      <span className="ops-sheet-title"><b>{title}</b><em>{subtitle}</em></span>
+      {status !== undefined && <span className={`ops-sheet-status ${tone}`}><i />{status}</span>}
+    </header>
+  );
+}
+
+function OpsRow({
+  icon,
+  title,
+  detail,
+  value,
+  tone = 'idle',
+  selected = false,
+  onClick,
+  disabled = false,
+}: {
+  icon?: ReactNode;
+  title: ReactNode;
+  detail?: ReactNode;
+  value?: ReactNode;
+  tone?: OpsTone | 'good';
+  selected?: boolean;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
+  const body = (
+    <>
+      {icon !== undefined && <span className={`ops-row-icon ${tone}`}>{icon}</span>}
+      <span className="ops-row-copy"><b>{title}</b>{detail !== undefined && <em>{detail}</em>}</span>
+      {value !== undefined && <span className={`ops-row-value ${tone}`}>{value}</span>}
+      {selected && <span className="ops-row-check"><IconCheck size={13} /></span>}
+    </>
+  );
+  return onClick ? (
+    <button className={`ops-row button ${selected ? 'selected' : ''}`} type="button" disabled={disabled} onClick={onClick}>{body}</button>
+  ) : (
+    <div className={`ops-row ${selected ? 'selected' : ''}`}>{body}</div>
+  );
+}
+
+type MK = 'clock' | 'shell' | 'apikey' | 'data' | 'advisor' | 'notif' | 'power' | 'mrefresh' | 'currency' | 'basisu' | 'appearance' | 'account';
+const TOPBAR_KEYS: MK[] = ['clock', 'data', 'mrefresh', 'shell', 'apikey', 'advisor', 'notif', 'power', 'currency', 'basisu', 'appearance', 'account'];
 const MENU_W: Record<MK, number> = {
-  clock: TOPBAR_PANEL_W,
-  shell: TOPBAR_PANEL_W,
-  apikey: TOPBAR_PANEL_W,
-  data: TOPBAR_PANEL_W,
-  advisor: TOPBAR_PANEL_W,
-  notif: TOPBAR_PANEL_W,
-  power: TOPBAR_PANEL_W,
-  mrefresh: TOPBAR_PANEL_W,
-  currency: TOPBAR_PANEL_W,
-  basisu: TOPBAR_PANEL_W,
-  appearance: TOPBAR_PANEL_W,
+  clock: 400,
+  shell: 400,
+  apikey: 400,
+  data: 400,
+  advisor: 400,
+  notif: 400,
+  power: 400,
+  mrefresh: 400,
+  currency: 400,
+  basisu: 400,
+  appearance: 400,
+  account: 400,
 };
 
 type NotifTab = 'all' | 'critical' | 'opportunity' | 'account' | 'logs' | 'prefs';
@@ -1380,22 +1437,21 @@ const clockParts = (zoneId: string, d: Date) => {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
-      hour12: true,
+      hourCycle: 'h23',
     };
     if (zoneId && zoneId !== 'local') opts.timeZone = zoneId;
-    const parts = new Intl.DateTimeFormat('en-US', opts).formatToParts(d);
+    const parts = new Intl.DateTimeFormat('en-GB', opts).formatToParts(d);
     const hh = parts.find((p) => p.type === 'hour')?.value ?? '00';
     const mm = parts.find((p) => p.type === 'minute')?.value ?? '00';
     const ss = parts.find((p) => p.type === 'second')?.value ?? '00';
-    const ampm = (parts.find((p) => p.type === 'dayPeriod')?.value ?? '').toUpperCase();
     const hour = Number(hh) || 0;
     const minute = Number(mm) || 0;
     const second = (Number(ss) || 0) + d.getMilliseconds() / 1000;
     return {
-      raw: `${hh}:${mm}:${ss} ${ampm}`.trim(),
+      raw: `${hh}:${mm}:${ss}`,
       hm: `${hh}:${mm}`,
       ss,
-      ampm,
+      ampm: '',
       hour,
       minute,
       second,
@@ -1443,31 +1499,23 @@ const clockDate = (zoneId: string, d: Date) => {
     return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit' });
   }
 };
-
-type ClockParts = ReturnType<typeof clockParts>;
-const clockFaceStyle = (p: ClockParts) => ({
-  '--clock-hour': `${p.hourDeg}deg`,
-  '--clock-minute': `${p.minuteDeg}deg`,
-  '--clock-second': `${p.secondDeg}deg`,
-} as CSSProperties);
-function ClockFace({ parts, className = '' }: { parts: ClockParts; className?: string }) {
-  return (
-    <span className={`clock-face ${className}`} style={clockFaceStyle(parts)} aria-hidden="true">
-      <i className="tick t12" />
-      <i className="tick t3" />
-      <i className="tick t6" />
-      <i className="tick t9" />
-      <i className="hand hour" />
-      <i className="hand minute" />
-      <i className="hand second" />
-      <i className="pin" />
-    </span>
-  );
-}
+const clockStamp = (zoneId: string, d: Date) => {
+  try {
+    const opts: Intl.DateTimeFormatOptions = { weekday: 'short', day: '2-digit', month: 'short' };
+    if (zoneId && zoneId !== 'local') opts.timeZone = zoneId;
+    const parts = new Intl.DateTimeFormat('en-GB', opts).formatToParts(d);
+    const weekday = parts.find((p) => p.type === 'weekday')?.value ?? '';
+    const day = parts.find((p) => p.type === 'day')?.value ?? '';
+    const month = parts.find((p) => p.type === 'month')?.value ?? '';
+    return `${weekday} · ${day} ${month}`.toUpperCase();
+  } catch {
+    return clockDate(zoneId, d).toUpperCase();
+  }
+};
 
 export interface ApiKeyInfo {
   id: string; name: string; type: string; scope: string;
-  status: 'live' | 'declared' | 'planned'; live: boolean; keysPresent?: boolean;
+  status: 'live' | 'declared' | 'planned' | 'missing'; live: boolean; keysPresent?: boolean;
   prefix: string; fingerprint: string | null;
   ipRestrict: boolean; ips: string[]; ipNote: string;
   permissions: { reading: boolean; spotMargin: boolean; marginLoan: boolean; withdrawals: boolean; universalTransfer: boolean; futures: boolean };
@@ -1503,29 +1551,40 @@ const apiKeyIpLine = (ak: ApiKeyInfo) => ak.ips.length
     : 'No IP restriction';
 
 function SharedTopBar() {
-  const { state, connected, page, prefs, updatePref, setPage, setKill, saveConfig, refresh } = useStore();
+  const { state, connected, page, prefs, updatePref, setPage, setKill, setLive, saveConfig, refresh } = useStore();
   const theme = useResolvedTheme();
   const rowRef = useRef<HTMLDivElement>(null);
   const menuContentRef = useRef<HTMLDivElement>(null);
+  const incomingPaneRef = useRef<HTMLDivElement>(null);
   const btnRefs = useRef<Partial<Record<MK, HTMLButtonElement | null>>>({});
   const closeT = useRef<number | undefined>(undefined);
   const rafRef = useRef<number | undefined>(undefined);
   const morphT = useRef<number | undefined>(undefined);
   const [active, setActive] = useState<MK | null>(null);
   const [contentActive, setContentActive] = useState<MK | null>(null);
-  const [contentMorphing, setContentMorphing] = useState(false);
+  const [outgoingContent, setOutgoingContent] = useState<MK | null>(null);
+  const [contentDirection, setContentDirection] = useState<-1 | 1>(1);
+  const [contentHeight, setContentHeight] = useState<number | null>(null);
+  const [contentMaxHeight, setContentMaxHeight] = useState(640);
   const [geo, setGeo] = useState({ left: 0, width: 260, pointer: 130 });
   const geoRef = useRef(geo); geoRef.current = geo;
-  // Register with the shared single-open closer so opening the box closes any
-  // other popover (the account panel) and vice-versa — never two open at once.
-  const closerRef = useRef<() => void>(() => {});
-  closerRef.current = () => {
+  const activeRef = useRef<MK | null>(null);
+  const contentActiveRef = useRef<MK | null>(null);
+  activeRef.current = active;
+  contentActiveRef.current = contentActive;
+  // Stable identity is essential: the global exclusivity controller compares
+  // function references. Replacing this callback on each render made the rail
+  // close itself while moving between adjacent triggers.
+  const closeShared = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     window.clearTimeout(morphT.current);
-    setContentMorphing(false);
+    activeRef.current = null;
+    contentActiveRef.current = null;
     setActive(null);
     setContentActive(null);
-  };
+    setOutgoingContent(null);
+    setContentHeight(null);
+  }, []);
   const [now, setNow] = useState(() => new Date());
   const [sys, setSys] = useState<SystemLite | null>(null);
   const [srv, setSrv] = useState<{ news: boolean | null; cal: boolean | null; fx: boolean | null }>({ news: null, cal: null, fx: null });
@@ -1608,8 +1667,8 @@ function SharedTopBar() {
   const animateTo = (target: { left: number; width: number; pointer: number }, immediate: boolean) => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     if (immediate) { setGeo(target); return; }
-    const start = geoRef.current; const t0 = performance.now(); const dur = 280;
-    const ease = (t: number) => 1 - Math.pow(1 - t, 3); // easeOutCubic
+    const start = geoRef.current; const t0 = performance.now(); const dur = 200;
+    const ease = (t: number) => 1 - Math.pow(1 - t, 4); // fast settle, zero bounce
     const step = (nowT: number) => {
       const p = Math.min(1, (nowT - t0) / dur); const e = ease(p);
       setGeo({
@@ -1624,39 +1683,70 @@ function SharedTopBar() {
 
   const openK = (k: MK) => {
     window.clearTimeout(closeT.current);
-    if (currentCloser && currentCloser !== closerRef.current) currentCloser(); // close account/other
-    const wasClosed = active === null;
-    const alreadyOpen = active === k;
-    currentCloser = closerRef.current;
+    if (currentCloser && currentCloser !== closeShared) currentCloser();
+    const previous = activeRef.current;
+    const previousContent = contentActiveRef.current ?? previous;
+    const wasClosed = previous === null;
+    const alreadyOpen = previous === k;
+    currentCloser = closeShared;
     const g = computeGeo(k);
-    if (g) animateTo(g, wasClosed); // snap when opening fresh, slide when morphing
+    if (g) animateTo(g, wasClosed);
     if (alreadyOpen) return;
     window.clearTimeout(morphT.current);
-    if (wasClosed) {
-      setContentMorphing(false);
-      setContentActive(k);
+    if (!wasClosed && previousContent) {
+      const direction = TOPBAR_KEYS.indexOf(k) >= TOPBAR_KEYS.indexOf(previous) ? 1 : -1;
+      setContentDirection(direction);
+      setOutgoingContent(previousContent);
+      morphT.current = window.setTimeout(() => setOutgoingContent(null), 210);
     } else {
-      setContentMorphing(true);
-      morphT.current = window.setTimeout(() => {
-        setContentActive(k);
-        morphT.current = window.setTimeout(() => setContentMorphing(false), 170);
-      }, 120);
+      setOutgoingContent(null);
     }
+    activeRef.current = k;
+    contentActiveRef.current = k;
+    setContentActive(k);
     setActive(k);
   };
-  const closeMenu = () => {
+  const closeMenu = useCallback(() => {
     window.clearTimeout(closeT.current);
-    if (currentCloser === closerRef.current) currentCloser = null;
-    closerRef.current();
-  };
-  const scheduleClose = () => { closeT.current = window.setTimeout(() => { if (currentCloser === closerRef.current) currentCloser = null; closerRef.current(); }, 180); };
+    if (currentCloser === closeShared) currentCloser = null;
+    closeShared();
+  }, [closeShared]);
+  const scheduleClose = useCallback(() => {
+    window.clearTimeout(closeT.current);
+    closeT.current = window.setTimeout(() => {
+      if (currentCloser === closeShared) currentCloser = null;
+      closeShared();
+    }, 320);
+  }, [closeShared]);
   useEffect(() => () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    window.clearTimeout(closeT.current);
     window.clearTimeout(morphT.current);
   }, []);
-  const cancelClose = () => window.clearTimeout(closeT.current);
+  const cancelClose = useCallback(() => window.clearTimeout(closeT.current), []);
+  useEffect(() => {
+    if (!active) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (rowRef.current && !rowRef.current.contains(event.target as Node)) closeMenu();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeMenu();
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [active, closeMenu]);
 
   const b = state?.binance; const cfg = state?.config;
+  const accountProfile = cfg?.profile ?? { name: '', avatar: null };
+  const accountAvatar = accountProfile.avatar ?? DEFAULT_PROFILE_LOGO;
+  const accountUsesDefaultLogo = !accountProfile.avatar;
+  const accountConnected = !!b?.keysPresent;
+  const accountTone = accountConnected ? (b?.connected ? 'live' : 'warn') : 'off';
+  const accountSub = accountConnected ? (b?.connected ? 'Binance connected' : 'Binance needs review') : 'Binance not linked';
   const roKey = apiKeys.find((k) => k.id === 'read-only') ?? apiKeys[0] ?? null;
   const fullKey = apiKeys.find((k) => k.id === 'secrets-full') ?? apiKeys[1] ?? null;
   const feeds = state?.feeds ?? {}; const feedList = Object.entries(feeds);
@@ -1741,12 +1831,27 @@ function SharedTopBar() {
   const liveOrdersAllowed = !!cfg?.liveTradingEnabled;
   const borrowGuard = cfg?.borrowGuard;
   const newLoansAllowed = !!borrowGuard?.enabled && !borrowGuard.newBorrowPaused && !borrowGuard.repayOnly;
-  const modeTone = killOn ? 'bad' : fundsAllowed && botRunning && liveOrdersAllowed ? 'ok' : 'warn';
   const allowCount = cfg?.allowedSymbols?.length ?? 0;
-  const modeLabel = killOn ? 'Stopped' : modeTone === 'ok' ? 'Ready' : 'Limited';
-  const modeSub = killOn ? 'Every bot action is blocked.' : modeTone === 'ok' ? 'Controls allow guarded execution.' : 'Some bot abilities are blocked.';
+  const liveBlocker = killOn
+    ? 'Emergency stop is active'
+    : !b?.keysPresent
+      ? 'Binance key is missing'
+      : !b?.connected
+        ? 'Binance account is not synchronized'
+        : b?.canWithdraw
+          ? 'Withdrawals must be disabled on the key'
+          : allowCount === 0
+            ? 'Symbol allowlist is empty'
+            : !fundsAllowed
+              ? 'Funds access is locked'
+              : !botRunning
+                ? 'Automation is paused'
+                : null;
+  const modeTone = killOn ? 'bad' : liveBlocker ? 'warn' : liveOrdersAllowed ? 'ok' : 'warn';
+  const modeLabel = killOn ? 'Stopped' : liveBlocker ? 'Limited' : liveOrdersAllowed ? 'Armed' : 'Ready';
+  const modeSub = killOn ? 'Every bot action is blocked.' : liveBlocker ?? (liveOrdersAllowed ? 'Live sends remain behind the risk gate.' : 'Prerequisites pass; live sends remain off.');
   const modeNet = b?.connected ? 'Synced' : 'Offline';
-  const liveTitle = 'Allow live order sends after the risk gate';
+  const liveTitle = liveBlocker ?? 'Allow live order sends after the risk gate';
   const setFundsAccess = (on: boolean) => { void saveConfig({ fundsLocked: !on }); };
   const setBotRunning = (on: boolean) => { void saveConfig({ automationPaused: !on }); };
   const setNewLoans = (on: boolean) => {
@@ -1792,8 +1897,6 @@ function SharedTopBar() {
     { id: 'account', label: 'Account', code: 'Account' },
     { id: 'logs', label: 'Logs', code: 'Logs' },
   ];
-  const compactNotifTabs = notifTabs.filter((t) => t.id !== 'logs');
-  const compactNotifTab: NotifTab = compactNotifTabs.some((t) => t.id === notifTab) ? notifTab : 'all';
   const notifMeta = (kind: string) => {
     const k = kind.toLowerCase();
     if (k.includes('risk') || k.includes('error') || k.includes('reject') || k.includes('kill') || k.includes('block') || k.includes('fail')) {
@@ -1819,7 +1922,7 @@ function SharedTopBar() {
     return notifMeta(e.kind).bucket === tab;
   });
   const filteredNotifEvents = filterNotifEvents(notifTab);
-  const compactNotifEvents = filterNotifEvents(compactNotifTab);
+  const compactNotifEvents = events;
   const notifBucketCounts = events.reduce<Record<NotifFeedTab, number>>((acc, e) => {
     acc[notifMeta(e.kind).bucket] += 1;
     return acc;
@@ -1838,7 +1941,11 @@ function SharedTopBar() {
     const value = prefs.dataCadence?.[key] ?? (key === 'market' ? prefs.refreshSec : key === 'news' ? 5 : 10);
     return key === 'news' ? Math.min(5, value) : value;
   };
-  const fmtCadence = (sec: number) => sec < 1 ? '<1s' : `${sec % 1 === 0 ? sec.toFixed(0) : sec.toFixed(1)}s`;
+  const fmtCadence = (sec: number) => sec >= 60
+    ? `${Number.isInteger(sec / 60) ? (sec / 60).toFixed(0) : (sec / 60).toFixed(1)}m`
+    : sec < 1
+      ? '<1s'
+      : `${sec % 1 === 0 ? sec.toFixed(0) : sec.toFixed(1)}s`;
   const setSourceCadence = (key: DataCadenceKey, sec: number) => {
     const next = clampRefresh(sec);
     const map = { ...(prefs.dataCadence ?? {}), [key]: next } as Record<DataCadenceKey, number>;
@@ -1923,9 +2030,9 @@ function SharedTopBar() {
   const cadenceRows: { key: DataCadenceKey; label: string; sub: string; value: string; tone: 'ok' | 'warn' | 'bad' | 'idle'; icon: ReactNode }[] = [
     { key: 'market', label: 'Market Prices', sub: 'Markets table, quotes, basis rows', value: fmtCadence(cadenceSec('market')), tone: connected && feedsOk ? 'ok' : connected ? 'warn' : 'bad', icon: <IconChart size={14} /> },
     { key: 'account', label: 'Account Data', sub: 'Balances, loans, fills, PnL', value: fmtCadence(cadenceSec('account')), tone: b?.connected ? 'ok' : 'warn', icon: <IconWallet size={14} /> },
-    { key: 'news', label: 'News Sources', sub: 'Binance, Tree, RSS, Lookonchain', value: fmtCadence(cadenceSec('news')), tone: srv.news === null ? 'idle' : srv.news ? 'ok' : 'bad', icon: <IconNewspaper size={14} /> },
-    { key: 'calendar', label: 'Calendar', sub: 'Macro events and TradingView feed', value: fmtCadence(cadenceSec('calendar')), tone: srv.cal === null ? 'idle' : srv.cal ? 'ok' : 'bad', icon: <IconCalendar size={14} /> },
-    { key: 'fx', label: 'FX Rates', sub: 'Display currency conversion', value: fmtCadence(cadenceSec('fx')), tone: srv.fx === null ? 'idle' : srv.fx ? 'ok' : 'bad', icon: <IconDollar size={14} /> },
+    { key: 'news', label: 'News Context', sub: 'Aggregated server feed', value: fmtCadence(cadenceSec('news')), tone: srv.news === null ? 'idle' : srv.news ? 'ok' : 'bad', icon: <IconNewspaper size={14} /> },
+    { key: 'calendar', label: 'Calendar', sub: 'Macro-event endpoint', value: fmtCadence(cadenceSec('calendar')), tone: srv.cal === null ? 'idle' : srv.cal ? 'ok' : 'bad', icon: <IconCalendar size={14} /> },
+    { key: 'fx', label: 'FX Rates', sub: 'Cached display-rate endpoint', value: fmtCadence(cadenceSec('fx')), tone: srv.fx === null ? 'idle' : srv.fx ? 'ok' : 'bad', icon: <IconDollar size={14} /> },
     { key: 'health', label: 'Health & Logs', sub: 'System probes and event polling', value: fmtCadence(cadenceSec('health')), tone: netGrade === 'ok' ? 'ok' : netGrade === 'warn' ? 'warn' : 'bad', icon: <IconPulse size={14} /> },
     { key: 'token', label: 'Token Streams', sub: 'Detail candles and order-book panels', value: fmtCadence(cadenceSec('token')), tone: connected ? 'ok' : 'bad', icon: <IconLayers size={14} /> },
   ];
@@ -1947,8 +2054,6 @@ function SharedTopBar() {
   const scannerAgo = sys?.lastScannerTickTs ?? state?.scanner.lastTickTs;
   const rateTier: DataTier = sys?.usedWeight1m == null ? 'idle' : sys.usedWeight1m < 800 ? 'good' : sys.usedWeight1m < 1050 ? 'warn' : 'bad';
   const engineTier: DataTier = sys?.dbOk === false ? 'bad' : state?.scanner.pairs ? 'good' : 'idle';
-  const contextOkCount = [srv.cal, srv.fx].filter(Boolean).length;
-  const contextTier: DataTier = srv.cal === null || srv.fx === null ? 'idle' : contextOkCount === 2 ? 'good' : contextOkCount > 0 ? 'warn' : 'bad';
   const engineBudgetTier: DataTier = engineTier === 'bad' || rateTier === 'bad' ? 'bad' : engineTier === 'idle' || rateTier === 'idle' ? 'idle' : rateTier === 'warn' ? 'warn' : 'good';
   const streamNames = feedList
     .map(([name]) => name.replace('spot-', 'spot ').replace('futures-', 'futures ').replace(/-/g, ' '))
@@ -1958,10 +2063,11 @@ function SharedTopBar() {
     { name: 'Market Streams', sub: streamNames || 'Spot, mark price, liquidations', value: feedList.length ? `${feedList.length} open` : 'idle', tier: connected && feedsOk ? 'good' : connected ? 'warn' : 'bad' },
     { name: 'Account Snapshot', sub: b?.keyFingerprint ? `Read key ${b.keyFingerprint}` : 'Read key missing', value: b?.connected ? accountAgo : 'failed', tier: b?.connected ? 'good' : b?.keysPresent ? 'bad' : 'idle' },
     { name: 'User Stream', sub: 'Account event socket', value: userStream, tier: userStreamTier },
-    { name: 'News Context', sub: 'Tree, RSS, Lookonchain, Binance', value: probeDetail(srv.news), tier: probeTier(srv.news) },
-    { name: 'Calendar / FX', sub: 'Macro events + display rates', value: srv.cal === null || srv.fx === null ? 'Checking' : `${contextOkCount}/2 ok`, tier: contextTier },
+    { name: 'News Context', sub: 'Aggregated server endpoint', value: probeDetail(srv.news), tier: probeTier(srv.news) },
+    { name: 'Calendar', sub: 'Macro-event endpoint', value: probeDetail(srv.cal), tier: probeTier(srv.cal) },
+    { name: 'FX Rates', sub: 'Cached display-rate endpoint', value: probeDetail(srv.fx), tier: probeTier(srv.fx) },
     { name: 'Timing / REST', sub: `Clock drift ${msLabel(sys?.serverTimeDiffMs)}`, value: msLabel(lat), tier: latTier === 'good' ? driftTier : latTier },
-    { name: 'Engine / Budget', sub: `Scanner ${timeAgo(scannerAgo)} · ledger ${sys?.dbOk === false ? 'blocked' : 'writable'}`, value: state?.scanner.pairs ? `${state.scanner.pairs} / ${sys?.usedWeight1m ?? '—'}` : 'idle', tier: engineBudgetTier },
+    { name: 'Engine / Budget', sub: `Scanner ${timeAgo(scannerAgo)} · ledger ${sys?.dbOk === false ? 'blocked' : 'writable'}`, value: state?.scanner.pairs ? `${state.scanner.pairs} pairs · ${sys?.usedWeight1m ?? '—'} weight` : 'idle', tier: engineBudgetTier },
   ];
   const dataGood = dataRows.filter((r) => r.tier === 'good').length;
   const dataWarn = dataRows.filter((r) => r.tier === 'warn').length;
@@ -1976,8 +2082,14 @@ function SharedTopBar() {
     !feedsOk ? { sev: 'invest', name: 'Market feed degraded', detail: 'A stream is not open.', page: 'system' } : { sev: 'pass', name: 'Market feeds live', detail: `${Object.keys(feeds).length} open.` },
     !b?.keysPresent ? { sev: 'invest', name: 'No read key set', detail: 'Account data hidden.', page: 'account' } : { sev: 'pass', name: 'Read key set', detail: 'Account data available.' },
     (cfg?.allowedSymbols?.length ?? 0) === 0 ? { sev: 'invest', name: 'Allowlist empty', detail: 'Safe default.', page: 'risk' } : { sev: 'pass', name: `Allowlist: ${cfg?.allowedSymbols.length}`, detail: 'Listed symbols only.' },
-    { sev: 'pass', name: cfg?.killSwitch ? 'Kill switch ON' : 'Kill switch armed', detail: cfg?.killSwitch ? 'Sends blocked.' : 'Passes to risk gate.' },
-    { sev: 'pass', name: 'Cloudflare-gated', detail: 'Hardware-key auth.' },
+    cfg?.killSwitch
+      ? { sev: 'pass', name: 'Kill switch ON', detail: 'Order, loan, and bot actions are blocked.' }
+      : { sev: 'invest', name: 'Kill switch off', detail: 'Execution continues through configured risk gates.', page: 'risk' },
+    typeof window !== 'undefined' && window.location.hostname === DEPLOYED_APP_HOST
+      ? sys?.cfUser
+        ? { sev: 'pass', name: 'Cloudflare Access verified', detail: sys.cfUser }
+        : { sev: 'action', name: 'Edge identity missing', detail: 'No Cloudflare Access identity header was received.', page: 'risk' }
+      : null,
   ];
   const advChecks = advRaw.filter(Boolean) as { sev: Sev; name: string; detail: string; page?: Page }[];
   const advA = advChecks.filter((c) => c.sev === 'action'); const advI = advChecks.filter((c) => c.sev === 'invest'); const advP = advChecks.filter((c) => c.sev === 'pass');
@@ -2024,23 +2136,46 @@ function SharedTopBar() {
   // seconds keep a constant width; otherwise every tick would shift the triggers
   // and restart the slide transition, leaving the box perpetually mid-flight.)
   const placeSig = `${alertsOn > 0}|${unread > 0}|${advA.length > 0}|${zone.label}|${prefs.zoom}`;
+  const menuOpen = active !== null;
   useLayoutEffect(() => {
-    if (!active) return;
-    const place = () => { const g = computeGeo(active); if (g) setGeo(g); };
+    if (!menuOpen) return;
+    const place = () => {
+      const current = activeRef.current;
+      if (!current) return;
+      const g = computeGeo(current);
+      if (g) setGeo(g);
+    };
     place();
     window.addEventListener('resize', place);
     return () => window.removeEventListener('resize', place);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, placeSig]);
+  }, [menuOpen, placeSig]);
   useLayoutEffect(() => {
-    menuContentRef.current?.scrollTo({ top: 0, left: 0 });
-  }, [active, contentActive]);
+    const pane = incomingPaneRef.current;
+    if (!pane || !contentActive) return;
+    pane.scrollTo({ top: 0, left: 0 });
+    const measure = () => {
+      const zoom = prefs.zoom || 1;
+      const viewportCap = Math.floor(Math.max(260, Math.min(640, (window.innerHeight - 84) / zoom)));
+      setContentMaxHeight(viewportCap);
+      setContentHeight(Math.ceil(Math.min(pane.scrollHeight, viewportCap)));
+    };
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(pane);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [contentActive, prefs.zoom]);
 
   const trig = (k: MK, cls: string, inner: JSX.Element, opts: { title?: string; onClick?: () => void } = {}) => (
     <button
       ref={(el) => { btnRefs.current[k] = el; }}
       className={`${cls} ${active === k ? 'on' : ''}`}
-      onMouseEnter={() => openK(k)}
+      onPointerEnter={() => openK(k)}
+      onFocus={() => openK(k)}
       onClick={() => {
         if (opts.onClick) {
           closeMenu();
@@ -2131,27 +2266,47 @@ function SharedTopBar() {
     switch (k) {
       case 'clock':
         return (
-          <div className="clock-pop clock-select-pop">
-            <TopPanelHeader
-              className="clock-pop-hero"
-              logo={<ClockFace parts={activeClock} className="lg" />}
-              title="Market Clock"
-              value={activeClock.raw}
-              sub={`${zone.city} · ${activeClockOffset} · ${clockDate(zone.id, now)}`}
-              status={zone.label}
-            />
+          <div className="clock-pop clock-select-pop clock-premium-pop">
+            <div className="clock-premium-hero">
+              <div className="clock-premium-eyebrow">
+                <span>Desk time</span>
+                <em>{zone.label} · {activeClockOffset}</em>
+              </div>
+              <div className="clock-premium-hero-time" aria-hidden="true">
+                <strong>{activeClock.hm}</strong>
+                <span>:{activeClock.ss}</span>
+              </div>
+              <div className="clock-premium-meta">
+                <b>{zone.city}</b>
+                <i />
+                <span>{clockDate(zone.id, now)}</span>
+              </div>
+            </div>
+            <div className="clock-premium-columns" aria-hidden="true">
+              <span>World desks</span>
+              <span>Live time</span>
+            </div>
             <div className="clock-zone-list">
               {ZONES.map((zz) => {
                 const p = clockParts(zz.id, now);
                 const selected = zz.id === zone.id;
                 return (
-                  <button key={zz.id} className={`clock-zone-row ${selected ? 'on' : ''}`} onClick={() => { updatePref('clockZone', zz.id); }}>
+                  <button
+                    key={zz.id}
+                    type="button"
+                    className={`clock-zone-row ${selected ? 'on' : ''}`}
+                    aria-pressed={selected}
+                    onClick={() => { updatePref('clockZone', zz.id); }}
+                  >
                     <span className="clock-zone-mark">{zz.label}</span>
                     <span className="clock-zone-copy">
                       <b>{zz.city}</b>
-                      <small>{clockOffset(zz.id, now)}</small>
+                      <small>{zz.id === 'local' ? 'Browser time' : zz.id.replaceAll('_', ' ')}</small>
                     </span>
-                    <span className="clock-zone-time">{p.raw}</span>
+                    <span className="clock-zone-time">
+                      <span className="clock-zone-digits"><b>{p.hm}</b><small>:{p.ss}</small></span>
+                      <em>{clockOffset(zz.id, now)}</em>
+                    </span>
                     {selected && <TbpCheck />}
                   </button>
                 );
@@ -2291,58 +2446,47 @@ function SharedTopBar() {
               className="ntfx-head"
               logo={<NotificationCenterGlyph />}
               title="Notifications"
-              sub="Critical, account, logs"
-              status={unread ? `${unread} New` : events.length ? `${events.length} Total` : 'Clear'}
-              action={(
-                <span className="ntfx-head-actions">
-                  <button className="ntfx-clear" type="button" onClick={markNotificationsRead} disabled={events.length === 0} title="Clear notifications" aria-label="Clear notifications">
-                    Clear
-                  </button>
-                  <button className="ntfx-iconbtn" type="button" onClick={openNotificationCenter} title="Expand notifications" aria-label="Expand notifications">
-                    <IconMaximize size={15} />
-                  </button>
-                </span>
-              )}
+              sub={`${events.length} events · ${alertsOn} alerts`}
             />
-            <div className="ntfx-tabs" role="tablist" aria-label="Notification filters">
-              {compactNotifTabs.map((t) => (
-                <button
-                  key={t.id}
-                  data-testid={`notif-tab-${t.id}`}
-                  className={`ntfx-tab ${compactNotifTab === t.id ? 'on' : ''}`}
-                  type="button"
-                  role="tab"
-                  aria-selected={compactNotifTab === t.id}
-                  aria-label={t.label}
-                  title={t.label}
-                  onClick={() => setNotifTab(t.id)}
-                >
-                  {t.id === 'opportunity' ? 'Signals' : t.id === 'critical' ? 'Critical' : t.label}
-                </button>
-              ))}
+            <div className="ntfx-section-head">
+              <span><IconBell size={15} />Feed</span>
+              <b className={unread ? 'hot' : events.length ? 'ok' : ''}>{unread ? `${unread} New` : events.length ? `${events.length} Total` : 'Clear'}</b>
             </div>
 
             <div className="ntfx-list">
               {compactNotifEvents.length === 0 ? (
                 <div className="ntfx-empty">
                   <span className="ntfx-dot idle" />
-                  <b>No alerts in this filter</b>
-                  <em>{compactNotifTab === 'all' ? 'Inbox clear' : compactNotifTab}</em>
+                  <b>No notifications</b>
+                  <em>Inbox clear</em>
                 </div>
               ) : compactNotifEvents.slice(0, 3).map((e) => {
                 const meta = notifMeta(e.kind);
                 const summary = eventSummary(e.kind, (e.data as Record<string, unknown> | null) ?? null, e.symbol);
+                const rightLabel = meta.bucket === 'opportunity' ? 'Signal' : meta.bucket === 'account' ? 'Account' : meta.bucket === 'critical' ? 'Critical' : 'System';
                 return (
                   <button key={e.id} className={`ntfx-event ${meta.tone}`} type="button" title={summary} aria-label={summary} onClick={openNotificationCenter}>
                     <span className={`ntfx-row-icon ${meta.tone}`}>{notifIcon(meta.tone, 16)}</span>
                     <span className="ntfx-copy">
-                      <span className="ntfx-row-top"><b>{meta.scope}</b><time>{notifStamp(e.ts)}</time></span>
                       <strong>{meta.title}</strong>
                       <small>{summary}</small>
+                    </span>
+                    <span className="ntfx-row-right">
+                      <i>{rightLabel}</i>
+                      <b>{notifStamp(e.ts)}</b>
                     </span>
                   </button>
                 );
               })}
+            </div>
+            <div className="ntfx-foot">
+              <button className="ntfx-mark-read" type="button" onClick={markNotificationsRead} disabled={unread === 0} title="Mark notifications read" aria-label="Mark notifications read">
+                Mark Read
+              </button>
+              <button className="ntfx-open-center" type="button" onClick={openNotificationCenter} title="Open notification center" aria-label="Open notification center">
+                <IconMaximize size={15} />
+                Open Center
+              </button>
             </div>
           </div>
         );
@@ -2816,72 +2960,493 @@ function SharedTopBar() {
     return content(k);
   };
 
+  const premiumContent = (k: MK) => {
+    const closeAndOpen = (overlay: 'cloudshell') => {
+      closeMenu();
+      openOverlay(overlay);
+    };
+    const statusTone = (tone: string): OpsTone => tone === 'ok' || tone === 'good'
+      ? 'ok'
+      : tone === 'bad'
+        ? 'bad'
+        : tone === 'warn'
+          ? 'warn'
+          : 'idle';
+    const cadenceChoicesFor = (key: DataCadenceKey) => ({
+      market: [0.5, 1, 3, 5],
+      account: [1, 3, 5, 10],
+      news: [5],
+      calendar: [30, 60, 300],
+      fx: [30, 60, 300],
+      health: [3, 5, 10, 30],
+      token: [0.5, 1, 3, 5],
+    } satisfies Record<DataCadenceKey, number[]>)[key];
+    const cadenceNote = (key: DataCadenceKey) => ({
+      market: 'Quotes, basis, and market tables',
+      account: 'Balances, fills, loans, and PnL',
+      news: 'Server refresh floor is five seconds',
+      calendar: 'Upstream data is cached independently',
+      fx: 'Upstream rates use a thirty-minute cache',
+      health: 'System probes and event polling',
+      token: 'Candles and order-book panels',
+    } satisfies Record<DataCadenceKey, string>)[key];
+
+    switch (k) {
+      case 'clock':
+        return (
+          <div className="ops-sheet ops-clock-sheet">
+            <OpsSheetHeader
+              icon={<IconClock size={18} />}
+              title="Desk Clock"
+              subtitle={`${zone.city} · ${activeClockOffset}`}
+              status={zone.label}
+              tone="accent"
+            />
+            <section className="ops-clock-stage" aria-label={`${activeClock.raw}, ${clockDate(zone.id, now)}`}>
+              <span className="ops-clock-time"><b>{activeClock.hm}</b><em>:{activeClock.ss}</em></span>
+              <span className="ops-clock-date">{clockDate(zone.id, now)}</span>
+            </section>
+            <div className="ops-section-label"><span>Timezone</span><em>24-hour display</em></div>
+            <div className="ops-list ops-clock-zones">
+              {ZONES.map((zz) => {
+                const p = clockParts(zz.id, now);
+                return (
+                  <OpsRow
+                    key={zz.id}
+                    icon={<span className="ops-zone-code">{zz.label}</span>}
+                    title={zz.city}
+                    detail={zz.id === 'local' ? 'Browser timezone' : zz.id.replaceAll('_', ' ')}
+                    value={<><b>{p.hm}</b><em>:{p.ss}</em></>}
+                    selected={zz.id === zone.id}
+                    tone={zz.id === zone.id ? 'accent' : 'idle'}
+                    onClick={() => updatePref('clockZone', zz.id)}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        );
+
+      case 'shell':
+        return (
+          <div className="ops-sheet ops-aws-sheet">
+            <OpsSheetHeader
+              icon={<IconTerminal size={18} />}
+              title="AWS CLI"
+              subtitle="CloudShell command launcher"
+              status="Not attached"
+              tone="idle"
+            />
+            <button className="ops-terminal-stage" type="button" onClick={() => closeAndOpen('cloudshell')}>
+              <span className="ops-terminal-bar"><i /><i /><i /><em>COMMAND DRAFT</em></span>
+              <span className="ops-terminal-command"><i>$</i><b>aws sts get-caller-identity</b></span>
+              <span className="ops-terminal-help">Review or copy locally, then execute in your authenticated AWS CloudShell session.</span>
+            </button>
+            <div className="ops-note-row">
+              <IconShield size={15} />
+              <span><b>No AWS identity is inferred here.</b><em>Region, host, and role appear only after a verified backend connection exists.</em></span>
+            </div>
+            <footer className="ops-sheet-foot split">
+              <button type="button" className="primary" onClick={() => closeAndOpen('cloudshell')}><IconTerminal size={14} /> Open draft</button>
+              <a href={CLOUD_SHELL_URL} target="_blank" rel="noreferrer noopener" onClick={closeMenu}><IconExternal size={14} /> AWS CloudShell</a>
+            </footer>
+          </div>
+        );
+
+      case 'apikey': {
+        const visibleKeys = [roKey, fullKey].filter(Boolean) as ApiKeyInfo[];
+        const risky = visibleKeys.some((ak) => ak.status !== 'planned' && (ak.permissions.withdrawals || ak.permissions.universalTransfer));
+        const liveCount = visibleKeys.filter((ak) => ak.live).length;
+        return (
+          <div className="ops-sheet ops-key-sheet">
+            <OpsSheetHeader
+              icon={<BinanceLogo size={23} />}
+              title="API Keys"
+              subtitle="Masked Binance credential posture"
+              status={risky ? 'Review' : liveCount ? `${liveCount} live` : 'No live key'}
+              tone={risky ? 'bad' : liveCount ? 'ok' : 'warn'}
+            />
+            {visibleKeys.length ? (
+              <div className="ops-list ops-key-list">
+                {visibleKeys.map((ak) => {
+                  const actual = ak.status !== 'planned' && ak.status !== 'missing' && !!ak.keysPresent;
+                  const enabled = actual ? enabledApiPerms(ak) : [];
+                  const keyTone: OpsTone = ak.live ? 'ok' : ak.status === 'missing' ? 'bad' : ak.status === 'planned' ? 'idle' : 'warn';
+                  return (
+                    <section className={`ops-key-entry ${ak.status}`} key={ak.id}>
+                      <OpsRow
+                        icon={<IconKey size={15} />}
+                        title={ak.name}
+                        detail={`${apiKeyRole(ak)} · ${actual ? apiKeyFingerprint(ak) : ak.status === 'planned' ? 'No credential' : 'Not loaded'}`}
+                        value={ak.status === 'missing' ? 'Missing' : ak.live ? 'Live' : ak.status === 'planned' ? 'Planned' : 'Syncing'}
+                        tone={keyTone}
+                      />
+                      <div className="ops-key-meta">
+                        <span><b>Network</b><em>{actual ? (ak.ipRestrict ? 'IP restricted' : 'Open IP access') : 'Not active'}</em></span>
+                        <span><b>Permissions</b><em>{enabled.length ? enabled.map((p) => p.label).join(' · ') : 'None active'}</em></span>
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            ) : <div className="ops-empty-state"><IconKey size={18} /><b>No key inventory</b><em>The server returned no API-key posture.</em></div>}
+            <div className={`ops-policy-line ${risky ? 'bad' : 'ok'}`}><IconShield size={14} /><span>{risky ? 'A live key can move funds. Rotate it before automation.' : 'Withdrawal and transfer permissions are off on active keys.'}</span></div>
+          </div>
+        );
+      }
+
+      case 'data':
+        return (
+          <div className="ops-sheet ops-data-sheet">
+            <OpsSheetHeader
+              icon={<IconDatabase size={18} />}
+              title="Connection Health"
+              subtitle={`${dataGood} of ${dataRows.length} live checks passing`}
+              status={dataLabel}
+              tone={statusTone(dataGrade)}
+            />
+            <div className="ops-list ops-health-list" aria-label="Measured data checks">
+              {dataRows.map((row) => (
+                <OpsRow
+                  key={row.name}
+                  icon={<span className={`ops-health-dot ${row.tier}`} />}
+                  title={row.name}
+                  value={row.value}
+                  tone={statusTone(row.tier)}
+                />
+              ))}
+            </div>
+            <footer className="ops-sheet-foot"><button type="button" className="primary" onClick={() => { closeMenu(); setPage('system'); }}><IconPulse size={14} /> Open System Health</button></footer>
+          </div>
+        );
+
+      case 'advisor': {
+        const focus = advAtt.length ? advAtt.slice(0, 4) : advP.slice(0, 4);
+        return (
+          <div className="ops-sheet ops-advisor-sheet">
+            <OpsSheetHeader
+              icon={<IconShield size={18} />}
+              title="Trust Advisor"
+              subtitle={`${advChecks.length} live cockpit checks`}
+              status={advTone === 'bad' ? 'Action' : advTone === 'warn' ? 'Review' : 'Clear'}
+              tone={statusTone(advTone)}
+            />
+            <div className="ops-advisor-strip" aria-label="Advisor results">
+              <span className="bad"><b>{advA.length}</b><em>Action</em></span>
+              <span className="warn"><b>{advI.length}</b><em>Review</em></span>
+              <span className="ok"><b>{advP.length}</b><em>Clear</em></span>
+            </div>
+            <div className="ops-section-label"><span>{advAtt.length ? 'Attention' : 'Passing controls'}</span><em>No weighted score</em></div>
+            <div className="ops-list">
+              {focus.map((check) => (
+                <OpsRow
+                  key={check.name}
+                  icon={check.sev === 'action' ? <IconCross size={13} /> : check.sev === 'invest' ? <IconAlarm size={13} /> : <IconCheck size={13} />}
+                  title={check.name}
+                  detail={check.detail}
+                  value={check.sev === 'action' ? 'Fix' : check.sev === 'invest' ? 'Review' : 'Clear'}
+                  tone={check.sev === 'action' ? 'bad' : check.sev === 'invest' ? 'warn' : 'ok'}
+                  onClick={check.page ? () => { closeMenu(); setPage(check.page!); } : undefined}
+                />
+              ))}
+            </div>
+            <footer className="ops-sheet-foot split">
+              <button type="button" className="primary" onClick={() => { closeMenu(); setPage('risk'); }}><IconRadar size={14} /> Risk controls</button>
+              <button type="button" onClick={() => { closeMenu(); setPage('system'); }}><IconPulse size={14} /> Health</button>
+            </footer>
+          </div>
+        );
+      }
+
+      case 'notif':
+        return (
+          <div className="ops-sheet ops-notification-sheet">
+            <OpsSheetHeader
+              icon={<IconBell size={18} />}
+              title="Notifications"
+              subtitle="Real ledger and control-room events"
+              status={unread ? `${unread} new` : events.length ? 'Read' : 'Clear'}
+              tone={unread ? 'accent' : 'ok'}
+            />
+            <div className="ops-list ops-notification-list">
+              {compactNotifEvents.length ? compactNotifEvents.slice(0, 3).map((e) => {
+                const meta = notifMeta(e.kind);
+                const summary = eventSummary(e.kind, (e.data as Record<string, unknown> | null) ?? null, e.symbol);
+                return (
+                  <OpsRow
+                    key={e.id}
+                    icon={notifIcon(meta.tone, 15)}
+                    title={meta.scope}
+                    detail={summary}
+                    value={timeAgo(e.ts)}
+                    tone={meta.tone === 'critical' ? 'bad' : meta.tone === 'opportunity' ? 'accent' : 'idle'}
+                    onClick={openNotificationCenter}
+                  />
+                );
+              }) : <div className="ops-empty-state"><IconBell size={18} /><b>Inbox clear</b><em>New control-room events will appear here.</em></div>}
+            </div>
+            <footer className="ops-sheet-foot split">
+              <button type="button" onClick={markNotificationsRead} disabled={!unread}>Mark read</button>
+              <button type="button" className="primary" onClick={openNotificationCenter}><IconMaximize size={14} /> Open center</button>
+            </footer>
+          </div>
+        );
+
+      case 'power':
+        return (
+          <div className={`ops-sheet ops-bot-sheet ${modeTone}`}>
+            <OpsSheetHeader
+              icon={<IconPower size={18} />}
+              title="Bot Control"
+              subtitle={modeSub}
+              status={modeLabel}
+              tone={statusTone(modeTone)}
+            />
+            <button
+              className={`ops-emergency ${killOn ? 'engaged' : ''}`}
+              type="button"
+              onClick={() => {
+                if (!killOn || window.confirm('Resume bot actions and return control to the configured risk gates?')) void setKill(!killOn);
+              }}
+            >
+              <span className="ops-emergency-mark"><IconPower size={20} /></span>
+              <span><b>{killOn ? 'Emergency stop engaged' : 'Emergency stop ready'}</b><em>{killOn ? 'Click to resume after confirmation.' : 'Stops orders, loans, and automation immediately.'}</em></span>
+              <strong>{killOn ? 'STOPPED' : 'STOP'}</strong>
+            </button>
+            <div className="ops-section-label"><span>Configured permissions</span><em>{modeNet}</em></div>
+            <div className="ops-list ops-control-list" role="group" aria-label="Bot execution permissions">
+              <button type="button" className="ops-control-row" onClick={() => setFundsAccess(!fundsAllowed)} aria-pressed={fundsAllowed}>
+                <span><b>Funds access</b><em>Use balances within risk limits</em></span><i className={`ops-switch ${fundsAllowed ? 'on' : ''}`}><span /></i>
+              </button>
+              <button type="button" className="ops-control-row" onClick={() => setNewLoans(!newLoansAllowed)} aria-pressed={newLoansAllowed}>
+                <span><b>New borrowing</b><em>Margin and flexible-loan requests</em></span><i className={`ops-switch ${newLoansAllowed ? 'on' : ''}`}><span /></i>
+              </button>
+              <button type="button" className="ops-control-row" onClick={() => setBotRunning(!botRunning)} aria-pressed={botRunning}>
+                <span><b>Strategy automation</b><em>Allow configured strategies to act</em></span><i className={`ops-switch ${botRunning ? 'on' : ''}`}><span /></i>
+              </button>
+              <button type="button" className="ops-control-row" onClick={() => { void setLive(!liveOrdersAllowed); }} aria-pressed={liveOrdersAllowed} disabled={!liveOrdersAllowed && !!liveBlocker} title={liveTitle}>
+                <span><b>Live order arm</b><em>{liveBlocker ?? 'Sends remain behind the risk gate'}</em></span><i className={`ops-switch ${liveOrdersAllowed ? 'on' : ''}`}><span /></i>
+              </button>
+            </div>
+          </div>
+        );
+
+      case 'mrefresh':
+        return (
+          <div className="ops-sheet ops-cadence-sheet">
+            <OpsSheetHeader
+              icon={<IconRefresh size={18} />}
+              title="Data Cadence"
+              subtitle="Per-surface browser polling"
+              status={refreshCode}
+              tone={statusTone(refreshTone)}
+            />
+            <div className="ops-list ops-cadence-list">
+              {cadenceRows.map((row) => {
+                const choices = Array.from(new Set([...cadenceChoicesFor(row.key), cadenceSec(row.key)])).sort((a, b) => a - b);
+                return (
+                  <div className="ops-cadence-row" key={row.key}>
+                    <span className={`ops-row-icon ${statusTone(row.tone)}`}>{row.icon}</span>
+                    <span className="ops-row-copy"><b>{row.label}</b><em>{cadenceNote(row.key)}</em></span>
+                    <select value={cadenceSec(row.key)} onChange={(e) => applyCadence(Number(e.target.value), row.key)} aria-label={`${row.label} cadence`}>
+                      {choices.map((sec) => <option key={sec} value={sec}>{fmtCadence(sec)}</option>)}
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="ops-policy-line idle"><IconRefresh size={14} /><span>Polling never bypasses upstream server-cache windows.</span></div>
+          </div>
+        );
+
+      case 'currency':
+        return (
+          <div className="ops-sheet ops-currency-sheet">
+            <OpsSheetHeader
+              icon={<IconDollar size={18} />}
+              title="Display Currency"
+              subtitle={currencyFx.fetchedAt ? `Rates updated ${timeAgo(currencyFx.fetchedAt)}` : 'Loading cached FX rates'}
+              status={cur}
+              tone={statusTone(curTone)}
+            />
+            <div className="ops-list">
+              {Object.entries(CURRENCIES).map(([code, currency]) => (
+                <OpsRow
+                  key={code}
+                  icon={<span className="ops-currency-symbol">{currency.symbol.trim() || code}</span>}
+                  title={currency.label}
+                  detail={code}
+                  value={currencyRateText(code)}
+                  selected={cur === code}
+                  tone={cur === code ? 'accent' : 'idle'}
+                  onClick={() => updatePref('currency', code)}
+                />
+              ))}
+            </div>
+            <div className="ops-policy-line idle"><IconRefresh size={14} /><span>Rates follow the server cache; changing currency updates every formatter.</span></div>
+          </div>
+        );
+
+      case 'basisu':
+        return (
+          <div className="ops-sheet ops-basis-sheet">
+            <OpsSheetHeader
+              icon={<IconPercent size={18} />}
+              title="Basis Unit"
+              subtitle="One unit across tables and charts"
+              status={basisCode}
+              tone="accent"
+            />
+            <div className="ops-choice-stack" role="radiogroup" aria-label="Basis display unit">
+              <button type="button" role="radio" aria-checked={!basisIsBps} className={!basisIsBps ? 'selected' : ''} onClick={() => updatePref('basisUnit', 'pct')} data-testid="basis-unit-pct">
+                <span className="ops-choice-mark">%</span><span><b>Percent</b><em>Compact decimal display · +0.042%</em></span>{!basisIsBps && <IconCheck size={15} />}
+              </button>
+              <button type="button" role="radio" aria-checked={basisIsBps} className={basisIsBps ? 'selected' : ''} onClick={() => updatePref('basisUnit', 'bps')} data-testid="basis-unit-bps">
+                <span className="ops-choice-mark">bp</span><span><b>Basis points</b><em>Trading-desk display · +4.2 bp</em></span>{basisIsBps && <IconCheck size={15} />}
+              </button>
+            </div>
+            <div className="ops-note-row"><IconTicket size={15} /><span><b>1 basis point = 0.01%</b><em>This changes presentation only; calculations retain full precision.</em></span></div>
+          </div>
+        );
+
+      case 'account':
+        return <AccountSheet open={active === 'account'} />;
+
+      case 'appearance': {
+        const themeModes = [
+          { id: 'system', label: 'System' },
+          { id: 'light', label: 'Light' },
+          { id: 'dark', label: 'Dark' },
+        ] as const;
+        const setZoom = (next: number) => updatePref('zoom', Math.min(1.5, Math.max(0.8, Math.round(next * 100) / 100)));
+        return (
+          <div className="ops-sheet ops-appearance-sheet" style={{ '--ops-accent': activeAccent.hex } as CSSProperties}>
+            <OpsSheetHeader
+              icon={theme === 'dark' ? <IconMoon size={18} /> : <IconSun size={18} />}
+              title="Appearance"
+              subtitle={`${activeAccent.label} accent · ${appearanceZoom}% scale`}
+              status={prefs.theme === 'system' ? 'Auto' : prefs.theme}
+              tone="accent"
+            />
+            <div className="ops-section-label"><span>Theme</span><em>Applied immediately</em></div>
+            <div className="ops-segment" role="radiogroup" aria-label="Theme mode">
+              {themeModes.map((mode) => (
+                <button key={mode.id} type="button" role="radio" aria-checked={prefs.theme === mode.id} className={prefs.theme === mode.id ? 'selected' : ''} onClick={() => updatePref('theme', mode.id)} data-testid={`appearance-theme-${mode.id}`}>{mode.label}</button>
+              ))}
+            </div>
+            <div className="ops-section-label"><span>Accent</span><em>{activeAccent.label}</em></div>
+            <div className="ops-accent-row" role="radiogroup" aria-label="Accent color">
+              {ACCENT_ORDER.map((key) => {
+                const accent = ACCENTS[key];
+                return <button key={key} type="button" role="radio" aria-checked={prefs.accent === key} className={prefs.accent === key ? 'selected' : ''} onClick={() => updatePref('accent', key)} aria-label={`${accent.label} accent`} title={accent.label} style={{ '--swatch': accent.hex } as CSSProperties}><span /></button>;
+              })}
+            </div>
+            <div className="ops-section-label"><span>Interface scale</span><em>80–150%</em></div>
+            <div className="ops-scale-row">
+              <button type="button" onClick={() => setZoom((prefs.zoom || 1) - 0.05)} aria-label="Zoom out" data-testid="appearance-zoom-out">−</button>
+              <strong>{appearanceZoom}%</strong>
+              <button type="button" onClick={() => setZoom((prefs.zoom || 1) + 0.05)} aria-label="Zoom in" data-testid="appearance-zoom-in">+</button>
+              <button type="button" className="reset" onClick={() => updatePref('zoom', 1)} data-testid="appearance-zoom-reset">Reset 100%</button>
+            </div>
+          </div>
+        );
+      }
+    }
+  };
+
   return (
-    <div className="smenu-bar" ref={rowRef} onMouseLeave={scheduleClose}>
-      {trig('clock', 'hdr-clock-btn clock-pro-btn', <>
-        <ClockFace parts={activeClock} className="trigger" />
-        <span className="clock-pro-time"><b>{activeClock.raw}</b><small>{zone.label}</small></span>
+    <div
+      className="smenu-bar topbar-suite-v3 topbar-suite-v4"
+      ref={rowRef}
+      onPointerLeave={scheduleClose}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) scheduleClose();
+      }}
+    >
+      {trig('clock', 'hdr-clock-btn clock-pro-btn clock-premium-trigger', <>
+        <span className="clock-premium-readout" aria-hidden="true">
+          <span className="clock-premium-main">
+            <b>{activeClock.hm}</b>
+            <em>:{activeClock.ss}</em>
+          </span>
+          <small>{clockStamp(zone.id, now)}</small>
+        </span>
+        <span className="clock-premium-zone" aria-hidden="true">{zone.label}</span>
       </>, { title: `Clock & timezone — ${zone.city}` })}
-      {trig('shell', 'hdr-ic tint-shell shell-ghost shell-premium-trigger', <>
-        <span className="shell-trigger-core">
-          <IconTerminal size={16} />
-        </span>
-      </>, { title: 'AWS CloudShell' })}
-      {trig('apikey', `hdr-ic apikey-ghost apikey-premium-trigger s-${roKey?.status ?? 'declared'}`, <>
-        <span className={`key-trigger-core s-${roKey?.status ?? 'declared'}`}>
-          <IconKey size={16} />
-        </span>
-      </>, { title: 'API keys — read-only live · full planned' })}
       {trig('data', `hdr-ic data-ghost data-pro grade-${dataGrade}`, <>
-        <span className={`data-pro-core ${dataGrade}`}>
-          <IconDatabase size={18} />
-        </span>
+        <span className={`data-pro-core ${dataGrade}`}><IconDatabase size={17} /></span>
       </>, { title: `Data Health — ${dataLabel} · ${dataSub}` })}
+      {trig('mrefresh', `hdr-ic refresh-ghost refresh-premium-trigger ${refreshTone}`, <>
+        <span className={`ops-trigger-code cadence ${refreshTone}`}><IconRefresh size={12} /><b>{refreshCode}</b></span>
+      </>, { title: `Data cadence — market every ${refreshCode}` })}
+      <span className="topbar-suite-divider" aria-hidden="true" />
+      {trig('shell', 'hdr-ic tint-shell shell-ghost shell-premium-trigger', <>
+        <span className="shell-trigger-core"><IconTerminal size={16} /></span>
+      </>, { title: 'AWS CLI — CloudShell launcher, not attached' })}
+      {trig('apikey', `hdr-ic apikey-ghost apikey-premium-trigger s-${roKey?.status ?? 'missing'}`, <>
+        <span className={`key-trigger-core s-${roKey?.status ?? 'missing'}`}><IconKey size={16} /></span>
+      </>, { title: `API keys — ${roKey?.live ? 'live posture' : roKey?.keysPresent ? 'permission sync pending' : 'no live key'}` })}
       {trig('advisor', `hdr-ic advisor-ghost advisor-premium-trigger grade-${advTone}`, <>
-        <span className={`advisor-trigger-core ${advTone}`}>
-          <IconShield size={16} />
-        </span>
-      </>, { title: 'Trusted advisor — cockpit safety scan' })}
+        <span className={`advisor-trigger-core ${advTone}`}><IconShield size={16} /></span>
+      </>, { title: 'Trust Advisor — live cockpit checks' })}
+      <span className="topbar-suite-divider" aria-hidden="true" />
       {trig('notif', `hdr-ic notif-trigger notif-ghost notif-premium-trigger ${notifTone}`, <>
         <span className={`notif-trigger-core ${notifTone}`}>
           <IconBell size={16} />
+          {unread > 0 && <b className="ops-trigger-count">{unread > 99 ? '99+' : unread}</b>}
         </span>
-      </>, { title: 'Notifications & alerts' })}
+      </>, { title: `Notifications — ${unread ? `${unread} unread` : 'no unread events'}` })}
       {trig('power', `hdr-ic power-ghost power-premium-trigger ${modeClass}`, <>
-        <span className={`power-trigger-core ${modeTone}`}>
-          <IconPower size={16} />
-        </span>
-      </>, { title: 'Kill switch & trading mode' })}
-      {trig('mrefresh', `hdr-ic refresh-ghost refresh-premium-trigger ${refreshTone} ${menuRefreshState === 'spin' ? 'spinning' : ''}`, <>
-        <span className={`refresh-trigger-core ${refreshTone}`}>
-          <IconRefresh size={16} />
-        </span>
-      </>, { title: `Data cadence — market every ${refreshCode}` })}
+        <span className={`ops-trigger-code bot ${modeTone}`}><IconPower size={13} /><b>{killOn ? 'STOP' : liveOrdersAllowed ? 'ARM' : 'BOT'}</b></span>
+      </>, { title: `Bot Control — ${modeLabel}` })}
+      <span className="topbar-suite-divider" aria-hidden="true" />
       {trig('currency', `hdr-ic currency-ghost currency-premium-trigger ${curTone}`, <>
-        <span className={`currency-trigger-core ${curTone}`}>
-          <b>{curSymbol}</b>
-        </span>
+        <span className={`ops-trigger-code currency ${curTone}`}><b>{cur}</b></span>
       </>, { title: `Display currency — ${cur}` })}
       {trig('basisu', `hdr-ic basis-ghost basis-premium-trigger ${basisIsBps ? 'basis-bps' : 'basis-pct'}`, <>
-        <span className={`basis-trigger-core ${basisIsBps ? 'bps' : 'pct'}`}>
-          {basisIsBps ? <b>{basisMark}</b> : <IconPercent size={19} />}
-        </span>
+        <span className={`ops-trigger-code basis ${basisIsBps ? 'bps' : 'pct'}`}><b>{basisCode}</b></span>
       </>, { title: `Basis units — ${basisIsBps ? 'basis points' : 'percent'}` })}
       {trig('appearance', `hdr-ic appearance-ghost appearance-premium-trigger ${theme}`, <>
         <span className={`appearance-trigger-core ${theme}`} style={{ '--apx-accent': activeAccent.hex } as CSSProperties}>
           {theme === 'dark' ? <IconMoon size={19} /> : <IconSun size={19} />}
         </span>
       </>, { title: `Appearance — ${prefs.theme === 'system' ? 'auto' : prefs.theme} · ${appearanceZoom}%` })}
+      {trig('account', `hdr-ic shared-account-trigger s-${accountTone}`, <>
+        <span className={`shared-account-orb ${accountUsesDefaultLogo ? 'profile-logo' : ''} s-${accountTone}`}>
+          <span>{accountAvatar ? <img src={accountAvatar} alt="" /> : <IconUser size={16} />}</span>
+          <i aria-hidden="true" />
+        </span>
+      </>, { title: `Account Details — ${accountSub}` })}
       <div
         className={`smenu ${active ? 'open' : ''}`}
         style={{ left: geo.left, width: geo.width }}
-        onMouseEnter={cancelClose}
-        onMouseLeave={scheduleClose}
+        onPointerEnter={cancelClose}
+        onPointerLeave={scheduleClose}
         aria-hidden={!active}
       >
         <span className="smenu-arrow" style={{ left: geo.pointer }} />
-        <div ref={menuContentRef} className={`smenu-content ${contentMorphing ? 'morphing' : ''}`}>
-          {(contentActive ?? active) ? content((contentActive ?? active) as MK) : null}
+        <div
+          ref={menuContentRef}
+          className={`smenu-content ${outgoingContent ? 'switching' : ''} dir-${contentDirection > 0 ? 'forward' : 'backward'}`}
+          style={{
+            height: contentHeight === null ? undefined : `${contentHeight}px`,
+            '--smenu-max-height': `${contentMaxHeight}px`,
+          } as CSSProperties}
+        >
+          {outgoingContent && (
+            <div className="smenu-pane outgoing" aria-hidden="true" inert key={outgoingContent}>
+              {premiumContent(outgoingContent)}
+            </div>
+          )}
+          {contentActive && (
+            <div
+              ref={incomingPaneRef}
+              className={`smenu-pane incoming ${outgoingContent ? 'switching' : 'first'}`}
+              key={contentActive}
+            >
+              {premiumContent(contentActive)}
+            </div>
+          )}
         </div>
       </div>
       {notifDetailOpen && (
@@ -2947,61 +3512,40 @@ function SharedTopBar() {
                 </div>
               </section>
 
-              <aside className="ntf-center-settings" aria-label="Notification preferences">
+              <aside className="ntf-center-settings ntf-coverage" aria-label="Notification event coverage">
                 <div className="ntf-prefs-copy">
-                  <b>Advanced Alerts</b>
-                  <em>Select preferred channels and contents for control-room notifications.</em>
+                  <b>Event Coverage</b>
+                  <em>What the current ledger feed actually contains.</em>
                 </div>
 
-                <section className="ntf-pref-group" aria-label="Delivery channels">
+                <section className="ntf-pref-group ntf-coverage-list" aria-label="Event categories">
                   <div className="ntf-setting-row">
-                    <span className="ntf-setting-icon"><MiniMegaphone size={19} /></span>
-                    <span className="ntf-setting-label">Push <em>Planned</em></span>
-                    <span className="ntf-static-switch off" aria-label="Push planned" title="Planned for WhatsApp or push routing"><i /></span>
+                    <span className="ntf-setting-icon"><IconShield size={18} /></span>
+                    <span className="ntf-setting-label">Critical</span>
+                    <strong>{notifBucketCounts.critical}</strong>
                   </div>
                   <div className="ntf-setting-row">
-                    <span className="ntf-setting-icon"><MiniDevice size={19} /></span>
-                    <span className="ntf-setting-label">In-app</span>
-                    <span className="ntf-static-switch on" aria-label="In-app enabled"><i /></span>
+                    <span className="ntf-setting-icon"><IconRadar size={18} /></span>
+                    <span className="ntf-setting-label">Opportunities</span>
+                    <strong>{notifBucketCounts.opportunity}</strong>
                   </div>
                   <div className="ntf-setting-row">
-                    <span className="ntf-setting-icon"><MiniMessage size={19} /></span>
-                    <span className="ntf-setting-label">WhatsApp Agent <em>Planned</em></span>
-                    <span className="ntf-static-switch off" aria-label="WhatsApp Agent planned" title="Planned external notifier"><i /></span>
+                    <span className="ntf-setting-icon"><IconWallet size={18} /></span>
+                    <span className="ntf-setting-label">Account</span>
+                    <strong>{notifBucketCounts.account}</strong>
+                  </div>
+                  <div className="ntf-setting-row">
+                    <span className="ntf-setting-icon"><IconReceipt size={18} /></span>
+                    <span className="ntf-setting-label">System logs</span>
+                    <strong>{notifBucketCounts.logs}</strong>
                   </div>
                 </section>
 
-                <section className="ntf-pref-group types" aria-label="Types of notifications">
-                  <div className="ntf-pref-section-title">
-                    <b>Types Of Notifications</b>
-                    <em>{draftAlertsOn} Active</em>
-                  </div>
-                  {alertRows.map((r) => (
-                    <div key={r.key} className="ntf-setting-row">
-                      <span className="ntf-setting-icon" title={r.sub}>
-                        {r.key === 'risk' ? <IconShield size={18} /> : r.key === 'proposals' ? <IconRadar size={18} /> : r.key === 'fills' ? <IconWallet size={18} /> : <IconReceipt size={18} />}
-                      </span>
-                      <span className="ntf-setting-label">
-                        {r.label}
-                        <i title={r.sub}>i</i>
-                      </span>
-                      <button
-                        data-testid={`notif-alert-${r.key}`}
-                        className={`ntf-switch ${notifDraftAlerts[r.key] ? 'on' : ''}`}
-                        type="button"
-                        onClick={() => setNotifDraftAlerts((next) => ({ ...next, [r.key]: !next[r.key] }))}
-                        aria-label={`Toggle ${r.label}`}
-                      >
-                        <span />
-                      </button>
-                    </div>
-                  ))}
-                </section>
-
-                <div className="ntf-center-save">
-                  <button type="button" onClick={cancelNotificationPrefs}>Cancel</button>
-                  <button type="button" onClick={saveNotificationPrefs}>Save Changes</button>
+                <div className="ntf-delivery-truth">
+                  <IconBell size={16} />
+                  <span><b>In-app ledger only</b><em>External push and messaging delivery are not connected.</em></span>
                 </div>
+                <button className="ntf-open-ledger" type="button" onClick={() => { setNotifDetailOpen(false); setPage('ledger'); }}><IconReceipt size={15} /> Open full ledger</button>
               </aside>
             </div>
           </section>
@@ -3213,7 +3757,6 @@ export function Topbar() {
         </div>
         <div className="hdr-right">
           <SharedTopBar />
-          <AccountCard compact />
         </div>
       </div>
     </header>
@@ -3284,24 +3827,6 @@ function NewsModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-export interface CalItem {
-  id: string;
-  title: string;
-  country: string;
-  indicator: string;
-  importance: number;
-  period: string;
-  actual: number | null;
-  forecast: number | null;
-  previous: number | null;
-  unit: string | null;
-  date: string;
-}
-export function calVal(v: number | null, unit: string | null): string {
-  if (v === null || v === undefined) return '—';
-  const s = Math.abs(v) >= 1000 ? v.toLocaleString('en-US') : String(v);
-  return unit ? `${s}${unit}` : s;
-}
 function CalendarModal({ onClose }: { onClose: () => void }) {
   const { setPage, prefs } = useStore();
   const [items, setItems] = useState<CalItem[] | null>(null);
@@ -3363,9 +3888,9 @@ function CalendarModal({ onClose }: { onClose: () => void }) {
                         <span className={`cal-imp ${imp}`} />
                         <span className="cal-title">{it.title}{it.period ? <span className="cal-period"> {it.period}</span> : null}</span>
                       </span>
-                      <span className="cc-num num strong">{calVal(it.actual, it.unit)}</span>
-                      <span className="cc-num num">{calVal(it.forecast, it.unit)}</span>
-                      <span className="cc-num num muted">{calVal(it.previous, it.unit)}</span>
+                      <span className="cc-num num strong">{calVal(it.actual, it.unit, it.scale)}</span>
+                      <span className="cc-num num">{calVal(it.forecast, it.unit, it.scale)}</span>
+                      <span className="cc-num num muted">{calVal(it.previous, it.unit, it.scale)}</span>
                     </div>
                   );
                 })}
@@ -3406,7 +3931,7 @@ function CloudShellModal({ onClose }: { onClose: () => void }) {
             <span className="cs-aws-mark">aws</span>
             <span>
               <b>CloudShell</b>
-              <em>cg-arbitrage-01 · /opt/arbitrage-cosmos</em>
+              <em>Local command draft · no AWS session attached</em>
             </span>
           </div>
           <div className="cs-console-actions">
@@ -3417,9 +3942,7 @@ function CloudShellModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="cs-console-tabs" aria-label="CloudShell terminal tabs">
           <span className="on">terminal</span>
-          <span>commands</span>
-          <span>files</span>
-          <em>draft only</em>
+          <em>draft · executes only after opening AWS</em>
         </div>
         <div className="cs-shell-grid">
           <div className="cs-term" onMouseDown={() => inputRef.current?.focus()}>
@@ -3427,12 +3950,11 @@ function CloudShellModal({ onClose }: { onClose: () => void }) {
               <span><i /> bash</span>
               <em>not attached</em>
             </div>
-            <div className="cs-line muted">Last login: local cockpit draft session</div>
-            <div className="cs-line"><span className="cs-k">host</span> <b>cg-arbitrage-01</b></div>
-            <div className="cs-line"><span className="cs-k">auth</span> <b>AWS Systems Manager</b></div>
+            <div className="cs-line muted">Local editor — no remote output is fabricated.</div>
+            <div className="cs-line"><span className="cs-k">identity</span> <b>not attached</b></div>
             <div className="cs-editor">
               <div className="cs-promptline">
-                <span className="cs-prompt">ubuntu@cg-arbitrage-01:~$</span>
+                <span className="cs-prompt">draft$</span>
                 <textarea
                   ref={inputRef}
                   className="cs-input"
@@ -3446,15 +3968,15 @@ function CloudShellModal({ onClose }: { onClose: () => void }) {
               </div>
             </div>
             <div className="cs-output">
-              <span>ready</span>
+              <span>local draft</span>
               <em>Copy or open AWS CloudShell to execute.</em>
             </div>
           </div>
           <aside className="cs-side" aria-label="CloudShell environment">
-            <span><em>host</em><b>cg-arb-01</b></span>
-            <span><em>path</em><b>/opt/arb</b></span>
-            <span><em>auth</em><b>ssm</b></span>
-            <span><em>mode</em><b>draft</b></span>
+            <span><em>identity</em><b>unknown</b></span>
+            <span><em>region</em><b>choose in AWS</b></span>
+            <span><em>session</em><b>not attached</b></span>
+            <span><em>mode</em><b>local draft</b></span>
             <button type="button" onClick={() => { void copyCommand(); }}>{copied ? 'Copied' : 'Copy Command'}</button>
             <button type="button" className="primary" onClick={launch}>Open CloudShell</button>
           </aside>

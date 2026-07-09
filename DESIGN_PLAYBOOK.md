@@ -30,6 +30,34 @@ calls garbage and will redo the work five times.
 8. Click every control in real Chrome; restore any state you flipped.
 9. Log the pass in PROJECT_MEMORY.md before moving on.
 
+### 0.1 News And Calendar Are Frozen Tape Surfaces (2026-07-10)
+
+The owner explicitly closed both surfaces after the TradingView-reference pass.
+Do not re-template them from Markets and do not add hero statistics, sparklines,
+summary cards, ten-row pagination, large headline type, or example-filled search
+copy. Their permanent reference is the current rendered implementation:
+
+- Calendar: functional seven-day navigator, compact Today/week controls, real
+  Economic and High Impact counts, one impact/country filter row, grouped dense
+  release tape, importance bars, and aligned Actual/Forecast/Prior columns.
+- News: Must Know by default, All News as the raw strict-chronological flow,
+  category chips, one provider dropdown, then a continuous Published/Provider/
+  Headline/Category tape with visible source identity.
+- Typography: page title 22/540; tape headlines and events 13–13.25/470–480;
+  providers, times and values 12.5/430–490; secondary metadata 10.5/410.
+- The zero-row-border Markets rule does not apply here. TradingView-style
+  hairlines are required because they stabilize high-density time-series rows.
+- Motion is limited to one short incoming-data wash. Persistent text never
+  moves or changes opacity during navigation.
+- The backend refresh architecture is part of the freeze: one shared News SSE
+  refresh owner, client delta merge, upstream safety floors, and Calendar
+  stale-while-revalidate/startup prewarm. Do not reintroduce per-client polling
+  storms or block a warm Calendar response on TradingView.
+
+Only an explicit owner request may reopen the information architecture. Normal
+bug fixes must preserve the `lix-`, `calx-`, and `newsx-` geometry in
+`web/src/pages/LiveIntelligence.css`.
+
 ## 0.5 KNOWN FAILURE MODES OF THE AGENT (the owner should not have to babysit these)
 
 Each of these happened repeatedly on 2026-07-08 and cost a rage round. The

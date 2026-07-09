@@ -45,7 +45,7 @@ const DEFAULTS: Prefs = {
   accent: 'b',
   clockZone: 'UTC',
   currency: 'USD',
-  zoom: 1.05,
+  zoom: 1,
   alerts: { proposals: true, fills: true, risk: true, news: false },
 };
 

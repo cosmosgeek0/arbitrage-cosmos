@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useStore } from '../store';
 import { fmtPrice, fmtDateTime } from '../format';
 import { IconBook, IconShield } from '../components/Icons';
+import { PillSelect } from '../components/PillSelect';
 import type { CustomRule } from '../types';
 
 // Governance: what this cockpit is allowed to do. Rendered inside the Risk
@@ -80,18 +81,34 @@ export function GovernanceSection() {
         <form className="rule-form" onSubmit={(e) => void submit(e)}>
           <input className="rf-name" value={name} maxLength={80} placeholder="Rule name — e.g. Never trade meme pairs" onChange={(e) => setName(e.target.value)} />
           <div className="rf-row">
-            <select value={effect} onChange={(e) => setEffect(e.target.value as CustomRule['effect'])} aria-label="Effect">
-              <option value="block">Block</option>
-              <option value="allow">Allow</option>
-              <option value="limit">Limit</option>
-            </select>
-            <select value={scope} onChange={(e) => setScope(e.target.value as CustomRule['scope'])} aria-label="Scope">
-              <option value="orders">Orders</option>
-              <option value="symbols">Symbols</option>
-              <option value="strategy">Strategy</option>
-              <option value="hours">Trading hours</option>
-              <option value="general">General</option>
-            </select>
+            <PillSelect
+              className="rf-select"
+              buttonClassName="rf-select-pill"
+              value={effect}
+              options={[
+                { id: 'block', label: 'Block' },
+                { id: 'allow', label: 'Allow' },
+                { id: 'limit', label: 'Limit' },
+              ]}
+              onChange={setEffect}
+              ariaLabel="Effect"
+              testId="rule-effect"
+            />
+            <PillSelect
+              className="rf-select"
+              buttonClassName="rf-select-pill"
+              value={scope}
+              options={[
+                { id: 'orders', label: 'Orders' },
+                { id: 'symbols', label: 'Symbols' },
+                { id: 'strategy', label: 'Strategy' },
+                { id: 'hours', label: 'Trading hours' },
+                { id: 'general', label: 'General' },
+              ]}
+              onChange={setScope}
+              ariaLabel="Scope"
+              testId="rule-scope"
+            />
             <label className="rf-strict">
               <button type="button" className={`toggle ${strict ? 'on' : ''}`} onClick={() => setStrict(!strict)} aria-label="Strict"><span className="knob" /></button>
               Strict

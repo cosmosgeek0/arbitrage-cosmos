@@ -1,171 +1,223 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useStore } from '../store';
-import { calVal, flag, type CalItem } from '../components/Header';
-import { Pill } from '../components/px';
-import { IconCalendar, IconExternal, IconRefresh } from '../components/Icons';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { IconSearch } from '../components/Icons';
+import { PillSelect } from '../components/PillSelect';
+import { CALENDAR_COUNTRIES, calVal, categoryName, countryName, flag, type CalItem } from '../lib/calendar';
 import { liveAge } from '../format';
-import './Markets.css';
+import { useStore } from '../store';
+import './LiveIntelligence.css';
 
-// Full-page economic calendar (TradingView feed, server-proxied). More context
-// than the quick view: importance + country filters and full week grouping.
-const COUNTRIES = ['US', 'EU', 'GB', 'JP', 'CN', 'IN', 'DE', 'CA', 'AU', 'FR'];
+function dayKey(date: Date, zone?: string): string {
+  return date.toLocaleDateString('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' });
+}
+
+function keyDate(key: string): Date {
+  return new Date(`${key}T12:00:00Z`);
+}
+
+function addDays(key: string, days: number): string {
+  const date = keyDate(key);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function mondayFor(key: string): string {
+  const date = keyDate(key);
+  const weekday = date.getUTCDay();
+  return addDays(key, weekday === 0 ? -6 : 1 - weekday);
+}
+
+function formatKey(key: string, options: Intl.DateTimeFormatOptions): string {
+  return keyDate(key).toLocaleDateString('en-US', { ...options, timeZone: 'UTC' });
+}
+
+function eventFingerprint(item: CalItem): string {
+  return `${item.actual ?? ''}|${item.forecast ?? ''}|${item.previous ?? ''}|${item.date}`;
+}
+
+function countdownLabel(timestamp: number, now: number): string {
+  const seconds = Math.max(0, Math.floor((timestamp - now) / 1_000));
+  if (seconds >= 86_400) return `Coming In ${Math.floor(seconds / 86_400)}d ${Math.floor((seconds % 86_400) / 3_600)}h`;
+  const hours = Math.floor(seconds / 3_600);
+  const minutes = Math.floor((seconds % 3_600) / 60);
+  if (hours > 0) return `Coming In ${hours}:${String(minutes).padStart(2, '0')}`;
+  return `Coming In ${minutes}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function ImpactBars({ importance }: { importance: number }) {
+  const active = importance >= 1 ? 3 : importance === 0 ? 2 : 1;
+  return <span className={`calx-impact level-${active}`} title={active === 3 ? 'High Impact' : active === 2 ? 'Medium Impact' : 'Low Impact'} aria-label={`${active === 3 ? 'High' : active === 2 ? 'Medium' : 'Low'} Impact`}>
+    {[1, 2, 3].map((bar) => <i key={bar} className={bar <= active ? 'on' : ''} />)}
+  </span>;
+}
 
 export function CalendarPage() {
   const { prefs } = useStore();
+  const zone = prefs.clockZone && prefs.clockZone !== 'local' ? prefs.clockZone : undefined;
+  const initialToday = dayKey(new Date(), zone);
   const [items, setItems] = useState<CalItem[] | null>(null);
   const [fetchedAt, setFetchedAt] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [minImp, setMinImp] = useState<-1 | 0 | 1>(-1);
-  const [country, setCountry] = useState<string | null>(null);
-  const [nonce, setNonce] = useState(0);
-  const zone = prefs.clockZone && prefs.clockZone !== 'local' ? prefs.clockZone : undefined;
+  const [query, setQuery] = useState('');
+  const [country, setCountry] = useState('all');
+  const [impact, setImpact] = useState<'all' | 'high'>('all');
+  const [weekStart, setWeekStart] = useState(() => mondayFor(initialToday));
+  const [selectedDay, setSelectedDay] = useState(initialToday);
+  const [clock, setClock] = useState(Date.now());
+  const [changedIds, setChangedIds] = useState<Set<string>>(new Set());
+  const previousRef = useRef<Map<string, string>>(new Map());
+  const changeTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const t = window.setInterval(() => setNonce((n) => n + 1), Math.max(0.5, prefs.dataCadence?.calendar ?? 300) * 1000);
-    return () => window.clearInterval(t);
-  }, [prefs.dataCadence?.calendar]);
+    const timer = window.setInterval(() => setClock(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let alive = true;
-    const ctrl = new AbortController();
-    let releaseTimer: number | null = null;
-    const startedAt = Date.now();
-    setFailed(false);
-    setRefreshing(nonce > 0);
-    const releaseRefreshing = () => {
-      if (nonce <= 0) {
-        setRefreshing(false);
-        return;
-      }
-      const delay = Math.max(0, 1600 - (Date.now() - startedAt));
-      releaseTimer = window.setTimeout(() => {
-        if (alive) setRefreshing(false);
-      }, delay);
+    let timer: number | null = null;
+    const cadence = Math.min(60, Math.max(5, prefs.dataCadence?.calendar ?? 30));
+    const load = () => {
+      fetch('/api/calendar')
+        .then((response) => response.ok ? response.json() : Promise.reject(new Error('calendar unavailable')))
+        .then((payload: { items: CalItem[]; fetchedAt?: number }) => {
+          if (!alive) return;
+          const next = [...(payload.items ?? [])].sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+          if (previousRef.current.size) {
+            const changed = next.filter((item) => previousRef.current.get(item.id) !== eventFingerprint(item)).map((item) => item.id);
+            if (changed.length) {
+              setChangedIds(new Set(changed));
+              if (changeTimerRef.current !== null) window.clearTimeout(changeTimerRef.current);
+              changeTimerRef.current = window.setTimeout(() => setChangedIds(new Set()), 1_600);
+            }
+          }
+          previousRef.current = new Map(next.map((item) => [item.id, eventFingerprint(item)]));
+          setItems(next);
+          setFetchedAt(payload.fetchedAt ?? Date.now());
+          setFailed(false);
+        })
+        .catch(() => { if (alive) setFailed(true); });
     };
-    fetch('/api/calendar', { signal: ctrl.signal })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad'))))
-      .then((d: { items: CalItem[]; fetchedAt?: number }) => {
-        if (!alive) return;
-        setItems(d.items ?? []);
-        setFetchedAt(d.fetchedAt ?? null);
-      })
-      .catch(() => alive && setFailed(true))
-      .finally(() => alive && releaseRefreshing());
+    load();
+    timer = window.setInterval(load, cadence * 1_000);
     return () => {
       alive = false;
-      if (releaseTimer !== null) window.clearTimeout(releaseTimer);
-      ctrl.abort();
+      if (timer !== null) window.clearInterval(timer);
+      if (changeTimerRef.current !== null) window.clearTimeout(changeTimerRef.current);
     };
-  }, [nonce]);
+  }, [prefs.dataCadence?.calendar]);
 
-  const filtered = useMemo(
-    () => (items ?? []).filter((it) => it.importance >= minImp && (!country || it.country === country)),
-    [items, minImp, country]
-  );
+  const weekKeys = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)), [weekStart]);
+  const allItems = items ?? [];
+  const itemsByDay = useMemo(() => {
+    const grouped = new Map<string, CalItem[]>();
+    allItems.forEach((item) => {
+      const date = new Date(item.date);
+      if (!Number.isFinite(date.getTime())) return;
+      const key = dayKey(date, zone);
+      grouped.set(key, [...(grouped.get(key) ?? []), item]);
+    });
+    return grouped;
+  }, [allItems, zone]);
 
-  const days = useMemo(() => {
-    const out: { key: string; label: string; rows: CalItem[] }[] = [];
-    for (const it of filtered) {
-      const d = new Date(it.date);
-      if (isNaN(d.getTime())) continue;
-      const key = d.toLocaleDateString('en-US', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' });
-      let g = out.find((x) => x.key === key);
-      if (!g) {
-        g = { key, label: d.toLocaleDateString('en-US', { timeZone: zone, weekday: 'long', month: 'short', day: 'numeric' }), rows: [] };
-        out.push(g);
-      }
-      g.rows.push(it);
-    }
-    return out;
-  }, [filtered, zone]);
+  const visible = useMemo(() => {
+    const text = query.trim().toLowerCase();
+    return (itemsByDay.get(selectedDay) ?? []).filter((item) => {
+      if (impact === 'high' && item.importance < 1) return false;
+      if (country !== 'all' && item.country !== country) return false;
+      const haystack = `${item.title} ${item.indicator} ${item.period} ${item.country} ${countryName(item.country)} ${item.source ?? ''} ${item.currency ?? ''}`.toLowerCase();
+      return !text || text.split(/\s+/).every((token) => haystack.includes(token));
+    });
+  }, [country, impact, itemsByDay, query, selectedDay]);
 
-  const status = failed ? 'Feed Unreachable' : fetchedAt ? `Live · ${liveAge(fetchedAt)}` : 'Fetching';
-  const timeZoneLabel = prefs.clockZone === 'local' ? 'local time' : prefs.clockZone;
+  const nextEventId = useMemo(() => allItems.find((item) => item.actual === null && Date.parse(item.date) >= clock)?.id ?? null, [allItems, clock]);
+  const availableCountries = useMemo(() => {
+    const present = new Set(allItems.map((item) => item.country));
+    return CALENDAR_COUNTRIES.filter((code) => present.has(code));
+  }, [allItems]);
+  const status = failed ? 'Feed Unavailable' : fetchedAt ? `Live · ${liveAge(fetchedAt)}` : 'Loading';
+  const zoneLabel = prefs.clockZone === 'local' ? Intl.DateTimeFormat().resolvedOptions().timeZone : prefs.clockZone;
+  const rangeLabel = `${formatKey(weekStart, { month: 'short', day: 'numeric' })} — ${formatKey(addDays(weekStart, 6), { month: 'short', day: 'numeric', year: 'numeric' })}`;
+
+  const moveWeek = (delta: number) => {
+    const next = addDays(weekStart, delta * 7);
+    setWeekStart(next);
+    setSelectedDay(next);
+  };
+  const returnToday = () => {
+    const today = dayKey(new Date(), zone);
+    setWeekStart(mondayFor(today));
+    setSelectedDay(today);
+  };
 
   return (
-    <div className="container page mkx ux-page cal-page clx-page">
-      <header className="bwx-hero bsx-hero ux-hero">
-        <div className="bwx-hero-top">
-          <div className="bwx-hero-title">
-            <div className="bwx-title-row">
-              <h1>Calendar</h1>
-            </div>
-            <p>Economic events for the next 6 days. Times in {timeZoneLabel}. Refreshed every 10 minutes.</p>
-          </div>
-          <span className="tdx-head-right">
-            <Pill tone={failed ? 'bad' : fetchedAt ? 'ok' : 'idle'} className={`ux-live-status ${refreshing ? 'syncing' : ''}`}>{status}</Pill>
-            <button className={`mkx-pill ux-refresh ${refreshing ? 'checking refreshing' : ''}`} onClick={() => setNonce((n) => n + 1)} disabled={refreshing} title={refreshing ? 'Refreshing Calendar Feed' : 'Refresh Calendar Feed'}>
-              <span className="ux-refresh-beam" aria-hidden="true" />
-              <IconRefresh size={13} />
-              <span>Refresh</span>
-            </button>
-          </span>
-        </div>
+    <div className="container page lix-page calx-page">
+      <header className="lix-toolbar">
+        <div className="lix-title"><h1>Economic Calendar</h1><span className={`lix-live ${failed ? 'error' : ''}`}><i />{status}</span></div>
+        <label className="lix-search">
+          <IconSearch size={15} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" spellCheck={false} />
+          {query && <button type="button" aria-label="Clear Search" onClick={() => setQuery('')}>×</button>}
+        </label>
       </header>
 
-      <div className="cal-filters clx-filters ux-filters">
-        <div className="news-tabs">
-          <button className={`news-tab ${minImp === -1 ? 'on' : ''}`} onClick={() => setMinImp(-1)}>All Events</button>
-          <button className={`news-tab ${minImp === 0 ? 'on' : ''}`} onClick={() => setMinImp(0)}>Medium +</button>
-          <button className={`news-tab ${minImp === 1 ? 'on' : ''}`} onClick={() => setMinImp(1)}>High Impact</button>
+      <section className="calx-navigation" aria-label="Calendar Navigation">
+        <div className="calx-range-controls">
+          <button type="button" className="calx-today" onClick={returnToday}>Today</button>
+          <button type="button" className="calx-arrow" onClick={() => moveWeek(-1)} aria-label="Previous Week">‹</button>
+          <button type="button" className="calx-arrow" onClick={() => moveWeek(1)} aria-label="Next Week">›</button>
+          <strong>{rangeLabel}</strong>
         </div>
-        <label className="ux-select-wrap">
-          <IconCalendar size={14} />
-          <select
-            value={country ?? 'all'}
-            onChange={(e) => {
-              const next = e.target.value;
-              setCountry(next === 'all' ? null : next);
-            }}
-            aria-label="Country Filter"
-          >
-            <option value="all">All countries</option>
-            {COUNTRIES.map((c) => <option key={c} value={c}>{flag(c)} {c}</option>)}
-          </select>
-        </label>
-      </div>
+        <span className="calx-zone">{zoneLabel}</span>
+      </section>
 
-      <div className="cal-cols page-cols">
-        <span className="cc-time">Time</span><span className="cc-evt">Event</span>
-        <span className="cc-num">Actual</span><span className="cc-num">Forecast</span><span className="cc-num">Prior</span>
-      </div>
-      <div className="cal-page-list">
-        {items === null && !failed && <div className="ov-empty">Loading…</div>}
-        {failed && <div className="ov-empty">Calendar unavailable — source could not be reached. Check Data health.</div>}
-        {items !== null && !failed && days.length === 0 && <div className="ov-empty">No events match these filters.</div>}
-        {days.map((g) => (
-          <div key={g.key} className="cal-day">
-            <div className="cal-day-head lg">{g.label}<span className="cal-day-count">{g.rows.length} events</span></div>
-            {g.rows.map((it) => {
-              const imp = it.importance >= 1 ? 'high' : it.importance === 0 ? 'med' : 'low';
-              const t = new Date(it.date).toLocaleTimeString('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit' });
-              return (
-                <div key={it.id} className="cal-row lg">
-                  <span className="cc-time num">{t}</span>
-                  <span className="cc-evt">
-                    <span className="cal-flag">{flag(it.country)}</span>
-                    <span className={`cal-imp ${imp}`} title={imp === 'high' ? 'High impact' : imp === 'med' ? 'Medium impact' : 'Low impact'} />
-                    <span className="cal-title">
-                      {it.title}
-                      {it.period ? <span className="cal-period"> {it.period}</span> : null}
-                      {it.indicator && it.indicator !== 'Calendar' && it.indicator !== it.title ? (
-                        <span className="cal-indicator"> · {it.indicator}</span>
-                      ) : null}
-                    </span>
-                  </span>
-                  <span className="cc-num num strong">{calVal(it.actual, it.unit)}</span>
-                  <span className="cc-num num">{calVal(it.forecast, it.unit)}</span>
-                  <span className="cc-num num muted">{calVal(it.previous, it.unit)}</span>
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-      <p className="news-source-note">
-        Source: TradingView economic calendar (server-proxied). <a href="https://www.tradingview.com/economic-calendar/" target="_blank" rel="noreferrer noopener">Open TradingView <IconExternal size={12} /></a>
-      </p>
+      <section className="calx-week" aria-label="Week">
+        {weekKeys.map((key) => {
+          const rows = itemsByDay.get(key) ?? [];
+          const high = rows.filter((item) => item.importance >= 1).length;
+          return <button type="button" key={key} className={`${key === selectedDay ? 'selected' : ''} ${key === initialToday ? 'today' : ''}`} onClick={() => setSelectedDay(key)}>
+            <span className="calx-day-name">{formatKey(key, { weekday: 'short' })} <b>{formatKey(key, { day: 'numeric' })}</b></span>
+            <span><em>Economic</em><b>{rows.length}</b></span>
+            <span><em>High Impact</em><b>{high}</b></span>
+          </button>;
+        })}
+      </section>
+
+      <section className="lix-filters" aria-label="Calendar Filters">
+        <div className="lix-segments" role="group" aria-label="Impact">
+          <button type="button" className={impact === 'all' ? 'selected' : ''} onClick={() => setImpact('all')}>All Events</button>
+          <button type="button" className={impact === 'high' ? 'selected' : ''} onClick={() => setImpact('high')}>High Impact</button>
+        </div>
+        <PillSelect value={country} options={[{ id: 'all', label: 'All Countries' }, ...availableCountries.map((code) => ({ id: code, label: `${flag(code)} ${countryName(code)}` }))]} onChange={setCountry} ariaLabel="Country" className="lix-select" />
+      </section>
+
+      <section className="calx-tape" aria-label="Economic Events">
+        <div className="calx-day-header">
+          <strong>{formatKey(selectedDay, { weekday: 'long', month: 'long', day: 'numeric' })}</strong>
+          <span className="calx-col-actual">Actual</span><span>Forecast</span><span>Prior</span>
+        </div>
+        <div className="calx-scroll">
+          {visible.map((item, index) => {
+            const timestamp = Date.parse(item.date);
+            const previous = visible[index - 1];
+            const repeated = previous && previous.country === item.country && previous.date === item.date;
+            const time = new Date(item.date).toLocaleTimeString('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit' });
+            const upcoming = item.id === nextEventId;
+            const title = `${item.title}${item.period ? ` ${item.period}` : ''}`;
+            return <div key={item.id} className={`calx-row ${upcoming ? 'next' : ''} ${changedIds.has(item.id) ? 'fresh' : ''}`} title={item.comment ?? title}>
+              <span className="calx-time">{repeated ? '' : time}</span>
+              <span className="calx-country">{repeated ? '' : <><i>{flag(item.country)}</i><b>{countryName(item.country)}</b></>}</span>
+              <ImpactBars importance={item.importance} />
+              <span className="calx-event"><b>{title}</b><em>{item.source || categoryName(item)}</em></span>
+              <span className={`calx-number actual ${upcoming && item.actual === null ? 'upcoming' : ''}`}>{upcoming && item.actual === null ? countdownLabel(timestamp, clock) : calVal(item.actual, item.unit, item.scale)}</span>
+              <span className="calx-number">{calVal(item.forecast, item.unit, item.scale)}</span>
+              <span className="calx-number prior">{calVal(item.previous, item.unit, item.scale)}</span>
+            </div>;
+          })}
+          {items === null && !failed && <div className="lix-empty">Loading Economic Events…</div>}
+          {failed && <div className="lix-empty">The Calendar Feed Is Currently Unavailable.</div>}
+          {items !== null && !failed && visible.length === 0 && <div className="lix-empty">No Events Match These Filters.</div>}
+        </div>
+      </section>
     </div>
   );
 }

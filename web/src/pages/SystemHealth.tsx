@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
 import { useRefreshSignal } from '../lib/refresh';
-import { Dot, Pill, TINT } from '../components/px';
+import { Dot, Pill } from '../components/px';
 import {
   IconAlert,
   IconBook,
@@ -86,13 +86,6 @@ const stateTone: Record<HealthState, Tone> = {
   degraded: 'warn',
   broken: 'bad',
   not_configured: 'idle',
-};
-
-const stateTint: Record<HealthState, string> = {
-  healthy: TINT.green,
-  degraded: TINT.orange,
-  broken: TINT.red,
-  not_configured: TINT.slate,
 };
 
 const stateRank: Record<HealthState, number> = {
@@ -198,51 +191,39 @@ function decisionCopy(state: HealthState): string {
   return 'Market data is available. Account and engine signals still need setup.';
 }
 
-/** Tonal icon tile — soft wash + colored glyph, never a saturated block. */
-function Ico({ tint, children }: { tint: string; children: ReactNode }) {
-  return (
-    <span className="rsx-ico" style={{ color: tint, background: `color-mix(in srgb, ${tint} 11%, transparent)` }}>
-      {children}
-    </span>
-  );
-}
-
-function HlxRow({
-  icon,
-  tint,
-  label,
-  sub,
-  end,
-}: {
-  icon?: ReactNode;
-  tint?: string;
-  label: string;
-  sub?: string;
-  end?: ReactNode;
-}) {
-  return (
-    <div className="rsx-row">
-      {icon ? <Ico tint={tint ?? TINT.slate}>{icon}</Ico> : null}
-      <span className="rsx-main">
-        <b>{label}</b>
-        {sub ? <em title={sub}>{sub}</em> : null}
-      </span>
-      <span className="rsx-end">{end}</span>
-    </div>
-  );
-}
-
 function HealthDot({ state }: { state: HealthState }) {
   return <Dot tone={stateTone[state]} />;
 }
 
-function stateForIds(checks: HealthCheck[], ids: string[]): HealthState {
-  return worstState(checks.filter((check) => ids.includes(check.id)).map((check) => check.state));
+function HlxStatusRow({
+  state,
+  label,
+  sub,
+  value,
+  icon,
+}: {
+  state: HealthState;
+  label: string;
+  sub?: string;
+  value: ReactNode;
+  icon?: ReactNode;
+}) {
+  return (
+    <div className={`hlx-status-row ${state}`}>
+      <span className="hlx-status-mark" aria-hidden="true">
+        {icon ?? <HealthDot state={state} />}
+      </span>
+      <span className="hlx-status-copy">
+        <b>{label}</b>
+        {sub ? <em title={sub}>{sub}</em> : null}
+      </span>
+      <span className="hlx-status-value">{value}</span>
+    </div>
+  );
 }
 
-function healthCount(checks: HealthCheck[], ids: string[]): string {
-  const rows = checks.filter((check) => ids.includes(check.id));
-  return `${rows.filter((check) => check.state === 'healthy').length}/${rows.length} Ready`;
+function stateForIds(checks: HealthCheck[], ids: string[]): HealthState {
+  return worstState(checks.filter((check) => ids.includes(check.id)).map((check) => check.state));
 }
 
 export function SystemHealth() {
@@ -537,99 +518,131 @@ export function SystemHealth() {
     },
     { healthy: 0, degraded: 0, broken: 0, not_configured: 0 } as Record<HealthState, number>,
   );
-  const exchangeIds = ['rest-latency', 'public-stream-age', 'rate-budget', 'clock-drift', 'binance-error'];
-  const accountIds = ['account-sync', 'user-stream', 'key-scope', 'order-cache'];
-  const keysPresent = state?.binance.keysPresent || info.binance.keysPresent;
-  const evidence = [
-    { id: 'path', label: 'Connection', detail: 'Browser to control server', value: browserLatencyMs === null ? 'Not Measured' : `${browserLatencyMs}ms`, state: stateForIds(checks, ['browser-server']), icon: <IconPulse size={16} /> },
-    { id: 'exchange', label: 'Exchange Data', detail: 'REST latency, market stream, rate budget, clock', value: healthCount(checks, exchangeIds), state: stateForIds(checks, exchangeIds), icon: <IconChart size={16} /> },
-    { id: 'account', label: 'Account Data', detail: 'Read keys, account sync, and user events', value: keysPresent ? healthCount(checks, accountIds) : 'Not Connected', state: stateForIds(checks, accountIds), icon: <IconWallet size={16} /> },
-    { id: 'ledger', label: 'Ledger', detail: 'Local database read and write probe', value: info.dbOk ? 'Writable' : 'Blocked', state: stateForIds(checks, ['ledger-db']), icon: <IconDatabase size={16} /> },
-    { id: 'engine', label: 'Engine', detail: 'Dedicated heartbeat source', value: 'Not Started', state: stateForIds(checks, ['engine-heartbeat']), icon: <IconBrain size={16} /> },
-    { id: 'tokendata', label: 'Token Data', detail: 'CoinGecko profiles, one per tracked base', value: !profiles ? 'Not Started' : profiles.running ? `Warming ${profiles.done}/${profiles.total}` : `${profiles.ok + profiles.na}/${profiles.total} Ready`, state: stateForIds(checks, ['token-profiles']), icon: <IconDatabase size={16} /> },
-  ];
+  const checkById = new Map(checks.map((check) => [check.id, check]));
+  const rowFor = (id: string) => checkById.get(id);
+  const feedEntries = Object.entries(info.feeds);
+  const liveFeedCount = feedEntries.filter(([, status]) => status === 'open' || status === 'live').length;
+  const feedHealthState = feedEntries.length ? stateForIds(checks, ['public-stream-age']) : 'not_configured';
 
   const execTone: Tone = info.killSwitch ? 'bad' : info.liveTradingEnabled ? 'ok' : 'idle';
   const overallTone = stateTone[overallState];
+  const actionRows = [
+    topBlocker,
+    rowFor('account-sync'),
+    rowFor('key-scope'),
+    rowFor('engine-heartbeat'),
+  ].filter(Boolean) as HealthCheck[];
+  const quickRows = [
+    rowFor('browser-server'),
+    rowFor('rest-latency'),
+    {
+      id: 'live-socket',
+      state: feedHealthState,
+      source: 'Live Socket',
+      detail: feedEntries.length ? `${liveFeedCount}/${feedEntries.length} feeds open` : 'No feed state returned.',
+      value: feedEntries.length ? `${liveFeedCount} open` : 'Not Exposed',
+      icon: <IconWifi size={16} />,
+    },
+    rowFor('public-stream-age'),
+    rowFor('account-sync'),
+    {
+      id: 'last-refresh',
+      state: loadError ? 'broken' : readTs ? 'healthy' : 'not_configured',
+      source: 'Last Refresh',
+      detail: loadError ?? 'Latest successful /api/system read.',
+      value: readTs ? timeAgo(readTs) : 'Waiting',
+      icon: <IconClock size={16} />,
+    },
+    rowFor('user-stream'),
+    rowFor('clock-drift'),
+    rowFor('rate-budget'),
+    rowFor('ledger-db'),
+  ].filter(Boolean) as Array<HealthCheck | { id: string; state: HealthState; source: string; detail: string; value: ReactNode; icon: ReactNode }>;
 
   return (
-    <div className="container page mkx rsx-page">
-      {/* ---- hero: the verdict + source tallies --------------------------- */}
-      <header className="bwx-hero">
-        <div className="bwx-hero-top">
-          <div className="bwx-hero-title">
-            <div className="bwx-title-row">
-              <h1>Health</h1>
-              <Pill tone={overallTone}>{stateLabel[overallState]}</Pill>
-            </div>
-            <p>v{info.version} · {info.env} · Up {fmtUptime(info.uptimeSec)} · {readTs ? `Read ${timeAgo(readTs)}` : loading ? 'Reading…' : 'Waiting'}</p>
-          </div>
+    <div className="container page mkx rsx-page hlx-page">
+      <header className="hlx-console">
+        <div className="hlx-console-head">
+          <span className="hlx-console-mark" aria-hidden="true">
+            <IconShield size={22} />
+          </span>
+          <span className="hlx-console-copy">
+            <b>Cosmosgeek</b>
+            <h1>System Health</h1>
+            <em>v{info.version} · {info.env} · Up {fmtUptime(info.uptimeSec)} · {readTs ? `Read ${timeAgo(readTs)}` : loading ? 'Reading' : 'Waiting'}</em>
+          </span>
+          <span className={`hlx-console-pill ${overallTone}`}>{stateLabel[overallState]}</span>
         </div>
-
-        <div className="bwx-hero-metrics">
-          <div className="bwx-hero-metric">
-            <em>System Status</em>
+        <div className="hlx-summary">
+          <div>
+            <em>Decision</em>
             <b className={`hlx-word ${overallTone}`}>{tradeDecision(overallState)}</b>
             <small>{decisionCopy(overallState)}</small>
           </div>
-          <div className="bwx-hero-metric">
+          <div>
             <em>Sources Ready</em>
             <b>{counts.healthy} Of {checks.length}</b>
             <small>{counts.broken} Broken · {counts.degraded} Degraded · {counts.not_configured} Not Configured</small>
           </div>
-          <div className="bwx-hero-metric">
-            <em>Execution Mode</em>
+          <div>
+            <em>Execution</em>
             <b>{modeLabel(info)}</b>
-            <small>{info.killSwitch ? 'Kill Switch Is On · Live Routes Blocked' : info.liveTradingEnabled ? 'Live Mode Is Armed' : 'No Automated Sends'}</small>
+            <small>{info.killSwitch ? 'Kill Switch On · Routes Blocked' : info.liveTradingEnabled ? 'Live Mode Armed' : 'Manual Only · No Automated Sends'}</small>
           </div>
-          <div className="bwx-hero-metric">
+          <div>
             <em>Needs Action</em>
             <b>{blockers.length}</b>
-            <small>{blockers.length ? `First: ${topBlocker.source}` : 'All Sources Clear'}</small>
+            <small>{blockers.length ? topBlocker.source : 'All Sources Clear'}</small>
           </div>
         </div>
       </header>
 
-      {/* ---- next action | data path -------------------------------------- */}
-      <section className="rsx-band">
-        {loadError && (
-          <div className="rsx-alert">/api/system read failed: {loadError}</div>
-        )}
-        <div className="rsx-cols">
-          <div className="rsx-col">
-            <h3>Next Action</h3>
-            <HlxRow
-              icon={topBlocker.icon}
-              tint={stateTint[topBlocker.state]}
-              label={topBlocker.state === 'healthy' ? 'No Current Blocker' : topBlocker.source}
-              sub={topBlocker.state === 'healthy' ? 'All configured sources are inside their trust bands.' : topBlocker.fix}
-              end={
-                <>
-                  <span className="rsx-val">{topBlocker.value}</span>
-                  <Pill tone={stateTone[topBlocker.state]}>{stateLabel[topBlocker.state]}</Pill>
-                </>
-              }
-            />
-            <HlxRow
-              icon={<IconTerminal size={16} />}
-              tint={info.killSwitch ? TINT.red : info.liveTradingEnabled ? TINT.green : TINT.slate}
+      {loadError && (
+        <div className="hlx-alert">/api/system read failed: {loadError}</div>
+      )}
+
+      <section className="hlx-card-grid">
+        <div className="hlx-card">
+          <div className="hlx-card-head">
+            <span>Connection Health</span>
+            <b className={`hlx-chip ${overallTone}`}>{tradeDecision(overallState)}</b>
+          </div>
+          <div className="hlx-status-list">
+            {quickRows.map((row) => (
+              <HlxStatusRow
+                key={row.id}
+                state={row.state}
+                label={row.source.replace('Browser → Server Latency', 'Browser → Server').replace('Server → Binance REST Latency', 'Binance REST').replace('Public Market Stream Age', 'Market Feed').replace('Account Sync Age', 'Account Sync').replace('User Stream Or Polling Fallback', 'User Stream').replace('Rate Budget / Request Weight', 'Rate Budget · 1m').replace('DB / Ledger Writable', 'Ledger DB')}
+                sub={row.detail}
+                value={row.value}
+                icon={'icon' in row ? row.icon : undefined}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="hlx-card">
+          <div className="hlx-card-head">
+            <span>Operator Action</span>
+            <b className={`hlx-chip ${stateTone[topBlocker.state]}`}>{stateLabel[topBlocker.state]}</b>
+          </div>
+          <div className="hlx-status-list">
+            {actionRows.map((row) => (
+              <HlxStatusRow
+                key={row.id}
+                state={row.state}
+                label={row.id === topBlocker.id && row.state === 'healthy' ? 'No Current Blocker' : row.source}
+                sub={row.id === topBlocker.id && row.state === 'healthy' ? 'All configured sources are inside their trust bands.' : row.fix}
+                value={row.value}
+                icon={row.icon}
+              />
+            ))}
+            <HlxStatusRow
+              state={info.killSwitch ? 'broken' : info.liveTradingEnabled ? 'healthy' : 'not_configured'}
               label="Execution Mode"
               sub={info.killSwitch ? 'Kill switch is on. Live order routes are blocked.' : info.liveTradingEnabled ? 'Live mode is armed.' : 'Manual-only mode. No automated sends.'}
-              end={<Pill tone={execTone}>{modeLabel(info)}</Pill>}
-            />
-
-            <h3>Cost & Usage · AWS</h3>
-            <HlxRow
-              icon={<IconChart size={16} />}
-              label="Current Month"
-              sub="Read-only Cost Explorer source is not connected to this cockpit."
-              end={<Pill tone="idle">Not Connected</Pill>}
-            />
-            <HlxRow
-              icon={<IconClock size={16} />}
-              label="Forecast"
-              sub="No billing numbers are shown until a real server-side source exists."
-              end={<Pill tone="idle">Not Connected</Pill>}
+              value={<Pill tone={execTone}>{modeLabel(info)}</Pill>}
+              icon={<IconTerminal size={16} />}
             />
             <div className="hlx-links">
               <a href="https://console.aws.amazon.com/billing/home" target="_blank" rel="noreferrer noopener">
@@ -642,25 +655,10 @@ export function SystemHealth() {
               </a>
             </div>
           </div>
-
-          <div className="rsx-col">
-            <h3>Data Path</h3>
-            {evidence.map((item) => (
-              <HlxRow
-                key={item.id}
-                icon={item.icon}
-                tint={stateTint[item.state]}
-                label={item.label}
-                sub={item.detail}
-                end={<span className="rsx-val"><HealthDot state={item.state} /> {item.value}</span>}
-              />
-            ))}
-          </div>
         </div>
       </section>
 
-      {/* ---- the evidence matrix ------------------------------------------ */}
-      <section className="rsx-band">
+      <section className="hlx-evidence">
         <div className="hlx-matrix-head">
           <div>
             <h3>Evidence Matrix</h3>

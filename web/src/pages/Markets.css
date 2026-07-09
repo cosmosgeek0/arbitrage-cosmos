@@ -177,7 +177,8 @@
 
 /* ---- Prices head + pills ---------------------------------------------- */
 .mkx-prices { padding-top: 26px; }
-.mkx-prices-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.mkx-prices-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.mkx-prices-title { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
 .mkx-prices-head h2 {
   margin: 0;
   font-size: 28px;
@@ -206,6 +207,97 @@
 .mkx-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
 .mkx-live.on i { background: var(--up); }
 
+/* Data-source control: occupies the old live-status position. Only connected
+   providers are selectable; planned rows remain visible and explicit. */
+.mkx-source-picker { position: relative; z-index: 12; flex: none; }
+.mkx-source-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 13px 0 9px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--tile);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 510;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mkx-source-trigger:hover { background: color-mix(in srgb, var(--tile) 82%, var(--text) 5%); }
+.mkx-source-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mkx-source-logo {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 560;
+}
+.mkx-source-logo::before { content: attr(data-fallback); position: absolute; inset: 0; display: grid; place-items: center; }
+.mkx-source-logo img { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: contain; }
+.mkx-source-logo-all { border-radius: 8px; color: var(--text-2); background: var(--tile); }
+.mkx-source-logo-all svg { fill: none; stroke: currentColor; stroke-width: 1.4; }
+.mkx-source-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 80;
+  width: 332px;
+  padding: 6px;
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: var(--shadow-pop);
+}
+.mkx-source-menu.upward { top: auto; bottom: calc(100% + 8px); }
+.mkx-source-menu-head { padding: 10px 11px 9px; border-bottom: 1px solid var(--line); }
+.mkx-source-menu-head b { display: block; font-size: 14px; font-weight: 550; line-height: 20px; color: var(--text); }
+.mkx-source-menu-head span { display: block; margin-top: 1px; font-size: 12px; font-weight: 430; line-height: 17px; color: var(--muted); }
+.mkx-source-options { padding-top: 4px; }
+.mkx-source-options > button {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+.mkx-source-options > button:not(:disabled) { cursor: pointer; }
+.mkx-source-options > button:not(:disabled):hover,
+.mkx-source-options > button.selected { background: var(--hover); }
+.mkx-source-options > button:disabled { cursor: not-allowed; }
+.mkx-source-options > button:disabled .mkx-source-logo,
+.mkx-source-options > button:disabled .mkx-source-copy { opacity: .62; }
+.mkx-source-copy { display: grid; gap: 1px; min-width: 0; }
+.mkx-source-copy b { overflow: hidden; font-size: 14px; font-weight: 550; line-height: 19px; text-overflow: ellipsis; white-space: nowrap; }
+.mkx-source-copy em { overflow: hidden; color: var(--muted); font-size: 12px; font-style: normal; font-weight: 430; line-height: 17px; text-overflow: ellipsis; white-space: nowrap; }
+.mkx-source-state {
+  min-width: 52px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 550;
+  line-height: 15px;
+  text-align: center;
+}
+.mkx-source-state.live { color: var(--up); background: color-mix(in srgb, var(--up) 10%, transparent); }
+.mkx-source-state.planned { color: var(--muted); background: var(--tile); }
+
 .mkx-pills { display: flex; align-items: center; gap: 10px; margin: 16px 0 4px; flex-wrap: wrap; }
 .mkx-pill {
   position: relative;
@@ -225,6 +317,13 @@
 .mkx-pill:hover { background: color-mix(in srgb, var(--tile) 82%, var(--text) 5%); }
 .mkx-pill svg { color: var(--text-2); flex: none; }
 .mkx-pill { border: 0; font: inherit; }
+.mkx-pillwrap .mkx-pill { max-width: 100%; }
+.mkx-pillwrap .mkx-pill > span:not(.mkx-chev) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .mkx-chev { display: inline-flex; transition: transform .15s ease; }
 .mkx-chev.up { transform: rotate(180deg); }
 
@@ -236,12 +335,17 @@
   top: calc(100% + 8px);
   left: 0;
   z-index: 70;
-  min-width: 172px;
+  width: max-content;
+  min-width: max(172px, 100%);
+  max-width: min(520px, calc(100vw - 32px));
+  max-height: min(520px, calc(100vh - 128px));
   padding: 6px;
   border-radius: 14px;
   background: var(--panel);
   border: 1px solid var(--line-2);
   box-shadow: var(--shadow-pop);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .mkx-menu button {
   display: flex;
@@ -249,7 +353,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  height: 42px;
+  min-height: 42px;
   padding: 0 12px;
   border: 0;
   border-radius: 10px;
@@ -260,6 +364,13 @@
   color: var(--text);
   cursor: pointer;
   text-align: left;
+  white-space: nowrap;
+}
+.mkx-menu-label {
+  min-width: 0;
+  overflow: hidden;
+  line-height: 18px;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 .mkx-menu button:hover { background: var(--hover); }
@@ -427,6 +538,11 @@ td.mkx-starcol { padding: 0 0 0 2px; text-overflow: clip; }
      Coinbase drops it below the heading instead */
   .mkx-hero { flex-direction: column; align-items: stretch; gap: 16px; }
   .mkx-search { flex: 1 1 auto; }
+}
+@container (max-width: 720px) {
+  .mkx-prices-head { align-items: flex-start; flex-wrap: wrap; }
+  .mkx-prices-title { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .mkx-source-picker { margin-left: auto; }
 }
 @container (max-width: 800px) {
   .mkx-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }

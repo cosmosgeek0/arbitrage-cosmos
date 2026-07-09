@@ -221,10 +221,6 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
   },
 ];
 
-interface SessionRow {
-  id: string; ip: string | null; country: string | null; system: string; browser: string;
-  firstSeen: number; lastSeen: number; current: boolean; active: boolean;
-}
 interface AccountExchangeRow {
   id: string;
   name: string;
@@ -245,35 +241,28 @@ interface AccountExchangeRow {
     futures?: boolean;
   };
 }
-const COUNTRY_NAMES: Record<string, string> = {
-  IN: 'India', US: 'United States', GB: 'United Kingdom', SG: 'Singapore', DE: 'Germany',
-  AE: 'UAE', JP: 'Japan', CA: 'Canada', AU: 'Australia', FR: 'France', NL: 'Netherlands',
-};
-function sessionPlace(s: SessionRow): string {
-  return [s.country ? COUNTRY_NAMES[s.country] ?? s.country : null, s.ip ?? 'local network'].filter(Boolean).join(' · ');
+interface AccountSessionRow {
+  id: string;
+  ip: string | null;
+  country: string | null;
+  system: string;
+  browser: string;
+  firstSeen: number;
+  lastSeen: number;
+  current: boolean;
+  active: boolean;
 }
-function keyScopeCode(k: AccountExchangeRow): string {
-  if (/read/i.test(k.scope)) return 'RO';
-  if (/full/i.test(k.scope)) return 'FULL';
-  return k.scope.toUpperCase();
-}
-function keyMeta(k: AccountExchangeRow): string {
-  return [keyScopeCode(k), k.type, k.fingerprint ?? `${k.prefix}...`].filter(Boolean).join(' · ');
-}
-function deviceMeta(s: SessionRow): string {
-  return [s.system, s.country ? COUNTRY_NAMES[s.country] ?? s.country : 'local'].filter(Boolean).join(' · ');
-}
-
 // ---- account card (Binance-style profile chip + details) --------------------
 function AccountCard({ compact = false }: { compact?: boolean }) {
-  const { state, saveConfig, setPage } = useStore();
+  const { state, saveConfig } = useStore();
   const { open, setOpen, ref } = useMenu<HTMLDivElement>(); // hover-open, like the rest of the bar
   const fileRef = useRef<HTMLInputElement>(null);
   const profile = state?.config.profile ?? { name: '', avatar: null };
   const [preview, setPreview] = useState<string | null>(null); // instant feedback before the 2s state tick
   const [editName, setEditName] = useState<string | null>(null);
-  const [sessList, setSessList] = useState<SessionRow[]>([]);
   const [linkedKeys, setLinkedKeys] = useState<AccountExchangeRow[]>([]);
+  const [sessions, setSessions] = useState<AccountSessionRow[]>([]);
+  const [sessionNow, setSessionNow] = useState(Date.now());
   const avatar = preview ?? profile.avatar ?? DEFAULT_PROFILE_LOGO;
   const usesDefaultLogo = !preview && !profile.avatar;
   const name = profile.name || 'Operator';
@@ -282,42 +271,39 @@ function AccountCard({ compact = false }: { compact?: boolean }) {
   const sub = connected ? (state?.binance.connected ? 'Binance · read-only' : 'Binance · error') : 'Binance · not linked';
   const liveKeys = linkedKeys.filter((k) => k.live || k.keysPresent || k.status === 'live');
   const accountTone = connected ? (state?.binance.connected ? 'live' : 'warn') : 'off';
-  const activeSessions = sessList.filter((s) => s.active);
-  const currentSession = sessList.find((s) => s.current);
-  const syncLabel = connected ? (state?.binance.connected ? 'Synced' : 'Check') : 'Unlinked';
-  const keyLabel = liveKeys.length ? `${liveKeys.length} Live` : linkedKeys.length ? `${linkedKeys.length} Declared` : 'No Keys';
-  const deviceLabel = sessList.length ? `${activeSessions.length || sessList.length} Active` : 'Checking';
+  const verified = !!state?.binance.connected;
+  const identityLine = connected ? (verified ? 'Binance · read-only' : 'Binance · key check') : 'Local session';
+  const connectedKeys = (liveKeys.length ? liveKeys : linkedKeys.filter((k) => k.keysPresent || k.status !== 'planned')).slice(0, 4);
+  const hostLabel = typeof window !== 'undefined' ? window.location.host : 'local';
+  const recentSessions = sessions
+    .filter((s) => s.current || s.active || sessionNow - s.lastSeen < 90_000)
+    .slice(0, 10);
   const logoutHref = typeof window !== 'undefined' && window.location.hostname === DEPLOYED_APP_HOST
     ? '/cdn-cgi/access/logout'
     : `https://${DEPLOYED_APP_HOST}/cdn-cgi/access/logout`;
 
-  // Real active-session list (server-tracked). Polled only while the popover is open.
+  // Linked-key count is polled only while the popover is open.
   useEffect(() => {
     if (!open) return;
     let alive = true;
     const load = () => {
-      void fetch('/api/sessions')
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => { if (alive && d) setSessList(d.sessions ?? []); })
-        .catch(() => undefined);
       void fetch('/api/apikey')
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => { if (alive && d) setLinkedKeys(d.keys ?? []); })
+        .catch(() => undefined);
+      void fetch('/api/sessions')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!alive || !d) return;
+          setSessions(d.sessions ?? []);
+          setSessionNow(Number(d.now) || Date.now());
+        })
         .catch(() => undefined);
     };
     load();
     const t = setInterval(load, 5000);
     return () => { alive = false; clearInterval(t); };
   }, [open]);
-  const otherActive = sessList.filter((s) => s.active && !s.current).length;
-  const shownKeys = linkedKeys.slice(0, 2);
-  const hiddenKeys = Math.max(0, linkedKeys.length - shownKeys.length);
-  const shownSessions = sessList.slice(0, 2);
-  const hiddenSessions = Math.max(0, sessList.length - shownSessions.length);
-  const goAccount = () => {
-    setOpen(false);
-    setPage('account');
-  };
 
   const onFile = (f: File | undefined) => {
     if (!f || !f.type.startsWith('image/')) return;
@@ -345,11 +331,9 @@ function AccountCard({ compact = false }: { compact?: boolean }) {
       <button className={`acct-card ${compact ? 'top acct-pro-trigger' : ''} ${open ? 'on' : ''} s-${accountTone}`} onClick={() => setOpen(!open)} title={`Account Details — ${sub}`} aria-label="Account Details">
         {compact ? (
           <span className={`acct-top-orb ${usesDefaultLogo ? 'profile-logo' : ''} s-${accountTone}`}>
-            <span className="acct-top-ring" />
             <span className="acct-top-face">
               {avatar ? <img src={avatar} alt="" /> : <IconUser size={16} />}
             </span>
-            <span className="acct-top-dot" />
           </span>
         ) : (
           <>
@@ -365,17 +349,17 @@ function AccountCard({ compact = false }: { compact?: boolean }) {
       </button>
       {open && (
         <div className="menu-pop acct-pop cb-acct-pop">
-          <div className={`cb-acct-head cb-acct-pro-head s-${accountTone}`}>
-            <button className={`cb-acct-avatar ${usesDefaultLogo ? 'profile-logo' : ''}`} onClick={() => fileRef.current?.click()} title="Upload profile photo">
+          <div className="cb-profile-head">
+            <button className={`cb-profile-avatar ${usesDefaultLogo ? 'profile-logo' : ''}`} onClick={() => fileRef.current?.click()} title="Upload profile photo">
               {avatar ? <img src={avatar} alt="" /> : initial}
               <span className="acct-cam"><IconCamera size={11} /></span>
             </button>
-            <div className="cb-acct-id">
+            <div className="cb-profile-id">
               {editName === null ? (
-                <button className="cb-acct-name" onClick={() => setEditName(profile.name || '')} title="Edit display name">{name}</button>
+                <button className="cb-profile-name" onClick={() => setEditName(profile.name || '')} title="Edit display name">{name}</button>
               ) : (
                 <form
-                  className="acct-name-form"
+                  className="cb-profile-name-form"
                   onSubmit={(e) => {
                     e.preventDefault();
                     void saveConfig({ profile: { name: editName.slice(0, 40), avatar: profile.avatar } } as never);
@@ -386,79 +370,65 @@ function AccountCard({ compact = false }: { compact?: boolean }) {
                   <button type="submit">Save</button>
                 </form>
               )}
-              <span className="cb-acct-sub"><span className={`acct-dot ${state?.binance.connected ? 'ok' : connected ? 'bad' : ''}`} />{sub}</span>
-            </div>
-            <div className="cb-acct-actions">
-              <button className="cb-acct-manage" type="button" onClick={goAccount} title="Account & Security" aria-label="Account & Security"><IconShield size={15} /></button>
-              <a className="cb-logout" href={logoutHref} title="Sign out of the deployed Cloudflare Access session" aria-label="Sign out">
-                <IconPower size={15} />
-              </a>
+              <span className="cb-profile-sub">{identityLine}</span>
             </div>
           </div>
 
-          <div className="cb-acct-strip cb-acct-matrix">
-            <span className={`s-${accountTone}`}>
-              <i />
-              <em>SYNC</em>
-              <b className={`s-${accountTone}`}>{syncLabel}</b>
-            </span>
-            <span>
-              <i />
-              <em>KEYS</em>
-              <b>{keyLabel}</b>
-            </span>
-            <span>
-              <i />
-              <em>DEV</em>
-              <b>{deviceLabel}</b>
-            </span>
-          </div>
+          <div className="cb-profile-sections">
+            <section className="cb-profile-section" aria-label="Connected exchange">
+              <div className="cb-profile-section-head">
+                <span><IconKey size={16} />Connected Exchange</span>
+                <b className={verified ? 'ok' : connected ? 'warn' : ''}>{verified ? 'Live' : connected ? 'Checking' : 'Not linked'}</b>
+              </div>
+              <div className="cb-link-list">
+                {connectedKeys.length > 0 ? connectedKeys.map((k) => (
+                  <div className="cb-exchange-row" key={k.id}>
+                    <span className={`cb-exchange-mark ${k.live || k.keysPresent ? 'on' : ''}`}>{k.name.slice(0, 1).toUpperCase()}</span>
+                    <span className="cb-exchange-main">
+                      <b>{k.name}</b>
+                      <em>{k.scope} · {k.type}{k.fingerprint ? ` · ${k.fingerprint}` : k.prefix ? ` · ${k.prefix}...` : ''}</em>
+                    </span>
+                    <span className={`cb-status ${k.live ? 'ok' : k.keysPresent ? 'warn' : ''}`}>
+                      {k.live ? 'Live' : k.keysPresent ? 'Pending' : 'Off'}
+                    </span>
+                  </div>
+                )) : (
+                  <div className="cb-empty">No exchange key is linked to this server.</div>
+                )}
+              </div>
+            </section>
 
-          <div className="cb-link-block">
-            <div className="cb-link-head">
-              <span><IconKey size={14} /><b>KEYS</b></span>
-              <b>{hiddenKeys > 0 ? `+${hiddenKeys}` : liveKeys.length ? `${liveKeys.length} Live` : linkedKeys.length ? 'Set' : 'None'}</b>
-            </div>
-            <div className="cb-link-list">
-              {linkedKeys.length === 0 ? (
-                <div className="cb-empty">No keys</div>
-              ) : shownKeys.map((k) => (
-                <div className="cb-exchange-row" key={k.id}>
-                  <span className={`cb-exchange-mark ${k.live || k.keysPresent ? 'on' : ''}`}>{k.name.slice(0, 1).toUpperCase()}</span>
-                  <span className="cb-exchange-main">
-                    <b>{k.name}</b>
-                    <em>{keyMeta(k)}</em>
-                  </span>
-                  <span className={`cb-status ${k.live || k.keysPresent ? (k.status === 'live' || state?.binance.connected ? 'ok' : 'warn') : 'idle'}`}>
-                    {k.live || k.keysPresent ? (k.status === 'live' || state?.binance.connected ? 'ON' : 'CHK') : 'OFF'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+            <section className="cb-profile-section" aria-label="Linked devices">
+              <div className="cb-profile-section-head">
+                <span><IconWifi size={16} />Linked Devices</span>
+                <b className={recentSessions.length ? 'ok' : ''}>{recentSessions.length || 0} Active</b>
+              </div>
+              <div className="cb-link-list">
+                {recentSessions.length > 0 ? recentSessions.map((s) => {
+                  const lastSeen = timeAgo(s.lastSeen);
+                  const network = s.ip ? s.ip : 'local network';
+                  return (
+                    <div className="cb-device-row" key={s.id}>
+                      <span className={`cb-device-dot ${s.active ? 'on' : ''}`} />
+                      <span className="cb-device-main">
+                        <b>{s.browser} on {s.system}</b>
+                        <em>{hostLabel} · {network}{s.country ? ` · ${s.country}` : ''} · first seen {timeAgo(s.firstSeen)}</em>
+                      </span>
+                      <span className="cb-device-right">
+                        <i>{s.current ? 'This Device' : s.active ? 'Active' : 'Recent'}</i>
+                        <b>{s.active ? 'Active Now' : lastSeen}</b>
+                      </span>
+                    </div>
+                  );
+                }) : (
+                  <div className="cb-empty">No active device sessions reported yet.</div>
+                )}
+              </div>
+            </section>
 
-          <div className="cb-link-block">
-            <div className="cb-link-head">
-              <span><IconWifi size={14} /><b>DEVICES</b></span>
-              <b>{hiddenSessions > 0 ? `+${hiddenSessions}` : currentSession ? 'Current' : otherActive > 0 ? `+${otherActive}` : sessList.length ? 'Live' : '...'}</b>
-            </div>
-            <div className="cb-link-list">
-              {sessList.length === 0 ? (
-                <div className="cb-empty">Checking</div>
-              ) : shownSessions.map((s) => (
-                <div key={s.id} className={`cb-device-row ${s.current ? 'me' : ''}`}>
-                  <span className={`cb-device-dot ${s.active ? 'on' : ''}`} />
-                  <span className="cb-device-main">
-                    <b>{s.browser}</b>
-                    <em>{deviceMeta(s)}</em>
-                  </span>
-                  <span className="cb-device-right">
-                    {s.current && <i>THIS</i>}
-                    <b>{s.active ? 'NOW' : timeAgo(s.lastSeen)}</b>
-                  </span>
-                </div>
-              ))}
-            </div>
+            <a className="cb-profile-logout-bar" href={logoutHref} title="Sign out of the deployed Cloudflare Access session">
+              <IconPower size={18} /><span>Log Out</span>
+            </a>
           </div>
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => onFile(e.target.files?.[0])} />
         </div>
@@ -713,6 +683,7 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
         />
         <button className="snav-search-k" onClick={() => setPaletteOpen(true)} title="Full command palette (⌘K)" tabIndex={-1}>⌘K</button>
       </div>
+      {isTopbar && <span className="search-beam" aria-hidden="true" />}
       {panelOpen && (
         <div className="snav-search-pop">
           {isTopbar && (
@@ -1241,9 +1212,25 @@ const MENU_W: Record<MK, number> = {
 };
 
 const clockParts = (zoneId: string, d: Date) => {
-  const raw = fmtClockZone(zoneId, d);
-  const [hh = '00', mm = '00', ss = '00'] = raw.split(':');
-  return { raw, hm: `${hh}:${mm}`, ss };
+  try {
+    const opts: Intl.DateTimeFormatOptions = {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    };
+    if (zoneId && zoneId !== 'local') opts.timeZone = zoneId;
+    const parts = new Intl.DateTimeFormat('en-US', opts).formatToParts(d);
+    const hh = parts.find((p) => p.type === 'hour')?.value ?? '00';
+    const mm = parts.find((p) => p.type === 'minute')?.value ?? '00';
+    const ss = parts.find((p) => p.type === 'second')?.value ?? '00';
+    const ampm = (parts.find((p) => p.type === 'dayPeriod')?.value ?? '').toUpperCase();
+    return { raw: `${hh}:${mm}:${ss} ${ampm}`.trim(), hm: `${hh}:${mm}`, ss, ampm };
+  } catch {
+    const raw = fmtClockZone(zoneId, d);
+    const [hh = '00', mm = '00', ss = '00'] = raw.split(':');
+    return { raw: `${hh}:${mm}:${ss}`, hm: `${hh}:${mm}`, ss, ampm: '' };
+  }
 };
 const clockOffset = (zoneId: string, d: Date) => {
   try {
@@ -1410,7 +1397,6 @@ function SharedTopBar() {
   const zone = ZONES.find((z) => z.id === prefs.clockZone) ?? ZONES[1];
   const activeClock = clockParts(zone.id, now);
   const activeClockOffset = clockOffset(zone.id, now);
-  const activeClockSub = activeClockOffset === zone.label ? 'Live' : activeClockOffset;
   const utcClock = clockParts('UTC', now);
   const localClock = clockParts('local', now);
   const cur = CURRENCIES[prefs.currency] ? prefs.currency : 'USD';
@@ -2181,75 +2167,356 @@ function SharedTopBar() {
     }
   };
 
+  const contentClean = (k: MK) => {
+    if (k === 'clock' || k === 'shell') return content(k);
+
+    if (k === 'apikey') {
+      const visibleKeys = [roKey, fullKey].filter((ak): ak is ApiKeyInfo => !!ak);
+      const liveCount = visibleKeys.filter((ak) => ak.status === 'live').length;
+      const ipLocked = visibleKeys.length > 0 && visibleKeys.every((ak) => ak.ipRestrict);
+      const withdrawalsOpen = visibleKeys.some((ak) => ak.permissions.withdrawals);
+      return (
+        <div className="topux-panel">
+          <div className="topux-head">
+            <span><IconKey size={16} />API Keys</span>
+            <em className={withdrawalsOpen ? 'warn' : liveCount ? 'ok' : 'idle'}>{withdrawalsOpen ? 'Review' : liveCount ? 'Locked' : 'Setup'}</em>
+          </div>
+          {visibleKeys.length === 0 ? (
+            <div className="topux-empty">No Binance API key is connected.</div>
+          ) : (
+            <div className="topux-list">
+              {visibleKeys.map((ak) => (
+                <div key={ak.id} className="topux-key-row">
+                  <span>
+                    <b>{ak.name}</b>
+                    <small>{ak.prefix ? `${ak.prefix}...${ak.fingerprint ?? ''}` : ak.scope}</small>
+                  </span>
+                  <em className={ak.status === 'live' ? 'ok' : ak.status === 'planned' ? 'warn' : 'idle'}>{ak.status === 'live' ? 'Live' : ak.status === 'planned' ? 'Planned' : 'Set'}</em>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="topux-perms">
+            {API_PERMS.map((p) => {
+              const read = !!roKey?.permissions[p.key];
+              const full = !!fullKey?.permissions[p.key];
+              return (
+                <div key={p.key} className={`topux-perm ${p.key === 'withdrawals' && (read || full) ? 'risk' : ''}`}>
+                  <span>{p.label.replace('Spot & Margin & Stock Trading', 'Spot / Margin').replace('Permits Universal Transfer', 'Universal Transfer')}</span>
+                  <b>{read ? 'Read' : full ? 'Full' : 'Off'}</b>
+                </div>
+              );
+            })}
+          </div>
+          <div className="topux-actions">
+            <button className="topux-action primary" type="button" onClick={() => { setActive(null); openOverlay('apikey'); }}>
+              <IconShield size={14} /> Open Security
+            </button>
+            <span className={`topux-note ${ipLocked ? 'ok' : 'warn'}`}>{ipLocked ? 'IP locked' : 'IP open'}</span>
+          </div>
+        </div>
+      );
+    }
+
+    if (k === 'data') {
+      return (
+        <div className="topux-panel">
+          <div className="topux-head">
+            <span><IconDatabase size={16} />Data Health</span>
+            <em className={netGrade === 'ok' ? 'ok' : netGrade === 'warn' ? 'warn' : 'bad'}>{dataLabel}</em>
+          </div>
+          <div className="topux-list compact">
+            {dataRows.map((row) => (
+              <div key={row.name} className="topux-row">
+                <span>
+                  <b>{row.name}</b>
+                  <small>{row.sub}</small>
+                </span>
+                <em className={row.tier}>{row.value}</em>
+              </div>
+            ))}
+          </div>
+          <button className="topux-action" type="button" onClick={() => { setActive(null); setPage('system'); }}>
+            <IconPulse size={14} /> Open Health
+          </button>
+        </div>
+      );
+    }
+
+    if (k === 'advisor') {
+      const rows = advAtt.length ? advAtt : advChecks.filter((c) => c.sev === 'pass').slice(0, 4);
+      return (
+        <div className="topux-panel">
+          <div className="topux-head">
+            <span><IconShield size={16} />Trust Advisor</span>
+            <em className={advTone === 'ok' ? 'ok' : advTone === 'warn' ? 'warn' : 'bad'}>{advTone === 'ok' ? 'Clean' : advTone === 'warn' ? 'Review' : 'Action'}</em>
+          </div>
+          <div className="topux-summary">
+            <span><b>{advP.length}</b><small>Passed</small></span>
+            <span><b>{advI.length}</b><small>Review</small></span>
+            <span><b>{advA.length}</b><small>Action</small></span>
+          </div>
+          <div className="topux-list">
+            {rows.map((c) => (
+              <button key={c.name} className="topux-row button" type="button" disabled={!c.page} onClick={() => { if (c.page) { setActive(null); setPage(c.page); } }}>
+                <span>
+                  <b>{c.name}</b>
+                  <small>{c.detail}</small>
+                </span>
+                <em className={c.sev === 'pass' ? 'good' : c.sev === 'invest' ? 'warn' : 'bad'}>{c.sev === 'pass' ? 'OK' : c.sev === 'invest' ? 'Review' : 'Fix'}</em>
+              </button>
+            ))}
+          </div>
+          <button className="topux-action" type="button" onClick={() => { setActive(null); setPage('risk'); }}>
+            <IconRadar size={14} /> Open Risk
+          </button>
+        </div>
+      );
+    }
+
+    if (k === 'notif') {
+      return (
+        <div className="topux-panel">
+          <div className="topux-head">
+            <span><IconBell size={16} />Notifications</span>
+            <em className={unread ? 'bad' : events.length ? 'ok' : 'idle'}>{unread ? `${unread} New` : `${events.length} Total`}</em>
+          </div>
+          <div className="topux-tabs" role="tablist" aria-label="Notification filters">
+            {notifTabs.map((t) => (
+              <button key={t.id} className={notifTab === t.id ? 'on' : ''} type="button" role="tab" aria-selected={notifTab === t.id} onClick={() => setNotifTab(t.id)}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+          {notifTab === 'custom' ? (
+            <div className="topux-list">
+              {alertRows.map((r) => (
+                <div key={r.key} className="topux-row switch">
+                  <span>
+                    <b>{r.label}</b>
+                    <small>{r.sub}</small>
+                  </span>
+                  <button className={`toggle ${al[r.key] ? 'on' : ''}`} type="button" onClick={() => updatePref('alerts', { ...al, [r.key]: !al[r.key] })} aria-label={`Toggle ${r.label}`}>
+                    <span className="knob" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="topux-list">
+              {filteredNotifEvents.length === 0 ? (
+                <div className="topux-empty">No notifications in this filter.</div>
+              ) : filteredNotifEvents.slice(0, 4).map((e) => {
+                const meta = notifMeta(e.kind);
+                const summary = eventSummary(e.kind, (e.data as Record<string, unknown> | null) ?? null, e.symbol);
+                return (
+                  <button key={e.id} className="topux-row button" type="button" title={summary} onClick={() => { setActive(null); setPage('ledger'); }}>
+                    <span>
+                      <b>{meta.scope}</b>
+                      <small>{summary}</small>
+                    </span>
+                    <em>{timeAgo(e.ts)}</em>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <button className="topux-action" type="button" onClick={() => { setActive(null); setPage('ledger'); }}>
+            <IconReceipt size={14} /> Open Ledger
+          </button>
+        </div>
+      );
+    }
+
+    if (k === 'power') {
+      return (
+        <div className="topux-panel">
+          <div className="topux-head">
+            <span><IconPower size={16} />Trading Mode</span>
+            <em className={modeTone === 'ok' ? 'ok' : modeTone === 'warn' ? 'warn' : 'bad'}>{mode === 'HALTED' ? 'Halted' : mode === 'LIVE_ARMED' ? 'Live' : 'Manual'}</em>
+          </div>
+          <div className="topux-summary">
+            <span><b>{allowCount}</b><small>Symbols</small></span>
+            <span><b>{b?.connected ? 'Online' : 'Offline'}</b><small>Binance</small></span>
+            <span><b>{modeSend}</b><small>Orders</small></span>
+          </div>
+          <div className="topux-mode-actions">
+            <button className={`bad ${mode === 'HALTED' ? 'on' : ''}`} type="button" onClick={() => { void setKill(true); }}><IconPower size={14} /><span>Halt</span></button>
+            <button className={`warn ${mode === 'MANUAL' ? 'on' : ''}`} type="button" onClick={setManualMode}><IconShield size={14} /><span>Manual</span></button>
+            <button className={`ok ${mode === 'LIVE_ARMED' ? 'on' : ''}`} type="button" disabled={liveDisabled} title={liveTitle} onClick={setLiveMode}><IconPulse size={14} /><span>Live</span></button>
+          </div>
+        </div>
+      );
+    }
+
+    if (k === 'mrefresh') {
+      return (
+        <div className="topux-panel">
+          <div className="topux-head">
+            <span><IconRefresh size={16} />Market Refresh</span>
+            <em className={refreshTone === 'ok' ? 'ok' : refreshTone === 'warn' ? 'warn' : 'bad'}>{refreshLabel}</em>
+          </div>
+          <div className="topux-subline">{refreshDetail}</div>
+          <div className="topux-presets">
+            {refreshChoices.map((r) => (
+              <button key={r.sec} className={prefs.refreshSec === r.sec ? 'on' : ''} type="button" onClick={() => setMarketRefresh(r.sec)}>
+                <b>{r.sec}s</b><span>{r.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="topux-custom">
+            <button type="button" onClick={() => setMarketRefresh(prefs.refreshSec - 3)} aria-label="Decrease market refresh">−</button>
+            <label><span>Custom</span><input value={refreshCustom} inputMode="numeric" type="number" min={3} max={120} step={1} onChange={(e) => setRefreshCustom(e.currentTarget.value)} onBlur={applyCustomRefresh} onKeyDown={(e) => { if (e.key === 'Enter') applyCustomRefresh(); }} /></label>
+            <button type="button" onClick={() => setMarketRefresh(prefs.refreshSec + 3)} aria-label="Increase market refresh">+</button>
+            <button className="topux-action mini" type="button" disabled={menuRefreshState === 'spin'} onClick={() => { void runMenuRefresh(); }}>
+              <IconRefresh size={13} /> Refresh Now
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (k === 'currency') {
+      return (
+        <div className="topux-panel">
+          <div className="topux-head">
+            <span><IconDollar size={16} />Display Currency</span>
+            <em className={curTone === 'ok' ? 'ok' : curTone === 'warn' ? 'warn' : 'bad'}>{cur}</em>
+          </div>
+          <div className="topux-subline">Current rate: {curRateText}</div>
+          <div className="topux-list">
+            {Object.entries(CURRENCIES).map(([code, c]) => (
+              <button key={code} className={`topux-row button currency ${cur === code ? 'on' : ''}`} type="button" onClick={() => updatePref('currency', code)}>
+                <span>
+                  <b>{c.label}</b>
+                  <small>{code}</small>
+                </span>
+                <em>{currencyRateText(code)}</em>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (k === 'basisu') {
+      return (
+        <div className="topux-panel">
+          <div className="topux-head">
+            <span><IconPercent size={16} />Basis Display</span>
+            <em>{basisIsBps ? 'Basis Points' : 'Percent'}</em>
+          </div>
+          <div className="topux-options">
+            <button className={!basisIsBps ? 'on' : ''} type="button" onClick={() => updatePref('basisUnit', 'pct')}>
+              <b>Percent</b>
+              <small>Example +0.042%</small>
+            </button>
+            <button className={basisIsBps ? 'on' : ''} type="button" onClick={() => updatePref('basisUnit', 'bps')}>
+              <b>Basis Points</b>
+              <small>Example +4.2 bps</small>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (k === 'appearance') {
+      const themeModes = [
+        { id: 'system', label: 'System' },
+        { id: 'light', label: 'Light' },
+        { id: 'dark', label: 'Dark' },
+      ] as const;
+      const setZoom = (next: number) => updatePref('zoom', Math.min(1.5, Math.max(0.8, Math.round(next * 100) / 100)));
+      return (
+        <div className="topux-panel">
+          <div className="topux-head">
+            <span><IconSun size={16} />Appearance</span>
+            <em>{appearanceZoom}%</em>
+          </div>
+          <div className="topux-tabs theme">
+            {themeModes.map((m) => (
+              <button key={m.id} className={prefs.theme === m.id ? 'on' : ''} type="button" onClick={() => updatePref('theme', m.id)}>
+                {m.label}
+              </button>
+            ))}
+          </div>
+          <div className="topux-dots" role="radiogroup" aria-label="Accent">
+            {ACCENT_ORDER.map((kk) => {
+              const a = ACCENTS[kk];
+              return (
+                <button key={kk} className={prefs.accent === kk ? 'on' : ''} type="button" onClick={() => updatePref('accent', kk)} title={a.label} aria-label={`${a.label} accent`} style={{ '--dot': a.hex } as CSSProperties}>
+                  <span />
+                </button>
+              );
+            })}
+          </div>
+          <div className="topux-scale">
+            <button type="button" onClick={() => setZoom((prefs.zoom || 1) - 0.05)}>−</button>
+            <strong>{appearanceZoom}%</strong>
+            <button type="button" onClick={() => setZoom((prefs.zoom || 1) + 0.05)}>+</button>
+            <button type="button" onClick={() => updatePref('zoom', 1.05)}>Reset</button>
+          </div>
+        </div>
+      );
+    }
+
+    return content(k);
+  };
+
   return (
     <div className="smenu-bar" ref={rowRef} onMouseLeave={scheduleClose}>
       {trig('clock', 'hdr-clock-btn clock-pro-btn', <>
         <span className="clock-orbit"><span /></span>
-        <span className="clock-pro-time"><b>{activeClock.hm}</b><small>{activeClockSub}</small></span>
-        <span className="clock-pro-sec">{activeClock.ss}</span>
-        <span className="clock-pro-zone">{zone.label}</span>
+        <span className="clock-pro-time"><b>{activeClock.raw}</b><small>{zone.label}</small></span>
       </>, { title: `Clock & timezone — ${zone.city}` })}
       {trig('shell', 'hdr-ic tint-shell shell-ghost shell-premium-trigger', <>
         <span className="shell-trigger-core">
           <IconTerminal size={16} />
-          <i />
         </span>
       </>, { title: 'AWS CloudShell' })}
       {trig('apikey', `hdr-ic apikey-ghost apikey-premium-trigger s-${roKey?.status ?? 'declared'}`, <>
         <span className={`key-trigger-core s-${roKey?.status ?? 'declared'}`}>
           <IconKey size={16} />
-          <i />
         </span>
       </>, { title: 'API keys — read-only live · full planned' })}
       {trig('data', `hdr-ic data-ghost data-pro grade-${netGrade}`, <>
         <span className={`data-pro-core ${netGrade}`}>
           <IconDatabase size={16} />
-          <span className={`data-pro-pulse ${netGrade}`} />
         </span>
       </>, { title: `Data Health — ${dataLabel} · ${dataSub}` })}
       {trig('advisor', `hdr-ic advisor-ghost advisor-premium-trigger grade-${advTone}`, <>
         <span className={`advisor-trigger-core ${advTone}`}>
           <IconShield size={16} />
-          <i />
-          {advA.length > 0 && <b>{advA.length}</b>}
         </span>
       </>, { title: 'Trusted advisor — cockpit safety scan' })}
       {trig('notif', `hdr-ic notif-trigger notif-ghost notif-premium-trigger ${notifTone}`, <>
         <span className={`notif-trigger-core ${notifTone}`}>
           <IconBell size={16} />
-          <i />
-          {unread > 0 && <b>{unread > 9 ? '9+' : unread}</b>}
         </span>
       </>, { title: 'Notifications & alerts' })}
       {trig('power', `hdr-ic power-ghost power-premium-trigger ${modeClass}`, <>
         <span className={`power-trigger-core ${modeTone}`}>
           <IconPower size={16} />
-          <i />
         </span>
       </>, { title: 'Kill switch & trading mode' })}
       {trig('mrefresh', `hdr-ic refresh-ghost refresh-premium-trigger ${refreshTone} ${menuRefreshState === 'spin' ? 'spinning' : ''}`, <>
         <span className={`refresh-trigger-core ${refreshTone}`}>
           <IconRefresh size={16} />
-          <i />
         </span>
       </>, { title: `Market refresh — every ${prefs.refreshSec}s` })}
       {trig('currency', `hdr-ic currency-ghost currency-premium-trigger ${curTone}`, <>
         <span className={`currency-trigger-core ${curTone}`}>
           <b>{curSymbol}</b>
-          <i />
         </span>
       </>, { title: `Display currency — ${cur}` })}
       {trig('basisu', `hdr-ic basis-ghost basis-premium-trigger ${basisIsBps ? 'basis-bps' : 'basis-pct'}`, <>
         <span className={`basis-trigger-core ${basisIsBps ? 'bps' : 'pct'}`}>
-          <b>{basisMark}</b>
-          <i />
+          {basisIsBps ? <b>{basisMark}</b> : <IconPercent size={19} />}
         </span>
       </>, { title: `Basis units — ${basisIsBps ? 'basis points' : 'percent'}` })}
       {trig('appearance', `hdr-ic appearance-ghost appearance-premium-trigger ${theme}`, <>
         <span className={`appearance-trigger-core ${theme}`} style={{ '--apx-accent': activeAccent.hex } as CSSProperties}>
-          <span aria-hidden="true" />
-          <b>{theme === 'dark' ? '◐' : '☼'}</b>
-          <i />
+          {theme === 'dark' ? <IconMoon size={19} /> : <IconSun size={19} />}
         </span>
       </>, { title: `Appearance — ${prefs.theme === 'system' ? 'auto' : prefs.theme} · ${appearanceZoom}%` })}
       {active && (

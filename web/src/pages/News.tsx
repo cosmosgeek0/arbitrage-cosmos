@@ -18,6 +18,17 @@ const TAB_HINTS: Record<number, string> = {
   128: 'Airdrop distributions and HODLer programs.',
 };
 
+const TAB_META: Record<number, { code: string; tone: 'ok' | 'warn' | 'bad' | 'idle'; desk: string }> = {
+  48: { code: 'LIST', tone: 'ok', desk: 'Listings' },
+  49: { code: 'NEWS', tone: 'idle', desk: 'General' },
+  93: { code: 'ACT', tone: 'idle', desk: 'Campaigns' },
+  50: { code: 'FIAT', tone: 'ok', desk: 'Fiat Rails' },
+  161: { code: 'DEL', tone: 'bad', desk: 'Delisting Risk' },
+  157: { code: 'OPS', tone: 'warn', desk: 'Maintenance' },
+  51: { code: 'API', tone: 'warn', desk: 'API Watch' },
+  128: { code: 'DROP', tone: 'idle', desk: 'Airdrops' },
+};
+
 export function News() {
   const [tab, setTab] = useState<number>(48);
   const [items, setItems] = useState<NewsRow[] | null>(null);
@@ -48,58 +59,114 @@ export function News() {
     () => (items ?? []).filter((it) => !ql || it.title.toLowerCase().includes(ql)),
     [items, ql]
   );
+  const activeTab = NEWS_TABS.find((t) => t.id === tab) ?? NEWS_TABS[0];
+  const meta = TAB_META[tab] ?? TAB_META[49];
+  const total = items?.length ?? 0;
+  const matched = filtered.length;
+  const lead = filtered[0] ?? null;
+  const rest = filtered.slice(1);
+  const statusTone = failed ? 'bad' : items === null ? 'idle' : 'ok';
+  const statusText = failed ? 'Feed Unreachable' : fetchedAt ? `Live · ${timeAgo(fetchedAt)}` : 'Fetching';
+  const syncText = fetchedAt ? timeAgo(fetchedAt) : items === null ? 'Pending' : 'No Sync';
 
   return (
-    <div className="container page mkx news-page nwx-page">
-      <header className="bwx-hero bsx-hero">
-        <div className="bwx-hero-top">
-          <div className="bwx-hero-title">
-            <div className="bwx-title-row">
-              <h1>News</h1>
-              <Pill tone={failed ? 'bad' : 'ok'}>{failed ? 'Feed Unreachable' : fetchedAt ? `Live · Fetched ${timeAgo(fetchedAt)}` : 'Fetching…'}</Pill>
+    <div className="container page nwx-page">
+      <header className="nwx-hero">
+        <div className="nwx-hero-main">
+          <div className="nwx-title">
+            <span className="nwx-kicker">Binance Announcement Feed</span>
+            <div className="nwx-title-row">
+              <h1>News Desk</h1>
+              <Pill tone={statusTone}>{statusText}</Pill>
             </div>
-            <p>Official Binance Announcements · Refreshed Every 5 Minutes · Never Invented, Never Summarized</p>
+            <p>Official Binance announcements for listings, delistings, API changes, maintenance windows, and exchange activity.</p>
           </div>
-          <span className="tdx-head-right">
-            <button className="mkx-pill" onClick={() => setNonce((n) => n + 1)} title="Refresh"><IconRefresh size={13} /> Refresh</button>
-            <a className="mkx-pill" href="https://www.binance.com/en/support/announcement" target="_blank" rel="noreferrer noopener">
-              Binance <IconExternal size={12} />
+          <div className="nwx-actions">
+            <button className="nwx-action" onClick={() => setNonce((n) => n + 1)} title="Refresh News Feed" aria-label="Refresh News Feed">
+              <IconRefresh size={14} />
+              Refresh
+            </button>
+            <a className="nwx-action" href="https://www.binance.com/en/support/announcement" target="_blank" rel="noreferrer noopener">
+              Binance
+              <IconExternal size={13} />
             </a>
-          </span>
+          </div>
+        </div>
+        <div className="nwx-stat-strip" aria-label="News Feed Status">
+          <span><b>{activeTab.label}</b><em>Active Catalog</em></span>
+          <span><b className="num">{matched}</b><em>{ql ? 'Matched Headlines' : 'Visible Headlines'}</em></span>
+          <span><b className="num">{total}</b><em>Total Loaded</em></span>
+          <span><b>{syncText}</b><em>Last Sync</em></span>
         </div>
       </header>
 
-      <div className="news-page-bar nwx-bar">
-        <div className="news-tabs">
+      <section className="nwx-controls" aria-label="News Controls">
+        <div className="nwx-tab-strip">
           {NEWS_TABS.map((t) => (
-            <button key={t.id} className={`news-tab ${tab === t.id ? 'on' : ''}`} onClick={() => setTab(t.id)}>{t.label}</button>
+            <button key={t.id} className={`nwx-tab ${tab === t.id ? 'on' : ''}`} aria-pressed={tab === t.id} onClick={() => setTab(t.id)}>
+              <span>{t.label}</span>
+            </button>
           ))}
         </div>
-        <div className="news-filter">
-          <IconSearch size={14} />
-          <input value={q} placeholder="Filter headlines" onChange={(e) => setQ(e.target.value)} aria-label="Filter headlines" />
-        </div>
-      </div>
-      <p className="news-hint">{TAB_HINTS[tab]}</p>
+        <label className="nwx-search">
+          <IconSearch size={15} />
+          <input value={q} placeholder="Search headlines" onChange={(e) => setQ(e.target.value)} aria-label="Search Headlines" />
+        </label>
+      </section>
 
-      <div className="news-page-list">
-        {items === null && !failed && <div className="ov-empty">Loading…</div>}
-        {failed && <div className="ov-empty">Feed unavailable — Binance could not be reached. Check Data health.</div>}
+      <div className="nwx-context">
+        <span className={`nwx-code ${meta.tone}`}>{meta.code}</span>
+        <p>{TAB_HINTS[tab]}</p>
+        <span className="nwx-source">Catalog {tab} · {meta.desk}</span>
+      </div>
+
+      <section className="nwx-grid">
+        <div className="nwx-lead">
+          <div className="nwx-section-head">
+            <span>Lead Headline</span>
+            <em>{activeTab.label}</em>
+          </div>
+          {lead ? (
+            <a className={`nwx-lead-card ${meta.tone}`} href={lead.url} target="_blank" rel="noreferrer noopener">
+              <span className="nwx-lead-mark"><IconNewspaper size={18} /></span>
+              <h2>{lead.title}</h2>
+              <span className="nwx-lead-meta">
+                <b>Binance</b>
+                <i>{lead.date ?? 'Official Announcement'}</i>
+                <IconExternal size={14} />
+              </span>
+            </a>
+          ) : (
+            <div className="nwx-empty-card">No lead headline in this view.</div>
+          )}
+        </div>
+
+        <div className="nwx-feed">
+          <div className="nwx-section-head">
+            <span>Headline Tape</span>
+            <em>{rest.length} Rows</em>
+          </div>
+          <div className="nwx-feed-list">
+        {items === null && !failed && <div className="ov-empty">Loading...</div>}
+        {failed && <div className="ov-empty">Feed unavailable. Binance could not be reached. Check Data Health.</div>}
         {items !== null && !failed && filtered.length === 0 && (
-          <div className="ov-empty">{ql ? `Nothing matches “${q}”.` : 'No announcements in this category.'}</div>
+          <div className="ov-empty">{ql ? `Nothing matches "${q}".` : 'No announcements in this category.'}</div>
         )}
-        {filtered.map((it) => (
-          <a key={it.id} className="news-item lg" href={it.url} target="_blank" rel="noreferrer noopener">
-            <span className="news-item-ic"><IconNewspaper size={15} /></span>
-            <span className="news-item-body">
-              <span className="news-item-title">{it.title}</span>
-              <span className="news-item-sub">{NEWS_TABS.find((t) => t.id === tab)?.label}</span>
+        {rest.map((it, index) => (
+          <a key={it.id} className="nwx-row" href={it.url} target="_blank" rel="noreferrer noopener">
+            <span className="nwx-row-index num">{String(index + 2).padStart(2, '0')}</span>
+            <span className="nwx-row-body">
+              <span className="nwx-row-title">{it.title}</span>
+              <span className="nwx-row-sub"><b>Binance</b><i>{activeTab.label}</i></span>
             </span>
-            <span className="news-item-meta">{it.date && <span className="news-item-date">{it.date}</span>}<IconExternal size={14} /></span>
+            <span className="nwx-row-date num">{it.date ?? 'Official'}</span>
+            <span className="nwx-row-open"><IconExternal size={13} /></span>
           </a>
         ))}
-      </div>
-      <p className="news-source-note">Source: Binance's announcement catalog. If the feed is unreachable this page says so — it never invents items.</p>
+          </div>
+        </div>
+      </section>
+      <p className="nwx-source-note">Source: Binance announcement catalog. The page only displays feed data returned by the server.</p>
     </div>
   );
 }

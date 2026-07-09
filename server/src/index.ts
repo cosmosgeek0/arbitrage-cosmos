@@ -35,6 +35,7 @@ import { RiskService } from './services/risk.js';
 import { OrderService } from './services/orders.js';
 import { LoanService } from './services/loans.js';
 import { BookStreamHub } from './services/bookStream.js';
+import { getNewsContext } from './services/newsContext.js';
 import type { AppConfig, OrderIntent } from './types.js';
 
 // Minimal .env loader (no dependency). Never logs values.
@@ -59,6 +60,12 @@ loadDotEnv();
 const PORT = Number(process.env.PORT ?? 8080);
 const TICK_MS = 2_000;
 const POLL_MS = 30_000;
+const SOURCE_LOGO_TTL_MS = 24 * 60 * 60 * 1000;
+const SOURCE_LOGO_MAX_BYTES = 256 * 1024;
+const DIRECT_SOURCE_LOGOS: Record<string, string> = {
+  'financialjuice.com': 'https://www.financialjuice.com/favicon.ico',
+};
+const sourceLogoCache = new Map<string, { ts: number; contentType: string; body: Buffer }>();
 
 const ledger = new Ledger(
   process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : undefined
@@ -85,6 +92,20 @@ const account = new AccountService(client, ledger, (s) => engine.priceOf(s));
 const risk = new RiskService(config, ledger);
 const orders = new OrderService(client, engine.filters, (s) => engine.priceOf(s), risk, ledger, account);
 const loans = new LoanService(client, config, ledger);
+
+function normalizeLogoDomain(value: string): string | null {
+  let host = value.trim().toLowerCase();
+  if (!host) return null;
+  try {
+    if (/^https?:\/\//.test(host)) host = new URL(host).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+  host = host.replace(/^www\./, '').replace(/\.$/, '');
+  if (!/^[a-z0-9.-]{3,80}$/.test(host) || host.includes('..')) return null;
+  if (host === 'localhost' || host.endsWith('.local') || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) return null;
+  return host;
+}
 
 let userStream: UserStream | null = null;
 if (client) {
@@ -330,6 +351,7 @@ app.get('/api/events', (req, res) => {
 // Categories map to Binance's own announcement catalog IDs.
 type NewsItem = { id: number; title: string; date: string | null; url: string };
 const NEWS_CATALOGS = new Set([48, 49, 93, 50, 161, 157, 51, 128]);
+const NEWS_AGGREGATE_CATALOGS = [48, 49, 93, 50, 161, 157, 51, 128];
 const newsCache = new Map<number, { at: number; items: NewsItem[] }>();
 const newsInFlight = new Map<number, Promise<void>>();
 
@@ -359,23 +381,58 @@ async function refreshNews(catalogId: number): Promise<void> {
   }
 }
 
+function compareNewsItems(a: NewsItem, b: NewsItem): number {
+  const aTs = a.date ? Date.parse(`${a.date}T00:00:00Z`) : 0;
+  const bTs = b.date ? Date.parse(`${b.date}T00:00:00Z`) : 0;
+  if (Number.isFinite(aTs) && Number.isFinite(bTs) && aTs !== bTs) return bTs - aTs;
+  return b.id - a.id;
+}
+
+async function ensureNewsCatalog(catalogId: number, force: boolean): Promise<void> {
+  const cached = newsCache.get(catalogId);
+  const fresh = !force && cached && Date.now() - cached.at < 5 * 60_000;
+  if (!fresh && !newsInFlight.has(catalogId)) {
+    const p = refreshNews(catalogId)
+      .catch((err) => {
+        ledger.logEvent('error_event', null, { source: 'news.fetch', message: String(err), catalogId });
+      })
+      .finally(() => newsInFlight.delete(catalogId));
+    newsInFlight.set(catalogId, p);
+  }
+  if (!newsCache.get(catalogId) && newsInFlight.has(catalogId)) await newsInFlight.get(catalogId)!.catch(() => undefined);
+}
+
 app.get('/api/news', (req, res) => {
-  const catalogId = NEWS_CATALOGS.has(Number(req.query.catalog)) ? Number(req.query.catalog) : 48;
   void (async () => {
-    const cached = newsCache.get(catalogId);
-    const fresh = cached && Date.now() - cached.at < 5 * 60_000;
-    if (!fresh && !newsInFlight.has(catalogId)) {
-      const p = refreshNews(catalogId)
-        .catch((err) => {
-          ledger.logEvent('error_event', null, { source: 'news.fetch', message: String(err) });
-        })
-        .finally(() => newsInFlight.delete(catalogId));
-      newsInFlight.set(catalogId, p);
+    const force = req.query.refresh === '1' || req.query.refresh === 'true';
+    const aggregate = String(req.query.catalog ?? '') === 'all';
+    const catalogId = NEWS_CATALOGS.has(Number(req.query.catalog)) ? Number(req.query.catalog) : 48;
+    const catalogIds = aggregate ? NEWS_AGGREGATE_CATALOGS : [catalogId];
+    await Promise.all(catalogIds.map((id) => ensureNewsCatalog(id, force)));
+    const outputs = catalogIds.map((id) => newsCache.get(id)).filter((out): out is { at: number; items: NewsItem[] } => Boolean(out));
+    if (outputs.length) {
+      const byId = new Map<number, NewsItem>();
+      outputs.flatMap((out) => out.items).forEach((item) => byId.set(item.id, item));
+      const items = Array.from(byId.values()).sort(compareNewsItems).slice(0, aggregate ? 96 : 20);
+      const fetchedAt = Math.max(...outputs.map((out) => out.at));
+      res.json({ catalog: aggregate ? 'all' : catalogId, items, fetchedAt });
     }
-    if (!newsCache.get(catalogId) && newsInFlight.has(catalogId)) await newsInFlight.get(catalogId)!.catch(() => undefined);
-    const out = newsCache.get(catalogId);
-    if (out) res.json({ catalog: catalogId, items: out.items, fetchedAt: out.at });
     else res.status(503).json({ error: 'binance announcements unavailable', items: [] });
+  })();
+});
+
+// ---- Market news context proxy (primary + venue + Tree/RSS/Lookonchain) ----
+app.get('/api/news-context', (req, res) => {
+  void (async () => {
+    try {
+      const force = req.query.refresh === '1' || req.query.refresh === 'true';
+      const limit = Math.max(20, Math.min(Number(req.query.limit ?? 220), 520));
+      const payload = await getNewsContext(force);
+      res.json({ ...payload, items: payload.items.slice(0, limit) });
+    } catch (err) {
+      ledger.logEvent('error_event', null, { source: 'news-context.fetch', message: String(err) });
+      res.status(503).json({ error: 'news context unavailable', source: 'primary+venue+tree+rss+lookonchain', items: [], sources: [] });
+    }
   })();
 });
 
@@ -1015,6 +1072,50 @@ app.get('/api/icons', (req, res) => {
   res.json(resolveIcons(bases));
 });
 
+app.get('/api/source-logo', (req, res) => {
+  void (async () => {
+    const domain = normalizeLogoDomain(String(req.query.domain ?? ''));
+    const size = Math.max(16, Math.min(Number(req.query.sz ?? 64) || 64, 128));
+    if (!domain) {
+      res.status(400).json({ error: 'valid domain required' });
+      return;
+    }
+    const key = `${domain}:${size}`;
+    const cached = sourceLogoCache.get(key);
+    if (cached && Date.now() - cached.ts < SOURCE_LOGO_TTL_MS) {
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.type(cached.contentType);
+      res.send(cached.body);
+      return;
+    }
+
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5_000);
+    try {
+      const faviconUrl = DIRECT_SOURCE_LOGOS[domain] ?? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=${size}`;
+      const upstream = await fetch(faviconUrl, {
+        headers: { Accept: 'image/avif,image/webp,image/png,image/svg+xml,image/*,*/*;q=0.8' },
+        signal: ctrl.signal,
+      });
+      if (!upstream.ok) throw new Error(`favicon HTTP ${upstream.status}`);
+      const contentType = upstream.headers.get('content-type')?.split(';')[0] || 'image/png';
+      const body = Buffer.from(await upstream.arrayBuffer());
+      if (!body.length || body.length > SOURCE_LOGO_MAX_BYTES || !contentType.startsWith('image/')) {
+        throw new Error('invalid favicon payload');
+      }
+      sourceLogoCache.set(key, { ts: Date.now(), contentType, body });
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.type(contentType);
+      res.send(body);
+    } catch (err) {
+      ledger.logEvent('error_event', null, { source: 'source-logo.fetch', domain, message: String(err) });
+      res.status(502).json({ error: 'source logo unavailable' });
+    } finally {
+      clearTimeout(timer);
+    }
+  })();
+});
+
 app.get('/api/market/quote', (req, res) => {
   void (async () => {
     const symbol = String(req.query.symbol ?? '');
@@ -1312,7 +1413,7 @@ function apiKeyManifest() {
       id: 'secrets-full',
       name: process.env.BINANCE_FULL_KEY_NAME || 'aws-secrets-manager',
       type: process.env.BINANCE_FULL_KEY_TYPE || 'HMAC',
-      scope: 'Full access',
+      scope: 'Automation',
       status: 'planned',
       live: false,
       keysPresent: false,
@@ -1321,8 +1422,8 @@ function apiKeyManifest() {
       ipRestrict: true,
       ips: fullIps,
       ipNote: 'AWS EC2 IP (planned)',
-      permissions: { reading: true, spotMargin: true, marginLoan: true, withdrawals: false, universalTransfer: true, futures: true },
-      note: 'Planned — will be created in AWS Secrets Manager for the deployed engine. Withdrawals stay OFF.',
+      permissions: { reading: false, spotMargin: true, marginLoan: true, withdrawals: false, universalTransfer: false, futures: true },
+      note: 'Planned in AWS Secrets Manager. Data stays read-only; withdrawals stay off.',
       updatedAt: bootTs,
     },
   ];
@@ -1369,6 +1470,7 @@ const NUMERIC_KEYS: (keyof AppConfig)[] = [
   'staleOrderMaxMin',
 ];
 const LIST_KEYS: (keyof AppConfig)[] = ['allowedSymbols', 'blockedSymbols', 'watchlist'];
+const BOOLEAN_KEYS: (keyof AppConfig)[] = ['killSwitch', 'liveTradingEnabled', 'fundsLocked', 'automationPaused'];
 const COIN_RE = /^[A-Z0-9]{1,20}$/;
 
 function parseCoinList(v: unknown, max = 40): string[] | null {
@@ -1396,6 +1498,13 @@ app.post('/api/config', (req, res) => {
     if (Array.isArray(v) && v.every((x) => typeof x === 'string' && /^[A-Z0-9]{4,20}$/.test(x))) {
       patch[key] = [...new Set(v)];
       logPatch[key] = patch[key];
+    }
+  }
+  for (const key of BOOLEAN_KEYS) {
+    const v = body[key];
+    if (typeof v === 'boolean') {
+      patch[key] = v;
+      logPatch[key] = v;
     }
   }
   if (body.borrowGuard && typeof body.borrowGuard === 'object') {

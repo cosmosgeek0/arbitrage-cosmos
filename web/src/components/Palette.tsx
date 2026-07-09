@@ -20,7 +20,7 @@ const PAGES: { page: Page; name: string; sub: string }[] = [
   { page: 'risk', name: 'Risk', sub: 'Kill switch · limits · rules' },
   { page: 'ledger', name: 'Ledger / Logs', sub: 'Full audit trail' },
   { page: 'system', name: 'System Health', sub: 'Feeds, latency, limits' },
-  { page: 'news', name: 'Binance News', sub: 'Announcements' },
+  { page: 'news', name: 'Market News', sub: 'Tree · RSS · Lookonchain · Binance' },
   { page: 'calendar', name: 'Economic Calendar', sub: 'Macro events' },
 ];
 

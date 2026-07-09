@@ -1,6 +1,6 @@
 # PROJECT_MEMORY.md — Cosmos Arbitrage Control Room
 
-Last updated: 2026-07-07 11:17 IST
+Last updated: 2026-07-09 13:09 IST
 Permanent role of this file: the durable living-state log for the project. The other three core docs are mostly static blueprints; this file records what is *true right now* — current source-of-truth folder, git/deploy state, active phase, outstanding decisions, and a dated changelog. A new Director should read this file to learn the present state without any old chat history.
 
 **UI WORK? Read `DESIGN_PLAYBOOK.md` FIRST** — the distilled, owner-calibrated design system, process, and gotcha catalog from the 2026-07-08 quality passes. The Account page is the owner's only approved "real quality" surface; the playbook is how to hit that bar without redoing five rounds.
@@ -9,16 +9,21 @@ Update this file whenever the project state changes. When in doubt, this file wi
 
 ---
 
-## 1. Core docs (four, not three)
+## 1. Core docs and agent entrypoints
 
-The permanent root docs are:
+The permanent root docs and entrypoints are:
 
-1. `DIRECTOR_RULEBOOK.md` — operating rules, safety laws, worker coordination, commit discipline.
-2. `BLUEPRINT.md` — product / UI / backend / deploy / reconstruction blueprint.
-3. `ENGINE.md` — engine / algorithm / risk / ledger blueprint.
-4. `PROJECT_MEMORY.md` — this file. Current live state and changelog.
+0. `AGENTS.md` — project-local instructions future coding agents should read automatically; this file points them at the durable context below.
+1. `PROJECT_MEMORY.md` — this file. Current live state, dated changelog, latest owner rulings.
+2. `DESIGN_PLAYBOOK.md` — mandatory UI quality bar, owner-calibrated design laws, ship gate, gotchas.
+3. `UI_SURFACE_BASELINE.md` — detailed current baseline for the surfaces polished in the long topbar/sidebar pass: sidebar, brand, global search, clock, all topbar icons/popovers, notifications, kill switch, refresh, currency, basis, appearance, and account profile.
+4. `DIRECTOR_RULEBOOK.md` — operating rules, safety laws, worker coordination, commit discipline.
+5. `BLUEPRINT.md` — product / UI / backend / deploy / reconstruction blueprint.
+6. `ENGINE.md` — engine / algorithm / risk / ledger blueprint.
 
-`README.md` stays short and points to these four.
+`README.md` stays short and points to the docs. A new agent should start with
+`AGENTS.md`, then read `PROJECT_MEMORY.md` and `DESIGN_PLAYBOOK.md` before UI
+work. For topbar/sidebar/profile work, `UI_SURFACE_BASELINE.md` is mandatory.
 
 ---
 
@@ -82,6 +87,154 @@ Owner directive (2026-07-07):
 ---
 
 ## 7. Run log (newest first)
+
+### 2026-07-09 — Venue/exchange operational sources added to News
+- Owner supplied the exchange/venue-operational feed list and asked to add each source carefully from official sources: Binance, Coinbase/Coinbase Assets, Kraken, OKX, Bybit, Upbit/Bithumb, Deribit, CME Group crypto notices, and exchange status pages.
+- `/api/news-context` now has a first-class `venue` channel alongside `primary`, `tree`, `rss`, and `lookonchain`. Venue rows rank below primary macro/policy rows and above ordinary media/RSS rows. The payload source string is now `primary+venue+tree+rss+lookonchain`, and the row cap was raised to 520 so every source filter has its real rows in the payload.
+- Added official venue integrations in `server/src/services/newsContext.ts`: Coinbase Exchange public product availability/trading phases; Kraken asset-listings RSS; OKX listing/delisting/trading/deposit-withdrawal/Web3 announcement SSR pages; Bybit listing/delisting/maintenance SSR pages; Upbit announcements JSON; Bithumb notices JSON; Deribit exchange-updates RSS; CME Group press release + CME Globex feeds filtered for crypto terms; Coinbase/Kraken status RSS, OKX status page, and Bybit system-status API as the grouped Exchange Status source.
+- Coinbase limitation is honest: Coinbase's own 2025 notice moved listing announcements to Coinbase Markets on X, so without an X bearer-token integration the app monitors official Coinbase Exchange product/trading-phase state and Coinbase status, not third-party listing rumors.
+- `News.tsx` now exposes filters for all new venue groups and maps their official logo domains. Browser verification at `http://localhost:8091/`: All Sources 540 rows, 37/38 live sources + Tree delayed + 0 unavailable, no console warnings/errors, no horizontal overflow, News frame rects stayed aligned, and filters for Coinbase, OKX, Bybit, Upbit/Bithumb, CME, Exchange Status, and Binance each showed real rows.
+- Verified: current official web references checked first; direct API checks showed all eight new venue groups live; `npm run build`, `npm test` 50/50, and `git diff --check` passed.
+
+### 2026-07-09 — News source ranking and timestamp trust fix
+- Owner correction: Binance official announcements and Lookonchain rows were sticking at the top of the merged News feed and making the live tape look stale. Root cause: Lookonchain publishes naive `YYYY-MM-DD HH:mm:ss` timestamps from its UTC+8 feed clock, but the server parsed them as local time and then clamped future rows to `now`; Binance date-only/future-effective announcements were also allowed to compete with real live headlines.
+- `server/src/services/newsContext.ts` now parses Lookonchain timestamps as UTC+8, falls back to the source's relative `times` field when needed, and no longer converts large future timestamps into fresh `now` rows. Context API verification after restart showed Lookonchain rows as minutes-old and the top context feed mixed with Tree/RSS.
+- `News.tsx` now demotes future/undated Binance announcements in the all-source sort, interleaves comparable fresh rows from different source families so one provider cannot occupy the top block, and display-trims oversized relay titles while preserving the full original in the row title attribute.
+- Product language was de-biased: the News document title and command palette now say `Market News`, with Tree/RSS/Lookonchain/Binance as the source stack instead of labeling the page `Binance News`.
+- Browser verification at `http://localhost:8091/`: top rows alternated RSS/Tree/RSS/Tree/RSS/Lookonchain without consecutive source repeats, Binance official rows were not pinned at the top, live status showed `Live · 3s ago`, title was `Arbitrage Control Room · Market News`, live/refresh rects stayed aligned, and horizontal overflow remained 0. `npm run build`, `npm test` 50/50, and `git diff --check` passed.
+
+### 2026-07-09 — News/Calendar live badge moved to right action cluster
+- Owner correction: the live badge must not sit after the title. News and Calendar now render the title row as title-only, and the `ux-live-status` badge lives in the right-side hero action cluster immediately before Refresh.
+- The live badge is now a real animated status button: fixed 154px CSS width, 40px height, thin state border, tabular age text, continuous dot core + radar ping animation, and a short sweep animation during refresh. Visible text stays `Live · Ns ago` / `Live · Nm ago`; it never says `Checking` or `now`.
+- Browser verification at `http://localhost:8091/`: News and Calendar both had `liveInRightCluster=true`, `liveInTitleRow=false`, identical live/refresh x-y alignment (`live x≈902.84`, `refresh x≈1075.03`, both y≈143.81), active `uxLiveDotCore`, `uxLiveDotPing`, and refresh-state `uxLiveStatusSweep`; no horizontal overflow.
+
+### 2026-07-09 — News/Calendar live-pill wording and fixed position
+- Owner correction: the green live wording should not move, should not say `Checking`, and should not say `now`. News and Calendar now use one fixed-width `ux-live-status` slot beside the title with tabular numeric age text.
+- Added `liveAge()` for live-feed status grammar: 1s-59s render as seconds, then 1m+ renders as minutes. Existing generic `timeAgo()` stays unchanged for other surfaces.
+- Refresh state is now represented by motion, not copy swaps: the live dot pulses and a tiny status sweep runs while the page refreshes; the refresh button still animates but its visible label remains `Refresh`.
+- Browser verification at `http://localhost:8091/`: Calendar and News both showed no `Checking` text, no `now`, fixed pill width around 142px CSS, same measured status x, and active `uxLiveDotPulse` / `uxLiveStatusSweep` animations during refresh.
+
+### 2026-07-09 — News live cadence + shared refresh motion
+- Owner correction: News must behave like a live financial feed, not a manual-refresh page. The page now caps News auto-polling at a 10s live cadence even if an older local preference was 60s, and the default News cadence is 10s for new preference state.
+- `News.tsx` now forces `/api/news-context` + `/api/news`, then performs delayed readbacks at 2.2s, 5.2s, and 9.2s so stale-while-refresh backend updates can surface without a full page reload. New IDs still receive `.nwx-line.fresh`, so incoming headlines open at the top and push existing rows down.
+- News and Calendar share the same razor refresh control: fixed-width thin bordered pill, short visible `Live · Checking` state, slow icon spin, and a restrained top/bottom beam copied from the top search motion grammar. Calendar keeps the active state visible briefly even when the API returns immediately.
+- Browser verification at `http://localhost:8091/`: News auto-refresh toggled to `Live · Checking` without a click; manual refresh returned to `Live · now`; Calendar/News hero, filters, columns, list top, and refresh button rects matched exactly; H1 computed style stayed 40px / 540 / 42px; no horizontal overflow. Build clean.
+
+### 2026-07-09 — News/Calendar shared frame lock + live insert rule
+- News and Calendar now share the same `ux-page`/`ux-hero`/`ux-filters` geometry: hero box, title slot, status pill slot, refresh button, filter row, column header, and list top are locked to the same measured rects. Do not add page-specific top padding, second filter rows, or extra hero actions that make the tabs jump.
+- News feed rows use real source logos through `/api/source-logo`; source filters stay in the filter band, source truth lives below the list. Calendar country filtering is a compact real native select, not a second row of pills.
+- Live update rule: News uses the project data cadence, triggers non-blocking refresh, then performs one delayed read so new IDs get `.nwx-line.fresh`. Fresh rows open from height 0 to the normal 74px row with a 2px accent line, pushing existing rows down without refreshing the whole page. Calendar uses its project cadence and the same animated refresh control.
+- Verified in the in-app browser after build: News vs Calendar diffs are exactly 0 for hero y/height, filters y/height, columns y, list y, refresh x/y/width; title font is 40px/540/42px on both; row font is 13.5px/20.25px on both; no horizontal overflow. Gates 50/50.
+
+### 2026-07-09 — News filter rules and column header alignment
+- Owner screenshot showed two stray horizontal rules bracketing the News filters and an incomplete column header. The filter band should not be trapped between random lines, and the feed header must explicitly read Time / Source / Headline / Link.
+- Removed the scoped News filter/header top borders (`.nwx-filters` and `.nwx-cols`) and tightened the filter/header spacing. The only structural border around the feed remains the actual list frame.
+- Added the `Link` column label in `News.tsx` and widened the fourth grid column from `24px` to `44px` in both `.nwx-cols` and `.nwx-line`, so the label aligns over the external-link icon column. Browser verification showed matching header/row grids and zero horizontal overflow.
+- Verified with screenshot, `npm run build`, `npm test` 50/50, and `git diff --check`.
+
+### 2026-07-09 — News hero padding cascade fix
+- Owner screenshot showed the real bug: the `News` title was almost touching the hero border. The card chrome was present, but old `.nwx-hero { padding: 0 0 20px !important; border-bottom: ... !important; }` rules overrode the shared `.bwx-hero` card padding.
+- Fixed with a scoped `.nwx-calendar .nwx-hero` override: `padding: 20px 24px 22px !important`, full `1px var(--line-2)` border, and `12px` radius. Browser measurement after reload: hero padding `20px 24px 22px`, title left air `26px`, title top air `22px`, Refresh right air `26px`.
+- Verified with screenshot, `npm run build`, `npm test` 50/50, and `git diff --check`.
+
+### 2026-07-09 — News first-paint and typography correction
+- Owner correction: News must not show a giant blank loading panel on reload, row headline text must not feel like heavy black type crashing into divider lines, and the hero Refresh button must not sit pinned to the top edge of the hero box.
+- `News.tsx` now stores the last Tree/RSS/Lookonchain + Binance payload in localStorage (`cosmos-news-feed-cache-v1`) and hydrates from it on page load. Browser verification after reload showed 160 rows present at 300ms, no `.ov-empty`, and no horizontal overflow.
+- News copy was shortened: hero subcopy is now one sentence, search placeholder uses normal sentence casing, and the source note is a short source list instead of a long implementation sentence.
+- News CSS now gives rows more air (`min-height: 74px`, `13px 20px` padding), lowers headline weight (`13.5px / 450 / 20px`), lowers provider weight (`480`), and centers the hero refresh action vertically. Browser computed-style check confirmed the new values and screenshot verification was taken.
+- Verified: external references checked (TradingView News Flow, TradingView Economic Calendar, Apple typography guidance); `npm run build` clean; `npm test` 50/50; `git diff --check` clean.
+
+### 2026-07-09 — News refresh and source-logo correction
+- Owner correction: Refresh must not feel stuck, and publisher logos must not be put inside extra rounded/logo-box chrome. Real source marks should render as the mark itself; do not wrap X/Twitter or publisher favicons in fake rounded containers.
+- `getNewsContext(force=true)` now uses stale-while-refresh when cached data exists: the API returns the current feed immediately and refreshes Tree/RSS/Lookonchain in the background. Measured warm `/api/news-context?refresh=1` response is ~4ms instead of waiting on the full RSS fan-out.
+- News Refresh now uses abortable combined fetches and a short disabled/loading state so repeated clicks do not pile up overlapping requests. Rows remain visible during refresh.
+- `.nwx-logo` no longer has border, radius, background, overflow clipping, or image padding. Browser verification confirmed Twitter/X row logo CSS: `border: 0`, `border-radius: 0`, transparent background, image padding `0`.
+- Verified: external references checked (TradingView News Flow filter/list anatomy, X brand toolkit, Google favicon guidance); `npm run build` clean; `npm test` 50/50; `git diff --check` clean.
+
+### 2026-07-09 — News corrected to Calendar-density headline feed
+- Owner correction: the News page must copy Calendar's utility-page rhythm, not use a left source box, colored context chips, long summaries, or a separate Binance mode/button. Durable page rule: one thin framed feed, compact filters above the list, real source logos, headline-only rows, and source truth as quiet footer text.
+- `News.tsx` now merges live context (`/api/news-context`: Tree, RSS bundle, Lookonchain) with Binance official announcements (`/api/news?catalog=49`) inside one source filter row: All Sources, Tree, RSS Bundle, Lookonchain, Binance. Binance is a normal source, not the page's bias.
+- Row anatomy is locked to Time / Source / Headline / Open: no `Context` column, no summary paragraph, no colored tone tags, no colored unread strip. Source identity uses real publisher/favicon logos through `/api/source-logo`; no fake initials or random colored badges.
+- Refresh now forces both `/api/news-context` and `/api/news`; the Binance announcement proxy accepts `refresh=1`. Browser verification measured no source rail, no visible tags, no context text, no horizontal overflow, no refresh/title overlap, Binance filter rows only Binance, search narrowing, and mobile collapse at 390px.
+- Verified: external references checked (TradingView News Flow filters and Economic Calendar list anatomy, Google favicon guidance); `npm run build` clean; `npm test` 50/50; `git diff --check` clean.
+
+### 2026-07-09 — News rebuilt to Calendar-style live-context list
+- Owner rejected the left source rail, source-stack copy, Binance-biased mode, and oversized confirmation surfaces. Durable rule for this page: News should follow Calendar's utility-page anatomy, not a dashboard/sidebar layout.
+- `News.tsx` now uses only `/api/news-context` as the page feed. The Binance Official mode, Binance top action, priority queues, stat strip, `Source Stack` rail, source cards, and old `nwx-row` badge rows are removed from the page.
+- New structure matches Calendar directly: hero with small live pill, filter band above the list, compact source/search controls, column header, one razor-thin framed list, provider logo + provider name, headline/summary, context chips, external-link action, and a quiet footer for Tree/RSS/Lookonchain source truth.
+- Source logos stay real and are resolved from article/provider domains through local `/api/source-logo`; no random letter badges or colored fake source dots in the news rows.
+- Verified in the in-app browser: no `Source Stack`, no Binance top button, no `nwx-queue`/`nwx-source-panel`/`nwx-workspace`, no old `nwx-row`, one `nwx-page-list`, 140 `nwx-line` rows, 140 logos, 0 horizontal overflow at 390px. `npm run build` clean; `npm test` 50/50; `git diff --check` clean.
+
+### 2026-07-09 — News source stack razor-frame correction
+- Owner correction: the News page's left source stack looked like stacked boxes with dead bottom space. The Calendar tab is the reference for this utility-page pattern: one clean control band, then one razor-thin framed list with rows and hairline dividers.
+- Fixed `News.tsx` by wrapping the source selector rows and source-truth rows in a single `nwx-source-panel`. The former `nwx-queue-list` and `nwx-source-card` no longer render as separate framed cards inside the left rail.
+- Fixed `styles.css` so the source panel owns the only border/shadow, child rows use internal hairlines, source facts stay vertical at all breakpoints, and the measured panel bottom gap is only the 1px border stroke.
+- Verified in the in-app browser: desktop rects, screenshot, Lookonchain source click, Binance Official mode click, mobile 390px no-overflow check. `npm run build` clean; `npm test` 50/50; `git diff --check` clean.
+
+### 2026-07-09 — Shared topbar morph transition repair
+- Aave nav lesson: topbar dropdowns feel smooth when the menu surface stays alive and the active content changes inside it. Destroying/recreating the menu or fading content hard creates the flicker the owner rejected.
+- The shared `.smenu` is now always mounted. It uses `.open` for visibility instead of `{active && ...}`, so moving between topbar controls keeps one continuous surface. A small invisible bridge above the popover prevents the trigger-to-panel hover gap from collapsing the menu.
+- `SharedTopBar()` keeps separate shell state (`active`) and content state (`contentActive`). Between controls, the shell rAF-tweens left/width/pointer while content swaps on a short staged morph. The content morph is almost transparent (`.985` opacity / `.998` scale), not a visible flash.
+- Normal topbar trigger clicks are idempotent: click opens/selects a control, and moving away closes. Avoid click-to-close on the same icon because hover-open plus click-close fights the morph and can create close/reopen artifacts.
+- CSS rule: `.smenu-content` has no entrance animation during tab switches. Never reintroduce `key={active}`, conditional menu mounting, or per-tab `smFade` on the shared content layer.
+- Verified in Chrome, not the in-app browser: external references checked first (Aave nav, Apple HIG Motion/Popovers, Motion Primitives morphing popover); `npm run build` clean; Chrome hover/click checks confirmed AWS CLI -> API Keys -> Data Health keeps `.smenu open` and visible with `contentAnimation: none`.
+
+### 2026-07-09 — Live news context wired from old-project source stack
+- Applied the old project's news-source model in this repo without importing unavailable old files: new server endpoint `/api/news-context` in `server/src/index.ts`, backed by `server/src/services/newsContext.ts`. Current source string is `tree+rss+lookonchain`.
+- Backend source truth: Tree of Alpha public history (`https://news.treeofalpha.com/api/news?limit=60`) is treated as delayed unless a Tree websocket/API key is added; RSS bundle includes FinancialJuice, WSJ Markets, Benzinga, Watcher Guru, ZeroHedge, CoinDesk, Cointelegraph, The Block, Decrypt, BeInCrypto, NewsBTC, AMBCrypto, U.Today, CryptoSlate, Bitcoin Magazine, Crypto Briefing, and WuBlockchain/Substack; Lookonchain uses the public feed endpoint `https://www.lookonchain.com/ashx/index.ashx?type=1&page=1&pageSize=24` with the feeds referer.
+- News UI is now a two-mode operator surface: Live Context (`/api/news-context`) and Binance Official (`/api/news`). It has real source filters (All/Tree/RSS/Lookonchain), live source stack rows, source-status truth, headline search, read-state, Mark Visible Read, and external links. Binance Official mode keeps real catalog switching and priority queues.
+- UI quality pass followed the premium surface checklist: fewer nested boxes, aligned stat strip, source stack + feed grid, crisp 540-ish headline voice, restrained state color, no fake controls, honest empty states, desktop/dark/mobile browser screenshots, computed style/rect checks, and click verification for filters, mode switch, search, and mark-read.
+- Verified: external references checked first (Tree docs, Lookonchain feed behavior, FinancialJuice/RSS news feeds, TradingView News Flow filter anatomy); `npm run build` clean; `npm test` 50/50 gates; `git diff --check` clean.
+
+### 2026-07-09 — News page operator scanner redesign
+- News is now treated as an operator announcement scanner, not a generic article wall. `News.tsx` keeps the existing real `/api/news` feed contract (`id/title/date/url`) and derives only transparent UI metadata from headline text: listing, delisting, API, maintenance, futures, margin/loan, airdrop, and schedule labels.
+- Added a real priority queue for Delisting Risk, API Watch, and Maintenance by fetching Binance catalog IDs 161/51/157 through the existing server proxy. These rows are clickable catalog switches, not fake alerts. Added local browser read-state and a real "Mark Visible Read" action.
+- `styles.css` adds the nwx v2 operator layout: thinner 540 title, 430 numeric stats, full-width status strip, two-column desktop workspace, dense announcement tape, dark-mode support, and a mobile single-column stat strip to avoid truncated labels.
+- Verified: current external references checked first (Binance announcement categories, TradingView News Flow, LSEG/Koyfin watchlist/news-alert workflows); `npm run build` clean; `npm test` 50/50; Chrome audit screenshots checked at 1600 light, 1600 dark, and 390 mobile; controls verified for refresh, priority switch, mark-read, and search empty state.
+
+### 2026-07-09 — Trust Advisor topbar redesign
+- Owner clarified the purpose: Trust Advisor is not notification history. It is the audit surface for bot controls, settings, variables, account/security posture, feeds, guardrails, and automation readiness. It should help the operator know what must be fixed or reviewed before trusting automation.
+- `Header.tsx` Trust Advisor popover was redesigned around real derived checks only. It now uses three clear groups inspired by the Trusted Advisor model: Action Recommended, Investigation Recommended, and No Problems Detected. Details/actions route to existing real pages such as Risk and Health/System; no fake controls were added.
+- `styles.css` adds a final topbar-family override: Trust Advisor, Notifications, and Account Details are pulled closer to the Clock popover rhythm with smaller widths, tighter padding, sharper text, visible footer actions, and less decorative animation/boxing.
+- Durable rule added to `DESIGN_PLAYBOOK.md` and `UI_SURFACE_BASELINE.md`: Trust Advisor is a settings/control audit, not a decorative score card or notification feed.
+
+### 2026-07-09 — Premium surface checklist recorded
+- Owner distilled the target style: fewer boxes, high quality, good taste, premium look, maximum organization, clean style, mid-to-deep color, real icons/logos, perfect alignment, moderate animation, clear sections, clear spacing, and visible footer actions.
+- Added `PREMIUM SURFACE CHECKLIST` to `DESIGN_PLAYBOOK.md` as a blocking standard for every topbar popover, modal, panel, card group, sidebar section, and dashboard zone. The checklist explicitly covers box discipline, organization, alignment, spacing, typography, color, real icons/logos, motion, sectioning, visible actions, real controls, family consistency, empty states, and browser verification.
+- Future agents should treat this as the default taste target before making UI changes. It is not a decoration request; it is the quality gate for whether a surface feels premium and operational.
+
+### 2026-07-09 — Notification topbar scale correction
+- Owner correction: the compact notification tray looked cleaner but became too large and had too much edge/empty space compared with Clock and Account Details. Durable lesson added: topbar popovers should stay in the same visual family unless a real task needs a larger surface.
+- Fixed hidden-filter state: the compact tray no longer shows an empty Logs state when Logs is not visible as a compact pill; it falls back to All and leaves Logs to the expanded center.
+- Scaled compact notification down from a forced page-like panel to a tighter popover: narrower width, smaller padding, four visible rows, shorter row/icon rhythm, and compact empty state.
+
+### 2026-07-09 — Notification tray Coinbase-clean base pass
+- Owner correction: the clean Coinbase notification screenshot is the base, not the prior noisy operational tray. Durable lesson updated in `DESIGN_PLAYBOOK.md` and `UI_SURFACE_BASELINE.md`: compact notifications should be a quiet title row, one settings/expand affordance, pill filters, and repeated notification rows with category/date kicker, short title, readable summary, and one real icon medallion.
+- Removed the compact tray's Critical/Opps/New metric strip and stopped using multiple visual formats for the same notification state. The tray now intentionally leaves breathing room and should not become a miniature dashboard.
+- Expanded notification center keeps the real interaction surface: feed plus Advanced Alerts preferences together. The duplicate expanded metric strip was removed so the modal stays inspection + controls rather than another status scoreboard.
+
+### 2026-07-09 — Notification hub unification pass
+- Owner correction: the first notification repair copied the preference reference but left the main notification tray/modal noisy. The durable lesson is now explicit in `DESIGN_PLAYBOOK.md`: do not show the same notification state through multiple visual formats. Compact tray = title, one expand icon, Critical/Opps/New metrics, filters, and rows. No hero card, no score tile, no "Review new" prose, no separate Preferences footer.
+- `Header.tsx` now opens one integrated notification center instead of a Feed/Preferences tab switcher. Left side is a filterable feed; right side is the Advanced Alerts preference surface. Preferences remain real draft controls: Cancel discards draft changes; Save Changes writes `prefs.alerts`; Push/WhatsApp remain static Planned states.
+- `styles.css` adds a scoped notification hub override: compact popover widened to the 470px topbar menu, up to five visible rows, bare line icons, and quiet row dividers; expanded center uses the Coinbase-style row system across both feed and preferences.
+
+### 2026-07-09 — Notification preferences reference pass
+- Owner supplied a Coinbase-style "Advanced Transaction" notification settings reference and rejected the current notification preference modal for generic green bell chrome, nested cards, heavy/random text, and poor reference matching. Durable lesson added to `DESIGN_PLAYBOOK.md`: reference matching means copying the anatomy first — single vertical settings sheet, 28-30px padding, 70-74px rows, bare line icons, 18px/430 row labels, switches hard-right, one footer hairline, and no fake delivery toggles.
+- `Header.tsx` notification preferences now split from the feed modal: feed keeps the operational notification center; preferences opens a Coinbase-style `prefs-mode` sheet with Delivery rows, real draft toggles for persisted `prefs.alerts`, Cancel that discards draft changes, and Save Changes that writes the preference object. Push/WhatsApp remain static Planned states instead of fake clickable toggles; In-app is static On because it is the current in-browser channel.
+- `styles.css` adds a dedicated preference-sheet override so the preferences view no longer inherits the full notification-dashboard stat cards/two-column card layout. The sheet uses bare SVG icons, right-aligned iOS/Material-like switches, restrained text weights, and a separated footer.
+
+### 2026-07-09 — PROJECT-LOCAL AGENT MEMORY + five-hour UI lessons captured
+- Owner correction: durable lessons must live inside `/Users/cosmosgeek/Desktop/Main`, not in Codex/assistant memory. Added root `AGENTS.md` so future coding agents have a project-local entrypoint even if Codex is uninstalled or chat memory is gone. Updated this file's core-doc read order accordingly.
+- Added `UI_SURFACE_BASELINE.md` after auditing the current rendered app and edited files. It records concrete baseline details for the side row, renamed/sidebar sections, brand/topbar, global search, clock, AWS CLI, API key, Data Health, Trust Advisor, Notifications, Kill Switch / Trading Mode, Market Refresh, Display Currency, Basis Display, Appearance, and Account Details profile.
+- The five-hour UI grind is now encoded in `DESIGN_PLAYBOOK.md` and `AGENTS.md`, not only in chat:
+  - **Real controls only:** no fake buttons, fake toggles, fake "live" states, fake guardrails, fake profile menu rows, or decorative controls. Buttons/toggles must do real work, open a real control surface, reflect real backend state, or be honestly marked Planned/Disabled With Reason.
+  - **Typography sharpness:** Flow sidebar reference proved the issue was text, not background. Use calm 14px-ish nav labels, 20px line-height, 500-560 weights, exact row rhythm, simple black/gray text, no subpixel hover movement on persistent labels. Heavy 700 active labels, boxed inactive icon tiles, and `translateX(1px)` make text look swollen/soft under Chrome and project zoom.
+  - **Motion restraint:** premium motion means rare, purposeful, and readable. Search idle beam = very thin paired streak with a quiet gap; search active = sharper streak with a tail; no static JPEG glow, no nonstop rotating search border. Clock = slow/calm if animated, no purple orbit, no aggressive spinning, no weird seconds box.
+  - **Topbar trigger law:** triggers stay icon-first; useful words belong inside popovers. Avoid circles/dots/status badges everywhere; color communicates state only.
+  - **Account/profile law:** profile dropdown is not navigation. It shows connected exchange/API posture, active/recent sessions/devices from real data, and logout. Device rows must come from `/api/sessions` facts (browser, OS, host/IP/country when available, current/active/recent, first/last seen).
+  - **Borrow/Binance law reinforced:** bot-operated pages expose monitor + kill-switch/control state, not fake manual action buttons. Copy Binance layout truth, not direct Binance money-action controls unless explicitly ordered.
+- Project-level verification standard reinforced: after UI edits, build, reload the real browser, inspect computed CSS for the exact issue, click touched controls, and use screenshots/rects. "Compiled" is not proof of visual quality.
+- Note for future agents: `DESIGN_PLAYBOOK.md` has the operational rules; this entry is the high-level lesson record. Keep future durable preferences in project files, not external chat memory.
 
 ### 2026-07-08 (later) — CONTROL ROOM PASS: dashboard, account merge, borrow, dock (uncommitted)
 - **Dashboard rebuilt as a quant strategy control room** (owner-directed, research-grounded): 6-stat quant strip (Total PnL/max DD/win rate/profit factor/Sharpe — Sharpe annualized from equity snapshots, honest "needs N more" states), new `web/src/components/PerfChart.tsx` (SVG cumulative-PnL + daily-bars chart, TradingView-tester style, zoom-safe/no animation) + DistChart histogram + attribution donut + profit-structure bars; Zone 2 "Strategy brain" (basis-scanner/volume-scanner/risk-gate as script-named rows + live proposals with Ticket/Inspect); Zone 3 ops (control&security / system / intelligence with REAL Binance listings + high-impact calendar rows).
@@ -619,3 +772,40 @@ STATUS / NEXT: (1) Borrow→Account-style restyle [IN PROGRESS], (2) Basis Scann
 - FIX: `.container { max-width: none; margin: 0 }` — content on EVERY page now behaves exactly like Account: cards/tables/charts stretch with the window; the sidebar→content and edge gutters stay constant-pixel (22px container padding + fixed shell offsets); nothing breaks because every grid is minmax(0,1fr) and every svg is width:100%.
 - MEASURED at 2200px AND 1300px across all 13 tabs: container gap L0/R15 (scrollbar) IDENTICAL everywhere, zero overflow. Screenshots: Borrow cards stretch at 1568, contract at 1300, same gutters.
 - LAW (playbook): pages never cap width; stretching the window stretches CONTENT, never the gaps. Fixed gaps + fluid boxes = the Account feel the owner wants everywhere.
+
+## 2026-07-09 — Notification Center sprint: compact signal tray + real preference modal
+- Topbar notification content rebuilt around the actual control-room job: critical bot/account alerts, opportunities, account activity, and log/system signals from `state.events`; no random token/news spam. Opening notifications no longer auto-clears unread on hover; Mark Read is an explicit real action (`cosmos-notif-seen`).
+- Compact tray is intentionally small: status header, one alert-summary card, Critical/Opps/New counters, All/Critical/Opps/Account/Logs filters, two latest rows, Mark Read, Preferences. Rows open the modal, not a full page jump.
+- Expanded Notification Center is a popup with blurred backdrop, not a route/page. It shows counts, filter pills, a contained scroll feed (six-row preview), and real preferences. Preferences use existing `prefs.alerts` toggles only: Opportunity Alerts, Account Activity, Critical Risk, Binance Announcements. In-app delivery is shown as active; WhatsApp Agent is explicitly Planned, not a fake toggle.
+- Verification: `npm run build` clean, `git diff --check` clean, browser measured tray ~378x381 and modal ~724x663 at current zoom; modal backdrop, feed tab, preference tab, four real toggles verified.
+
+## 2026-07-09 — Notification Center repair: wide overlay + crisp type law
+- Owner correction: if a notification surface opens as a modal, do not keep it tiny. It should use the page width so words do not crash inside boxes. Notification modal widened to `min(1080px, 100vw - 68px)` CSS with feed rows spanning the overlay; Preferences is a two-column layout like the Coinbase reference: Delivery left, Types of Notifications right.
+- Typography correction recorded as a permanent law in `DESIGN_PLAYBOOK.md`: premium does not mean thick. Large headings can be bigger only with thinner weights (around 500-560); numbers should be around 430; body/subcopy around 420-440. If text looks fuzzy/swollen, reduce font weight first before moving boxes.
+- Verified in browser after build: modal measured about 1134px wide at current zoom; title computed 28px/520, counters 31px/430, feed row titles 16px/520, Preferences intro 24px/520, preference labels 15px/520. No row title overflow in the feed; four real alert toggles still wired to `prefs.alerts`.
+
+## 2026-07-09 — Notification Center repair 2: box discipline, full-height overlay, real icons
+- Owner correction: the lesson is box discipline, not just "make bigger." Every boundary must be checked for internal air, alignment, footer visibility, and text not touching the border. Added `BOX DISCIPLINE LAW` to `DESIGN_PLAYBOOK.md`.
+- Notification modal now uses the app zoom factor: height `calc((100vh - 48px) / var(--uiz, 1))`, top padding divided by `--uiz`, and starts near the top. Feed actions are visible at the bottom instead of hidden below the viewport.
+- Feed row stretching bug fixed: CSS grid was stretching the six event rows to fill the tall feed area, creating absurd huge boxes. Added `align-content: start` and `grid-auto-rows: max-content`; rows now keep normal height while the modal remains full-height.
+- Replaced random letter category marks with real icons: Critical Shield, Opportunity Radar, Account Wallet, Logs Receipt.
+- Verified in browser after build: modal visible top-to-bottom (`y=24`, `bottom=1803` inside `innerHeight=1827`), bottom actions visible (`bottom=1777`), feed rows about 101px, all feed icons are SVGs, no title overflow.
+
+## 2026-07-09 — API Keys topbar repair: two real keys, enabled-only scopes
+- Product model is fixed: Binance API posture is TWO keys only. `Read-Only Data Key` feeds balances/orders/loans/account truth. `Automation Key` handles guarded trading, margin/loan-repay, and futures actions. Data stays on the read-only key; withdrawals/transfer-out stay OFF unless explicitly enabled and then must read as a risk.
+- UI lesson: compact topbar popovers follow the clock-family scale. Do not make a large security page in the topbar. Use two thin bordered cards, no table/matrix, no disabled red clutter, no tick/cross glyphs, no extra metric strip. Show only enabled scopes as inline text with small status marks: Reading; Spot / Margin; Loan / Repay; Futures. Hidden disabled scopes are not useful in the compact view.
+- Source identity lesson: do NOT invent square/letter tiles or homemade logo blocks when a real source exists. Each key card starts with the real Binance source logo, then the HMAC type badge + actual key name (`cosmos-local-read-only` / `aws-secrets-manager`), then the short role/fingerprint/IP line. Never lead with generic labels like "Name / Key / IP" when the object itself can be shown directly.
+- Expanded API modal may explain posture, but still uses the same card anatomy and enabled-only permission list. Secrets never appear; only server-side key name/fingerprint/IP posture are visible.
+- Verified in Chrome after build: source-first API popup content ~380x303, two equal ~110px key cards, real Binance logo loaded at 64x64, no scrollbar, no `.keyx-matrix`, no `.keyx-card-meta` mini boxes, no `.keyx-perm` disabled chips, no note paragraphs in compact view. Gates 50/50.
+
+## 2026-07-09 — News official source roster integrated and rate-limit safe
+- News now uses the owner's full source roster: Binance News / Announcements, Tree Of Alpha Relay, FinancialJuice, WSJ Markets RSS, Benzinga, CoinDesk, The Block, WuBlockchain / Substack, Lookonchain, ZeroHedge, WatcherGuru, Cointelegraph, Decrypt, CryptoSlate, Bitcoin Magazine, and Crypto Briefing.
+- Backend source truth: `/api/news?catalog=all` aggregates official Binance announcement categories; `/api/news-context` returns per-source keys/domains/status/counts. Tree is correctly delayed because the official public history endpoint is delayed. RSS sources use publisher-aware cache windows; The Block respects its <=1 request / 3 minutes limit. CryptoSlate falls back to its official `/news/` page if `/feed/` is Cloudflare/rate-limited.
+- Frontend source filtering is a single compact source select with counts, real favicon/logo images through `/api/source-logo`, headline-only rows, and footer source health. Automatic polling no longer sends forced refreshes; only the Refresh button forces a pull.
+- Verification: official web references checked, `npm run build`, `npm test` 50/50, `git diff --check`, API source check after cooldown showed every requested source returning real rows except Tree intentionally delayed, and browser screenshot confirmed the rebuilt News surface with minute/second row labels instead of `Now`.
+
+## 2026-07-09 — News primary macro/policy tier integrated
+- Owner-provided primary-source list is now a first-class `primary` channel in `/api/news-context`, not buried in the media RSS bundle. Added grouped official sources: Federal Reserve Board, BLS, BEA, SEC, CFTC, U.S. Treasury, OFAC, ECB, Bank of England, Bank of Japan, Japan MOF, China NBS, PBoC, SAFE.
+- Implementation truth: machine feeds are used where they work (Fed/BLS/BEA/SEC/CFTC/ECB/BoE/Japan MOF); official-page parsers are used where RSS is unavailable, broken, retired, or unreliable (Treasury, OFAC, BoJ, China NBS HTTPS Latest Releases, PBoC, SAFE official News/Data pages). CFTC comments.gov rule feeds were not kept because the official endpoint now says the RSS feed was removed.
+- Ranking law: primary macro/policy rows get a source-score boost so Fed/BLS/SEC/Treasury/OFAC/central-bank releases can outrank media/blog rows, while timestamp still prevents stale official rows from pinning forever. Frontend filters/domains/logo lookup include every primary source.
+- Verification: official web references checked, `npm run build`, `npm test` 50/50, `git diff --check`, direct compiled-service check showed all 14 requested primary sources live with real rows (`cftc` 3/3 working endpoints; `china-nbs` live after HTTPS page switch; `safe` live after switching from slow homepage to official News/Data pages). Media bundle note: FinancialJuice can still 429 from Cloudflare on cold fetch and must remain honest if no cache exists.

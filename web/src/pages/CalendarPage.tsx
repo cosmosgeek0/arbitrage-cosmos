@@ -3,7 +3,7 @@ import { useStore } from '../store';
 import { calVal, flag, type CalItem } from '../components/Header';
 import { Pill } from '../components/px';
 import { IconCalendar, IconExternal, IconRefresh } from '../components/Icons';
-import { timeAgo } from '../format';
+import { liveAge } from '../format';
 import './Markets.css';
 
 // Full-page economic calendar (TradingView feed, server-proxied). More context
@@ -15,24 +15,47 @@ export function CalendarPage() {
   const [items, setItems] = useState<CalItem[] | null>(null);
   const [fetchedAt, setFetchedAt] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [minImp, setMinImp] = useState<-1 | 0 | 1>(-1);
   const [country, setCountry] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
   const zone = prefs.clockZone && prefs.clockZone !== 'local' ? prefs.clockZone : undefined;
 
   useEffect(() => {
+    const t = window.setInterval(() => setNonce((n) => n + 1), Math.max(0.5, prefs.dataCadence?.calendar ?? 300) * 1000);
+    return () => window.clearInterval(t);
+  }, [prefs.dataCadence?.calendar]);
+
+  useEffect(() => {
     let alive = true;
+    const ctrl = new AbortController();
+    let releaseTimer: number | null = null;
+    const startedAt = Date.now();
     setFailed(false);
-    fetch('/api/calendar')
+    setRefreshing(nonce > 0);
+    const releaseRefreshing = () => {
+      if (nonce <= 0) {
+        setRefreshing(false);
+        return;
+      }
+      const delay = Math.max(0, 1600 - (Date.now() - startedAt));
+      releaseTimer = window.setTimeout(() => {
+        if (alive) setRefreshing(false);
+      }, delay);
+    };
+    fetch('/api/calendar', { signal: ctrl.signal })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad'))))
       .then((d: { items: CalItem[]; fetchedAt?: number }) => {
         if (!alive) return;
         setItems(d.items ?? []);
         setFetchedAt(d.fetchedAt ?? null);
       })
-      .catch(() => alive && setFailed(true));
+      .catch(() => alive && setFailed(true))
+      .finally(() => alive && releaseRefreshing());
     return () => {
       alive = false;
+      if (releaseTimer !== null) window.clearTimeout(releaseTimer);
+      ctrl.abort();
     };
   }, [nonce]);
 
@@ -57,40 +80,50 @@ export function CalendarPage() {
     return out;
   }, [filtered, zone]);
 
+  const status = failed ? 'Feed Unreachable' : fetchedAt ? `Live · ${liveAge(fetchedAt)}` : 'Fetching';
+  const timeZoneLabel = prefs.clockZone === 'local' ? 'local time' : prefs.clockZone;
+
   return (
-    <div className="container page mkx cal-page clx-page">
-      <header className="bwx-hero bsx-hero">
+    <div className="container page mkx ux-page cal-page clx-page">
+      <header className="bwx-hero bsx-hero ux-hero">
         <div className="bwx-hero-top">
           <div className="bwx-hero-title">
             <div className="bwx-title-row">
               <h1>Calendar</h1>
-              <Pill tone={failed ? 'bad' : 'ok'}>{failed ? 'Feed Unreachable' : fetchedAt ? `Live · Fetched ${timeAgo(fetchedAt)}` : 'Fetching…'}</Pill>
             </div>
-            <p>Economic Events For The Next 6 Days · Times In {prefs.clockZone === 'local' ? 'Local Time' : prefs.clockZone} · Refreshed Every 10 Minutes</p>
+            <p>Economic events for the next 6 days. Times in {timeZoneLabel}. Refreshed every 10 minutes.</p>
           </div>
           <span className="tdx-head-right">
-            <button className="mkx-pill" onClick={() => setNonce((n) => n + 1)} title="Refresh"><IconRefresh size={13} /> Refresh</button>
-            <a className="mkx-pill" href="https://www.tradingview.com/economic-calendar/" target="_blank" rel="noreferrer noopener">
-              TradingView <IconExternal size={12} />
-            </a>
+            <Pill tone={failed ? 'bad' : fetchedAt ? 'ok' : 'idle'} className={`ux-live-status ${refreshing ? 'syncing' : ''}`}>{status}</Pill>
+            <button className={`mkx-pill ux-refresh ${refreshing ? 'checking refreshing' : ''}`} onClick={() => setNonce((n) => n + 1)} disabled={refreshing} title={refreshing ? 'Refreshing Calendar Feed' : 'Refresh Calendar Feed'}>
+              <span className="ux-refresh-beam" aria-hidden="true" />
+              <IconRefresh size={13} />
+              <span>Refresh</span>
+            </button>
           </span>
         </div>
       </header>
 
-      <div className="cal-filters clx-filters">
+      <div className="cal-filters clx-filters ux-filters">
         <div className="news-tabs">
           <button className={`news-tab ${minImp === -1 ? 'on' : ''}`} onClick={() => setMinImp(-1)}>All Events</button>
           <button className={`news-tab ${minImp === 0 ? 'on' : ''}`} onClick={() => setMinImp(0)}>Medium +</button>
           <button className={`news-tab ${minImp === 1 ? 'on' : ''}`} onClick={() => setMinImp(1)}>High Impact</button>
         </div>
-        <div className="news-tabs">
-          <button className={`news-tab ${country === null ? 'on' : ''}`} onClick={() => setCountry(null)}>🌐 All</button>
-          {COUNTRIES.map((c) => (
-            <button key={c} className={`news-tab ${country === c ? 'on' : ''}`} onClick={() => setCountry(country === c ? null : c)}>
-              {flag(c)} {c}
-            </button>
-          ))}
-        </div>
+        <label className="ux-select-wrap">
+          <IconCalendar size={14} />
+          <select
+            value={country ?? 'all'}
+            onChange={(e) => {
+              const next = e.target.value;
+              setCountry(next === 'all' ? null : next);
+            }}
+            aria-label="Country Filter"
+          >
+            <option value="all">All countries</option>
+            {COUNTRIES.map((c) => <option key={c} value={c}>{flag(c)} {c}</option>)}
+          </select>
+        </label>
       </div>
 
       <div className="cal-cols page-cols">
@@ -131,7 +164,7 @@ export function CalendarPage() {
         ))}
       </div>
       <p className="news-source-note">
-        Source: TradingView economic calendar (server-proxied). Dots mark impact: red high, accent medium, grey low.
+        Source: TradingView economic calendar (server-proxied). <a href="https://www.tradingview.com/economic-calendar/" target="_blank" rel="noreferrer noopener">Open TradingView <IconExternal size={12} /></a>
       </p>
     </div>
   );

@@ -108,7 +108,7 @@ function meterZones(callLTV: number, liqLTV: number, currentLTV: number) {
 }
 
 export function Loans() {
-  const { state, markets, openDetail, saveConfig, toggleWatch } = useStore();
+  const { state, markets, openDetail, saveConfig, toggleWatch, prefs } = useStore();
   const [loans, setLoans] = useState<LoansSnapshot | null>(null);
   const [earnAprs, setEarnAprs] = useState<Map<string, number>>(new Map());
   const [loanView, setLoanView] = useState<LoanView>('orders');
@@ -136,9 +136,9 @@ export function Loans() {
         setEarnAprs(new Map(rows.map((r) => [r.asset, r.apr * 100])));
       })
       .catch(() => undefined);
-    const t = window.setInterval(() => setRefreshTick((n) => n + 1), 60_000);
+    const t = window.setInterval(() => setRefreshTick((n) => n + 1), Math.max(0.5, prefs.dataCadence?.account ?? 30) * 1000);
     return () => { alive = false; window.clearInterval(t); };
-  }, [refreshTick]);
+  }, [refreshTick, prefs.dataCadence?.account]);
 
   const priceOf = (asset: string): number | null =>
     asset === 'USDT' || asset === 'USDC' || asset === 'FDUSD'
@@ -566,4 +566,3 @@ function AssetOverviewCard({
     </section>
   );
 }
-

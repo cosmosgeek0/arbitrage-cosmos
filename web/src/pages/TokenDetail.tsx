@@ -943,7 +943,7 @@ function CgxPanel({ symbol, base, name, hasPerp }: { symbol: string; base: strin
 }
 
 export function TokenDetail({ symbol }: { symbol: string }) {
-  const { markets, state, toggleWatch, setPage, openDetail } = useStore();
+  const { markets, state, toggleWatch, setPage, openDetail, prefs } = useStore();
   const [range, setRange] = useState<RangeKey>('1D');
   const [ivl, setIvl] = useState<'auto' | IntervalKey>('auto');
   const [tv, setTv] = useState(false);
@@ -974,10 +974,10 @@ export function TokenDetail({ symbol }: { symbol: string }) {
         .catch(() => undefined);
     };
     load();
-    const t = setInterval(load, 60_000);
+    const t = setInterval(load, Math.max(0.5, prefs.dataCadence?.token ?? 1) * 1000);
     return () => { alive = false; clearInterval(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbol, range, ivl, src]);
+  }, [symbol, range, ivl, src, prefs.dataCadence?.token]);
 
   useEffect(() => {
     const { interval, limit } = effective;

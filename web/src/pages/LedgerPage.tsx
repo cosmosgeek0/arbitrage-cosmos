@@ -324,7 +324,7 @@ function sortEvents(events: LedgerEvent[]): LedgerEvent[] {
 }
 
 export function LedgerPage() {
-  const { setPage, openDetail, state } = useStore();
+  const { setPage, openDetail, state, prefs } = useStore();
   const stateEvents = state?.events ?? [];
   const [apiEvents, setApiEvents] = useState<LedgerEvent[]>(() => stateEvents);
   const [kind, setKind] = useState('all');
@@ -370,9 +370,9 @@ export function LedgerPage() {
 
   useEffect(() => {
     void load();
-    const t = window.setInterval(() => void load(), 5000);
+    const t = window.setInterval(() => void load(), Math.max(0.5, prefs.dataCadence?.health ?? 10) * 1000);
     return () => window.clearInterval(t);
-  }, [load]);
+  }, [load, prefs.dataCadence?.health]);
 
   const events = useMemo(() => {
     const map = new Map<number, LedgerEvent>();

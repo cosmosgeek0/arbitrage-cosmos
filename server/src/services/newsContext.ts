@@ -1,0 +1,1705 @@
+export type NewsContextChannel = 'primary' | 'venue' | 'tree' | 'rss' | 'lookonchain';
+export type NewsContextTone = 'bad' | 'warn' | 'ok' | 'idle';
+export type NewsSourceStatus = 'live' | 'delayed' | 'error';
+
+export interface NewsContextItem {
+  id: string;
+  title: string;
+  summary: string | null;
+  url: string | null;
+  source: string;
+  sourceKey: string;
+  sourceDomain: string | null;
+  channel: NewsContextChannel;
+  ts: number | null;
+  timeLabel: string;
+  symbols: string[];
+  tags: string[];
+  tone: NewsContextTone;
+}
+
+export interface NewsContextSource {
+  key: string;
+  label: string;
+  status: NewsSourceStatus;
+  detail: string;
+  fetchedAt: number | null;
+  count: number;
+  url: string | null;
+  domain: string | null;
+}
+
+export interface NewsContextPayload {
+  source: 'primary+venue+tree+rss+lookonchain';
+  fetchedAt: number;
+  items: NewsContextItem[];
+  sources: NewsContextSource[];
+}
+
+const TREE_URL = 'https://news.treeofalpha.com/api/news?limit=60';
+const LOOKONCHAIN_URL = 'https://www.lookonchain.com/ashx/index.ashx?type=1&page=1&pageSize=24';
+const CACHE_MS = 45_000;
+const FETCH_TIMEOUT_MS = 8_000;
+const TREE_MIN_FETCH_MS = 185_000;
+const RSS_DEFAULT_MIN_FETCH_MS = 60_000;
+const PRIMARY_DEFAULT_MIN_FETCH_MS = 90_000;
+const VENUE_DEFAULT_MIN_FETCH_MS = 75_000;
+const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+
+interface FeedConfig {
+  key: string;
+  label: string;
+  url: string;
+  domain: string;
+  minFetchMs?: number;
+  fallbackUrl?: string;
+  includeKeywords?: string[];
+  pageParser?: MediaPageParser;
+}
+
+type MediaPageParser = 'ap-business';
+type OfficialPageParser =
+  | 'treasury-press'
+  | 'ofac-actions'
+  | 'boj-news'
+  | 'nbs-releases'
+  | 'pboc-home'
+  | 'safe-home'
+  | 'okx-announcements'
+  | 'okx-status'
+  | 'bybit-announcements';
+type OfficialJsonParser = 'coinbase-products' | 'upbit-announcements' | 'bithumb-notices' | 'bybit-system-status';
+type OfficialFeedEndpoint = string | { url: string; label?: string; domain?: string; includeKeywords?: string[] };
+type OfficialPageEndpoint = { url: string; parser: OfficialPageParser; label?: string; domain?: string };
+type OfficialJsonEndpoint = { url: string; parser: OfficialJsonParser; label?: string; domain?: string };
+
+interface OfficialSourceConfig {
+  key: string;
+  label: string;
+  domain: string;
+  url: string;
+  detail: string;
+  feeds?: OfficialFeedEndpoint[];
+  pages?: OfficialPageEndpoint[];
+  jsons?: OfficialJsonEndpoint[];
+  minFetchMs?: number;
+}
+
+const PRIMARY_SOURCES: OfficialSourceConfig[] = [
+  {
+    key: 'fed',
+    label: 'Federal Reserve Board',
+    domain: 'federalreserve.gov',
+    url: 'https://www.federalreserve.gov/feeds/feeds.htm',
+    detail: 'Official Fed press, FOMC, speech/testimony, and supervision feeds.',
+    feeds: [
+      'https://www.federalreserve.gov/feeds/press_all.xml',
+      'https://www.federalreserve.gov/feeds/press_monetary.xml',
+      'https://www.federalreserve.gov/feeds/speeches_and_testimony.xml',
+      'https://www.federalreserve.gov/feeds/bankinginfo-rss.xml',
+    ],
+  },
+  {
+    key: 'bls',
+    label: 'BLS',
+    domain: 'bls.gov',
+    url: 'https://www.bls.gov/feed/',
+    detail: 'Official BLS CPI, jobs, JOLTS, PPI, import/export prices, ECI, and productivity feeds.',
+    feeds: [
+      'https://www.bls.gov/feed/empsit.rss',
+      'https://www.bls.gov/feed/jolts.rss',
+      'https://www.bls.gov/feed/cpi.rss',
+      'https://www.bls.gov/feed/ppi.rss',
+      'https://www.bls.gov/feed/ximpim.rss',
+      'https://www.bls.gov/feed/eci.rss',
+      'https://www.bls.gov/feed/prod2.rss',
+    ],
+  },
+  {
+    key: 'bea',
+    label: 'BEA',
+    domain: 'bea.gov',
+    url: 'https://www.bea.gov/news/schedule',
+    detail: 'Official BEA release RSS and machine-readable release schedule source.',
+    feeds: ['https://apps.bea.gov/rss/rss.xml'],
+  },
+  {
+    key: 'sec',
+    label: 'SEC',
+    domain: 'sec.gov',
+    url: 'https://www.sec.gov/about/rss-feeds',
+    detail: 'Official SEC press, statements, testimony, litigation, administrative, and trading suspension feeds.',
+    feeds: [
+      'https://www.sec.gov/news/pressreleases.rss',
+      'https://www.sec.gov/news/speeches-statements.rss',
+      'https://www.sec.gov/news/testimony.rss',
+      'https://www.sec.gov/news/statements.rss',
+      'https://www.sec.gov/enforcement-litigation/litigation-releases/rss',
+      'https://www.sec.gov/enforcement-litigation/administrative-proceedings/rss',
+      'https://www.sec.gov/enforcement-litigation/trading-suspensions/rss',
+    ],
+  },
+  {
+    key: 'cftc',
+    label: 'CFTC',
+    domain: 'cftc.gov',
+    url: 'https://www.cftc.gov/RSS/index.htm',
+    detail: 'Official CFTC press, enforcement, speeches, and Federal Register feeds.',
+    // CFTC's comments.gov Federal Register RSS endpoints now return "RSS Feed has been removed";
+    // keep the working official CFTC feeds live instead of surfacing dead rows.
+    feeds: [
+      'https://www.cftc.gov/RSS/RSSGP/rssgp.xml',
+      'https://www.cftc.gov/RSS/RSSENF/rssenf.xml',
+      'https://www.cftc.gov/RSS/RSSST/rssst.xml',
+    ],
+  },
+  {
+    key: 'treasury',
+    label: 'U.S. Treasury',
+    domain: 'home.treasury.gov',
+    url: 'https://home.treasury.gov/news/press-releases',
+    detail: 'Official Treasury press releases parsed from the Treasury site.',
+    pages: [{ url: 'https://home.treasury.gov/news/press-releases', parser: 'treasury-press' }],
+  },
+  {
+    key: 'ofac',
+    label: 'OFAC',
+    domain: 'ofac.treasury.gov',
+    url: 'https://ofac.treasury.gov/recent-actions',
+    detail: 'Official OFAC recent actions parsed from the Treasury OFAC site.',
+    pages: [{ url: 'https://ofac.treasury.gov/recent-actions', parser: 'ofac-actions' }],
+  },
+  {
+    key: 'ecb',
+    label: 'ECB',
+    domain: 'ecb.europa.eu',
+    url: 'https://www.ecb.europa.eu/home/html/rss.en.html',
+    detail: 'Official ECB press, statistical releases, publications, and market operations feeds.',
+    feeds: [
+      'https://www.ecb.europa.eu/rss/press.html',
+      'https://www.ecb.europa.eu/rss/statpress.html',
+      'https://www.ecb.europa.eu/rss/pub.html',
+      'https://www.ecb.europa.eu/rss/operations.html',
+    ],
+  },
+  {
+    key: 'boe',
+    label: 'Bank of England',
+    domain: 'bankofengland.co.uk',
+    url: 'https://www.bankofengland.co.uk/rss',
+    detail: 'Official Bank of England news, publications, speeches, and statistics feeds.',
+    feeds: [
+      'https://www.bankofengland.co.uk/rss/news',
+      'https://www.bankofengland.co.uk/rss/publications',
+      'https://www.bankofengland.co.uk/rss/speeches',
+      'https://www.bankofengland.co.uk/rss/statistics',
+    ],
+  },
+  {
+    key: 'boj',
+    label: 'Bank of Japan',
+    domain: 'boj.or.jp',
+    url: 'https://www.boj.or.jp/en/whatsnew/index.htm',
+    detail: 'Official Bank of Japan news list parsed because the public RSS link currently returns not found.',
+    pages: [{ url: 'https://www.boj.or.jp/en/whatsnew/index.htm', parser: 'boj-news' }],
+  },
+  {
+    key: 'japan-mof',
+    label: 'Japan MOF',
+    domain: 'mof.go.jp',
+    url: 'https://www.mof.go.jp/english/about_mof/rss/index.html',
+    detail: 'Official Ministry of Finance Japan what-new feed.',
+    feeds: ['https://www.mof.go.jp/english/news.rss'],
+  },
+  {
+    key: 'china-nbs',
+    label: 'China NBS',
+    domain: 'stats.gov.cn',
+    url: 'https://www.stats.gov.cn/english/PressRelease/',
+    detail: 'Official China NBS latest releases parsed carefully from the agency site.',
+    pages: [{ url: 'https://www.stats.gov.cn/english/PressRelease/', parser: 'nbs-releases' }],
+  },
+  {
+    key: 'pboc',
+    label: 'PBoC',
+    domain: 'pbc.gov.cn',
+    url: 'https://www.pbc.gov.cn/en/3688006/index.html',
+    detail: 'Official PBoC English recent developments parsed carefully from the central bank site.',
+    pages: [{ url: 'https://www.pbc.gov.cn/en/3688006/index.html', parser: 'pboc-home' }],
+  },
+  {
+    key: 'safe',
+    label: 'SAFE',
+    domain: 'safe.gov.cn',
+    url: 'http://www.safe.gov.cn/en/SAFENews/index.html',
+    detail: 'Official SAFE English news and FX reserve/statistics rows parsed carefully from the agency site.',
+    pages: [
+      { url: 'http://www.safe.gov.cn/en/SAFENews/index.html', parser: 'safe-home' },
+      { url: 'http://www.safe.gov.cn/en/DataandStatistics/index.html', parser: 'safe-home' },
+    ],
+  },
+];
+
+const VENUE_SOURCES: OfficialSourceConfig[] = [
+  {
+    key: 'coinbase-assets',
+    label: 'Coinbase / Coinbase Assets',
+    domain: 'coinbase.com',
+    url: 'https://api.exchange.coinbase.com/products',
+    detail: 'Official Coinbase Exchange product API for trading phases and availability. Coinbase listing announcements now live on Coinbase Markets on X.',
+    jsons: [
+      { url: 'https://api.exchange.coinbase.com/products', parser: 'coinbase-products', label: 'Coinbase Exchange', domain: 'coinbase.com' },
+    ],
+    minFetchMs: 120_000,
+  },
+  {
+    key: 'kraken',
+    label: 'Kraken',
+    domain: 'blog.kraken.com',
+    url: 'https://blog.kraken.com/category/product/asset-listings/',
+    detail: 'Official Kraken asset-listing and product update feed.',
+    feeds: [
+      { url: 'https://blog.kraken.com/category/product/asset-listings/feed', label: 'Kraken', domain: 'blog.kraken.com' },
+    ],
+  },
+  {
+    key: 'okx',
+    label: 'OKX',
+    domain: 'okx.com',
+    url: 'https://www.okx.com/help/section/announcements-new-listings',
+    detail: 'Official OKX listing, delisting, trading update, wallet, and Web3 announcement pages.',
+    pages: [
+      { url: 'https://www.okx.com/help/section/announcements-new-listings', parser: 'okx-announcements' },
+      { url: 'https://www.okx.com/help/section/announcements-delistings', parser: 'okx-announcements' },
+      { url: 'https://www.okx.com/help/section/announcements-trading-updates', parser: 'okx-announcements' },
+      { url: 'https://www.okx.com/help/section/announcements-deposit-withdrawal-suspension-resumption', parser: 'okx-announcements' },
+      { url: 'https://www.okx.com/help/section/announcements-web3', parser: 'okx-announcements' },
+    ],
+  },
+  {
+    key: 'bybit',
+    label: 'Bybit',
+    domain: 'announcements.bybit.com',
+    url: 'https://announcements.bybit.com/en/',
+    detail: 'Official Bybit listings, delistings, derivatives, launch, and maintenance announcements.',
+    pages: [
+      { url: 'https://announcements.bybit.com/en/?category=new_crypto', parser: 'bybit-announcements' },
+      { url: 'https://announcements.bybit.com/en/?category=delistings', parser: 'bybit-announcements' },
+      { url: 'https://announcements.bybit.com/en/?category=maintenance_updates', parser: 'bybit-announcements' },
+    ],
+  },
+  {
+    key: 'upbit-bithumb',
+    label: 'Upbit / Bithumb',
+    domain: 'upbit.com',
+    url: 'https://upbit.com/service_center/notice',
+    detail: 'Official Korean exchange notices for listings, delistings, deposits, withdrawals, and risk-designation events.',
+    jsons: [
+      {
+        url: 'https://api-manager.upbit.com/api/v1/announcements?os=web&page=1&per_page=20&category=all',
+        parser: 'upbit-announcements',
+        label: 'Upbit',
+        domain: 'upbit.com',
+      },
+      { url: 'https://api.bithumb.com/v1/notices', parser: 'bithumb-notices', label: 'Bithumb', domain: 'bithumb.com' },
+    ],
+  },
+  {
+    key: 'deribit',
+    label: 'Deribit',
+    domain: 'insights.deribit.com',
+    url: 'https://insights.deribit.com/exchange-updates/',
+    detail: 'Official Deribit exchange updates for options/futures instruments, fee schedules, delivery, and platform changes.',
+    feeds: [
+      { url: 'https://insights.deribit.com/exchange-updates/feed/', label: 'Deribit', domain: 'insights.deribit.com' },
+    ],
+  },
+  {
+    key: 'cme-crypto',
+    label: 'CME Group Crypto Notices',
+    domain: 'cmegroup.com',
+    url: 'https://www.cmegroup.com/rss.html',
+    detail: 'Official CME press release and Globex notice feeds filtered for crypto futures/options terms.',
+    feeds: [
+      {
+        url: 'https://feeds.feedburner.com/mediaroom/CMsF',
+        label: 'CME Group Press Releases',
+        domain: 'cmegroup.com',
+        includeKeywords: ['crypto', 'cryptocurrency', 'bitcoin', 'ether', 'ethereum', 'xrp', 'solana', 'cardano', 'chainlink', 'stellar'],
+      },
+      {
+        url: 'https://feeds.feedburner.com/GlobexAdvisories',
+        label: 'CME Globex Notice',
+        domain: 'cmegroup.com',
+        includeKeywords: ['crypto', 'cryptocurrency', 'bitcoin', 'ether', 'ethereum', 'xrp', 'solana', 'cardano', 'chainlink', 'stellar'],
+      },
+    ],
+    minFetchMs: 185_000,
+  },
+  {
+    key: 'exchange-status',
+    label: 'Exchange Status Pages',
+    domain: 'status.coinbase.com',
+    url: 'https://status.coinbase.com/',
+    detail: 'Official exchange incident/status feeds and maintenance endpoints for Coinbase, Kraken, OKX, and Bybit.',
+    feeds: [
+      { url: 'https://status.coinbase.com/history.rss', label: 'Coinbase Status', domain: 'status.coinbase.com' },
+      { url: 'https://status.kraken.com/history.rss', label: 'Kraken Status', domain: 'status.kraken.com' },
+    ],
+    pages: [
+      { url: 'https://www.okx.com/en-us/status', parser: 'okx-status', label: 'OKX Status', domain: 'okx.com' },
+    ],
+    jsons: [
+      { url: 'https://api.bybit.com/v5/system/status', parser: 'bybit-system-status', label: 'Bybit System Status', domain: 'bybit.com' },
+    ],
+    minFetchMs: 120_000,
+  },
+];
+
+const RSS_FEEDS: FeedConfig[] = [
+  { key: 'financialjuice', label: 'FinancialJuice', url: 'https://www.financialjuice.com/feed.ashx', domain: 'financialjuice.com' },
+  { key: 'wsj-markets', label: 'WSJ Markets RSS', url: 'https://feeds.content.dowjones.io/public/rss/RSSMarketsMain', domain: 'wsj.com' },
+  { key: 'benzinga', label: 'Benzinga', url: 'https://www.benzinga.com/feed', domain: 'benzinga.com' },
+  { key: 'ft-alphaville', label: 'FT Alphaville', url: 'https://www.ft.com/alphaville?format=rss', domain: 'ft.com' },
+  {
+    key: 'cnbc-markets',
+    label: 'CNBC Markets',
+    url: 'https://www.cnbc.com/id/15839069/device/rss/rss.html',
+    domain: 'cnbc.com',
+    includeKeywords: [
+      'market', 'markets', 'stock', 'stocks', 'shares', 'nasdaq', 'dow', 's&p', 'earnings',
+      'fed', 'rates', 'inflation', 'treasury', 'bond', 'oil', 'dollar', 'futures', 'options', 'crypto',
+    ],
+  },
+  {
+    key: 'marketwatch',
+    label: 'MarketWatch',
+    url: 'https://feeds.content.dowjones.io/public/rss/mw_topstories',
+    domain: 'marketwatch.com',
+    includeKeywords: [
+      'market', 'markets', 'stock', 'stocks', 'shares', 'investor', 'investors', 'oil', 'energy',
+      'dollar', 'treasury', 'bond', 'fed', 'inflation', 'rates', 'nvidia', 'earnings', 'wall street',
+    ],
+  },
+  { key: 'yahoo-finance', label: 'Yahoo Finance', url: 'https://finance.yahoo.com/news/rss', domain: 'finance.yahoo.com' },
+  {
+    key: 'investing-news',
+    label: 'Investing.com News',
+    url: 'https://www.investing.com/rss/news.rss',
+    domain: 'investing.com',
+    includeKeywords: [
+      'market', 'stock', 'stocks', 'shares', 'nasdaq', 's&p', 'dow', 'fed', 'rates', 'inflation',
+      'economy', 'economic', 'oil', 'gold', 'dollar', 'treasury', 'bond', 'crypto', 'bitcoin', 'earnings',
+    ],
+  },
+  { key: 'nasdaq-news', label: 'Nasdaq News / Market Activity', url: 'https://www.nasdaq.com/feed/rssoutbound?category=Market%20Activity', domain: 'nasdaq.com' },
+  {
+    key: 'ap-business',
+    label: 'AP Business',
+    url: 'https://apnews.com/business',
+    domain: 'apnews.com',
+    pageParser: 'ap-business',
+    minFetchMs: 185_000,
+  },
+  { key: 'coindesk', label: 'CoinDesk', url: 'https://www.coindesk.com/arc/outboundfeeds/rss/', domain: 'coindesk.com' },
+  { key: 'the-block', label: 'The Block', url: 'https://www.theblock.co/rss.xml', domain: 'theblock.co', minFetchMs: 185_000 },
+  { key: 'wublockchain', label: 'WuBlockchain / Substack', url: 'https://wublock.substack.com/feed', domain: 'wublock.substack.com' },
+  { key: 'zerohedge', label: 'ZeroHedge', url: 'https://cms.zerohedge.com/fullrss2.xml', domain: 'zerohedge.com' },
+  { key: 'watcherguru', label: 'WatcherGuru', url: 'https://watcher.guru/news/feed', domain: 'watcher.guru' },
+  { key: 'cointelegraph', label: 'Cointelegraph', url: 'https://cointelegraph.com/rss', domain: 'cointelegraph.com' },
+  { key: 'decrypt', label: 'Decrypt', url: 'https://decrypt.co/feed', domain: 'decrypt.co' },
+  { key: 'cryptoslate', label: 'CryptoSlate', url: 'https://cryptoslate.com/feed/', domain: 'cryptoslate.com', fallbackUrl: 'https://cryptoslate.com/news/' },
+  { key: 'bitcoin-magazine', label: 'Bitcoin Magazine', url: 'https://bitcoinmagazine.com/feed', domain: 'bitcoinmagazine.com' },
+  { key: 'crypto-briefing', label: 'Crypto Briefing', url: 'https://cryptobriefing.com/feed/', domain: 'cryptobriefing.com' },
+] as const satisfies FeedConfig[];
+type RssFeed = FeedConfig;
+type RssFetchResult = { items: NewsContextItem[]; source: NewsContextSource };
+
+const COMMON_SYMBOLS = new Set([
+  'BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'DOGE', 'ADA', 'TRX', 'AVAX', 'LINK',
+  'TON', 'SUI', 'ARB', 'OP', 'APT', 'SEI', 'ENA', 'WLFI', 'USD1', 'USDT',
+  'USDC', 'HYPE', 'PEPE', 'WIF', 'SHIB', 'FLOKI', 'AI', 'MSTR',
+]);
+
+let cache: NewsContextPayload | null = null;
+let inFlight: Promise<NewsContextPayload> | null = null;
+let treeSourceCache: (RssFetchResult & { fetchedAt: number }) | null = null;
+const rssSourceCache = new Map<string, RssFetchResult & { fetchedAt: number }>();
+const primarySourceCache = new Map<string, RssFetchResult & { fetchedAt: number }>();
+const venueSourceCache = new Map<string, RssFetchResult & { fetchedAt: number }>();
+
+export async function getNewsContext(force = false): Promise<NewsContextPayload> {
+  if (!force && cache && Date.now() - cache.fetchedAt < CACHE_MS) return cache;
+  if (force && cache) {
+    void startRefresh();
+    return cache;
+  }
+  return startRefresh();
+}
+
+function startRefresh(): Promise<NewsContextPayload> {
+  if (!inFlight) {
+    inFlight = refreshNewsContext()
+      .then((payload) => {
+        cache = payload;
+        return payload;
+      })
+      .finally(() => {
+        inFlight = null;
+      });
+  }
+  return inFlight;
+}
+
+async function refreshNewsContext(): Promise<NewsContextPayload> {
+  const [primary, venue, tree, rss, lookonchain] = await Promise.all([
+    fetchPrimarySources(),
+    fetchVenueSources(),
+    fetchTree(),
+    fetchRssBundle(),
+    fetchLookonchain(),
+  ]);
+  const seen = new Set<string>();
+  const items = [...primary.items, ...venue.items, ...tree.items, ...rss.items, ...lookonchain.items]
+    .filter((item) => {
+      const key = normalizeKey(item.title);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort(compareContextItems)
+    .slice(0, 520);
+
+  return {
+    source: 'primary+venue+tree+rss+lookonchain',
+    fetchedAt: Date.now(),
+    items,
+    sources: [...primary.sources, ...venue.sources, tree.source, ...rss.sources, lookonchain.source],
+  };
+}
+
+async function fetchPrimarySources(): Promise<{ items: NewsContextItem[]; sources: NewsContextSource[] }> {
+  return fetchOfficialSources(PRIMARY_SOURCES, 'primary', primarySourceCache, PRIMARY_DEFAULT_MIN_FETCH_MS, 180);
+}
+
+async function fetchVenueSources(): Promise<{ items: NewsContextItem[]; sources: NewsContextSource[] }> {
+  return fetchOfficialSources(VENUE_SOURCES, 'venue', venueSourceCache, VENUE_DEFAULT_MIN_FETCH_MS, 160);
+}
+
+async function fetchOfficialSources(
+  sources: OfficialSourceConfig[],
+  channel: NewsContextChannel,
+  sourceCache: Map<string, RssFetchResult & { fetchedAt: number }>,
+  defaultMinFetchMs: number,
+  maxItems: number,
+): Promise<{ items: NewsContextItem[]; sources: NewsContextSource[] }> {
+  const fetchedAt = Date.now();
+  const settled = await Promise.all(sources.map((source) => fetchOfficialSource(source, fetchedAt, channel, sourceCache, defaultMinFetchMs)));
+  const items = settled
+    .flatMap((res) => res.items)
+    .sort(compareContextItems)
+    .slice(0, maxItems);
+  return {
+    items,
+    sources: settled.map((res) => res.source),
+  };
+}
+
+async function fetchOfficialSource(
+  source: OfficialSourceConfig,
+  fetchedAt: number,
+  channel: NewsContextChannel,
+  sourceCache: Map<string, RssFetchResult & { fetchedAt: number }>,
+  defaultMinFetchMs: number,
+): Promise<RssFetchResult> {
+  const cached = sourceCache.get(source.key);
+  const minFetchMs = source.minFetchMs ?? defaultMinFetchMs;
+  if (cached && Date.now() - cached.fetchedAt < minFetchMs) {
+    return {
+      items: cached.items,
+      source: {
+        ...cached.source,
+        status: cached.source.status === 'error' ? 'delayed' : cached.source.status,
+        detail: `${source.detail} Cached ${sourceAgeLabel(cached.fetchedAt)}.`,
+        fetchedAt: cached.source.fetchedAt,
+        count: cached.items.length,
+      },
+    };
+  }
+
+  const endpoints = [
+    ...(source.feeds ?? []).map((feed) => ({ kind: 'feed' as const, ...normalizeOfficialFeed(feed) })),
+    ...(source.pages ?? []).map((page) => ({ kind: 'page' as const, ...page })),
+    ...(source.jsons ?? []).map((json) => ({ kind: 'json' as const, ...json })),
+  ];
+  if (!endpoints.length) {
+    return { items: [], source: sourceError(source.key, source.label, 'No official endpoints configured.', source.url, source.domain) };
+  }
+
+  const settled = await Promise.allSettled(endpoints.map(async (endpoint) => {
+    if (endpoint.kind === 'feed') {
+      const feed: FeedConfig = {
+        key: source.key,
+        label: endpoint.label ?? source.label,
+        domain: endpoint.domain ?? source.domain,
+        url: endpoint.url,
+        includeKeywords: endpoint.includeKeywords,
+      };
+      const xml = await fetchText(endpoint.url, {
+        headers: {
+          Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
+          Referer: source.url,
+        },
+      });
+      return parseFeed(xml, feed, channel);
+    }
+    if (endpoint.kind === 'json') {
+      const data = await fetchJson<unknown>(endpoint.url, {
+        headers: {
+          Accept: 'application/json, text/plain, */*',
+          Referer: source.url,
+        },
+      });
+      return parseOfficialJson(data, source, endpoint, channel);
+    }
+    const html = await fetchText(endpoint.url, {
+      headers: {
+        Accept: 'text/html,application/xhtml+xml,*/*',
+        Referer: source.url,
+      },
+    });
+    return parseOfficialPage(html, source, endpoint, channel);
+  }));
+
+  const errors = settled
+    .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+    .map((result) => errorMessage(result.reason));
+  const seen = new Set<string>();
+  const items = settled
+    .flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
+    .filter((item) => {
+      const key = `${normalizeKey(item.title)}:${item.ts ?? 0}`;
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort(compareContextItems)
+    .slice(0, 16);
+
+  if (!items.length && cached) {
+    return {
+      items: cached.items,
+      source: {
+        ...cached.source,
+        status: 'delayed',
+        detail: `Using latest cached rows; official refresh hit ${errors[0] ?? 'no rows'}.`,
+        fetchedAt: cached.source.fetchedAt,
+        count: cached.items.length,
+      },
+    };
+  }
+
+  const successCount = settled.filter((result) => result.status === 'fulfilled').length;
+  const rowCount = settled.filter((result) => result.status === 'fulfilled' && result.value.length).length;
+  const result: RssFetchResult = {
+    items,
+    source: {
+      key: source.key,
+      label: source.label,
+      status: successCount ? 'live' : 'error',
+      detail: items.length
+        ? `${source.detail} ${rowCount}/${endpoints.length} endpoints returned rows.`
+        : successCount
+          ? `${source.detail} ${successCount}/${endpoints.length} endpoints reachable; no current rows.`
+          : `${source.detail} No rows returned${errors.length ? `; ${errors[0]}` : '.'}`,
+      fetchedAt,
+      count: items.length,
+      url: source.url,
+      domain: source.domain,
+    },
+  };
+  if (items.length || successCount) sourceCache.set(source.key, { ...result, fetchedAt });
+  return result;
+}
+
+async function fetchTree(): Promise<{ items: NewsContextItem[]; source: NewsContextSource }> {
+  const fetchedAt = Date.now();
+  if (treeSourceCache && Date.now() - treeSourceCache.fetchedAt < TREE_MIN_FETCH_MS) {
+    return {
+      items: treeSourceCache.items,
+      source: {
+        ...treeSourceCache.source,
+        detail: `Public history endpoint. Cached ${sourceAgeLabel(treeSourceCache.fetchedAt)}; realtime requires Tree websocket/API key.`,
+        fetchedAt: treeSourceCache.source.fetchedAt,
+        count: treeSourceCache.items.length,
+      },
+    };
+  }
+  try {
+    const data = await fetchJson<unknown[]>(TREE_URL, { headers: { Accept: 'application/json' } });
+    const items = Array.isArray(data)
+      ? data.map((row) => normalizeTree(row)).filter((row): row is NewsContextItem => Boolean(row)).slice(0, 60)
+      : [];
+    const result: RssFetchResult = {
+      items,
+      source: {
+        key: 'tree',
+	        label: 'Tree Of Alpha Relay',
+        status: 'delayed',
+	        detail: 'Public history endpoint. Realtime requires Tree websocket/API key.',
+	        fetchedAt,
+	        count: items.length,
+	        url: TREE_URL,
+	        domain: 'treeofalpha.com',
+	      },
+    };
+    if (items.length) treeSourceCache = { ...result, fetchedAt };
+    return result;
+  } catch (err) {
+    if (treeSourceCache) {
+      return {
+        items: treeSourceCache.items,
+        source: {
+          ...treeSourceCache.source,
+          detail: `Using latest cached Tree history rows; refresh hit ${errorMessage(err)}.`,
+          fetchedAt: treeSourceCache.source.fetchedAt,
+          count: treeSourceCache.items.length,
+        },
+      };
+    }
+	    return { items: [], source: sourceError('tree', 'Tree Of Alpha Relay', err, TREE_URL, 'treeofalpha.com') };
+  }
+}
+
+async function fetchLookonchain(): Promise<{ items: NewsContextItem[]; source: NewsContextSource }> {
+  const fetchedAt = Date.now();
+  try {
+    const text = await fetchText(LOOKONCHAIN_URL, {
+      headers: {
+	        Accept: 'application/json',
+	        Referer: 'https://www.lookonchain.com/feeds',
+	        'User-Agent': USER_AGENT,
+	      },
+    });
+    const data = parseLooseJson<{ success?: string; time?: string; content?: unknown[] }>(text);
+    const sourceNow = parseLookonchainDate(String(data.time ?? '')) ?? Date.now();
+    const items = data.success === 'Y' && Array.isArray(data.content)
+      ? data.content.map((row) => normalizeLookonchain(row, sourceNow)).filter((row): row is NewsContextItem => Boolean(row)).slice(0, 24)
+      : [];
+    return {
+      items,
+      source: {
+        key: 'lookonchain',
+        label: 'Lookonchain',
+        status: items.length ? 'live' : 'error',
+	        detail: items.length ? 'Public on-chain feed endpoint.' : 'Endpoint returned no rows.',
+	        fetchedAt,
+	        count: items.length,
+	        url: LOOKONCHAIN_URL,
+	        domain: 'lookonchain.com',
+	      },
+    };
+  } catch (err) {
+	    return { items: [], source: sourceError('lookonchain', 'Lookonchain', err, LOOKONCHAIN_URL, 'lookonchain.com') };
+  }
+}
+
+async function fetchRssBundle(): Promise<{ items: NewsContextItem[]; sources: NewsContextSource[] }> {
+  const fetchedAt = Date.now();
+  const settled = await Promise.all(RSS_FEEDS.map((feed) => fetchRssFeed(feed, fetchedAt)));
+  const items = settled
+    .flatMap((res) => res.items)
+    .sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0))
+    .slice(0, 180);
+  return {
+    items,
+    sources: settled.map((res) => res.source),
+  };
+}
+
+async function fetchRssFeed(feed: RssFeed, fetchedAt: number): Promise<RssFetchResult> {
+  const cached = rssSourceCache.get(feed.key);
+  const minFetchMs = feed.minFetchMs ?? RSS_DEFAULT_MIN_FETCH_MS;
+  if (cached && minFetchMs && Date.now() - cached.fetchedAt < minFetchMs) {
+    return {
+      items: cached.items,
+      source: {
+        ...cached.source,
+        status: 'live',
+        detail: `${rssDetail(feed)} Cached ${sourceAgeLabel(cached.fetchedAt)}; publisher rate limit respected.`,
+        fetchedAt: cached.source.fetchedAt,
+        count: cached.items.length,
+      },
+    };
+  }
+
+  try {
+    if (feed.pageParser) {
+      const html = await fetchText(feed.url, {
+        headers: {
+          Accept: 'text/html,application/xhtml+xml,*/*',
+          Referer: `https://${feed.domain}/`,
+        },
+      });
+      const items = parseMediaPage(html, feed).slice(0, 8);
+      const result: RssFetchResult = {
+        items,
+        source: {
+          key: feed.key,
+          label: feed.label,
+          status: items.length ? 'live' : 'error',
+          detail: items.length ? rssDetail(feed) : 'Page returned no eligible rows.',
+          fetchedAt,
+          count: items.length,
+          url: feed.url,
+          domain: feed.domain,
+        },
+      };
+      if (items.length) rssSourceCache.set(feed.key, { ...result, fetchedAt });
+      return result;
+    }
+
+    const xml = await fetchText(feed.url, {
+      headers: {
+        Accept: 'application/rss+xml, application/xml, text/xml, */*',
+        Referer: `https://${feed.domain}/`,
+      },
+    });
+    const items = parseFeed(xml, feed).slice(0, 8);
+    if (!items.length) {
+      const fallback = await fetchRssFallback(feed, fetchedAt, 'Feed returned no rows.');
+      if (fallback) return fallback;
+    }
+    const result: RssFetchResult = {
+      items,
+      source: {
+        key: feed.key,
+        label: feed.label,
+        status: items.length ? 'live' : 'error',
+        detail: items.length ? rssDetail(feed) : 'Feed returned no rows.',
+        fetchedAt,
+        count: items.length,
+        url: feed.url,
+        domain: feed.domain,
+      },
+    };
+    if (items.length) rssSourceCache.set(feed.key, { ...result, fetchedAt });
+    return result;
+  } catch (err) {
+    const fallback = await fetchRssFallback(feed, fetchedAt, errorMessage(err));
+    if (fallback) return fallback;
+    if (cached) {
+      return {
+        items: cached.items,
+        source: {
+          ...cached.source,
+          status: 'delayed',
+          detail: `Using latest cached rows; refresh hit ${errorMessage(err)}.`,
+          fetchedAt: cached.source.fetchedAt,
+          count: cached.items.length,
+        },
+      };
+    }
+    return { items: [], source: sourceError(feed.key, feed.label, err, feed.url, feed.domain) };
+  }
+}
+
+async function fetchRssFallback(feed: RssFeed, fetchedAt: number, reason: string): Promise<RssFetchResult | null> {
+  if (!feed.fallbackUrl) return null;
+  try {
+    const fallbackUrl = feed.fallbackUrl;
+    const html = await fetchText(fallbackUrl, {
+      headers: {
+        Accept: 'text/html,application/xhtml+xml,*/*',
+        Referer: `https://${feed.domain}/`,
+      },
+    });
+    const items = parseFallbackPage(html, feed);
+    if (!items.length) return null;
+    const result: RssFetchResult = {
+      items,
+      source: {
+        key: feed.key,
+        label: feed.label,
+        status: 'live',
+        detail: `Official news page fallback. RSS feed returned ${reason}.`,
+        fetchedAt,
+        count: items.length,
+        url: fallbackUrl,
+        domain: feed.domain,
+      },
+    };
+    rssSourceCache.set(feed.key, { ...result, fetchedAt });
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeTree(row: unknown): NewsContextItem | null {
+  const data = row as Record<string, unknown>;
+  const title = cleanText(String(data.title ?? data.en ?? ''));
+  if (!title) return null;
+  const ts = typeof data.time === 'number' ? data.time : null;
+  const sourceName = cleanText(String(data.sourceName ?? data.source ?? 'Tree'));
+  const rawSymbols = Array.isArray(data.symbols) ? data.symbols.map(String) : [];
+  return buildItem({
+    id: `tree:${String(data._id ?? ts ?? title)}`,
+    title,
+    summary: typeof data.en === 'string' && data.en !== title ? data.en : null,
+	    url: typeof data.url === 'string' ? data.url : null,
+	    source: sourceName,
+	    sourceKey: 'tree',
+	    sourceDomain: 'treeofalpha.com',
+	    channel: 'tree',
+	    ts,
+    extraSymbols: rawSymbols,
+  });
+}
+
+function normalizeLookonchain(row: unknown, sourceNow: number): NewsContextItem | null {
+  const data = row as Record<string, unknown>;
+  const title = cleanText(String(data.stitle ?? ''));
+  if (!title) return null;
+  const absoluteTs = parseLookonchainDate(String(data.dcreate_time ?? ''));
+  const relativeTs = parseRelativeAge(String(data.times ?? ''), sourceNow);
+  const ts = selectLookonchainTimestamp(absoluteTs, relativeTs);
+  const url = data.nnewflash_id ? `https://www.lookonchain.com/feeds/${String(data.nnewflash_id)}` : (typeof data.surl === 'string' ? data.surl : null);
+  return buildItem({
+    id: `lookonchain:${String(data.nnewflash_id ?? title)}`,
+    title,
+    summary: cleanText(stripHtml(String(data.sabstract ?? ''))) || null,
+	    url,
+	    source: cleanText(String(data.ssource ?? 'Lookonchain')) || 'Lookonchain',
+	    sourceKey: 'lookonchain',
+	    sourceDomain: 'lookonchain.com',
+	    channel: 'lookonchain',
+	    ts,
+  });
+}
+
+function normalizeOfficialFeed(feed: OfficialFeedEndpoint): { url: string; label?: string; domain?: string; includeKeywords?: string[] } {
+  return typeof feed === 'string' ? { url: feed } : feed;
+}
+
+function parseFeed(xml: string, feed: FeedConfig, channel: NewsContextChannel = 'rss'): NewsContextItem[] {
+  const rssItems = matchBlocks(xml, 'item');
+  const atomItems = rssItems.length ? [] : matchBlocks(xml, 'entry');
+  const maxBlocks = feed.includeKeywords?.length ? 60 : channel === 'primary' || channel === 'venue' ? 20 : 8;
+  return (rssItems.length ? rssItems : atomItems)
+    .slice(0, maxBlocks)
+    .map((block) => {
+      const title = cleanText(readTag(block, 'title') ?? '');
+      if (!title) return null;
+      const link = absolutizeUrl(readTag(block, 'link') ?? readAttr(block, 'link', 'href') ?? feed.url, feed.url);
+      const summary = cleanText(stripHtml(readTag(block, 'description') ?? readTag(block, 'summary') ?? readTag(block, 'content') ?? ''));
+      if (feed.includeKeywords?.length && !matchesAnyKeyword(`${title} ${summary}`, feed.includeKeywords)) return null;
+      const dateRaw = readTag(block, 'pubDate') ?? readTag(block, 'pubTime') ?? readTag(block, 'updated') ?? readTag(block, 'published') ?? '';
+      const guid = readTag(block, 'guid') ?? link ?? title;
+      return buildItem({
+        id: `${channel}:${feed.key}:${guid}`,
+        title,
+        summary: summary || null,
+        url: link,
+        source: feed.label,
+        sourceKey: feed.key,
+        sourceDomain: feed.domain,
+        channel,
+        ts: parseDateMillis(dateRaw),
+      });
+    })
+    .filter((row): row is NewsContextItem => Boolean(row));
+}
+
+function parseOfficialPage(
+  html: string,
+  source: OfficialSourceConfig,
+  page: OfficialPageEndpoint,
+  channel: NewsContextChannel = 'primary',
+): NewsContextItem[] {
+  if (page.parser === 'treasury-press') return parseTreasuryPressPage(html, source, page.url, channel);
+  if (page.parser === 'ofac-actions') return parseOfacActionsPage(html, source, page.url, channel);
+  if (page.parser === 'boj-news') return parseBojNewsPage(html, source, page.url, channel);
+  if (page.parser === 'nbs-releases') return parseNbsReleasesPage(html, source, page.url, channel);
+  if (page.parser === 'pboc-home') return parsePbocHomePage(html, source, page.url, channel);
+  if (page.parser === 'safe-home') return parseSafeHomePage(html, source, page.url, channel);
+  if (page.parser === 'okx-announcements') return parseOkxAnnouncementsPage(html, source, page, channel);
+  if (page.parser === 'okx-status') return parseOkxStatusPage(html, source, page, channel);
+  if (page.parser === 'bybit-announcements') return parseBybitAnnouncementsPage(html, source, page, channel);
+  return [];
+}
+
+function parseOfficialJson(
+  data: unknown,
+  source: OfficialSourceConfig,
+  endpoint: OfficialJsonEndpoint,
+  channel: NewsContextChannel,
+): NewsContextItem[] {
+  if (endpoint.parser === 'coinbase-products') return parseCoinbaseProductsJson(data, source, endpoint, channel);
+  if (endpoint.parser === 'upbit-announcements') return parseUpbitAnnouncementsJson(data, source, endpoint, channel);
+  if (endpoint.parser === 'bithumb-notices') return parseBithumbNoticesJson(data, source, endpoint, channel);
+  if (endpoint.parser === 'bybit-system-status') return parseBybitSystemStatusJson(data, source, endpoint, channel);
+  return [];
+}
+
+function buildOfficialPageItem(source: OfficialSourceConfig, input: {
+  idPart: string;
+  title: string;
+  url: string | null;
+  ts: number | null;
+  summary?: string | null;
+  source?: string;
+  sourceDomain?: string | null;
+  channel?: NewsContextChannel;
+}): NewsContextItem {
+  const channel = input.channel ?? 'primary';
+  return buildItem({
+    id: `${channel}:${source.key}:page:${input.idPart}`,
+    title: input.title,
+    summary: input.summary ?? null,
+    url: input.url,
+    source: input.source ?? source.label,
+    sourceKey: source.key,
+    sourceDomain: input.sourceDomain ?? source.domain,
+    channel,
+    ts: input.ts,
+  });
+}
+
+function parseTreasuryPressPage(html: string, source: OfficialSourceConfig, baseUrl: string, channel: NewsContextChannel): NewsContextItem[] {
+  const items: NewsContextItem[] = [];
+  const seen = new Set<string>();
+  const rows = html.matchAll(/<time\b[^>]*datetime=["']([^"']+)["'][^>]*>[\s\S]{0,700}?<a\b[^>]*href=["']([^"']*\/news\/press-releases\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi);
+  for (const match of rows) {
+    const url = absolutizeUrl(match[2], baseUrl);
+    const title = cleanText(stripHtml(match[3]));
+    if (!title || seen.has(url)) continue;
+    seen.add(url);
+    items.push(buildOfficialPageItem(source, {
+      idPart: url,
+      title,
+      url,
+      ts: parseDateMillis(match[1]),
+      channel,
+    }));
+    if (items.length >= 12) break;
+  }
+  return items;
+}
+
+function parseOfacActionsPage(html: string, source: OfficialSourceConfig, baseUrl: string, channel: NewsContextChannel): NewsContextItem[] {
+  const items: NewsContextItem[] = [];
+  const seen = new Set<string>();
+  const rows = html.matchAll(/<a\b[^>]*href=["']([^"']*\/recent-actions\/\d[^"']*)["'][^>]*>([\s\S]*?)<\/a>[\s\S]{0,360}?([A-Z][a-z]+\s+\d{1,2},\s+\d{4})/gi);
+  for (const match of rows) {
+    const url = absolutizeUrl(match[1], baseUrl);
+    const title = cleanText(stripHtml(match[2]));
+    if (!title || seen.has(url)) continue;
+    seen.add(url);
+    items.push(buildOfficialPageItem(source, {
+      idPart: url,
+      title,
+      url,
+      ts: parseNaturalDateMillis(match[3]),
+      summary: 'OFAC recent action',
+      channel,
+    }));
+    if (items.length >= 12) break;
+  }
+  return items;
+}
+
+function parseBojNewsPage(html: string, source: OfficialSourceConfig, baseUrl: string, channel: NewsContextChannel): NewsContextItem[] {
+  const items: NewsContextItem[] = [];
+  const rows = html.matchAll(/<time\b[^>]*datetime=["']([^"']+)["'][^>]*>[\s\S]*?<\/time>\s*<span\b[^>]*>([\s\S]*?)<\/span>\s*<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi);
+  for (const match of rows) {
+    const title = cleanText(stripHtml(match[4]));
+    if (!title) continue;
+    items.push(buildOfficialPageItem(source, {
+      idPart: `${match[1]}:${match[3]}:${title}`,
+      title,
+      url: absolutizeUrl(match[3], baseUrl),
+      ts: parseDateMillis(match[1]),
+      summary: cleanText(stripHtml(match[2])) || null,
+      channel,
+    }));
+    if (items.length >= 12) break;
+  }
+  return items;
+}
+
+function parseNbsReleasesPage(html: string, source: OfficialSourceConfig, baseUrl: string, channel: NewsContextChannel): NewsContextItem[] {
+  const items: NewsContextItem[] = [];
+  const rows = html.matchAll(/<a\b[^>]*title=["']([^"']+)["'][^>]*href=["']([^"']+)["'][^>]*>[\s\S]*?<\/a>\s*<span>(\d{4}-\d{2}-\d{2})<\/span>/gi);
+  for (const match of rows) {
+    const title = cleanText(stripHtml(match[1]).replace(/^\d+\.\s*/, ''));
+    if (!title) continue;
+    items.push(buildOfficialPageItem(source, {
+      idPart: `${match[3]}:${match[2]}:${title}`,
+      title,
+      url: absolutizeUrl(match[2], baseUrl),
+      ts: parseDateMillis(match[3]),
+      summary: 'China NBS latest release',
+      channel,
+    }));
+    if (items.length >= 12) break;
+  }
+  return items;
+}
+
+function parsePbocHomePage(html: string, source: OfficialSourceConfig, baseUrl: string, channel: NewsContextChannel): NewsContextItem[] {
+  const items: NewsContextItem[] = [];
+  const recent = html.slice(Math.max(0, html.indexOf('Recent Developments')));
+  const rows = recent.matchAll(/<span\b[^>]*>\[(\d{4}-\d{2}-\d{2})\]<\/span>\s*<a\b[^>]*href=["']([^"']+)["'][^>]*(?:title=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/a>/gi);
+  for (const match of rows) {
+    const title = cleanText(stripHtml(match[3] || match[4]));
+    if (!title) continue;
+    items.push(buildOfficialPageItem(source, {
+      idPart: `${match[1]}:${match[2]}:${title}`,
+      title,
+      url: absolutizeUrl(match[2], baseUrl),
+      ts: parseDateMillis(match[1]),
+      summary: 'PBoC recent development',
+      channel,
+    }));
+    if (items.length >= 12) break;
+  }
+  return items;
+}
+
+function parseSafeHomePage(html: string, source: OfficialSourceConfig, baseUrl: string, channel: NewsContextChannel): NewsContextItem[] {
+  const items: NewsContextItem[] = [];
+  const seen = new Set<string>();
+  const rows = html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*(?:title=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/a>\s*(?:<\/dt>\s*)?<dd>(\d{4}-\d{2}-\d{2})<\/dd>/gi);
+  for (const match of rows) {
+    const url = absolutizeUrl(match[1], baseUrl);
+    const title = cleanText(stripHtml(match[2] || match[3]));
+    if (!title || seen.has(url)) continue;
+    seen.add(url);
+    items.push(buildOfficialPageItem(source, {
+      idPart: `${match[4]}:${url}`,
+      title,
+      url,
+      ts: parseDateMillis(match[4]),
+      summary: title.includes('Reserve') || title.includes('Balance') || title.includes('External') ? 'SAFE data/statistics' : 'SAFE news',
+      channel,
+    }));
+    if (items.length >= 12) break;
+  }
+  return items;
+}
+
+function parseOkxAnnouncementsPage(html: string, source: OfficialSourceConfig, page: OfficialPageEndpoint, channel: NewsContextChannel): NewsContextItem[] {
+  const state = readJsonScript(html, 'appState') as Record<string, any> | null;
+  const rows = state?.appContext?.initialProps?.sectionData?.articleList?.list;
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .slice(0, 12)
+    .map((row) => {
+      const title = cleanText(String(row?.title ?? ''));
+      const slug = cleanText(String(row?.slug ?? row?.id ?? ''));
+      if (!title || !slug) return null;
+      const url = absolutizeUrl(`/help/${slug}`, page.url);
+      return buildOfficialPageItem(source, {
+        idPart: `${slug}:${row?.publishTime ?? ''}`,
+        title,
+        url,
+        ts: typeof row?.publishTime === 'number' ? row.publishTime : parseDateMillis(String(row?.publishTime ?? '')),
+        summary: okxSectionLabel(String(row?.sectionSlug ?? '')),
+        source: page.label ?? source.label,
+        sourceDomain: page.domain ?? source.domain,
+        channel,
+      });
+    })
+    .filter((row): row is NewsContextItem => Boolean(row));
+}
+
+function parseOkxStatusPage(html: string, source: OfficialSourceConfig, page: OfficialPageEndpoint, channel: NewsContextChannel): NewsContextItem[] {
+  const items: NewsContextItem[] = [];
+  const seen = new Set<string>();
+  const links = html.matchAll(/<a\b[^>]*href=["']([^"']*\/help\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi);
+  for (const match of links) {
+    const block = match[2];
+    const h3 = block.match(/<h3\b[^>]*>([\s\S]*?)<\/h3>/i);
+    const title = cleanText(stripHtml(h3?.[1] ?? ''));
+    if (!title || !/\b(issue|service|status|maintenance|failure|upgrade)\b/i.test(title)) continue;
+    const url = absolutizeUrl(match[1], page.url);
+    if (seen.has(url)) continue;
+    seen.add(url);
+    const text = cleanText(stripHtml(block));
+    const date = text.match(/\b[A-Z][a-z]{2}\s+\d{1,2},\s+\d{4}\b/)?.[0] ?? '';
+    items.push(buildOfficialPageItem(source, {
+      idPart: url,
+      title,
+      url,
+      ts: parseNaturalDateMillis(date),
+      summary: 'OKX status issue history',
+      source: page.label ?? 'OKX Status',
+      sourceDomain: page.domain ?? 'okx.com',
+      channel,
+    }));
+    if (items.length >= 8) break;
+  }
+  return items;
+}
+
+function parseBybitAnnouncementsPage(html: string, source: OfficialSourceConfig, page: OfficialPageEndpoint, channel: NewsContextChannel): NewsContextItem[] {
+  const state = readJsonScript(html, '__NEXT_DATA__') as Record<string, any> | null;
+  const rows = state?.props?.pageProps?.articleInitEntity?.list;
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .slice(0, 12)
+    .map((row) => {
+      const title = cleanText(String(row?.title ?? ''));
+      if (!title) return null;
+      const url = absolutizeUrl(String(row?.url ?? ''), page.url);
+      const category = cleanText(String(row?.category?.title ?? ''));
+      const topics = Array.isArray(row?.topics) ? row.topics.map((topic: unknown) => cleanText(String(topic))).filter(Boolean).slice(0, 3) : [];
+      const summary = cleanText(String(row?.description ?? '')) || [category, ...topics].filter(Boolean).join(' · ') || null;
+      const ts = secondsToMillis(row?.publish_time) ?? secondsToMillis(row?.date_timestamp) ?? secondsToMillis(row?.start_date_timestamp);
+      return buildOfficialPageItem(source, {
+        idPart: `${row?.objectID ?? row?.url ?? title}:${row?.publish_time ?? ''}`,
+        title,
+        url,
+        ts,
+        summary,
+        source: page.label ?? source.label,
+        sourceDomain: page.domain ?? source.domain,
+        channel,
+      });
+    })
+    .filter((row): row is NewsContextItem => Boolean(row));
+}
+
+function parseCoinbaseProductsJson(data: unknown, source: OfficialSourceConfig, endpoint: OfficialJsonEndpoint, channel: NewsContextChannel): NewsContextItem[] {
+  if (!Array.isArray(data)) return [];
+  return data
+    .map((row) => {
+      const product = row as Record<string, unknown>;
+      const id = cleanText(String(product.id ?? product.display_name ?? ''));
+      if (!id) return null;
+      const phase = coinbaseTradingPhase(product);
+      if (!phase) return null;
+      return buildOfficialPageItem(source, {
+        idPart: `${id}:${phase}`,
+        title: `Coinbase ${id} Trading Phase: ${phase}`,
+        url: 'https://www.coinbase.com/exchange/asset-listings',
+        ts: null,
+        summary: cleanText(String(product.status_message ?? '')) || 'Official Coinbase Exchange product availability state',
+        source: endpoint.label ?? source.label,
+        sourceDomain: endpoint.domain ?? source.domain,
+        channel,
+      });
+    })
+    .filter((row): row is NewsContextItem => Boolean(row))
+    .slice(0, 12);
+}
+
+function parseUpbitAnnouncementsJson(data: unknown, source: OfficialSourceConfig, endpoint: OfficialJsonEndpoint, channel: NewsContextChannel): NewsContextItem[] {
+  const notices = (data as Record<string, any>)?.data?.notices;
+  if (!Array.isArray(notices)) return [];
+  return notices
+    .slice(0, 12)
+    .map((notice) => {
+      const title = cleanText(String(notice?.title ?? ''));
+      const id = String(notice?.id ?? notice?.uuid ?? title);
+      if (!title) return null;
+      return buildOfficialPageItem(source, {
+        idPart: `upbit:${id}:${notice?.listed_at ?? ''}`,
+        title,
+        url: notice?.id ? `https://upbit.com/service_center/notice?id=${encodeURIComponent(String(notice.id))}` : source.url,
+        ts: parseDateMillis(String(notice?.listed_at ?? notice?.first_listed_at ?? '')),
+        summary: cleanText(String(notice?.category ?? 'Upbit notice')) || 'Upbit notice',
+        source: endpoint.label ?? 'Upbit',
+        sourceDomain: endpoint.domain ?? 'upbit.com',
+        channel,
+      });
+    })
+    .filter((row): row is NewsContextItem => Boolean(row));
+}
+
+function parseBithumbNoticesJson(data: unknown, source: OfficialSourceConfig, endpoint: OfficialJsonEndpoint, channel: NewsContextChannel): NewsContextItem[] {
+  if (!Array.isArray(data)) return [];
+  return data
+    .slice(0, 12)
+    .map((notice) => {
+      const row = notice as Record<string, unknown>;
+      const title = cleanText(String(row.title ?? ''));
+      if (!title) return null;
+      const categories = Array.isArray(row.categories) ? row.categories.map(String).map(cleanText).filter(Boolean).join(' · ') : 'Bithumb notice';
+      const url = typeof row.pc_url === 'string' ? row.pc_url : source.url;
+      return buildOfficialPageItem(source, {
+        idPart: `bithumb:${url}:${row.published_at ?? ''}`,
+        title,
+        url,
+        ts: parseDateWithZone(String(row.published_at ?? row.modified_at ?? ''), '+09:00'),
+        summary: categories,
+        source: endpoint.label ?? 'Bithumb',
+        sourceDomain: endpoint.domain ?? 'bithumb.com',
+        channel,
+      });
+    })
+    .filter((row): row is NewsContextItem => Boolean(row));
+}
+
+function parseBybitSystemStatusJson(data: unknown, source: OfficialSourceConfig, endpoint: OfficialJsonEndpoint, channel: NewsContextChannel): NewsContextItem[] {
+  const list = (data as Record<string, any>)?.result?.list;
+  if (!Array.isArray(list)) return [];
+  return list
+    .slice(0, 12)
+    .map((entry) => {
+      const title = cleanText(String(entry?.title ?? entry?.state ?? entry?.id ?? 'Bybit System Status'));
+      if (!title) return null;
+      return buildOfficialPageItem(source, {
+        idPart: `bybit-system:${entry?.id ?? entry?.title ?? title}`,
+        title: title.startsWith('Bybit') ? title : `Bybit ${title}`,
+        url: 'https://announcements.bybit.com/en/?category=maintenance_updates',
+        ts: parseDateMillis(String(entry?.beginTime ?? entry?.startTime ?? entry?.time ?? '')),
+        summary: cleanText(String(entry?.desc ?? entry?.status ?? 'Official Bybit system status')) || 'Official Bybit system status',
+        source: endpoint.label ?? 'Bybit System Status',
+        sourceDomain: endpoint.domain ?? 'bybit.com',
+        channel,
+      });
+    })
+    .filter((row): row is NewsContextItem => Boolean(row));
+}
+
+function parseFallbackPage(html: string, feed: RssFeed): NewsContextItem[] {
+  if (feed.key === 'cryptoslate') return parseCryptoSlateNewsPage(html, feed);
+  return [];
+}
+
+function parseMediaPage(html: string, feed: RssFeed): NewsContextItem[] {
+  if (feed.pageParser === 'ap-business') return parseApBusinessPage(html, feed);
+  return [];
+}
+
+function parseApBusinessPage(html: string, feed: RssFeed): NewsContextItem[] {
+  const seen = new Set<string>();
+  const items: NewsContextItem[] = [];
+  const rows = html.matchAll(/<div\b[^>]*class=["'][^"']*PagePromo[^"']*["'][^>]*data-gtm-region=["']([^"']+)["'][^>]*data-posted-date-timestamp=["'](\d+)["'][\s\S]*?<a\b[^>]*href=["']([^"']*\/article\/[^"']+)["']/gi);
+  for (const match of rows) {
+    const title = cleanText(match[1]);
+    if (!isApBusinessHeadline(title)) continue;
+    const url = absolutizeUrl(match[3], feed.url);
+    if (seen.has(url)) continue;
+    seen.add(url);
+    const ts = Number(match[2]);
+    items.push(buildItem({
+      id: `rss:${feed.key}:page:${url}`,
+      title,
+      summary: 'AP Business page headline',
+      url,
+      source: feed.label,
+      sourceKey: feed.key,
+      sourceDomain: feed.domain,
+      channel: 'rss',
+      ts: Number.isFinite(ts) ? ts : null,
+    }));
+    if (items.length >= 8) break;
+  }
+  return items;
+}
+
+function parseCryptoSlateNewsPage(html: string, feed: RssFeed): NewsContextItem[] {
+  const ignored = new Set([
+    'news', 'feed', 'coins', 'predictions', 'crypto-laws', 'guides', 'reviews', 'directory',
+    'market', 'regulation', 'macro', 'defi', 'etf', 'mining', 'trading', 'exchanges',
+  ]);
+  const seen = new Set<string>();
+  const items: NewsContextItem[] = [];
+  const links = html.matchAll(/<a\b[^>]*href=["'](https:\/\/cryptoslate\.com\/([^"'?#]+\/))["'][^>]*>([\s\S]*?)<\/a>/gi);
+  for (const match of links) {
+    const url = decodeXml(match[1]);
+    const slug = decodeXml(match[2]).replace(/^\/+|\/+$/g, '');
+    if (!slug || slug.includes('/') || ignored.has(slug) || seen.has(url)) continue;
+    const title = cleanText(stripHtml(match[3]));
+    if (!isCryptoSlateHeadline(title)) continue;
+    const after = html.slice(match.index ?? 0, (match.index ?? 0) + 900);
+    const naturalDate = after.match(/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},\s+\d{4}\b/i)?.[0] ?? '';
+    seen.add(url);
+    items.push(buildItem({
+      id: `rss:${feed.key}:fallback:${url}`,
+      title,
+      summary: null,
+      url,
+      source: feed.label,
+      sourceKey: feed.key,
+      sourceDomain: feed.domain,
+      channel: 'rss',
+      ts: parseNaturalDateMillis(naturalDate),
+    }));
+    if (items.length >= 8) break;
+  }
+  return items;
+}
+
+function buildItem(input: {
+  id: string;
+  title: string;
+  summary: string | null;
+	url: string | null;
+	source: string;
+	sourceKey: string;
+	sourceDomain: string | null;
+	channel: NewsContextChannel;
+  ts: number | null;
+  extraSymbols?: string[];
+}): NewsContextItem {
+  const ts = normalizeTimestamp(input.ts);
+  const text = `${input.title} ${input.summary ?? ''}`;
+  const tags = classifyTags(text);
+  return {
+	    id: input.id,
+	    url: input.url,
+	    source: input.source,
+	    sourceKey: input.sourceKey,
+	    sourceDomain: input.sourceDomain,
+	    channel: input.channel,
+    ts,
+    title: cleanText(input.title),
+    summary: input.summary ? cleanText(input.summary).slice(0, 260) : null,
+    timeLabel: ts ? ageLabel(ts) : 'Undated',
+    symbols: extractSymbols(text, input.extraSymbols),
+    tags,
+    tone: toneForTags(tags),
+  };
+}
+
+function parseLooseJson<T>(text: string): T {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    const repaired = text.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
+    return JSON.parse(repaired) as T;
+  }
+}
+
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetchWithRetry(url, init);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return (await res.json()) as T;
+}
+
+async function fetchText(url: string, init?: RequestInit): Promise<string> {
+  const res = await fetchWithRetry(url, init);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.text();
+}
+
+async function fetchWithRetry(url: string, init?: RequestInit): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await fetchWithTimeout(url, init);
+    } catch (err) {
+      lastErr = err;
+      if (err instanceof Error && err.name === 'AbortError') break;
+      if (attempt === 2) break;
+      await sleep(350 * (attempt + 1));
+    }
+  }
+  throw lastErr;
+}
+
+async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, {
+      ...init,
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Accept-Language': 'en-US,en;q=0.9',
+        ...(init?.headers ?? {}),
+      },
+      signal: ctrl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function sourceError(key: string, label: string, err: unknown, url: string | null = null, domain: string | null = null): NewsContextSource {
+  return {
+    key,
+    label,
+    status: 'error',
+    detail: errorMessage(err),
+    fetchedAt: null,
+    count: 0,
+    url,
+    domain,
+  };
+}
+
+function rssDetail(feed: RssFeed): string {
+  if (feed.pageParser) {
+    return feed.minFetchMs
+      ? 'Official public page headline source. Publisher limit: <=1 request / 3 minutes.'
+      : 'Official public page headline source.';
+  }
+  return feed.minFetchMs
+    ? 'Official RSS feed. Publisher limit: <=1 request / 3 minutes.'
+    : 'Official RSS feed.';
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function sourceAgeLabel(ts: number): string {
+  const seconds = Math.max(0, Math.floor((Date.now() - ts) / 1_000));
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  return `${Math.floor(minutes / 60)}h ago`;
+}
+
+function compareContextItems(a: NewsContextItem, b: NewsContextItem): number {
+  const byScore = contextSortScore(b) - contextSortScore(a);
+  if (byScore !== 0) return byScore;
+  if (a.channel !== b.channel) return channelRank(a.channel) - channelRank(b.channel);
+  return a.id.localeCompare(b.id);
+}
+
+function contextSortScore(item: NewsContextItem): number {
+  const ts = item.ts && Number.isFinite(item.ts) ? item.ts : 0;
+  if (item.channel === 'primary') return ts + 6 * 60 * 60_000;
+  if (item.channel === 'venue') return ts + 5 * 60 * 60_000;
+  return ts;
+}
+
+function channelRank(channel: NewsContextChannel): number {
+  if (channel === 'primary') return 0;
+  if (channel === 'venue') return 1;
+  if (channel === 'tree') return 2;
+  if (channel === 'lookonchain') return 3;
+  return 4;
+}
+
+function classifyTags(text: string): string[] {
+  const lower = text.toLowerCase();
+  const tags: string[] = [];
+  if (/(binance|coinbase|kraken|bybit|okx|upbit|bithumb|deribit|cme|globex|exchange|status page)/.test(lower)) tags.push('Exchange');
+  if (/(listing|list|launch|perpetual|pair|airdrop|hodler|futures|options|contract)/.test(lower)) tags.push('Listing');
+  if (/(delist|removal|cease support|monitoring tag|trading support end|거래지원 종료|거래유의)/.test(lower)) tags.push('Delisting');
+  if (/(api|websocket|endpoint|request weight|maintenance|upgrade|suspend|deposit|withdrawal|wallet|network|outage|incident|service issue|점검|입출금)/.test(lower)) tags.push('Ops');
+  if (/(whale|wallet|transfer|bought|sold|deposited|withdrew|smart money|on-chain|onchain)/.test(lower)) tags.push('On-Chain');
+  if (/(hack|exploit|attack|phishing|security|stolen)/.test(lower)) tags.push('Security');
+  if (/\b(fed|fomc|bls|bea|cpi|ppi|pce|jolts|inflation|payroll|unemployment|rate|rates|gdp|employment|jobs|treasury|ofac|ecb|boe|boj|pboc|safe|fx reserve|yield|tariff|iran|strike|strikes|war)\b/.test(lower) || /\b(u\.s\.|us)\s+treasury\b/.test(lower)) tags.push('Macro');
+  if (/\b(etf|sec|cftc|lawsuit|court|regulator|approval|enforcement|litigation|sanction|general license|trading suspension|stablecoin)\b/.test(lower)) tags.push('Policy');
+  if (!tags.length) tags.push('Market');
+  return tags.slice(0, 4);
+}
+
+function toneForTags(tags: string[]): NewsContextTone {
+  if (tags.some((tag) => tag === 'Delisting' || tag === 'Security' || tag === 'Macro')) return 'bad';
+  if (tags.some((tag) => tag === 'Ops' || tag === 'Policy' || tag === 'On-Chain')) return 'warn';
+  if (tags.some((tag) => tag === 'Listing' || tag === 'Exchange')) return 'ok';
+  return 'idle';
+}
+
+function extractSymbols(text: string, extra: string[] = []): string[] {
+  const found = new Set<string>();
+  for (const raw of extra) {
+    const sym = raw.replace(/[_/-].*$/, '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+    if (sym) found.add(sym);
+  }
+  for (const m of text.matchAll(/[$#]([A-Za-z0-9]{2,12})\b/g)) {
+    found.add(m[1].toUpperCase());
+  }
+  for (const m of text.matchAll(/\b(BTC|ETH|SOL|BNB|XRP|DOGE|ARB|OP|SUI|USD1|WLFI|USDT|USDC|HYPE|PEPE|SHIB|MSTR)\b/gi)) {
+    found.add(m[1].toUpperCase());
+  }
+  return Array.from(found).filter((sym) => COMMON_SYMBOLS.has(sym) || sym.length >= 3).slice(0, 8);
+}
+
+function matchBlocks(xml: string, tag: string): string[] {
+  return Array.from(xml.matchAll(new RegExp(`<${tag}\\b[\\s\\S]*?<\\/${tag}>`, 'gi')), (m) => m[0]);
+}
+
+function readTag(block: string, tag: string): string | null {
+  const m = block.match(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'));
+  return m ? decodeXml(m[1]) : null;
+}
+
+function readAttr(block: string, tag: string, attr: string): string | null {
+  const m = block.match(new RegExp(`<${tag}\\b[^>]*\\s${attr}=["']([^"']+)["'][^>]*>`, 'i'));
+  return m ? decodeXml(m[1]) : null;
+}
+
+function stripHtml(value: string): string {
+  return value.replace(/<[^>]+>/g, ' ');
+}
+
+function cleanText(value: string): string {
+  return decodeXml(value).replace(/\\'/g, "'").replace(/\\"/g, '"').replace(/\s+/g, ' ').trim();
+}
+
+function matchesAnyKeyword(value: string, keywords: string[]): boolean {
+  const lower = value.toLowerCase();
+  return keywords.some((keyword) => lower.includes(keyword.toLowerCase()));
+}
+
+function readJsonScript(html: string, id: string): unknown | null {
+  const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = html.match(new RegExp(`<script\\b[^>]*id=["']${escaped}["'][^>]*>([\\s\\S]*?)<\\/script>`, 'i'));
+  if (!match) return null;
+  try {
+    return JSON.parse(decodeXml(match[1]).trim());
+  } catch {
+    return null;
+  }
+}
+
+function okxSectionLabel(slug: string): string | null {
+  const labels: Record<string, string> = {
+    'announcements-new-listings': 'OKX new listing',
+    'announcements-delistings': 'OKX delisting',
+    'announcements-trading-updates': 'OKX trading update',
+    'announcements-deposit-withdrawal-suspension-resumption': 'OKX deposit/withdrawal update',
+    'announcements-web3': 'OKX Web3 update',
+  };
+  return labels[slug] ?? null;
+}
+
+function coinbaseTradingPhase(product: Record<string, unknown>): string | null {
+  const status = cleanText(String(product.status ?? '')).toLowerCase();
+  const statusMessage = cleanText(String(product.status_message ?? ''));
+  if (Boolean(product.trading_disabled)) return 'Trading Disabled';
+  if (Boolean(product.cancel_only)) return 'Cancel Only';
+  if (Boolean(product.limit_only)) return 'Limit Only';
+  if (Boolean(product.post_only)) return 'Post Only';
+  if (Boolean(product.auction_mode)) return 'Auction Mode';
+  if (status && status !== 'online') return status.replace(/\b\w/g, (char) => char.toUpperCase());
+  if (statusMessage) return statusMessage;
+  return null;
+}
+
+function secondsToMillis(value: unknown): number | null {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return null;
+  return numeric < 20_000_000_000 ? numeric * 1_000 : numeric;
+}
+
+function absolutizeUrl(value: string | null, base: string): string {
+  const raw = cleanText(value ?? '');
+  if (!raw) return base;
+  try {
+    return new URL(raw, base).toString();
+  } catch {
+    return raw;
+  }
+}
+
+function decodeXml(value: string): string {
+  return value
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&#x([0-9a-f]+);/gi, (_, n: string) => String.fromCharCode(Number.parseInt(n, 16)))
+    .replace(/&#(\d+);/g, (_, n: string) => String.fromCharCode(Number(n)));
+}
+
+function parseDateMillis(value: string): number | null {
+  if (!value) return null;
+  const normalized = value.includes(' ') && !value.includes('T') ? value.replace(' ', 'T') : value;
+  const ts = Date.parse(normalized);
+  return Number.isFinite(ts) ? ts : null;
+}
+
+function parseNaturalDateMillis(value: string): number | null {
+  if (!value) return null;
+  const ts = Date.parse(value);
+  return Number.isFinite(ts) ? ts : null;
+}
+
+function parseDateWithZone(value: string, zone: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const normalized = trimmed.includes(' ') && !trimmed.includes('T') ? trimmed.replace(' ', 'T') : trimmed;
+  const withZone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(normalized) ? normalized : `${normalized}${zone}`;
+  const ts = Date.parse(withZone);
+  return Number.isFinite(ts) ? ts : null;
+}
+
+function isCryptoSlateHeadline(title: string): boolean {
+  if (title.length < 32 || title.length > 220) return false;
+  if (!/[a-z]/.test(title) || !/\s/.test(title)) return false;
+  return !/^(open|view|browse|follow|explore|latest|section navigation|asset coverage|topic coverage)\b/i.test(title);
+}
+
+function isApBusinessHeadline(title: string): boolean {
+  if (title.length < 24 || title.length > 220) return false;
+  return /\b(market|markets|stock|stocks|shares|wall street|investor|investors|economy|economic|inflation|fed|federal reserve|rates|oil|bank|banks|business|company|companies|earnings|finance|financial|loan|loans|tariff|trade|ai)\b/i.test(title);
+}
+
+function parseLookonchainDate(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const normalized = trimmed.includes(' ') && !trimmed.includes('T') ? trimmed.replace(' ', 'T') : trimmed;
+  const withSourceZone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(normalized)
+    ? `${normalized}+08:00`
+    : normalized;
+  const ts = Date.parse(withSourceZone);
+  return Number.isFinite(ts) ? ts : null;
+}
+
+function parseRelativeAge(value: string, baseTs: number): number | null {
+  const lower = value.trim().toLowerCase();
+  if (!lower) return null;
+  if (lower === 'now' || lower === 'just now') return baseTs;
+  const m = lower.match(/(\d+)\s*(second|minute|hour|day|week|month|year)s?\s+ago/);
+  if (!m) return null;
+  const qty = Number(m[1]);
+  const unit = m[2];
+  if (!Number.isFinite(qty)) return null;
+  const unitMs: Record<string, number> = {
+    second: 1_000,
+    minute: 60_000,
+    hour: 3_600_000,
+    day: 86_400_000,
+    week: 604_800_000,
+    month: 30 * 86_400_000,
+    year: 365 * 86_400_000,
+  };
+  return baseTs - qty * unitMs[unit];
+}
+
+function selectLookonchainTimestamp(absoluteTs: number | null, relativeTs: number | null): number | null {
+  const now = Date.now();
+  if (absoluteTs && absoluteTs <= now + 2 * 60_000) return absoluteTs;
+  if (relativeTs && relativeTs <= now + 2 * 60_000) return relativeTs;
+  return absoluteTs ?? relativeTs;
+}
+
+function normalizeTimestamp(ts: number | null): number | null {
+  if (!ts || !Number.isFinite(ts)) return null;
+  const now = Date.now();
+  if (ts > now + 5 * 60_000) return null;
+  return ts > now ? now : ts;
+}
+
+function ageLabel(ts: number): string {
+  const diff = Math.max(0, Date.now() - ts);
+  const seconds = Math.floor(diff / 1_000);
+  if (seconds < 60) return `${seconds}s`;
+  const min = Math.floor(diff / 60_000);
+  if (min < 60) return `${min}m`;
+  const hours = Math.floor(min / 60);
+  if (hours < 48) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
+}
+
+function normalizeKey(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().slice(0, 180);
+}

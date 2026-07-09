@@ -8,6 +8,8 @@ export interface AppConfig {
   minQuoteVolume24h: number;
   killSwitch: boolean;
   liveTradingEnabled: boolean;
+  fundsLocked: boolean;
+  automationPaused: boolean;
   maxOrderNotionalUsd: number;
   maxDailyNotionalUsd: number;
   maxDailyLossUsd: number;

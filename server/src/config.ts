@@ -14,6 +14,8 @@ export const DEFAULTS: AppConfig = {
   // Control. Kill switch starts ON (halted); live trading starts OFF.
   killSwitch: true,
   liveTradingEnabled: false,
+  fundsLocked: true,
+  automationPaused: true,
 
   // Risk limits sized for a ~$10 account. Raise them deliberately, in the UI.
   maxOrderNotionalUsd: 12,

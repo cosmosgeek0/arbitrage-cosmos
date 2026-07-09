@@ -36,7 +36,7 @@ function feeSummary(fills: FillRow[]): string {
 }
 
 export function Fills() {
-  const { state, importFills, openDetail, setPage } = useStore();
+  const { state, importFills, openDetail, setPage, prefs } = useStore();
   const [fills, setFills] = useState<FillRow[]>([]);
   const [importSymbol, setImportSymbol] = useState('');
   const [importMsg, setImportMsg] = useState<{ tone: MsgTone; text: string } | null>(null);
@@ -62,9 +62,9 @@ export function Fills() {
 
   useEffect(() => {
     void load();
-    const t = window.setInterval(load, 30_000);
+    const t = window.setInterval(load, Math.max(0.5, prefs.dataCadence?.account ?? 30) * 1000);
     return () => window.clearInterval(t);
-  }, [load, state?.recentFills.length]);
+  }, [load, state?.recentFills.length, prefs.dataCadence?.account]);
   useRefreshSignal(() => void load());
 
   useEffect(() => {

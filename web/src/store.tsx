@@ -160,7 +160,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return;
     }
     let alive = true;
-    void fetch('/api/fx')
+    const load = () => fetch('/api/fx')
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { rates?: Record<string, number> } | null) => {
         if (!alive || !d?.rates) return;
@@ -171,10 +171,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch(() => undefined);
+    void load();
+    const t = window.setInterval(load, Math.max(0.5, prefs.dataCadence?.fx ?? 300) * 1000);
     return () => {
       alive = false;
+      window.clearInterval(t);
     };
-  }, [prefs.currency]);
+  }, [prefs.currency, prefs.dataCadence?.fx]);
 
   useEffect(() => onPrefs((p) => {
     setPrefs(p);
@@ -236,8 +239,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // markets poll at the preferred refresh rate
+  // markets poll at the preferred source cadence. `refreshSec` is retained as
+  // the legacy market value; `dataCadence.market` is the new source map.
   useEffect(() => {
+    const marketSec = prefs.dataCadence?.market ?? prefs.refreshSec;
     const load = () =>
       fetch('/api/markets')
         .then((r) => (r.ok ? r.json() : null))
@@ -250,9 +255,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })
         .catch(() => setMarketsError('market refresh failed'));
     void load();
-    const t = setInterval(load, Math.max(3, prefs.refreshSec) * 1000);
+    const t = setInterval(load, Math.max(0.5, marketSec) * 1000);
     return () => clearInterval(t);
-  }, [prefs.refreshSec]);
+  }, [prefs.refreshSec, prefs.dataCadence?.market]);
 
   const openDetail = useCallback((symbol: string) => {
     setDetailSymbol(symbol);

@@ -1,8 +1,8 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useStore, useResolvedTheme, type Page } from '../store';
 import { fmtClockZone, timeAgo } from '../format';
 import { eventSummary } from '../lib/eventText';
-import { ACCENTS, CURRENCIES, type AccentKey } from '../lib/prefs';
+import { ACCENTS, CURRENCIES, type AccentKey, type DataCadenceKey } from '../lib/prefs';
 import { openOverlay, useOverlay } from '../lib/overlay';
 import { TokenIcon } from './TokenIcon';
 import {
@@ -128,6 +128,118 @@ export function LiveDot({ ok = true, title = 'Live — refreshing' }: { ok?: boo
   return <span className={`live-dot ${ok ? 'on' : 'off'}`} title={title} aria-hidden />;
 }
 
+function MiniMegaphone({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 14h3l8 4V6l-8 4H5z" />
+      <path d="M8 14v4" />
+      <path d="M19 9.5a4.5 4.5 0 0 1 0 5" />
+    </svg>
+  );
+}
+
+function MiniDevice({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="7" y="3" width="10" height="18" rx="2" />
+      <path d="M10 6h4M11 18h2" />
+    </svg>
+  );
+}
+
+function MiniMessage({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="6" width="16" height="12" rx="2" />
+      <path d="m5 8 7 5 7-5" />
+    </svg>
+  );
+}
+
+function BasisUnitGlyph({ size = 31 }: { size?: number }) {
+  return (
+    <span className="basis-unit-logo" style={{ width: size, height: size }} aria-hidden="true">
+      <svg width={size} height={size} viewBox="0 0 31 31" fill="none">
+        <path className="rail low" d="M6 20.5h8.5c2.6 0 3.9-10 6.5-10H25" />
+        <path className="rail high" d="M6 10.5h8.5c2.6 0 3.9 10 6.5 10H25" />
+        <path className="zero" d="M15.5 7v17" />
+        <circle className="node left" cx="6" cy="15.5" r="2" />
+        <circle className="node right" cx="25" cy="15.5" r="2" />
+      </svg>
+    </span>
+  );
+}
+
+function CurrencyUnitGlyph({ size = 31 }: { size?: number }) {
+  return (
+    <span className="currency-unit-logo" style={{ width: size, height: size }} aria-hidden="true">
+      <svg width={size} height={size} viewBox="0 0 31 31" fill="none">
+        <circle className="coin main" cx="12" cy="12" r="6.5" />
+        <circle className="coin quote" cx="19.5" cy="19" r="5.5" />
+        <path className="mark" d="M12 8.5v7M9.5 10.5h4.8M9.5 13.5h4.8" />
+        <path className="arrow" d="M18 10.5h4.2m0 0-1.6-1.6m1.6 1.6-1.6 1.7M13 21h-4.2m0 0 1.6-1.7M8.8 21l1.6 1.6" />
+      </svg>
+    </span>
+  );
+}
+
+function DataCadenceGlyph({ size = 31 }: { size?: number }) {
+  return (
+    <span className="cadence-unit-logo" style={{ width: size, height: size }} aria-hidden="true">
+      <svg width={size} height={size} viewBox="0 0 31 31" fill="none">
+        <path className="ring" d="M15.5 5.8a9.7 9.7 0 1 1-8.2 4.5" />
+        <path className="tick" d="M15.5 9v6.7l4.4 2.5" />
+        <path className="pulse" d="M6 16h3.2l1.4-3.3 2.6 6.6 1.9-3.3H25" />
+        <circle className="node" cx="6.8" cy="8.5" r="2" />
+      </svg>
+    </span>
+  );
+}
+
+function DataHealthGlyph({ size = 31 }: { size?: number }) {
+  return (
+    <span className="data-health-logo" style={{ width: size, height: size }} aria-hidden="true">
+      <svg width={size} height={size} viewBox="0 0 31 31" fill="none">
+        <path className="grid top" d="M6.4 9h18.2" />
+        <path className="grid mid" d="M6.4 15.5h18.2" />
+        <path className="grid bot" d="M6.4 22h18.2" />
+        <path className="pulse" d="M6.3 15.5h4l1.8-4.7 3.2 9.6 2.3-4.9h7.1" />
+        <circle className="node one" cx="8.3" cy="9" r="1.65" />
+        <circle className="node two" cx="18.4" cy="15.5" r="1.65" />
+        <circle className="node three" cx="23.3" cy="22" r="1.65" />
+      </svg>
+    </span>
+  );
+}
+
+function AdvisorSealGlyph({ size = 31 }: { size?: number }) {
+  return (
+    <span className="advisor-seal-logo" style={{ width: size, height: size }} aria-hidden="true">
+      <svg width={size} height={size} viewBox="0 0 31 31" fill="none">
+        <path className="scan" d="M5.7 15.5a9.8 9.8 0 0 1 16.7-7" />
+        <path className="scan cap" d="m22.5 8.5.2-3.1 3 1" />
+        <path className="plate" d="M15.5 7.1 22 9.7v4.7c0 4-2.4 7.2-6.5 9.1-4.1-1.9-6.5-5.1-6.5-9.1V9.7l6.5-2.6Z" />
+        <path className="edge" d="M15.5 10.1 19 11.5v2.8c0 2.2-1.2 4-3.5 5.3-2.3-1.3-3.5-3.1-3.5-5.3v-2.8l3.5-1.4Z" />
+        <path className="check" d="m12.1 15.4 2.3 2.3 4.7-5" />
+        <circle className="node" cx="6.7" cy="16.2" r="1.55" />
+      </svg>
+    </span>
+  );
+}
+
+function NotificationCenterGlyph({ size = 31 }: { size?: number }) {
+  return (
+    <span className="notification-center-logo" style={{ width: size, height: size }} aria-hidden="true">
+      <svg width={size} height={size} viewBox="0 0 31 31" fill="none">
+        <path className="wave" d="M7 11.2c1.3-2.7 4.2-4.7 8.5-4.7 4.4 0 7.2 2 8.5 4.7" />
+        <path className="bell" d="M10 17.4v-3.1c0-3.2 2.2-5.4 5.5-5.4s5.5 2.2 5.5 5.4v3.1l2.1 2.7H7.9l2.1-2.7Z" />
+        <path className="clapper" d="M13.2 22.5c.5 1 1.2 1.6 2.3 1.6s1.8-.6 2.3-1.6" />
+        <circle className="ping" cx="22.9" cy="8.3" r="2.2" />
+      </svg>
+    </span>
+  );
+}
+
 // 2-letter ISO country code → flag emoji (EU included).
 export function flag(cc: string): string {
   if (!cc || cc.length !== 2) return '🏳️';
@@ -174,7 +286,7 @@ const TITLES: Record<Page, string> = {
   risk: 'Risk',
   ledger: 'Ledger / Logs',
   system: 'System Health',
-  news: 'Binance News',
+  news: 'Market News',
   calendar: 'Economic Calendar',
 };
 
@@ -221,26 +333,6 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
   },
 ];
 
-interface AccountExchangeRow {
-  id: string;
-  name: string;
-  type: string;
-  scope: string;
-  status: string;
-  live: boolean;
-  keysPresent: boolean;
-  prefix: string;
-  fingerprint: string | null;
-  ipRestrict: boolean;
-  permissions?: {
-    reading?: boolean;
-    spotMargin?: boolean;
-    marginLoan?: boolean;
-    withdrawals?: boolean;
-    universalTransfer?: boolean;
-    futures?: boolean;
-  };
-}
 interface AccountSessionRow {
   id: string;
   ip: string | null;
@@ -260,7 +352,6 @@ function AccountCard({ compact = false }: { compact?: boolean }) {
   const profile = state?.config.profile ?? { name: '', avatar: null };
   const [preview, setPreview] = useState<string | null>(null); // instant feedback before the 2s state tick
   const [editName, setEditName] = useState<string | null>(null);
-  const [linkedKeys, setLinkedKeys] = useState<AccountExchangeRow[]>([]);
   const [sessions, setSessions] = useState<AccountSessionRow[]>([]);
   const [sessionNow, setSessionNow] = useState(Date.now());
   const avatar = preview ?? profile.avatar ?? DEFAULT_PROFILE_LOGO;
@@ -269,28 +360,23 @@ function AccountCard({ compact = false }: { compact?: boolean }) {
   const initial = name.trim().slice(0, 1).toUpperCase() || 'O';
   const connected = !!state?.binance.keysPresent;
   const sub = connected ? (state?.binance.connected ? 'Binance · read-only' : 'Binance · error') : 'Binance · not linked';
-  const liveKeys = linkedKeys.filter((k) => k.live || k.keysPresent || k.status === 'live');
   const accountTone = connected ? (state?.binance.connected ? 'live' : 'warn') : 'off';
-  const verified = !!state?.binance.connected;
-  const identityLine = connected ? (verified ? 'Binance · read-only' : 'Binance · key check') : 'Local session';
-  const connectedKeys = (liveKeys.length ? liveKeys : linkedKeys.filter((k) => k.keysPresent || k.status !== 'planned')).slice(0, 4);
   const hostLabel = typeof window !== 'undefined' ? window.location.host : 'local';
-  const recentSessions = sessions
-    .filter((s) => s.current || s.active || sessionNow - s.lastSeen < 90_000)
-    .slice(0, 10);
+  const accountId = '1029671855';
+  const activeSessionCount = sessions.filter((s) => s.current || s.active).length;
+  const recentWindowMs = 10 * 60_000;
+  const deviceRows = sessions
+    .filter((s) => s.current || s.active || sessionNow - s.lastSeen < recentWindowMs)
+    .slice(0, 3);
   const logoutHref = typeof window !== 'undefined' && window.location.hostname === DEPLOYED_APP_HOST
     ? '/cdn-cgi/access/logout'
     : `https://${DEPLOYED_APP_HOST}/cdn-cgi/access/logout`;
 
-  // Linked-key count is polled only while the popover is open.
+  // Device posture is the only live data this popover owns; refresh it quickly.
   useEffect(() => {
     if (!open) return;
     let alive = true;
     const load = () => {
-      void fetch('/api/apikey')
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => { if (alive && d) setLinkedKeys(d.keys ?? []); })
-        .catch(() => undefined);
       void fetch('/api/sessions')
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
@@ -301,7 +387,7 @@ function AccountCard({ compact = false }: { compact?: boolean }) {
         .catch(() => undefined);
     };
     load();
-    const t = setInterval(load, 5000);
+    const t = setInterval(load, 2000);
     return () => { alive = false; clearInterval(t); };
   }, [open]);
 
@@ -328,7 +414,12 @@ function AccountCard({ compact = false }: { compact?: boolean }) {
 
   return (
     <div className={`acct-wrap ${compact ? 'top' : ''}`} ref={ref}>
-      <button className={`acct-card ${compact ? 'top acct-pro-trigger' : ''} ${open ? 'on' : ''} s-${accountTone}`} onClick={() => setOpen(!open)} title={`Account Details — ${sub}`} aria-label="Account Details">
+      <button
+        className={`acct-card ${compact ? 'top acct-pro-trigger' : ''} ${open ? 'on' : ''} s-${accountTone}`}
+        onClick={() => { if (!(compact && open)) setOpen(!open); }}
+        title={`Account Details — ${sub}`}
+        aria-label="Account Details"
+      >
         {compact ? (
           <span className={`acct-top-orb ${usesDefaultLogo ? 'profile-logo' : ''} s-${accountTone}`}>
             <span className="acct-top-face">
@@ -370,58 +461,35 @@ function AccountCard({ compact = false }: { compact?: boolean }) {
                   <button type="submit">Save</button>
                 </form>
               )}
-              <span className="cb-profile-sub">{identityLine}</span>
+              <span className="cb-profile-sub">Binance · ID: {accountId}</span>
             </div>
           </div>
 
-          <div className="cb-profile-sections">
-            <section className="cb-profile-section" aria-label="Connected exchange">
-              <div className="cb-profile-section-head">
-                <span><IconKey size={16} />Connected Exchange</span>
-                <b className={verified ? 'ok' : connected ? 'warn' : ''}>{verified ? 'Live' : connected ? 'Checking' : 'Not linked'}</b>
-              </div>
-              <div className="cb-link-list">
-                {connectedKeys.length > 0 ? connectedKeys.map((k) => (
-                  <div className="cb-exchange-row" key={k.id}>
-                    <span className={`cb-exchange-mark ${k.live || k.keysPresent ? 'on' : ''}`}>{k.name.slice(0, 1).toUpperCase()}</span>
-                    <span className="cb-exchange-main">
-                      <b>{k.name}</b>
-                      <em>{k.scope} · {k.type}{k.fingerprint ? ` · ${k.fingerprint}` : k.prefix ? ` · ${k.prefix}...` : ''}</em>
-                    </span>
-                    <span className={`cb-status ${k.live ? 'ok' : k.keysPresent ? 'warn' : ''}`}>
-                      {k.live ? 'Live' : k.keysPresent ? 'Pending' : 'Off'}
-                    </span>
-                  </div>
-                )) : (
-                  <div className="cb-empty">No exchange key is linked to this server.</div>
-                )}
-              </div>
-            </section>
-
+          <div className="cb-profile-sections cb-device-only">
             <section className="cb-profile-section" aria-label="Linked devices">
               <div className="cb-profile-section-head">
-                <span><IconWifi size={16} />Linked Devices</span>
-                <b className={recentSessions.length ? 'ok' : ''}>{recentSessions.length || 0} Active</b>
+                <span><IconWifi size={16} />Devices</span>
+                <b className={activeSessionCount ? 'ok' : ''}>{activeSessionCount} Active</b>
               </div>
               <div className="cb-link-list">
-                {recentSessions.length > 0 ? recentSessions.map((s) => {
-                  const lastSeen = timeAgo(s.lastSeen);
-                  const network = s.ip ? s.ip : 'local network';
+                {deviceRows.length > 0 ? deviceRows.map((s) => {
+                  const ipLine = s.ip ? [s.ip, s.country].filter(Boolean).join(' · ') : 'local network';
+                  const isPast = !s.current && !s.active;
                   return (
-                    <div className="cb-device-row" key={s.id}>
+                    <div className={`cb-device-row ${isPast ? 'past' : 'active'}`} key={s.id}>
                       <span className={`cb-device-dot ${s.active ? 'on' : ''}`} />
                       <span className="cb-device-main">
                         <b>{s.browser} on {s.system}</b>
-                        <em>{hostLabel} · {network}{s.country ? ` · ${s.country}` : ''} · first seen {timeAgo(s.firstSeen)}</em>
+                        <em>{ipLine} · {hostLabel}</em>
                       </span>
                       <span className="cb-device-right">
-                        <i>{s.current ? 'This Device' : s.active ? 'Active' : 'Recent'}</i>
-                        <b>{s.active ? 'Active Now' : lastSeen}</b>
+                        <i>{s.current ? 'This' : isPast ? 'Past' : 'Active'}</i>
+                        <b>{isPast ? timeAgo(s.lastSeen) : 'Now'}</b>
                       </span>
                     </div>
                   );
                 }) : (
-                  <div className="cb-empty">No active device sessions reported yet.</div>
+                  <div className="cb-empty">No device sessions reported yet.</div>
                 )}
               </div>
             </section>
@@ -486,7 +554,7 @@ function buildIndex(): SearchEntry[] {
     }
   }
   out.push(
-    { label: 'News', hint: 'Binance announcements', page: 'news', keywords: 'news binance announcements listing delisting maintenance airdrop' },
+    { label: 'News', hint: 'Tree, RSS, Lookonchain, Binance', page: 'news', keywords: 'news tree rss lookonchain binance announcements listing delisting maintenance airdrop' },
     { label: 'Calendar', hint: 'Economic events', page: 'calendar', keywords: 'calendar economic events cpi fomc pmi tradingview' },
     { label: 'Kill switch', hint: 'Risk · halt everything', page: 'risk', keywords: 'kill switch halt stop emergency risk' },
     { label: 'Risk limits', hint: 'Risk · caps & allowlist', page: 'risk', keywords: 'risk limits caps notional allowlist symbols' },
@@ -855,9 +923,11 @@ interface SystemLite {
   restLatencyMs: number | null;
   serverTimeDiffMs: number | null;
   usedWeight1m: number | null;
+  usedWeightTs?: number | null;
   feeds?: Record<string, string>;
   dbOk?: boolean;
   lastScannerTickTs?: number | null;
+  lastOrdersSyncTs?: number | null;
 }
 function msLabel(v: number | null | undefined): string {
   return v === null || v === undefined || !isFinite(v) ? '—' : `${Math.round(v)} ms`;
@@ -874,7 +944,7 @@ function DataHealthMenu() {
     void fetch('/api/system').then((r) => (r.ok ? r.json() : null)).then((s) => alive && s && setSys(s as SystemLite)).catch(() => undefined);
     const probe = (u: string, k: 'news' | 'cal' | 'fx') =>
       fetch(u).then((r) => alive && setSrv((p) => ({ ...p, [k]: r.ok }))).catch(() => alive && setSrv((p) => ({ ...p, [k]: false })));
-    void probe('/api/news', 'news');
+    void probe('/api/news-context', 'news');
     void probe('/api/calendar', 'cal');
     void probe('/api/fx', 'fx');
     return () => {
@@ -1206,10 +1276,99 @@ const IconDollar = ({ size = 16 }: { size?: number }) => (
   </svg>
 );
 
+function BinanceLogo({ size = 32 }: { size?: number }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <span className="keyx-source-logo" style={{ width: size, height: size }} aria-label="Binance">
+      {!failed ? (
+        <img
+          src="/api/source-logo?domain=binance.com&sz=64"
+          alt=""
+          width={size}
+          height={size}
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <IconExchange size={Math.max(14, size - 14)} />
+      )}
+    </span>
+  );
+}
+
+function PanelWebLogo({ domain, label, fallback, size = 31 }: { domain: string; label: string; fallback: ReactNode; size?: number }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <span className="top-panel-web-logo" style={{ width: size, height: size }} aria-label={label}>
+      {!failed ? (
+        <img
+          src={`/api/source-logo?domain=${encodeURIComponent(domain)}&sz=64`}
+          alt=""
+          width={size}
+          height={size}
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailed(true)}
+        />
+      ) : fallback}
+    </span>
+  );
+}
+
+function TopPanelHeader({
+  className = '',
+  logo,
+  title,
+  sub,
+  value,
+  status,
+  action,
+}: {
+  className?: string;
+  logo: ReactNode;
+  title: string;
+  sub?: ReactNode;
+  value?: ReactNode;
+  status?: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <div className={`top-panel-head ${className}`}>
+      <span className="top-panel-logo">{logo}</span>
+      <span className="top-panel-copy">
+        <b>{title}</b>
+        {value !== undefined && <strong>{value}</strong>}
+        {sub !== undefined && <em>{sub}</em>}
+      </span>
+      {(status !== undefined || action !== undefined) && (
+        <span className="top-panel-right">
+          {status !== undefined && <span className="top-panel-status">{status}</span>}
+          {action}
+        </span>
+      )}
+    </div>
+  );
+}
+
 type MK = 'clock' | 'shell' | 'apikey' | 'data' | 'advisor' | 'notif' | 'power' | 'mrefresh' | 'currency' | 'basisu' | 'appearance';
+const TOPBAR_PANEL_W = 386;
 const MENU_W: Record<MK, number> = {
-  clock: 360, shell: 320, apikey: 320, data: 320, advisor: 320, notif: 340, power: 270, mrefresh: 300, currency: 280, basisu: 260, appearance: 260,
+  clock: TOPBAR_PANEL_W,
+  shell: TOPBAR_PANEL_W,
+  apikey: TOPBAR_PANEL_W,
+  data: TOPBAR_PANEL_W,
+  advisor: TOPBAR_PANEL_W,
+  notif: TOPBAR_PANEL_W,
+  power: TOPBAR_PANEL_W,
+  mrefresh: TOPBAR_PANEL_W,
+  currency: TOPBAR_PANEL_W,
+  basisu: TOPBAR_PANEL_W,
+  appearance: TOPBAR_PANEL_W,
 };
+
+type NotifTab = 'all' | 'critical' | 'opportunity' | 'account' | 'logs' | 'prefs';
+type NotifFeedTab = Exclude<NotifTab, 'all' | 'prefs'>;
 
 const clockParts = (zoneId: string, d: Date) => {
   try {
@@ -1225,11 +1384,39 @@ const clockParts = (zoneId: string, d: Date) => {
     const mm = parts.find((p) => p.type === 'minute')?.value ?? '00';
     const ss = parts.find((p) => p.type === 'second')?.value ?? '00';
     const ampm = (parts.find((p) => p.type === 'dayPeriod')?.value ?? '').toUpperCase();
-    return { raw: `${hh}:${mm}:${ss} ${ampm}`.trim(), hm: `${hh}:${mm}`, ss, ampm };
+    const hour = Number(hh) || 0;
+    const minute = Number(mm) || 0;
+    const second = Number(ss) || 0;
+    return {
+      raw: `${hh}:${mm}:${ss} ${ampm}`.trim(),
+      hm: `${hh}:${mm}`,
+      ss,
+      ampm,
+      hour,
+      minute,
+      second,
+      hourDeg: (hour % 12) * 30 + minute * 0.5,
+      minuteDeg: minute * 6 + second * 0.1,
+      secondDeg: second * 6,
+    };
   } catch {
     const raw = fmtClockZone(zoneId, d);
     const [hh = '00', mm = '00', ss = '00'] = raw.split(':');
-    return { raw: `${hh}:${mm}:${ss}`, hm: `${hh}:${mm}`, ss, ampm: '' };
+    const hour = Number(hh) || 0;
+    const minute = Number(mm) || 0;
+    const second = Number(ss) || 0;
+    return {
+      raw: `${hh}:${mm}:${ss}`,
+      hm: `${hh}:${mm}`,
+      ss,
+      ampm: '',
+      hour,
+      minute,
+      second,
+      hourDeg: (hour % 12) * 30 + minute * 0.5,
+      minuteDeg: minute * 6 + second * 0.1,
+      secondDeg: second * 6,
+    };
   }
 };
 const clockOffset = (zoneId: string, d: Date) => {
@@ -1253,6 +1440,27 @@ const clockDate = (zoneId: string, d: Date) => {
   }
 };
 
+type ClockParts = ReturnType<typeof clockParts>;
+const clockFaceStyle = (p: ClockParts) => ({
+  '--clock-hour': `${p.hourDeg}deg`,
+  '--clock-minute': `${p.minuteDeg}deg`,
+  '--clock-second': `${p.secondDeg}deg`,
+} as CSSProperties);
+function ClockFace({ parts, className = '' }: { parts: ClockParts; className?: string }) {
+  return (
+    <span className={`clock-face ${className}`} style={clockFaceStyle(parts)} aria-hidden="true">
+      <i className="tick t12" />
+      <i className="tick t3" />
+      <i className="tick t6" />
+      <i className="tick t9" />
+      <i className="hand hour" />
+      <i className="hand minute" />
+      <i className="hand second" />
+      <i className="pin" />
+    </span>
+  );
+}
+
 export interface ApiKeyInfo {
   id: string; name: string; type: string; scope: string;
   status: 'live' | 'declared' | 'planned'; live: boolean; keysPresent?: boolean;
@@ -1264,12 +1472,31 @@ export interface ApiKeyInfo {
 // The six permissions the owner wants visible, in display order.
 export const API_PERMS: { key: keyof ApiKeyInfo['permissions']; label: string }[] = [
   { key: 'reading', label: 'Reading' },
-  { key: 'spotMargin', label: 'Spot & Margin & Stock Trading' },
-  { key: 'marginLoan', label: 'Margin Loan, Repay & Transfer' },
-  { key: 'withdrawals', label: 'Withdrawals' },
-  { key: 'universalTransfer', label: 'Permits Universal Transfer' },
+  { key: 'spotMargin', label: 'Spot / Margin' },
+  { key: 'marginLoan', label: 'Loan / Repay' },
   { key: 'futures', label: 'Futures' },
+  { key: 'universalTransfer', label: 'Universal Transfer' },
+  { key: 'withdrawals', label: 'Withdrawals' },
 ];
+
+const riskApiPerms: Array<keyof ApiKeyInfo['permissions']> = ['withdrawals', 'universalTransfer'];
+const enabledApiPerms = (ak: ApiKeyInfo) => API_PERMS.filter((p) => ak.permissions[p.key]);
+const apiKeyRole = (ak: ApiKeyInfo) => {
+  const scope = ak.scope.toLowerCase();
+  if (ak.id === 'read-only' || scope.includes('read')) return 'Read-only';
+  if (ak.id === 'secrets-full' || scope.includes('automation') || scope.includes('full')) return 'Automation';
+  return ak.scope;
+};
+const apiKeyFingerprint = (ak: ApiKeyInfo) => ak.fingerprint || (ak.prefix && ak.prefix !== '—' ? `${ak.prefix}····` : 'Planned');
+const apiKeySourceLine = (ak: ApiKeyInfo) => {
+  const key = apiKeyFingerprint(ak);
+  return `${key} · ${ak.ipRestrict ? 'IP locked' : 'IP open'}`;
+};
+const apiKeyIpLine = (ak: ApiKeyInfo) => ak.ips.length
+  ? `${ak.ipRestrict ? 'Trusted IP' : 'Listed IP'} · ${ak.ips.join(', ')}`
+  : ak.ipRestrict
+    ? 'Trusted IP required'
+    : 'No IP restriction';
 
 function SharedTopBar() {
   const { state, connected, page, prefs, updatePref, setPage, setKill, saveConfig, refresh } = useStore();
@@ -1278,29 +1505,47 @@ function SharedTopBar() {
   const btnRefs = useRef<Partial<Record<MK, HTMLButtonElement | null>>>({});
   const closeT = useRef<number | undefined>(undefined);
   const rafRef = useRef<number | undefined>(undefined);
+  const morphT = useRef<number | undefined>(undefined);
   const [active, setActive] = useState<MK | null>(null);
+  const [contentActive, setContentActive] = useState<MK | null>(null);
+  const [contentMorphing, setContentMorphing] = useState(false);
   const [geo, setGeo] = useState({ left: 0, width: 260, pointer: 130 });
   const geoRef = useRef(geo); geoRef.current = geo;
   // Register with the shared single-open closer so opening the box closes any
   // other popover (the account panel) and vice-versa — never two open at once.
   const closerRef = useRef<() => void>(() => {});
-  closerRef.current = () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); setActive(null); };
+  closerRef.current = () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    window.clearTimeout(morphT.current);
+    setContentMorphing(false);
+    setActive(null);
+    setContentActive(null);
+  };
   const [now, setNow] = useState(() => new Date());
   const [sys, setSys] = useState<SystemLite | null>(null);
   const [srv, setSrv] = useState<{ news: boolean | null; cal: boolean | null; fx: boolean | null }>({ news: null, cal: null, fx: null });
   const [seen, setSeen] = useState(() => Number(localStorage.getItem('cosmos-notif-seen') || 0));
   const [apiKeys, setApiKeys] = useState<ApiKeyInfo[]>([]);
-  const [notifTab, setNotifTab] = useState<'all' | 'account' | 'risk' | 'custom'>('all');
+  const [notifTab, setNotifTab] = useState<NotifTab>('all');
+  const [notifDetailOpen, setNotifDetailOpen] = useState(false);
+  const [notifDraftAlerts, setNotifDraftAlerts] = useState(() => prefs.alerts);
   const [refreshCustom, setRefreshCustom] = useState(() => String(prefs.refreshSec));
   const [menuRefreshState, setMenuRefreshState] = useState<'idle' | 'spin' | 'ok' | 'err'>('idle');
   const menuRefreshBusy = useRef(false);
   const [currencyFx, setCurrencyFx] = useState<{ ok: boolean | null; rates: Record<string, number>; fetchedAt: number | null }>({ ok: null, rates: {}, fetchedAt: null });
+  const [currencyBusy, setCurrencyBusy] = useState(false);
+  const [currencyNotional, setCurrencyNotional] = useState(1000);
+  const [basisSamplePct, setBasisSamplePct] = useState(0.042);
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
-  useEffect(() => { if (active === 'mrefresh') setRefreshCustom(String(prefs.refreshSec)); }, [active, prefs.refreshSec]);
+  useEffect(() => {
+    if (active !== 'mrefresh') return;
+    setRefreshCustom(String(prefs.refreshSec));
+  }, [active, prefs.refreshSec]);
   useEffect(() => {
     if (active !== 'currency') return;
     let alive = true;
+    setCurrencyBusy(true);
     fetch('/api/fx')
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { rates?: Record<string, number>; fetchedAt?: number } | null) => {
@@ -1308,10 +1553,14 @@ function SharedTopBar() {
         if (d?.rates) setCurrencyFx({ ok: true, rates: d.rates, fetchedAt: d.fetchedAt ?? null });
         else setCurrencyFx((x) => ({ ...x, ok: false }));
       })
-      .catch(() => { if (alive) setCurrencyFx((x) => ({ ...x, ok: false })); });
+      .catch(() => { if (alive) setCurrencyFx((x) => ({ ...x, ok: false })); })
+      .finally(() => { if (alive) setCurrencyBusy(false); });
     return () => { alive = false; };
   }, [active]);
   useEffect(() => { let al = true; const load = () => fetch('/api/system').then((r) => (r.ok ? r.json() : null)).then((s) => al && s && setSys(s as SystemLite)).catch(() => undefined); void load(); const t = setInterval(load, 5000); return () => { al = false; clearInterval(t); }; }, []);
+  useEffect(() => {
+    if (notifDetailOpen) setNotifDraftAlerts(prefs.alerts);
+  }, [notifDetailOpen, prefs.alerts]);
   useEffect(() => {
     let al = true;
     fetch('/api/apikey').then((r) => (r.ok ? r.json() : null)).then((d) => {
@@ -1322,7 +1571,7 @@ function SharedTopBar() {
   useEffect(() => {
     if (active !== 'data') return; let al = true;
     const p = (u: string, k: 'news' | 'cal' | 'fx') => fetch(u).then((r) => al && setSrv((x) => ({ ...x, [k]: r.ok }))).catch(() => al && setSrv((x) => ({ ...x, [k]: false })));
-    void p('/api/news', 'news'); void p('/api/calendar', 'cal'); void p('/api/fx', 'fx');
+    void p('/api/news-context', 'news'); void p('/api/calendar', 'cal'); void p('/api/fx', 'fx');
     return () => { al = false; };
   }, [active]);
 
@@ -1352,7 +1601,7 @@ function SharedTopBar() {
   const animateTo = (target: { left: number; width: number; pointer: number }, immediate: boolean) => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     if (immediate) { setGeo(target); return; }
-    const start = geoRef.current; const t0 = performance.now(); const dur = 340;
+    const start = geoRef.current; const t0 = performance.now(); const dur = 280;
     const ease = (t: number) => 1 - Math.pow(1 - t, 3); // easeOutCubic
     const step = (nowT: number) => {
       const p = Math.min(1, (nowT - t0) / dur); const e = ease(p);
@@ -1370,19 +1619,34 @@ function SharedTopBar() {
     window.clearTimeout(closeT.current);
     if (currentCloser && currentCloser !== closerRef.current) currentCloser(); // close account/other
     const wasClosed = active === null;
+    const alreadyOpen = active === k;
     currentCloser = closerRef.current;
     const g = computeGeo(k);
     if (g) animateTo(g, wasClosed); // snap when opening fresh, slide when morphing
+    if (alreadyOpen) return;
+    window.clearTimeout(morphT.current);
+    if (wasClosed) {
+      setContentMorphing(false);
+      setContentActive(k);
+    } else {
+      setContentMorphing(true);
+      morphT.current = window.setTimeout(() => {
+        setContentActive(k);
+        morphT.current = window.setTimeout(() => setContentMorphing(false), 170);
+      }, 120);
+    }
     setActive(k);
-    if (k === 'notif' && state?.events?.[0]) { setSeen(state.events[0].id); localStorage.setItem('cosmos-notif-seen', String(state.events[0].id)); }
   };
   const closeMenu = () => {
     window.clearTimeout(closeT.current);
     if (currentCloser === closerRef.current) currentCloser = null;
     closerRef.current();
   };
-  const scheduleClose = () => { closeT.current = window.setTimeout(() => { if (currentCloser === closerRef.current) currentCloser = null; closerRef.current(); }, 120); };
-  useEffect(() => () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); }, []);
+  const scheduleClose = () => { closeT.current = window.setTimeout(() => { if (currentCloser === closerRef.current) currentCloser = null; closerRef.current(); }, 180); };
+  useEffect(() => () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    window.clearTimeout(morphT.current);
+  }, []);
   const cancelClose = () => window.clearTimeout(closeT.current);
 
   const b = state?.binance; const cfg = state?.config;
@@ -1395,10 +1659,15 @@ function SharedTopBar() {
   const latTone = lat === null ? '' : lat < 400 ? 'ok' : lat < 900 ? 'warn' : 'bad';
   const events = state?.events ?? []; const unread = events.filter((e) => e.id > seen).length;
   const zone = ZONES.find((z) => z.id === prefs.clockZone) ?? ZONES[1];
+  const clockPanelZones = ZONES.filter((z) => ['local', 'UTC', 'Asia/Kolkata', 'America/New_York'].includes(z.id));
+  const visibleClockZones = clockPanelZones.some((z) => z.id === zone.id) ? clockPanelZones : [zone, ...clockPanelZones].slice(0, 4);
   const activeClock = clockParts(zone.id, now);
   const activeClockOffset = clockOffset(zone.id, now);
   const utcClock = clockParts('UTC', now);
   const localClock = clockParts('local', now);
+  const marketClock = clockParts('America/New_York', now);
+  const marketClockOffset = clockOffset('America/New_York', now);
+  const marketClockDate = clockDate('America/New_York', now);
   const cur = CURRENCIES[prefs.currency] ? prefs.currency : 'USD';
   const curInfo = CURRENCIES[cur] ?? CURRENCIES.USD;
   const curSymbol = curInfo.symbol.trim() || cur;
@@ -1419,74 +1688,170 @@ function SharedTopBar() {
     if (!r) return currencyFx.ok === false ? 'OFF' : 'FX';
     return r.toLocaleString('en-US', { maximumFractionDigits: r >= 100 ? 2 : 4 });
   };
+  const formatCurrencyPanelValue = (code: string, amount: number) => {
+    try {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: code,
+        maximumFractionDigits: code === 'JPY' ? 0 : amount >= 1000 ? 2 : 4,
+      }).format(amount);
+    } catch {
+      const c = CURRENCIES[code] ?? CURRENCIES.USD;
+      return `${c.symbol}${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+    }
+  };
+  const curLiveRate = cur === 'USD' ? 1 : curRate;
+  const convertedCurrencyNotional = curLiveRate ? currencyNotional * curLiveRate : null;
+  const currencyBasePreview = formatCurrencyPanelValue('USD', currencyNotional);
+  const currencyConvertedPreview = convertedCurrencyNotional !== null
+    ? formatCurrencyPanelValue(cur, convertedCurrencyNotional)
+    : curTone === 'bad'
+      ? 'Unavailable'
+      : 'Loading';
+  const refreshCurrencyFx = () => {
+    if (currencyBusy) return;
+    setCurrencyBusy(true);
+    fetch('/api/fx')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { rates?: Record<string, number>; fetchedAt?: number } | null) => {
+        if (d?.rates) setCurrencyFx({ ok: true, rates: d.rates, fetchedAt: d.fetchedAt ?? null });
+        else setCurrencyFx((x) => ({ ...x, ok: false }));
+      })
+      .catch(() => setCurrencyFx((x) => ({ ...x, ok: false })))
+      .finally(() => setCurrencyBusy(false));
+  };
   const basisIsBps = prefs.basisUnit === 'bps';
   const basisMark = basisIsBps ? 'bp' : '%';
-  const basisPreview = basisIsBps ? '+4.2 bps' : '+0.042%';
+  const formatBasisPct = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(Math.abs(value) < 0.1 ? 3 : 2)}%`;
+  const formatBasisBp = (value: number) => `${value >= 0 ? '+' : ''}${(value * 100).toFixed(Math.abs(value * 100) < 10 ? 1 : 0)}bp`;
+  const basisSamples = [
+    { label: '1bp', value: 0.01 },
+    { label: '4.2bp', value: 0.042 },
+    { label: '10bp', value: 0.1 },
+    { label: '-57bp', value: -0.57 },
+  ];
+  const basisPreview = basisIsBps ? formatBasisBp(basisSamplePct).replace('bp', ' bps') : formatBasisPct(basisSamplePct);
   const basisCode = basisIsBps ? 'BPS' : 'PCT';
-  const basisAltPreview = basisIsBps ? '+0.042%' : '+4.2bp';
+  const basisAltPreview = basisIsBps ? formatBasisPct(basisSamplePct) : formatBasisBp(basisSamplePct);
+  const basisTrackPos = Math.max(6, Math.min(94, 50 + basisSamplePct * 70));
+  const basisTrackStart = Math.min(50, basisTrackPos);
+  const basisTrackSpan = Math.abs(basisTrackPos - 50);
   const activeAccent = ACCENTS[prefs.accent] ?? ACCENTS.b;
   const appearanceZoom = Math.round((prefs.zoom || 1) * 100);
   const al = prefs.alerts; const alertsOn = Object.values(al).filter(Boolean).length;
   const mode = state?.mode ?? 'HALTED';
   const modeClass = mode === 'HALTED' ? 'm-halted' : mode === 'LIVE_ARMED' ? 'm-live' : 'm-manual';
-  const modeTone = mode === 'HALTED' ? 'bad' : mode === 'LIVE_ARMED' ? 'ok' : 'warn';
+  const killOn = !!cfg?.killSwitch;
+  const fundsAllowed = !(cfg?.fundsLocked ?? true);
+  const botRunning = !(cfg?.automationPaused ?? true);
+  const liveOrdersAllowed = !!cfg?.liveTradingEnabled;
+  const borrowGuard = cfg?.borrowGuard;
+  const newLoansAllowed = !!borrowGuard?.enabled && !borrowGuard.newBorrowPaused && !borrowGuard.repayOnly;
+  const modeTone = killOn ? 'bad' : fundsAllowed && botRunning && liveOrdersAllowed ? 'ok' : 'warn';
   const allowCount = cfg?.allowedSymbols?.length ?? 0;
-  const modeCode = mode === 'HALTED' ? 'OFF' : mode === 'LIVE_ARMED' ? 'LIVE' : 'MAN';
-  const modeStamp = mode === 'HALTED' ? 'HALT' : mode === 'LIVE_ARMED' ? 'ARM' : 'HOLD';
-  const modeSend = mode === 'HALTED' ? 'BLOCK' : mode === 'LIVE_ARMED' ? 'GATE' : 'MAN';
-  const modeNet = b?.connected ? 'UP' : 'OFF';
-  const liveDisabled = !b?.connected || allowCount === 0;
-  const liveTitle = !b?.connected ? 'Binance account sync is required' : allowCount === 0 ? 'Add allowed symbols in Risk first' : 'Arm live trading';
-  const setManualMode = () => { void saveConfig({ killSwitch: false, liveTradingEnabled: false }); };
-  const setLiveMode = () => { void saveConfig({ killSwitch: false, liveTradingEnabled: true }); };
+  const modeLabel = killOn ? 'Stopped' : modeTone === 'ok' ? 'Ready' : 'Limited';
+  const modeSub = killOn ? 'Every bot action is blocked.' : modeTone === 'ok' ? 'Controls allow guarded execution.' : 'Some bot abilities are blocked.';
+  const modeNet = b?.connected ? 'Synced' : 'Offline';
+  const liveTitle = 'Allow live order sends after the risk gate';
+  const setFundsAccess = (on: boolean) => { void saveConfig({ fundsLocked: !on }); };
+  const setBotRunning = (on: boolean) => { void saveConfig({ automationPaused: !on }); };
+  const setNewLoans = (on: boolean) => {
+    const cur = cfg?.borrowGuard;
+    if (!cur) return;
+    void saveConfig({ borrowGuard: { ...cur, enabled: true, newBorrowPaused: !on, repayOnly: !on } });
+  };
+  const markNotificationsRead = () => {
+    const latest = events[0]?.id;
+    if (latest === undefined) return;
+    setSeen(latest);
+    localStorage.setItem('cosmos-notif-seen', String(latest));
+  };
+  const openNotificationCenter = () => {
+    setNotifDraftAlerts(prefs.alerts);
+    setActive(null);
+    setNotifDetailOpen(true);
+  };
   const alertRows: { key: keyof typeof al; label: string; sub: string }[] = [
-    { key: 'proposals', label: 'Strategy Proposals', sub: 'New basis and spread signals' },
-    { key: 'fills', label: 'Account Fills', sub: 'Executions on your Binance account' },
-    { key: 'risk', label: 'Risk Blocks', sub: 'Risk gate and kill-switch blocks' },
-    { key: 'news', label: 'Binance Announcements', sub: 'Listings, delistings, maintenance' },
+    { key: 'proposals', label: 'Opportunity Alerts', sub: 'New basis, spread, and scanner signals' },
+    { key: 'fills', label: 'Account Activity', sub: 'Fills, orders, loans, and Binance sync' },
+    { key: 'risk', label: 'Critical Risk', sub: 'Risk rejects, guardrail blocks, kill switch' },
+    { key: 'news', label: 'Binance Announcements', sub: 'Maintenance, API changes, listings' },
   ];
   const alertShort: Record<keyof typeof al, string> = {
-    proposals: 'Signals',
-    fills: 'Fills',
-    risk: 'Risk',
+    proposals: 'Opportunities',
+    fills: 'Account',
+    risk: 'Critical',
     news: 'News',
   };
+  const draftAlertsOn = Object.values(notifDraftAlerts).filter(Boolean).length;
+  const cancelNotificationPrefs = () => {
+    setNotifDraftAlerts(al);
+  };
+  const saveNotificationPrefs = () => {
+    updatePref('alerts', notifDraftAlerts);
+  };
+  const notifStamp = (ts: number) => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase();
   const notifTabs: { id: typeof notifTab; label: string; code: string }[] = [
     { id: 'all', label: 'All', code: 'All' },
-    { id: 'account', label: 'Account', code: 'A' },
-    { id: 'risk', label: 'Risk', code: 'R' },
-    { id: 'custom', label: 'Custom alerts', code: 'C' },
+    { id: 'critical', label: 'Critical', code: 'Critical' },
+    { id: 'opportunity', label: 'Opportunities', code: 'Opps' },
+    { id: 'account', label: 'Account', code: 'Account' },
+    { id: 'logs', label: 'Logs', code: 'Logs' },
   ];
+  const compactNotifTabs = notifTabs.filter((t) => t.id !== 'logs');
+  const compactNotifTab: NotifTab = compactNotifTabs.some((t) => t.id === notifTab) ? notifTab : 'all';
   const notifMeta = (kind: string) => {
     const k = kind.toLowerCase();
-    if (k.includes('risk') || k.includes('error') || k.includes('reject') || k.includes('kill')) {
-      return { bucket: 'risk' as const, scope: 'Risk Alert', title: 'Control Room Alert', tone: 'risk', mark: '!' };
+    if (k.includes('risk') || k.includes('error') || k.includes('reject') || k.includes('kill') || k.includes('block') || k.includes('fail')) {
+      return { bucket: 'critical' as const, scope: 'Critical Alert', title: 'Control Room Alert', tone: 'critical', mark: '!' };
+    }
+    if (k.includes('strategy') || k.includes('proposal') || k.includes('signal') || k.includes('opportunity') || k.includes('basis') || k.includes('funding')) {
+      return { bucket: 'opportunity' as const, scope: 'Opportunity', title: 'Strategy Signal', tone: 'opportunity', mark: 'O' };
     }
     if (k.includes('order') || k.includes('fill') || k.includes('loan') || k.includes('account') || k.includes('binance') || k.includes('user_stream')) {
       return { bucket: 'account' as const, scope: 'Account Activity', title: 'Account Update', tone: 'account', mark: 'A' };
     }
-    if (k.includes('strategy') || k.includes('proposal') || k.includes('signal')) {
-      return { bucket: 'account' as const, scope: 'Trading Insight', title: 'Strategy Update', tone: 'trading', mark: 'S' };
-    }
-    return { bucket: 'system' as const, scope: 'System Update', title: 'System Notice', tone: 'system', mark: 'C' };
+    return { bucket: 'logs' as const, scope: 'System Log', title: 'Operations Log', tone: 'logs', mark: 'L' };
   };
-  const filteredNotifEvents = events.filter((e) => {
-    if (notifTab === 'all') return true;
-    if (notifTab === 'custom') return false;
-    return notifMeta(e.kind).bucket === notifTab;
+  const notifIcon = (tone: string, size = 17) => {
+    if (tone === 'critical') return <IconShield size={size} />;
+    if (tone === 'opportunity') return <IconRadar size={size} />;
+    if (tone === 'account') return <IconWallet size={size} />;
+    return <IconReceipt size={size} />;
+  };
+  const filterNotifEvents = (tab: NotifTab) => events.filter((e) => {
+    if (tab === 'all') return true;
+    if (tab === 'prefs') return false;
+    return notifMeta(e.kind).bucket === tab;
   });
-  const notifTone = unread > 0 ? 'hot' : events.length > 0 ? 'live' : alertsOn > 0 ? 'armed' : 'idle';
-  const refreshChoices = [
-    { sec: 3, label: 'Fast', sub: 'Market Poll' },
-    { sec: 6, label: 'Live', sub: 'Default' },
-    { sec: 12, label: 'Balanced', sub: 'Lower Load' },
-    { sec: 30, label: 'Light', sub: 'Quiet Mode' },
+  const filteredNotifEvents = filterNotifEvents(notifTab);
+  const compactNotifEvents = filterNotifEvents(compactNotifTab);
+  const notifBucketCounts = events.reduce<Record<NotifFeedTab, number>>((acc, e) => {
+    acc[notifMeta(e.kind).bucket] += 1;
+    return acc;
+  }, { critical: 0, opportunity: 0, account: 0, logs: 0 });
+  const notifTone = notifBucketCounts.critical > 0 ? 'hot' : unread > 0 ? 'live' : events.length > 0 ? 'armed' : alertsOn > 0 ? 'armed' : 'idle';
+  const cadenceKeys: DataCadenceKey[] = ['market', 'account', 'news', 'calendar', 'fx', 'health', 'token'];
+  const cadenceChoices = [
+    { sec: 0.5, label: '<1s' },
+    { sec: 1, label: '1s' },
+    { sec: 2, label: '2s' },
+    { sec: 3, label: '3s' },
+    { sec: 5, label: '5s' },
+    { sec: 10, label: '10s' },
   ];
-  const clampRefresh = (sec: number) => Math.min(120, Math.max(3, Math.round(sec)));
-  const setMarketRefresh = (sec: number) => {
+  const clampRefresh = (sec: number) => Math.min(300, Math.max(0.5, Math.round(sec * 10) / 10));
+  const cadenceSec = (key: DataCadenceKey) => prefs.dataCadence?.[key] ?? (key === 'market' ? prefs.refreshSec : 10);
+  const fmtCadence = (sec: number) => sec < 1 ? '<1s' : `${sec % 1 === 0 ? sec.toFixed(0) : sec.toFixed(1)}s`;
+  const setAllCadences = (sec: number) => {
     const next = clampRefresh(sec);
+    const map = Object.fromEntries(cadenceKeys.map((key) => [key, next])) as Record<DataCadenceKey, number>;
+    updatePref('dataCadence', map);
     updatePref('refreshSec', next);
     setRefreshCustom(String(next));
+  };
+  const applyCadence = (sec: number) => {
+    setAllCadences(sec);
   };
   const applyCustomRefresh = () => {
     const parsed = Number(refreshCustom);
@@ -1494,7 +1859,7 @@ function SharedTopBar() {
       setRefreshCustom(String(prefs.refreshSec));
       return;
     }
-    setMarketRefresh(parsed);
+    applyCadence(parsed);
   };
   const runMenuRefresh = async () => {
     if (menuRefreshBusy.current) return;
@@ -1534,7 +1899,13 @@ function SharedTopBar() {
           : refreshTone === 'warn'
             ? 'Watch'
             : 'Offline';
-  const refreshCode = `${prefs.refreshSec}s`;
+  const marketCadence = cadenceSec('market');
+  const minCadence = Math.min(...cadenceKeys.map((key) => cadenceSec(key)));
+  const maxCadence = Math.max(...cadenceKeys.map((key) => cadenceSec(key)));
+  const cadenceSpread = minCadence === maxCadence ? fmtCadence(minCadence) : `${fmtCadence(minCadence)}-${fmtCadence(maxCadence)}`;
+  const selectedCadence = minCadence === maxCadence ? minCadence : marketCadence;
+  const selectedCadenceLabel = 'All Sources';
+  const refreshCode = fmtCadence(marketCadence);
   const refreshStamp = menuRefreshState === 'spin' ? 'POLL' : menuRefreshState === 'ok' ? 'SYNC' : menuRefreshState === 'err' ? 'ERR' : refreshLabel.toUpperCase();
   const refreshNetCode = menuRefreshState === 'spin' ? 'RUN' : menuRefreshState === 'ok' ? 'SYNC' : menuRefreshState === 'err' ? 'ERR' : refreshTone === 'ok' ? 'LIVE' : refreshTone === 'warn' ? 'WARN' : 'OFF';
   const refreshActionText = menuRefreshState === 'spin' ? 'Run' : menuRefreshState === 'ok' ? 'OK' : menuRefreshState === 'err' ? 'Retry' : 'Now';
@@ -1542,39 +1913,56 @@ function SharedTopBar() {
     ? 'Socket reconnecting'
     : !feedsOk
       ? 'Market feed degraded'
-      : `${refreshFeedCount} streams / ${msLabel(lat)}`;
+      : `${refreshFeedCount} streams / ${msLabel(lat)} / ${cadenceSpread}`;
+  const cadenceRows: { key: DataCadenceKey; label: string; sub: string; value: string; tone: 'ok' | 'warn' | 'bad' | 'idle'; icon: ReactNode }[] = [
+    { key: 'market', label: 'Market Prices', sub: 'Markets table, quotes, basis rows', value: fmtCadence(cadenceSec('market')), tone: connected && feedsOk ? 'ok' : connected ? 'warn' : 'bad', icon: <IconChart size={14} /> },
+    { key: 'account', label: 'Account Data', sub: 'Balances, loans, fills, PnL', value: fmtCadence(cadenceSec('account')), tone: b?.connected ? 'ok' : 'warn', icon: <IconWallet size={14} /> },
+    { key: 'news', label: 'News Sources', sub: 'Binance, Tree, RSS, Lookonchain', value: fmtCadence(cadenceSec('news')), tone: srv.news === null ? 'idle' : srv.news ? 'ok' : 'bad', icon: <IconNewspaper size={14} /> },
+    { key: 'calendar', label: 'Calendar', sub: 'Macro events and TradingView feed', value: fmtCadence(cadenceSec('calendar')), tone: srv.cal === null ? 'idle' : srv.cal ? 'ok' : 'bad', icon: <IconCalendar size={14} /> },
+    { key: 'fx', label: 'FX Rates', sub: 'Display currency conversion', value: fmtCadence(cadenceSec('fx')), tone: srv.fx === null ? 'idle' : srv.fx ? 'ok' : 'bad', icon: <IconDollar size={14} /> },
+    { key: 'health', label: 'Health & Logs', sub: 'System probes and event polling', value: fmtCadence(cadenceSec('health')), tone: netGrade === 'ok' ? 'ok' : netGrade === 'warn' ? 'warn' : 'bad', icon: <IconPulse size={14} /> },
+    { key: 'token', label: 'Token Streams', sub: 'Detail candles and order-book panels', value: fmtCadence(cadenceSec('token')), tone: connected ? 'ok' : 'bad', icon: <IconLayers size={14} /> },
+  ];
   type DataTier = 'good' | 'warn' | 'bad' | 'idle';
-  const dataLabel = netGrade === 'ok' ? 'Good' : netGrade === 'bad' ? 'Down' : 'Watch';
-  const dataSub = connected
-    ? feedsOk
-      ? `${feedList.length} market streams · ${msLabel(lat)}`
-      : 'One or more market streams is not open'
-    : 'Cockpit socket is reconnecting';
   const probeTier = (ok: boolean | null): DataTier => ok === null ? 'idle' : ok ? 'good' : 'bad';
   const probeDetail = (ok: boolean | null) => ok === null ? 'Checking' : ok ? 'Reachable' : 'Down';
   const driftAbs = sys?.serverTimeDiffMs == null ? null : Math.abs(sys.serverTimeDiffMs);
   const driftTier: DataTier = driftAbs == null ? 'idle' : driftAbs < 500 ? 'good' : driftAbs < 1500 ? 'warn' : 'bad';
   const latTier: DataTier = lat === null ? 'idle' : lat < 400 ? 'good' : lat < 900 ? 'warn' : 'bad';
+  const userStream = String(b?.userStream ?? 'off');
+  const userStreamTier: DataTier = ['live', 'open', 'connected'].includes(userStream.toLowerCase())
+    ? 'good'
+    : userStream.toLowerCase() === 'failed'
+      ? 'bad'
+      : userStream.toLowerCase() === 'off'
+        ? 'idle'
+        : 'warn';
+  const accountAgo = b?.lastSyncTs ? timeAgo(b.lastSyncTs) : 'No sync';
+  const scannerAgo = sys?.lastScannerTickTs ?? state?.scanner.lastTickTs;
+  const rateTier: DataTier = sys?.usedWeight1m == null ? 'idle' : sys.usedWeight1m < 800 ? 'good' : sys.usedWeight1m < 1050 ? 'warn' : 'bad';
+  const engineTier: DataTier = sys?.dbOk === false ? 'bad' : state?.scanner.pairs ? 'good' : 'idle';
+  const contextOkCount = [srv.cal, srv.fx].filter(Boolean).length;
+  const contextTier: DataTier = srv.cal === null || srv.fx === null ? 'idle' : contextOkCount === 2 ? 'good' : contextOkCount > 0 ? 'warn' : 'bad';
+  const engineBudgetTier: DataTier = engineTier === 'bad' || rateTier === 'bad' ? 'bad' : engineTier === 'idle' || rateTier === 'idle' ? 'idle' : rateTier === 'warn' ? 'warn' : 'good';
+  const streamNames = feedList
+    .map(([name]) => name.replace('spot-', 'spot ').replace('futures-', 'futures ').replace(/-/g, ' '))
+    .join(' · ');
   const dataRows: { name: string; sub: string; value: string; tier: DataTier }[] = [
-    { name: 'Binance Market Feed', sub: feedList.length ? `${feedList.length} streams observed` : 'No streams reported', value: feedsOk ? 'Open' : feedList.length ? 'Degraded' : 'Idle', tier: connected && feedsOk ? 'good' : connected ? 'warn' : 'bad' },
-    { name: 'Binance Account', sub: b?.keysPresent ? 'Read-only account sync' : 'Read key not configured', value: b?.keysPresent ? (b?.connected ? 'Synced' : 'Error') : 'No Key', tier: b?.connected ? 'good' : b?.keysPresent ? 'bad' : 'idle' },
-    { name: 'Announcements', sub: 'Binance news probe', value: probeDetail(srv.news), tier: probeTier(srv.news) },
-    { name: 'Economic Calendar', sub: 'Macro event probe', value: probeDetail(srv.cal), tier: probeTier(srv.cal) },
-    { name: 'FX Rates', sub: 'Currency conversion probe', value: probeDetail(srv.fx), tier: probeTier(srv.fx) },
-    { name: 'Clock Drift', sub: 'Server time offset', value: msLabel(sys?.serverTimeDiffMs), tier: driftTier },
-    { name: 'Pairs Scanned', sub: 'Scanner universe', value: String(state?.scanner.pairs ?? '—'), tier: state?.scanner.pairs ? 'good' : 'idle' },
+    { name: 'Browser -> Server', sub: 'Dashboard state socket', value: connected ? 'live' : 'offline', tier: connected ? 'good' : 'bad' },
+    { name: 'Market Streams', sub: streamNames || 'Spot, mark price, liquidations', value: feedList.length ? `${feedList.length} open` : 'idle', tier: connected && feedsOk ? 'good' : connected ? 'warn' : 'bad' },
+    { name: 'Account Snapshot', sub: b?.keyFingerprint ? `Read key ${b.keyFingerprint}` : 'Read key missing', value: b?.connected ? accountAgo : 'failed', tier: b?.connected ? 'good' : b?.keysPresent ? 'bad' : 'idle' },
+    { name: 'User Stream', sub: 'Account event socket', value: userStream, tier: userStreamTier },
+    { name: 'News Context', sub: 'Tree, RSS, Lookonchain, Binance', value: probeDetail(srv.news), tier: probeTier(srv.news) },
+    { name: 'Calendar / FX', sub: 'Macro events + display rates', value: srv.cal === null || srv.fx === null ? 'Checking' : `${contextOkCount}/2 ok`, tier: contextTier },
+    { name: 'Timing / REST', sub: `Clock drift ${msLabel(sys?.serverTimeDiffMs)}`, value: msLabel(lat), tier: latTier === 'good' ? driftTier : latTier },
+    { name: 'Engine / Budget', sub: `Scanner ${timeAgo(scannerAgo)} · ledger ${sys?.dbOk === false ? 'blocked' : 'writable'}`, value: state?.scanner.pairs ? `${state.scanner.pairs} / ${sys?.usedWeight1m ?? '—'}` : 'idle', tier: engineBudgetTier },
   ];
-  const dataCode = netGrade === 'ok' ? 'OK' : netGrade === 'bad' ? 'DWN' : 'WAT';
-  const dataScore = dataRows.length ? Math.round((dataRows.filter((r) => r.tier === 'good').length / dataRows.length) * 100) : 100;
-  const dataShort: Record<string, string> = {
-    'Binance Market Feed': 'Feed',
-    'Binance Account': 'Account',
-    'Announcements': 'News',
-    'Economic Calendar': 'Calendar',
-    'FX Rates': 'FX',
-    'Clock Drift': 'Drift',
-    'Pairs Scanned': 'Pairs',
-  };
+  const dataGood = dataRows.filter((r) => r.tier === 'good').length;
+  const dataWarn = dataRows.filter((r) => r.tier === 'warn').length;
+  const dataBad = dataRows.filter((r) => r.tier === 'bad').length;
+  const dataGrade = !connected || dataBad > 1 ? 'bad' : dataBad || dataWarn ? 'warn' : 'ok';
+  const dataLabel = dataGrade === 'ok' ? 'Good' : dataGrade === 'bad' ? 'Down' : 'Watch';
+  const dataSub = `${dataGood}/${dataRows.length} sources passing · ${feedList.length || 0} streams`;
   const advRaw: ({ sev: Sev; name: string; detail: string; page?: Page } | null)[] = [
     b?.canWithdraw ? { sev: 'action', name: 'Withdrawals enabled on key', detail: 'Rotate to a read-only key.', page: 'account' } : { sev: 'pass', name: 'Withdrawals disabled', detail: 'Key cannot move funds.' },
     b?.keysPresent && !b?.connected ? { sev: 'action', name: 'Account sync failing', detail: b?.lastError ?? 'Not syncing.', page: 'system' } : null,
@@ -1591,6 +1979,38 @@ function SharedTopBar() {
   const advTone = advA.length ? 'bad' : advI.length ? 'warn' : 'ok';
   const advScore = advChecks.length ? Math.round((advP.length / advChecks.length) * 100) : 100;
   const advCode = advTone === 'bad' ? 'ACT' : advTone === 'warn' ? 'REV' : 'OK';
+  const openAdvisorDetail = (checks: typeof advChecks, fallback: Page) => {
+    const target = checks.find((c) => c.page)?.page ?? fallback;
+    setActive(null);
+    setPage(target);
+  };
+  const advisorGroups = [
+    {
+      key: 'action',
+      label: 'Action Recommended',
+      sub: 'Fix before automated live control.',
+      tone: 'bad',
+      items: advA,
+      fallback: 'risk' as Page,
+    },
+    {
+      key: 'investigate',
+      label: 'Investigation Recommended',
+      sub: 'Review settings, feeds, and guardrails.',
+      tone: 'warn',
+      items: advI,
+      fallback: 'system' as Page,
+    },
+    {
+      key: 'clear',
+      label: 'No Problems Detected',
+      sub: 'Controls currently pass advisor checks.',
+      tone: 'ok',
+      items: advP,
+      fallback: 'risk' as Page,
+    },
+  ] as const;
+  const advisorFocus = advAtt.length ? advAtt.slice(0, 2) : advP.slice(0, 2);
 
   // Reposition only when the ACTIVE menu changes, when a trigger's width could
   // change (badges toggling, currency symbol, zone label), on zoom, or on window
@@ -1618,7 +2038,7 @@ function SharedTopBar() {
           opts.onClick();
           return;
         }
-        active === k ? closeMenu() : openK(k);
+        if (active !== k) openK(k);
       }}
       title={opts.title ?? k}
       aria-label={opts.title ?? k}
@@ -1627,79 +2047,72 @@ function SharedTopBar() {
     </button>
   );
 
-  // ONE panel for both keys: identity lines in the dock voice, then a single
-  // permission matrix (read-only vs full) instead of two stacks of chips.
-  const PERM_SHORT: Record<string, string> = {
-    reading: 'Read',
-    spotMargin: 'Spot',
-    marginLoan: 'Loan',
-    withdrawals: 'Withdraw',
-    universalTransfer: 'Transfer',
-    futures: 'Futures',
-  };
   const keysBody = () => {
     if (!roKey && !fullKey) {
       return (
         <div className="keyx-pop keyx-empty">
-          <div className="keyx-vault">
-            <span className="keyx-vault-mark"><IconKey size={18} /></span>
-            <span className="keyx-vault-copy"><b>API</b><em>missing</em></span>
-            <button className="keyx-action" type="button" title="Open API Security" aria-label="Open API Security" onClick={() => { setActive(null); openOverlay('apikey'); }}>
-              <IconShield size={15} />
-            </button>
-          </div>
+          <TopPanelHeader
+            className="keyx-vault"
+            logo={<BinanceLogo size={31} />}
+            title="Binance API"
+            sub="No Binance key manifest"
+            status="Missing"
+          />
           <div className="keyx-empty-line"><span /><span /><span /></div>
         </div>
       );
     }
-    const rows = API_PERMS.map((p) => ({
-      key: p.key as string,
-      label: PERM_SHORT[p.key] ?? p.label,
-      ro: !!roKey?.permissions[p.key],
-      full: !!fullKey?.permissions[p.key],
-    }));
     const visibleKeys = [roKey, fullKey].filter(Boolean) as ApiKeyInfo[];
-    const liveCount = visibleKeys.filter((ak) => ak.status === 'live').length;
-    const ipLocked = visibleKeys.every((ak) => ak.ipRestrict);
-    const withdrawalsOpen = rows.some((r) => r.key === 'withdrawals' && (r.ro || r.full));
+    const withdrawalsOpen = visibleKeys.some((ak) => ak.permissions.withdrawals);
+    const transferOpen = visibleKeys.some((ak) => ak.permissions.universalTransfer);
+    const keyCards = [
+      roKey && {
+        role: 'Data Key',
+        key: roKey,
+      },
+      fullKey && {
+        role: 'Automation Key',
+        key: fullKey,
+      },
+    ].filter(Boolean) as { role: string; key: ApiKeyInfo }[];
     return (
       <div className="keyx-pop">
-        <div className="keyx-vault">
-          <span className={`keyx-vault-mark ${roKey?.status ?? 'declared'}`}><IconKey size={18} /></span>
-          <span className="keyx-vault-copy"><b>API</b><em>{withdrawalsOpen ? 'review' : 'locked'}</em></span>
-          <span className={`keyx-vault-ring ${withdrawalsOpen ? 'warn' : 'ok'}`} aria-hidden>
-            <i /><i /><i />
-          </span>
-          <button className="keyx-action" type="button" title="Open API Security" aria-label="Open API Security" onClick={() => { setActive(null); openOverlay('apikey'); }}>
-            <IconShield size={15} />
-          </button>
-        </div>
-        <div className="keyx-strip">
-          <span><em>Keys</em><b>{visibleKeys.length}</b></span>
-          <span><em>Live</em><b>{liveCount}</b></span>
-          <span><em>IP</em><b>{ipLocked ? 'Lock' : 'Open'}</b></span>
-        </div>
-        <div className="keyx-key-stack">
-          {visibleKeys.map((ak) => (
-            <div key={ak.id} className={`keyx-card ${ak.status}`}>
-              <span className="keyx-led" />
-              <span className="keyx-main">
-                <b>{ak.name}</b>
-                <em>{ak.prefix ? `${ak.prefix}····${ak.fingerprint ? ` ${ak.fingerprint}` : ''}` : 'pending'}</em>
-              </span>
-              <span className={`keyx-side ${ak.status}`} title={ak.status} aria-label={ak.status} />
-            </div>
-          ))}
-        </div>
-        <div className="keyx-matrix">
-          <div className="keyx-mhead"><span /><em>R</em><em>F</em></div>
-          {rows.map((r) => (
-            <div key={r.key} className={`keyx-mrow ${r.key === 'withdrawals' ? (withdrawalsOpen ? 'risk' : 'locked') : ''}`}>
-              <span>{r.label}</span>
-              <i className={`keyx-bit ${r.ro ? 'on' : 'off'}`} title={`Read ${r.label}: ${r.ro ? 'enabled' : 'disabled'}`} aria-label={`Read ${r.label}: ${r.ro ? 'enabled' : 'disabled'}`} />
-              <i className={`keyx-bit ${r.full ? 'on' : 'off'}`} title={`Full ${r.label}: ${r.full ? 'enabled' : 'disabled'}`} aria-label={`Full ${r.label}: ${r.full ? 'enabled' : 'disabled'}`} />
-            </div>
-          ))}
+        <TopPanelHeader
+          className="keyx-vault"
+          logo={<BinanceLogo size={31} />}
+          title="Binance API"
+          sub={withdrawalsOpen || transferOpen ? 'Review permissions' : 'HMAC · Withdrawals Off'}
+          status={withdrawalsOpen || transferOpen ? 'Review' : 'Locked'}
+        />
+        <div className="keyx-card-stack" aria-label="Binance API key posture">
+          {keyCards.map(({ role, key: ak }) => {
+            const enabled = enabledApiPerms(ak);
+            return (
+              <section key={`${role}-${ak.id}`} className={`keyx-card2 ${ak.status}`}>
+                <div className="keyx-card-head">
+                  <span className="keyx-source-mark"><BinanceLogo size={32} /></span>
+                  <span className="keyx-card-title">
+                    <span className="keyx-name-row"><b>{apiKeyRole(ak)}</b><span className="keyx-type-pill">{ak.type}</span></span>
+                    <em className="keyx-ip-line">{apiKeyIpLine(ak)}</em>
+                    <em>{ak.name} · {apiKeySourceLine(ak)}</em>
+                  </span>
+                  <span className={`keyx-state ${ak.status}`}>{ak.status}</span>
+                </div>
+                <div className="keyx-enabled" aria-label={`${ak.name} enabled permissions`}>
+                  {enabled.length ? (
+                    <ul className="keyx-enabled-list">
+                      {enabled.map((p) => (
+                        <li key={p.key} className={riskApiPerms.includes(p.key) ? 'risk' : undefined}>
+                          <i aria-hidden />
+                          <span>{p.label}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : <span className="keyx-enabled-empty">No active permission</span>}
+                </div>
+              </section>
+            );
+          })}
         </div>
       </div>
     );
@@ -1710,21 +2123,28 @@ function SharedTopBar() {
       case 'clock':
         return (
           <div className="clock-pop">
-            <div className="clock-pop-hero">
-              <span className="clock-orbit lg"><span /></span>
-              <span className="clock-hero-copy">
-                <small>Execution Time</small>
-                <b>{activeClock.raw}</b>
-                <em>{zone.city} · {activeClockOffset} · {clockDate(zone.id, now)}</em>
-              </span>
-              <span className="clock-live">Live</span>
-            </div>
+            <TopPanelHeader
+              className="clock-pop-hero"
+              logo={<ClockFace parts={activeClock} className="lg" />}
+              title="Execution Time"
+              value={activeClock.raw}
+              sub={`${activeClockOffset} · ${clockDate(zone.id, now)}`}
+              status="Live"
+            />
             <div className="clock-twins">
               <span><em>UTC</em><b>{utcClock.raw}</b></span>
               <span><em>Local</em><b>{localClock.raw}</b></span>
             </div>
+            <div className="clock-market-card">
+              <ClockFace parts={marketClock} className="mini" />
+              <span>
+                <em>Market Clock</em>
+                <b>{marketClock.raw}</b>
+                <small>New York · {marketClockOffset} · {marketClockDate}</small>
+              </span>
+            </div>
             <div className="clock-zone-list">
-              {ZONES.map((zz) => {
+              {visibleClockZones.map((zz) => {
                 const p = clockParts(zz.id, now);
                 const selected = zz.id === zone.id;
                 return (
@@ -1745,7 +2165,7 @@ function SharedTopBar() {
       case 'shell':
         return (
           <div className="shell-pop shell-premium">
-            <div className="shell-stage" aria-hidden>
+            <button className="shell-stage shell-stage-open" type="button" onClick={() => { setActive(null); openOverlay('cloudshell'); }}>
               <div className="shell-stage-bar">
                 <span className="shell-leds"><i /><i /><i /></span>
                 <b>AWS CLI</b>
@@ -1756,15 +2176,16 @@ function SharedTopBar() {
                 <div className="shell-command"><em>$</em><span>aws sts get-caller-identity</span><i /></div>
                 <div className="shell-rail"><span /><span /><span /></div>
               </div>
-            </div>
-            <div className="shell-pills" aria-hidden>
+            </button>
+            <div className="shell-pills shell-strip" aria-hidden>
               <span><em>host</em><b>cg-arb-01</b></span>
-              <span><em>path</em><b>/opt/arbitrage</b></span>
+              <span><em>path</em><b>/opt/arb</b></span>
               <span><em>auth</em><b>ssm</b></span>
             </div>
             <div className="shell-actions">
-              <button className="shell-open primary icon-only" type="button" onClick={() => { setActive(null); openOverlay('cloudshell'); }} title="Open in-app CloudShell" aria-label="Open in-app CloudShell">
+              <button className="shell-open primary" type="button" onClick={() => { setActive(null); openOverlay('cloudshell'); }} title="Open in-app CloudShell" aria-label="Open in-app CloudShell">
                 <IconTerminal size={15} />
+                <span>Expand</span>
               </button>
               <a className="shell-open icon-only" href={CLOUD_SHELL_URL} target="_blank" rel="noreferrer noopener" onClick={() => setActive(null)} title="Open AWS Console" aria-label="Open AWS Console">
                 <IconExternal size={14} />
@@ -1775,260 +2196,261 @@ function SharedTopBar() {
       case 'apikey': return keysBody();
       case 'data':
         return (
-          <div className={`datax-pop ${netGrade}`}>
-            <div className={`datax-hero ${netGrade}`}>
-              <span className="datax-mark"><IconDatabase size={18} /></span>
-              <span className="datax-score">
-                <b>{dataScore}</b>
-                <em>{dataCode}</em>
-              </span>
-              <span className="datax-signal" aria-hidden><i /><i /><i /></span>
-            </div>
-            <div className="datax-counters">
-              <span><i /><b>{feedList.length || '—'}</b><em>S</em></span>
-              <span className={latTier}><i /><b>{msLabel(lat)}</b><em>L</em></span>
-              <span><i /><b>{sys?.usedWeight1m ?? '—'}</b><em>W</em></span>
-            </div>
-            <div className="datax-list">
+          <div className={`datax-pop ${dataGrade}`}>
+            <TopPanelHeader
+              className={`datax-hero ${dataGrade}`}
+              logo={<DataHealthGlyph />}
+              title="Data Health"
+              sub={dataSub}
+              status={dataLabel}
+            />
+            <div className="datax-source-list" aria-label="Measured data sources">
               {dataRows.map((row) => (
-                <div key={row.name} className={`datax-row ${row.tier}`}>
-                  <span className={`datax-dot ${row.tier}`} />
-                  <span className="datax-row-copy">
-                    <b>{dataShort[row.name] ?? row.name}</b>
+                <div key={row.name} className={`datax-source-row ${row.tier}`}>
+                  <span className={`datax-source-dot ${row.tier}`} />
+                  <span className="datax-source-copy">
+                    <b>{row.name}</b>
+                    <em>{row.sub}</em>
+                  </span>
+                  <span className="datax-source-value">
                     <em>{row.value}</em>
                   </span>
-                  <span className={`datax-chip ${row.tier}`} />
                 </div>
               ))}
+            </div>
+            <div className="datax-foot">
+              <button type="button" onClick={() => { setActive(null); setPage('system'); }}>
+                <IconPulse size={13} />
+                Health
+              </button>
+              <span>{sys?.usedWeightTs ? `Weight ${timeAgo(sys.usedWeightTs)}` : 'Live Probes'}</span>
             </div>
           </div>
         );
       case 'advisor':
         return (
-          <div className={`advx-pop ${advTone}`}>
-            <div className={`advx-hero ${advTone}`}>
-              <span className="advx-seal"><IconShield size={18} /></span>
-              <span className="advx-score">
-                <b>{advScore}</b>
-                <em>{advCode}</em>
-              </span>
-              <span className="advx-pulse" aria-hidden><i /><i /><i /></span>
-              <button className="advx-action" type="button" title="Open Risk" aria-label="Open Risk" onClick={() => { setActive(null); setPage('risk'); }}>
-                <IconRadar size={15} />
-              </button>
-            </div>
-            <div className="advx-counters">
-              <span className="bad"><i /><b>{advA.length}</b><em>A</em></span>
-              <span className="warn"><i /><b>{advI.length}</b><em>R</em></span>
-              <span className="ok"><i /><b>{advP.length}</b><em>P</em></span>
-            </div>
-            <div className="advx-list">
-              {advAtt.length === 0 ? (
-                <div className="advx-clean">
-                  <span className="advx-dot ok" />
-                  <b>Checks clean</b>
-                  <em>{advP.length}/{advChecks.length}</em>
-                </div>
-              ) : advAtt.slice(0, 4).map((c) => (
-                <button key={c.name} className={`advx-row ${c.sev}`} type="button" onClick={() => { if (c.page) { setActive(null); setPage(c.page); } }}>
-                  <span className={`advx-dot ${c.sev === 'action' ? 'bad' : 'warn'}`} />
-                  <span className="advx-row-copy">
-                    <b>{c.name}</b>
-                    <em>{c.page ?? 'scan'}</em>
+          <div className={`advx-pop advisor-audit ${advTone}`}>
+            <TopPanelHeader
+              className="advx-audit-head"
+              logo={<AdvisorSealGlyph />}
+              title="Trusted Advisor"
+              sub={`Bot controls audit · ${advChecks.length} checks`}
+              status={advTone === 'bad' ? 'Action' : advTone === 'warn' ? 'Review' : 'Clear'}
+            />
+
+            <div className="advx-status-stack" aria-label="Trusted Advisor status groups">
+              {advisorGroups.map((g) => (
+                <button key={g.key} className={`advx-status-row ${g.tone}`} type="button" onClick={() => openAdvisorDetail(g.items, g.fallback)}>
+                  <span className="advx-status-icon">
+                    {g.tone === 'bad' ? <IconCross size={15} /> : g.tone === 'warn' ? <IconAlarm size={15} /> : <IconCheck size={15} />}
                   </span>
-                  <span className={`advx-chip ${c.sev === 'action' ? 'bad' : 'warn'}`} />
+                  <span className="advx-status-copy">
+                    <b>{g.label}</b>
+                    <em>{g.sub}</em>
+                  </span>
+                  <span className="advx-status-count">{g.items.length}</span>
+                  <span className="advx-status-link">Details</span>
                 </button>
               ))}
+            </div>
+
+            <div className="advx-focus-list" aria-label="Advisor focus checks">
+              <div className="advx-focus-head">
+                <b>{advAtt.length ? 'Focus Checks' : 'Passing Controls'}</b>
+                <em>{advScore}%</em>
+              </div>
+              {advisorFocus.map((c) => (
+                <button key={c.name} className={`advx-focus-row ${c.sev}`} type="button" disabled={!c.page} onClick={() => { if (c.page) { setActive(null); setPage(c.page); } }}>
+                  <span className="advx-focus-copy">
+                    <b>{c.name}</b>
+                    <em>{c.detail}</em>
+                  </span>
+                  <span className={`advx-focus-pill ${c.sev === 'action' ? 'bad' : c.sev === 'invest' ? 'warn' : 'ok'}`}>
+                    {c.sev === 'action' ? 'Fix' : c.sev === 'invest' ? 'Review' : 'OK'}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="advx-footer-actions">
+              <button type="button" onClick={() => { setActive(null); setPage('risk'); }}>
+                <IconRadar size={14} /> Risk Controls
+              </button>
+              <button type="button" onClick={() => { setActive(null); setPage('system'); }}>
+                <IconPulse size={14} /> Health
+              </button>
             </div>
           </div>
         );
       case 'notif':
         return (
           <div className={`ntfx-pop ${notifTone}`}>
-            <div className={`ntfx-hero ${notifTone}`}>
-              <span className="ntfx-mark"><IconBell size={18} /></span>
-              <span className="ntfx-score">
-                <b>{unread || events.length}</b>
-                <em>{unread ? 'NEW' : events.length ? 'LOG' : 'CLR'}</em>
-              </span>
-              <span className="ntfx-signal" aria-hidden><i /><i /><i /></span>
-              <button className="ntfx-action" type="button" onClick={() => { setActive(null); setPage('ledger'); }} title="Open Ledger" aria-label="Open notification ledger">
-                <IconReceipt size={15} />
-              </button>
-            </div>
-            <div className="ntfx-counters" aria-label="Notification summary">
-              <span><i /><b>{events.length}</b><em>T</em></span>
-              <span className={unread ? 'hot' : ''}><i /><b>{unread}</b><em>N</em></span>
-              <span><i /><b>{alertsOn}</b><em>R</em></span>
-            </div>
+            <TopPanelHeader
+              className="ntfx-head"
+              logo={<NotificationCenterGlyph />}
+              title="Notifications"
+              sub="Critical, account, logs"
+              status={unread ? `${unread} New` : events.length ? `${events.length} Total` : 'Clear'}
+              action={(
+                <span className="ntfx-head-actions">
+                  <button className="ntfx-clear" type="button" onClick={markNotificationsRead} disabled={unread === 0} title="Clear unread notifications" aria-label="Clear unread notifications">
+                    Clear
+                  </button>
+                  <button className="ntfx-iconbtn" type="button" onClick={openNotificationCenter} title="Expand notifications" aria-label="Expand notifications">
+                    <IconMaximize size={15} />
+                  </button>
+                </span>
+              )}
+            />
             <div className="ntfx-tabs" role="tablist" aria-label="Notification filters">
-              {notifTabs.map((t) => (
+              {compactNotifTabs.map((t) => (
                 <button
                   key={t.id}
                   data-testid={`notif-tab-${t.id}`}
-                  className={`ntfx-tab ${notifTab === t.id ? 'on' : ''}`}
+                  className={`ntfx-tab ${compactNotifTab === t.id ? 'on' : ''}`}
                   type="button"
                   role="tab"
-                  aria-selected={notifTab === t.id}
+                  aria-selected={compactNotifTab === t.id}
                   aria-label={t.label}
                   title={t.label}
                   onClick={() => setNotifTab(t.id)}
                 >
-                  {t.code}
+                  {t.id === 'opportunity' ? 'Signals' : t.label}
                 </button>
               ))}
             </div>
 
-            {notifTab === 'custom' ? (
-              <div className="ntfx-rules">
-                {alertRows.map((r) => (
-                  <div key={r.key} className="ntfx-rule">
-                    <span className={`ntfx-dot ${al[r.key] ? 'on' : ''}`} />
-                    <span className="ntfx-rule-copy">
-                      <b>{alertShort[r.key]}</b>
-                      <em>{al[r.key] ? 'ON' : 'OFF'}</em>
+            <div className="ntfx-list">
+              {compactNotifEvents.length === 0 ? (
+                <div className="ntfx-empty">
+                  <span className="ntfx-dot idle" />
+                  <b>No alerts in this filter</b>
+                  <em>{compactNotifTab === 'all' ? 'Inbox clear' : compactNotifTab}</em>
+                </div>
+              ) : compactNotifEvents.slice(0, 3).map((e) => {
+                const meta = notifMeta(e.kind);
+                const summary = eventSummary(e.kind, (e.data as Record<string, unknown> | null) ?? null, e.symbol);
+                return (
+                  <button key={e.id} className={`ntfx-event ${meta.tone}`} type="button" title={summary} aria-label={summary} onClick={openNotificationCenter}>
+                    <span className={`ntfx-row-icon ${meta.tone}`}>{notifIcon(meta.tone, 16)}</span>
+                    <span className="ntfx-copy">
+                      <span className="ntfx-row-top"><b>{meta.scope}</b><time>{notifStamp(e.ts)}</time></span>
+                      <strong>{meta.title}</strong>
+                      <small>{summary}</small>
                     </span>
-                    <button
-                      data-testid={`notif-alert-${r.key}`}
-                      className={`toggle ${al[r.key] ? 'on' : ''}`}
-                      type="button"
-                      onClick={() => updatePref('alerts', { ...al, [r.key]: !al[r.key] })}
-                      aria-label={`Toggle ${r.label}`}
-                    >
-                      <span className="knob" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="ntfx-list">
-                {filteredNotifEvents.length === 0 ? (
-                  <div className="ntfx-empty">
-                    <span className="ntfx-dot idle" />
-                    <b>Quiet</b>
-                    <em>{notifTab === 'all' ? '0' : notifTab.toUpperCase()}</em>
-                  </div>
-                ) : filteredNotifEvents.slice(0, 4).map((e) => {
-                  const meta = notifMeta(e.kind);
-                  const summary = eventSummary(e.kind, (e.data as Record<string, unknown> | null) ?? null, e.symbol);
-                  return (
-                    <button key={e.id} className="ntfx-event" type="button" title={summary} aria-label={summary} onClick={() => { setActive(null); setPage('ledger'); }}>
-                      <span className={`ntfx-dot ${meta.tone}`} aria-hidden="true" />
-                      <span className="ntfx-copy">
-                        <b>{meta.scope}</b>
-                        <em>{meta.mark} · {timeAgo(e.ts)}</em>
-                      </span>
-                      <span className={`ntfx-chip ${meta.tone}`} />
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         );
       case 'power':
         return (
           <div className={`modex-pop ${modeTone}`}>
-            <div className={`modex-hero ${modeTone}`}>
-              <span className="modex-mark"><IconPower size={18} /></span>
-              <span className="modex-score">
-                <b>{modeCode}</b>
-                <em>{modeStamp}</em>
-              </span>
-              <span className={`modex-bars ${modeTone}`} aria-hidden="true"><i /><i /><i /></span>
+            <TopPanelHeader
+              className="modex-head"
+              logo={<PanelWebLogo domain="cloudflare.com" label="Bot controls" fallback={<IconPower size={17} />} />}
+              title="Bot Controls"
+              sub={modeSub}
+              status={modeLabel}
+            />
+            <div className="modex-rows" role="group" aria-label="Bot guardrail controls">
+              <button className={`modex-row emergency ${killOn ? 'on' : ''}`} type="button" onClick={() => { void setKill(!killOn); }} aria-pressed={killOn}>
+                <span><b>Emergency Stop</b><em>Stops orders, loans, and bot actions.</em></span>
+                <i className="cb-switch" aria-hidden><span /></i>
+              </button>
+              <button className={`modex-row ${fundsAllowed ? 'on' : ''}`} type="button" onClick={() => setFundsAccess(!fundsAllowed)} aria-pressed={fundsAllowed}>
+                <span><b>Funds Access</b><em>Allow the bot to use account funds.</em></span>
+                <i className="cb-switch" aria-hidden><span /></i>
+              </button>
+              <button className={`modex-row ${newLoansAllowed ? 'on' : ''}`} type="button" onClick={() => setNewLoans(!newLoansAllowed)} aria-pressed={newLoansAllowed}>
+                <span><b>New Loans</b><em>Allow margin or flexible borrow requests.</em></span>
+                <i className="cb-switch" aria-hidden><span /></i>
+              </button>
+              <button className={`modex-row ${botRunning ? 'on' : ''}`} type="button" onClick={() => setBotRunning(!botRunning)} aria-pressed={botRunning}>
+                <span><b>Bot Running</b><em>Allow strategy automation to act.</em></span>
+                <i className="cb-switch" aria-hidden><span /></i>
+              </button>
+              <button className={`modex-row ${liveOrdersAllowed ? 'on' : ''}`} type="button" onClick={() => { void setLive(!liveOrdersAllowed); }} aria-pressed={liveOrdersAllowed} title={liveTitle}>
+                <span><b>Live Orders</b><em>Allow live sends after the risk gate.</em></span>
+                <i className="cb-switch" aria-hidden><span /></i>
+              </button>
             </div>
-            <div className="modex-counters" aria-label="Trading mode telemetry">
-              <span><i /><b>{allowCount}</b><em>SYM</em></span>
-              <span className={modeTone}><i /><b>{modeSend}</b><em>ORD</em></span>
-              <span className={b?.connected ? 'ok' : 'bad'}><i /><b>{modeNet}</b><em>API</em></span>
-            </div>
-            <div className="modex-actions" role="group" aria-label="Bot trading mode controls">
-              <button
-                className={`modex-action bad ${mode === 'HALTED' ? 'on' : ''}`}
-                type="button"
-                aria-pressed={mode === 'HALTED'}
-                title="Halt trading"
-                onClick={() => { void setKill(true); }}
-              >
-                <IconPower size={14} /><b>Halt</b>
-              </button>
-              <button
-                className={`modex-action warn ${mode === 'MANUAL' ? 'on' : ''}`}
-                type="button"
-                aria-pressed={mode === 'MANUAL'}
-                title="Manual only"
-                onClick={setManualMode}
-              >
-                <IconShield size={14} /><b>Manual</b>
-              </button>
-              <button
-                className={`modex-action ok ${mode === 'LIVE_ARMED' ? 'on' : ''}`}
-                type="button"
-                aria-pressed={mode === 'LIVE_ARMED'}
-                disabled={liveDisabled}
-                title={liveTitle}
-                onClick={setLiveMode}
-              >
-                <IconPulse size={14} /><b>Live</b>
-              </button>
+            <div className="modex-foot">
+              <button type="button" onClick={() => { setActive(null); setPage('risk'); }}><IconShield size={13} />Risk Limits</button>
+              <button type="button" onClick={() => { setActive(null); setPage('loans'); }}><IconCoins size={13} />Borrow Guard</button>
+              <span>{modeNet}</span>
             </div>
           </div>
         );
       case 'mrefresh':
         return (
-          <div className={`mrefx-pop ${refreshTone}`}>
-            <div className={`mrefx-hero ${refreshTone}`}>
-              <span className={`mrefx-mark ${menuRefreshState === 'spin' ? 'spin' : ''}`}><IconRefresh size={18} /></span>
-              <span className="mrefx-score">
-                <b>{refreshCode}</b>
-                <em>{refreshStamp}</em>
-              </span>
-              <span className={`mrefx-bars ${refreshTone}`} aria-hidden="true"><i /><i /><i /></span>
+          <div className={`mrefx-pop cadence ${refreshTone}`}>
+            <TopPanelHeader
+              className="mrefx-cadence-head"
+              logo={<DataCadenceGlyph />}
+              title="Data Cadence"
+              sub={refreshDetail}
+              status={refreshLabel}
+            />
+            <div className="mrefx-custom-row top" aria-label="Custom data cadence seconds">
+              <button data-testid="mrefresh-decrease" type="button" onClick={() => applyCadence(selectedCadence - 1)} aria-label="Decrease cadence">-</button>
+              <label>
+                <span>{selectedCadenceLabel}</span>
+                <input data-testid="mrefresh-custom-input" value={refreshCustom} inputMode="decimal" type="number" min={0.5} max={300} step={0.5} onChange={(e) => setRefreshCustom(e.currentTarget.value)} onBlur={applyCustomRefresh} onKeyDown={(e) => { if (e.key === 'Enter') applyCustomRefresh(); }} aria-label="Custom data cadence seconds" />
+              </label>
+              <button data-testid="mrefresh-increase" type="button" onClick={() => applyCadence(selectedCadence + 1)} aria-label="Increase cadence">+</button>
+              <button data-testid="mrefresh-apply" className="mrefx-apply" type="button" onClick={applyCustomRefresh}>Apply</button>
             </div>
-            <div className="mrefx-counters" aria-label="Market refresh telemetry">
-              <span className={feedsOk ? 'ok' : 'warn'}><i /><b>{refreshFeedCount}</b><em>STR</em></span>
-              <span className={latTone || 'idle'}><i /><b>{msLabel(lat)}</b><em>LAT</em></span>
-              <span className={refreshTone}><i /><b>{refreshNetCode}</b><em>NET</em></span>
-            </div>
-            <div className="mrefx-presets" role="radiogroup" aria-label="Market refresh interval">
-              {refreshChoices.map((r) => (
+            <div className="mrefx-cadence-presets" role="radiogroup" aria-label={`${selectedCadenceLabel} cadence`}>
+              {cadenceChoices.map((r) => (
                 <button
                   key={r.sec}
                   data-testid={`mrefresh-${r.sec}`}
-                  className={`mrefx-preset ${prefs.refreshSec === r.sec ? 'on' : ''}`}
+                  className={`mrefx-cadence-preset ${selectedCadence === r.sec ? 'on' : ''}`}
                   type="button"
                   role="radio"
-                  aria-checked={prefs.refreshSec === r.sec}
-                  aria-label={`${r.label} market refresh, ${r.sec} seconds`}
-                  title={`${r.label} / ${r.sub}`}
-                  onClick={() => setMarketRefresh(r.sec)}
+                  aria-checked={selectedCadence === r.sec}
+                  aria-label={`${r.label} cadence for ${selectedCadenceLabel}`}
+                  onClick={() => applyCadence(r.sec)}
                 >
-                  <b>{r.sec}</b><em>s</em>
+                  {r.label}
                 </button>
               ))}
             </div>
-            <div className="mrefx-custom" aria-label="Custom market refresh seconds">
-              <button data-testid="mrefresh-decrease" type="button" onClick={() => setMarketRefresh(prefs.refreshSec - 3)} aria-label="Decrease market refresh">-</button>
-              <input data-testid="mrefresh-custom-input" value={refreshCustom} inputMode="numeric" type="number" min={3} max={120} step={1} onChange={(e) => setRefreshCustom(e.currentTarget.value)} onBlur={applyCustomRefresh} onKeyDown={(e) => { if (e.key === 'Enter') applyCustomRefresh(); }} aria-label="Custom market refresh seconds" />
-              <button data-testid="mrefresh-increase" type="button" onClick={() => setMarketRefresh(prefs.refreshSec + 3)} aria-label="Increase market refresh">+</button>
-              <button data-testid="mrefresh-now" className={`mrefx-now ${menuRefreshState}`} type="button" disabled={menuRefreshState === 'spin'} onClick={() => { void runMenuRefresh(); }} aria-label="Refresh market data now">
-                <span className={menuRefreshState === 'spin' ? 'spin' : ''}><IconRefresh size={14} /></span>
-                <b>{refreshActionText}</b>
-              </button>
+            <div className="mrefx-source-list" aria-label="Data source cadences">
+              {cadenceRows.map((row) => (
+                <div key={row.key} className={`mrefx-source-row ${row.tone}`}>
+                  <span className="mrefx-source-ic">{row.icon}</span>
+                  <span className="mrefx-source-copy"><b>{row.label}</b><em>{row.sub}</em></span>
+                  <strong>{row.value}</strong>
+                </div>
+              ))}
             </div>
           </div>
         );
       case 'currency':
         return (
           <div className={`curfx-pop ${curTone}`}>
-            <div className={`curfx-hero ${curTone}`}>
-              <span className="curfx-mark">{curSymbol}</span>
-              <span className="curfx-score">
-                <b>{cur}</b>
-                <em>{curFxCode}</em>
-              </span>
-              <span className={`curfx-bars ${curTone}`} aria-hidden="true"><i /><i /><i /></span>
-            </div>
+            <TopPanelHeader
+              className={`curfx-hero ${curTone}`}
+              logo={<CurrencyUnitGlyph />}
+              title="Display Currency"
+              sub={curRateText}
+              status={cur}
+              action={(
+                <button
+                  className={`curfx-refresh ${currencyBusy ? 'spin' : ''}`}
+                  type="button"
+                  onClick={refreshCurrencyFx}
+                  title="Refresh FX rates"
+                  aria-label="Refresh FX rates"
+                  disabled={currencyBusy}
+                >
+                  <IconRefresh size={14} />
+                </button>
+              )}
+            />
             <div className="curfx-counters" aria-label="Display currency telemetry">
               <span className={curTone}><i /><b>{curRateText}</b><em>RATE</em></span>
               <span className={curTone}><i /><b>{curFxCode}</b><em>FX</em></span>
@@ -2052,6 +2474,34 @@ function SharedTopBar() {
                 </button>
               ))}
             </div>
+            <div className="curfx-converter" aria-label="Display currency conversion preview">
+              <div className="curfx-converter-head">
+                <span><b>Preview</b><em>{currencyBasePreview}</em></span>
+                <strong>{currencyConvertedPreview}</strong>
+              </div>
+              <div className="curfx-flow" aria-hidden="true">
+                <span />
+                <i />
+                <span />
+              </div>
+              <div className="curfx-pair">
+                <span><b>Base</b><em>USD</em></span>
+                <span><b>Display</b><em>{cur}</em></span>
+                <span><b>Cadence</b><em>{prefs.dataCadence?.fx ?? 300}s</em></span>
+              </div>
+            </div>
+            <div className="curfx-amounts" role="group" aria-label="Preview amount">
+              {[100, 1000, 10000].map((amount) => (
+                <button
+                  key={amount}
+                  type="button"
+                  className={currencyNotional === amount ? 'on' : ''}
+                  onClick={() => setCurrencyNotional(amount)}
+                >
+                  {formatCurrencyPanelValue('USD', amount)}
+                </button>
+              ))}
+            </div>
           </div>
         );
       case 'appearance':
@@ -2063,12 +2513,13 @@ function SharedTopBar() {
         const setZoom = (next: number) => updatePref('zoom', Math.min(1.5, Math.max(0.8, Math.round(next * 100) / 100)));
         return (
           <div className={`apx-pop apx-premium ${theme}`} style={{ '--apx-accent': activeAccent.hex } as CSSProperties}>
-            <div className={`apx-stage ${prefs.theme}`}>
-              <span className="apx-window" aria-hidden="true"><i /><i /><i /></span>
-              <span className="apx-rail" aria-hidden="true"><i /><i /><i /></span>
-              <span className="apx-orb" aria-hidden="true" />
-              <b>{appearanceZoom}%</b>
-            </div>
+            <TopPanelHeader
+              className={`apx-stage ${prefs.theme}`}
+              logo={<PanelWebLogo domain="apple.com" label="Appearance" fallback={theme === 'dark' ? <IconMoon size={17} /> : <IconSun size={17} />} />}
+              title="Appearance"
+              sub={`${prefs.theme === 'system' ? 'Auto' : prefs.theme} · ${activeAccent.label}`}
+              status={`${appearanceZoom}%`}
+            />
             <div className="apx-modes" role="radiogroup" aria-label="Theme mode">
               {themeModes.map((m) => (
                 <button
@@ -2116,19 +2567,46 @@ function SharedTopBar() {
               <button data-testid="appearance-zoom-in" type="button" onClick={() => setZoom((prefs.zoom || 1) + 0.05)} aria-label="Zoom in">+</button>
               <button data-testid="appearance-zoom-reset" className="reset" type="button" onClick={() => updatePref('zoom', 1.05)} aria-label="Reset scale" title="Reset scale">↺</button>
             </div>
+            <div className="apx-preview" aria-label="Appearance preview">
+              <div className="apx-preview-nav" aria-hidden="true">
+                <i />
+                <i className="on" />
+                <i />
+              </div>
+              <div className="apx-preview-main">
+                <span className="apx-preview-title">
+                  <b>Control Room</b>
+                  <em>{activeAccent.label}</em>
+                </span>
+                <span className="apx-preview-row">
+                  <i />
+                  <b>Market Feed</b>
+                  <em>Live</em>
+                </span>
+                <span className="apx-preview-row">
+                  <i />
+                  <b>Risk Guard</b>
+                  <em>Armed</em>
+                </span>
+              </div>
+            </div>
+            <div className="apx-token-grid" aria-label="Appearance state">
+              <span><b>Mode</b><em>{prefs.theme === 'system' ? 'Auto' : prefs.theme}</em></span>
+              <span><b>Accent</b><em>{activeAccent.label}</em></span>
+              <span><b>Scale</b><em>{appearanceZoom}%</em></span>
+            </div>
           </div>
         );
       case 'basisu':
         return (
           <div className={`basisx-pop ${basisIsBps ? 'bps' : 'pct'}`}>
-            <div className={`basisx-hero ${basisIsBps ? 'bps' : 'pct'}`}>
-              <span className="basisx-mark">{basisMark}</span>
-              <span className="basisx-score">
-                <b>{basisCode}</b>
-                <em>{basisPreview}</em>
-              </span>
-              <span className={`basisx-bars ${basisIsBps ? 'bps' : 'pct'}`} aria-hidden="true"><i /><i /><i /></span>
-            </div>
+            <TopPanelHeader
+              className={`basisx-hero ${basisIsBps ? 'bps' : 'pct'}`}
+              logo={<BasisUnitGlyph />}
+              title="Basis Unit"
+              sub={basisPreview}
+              status={basisCode}
+            />
             <div className="basisx-counters" aria-label="Basis conversion telemetry">
               <span><i /><b>1bp</b><em>.01%</em></span>
               <span><i /><b>100</b><em>bp/%</em></span>
@@ -2146,7 +2624,7 @@ function SharedTopBar() {
                 onClick={() => updatePref('basisUnit', 'pct')}
               >
                 <i>%</i>
-                <span><b>PCT</b><em>+0.042%</em></span>
+                <span><b>PCT</b><em>{formatBasisPct(basisSamplePct)}</em></span>
               </button>
               <button
                 data-testid="basis-unit-bps"
@@ -2159,8 +2637,46 @@ function SharedTopBar() {
                 onClick={() => updatePref('basisUnit', 'bps')}
               >
                 <i>bp</i>
-                <span><b>BPS</b><em>+4.2</em></span>
+                <span><b>BPS</b><em>{formatBasisBp(basisSamplePct)}</em></span>
               </button>
+            </div>
+            <div
+              className="basisx-converter"
+              aria-label="Basis conversion preview"
+              style={{
+                '--basis-pos': `${basisTrackPos}%`,
+                '--basis-start': `${basisTrackStart}%`,
+                '--basis-span': `${basisTrackSpan}%`,
+              } as CSSProperties}
+            >
+              <div className="basisx-converter-head">
+                <span><b>Display</b><em>{basisIsBps ? 'Basis points' : 'Percent'}</em></span>
+                <strong>{basisPreview}</strong>
+              </div>
+              <div className="basisx-track" aria-hidden="true">
+                <i />
+                <b />
+              </div>
+              <div className="basisx-converter-foot">
+                <span><b>Percent</b><em>{formatBasisPct(basisSamplePct)}</em></span>
+                <span><b>Basis Points</b><em>{formatBasisBp(basisSamplePct)}</em></span>
+              </div>
+            </div>
+            <div className="basisx-samples" role="group" aria-label="Basis preview samples">
+              {basisSamples.map((sample) => (
+                <button
+                  key={sample.label}
+                  type="button"
+                  className={Math.abs(sample.value - basisSamplePct) < 0.0001 ? 'on' : ''}
+                  onClick={() => setBasisSamplePct(sample.value)}
+                >
+                  {sample.label}
+                </button>
+              ))}
+            </div>
+            <div className="basisx-rule" aria-label="Basis conversion rule">
+              <span><b>Rule</b><em>1bp = 0.01%</em></span>
+              <span><b>Active</b><em>{basisIsBps ? 'Basis points' : 'Percent'}</em></span>
             </div>
           </div>
         );
@@ -2171,51 +2687,7 @@ function SharedTopBar() {
     if (k === 'clock' || k === 'shell') return content(k);
 
     if (k === 'apikey') {
-      const visibleKeys = [roKey, fullKey].filter((ak): ak is ApiKeyInfo => !!ak);
-      const liveCount = visibleKeys.filter((ak) => ak.status === 'live').length;
-      const ipLocked = visibleKeys.length > 0 && visibleKeys.every((ak) => ak.ipRestrict);
-      const withdrawalsOpen = visibleKeys.some((ak) => ak.permissions.withdrawals);
-      return (
-        <div className="topux-panel">
-          <div className="topux-head">
-            <span><IconKey size={16} />API Keys</span>
-            <em className={withdrawalsOpen ? 'warn' : liveCount ? 'ok' : 'idle'}>{withdrawalsOpen ? 'Review' : liveCount ? 'Locked' : 'Setup'}</em>
-          </div>
-          {visibleKeys.length === 0 ? (
-            <div className="topux-empty">No Binance API key is connected.</div>
-          ) : (
-            <div className="topux-list">
-              {visibleKeys.map((ak) => (
-                <div key={ak.id} className="topux-key-row">
-                  <span>
-                    <b>{ak.name}</b>
-                    <small>{ak.prefix ? `${ak.prefix}...${ak.fingerprint ?? ''}` : ak.scope}</small>
-                  </span>
-                  <em className={ak.status === 'live' ? 'ok' : ak.status === 'planned' ? 'warn' : 'idle'}>{ak.status === 'live' ? 'Live' : ak.status === 'planned' ? 'Planned' : 'Set'}</em>
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="topux-perms">
-            {API_PERMS.map((p) => {
-              const read = !!roKey?.permissions[p.key];
-              const full = !!fullKey?.permissions[p.key];
-              return (
-                <div key={p.key} className={`topux-perm ${p.key === 'withdrawals' && (read || full) ? 'risk' : ''}`}>
-                  <span>{p.label.replace('Spot & Margin & Stock Trading', 'Spot / Margin').replace('Permits Universal Transfer', 'Universal Transfer')}</span>
-                  <b>{read ? 'Read' : full ? 'Full' : 'Off'}</b>
-                </div>
-              );
-            })}
-          </div>
-          <div className="topux-actions">
-            <button className="topux-action primary" type="button" onClick={() => { setActive(null); openOverlay('apikey'); }}>
-              <IconShield size={14} /> Open Security
-            </button>
-            <span className={`topux-note ${ipLocked ? 'ok' : 'warn'}`}>{ipLocked ? 'IP locked' : 'IP open'}</span>
-          </div>
-        </div>
-      );
+      return keysBody();
     }
 
     if (k === 'data') {
@@ -2288,7 +2760,7 @@ function SharedTopBar() {
               </button>
             ))}
           </div>
-          {notifTab === 'custom' ? (
+          {notifTab === 'prefs' ? (
             <div className="topux-list">
               {alertRows.map((r) => (
                 <div key={r.key} className="topux-row switch">
@@ -2329,51 +2801,11 @@ function SharedTopBar() {
     }
 
     if (k === 'power') {
-      return (
-        <div className="topux-panel">
-          <div className="topux-head">
-            <span><IconPower size={16} />Trading Mode</span>
-            <em className={modeTone === 'ok' ? 'ok' : modeTone === 'warn' ? 'warn' : 'bad'}>{mode === 'HALTED' ? 'Halted' : mode === 'LIVE_ARMED' ? 'Live' : 'Manual'}</em>
-          </div>
-          <div className="topux-summary">
-            <span><b>{allowCount}</b><small>Symbols</small></span>
-            <span><b>{b?.connected ? 'Online' : 'Offline'}</b><small>Binance</small></span>
-            <span><b>{modeSend}</b><small>Orders</small></span>
-          </div>
-          <div className="topux-mode-actions">
-            <button className={`bad ${mode === 'HALTED' ? 'on' : ''}`} type="button" onClick={() => { void setKill(true); }}><IconPower size={14} /><span>Halt</span></button>
-            <button className={`warn ${mode === 'MANUAL' ? 'on' : ''}`} type="button" onClick={setManualMode}><IconShield size={14} /><span>Manual</span></button>
-            <button className={`ok ${mode === 'LIVE_ARMED' ? 'on' : ''}`} type="button" disabled={liveDisabled} title={liveTitle} onClick={setLiveMode}><IconPulse size={14} /><span>Live</span></button>
-          </div>
-        </div>
-      );
+      return content(k);
     }
 
     if (k === 'mrefresh') {
-      return (
-        <div className="topux-panel">
-          <div className="topux-head">
-            <span><IconRefresh size={16} />Market Refresh</span>
-            <em className={refreshTone === 'ok' ? 'ok' : refreshTone === 'warn' ? 'warn' : 'bad'}>{refreshLabel}</em>
-          </div>
-          <div className="topux-subline">{refreshDetail}</div>
-          <div className="topux-presets">
-            {refreshChoices.map((r) => (
-              <button key={r.sec} className={prefs.refreshSec === r.sec ? 'on' : ''} type="button" onClick={() => setMarketRefresh(r.sec)}>
-                <b>{r.sec}s</b><span>{r.label}</span>
-              </button>
-            ))}
-          </div>
-          <div className="topux-custom">
-            <button type="button" onClick={() => setMarketRefresh(prefs.refreshSec - 3)} aria-label="Decrease market refresh">−</button>
-            <label><span>Custom</span><input value={refreshCustom} inputMode="numeric" type="number" min={3} max={120} step={1} onChange={(e) => setRefreshCustom(e.currentTarget.value)} onBlur={applyCustomRefresh} onKeyDown={(e) => { if (e.key === 'Enter') applyCustomRefresh(); }} /></label>
-            <button type="button" onClick={() => setMarketRefresh(prefs.refreshSec + 3)} aria-label="Increase market refresh">+</button>
-            <button className="topux-action mini" type="button" disabled={menuRefreshState === 'spin'} onClick={() => { void runMenuRefresh(); }}>
-              <IconRefresh size={13} /> Refresh Now
-            </button>
-          </div>
-        </div>
-      );
+      return content(k);
     }
 
     if (k === 'currency') {
@@ -2466,7 +2898,7 @@ function SharedTopBar() {
   return (
     <div className="smenu-bar" ref={rowRef} onMouseLeave={scheduleClose}>
       {trig('clock', 'hdr-clock-btn clock-pro-btn', <>
-        <span className="clock-orbit"><span /></span>
+        <ClockFace parts={activeClock} className="trigger" />
         <span className="clock-pro-time"><b>{activeClock.raw}</b><small>{zone.label}</small></span>
       </>, { title: `Clock & timezone — ${zone.city}` })}
       {trig('shell', 'hdr-ic tint-shell shell-ghost shell-premium-trigger', <>
@@ -2479,9 +2911,9 @@ function SharedTopBar() {
           <IconKey size={16} />
         </span>
       </>, { title: 'API keys — read-only live · full planned' })}
-      {trig('data', `hdr-ic data-ghost data-pro grade-${netGrade}`, <>
-        <span className={`data-pro-core ${netGrade}`}>
-          <IconDatabase size={16} />
+      {trig('data', `hdr-ic data-ghost data-pro grade-${dataGrade}`, <>
+        <span className={`data-pro-core ${dataGrade}`}>
+          <DataHealthGlyph size={18} />
         </span>
       </>, { title: `Data Health — ${dataLabel} · ${dataSub}` })}
       {trig('advisor', `hdr-ic advisor-ghost advisor-premium-trigger grade-${advTone}`, <>
@@ -2503,7 +2935,7 @@ function SharedTopBar() {
         <span className={`refresh-trigger-core ${refreshTone}`}>
           <IconRefresh size={16} />
         </span>
-      </>, { title: `Market refresh — every ${prefs.refreshSec}s` })}
+      </>, { title: `Data cadence — market every ${refreshCode}` })}
       {trig('currency', `hdr-ic currency-ghost currency-premium-trigger ${curTone}`, <>
         <span className={`currency-trigger-core ${curTone}`}>
           <b>{curSymbol}</b>
@@ -2519,10 +2951,139 @@ function SharedTopBar() {
           {theme === 'dark' ? <IconMoon size={19} /> : <IconSun size={19} />}
         </span>
       </>, { title: `Appearance — ${prefs.theme === 'system' ? 'auto' : prefs.theme} · ${appearanceZoom}%` })}
-      {active && (
-        <div className="smenu" style={{ left: geo.left, width: geo.width }} onMouseEnter={cancelClose} onMouseLeave={scheduleClose}>
-          <span className="smenu-arrow" style={{ left: geo.pointer }} />
-          <div className="smenu-content" key={active}>{content(active)}</div>
+      <div
+        className={`smenu ${active ? 'open' : ''}`}
+        style={{ left: geo.left, width: geo.width }}
+        onMouseEnter={cancelClose}
+        onMouseLeave={scheduleClose}
+        aria-hidden={!active}
+      >
+        <span className="smenu-arrow" style={{ left: geo.pointer }} />
+        <div className={`smenu-content ${contentMorphing ? 'morphing' : ''}`}>
+          {(contentActive ?? active) ? content((contentActive ?? active) as MK) : null}
+        </div>
+      </div>
+      {notifDetailOpen && (
+        <div
+          className="ntf-modal-backdrop"
+          role="presentation"
+          onMouseDown={(e) => { if (e.currentTarget === e.target) setNotifDetailOpen(false); }}
+        >
+          <section className={`ntf-modal ${notifTone} center-mode`} role="dialog" aria-modal="true" aria-labelledby="ntf-modal-title">
+            <header className="ntf-center-head">
+              <div className="ntf-prefs-copy">
+                <b id="ntf-modal-title">Notifications</b>
+                <em>Critical alerts, opportunities, account events, and logs.</em>
+              </div>
+              <div className="ntf-center-actions">
+                <button type="button" onClick={markNotificationsRead} disabled={events.length === 0}>Mark Read</button>
+                <button className="ntf-modal-close" type="button" onClick={() => setNotifDetailOpen(false)} aria-label="Close notifications">
+                  <IconClose size={18} />
+                </button>
+              </div>
+            </header>
+
+            <div className="ntf-center-body">
+              <section className="ntf-center-feed" aria-label="Notification feed">
+                <div className="ntf-modal-filters" role="tablist" aria-label="Notification filters">
+                  {notifTabs.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className={notifTab === t.id ? 'on' : ''}
+                      role="tab"
+                      aria-selected={notifTab === t.id}
+                      onClick={() => setNotifTab(t.id)}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="ntf-center-list">
+                  {filteredNotifEvents.length === 0 ? (
+                    <div className="ntf-center-empty">
+                      <span className="ntf-setting-icon"><IconBell size={18} /></span>
+                      <span className="ntf-center-copy">
+                        <b>No notifications in this filter</b>
+                        <em>Matching control-room events will appear here.</em>
+                      </span>
+                    </div>
+                  ) : filteredNotifEvents.slice(0, 10).map((e) => {
+                    const meta = notifMeta(e.kind);
+                    const summary = eventSummary(e.kind, (e.data as Record<string, unknown> | null) ?? null, e.symbol);
+                    return (
+                      <article key={e.id} className={`ntf-center-row ${meta.tone}`}>
+                        <span className="ntf-setting-icon">{notifIcon(meta.tone, 18)}</span>
+                        <span className="ntf-center-copy">
+                          <span className="ntf-center-kicker"><b>{meta.scope}</b><time>{notifStamp(e.ts)}</time></span>
+                          <strong>{meta.title}</strong>
+                          <em>{summary}</em>
+                        </span>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <aside className="ntf-center-settings" aria-label="Notification preferences">
+                <div className="ntf-prefs-copy">
+                  <b>Advanced Alerts</b>
+                  <em>Select preferred channels and contents for control-room notifications.</em>
+                </div>
+
+                <section className="ntf-pref-group" aria-label="Delivery channels">
+                  <div className="ntf-setting-row">
+                    <span className="ntf-setting-icon"><MiniMegaphone size={19} /></span>
+                    <span className="ntf-setting-label">Push <em>Planned</em></span>
+                    <span className="ntf-static-switch off" aria-label="Push planned" title="Planned for WhatsApp or push routing"><i /></span>
+                  </div>
+                  <div className="ntf-setting-row">
+                    <span className="ntf-setting-icon"><MiniDevice size={19} /></span>
+                    <span className="ntf-setting-label">In-app</span>
+                    <span className="ntf-static-switch on" aria-label="In-app enabled"><i /></span>
+                  </div>
+                  <div className="ntf-setting-row">
+                    <span className="ntf-setting-icon"><MiniMessage size={19} /></span>
+                    <span className="ntf-setting-label">WhatsApp Agent <em>Planned</em></span>
+                    <span className="ntf-static-switch off" aria-label="WhatsApp Agent planned" title="Planned external notifier"><i /></span>
+                  </div>
+                </section>
+
+                <section className="ntf-pref-group types" aria-label="Types of notifications">
+                  <div className="ntf-pref-section-title">
+                    <b>Types Of Notifications</b>
+                    <em>{draftAlertsOn} Active</em>
+                  </div>
+                  {alertRows.map((r) => (
+                    <div key={r.key} className="ntf-setting-row">
+                      <span className="ntf-setting-icon" title={r.sub}>
+                        {r.key === 'risk' ? <IconShield size={18} /> : r.key === 'proposals' ? <IconRadar size={18} /> : r.key === 'fills' ? <IconWallet size={18} /> : <IconReceipt size={18} />}
+                      </span>
+                      <span className="ntf-setting-label">
+                        {r.label}
+                        <i title={r.sub}>i</i>
+                      </span>
+                      <button
+                        data-testid={`notif-alert-${r.key}`}
+                        className={`ntf-switch ${notifDraftAlerts[r.key] ? 'on' : ''}`}
+                        type="button"
+                        onClick={() => setNotifDraftAlerts((next) => ({ ...next, [r.key]: !next[r.key] }))}
+                        aria-label={`Toggle ${r.label}`}
+                      >
+                        <span />
+                      </button>
+                    </div>
+                  ))}
+                </section>
+
+                <div className="ntf-center-save">
+                  <button type="button" onClick={cancelNotificationPrefs}>Cancel</button>
+                  <button type="button" onClick={saveNotificationPrefs}>Save Changes</button>
+                </div>
+              </aside>
+            </div>
+          </section>
         </div>
       )}
     </div>
@@ -2871,47 +3432,80 @@ function CalendarModal({ onClose }: { onClose: () => void }) {
 // CloudShell and is grounded in the real deploy target, but it does not fake an
 // attached session: "Open in AWS" (or Enter) starts the real console session.
 function CloudShellModal({ onClose }: { onClose: () => void }) {
-  const [cmd, setCmd] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [cmd, setCmd] = useState('aws sts get-caller-identity');
+  const [copied, setCopied] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const launch = () => window.open(CLOUD_SHELL_URL, '_blank', 'noopener,noreferrer');
+  const copyCommand = async () => {
+    try {
+      await navigator.clipboard?.writeText(cmd);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1400);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   return (
     <div className="ov-backdrop" onMouseDown={onClose}>
-      <div className="ov-modal cs-modal" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="ov-head cs-head">
-          <div className="ov-title"><IconTerminal size={16} /> AWS CloudShell</div>
-          <div className="ov-actions">
-            <span className="cs-region">cg-arbitrage-01</span>
-            <button className="ov-btn" onClick={launch}><IconExternal size={14} /> Open in AWS</button>
-            <button className="ov-close" onClick={onClose} aria-label="Close"><IconClose size={16} /></button>
+      <div className="ov-modal cs-modal aws-console" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="cs-console-top">
+          <div className="cs-console-brand">
+            <span className="cs-aws-mark">aws</span>
+            <span>
+              <b>CloudShell</b>
+              <em>cg-arbitrage-01 · /opt/arbitrage-cosmos</em>
+            </span>
+          </div>
+          <div className="cs-console-actions">
+            <button type="button" onClick={() => { void copyCommand(); }}><IconReceipt size={14} />{copied ? 'Copied' : 'Copy'}</button>
+            <button type="button" className="primary" onClick={launch}><IconExternal size={14} />Open AWS</button>
+            <button type="button" className="close" onClick={onClose} aria-label="Close"><IconClose size={16} /></button>
           </div>
         </div>
-        <div className="cs-term" onMouseDown={() => inputRef.current?.focus()}>
-          <div className="cs-banner">AWS CloudShell</div>
-          <div className="cs-line muted">Cosmos Arbitrage Control Room · deploy target (not a live session)</div>
-          <div className="cs-line">&nbsp;</div>
-          <div className="cs-line"><span className="cs-k">instance</span> <b>cg-arbitrage-01</b></div>
-          <div className="cs-line"><span className="cs-k">runtime&nbsp;</span> <b>/opt/arbitrage-cosmos</b></div>
-          <div className="cs-line"><span className="cs-k">user&nbsp;&nbsp;&nbsp;</span> <b>ubuntu</b></div>
-          <div className="cs-line"><span className="cs-k">access&nbsp;</span> <b>AWS Systems Manager · Session Manager</b></div>
-          <div className="cs-line">&nbsp;</div>
-          <div className="cs-line muted">Commands run in the real console — press Enter to open a live session ↗</div>
-          <div className="cs-promptline">
-            <span className="cs-prompt">ubuntu@ip-172-31-2-134:~$</span>
-            <input
-              ref={inputRef}
-              className="cs-input"
-              autoFocus
-              value={cmd}
-              spellCheck={false}
-              aria-label="CloudShell launcher"
-              onChange={(e) => setCmd(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { launch(); setCmd(''); } }}
-            />
-          </div>
+        <div className="cs-console-tabs" aria-label="CloudShell terminal tabs">
+          <span className="on">terminal</span>
+          <span>commands</span>
+          <span>files</span>
+          <em>draft only</em>
         </div>
-        <div className="cs-foot">
-          In-browser execution isn’t attached — this is a launcher. “Open in AWS” starts a real CloudShell session.
+        <div className="cs-shell-grid">
+          <div className="cs-term" onMouseDown={() => inputRef.current?.focus()}>
+            <div className="cs-term-toolbar">
+              <span><i /> bash</span>
+              <em>not attached</em>
+            </div>
+            <div className="cs-line muted">Last login: local cockpit draft session</div>
+            <div className="cs-line"><span className="cs-k">host</span> <b>cg-arbitrage-01</b></div>
+            <div className="cs-line"><span className="cs-k">auth</span> <b>AWS Systems Manager</b></div>
+            <div className="cs-editor">
+              <div className="cs-promptline">
+                <span className="cs-prompt">ubuntu@cg-arbitrage-01:~$</span>
+                <textarea
+                  ref={inputRef}
+                  className="cs-input"
+                  autoFocus
+                  value={cmd}
+                  spellCheck={false}
+                  rows={7}
+                  aria-label="CloudShell command draft"
+                  onChange={(e) => setCmd(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="cs-output">
+              <span>ready</span>
+              <em>Copy or open AWS CloudShell to execute.</em>
+            </div>
+          </div>
+          <aside className="cs-side" aria-label="CloudShell environment">
+            <span><em>host</em><b>cg-arb-01</b></span>
+            <span><em>path</em><b>/opt/arb</b></span>
+            <span><em>auth</em><b>ssm</b></span>
+            <span><em>mode</em><b>draft</b></span>
+            <button type="button" onClick={() => { void copyCommand(); }}>{copied ? 'Copied' : 'Copy Command'}</button>
+            <button type="button" className="primary" onClick={launch}>Open CloudShell</button>
+          </aside>
         </div>
       </div>
     </div>
@@ -2933,24 +3527,42 @@ function ApiKeyModal({ onClose }: { onClose: () => void }) {
           <div className="ov-actions"><button className="ov-close" onClick={onClose} aria-label="Close"><IconClose size={16} /></button></div>
         </div>
         <div className="ak-modal-body">
-          <p className="ak-modal-intro">Which Binance key is wired into this deployment and what it may do. The key and secret are never shown — only the first characters, so you can confirm a rotation.</p>
-          {keys.length === 0 ? <div className="ak-empty">No key manifest available.</div> : keys.map((ak) => (
-            <div key={ak.id} className="ak-card">
-              <div className="ak-card-head">
-                <span className="ak-card-name"><IconKey size={15} /> {ak.name}</span>
-                <span className="ak-badges"><span className="ak-type">{ak.type}</span><span className="ak-scope">{ak.scope}</span><span className={`ak-live s-${ak.status}`}>{ak.status}</span></span>
-              </div>
-              <div className="ak-card-rows">
-                <div className="ak-crow"><span className="k">Key</span><span className="v num">{ak.prefix}<span className="ak-dots">••••••••••••••••</span></span></div>
-                <div className="ak-crow"><span className="k">IP access</span><span className="v">{ak.ipRestrict ? `Restricted · ${ak.ips.join(', ')}` : 'Unrestricted — any IP'} <em>{ak.ipNote}</em></span></div>
-              </div>
-              <div className="ak-card-perms">{API_PERMS.map((p) => { const on = ak.permissions[p.key]; return (
-                <span key={p.key} className={`ak-perm ${on ? 'on' : 'off'}`}><span className="ak-perm-ic">{on ? '✓' : '✕'}</span>{p.label}</span>); })}</div>
-              {ak.note && <div className="ak-card-note">{ak.note}</div>}
+          <p className="ak-modal-intro">Two Binance keys are expected: one data key and one guarded automation key. Secrets stay server-side; this only shows posture and enabled scope.</p>
+          {keys.length === 0 ? <div className="ak-empty">No key manifest available.</div> : (
+            <div className="ak-detail-cards">
+              {keys.map((ak) => {
+                const enabled = enabledApiPerms(ak);
+                return (
+                  <section key={ak.id} className={`keyx-card2 ak-card2 ${ak.status}`}>
+                    <div className="keyx-card-head">
+                      <span className="keyx-source-mark"><BinanceLogo size={32} /></span>
+                      <span className="keyx-card-title">
+                        <span className="keyx-name-row"><b>{apiKeyRole(ak)}</b><span className="keyx-type-pill">{ak.type}</span></span>
+                        <em className="keyx-ip-line">{apiKeyIpLine(ak)}</em>
+                        <em>{ak.name} · {apiKeySourceLine(ak)}</em>
+                      </span>
+                      <span className={`keyx-state ${ak.status}`}>{ak.status}</span>
+                    </div>
+                    <div className="keyx-enabled" aria-label={`${ak.name} enabled permissions`}>
+                      {enabled.length ? (
+                        <ul className="keyx-enabled-list">
+                          {enabled.map((p) => (
+                            <li key={p.key} className={riskApiPerms.includes(p.key) ? 'risk' : undefined}>
+                              <i aria-hidden />
+                              <span>{p.label}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : <span className="keyx-enabled-empty">No active permission</span>}
+                    </div>
+                    {ak.note && <p className="keyx-note">{ak.note}</p>}
+                  </section>
+                );
+              })}
             </div>
-          ))}
+          )}
         </div>
-        <div className="cs-foot">Edit the manifest server-side (env: BINANCE_KEY_NAME / _TYPE / _IPS) when you rotate or add a key.</div>
+        <div className="cs-foot">Rotate or rename keys server-side; this surface only verifies the visible posture.</div>
       </div>
     </div>
   );

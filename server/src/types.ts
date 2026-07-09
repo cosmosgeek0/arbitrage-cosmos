@@ -60,6 +60,8 @@ export interface AppConfig {
   // control
   killSwitch: boolean; // true = everything halted
   liveTradingEnabled: boolean; // false = live send blocked even if kill switch is off
+  fundsLocked: boolean; // true = money-state-changing actions are blocked
+  automationPaused: boolean; // true = proposal/bot-originated live sends are blocked
   // risk limits
   maxOrderNotionalUsd: number;
   maxDailyNotionalUsd: number;

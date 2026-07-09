@@ -53,6 +53,20 @@ export class RiskService {
       this.cfg.killSwitch ? 'kill switch is ON — everything halted' : 'kill switch is off'
     );
 
+    add(
+      'funds_access_unlocked',
+      !this.cfg.fundsLocked,
+      this.cfg.fundsLocked ? 'funds access is OFF — money actions are blocked' : 'funds access is allowed'
+    );
+
+    if (intent.source === 'proposal') {
+      add(
+        'automation_running',
+        !this.cfg.automationPaused,
+        this.cfg.automationPaused ? 'bot automation is paused' : 'bot automation is running'
+      );
+    }
+
     if (opts.forLiveSend) {
       add(
         'live_trading_enabled',

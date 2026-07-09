@@ -2,6 +2,18 @@
 // localStorage, applied globally, never sent to the server.
 
 export type AccentKey = 'r' | 'o' | 'y' | 'g' | 'b' | 'i' | 'v';
+export type DataCadenceKey = 'market' | 'account' | 'news' | 'calendar' | 'fx' | 'health' | 'token';
+export type DataCadence = Record<DataCadenceKey, number>;
+
+export const DATA_CADENCE_DEFAULTS: DataCadence = {
+  market: 6,
+  account: 30,
+  news: 10,
+  calendar: 300,
+  fx: 300,
+  health: 10,
+  token: 1,
+};
 
 export interface Prefs {
   theme: 'light' | 'dark' | 'system';
@@ -9,6 +21,7 @@ export interface Prefs {
   tape: boolean;
   density: 'comfortable' | 'compact';
   refreshSec: number; // markets poll
+  dataCadence: DataCadence; // per-source data pressure controls
   defaultPage: string;
   timezone: 'local' | 'utc';
   basisUnit: 'pct' | 'bps';
@@ -25,6 +38,7 @@ const DEFAULTS: Prefs = {
   tape: false,
   density: 'comfortable',
   refreshSec: 6,
+  dataCadence: DATA_CADENCE_DEFAULTS,
   defaultPage: 'dashboard',
   timezone: 'local',
   basisUnit: 'pct',
@@ -40,11 +54,24 @@ export const CURRENCIES: Record<string, { symbol: string; label: string }> = {
   USD: { symbol: '$', label: 'US Dollar' },
   INR: { symbol: '₹', label: 'Indian Rupee' },
   EUR: { symbol: '€', label: 'Euro' },
+  GBP: { symbol: '£', label: 'British Pound' },
   JPY: { symbol: '¥', label: 'Japanese Yen' },
+  SGD: { symbol: 'S$', label: 'Singapore Dollar' },
 };
 
 function normalizePrefs(raw: Partial<Prefs>): Prefs {
-  const next = { ...DEFAULTS, ...raw };
+  const rawCadence = raw.dataCadence && typeof raw.dataCadence === 'object' ? raw.dataCadence : {};
+  const next = { ...DEFAULTS, ...raw, dataCadence: { ...DATA_CADENCE_DEFAULTS, ...rawCadence } };
+  const clamp = (v: unknown, fallback: number) => {
+    const n = typeof v === 'number' ? v : Number(v);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(300, Math.max(0.5, Math.round(n * 10) / 10));
+  };
+  next.refreshSec = clamp(next.refreshSec, DEFAULTS.refreshSec);
+  for (const key of Object.keys(DATA_CADENCE_DEFAULTS) as DataCadenceKey[]) {
+    next.dataCadence[key] = clamp(next.dataCadence[key], DATA_CADENCE_DEFAULTS[key]);
+  }
+  if (!raw.dataCadence?.market) next.dataCadence.market = next.refreshSec;
   if (!CURRENCIES[next.currency]) next.currency = DEFAULTS.currency;
   if (next.defaultPage === 'trade' || next.defaultPage === 'settings') next.defaultPage = DEFAULTS.defaultPage; // pages removed 2026-07
   return next;

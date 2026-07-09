@@ -241,7 +241,7 @@ export class LoanService {
   private baseGate(): string | null {
     if (!this.client) return 'Binance keys not configured';
     if (this.cfg.killSwitch) return 'kill switch is ON — everything halted';
-    if (!this.cfg.liveTradingEnabled) return 'live trading is not armed (Risk page)';
+    if (this.cfg.fundsLocked) return 'funds access is OFF — money actions are blocked';
     return null;
   }
 
@@ -407,6 +407,7 @@ export class LoanService {
   ): Promise<{ ok: boolean; error?: string }> {
     if (!this.client) return { ok: false, error: 'Binance keys not configured' };
     if (this.cfg.killSwitch) return { ok: false, error: 'kill switch is ON' };
+    if (this.cfg.fundsLocked) return { ok: false, error: 'funds access is OFF' };
     this.ledger.logEvent('loan_request', null, { action: 'adjust_ltv', loanCoin, collateralCoin, amount, direction });
     try {
       const res = await this.client.flexibleAdjustLtv(loanCoin, collateralCoin, amount, direction);
@@ -427,6 +428,7 @@ export class LoanService {
   ): Promise<{ ok: boolean; error?: string }> {
     if (!this.client) return { ok: false, error: 'Binance keys not configured' };
     if (this.cfg.killSwitch) return { ok: false, error: 'kill switch is ON' };
+    if (this.cfg.fundsLocked) return { ok: false, error: 'funds access is OFF' };
     this.ledger.logEvent('loan_request', null, { action: 'repay', loanCoin, collateralCoin, repayAmount });
     try {
       const res = await this.client.flexibleRepay(loanCoin, collateralCoin, repayAmount);

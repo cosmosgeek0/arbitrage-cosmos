@@ -246,7 +246,7 @@ function healthCount(checks: HealthCheck[], ids: string[]): string {
 }
 
 export function SystemHealth() {
-  const { state, connected, setPage } = useStore();
+  const { state, connected, setPage, prefs } = useStore();
   const [info, setInfo] = useState<SystemInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -278,9 +278,9 @@ export function SystemHealth() {
 
   useEffect(() => {
     void load();
-    const t = setInterval(() => void load(), 10_000);
+    const t = setInterval(() => void load(), Math.max(0.5, prefs.dataCadence?.health ?? 10) * 1000);
     return () => clearInterval(t);
-  }, [load]);
+  }, [load, prefs.dataCadence?.health]);
 
   useRefreshSignal(() => void load());
 
@@ -293,9 +293,9 @@ export function SystemHealth() {
         .catch(() => undefined);
     };
     loadProfiles();
-    const t = setInterval(loadProfiles, 30_000);
+    const t = setInterval(loadProfiles, Math.max(0.5, prefs.dataCadence?.health ?? 10) * 1000);
     return () => { alive = false; clearInterval(t); };
-  }, []);
+  }, [prefs.dataCadence?.health]);
 
   const checks = useMemo<HealthCheck[]>(() => {
     if (!info) return [];

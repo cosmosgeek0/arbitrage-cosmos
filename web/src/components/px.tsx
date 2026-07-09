@@ -15,9 +15,9 @@ export function Dot({ tone }: { tone: Tone }) {
 }
 
 /** Dot + colored 12/600 label. The single status-pill style. */
-export function Pill({ tone, children }: { tone: Tone; children: ReactNode }) {
+export function Pill({ tone, children, className = '' }: { tone: Tone; children: ReactNode; className?: string }) {
   return (
-    <span className={`hp-pill ${tone}`}>
+    <span className={`hp-pill ${tone}${className ? ` ${className}` : ''}`}>
       <i aria-hidden="true" />
       {children}
     </span>

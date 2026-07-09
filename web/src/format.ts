@@ -136,6 +136,17 @@ export function timeAgo(ts: number | null | undefined): string {
   return Math.round(s / 86400) + 'd ago';
 }
 
+export function liveAge(ts: number | null | undefined): string {
+  if (!ts) return '—';
+  const s = Math.max(1, Math.floor((Date.now() - ts) / 1000));
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
 export function duration(fromTs: number, toTs: number): string {
   const s = Math.max(0, Math.floor((toTs - fromTs) / 1000));
   if (s < 60) return `${s}s`;

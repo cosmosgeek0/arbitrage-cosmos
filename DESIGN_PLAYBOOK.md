@@ -60,6 +60,15 @@ countermeasure column is the ONLY known fix — apply it mechanically.
 7. WRITES DIARIES, NOT GATES. Logged what happened instead of what to check
    next time. → Countermeasure: every lesson becomes a numbered, measurable
    item in §0 or this list — nothing else counts as "recorded".
+8. STORES LESSONS OUTSIDE THE PROJECT. Saves owner taste and product laws in
+   assistant/Codex memory only; the next fresh agent loses five hours of
+   calibration. → Countermeasure: durable lessons go into project files:
+   `AGENTS.md`, `PROJECT_MEMORY.md`, and this playbook. External memory may
+   summarize, but the repo is the source of truth.
+9. OVER-STRIPS WORDS. Interprets "less words, more style" as removing useful
+   labels/context until panels become symbol soup. → Countermeasure: remove
+   filler and fake text only; keep words needed to understand state, controls,
+   and risk.
 
 ## 1. How the owner judges quality (the meta-skill)
 
@@ -109,6 +118,101 @@ edge-to-edge: pad the y-domain ~22% (Coinbase headroom). Card cells: measure
 cell-bottom minus content-bottom in real Chrome and tune chart heights until
 slack ≤ 16px — no dead space, no overflow.
 
+**CRISP TYPE LAW (owner ruling 2026-07-09, notification sprint):** the default
+answer to "premium" is not bigger/bolder text. Use thinner, sharper system text:
+large headings may be bigger only when their weight drops into the 500-560 band;
+large numbers should sit around 430; body/subcopy should sit around 420-440.
+Avoid fuzzy mixed-color text, heavy 650-760 headings, and random bold emphasis.
+Before finishing any UI surface, inspect computed font size/weight/line-height
+in the browser and compare to the rendered screenshot. If text feels blurry,
+swollen, or childish, reduce weight first before changing layout.
+
+**BOX DISCIPLINE LAW (owner ruling 2026-07-09):** every boundary creates an
+obligation. If you draw a card, row, pill, modal, or tray, inspect whether the
+text and controls have clear air from every edge, whether labels align to a
+grid, whether footer/actions are visible, and whether the box is necessary at
+all. No words may crash into a border, sit visually on the bottom line, or hide
+behind an action bar. After any boxed UI edit, take a real browser screenshot
+and measure the element rects; do not call it done from code alone.
+
+**PREMIUM SURFACE CHECKLIST (owner ruling 2026-07-09):** every topbar popover,
+modal, panel, card group, sidebar section, and dashboard zone must pass this
+before it is considered owner-grade:
+1. Fewer boxes: use one surface and row rhythm before adding nested cards. A
+   box must group, protect, or frame an action; otherwise remove it.
+2. Maximum organization: one clear hierarchy per surface: header, primary
+   content, secondary controls, footer actions. Do not show the same state in
+   two different formats.
+3. Perfect alignment: icons, labels, values, switches, and actions sit on a
+   shared grid. Left/right/top/bottom air must look intentional and match the
+   sibling surfaces in the same topbar/page family.
+4. Clean spacing: compact does not mean cramped; premium does not mean huge.
+   Empty space is allowed only when it is balanced and scaled to the component.
+   Never leave a page-sized blank region inside a small popover.
+5. Crisp typography: thinner and sharper beats bigger and heavier. Titles
+   usually 520-560, labels 430-560, numbers 430-440. Keep casing consistent;
+   do not mix random title case, lowercase, and all-caps without a role.
+6. Mid-to-deep color: use white/neutral structure with controlled mid/deep
+   accent color for state, not pastel tint everywhere and not neon decoration.
+   Color must mean something: live, risk, selected, disabled, planned.
+7. Real icons/logos: use recognizable product logos or truthful line icons.
+   No random letters, fake badges, decorative dots, or icon containers that
+   hide the glyph. If a logo is known, use it; if not, use a clean line icon.
+8. Moderate animation: motion should guide attention or confirm interaction.
+   It must be calm, short, and rare. No constant toy spinning, static fake
+   glows, or motion that competes with the data.
+9. Clear sections: section labels must answer what the group is for. Rows must
+   use one repeated grammar, then vary only the content and state.
+10. Visible footer actions: save/cancel/open/close actions live inside the
+    visible surface, aligned to the edge, never hidden below scroll or floating
+    randomly outside the box.
+11. Real controls only: buttons and toggles must do real work, open a real
+    control surface, reflect real backend state, or be explicitly marked
+    Planned/Disabled with reason. No fake operational buttons.
+12. Family consistency: surfaces in the same area should be roughly the same
+    size, density, radius, typography, and edge system unless the task truly
+    needs a larger modal. Topbar popovers should feel like siblings.
+13. Empty-state discipline: empty states are short, useful, and scaled to the
+    component. They should not create a giant blank area or expose hidden filter
+    state.
+14. Verify in Chrome: inspect computed font/spacing, compare sibling sizes,
+    click every touched control, and take/measure a screenshot before final.
+
+**TRUST ADVISOR LAW (owner ruling 2026-07-09):** Trust Advisor is not a
+notification feed and not a decorative score tile. It is the audit surface for
+bot controls, settings, variables, account/security posture, feeds, guardrails,
+and automation readiness. It must show three severity groups clearly: Action
+Recommended, Investigation Recommended, and No Problems Detected. Every row
+comes from real state; if the backend does not expose a check, do not invent
+one. The compact topbar panel should follow the Clock rhythm: compact header
+card, hairline severity rows, real icons, visible footer actions, moderate/no
+animation, and roughly the same size family as sibling topbar popovers.
+
+**REFERENCE-MATCH LAW (owner ruling 2026-07-09, Coinbase notification photo):**
+when the owner gives a high-quality reference image, copy the anatomy before
+inventing new chrome. A Coinbase-style preferences modal is a single vertical
+settings sheet: 28-30px outer padding, 70-74px option rows, bare black line
+icons in a narrow column, 18px/430 row labels, small inline info marks, switches
+hard-aligned to the far right, and a 96px footer separated by one hairline with
+rounded Cancel / Save buttons. Do not wrap the same content in stat cards,
+nested boxes, colored bell tiles, fake channel toggles, or dashboard counters.
+If a channel is not wired, show Planned as static state; only real persisted
+preferences get switches.
+
+**NOTIFICATION-HUB LAW (owner ruling 2026-07-09):** do not describe the same
+notification state in multiple visual languages. The compact topbar tray uses
+the Coinbase notification reference as its base: quiet title row, one
+settings/expand affordance, pill filters, and repeated notification rows with
+category/date kicker, title, summary, and one real icon. No metric strip, hero
+card, extra bell score, duplicate footer buttons, or "Review new" status
+prose. Empty white space is acceptable only at the same scale as the other
+topbar popovers; do not force a page-sized empty region. Hidden compact filters
+must not drive visible state: if a filter is only exposed in the expanded
+center, compact view falls back to All.
+The expanded popup is the interactive surface: feed and alert preferences sit
+together in one larger Coinbase-style sheet, so the operator can inspect events
+and tune routing without switching to a separate Preferences tab.
+
 **A. Data pages (Coinbase voice — Markets, Account, any table surface):**
 - Font: InterVariable (loaded; variable weights are honored exactly).
 - Two-weight discipline: REGULAR (430–440) for every number and secondary
@@ -135,10 +239,21 @@ slack ≤ 16px — no dead space, no overflow.
   var(--muted))` — small glyphs pack more ink; full ink/550 "pops too much".
   Active nav item: full var(--text) at 550.
 
-**D. Shell scale (8px rhythm):** topbar 64px, 38px icon boxes (19px glyphs),
-search = Coinbase pill 42px r21 "Search for an asset" + ⌘K chip, sidebar
-218px (37px rows), content `--maxw` 1600px with 32px symmetric gutters,
-RefreshDock 28px off both edges. Footer = 12.5px all-muted whisper
+**C2. Flow sidebar typography lesson (owner screenshot, 2026-07-09):**
+- Sidebar quality is typography first, not background. Use calm labels around
+  14px / 20px line-height, weights 500 regular and 560 active, system/SF Pro
+  first, black/gray ink, exact row rhythm, subtle active fill. Inactive icons
+  are bare glyphs, not boxed tiles. Do not animate persistent nav text with
+  `translateX()` or any subpixel transform. Under project CSS zoom, that makes
+  Chrome text look soft. If a sidebar feels blurry, inspect: font-size,
+  weight, line-height, transform, icon background, and root zoom before changing
+  colors.
+
+**D. Shell scale (8px rhythm):** topbar 64px, 38px topbar icon targets
+(19px glyphs), search = Coinbase pill 42px r21 "Search for an asset" + ⌘K
+chip, sidebar currently 178px with 40px Flow-style rows, content stretches
+with constant gutters, RefreshDock 28px off both edges. Footer = 12.5px
+all-muted whisper
 (navigation words carry ink; chrome/legal lines carry gray — never reversed).
 
 **THE STRETCH LAW (owner 2026-07-09):** no page caps its width — `.container`
@@ -159,6 +274,26 @@ orange=caution/keys, blue=connectivity, indigo=engine, teal=volume,
 slate=neutral). ROYGBIV accent pref drives --accent/--cta. Charts: smooth
 Catmull-Rom bezier 2px round stroke, downsample ~26pts — never raw tick
 polylines; stablecoin sparks flat-line when range/mean < 0.1%.
+
+**F. Topbar/profile motion and control law (owner-calibrated 2026-07-09):**
+- Topbar triggers are icon-first. Do not add words to triggers just to explain
+  them; put useful words inside popovers. Do not surround every topbar icon in
+  circles, dots, or tinted badges. State color only when it carries real state.
+- Motion must be rare and purposeful. No constant toy spinning. Clock motion,
+  if present, is slow/calm; no purple orbit, no separate weird seconds box.
+  Search idle motion is a very thin paired beam with a quiet interval; focused
+  search gets a sharper streak with a tail. Never use a static glow strip and
+  never use a nonstop rotating search border.
+- Profile/account popover is not a nav menu. It must show connected exchange
+  and key posture from `/api/apikey`, active/recent devices from `/api/sessions`,
+  and a real logout path. No Dashboard/Assets/Orders/Risk/Settings filler rows.
+
+**G. Current surface baseline:** before editing the left sidebar, brand/topbar,
+global search, clock, AWS CLI, API key, Data Health, Trust Advisor,
+Notifications, Kill Switch / Trading Mode, Market Refresh, Display Currency,
+Basis Display, Appearance, or Account Details profile, read
+`UI_SURFACE_BASELINE.md`. It records the measured current geometry, text sizes,
+motion timing, real endpoints, and old-code traps from the 2026-07-09 audit.
 
 ## 3. Product decisions (owner rulings — do not relitigate)
 
@@ -243,6 +378,20 @@ polylines; stablecoin sparks flat-line when range/mean < 0.1%.
   `index.ts` — /api/earn (60s cache), /api/equity-history (1h cache, flow
   reconstruction), CSP img-src hosts.
 - Gates: `server/test/gates.mjs` (`npm test` from root, 50 must pass).
+
+### 5.1 Current page map (2026-07-09, all 13 tabs)
+- Prefixes: `mkx` Markets · `acb` Account (gold standard) · `bwx` Borrow (card
+  voice) · `tdx` Token (Coinbase clone + Binance base cards + `cgx` Coinglass
+  panel) · `bsx` Basis · `vsx` Volume (honest spec tiles) · `opx` Opportunities
+  · `rsx` Risk (+ shared control-page recipe) · `hlx` Health · `lg` Logs ·
+  `nwx` News · `clx` Calendar. Shared: bwx-hero = page-hero recipe;
+  bwx-guard/switch2 = kill-switch tile; rsx-band = carded section;
+  PillSelect/Star/pageList in components/PillSelect.tsx.
+- Server data sources added 07-08/09: binance/profile.ts (CoinGecko two-tier
+  warm, 452/452), binance/moneyflow.ts (aggTrades buckets), binance/
+  liquidations.ts (!forceOrder recorder — no upstream history), rest.ts
+  fetchOiHist/fetchBasisHist/fetchFundingHist. Status: /api/token/profiles/
+  status surfaces in Health → Token Data.
 
 ## 6. The loop (run it EVERY pass, no exceptions)
 

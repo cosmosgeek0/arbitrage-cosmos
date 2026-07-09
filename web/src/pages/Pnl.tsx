@@ -80,7 +80,7 @@ function DayBars({ days }: { days: { day: string; usd: number }[] }) {
 }
 
 export function Pnl() {
-  const { state, setPage, openDetail } = useStore();
+  const { state, setPage, openDetail, prefs } = useStore();
   const [data, setData] = useState<PnlData | null>(null);
   const [fills, setFills] = useState<FillRow[]>([]);
   const [lens, setLens] = useState<Lens>('realized');
@@ -99,9 +99,9 @@ export function Pnl() {
         .catch(() => undefined);
     };
     load();
-    const t = window.setInterval(load, 30_000);
+    const t = window.setInterval(load, Math.max(0.5, prefs.dataCadence?.account ?? 30) * 1000);
     return () => window.clearInterval(t);
-  }, [state?.recentFills.length, refreshTick]);
+  }, [state?.recentFills.length, refreshTick, prefs.dataCadence?.account]);
 
   const days = data?.realizedByDay ?? [];
   const symbols = data?.realizedBySymbol ?? [];

@@ -14,6 +14,7 @@ import type { BasisRow as BasisEngineRow, BasisSnapshot as BasisEngineSnapshot }
 import { IconClose, IconMaximize } from '../components/Icons';
 import { baseOf, countdown, fmtBasis, fmtFunding, fmtMoney, fmtPct, fmtPrice, timeAgo } from '../format';
 import { tokenName } from '../lib/tokenNames';
+import type { MarketRow } from '../types';
 import './Markets.css';
 import './TokenDetail.css';
 
@@ -95,6 +96,26 @@ interface MoneyFlow {
 
 interface OiPoint { t: number; contracts: number; notional: number }
 interface BasisPoint { t: number; futuresPrice: number; indexPrice: number; basis: number; basisRatePct: number }
+interface FuturesRatioPoint { t: number; ratio: number; longPct: number; shortPct: number }
+interface FuturesTakerFlowPoint { t: number; buyVol: number; sellVol: number; ratio: number }
+interface FuturesTelemetry {
+  symbol: string;
+  period: string;
+  updatedAt: number;
+  available: boolean;
+  errors: string[];
+  openInterest: OiPoint[];
+  topAccountRatio: FuturesRatioPoint[];
+  topPositionRatio: FuturesRatioPoint[];
+  globalRatio: FuturesRatioPoint[];
+  takerFlow: FuturesTakerFlowPoint[];
+}
+
+interface TimedCache<T> { value: T; updatedAt: number }
+
+const tokenCandleCache = new Map<string, TimedCache<TvCandle[]>>();
+const moneyFlowCache = new Map<string, TimedCache<MoneyFlow>>();
+const positioningCache = new Map<string, TimedCache<FuturesTelemetry>>();
 
 function fmtCompact(v: number | null | undefined): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return '—';
@@ -146,7 +167,7 @@ function PriceChart({ points, up }: { points: { t: number; v: number }[]; up: bo
   }, []);
 
   const W = chartWidth;
-  const H = Math.round(Math.max(320, Math.min(560, W * 0.32)));
+  const H = Math.round(Math.max(300, Math.min(410, W * 0.22)));
   const PAD_R = 110;
   const PAD_B = 34;
   const model = useMemo(() => {
@@ -199,12 +220,12 @@ function PriceChart({ points, up }: { points: { t: number; v: number }[]; up: bo
       </defs>
       {model.ticks.map((v, i) => (
         <g key={i}>
-          <line x1={0} x2={W - PAD_R} y1={model.y(v)} y2={model.y(v)} stroke="var(--line)" strokeWidth="1" />
+          <line x1={0} x2={W - PAD_R} y1={model.y(v)} y2={model.y(v)} stroke="var(--line)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
           <text x={W - PAD_R + 12} y={model.y(v) + 4} className="tdx-axis">{fmtPrice(v)}</text>
         </g>
       ))}
       <path d={model.area} fill="url(#tdx-dots)" />
-      <path d={model.d} fill="none" stroke={stroke} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
+      <path d={model.d} fill="none" stroke={stroke} strokeWidth="1.35" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
       <circle cx={model.last[0]} cy={model.last[1]} r="4.5" fill={stroke} />
       {model.times.map((t, i) => (
         <text key={i} x={(i / 6) * (W - PAD_R)} y={H - 8} className="tdx-axis" textAnchor={i === 0 ? 'start' : i === 6 ? 'end' : 'middle'}>
@@ -266,11 +287,16 @@ function MoneyFlowCard({ symbol, base }: { symbol: string; base: string }) {
 
   useEffect(() => {
     let alive = true;
-    setFlow(null);
+    const key = `${symbol}:${win}`;
+    setFlow(moneyFlowCache.get(key)?.value ?? null);
     const load = () => {
       void fetch(`/api/token/moneyflow?symbol=${symbol}&window=${win}`)
         .then((r) => (r.ok ? r.json() : null))
-        .then((d) => alive && d && setFlow(d as MoneyFlow))
+        .then((d) => {
+          if (!d) return;
+          moneyFlowCache.set(key, { value: d as MoneyFlow, updatedAt: Date.now() });
+          if (alive) setFlow(d as MoneyFlow);
+        })
         .catch(() => undefined);
     };
     load();
@@ -303,6 +329,8 @@ function MoneyFlowCard({ symbol, base }: { symbol: string; base: string }) {
   }, [flow, animKey]);
 
   const total = flow ? flow.totalBuy + flow.totalSell : 0;
+  const buyShare = total > 0 && flow ? (flow.totalBuy / total) * 100 : null;
+  const coverage = flow && flow.windowMs > 0 ? Math.min(100, (flow.coveredMs / flow.windowMs) * 100) : null;
   const segs = flow && total > 0
     ? ([
         { key: 'largeBuy' as FlowKey, v: flow.large.buy },
@@ -338,7 +366,7 @@ function MoneyFlowCard({ symbol, base }: { symbol: string; base: string }) {
     : [];
 
   return (
-    <section className="tdx-cell tdx-third">
+    <section className="tdx-cell tkx-flow-card" aria-label="Spot money flow">
       <div className="tdx-cardhead">
         <h3 title="Taker-side spot volume by order size. Large ≥ $100K · Medium $10K–$100K · Small < $10K per aggregate trade. Source: Binance aggTrades.">
           Money Flow Analysis <em className="tdx-src">Binance Spot</em>
@@ -356,6 +384,12 @@ function MoneyFlowCard({ symbol, base }: { symbol: string; base: string }) {
         <p className="tdx-dimnote">No trades in the window.</p>
       ) : (
         <>
+          <div className="tkx-instrument-metrics tkx-flow-stats" aria-label="Money Flow Snapshot">
+            <div><span>Net Flow</span><strong className={flow.inflow > 0 ? 'up' : flow.inflow < 0 ? 'down' : ''}>{fmtCompact(flow.inflow)} {base}</strong><small>{flow.inflow >= 0 ? 'Net Taker Buying' : 'Net Taker Selling'}</small></div>
+            <div><span>Buy Share</span><strong>{buyShare === null ? '—' : buyShare.toFixed(1) + '%'}</strong><small>{fmtCompact(flow.totalBuy)} {base}</small></div>
+            <div><span>Trades</span><strong>{flow.trades.toLocaleString('en-US')}</strong><small>Aggregate Prints</small></div>
+            <div><span>Coverage</span><strong>{coverage === null ? '—' : Math.round(coverage) + '%'}</strong><small>{flow.sampled ? 'Latest Sample' : 'Full Window'}</small></div>
+          </div>
           <div
             ref={wrapRef}
             className="tdx-flow-donutwrap"
@@ -449,13 +483,97 @@ function MoneyFlowCard({ symbol, base }: { symbol: string; base: string }) {
   );
 }
 
+function PositioningCard({ symbol, base, hasPerp }: { symbol: string; base: string; hasPerp: boolean }) {
+  const [period, setPeriod] = useState<'5m' | '15m' | '1h' | '4h'>('5m');
+  const [telemetry, setTelemetry] = useState<FuturesTelemetry | null>(null);
+
+  useEffect(() => {
+    if (!hasPerp) {
+      setTelemetry(null);
+      return;
+    }
+    let alive = true;
+    const key = `${symbol}:${period}`;
+    setTelemetry(positioningCache.get(key)?.value ?? null);
+    const load = () => {
+      void fetch(`/api/futures/telemetry?symbol=${symbol}&period=${period}&limit=120`)
+        .then((response) => response.ok ? response.json() : null)
+        .then((next) => {
+          if (!next) return;
+          positioningCache.set(key, { value: next as FuturesTelemetry, updatedAt: Date.now() });
+          if (alive) setTelemetry(next as FuturesTelemetry);
+        })
+        .catch(() => undefined);
+    };
+    load();
+    const timer = window.setInterval(load, 60_000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, [hasPerp, period, symbol]);
+
+  const taker = lastOf(telemetry?.takerFlow);
+  const global = lastOf(telemetry?.globalRatio);
+  const topAccounts = lastOf(telemetry?.topAccountRatio);
+  const topPositions = lastOf(telemetry?.topPositionRatio);
+  const takerTotal = (taker?.buyVol ?? 0) + (taker?.sellVol ?? 0);
+  const takerBuyPct = takerTotal > 0 ? ((taker?.buyVol ?? 0) / takerTotal) * 100 : null;
+
+  const rows = [
+    takerBuyPct === null ? null : {
+      label: 'Taker Flow', ratio: taker?.ratio ?? null, leftPct: takerBuyPct, rightPct: 100 - takerBuyPct,
+      leftLabel: `Buy ${fmtCompact(taker?.buyVol)} ${base}`, rightLabel: `Sell ${fmtCompact(taker?.sellVol)} ${base}`,
+    },
+    global ? { label: 'Global Accounts', ratio: global.ratio, leftPct: global.longPct, rightPct: global.shortPct, leftLabel: `Long ${global.longPct.toFixed(1)}%`, rightLabel: `Short ${global.shortPct.toFixed(1)}%` } : null,
+    topAccounts ? { label: 'Top Accounts', ratio: topAccounts.ratio, leftPct: topAccounts.longPct, rightPct: topAccounts.shortPct, leftLabel: `Long ${topAccounts.longPct.toFixed(1)}%`, rightLabel: `Short ${topAccounts.shortPct.toFixed(1)}%` } : null,
+    topPositions ? { label: 'Top Positions', ratio: topPositions.ratio, leftPct: topPositions.longPct, rightPct: topPositions.shortPct, leftLabel: `Long ${topPositions.longPct.toFixed(1)}%`, rightLabel: `Short ${topPositions.shortPct.toFixed(1)}%` } : null,
+  ].filter((row): row is NonNullable<typeof row> => row !== null);
+
+  return (
+    <section className="tdx-cell tkx-positioning" aria-label="Futures positioning">
+      <div className="tdx-cardhead">
+        <h3 title="Binance USD-M taker buy/sell volume plus global and top-trader long/short ratios. Public history is limited to the latest 30 days.">
+          Futures Positioning <em className="tdx-src">Binance USD-M · 30D Max</em>
+        </h3>
+        {hasPerp && (
+          <PillSelect
+            value={period}
+            options={[{ id: '5m' as const, label: '5m' }, { id: '15m' as const, label: '15m' }, { id: '1h' as const, label: '1H' }, { id: '4h' as const, label: '4H' }]}
+            onChange={setPeriod}
+            ariaLabel="Positioning period"
+          />
+        )}
+      </div>
+      {!hasPerp ? (
+        <p className="tdx-dimnote">Spot Only — {base} has no Binance USD-M positioning feed.</p>
+      ) : !telemetry ? (
+        <div className="tdx-chart-empty small">Reading Positioning…</div>
+      ) : rows.length === 0 ? (
+        <p className="tdx-dimnote">Positioning is currently unavailable from Binance for this contract.</p>
+      ) : (
+        <div className="tkx-position-list">
+          {rows.map((row) => (
+            <div className="tkx-position-row" key={row.label}>
+              <span><strong>{row.label}</strong><em>{row.ratio === null ? '—' : row.ratio.toFixed(2) + '×'}</em></span>
+              <div className="tkx-position-bar" aria-label={`${row.leftLabel} · ${row.rightLabel}`}>
+                <i style={{ width: `${Math.max(0, Math.min(100, row.leftPct))}%` }} />
+              </div>
+              <small><span>{row.leftLabel}</span><span>{row.rightLabel}</span></small>
+            </div>
+          ))}
+          <p className="tdx-updated">{telemetry.errors.length ? `${telemetry.errors.length} optional feed${telemetry.errors.length === 1 ? '' : 's'} unavailable · ` : ''}Updated {timeAgo(telemetry.updatedAt)}</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
 /* ==== TASK 3: Basis — Binance futures token data =========================== */
-function BasisCard({ symbol, base, hasPerp }: { symbol: string; base: string; hasPerp: boolean }) {
+function BasisCard({ symbol, base, hasPerp, market }: { symbol: string; base: string; hasPerp: boolean; market: MarketRow | undefined }) {
   const [period, setPeriod] = useState<'5m' | '1h' | '4h' | '1d'>('1h');
   const [rows, setRows] = useState<BasisPoint[]>([]);
   const [hov, setHov] = useState<number | null>(null);
   const [mouse, setMouse] = useState<{ x: number } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const [chartWidth, setChartWidth] = useState(1080);
 
   useEffect(() => {
     if (!hasPerp) return;
@@ -473,10 +591,26 @@ function BasisCard({ symbol, base, hasPerp }: { symbol: string; base: string; ha
     return () => { alive = false; clearInterval(t); };
   }, [symbol, period, hasPerp]);
 
-  const W = 560;
-  const H = 380;
-  const PAD_L = 74;
-  const PAD_R = 58;
+  useEffect(() => {
+    const host = wrapRef.current;
+    if (!host) return;
+    const measure = () => {
+      const width = host.getBoundingClientRect().width;
+      if (!Number.isFinite(width) || width <= 0) return;
+      const next = Math.round(width);
+      setChartWidth((previous) => Math.abs(previous - next) > 2 ? next : previous);
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [rows.length]);
+
+  const W = chartWidth;
+  const H = Math.round(Math.max(300, Math.min(400, W * 0.24)));
+  const PAD_L = 84;
+  const PAD_R = 84;
   const PAD_B = 30;
   const PAD_T = 12;
   const model = useMemo(() => {
@@ -486,7 +620,7 @@ function BasisCard({ symbol, base, hasPerp }: { symbol: string; base: string; ha
     let pMax = Math.max(...prices);
     const pad = Math.max((pMax - pMin) * 0.08, pMax * 1e-6);
     pMin -= pad; pMax += pad;
-    const bs = rows.map((r) => r.basis);
+    const bs = rows.map((r) => r.basisRatePct);
     let bMin = Math.min(...bs, 0);
     let bMax = Math.max(...bs, 0);
     const bPad = Math.max((bMax - bMin) * 0.15, 1e-9);
@@ -497,7 +631,7 @@ function BasisCard({ symbol, base, hasPerp }: { symbol: string; base: string; ha
     const futLine = rows.map((r, i) => `${i ? 'L' : 'M'}${x(i)},${py(r.futuresPrice)}`).join(' ');
     const idxLine = rows.map((r, i) => `${i ? 'L' : 'M'}${x(i)},${py(r.indexPrice)}`).join(' ');
     const basisArea =
-      rows.map((r, i) => `${i ? 'L' : 'M'}${x(i)},${by(r.basis)}`).join(' ') +
+      rows.map((r, i) => `${i ? 'L' : 'M'}${x(i)},${by(r.basisRatePct)}`).join(' ') +
       ` L${x(rows.length - 1)},${by(0)} L${x(0)},${by(0)} Z`;
     const pTicks = Array.from({ length: 3 }, (_, i) => pMin + ((i + 0.5) / 3) * (pMax - pMin));
     const bTicks = Array.from({ length: 3 }, (_, i) => bMin + ((i + 0.5) / 3) * (bMax - bMin));
@@ -514,9 +648,9 @@ function BasisCard({ symbol, base, hasPerp }: { symbol: string; base: string; ha
   };
 
   return (
-    <section className="tdx-cell tdx-third">
+    <section className="tdx-cell tkx-basis-card" aria-label="Basis and carry">
       <div className="tdx-cardhead">
-        <h3 title="Binance USD-M basis history: perpetual futures price vs the index price; the shaded band is the basis (futures − index) on the right axis.">
+        <h3 title="Binance USD-M basis history: perpetual futures price versus the index price; the shaded band is the basis rate on the right axis.">
           Basis <em className="tdx-src">Binance USD-M</em>
         </h3>
         {hasPerp && (
@@ -534,6 +668,12 @@ function BasisCard({ symbol, base, hasPerp }: { symbol: string; base: string; ha
         <div className="tdx-chart-empty small">Reading Basis…</div>
       ) : (
         <>
+          <div className="tkx-evidence-strip" aria-label="Basis Snapshot">
+            <div><span>Perpetual Mark</span><strong>{fmtPrice(market?.perpMark)}</strong><small>Binance USD-M</small></div>
+            <div><span>Index Price</span><strong>{fmtPrice(market?.perpIndexPrice)}</strong><small>Reference Basket</small></div>
+            <div><span>Mark Basis</span><strong>{fmtBasis(market?.markIndexBasisPct)}</strong><small>Mark Versus Index</small></div>
+            <div><span>Executable Gap</span><strong>{fmtBasis(market?.executableBasisBestPct)}</strong><small>{market?.executableBasisSide === 'LONG_SPOT_SHORT_PERP' ? 'Buy Spot · Sell Perp' : market?.executableBasisSide === 'SHORT_SPOT_LONG_PERP' ? 'Sell Spot · Buy Perp' : 'No Crossed-Book Edge'}</small></div>
+          </div>
           <div
             ref={wrapRef}
             className="tdx-chartwrap"
@@ -545,22 +685,22 @@ function BasisCard({ symbol, base, hasPerp }: { symbol: string; base: string; ha
             }}
             onMouseLeave={() => { setHov(null); setMouse(null); }}
           >
-            <svg viewBox={`0 0 ${W} ${H}`} className="tdx-datachart" aria-hidden>
+            <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="tdx-datachart" aria-hidden>
               {model.pTicks.map((v, i) => (
                 <g key={`p${i}`}>
-                  <line x1={PAD_L} x2={W - PAD_R} y1={model.py(v)} y2={model.py(v)} stroke="var(--line)" strokeWidth="1" />
+                  <line x1={PAD_L} x2={W - PAD_R} y1={model.py(v)} y2={model.py(v)} stroke="var(--line)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
                   <text x={PAD_L - 8} y={model.py(v) + 4} textAnchor="end" className="tdx-axis">{fmtPrice(v)}</text>
                 </g>
               ))}
               {model.bTicks.map((v, i) => (
-                <text key={`b${i}`} x={W - PAD_R + 8} y={model.by(v) + 4} className="tdx-axis">{v.toFixed(2)}</text>
+                <text key={`b${i}`} x={W - PAD_R + 8} y={model.by(v) + 4} className="tdx-axis">{fmtBasis(v)}</text>
               ))}
               <path d={model.basisArea} fill="#F0B90B" opacity="0.14" />
               {hov !== null && (
                 <line x1={model.x(hov)} x2={model.x(hov)} y1={PAD_T} y2={H - PAD_B} stroke="var(--muted)" strokeWidth="1" strokeDasharray="3 3" />
               )}
-              <path d={model.futLine} fill="none" stroke="#F0B90B" strokeWidth="1.6" strokeLinejoin="round" />
-              <path d={model.idxLine} fill="none" stroke="var(--text)" strokeWidth="1.6" strokeLinejoin="round" />
+              <path d={model.futLine} fill="none" stroke="#F0B90B" strokeWidth="1.35" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+              <path d={model.idxLine} fill="none" stroke="var(--text)" strokeWidth="1.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
               {rows.map((r, i) => (
                 <circle key={`f${r.t}`} cx={model.x(i)} cy={model.py(r.futuresPrice)} r={hov === i ? 3.6 : 2.2} fill="var(--panel)" stroke="#F0B90B" strokeWidth={hov === i ? 1.8 : 1.2} />
               ))}
@@ -581,7 +721,7 @@ function BasisCard({ symbol, base, hasPerp }: { symbol: string; base: string; ha
                 rows={[
                   { dot: '#F0B90B', label: 'Futures Price', value: fmtFull(rows[hov].futuresPrice, 2) },
                   { dot: 'var(--text)', label: 'Price Index', value: fmtFull(rows[hov].indexPrice, 2) },
-                  { dot: 'rgba(240,185,11,0.4)', label: 'Basis', value: fmtFull(rows[hov].basis, 2) },
+                  { dot: 'rgba(240,185,11,0.4)', label: 'Basis Rate', value: fmtBasis(rows[hov].basisRatePct) },
                 ]}
               />
             )}
@@ -590,6 +730,396 @@ function BasisCard({ symbol, base, hasPerp }: { symbol: string; base: string; ha
             <span><i className="dot" style={{ borderColor: '#F0B90B' }} />Futures Price</span>
             <span><i className="dot" />Price Index</span>
             <span><i className="sw" style={{ background: '#F0B90B', opacity: 0.3 }} />Basis</span>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+type IntelTab = 'funding' | 'oi' | 'volume' | 'liq' | 'basis';
+
+interface IntelPoint { t: number; a: number; b?: number }
+interface IntelDataset {
+  points: IntelPoint[];
+  price: { t: number; v: number }[];
+  liqSince: number | null;
+}
+
+const intelCache = new Map<string, TimedCache<IntelDataset>>();
+const intelInflight = new Map<string, Promise<IntelDataset>>();
+const INTEL_CACHE_MS = 5 * 60_000;
+
+const intelKey = (symbol: string, tab: IntelTab, opt: string, hasPerp: boolean) =>
+  `${symbol}:${hasPerp ? 'perp' : 'spot'}:${tab}:${opt}`;
+
+async function fetchIntelDataset(symbol: string, tab: IntelTab, opt: string, hasPerp: boolean): Promise<IntelDataset> {
+  const candleMarket = hasPerp ? 'futures' : 'spot';
+  const priceFor = async (interval: string, limit: number) => {
+    const response = await fetch(`/api/candles?symbol=${symbol}&interval=${interval}&limit=${limit}&market=${candleMarket}`);
+    const rows = response.ok ? await response.json() as TvCandle[] : [];
+    return Array.isArray(rows) ? rows.map((row) => ({ t: row.t, v: row.c })) : [];
+  };
+
+  if (tab === 'volume') {
+    const response = await fetch(`/api/candles?symbol=${symbol}&interval=${opt}&limit=1000&market=${candleMarket}`);
+    const rows = response.ok ? await response.json() as TvCandle[] : [];
+    const candles = Array.isArray(rows) ? rows : [];
+    return {
+      points: candles.map((row) => ({ t: row.t, a: row.qv || row.v * row.c })),
+      price: candles.map((row) => ({ t: row.t, v: row.c })),
+      liqSince: null,
+    };
+  }
+
+  if (!hasPerp) return { points: [], price: [], liqSince: null };
+
+  if (tab === 'oi') {
+    const response = await fetch(`/api/futures/oi-hist?symbol=${symbol}&period=${opt}&limit=500`);
+    const rows = response.ok ? await response.json() as OiPoint[] : [];
+    return {
+      points: Array.isArray(rows) ? rows.map((row) => ({ t: row.t, a: row.notional })) : [],
+      price: await priceFor(opt, 500),
+      liqSince: null,
+    };
+  }
+
+  if (tab === 'funding') {
+    const response = await fetch(`/api/futures/funding-hist?symbol=${symbol}&limit=1000`);
+    const rows = response.ok ? await response.json() as { t: number; ratePct: number }[] : [];
+    const cut = opt === '30d' ? Date.now() - 30 * 864e5 : opt === '90d' ? Date.now() - 90 * 864e5 : 0;
+    return {
+      points: Array.isArray(rows) ? rows.filter((row) => row.t >= cut).map((row) => ({ t: row.t, a: row.ratePct })) : [],
+      price: await priceFor('8h', 1000),
+      liqSince: null,
+    };
+  }
+
+  if (tab === 'liq') {
+    const buckets: Record<string, number> = { '5m': 3e5, '15m': 9e5, '1h': 36e5, '4h': 144e5, '12h': 432e5, '1d': 864e5 };
+    const response = await fetch(`/api/futures/liquidations?symbol=${symbol}&bucketMs=${buckets[opt] ?? 36e5}`);
+    const data = response.ok ? await response.json() as { since: number; points: { t: number; long: number; short: number }[] } : null;
+    return {
+      points: data?.points?.map((point) => ({ t: point.t, a: point.long, b: point.short })) ?? [],
+      price: await priceFor(opt === '5m' || opt === '15m' ? opt : '1h', 1000),
+      liqSince: data?.since ?? null,
+    };
+  }
+
+  const response = await fetch(`/api/futures/basis-hist?symbol=${symbol}&period=${opt}&limit=240`);
+  const rows = response.ok ? await response.json() as BasisPoint[] : [];
+  const basis = Array.isArray(rows) ? rows.filter((row) => row.futuresPrice > 0 && Number.isFinite(row.basisRatePct)) : [];
+  return {
+    points: basis.map((row) => ({ t: row.t, a: row.basisRatePct })),
+    price: basis.map((row) => ({ t: row.t, v: row.futuresPrice })),
+    liqSince: null,
+  };
+}
+
+function requestIntelDataset(symbol: string, tab: IntelTab, opt: string, hasPerp: boolean, force = false): Promise<IntelDataset> {
+  const key = intelKey(symbol, tab, opt, hasPerp);
+  const cached = intelCache.get(key);
+  if (!force && cached && Date.now() - cached.updatedAt < INTEL_CACHE_MS) return Promise.resolve(cached.value);
+  const pending = intelInflight.get(key);
+  if (pending) return pending;
+  const request = fetchIntelDataset(symbol, tab, opt, hasPerp)
+    .then((value) => {
+      // An upstream warm-up failure must not become a five-minute blank chart.
+      // Liquidations are the exception: an empty live bucket is valid data.
+      if (value.points.length > 0 || tab === 'liq') {
+        intelCache.set(key, { value, updatedAt: Date.now() });
+      }
+      return value;
+    })
+    .finally(() => intelInflight.delete(key));
+  intelInflight.set(key, request);
+  return request;
+}
+
+const INTEL_OPTIONS: Record<IntelTab, { id: string; label: string }[]> = {
+  funding: [{ id: '30d', label: '30D' }, { id: '90d', label: '90D' }, { id: 'all', label: 'All' }],
+  oi: [{ id: '5m', label: '5m' }, { id: '15m', label: '15m' }, { id: '30m', label: '30m' }, { id: '1h', label: '1H' }, { id: '4h', label: '4H' }, { id: '12h', label: '12H' }, { id: '1d', label: '1D' }],
+  volume: [{ id: '1m', label: '1m' }, { id: '5m', label: '5m' }, { id: '15m', label: '15m' }, { id: '30m', label: '30m' }, { id: '1h', label: '1H' }, { id: '4h', label: '4H' }, { id: '12h', label: '12H' }, { id: '1d', label: '1D' }, { id: '1w', label: 'All' }],
+  liq: [{ id: '5m', label: '5m' }, { id: '15m', label: '15m' }, { id: '1h', label: '1H' }, { id: '4h', label: '4H' }, { id: '12h', label: '12H' }, { id: '1d', label: '1D' }],
+  basis: [{ id: '5m', label: '5m' }, { id: '1h', label: '1H' }, { id: '4h', label: '4H' }, { id: '1d', label: '1D' }],
+};
+
+const INTEL_DEFAULT: Record<IntelTab, string> = { funding: '30d', oi: '1h', volume: '1h', liq: '1h', basis: '1h' };
+const INTEL_TITLE: Record<IntelTab, string> = {
+  funding: 'Funding Rate',
+  oi: 'Open Interest',
+  volume: 'Perpetual Volume',
+  liq: 'Liquidations',
+  basis: 'Basis',
+};
+
+function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInterestSnapshot }: { symbol: string; base: string; name: string; hasPerp: boolean; market: MarketRow | undefined; openInterestSnapshot: { usd: number; changePct: number | null } | null }) {
+  const initial = intelCache.get(intelKey(symbol, 'funding', INTEL_DEFAULT.funding, hasPerp))?.value;
+  const [tab, setTab] = useState<IntelTab>('funding');
+  const [opt, setOpt] = useState(INTEL_DEFAULT.funding);
+  const [dataset, setDataset] = useState<IntelDataset>(initial ?? { points: [], price: [], liqSince: null });
+  const [loading, setLoading] = useState(!initial);
+  const [hov, setHov] = useState<number | null>(null);
+  const [mouse, setMouse] = useState<{ x: number } | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [chartBox, setChartBox] = useState({ width: 1160, height: 380 });
+
+  useEffect(() => {
+    const tabs: IntelTab[] = hasPerp ? ['funding', 'oi', 'volume', 'liq', 'basis'] : ['volume'];
+    for (const next of tabs) void requestIntelDataset(symbol, next, INTEL_DEFAULT[next], hasPerp);
+  }, [hasPerp, symbol]);
+
+  useEffect(() => {
+    let alive = true;
+    const key = intelKey(symbol, tab, opt, hasPerp);
+    const cached = intelCache.get(key)?.value;
+    if (cached) {
+      setDataset(cached);
+      setLoading(false);
+    } else {
+      setDataset({ points: [], price: [], liqSince: null });
+      setLoading(true);
+    }
+    const load = (force = false) => {
+      void requestIntelDataset(symbol, tab, opt, hasPerp, force)
+        .then((next) => {
+          if (!alive) return;
+          setDataset(next);
+          setLoading(false);
+        })
+        .catch(() => { if (alive) setLoading(false); });
+    };
+    load();
+    const timer = window.setInterval(() => load(true), 60_000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, [hasPerp, opt, symbol, tab]);
+
+  useEffect(() => {
+    const host = wrapRef.current;
+    if (!host) return;
+    const measure = () => {
+      const width = host.getBoundingClientRect().width;
+      if (!Number.isFinite(width) || width <= 0) return;
+      const next = { width: Math.round(width), height: Math.round(Math.max(310, Math.min(400, width * 0.245))) };
+      setChartBox((previous) => Math.abs(previous.width - next.width) > 2 || Math.abs(previous.height - next.height) > 2 ? next : previous);
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [dataset.points.length, tab]);
+
+  const switchTab = (next: IntelTab) => {
+    const nextOpt = INTEL_DEFAULT[next];
+    const cached = intelCache.get(intelKey(symbol, next, nextOpt, hasPerp))?.value;
+    if (cached) {
+      setDataset(cached);
+      setLoading(false);
+    } else {
+      setDataset({ points: [], price: [], liqSince: null });
+      setLoading(true);
+    }
+    setTab(next);
+    setOpt(nextOpt);
+    setHov(null);
+  };
+
+  const { points, price, liqSince } = dataset;
+  const W = chartBox.width;
+  const H = chartBox.height;
+  const PAD_L = 80;
+  const PAD_R = 80;
+  const PAD_B = 30;
+  const PAD_T = 14;
+
+  const model = useMemo(() => {
+    if (points.length < 3) return null;
+    const t0 = points[0].t;
+    const t1 = points[points.length - 1].t;
+    const x = (t: number) => PAD_L + ((t - t0) / Math.max(1, t1 - t0)) * (W - PAD_L - PAD_R);
+    const xi = (index: number) => x(points[index].t);
+    let aMin = 0;
+    let aMax = 1;
+    if (tab === 'funding' || tab === 'basis') {
+      const values = points.map((point) => point.a);
+      const magnitude = Math.max(Math.abs(Math.min(...values, 0)), Math.abs(Math.max(...values, 0)), 1e-9);
+      aMin = -magnitude * 1.12;
+      aMax = magnitude * 1.12;
+    } else if (tab === 'liq') {
+      const magnitude = Math.max(...points.map((point) => Math.max(point.a, point.b ?? 0)), 1e-9);
+      aMin = -magnitude * 1.12;
+      aMax = magnitude * 1.12;
+    } else {
+      aMax = Math.max(...points.map((point) => point.a), 1e-9) * 1.06;
+    }
+    const ay = (value: number) => PAD_T + ((aMax - value) / (aMax - aMin)) * (H - PAD_T - PAD_B);
+    const inRange = price.filter((point) => point.t >= t0 - 864e5 && point.t <= t1 + 864e5);
+    let pMin = Math.min(...inRange.map((point) => point.v));
+    let pMax = Math.max(...inRange.map((point) => point.v));
+    if (!Number.isFinite(pMin) || !Number.isFinite(pMax)) { pMin = 0; pMax = 1; }
+    const priceSpan = Math.max(pMax - pMin, pMax * 1e-9, 1e-12);
+    pMin -= priceSpan * 0.08;
+    pMax += priceSpan * 0.08;
+    const py = (value: number) => PAD_T + ((pMax - value) / (pMax - pMin)) * (H - PAD_T - PAD_B);
+    const priceLine = inRange.filter((point) => point.t >= t0 && point.t <= t1).map((point, index) => `${index ? 'L' : 'M'}${x(point.t)},${py(point.v)}`).join(' ');
+    const valueLine = points.map((point, index) => `${index ? 'L' : 'M'}${xi(index)},${ay(point.a)}`).join(' ');
+    const barWidth = Math.max(1.2, ((W - PAD_L - PAD_R) / points.length) * 0.58);
+    const oiArea = `${valueLine} L${xi(points.length - 1)},${H - PAD_B} L${xi(0)},${H - PAD_B} Z`;
+    const aTicks = Array.from({ length: 4 }, (_, index) => aMin + ((index + 0.5) / 4) * (aMax - aMin));
+    const pTicks = Array.from({ length: 4 }, (_, index) => pMin + ((index + 0.5) / 4) * (pMax - pMin));
+    const times = [0, Math.floor(points.length / 3), Math.floor((2 * points.length) / 3), points.length - 1];
+    const priceAt = (time: number): number | null => {
+      if (!inRange.length) return null;
+      let closest = inRange[0];
+      for (const point of inRange) if (Math.abs(point.t - time) < Math.abs(closest.t - time)) closest = point;
+      return closest.v;
+    };
+    return { x, xi, ay, py, priceLine, valueLine, barWidth, oiArea, aTicks, pTicks, times, priceAt, zeroY: ay(0) };
+  }, [H, W, points, price, tab]);
+
+  const indexFromMouse = (clientX: number): number | null => {
+    const bounds = wrapRef.current?.getBoundingClientRect();
+    if (!bounds || points.length < 2) return null;
+    const chartX = ((clientX - bounds.left) / bounds.width) * W;
+    let closest = 0;
+    let distance = Infinity;
+    for (let index = 0; index < points.length; index += 1) {
+      const next = Math.abs((model?.xi(index) ?? 0) - chartX);
+      if (next < distance) { distance = next; closest = index; }
+    }
+    return closest;
+  };
+
+  const source = tab === 'volume' && !hasPerp ? 'Binance Spot' : 'Binance USD-M';
+  const selected = points[points.length - 1];
+  const metricSets: Record<IntelTab, { label: string; value: string; note: string; tone?: 'up' | 'down' }[]> = {
+    funding: [
+      { label: 'Current Rate', value: hasPerp ? fmtFunding(market?.fundingRate) : 'Spot Only', note: market?.fundingRate === null || market?.fundingRate === undefined ? 'Awaiting Contract Feed' : market.fundingRate > 0 ? 'Longs Pay Shorts' : market.fundingRate < 0 ? 'Shorts Pay Longs' : 'Neutral' },
+      { label: 'Annualized', value: hasPerp ? fmtPct(market?.fundingAnnualPct, 2) : '—', note: 'Simple Annualized' },
+      { label: 'Next Settlement', value: hasPerp && market?.nextFundingTime ? countdown(market.nextFundingTime) : '—', note: 'Exchange Schedule' },
+      { label: 'Latest Print', value: selected ? `${selected.a.toFixed(4)}%` : '—', note: opt === 'all' ? 'Full Available History' : opt.toUpperCase() + ' Window', tone: selected?.a && selected.a < 0 ? 'down' : 'up' },
+    ],
+    oi: [
+      { label: 'Open Interest', value: hasPerp ? fmtMoney(openInterestSnapshot?.usd ?? market?.openInterestUsd) : 'Spot Only', note: 'USD Notional' },
+      { label: '5m Change', value: fmtPct(openInterestSnapshot?.changePct, 2), note: 'Latest Two Observations', tone: (openInterestSnapshot?.changePct ?? 0) < 0 ? 'down' : 'up' },
+      { label: 'Perpetual Volume', value: fmtMoney(market?.perpVolume24h), note: 'Rolling 24 Hours' },
+      { label: 'OI / Volume', value: market?.oiToPerpVolume24h === null || market?.oiToPerpVolume24h === undefined ? '—' : `${market.oiToPerpVolume24h.toFixed(2)}×`, note: 'Leverage Density' },
+    ],
+    volume: [
+      { label: hasPerp ? 'Perpetual Volume' : 'Spot Volume', value: hasPerp ? fmtMoney(market?.perpVolume24h) : fmtMoney(market?.quoteVolume24h), note: 'Rolling 24 Hours' },
+      { label: 'Latest Interval', value: selected ? '$' + fmtCompact(selected.a) : '—', note: INTEL_OPTIONS.volume.find((item) => item.id === opt)?.label ?? opt },
+      { label: 'Open Interest', value: hasPerp ? fmtMoney(openInterestSnapshot?.usd ?? market?.openInterestUsd) : 'Spot Only', note: hasPerp ? 'USD Notional' : 'No Perpetual Contract' },
+      { label: 'OI / Volume', value: market?.oiToPerpVolume24h === null || market?.oiToPerpVolume24h === undefined ? '—' : `${market.oiToPerpVolume24h.toFixed(2)}×`, note: hasPerp ? 'Leverage Density' : 'Not Applicable' },
+    ],
+    liq: [
+      { label: 'Liquidations · 15m', value: hasPerp ? fmtMoney(market?.liquidations15mUsd) : 'Spot Only', note: 'Confirmed Force Orders' },
+      { label: 'Long Liquidations', value: fmtMoney(market?.longLiquidations15mUsd), note: '15 Minute Window', tone: 'down' },
+      { label: 'Short Liquidations', value: fmtMoney(market?.shortLiquidations15mUsd), note: '15 Minute Window', tone: 'up' },
+      { label: 'Recorder', value: liqSince ? timeAgo(liqSince) : 'Starting…', note: 'Persistent Live Binance Stream' },
+    ],
+    basis: [
+      { label: 'Perpetual Mark', value: fmtPrice(market?.perpMark), note: 'Binance USD-M' },
+      { label: 'Index Price', value: fmtPrice(market?.perpIndexPrice), note: 'Reference Basket' },
+      { label: 'Mark Basis', value: fmtBasis(market?.markIndexBasisPct), note: 'Mark Versus Index', tone: (market?.markIndexBasisPct ?? 0) < 0 ? 'down' : 'up' },
+      { label: 'Executable Gap', value: fmtBasis(market?.executableBasisBestPct), note: market?.executableBasisSide === 'LONG_SPOT_SHORT_PERP' ? 'Buy Spot · Sell Perp' : market?.executableBasisSide === 'SHORT_SPOT_LONG_PERP' ? 'Sell Spot · Buy Perp' : 'No Crossed-Book Edge' },
+    ],
+  };
+  const activePoint = hov !== null ? points[hov] : null;
+  const requiresPerp = tab !== 'volume';
+  const formatAxis = (value: number) => tab === 'funding' || tab === 'basis' ? `${value.toFixed(4)}%` : '$' + fmtCompact(value);
+  const formatValue = (value: number) => tab === 'funding' || tab === 'basis' ? `${value.toFixed(4)}%` : '$' + fmtFull(value, 0);
+
+  return (
+    <section className="tdx-cell tdx-cgx tkx-intelligence" aria-label="Token derivatives intelligence">
+      <div className="tkx-intelligence-head">
+        <div>
+          <span className="tkx-section-label">Derivatives Intelligence</span>
+          <p>Funding, leverage, participation, forced unwinds and carry for {base}.</p>
+        </div>
+        <PillSelect value={opt} options={INTEL_OPTIONS[tab]} onChange={setOpt} ariaLabel="Data interval" />
+      </div>
+      <div className="cgx-tabs tkx-intelligence-tabs" role="tablist" aria-label="Derivatives data">
+        <button type="button" role="tab" aria-selected={tab === 'funding'} className={tab === 'funding' ? 'on' : ''} data-testid="token-cgx-funding" onClick={() => switchTab('funding')}>Funding</button>
+        <button type="button" role="tab" aria-selected={tab === 'oi'} className={tab === 'oi' ? 'on' : ''} data-testid="token-cgx-oi" onClick={() => switchTab('oi')}>Open Interest</button>
+        <button type="button" role="tab" aria-selected={tab === 'volume'} className={tab === 'volume' ? 'on' : ''} data-testid="token-cgx-volume" onClick={() => switchTab('volume')}>Volume</button>
+        <button type="button" role="tab" aria-selected={tab === 'liq'} className={tab === 'liq' ? 'on' : ''} data-testid="token-cgx-liquidation" onClick={() => switchTab('liq')}>Liquidation</button>
+        <button type="button" role="tab" aria-selected={tab === 'basis'} className={tab === 'basis' ? 'on' : ''} data-testid="token-cgx-basis" onClick={() => switchTab('basis')}>Basis</button>
+      </div>
+      <div className="tkx-instrument-metrics" aria-label={`${INTEL_TITLE[tab]} snapshot`}>
+        {metricSets[tab].map((metric) => (
+          <div key={metric.label}>
+            <span>{metric.label}</span>
+            <strong className={metric.tone ?? ''}>{metric.value}</strong>
+            <small>{metric.note}</small>
+          </div>
+        ))}
+      </div>
+      <h3 className="cgx-title">{name} {INTEL_TITLE[tab]} <em className="tdx-src">{source}{tab === 'oi' ? ' · 30D Max Upstream' : ''}</em></h3>
+      {requiresPerp && !hasPerp ? (
+        <div className="tdx-cgx-empty"><p className="tdx-dimnote">Spot Only — {base} has no Binance USD-M perpetual feed for this view.</p></div>
+      ) : !model ? (
+        <div className="tdx-cgx-empty">
+          {tab === 'liq' && !loading
+            ? <p className="tdx-dimnote">The live liquidation recorder is active. The chart will populate as force-order events arrive.</p>
+            : <div className="tkx-chart-skeleton" aria-label={`Loading ${INTEL_TITLE[tab]}`}><i /><i /><i /><i /></div>}
+        </div>
+      ) : (
+        <>
+          <div
+            ref={wrapRef}
+            className="tdx-chartwrap tkx-intelligence-chart"
+            onMouseMove={(event) => {
+              setHov(indexFromMouse(event.clientX));
+              const bounds = wrapRef.current?.getBoundingClientRect();
+              if (bounds) setMouse({ x: event.clientX - bounds.left });
+            }}
+            onMouseLeave={() => { setHov(null); setMouse(null); }}
+          >
+            <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="tdx-datachart" aria-hidden>
+              {model.aTicks.map((value, index) => (
+                <g key={`a${index}`}>
+                  <line x1={PAD_L} x2={W - PAD_R} y1={model.ay(value)} y2={model.ay(value)} stroke="var(--line)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+                  <text x={PAD_L - 8} y={model.ay(value) + 4} textAnchor="end" className="tdx-axis">{formatAxis(value)}</text>
+                </g>
+              ))}
+              {model.pTicks.map((value, index) => <text key={`p${index}`} x={W - PAD_R + 8} y={model.py(value) + 4} className="tdx-axis">{fmtPrice(value)}</text>)}
+              {hov !== null && <line x1={model.xi(hov)} x2={model.xi(hov)} y1={PAD_T} y2={H - PAD_B} stroke="var(--muted)" strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />}
+              {tab === 'oi' && <path d={model.oiArea} fill="var(--accent)" opacity="0.11" />}
+              {(tab === 'oi' || tab === 'basis') && <path d={model.valueLine} fill="none" stroke="var(--accent)" strokeWidth="1.35" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+              {tab === 'volume' && points.map((point, index) => <rect key={point.t} x={model.xi(index) - model.barWidth / 2} y={model.ay(point.a)} width={model.barWidth} height={Math.max(1, H - PAD_B - model.ay(point.a))} rx="1" fill="var(--accent)" opacity={hov === null ? 0.58 : hov === index ? 0.92 : 0.2} />)}
+              {tab === 'funding' && points.map((point, index) => <rect key={point.t} x={model.xi(index) - model.barWidth / 2} y={point.a >= 0 ? model.ay(point.a) : model.zeroY} width={model.barWidth} height={Math.max(1, Math.abs(model.ay(point.a) - model.zeroY))} rx="1" fill={point.a >= 0 ? 'var(--up)' : 'var(--down)'} opacity={hov === null ? 0.72 : hov === index ? 1 : 0.25} />)}
+              {tab === 'liq' && points.map((point, index) => (
+                <g key={point.t}>
+                  <rect x={model.xi(index) - model.barWidth / 2} y={model.ay(point.a)} width={model.barWidth} height={Math.max(0.5, model.zeroY - model.ay(point.a))} rx="1" fill="var(--down)" opacity={hov === null ? 0.78 : hov === index ? 1 : 0.25} />
+                  <rect x={model.xi(index) - model.barWidth / 2} y={model.zeroY} width={model.barWidth} height={Math.max(0.5, model.ay(-(point.b ?? 0)) - model.zeroY)} rx="1" fill="var(--up)" opacity={hov === null ? 0.78 : hov === index ? 1 : 0.25} />
+                </g>
+              ))}
+              {(tab === 'funding' || tab === 'liq' || tab === 'basis') && <line x1={PAD_L} x2={W - PAD_R} y1={model.zeroY} y2={model.zeroY} stroke="var(--line-2)" strokeWidth="1" vectorEffect="non-scaling-stroke" />}
+              <path d={model.priceLine} fill="none" stroke="#F0B90B" strokeWidth="1.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+              {model.times.map((index) => <text key={`t${index}`} x={model.xi(index)} y={H - 8} textAnchor="middle" className="tdx-axis">{new Date(points[index].t).toLocaleDateString('en-US', points[points.length - 1].t - points[0].t > 300 * 864e5 ? { month: 'short', year: '2-digit' } : { month: 'short', day: 'numeric' })}</text>)}
+            </svg>
+            {activePoint && mouse && (
+              <ChartTip
+                x={mouse.x}
+                w={wrapRef.current?.clientWidth ?? W}
+                title={tipTime(activePoint.t)}
+                rows={[
+                  ...(tab === 'liq'
+                    ? [
+                        { dot: 'var(--down)', label: 'Long Liquidations', value: '$' + fmtFull(activePoint.a, 0) },
+                        { dot: 'var(--up)', label: 'Short Liquidations', value: '$' + fmtFull(activePoint.b ?? 0, 0) },
+                      ]
+                    : [{ dot: tab === 'funding' ? (activePoint.a >= 0 ? 'var(--up)' : 'var(--down)') : 'var(--accent)', label: INTEL_TITLE[tab], value: formatValue(activePoint.a) }]),
+                  ...(model.priceAt(activePoint.t) !== null ? [{ dot: '#F0B90B', label: `${base} Price`, value: fmtFull(model.priceAt(activePoint.t) as number, 2) }] : []),
+                ]}
+              />
+            )}
+          </div>
+          <div className="tdx-legend">
+            {tab === 'liq' ? <><span><i className="sw" style={{ background: 'var(--down)' }} />Long Liquidations</span><span><i className="sw" style={{ background: 'var(--up)' }} />Short Liquidations</span></> : <span><i className="sw" style={{ background: 'var(--accent)', opacity: 0.8 }} />{INTEL_TITLE[tab]}</span>}
+            <span><i className="dot" style={{ borderColor: '#F0B90B' }} />{base} Price</span>
+            {tab === 'liq' && liqSince ? <span className="cgx-note">Recording Since {new Date(liqSince).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · No Historical REST Feed</span> : null}
           </div>
         </>
       )}
@@ -606,7 +1136,7 @@ type CgxTab = 'funding' | 'oi' | 'volume' | 'liq';
 
 interface CgxPoint { t: number; a: number; b?: number }
 
-function CgxPanel({ symbol, base, name, hasPerp }: { symbol: string; base: string; name: string; hasPerp: boolean }) {
+function CgxPanel({ symbol, base, name, hasPerp, market, openInterestSnapshot }: { symbol: string; base: string; name: string; hasPerp: boolean; market: MarketRow | undefined; openInterestSnapshot: { usd: number; changePct: number | null } | null }) {
   const [tab, setTab] = useState<CgxTab>('volume');
   const [opt, setOpt] = useState<string>('1d');
   const [points, setPoints] = useState<CgxPoint[]>([]);
@@ -681,7 +1211,7 @@ function CgxPanel({ symbol, base, name, hasPerp }: { symbol: string; base: strin
       if (!Number.isFinite(width) || width <= 0) return;
       const next = {
         width: Math.round(width),
-        height: Math.round(Math.max(620, Math.min(860, width * 0.32))),
+        height: Math.round(Math.max(320, Math.min(440, width * 0.28))),
       };
       setChartBox((prev) => (
         Math.abs(prev.width - next.width) > 2 || Math.abs(prev.height - next.height) > 2 ? next : prev
@@ -772,7 +1302,13 @@ function CgxPanel({ symbol, base, name, hasPerp }: { symbol: string; base: strin
   const p = hov !== null ? points[hov] : null;
 
   return (
-    <section className="tdx-cell tdx-cgx">
+    <section className="tdx-cell tdx-cgx" aria-label="Derivatives monitor">
+      <div className="tkx-evidence-strip tkx-derivatives-strip" aria-label="Derivatives Snapshot">
+        <div><span>Funding Rate</span><strong>{hasPerp ? fmtFunding(market?.fundingRate) : 'Spot Only'}</strong><small>{market?.fundingAnnualPct === null || market?.fundingAnnualPct === undefined ? 'Simple Annualized —' : `${fmtPct(market.fundingAnnualPct, 2)} Simple Annualized`}</small></div>
+        <div><span>Open Interest</span><strong>{hasPerp ? fmtMoney(openInterestSnapshot?.usd ?? market?.openInterestUsd) : 'Spot Only'}</strong><small>{openInterestSnapshot?.changePct === null || openInterestSnapshot?.changePct === undefined ? '5m Change —' : `${fmtPct(openInterestSnapshot.changePct, 2)} · 5m`}</small></div>
+        <div><span>Perpetual Volume</span><strong>{hasPerp ? fmtMoney(market?.perpVolume24h) : 'Spot Only'}</strong><small>{market?.oiToPerpVolume24h === null || market?.oiToPerpVolume24h === undefined ? 'OI / Volume —' : `${market.oiToPerpVolume24h.toFixed(2)}× OI / Volume`}</small></div>
+        <div><span>Liquidations · 15m</span><strong>{hasPerp ? fmtMoney(market?.liquidations15mUsd) : 'Spot Only'}</strong><small>{hasPerp ? `${fmtMoney(market?.longLiquidations15mUsd)} Long · ${fmtMoney(market?.shortLiquidations15mUsd)} Short` : 'No Derivatives Telemetry'}</small></div>
+      </div>
       <div className="tdx-cardhead">
         <div className="cgx-tabs" role="tablist" aria-label="Derivatives data">
           <button type="button" role="tab" aria-selected={tab === 'funding'} className={tab === 'funding' ? 'on' : ''} data-testid="token-cgx-funding" onClick={() => switchTab('funding')}>Funding Rate</button>
@@ -810,7 +1346,7 @@ function CgxPanel({ symbol, base, name, hasPerp }: { symbol: string; base: strin
             <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="tdx-datachart" aria-hidden>
               {model.aTicks.map((v, i) => (
                 <g key={`a${i}`}>
-                  <line x1={PAD_L} x2={W - PAD_R} y1={model.ay(v)} y2={model.ay(v)} stroke="var(--line)" strokeWidth="1" />
+                  <line x1={PAD_L} x2={W - PAD_R} y1={model.ay(v)} y2={model.ay(v)} stroke="var(--line)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
                   <text x={PAD_L - 8} y={model.ay(v) + 4} textAnchor="end" className="tdx-axis">{fmtA(v)}</text>
                 </g>
               ))}
@@ -821,7 +1357,7 @@ function CgxPanel({ symbol, base, name, hasPerp }: { symbol: string; base: strin
                 <line x1={model.xi(hov)} x2={model.xi(hov)} y1={PAD_T} y2={H - PAD_B} stroke="var(--muted)" strokeWidth="1" strokeDasharray="3 3" />
               )}
               {tab === 'oi' && <path d={model.areaPath} fill="var(--up)" opacity="0.16" />}
-              {tab === 'oi' && <path d={points.map((pt, i) => `${i ? 'L' : 'M'}${model.xi(i)},${model.ay(pt.a)}`).join(' ')} fill="none" stroke="var(--up)" strokeWidth="1.6" />}
+              {tab === 'oi' && <path d={points.map((pt, i) => `${i ? 'L' : 'M'}${model.xi(i)},${model.ay(pt.a)}`).join(' ')} fill="none" stroke="var(--up)" strokeWidth="1.35" vectorEffect="non-scaling-stroke" />}
               {tab === 'volume' && points.map((pt, i) => (
                 <rect key={pt.t} x={model.xi(i) - model.bw / 2} y={model.ay(pt.a)} width={model.bw} height={Math.max(1, H - PAD_B - model.ay(pt.a))} fill="var(--up)" opacity={hov === null ? 0.6 : hov === i ? 1 : 0.25} />
               ))}
@@ -837,7 +1373,7 @@ function CgxPanel({ symbol, base, name, hasPerp }: { symbol: string; base: strin
               {(tab === 'funding' || tab === 'liq') && (
                 <line x1={PAD_L} x2={W - PAD_R} y1={model.zeroY} y2={model.zeroY} stroke="var(--line-2)" strokeWidth="1" />
               )}
-              <path d={model.priceLine} fill="none" stroke="#F0B90B" strokeWidth="1.7" strokeLinejoin="round" />
+              <path d={model.priceLine} fill="none" stroke="#F0B90B" strokeWidth="1.35" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
               {model.times.map((i) => (
                 <text key={`t${i}`} x={model.xi(i)} y={H - 8} textAnchor="middle" className="tdx-axis">
                   {new Date(points[i].t).toLocaleDateString('en-US', points[points.length - 1].t - points[0].t > 300 * 864e5 ? { month: 'short', year: '2-digit' } : { month: 'short', day: 'numeric' })}
@@ -976,7 +1512,7 @@ function ProfilePanel({ profile, base }: { profile: TokenProfile | null; base: s
 }
 
 export function TokenDetail({ symbol }: { symbol: string }) {
-  const { markets, state, toggleWatch, setPage, openDetail, prefs } = useStore();
+  const { markets, state, toggleWatch, setPage, openDetail } = useStore();
   const [range, setRange] = useState<RangeKey>('1D');
   const [ivl, setIvl] = useState<'auto' | IntervalKey>('auto');
   const [tv, setTv] = useState(false);
@@ -986,6 +1522,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
   const [profile, setProfile] = useState<TokenProfile | null>(null);
   const [q, setQ] = useState('');
   const [basisSnapshot, setBasisSnapshot] = useState<BasisEngineSnapshot | null>(null);
+  const [openInterestSnapshot, setOpenInterestSnapshot] = useState<{ usd: number; changePct: number | null } | null>(null);
 
   const live = markets.find((m) => m.symbol === symbol);
   const base = baseOf(symbol);
@@ -1010,18 +1547,25 @@ export function TokenDetail({ symbol }: { symbol: string }) {
   useEffect(() => {
     const { interval, limit } = effective;
     let alive = true;
-    setCandles([]);
+    const cacheKey = `${symbol}:${src}:${interval}:${limit}`;
+    setCandles(tokenCandleCache.get(cacheKey)?.value ?? []);
     const load = () => {
       void fetch(`/api/candles?symbol=${symbol}&interval=${interval}&limit=${limit}&market=${src}`)
         .then((r) => (r.ok ? r.json() : null))
-        .then((d) => alive && Array.isArray(d) && setCandles(d as TvCandle[]))
+        .then((d) => {
+          if (!Array.isArray(d)) return;
+          tokenCandleCache.set(cacheKey, { value: d as TvCandle[], updatedAt: Date.now() });
+          if (alive) setCandles(d as TvCandle[]);
+        })
         .catch(() => undefined);
     };
     load();
-    const t = setInterval(load, Math.max(0.5, prefs.dataCadence?.token ?? 1) * 1000);
+    // REST hydrates and periodically reconciles history; the exchange kline
+    // socket below owns live updates so the series does not jump on a 1s refetch.
+    const t = setInterval(load, 30_000);
     return () => { alive = false; clearInterval(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbol, range, ivl, src, prefs.dataCadence?.token]);
+  }, [symbol, range, ivl, src]);
 
   useEffect(() => {
     const { interval, limit } = effective;
@@ -1089,7 +1633,41 @@ export function TokenDetail({ symbol }: { symbol: string }) {
     return () => { alive = false; window.clearInterval(timer); };
   }, [hasPerp, symbol]);
 
-  const points = useMemo(() => candles.map((c) => ({ t: c.t, v: c.c })), [candles]);
+  // Hydrate OI directly from Binance history so the instrument summary does
+  // not wait for the slower all-market engine poll after a token switch.
+  useEffect(() => {
+    if (!hasPerp) {
+      setOpenInterestSnapshot(null);
+      return;
+    }
+    let alive = true;
+    setOpenInterestSnapshot(null);
+    const load = () => {
+      void fetch(`/api/futures/oi-hist?symbol=${symbol}&period=5m&limit=3`)
+        .then((response) => response.ok ? response.json() : null)
+        .then((next) => {
+          if (!alive || !Array.isArray(next) || next.length === 0) return;
+          const rows = next as OiPoint[];
+          const latest = rows[rows.length - 1];
+          const previous = rows.length > 1 ? rows[rows.length - 2] : null;
+          setOpenInterestSnapshot({
+            usd: latest.notional,
+            changePct: previous && previous.notional > 0 ? ((latest.notional - previous.notional) / previous.notional) * 100 : null,
+          });
+        })
+        .catch(() => undefined);
+    };
+    load();
+    const timer = window.setInterval(load, 60_000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, [hasPerp, symbol]);
+
+  const points = useMemo(() => {
+    if (candles.length) return candles.map((c) => ({ t: c.t, v: c.c }));
+    const spark = live?.spark ?? [];
+    const now = Date.now();
+    return spark.map((v, index) => ({ t: now - (spark.length - 1 - index) * 5 * 60_000, v }));
+  }, [candles, live?.spark]);
   const price = live?.spot ?? lastOf(points)?.v ?? null;
   const first = points[0]?.v ?? null;
   const rangeAbs = price !== null && first !== null ? price - first : null;
@@ -1119,21 +1697,6 @@ export function TokenDetail({ symbol }: { symbol: string }) {
       : live.fundingRate < 0
         ? 'Shorts Pay'
         : 'Flat Funding';
-  const engineLabel = basisContext?.rejectCode
-    ? basisContext.rejectCode.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
-    : basisContext
-      ? basisContext.decisionKind.replace(/\b\w/g, (letter) => letter.toUpperCase())
-      : hasPerp
-        ? basisSnapshot
-          ? 'Outside Scanner Universe'
-          : 'Connecting'
-        : 'Spot Market Only';
-  const engineReason = basisContext?.reason
-    ?? (hasPerp
-      ? basisSnapshot
-        ? `Not inside the ${fmtMoney(state?.config.minQuoteVolume24h ?? null)} scanner liquidity universe.`
-        : 'Waiting for the crossed-book Basis runtime.'
-      : `${base} has no Binance USD-M perpetual contract.`);
   return (
     <div className="container page tkx-page">
       <section className="tkx-frame" aria-label="token workspace">
@@ -1206,19 +1769,9 @@ export function TokenDetail({ symbol }: { symbol: string }) {
           </div>
           <div>
             <span>Open Interest</span>
-            <strong>{hasPerp ? fmtMoney(live?.openInterestUsd) : 'Spot Only'}</strong>
-            <small>{hasPerp ? <><Chg pct={live?.openInterestChangePct}>{live?.openInterestChangePct === null || live?.openInterestChangePct === undefined ? '—' : fmtPct(Math.abs(live.openInterestChangePct), 2, false)}</Chg> · {fmtMoney(live?.liquidations15mUsd)} Liq · 15m</> : 'No derivatives telemetry'}</small>
+            <strong>{hasPerp ? fmtMoney(openInterestSnapshot?.usd ?? live?.openInterestUsd) : 'Spot Only'}</strong>
+            <small>{hasPerp ? <><Chg pct={openInterestSnapshot?.changePct}>{openInterestSnapshot?.changePct === null || openInterestSnapshot?.changePct === undefined ? '—' : fmtPct(Math.abs(openInterestSnapshot.changePct), 2, false)}</Chg> · {fmtMoney(live?.liquidations15mUsd)} Liq · 15m</> : 'No derivatives telemetry'}</small>
           </div>
-        </div>
-
-        <div className="tkx-engine" aria-label="Basis Engine Context">
-          <span><em>Basis Engine</em><strong>{engineLabel}</strong></span>
-          <p>{engineReason}</p>
-          <dl>
-            <div><dt>Data Trust</dt><dd>{basisContext ? Math.round(basisContext.dataQuality.score * 100) + '%' : '—'}</dd></div>
-            <div><dt>Borrow</dt><dd>{basisContext ? basisContext.borrow.status.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) : '—'}</dd></div>
-            <div><dt>Decision</dt><dd>{basisContext?.decisionTs ? timeAgo(basisContext.decisionTs) : '—'}</dd></div>
-          </dl>
         </div>
 
         <div className="tkx-workspace">
@@ -1270,10 +1823,11 @@ export function TokenDetail({ symbol }: { symbol: string }) {
             </div>
           )}
           </section>
-          <MoneyFlowCard symbol={symbol} base={base} />
-          <BasisCard symbol={symbol} base={base} hasPerp={hasPerp} />
-          <CgxPanel symbol={symbol} base={base} name={name} hasPerp={hasPerp} />
-          <ProfilePanel profile={profile} base={base} />
+          <div className="tkx-flow-deck" aria-label="Market flow">
+            <MoneyFlowCard symbol={symbol} base={base} />
+            <PositioningCard symbol={symbol} base={base} hasPerp={hasPerp} />
+          </div>
+          <DerivativesIntelligence symbol={symbol} base={base} name={name} hasPerp={hasPerp} market={live} openInterestSnapshot={openInterestSnapshot} />
         </div>
       </section>
       {chartFocus && (

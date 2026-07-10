@@ -1,6 +1,6 @@
 # PROJECT_MEMORY.md — Arbitrage Capital Control Room
 
-Last updated: 2026-07-10 13:01 IST
+Last updated: 2026-07-10 17:36 IST
 Permanent role of this file: the durable living-state log for the project. The other three core docs are mostly static blueprints; this file records what is *true right now* — current source-of-truth folder, git/deploy state, active phase, outstanding decisions, and a dated changelog. A new Director should read this file to learn the present state without any old chat history.
 
 **UI WORK? Read `DESIGN_PLAYBOOK.md` FIRST** — the distilled, owner-calibrated design system, process, and gotcha catalog from the 2026-07-08 quality passes. The Account page is the owner's only approved "real quality" surface; the playbook is how to hit that bar without redoing five rounds.
@@ -87,6 +87,29 @@ Owner directive (2026-07-07):
 ---
 
 ## 7. Run log (newest first)
+
+### 2026-07-10 18:09 IST — Account Rebuilt As A Clear Capital Master-Detail Workspace
+
+- The owner-rejected Spot expansion was a hierarchy defect, not a data shortage. The old Account inserted a seven-column asset table directly between five-column wallet rows, producing `16` competing hairlines and making the parent account, child header, and asset rows read as peers. Live signed sources already supplied total/free/locked balances, price, market value, Earn, loan, margin, source age, and watchlist truth.
+- Rebuilt Account around three explicit levels: executive capital facts; a wide `1fr / 320px` Balance History + Wallet Allocation band; and Capital Accounts as a `350px` wallet selector rail beside one dedicated selected-wallet workspace. Spot is selected by default. All ten Binance wallet buckets are selectable; Spot, Earn + Flexible Loan, and Cross Margin render their signed detail, while other buckets render an honest `Wallet Snapshot Only` state instead of pretending an asset adapter exists.
+- The selected-wallet workspace owns its identity, Active/Cached state, Balance/Positions/Liability/Wallet Share facts, and one seven-column detail table. At 1280×720 the detail panel is `713px`; its table and rows both measure exactly `713px` client/scroll width, all wallet names are untruncated, document overflow is zero, and the detail uses only five structural dividers rather than the former sixteen. Account now carries the same 32/30px page identity slot and 53px/32px CTA tab rail as the accepted data-page family.
+- No money action was added. Masking was toggled and restored; 1W/1M ranges, Open Orders, Recent Fills, Spot, Earn, Cross Margin, Funding snapshot-only, watchlist controls, Light/Dark, and source truth states were exercised. Production build passes, all `71/71` gates pass, and `git diff --check` passes. The mandatory Calendar → News → Health → Logs → Risk → Opportunities → Volume → Basis → Markets → Token → Borrow → Account → Dashboard sweep passed in both themes with every frame at `x=189/y=75`, `1065px`, `1px`, `12px`, and zero overflow. Light, Account, Overview, Spot, 1M, balances visible, and scroll top were restored.
+
+### 2026-07-10 17:52 IST — Borrow And Markets Tab Rails Re-Aligned; Dashboard Identity Restored
+
+- The apparent page drift was not an outer-frame problem: live geometry proved Markets and Borrow already shared `x=189/y=75`, the `57px` toolbar, and the same summary rail. Borrow alone switched its viewbar into an `86.25px` two-row layout at `1100px`, while Markets kept a `53px` single row until `850px`. Borrow also used `34px / 11.5px / black` pills against Markets' `32px / 12.5px / CTA` contract.
+- Borrow now shares the Markets viewbar geometry and active language: `53px` rail, `16px` inset, `6px` gap, `32px` pills with `14px` horizontal padding and `12.5px / 470` type, plus the same `850px` stacking breakpoint. At 1280×720 both pages measure the first tab at `x=206/y=384`, with no document overflow.
+- Dashboard now renders the existing `/dashboard-blocks.png` identity already used in the sidebar. It occupies the same `32px` identity slot and `30px` optical mark as Markets and Borrow, placing the Dashboard title at `x=248` without moving the shared frame or toolbar.
+- Verification: production build passes, all `71/71` gates pass, `git diff --check` passes, Markets Derivatives and Borrow Assets tabs were exercised and restored, and the mandatory Calendar → News → Health → Logs → Risk → Opportunities → Volume → Basis → Markets → Token → Borrow → Account → Dashboard sweep passed in Light and Dark with every frame at `x=189/y=75`, `1065px`, `1px`, `12px`, zero overflow, and no crash boundary. Light, Dashboard, 1M, and scroll top were restored.
+
+### 2026-07-10 17:36 IST — Token Rebuilt As A Stable Per-Instrument Market Intelligence Workspace
+
+- Removed the owner-rejected `Basis Engine / Ignore` context strip. Token now reads continuously as Price Chart → Spot Money Flow + Futures Positioning → Basis & Carry → Derivatives Monitor → Verified Profile, inside the existing one-frame contract. No manual trade, borrow, repay, or decorative action was added.
+- Repaired the chart instability at its source. The native line chart now uses measured-width geometry with a bounded `300–410px` plot height, thinner non-scaling lines, and 22% y-domain breathing room. Binance WebSocket klines own live updates while REST hydrates/reconciles every 30 seconds instead of refetching the full series every second. Returning to Token resets the shared scroll container to the instrument header.
+- Promoted real per-token evidence already available in the repo: Spot aggregate-trade flow now shows net flow, buy share, print count, coverage, size buckets, and inflow; Basis uses a full-width responsive chart with price/index plus basis-rate axes; Derivatives has one current snapshot for funding/simple-annualized funding, direct 5-minute OI/change, perp volume/OI ratio, and 15-minute long/short liquidations, followed by the existing Funding/OI/Volume/Liquidation history modes.
+- Activated the repo's existing `GET /api/futures/telemetry` aggregation on the Token page. Futures Positioning now shows Binance USD-M taker buy/sell flow, global account long/short ratio, top-trader account ratio, and top-trader position ratio with the official 30-day coverage limit. Current Binance docs and live responses were rechecked before implementation; CoinGlass/Coinbase were used only as information-hierarchy references, not as invented data sources.
+- Fast truth states were verified on BTC and USDC. BTC hydrated `$6.66B` OI plus 5-minute change directly after opening and rendered the full derivatives stack; USDC retained live Spot flow while every futures-only area reported `Spot Only`. Binance liquidation history remains the repo's persisted `!forceOrder@arr` recording with no fake backfill.
+- Verification: web and server production builds pass, all `71/71` gates pass, `git diff --check` passes, `/api/futures/telemetry` returned all five BTC series with zero source errors, and browser console warnings/errors are empty. Browser interaction covered token search, scroll reset, Spot/Futures, disabled Futures 1S, line/TradingView, full-chart open/close, all four derivatives modes, BTC/USDC truth states, Light/Dark, and the mandatory Calendar → News → Health → Logs → Risk → Opportunities → Volume → Basis → Markets → Token → Borrow → Account → Dashboard sweep. At the wide audited viewport every page remained `x=189/y=75`, `1690px`, `1px`, `12px`, `22px/540/30px`, with zero horizontal overflow; Light, Bitcoin, Spot, native 1D chart, and scroll top were restored.
 
 ### 2026-07-10 13:01 IST — Dashboard Rebuilt As A Truthful Executive Control Room
 
@@ -1441,3 +1464,349 @@ STATUS / NEXT: (1) Borrow→Account-style restyle [IN PROGRESS], (2) Basis Scann
 - Current research anchors are Apple Popovers/Layout for compact related tasks
   and scan alignment, plus Carbon Structured List for consistent row anatomy.
   Final production build, `70/70` gates, and `git diff --check` pass.
+
+## 2026-07-10 — Watchman instrument and Recent Devices identity repair
+
+- Connection Watchman keeps the real `900×566` workspace and the distinct
+  shield/radar header identity, but its launcher now renders the owner's exact
+  dual-arrow anatomy as a 68px code-native mark inside a transparent 76px
+  target in both themes. The long idle turn, recovery spin, status point, and
+  Reduced Motion behavior remain; no square image canvas or dark-mode tile is
+  allowed around the mark.
+- Overview is one restrained operator instrument: five continuous summary
+  cells, a flat underlined four-view rail, and a continuous six-stage monitored
+  path with hairline separators instead of six gray cards. Typography follows
+  the canonical topbar/Logs row weights. The transition list keeps only the
+  newest state change for each connection owner so repeated browser socket
+  history does not become decorative filler; the ledger remains authoritative.
+- Recent Devices no longer identifies a device by `IP + User-Agent`. The browser
+  creates a stable random first-party `cosmos_device` value before React mounts;
+  the server stores only a SHA-256-derived id. Matching IP and Chrome metadata
+  can now produce separate real devices. Legacy ids are migrated, fallback rows
+  are suppressed when a matching token-backed profile exists, static assets do
+  not count as device activity, and `/api/sessions` is private/no-store with
+  current → active → newest ordering.
+- Live Account Details at 1280×720 showed two distinct active Chrome 150/macOS
+  profiles on `127.0.0.1`, exactly one `This Device`, separate request counts,
+  and the truthful two-minute activity window. Watchman Overview, Connections,
+  Sources, Controls, focus behavior, zero overflow, and Light/Dark contrast were
+  inspected. Production build passes; full gates pass `71/71`, including the
+  new same-IP/same-browser multi-device gate; `git diff --check` passes.
+
+## 2026-07-10 — Sidebar breathing and website identity correction
+
+- Owner correction: icon size and navigation spacing are independent. Sidebar
+  source marks are now 19px in the existing 28px alignment column (Calendar and
+  Notifications 20px), exactly 30% below the former 27-29px artwork, while rows
+  expand from 36px to 40px and group separation from 6px to 8px. The active
+  background and label rail stay aligned; no icon or text transform is used.
+- A `max-height:730px` fallback retains the older 36px cadence only to keep all
+  fourteen destinations visible at the 1280×720 verification viewport. Normal
+  owner-height windows use the requested 40px cadence. At the live 1911×1941
+  viewport, row centers measured 40px apart, group starts were visibly separated,
+  and sidebar/document overflow both measured zero.
+- The gray/teal neural mark is retired. The supplied blue code-file identity is
+  rebuilt as transparent SVG with its folded page, blue depth face, pale code
+  panel, and code brackets. It measures 18×18—half the former 36px mark—while
+  `ARBITRAGE` grows to 18/670 and `CONTROL ROOM` to 10.5/650. The brand remains
+  inside the 160×48 header hit area with a clear gap before Search.
+- Current official reference: Carbon UI Shell treats header and side navigation
+  as one persistent orientation system, while Carbon icon guidance separates
+  consistent icon artboards from component spacing. Light/Dark rendered checks
+  confirmed a transparent mark, exact blue palette, zero overflow, and crisp
+  wordmark hierarchy. Production build and `git diff --check` pass.
+
+## 2026-07-10 — Control Room C identity and Watchman bleed repair
+
+- Owner superseded the folded-file website identity. The header now uses the
+  supplied concentric blue Control Room `C`, reconstructed as three transparent
+  SVG rings at exactly `18×18` beside the existing 18px/10.5px wordmark. The
+  interim file and code-bracket experiments are removed.
+- Sidebar reductions are encoded from the measured original artwork rather than
+  rounded guesses: normal 27px marks render at `18.9px`, Calendar's 29×27 canvas
+  at `20.3×18.9px`, and Notification's 28px canvas at `19.6px`—exactly 70% of
+  each former dimension. Their 28px alignment slots and 40px row cadence do not
+  shrink.
+- The broken-looking Watchman was diagnosed from the live stacking context: its
+  transparent center exposed a real `$386.32` liquidation value underneath.
+  A 60px `var(--panel)` occlusion circle now lives inside the rotating SVG,
+  beneath the supplied arrows. It blocks underlying text without restoring a
+  visible outer tile, border, or square launcher.
+- Current official icon reference is Lucide's full-artboard scalable SVG model;
+  live verification measured the brand at 18px, standard navigation artwork at
+  18.9px, the Watchman at 68px, a white internal mask in Light, and zero document
+  overflow.
+
+## 2026-07-10 — Watchman Overview becomes the control plane
+
+- Owner correction supersedes the former read-only Overview plus fourth
+  Controls tab. The rail now has exactly Overview, Connections, and Sources.
+  Overview places the compact six-owner connection/evidence path on the left
+  and Market, Account, News, and Calendar cadence controls on the right.
+- Every cadence row has the persisted `<1s / 1s / 3s / 5s / 10s` selector and
+  one dedicated backend refresh action. Defaults remains a single restrained
+  action; recovery is not repeated in cards or hidden in another view.
+- The All/Market/Runtimes/Account/News/Calendar/FX selector and Run Recovery
+  action are a fixed 76px bottom console shared by all three views. Connections
+  and Sources scroll above it, so a growing inventory cannot push recovery out
+  of reach.
+- Live verification measured a `900×650` panel at the active workstation,
+  `484.9/413.1px` Overview columns, six 43px evidence rows, four 64px cadence
+  rows, and a 76px footer whose top exactly meets the scroll region and whose
+  bottom stays 1px inside the panel. Cadence changed `5s → 3s → 5s`; targeted
+  Calendar recovery completed without issues and reported `calendar · 1975 ms`.
+- Official AWS CloudWatch Network Synthetic Monitor documentation reinforces
+  the operator model: monitor/probe evidence and operational actions belong in
+  the same workflow rather than being split across a detached control tab.
+
+## 2026-07-10 — Header hierarchy and Execution Control action repair
+
+- Owner correction supersedes the 18px website mark / 24-25px operational rail.
+  The concentric Control Room `C` is now 30px with an 8px optical gap to the
+  existing wordmark. AWS, API Keys, Trust, Notifications, Execution, Currency,
+  Basis, and Appearance artwork is uniformly 18px inside unchanged 42px hit
+  targets. This makes the brand primary and the command rail deliberately quiet.
+- Execution Control no longer makes its entire stopped-state row green or
+  clickable. The `398×76` state row is transparent evidence with a 30px power
+  mark, aligned copy, and exactly one `102×36` Resume/Stop action. The button
+  alone carries state color; the four persisted execution-mode rows remain
+  unchanged.
+- Live verification measured the brand at `30×30`, every operational mark at
+  `18×18`, the execution columns at `34/214/102px`, and the single action at
+  `102×36`. Light and Dark both retain a transparent state row. Resume was
+  exercised through the real control and the original `Bot Stopped` safety
+  state was restored immediately before completion.
+- Current Apple HIG research supports the hierarchy: toolbars should avoid
+  overcrowding, while interface icons need consistent optical size/weight and
+  may be dimensionally adjusted for visual balance.
+
+## 2026-07-10 — Watchman source-logo restoration and motion verification
+
+- The Connection Watchman launcher again renders the owner-supplied
+  `/connection-reset-mark.svg` directly. The interim JSX reconstruction is
+  removed so the launcher cannot drift from the approved two-arrow anatomy.
+- The 60px theme-matched occlusion circle is fixed in the 78px image holder,
+  behind the 68px rotating asset. It blocks chart prices and metrics from the
+  transparent center without creating a square tile or joining the mask to the
+  animation. The 76px launcher target and operational state point are unchanged.
+- Live verification at 1280×720 observed a real idle rotation transform during
+  the 11-second paused cycle, confirmed the exact SVG source in Light and Dark,
+  and confirmed Reduced Motion changes the animation to `none`. Launcher
+  open/close remained a panel action only; no recovery ran from the launcher.
+- The required `Calendar -> News -> Health -> Logs -> Risk -> Opportunities ->
+  Volume -> Basis -> Markets -> Token -> Borrow -> Account -> Dashboard` sweep
+  held the same 68px mark, 76px target, zero horizontal overflow, and correct
+  theme mask on every page. Production build and all `71/71` gates pass.
+
+## 2026-07-10 — Watchman supplied-pixel correction
+
+- Owner rejected the prior result because it still combined an inaccurate
+  vector reconstruction with a visible inner mask and the global dock's
+  breathing rounded-square pseudo-element. Those layers made the mark read as
+  a small chain/eye inside a ghost tile instead of the supplied reset artwork.
+- `/connection-reset-mark.svg` now packages an alpha-extracted crop of the
+  supplied `355×339` image. The pale `#F7F7F7` screenshot canvas is removed while
+  the exact long arcs, `#588DF2` blue, antialiasing, and `264:230` artwork ratio
+  are preserved. No JSX or path approximation remains.
+- The launcher is one borderless 76px `var(--panel)` circle. The inherited
+  `.rdock-btn::before` outline, the inner occlusion mask, image shadow, and hover
+  glow are disabled. The circle alone prevents page data from bleeding through
+  the transparent artwork; the operational state point remains truthful.
+- Browser verification observed the real paused idle turn, confirmed Reduced
+  Motion changes animation to `none`, inspected Light and Dark, and restored
+  Light/Full Motion with popovers closed. The complete bottom-up page sweep held
+  the same source, circular geometry, zero ghost pseudo-element, and zero
+  horizontal overflow. Production build and all `71/71` gates pass.
+
+## 2026-07-10 — Account chart scaling and allocation-circle repair
+
+- The Account chart was visibly centered and truncated because its live
+  `711×286` box still rendered the fallback `1000×330` viewBox. Default SVG
+  `xMidYMid meet` scaling reduced that coordinate system to a narrow centered
+  plot while the CSS date axis spanned the full Account width. The blank sides
+  and misaligned dates were geometry failures, not missing Binance history.
+- Spot Balance History now uses a normalized `1000×286` plot with
+  `preserveAspectRatio="none"`, non-scaling grid/line strokes, and independent
+  CSS-owned date and value axes. The plot canvas reserves the same fixed 68px
+  value rail at every width, so the SVG, dates, crosshair, and tooltip share one
+  coordinate space without ResizeObserver timing.
+- Wallet Allocation no longer stacks rotated SVG dash circles. It is one exact
+  `128×128` conic-gradient circle with a 16% theme-matched circular hole and an
+  accessible allocation label, eliminating the visible dash join and transform
+  ambiguity while preserving the real Spot/Earn percentages and source colors.
+- Browser verification exercised 1W/1M/3M/6M: every range held the same
+  `1000×286` plane, the latest point ended at `x=996`, and the 1M first point
+  began at `x=19.1` instead of a centered half-width plot. Light/Dark, zero
+  overflow, and the bottom-up page sweep passed. Production build and all
+  `71/71` gates pass.
+
+## 2026-07-10 — Capital Accounts full-width disclosure restoration
+
+- Owner rejected the `350px wallet rail + partial right detail workspace` as a
+  half-rectangle representation. That master-detail ruling is superseded:
+  Capital Accounts is one continuous full-width disclosure ledger.
+- Every wallet row now spans the complete Account frame with Wallet, Balance,
+  Positions, Liability, and Wallet Share. Spot is expanded by default and its
+  full signed asset table renders immediately under the Spot row at the exact
+  same `x` and width; Earn follows only after the Spot table. Earn and Cross
+  Margin use the identical single-open accordion behavior. Unsupported wallets
+  stay truthful non-expanding valuation rows.
+- Live geometry measured the Spot row and detail at the same `x=190` and
+  `1063px` width, with `Spot row -> 340px Spot detail -> Earn row` sharing exact
+  touching boundaries and zero horizontal document overflow. Collapse, Earn
+  expansion, Spot restoration, and Dark Mode were exercised; Light was restored.
+  Production build and all `71/71` gates pass.
+
+## 2026-07-10 — Execution Control single-action header
+
+- Owner rejected the passive `Limited` badge plus separate Bot Running action
+  row as two controls for one state. Execution Control now gives the header's
+  trailing slot to the real `102×36` Stop Bot/Resume action and removes the
+  redundant 76px row entirely.
+- The live blocker remains in the header subtitle, while Execution Modes begins
+  immediately below the header. The fixed `398×486` panel now distributes the
+  remaining height across four equal 96px mode rows with no clipping, internal
+  scroll, or document overflow.
+- Browser verification measured one action, zero status pills, zero legacy
+  emergency rows, and exact `102×36` action geometry in Light and Dark. Stop was
+  exercised and the original running state was restored through the real API.
+  The complete bottom-up page sweep retained the shared `x=178`, `1102px` main
+  frame and zero horizontal overflow.
+
+## 2026-07-10 — Borrow leading-column alignment repair
+
+- Owner caught that Active Positions and Loan Market did not share one star and
+  asset rail. The cause was table-layout scaling: their `1520px` and `1380px`
+  canvases proportionally redistributed nominal first-column widths, placing
+  stars at different fractional x coordinates and shifting both tables away
+  from the Markets reference.
+- Positions, Loan Market, and Assets now use explicit `colgroup` tracks with
+  Markets' exact `46px` watchlist column and `220px` asset column. Remaining
+  evidence columns are intentionally flexible, so canvas width cannot scale the
+  two leading identity tracks.
+- Live browser measurements at `1280px` now match Markets exactly: table edge
+  `x=190`, stars `x=198`, asset cells `x=236`, and token icons `x=248` in all
+  three Borrow tables. Overview, Assets, Borrow Preflight, and Activity render
+  without document overflow; Light and Dark retain identical rails. The full
+  bottom-up page sweep kept the shared `x=178`, `1102px` main frame.
+
+## 2026-07-10 — Token derivatives intelligence consolidation
+
+- Owner rejected the oversized standalone Basis section, the four-cell divider
+  strips, slow blank tab hydration, and the bottom About/Profile block. Token now
+  ends with one five-view operator panel in the required order: `Funding -> Open
+  Interest -> Volume -> Liquidation -> Basis`; Basis is no longer a separate
+  page section and the About/Profile region is no longer rendered.
+- Each active view owns four rounded `10px` evidence tiles and one measured-width
+  chart. The chart's rendered `1023x310` box and `viewBox="0 0 1023 310"` remain
+  identical across Funding, Open Interest, Volume, and Basis, so no centered or
+  partial canvas can appear. Money Flow uses the same rounded-tile language
+  instead of parallel divider strips.
+- Token candles, money flow, positioning, and every default derivatives dataset
+  now hydrate from module cache while fresh official exchange data loads in the
+  background. All five default derivatives datasets prefetch together; browser
+  checks showed every populated view present immediately on selection without a
+  loading skeleton. Volume correctly requests Binance USD-M candles whenever a
+  perpetual contract exists and falls back honestly to Binance Spot otherwise.
+- CoinGlass V4 remains an optional professional aggregation source but is not
+  labeled or used without its required plan/API key. The current implementation
+  uses official Binance REST/market data. Liquidation history remains the app's
+  truthful persisted live recorder because Binance provides no historical REST
+  endpoint.
+- The liquidation recorder was still using Binance's retired legacy futures
+  socket while the market engine used the current `/market/ws` host. It now uses
+  `wss://fstream.binance.com/market/ws/!forceOrder@arr`; live verification moved
+  the recorder from zero symbols/events to `live`, `23` symbols, and `46` events.
+- Production server/web build and all `71/71` gates pass. Light and Dark Token
+  checks have zero overflow, the old Basis/Profile selectors are absent, and the
+  required `Calendar -> News -> Health -> Logs -> Risk -> Opportunities ->
+  Volume -> Basis -> Markets -> Token -> Borrow -> Account -> Dashboard` audit
+  held a common `x=183`, `1077px` page frame with zero document/main overflow.
+
+## 2026-07-10 — Notifications page identity mark restoration
+
+- Notifications was the only page in the Logs / News / Calendar utility family
+  whose title had no matching sidebar artwork. Its toolbar now reuses the real
+  `/notification-bell.png` sidebar asset instead of introducing another icon.
+- The page mark follows the established utility-page title contract: `30x30`,
+  `object-fit: contain`, an `8px` title gap, and decorative `alt=""` / `aria-hidden`
+  semantics so the visible `Notifications` heading remains the accessible name.
+- Production web build and `git diff --check` pass. Browser verification measured
+  the mark at exact `30x30` geometry inside the unchanged `57px` toolbar in Light
+  and Dark, with zero document overflow; Light was restored.
+
+## 2026-07-10 — Exact supplied Arbitrage brand mark
+
+- Owner rejected the code-reconstructed three-circle header mark and supplied the
+  exact `200x200` concentric blue identity. The Topbar now renders that supplied
+  artwork immediately before `ARBITRAGE`; the reconstruction is removed.
+- `/arbitrage-control-room-mark.svg` embeds the original PNG bytes unchanged and
+  keys only the white screenshot canvas transparent at render time. A decoded
+  asset hash check exactly matches the supplied source:
+  `3f376310da2509fb153cf3e0bc1cc8f7ddfb5a7b94d96a44854865e14cf99bb3`.
+- The mark is a static, unfiltered `30x30` image with `object-fit: contain`; no
+  recolor, shadow, hover scaling, or substitute path changes its geometry.
+  Production web build and `git diff --check` pass. Browser verification measured
+  the same `x=17/y=17/30x30` mark in Light and Dark, with transparent background,
+  zero document overflow, and Light restored with the Appearance panel closed.
+
+## 2026-07-10 — Sidebar 40px rhythm restored at every height
+
+- Owner rejected the short-viewport sidebar compression after comparing it with
+  the supplied `207x791` reference. The `max-height: 730px` rule that changed all
+  navigation rows from `40px` to `36px` is superseded and removed.
+- Every destination now keeps the same reference cadence at every desktop height:
+  `40px` rows, `8px` group spacing, `7px` title spacing, `28px` icon columns, and
+  stable `14px` labels. Short windows use the existing `.snav-nav` internal
+  scroller with a hidden scrollbar rather than shrinking every page target.
+- At the `1280x720` verification viewport, the rail has `642px` available for
+  `689px` of correctly spaced navigation. The inner rail scrolls exactly `47px`
+  to show Notifications fully, and returns to `0` when Dashboard is selected.
+  Every rendered row measured exactly `40px` in Light and Dark.
+- Production web build and `git diff --check` pass. The required `Calendar ->
+  News -> Health -> Logs -> Risk -> Opportunities -> Volume -> Basis -> Markets
+  -> Token -> Borrow -> Account -> Dashboard` audit held one `x=183`, `1077px`
+  page frame, `40px` sidebar rows, and zero document/main overflow throughout.
+  Light was restored with Dashboard active and the Appearance panel closed.
+
+## 2026-07-10 — Account allocation full-width and palette correction
+
+- Owner rejected Wallet Allocation being pinned into the Account overview's
+  `320px` right column and the arbitrary orange/purple wallet colors. Live
+  inspection confirmed the old `743px + 320px` split placed the donut at
+  `x=950`, while wallet names were incorrectly passed through token-brand color
+  hashing (`Spot rgb(190,108,45)`, `Earn rgb(103,45,190)`).
+- Account Performance and Wallet Allocation are now consecutive full-width rows
+  inside the same Account frame. Allocation spans `x=190..1253` (`1063px`), and
+  centers a `128px` donut beside a `520px` evidence legend instead of anchoring
+  the module in a corner. Capital Accounts continues immediately underneath.
+- Wallet types use a stable account palette rather than token colors: Spot is
+  `#2f6bff`, Earn is `#159f8c`, and the remaining Binance wallet families have
+  restrained blue/teal/slate identities. The donut center still resolves to the
+  real theme panel color in both themes.
+- Production web build and `git diff --check` pass. Browser verification measured
+  the single `1063px` column, `221px` allocation row, exact blue/teal computed
+  colors, theme-correct center, and zero document/main overflow in Light and
+  Dark. Light was restored with Account at the top and Appearance closed.
+
+## 2026-07-10 — Account history matched to Binance overview anatomy
+
+- Owner compared Spot Balance History directly with the signed-in Binance Assets
+  Overview and rejected the oversized blue area chart. Live inspection measured
+  the old plot at `1031x286`, with a blue `1.55px` line, filled area, `60px`
+  right value rail, and `1M` default; that presentation exaggerated sparse
+  account snapshots and dominated the Account page.
+- The chart now follows the supplied Binance anatomy while preserving data truth:
+  a compact `1031x164` plot, thin `#f0b90b` `1.2px` unfilled line, three faint
+  guides, bottom-only dates, no value rail, and `6M` default. The title remains
+  Spot Balance History because the source is signed Spot account value and wallet
+  movement—not inferred portfolio PnL.
+- Downsampling had also converted deposit/withdrawal transitions into misleading
+  diagonal ramps. The path now uses horizontal holds plus vertical changes, so
+  the reconstructed flow history reads as a true account step series like the
+  Binance reference rather than gradual market performance.
+- Production web build and `git diff --check` pass. Browser verification exercised
+  `1W`, `1M`, `3M`, and `6M`; every range rendered a non-empty `1000x164` SVG,
+  the area and right axis were absent, and Light/Dark retained the exact yellow
+  non-scaling line with zero overflow. Light, `6M`, Account top, and closed
+  Appearance were restored.

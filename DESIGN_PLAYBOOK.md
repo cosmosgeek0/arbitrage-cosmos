@@ -28,6 +28,11 @@ calls garbage and will redo the work five times.
 6. Asset tables always carry: Star watchlist column (shared Star in
    components/PillSelect.tsx + toggleWatch/config.watchlist), 36px TokenIcon,
    name-over-fullname, Title Case heads, PillSelect chrome, Coinbase pager.
+   Markets defines the leading table rails: `46px` star track with `8px` left
+   inset, then a fixed `220px` asset track with `12px` inset. Borrow Positions,
+   Loan Market, and Assets must use explicit column tracks and leave remaining
+   data columns flexible; independent table canvases must never proportionally
+   rescale the star or asset tracks.
 7. Monitor + kill-switches only — NO manual money-action UI ever (trading,
    borrow, repay, collateral). Action routes belong to the engine.
 8. Click every control in real Chrome; restore any state you flipped.
@@ -123,6 +128,14 @@ Calendar after any correction that changes shared type, color, or geometry.
   when switching; `1px var(--line-2)`
   edge; `12px` radius; `57px` toolbar; summary
   begins at the same y and is exactly `102px` high where that role exists.
+- Markets and Borrow share one secondary-view rail: `53px` high, `16px`
+  horizontal padding, `6px` tab gap, and `32px` pills at `12.5px / 470` with
+  the same CTA active treatment. Both remain a single row above the shared
+  `850px` container breakpoint and stack only below it. Do not give Borrow an
+  earlier breakpoint or a separate black/undersized tab language.
+- Dashboard uses the same `/dashboard-blocks.png` identity as its sidebar item
+  in the standard `32px` slot with a `30px` optical mark. Keep its heading on
+  the same icon/title rail as Markets and Borrow.
 - Use the role contract in §0 item 3. An upper page may not become smaller,
   darker, heavier, denser, or more tightly tracked than the accepted page below.
   Persistent data rows must not use `600+` weights.
@@ -421,6 +434,10 @@ new toggle language.
   thinner 430 weight. These are roles, not popup-specific decoration; preserve
   them across Clock, Health, Refresh, Shell, API Keys, Advisor, Notifications,
   Execution, Currency, Basis, Appearance, and Account.
+- When a sheet has one real contextual action, that action may own the trailing
+  header slot instead of a passive status pill. Execution Control is the
+  reference: exactly one `Stop Bot`/`Resume` button in the header, with no
+  duplicate state/action row below it.
 - Typography-only corrections must not silently alter panel width, height,
   row spacing, icon treatment, color, border, shadow, or motion. Display-scale
   exceptions such as the live clock time or terminal command do not create a
@@ -445,8 +462,8 @@ new toggle language.
   colors.
 
 **D. Shell scale (8px rhythm):** topbar 64px, 42px topbar icon targets
-(24px optical marks; bell 25px), search = Coinbase pill 42px r21 "Search for an asset" + ⌘K
-chip, sidebar currently 178px with 36px Flow-style rows and 27-29px marks, content stretches
+(18px optical operational marks), search = Coinbase pill 42px r21 "Search for an asset" + ⌘K
+chip, sidebar currently 178px with 40px Flow-style rows and 19-20px marks, content stretches
 with constant gutters, RefreshDock 28px off both edges. Footer = 12.5px
 all-muted whisper
 (navigation words carry ink; chrome/legal lines carry gray — never reversed).
@@ -459,6 +476,12 @@ white/pale canvas, never put a second shape behind the mark, and verify every
 identity in Dark Mode. Current family: neural brain brand, AWS cube, gold API
 key, red/green Execution power, green Currency dollar, and blue Appearance sun.
 Adjust only for optical weight, not arbitrary per-icon size drift.
+
+Connection Watchman is the explicit owner exception: its launcher uses the
+alpha-extracted pixels from the supplied dual-arrow image because the vector
+reconstruction changed the anatomy and color. The pale screenshot canvas is
+removed, the original pixels are preserved, and the old dock breathing outline
+plus all inner artwork masks remain disabled.
 
 **THE STRETCH LAW (owner 2026-07-09):** no page caps its width — `.container`
 has `max-width: none`. Stretching the window stretches the CONTENT (fluid
@@ -479,6 +502,14 @@ slate=neutral). ROYGBIV accent pref drives --accent/--cta. Charts: smooth
 Catmull-Rom bezier 2px round stroke, downsample ~26pts — never raw tick
 polylines; stablecoin sparks flat-line when range/mean < 0.1%.
 
+Account balance-history geometry is an explicit fluid-chart exception: use a
+normalized plotting plane with `preserveAspectRatio="none"`, keep value/date
+labels in CSS-owned HTML rails, and keep strokes non-scaling. Do not restore a
+measured viewBox with an optimistic fallback; if its measurement freezes, SVG
+`meet` scaling centers a narrow chart inside the wide Account band while the
+HTML axis stays full width. Wallet Allocation uses one CSS conic circle plus a
+theme-matched circular hole; do not restore rotated SVG dash arcs and seams.
+
 **F. Topbar/profile motion and control law (owner-calibrated 2026-07-09):**
 - Topbar triggers are icon-first. Do not add words to triggers just to explain
   them; put useful words inside popovers. Do not surround every topbar icon in
@@ -491,6 +522,10 @@ polylines; stablecoin sparks flat-line when range/mean < 0.1%.
 - Profile/account popover is not a nav menu. It must show connected exchange
   and key posture from `/api/apikey`, active/recent devices from `/api/sessions`,
   and a real logout path. No Dashboard/Assets/Orders/Risk/Settings filler rows.
+- Recent Devices identity is a random first-party browser-profile token hashed
+  by the server. IP and User-Agent are evidence only; they may not be used as a
+  unique device key because shared NAT and identical browser versions are
+  normal. Keep the response no-store and current/active/newest ordered.
 - Related commands get one control grammar. If six backend targets perform the
   same recovery operation, use one target selector plus one action; do not
   repeat them as a card grid and again in a footer. Buttons sharing one action
@@ -517,9 +552,19 @@ motion timing, real endpoints, and old-code traps from the 2026-07-09 audit.
   default page, reset.
 - Account = money only (keys/connection/permissions/sessions live in the
   API-keys panel, RefreshDock, Health, profile popover). Account View only
-  (no Asset View tab) with ALL nine Binance buckets listed; allocation is ONE
-  big donut. Hero: eye-mask, ≈BTC line, Today's PnL from equity snapshots
-  (`account.dayChangeUsd`), 1W/1M/3M/6M chart.
+  (no Asset View tab) with all ten signed Binance wallet buckets listed.
+  Overview keeps the eye-mask, ≈BTC line, explicitly non-PnL Spot Balance
+  History, 1W/1M/3M/6M ranges, and one compact wallet-allocation donut.
+- Account capital hierarchy is one full-width disclosure ledger, never a split
+  selector rail or partial side workspace. Each wallet row spans the frame and
+  carries Balance, Positions, Liability, and Wallet Share. Spot is expanded by
+  default; its complete signed asset table sits immediately beneath the Spot
+  row at the identical left/right edges, followed by Earn and the remaining
+  wallet rows. Earn and Cross Margin use the same click-to-expand pattern and
+  only one wallet is open at a time. Unsupported adapters remain truthful
+  read-only rows without invented asset detail. The disclosure panel owns a
+  `760px` minimum internal grid and horizontal scroller only when the viewport
+  is genuinely narrower than the evidence.
 - Markets = the differentiated screener: sortable asset/price/chart-growth/
   change/volume/OI/funding; tick-flash cells pulse in the TICK direction with
   a matching arrow then revert to 24h truth (arrow may never contradict

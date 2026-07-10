@@ -419,9 +419,12 @@ export function Dashboard() {
       <section className="dcx-frame" aria-label="dashboard workspace">
         <header className="dcx-toolbar">
           <div className="dcx-title">
-            <h1>Dashboard</h1>
-            <span className={`dcx-live ${systemLive ? 'active' : 'degraded'}`}><i aria-hidden="true" />{systemLive ? 'System Live' : 'Review Required'}</span>
-            <span className="dcx-updated">{latestUpdate ? `Updated ${timeAgo(latestUpdate)}` : 'Connecting Sources'}</span>
+            <span className="dcx-source-mark"><img className="dcx-page-mark" src="/dashboard-blocks.png" alt="" aria-hidden="true" /></span>
+            <span className="dcx-title-content">
+              <h1>Dashboard</h1>
+              <span className={`dcx-live ${systemLive ? 'active' : 'degraded'}`}><i aria-hidden="true" />{systemLive ? 'System Live' : 'Review Required'}</span>
+              <span className="dcx-updated">{latestUpdate ? `Updated ${timeAgo(latestUpdate)}` : 'Connecting Sources'}</span>
+            </span>
           </div>
           <div className="dcx-toolbar-actions">
             <button type="button" onClick={() => open('account')}><WalletCards size={14} />Account</button>

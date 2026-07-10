@@ -239,7 +239,11 @@ export function NotificationsPage() {
   return <div className="container page lix-page notifx-page">
     <div className="lix-frame">
       <header className="lix-toolbar notifx-toolbar">
-        <div className="lix-title"><h1>Notifications</h1><span className={`lix-live ${failed ? 'error' : 'streaming'}`}><i />{status}</span></div>
+        <div className="lix-title notifx-title">
+          <img className="notifx-page-mark" src="/notification-bell.png" alt="" aria-hidden="true" />
+          <h1>Notifications</h1>
+          <span className={`lix-live ${failed ? 'error' : 'streaming'}`}><i />{status}</span>
+        </div>
         <label className="lix-search">
           <IconSearch size={15} />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" spellCheck={false} />

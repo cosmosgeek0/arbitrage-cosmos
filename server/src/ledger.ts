@@ -167,6 +167,10 @@ export class Ledger extends EventEmitter {
     // `local` was a display placeholder from the first telemetry version, not
     // a real address. New sessions persist the actual socket/proxy/edge IP.
     this.db.prepare("DELETE FROM browser_sessions WHERE ip = 'local'").run();
+    // July 2026 identity migration: the former raw 16-char IP+UA ids collapsed
+    // separate devices behind one NAT. New ids are explicitly versioned as
+    // device-token (`d_`) or privacy fallback (`f_`) records.
+    this.db.prepare("DELETE FROM browser_sessions WHERE id NOT GLOB 'd_*' AND id NOT GLOB 'f_*'").run();
   }
 
   logEvent(kind: string, symbol?: string | null, data?: unknown): LedgerEvent {

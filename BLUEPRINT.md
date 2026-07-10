@@ -136,7 +136,7 @@ Control section responsibilities (three operator pages — never merged; Setting
 - **Health** (page id `system`, title may stay "System Health") — "can we trust the data/system?" Streams, account read/user-stream-or-polling, REST latency, clock drift, rate budget, DB/ledger writable, cache/sync age, last error, engine heartbeat, AWS/CloudShell admin area. State colors: green healthy / amber degraded-or-stale / red broken / gray not-configured.
 **Settings** (bottom utility, page id `settings`) — "how does this browser display the cockpit?" **Local UI preferences ONLY**: theme, density, motion, table density, ticker tape, timezone, currency, basis units, default page, keyboard note, reset local preferences, plus a small "keys are server-only" reminder. Connection polling cadence belongs to Connection Control, not Settings or the topbar. No API/security dashboard, no permission map, no session/security center, no risk controls, no source-health table (those live in Account/Health/Risk).
 
-Bottom-right **Connection Watchman = the existing `RefreshDock`** (one component, not a separate SyncHub). It is a click-open `900px` operator workspace at 1280×720 with real browser RTT/socket, server control path, Binance public streams and REST, signed account sync, Basis/Volume runtimes, News, Calendar, FX, Ledger DB, optional user-stream fallback, AWS/Cloudflare readiness, notification routing, recent state transitions, recovery, and the four browser polling cadences. The launcher uses the owner's transparent solid-blue two-arrow mark at 76px with a quiet idle turn; the popup keeps its distinct shield/radar mark. Launcher click only opens the workspace. Controls expose one balanced 182×44 Recovery Target selector and one 182×44 Run Recovery action, with four 72px cadence rows and 16px section air; `all` performs the browser WebSocket rebuild plus `POST /api/refresh`, while `market`, `runtime`, `account`, `news`, `calendar`, and `fx` call their exact targets. Never invent latency, never count the optional read-only user-stream fallback as a global failure, and label unconfigured AWS/Cloudflare channels Planned or Not Configured. Connection Watchman owns health/reset/cadence detail; there is no topbar Market Ping or Data Health trigger and no second bottom-right bubble.
+Bottom-right **Connection Watchman = the existing `RefreshDock`** (one component, not a separate SyncHub). It is a click-open `900px` operator workspace with real browser RTT/socket, server control path, Binance public streams and REST, signed account sync, Basis/Volume runtimes, News, Calendar, FX, Ledger DB, optional user-stream fallback, AWS/Cloudflare readiness, notification routing, recovery, and the four browser polling cadences. The launcher uses the owner's transparent solid-blue two-arrow mark at a 68px visible scale inside its 76px target with a quiet idle turn; the popup keeps its distinct shield/radar mark. Launcher click only opens the workspace. The summary is a continuous hairline tape and the flat rail contains exactly Overview, Connections, and Sources. Overview is the control plane: a compact six-owner evidence path sits on the left; Market, Account, News, and Calendar cadence selectors plus targeted refresh actions sit on the right. One Recovery Target selector and one Run Recovery action remain fixed to the workspace bottom across all three views; `all` performs the browser WebSocket rebuild plus `POST /api/refresh`, while `market`, `runtime`, `account`, `news`, `calendar`, and `fx` call their exact targets. Never invent latency, never count the optional read-only user-stream fallback as a global failure, and label unconfigured AWS/Cloudflare channels Planned or Not Configured. Connection Watchman owns health/reset/cadence detail; there is no fourth Controls tab, topbar Market Ping/Data Health trigger, or second bottom-right bubble.
 
 Earn belongs in Wallets/Capital, not Control: Simple Earn flexible/locked positions are a future read-only Wallets adapter (signed, high request-weight — cache, don't poll aggressively).
 
@@ -155,14 +155,25 @@ Removed from the sidebar: Tokens (Token Detail opens from Markets rows / search 
 Topbar (fixed set — do not add more buttons): search, clock, **AWS Runner Control**, Binance API keys, Trust Advisor, notifications, execution control, currency, basis units, appearance, and account/profile. Do not restore separate Market Ping or Data Health triggers; source health, latency, alerts, and cadence belong to bottom-right Connection Watchman.
 
 Topbar identity contract: operational marks are transparent code-native SVG at
-a 24px optical scale inside 42px targets, smaller than the 27-29px sidebar
-marks. The current owner-approved sequence is orange AWS cube, gold API key,
+an 18px optical scale inside 42px targets. Sidebar destination artwork is 19px
+inside stable 28px alignment slots and 40px rows; do not tie row cadence to icon
+size. The current owner-approved sequence is orange AWS cube, gold API key,
 green Trust Advisor, notification bell, red/green Execution power, green
 Currency dollar, violet Basis, blue Appearance sun, then the 34px Account
-photograph. The website lockup uses the gray/teal neural-brain mark. Popup
+photograph. The website lockup uses the owner's concentric blue Control Room
+`C` at exactly 30px
+beside an 18px/670 `ARBITRAGE` and 10.5px/650 `CONTROL ROOM`. Popup
 headers reuse the same mark at 40px (AWS 42px); never ship screenshot canvases.
 
 Connection Watchman: the persistent bottom `RefreshDock` re-pulls shared state/markets, rebuilds the browser socket, performs real server-side targeted recovery through `POST /api/refresh`, and broadcasts `fireRefresh` so mounted pages can re-pull. `GET /api/system.connections.watchman` is its server-owned component inventory; transition-only `connection_alert` and `connection_recovered` ledger events feed Notifications. It is the single source-health, latency, reset, alert, and cadence surface.
+
+Account Recent Devices: the browser creates a random first-party `cosmos_device`
+token per browser profile before mounting the app. The server stores only its
+hash as the device key and keeps IP, User-Agent, Client Hints, first/last seen,
+and request count as evidence. Never revert identity to IP + User-Agent: two
+devices can share both. `/api/sessions` is private/no-store, current-first,
+active-first, then newest-first browser telemetry, not an authenticated-session
+or remote-revocation API.
 
 Key manifest / permissions: `GET /api/apikey` returns a masked key manifest (fingerprint + first-8 prefix only — never the full key/secret). Per-key scope comes from the authoritative `/sapi/v1/account/apiRestrictions` (client `apiRestrictions()`), which is the real "can this key trade/withdraw" — unlike account-level `canWithdraw`. `state.binance` exposes `keyPermissions` (raw flags) + a derived `keyPosture` (`read_only`/`trading`/`elevated`/`unsafe`, with `ipRestricted`); the fingerprint is first-6 + last-4. The Account page shows the full per-key permission map and posture badge; System Health shows an "API key scope" row. `canTrade`/`canWithdraw` are sourced from the key flags, not account-level.
 
@@ -545,6 +556,8 @@ Missing data:
 Data:
 - show what Binance does not package cleanly: executable basis, funding-adjusted edge, borrowability, risk reason, proposal state, ledger trace, engine heartbeat.
 - do not recreate Binance charts/order book as the main value. Secondary chart/order book is okay only when it supports execution or verification.
+- Symbol Detail may consolidate real per-token evidence beneath the verification chart: Binance Spot aggregate-trade money flow; USD-M taker flow, global/top-trader positioning, basis, funding, open interest, volume, and locally recorded liquidation history; plus the verified CoinGecko profile. Spot-only contracts must retain explicit Spot Only states.
+- `GET /api/futures/telemetry?symbol=&period=&limit=` is the bounded public positioning contract. It returns Binance USD-M OI, global/top-account/top-position long-short ratios, taker buy-sell flow, source errors, and update time; the frontend must preserve Binance's 30-day history limit instead of implying deeper coverage.
 
 ---
 

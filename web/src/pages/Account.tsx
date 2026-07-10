@@ -104,20 +104,6 @@ function SpotBalanceChart({
 }) {
   const plotRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{ x: number; value: number; ts: number } | null>(null);
-  const [chartSize, setChartSize] = useState({ width: 1000, height: 330 });
-
-  useEffect(() => {
-    const node = plotRef.current;
-    if (!node) return;
-    const update = () => {
-      const rect = node.getBoundingClientRect();
-      setChartSize({ width: Math.max(420, Math.round(rect.width)), height: Math.max(220, Math.round(rect.height)) });
-    };
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [hidden]);
 
   if (hidden) return <div className="accountx-private">Balances Hidden</div>;
 
@@ -129,10 +115,12 @@ function SpotBalanceChart({
   const visible = samplePoints(sorted.filter((point) => point.ts >= start));
   if (visible.length < 2) return <div className="accountx-empty compact"><b>History Is Warming Up</b><span>Spot snapshots appear after the signed account source records enough points.</span></div>;
 
-  const width = chartSize.width;
-  const height = chartSize.height;
-  const axisWidth = 68;
-  const plotWidth = width - axisWidth;
+  // A normalized plotting plane intentionally fills the CSS-owned canvas.
+  // Keeping axes outside the SVG prevents preserveAspectRatio from centering a
+  // shrunken chart when the account surface becomes much wider than it is tall.
+  const width = 1000;
+  const height = 164;
+  const plotWidth = width;
   const values = visible.map((point) => point.v);
   const minimum = Math.min(...values);
   const maximum = Math.max(...values);
@@ -141,9 +129,14 @@ function SpotBalanceChart({
   const high = maximum + span * 0.12;
   const x = (timestamp: number) => ((timestamp - start) / Math.max(1, end - start)) * (plotWidth - 8) + 4;
   const y = (value: number) => height - 24 - ((value - low) / Math.max(1e-9, high - low)) * (height - 38);
-  const path = visible.map((point, index) => `${index === 0 ? 'M' : 'L'}${x(point.ts).toFixed(1)} ${y(point.v).toFixed(1)}`).join(' ');
-  const area = `${path} L${x(visible[visible.length - 1].ts).toFixed(1)} ${height - 22} L${x(visible[0].ts).toFixed(1)} ${height - 22} Z`;
-  const grid = Array.from({ length: 4 }, (_, index) => low + ((3 - index) / 3) * (high - low));
+  const path = visible.reduce((commands, point, index) => {
+    const px = x(point.ts).toFixed(1);
+    const py = y(point.v).toFixed(1);
+    if (index === 0) return `M${px} ${py}`;
+    const previousY = y(visible[index - 1].v).toFixed(1);
+    return `${commands} L${px} ${previousY} L${px} ${py}`;
+  }, '');
+  const grid = Array.from({ length: 3 }, (_, index) => low + ((2 - index) / 2) * (high - low));
   const ticks = Array.from({ length: 5 }, (_, index) => start + (index / 4) * (end - start));
 
   const onMove = (event: { clientX: number }) => {
@@ -157,27 +150,25 @@ function SpotBalanceChart({
   };
 
   return (
-    <div className="accountx-chart" ref={plotRef} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Spot balance history">
-        {grid.map((value) => (
-          <g key={value}>
-            <line x1="0" x2={plotWidth} y1={y(value)} y2={y(value)} className="accountx-gridline" vectorEffect="non-scaling-stroke" />
-            <text x={width - 2} y={y(value) + 4} textAnchor="end" className="accountx-axis-label">{fmtMoney(value)}</text>
-          </g>
-        ))}
-        <path d={area} className="accountx-chart-area" />
-        <path d={path} className="accountx-chart-line" vectorEffect="non-scaling-stroke" />
-      </svg>
+    <div className="accountx-chart">
+      <div className="accountx-chart-canvas" ref={plotRef} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+        <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-label="Spot balance history">
+          {grid.map((value) => (
+            <line key={value} x1="0" x2={plotWidth} y1={y(value)} y2={y(value)} className="accountx-gridline" vectorEffect="non-scaling-stroke" />
+          ))}
+          <path d={path} className="accountx-chart-line" vectorEffect="non-scaling-stroke" />
+        </svg>
+        {hover && (
+          <>
+            <span className="accountx-crosshair" style={{ left: `${hover.x * 100}%` }} />
+            <span className={`accountx-chart-tip ${hover.x > 0.76 ? 'flip' : ''}`} style={{ left: `${hover.x * 100}%` }}>
+              <b>{fmtPrice(hover.value)}</b>
+              <em>{new Date(hover.ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</em>
+            </span>
+          </>
+        )}
+      </div>
       <div className="accountx-date-axis">{ticks.map((tick) => <span key={tick}>{compactDate(tick)}</span>)}</div>
-      {hover && (
-        <>
-          <span className="accountx-crosshair" style={{ left: `${hover.x * 100}%` }} />
-          <span className={`accountx-chart-tip ${hover.x > 0.76 ? 'flip' : ''}`} style={{ left: `${hover.x * 100}%` }}>
-            <b>{fmtPrice(hover.value)}</b>
-            <em>{new Date(hover.ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</em>
-          </span>
-        </>
-      )}
     </div>
   );
 }
@@ -185,8 +176,8 @@ function SpotBalanceChart({
 export function Account() {
   const { state, markets, prefs, toggleWatch } = useStore();
   const [view, setView] = useState<AccountView>('overview');
-  const [range, setRange] = useState<RangeId>('1M');
-  const [expandedWallet, setExpandedWallet] = useState<string | null>(null);
+  const [range, setRange] = useState<RangeId>('6M');
+  const [expandedWallet, setExpandedWallet] = useState<string | null>('Spot');
   const [mask, setMask] = useState(() => localStorage.getItem('cosmos-balance-mask') === '1');
   const [walletSource, setWalletSource] = useState<SourceState<WalletBalanceRow[]>>(EMPTY_SOURCE);
   const [earnSource, setEarnSource] = useState<SourceState<{ asset: string; amount: number; apr: number }[]>>(EMPTY_SOURCE);
@@ -337,7 +328,7 @@ export function Account() {
     return null;
   };
   const hasDetails = (name: string): boolean => name === 'Spot' || name === 'Earn' || name === 'Cross Margin';
-  const selectedWallet = expandedWallet && visibleWallets.some((wallet) => wallet.walletName === expandedWallet && hasDetails(wallet.walletName))
+  const selectedWallet = expandedWallet && visibleWallets.some((wallet) => wallet.walletName === expandedWallet)
     ? expandedWallet
     : null;
 
@@ -346,7 +337,8 @@ export function Account() {
       <section className="accountx-frame" aria-label="account workspace">
         <header className="accountx-toolbar">
           <div className="accountx-identity">
-            <h1>Account</h1>
+            <span className="accountx-source-mark"><img className="accountx-page-mark" src="/account-wallet.png" alt="" aria-hidden="true" /></span>
+            <span><h1>Account</h1><small>Binance Capital And Signed Wallets</small></span>
           </div>
           <div className="accountx-tools">
             <button type="button" className="accountx-mask" onClick={toggleMask} title={mask ? 'Show Balances' : 'Hide Balances'} aria-label={mask ? 'Show Balances' : 'Hide Balances'}>
@@ -357,7 +349,7 @@ export function Account() {
 
         <section className="accountx-summary" aria-label="Account Summary">
           <article>
-            <span className="accountx-estimated-label"><img className="accountx-balance-mark" src="/account-wallet.png" alt="" aria-hidden="true" /><b>Estimated Total Value</b></span>
+            <span>Estimated Total Value</span>
             <strong>{money(netCapital)}</strong>
             <small>{btcEquivalent === null ? (walletSource.error ? 'Wallet Aggregate Unavailable' : 'Wallet Aggregate Loading') : `≈ ${mask ? '••••' : btcEquivalent.toFixed(8)} BTC`}</small>
           </article>
@@ -396,43 +388,42 @@ export function Account() {
         <div className="accountx-workspace">
           {view === 'overview' && (
             <section className="accountx-overview" aria-label="Portfolio Overview">
-              <div className="accountx-equity">
-                <div className="accountx-section-head">
-                  <span><b>Spot Balance History</b><small>{historySource.data?.reconstructedBefore ? 'Binance daily snapshots + complete intraday observations · earlier history reconstructed' : 'Binance daily snapshots + complete intraday observations · not PnL'}</small></span>
-                  <div className="accountx-equity-tools">
-                    <span className={`accountx-spot-change ${signClass(spotChange)}`}>
-                      <em>Spot Change</em>
-                      <b>{mask ? '••••' : `${finite(spotChange) && spotChange > 0 ? '+' : ''}${fmtPrice(spotChange)}${spotChangePct === null ? '' : ` · ${fmtPct(spotChangePct, 2)}`}`}</b>
-                    </span>
-                    <div className="accountx-ranges" role="tablist" aria-label="History Range">
-                      {RANGES.map((item) => <button type="button" role="tab" aria-selected={range === item.id} key={item.id} onClick={() => setRange(item.id)}>{item.id}</button>)}
+              <section className="accountx-portfolio-band" aria-label="Balance And Allocation">
+                <div className="accountx-equity">
+                  <div className="accountx-section-head">
+                    <span><b>Spot Balance History</b><small>{historySource.data?.reconstructedBefore ? 'Signed Binance snapshots · verified wallet-flow reconstruction' : 'Signed Binance snapshots · balance movement, not PnL'}</small></span>
+                    <div className="accountx-equity-tools">
+                      <span className={`accountx-spot-change ${signClass(spotChange)}`}>
+                        <em>Spot Change</em>
+                        <b>{mask ? '••••' : `${finite(spotChange) && spotChange > 0 ? '+' : ''}${fmtPrice(spotChange)}${spotChangePct === null ? '' : ` · ${fmtPct(spotChangePct, 2)}`}`}</b>
+                      </span>
+                      <div className="accountx-ranges" role="tablist" aria-label="History Range">
+                        {RANGES.map((item) => <button type="button" role="tab" aria-selected={range === item.id} key={item.id} onClick={() => setRange(item.id)}>{item.id}</button>)}
+                      </div>
                     </div>
                   </div>
+                  <SpotBalanceChart points={historyPoints} rangeMs={currentRange.ms} hidden={mask} />
                 </div>
-                <SpotBalanceChart points={historyPoints} rangeMs={currentRange.ms} hidden={mask} />
-              </div>
-              <aside className="accountx-allocation">
-                <div className="accountx-section-head"><span><b>Wallet Allocation</b><small>Official Binance wallet valuation</small></span></div>
-                {mask ? (
-                  <div className="accountx-private">Balances Hidden</div>
-                ) : allocation.length > 0 ? (
-                  <Donut slices={allocation} size={168} topN={6} />
-                ) : walletSource.data === null && !walletSource.error ? (
-                  <div className="accountx-empty compact"><b>Allocation Is Loading</b><span>The signed wallet aggregate is still being fetched.</span></div>
-                ) : walletSource.error ? (
-                  <div className="accountx-empty compact"><b>Allocation Is Unavailable</b><span>No verified wallet aggregate is available yet.</span></div>
-                ) : (
-                  <div className="accountx-empty compact"><b>No Wallet Balance</b><span>Binance returned no positive wallet allocation.</span></div>
-                )}
-              </aside>
-            </section>
-          )}
+                <aside className="accountx-allocation">
+                  <div className="accountx-section-head"><span><b>Wallet Allocation</b><small>Official Binance wallet valuation</small></span></div>
+                  {mask ? (
+                    <div className="accountx-private">Balances Hidden</div>
+                  ) : allocation.length > 0 ? (
+                    <Donut slices={allocation} size={128} topN={6} />
+                  ) : walletSource.data === null && !walletSource.error ? (
+                    <div className="accountx-empty compact"><b>Allocation Is Loading</b><span>The signed wallet aggregate is still being fetched.</span></div>
+                  ) : walletSource.error ? (
+                    <div className="accountx-empty compact"><b>Allocation Is Unavailable</b><span>No verified wallet aggregate is available yet.</span></div>
+                  ) : (
+                    <div className="accountx-empty compact"><b>No Wallet Balance</b><span>Binance returned no positive wallet allocation.</span></div>
+                  )}
+                </aside>
+              </section>
 
-          {view === 'overview' && (
-            <section className="accountx-wallet-zone" aria-label="Binance Wallets">
+              <section className="accountx-wallet-zone" aria-label="Capital Accounts">
               <header className="accountx-wallet-zone-head">
-                <span><b>Wallets</b><small>Official Binance wallet valuation and signed position detail</small></span>
-                <em>{visibleWallets.length} of {walletRows.length}</em>
+                <span><b>Capital Accounts</b><small>Expand a Binance wallet to inspect its complete signed balance and positions directly underneath</small></span>
+                <em>{visibleWallets.filter((wallet) => wallet.active).length} Active · {walletRows.length} Total</em>
               </header>
               <div className="accountx-wallet-table">
                 {visibleWallets.map((wallet) => {
@@ -455,7 +446,7 @@ export function Account() {
                 return (
                   <div className={`accountx-wallet-item ${expanded ? 'expanded' : ''}`} key={wallet.walletName}>
                     {hasDetails(wallet.walletName) ? (
-                      <button type="button" className="accountx-wallet-row" aria-pressed={expanded} onClick={() => setExpandedWallet((current) => current === wallet.walletName ? null : wallet.walletName)}>{rowContent}</button>
+                      <button type="button" className="accountx-wallet-row" aria-expanded={expanded} onClick={() => setExpandedWallet((current) => current === wallet.walletName ? null : wallet.walletName)}>{rowContent}</button>
                     ) : (
                       <div className="accountx-wallet-row">{rowContent}</div>
                     )}
@@ -535,11 +526,13 @@ export function Account() {
                 {!walletSource.error && walletSource.data !== null && walletRows.length === 0 && <div className="accountx-empty"><b>No Wallets Returned</b><span>The signed Binance source returned an empty wallet list.</span></div>}
               </div>
             </section>
+            </section>
           )}
 
           {view === 'orders' && (
-            <section className="accountx-table-scroll" aria-label="Open Orders">
-              <table className="accountx-table orders">
+            <section className="accountx-table-view" aria-label="Open Orders">
+              <header className="accountx-data-view-head"><span><b>Open Orders</b><small>Signed Binance orders currently working across the account</small></span><em>{openOrders.length} Orders</em></header>
+              <div className="accountx-table-scroll"><table className="accountx-table orders">
                 <thead><tr><th className="l">Order</th><th>Price</th><th>Quantity</th><th>Filled</th><th>Status</th><th>Age</th></tr></thead>
                 <tbody>{openOrders.map((order: OpenOrderRow) => (
                   <tr key={`${order.symbol}-${order.orderId}`}>
@@ -553,12 +546,14 @@ export function Account() {
                 ))}</tbody>
               </table>
               {openOrders.length === 0 && <div className="accountx-empty"><b>No Open Orders</b><span>{binance?.keysPresent ? 'Signed polling is current; any new Binance order will appear here.' : 'Read-only Binance keys are required for account orders.'}</span></div>}
+              </div>
             </section>
           )}
 
           {view === 'fills' && (
-            <section className="accountx-table-scroll" aria-label="Recent Fills">
-              <table className="accountx-table fills">
+            <section className="accountx-table-view" aria-label="Recent Fills">
+              <header className="accountx-data-view-head"><span><b>Recent Fills</b><small>Ledgered Binance executions with price, size, value, and fee evidence</small></span><em>{visibleFills.length} Fills</em></header>
+              <div className="accountx-table-scroll"><table className="accountx-table fills">
                 <thead><tr><th className="l">Fill</th><th>Price</th><th>Quantity</th><th>Value</th><th>Fee</th><th>Time</th></tr></thead>
                 <tbody>{visibleFills.map((fill) => (
                   <tr key={`${fill.symbol}-${fill.tradeId}`}>
@@ -572,6 +567,7 @@ export function Account() {
                 ))}</tbody>
               </table>
               {visibleFills.length === 0 && <div className="accountx-empty"><b>No Ledgered Fills</b><span>{streamOpen ? 'New Binance executions will be recorded here.' : 'The user stream is unavailable; only observed or imported Binance fills can appear.'}</span></div>}
+              </div>
             </section>
           )}
         </div>

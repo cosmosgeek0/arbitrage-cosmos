@@ -3,6 +3,14 @@
 
 .notifx-toolbar { justify-content: flex-start; }
 .notifx-toolbar .lix-search { margin-left: auto; }
+.notifx-title { gap: 8px; }
+.notifx-page-mark {
+  display: block;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
 
 .notifx-view-switch {
   display: inline-flex;

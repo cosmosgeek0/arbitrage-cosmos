@@ -1,4 +1,3 @@
-import { brandColor } from './TokenIcon';
 import { fmtPrice } from '../format';
 
 export interface Slice {
@@ -7,8 +6,8 @@ export interface Slice {
 }
 
 /**
- * Compact allocation donut (Uniswap/Delta pattern) — SVG arcs, brand-colored,
- * with a legend. Small holdings past the top N fold into "Other".
+ * Compact wallet-allocation donut with stable account colors and a full legend.
+ * Small holdings past the top N fold into "Other".
  */
 export function Donut({ slices, size = 132, topN = 6 }: { slices: Slice[]; size?: number; topN?: number }) {
   const positive = slices.filter((s) => s.value > 0).sort((a, b) => b.value - a.value);
@@ -21,40 +20,37 @@ export function Donut({ slices, size = 132, topN = 6 }: { slices: Slice[]; size?
   const otherVal = positive.slice(topN).reduce((s, x) => s + x.value, 0);
   const parts = otherVal > 0 ? [...shown, { label: 'Other', value: otherVal }] : shown;
 
-  const r = size / 2;
-  const stroke = size * 0.16;
-  const radius = r - stroke / 2;
-  const circ = 2 * Math.PI * radius;
-  let offset = 0;
+  const walletColors: Record<string, string> = {
+    Spot: '#2f6bff',
+    Earn: '#159f8c',
+    'Cross Margin': '#687892',
+    'Isolated Margin': '#5a78d6',
+    Funding: '#3c8fbf',
+    'USDⓈ-M Futures': '#315bea',
+    'COIN-M Futures': '#177e89',
+    Options: '#718096',
+    'Trading Bots': '#4f6b88',
+    'Copy Trading': '#7d8ca3',
+    Other: 'var(--line-strong)',
+  };
+  const colorFor = (label: string) => walletColors[label] ?? '#7d8ca3';
 
-  const colorFor = (label: string) =>
-    label === 'Other' ? 'var(--line-strong)' : brandColor(`${label}USDT`);
+  let cursor = 0;
+  const stops = parts.map((part) => {
+    const start = cursor;
+    cursor += (part.value / total) * 100;
+    return `${colorFor(part.label)} ${start.toFixed(4)}% ${cursor.toFixed(4)}%`;
+  });
+  const allocationLabel = parts.map((part) => `${part.label} ${((part.value / total) * 100).toFixed(1)}%`).join(', ');
 
   return (
     <div className="donut-wrap">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx={r} cy={r} r={radius} fill="none" stroke="var(--line)" strokeWidth={stroke} />
-        {parts.map((p) => {
-          const frac = p.value / total;
-          const dash = frac * circ;
-          const el = (
-            <circle
-              key={p.label}
-              cx={r}
-              cy={r}
-              r={radius}
-              fill="none"
-              stroke={colorFor(p.label)}
-              strokeWidth={stroke}
-              strokeDasharray={`${dash} ${circ - dash}`}
-              strokeDashoffset={-offset}
-              strokeLinecap="butt"
-            />
-          );
-          offset += dash;
-          return el;
-        })}
-      </svg>
+      <div
+        className="donut-chart"
+        role="img"
+        aria-label={`Wallet allocation: ${allocationLabel}`}
+        style={{ width: size, height: size, background: `conic-gradient(from 0deg, ${stops.join(', ')})` }}
+      />
       <div className="donut-legend">
         {parts.map((p) => (
           <div key={p.label} className="donut-leg-row">

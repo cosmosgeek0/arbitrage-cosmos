@@ -357,9 +357,9 @@ app.use((_req, res, next) => {
 });
 
 // ---- active session tracking ------------------------------------------------
-// Records each visiting device by (IP + user-agent) so the account panel can
-// show who is currently on the cockpit. Cloudflare injects the real IP + country
-// in prod; on localhost it collapses to the real loopback address. Real, not faked.
+// Records each visiting browser profile by a random first-party device token.
+// IP + user-agent remains the privacy-safe fallback when cookies are disabled.
+// Cloudflare injects the real IP + country in prod; localhost uses loopback.
 interface Sess {
   id: string; ip: string; country: string | null; ua: string;
   system: string; browser: string; device: string; model: string | null;
@@ -372,6 +372,7 @@ const SESSION_API_RETENTION_MS = 24 * 60 * 60_000;
 const SESSION_DB_RETENTION_MS = 30 * 24 * 60 * 60_000;
 const SESSION_MEMORY_RETENTION_MS = 30 * 60_000;
 const SESSION_PERSIST_FLOOR_MS = 15_000;
+const DEVICE_ID_COOKIE = 'cosmos_device';
 
 function headerText(value: string | string[] | undefined): string {
   return Array.isArray(value) ? value[0] ?? '' : value ?? '';
@@ -417,8 +418,25 @@ function parseClient(req: express.Request, ua: string): { system: string; browse
       : 'Desktop';
   return { system, browser, device, model };
 }
-function sessKey(ip: string, ua: string): string {
-  return createHash('sha256').update(`${ip}|${ua}`).digest('hex').slice(0, 16);
+function requestDeviceToken(req: express.Request): string | null {
+  const cookieHeader = headerText(req.headers.cookie);
+  for (const part of cookieHeader.split(';')) {
+    const [rawName, ...rawValue] = part.trim().split('=');
+    if (rawName !== DEVICE_ID_COOKIE) continue;
+    try {
+      const value = decodeURIComponent(rawValue.join('=')).trim();
+      return /^[A-Za-z0-9_-]{20,96}$/.test(value) ? value : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function sessKey(ip: string, ua: string, deviceToken: string | null): string {
+  const stableDevice = deviceToken ? `device|${deviceToken}` : `fallback|${ip}|${ua}`;
+  const prefix = deviceToken ? 'd' : 'f';
+  return `${prefix}_${createHash('sha256').update(stableDevice).digest('hex').slice(0, 20)}`;
 }
 
 function normalizedRequestIp(req: express.Request): string {
@@ -435,7 +453,7 @@ function reqIdent(req: express.Request): { id: string; ip: string; ua: string; c
   const ip = normalizedRequestIp(req);
   const ua = headerText(req.headers['user-agent']) || 'unknown';
   const country = headerText(req.headers['cf-ipcountry']) || null;
-  return { id: sessKey(ip, ua), ip, ua, country };
+  return { id: sessKey(ip, ua, requestDeviceToken(req)), ip, ua, country };
 }
 
 function isBrowserTelemetryRequest(req: express.Request): boolean {
@@ -464,7 +482,9 @@ function persistBrowserSession(session: Sess, now = Date.now(), force = false): 
 }
 
 app.use((req, _res, next) => {
-  if (!isBrowserTelemetryRequest(req)) {
+  // Static assets and the document request happen before the frontend can
+  // establish its device cookie. Only same-origin API work is session activity.
+  if (!req.path.startsWith('/api/') || !isBrowserTelemetryRequest(req)) {
     next();
     return;
   }
@@ -572,7 +592,18 @@ app.get('/api/sessions', (req, res) => {
   const meId = reqIdent(req).id;
   for (const session of sessions.values()) persistBrowserSession(session, now, true);
   ledger.pruneBrowserSessions(now - SESSION_DB_RETENTION_MS);
-  const list = ledger.listBrowserSessions(now - SESSION_API_RETENTION_MS, 100)
+  const storedSessions = ledger.listBrowserSessions(now - SESSION_API_RETENTION_MS, 100);
+  // A privacy fallback can be created by an already-open pre-migration tab
+  // before it receives the first-party cookie. Once a token-backed profile
+  // with the same observable browser posture exists, suppress that duplicate
+  // fallback from Recent Devices instead of presenting one machine twice.
+  const tokenProfiles = new Set(
+    storedSessions
+      .filter((session) => session.id.startsWith('d_'))
+      .map((session) => `${session.ip}|${session.system}|${session.browser}|${session.device ?? ''}`),
+  );
+  const list = storedSessions
+    .filter((session) => !session.id.startsWith('f_') || !tokenProfiles.has(`${session.ip}|${session.system}|${session.browser}|${session.device ?? ''}`))
     .map((s) => {
       const live = sessions.get(s.id);
       const fallbackDevice = /Android|iOS/i.test(s.system) ? 'Mobile' : 'Desktop';
@@ -596,6 +627,7 @@ app.get('/api/sessions', (req, res) => {
     sessions: list,
     now,
     source: 'browser-request-telemetry',
+    identity: 'first-party-device-token',
     retentionHours: SESSION_API_RETENTION_MS / 3_600_000,
     activeWindowSeconds: SESSION_ACTIVE_MS / 1000,
     cloudflareActiveSessions: false,

@@ -347,40 +347,9 @@ function NotificationCenterGlyph({ size = 31 }: { size?: number }) {
   );
 }
 
-/* Owner identity: dual-hemisphere neural network, rebuilt as transparent SVG. */
+/* Owner identity: exact supplied concentric Control Room mark. */
 const BRAND_MARK = (
-  <svg viewBox="0 0 64 64" className="brand-mark brain-brand-mark" aria-hidden shapeRendering="geometricPrecision">
-    <defs>
-      <linearGradient id="brainLeft" x1="7" y1="5" x2="30" y2="60" gradientUnits="userSpaceOnUse">
-        <stop stopColor="#e6e8ea" />
-        <stop offset="1" stopColor="#c4c7ca" />
-      </linearGradient>
-      <linearGradient id="brainRight" x1="34" y1="5" x2="57" y2="60" gradientUnits="userSpaceOnUse">
-        <stop stopColor="#4dd7d4" />
-        <stop offset="1" stopColor="#24bec2" />
-      </linearGradient>
-      <mask id="brainLeftCircuit">
-        <rect width="64" height="64" fill="#fff" />
-        <g fill="none" stroke="#000" strokeWidth="4.4" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M18 18h10v8" />
-          <path d="M13 33h10v8h6" />
-          <path d="M18 49h11" />
-        </g>
-        <g fill="#000"><circle cx="16" cy="18" r="4" /><circle cx="11" cy="33" r="4" /><circle cx="16" cy="49" r="4" /></g>
-      </mask>
-      <mask id="brainRightCircuit">
-        <rect width="64" height="64" fill="#fff" />
-        <g fill="none" stroke="#000" strokeWidth="4.4" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M36 18h10" />
-          <path d="M35 28h9v7h8" />
-          <path d="M35 46h11" />
-        </g>
-        <g fill="#000"><circle cx="48" cy="18" r="4" /><circle cx="54" cy="35" r="4" /><circle cx="48" cy="46" r="4" /></g>
-      </mask>
-    </defs>
-    <path d="M29.5 5.5c-6-1.4-11.1 2.5-11.5 8.1-6.1-1.2-10.8 3.8-9.5 9.5-5.8 2-7.3 9-3 13.1-4 4.5-1.9 11.4 3.7 13-1 6 4.4 10.6 10.2 8.9 2.1 5.4 7.1 6.6 10.1 4.1V5.5Z" fill="url(#brainLeft)" mask="url(#brainLeftCircuit)" />
-    <path d="M34.5 5.5c6-1.4 11.1 2.5 11.5 8.1 6.1-1.2 10.8 3.8 9.5 9.5 5.8 2 7.3 9 3 13.1 4 4.5 1.9 11.4-3.7 13 1 6-4.4 10.6-10.2 8.9-2.1 5.4-7.1 6.6-10.1 4.1V5.5Z" fill="url(#brainRight)" mask="url(#brainRightCircuit)" />
-  </svg>
+  <img className="brand-mark control-ring-brand-mark" src="/arbitrage-control-room-mark.svg" alt="" aria-hidden="true" />
 );
 
 const TITLES: Record<Page, string> = {
@@ -494,11 +463,13 @@ function AccountSheet({ open }: { open: boolean }) {
     if (!open) return;
     let alive = true;
     const load = () => {
-      void fetch('/api/sessions')
+      void fetch('/api/sessions', { cache: 'no-store' })
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
           if (!alive || !d) return;
-          setSessions(d.sessions ?? []);
+          const next = [...(d.sessions ?? [])] as AccountSessionRow[];
+          next.sort((a, b) => Number(b.current) - Number(a.current) || Number(b.active) - Number(a.active) || b.lastSeen - a.lastSeen);
+          setSessions(next);
         })
         .catch(() => undefined);
     };
@@ -1540,19 +1511,23 @@ function OpsSheetHeader({
   title,
   subtitle,
   status,
+  action,
   tone = 'idle',
 }: {
   icon: ReactNode;
   title: string;
   subtitle: ReactNode;
   status?: ReactNode;
+  action?: ReactNode;
   tone?: OpsTone;
 }) {
   return (
     <header className="ops-sheet-head">
       <span className="ops-sheet-icon">{icon}</span>
       <span className="ops-sheet-title"><b>{title}</b><em>{subtitle}</em></span>
-      {status !== undefined && <span className={`ops-sheet-status ${tone}`}><i />{status}</span>}
+      {action !== undefined
+        ? <span className="ops-sheet-action">{action}</span>
+        : status !== undefined && <span className={`ops-sheet-status ${tone}`}><i />{status}</span>}
     </header>
   );
 }
@@ -3141,21 +3116,21 @@ function SharedTopBar() {
               icon={<PopupSourceMark tone={killOn ? '#55c937' : '#ff493b'} brand><ExecutionPowerIdentityMark stopped={killOn} size={40} /></PopupSourceMark>}
               title="Execution Control"
               subtitle={modeSub}
-              status={modeLabel}
               tone={statusTone(modeTone)}
+              action={(
+                <button
+                  className={`ops-execution-action ${killOn ? 'resume' : 'stop'}`}
+                  type="button"
+                  onClick={() => {
+                    if (!killOn || window.confirm('Resume bot actions and return control to the configured risk gates?')) void setKill(!killOn);
+                  }}
+                  aria-label={killOn ? 'Resume configured bot controls' : 'Stop every bot action'}
+                >
+                  <ExecutionPowerIdentityMark stopped={killOn} size={15} />
+                  <span>{killOn ? 'Resume' : 'Stop Bot'}</span>
+                </button>
+              )}
             />
-            <button
-              className={`ops-emergency ${killOn ? 'engaged' : ''}`}
-              type="button"
-              onClick={() => {
-                if (!killOn || window.confirm('Resume bot actions and return control to the configured risk gates?')) void setKill(!killOn);
-              }}
-              aria-label={killOn ? 'Bot stopped. Resume configured controls' : 'Emergency stop. Stop every bot action'}
-            >
-              <span className="ops-emergency-mark"><ExecutionPowerIdentityMark stopped={killOn} size={42} /></span>
-              <span><b>{killOn ? 'Bot Stopped' : 'Emergency Stop'}</b><em>{killOn ? 'Emergency stop is holding every action.' : 'Press to stop every bot action immediately.'}</em></span>
-              <strong>{killOn ? 'RESUME' : 'STOP BOT'}</strong>
-            </button>
             <div className="ops-section-label"><span>Execution Modes</span><em>{modeNet}</em></div>
             <div className="ops-list ops-control-list" aria-label="Bot execution modes">
               {executionControlRow('funds', 'Funds Access')}
@@ -3386,7 +3361,7 @@ const IconCross = ({ size = 18 }: { size?: number }) => (
 type ConnectionResetTarget = 'all' | 'market' | 'runtime' | 'account' | 'news' | 'calendar' | 'fx';
 type WatchmanStatus = 'operational' | 'degraded' | 'outage' | 'planned';
 type WatchmanGroup = 'control_path' | 'binance' | 'bot' | 'sources' | 'infrastructure';
-type WatchmanView = 'overview' | 'connections' | 'sources' | 'controls';
+type WatchmanView = 'overview' | 'connections' | 'sources';
 type WatchmanComponent = {
   id: string;
   label: string;
@@ -3557,7 +3532,6 @@ export function RefreshDock() {
   const infrastructureComponents = components.filter((component) => component.group === 'infrastructure');
   const chainIds = ['browser-session', 'control-api', 'strategy-runtimes', 'market-streams', 'binance-account', 'aws-runner'];
   const pathComponents = chainIds.map((id) => components.find((component) => component.id === id)).filter((component): component is WatchmanComponent => Boolean(component));
-
   const finish = (ok: boolean, issues: string[], ts: number) => {
     setLastRefreshTs(ts);
     setLastRefreshIssues(issues);
@@ -3639,6 +3613,12 @@ export function RefreshDock() {
     { target: 'calendar', label: 'Calendar', detail: 'Rebuild the economic-event cache' },
     { target: 'fx', label: 'FX Rates', detail: 'Refresh display-currency references' },
   ];
+  const cadenceControls: Array<{ key: DataCadenceKey; target: Exclude<ConnectionResetTarget, 'all'>; label: string; detail: string }> = [
+    { key: 'market', target: 'market', label: 'Market Prices', detail: 'Prices, breadth, and market rows' },
+    { key: 'account', target: 'account', label: 'Account Data', detail: 'Balances, orders, fills, and loans' },
+    { key: 'news', target: 'news', label: 'News Context', detail: 'Feed fallback and new-item context' },
+    { key: 'calendar', target: 'calendar', label: 'Calendar', detail: 'Macro releases and value changes' },
+  ];
   const selectedRecovery = resetControls.find((control) => control.target === recoveryTarget) ?? resetControls[0];
   const recoveryOptions = resetControls.map((control) => ({ id: control.target, label: control.label }));
 
@@ -3684,38 +3664,55 @@ export function RefreshDock() {
             <button type="button" role="tab" aria-selected={dockView === 'overview'} className={dockView === 'overview' ? 'on' : ''} onClick={() => setDockView('overview')}><IconPulse size={14} /> Overview</button>
             <button type="button" role="tab" aria-selected={dockView === 'connections'} className={dockView === 'connections' ? 'on' : ''} onClick={() => setDockView('connections')}><IconWifi size={14} /> Connections</button>
             <button type="button" role="tab" aria-selected={dockView === 'sources'} className={dockView === 'sources' ? 'on' : ''} onClick={() => setDockView('sources')}><IconNewspaper size={14} /> Sources</button>
-            <button type="button" role="tab" aria-selected={dockView === 'controls'} className={dockView === 'controls' ? 'on' : ''} onClick={() => setDockView('controls')}><IconGear size={14} /> Controls</button>
           </div>
 
           <div className={`rdock-scroll ${dockView}-view`}>
             {dockView === 'overview' && (
               <div className="watchman-overview">
-                <div className="watchman-section-head"><span><b>Monitored Path</b><em>Every layer reports its own evidence</em></span><strong>{backendWatchman?.assessedAt ? `Assessed ${timeAgo(backendWatchman.assessedAt)}` : 'Connecting'}</strong></div>
-                <div className="watchman-path" aria-label="Monitored connection path">
-                  {pathComponents.map((component, index) => (
-                    <div className={`watchman-path-node status-${component.status}`} key={component.id}>
-                      <span>{watchmanGroupIcon(component.group)}<i /></span>
-                      <b>{component.label.replace('Binance ', '').replace('Browser / Website Session', 'Browser')}</b>
-                      <em>{component.value}</em>
-                      {index < pathComponents.length - 1 && <svg viewBox="0 0 28 8" aria-hidden="true"><path d="M1 4h23m-4-3 4 3-4 3" /></svg>}
-                    </div>
-                  ))}
-                </div>
-                <div className="watchman-overview-grid">
-                  <section>
-                    <div className="watchman-section-head"><span><b>Attention Queue</b><em>Required components only</em></span><strong>{activeProblems.length}</strong></div>
-                    <div className="watchman-attention-list">
-                      {activeProblems.length ? activeProblems.slice(0, 5).map(renderComponentRow) : (
-                        <div className="watchman-clear-state"><IconCheck size={18} /><span><b>All Required Connections Operational</b><em>The watchman will notify on a lag, outage, or recovery transition.</em></span></div>
-                      )}
+                <div className="watchman-overview-control-grid">
+                  <section className="watchman-path-section">
+                    <div className="watchman-section-head"><span><b>Connection Path</b><em>Current evidence by owner</em></span><strong>{backendWatchman?.assessedAt ? `Assessed ${timeAgo(backendWatchman.assessedAt)}` : 'Connecting'}</strong></div>
+                    <div className="watchman-path" aria-label="Monitored connection path">
+                      {pathComponents.map((component) => (
+                        <div className={`watchman-path-node status-${component.status}`} key={component.id}>
+                          <span className="watchman-path-icon">{watchmanGroupIcon(component.group)}<i /></span>
+                          <span className="watchman-path-copy">
+                            <b>{component.label.replace('Binance ', '').replace('Browser / Website Session', 'Browser')}</b>
+                            <em>{component.detail}</em>
+                          </span>
+                          <span className="watchman-path-value"><b>{component.value}</b><em>{watchmanStatusLabel(component.status)}</em></span>
+                        </div>
+                      ))}
                     </div>
                   </section>
-                  <section>
-                    <div className="watchman-section-head"><span><b>Recent Transitions</b><em>Notification-backed state changes</em></span><strong>{backendWatchman?.recentTransitions.length ?? 0}</strong></div>
-                    <div className="watchman-transition-list">
-                      {backendWatchman?.recentTransitions.length ? backendWatchman.recentTransitions.slice(0, 5).map((transition) => (
-                        <div key={`${transition.componentId}-${transition.ts}`}><i className={`status-${transition.to}`} /><span><b>{transition.label}</b><em>{transition.from} → {transition.to}</em></span><time>{timeAgo(transition.ts)}</time></div>
-                      )) : <div className="watchman-empty">No connection transitions since this server started.</div>}
+                  <section className="watchman-cadence-section">
+                    <div className="watchman-section-head watchman-controls-section-head">
+                      <span><b>Polling Cadence</b><em>Select timing and refresh each owner inline</em></span>
+                      <button className={cadenceReset ? 'ok' : ''} type="button" disabled={busy.current} onClick={resetCadenceDefaults}><IconRefresh size={13} />{cadenceReset ? 'Restored' : 'Defaults'}</button>
+                    </div>
+                    <div className="watchman-cadence-grid">
+                      {cadenceControls.map((control, index) => (
+                        <div className="rdock-cadence-row" key={control.key}>
+                          <span className="watchman-cadence-copy"><b>{control.label}</b><em>{control.detail}</em></span>
+                          <PillSelect
+                            value={String(cadenceSec(control.key))}
+                            options={cadenceOptions}
+                            onChange={(value) => setCadence(control.key, Number(value))}
+                            ariaLabel={`${control.label} Polling Cadence`}
+                            className="rdock-cadence-select"
+                            buttonClassName="rdock-cadence-trigger"
+                            menuClassName={`rdock-cadence-menu ${index > 1 ? 'opens-up' : ''}`}
+                          />
+                          <button
+                            className={`watchman-cadence-refresh ${targetBusy === control.target ? 'busy' : ''}`}
+                            type="button"
+                            disabled={busy.current}
+                            onClick={() => void runTarget(control.target)}
+                            aria-label={`Refresh ${control.label}`}
+                            title={`Refresh ${control.label}`}
+                          ><IconRefresh size={14} /></button>
+                        </div>
+                      ))}
                     </div>
                   </section>
                 </div>
@@ -3751,61 +3748,34 @@ export function RefreshDock() {
               </div>
             )}
 
-            {dockView === 'controls' && (
-              <div className="watchman-controls-view">
-                <div className="watchman-section-head watchman-controls-section-head">
-                  <span><b>Polling Cadence</b><em>Browser request timing only · live sockets remain event-driven</em></span>
-                  <button className={cadenceReset ? 'ok' : ''} type="button" disabled={busy.current} onClick={resetCadenceDefaults}><IconRefresh size={13} />{cadenceReset ? 'Restored' : 'Defaults'}</button>
-                </div>
-                <div className="watchman-cadence-grid">
-                  {MARKET_PING_KEYS.map((key, index) => {
-                    const labelFor = { market: 'Market Prices', account: 'Account Data', news: 'News Context', calendar: 'Calendar' } as const;
-                    const detailFor = { market: 'Prices, breadth, and market rows', account: 'Balances, orders, fills, and loans', news: 'Feed fallback and new-item context', calendar: 'Macro releases and value changes' } as const;
-                    return (
-                      <div className="rdock-cadence-row" key={key}>
-                        <span><b>{labelFor[key]}</b><em>{detailFor[key]}</em></span>
-                        <PillSelect
-                          value={String(cadenceSec(key))}
-                          options={cadenceOptions}
-                          onChange={(value) => setCadence(key, Number(value))}
-                          ariaLabel={`${labelFor[key]} Polling Cadence`}
-                          className="rdock-cadence-select"
-                          buttonClassName="rdock-cadence-trigger"
-                          menuClassName={`rdock-cadence-menu ${index > 1 ? 'opens-up' : ''}`}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="watchman-section-head"><span><b>Recovery</b><em>Choose one connection owner, then run one deliberate action</em></span><strong>{selectedRecovery.label}</strong></div>
-                <div className="watchman-recovery-console">
-                  <span className="watchman-recovery-icon"><IconRefresh size={18} /></span>
-                  <span className="watchman-recovery-copy"><b>{selectedRecovery.label}</b><em>{selectedRecovery.detail}</em></span>
-                  <PillSelect
-                    value={recoveryTarget}
-                    options={recoveryOptions}
-                    onChange={(value) => setRecoveryTarget(value as ConnectionResetTarget)}
-                    ariaLabel="Recovery Target"
-                    className="watchman-recovery-select"
-                    buttonClassName="watchman-recovery-trigger"
-                    menuClassName="watchman-recovery-menu opens-up"
-                  />
-                  <button className={targetBusy === recoveryTarget ? 'busy' : ''} type="button" disabled={busy.current} onClick={() => void runTarget(recoveryTarget)}>
-                    <IconRefresh size={15} /><span>{targetBusy === recoveryTarget ? 'Recovering' : 'Run Recovery'}</span>
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
 
           {lastRefreshIssues.length > 0 && (
             <div className="rdock-issues" title={lastRefreshIssues.join(' · ')}><IconAlarm size={14} /><span>{lastRefreshIssues[0]}</span></div>
           )}
+          <footer className="watchman-recovery-console watchman-recovery-dock" aria-label="Connection Recovery">
+            <span className="watchman-recovery-icon"><IconRefresh size={18} /></span>
+            <span className="watchman-recovery-copy"><b>{selectedRecovery.label}</b><em>{selectedRecovery.detail}</em></span>
+            <PillSelect
+              value={recoveryTarget}
+              options={recoveryOptions}
+              onChange={(value) => setRecoveryTarget(value as ConnectionResetTarget)}
+              ariaLabel="Recovery Target"
+              className="watchman-recovery-select"
+              buttonClassName="watchman-recovery-trigger"
+              menuClassName="watchman-recovery-menu opens-up"
+            />
+            <button className={targetBusy === recoveryTarget ? 'busy' : ''} type="button" disabled={busy.current} onClick={() => void runTarget(recoveryTarget)}>
+              <IconRefresh size={15} /><span>{targetBusy === recoveryTarget ? 'Recovering' : 'Run Recovery'}</span>
+            </button>
+          </footer>
         </section>
       )}
 
       <button className={`rdock-btn rdock-control-btn status-${overallStatus} ${st}`} onClick={() => setOpen((value) => !value)} title={label} aria-label={label} aria-expanded={open}>
-        <span className="rdock-control-image"><img src="/connection-reset-mark.svg" alt="" /></span>
+        <span className="rdock-control-image" aria-hidden="true">
+          <img className="watchman-reset-mark" src="/connection-reset-mark.svg" alt="" draggable={false} />
+        </span>
         <i className={`rdock-control-state status-${st === 'ok' ? 'operational' : st === 'err' ? 'outage' : overallStatus}`} />
       </button>
     </div>

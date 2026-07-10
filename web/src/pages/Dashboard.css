@@ -40,6 +40,7 @@
 }
 
 .dcx-title,
+.dcx-title-content,
 .dcx-toolbar-actions,
 .dcx-live,
 .dcx-updated {
@@ -48,6 +49,22 @@
 }
 
 .dcx-title { min-width: 0; gap: 10px; }
+.dcx-title-content { min-width: 0; gap: 10px; }
+
+.dcx-source-mark {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  place-items: center;
+}
+
+.dcx-page-mark {
+  display: block;
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
 
 .dcx-title h1 {
   margin: 0;
@@ -638,8 +655,9 @@
 
 @container (max-width: 620px) {
   .dcx-toolbar { align-items: flex-start; min-height: 86px; padding-top: 11px; }
-  .dcx-title { flex-wrap: wrap; gap: 5px 8px; }
-  .dcx-title h1 { width: 100%; }
+  .dcx-title { align-items: flex-start; }
+  .dcx-title-content { flex-wrap: wrap; gap: 5px 8px; }
+  .dcx-title-content h1 { width: 100%; }
   .dcx-toolbar-actions { padding-top: 4px; }
   .dcx-toolbar-actions button { width: 32px; padding: 0; font-size: 0; }
   .dcx-summary,

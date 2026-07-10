@@ -36,6 +36,7 @@
 .accountx-spot-change,
 .accountx-ranges,
 .accountx-wallet-name,
+.accountx-data-view-head,
 .accountx-asset,
 .accountx-order,
 .accountx-footer {
@@ -51,7 +52,24 @@
   border-bottom: 1px solid var(--line-2);
 }
 
-.accountx-identity { min-width: 0; }
+.accountx-identity { min-width: 0; gap: 10px; }
+
+.accountx-source-mark {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  place-items: center;
+}
+
+.accountx-page-mark {
+  display: block;
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+
+.accountx-identity > span:last-child { min-width: 0; }
 
 .accountx-identity h1 {
   margin: 0;
@@ -60,6 +78,17 @@
   font-weight: 540;
   line-height: 30px;
   letter-spacing: -.014em;
+}
+
+.accountx-identity small {
+  display: block;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 420;
+  line-height: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .accountx-source-state i {
@@ -184,7 +213,7 @@
 
 .accountx-viewbar > div {
   min-width: 0;
-  gap: 7px;
+  gap: 6px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -194,12 +223,12 @@
 .accountx-viewbar [role="tab"] {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  height: 34px;
-  padding: 0 13px;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 14px;
   border: 0;
-  border-radius: 17px;
-  background: color-mix(in srgb, var(--text) 3.8%, var(--panel));
+  border-radius: 18px;
+  background: var(--tile);
   color: var(--muted);
   font: inherit;
   font-size: 12.5px;
@@ -215,7 +244,7 @@
 }
 
 .accountx-viewbar [role="tab"]:hover { background: var(--tile-hover); color: var(--text); }
-.accountx-viewbar [role="tab"][aria-selected="true"] { background: var(--text); color: var(--panel); }
+.accountx-viewbar [role="tab"][aria-selected="true"] { background: var(--cta-bg); color: var(--cta-fg); }
 
 .accountx-source-state {
   flex: none;
@@ -233,17 +262,24 @@
 
 .accountx-overview {
   display: block;
-  min-height: 430px;
+  min-height: 0;
+}
+
+.accountx-portfolio-band {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  border-bottom: 1px solid var(--line-2);
 }
 
 .accountx-equity {
   min-width: 0;
-  padding: 18px 16px 16px;
+  padding: 14px 16px 12px;
 }
 
 .accountx-allocation {
   min-width: 0;
-  padding: 18px 20px 20px;
+  padding: 14px 16px 12px;
   border-top: 1px solid var(--line-2);
 }
 
@@ -324,27 +360,46 @@
 
 .accountx-chart {
   position: relative;
-  height: 330px;
-  margin-top: 8px;
+  height: 164px;
+  margin-top: 6px;
+}
+
+.accountx-chart-canvas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
   cursor: crosshair;
 }
 
-.accountx-chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
-.accountx-gridline { stroke: var(--line); stroke-width: 1; }
-.accountx-chart-area { fill: color-mix(in srgb, var(--accent) 7%, transparent); }
-.accountx-chart-line { fill: none; stroke: var(--accent); stroke-width: 1.55; stroke-linecap: round; stroke-linejoin: round; }
+.accountx-chart-canvas svg { display: block; width: 100%; height: 100%; overflow: hidden; }
+.accountx-gridline { stroke: color-mix(in srgb, var(--line) 72%, transparent); stroke-width: 1; }
+.accountx-chart-area { display: none; }
+.accountx-chart-line { fill: none; stroke: #f0b90b; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
 
-.accountx-axis-label {
-  fill: var(--muted);
-  font-family: var(--font);
+.accountx-y-axis {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 60px;
+  pointer-events: none;
+}
+
+.accountx-y-axis span {
+  position: absolute;
+  right: 0;
+  color: var(--muted);
   font-size: 10.5px;
   font-weight: 420;
   font-variant-numeric: tabular-nums;
+  line-height: 14px;
+  transform: translateY(-50%);
+  white-space: nowrap;
 }
 
 .accountx-date-axis {
   position: absolute;
-  right: 68px;
+  right: 4px;
   bottom: 1px;
   left: 4px;
   display: flex;
@@ -386,19 +441,31 @@
 .accountx-chart-tip em { color: var(--muted); font-size: 10.5px; font-style: normal; font-weight: 420; }
 
 .accountx-allocation .donut-wrap {
-  display: flex;
-  flex-direction: row;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: 128px minmax(360px, 520px);
   align-items: center;
+  justify-content: center;
   gap: 44px;
-  padding: 16px 0 2px;
+  padding: 18px 0 10px;
 }
 
-.accountx-allocation .donut-legend {
-  display: flex;
-  width: min(100%, 520px);
-  flex-direction: column;
+.accountx-allocation .donut-chart {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  border-radius: 50%;
+  isolation: isolate;
 }
+
+.accountx-allocation .donut-chart::after {
+  content: "";
+  position: absolute;
+  inset: 16%;
+  border-radius: 50%;
+  background: var(--panel);
+}
+
+.accountx-allocation .donut-legend { display: flex; min-width: 0; flex-direction: column; }
 
 .accountx-allocation .donut-leg-row {
   display: flex;
@@ -425,13 +492,12 @@
 .accountx-wallet-zone {
   min-width: 0;
   padding: 0;
-  border-top: 1px solid var(--line-2);
   background: var(--panel);
 }
 
 .accountx-wallet-zone-head {
   display: flex;
-  min-height: 52px;
+  min-height: 58px;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
@@ -476,24 +542,27 @@
   display: block;
   min-width: 0;
   padding: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
+
 
 .accountx-table-scroll {
   width: 100%;
   min-width: 100%;
-  min-height: 430px;
-  max-height: 430px;
+  min-height: 372px;
+  max-height: none;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
 }
 
-.accountx-wallet-item { display: block; }
+.accountx-wallet-item { display: block; min-width: 760px; }
 
 .accountx-wallet-row {
   display: grid;
   width: 100%;
-  min-width: 0;
+  min-width: 760px;
   min-height: 68px;
   grid-template-columns: minmax(230px, 1.35fr) repeat(4, minmax(112px, .72fr));
   align-items: center;
@@ -621,7 +690,6 @@ button.accountx-wallet-row:focus-visible {
   min-width: 0;
   overflow-x: auto;
   border: 0;
-  border-bottom: 1px solid var(--line-2);
   border-radius: 0;
   background: var(--panel);
   scrollbar-width: thin;
@@ -629,7 +697,7 @@ button.accountx-wallet-row:focus-visible {
 
 .accountx-detail-title {
   display: flex;
-  min-width: 1020px;
+  min-width: 760px;
   min-height: 50px;
   align-items: center;
   padding: 0 16px;
@@ -655,13 +723,14 @@ button.accountx-wallet-row:focus-visible {
 .accountx-detail-head,
 .accountx-detail-row {
   display: grid;
-  grid-template-columns: minmax(230px, 1.25fr) repeat(5, minmax(126px, .72fr)) 48px;
+  width: 100%;
+  grid-template-columns: minmax(150px, 1.25fr) repeat(5, minmax(78px, .72fr)) 48px;
   align-items: center;
-  min-width: 1020px;
+  min-width: 760px;
 }
 
 .accountx-detail-head {
-  min-height: 35px;
+  min-height: 34px;
   background: color-mix(in srgb, var(--tile) 54%, var(--panel));
   color: var(--muted);
   font-size: 10.5px;
@@ -669,12 +738,13 @@ button.accountx-wallet-row:focus-visible {
 }
 
 .accountx-detail-head > span,
-.accountx-detail-row > span { min-width: 0; padding: 0 14px; text-align: right; }
+.accountx-detail-row > span { min-width: 0; padding: 0 10px; text-align: right; }
 .accountx-detail-head > span:first-child,
-.accountx-detail-row > span:first-child { padding-left: 16px; text-align: left; }
+.accountx-detail-row > span:first-child { padding-left: 14px; text-align: left; }
 .accountx-detail-head > span:last-child,
-.accountx-detail-row > span:last-child { padding-right: 16px; }
-.accountx-detail-row { min-height: 68px; border-top: 1px solid var(--line); }
+.accountx-detail-row > span:last-child { padding-right: 8px; padding-left: 8px; }
+.accountx-detail-row { min-height: 64px; }
+.accountx-detail-row + .accountx-detail-row { border-top: 1px solid var(--line); }
 
 .accountx-asset { gap: 10px; }
 .accountx-asset > .tok-badge { flex: none; }
@@ -693,6 +763,21 @@ button.accountx-wallet-row:focus-visible {
 
 .accountx-table.orders,
 .accountx-table.fills { min-width: 1060px; }
+
+.accountx-table-view { min-width: 0; min-height: 430px; }
+.accountx-data-view-head {
+  min-height: 58px;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line-2);
+}
+.accountx-data-view-head > span { min-width: 0; }
+.accountx-data-view-head b,
+.accountx-data-view-head small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.accountx-data-view-head b { color: var(--text); font-size: 13px; font-weight: 510; line-height: 18px; }
+.accountx-data-view-head small { color: var(--muted); font-size: 10.5px; font-weight: 420; line-height: 14px; }
+.accountx-data-view-head em { flex: none; color: var(--muted); font-size: 10.5px; font-style: normal; font-weight: 450; }
 
 .accountx-table th {
   position: sticky;
@@ -769,15 +854,18 @@ button.accountx-wallet-row:focus-visible {
   .accountx-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-@container (max-width: 820px) {
+@container (max-width: 900px) {
+  .accountx-portfolio-band { grid-template-columns: minmax(0, 1fr); }
+  .accountx-allocation { border-top: 1px solid var(--line-2); border-left: 0; }
+  .accountx-allocation .donut-wrap { grid-template-columns: 128px minmax(0, 320px); justify-content: center; padding-top: 18px; }
+}
+
+@container (max-width: 850px) {
   .accountx-viewbar { align-items: flex-start; min-height: 90px; padding-top: 9px; padding-bottom: 9px; flex-direction: column; }
   .accountx-source-state { padding-left: 4px; }
   .accountx-section-head { align-items: flex-start; flex-direction: column; }
   .accountx-equity-tools { width: 100%; justify-content: space-between; }
-  .accountx-chart { height: 280px; }
-  .accountx-allocation .donut-wrap { flex-direction: column; gap: 16px; }
-  .accountx-wallet-table { overflow-x: auto; scrollbar-width: thin; }
-  .accountx-wallet-item { min-width: 850px; }
+  .accountx-chart { height: 156px; }
 }
 
 @container (max-width: 620px) {
@@ -786,6 +874,8 @@ button.accountx-wallet-row:focus-visible {
   .accountx-spot-change { display: none; }
   .accountx-equity { padding-right: 12px; padding-left: 12px; }
   .accountx-allocation { padding-right: 12px; padding-left: 12px; }
+  .accountx-allocation .donut-wrap { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+  .accountx-allocation .donut-legend { width: 100%; }
   .accountx-footer { align-items: flex-start; padding-top: 10px; padding-bottom: 10px; flex-direction: column; gap: 3px; }
 }
 

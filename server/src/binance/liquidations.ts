@@ -77,7 +77,11 @@ let ws: WebSocket | null = null;
 
 function connect(): void {
   wsState = 'connecting';
-  ws = new WebSocket('wss://fstream.binance.com/ws/!forceOrder@arr');
+  // Binance's legacy /ws futures host still handshakes but no longer emits
+  // market frames. The engine and this persistent recorder must use the
+  // current public market socket or the UI gets live 15m totals with an empty
+  // historical liquidation series.
+  ws = new WebSocket('wss://fstream.binance.com/market/ws/!forceOrder@arr');
   ws.on('open', () => { wsState = 'live'; });
   ws.on('message', (raw: WebSocket.RawData) => {
     try {

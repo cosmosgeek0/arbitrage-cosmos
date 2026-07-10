@@ -213,25 +213,26 @@
   padding: 0 16px;
   border-bottom: 1px solid var(--line-2);
 }
-.borrowx-viewbar > div { gap: 7px; min-width: 0; }
+.borrowx-viewbar > div { gap: 6px; min-width: 0; }
 .borrowx-viewbar [role="tab"] {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  height: 34px;
-  padding: 0 13px;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 14px;
   border: 0;
-  border-radius: 17px;
+  border-radius: 18px;
   color: var(--muted);
-  background: color-mix(in srgb, var(--text) 3.8%, var(--panel));
+  background: var(--tile);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 470;
   white-space: nowrap;
 }
 .borrowx-viewbar [role="tab"] span { color: var(--muted-2); font-size: 10px; font-weight: 420; }
-.borrowx-viewbar [role="tab"][aria-selected="true"] { color: var(--panel); background: var(--text); }
-.borrowx-viewbar [role="tab"][aria-selected="true"] span { color: color-mix(in srgb, var(--panel) 74%, transparent); }
+.borrowx-viewbar [role="tab"]:hover { color: var(--text); }
+.borrowx-viewbar [role="tab"][aria-selected="true"] { color: var(--cta-fg); background: var(--cta-bg); }
+.borrowx-viewbar [role="tab"][aria-selected="true"] span { color: color-mix(in srgb, var(--cta-fg) 74%, transparent); }
 .borrowx-live { gap: 7px; color: var(--muted); font-size: 11.5px; font-weight: 420; white-space: nowrap; }
 .borrowx-live i { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
 .borrowx-live.on i { background: var(--up); }
@@ -334,6 +335,8 @@
 .borrowx-table.preflight { min-width: 1260px; }
 .borrowx-table.activity { min-width: 900px; }
 .borrowx-table.market { min-width: 1380px; }
+.borrowx-table col.borrowx-star-track { width: 46px; }
+.borrowx-table col.borrowx-asset-track { width: 220px; }
 .borrowx-table thead { position: sticky; z-index: 3; top: 0; }
 .borrowx-table th {
   height: 36px;
@@ -404,15 +407,25 @@
 .borrowx-table small.liq,
 .borrowx-table .borrow-unavailable { color: var(--down); }
 
-.borrowx-table.positions th:nth-child(2) { width: 185px; }
-.borrowx-table.positions th:nth-child(3) { width: 150px; }
-.borrowx-table.positions th:nth-child(4) { width: 175px; }
-.borrowx-table.positions th:nth-child(5) { width: 130px; }
-.borrowx-table.positions th:nth-child(6),
-.borrowx-table.positions th:nth-child(7),
-.borrowx-table.positions th:nth-child(8),
-.borrowx-table.positions th:nth-child(9),
-.borrowx-table.positions th:nth-child(10) { width: 120px; }
+/* Borrow's watchlist tables share Markets' exact leading rails. Keep these
+   tracks fixed so the different table canvases cannot redistribute them. */
+.borrowx-table:is(.positions, .market, .assets) :is(th, td):first-child {
+  width: 46px !important;
+  min-width: 46px !important;
+  max-width: 46px !important;
+  padding-right: 0 !important;
+  padding-left: 8px !important;
+  text-align: left !important;
+}
+.borrowx-table:is(.positions, .market, .assets) :is(th, td):nth-child(2) {
+  width: 220px !important;
+  min-width: 220px !important;
+  max-width: 220px !important;
+  padding-right: 12px !important;
+  padding-left: 12px !important;
+  text-align: left !important;
+}
+
 .borrowx-table.preflight th:first-child { width: 190px; }
 .borrowx-table.preflight th:nth-child(2) { width: 140px; }
 .borrowx-table.preflight th:nth-child(3) { width: 130px; }
@@ -421,14 +434,6 @@
 .borrowx-table.preflight th:nth-child(6) { width: 360px; }
 .borrowx-table.preflight th:nth-child(7) { width: 110px; }
 .borrowx-table.activity th:first-child { width: 46%; }
-.borrowx-table.market th:nth-child(2) { width: 220px; }
-.borrowx-table.market th:nth-child(3),
-.borrowx-table.market th:nth-child(4) { width: 120px; }
-.borrowx-table.market th:nth-child(5),
-.borrowx-table.market th:nth-child(6) { width: 150px; }
-.borrowx-table.market th:nth-child(7) { width: 190px; }
-.borrowx-table.market th:nth-child(8) { width: 150px; }
-
 .borrowx-asset { justify-content: flex-start; gap: 10px; min-width: 0; text-align: left; }
 .borrowx-asset > span { overflow: hidden; min-width: 0; }
 .borrowx-asset b,
@@ -558,12 +563,15 @@
   .borrowx-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .borrowx-summary article:nth-child(3) { border-top: 1px solid var(--line-2); border-left: 0; }
   .borrowx-summary article:nth-child(4) { border-top: 1px solid var(--line-2); }
-  .borrowx-viewbar { align-items: flex-start; flex-direction: column; padding-top: 9px; padding-bottom: 9px; }
-  .borrowx-viewbar > div { overflow-x: auto; width: 100%; scrollbar-width: none; }
-  .borrowx-live { align-self: flex-end; }
   .borrowx-workspace { max-height: none; }
   .borrowx-market-head { align-items: flex-start; min-height: 96px; padding-top: 10px; padding-bottom: 10px; flex-wrap: wrap; }
   .borrowx-market-tools { order: 3; width: 100%; flex-basis: 100%; justify-content: flex-start; }
+}
+
+@container (max-width: 850px) {
+  .borrowx-viewbar { align-items: flex-start; flex-direction: column; padding-top: 9px; padding-bottom: 9px; }
+  .borrowx-viewbar > div { overflow-x: auto; width: 100%; scrollbar-width: none; }
+  .borrowx-live { align-self: flex-end; }
 }
 
 @container (max-width: 760px) {

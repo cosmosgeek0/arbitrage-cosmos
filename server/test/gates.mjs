@@ -23,10 +23,11 @@ async function get(p) {
   return { status: res.status, headers: res.headers, body: await res.json().catch(() => null) };
 }
 
-async function browserGet(p) {
+async function browserGet(p, deviceId = 'gate-primary-device-2026') {
   const res = await fetch(`${BASE}${p}`, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/150.0.0.0 Safari/537.36',
+      Cookie: `cosmos_device=${deviceId}`,
     },
   });
   return { status: res.status, headers: res.headers, body: await res.json().catch(() => null) };
@@ -198,6 +199,17 @@ check(
     browserSessions.sessions[0]?.ip === '127.0.0.1' &&
     browserSessions.sessions[0]?.requests >= 2 &&
     /no-store/i.test(browserSessionsResponse.headers.get('cache-control') ?? '')
+);
+
+await browserGet('/api/state', 'gate-secondary-device-2026');
+const multiDeviceSessions = (await browserGet('/api/sessions', 'gate-secondary-device-2026')).body;
+check(
+  'same IP and browser keep separate latest devices',
+  multiDeviceSessions?.identity === 'first-party-device-token' &&
+    multiDeviceSessions?.sessions?.length === 2 &&
+    multiDeviceSessions.sessions.filter((session) => session.active).length === 2 &&
+    multiDeviceSessions.sessions.filter((session) => session.current).length === 1 &&
+    multiDeviceSessions.sessions[0]?.current === true,
 );
 
 // oversized order must be rejected by risk

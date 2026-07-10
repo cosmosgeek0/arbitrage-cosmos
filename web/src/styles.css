@@ -48076,31 +48076,30 @@ body::after {
   padding-left: 6px !important;
 }
 
-/* Short ARBITRAGE identity with a two-venue exchange mark, not a letter A. */
+/* Strong ARBITRAGE lockup with the owner's compact blue code-file mark. */
 .hdr-brand {
   width: 160px !important;
   min-width: 160px !important;
   gap: 8px !important;
 }
 .hdr-brand .brand-mark {
-  width: 34px !important;
-  height: 34px !important;
-  flex: 0 0 34px !important;
-  filter: drop-shadow(0 5px 10px rgba(58, 89, 228, .14)) !important;
-}
-.hdr-brand .brand-flow-node {
-  fill: var(--panel);
-  stroke: #536cf5;
-  stroke-width: 1.6px;
+  width: 18px !important;
+  height: 18px !important;
+  flex: 0 0 18px !important;
+  filter: drop-shadow(0 3px 6px rgba(52, 117, 232, .18)) !important;
 }
 .hdr-brand .brand-name {
-  font-size: 14px !important;
-  font-weight: 650 !important;
-  letter-spacing: .075em !important;
+  font-size: 18px !important;
+  font-weight: 670 !important;
+  line-height: 20px !important;
+  letter-spacing: .055em !important;
 }
 .hdr-brand .brand-sub {
-  font-size: 8.5px !important;
-  letter-spacing: .15em !important;
+  margin-top: 1px !important;
+  font-size: 10.5px !important;
+  font-weight: 650 !important;
+  line-height: 12px !important;
+  letter-spacing: .16em !important;
 }
 
 /* Compact squared clock capsule: no blue wash or white inset tint. */
@@ -48226,19 +48225,19 @@ body::after {
   object-fit: contain !important;
 }
 
-/* All Utility items now fit: Logs / News / Calendar / Notifications. Sidebar
-   marks are deliberately larger than topbar marks and sit one pixel lower. */
+/* Preserve vertical breathing while keeping the supplied sidebar marks quiet.
+   Icon scale and row cadence are separate: 19px marks in 40px rows. */
 .snav { padding: 4px 5px 10px !important; }
 .snav-nav { gap: 0 !important; }
-.snav-group { margin: 0 0 6px !important; }
+.snav-group { margin: 0 0 8px !important; }
 .snav-group-title,
-.snav-group:first-child .snav-group-title { margin: 6px 7px 5px !important; }
+.snav-group:first-child .snav-group-title { margin: 7px 7px 7px !important; }
 .snav-group:first-child .snav-group-title { margin-top: 0 !important; }
 .snav-item {
   grid-template-columns: 28px minmax(0, 1fr) auto !important;
   gap: 8px !important;
   width: 100% !important;
-  height: 36px !important;
+  height: 40px !important;
   padding: 0 7px !important;
 }
 .snav-ic,
@@ -48248,23 +48247,23 @@ body::after {
   overflow: visible !important;
 }
 .snav-item .snav-ic > :is(img, svg) {
-  width: 27px !important;
-  height: 27px !important;
-  max-width: 27px !important;
-  max-height: 27px !important;
+  width: 18.9px !important;
+  height: 18.9px !important;
+  max-width: 18.9px !important;
+  max-height: 18.9px !important;
   object-fit: contain !important;
-  transform: translateY(1px) !important;
+  transform: none !important;
 }
-.snav-item .snav-calendar-mark {
-  width: 29px !important;
-  height: 27px !important;
-  max-width: 29px !important;
+.snav-item .snav-ic > img.snav-calendar-mark {
+  width: 20.3px !important;
+  height: 18.9px !important;
+  max-width: 20.3px !important;
 }
-.snav-item .snav-notification-mark {
-  width: 28px !important;
-  height: 28px !important;
-  max-width: 28px !important;
-  max-height: 28px !important;
+.snav-item .snav-ic > img.snav-notification-mark {
+  width: 19.6px !important;
+  height: 19.6px !important;
+  max-width: 19.6px !important;
+  max-height: 19.6px !important;
 }
 .snav-item:focus,
 .snav-item:focus-visible {
@@ -48272,6 +48271,20 @@ body::after {
 }
 .snav-item:focus-visible {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 13%, transparent) !important;
+}
+
+/* Short viewports keep the exact same 40px navigation rhythm. If the complete
+   rail cannot fit, it scrolls internally instead of crushing every destination
+   to a different 36px system. */
+@media (max-height: 730px) {
+  .snav { overflow: hidden !important; }
+  .snav-nav {
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain;
+    scrollbar-width: none;
+    scroll-padding-block: 4px;
+  }
+  .snav-nav::-webkit-scrollbar { display: none; }
 }
 
 /* Move the connection launcher away from the edges while retaining a balanced
@@ -48301,17 +48314,35 @@ body::after {
   min-height: 76px !important;
   overflow: visible !important;
   border: 0 !important;
-  border-radius: 20px !important;
+  border-radius: 50% !important;
   color: #078cf0 !important;
-  background: transparent !important;
+  background: var(--panel) !important;
   box-shadow: none !important;
-  transition: transform .22s ease, filter .22s ease !important;
+  transition: transform .22s ease !important;
 }
 
 .watchman-dock .rdock-control-btn:hover,
 .watchman-dock.open .rdock-control-btn {
   transform: translateY(-2px) !important;
-  filter: drop-shadow(0 10px 12px rgba(7, 140, 240, .24)) !important;
+}
+.watchman-dock .rdock-control-btn:focus,
+.watchman-dock .rdock-control-btn:focus-visible {
+  outline: none !important;
+}
+.watchman-dock .rdock-control-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, #588df2 48%, transparent) !important;
+  outline-offset: 3px !important;
+}
+[data-theme="dark"] .rdock.rdock-control.watchman-dock .rdock-control-btn {
+  border-color: transparent !important;
+  background: var(--panel) !important;
+  box-shadow: none !important;
+}
+
+.watchman-dock .rdock-control-btn::before {
+  content: none !important;
+  display: none !important;
+  animation: none !important;
 }
 
 .watchman-dock .status-operational { --wm-color: #1c9b69; }
@@ -48325,18 +48356,23 @@ body::after {
   height: 78px !important;
   place-items: center !important;
   overflow: visible !important;
-  color: #078cf0 !important;
+  isolation: isolate !important;
 }
 
-.watchman-dock .rdock-control-image img {
+.watchman-dock img.watchman-reset-mark {
+  position: relative !important;
+  z-index: 1 !important;
   display: block !important;
-  width: 76px !important;
-  height: 76px !important;
+  width: 68px !important;
+  height: 68px !important;
   max-width: none !important;
   max-height: none !important;
+  overflow: visible !important;
   object-fit: contain !important;
-  filter: drop-shadow(0 7px 9px rgba(7, 140, 240, .18));
-  animation: owner-refresh-idle 6.8s cubic-bezier(.42, 0, .22, 1) infinite !important;
+  user-select: none !important;
+  transform-origin: 50% 50% !important;
+  filter: none !important;
+  animation: owner-refresh-idle 11s cubic-bezier(.42, 0, .22, 1) infinite !important;
 }
 
 .watchman-mark {
@@ -48378,11 +48414,11 @@ body::after {
 @keyframes watchman-node { 0%, 100% { opacity: .45; } 48% { opacity: 1; } }
 @keyframes watchman-recover { to { transform: rotate(1080deg); } }
 @keyframes owner-refresh-idle {
-  0%, 68% { transform: rotate(0deg); }
-  86%, 100% { transform: rotate(360deg); }
+  0%, 72% { transform: rotate(0deg); }
+  91%, 100% { transform: rotate(360deg); }
 }
 
-.watchman-dock .rdock-control-btn.spin .rdock-control-image img {
+.watchman-dock .rdock-control-btn.spin .watchman-reset-mark {
   animation: watchman-recover 2.1s cubic-bezier(.3, .72, .2, 1) 1 !important;
 }
 
@@ -48420,7 +48456,7 @@ body::after {
   min-height: 70px !important;
   padding: 8px 12px 8px 14px !important;
   border-bottom: 1px solid var(--line) !important;
-  background: linear-gradient(110deg, color-mix(in srgb, var(--wm-color, #1c9b69) 5%, var(--panel)) 0%, var(--panel) 45%) !important;
+  background: var(--panel) !important;
 }
 
 .watchman-panel .rdock-control-logo {
@@ -48439,14 +48475,14 @@ body::after {
 }
 .watchman-panel .rdock-control-title b {
   color: var(--text) !important;
-  font-size: 17px !important;
-  font-weight: 570 !important;
-  line-height: 22px !important;
-  letter-spacing: -.014em !important;
+  font-size: 16px !important;
+  font-weight: 540 !important;
+  line-height: 21px !important;
+  letter-spacing: -.012em !important;
 }
 .watchman-panel .rdock-control-title em {
   color: var(--muted) !important;
-  font-size: 11.5px !important;
+  font-size: 11.25px !important;
   font-weight: 400 !important;
   font-style: normal !important;
   line-height: 16px !important;
@@ -48517,8 +48553,8 @@ body::after {
 .watchman-panel .watchman-summary > span:last-child { border-right: 0 !important; }
 .watchman-panel .watchman-summary em {
   color: var(--muted) !important;
-  font-size: 9.5px !important;
-  font-weight: 520 !important;
+  font-size: 9.75px !important;
+  font-weight: 500 !important;
   font-style: normal !important;
   line-height: 13px !important;
   letter-spacing: .045em !important;
@@ -48527,9 +48563,9 @@ body::after {
 .watchman-panel .watchman-summary b {
   color: var(--text) !important;
   font-family: var(--mono) !important;
-  font-size: 17px !important;
-  font-weight: 500 !important;
-  line-height: 23px !important;
+  font-size: 18px !important;
+  font-weight: 450 !important;
+  line-height: 24px !important;
 }
 .watchman-panel .watchman-summary small {
   overflow: hidden;
@@ -48542,31 +48578,42 @@ body::after {
 }
 
 .watchman-panel .rdock-view-tabs {
-  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   flex: 0 0 42px !important;
   min-height: 42px !important;
-  padding: 5px 8px !important;
+  padding: 0 12px !important;
+  border-bottom: 1px solid var(--line) !important;
+  background: var(--panel) !important;
 }
 .watchman-panel .rdock-view-tabs button {
-  min-height: 31px !important;
-  border-radius: 7px !important;
+  position: relative !important;
+  min-height: 41px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  color: var(--muted) !important;
+  background: transparent !important;
   font-size: 11.25px !important;
-  font-weight: 500 !important;
+  font-weight: 470 !important;
+  box-shadow: none !important;
 }
 .watchman-panel .rdock-view-tabs button.on {
   color: var(--text) !important;
-  background: var(--tile) !important;
-  box-shadow: inset 0 0 0 1px var(--line-2) !important;
+  background: transparent !important;
+  box-shadow: inset 0 -2px 0 var(--accent) !important;
+}
+.watchman-panel .rdock-view-tabs button:focus { outline: none !important; }
+.watchman-panel .rdock-view-tabs button:focus-visible {
+  box-shadow: inset 0 -2px 0 var(--accent) !important;
 }
 
 .watchman-panel .rdock-scroll {
+  flex: 1 1 auto !important;
   min-height: 0 !important;
   overflow: auto !important;
   padding: 0 !important;
   scrollbar-width: thin;
   background: var(--panel) !important;
 }
-.watchman-panel .rdock-scroll.controls-view { overflow: auto !important; }
 
 .watchman-section-head {
   display: flex;
@@ -48585,66 +48632,58 @@ body::after {
 
 .watchman-path {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 7px;
-  padding: 10px 12px 12px;
-  border-bottom: 1px solid var(--line);
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
 }
 .watchman-path-node {
   position: relative;
   display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 94px;
   min-width: 0;
-  min-height: 72px;
-  align-content: center;
-  justify-items: start;
-  gap: 2px;
-  padding: 8px 9px;
-  border: 1px solid var(--line-2);
-  border-radius: 9px;
-  background: var(--tile);
-}
-.watchman-path-node > span { position: relative; display: grid; width: 22px; height: 22px; place-items: center; color: var(--wm-color); }
-.watchman-path-node > span i { position: absolute; right: -1px; bottom: -1px; width: 6px; height: 6px; border: 1px solid var(--tile); border-radius: 50%; background: var(--wm-color); }
-.watchman-path-node b { overflow: hidden; width: 100%; color: var(--text); font-size: 10.5px; font-weight: 520; line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }
-.watchman-path-node em { overflow: hidden; width: 100%; color: var(--muted); font-family: var(--mono); font-size: 9px; font-weight: 400; font-style: normal; line-height: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.watchman-path-node > svg { position: absolute; top: 50%; right: -20px; z-index: 3; width: 28px; height: 8px; overflow: visible; color: var(--line-strong); transform: translateY(-50%); }
-.watchman-path-node > svg path { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1; }
-
-.watchman-overview-grid {
-  display: grid;
-  grid-template-columns: 1.1fr .9fr;
-  min-height: 164px;
-}
-.watchman-overview-grid > section:first-child { border-right: 1px solid var(--line); }
-.watchman-attention-list,
-.watchman-transition-list { min-height: 112px; }
-.watchman-clear-state {
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  min-height: 92px;
-  padding: 12px 16px;
-  color: var(--up);
-}
-.watchman-clear-state span { display: grid; gap: 2px; }
-.watchman-clear-state b { color: var(--text); font-size: 12px; font-weight: 520; line-height: 17px; }
-.watchman-clear-state em { color: var(--muted); font-size: 10px; font-weight: 400; font-style: normal; line-height: 14px; }
-.watchman-transition-list > div:not(.watchman-empty) {
-  display: grid;
-  grid-template-columns: 8px minmax(0, 1fr) auto;
+  min-height: 43px;
   align-items: center;
   gap: 9px;
-  min-height: 38px;
-  padding: 5px 13px;
+  padding: 5px 12px;
+  border: 0;
   border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--panel);
 }
-.watchman-transition-list i { width: 7px; height: 7px; border-radius: 50%; background: var(--wm-color); }
-.watchman-transition-list span { display: grid; min-width: 0; }
-.watchman-transition-list b { overflow: hidden; color: var(--text); font-size: 10.5px; font-weight: 500; line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }
-.watchman-transition-list em { color: var(--muted); font-family: var(--mono); font-size: 8.75px; font-weight: 400; font-style: normal; line-height: 12px; text-transform: capitalize; }
-.watchman-transition-list time { color: var(--muted); font-family: var(--mono); font-size: 8.75px; white-space: nowrap; }
-.watchman-empty { display: grid; min-height: 92px; place-items: center; padding: 12px; color: var(--muted); font-size: 10.5px; text-align: center; }
+.watchman-path-node:last-child { border-bottom: 0; }
+.watchman-path-icon {
+  position: relative;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  color: var(--wm-color);
+}
+.watchman-path-icon i {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--panel);
+  border-radius: 50%;
+  background: var(--wm-color);
+}
+.watchman-path-copy,
+.watchman-path-value { display: grid; min-width: 0; gap: 0; }
+.watchman-path-copy b { overflow: hidden; color: var(--text); font-size: 12.25px; font-weight: 470; line-height: 17px; text-overflow: ellipsis; white-space: nowrap; }
+.watchman-path-copy em { overflow: hidden; color: var(--muted); font-size: 9.75px; font-weight: 400; font-style: normal; line-height: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.watchman-path-value { justify-items: end; text-align: right; }
+.watchman-path-value b { color: var(--text-2); font-family: var(--mono); font-size: 10.5px; font-weight: 450; line-height: 14px; }
+.watchman-path-value em { color: var(--wm-color); font-size: 8.75px; font-weight: 520; font-style: normal; line-height: 12px; letter-spacing: .035em; text-transform: uppercase; }
+
+.watchman-overview,
+.watchman-overview-control-grid { min-height: 0; height: 100%; }
+.watchman-overview-control-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr);
+}
+.watchman-overview-control-grid > section:first-child { border-right: 1px solid var(--line); }
 
 .watchman-connection-group + .watchman-connection-group,
 .watchman-sources-view > section + section { border-top: 1px solid var(--line-2); }
@@ -48666,11 +48705,11 @@ body::after {
 .watchman-component-icon i { position: absolute; right: 1px; bottom: 1px; width: 6px; height: 6px; border: 1px solid var(--panel); border-radius: 50%; background: var(--wm-color); }
 .watchman-component-copy,
 .watchman-component-value { display: grid; min-width: 0; gap: 1px; }
-.watchman-component-copy b { color: var(--text); font-size: 11.5px; font-weight: 510; line-height: 16px; }
-.watchman-component-copy em { overflow: hidden; color: var(--muted); font-size: 9.75px; font-weight: 400; font-style: normal; line-height: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.watchman-component-copy b { color: var(--text); font-size: 12.5px; font-weight: 470; line-height: 17px; }
+.watchman-component-copy em { overflow: hidden; color: var(--muted); font-size: 10.5px; font-weight: 400; font-style: normal; line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }
 .watchman-component-value { justify-items: end; text-align: right; }
-.watchman-component-value b { color: var(--text-2); font-family: var(--mono); font-size: 10px; font-weight: 500; line-height: 14px; }
-.watchman-component-value em { color: var(--wm-color); font-size: 8.75px; font-weight: 540; font-style: normal; line-height: 12px; letter-spacing: .035em; text-transform: uppercase; }
+.watchman-component-value b { color: var(--text-2); font-family: var(--mono); font-size: 10.75px; font-weight: 450; line-height: 15px; }
+.watchman-component-value em { color: var(--wm-color); font-size: 9.25px; font-weight: 500; font-style: normal; line-height: 13px; letter-spacing: .035em; text-transform: uppercase; }
 .watchman-component > button {
   display: grid;
   width: 30px;
@@ -48722,25 +48761,51 @@ body::after {
 .watchman-controls-section-head > button.ok { color: var(--up); border-color: color-mix(in srgb, var(--up) 34%, var(--line-2)); }
 .watchman-cadence-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  border-bottom: 1px solid var(--line);
+  grid-template-columns: minmax(0, 1fr);
 }
 .watchman-cadence-grid .rdock-cadence-row {
-  min-height: 58px !important;
-  padding: 7px 12px !important;
-  border-right: 1px solid var(--line) !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 112px 34px !important;
+  align-items: center !important;
+  gap: 9px !important;
+  min-height: 64px !important;
+  padding: 8px 12px !important;
+  border-right: 0 !important;
   border-bottom: 1px solid var(--line) !important;
 }
-.watchman-cadence-grid .rdock-cadence-row:nth-child(2n) { border-right: 0 !important; }
-.watchman-cadence-grid .rdock-cadence-row:nth-last-child(-n+2) { border-bottom: 0 !important; }
+.watchman-cadence-grid .rdock-cadence-row:last-child { border-bottom: 0 !important; }
+.watchman-cadence-copy { display: grid; min-width: 0; gap: 0; }
+.watchman-cadence-grid .rdock-cadence-row > .watchman-cadence-copy b { overflow: hidden; color: var(--text); font-size: 12.25px !important; font-weight: 470 !important; line-height: 17px !important; text-overflow: ellipsis; white-space: nowrap; }
+.watchman-cadence-grid .rdock-cadence-row > .watchman-cadence-copy em { overflow: hidden; color: var(--muted) !important; font-size: 9.75px !important; font-weight: 400 !important; font-style: normal; line-height: 13px !important; text-overflow: ellipsis; white-space: nowrap; }
+.watchman-cadence-grid .rdock-cadence-select,
+.watchman-cadence-grid .rdock-cadence-select .rdock-cadence-trigger { width: 112px !important; }
+.watchman-cadence-grid .rdock-cadence-select .rdock-cadence-trigger { height: 38px !important; }
+.watchman-cadence-refresh {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--panel);
+}
+.watchman-cadence-refresh:hover:not(:disabled) { color: #078cf0; border-color: color-mix(in srgb, #078cf0 36%, var(--line-2)); background: color-mix(in srgb, #078cf0 5%, var(--panel)); }
+.watchman-cadence-refresh.busy svg { animation: spin .85s linear infinite; }
 .watchman-recovery-console {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 186px 142px;
+  grid-template-columns: 34px minmax(0, 1fr) 182px 182px;
   align-items: center;
-  gap: 10px;
-  min-height: 72px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--line);
+  gap: 12px;
+  min-height: 76px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+.watchman-recovery-dock {
+  position: relative;
+  z-index: 10;
+  flex: 0 0 76px;
 }
 .watchman-recovery-icon {
   display: grid;
@@ -48752,12 +48817,12 @@ body::after {
 .watchman-recovery-copy { display: grid; min-width: 0; gap: 1px; }
 .watchman-recovery-copy b { color: var(--text); font-size: 12px; font-weight: 520; line-height: 17px; }
 .watchman-recovery-copy em { overflow: hidden; color: var(--muted); font-size: 9.75px; font-weight: 400; font-style: normal; line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }
-.watchman-recovery-select { position: relative; width: 186px; }
+.watchman-recovery-select { position: relative; width: 182px; }
 .watchman-recovery-select .mkx-pill.watchman-recovery-trigger {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 16px;
-  width: 186px;
-  height: 40px;
+  width: 182px;
+  height: 42px;
   padding: 0 9px 0 12px;
   border: 1px solid var(--line-2);
   border-radius: 8px;
@@ -48801,8 +48866,8 @@ body::after {
 .watchman-recovery-select .mkx-menu.watchman-recovery-menu button.sel { color: #078cf0; background: color-mix(in srgb, #078cf0 7%, var(--panel)); }
 .watchman-recovery-console > button {
   display: flex;
-  width: 142px;
-  height: 40px;
+  width: 182px;
+  height: 42px;
   align-items: center;
   justify-content: center;
   gap: 7px;
@@ -48821,8 +48886,6 @@ body::after {
     width: calc(100vw - 228px) !important;
     min-width: calc(100vw - 228px) !important;
   }
-  .watchman-path { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .watchman-path-node > svg { display: none; }
 }
 
 @media (max-width: 760px) {
@@ -48832,10 +48895,12 @@ body::after {
   .watchman-panel .watchman-head { grid-template-columns: 52px minmax(0, 1fr) auto 30px !important; }
   .watchman-panel .watchman-summary { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
   .watchman-panel .watchman-summary > span:nth-child(n+4) { display: none !important; }
-  .watchman-overview-grid { grid-template-columns: 1fr; }
-  .watchman-overview-grid > section:first-child { border-right: 0; border-bottom: 1px solid var(--line); }
-  .watchman-cadence-grid { grid-template-columns: 1fr; }
-  .watchman-recovery-console { grid-template-columns: 30px minmax(0, 1fr); }
+  .watchman-overview,
+  .watchman-overview-control-grid { height: auto; }
+  .watchman-overview-control-grid { grid-template-columns: 1fr; }
+  .watchman-overview-control-grid > section:first-child { border-right: 0; border-bottom: 1px solid var(--line); }
+  .watchman-recovery-console { grid-template-columns: 30px minmax(0, 1fr); min-height: 160px; }
+  .watchman-recovery-dock { flex-basis: 160px; }
   .watchman-recovery-select,
   .watchman-recovery-select .mkx-pill.watchman-recovery-trigger,
   .watchman-recovery-console > button { width: 100%; }
@@ -48844,13 +48909,13 @@ body::after {
 [data-motion="reduced"] .watchman-mark .wm-sweep,
 [data-motion="reduced"] .watchman-mark .wm-node,
 [data-motion="reduced"] .watchman-live-pulse i,
-[data-motion="reduced"] .watchman-dock .rdock-control-image img { animation: none !important; }
+[data-motion="reduced"] .watchman-dock .watchman-reset-mark { animation: none !important; }
 
 @media (prefers-reduced-motion: reduce) {
   .watchman-mark .wm-sweep,
   .watchman-mark .wm-node,
   .watchman-live-pulse i,
-  .watchman-dock .rdock-control-image img { animation: none !important; }
+  .watchman-dock .watchman-reset-mark { animation: none !important; }
 }
 
 /* ==== OWNER SPACING CORRECTION — compact shell edge, roomy controls ========
@@ -48880,111 +48945,9 @@ body::after {
 .snav-group[data-nav-group="utility"] .snav-item[data-nav-id="calendar"] { order: 3; }
 .snav-group[data-nav-group="utility"] .snav-item[data-nav-id="notifications"] { order: 4; }
 
-/* Watchman Controls: one action per job, but never compressed into tiny chips.
-   The 8px spacing scale remains visible through 16px section padding, 72px
-   cadence rows, and balanced 44px target/action controls. */
-.watchman-controls-section-head {
-  min-height: 50px;
-  padding: 8px 16px !important;
-}
-
-.watchman-controls-section-head > button {
-  min-width: 112px;
-  height: 36px;
-  gap: 8px;
-  padding: 0 14px;
-  border-radius: 8px;
-  font-size: 10.5px;
-}
-
-.watchman-cadence-grid .rdock-cadence-row {
-  min-height: 72px !important;
-  padding: 12px 16px !important;
-}
-
-.watchman-cadence-grid .rdock-cadence-row > span {
-  gap: 3px !important;
-}
-
-.watchman-cadence-grid .rdock-cadence-row > span b {
-  line-height: 17px !important;
-}
-
-.watchman-cadence-grid .rdock-cadence-row > span em {
-  line-height: 15px !important;
-}
-
-.watchman-cadence-grid .rdock-cadence-select,
-.watchman-cadence-grid .rdock-cadence-select .rdock-cadence-trigger {
-  width: 112px !important;
-}
-
-.watchman-cadence-grid .rdock-cadence-select .rdock-cadence-trigger {
-  height: 42px !important;
-}
-
-.watchman-controls-view > .watchman-section-head:not(.watchman-controls-section-head) {
-  min-height: 50px;
-  padding: 8px 16px !important;
-}
-
-.watchman-recovery-console {
-  grid-template-columns: 42px minmax(0, 1fr) 182px 182px;
-  gap: 14px;
-  min-height: 112px;
-  padding: 16px;
-}
-
-.watchman-recovery-icon {
-  width: 40px;
-  height: 40px;
-}
-
-.watchman-recovery-copy {
-  gap: 3px;
-}
-
-.watchman-recovery-copy b {
-  font-size: 12.5px;
-  line-height: 18px;
-}
-
-.watchman-recovery-copy em {
-  font-size: 10.5px;
-  line-height: 15px;
-}
-
-.watchman-recovery-select,
-.watchman-recovery-select .mkx-pill.watchman-recovery-trigger,
-.watchman-recovery-console > button {
-  width: 182px;
-  height: 44px;
-}
-
-@media (max-width: 760px) {
-  .app-main main.app-page-main {
-    padding-top: 5px !important;
-  }
-
-  .app-main main.app-page-main > .app-page-frame > .container.page {
-    padding-top: 6px !important;
-  }
-
-  .watchman-recovery-console {
-    grid-template-columns: 40px minmax(0, 1fr);
-    min-height: 168px;
-  }
-
-  .watchman-recovery-select,
-  .watchman-recovery-select .mkx-pill.watchman-recovery-trigger,
-  .watchman-recovery-console > button {
-    width: 100%;
-  }
-}
-
 /* ==== OWNER IDENTITY SYSTEM — transparent, optical, state-aware ===========
-   Source screenshots are references only. Every mark below is code-native SVG
-   with no raster canvas, no white tile, and one 24px optical topbar scale. */
+   The brand uses the owner's exact supplied artwork; other operator marks stay
+   code-native and share one optical topbar scale. */
 .operator-identity-mark {
   display: block;
   flex: 0 0 auto;
@@ -48993,29 +48956,30 @@ body::after {
   shape-rendering: geometricPrecision;
 }
 
-.hdr-brand .brand-mark.brain-brand-mark {
-  width: 36px !important;
-  height: 36px !important;
-  flex: 0 0 36px !important;
+.hdr-brand .brand-mark.control-ring-brand-mark {
+  width: 30px !important;
+  height: 30px !important;
+  flex: 0 0 30px !important;
   overflow: visible !important;
-  filter: drop-shadow(0 4px 8px rgba(35, 190, 194, .14)) !important;
+  object-fit: contain !important;
+  filter: none !important;
   transform: none !important;
 }
 
-.hdr-brand:hover .brand-mark.brain-brand-mark {
-  filter: drop-shadow(0 5px 10px rgba(35, 190, 194, .2)) !important;
-  transform: translateY(-1px) scale(1.015) !important;
+.hdr-brand:hover .brand-mark.control-ring-brand-mark {
+  filter: none !important;
+  transform: none !important;
 }
 
-[data-theme="dark"] .hdr-brand .brand-mark.brain-brand-mark {
-  filter: drop-shadow(0 5px 11px rgba(37, 201, 200, .18)) !important;
+[data-theme="dark"] .hdr-brand .brand-mark.control-ring-brand-mark {
+  filter: none !important;
 }
 
 .smenu-bar.topbar-suite-v4 .rail-icon-core > .operator-identity-mark {
-  width: 24px !important;
-  height: 24px !important;
-  max-width: 24px !important;
-  max-height: 24px !important;
+  width: 18px !important;
+  height: 18px !important;
+  max-width: 18px !important;
+  max-height: 18px !important;
   background: transparent !important;
   transition: transform 180ms cubic-bezier(.22, 1, .36, 1), filter 180ms ease;
 }
@@ -49050,17 +49014,17 @@ body::after {
   filter: drop-shadow(0 3px 5px color-mix(in srgb, #397ff2 24%, transparent));
 }
 
-/* Keep the rest of the rail on the same family scale: all remain visibly
-   smaller than the 27-29px sidebar marks. */
+/* Keep the operational rail subordinate to the 30px product mark. The 42px
+   targets remain intact; only the visible artwork contracts. */
 .smenu-bar.topbar-suite-v4 .trust-advisor-trigger-image,
 .smenu-bar.topbar-suite-v4 .basis-trigger-image {
-  width: 24px !important;
-  height: 24px !important;
+  width: 18px !important;
+  height: 18px !important;
 }
 
 .smenu-bar.topbar-suite-v4 .notification-trigger-image {
-  width: 25px !important;
-  height: 25px !important;
+  width: 18px !important;
+  height: 18px !important;
 }
 
 /* Popup identities reuse the exact trigger geometry at a readable 40px scale.
@@ -49543,11 +49507,35 @@ body::after {
 .smenu-bar.topbar-suite-v4 .ops-notification-list { display: grid !important; flex: 1 1 auto !important; grid-auto-rows: minmax(56px, 1fr) !important; min-height: 0 !important; overflow-y: auto !important; }
 .smenu-bar.topbar-suite-v4 .ops-notification-list .ops-row { min-height: 56px !important; }
 
-/* Execution — emergency control remains prominent; modes share the tape. */
-.smenu-bar.topbar-suite-v4 .ops-emergency { min-height: 88px !important; height: 88px !important; margin: 0 !important; padding: 12px var(--popover-rail) !important; flex: 0 0 88px !important; border: 0 !important; border-bottom: 1px solid var(--line) !important; border-radius: 0 !important; }
-.smenu-bar.topbar-suite-v4 .ops-emergency b { font-size: 12.75px !important; font-weight: 480 !important; line-height: 18px !important; }
-.smenu-bar.topbar-suite-v4 .ops-emergency em { font-size: 10.5px !important; font-weight: 400 !important; line-height: 15px !important; }
-.smenu-bar.topbar-suite-v4 .ops-emergency strong { font-family: var(--ref-mono-font, var(--mono)) !important; font-size: 9.75px !important; font-weight: 500 !important; }
+/* Execution — one real Stop/Resume action owns the header's trailing slot.
+   The redundant status/action row is intentionally absent. */
+.smenu-bar.topbar-suite-v4 .ops-sheet-action {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+}
+.smenu-bar.topbar-suite-v4 .ops-execution-action {
+  display: flex !important;
+  width: 102px !important;
+  height: 36px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  padding: 0 10px !important;
+  border: 1px solid currentColor !important;
+  border-radius: 8px !important;
+  font-family: var(--font) !important;
+  font-size: 11.5px !important;
+  font-weight: 520 !important;
+  line-height: 16px !important;
+  letter-spacing: 0 !important;
+  cursor: pointer !important;
+  box-shadow: none !important;
+}
+.smenu-bar.topbar-suite-v4 .ops-execution-action.resume { color: #168f60 !important; background: color-mix(in srgb, #168f60 7%, var(--panel)) !important; }
+.smenu-bar.topbar-suite-v4 .ops-execution-action.stop { color: #d83f49 !important; background: color-mix(in srgb, #d83f49 7%, var(--panel)) !important; }
+.smenu-bar.topbar-suite-v4 .ops-execution-action:is(:hover, :focus-visible) { background: color-mix(in srgb, currentColor 11%, var(--panel)) !important; }
+.smenu-bar.topbar-suite-v4 .ops-execution-action .execution-power-identity-mark { width: 15px !important; height: 15px !important; }
 .smenu-bar.topbar-suite-v4 .ops-control-list { display: grid !important; flex: 1 1 auto !important; grid-template-rows: repeat(4, minmax(0, 1fr)) !important; min-height: 0 !important; overflow: hidden !important; }
 .smenu-bar.topbar-suite-v4 .ops-control-row { min-height: 0 !important; height: auto !important; padding: 8px var(--popover-rail) !important; border: 0 !important; border-bottom: 1px solid var(--line) !important; border-radius: 0 !important; background: transparent !important; }
 .smenu-bar.topbar-suite-v4 .ops-control-row:last-child { border-bottom: 0 !important; }

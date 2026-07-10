@@ -55,11 +55,11 @@ Use these as first-pass guardrails before taking screenshots:
 | --- | ---: | ---: | --- |
 | Header | 64px high | about 64px at 100% | Flat, no tint band. |
 | Sidebar | 178px wide | about 178px at 100% | Calm nav rail, no gradient/tint exterior. |
-| Sidebar Row | 36px high | about 36px | Compact enough to keep every Utility item visible. |
+| Sidebar Row | 40px high (`36px` only below 731px viewport height) | measured 40px | Icon scale does not control breathing room. |
 | Sidebar Label | 14px / 20px, 500 | active 560 | Crisp text matters more than background. |
 | Sidebar Group | 9px / 12px, 720, uppercase | muted caps | Small section labels, not huge category banners. |
 | Topbar Search | 42px high, about 440px wide | 44px x 462px | Coinbase pill aligned to content start. |
-| Topbar Icon | 24px optical mark in 42px target | 24px; bell 25px | Smaller than the 27-29px sidebar marks. |
+| Topbar Icon | 18px optical mark in 42px target | 18px across the operational rail | Quiet controls remain subordinate to the 30px product identity. |
 | Shared Popover | 400px, 14px radius | measured height | One persistent shell for every panel. |
 | Account Sheet | 400px shared shell | same as every trigger | Real profile, exchange, session, and logout rows. |
 
@@ -75,15 +75,19 @@ Current sidebar standard:
 
 - White panel background, no exterior tint, no gradient wash.
 - Shell padding is 4px top / 5px sides; the old 15px top and 10px side trench is retired.
-- Group spacing: 6px group gap, group title margin 6px 7px 5px.
+- Group spacing: 8px group gap, group title margin 7px 7px 7px. The compact
+  `<=730px` height fallback returns to 6px and 6px/7px/5px so every Utility
+  destination still fits at the verification viewport.
 - Group title: 9px, 12px line-height, 720, uppercase, letter spacing 0.16em,
   muted gray.
-- Row: 36px high, 8px radius, 7px horizontal padding, 28px icon column, 8px
-  gap. Active/hover backgrounds stretch symmetrically across the rail.
+- Row: 40px high, 8px radius, 7px horizontal padding, 28px icon column, 8px
+  gap. The icon column remains stable while the artwork shrinks; active/hover
+  backgrounds stretch symmetrically across the rail.
 - Label: 14px, 20px line-height, weight 500 normal, 560 active.
-- Navigation images: 27px optical mark in a 28px slot, transparent background,
-  translated down by 1px. Calendar may use 29px width to offset its source
-  canvas. This scale is intentionally larger than the 25px topbar marks.
+- Navigation images: 19px optical mark in a 28px alignment slot, transparent
+  background, no transform. Calendar and Notifications may reach 20px to
+  compensate for their lighter source canvases. This is 30% below the former
+  27-29px marks; the 40px row preserves air instead of shrinking with the art.
 - Active row: subtle warm fill (`#f0ede6`), not a loud blue block. Hover uses
   `#f5f2ec`.
 - No `translateX(1px)` or subpixel text movement on persistent nav labels.
@@ -113,14 +117,25 @@ Current standard:
 - Product lockup: `ARBITRAGE` over `CONTROL ROOM`; the browser title,
   accessible home label, and footer use the shorter identity.
 - Header brand hit area: 160px × 48px at the desktop baseline.
-- Mark: a 34px code-native pair of opposing blue/violet venue-flow arrows with
-  one controlled midpoint. The rejected letter `A` is retired.
-- Name: 14px / 16px, weight 650, uppercase, `.075em` tracking.
-- Sub: 8.5px / 11px mono/caps, restrained tracking.
+- Mark: the owner's supplied concentric blue Control Room `C`, reconstructed as
+  a 30px transparent three-ring SVG. It now carries the product hierarchy
+  instead of reading smaller than the operational rail, while retaining its
+  full artboard and no screenshot canvas in either theme. The rejected
+  folded-file and `</>` experiments are retired.
+- Name: 18px / 20px, weight 670, uppercase, `.055em` tracking.
+- Sub: 10.5px / 12px mono/caps, weight 650, `.16em` tracking.
 - Search begins at `sidebar width + 10px`, leaving a compact gap after the
   shorter brand and aligning with the tightened route rail.
 - No huge sidebar masthead, no extra decorative line collisions around the
   brand, no tint block behind the logo.
+
+Watchman overlay rule: `/connection-reset-mark.svg` packages the alpha-extracted
+pixels from the owner's supplied image, including its original `#588DF2` blue,
+long-arc anatomy, and `264:230` aspect ratio. It renders inside a borderless 76px
+theme-matched circular button. The global `.rdock-btn::before` breathing outline
+must stay disabled for this launcher and no inner mask may cover the arrows.
+The circle blocks prices or metrics underneath without creating the rejected
+rounded-square tile or changing the supplied artwork.
 
 ## 5. Global Search Lesson
 
@@ -204,8 +219,8 @@ Current trigger pattern:
 
 - Topbar triggers are icon-first.
 - Trigger targets are 42px CSS, transparent background, no visible box by
-  default. Visible operational marks are 24px; the bell is 25px for optical
-  compensation. Sidebar marks remain larger at 27-29px.
+  default. Visible operational marks are 18px across the rail. Their source
+  colors remain recognizable without competing with the 30px product mark.
 - Use source-driven color identity across the row:
   - AWS Runner: orange three-face cube.
   - API Key: yellow-to-orange key.
@@ -405,10 +420,12 @@ What makes it useful:
 
 What makes it useful:
 
-- Emergency Stop remains a separate immediate action. Ready state is an obvious
-  red `STOP BOT` button using the owner-supplied red power mark. After activation
-  the whole action becomes green and reads `Bot Stopped`; `RESUME` requires
-  confirmation. Stopped is a safe confirmed state, not a red ongoing failure.
+- Emergency Stop remains one immediate action. The aligned `102×36` real action
+  owns the header's trailing slot: red `Stop Bot` while running, green `Resume`
+  while stopped. Never pair that control with a redundant `Limited`/`Ready`
+  badge or a second Bot Running state row. The subtitle carries the current
+  blocker, the mode rows start immediately below the header, and Resume still
+  requires confirmation.
 - Funds Access, Borrowing, Strategy Automation, and Live Orders use one real
   three-position radio control: Blocked on the left, Paused in the middle, and
   Allowed on the right. Blocked is red, Paused is neutral, Allowed is green.
@@ -434,14 +451,22 @@ What makes it useful:
   browser-polling controls and every source-health check live in the single
   bottom-right `RefreshDock` Connection Watchman.
 - The launcher uses the owner's supplied solid-blue two-arrow refresh identity,
-  traced into transparent `/connection-reset-mark.svg`. The mark is 76px — 30%
-  larger than the previous 58px identity — with a slow one-turn pause cycle and
-  a deliberate recovery spin. It has no visible circle or tinted container.
+  reconstructed as code-native SVG with the same separated arrows. The visible
+  mark is 68px inside a 76px target — about 30% larger than the previous 52px
+  identity — with a slow one-turn pause cycle and a deliberate recovery spin.
+  It has no visible circle, screenshot canvas, tile, or tinted container in
+  either theme.
   The popup header keeps the separate shield/radar Watchman mark. Reduced Motion
   freezes the launcher, header scan, and live wave.
-- At 1280×720 the panel measures `900×566`, x=`338`, y=`16`, with a 1px edge,
-  15px radius, no document overflow, and fixed header, five-fact summary,
-  four-view rail, and scrolling evidence area.
+- At 1280×720 the panel resolves to `900×566`; on taller workstations it caps at
+  `900×650`. It keeps a 1px edge, 15px radius, no document overflow, and fixed
+  header, five-fact summary, three-view rail, scrolling evidence area, and a
+  76px recovery console fixed to the panel bottom.
+- The five summary facts remain one continuous hairline tape. Overview is the
+  working control plane: the six-stage connection path is a compact evidence
+  list on the left and the four browser polling controls are aligned on the
+  right. Connections and Sources remain the deeper scrollable inventories.
+  Do not restore a fourth Controls tab or a decorative transition queue.
 - Live rows come from current evidence: browser RTT/socket; server control API; public market
   streams; Binance REST latency/clock/rate weight; account sync; Basis and
   Volume runtimes; News; Calendar; FX; Ledger DB; optional user-stream fallback.
@@ -459,13 +484,13 @@ What makes it useful:
 - Cadence choices are exact persisted radio groups: `<1s`, `1s`, `3s`, `5s`,
   and `10s`. News and Calendar must honor the selected value; never present a
   cadence that the mounted page silently ignores.
-- Controls must not repeat recovery as six cards plus a footer reset. One
+- Controls must not repeat recovery as cards or per-view footers. One persistent
   Recovery Target selector owns `all/market/runtime/account/news/calendar/fx`
-  and one equal-height `Run Recovery` action calls the existing backend. The
-  target and action are balanced `182×44` controls with 14px separation;
-  cadence selectors are `112×42`, cadence rows are 72px, and section padding is
-  16px. Cadence Defaults is a visible `112×36` action in the Polling Cadence
-  header. No action footer is part of this popup.
+  and one equal-height `Run Recovery` action calls the existing backend. That
+  console stays visible at the bottom of Overview, Connections, and Sources.
+  The target and action are balanced `182×42` controls with 12px separation.
+  Every Overview cadence row is 64px with a `112×38` selector and a distinct
+  34px targeted refresh action; Defaults is a restrained `86×28` header action.
 
 ### Route Edge
 
@@ -536,6 +561,14 @@ Real behavior:
   agents only, the last 24 hours returned (up to 100 rows), two minutes defining
   `Active`, and thirty days retained in SQLite. Command-line probes, bots, and
   API tools are excluded so health checks never appear as fake devices.
+- A random first-party `cosmos_device` identity is created once per browser
+  profile and hashed server-side. This is the durable device key; IP and
+  User-Agent are evidence, not identity. Separate devices behind the same NAT
+  with the same Chrome version must therefore remain separate. Privacy-blocked
+  browsers may use the old IP/User-Agent fallback, but that fallback is hidden
+  as soon as the matching token-backed profile exists so one device never
+  appears twice. The response is `private, no-store`, the current profile sorts
+  first, then active profiles, then newest `lastSeen`.
 - This telemetry survives a server restart and records first seen, last seen,
   request count, browser, OS, IP, and country whenever those facts are actually
   available. It is not presented as Cloudflare's authenticated-session

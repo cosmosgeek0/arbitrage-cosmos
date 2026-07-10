@@ -344,11 +344,14 @@ app.get('/api/state', (_req, res) => {
 });
 
 app.get('/api/events', (req, res) => {
-  const limit = Math.min(Number(req.query.limit ?? 200), 1000);
+  const requestedLimit = Number(req.query.limit ?? 200);
+  const limit = Math.max(1, Math.min(Number.isFinite(requestedLimit) ? requestedLimit : 200, 20_000));
   const kind = req.query.kind ? String(req.query.kind) : undefined;
   const symbol = req.query.symbol ? String(req.query.symbol).toUpperCase() : undefined;
   const q = req.query.q ? String(req.query.q).slice(0, 60) : undefined;
-  res.json(ledger.recentEvents(limit, kind, symbol, q));
+  const requestedSince = Number(req.query.since);
+  const since = Number.isFinite(requestedSince) && requestedSince > 0 ? requestedSince : undefined;
+  res.json(ledger.recentEvents(limit, kind, symbol, q, since));
 });
 
 // ---- Binance announcements proxy (real critical announcements; cached) ------
@@ -434,7 +437,7 @@ app.get('/api/news-context', (req, res) => {
   void (async () => {
     try {
       const force = req.query.refresh === '1' || req.query.refresh === 'true';
-      const limit = Math.max(20, Math.min(Number(req.query.limit ?? 220), 1200));
+      const limit = Math.max(20, Math.min(Number(req.query.limit ?? 220), 8000));
       const payload = await getNewsContext(force);
       res.json({ ...payload, items: payload.items.slice(0, limit) });
     } catch (err) {
@@ -444,27 +447,18 @@ app.get('/api/news-context', (req, res) => {
   })();
 });
 
-// One refresh owner serves every connected browser. Upstream publishers keep
-// their own safe fetch floors; clients only subscribe to committed snapshots.
-let newsStreamClients = 0;
+// One server-owned refresh loop runs whether or not a browser is open. This is
+// what keeps the rolling seven-day archive complete on an unattended EC2 host;
+// browsers only subscribe to committed snapshots and never own collection.
 let newsRefreshTimer: NodeJS.Timeout | null = null;
 
-function retainNewsRefreshLoop(): () => void {
-  newsStreamClients += 1;
-  if (!newsRefreshTimer) {
-    newsRefreshTimer = setInterval(() => { void getNewsContext(true).catch(() => undefined); }, 5_000);
-  }
-  return () => {
-    newsStreamClients = Math.max(0, newsStreamClients - 1);
-    if (newsStreamClients === 0 && newsRefreshTimer) {
-      clearInterval(newsRefreshTimer);
-      newsRefreshTimer = null;
-    }
-  };
+function startNewsRefreshLoop(): void {
+  if (newsRefreshTimer) return;
+  newsRefreshTimer = setInterval(() => { void getNewsContext(true).catch(() => undefined); }, 5_000);
 }
 
 app.get('/api/news-stream', (req, res) => {
-  const limit = Math.max(20, Math.min(Number(req.query.limit ?? 220), 1200));
+  const limit = Math.max(20, Math.min(Number(req.query.limit ?? 220), 600));
   res.status(200);
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -474,14 +468,12 @@ app.get('/api/news-stream', (req, res) => {
   const send = (payload: Awaited<ReturnType<typeof getNewsContext>>) => {
     res.write(`event: news\ndata: ${JSON.stringify({ ...payload, items: payload.items.slice(0, limit) })}\n\n`);
   };
-  const releaseRefreshLoop = retainNewsRefreshLoop();
   const unsubscribe = subscribeNewsContext(send);
   void getNewsContext(false).catch(() => undefined);
   const heartbeat = setInterval(() => res.write(': keep-alive\n\n'), 15_000);
   req.on('close', () => {
     clearInterval(heartbeat);
     unsubscribe();
-    releaseRefreshLoop();
   });
 });
 
@@ -1791,6 +1783,7 @@ setTimeout(primeIconUniverse, 20_000);
 setTimeout(() => {
   void startCalendarRefresh();
   void getNewsContext(false).catch(() => undefined);
+  startNewsRefreshLoop();
 }, 250);
 function warmProfileUniverse(): void {
   try {

@@ -4,6 +4,7 @@ import path from 'node:path';
 export type NewsContextChannel = 'primary' | 'venue' | 'protocol' | 'issuer' | 'tree' | 'rss' | 'lookonchain';
 export type NewsContextTone = 'bad' | 'warn' | 'ok' | 'idle';
 export type NewsSourceStatus = 'live' | 'delayed' | 'error';
+export type NewsCategory = 'Crypto' | 'Macro' | 'Markets' | 'Regulation' | 'Exchange' | 'On-Chain' | 'Security' | 'Protocol';
 
 export interface NewsContextItem {
   id: string;
@@ -18,6 +19,7 @@ export interface NewsContextItem {
   timeLabel: string;
   symbols: string[];
   tags: string[];
+  category: NewsCategory;
   tone: NewsContextTone;
   impact: 1 | 2 | 3;
 }
@@ -40,11 +42,13 @@ export interface NewsContextPayload {
   sources: NewsContextSource[];
 }
 
-const TREE_URL = 'https://news.treeofalpha.com/api/news?limit=60';
+const TREE_URL = 'https://news.treeofalpha.com/api/news?limit=200';
+const TREE_HISTORY_URL = 'https://news.treeofalpha.com/api/news?limit=5000';
 const LOOKONCHAIN_URL = 'https://www.lookonchain.com/ashx/index.ashx?type=1&page=1&pageSize=24';
 const CACHE_MS = 5_000;
 const FETCH_TIMEOUT_MS = 8_000;
 const TREE_MIN_FETCH_MS = 15_000;
+const TREE_HISTORY_FETCH_MS = 10 * 60_000;
 const LOOKONCHAIN_MIN_FETCH_MS = 15_000;
 const RSS_DEFAULT_MIN_FETCH_MS = 30_000;
 const PRIMARY_DEFAULT_MIN_FETCH_MS = 60_000;
@@ -53,8 +57,11 @@ const PROTOCOL_DEFAULT_MIN_FETCH_MS = 120_000;
 const ISSUER_DEFAULT_MIN_FETCH_MS = 120_000;
 const OFFICIAL_SOURCE_CONCURRENCY = 4;
 const RSS_SOURCE_CONCURRENCY = 6;
-const NEWS_ARCHIVE_RETENTION_MS = 14 * 86_400_000;
-const NEWS_ARCHIVE_MAX_ITEMS = 4_000;
+// The UI exposes exactly seven calendar days. Eight elapsed days are retained
+// internally so the oldest visible day stays complete in every supported
+// timezone, including UTC-12 through UTC+14.
+const NEWS_ARCHIVE_RETENTION_MS = 8 * 86_400_000;
+const NEWS_ARCHIVE_MAX_ITEMS = 8_000;
 const NEWS_ARCHIVE_PATH = path.join(process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.resolve(process.cwd(), 'data'), 'news-archive.json');
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 const OFFICIAL_MACRO_KEYS = new Set([
@@ -65,6 +72,15 @@ const OFFICIAL_MACRO_KEYS = new Set([
 const VENUE_KEYS = new Set([
   'binance', 'coinbase-assets', 'kraken', 'okx', 'bybit', 'upbit-bithumb',
   'deribit', 'cme-crypto', 'exchange-status',
+]);
+const REGULATORY_KEYS = new Set([
+  'sec', 'cftc', 'treasury', 'ofac', 'japan-fsa', 'uk-fca', 'esma',
+]);
+const CRYPTO_EDITORIAL_KEYS = new Set([
+  'coindesk', 'the-block', 'blockworks', 'dl-news', 'unchained', 'protos',
+  'the-defiant', 'crypto-news', 'ledger-insights', 'rekt', 'beincrypto',
+  'cointelegraph', 'decrypt', 'cryptoslate', 'wublockchain', 'bankless',
+  'watcherguru', 'chainalysis', 'trm-labs', 'elliptic',
 ]);
 const TRUSTED_EDITORIAL_KEYS = new Set([
   'financialjuice', 'wsj-markets', 'ft-alphaville', 'cnbc-markets', 'marketwatch',
@@ -819,11 +835,12 @@ let cache: NewsContextPayload | null = archive.length ? {
   // Mark the bootstrap snapshot stale so the first caller starts a background
   // live sweep while still receiving the persisted tape immediately.
   fetchedAt: Date.now() - CACHE_MS,
-  items: archive.slice(0, 1200),
+  items: archive.slice(0, NEWS_ARCHIVE_MAX_ITEMS),
   sources: bootstrapNewsSources(),
 } : null;
 let inFlight: Promise<NewsContextPayload> | null = null;
 let treeSourceCache: (RssFetchResult & { fetchedAt: number }) | null = null;
+let treeHistoryFetchedAt = 0;
 let lookonchainSourceCache: (RssFetchResult & { fetchedAt: number }) | null = null;
 const subscribers = new Set<(payload: NewsContextPayload) => void>();
 const rssSourceCache = new Map<string, RssFetchResult & { fetchedAt: number }>();
@@ -869,10 +886,7 @@ function loadNewsArchive(): NewsContextItem[] {
     return parsed
       .filter((item): item is NewsContextItem => Boolean(item && typeof item === 'object' && typeof (item as NewsContextItem).id === 'string'))
       .filter(isUsefulNewsItem)
-      .map((item) => ({
-        ...item,
-        impact: scoreNewsImpact(item),
-      }))
+      .map(refreshItemSignals)
       .sort(compareContextItems)
       .slice(0, NEWS_ARCHIVE_MAX_ITEMS);
   } catch {
@@ -886,7 +900,7 @@ function commitNewsArchive(currentItems: NewsContextItem[]): NewsContextItem[] {
   archive = [...currentItems, ...archive]
     .filter((item) => item.ts !== null && item.ts >= cutoff && item.ts <= Date.now())
     .filter(isUsefulNewsItem)
-    .map((item) => ({ ...item, impact: scoreNewsImpact(item) }))
+    .map(refreshItemSignals)
     .sort(compareContextItems)
     .filter((item) => {
       const key = canonicalNewsKey(item);
@@ -907,7 +921,7 @@ function commitNewsArchive(currentItems: NewsContextItem[]): NewsContextItem[] {
   }
 
   const undated = currentItems.filter((item) => item.ts === null);
-  return [...archive, ...undated].sort(compareContextItems).slice(0, 1200);
+  return [...archive, ...undated].sort(compareContextItems).slice(0, NEWS_ARCHIVE_MAX_ITEMS);
 }
 
 export async function getNewsContext(force = false): Promise<NewsContextPayload> {
@@ -962,7 +976,7 @@ async function refreshNewsContext(): Promise<NewsContextPayload> {
       return true;
     })
     .sort(compareContextItems)
-    .slice(0, 1200);
+    .slice(0, NEWS_ARCHIVE_MAX_ITEMS);
   const items = commitNewsArchive(currentItems);
 
   return {
@@ -1091,7 +1105,7 @@ async function fetchOfficialSource(
       return true;
     })
     .sort(compareContextItems)
-    .slice(0, 16);
+    .slice(0, 64);
 
   if (!items.length && cached) {
     return {
@@ -1131,34 +1145,48 @@ async function fetchOfficialSource(
 
 async function fetchTree(): Promise<{ items: NewsContextItem[]; source: NewsContextSource }> {
   const fetchedAt = Date.now();
-  if (treeSourceCache && Date.now() - treeSourceCache.fetchedAt < TREE_MIN_FETCH_MS) {
+  if (treeSourceCache && fetchedAt - treeSourceCache.fetchedAt < TREE_MIN_FETCH_MS) {
     return {
       items: treeSourceCache.items,
       source: {
         ...treeSourceCache.source,
-        detail: `Public history endpoint. Cached ${sourceAgeLabel(treeSourceCache.fetchedAt)}; realtime requires Tree websocket/API key.`,
+        detail: `Rolling public history with lightweight live polling. Cached ${sourceAgeLabel(treeSourceCache.fetchedAt)}.`,
         fetchedAt: treeSourceCache.source.fetchedAt,
         count: treeSourceCache.items.length,
       },
     };
   }
+  const refreshHistory = !treeSourceCache || fetchedAt - treeHistoryFetchedAt >= TREE_HISTORY_FETCH_MS;
+  const endpoint = refreshHistory ? TREE_HISTORY_URL : TREE_URL;
   try {
-    const data = await fetchJson<unknown[]>(TREE_URL, { headers: { Accept: 'application/json' } });
-    const items = Array.isArray(data)
-      ? data.map((row) => normalizeTree(row)).filter((row): row is NewsContextItem => Boolean(row)).slice(0, 60)
+    const data = await fetchJson<unknown[]>(endpoint, { headers: { Accept: 'application/json' } });
+    const fresh = Array.isArray(data)
+      ? data.map((row) => normalizeTree(row)).filter((row): row is NewsContextItem => Boolean(row)).filter(isUsefulNewsItem)
       : [];
+    const seen = new Set<string>();
+    const items = [...fresh, ...(treeSourceCache?.items ?? [])]
+      .filter((item) => item.ts !== null && item.ts >= fetchedAt - NEWS_ARCHIVE_RETENTION_MS)
+      .sort(compareContextItems)
+      .filter((item) => {
+        const key = canonicalNewsKey(item);
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 5_000);
+    if (refreshHistory) treeHistoryFetchedAt = fetchedAt;
     const result: RssFetchResult = {
       items,
       source: {
         key: 'tree',
-	        label: 'Tree Of Alpha Relay',
+        label: 'Tree Of Alpha Relay',
         status: 'delayed',
-	        detail: 'Public history endpoint. Realtime requires Tree websocket/API key.',
-	        fetchedAt,
-	        count: items.length,
-	        url: TREE_URL,
-	        domain: 'treeofalpha.com',
-	      },
+        detail: 'Rolling seven-day public history with a smaller live polling delta.',
+        fetchedAt,
+        count: items.length,
+        url: TREE_URL,
+        domain: 'treeofalpha.com',
+      },
     };
     if (items.length) treeSourceCache = { ...result, fetchedAt };
     return result;
@@ -1168,13 +1196,13 @@ async function fetchTree(): Promise<{ items: NewsContextItem[]; source: NewsCont
         items: treeSourceCache.items,
         source: {
           ...treeSourceCache.source,
-          detail: `Using latest cached Tree history rows; refresh hit ${errorMessage(err)}.`,
+          detail: `Using the retained Tree history; refresh hit ${errorMessage(err)}.`,
           fetchedAt: treeSourceCache.source.fetchedAt,
           count: treeSourceCache.items.length,
         },
       };
     }
-	    return { items: [], source: sourceError('tree', 'Tree Of Alpha Relay', err, TREE_URL, 'treeofalpha.com') };
+    return { items: [], source: sourceError('tree', 'Tree Of Alpha Relay', err, endpoint, 'treeofalpha.com') };
   }
 }
 
@@ -1235,7 +1263,7 @@ async function fetchRssBundle(): Promise<{ items: NewsContextItem[]; sources: Ne
   const items = settled
     .flatMap((res) => res.items)
     .sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0))
-    .slice(0, 260);
+    .slice(0, 6_000);
   return {
     items,
     sources: settled.map((res) => res.source),
@@ -1266,7 +1294,7 @@ async function fetchRssFeed(feed: RssFeed, fetchedAt: number): Promise<RssFetchR
           Referer: `https://${feed.domain}/`,
         },
       });
-      const items = parseMediaPage(html, feed).slice(0, 8);
+      const items = parseMediaPage(html, feed).slice(0, 80);
       const result: RssFetchResult = {
         items,
         source: {
@@ -1290,7 +1318,7 @@ async function fetchRssFeed(feed: RssFeed, fetchedAt: number): Promise<RssFetchR
         Referer: `https://${feed.domain}/`,
       },
     });
-    const items = parseFeed(xml, feed).slice(0, 8);
+    const items = parseFeed(xml, feed).slice(0, 80);
     if (!items.length) {
       const fallback = await fetchRssFallback(feed, fetchedAt, 'Feed returned no rows.');
       if (fallback) return fallback;
@@ -1410,7 +1438,7 @@ function normalizeOfficialFeed(feed: OfficialFeedEndpoint): { url: string; label
 function parseFeed(xml: string, feed: FeedConfig, channel: NewsContextChannel = 'rss'): NewsContextItem[] {
   const rssItems = matchBlocks(xml, 'item');
   const atomItems = rssItems.length ? [] : matchBlocks(xml, 'entry');
-  const maxBlocks = feed.includeKeywords?.length ? 60 : channel === 'primary' || channel === 'venue' ? 20 : 8;
+  const maxBlocks = feed.includeKeywords?.length ? 160 : channel === 'primary' || channel === 'venue' ? 120 : 100;
   const feedBuildTs = parseDateMillis(readTag(xml, 'lastBuildDate') ?? readTag(xml, 'updated') ?? '');
   const rows = (rssItems.length ? rssItems : atomItems)
     .slice(0, maxBlocks)
@@ -2011,6 +2039,7 @@ function buildItem(input: {
   const ts = normalizeTimestamp(input.ts);
   const text = `${input.title} ${input.summary ?? ''}`;
   const tags = classifyTags(text);
+  const category = classifyNewsCategory({ sourceKey: input.sourceKey, channel: input.channel, title: input.title, tags });
   return {
 	    id: input.id,
 	    url: input.url,
@@ -2024,6 +2053,7 @@ function buildItem(input: {
     timeLabel: ts ? ageLabel(ts) : 'Undated',
     symbols: extractSymbols(text, input.extraSymbols),
     tags,
+    category,
     tone: toneForTags(tags),
     impact: scoreNewsImpact({ sourceKey: input.sourceKey, channel: input.channel, title: input.title, tags }),
   };
@@ -2161,20 +2191,39 @@ function channelRank(channel: NewsContextChannel): number {
 function classifyTags(text: string): string[] {
   const lower = text.toLowerCase();
   const tags: string[] = [];
-  if (/(binance|coinbase|kraken|bybit|okx|upbit|bithumb|deribit|cme|globex|exchange|status page)/.test(lower)) tags.push('Exchange');
-  if (/(listing|list|launch|perpetual|pair|airdrop|hodler|futures|options|contract)/.test(lower)) tags.push('Listing');
-  if (/(delist|removal|cease support|monitoring tag|trading support end|거래지원 종료|거래유의)/.test(lower)) tags.push('Delisting');
-  if (/(api|websocket|endpoint|request weight|maintenance|upgrade|suspend|deposit|withdrawal|wallet|network|outage|incident|service issue|점검|입출금)/.test(lower)) tags.push('Ops');
-  if (/(whale|wallet|transfer|bought|sold|deposited|withdrew|smart money|on-chain|onchain)/.test(lower)) tags.push('On-Chain');
-  if (/(hack|exploit|attack|phishing|security|stolen)/.test(lower)) tags.push('Security');
-  if (/(release|client|node|validator|version|upgrade|hard fork|soft fork|mainnet|testnet|consensus|execution layer|beacon|github)/.test(lower)) tags.push('Release');
-  if (/(governance|proposal|vote|dao|parameter|delegate|forum)/.test(lower)) tags.push('Governance');
-  if (/(stablecoin|stable coin|usdt|usdc|pyusd|usds|fdusd|depeg|peg|reserve|redemption|attestation)/.test(lower)) tags.push('Stablecoin');
+  if (/\b(binance|coinbase|kraken|bybit|okx|upbit|bithumb|deribit|cme|globex)\b|\b(?:crypto|digital asset|stock) exchange\b|\btrading venue\b|\bexchange (?:listing|delisting|outage|maintenance)\b/.test(lower)) tags.push('Exchange');
+  if (/\b(listing|lists|listed|launchpool|launchpad|perpetual|trading pair|airdrop|hodler|futures|options)\b/.test(lower)) tags.push('Listing');
+  if (/\b(delist|delists|delisted|delisting|removal of .*trading pairs?|cease support|monitoring tag|trading support end)\b|거래지원 종료|거래유의/.test(lower)) tags.push('Delisting');
+  if (/\b(api|websocket|endpoint|request weight|maintenance|upgrade|suspend(?:ed|sion)?|deposit|withdrawal|outage|incident|service issue)\b|점검|입출금/.test(lower)) tags.push('Ops');
+  if (/\b(whale|wallet|transfer(?:red)?|burn(?:ed)?|bought|sold|deposited|withdrew|smart money|on-chain|onchain|netflow|inflow|outflow)\b/.test(lower)) tags.push('On-Chain');
+  if (/\b(hack(?:ed)?|exploit(?:ed)?|breach(?:ed)?|cyberattack|phishing|stolen|drain(?:ed)?|vulnerability|security incident)\b/.test(lower)) tags.push('Security');
+  if (/\b(release|client|node|validator|version|upgrade|hard fork|soft fork|mainnet|testnet|consensus|execution layer|beacon|github)\b/.test(lower)) tags.push('Release');
+  if (/\b(governance|dao|delegate|forum)\b|\b(?:protocol|token|chain|on-chain) (?:proposal|vote)\b|\bproposal #?\d+\b/.test(lower)) tags.push('Governance');
+  if (/\b(stablecoin|stable coin|usdt|usdc|pyusd|usds|fdusd|depeg|reserve|redemption|attestation)\b/.test(lower)) tags.push('Stablecoin');
   if (/\b(fed|fomc|bls|bea|cpi|ppi|pce|jolts|inflation|payroll|unemployment|rate|rates|gdp|employment|jobs|treasury|ofac|ecb|boe|boj|pboc|safe|fx reserve|yield|tariff|iran|strike|strikes|war)\b/.test(lower) || /\b(u\.s\.|us)\s+treasury\b/.test(lower)) tags.push('Macro');
-  if (/\b(etf|sec|cftc|lawsuit|court|regulator|approval|enforcement|litigation|sanction|general license|trading suspension|stablecoin)\b/.test(lower)) tags.push('Policy');
+  if (/\b(etf|sec|cftc|lawsuit|court|regulator|regulation|approval|enforcement|litigation|sanction|general license|trading suspension|legislation|bill|law)\b/.test(lower)) tags.push('Policy');
   if (/\b(ibit|fbtc|gbtc|bitb|arkb|ezbc|hodl|spot bitcoin etf|spot ether etf|bitcoin etf|ether etf)\b/.test(lower)) tags.push('ETF');
   if (!tags.length) tags.push('Market');
   return tags.slice(0, 4);
+}
+
+export function classifyNewsCategory(item: Pick<NewsContextItem, 'sourceKey' | 'channel' | 'title' | 'tags'>): NewsCategory {
+  const key = item.sourceKey;
+  const title = item.title.toLowerCase();
+  const tags = new Set(item.tags);
+  const cryptoTerms = /\b(bitcoin|btc|ethereum|eth|crypto|token|stablecoin|blockchain|defi|web3|nft|solana|xrp|dogecoin|altcoin)\b/.test(title);
+  const exchangeEntity = /\b(binance|coinbase|kraken|bybit|okx|upbit|bithumb|deribit|bitmex|crypto\.com)\b/.test(title);
+  const policyTerms = /\b(sec|cftc|fca|esma|ofac|regulator|regulation|lawsuit|court|enforcement|legislation|bill|law|license|sanction|approval|ban)\b/.test(title);
+  const macroTerms = /\b(fed|fomc|central bank|inflation|cpi|ppi|pce|gdp|payroll|unemployment|interest rate|rate decision|treasury|bond yield|ecb|boe|boj|pboc|tariff|fx|dollar|oil)\b/.test(title);
+
+  if (tags.has('Security')) return 'Security';
+  if (item.channel === 'venue' || VENUE_KEYS.has(key) || exchangeEntity || tags.has('Exchange') || tags.has('Delisting')) return 'Exchange';
+  if (REGULATORY_KEYS.has(key) || policyTerms || tags.has('Policy')) return 'Regulation';
+  if ((OFFICIAL_MACRO_KEYS.has(key) && !REGULATORY_KEYS.has(key)) || macroTerms || tags.has('Macro')) return 'Macro';
+  if (tags.has('On-Chain')) return 'On-Chain';
+  if (item.channel === 'protocol' || tags.has('Release') || tags.has('Governance')) return 'Protocol';
+  if (item.channel === 'issuer' || CRYPTO_EDITORIAL_KEYS.has(key) || cryptoTerms || tags.has('Stablecoin') || tags.has('ETF')) return 'Crypto';
+  return 'Markets';
 }
 
 function toneForTags(tags: string[]): NewsContextTone {
@@ -2187,24 +2236,63 @@ function toneForTags(tags: string[]): NewsContextTone {
 export function scoreNewsImpact(item: Pick<NewsContextItem, 'sourceKey' | 'channel' | 'title' | 'tags'>): 1 | 2 | 3 {
   const key = item.sourceKey;
   const title = item.title.toLowerCase();
-  const text = `${item.title} ${item.tags.join(' ')}`.toLowerCase();
-  const critical = /\b(hack|exploit|breach|stolen|drain(?:ed)?|depeg|bankruptcy|insolven(?:t|cy)|trading suspension|withdrawal halt|bridge pause|chain halt|service outage|emergency pause)\b/.test(title);
-  const macroRelease = /\b(fomc|interest rate|rate decision|cpi|pce|ppi|payroll|employment situation|unemployment|gdp|monetary policy|sanction|enforcement action|etf approval|court ruling|final rule)\b/.test(text);
-  const venueMove = /\b(listing|delisting|trading support|perpetual contract|margin pair|network suspension|deposit suspension|withdrawal suspension|maintenance|tick size|removal of .*trading pairs?)\b/.test(text);
-  const issuerMove = /\b(stablecoin|reserve|redemption|attestation|etf|fund launch|approval)\b/.test(text);
+  const category = classifyNewsCategory(item);
+  const critical = /\b(hack(?:ed)?|exploit(?:ed)?|breach(?:ed)?|stolen|drain(?:ed)?|depeg|bankruptcy|insolven(?:t|cy)|trading suspension|withdrawal halt|bridge pause|chain halt|service outage|emergency pause)\b/.test(title);
+  const decisiveMacro = /\b(fomc|interest rate decision|rate decision|cpi|consumer price index|pce|ppi|payroll|employment situation|unemployment report|gdp|monetary policy (?:decision|statement|report)|central bank decision)\b/.test(title);
+  const regulatoryAction = /\b(approve[sd]?|reject[sd]?|pass(?:es|ed)?|sign(?:s|ed)?|ban(?:s|ned)?|charges?|sues?|lawsuit|court ruling|final rule|enforcement action|license[sd]?|settlement|sanction[sd]?)\b/.test(title)
+    && /\b(sec|cftc|fca|esma|ofac|regulator|government|court|state|parliament|senate|congress|occ|crypto|bitcoin|etf|stablecoin|token)\b/.test(title);
+  const venueStructure = (item.channel === 'venue' || VENUE_KEYS.has(key) || category === 'Exchange')
+    && /\b(listing|delisting|trading support|perpetual contract|margin pair|leverage (?:tier|limit)|network suspension|deposit suspension|withdrawal suspension|maintenance|tick size|removal of .*trading pairs?)\b/.test(title);
+  const issuerStructure = /\b(stablecoin|reserve report|redemption|attestation|etf approval|fund launch|custody approval)\b/.test(title);
+  const marketShock = /\b(surge[sd]?|jump[sd]?|plunge[sd]?|tumble[sd]?|crash(?:es|ed)?|liquidations?|record inflow|record outflow)\b/.test(title)
+    && /\b\d+(?:\.\d+)?%\b|\$\s?\d/.test(title);
+  const materialOnChain = /\b(whale|wallet|transfer(?:red)?|inflow|outflow|burn(?:ed)?|liquidat(?:ed|ion))\b/.test(title)
+    && /\$\s?\d|\b\d+(?:\.\d+)?\s?(?:million|billion|m|bn)\b/.test(title);
+  const corporateMaterial = /\b(chief executive|ceo|cfo|chief legal officer|steps? down|resigns?|acquires?|acquisition|merger|funding round|raises? \$|files? for (?:ipo|bankruptcy))\b/.test(title);
+  const capitalMarketMaterial = /\b(ipo|offering|rights issue|bond sale|debt raise|raises?|raised)\b/.test(title)
+    && /\$\s?\d|\b\d+(?:\.\d+)?\s?(?:million|billion|m|bn)\b/.test(title);
+  const geopolitical = /\b(war|missile|airstrike|strikes? against|invasion|ceasefire|sanctions?)\b/.test(title);
+  const majorEntity = /\b(federal reserve|fed|sec|cftc|ecb|boj|pboc|tether|circle|blackrock|grayscale)\b/.test(title);
+  const largeScale = /\$\s?\d+(?:\.\d+)?\s?(?:billion|bn)\b|\$\s?(?:[1-9]\d{2,})(?:\.\d+)?\s?(?:million|m)\b/.test(title);
+  const lowSignal = /\b(opinion|explainer|what happened|price prediction|could|may|might|why |here'?s what|roundup|sponsored|hiring|job opening)\b/.test(title);
+  const routineRelease = item.channel === 'protocol' && /\b(?:ci|nightly|version|v?\d+\.\d+\.\d+|release candidate)\b/.test(title);
 
   if (critical) return 3;
-  if (OFFICIAL_MACRO_KEYS.has(key) && macroRelease) return 3;
-  if (VENUE_KEYS.has(key) && venueMove) return 3;
-  if (item.channel === 'issuer' && issuerMove) return 3;
-  if (item.tags.includes('Delisting')) return 3;
 
-  if (item.channel === 'primary' || item.channel === 'venue' || item.channel === 'protocol' || item.channel === 'issuer') return 2;
-  if (TRUSTED_EDITORIAL_KEYS.has(key)) return 2;
-  if (item.channel === 'lookonchain' && item.tags.some((tag) =>
-    ['Exchange', 'Listing', 'Delisting', 'Ops', 'On-Chain', 'Security', 'Stablecoin', 'Macro', 'Policy', 'ETF'].includes(tag)
-  )) return 2;
+  let score = 0;
+  if (OFFICIAL_MACRO_KEYS.has(key) || item.channel === 'venue' || item.channel === 'issuer') score += 2;
+  else if (item.channel === 'primary' || item.channel === 'protocol' || TRUSTED_EDITORIAL_KEYS.has(key)) score += 1;
+
+  if (decisiveMacro) score += 3;
+  if (regulatoryAction) score += 3;
+  if (venueStructure) score += 3;
+  if (issuerStructure) score += 2;
+  if (marketShock) score += 2;
+  if (materialOnChain) score += 1;
+  if (corporateMaterial) score += 1;
+  if (capitalMarketMaterial) score += 2;
+  if (geopolitical) score += 2;
+  if (majorEntity) score += 1;
+  if (largeScale) score += 1;
+  if (category === 'Macro' || category === 'Regulation' || category === 'Exchange' || category === 'On-Chain') score += 1;
+  if (lowSignal) score -= 1;
+  if (routineRelease) score = Math.min(score, 1);
+
+  if (score >= 4) return 3;
+  if (score >= 2) return 2;
   return 1;
+}
+
+function refreshItemSignals(item: NewsContextItem): NewsContextItem {
+  const tags = classifyTags(`${item.title} ${item.summary ?? ''}`);
+  const signal = { sourceKey: item.sourceKey, channel: item.channel, title: item.title, tags };
+  return {
+    ...item,
+    tags,
+    category: classifyNewsCategory(signal),
+    tone: toneForTags(tags),
+    impact: scoreNewsImpact(signal),
+  };
 }
 
 function extractSymbols(text: string, extra: string[] = []): string[] {

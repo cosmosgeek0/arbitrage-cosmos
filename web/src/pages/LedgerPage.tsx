@@ -1,42 +1,42 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStore, type Page } from '../store';
-import { Dot, Empty, PageHead, Pill, type Tone } from '../components/px';
+import { Empty, Pill, type Tone } from '../components/px';
 import { eventSummary } from '../lib/eventText';
-import { fmtDateTime, fmtPrice, timeAgo } from '../format';
+import { fmtPrice, timeAgo } from '../format';
+import { TIME_ZONE_OPTIONS, addDays, dayKey, formatKey, resolvedZoneLabel } from '../lib/time';
 import type { LedgerEvent } from '../types';
 import { TokenIcon } from '../components/TokenIcon';
 import { PillSelect } from '../components/PillSelect';
 import {
-  IconBook,
   IconChart,
   IconDatabase,
   IconReceipt,
   IconRefresh,
+  IconSearch,
   IconShield,
   IconTicket,
   IconWallet,
 } from '../components/Icons';
+import './LiveIntelligence.css';
 
 type Severity = 'Critical' | 'Warning' | 'Info' | 'Debug';
 type SeverityFilter = 'all' | Severity;
 type DecisionFilter = 'all' | 'accepted' | 'rejected';
-type TimeRange = 'all' | '15m' | '1h' | '24h' | '7d';
 
-const SEVERITIES: Severity[] = ['Critical', 'Warning', 'Info', 'Debug'];
 const SEVERITY_TONE: Record<Severity, Tone> = {
   Critical: 'bad',
   Warning: 'warn',
   Info: 'idle',
   Debug: 'idle',
 };
-
-const TIME_OPTIONS: { value: TimeRange; label: string; ms: number | null }[] = [
-  { value: 'all', label: 'All Time', ms: null },
-  { value: '15m', label: 'Last 15 Minutes', ms: 15 * 60 * 1000 },
-  { value: '1h', label: 'Last Hour', ms: 60 * 60 * 1000 },
-  { value: '24h', label: 'Last 24 Hours', ms: 24 * 60 * 60 * 1000 },
-  { value: '7d', label: 'Last 7 Days', ms: 7 * 24 * 60 * 60 * 1000 },
+const SEVERITY_FILTERS: { id: SeverityFilter; label: string }[] = [
+  { id: 'all', label: 'All Logs' },
+  { id: 'Critical', label: 'Critical' },
+  { id: 'Warning', label: 'Warning' },
+  { id: 'Info', label: 'Info' },
+  { id: 'Debug', label: 'Debug' },
 ];
+const LOG_HISTORY_MS = 8 * 86_400_000;
 
 const KNOWN_KINDS = [
   'account_snapshot',
@@ -323,10 +323,40 @@ function sortEvents(events: LedgerEvent[]): LedgerEvent[] {
   return [...events].sort((a, b) => b.id - a.id || b.ts - a.ts);
 }
 
+function formatLogTime(ts: number, zone?: string): string {
+  return new Date(ts).toLocaleTimeString('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit' });
+}
+
+function formatLogDateTime(ts: number, zone?: string): string {
+  return new Date(ts).toLocaleString('en-US', {
+    timeZone: zone,
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function severityCounts(events: LedgerEvent[]): Record<Severity, number> {
+  const counts: Record<Severity, number> = { Critical: 0, Warning: 0, Info: 0, Debug: 0 };
+  for (const event of events) counts[eventSeverity(event)] += 1;
+  return counts;
+}
+
+function SeverityBars({ severity }: { severity: Severity }) {
+  return <span className={`logx-severity-bars ${severity.toLowerCase()}`} aria-label={`${severity} Severity`} title={`${severity} Severity`}>
+    <i /><i /><i />
+  </span>;
+}
+
 export function LedgerPage() {
-  const { setPage, openDetail, state, prefs } = useStore();
+  const { setPage, openDetail, state, prefs, updatePref } = useStore();
+  const zone = prefs.clockZone && prefs.clockZone !== 'local' ? prefs.clockZone : undefined;
+  const today = dayKey(new Date(), zone);
+  const dayKeys = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(today, index - 6)), [today]);
   const stateEvents = state?.events ?? [];
   const [apiEvents, setApiEvents] = useState<LedgerEvent[]>(() => stateEvents);
+  const [selectedDay, setSelectedDay] = useState(today);
   const [kind, setKind] = useState('all');
   const [severity, setSeverity] = useState<SeverityFilter>('all');
   const [symbol, setSymbol] = useState(() => {
@@ -335,10 +365,8 @@ export function LedgerPage() {
     return v;
   });
   const [query, setQuery] = useState('');
-  const [timeRange, setTimeRange] = useState<TimeRange>('all');
   const [decision, setDecision] = useState<DecisionFilter>('all');
   const [showDebug, setShowDebug] = useState(false);
-  const [errorFirst, setErrorFirst] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [rawOpen, setRawOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -349,12 +377,13 @@ export function LedgerPage() {
     if (stateEvents.length && apiEvents.length === 0) setApiEvents(stateEvents);
   }, [apiEvents.length, stateEvents]);
 
+  useEffect(() => {
+    setSelectedDay(today);
+    setSelectedId(null);
+  }, [prefs.clockZone, today]);
+
   const load = useCallback(() => {
-    const params = new URLSearchParams({ limit: '1000' });
-    const normalizedSymbol = symbol.trim().toUpperCase();
-    if (kind !== 'all') params.set('kind', kind);
-    if (/^[A-Z0-9]{5,24}$/.test(normalizedSymbol)) params.set('symbol', normalizedSymbol);
-    if (query.trim()) params.set('q', query.trim().slice(0, 60));
+    const params = new URLSearchParams({ limit: '20000', since: String(Date.now() - LOG_HISTORY_MS) });
 
     setLoading(true);
     return fetch(`/api/events?${params}`)
@@ -366,11 +395,11 @@ export function LedgerPage() {
       })
       .catch((err) => setLoadError(err instanceof Error ? err.message : 'Failed to load events'))
       .finally(() => setLoading(false));
-  }, [kind, query, symbol]);
+  }, []);
 
   useEffect(() => {
     void load();
-    const t = window.setInterval(() => void load(), Math.max(0.5, prefs.dataCadence?.health ?? 10) * 1000);
+    const t = window.setInterval(() => void load(), Math.max(30, prefs.dataCadence?.health ?? 10) * 1000);
     return () => window.clearInterval(t);
   }, [load, prefs.dataCadence?.health]);
 
@@ -386,54 +415,41 @@ export function LedgerPage() {
     return ['all', ...[...seen].sort((a, b) => kindLabel(a).localeCompare(kindLabel(b)))];
   }, [events]);
 
+  const itemsByDay = useMemo(() => {
+    const map = new Map<string, LedgerEvent[]>(dayKeys.map((key) => [key, []]));
+    for (const event of events) {
+      const key = dayKey(new Date(event.ts), zone);
+      map.get(key)?.push(event);
+    }
+    return map;
+  }, [dayKeys, events, zone]);
+
+  const selectedDayEvents = itemsByDay.get(selectedDay) ?? [];
+
   const baseEvents = useMemo(() => {
-    const selectedRange = TIME_OPTIONS.find((opt) => opt.value === timeRange);
     const symbolQuery = symbol.trim().toUpperCase();
-    const now = Date.now();
-    return events.filter((ev) => {
+    return selectedDayEvents.filter((ev) => {
       if (kind !== 'all' && ev.kind !== kind) return false;
       if (symbolQuery && !(ev.symbol ?? '').toUpperCase().includes(symbolQuery)) return false;
       if (!eventMatchesText(ev, query)) return false;
-      if (selectedRange?.ms !== null && selectedRange?.ms !== undefined && now - ev.ts > selectedRange.ms) return false;
       if (decision !== 'all' && decisionState(ev) !== decision) return false;
       return true;
     });
-  }, [decision, events, kind, query, symbol, timeRange]);
+  }, [decision, kind, query, selectedDayEvents, symbol]);
 
-  const severityCounts = useMemo(() => {
-    const counts: Record<Severity, number> = { Critical: 0, Warning: 0, Info: 0, Debug: 0 };
-    for (const ev of baseEvents) counts[eventSeverity(ev)] += 1;
-    return counts;
-  }, [baseEvents]);
-
-  const kindCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const ev of baseEvents) counts.set(ev.kind, (counts.get(ev.kind) ?? 0) + 1);
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
-  }, [baseEvents]);
-
-  const sourceCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const ev of baseEvents) {
-      const source = sourceText(ev);
-      counts.set(source, (counts.get(source) ?? 0) + 1);
-    }
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
-  }, [baseEvents]);
+  const selectedCounts = useMemo(() => severityCounts(selectedDayEvents), [selectedDayEvents]);
 
   const visible = useMemo(() => baseEvents.filter((ev) => {
     const evSeverity = eventSeverity(ev);
+    if (severity !== 'all') return evSeverity === severity;
     if (!showDebug && evSeverity === 'Debug') return false;
-    if (errorFirst && evSeverity !== 'Critical' && evSeverity !== 'Warning') return false;
-    if (!errorFirst && severity !== 'all' && evSeverity !== severity) return false;
     return true;
-  }), [baseEvents, errorFirst, severity, showDebug]);
+  }), [baseEvents, severity, showDebug]);
 
-  const shown = useMemo(() => visible.slice(0, 200), [visible]);
-  const selected = visible.find((ev) => ev.id === selectedId) ?? shown[0] ?? null;
-  const selectedDetailFields = selected ? detailFields(selected) : [];
-  const debugHiddenCount = showDebug ? 0 : severityCounts.Debug;
-  const canClear = kind !== 'all' || severity !== 'all' || symbol !== '' || query !== '' || timeRange !== 'all' || decision !== 'all' || showDebug || errorFirst;
+  const selected = selectedId === null ? null : visible.find((ev) => ev.id === selectedId) ?? null;
+  const debugHiddenCount = showDebug ? 0 : selectedCounts.Debug;
+  const canClear = kind !== 'all' || severity !== 'all' || symbol !== '' || query !== '' || decision !== 'all' || showDebug;
+  const rangeLabel = `${formatKey(dayKeys[0], { month: 'short', day: 'numeric' })} — ${formatKey(dayKeys[6], { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
   useEffect(() => {
     setRawOpen(false);
@@ -444,261 +460,181 @@ export function LedgerPage() {
     setSeverity('all');
     setSymbol('');
     setQuery('');
-    setTimeRange('all');
     setDecision('all');
     setShowDebug(false);
-    setErrorFirst(false);
     setSelectedId(null);
   }
 
-  function focusSeverity(next: Severity): void {
-    setSeverity(severity === next ? 'all' : next);
-    setErrorFirst(false);
+  function selectSeverity(next: SeverityFilter): void {
+    setSeverity(next);
+    setSelectedId(null);
     if (next === 'Debug') setShowDebug(true);
   }
 
-  const liveTone: Tone = loadError ? 'bad' : loading ? 'warn' : 'ok';
-
   return (
-    <div className="container page mkx hp-page wide lg-page">
-      <section className="hp-group lg-console">
-        <PageHead
-          mark={<IconBook size={18} />}
-          tone={loadError ? 'bad' : 'idle'}
-          title="Logs"
-          sub="Recorded events, source state, and risk decisions."
-          meta={
-            <>
-              <Pill tone={liveTone}>{loadError ? 'Unavailable' : loading ? 'Updating' : 'Live'}</Pill>
-              <span>
-                {visible.length.toLocaleString('en-US')} Of {baseEvents.length.toLocaleString('en-US')} ·{' '}
-                {loadError ?? (lastLoaded ? timeAgo(lastLoaded) : stateEvents.length ? 'Cached' : 'Waiting')}
-              </span>
-            </>
-          }
-        />
-
-        <div className="lg-filters">
-        <input
-          className="hp-input lg-search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search events"
-          spellCheck={false}
-        />
-        <PillSelect
-          value={severity}
-          options={[{ id: 'all' as SeverityFilter, label: 'All Severities' }, ...SEVERITIES.map((sev) => ({ id: sev as SeverityFilter, label: sev }))]}
-          onChange={(v) => { setSeverity(v); setErrorFirst(false); if (v === 'Debug') setShowDebug(true); }}
-          ariaLabel="Severity filter"
-        />
-        <PillSelect
-          value={kind}
-          options={kindOptions.map((item) => ({ id: item, label: item === 'all' ? 'All Kinds' : kindLabel(item) }))}
-          onChange={setKind}
-          ariaLabel="Kind filter"
-        />
-        <input
-          className="hp-input lg-symbol"
-          value={symbol}
-          onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-          placeholder="BTCUSDT"
-          spellCheck={false}
-        />
-        <PillSelect
-          value={timeRange}
-          options={TIME_OPTIONS.map((opt) => ({ id: opt.value, label: opt.label }))}
-          onChange={(v) => setTimeRange(v)}
-          ariaLabel="Time range"
-        />
-        <PillSelect
-          value={decision}
-          options={[
-            { id: 'all' as DecisionFilter, label: 'All Decisions' },
-            { id: 'accepted' as DecisionFilter, label: 'Accepted Only' },
-            { id: 'rejected' as DecisionFilter, label: 'Rejected Only' },
-          ]}
-          onChange={setDecision}
-          ariaLabel="Decision filter"
-        />
-        <span className="lg-filter-gap" />
-        <button
-          type="button"
-          className={`hp-btn lg-toggle${errorFirst ? ' active' : ''}`}
-          aria-pressed={errorFirst}
-          title="Show only critical and warning events"
-          onClick={() => { setErrorFirst((v) => !v); setSeverity('all'); }}
-        >
-          Errors First
-        </button>
-        <button
-          type="button"
-          className={`hp-btn lg-toggle${showDebug ? ' active' : ''}`}
-          aria-pressed={showDebug}
-          title={showDebug ? 'Connection/heartbeat records are visible' : `${debugHiddenCount.toLocaleString('en-US')} connection records hidden`}
-          onClick={() => setShowDebug((v) => !v)}
-        >
-          Connections
-        </button>
-        <button type="button" className="hp-btn" onClick={() => void load()} disabled={loading}>
-          <IconRefresh size={13} />
-          Refresh
-        </button>
-        <button type="button" className="hp-btn" onClick={clearFilters} disabled={!canClear} title={!canClear ? 'No active filters to clear' : 'Reset all Logs filters'}>
-          Clear
-        </button>
-        </div>
-      </section>
-
-      <div className="lg-grid">
-        <aside className="lg-facets" aria-label="Logs facets">
-          <section className="hp-group lg-facet">
-            <h3>Severity</h3>
-            {SEVERITIES.map((sev) => (
-              <button
-                type="button"
-                key={sev}
-                className={!errorFirst && severity === sev ? 'active' : ''}
-                onClick={() => focusSeverity(sev)}
-              >
-                <Dot tone={SEVERITY_TONE[sev]} />
-                <span>{sev}</span>
-                <b>{severityCounts[sev].toLocaleString('en-US')}</b>
-              </button>
-            ))}
-          </section>
-          <section className="hp-group lg-facet">
-            <h3>Kinds</h3>
-            {kindCounts.map(([item, count]) => (
-              <button type="button" key={item} className={kind === item ? 'active' : ''} onClick={() => setKind(kind === item ? 'all' : item)}>
-                <span>{kindLabel(item)}</span>
-                <b>{count.toLocaleString('en-US')}</b>
-              </button>
-            ))}
-          </section>
-          <section className="hp-group lg-facet">
-            <h3>Sources</h3>
-            {sourceCounts.map(([item, count]) => (
-              <button type="button" key={item} className={query === item ? 'active' : ''} onClick={() => setQuery(query === item ? '' : item)}>
-                <span>{sourceLabel(item)}</span>
-                <b>{count.toLocaleString('en-US')}</b>
-              </button>
-            ))}
-          </section>
-        </aside>
-
-        <section className="hp-group lg-feed" aria-label="Event Activity">
-          <div className="lg-feed-head">
-            <h3>Activity</h3>
-            <span>{shown.length < visible.length ? `${shown.length} / ${visible.length.toLocaleString('en-US')} Rows` : `${visible.length.toLocaleString('en-US')} Rows`}</span>
+    <div className="container page lix-page logx-page">
+      <div className="lix-frame logx-frame">
+        <header className="lix-toolbar">
+          <div className="lix-title">
+            <h1>Logs</h1>
+            <span className={`lix-live ${loadError ? 'error' : ''}`}>
+              <i />
+              {loadError ? 'Unavailable' : loading ? 'Updating' : `Live · ${lastLoaded ? timeAgo(lastLoaded) : stateEvents.length ? 'Cached' : 'Waiting'}`}
+            </span>
           </div>
-          {shown.length === 0 ? (
-            <div className="lg-empty-pad">
-              <Empty title="No matching events">Adjust or clear filters.</Empty>
-            </div>
-          ) : (
-            <div className="lg-list" role="listbox" aria-label="Event Activity">
-              {shown.map((ev) => {
-                const evSeverity = eventSeverity(ev);
-                const selectedRow = selected?.id === ev.id;
-                return (
-                  <div
-                    key={ev.id}
-                    className={`lg-row${selectedRow ? ' selected' : ''}`}
-                    onClick={() => setSelectedId(ev.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        setSelectedId(ev.id);
-                      }
-                    }}
-                    role="option"
-                    tabIndex={0}
-                    aria-selected={selectedRow}
-                  >
-                    <span className="lg-time" title={fmtDateTime(ev.ts)}>{timeAgo(ev.ts)}</span>
-                    <Dot tone={SEVERITY_TONE[evSeverity]} />
-                    <span className="lg-main" title={`${eventTitle(ev)} — ${eventCaption(ev)}`}>
-                      <b>{eventTitle(ev)}</b>
-                      <em> — {eventCaption(ev)}</em>
-                    </span>
-                    {ev.symbol ? (
-                      <button
-                        type="button"
-                        className="lg-sym"
-                        onClick={(e) => { e.stopPropagation(); openDetail(ev.symbol as string); }}
-                        title={`Inspect ${ev.symbol} market detail`}
-                      >
-                        <TokenIcon symbol={ev.symbol} size={14} />
-                        {ev.symbol}
-                      </button>
-                    ) : (
-                      <span className="lg-sym system">system</span>
-                    )}
-                    <span className="lg-src" title={`${kindLabel(ev.kind)} · ${sourceLabel(sourceText(ev))}`}>{sourceLabel(sourceText(ev))}</span>
-                    <span className="lg-status">{statusLabel(ev)}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <label className="lix-search">
+            <IconSearch size={15} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" spellCheck={false} />
+            {query && <button type="button" aria-label="Clear Search" onClick={() => setQuery('')}>×</button>}
+          </label>
+        </header>
+
+        <section className="calx-navigation logx-navigation" aria-label="Logs Navigation">
+          <div className="calx-range-controls">
+            <button type="button" className="calx-today" onClick={() => { setSelectedDay(today); setSelectedId(null); }}>Today</button>
+            <strong>{rangeLabel}</strong><span className="newsx-range-note">Rolling Seven Days</span>
+          </div>
+          <PillSelect value={prefs.clockZone} options={TIME_ZONE_OPTIONS.map((option) => ({ ...option }))} onChange={(value) => updatePref('clockZone', value)} ariaLabel="Time Zone" className="lix-select lix-zone-select" />
         </section>
 
-        <aside className="hp-group lg-inspect" aria-label="Event details">
-          {selected ? (
-            <>
-              <div className="lg-inspect-head">
-                <Pill tone={SEVERITY_TONE[eventSeverity(selected)]}>{eventSeverity(selected)}</Pill>
-                <h3>{eventTitle(selected)}</h3>
-                <span>#{selected.id} · {kindLabel(selected.kind)}</span>
-              </div>
-              <dl className="lg-facts">
-                <div><dt>Time</dt><dd>{fmtDateTime(selected.ts)} · {timeAgo(selected.ts)}</dd></div>
-                <div><dt>Source</dt><dd>{sourceLabel(sourceText(selected))}</dd></div>
-                <div><dt>Reason</dt><dd>{eventCaption(selected)}</dd></div>
-                <div><dt>Status</dt><dd>{statusLabel(selected)}</dd></div>
-                <div><dt>Symbol</dt><dd>{selected.symbol ?? 'system'}</dd></div>
-                {selectedDetailFields.map((field) => (
-                  <div key={field.key}><dt>{field.key}</dt><dd>{field.value}</dd></div>
-                ))}
-              </dl>
-              <div className="lg-related">
-                {(() => {
-                  const ids = relatedIds(selected);
-                  const ctx = contextAction(selected);
-                  return (
-                    <>
-                      {ids.proposalId ? (
-                        <button type="button" className="hp-btn" onClick={() => setPage('opportunities')}>
-                          <IconChart size={13} />
-                          Open proposal #{ids.proposalId}
-                        </button>
-                      ) : null}
-                      {ids.orderId ? (
-                        <button type="button" className="hp-btn" onClick={() => setPage('orders')}>
-                          <IconTicket size={13} />
-                          Open order #{ids.orderId}
-                        </button>
-                      ) : null}
-                      <button type="button" className="hp-btn" onClick={() => setPage(ctx.page)}>
-                        {ctx.page === 'system' ? <IconDatabase size={13} /> : ctx.page === 'risk' ? <IconShield size={13} /> : ctx.page === 'account' ? <IconWallet size={13} /> : <IconReceipt size={13} />}
-                        {ctx.label}
-                      </button>
-                    </>
-                  );
-                })()}
-              </div>
-              <details className="lg-raw" open={rawOpen} onToggle={(e) => setRawOpen(e.currentTarget.open)}>
-                <summary>Raw JSON</summary>
-                <pre>{safeJson(selected, 2)}</pre>
-              </details>
-            </>
-          ) : (
-            <div className="lg-empty-pad">
-              <Empty title="No event selected">Select a row to inspect its ledger record.</Empty>
-            </div>
-          )}
-        </aside>
+        <section className="calx-week logx-week" aria-label="Log Days">
+          {dayKeys.map((key) => {
+            const rows = itemsByDay.get(key) ?? [];
+            const counts = severityCounts(rows);
+            return <button type="button" key={key} className={`${key === selectedDay ? 'selected' : ''} ${key === today ? 'today' : ''}`} onClick={() => { setSelectedDay(key); setSelectedId(null); }}>
+              <span className="calx-day-name">{formatKey(key, { weekday: 'short' })} <b>{formatKey(key, { day: 'numeric' })}</b></span>
+              <span><em>Logs</em><b>{rows.length}</b></span>
+              <span className="logx-day-severity"><em>Severity</em><b><i className="critical">C {counts.Critical}</i><i className="warning">W {counts.Warning}</i><i className="info">I {counts.Info}</i><i className="debug">D {counts.Debug}</i></b></span>
+            </button>;
+          })}
+        </section>
+
+        <section className="lix-filters logx-filters" aria-label="Logs Filters">
+          <div className="lix-segments logx-severity-tabs" role="group" aria-label="Severity">
+            {SEVERITY_FILTERS.map((option) => <button type="button" key={option.id} className={severity === option.id ? 'selected' : ''} onClick={() => selectSeverity(option.id)}>{option.label}</button>)}
+          </div>
+          <div className="logx-filter-actions">
+            <PillSelect
+              value={kind}
+              options={kindOptions.map((item) => ({ id: item, label: item === 'all' ? 'All Kinds' : kindLabel(item) }))}
+              onChange={(value) => { setKind(value); setSelectedId(null); }}
+              ariaLabel="Kind Filter"
+              className="lix-select"
+            />
+            <PillSelect
+              value={decision}
+              options={[
+                { id: 'all' as DecisionFilter, label: 'All Decisions' },
+                { id: 'accepted' as DecisionFilter, label: 'Accepted Only' },
+                { id: 'rejected' as DecisionFilter, label: 'Rejected Only' },
+              ]}
+              onChange={(value) => { setDecision(value); setSelectedId(null); }}
+              ariaLabel="Decision Filter"
+              className="lix-select"
+            />
+            {symbol && <button type="button" className="logx-symbol-chip" onClick={() => setSymbol('')} title={`Clear ${symbol} filter`}>{symbol}<span>×</span></button>}
+            <button
+              type="button"
+              className={`logx-debug-toggle${showDebug ? ' active' : ''}`}
+              aria-pressed={showDebug}
+              title={showDebug ? 'Debug and connection records are visible' : `${debugHiddenCount.toLocaleString('en-US')} debug records hidden`}
+              onClick={() => { setShowDebug((current) => !current); setSelectedId(null); }}
+            >
+              {showDebug ? 'Debug On' : 'Include Debug'}
+            </button>
+            <button type="button" className="logx-refresh" onClick={() => void load()} disabled={loading}>
+              <IconRefresh size={13} />
+              Refresh
+            </button>
+            {canClear && <button type="button" className="logx-clear" onClick={clearFilters}>Clear</button>}
+          </div>
+        </section>
+
+        <section className="logx-tape" aria-label="Log Activity">
+          <div className="logx-day-header">
+            <strong>{formatKey(selectedDay, { weekday: 'long', month: 'long', day: 'numeric' })}</strong>
+            <span>{selectedDayEvents.length} Logs · {selectedCounts.Critical} Critical · {selectedCounts.Warning} Warning · {selectedCounts.Info} Info · {selectedCounts.Debug} Debug · {resolvedZoneLabel(prefs.clockZone)}</span>
+          </div>
+          <div className="logx-header"><span>Time</span><span>Severity</span><span>Event</span><span>Symbol</span><span>Source</span><span>Status</span><span /></div>
+          <div className="logx-day-body" key={selectedDay} role="listbox" aria-label="Log Activity">
+            {visible.map((ev) => {
+              const evSeverity = eventSeverity(ev);
+              const expanded = selected?.id === ev.id;
+              const fields = detailFields(ev);
+              const ids = relatedIds(ev);
+              const ctx = contextAction(ev);
+              return <div className={`logx-entry${expanded ? ' expanded' : ''}`} key={ev.id}>
+                <div
+                  className={`lg-row${expanded ? ' selected' : ''}`}
+                  onClick={() => setSelectedId((current) => current === ev.id ? null : ev.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setSelectedId((current) => current === ev.id ? null : ev.id);
+                    }
+                  }}
+                  role="option"
+                  tabIndex={0}
+                  aria-selected={expanded}
+                  aria-expanded={expanded}
+                >
+                  <span className="lg-time" title={formatLogDateTime(ev.ts, zone)}>{formatLogTime(ev.ts, zone)}</span>
+                  <SeverityBars severity={evSeverity} />
+                  <span className="lg-main" title={`${eventTitle(ev)} — ${eventCaption(ev)}`}>
+                    <b>{eventTitle(ev)}</b>
+                    <em> — {eventCaption(ev)}</em>
+                  </span>
+                  {ev.symbol ? (
+                    <button
+                      type="button"
+                      className="lg-sym"
+                      onClick={(event) => { event.stopPropagation(); openDetail(ev.symbol as string); }}
+                      title={`Inspect ${ev.symbol} market detail`}
+                    >
+                      <TokenIcon symbol={ev.symbol} size={14} />
+                      {ev.symbol}
+                    </button>
+                  ) : (
+                    <span className="lg-sym system">System</span>
+                  )}
+                  <span className="lg-src" title={`${kindLabel(ev.kind)} · ${sourceLabel(sourceText(ev))}`}>{sourceLabel(sourceText(ev))}</span>
+                  <span className="lg-status">{statusLabel(ev)}</span>
+                  <span className={`logx-expand${expanded ? ' open' : ''}`} aria-hidden>
+                    <svg viewBox="0 0 16 16"><path d="M4.5 6.25 8 9.75l3.5-3.5" /></svg>
+                  </span>
+                </div>
+                {expanded && <div className="logx-detail">
+                  <div className="logx-detail-head">
+                    <div><Pill tone={SEVERITY_TONE[evSeverity]}>{evSeverity}</Pill><strong>{eventTitle(ev)}</strong><span>#{ev.id} · {kindLabel(ev.kind)}</span></div>
+                    <time>{formatLogDateTime(ev.ts, zone)} · {timeAgo(ev.ts)}</time>
+                  </div>
+                  <dl className="lg-facts">
+                    <div><dt>Source</dt><dd>{sourceLabel(sourceText(ev))}</dd></div>
+                    <div><dt>Reason</dt><dd>{eventCaption(ev)}</dd></div>
+                    <div><dt>Status</dt><dd>{statusLabel(ev)}</dd></div>
+                    <div><dt>Symbol</dt><dd>{ev.symbol ?? 'System'}</dd></div>
+                    {fields.map((field) => <div key={field.key}><dt>{field.key}</dt><dd>{field.value}</dd></div>)}
+                  </dl>
+                  <div className="lg-related">
+                    {ids.proposalId && <button type="button" className="hp-btn" onClick={() => setPage('opportunities')}><IconChart size={13} />Open Proposal #{ids.proposalId}</button>}
+                    {ids.orderId && <button type="button" className="hp-btn" onClick={() => setPage('orders')}><IconTicket size={13} />Open Order #{ids.orderId}</button>}
+                    <button type="button" className="hp-btn" onClick={() => setPage(ctx.page)}>
+                      {ctx.page === 'system' ? <IconDatabase size={13} /> : ctx.page === 'risk' ? <IconShield size={13} /> : ctx.page === 'account' ? <IconWallet size={13} /> : <IconReceipt size={13} />}
+                      {ctx.label}
+                    </button>
+                  </div>
+                  <details className="lg-raw" open={rawOpen} onToggle={(event) => setRawOpen(event.currentTarget.open)}>
+                    <summary>Raw JSON</summary>
+                    <pre>{safeJson(ev, 2)}</pre>
+                  </details>
+                </div>}
+              </div>;
+            })}
+            {loading && events.length === 0 && <div className="lix-empty">Loading Logs…</div>}
+            {loadError && events.length === 0 && <div className="lix-empty">The Log Feed Is Currently Unavailable.</div>}
+            {!loading && !loadError && visible.length === 0 && <div className="lix-empty">{query ? `Nothing Matches “${query}”.` : 'No Logs Match These Filters.'}</div>}
+          </div>
+        </section>
       </div>
     </div>
   );

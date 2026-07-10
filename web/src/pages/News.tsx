@@ -8,8 +8,9 @@ import './LiveIntelligence.css';
 
 type NewsTone = 'ok' | 'warn' | 'bad' | 'idle';
 type FeedChannel = 'primary' | 'venue' | 'protocol' | 'issuer' | 'tree' | 'rss' | 'lookonchain' | 'binance';
-type NewsBucket = 'all' | 'exchange' | 'macro-policy' | 'crypto-market' | 'onchain-security' | 'long-research';
-type ImpactFilter = 'all' | 'high';
+type NewsCategory = 'Crypto' | 'Macro' | 'Markets' | 'Regulation' | 'Exchange' | 'On-Chain' | 'Security' | 'Protocol';
+type NewsBucket = 'all' | 'crypto' | 'macro' | 'markets' | 'regulation' | 'exchange' | 'onchain-security';
+type ImpactFilter = 'all' | 'high' | 'medium' | 'low';
 
 interface NewsItem {
   id: string;
@@ -25,6 +26,7 @@ interface NewsItem {
   timeLabel: string;
   symbols: string[];
   tags: string[];
+  category?: NewsCategory;
   tone: NewsTone;
   impact?: 1 | 2 | 3;
 }
@@ -50,15 +52,23 @@ interface NewsPayload {
 interface BinanceItem { id: number; title: string; date: string | null; url: string; impact?: 1 | 2 | 3 }
 interface BinancePayload { catalog: number | string; fetchedAt?: number; items: BinanceItem[] }
 
-const FEED_CACHE_KEY = 'cosmos-news-feed-cache-v3';
-const CONTEXT_LIMIT = 1_200;
+const FEED_CACHE_KEY = 'cosmos-news-feed-cache-v4';
+const CONTEXT_LIMIT = 8_000;
+const LOCAL_CACHE_LIMIT = 700;
 const BUCKETS: { id: NewsBucket; label: string }[] = [
-  { id: 'all', label: 'All Categories' },
+  { id: 'all', label: 'All News' },
+  { id: 'crypto', label: 'Crypto' },
+  { id: 'macro', label: 'Macro' },
+  { id: 'markets', label: 'Markets' },
+  { id: 'regulation', label: 'Regulation' },
   { id: 'exchange', label: 'Exchange' },
-  { id: 'macro-policy', label: 'Macro / Policy' },
-  { id: 'crypto-market', label: 'Crypto Markets' },
-  { id: 'onchain-security', label: 'Security / On-Chain' },
-  { id: 'long-research', label: 'Research' },
+  { id: 'onchain-security', label: 'On-Chain / Security' },
+];
+const IMPACTS: { id: ImpactFilter; label: string; value: 1 | 2 | 3 | null }[] = [
+  { id: 'all', label: 'All Impact', value: null },
+  { id: 'high', label: 'High', value: 3 },
+  { id: 'medium', label: 'Medium', value: 2 },
+  { id: 'low', label: 'Low', value: 1 },
 ];
 const SOURCE_PRIORITY: Record<FeedChannel, number> = {
   primary: 0, venue: 1, issuer: 2, protocol: 3, binance: 4, rss: 5, lookonchain: 6, tree: 7,
@@ -76,7 +86,10 @@ function readFeedCache(): { context: NewsPayload | null; binance: BinancePayload
 }
 
 function persistFeedCache(context: NewsPayload | null, binance: BinancePayload | null): void {
-  try { localStorage.setItem(FEED_CACHE_KEY, JSON.stringify({ context, binance })); } catch { /* cache is optional */ }
+  try {
+    const compactContext = context ? { ...context, items: context.items.slice(0, LOCAL_CACHE_LIMIT) } : null;
+    localStorage.setItem(FEED_CACHE_KEY, JSON.stringify({ context: compactContext, binance }));
+  } catch { /* cache is optional */ }
 }
 
 function cleanDomain(value: string | null | undefined): string | null {
@@ -129,6 +142,7 @@ function mapBinance(item: BinanceItem): NewsItem {
     timeLabel: 'Date Only',
     symbols: [],
     tags: ['Exchange'],
+    category: 'Exchange',
     tone: 'idle',
     impact: item.impact ?? 2,
   };
@@ -169,26 +183,37 @@ function mergeContextPayload(incoming: NewsPayload, current: NewsPayload | null)
 }
 
 function classification(item: NewsItem): string {
+  if (item.category) return item.category;
   const key = itemSourceKey(item);
   const tags = item.tags.join(' ').toLowerCase();
   const text = `${item.title} ${tags}`.toLowerCase();
-  if (/security|hack|exploit|phishing|stolen|attack|vulnerability/.test(text)) return 'Security';
-  if (item.channel === 'venue' || item.channel === 'binance' || /listing|delisting|maintenance|exchange/.test(tags)) return 'Exchange';
-  if (item.channel === 'primary' || MACRO_SOURCE_KEYS.has(key) || /macro|policy|inflation|rates|treasury|regulation/.test(text)) return 'Macro';
-  if (item.channel === 'lookonchain' || /on-chain|whale|wallet flow/.test(text)) return 'On-Chain';
+  if (/hack|exploit|phishing|stolen|breach|drain|vulnerability/.test(text)) return 'Security';
+  if (item.channel === 'venue' || item.channel === 'binance' || /listing|delisting|maintenance/.test(tags)) return 'Exchange';
+  if (/policy|regulation|lawsuit|court|enforcement/.test(tags)) return 'Regulation';
+  if (item.channel === 'primary' || MACRO_SOURCE_KEYS.has(key) || /macro|inflation|treasury/.test(tags)) return 'Macro';
+  if (/on-chain|whale|wallet flow/.test(text)) return 'On-Chain';
   if (item.channel === 'protocol' || /release|governance/.test(tags)) return 'Protocol';
-  if (item.channel === 'issuer' || /research|etf|stablecoin/.test(tags)) return 'Research';
+  if (item.channel === 'issuer' || /etf|stablecoin|bitcoin|ethereum|crypto/.test(text)) return 'Crypto';
   return 'Markets';
 }
 
 function matchesBucket(item: NewsItem, bucket: NewsBucket): boolean {
   if (bucket === 'all') return true;
   const type = classification(item);
+  if (bucket === 'crypto') return type === 'Crypto' || type === 'Protocol';
+  if (bucket === 'macro') return type === 'Macro';
+  if (bucket === 'markets') return type === 'Markets';
+  if (bucket === 'regulation') return type === 'Regulation';
   if (bucket === 'exchange') return type === 'Exchange';
-  if (bucket === 'macro-policy') return type === 'Macro';
-  if (bucket === 'crypto-market') return type === 'Markets';
-  if (bucket === 'onchain-security') return type === 'Security' || type === 'On-Chain' || type === 'Protocol';
-  return type === 'Research';
+  return type === 'Security' || type === 'On-Chain';
+}
+
+function displaySource(item: NewsItem): string {
+  if (item.source.toLowerCase() === 'twitter') {
+    const account = item.title.match(/^(.{2,42}?)\s*\(@[^)]+\)\s*:/)?.[1]?.trim();
+    if (account) return account;
+  }
+  return item.source || 'Unknown Source';
 }
 
 function matchesQuery(item: NewsItem, query: string): boolean {
@@ -221,12 +246,13 @@ function ImpactBars({ impact }: { impact: 1 | 2 | 3 }) {
 
 const NewsRow = memo(function NewsRow({ item, fresh, zone }: { item: NewsItem; fresh: boolean; zone?: string }) {
   const type = classification(item);
+  const source = displaySource(item);
   return <div className={`newsx-row ${fresh ? 'fresh' : ''}`}>
     <span className="newsx-time" title={item.timeLabel}><b>{publishedTime(item, zone)}</b></span>
-    <span className="newsx-source-mark"><SourceLogo domain={itemDomain(item)} label={item.source} /></span>
+    <span className="newsx-source"><SourceLogo domain={itemDomain(item)} label={source} /><b title={source}>{source}</b></span>
     <ImpactBars impact={fallbackImpact(item)} />
     <span className="newsx-headline">
-      {item.url ? <a href={item.url} target="_blank" rel="noreferrer noopener" title={`${item.source} · ${item.title}`}>{item.title}</a> : <b title={item.title}>{item.title}</b>}
+      {item.url ? <a href={item.url} target="_blank" rel="noreferrer noopener" title={`${source} · ${item.title}`}>{item.title}</a> : <b title={item.title}>{item.title}</b>}
     </span>
     <span className="newsx-type">{type}</span>
     <span className="newsx-open">{item.url ? <IconExternal size={13} /> : null}</span>
@@ -289,7 +315,6 @@ export function News() {
   const [bucket, setBucket] = useState<NewsBucket>('all');
   const [provider, setProvider] = useState('all');
   const [query, setQuery] = useState('');
-  const [rangeEnd, setRangeEnd] = useState(today);
   const [selectedDay, setSelectedDay] = useState(today);
   const [freshIds, setFreshIds] = useState<Set<string>>(new Set());
   const knownIdsRef = useRef(new Set(mergeItems(initial.context, initial.binance).map((item) => item.id)));
@@ -300,7 +325,7 @@ export function News() {
 
   useEffect(() => { binanceRef.current = binance; }, [binance]);
   useEffect(() => { contextRef.current = context; }, [context]);
-  useEffect(() => { setRangeEnd(today); setSelectedDay(today); }, [today]);
+  useEffect(() => { setSelectedDay(today); }, [today]);
 
   const applyContext = useCallback((payload: NewsPayload, animate = true, mergeExisting = false) => {
     const committed = mergeExisting ? mergeContextPayload(payload, contextRef.current) : payload;
@@ -379,7 +404,7 @@ export function News() {
     });
     return grouped;
   }, [items, zone]);
-  const dayKeys = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(rangeEnd, index - 6)), [rangeEnd]);
+  const dayKeys = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(today, index - 6)), [today]);
   const selectedItems = itemsByDay.get(selectedDay) ?? [];
   const providerCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -395,31 +420,33 @@ export function News() {
     });
     return sources.sort((a, b) => a.label.localeCompare(b.label));
   }, [binance, binanceFailed, context?.sources]);
+  const selectedImpact = IMPACTS.find((option) => option.id === impactFilter)?.value ?? null;
   const filtered = useMemo(() => selectedItems.filter((item) =>
-    (impactFilter === 'all' || fallbackImpact(item) === 3) &&
+    (selectedImpact === null || fallbackImpact(item) === selectedImpact) &&
     matchesBucket(item, bucket) &&
     (provider === 'all' || itemSourceKey(item) === provider) &&
     matchesQuery(item, deferredQuery)
-  ), [bucket, deferredQuery, impactFilter, provider, selectedItems]);
-  const failed = contextFailed && binanceFailed;
-  const status = failed ? 'Feed Unavailable' : lastCheckedAt ? `${streamConnected ? 'Streaming' : 'Live'} · ${liveAge(lastCheckedAt)}` : 'Loading';
+  ), [bucket, deferredQuery, provider, selectedImpact, selectedItems]);
+  const hasData = items.length > 0;
+  const failed = contextFailed && binanceFailed && !hasData;
+  const reconnecting = contextFailed && binanceFailed && hasData;
+  const status = failed
+    ? 'Feed Unavailable'
+    : reconnecting
+      ? `Reconnecting · ${liveAge(lastCheckedAt)}`
+      : lastCheckedAt
+        ? `${streamConnected ? 'Live' : 'Updating'} · ${liveAge(lastCheckedAt)}`
+        : 'Loading';
   const selectedHigh = selectedItems.filter((item) => fallbackImpact(item) === 3).length;
+  const selectedMedium = selectedItems.filter((item) => fallbackImpact(item) === 2).length;
+  const selectedLow = selectedItems.filter((item) => fallbackImpact(item) === 1).length;
   const rangeLabel = `${formatKey(dayKeys[0], { month: 'short', day: 'numeric' })} — ${formatKey(dayKeys[6], { month: 'short', day: 'numeric', year: 'numeric' })}`;
-  const canMoveForward = rangeEnd < today;
-
-  const moveRange = (direction: -1 | 1) => {
-    if (direction === 1 && !canMoveForward) return;
-    const nextEnd = addDays(rangeEnd, direction * 7);
-    const clampedEnd = nextEnd > today ? today : nextEnd;
-    setRangeEnd(clampedEnd);
-    setSelectedDay(clampedEnd);
-  };
-  const returnToday = () => { setRangeEnd(today); setSelectedDay(today); };
+  const returnToday = () => setSelectedDay(today);
 
   return <div className="container page lix-page newsx-page">
     <div className="lix-frame">
       <header className="lix-toolbar">
-        <div className="lix-title"><h1>News</h1><span className={`lix-live ${failed ? 'error' : ''}`}><i />{status}</span></div>
+        <div className="lix-title"><h1>News</h1><span className={`lix-live ${failed ? 'error' : reconnecting ? 'reconnecting' : streamConnected ? 'streaming' : ''}`}><i />{status}</span></div>
         <label className="lix-search">
           <IconSearch size={15} />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" spellCheck={false} />
@@ -430,9 +457,7 @@ export function News() {
       <section className="calx-navigation newsx-navigation" aria-label="News Navigation">
         <div className="calx-range-controls">
           <button type="button" className="calx-today" onClick={returnToday}>Today</button>
-          <button type="button" className="calx-arrow" onClick={() => moveRange(-1)} aria-label="Previous Seven Days">‹</button>
-          <button type="button" className="calx-arrow" disabled={!canMoveForward} onClick={() => moveRange(1)} aria-label="Next Seven Days">›</button>
-          <strong>{rangeLabel}</strong>
+          <strong>{rangeLabel}</strong><span className="newsx-range-note">Rolling Seven Days</span>
         </div>
         <PillSelect value={prefs.clockZone} options={TIME_ZONE_OPTIONS.map((option) => ({ ...option }))} onChange={(value) => updatePref('clockZone', value)} ariaLabel="Time Zone" className="lix-select lix-zone-select" />
       </section>
@@ -441,31 +466,36 @@ export function News() {
         {dayKeys.map((key) => {
           const rows = itemsByDay.get(key) ?? [];
           const high = rows.filter((item) => fallbackImpact(item) === 3).length;
+          const medium = rows.filter((item) => fallbackImpact(item) === 2).length;
+          const low = rows.filter((item) => fallbackImpact(item) === 1).length;
           return <button type="button" key={key} className={`${key === selectedDay ? 'selected' : ''} ${key === today ? 'today' : ''}`} onClick={() => setSelectedDay(key)}>
             <span className="calx-day-name">{formatKey(key, { weekday: 'short' })} <b>{formatKey(key, { day: 'numeric' })}</b></span>
             <span><em>News</em><b>{rows.length}</b></span>
-            <span><em>High Impact</em><b>{high}</b></span>
+            <span className="newsx-day-impact"><em>Impact</em><b><i className="high">H {high}</i><i className="medium">M {medium}</i><i className="low">L {low}</i></b></span>
           </button>;
         })}
       </section>
 
       <section className="lix-filters newsx-filters" aria-label="News Filters">
-        <div className="lix-segments" role="group" aria-label="Impact">
-          <button type="button" className={impactFilter === 'all' ? 'selected' : ''} onClick={() => setImpactFilter('all')}>All News</button>
-          <button type="button" className={impactFilter === 'high' ? 'selected' : ''} onClick={() => setImpactFilter('high')}>High Impact</button>
-        </div>
-        <div className="newsx-filter-actions">
-          <PillSelect value={bucket} options={BUCKETS} onChange={setBucket} ariaLabel="Category" className="lix-select newsx-category-select" />
+        <div className="newsx-filter-line">
+          <div className="lix-segments newsx-category-tabs" role="group" aria-label="Category">
+            {BUCKETS.map((option) => <button type="button" key={option.id} className={bucket === option.id ? 'selected' : ''} onClick={() => setBucket(option.id)}>{option.label}</button>)}
+          </div>
           <SourcePicker value={provider} sources={sourceDirectory} counts={providerCounts} onChange={setProvider} />
+        </div>
+        <div className="newsx-filter-line impact">
+          <div className="lix-segments newsx-impact-tabs" role="group" aria-label="Impact">
+            {IMPACTS.map((option) => <button type="button" key={option.id} className={impactFilter === option.id ? 'selected' : ''} onClick={() => setImpactFilter(option.id)}>{option.label}</button>)}
+          </div>
         </div>
       </section>
 
       <section className="newsx-tape" aria-label="News Feed">
         <div className="newsx-day-header">
           <strong>{formatKey(selectedDay, { weekday: 'long', month: 'long', day: 'numeric' })}</strong>
-          <span>{selectedItems.length} News · {selectedHigh} High Impact · {resolvedZoneLabel(prefs.clockZone)}</span>
+          <span>{selectedItems.length} News · {selectedHigh} High · {selectedMedium} Medium · {selectedLow} Low · {resolvedZoneLabel(prefs.clockZone)}</span>
         </div>
-        <div className="newsx-header"><span>Time</span><span /><span>Impact</span><span>Headline</span><span>Category</span><span /></div>
+        <div className="newsx-header"><span>Time</span><span>Source</span><span>Impact</span><span>Headline</span><span>Category</span><span /></div>
         <div className="newsx-day-body" key={selectedDay}>
           {filtered.map((item) => <NewsRow key={item.id} item={item} fresh={freshIds.has(item.id)} zone={zone} />)}
           {!context && !binance && !failed && <div className="lix-empty">Loading Headlines…</div>}

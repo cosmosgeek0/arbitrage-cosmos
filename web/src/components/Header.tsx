@@ -7,6 +7,22 @@ import { ACCENTS, CURRENCIES, type AccentKey, type DataCadenceKey } from '../lib
 import { openOverlay, useOverlay } from '../lib/overlay';
 import { TokenIcon } from './TokenIcon';
 import {
+  BadgePercent as LucideBasis,
+  BellRing as LucideBell,
+  CircleDollarSign as LucideCurrency,
+  CircleStop as LucideStop,
+  Clock3 as LucideClock,
+  Database as LucideDatabase,
+  KeyRound as LucideKey,
+  Laptop as LucideLaptop,
+  Moon as LucideMoon,
+  RefreshCw as LucideRefresh,
+  ShieldCheck as LucideShield,
+  Smartphone as LucideSmartphone,
+  SquareTerminal as LucideTerminal,
+  SunMedium as LucideSun,
+} from 'lucide-react';
+import {
   IconAlarm,
   IconBell,
   IconBrain,
@@ -38,7 +54,6 @@ import {
   IconSun,
   IconTerminal,
   IconTicket,
-  IconUser,
   IconWallet,
   IconWifi,
 } from './Icons';
@@ -359,12 +374,13 @@ function AccountSheet({ open }: { open: boolean }) {
   const avatar = preview ?? profile.avatar ?? DEFAULT_PROFILE_LOGO;
   const usesDefaultLogo = !preview && !profile.avatar;
   const name = profile.name || 'Operator';
+  const displayName = name.toLocaleUpperCase();
   const initial = name.trim().slice(0, 1).toUpperCase() || 'O';
   const connected = !!state?.binance.keysPresent;
   const accountTone = connected ? (state?.binance.connected ? 'live' : 'warn') : 'off';
   const hostLabel = typeof window !== 'undefined' ? window.location.host : 'local';
   const activeSessionCount = sessions.filter((s) => s.current || s.active).length;
-  const sessionRows = sessions.slice(0, 3);
+  const sessionRows = sessions;
   const keyFingerprint = state?.binance.keyFingerprint ?? null;
   const withdrawalsOff = !state?.binance.canWithdraw;
   const logoutHref = typeof window !== 'undefined' && window.location.hostname === DEPLOYED_APP_HOST
@@ -419,7 +435,7 @@ function AccountSheet({ open }: { open: boolean }) {
             </button>
             <div className="account-v3-identity">
               {editName === null ? (
-                <button className="cb-profile-name" onClick={() => setEditName(profile.name || '')} title="Edit display name">{name}</button>
+                <button className="cb-profile-name" onClick={() => setEditName(profile.name || '')} title="Edit display name">{displayName}</button>
               ) : (
                 <form
                   className="cb-profile-name-form"
@@ -466,15 +482,28 @@ function AccountSheet({ open }: { open: boolean }) {
                 {sessionRows.length > 0 ? sessionRows.map((s) => {
                   const ipLine = s.ip ? [s.ip, s.country].filter(Boolean).join(' · ') : 'local network';
                   const isPast = !s.current && !s.active;
+                  const isMobile = /android|ios|iphone|ipad/i.test(s.system);
                   return (
                     <div className={`account-v3-session ${isPast ? 'past' : 'active'}`} key={s.id}>
-                      <span className={`account-v3-session-dot ${s.active ? 'on' : ''}`} />
+                      <span className={`account-v3-device-mark ${s.active ? 'on' : 'off'}`}>
+                        {isMobile ? <LucideSmartphone size={23} strokeWidth={1.7} /> : <LucideLaptop size={24} strokeWidth={1.7} />}
+                        <i aria-hidden="true" />
+                      </span>
                       <span className="account-v3-session-copy">
                         <b>{s.browser} on {s.system}</b>
                         <em>{ipLine} · {hostLabel}</em>
                       </span>
                       <span className="account-v3-session-time">
-                        <b>{s.current ? 'This browser' : isPast ? timeAgo(s.lastSeen) : 'Recent'}</b>
+                        <b>{s.current ? 'This device' : isPast ? timeAgo(s.lastSeen) : 'Active'}</b>
+                        {s.current ? (
+                          <a href={logoutHref} title="Log out this Cloudflare Access session" aria-label={`Log out ${s.browser} on ${s.system}`}>
+                            <IconPower size={13} /><span>Log out</span>
+                          </a>
+                        ) : (
+                          <button type="button" disabled title="Remote logout needs a Cloudflare session identifier; this row is browser telemetry only" aria-label={`Remote logout unavailable for ${s.browser} on ${s.system}`}>
+                            <IconPower size={13} /><span>Log out</span>
+                          </button>
+                        )}
                       </span>
                     </div>
                   );
@@ -1425,7 +1454,7 @@ const MENU_W: Record<MK, number> = {
   currency: 400,
   basisu: 400,
   appearance: 400,
-  account: 400,
+  account: 440,
 };
 
 type NotifTab = 'all' | 'critical' | 'opportunity' | 'account' | 'logs' | 'prefs';
@@ -1653,8 +1682,9 @@ function SharedTopBar() {
     const zoom = rr.width / (row.offsetWidth || 1) || 1;
     const triggerCenter = btn.offsetLeft + btn.offsetWidth / 2;
     let left = triggerCenter - w / 2;
-    const minLeft = (10 - rr.left) / zoom;
-    const maxLeft = (window.innerWidth - 10 - rr.left) / zoom - w;
+    const viewportInset = 24;
+    const minLeft = (viewportInset - rr.left) / zoom;
+    const maxLeft = (window.innerWidth - viewportInset - rr.left) / zoom - w;
     if (maxLeft > minLeft) left = Math.max(minLeft, Math.min(left, maxLeft));
     const pointer = Math.max(18, Math.min(w - 18, triggerCenter - left));
     return { left, width: w, pointer };
@@ -1743,7 +1773,6 @@ function SharedTopBar() {
   const b = state?.binance; const cfg = state?.config;
   const accountProfile = cfg?.profile ?? { name: '', avatar: null };
   const accountAvatar = accountProfile.avatar ?? DEFAULT_PROFILE_LOGO;
-  const accountUsesDefaultLogo = !accountProfile.avatar;
   const accountConnected = !!b?.keysPresent;
   const accountTone = accountConnected ? (b?.connected ? 'live' : 'warn') : 'off';
   const accountSub = accountConnected ? (b?.connected ? 'Binance connected' : 'Binance needs review') : 'Binance not linked';
@@ -2173,6 +2202,7 @@ function SharedTopBar() {
   const trig = (k: MK, cls: string, inner: JSX.Element, opts: { title?: string; onClick?: () => void } = {}) => (
     <button
       ref={(el) => { btnRefs.current[k] = el; }}
+      data-topbar-key={k}
       className={`${cls} ${active === k ? 'on' : ''}`}
       onPointerEnter={() => openK(k)}
       onFocus={() => openK(k)}
@@ -2996,8 +3026,8 @@ function SharedTopBar() {
         return (
           <div className="ops-sheet ops-clock-sheet">
             <OpsSheetHeader
-              icon={<IconClock size={18} />}
-              title="Desk Clock"
+              icon={<LucideClock size={20} strokeWidth={1.7} />}
+              title="Market Clock"
               subtitle={`${zone.city} · ${activeClockOffset}`}
               status={zone.label}
               tone="accent"
@@ -3031,8 +3061,8 @@ function SharedTopBar() {
         return (
           <div className="ops-sheet ops-aws-sheet">
             <OpsSheetHeader
-              icon={<IconTerminal size={18} />}
-              title="AWS CLI"
+              icon={<LucideTerminal size={20} strokeWidth={1.7} />}
+              title="AWS CloudShell"
               subtitle="CloudShell command launcher"
               status="Not attached"
               tone="idle"
@@ -3060,8 +3090,8 @@ function SharedTopBar() {
         return (
           <div className="ops-sheet ops-key-sheet">
             <OpsSheetHeader
-              icon={<BinanceLogo size={23} />}
-              title="API Keys"
+              icon={<BinanceLogo size={25} />}
+              title="Binance API Keys"
               subtitle="Masked Binance credential posture"
               status={risky ? 'Review' : liveCount ? `${liveCount} live` : 'No live key'}
               tone={risky ? 'bad' : liveCount ? 'ok' : 'warn'}
@@ -3099,9 +3129,9 @@ function SharedTopBar() {
         return (
           <div className="ops-sheet ops-data-sheet">
             <OpsSheetHeader
-              icon={<IconDatabase size={18} />}
-              title="Connection Health"
-              subtitle={`${dataGood} of ${dataRows.length} live checks passing`}
+              icon={<LucideDatabase size={21} strokeWidth={1.7} />}
+              title="Data Health"
+              subtitle={`${dataGood} of ${dataRows.length} source checks passing`}
               status={dataLabel}
               tone={statusTone(dataGrade)}
             />
@@ -3125,7 +3155,7 @@ function SharedTopBar() {
         return (
           <div className="ops-sheet ops-advisor-sheet">
             <OpsSheetHeader
-              icon={<IconShield size={18} />}
+              icon={<LucideShield size={20} strokeWidth={1.7} />}
               title="Trust Advisor"
               subtitle={`${advChecks.length} live cockpit checks`}
               status={advTone === 'bad' ? 'Action' : advTone === 'warn' ? 'Review' : 'Clear'}
@@ -3162,7 +3192,7 @@ function SharedTopBar() {
         return (
           <div className="ops-sheet ops-notification-sheet">
             <OpsSheetHeader
-              icon={<IconBell size={18} />}
+              icon={<LucideBell size={20} strokeWidth={1.7} />}
               title="Notifications"
               subtitle="Real ledger and control-room events"
               status={unread ? `${unread} new` : events.length ? 'Read' : 'Clear'}
@@ -3196,8 +3226,8 @@ function SharedTopBar() {
         return (
           <div className={`ops-sheet ops-bot-sheet ${modeTone}`}>
             <OpsSheetHeader
-              icon={<IconPower size={18} />}
-              title="Bot Control"
+              icon={<LucideStop size={20} strokeWidth={1.7} />}
+              title="Execution Control"
               subtitle={modeSub}
               status={modeLabel}
               tone={statusTone(modeTone)}
@@ -3235,8 +3265,8 @@ function SharedTopBar() {
         return (
           <div className="ops-sheet ops-cadence-sheet">
             <OpsSheetHeader
-              icon={<IconRefresh size={18} />}
-              title="Data Cadence"
+              icon={<LucideRefresh size={20} strokeWidth={1.7} />}
+              title="Refresh Cadence"
               subtitle="Per-surface browser polling"
               status={refreshCode}
               tone={statusTone(refreshTone)}
@@ -3263,7 +3293,7 @@ function SharedTopBar() {
         return (
           <div className="ops-sheet ops-currency-sheet">
             <OpsSheetHeader
-              icon={<IconDollar size={18} />}
+              icon={<LucideCurrency size={20} strokeWidth={1.7} />}
               title="Display Currency"
               subtitle={currencyFx.fetchedAt ? `Rates updated ${timeAgo(currencyFx.fetchedAt)}` : 'Loading cached FX rates'}
               status={cur}
@@ -3291,8 +3321,8 @@ function SharedTopBar() {
         return (
           <div className="ops-sheet ops-basis-sheet">
             <OpsSheetHeader
-              icon={<IconPercent size={18} />}
-              title="Basis Unit"
+              icon={<LucideBasis size={20} strokeWidth={1.7} />}
+              title="Basis Units"
               subtitle="One unit across tables and charts"
               status={basisCode}
               tone="accent"
@@ -3322,7 +3352,7 @@ function SharedTopBar() {
         return (
           <div className="ops-sheet ops-appearance-sheet" style={{ '--ops-accent': activeAccent.hex } as CSSProperties}>
             <OpsSheetHeader
-              icon={theme === 'dark' ? <IconMoon size={18} /> : <IconSun size={18} />}
+              icon={theme === 'dark' ? <LucideMoon size={20} strokeWidth={1.7} /> : <LucideSun size={20} strokeWidth={1.7} />}
               title="Appearance"
               subtitle={`${activeAccent.label} accent · ${appearanceZoom}% scale`}
               status={prefs.theme === 'system' ? 'Auto' : prefs.theme}
@@ -3364,56 +3394,59 @@ function SharedTopBar() {
       }}
     >
       {trig('clock', 'hdr-clock-btn clock-pro-btn clock-premium-trigger', <>
-        <span className="clock-premium-readout" aria-hidden="true">
-          <span className="clock-premium-main">
-            <b>{activeClock.hm}</b>
-            <em>:{activeClock.ss}</em>
+        <span className="clock-premium-pill" aria-hidden="true">
+          <LucideClock className="clock-premium-glyph" size={14} strokeWidth={1.8} />
+          <span className="clock-premium-readout">
+            <span className="clock-premium-main">
+              <b>{activeClock.hm}</b>
+              <em>:{activeClock.ss}</em>
+            </span>
+            <small>{clockStamp(zone.id, now)}</small>
           </span>
-          <small>{clockStamp(zone.id, now)}</small>
+          <span className="clock-premium-zone">{zone.label}</span>
         </span>
-        <span className="clock-premium-zone" aria-hidden="true">{zone.label}</span>
       </>, { title: `Clock & timezone — ${zone.city}` })}
       {trig('data', `hdr-ic data-ghost data-pro grade-${dataGrade}`, <>
-        <span className={`data-pro-core ${dataGrade}`}><IconDatabase size={17} /></span>
+        <span className={`rail-icon-core ${dataGrade}`}><LucideDatabase size={21} strokeWidth={1.7} /></span>
       </>, { title: `Data Health — ${dataLabel} · ${dataSub}` })}
       {trig('mrefresh', `hdr-ic refresh-ghost refresh-premium-trigger ${refreshTone}`, <>
-        <span className={`ops-trigger-code cadence ${refreshTone}`}><IconRefresh size={12} /><b>{refreshCode}</b></span>
+        <span className={`rail-icon-core ${refreshTone}`}><LucideRefresh size={20} strokeWidth={1.7} /></span>
       </>, { title: `Data cadence — market every ${refreshCode}` })}
       <span className="topbar-suite-divider" aria-hidden="true" />
       {trig('shell', 'hdr-ic tint-shell shell-ghost shell-premium-trigger', <>
-        <span className="shell-trigger-core"><IconTerminal size={16} /></span>
+        <span className="rail-icon-core"><LucideTerminal size={20} strokeWidth={1.7} /></span>
       </>, { title: 'AWS CLI — CloudShell launcher, not attached' })}
       {trig('apikey', `hdr-ic apikey-ghost apikey-premium-trigger s-${roKey?.status ?? 'missing'}`, <>
-        <span className={`key-trigger-core s-${roKey?.status ?? 'missing'}`}><IconKey size={16} /></span>
+        <span className={`rail-icon-core s-${roKey?.status ?? 'missing'}`}><LucideKey size={20} strokeWidth={1.7} /></span>
       </>, { title: `API keys — ${roKey?.live ? 'live posture' : roKey?.keysPresent ? 'permission sync pending' : 'no live key'}` })}
       {trig('advisor', `hdr-ic advisor-ghost advisor-premium-trigger grade-${advTone}`, <>
-        <span className={`advisor-trigger-core ${advTone}`}><IconShield size={16} /></span>
+        <span className={`rail-icon-core ${advTone}`}><LucideShield size={20} strokeWidth={1.7} /></span>
       </>, { title: 'Trust Advisor — live cockpit checks' })}
       <span className="topbar-suite-divider" aria-hidden="true" />
       {trig('notif', `hdr-ic notif-trigger notif-ghost notif-premium-trigger ${notifTone}`, <>
-        <span className={`notif-trigger-core ${notifTone}`}>
-          <IconBell size={16} />
+        <span className={`rail-icon-core ${notifTone}`}>
+          <LucideBell size={20} strokeWidth={1.7} />
           {unread > 0 && <b className="ops-trigger-count">{unread > 99 ? '99+' : unread}</b>}
         </span>
       </>, { title: `Notifications — ${unread ? `${unread} unread` : 'no unread events'}` })}
       {trig('power', `hdr-ic power-ghost power-premium-trigger ${modeClass}`, <>
-        <span className={`ops-trigger-code bot ${modeTone}`}><IconPower size={13} /><b>{killOn ? 'STOP' : liveOrdersAllowed ? 'ARM' : 'BOT'}</b></span>
+        <span className={`rail-icon-core ${modeTone}`}><LucideStop size={20} strokeWidth={1.7} /></span>
       </>, { title: `Bot Control — ${modeLabel}` })}
       <span className="topbar-suite-divider" aria-hidden="true" />
       {trig('currency', `hdr-ic currency-ghost currency-premium-trigger ${curTone}`, <>
-        <span className={`ops-trigger-code currency ${curTone}`}><b>{cur}</b></span>
+        <span className={`rail-icon-core ${curTone}`}><LucideCurrency size={20} strokeWidth={1.7} /></span>
       </>, { title: `Display currency — ${cur}` })}
       {trig('basisu', `hdr-ic basis-ghost basis-premium-trigger ${basisIsBps ? 'basis-bps' : 'basis-pct'}`, <>
-        <span className={`ops-trigger-code basis ${basisIsBps ? 'bps' : 'pct'}`}><b>{basisCode}</b></span>
+        <span className={`rail-icon-core ${basisIsBps ? 'bps' : 'pct'}`}><LucideBasis size={20} strokeWidth={1.7} /></span>
       </>, { title: `Basis units — ${basisIsBps ? 'basis points' : 'percent'}` })}
       {trig('appearance', `hdr-ic appearance-ghost appearance-premium-trigger ${theme}`, <>
-        <span className={`appearance-trigger-core ${theme}`} style={{ '--apx-accent': activeAccent.hex } as CSSProperties}>
-          {theme === 'dark' ? <IconMoon size={19} /> : <IconSun size={19} />}
+        <span className={`rail-icon-core ${theme}`} style={{ '--apx-accent': activeAccent.hex } as CSSProperties}>
+          {theme === 'dark' ? <LucideMoon size={20} strokeWidth={1.7} /> : <LucideSun size={20} strokeWidth={1.7} />}
         </span>
       </>, { title: `Appearance — ${prefs.theme === 'system' ? 'auto' : prefs.theme} · ${appearanceZoom}%` })}
       {trig('account', `hdr-ic shared-account-trigger s-${accountTone}`, <>
-        <span className={`shared-account-orb ${accountUsesDefaultLogo ? 'profile-logo' : ''} s-${accountTone}`}>
-          <span>{accountAvatar ? <img src={accountAvatar} alt="" /> : <IconUser size={16} />}</span>
+        <span className={`shared-account-orb s-${accountTone}`}>
+          <span><img src={accountAvatar} alt="" /></span>
           <i aria-hidden="true" />
         </span>
       </>, { title: `Account Details — ${accountSub}` })}
@@ -3434,7 +3467,7 @@ function SharedTopBar() {
           } as CSSProperties}
         >
           {outgoingContent && (
-            <div className="smenu-pane outgoing" aria-hidden="true" inert key={outgoingContent}>
+            <div className="smenu-pane outgoing" data-pane-key={outgoingContent} aria-hidden="true" inert key={outgoingContent}>
               {premiumContent(outgoingContent)}
             </div>
           )}
@@ -3442,6 +3475,7 @@ function SharedTopBar() {
             <div
               ref={incomingPaneRef}
               className={`smenu-pane incoming ${outgoingContent ? 'switching' : 'first'}`}
+              data-pane-key={contentActive}
               key={contentActive}
             >
               {premiumContent(contentActive)}

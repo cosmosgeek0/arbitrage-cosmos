@@ -138,7 +138,7 @@ export class Ledger extends EventEmitter {
     return ev;
   }
 
-  recentEvents(limit = 100, kind?: string, symbol?: string, q?: string): LedgerEvent[] {
+  recentEvents(limit = 100, kind?: string, symbol?: string, q?: string, since?: number): LedgerEvent[] {
     const clauses: string[] = [];
     const params: (string | number)[] = [];
     if (kind) {
@@ -153,6 +153,10 @@ export class Ledger extends EventEmitter {
       clauses.push('(data LIKE ? OR kind LIKE ? OR symbol LIKE ?)');
       const like = `%${q}%`;
       params.push(like, like, like);
+    }
+    if (since !== undefined && Number.isFinite(since)) {
+      clauses.push('ts >= ?');
+      params.push(since);
     }
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
     const rows = this.db

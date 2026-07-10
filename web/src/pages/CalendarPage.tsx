@@ -36,7 +36,7 @@ export function CalendarPage() {
   const [failed, setFailed] = useState(false);
   const [query, setQuery] = useState('');
   const [country, setCountry] = useState('all');
-  const [impact, setImpact] = useState<'all' | 'high'>('all');
+  const [impact, setImpact] = useState<'all' | 'high' | 'medium' | 'low'>('all');
   const [weekStart, setWeekStart] = useState(() => mondayFor(initialToday));
   const [selectedDay, setSelectedDay] = useState(initialToday);
   const [clock, setClock] = useState(Date.now());
@@ -105,7 +105,8 @@ export function CalendarPage() {
   const visible = useMemo(() => {
     const text = query.trim().toLowerCase();
     return (itemsByDay.get(selectedDay) ?? []).filter((item) => {
-      if (impact === 'high' && item.importance < 1) return false;
+      const level = item.importance >= 1 ? 'high' : item.importance === 0 ? 'medium' : 'low';
+      if (impact !== 'all' && level !== impact) return false;
       if (country !== 'all' && item.country !== country) return false;
       const haystack = `${item.title} ${item.indicator} ${item.period} ${item.country} ${countryName(item.country)} ${item.source ?? ''} ${item.currency ?? ''}`.toLowerCase();
       return !text || text.split(/\s+/).every((token) => haystack.includes(token));
@@ -168,7 +169,9 @@ export function CalendarPage() {
       <section className="lix-filters" aria-label="Calendar Filters">
         <div className="lix-segments" role="group" aria-label="Impact">
           <button type="button" className={impact === 'all' ? 'selected' : ''} onClick={() => setImpact('all')}>All Events</button>
-          <button type="button" className={impact === 'high' ? 'selected' : ''} onClick={() => setImpact('high')}>High Impact</button>
+          <button type="button" className={impact === 'high' ? 'selected' : ''} onClick={() => setImpact('high')}>High</button>
+          <button type="button" className={impact === 'medium' ? 'selected' : ''} onClick={() => setImpact('medium')}>Medium</button>
+          <button type="button" className={impact === 'low' ? 'selected' : ''} onClick={() => setImpact('low')}>Low</button>
         </div>
         <PillSelect value={country} options={[{ id: 'all', label: 'All Countries' }, ...availableCountries.map((code) => ({ id: code, label: `${flag(code)} ${countryName(code)}` }))]} onChange={setCountry} ariaLabel="Country" className="lix-select" />
       </section>

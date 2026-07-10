@@ -40,35 +40,59 @@ filled search copy, blue priority rails, URL subcopy, or decorative source cards
 - Both pages use one Account/Markets/Borrow-style outer surface: `1px` neutral
   border, `12px` radius, no nested page card, and the same left/right geometry.
 - Calendar keeps its functional seven-day navigator, compact Today/week controls,
-  real Economic and High Impact counts, impact/country filters, grouped release
-  tape, importance bars, and aligned Actual/Forecast/Prior columns.
-- News mirrors that calendar navigation model: seven timezone-aware day cells,
-  previous/next week controls, News and High Impact counts, and the complete
-  retained tape for the selected day. Day membership starts at `00:00` in the
-  selected timezone; changing Local Time/UTC must change the partition honestly.
-- News rows carry only time, a free-standing publisher logo, impact bars,
-  headline, category, and the outbound link. Never print provider names, domains,
-  summaries, or URLs beneath the headline. A date-only source must show an honest
-  dash rather than invent an exact time.
+  real Economic counts, High/Medium/Low filters, grouped release tape, importance
+  bars, and aligned Actual/Forecast/Prior columns.
+- News exposes exactly the rolling seven timezone-aware days ending Today—no
+  previous-week range. Day membership starts at `00:00` in the selected timezone;
+  changing Local Time/UTC repartitions honestly. Each day prints Total plus exact
+  H/M/L counts from the retained archive.
+- News rows carry time, a free-standing publisher logo plus publisher name,
+  impact bars, headline, category, and the outbound link. The Source column must
+  have Calendar-country spacing: 24px mark, 9px gap, restrained 12px name. Never
+  print domains, summaries, or URLs beneath the headline. A date-only source must
+  show an honest dash rather than invent an exact time.
+- Visible category tabs are All News, Crypto, Macro, Markets, Regulation,
+  Exchange, and On-Chain / Security. Impact is an independent rail: All Impact,
+  High, Medium, Low. Do not collapse either axis into a generic dropdown.
 - Impact is a semantic three-bar phone-signal glyph: High = three green bars,
-  Medium = two orange bars, Low = one red bar. Do not infer a critical incident
-  from a generic category such as `Security`; score the actual headline/event.
+  Medium = two blue bars, Low = one yellow bar. Server scoring combines source
+  authority, event type, affected scope, explicit scale, and low-signal wording;
+  a source tier or generic `Security` tag is never sufficient on its own.
 - Source identity belongs in the enlarged searchable source directory, where
   source health and selected-day counts are useful. Coverage is 100 visible
   sources as of this ruling; additions must be verified, relevant, and non-spammy.
 - Typography: page title 22/540; tape headlines and events 13–13.25/470–480;
   times and values 12.5/430–490; secondary metadata 10.5/410. Hairlines stabilize
   the dense chronological rows; the Markets zero-row-border rule does not apply.
-- Motion is limited to a short day-content entrance and incoming-data wash.
-  Persistent text never shifts, fades, or transforms during ordinary hover.
-- The backend refresh architecture remains one shared News SSE refresh owner,
-  client delta merge, upstream safety floors, a bounded persisted rolling archive,
-  and Calendar stale-while-revalidate/startup prewarm. Do not reintroduce polling
-  storms or block warm responses on upstream calls.
+- Motion is limited to a short day-content entrance, incoming-data wash, and the
+  6px two-wave live beacon immediately after News while SSE is connected.
+  Persistent text never shifts, fades, or transforms; reduced motion disables it.
+- The backend refresh owner belongs to the server and runs with zero browsers so
+  EC2 retains an uninterrupted week. Clients only subscribe and merge deltas.
+  Keep publisher-specific fetch floors, the slow history/small live relay split,
+  the bounded persisted archive, and Calendar stale-while-revalidate prewarm.
 
 Only an explicit owner request may reopen this information architecture. Normal
 bug fixes must preserve the `lix-`, `calx-`, and `newsx-` geometry in
 `web/src/pages/LiveIntelligence.css`.
+
+### 0.2 Logs Uses The Same One-Frame Skeleton (2026-07-10)
+
+Logs content is intentionally still open for the owner's detailed direction,
+but its page skeleton is fixed to the News/Calendar surface grammar:
+
+- One `lix-frame` at the shared page rail: `1px` neutral border, `12px` radius,
+  `57px` toolbar, `22px / 540` title, live state, and `286px × 34px` Search.
+- No separate header card, facet cards, feed card, inspector card, shadows, or
+  gaps between pseudo-cards. Filters, facets, activity, and event details are
+  regions inside the one frame, separated only by functional hairlines.
+- Logs may retain a facet rail and selected-event inspector because those are
+  real investigation tools. They must never recreate nested dashboard chrome.
+- Selected rows use a quiet background only; no blue/accent rail. Tape rows use
+  the same compact type and `46px` rhythm as News.
+- Future content edits may change fields, names, filters, grouping, or detail
+  logic when the owner directs them, but must preserve the `logx-` one-frame
+  geometry in `LiveIntelligence.css` unless explicitly reopened.
 
 ## 0.5 KNOWN FAILURE MODES OF THE AGENT (the owner should not have to babysit these)
 

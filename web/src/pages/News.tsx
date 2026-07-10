@@ -321,7 +321,7 @@ export function News() {
   const contextRef = useRef(context);
   const binanceRef = useRef(binance);
   const freshTimerRef = useRef<number | null>(null);
-  const fallbackCadence = Math.max(5, prefs.dataCadence?.news ?? 5);
+  const fallbackCadence = Math.max(0.5, prefs.dataCadence?.news ?? 5);
 
   useEffect(() => { binanceRef.current = binance; }, [binance]);
   useEffect(() => { contextRef.current = context; }, [context]);

@@ -21,6 +21,7 @@ import { ProposalStore, type IntentResult } from './proposals.js';
 import { MemoryEventSink, makeEvent } from './events.js';
 import { priorityOf } from './priority.js';
 import type { WakeupSnapshot } from './types.js';
+import type { SeedMinute } from './rolling.js';
 
 export class VolumeEngine {
   readonly cfg: VolumeConfig;
@@ -134,6 +135,10 @@ export class VolumeEngine {
 
   onBook(b: BookTicker): void {
     this.features.onBook(b);
+  }
+
+  seedMinute(symbol: string, sample: SeedMinute): void {
+    this.features.seedMinute(symbol, sample);
   }
 
   // ---- execution-path bridge (manual, risk-gated; never automatic) ----

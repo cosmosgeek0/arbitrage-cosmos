@@ -2,7 +2,8 @@
  * supplies, ATH, rank, tags, contract addresses, description) served from
  * CoinGecko's keyless API. Read-only, aggressively cached to disk so the
  * keyless rate budget is never re-burned: coin ids resolve once and live
- * forever; profiles and the global dominance snapshot refresh hourly. */
+ * until an authoritative identity correction supersedes them; profiles and
+ * the global dominance snapshot refresh hourly. */
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -33,6 +34,14 @@ const MATCH_ALIASES: Record<string, string> = {
   AIGENSYN: 'AI', // CG lists Gensyn under symbol AI (id gensyn)
   RONIN: 'RON', // CoinGecko lists Ronin as RON
   VELODROME: 'VELO', // velodrome-finance
+};
+// Exact CoinGecko identities for collision-prone Binance bases. Symbol-only
+// search cannot distinguish canonical assets from lower-ranked bridged copies
+// that reuse the same ticker. Keep this list deliberately narrow and only add
+// ids verified against CoinGecko's canonical /coins/:id response.
+const DIRECT_IDS: Record<string, string> = {
+  USDC: 'usd-coin',
+  WBTC: 'wrapped-bitcoin',
 };
 /** Fiat bases Binance quotes directly — no crypto profile exists, honest N/A. */
 export const FIAT_BASES = new Set(['EUR', 'GBP', 'TRY', 'BRL', 'JPY', 'ARS']);
@@ -115,6 +124,19 @@ async function politeFetch(url: string): Promise<Response> {
 
 async function resolveId(base: string): Promise<string | null> {
   const hit = cache.get(base);
+  const directId = DIRECT_IDS[base];
+  if (directId) {
+    if (hit?.id !== directId || (hit.profile && hit.profile.id !== directId)) {
+      cache.set(base, {
+        id: directId,
+        idTs: Date.now(),
+        profile: hit?.profile?.id === directId ? hit.profile : null,
+        profileTs: hit?.profile?.id === directId ? hit.profileTs : 0,
+      });
+      persist();
+    }
+    return directId;
+  }
   if (hit?.id) return hit.id;
   const q = QUERY_ALIASES[base] ?? base;
   const res = await politeFetch(`${CG}/search?query=${encodeURIComponent(q)}`);
@@ -171,7 +193,9 @@ async function loadDominance(): Promise<Record<string, number>> {
 export async function tokenProfile(base: string, opts?: { forceFull?: boolean }): Promise<TokenProfile | null> {
   const key = base.toUpperCase();
   const hit = cache.get(key);
-  if (hit?.profile && Date.now() - hit.profileTs < PROFILE_TTL && (hit.profile.full || !opts?.forceFull)) return hit.profile;
+  const directId = DIRECT_IDS[key];
+  const cachedIdentityIsCanonical = !directId || hit?.profile?.id === directId;
+  if (hit?.profile && cachedIdentityIsCanonical && Date.now() - hit.profileTs < PROFILE_TTL && (hit.profile.full || !opts?.forceFull)) return hit.profile;
 
   const id = await resolveId(key);
   if (!id) return hit?.profile ?? null;

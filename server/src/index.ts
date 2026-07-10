@@ -3,6 +3,7 @@ import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
 import WebSocket, { WebSocketServer } from 'ws';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { MarketEngine } from './engine/marketData.js';
 import { Scanner } from './engine/scanner.js';
 import { Ledger } from './ledger.js';
@@ -35,6 +36,9 @@ import { RiskService } from './services/risk.js';
 import { OrderService } from './services/orders.js';
 import { LoanService } from './services/loans.js';
 import { BookStreamHub } from './services/bookStream.js';
+import { BasisRuntime } from './services/basisRuntime.js';
+import { VolumeRuntime } from './services/volumeRuntime.js';
+import { AwsRunnerControl, AwsRunnerControlError } from './services/awsRunnerControl.js';
 import { getNewsContext, scoreNewsImpact, subscribeNewsContext } from './services/newsContext.js';
 import type { AppConfig, OrderIntent } from './types.js';
 
@@ -71,9 +75,12 @@ const sourceLogoCache = new Map<string, { ts: number; contentType: string; body:
 const ledger = new Ledger(
   process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : undefined
 );
+const awsRunnerControl = new AwsRunnerControl(ledger);
 const config = loadConfig(ledger);
 const engine = new MarketEngine(ledger);
 const scanner = new Scanner(config, ledger);
+const basisRuntime = new BasisRuntime(ledger, () => config, () => engine.allRows());
+const volumeRuntime = new VolumeRuntime(ledger, () => config, () => engine.allRows());
 
 // The control plane, News and Calendar must stay available when Binance is
 // temporarily unreachable. Market initialization retries in the background
@@ -83,6 +90,8 @@ void (async () => {
     try {
       await engine.init();
       engine.start();
+      setTimeout(() => void basisRuntime.start(), 3_000);
+      setTimeout(() => void volumeRuntime.start(), 5_000);
       break;
     } catch (err) {
       console.error('engine init failed, retrying in 15s:', err);
@@ -307,6 +316,78 @@ app.use((req, _res, next) => {
   for (const [k, v] of sessions) if (now - v.lastSeen > 30 * 60_000) sessions.delete(k);
   next();
 });
+
+interface AwsOperatorResult {
+  authorized: boolean;
+  operator: string | null;
+  reason: string | null;
+}
+
+let cloudflareJwks: ReturnType<typeof createRemoteJWKSet> | null = null;
+let cloudflareJwksDomain = '';
+
+async function awsOperator(req: express.Request): Promise<AwsOperatorResult> {
+  const controlHeader = req.headers['x-cosmos-control'];
+  if (controlHeader !== 'aws-runner') return { authorized: false, operator: null, reason: 'Missing control-channel header.' };
+  const host = String(req.headers.host ?? '').toLowerCase();
+  const hostName = host.split(':')[0];
+  const local = hostName === 'localhost' || hostName === '127.0.0.1' || hostName === '[::1]';
+  const origin = String(req.headers.origin ?? '');
+  if (origin) {
+    try {
+      if (new URL(origin).host.toLowerCase() !== host) return { authorized: false, operator: null, reason: 'Cross-origin control request blocked.' };
+    } catch {
+      return { authorized: false, operator: null, reason: 'Invalid request origin.' };
+    }
+  }
+  if (local) return { authorized: true, operator: 'local-operator', reason: null };
+  const expected = String(process.env.AWS_CONTROL_OPERATOR_EMAIL ?? '').trim().toLowerCase();
+  const teamDomainRaw = String(process.env.CF_ACCESS_TEAM_DOMAIN ?? '').trim();
+  const audience = String(process.env.CF_ACCESS_AUD ?? '').trim();
+  const assertion = String(req.headers['cf-access-jwt-assertion'] ?? '').trim();
+  if (!expected) return { authorized: false, operator: null, reason: 'AWS_CONTROL_OPERATOR_EMAIL is not configured.' };
+  if (!teamDomainRaw || !audience) return { authorized: false, operator: null, reason: 'Cloudflare Access JWT verification is not configured.' };
+  if (!assertion) return { authorized: false, operator: null, reason: 'Cloudflare Access JWT assertion is missing.' };
+  let teamDomain: string;
+  try {
+    const parsed = new URL(teamDomainRaw);
+    if (parsed.protocol !== 'https:' || !parsed.hostname.endsWith('.cloudflareaccess.com')) {
+      return { authorized: false, operator: null, reason: 'Cloudflare Access team domain is invalid.' };
+    }
+    teamDomain = parsed.origin;
+  } catch {
+    return { authorized: false, operator: null, reason: 'Cloudflare Access team domain is invalid.' };
+  }
+  try {
+    if (!cloudflareJwks || cloudflareJwksDomain !== teamDomain) {
+      cloudflareJwks = createRemoteJWKSet(new URL(`${teamDomain}/cdn-cgi/access/certs`));
+      cloudflareJwksDomain = teamDomain;
+    }
+    const { payload } = await jwtVerify(assertion, cloudflareJwks, { issuer: teamDomain, audience });
+    const cfUser = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : '';
+    if (!cfUser || cfUser !== expected) return { authorized: false, operator: cfUser || null, reason: 'Verified Cloudflare Access operator does not match.' };
+    return { authorized: true, operator: cfUser, reason: null };
+  } catch {
+    return { authorized: false, operator: null, reason: 'Cloudflare Access JWT verification failed.' };
+  }
+}
+
+async function requireAwsOperator(req: express.Request, res: express.Response): Promise<AwsOperatorResult | null> {
+  const operator = await awsOperator(req);
+  if (!operator.authorized) {
+    res.status(403).json({ ok: false, code: 'AWS_OPERATOR_DENIED', error: operator.reason });
+    return null;
+  }
+  return operator;
+}
+
+function sendAwsControlError(res: express.Response, error: unknown): void {
+  if (error instanceof AwsRunnerControlError) {
+    res.status(error.statusCode).json({ ok: false, code: error.code, error: error.message });
+    return;
+  }
+  res.status(500).json({ ok: false, code: 'AWS_CONTROL_ERROR', error: error instanceof Error ? error.message : String(error) });
+}
 
 app.get('/api/sessions', (req, res) => {
   const now = Date.now();
@@ -790,6 +871,41 @@ app.get('/api/earn', (_req, res) => {
   })();
 });
 
+// Account-wide wallet totals from Binance's signed wallet-balance endpoint.
+// The upstream request costs 60 IP weight, so every browser shares one 60s
+// server cache. Cached rows remain visible with an explicit error if a later
+// refresh fails; the UI never replaces stale money with invented zeroes.
+let walletBalanceCache: { ts: number; rows: { walletName: string; balance: number; active: boolean }[] } | null = null;
+app.get('/api/wallet-balances', (_req, res) => {
+  void (async () => {
+    const now = Date.now();
+    if (walletBalanceCache && now - walletBalanceCache.ts < 60_000) {
+      res.json({ rows: walletBalanceCache.rows, fetchedAt: walletBalanceCache.ts });
+      return;
+    }
+    if (!client) {
+      res.json({ rows: [], fetchedAt: null, error: 'Binance keys not configured' });
+      return;
+    }
+    try {
+      const data = await client.walletBalances('USDT');
+      const rows = data.map((row) => ({
+        walletName: row.walletName,
+        balance: Number(row.balance) || 0,
+        active: row.activate,
+      }));
+      walletBalanceCache = { ts: now, rows };
+      res.json({ rows, fetchedAt: now });
+    } catch (error) {
+      res.json({
+        rows: walletBalanceCache?.rows ?? [],
+        fetchedAt: walletBalanceCache?.ts ?? null,
+        error: error instanceof Error ? error.message : 'wallet balance fetch failed',
+      });
+    }
+  })();
+});
+
 app.get('/api/markets', (_req, res) => {
   void (async () => {
     const [spotBookRes, perpBookRes, perp24hRes] = await Promise.allSettled([
@@ -984,6 +1100,14 @@ app.get('/api/pnl', (_req, res) => {
 
 app.get('/api/signals', (_req, res) => {
   res.json({ active: scanner.proposals(), recent: ledger.listSignals({ limit: 50 }) });
+});
+
+app.get('/api/engine/volume', (_req, res) => {
+  res.json(volumeRuntime.snapshot());
+});
+
+app.get('/api/engine/basis', (_req, res) => {
+  res.json(basisRuntime.snapshot());
 });
 
 app.post('/api/proposals/:id/approve', (req, res) => {
@@ -1378,12 +1502,7 @@ app.get('/api/system', (req, res) => {
         timeSync = null;
       }
     }
-    let dbOk = true;
-    try {
-      ledger.getConfigValue('app');
-    } catch {
-      dbOk = false;
-    }
+    const dbOk = ledger.probeWritable();
     res.json({
       ok: true,
       uptimeSec: Math.round((Date.now() - bootTs) / 1000),
@@ -1403,6 +1522,7 @@ app.get('/api/system', (req, res) => {
       },
       restLatencyMs: timeSync?.latencyMs ?? null,
       serverTimeDiffMs: timeSync?.diffMs ?? null,
+      timeSyncTs: timeSync?.ts ?? null,
       usedWeight1m: rateLimit.ts > 0 ? rateLimit.usedWeight1m : null,
       usedWeightTs: rateLimit.ts || null,
       lastScannerTickTs: scanner.lastTickTs,
@@ -1429,7 +1549,7 @@ app.get('/api/system', (req, res) => {
 // full-access key by editing these env vars (or the defaults below).
 function apiKeyManifest() {
   const declaredPrefix = process.env.BINANCE_KEY_PREFIX || '—';
-  const ips = (process.env.BINANCE_KEY_IPS || '')
+  const ips = (process.env.BINANCE_KEY_IPS || '223.181.45.88')
     .split(',').map((s) => s.trim()).filter(Boolean);
   // Prefer the LIVE per-key permissions from Binance apiRestrictions; fall back
   // to this key's declared read-only posture until a real fetch lands.
@@ -1444,7 +1564,7 @@ function apiKeyManifest() {
         futures: r.enableFutures,
       }
     : { reading: true, spotMargin: false, marginLoan: false, withdrawals: false, universalTransfer: false, futures: false };
-  const fullIps = (process.env.BINANCE_FULL_KEY_IPS || '')
+  const fullIps = (process.env.BINANCE_FULL_KEY_IPS || '13.235.86.162')
     .split(',').map((s) => s.trim()).filter(Boolean);
   return [
     {
@@ -1465,9 +1585,9 @@ function apiKeyManifest() {
       updatedAt: bootTs,
     },
     {
-      // The full-access engine key, created later in AWS Secrets Manager and
-      // restricted to the EC2 IP. Shown as PLANNED until it is actually wired.
-      // Withdrawals stay OFF by policy even on the full key.
+      // Future AWS automation key, restricted to the EC2 egress IP. Its
+      // requested permission scope is visible, but status remains PLANNED until
+      // a credential is actually wired and Binance confirms the live posture.
       id: 'secrets-full',
       name: process.env.BINANCE_FULL_KEY_NAME || 'Automation key',
       type: process.env.BINANCE_FULL_KEY_TYPE || 'HMAC',
@@ -1479,8 +1599,8 @@ function apiKeyManifest() {
       fingerprint: null,
       ipRestrict: fullIps.length > 0,
       ips: fullIps,
-      ipNote: 'No restriction is active',
-      permissions: { reading: false, spotMargin: false, marginLoan: false, withdrawals: false, universalTransfer: false, futures: false },
+      ipNote: 'AWS runner egress',
+      permissions: { reading: false, spotMargin: true, marginLoan: true, withdrawals: true, universalTransfer: true, futures: true },
       note: 'Planned only. No credential or permission is active.',
       updatedAt: bootTs,
     },
@@ -1509,6 +1629,64 @@ app.post('/api/refresh', (_req, res) => {
 
 app.get('/api/apikey', (_req, res) => {
   res.json({ keys: apiKeyManifest(), activeId: 'read-only', ts: Date.now() });
+});
+
+app.get('/api/aws-control/status', (req, res) => {
+  void (async () => {
+    const operator = await awsOperator(req);
+    const probe = req.query.probe === '1';
+    const status = await awsRunnerControl.status(operator.authorized, operator.operator, probe);
+    res.json({ ok: true, status, authorizationReason: operator.authorized ? null : operator.reason });
+  })().catch((error) => sendAwsControlError(res, error));
+});
+
+app.post('/api/aws-control/gates', (req, res) => {
+  void (async () => {
+    const operator = await requireAwsOperator(req, res);
+    if (!operator) return;
+    const body = req.body as Record<string, unknown>;
+    const gates = awsRunnerControl.setGates({
+      connectionEnabled: typeof body.connectionEnabled === 'boolean' ? body.connectionEnabled : undefined,
+      executionEnabled: typeof body.executionEnabled === 'boolean' ? body.executionEnabled : undefined,
+    }, operator.operator);
+    res.json({ ok: true, gates });
+  })().catch((error) => sendAwsControlError(res, error));
+});
+
+app.post('/api/aws-control/command', (req, res) => {
+  void (async () => {
+    const operator = await requireAwsOperator(req, res);
+    if (!operator) return;
+    const command = typeof (req.body as Record<string, unknown>).command === 'string'
+      ? String((req.body as Record<string, unknown>).command).slice(0, 80)
+      : '';
+    ledger.logEvent('aws_runner_request', null, { operator: operator.operator, command: command.toLowerCase() });
+    const result = await awsRunnerControl.runCommand(command);
+    res.json({ ok: true, result });
+  })().catch((error) => sendAwsControlError(res, error));
+});
+
+app.get('/api/aws-control/runner', (req, res) => {
+  void (async () => {
+    const operator = await requireAwsOperator(req, res);
+    if (!operator) return;
+    ledger.logEvent('aws_runner_request', null, { operator: operator.operator, command: 'read_runner' });
+    const file = await awsRunnerControl.readRunner();
+    res.json({ ok: true, file });
+  })().catch((error) => sendAwsControlError(res, error));
+});
+
+app.put('/api/aws-control/runner', (req, res) => {
+  void (async () => {
+    const operator = await requireAwsOperator(req, res);
+    if (!operator) return;
+    const body = req.body as Record<string, unknown>;
+    const content = typeof body.content === 'string' ? body.content : '';
+    const expectedSha256 = typeof body.expectedSha256 === 'string' ? body.expectedSha256 : null;
+    ledger.logEvent('aws_runner_request', null, { operator: operator.operator, command: 'save_runner', bytes: Buffer.byteLength(content) });
+    const file = await awsRunnerControl.saveRunner(content, expectedSha256);
+    res.json({ ok: true, file: { ...file, content: undefined } });
+  })().catch((error) => sendAwsControlError(res, error));
 });
 
 app.get('/api/config', (_req, res) => {

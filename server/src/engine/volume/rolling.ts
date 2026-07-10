@@ -22,6 +22,17 @@ interface Bucket {
   low: number;
 }
 
+export interface SeedMinute {
+  startMs: number;
+  quoteVolume: number;
+  tradeCount: number;
+  takerBuyQuote: number;
+  open: number;
+  close: number;
+  high: number;
+  low: number;
+}
+
 function emptyBucket(): Bucket {
   return {
     startMs: -1,
@@ -83,6 +94,19 @@ class BucketRing {
     if (!t.isBuyerMaker) b.takerBuyQuote += t.quoteQty;
     if (t.quoteQty >= largeTradeQuoteUsd) b.largeTradeCount += 1;
     if (t.quoteQty > b.maxTradeQuote) b.maxTradeQuote = t.quoteQty;
+  }
+
+  seedMinute(sample: SeedMinute): void {
+    const bucket = this.slotFor(sample.startMs);
+    bucket.quoteVolume = Math.max(0, sample.quoteVolume);
+    bucket.tradeCount = Math.max(0, Math.round(sample.tradeCount));
+    bucket.takerBuyQuote = Math.max(0, Math.min(bucket.quoteVolume, sample.takerBuyQuote));
+    bucket.largeTradeCount = 0;
+    bucket.maxTradeQuote = bucket.tradeCount > 0 ? bucket.quoteVolume / bucket.tradeCount : 0;
+    bucket.open = sample.open;
+    bucket.close = sample.close;
+    bucket.high = sample.high;
+    bucket.low = sample.low;
   }
 
   /**
@@ -159,6 +183,12 @@ export class RollingTape {
     if (drop > 0) this.raw.splice(0, drop);
     if (this.raw.length > this.cfg.maxRawTrades)
       this.raw.splice(0, this.raw.length - this.cfg.maxRawTrades);
+  }
+
+  /** Seed a completed Binance 1m candle into the coarse history only. */
+  seedMinute(sample: SeedMinute): void {
+    this.firstSeenTs = Math.min(this.firstSeenTs, sample.startMs);
+    this.coarse.seedMinute(sample);
   }
 
   rawWindow(nowTs: number, windowMs: number): RawTrade[] {

@@ -4,15 +4,18 @@
    — all straight from Binance endpoints, one template for every token, with
    honest spot-only fallbacks. The second base row is reserved (owner). */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Copy, FileText, Globe2, Grid2X2, Search, Star as StarIcon, X } from 'lucide-react';
 import { useStore } from '../store';
 import { TokenIcon } from '../components/TokenIcon';
-import { PillSelect, Star } from '../components/PillSelect';
+import { PillSelect } from '../components/PillSelect';
 import { type TvCandle } from '../components/TradingViewChart';
 import { TradingViewWidget } from '../components/TradingViewWidget';
-import { IconClose, IconExternal, IconMaximize, IconSearch } from '../components/Icons';
-import { fmtPrice, fmtPct, baseOf } from '../format';
+import type { BasisRow as BasisEngineRow, BasisSnapshot as BasisEngineSnapshot } from '../lib/basisRuntime';
+import { IconClose, IconMaximize } from '../components/Icons';
+import { baseOf, countdown, fmtBasis, fmtFunding, fmtMoney, fmtPct, fmtPrice, timeAgo } from '../format';
 import { tokenName } from '../lib/tokenNames';
 import './Markets.css';
+import './TokenDetail.css';
 
 /* Coinbase lookback ranges — 1S through ALL, every one real Binance klines. */
 const RANGES = {
@@ -46,11 +49,36 @@ interface BinanceKlineMsg {
 }
 
 interface TokenProfile {
+  id: string;
   name: string;
   rank: number | null;
+  description: string | null;
   homepage: string | null;
   whitepaper: string | null;
+  categories: string[];
+  platforms: { network: string; address: string }[];
+  marketCapUsd: number | null;
+  fdvUsd: number | null;
+  circSupply: number | null;
+  totalSupply: number | null;
+  maxSupply: number | null;
+  athUsd: number | null;
+  athDate: string | null;
+  athChangePct: number | null;
+  vol24hUsd: number | null;
+  priceChange1yPct: number | null;
+  priceChange30dPct: number | null;
+  priceChange7dPct: number | null;
+  dominancePct: number | null;
+  genesisDate: string | null;
+  hashingAlgorithm: string | null;
+  sentimentUpPct: number | null;
+  watchlistUsers: number | null;
+  full: boolean;
+  fetchedAt: number;
 }
+
+type TokenView = 'chart' | 'flow' | 'basis' | 'derivatives' | 'profile';
 
 interface MoneyFlow {
   symbol: string;
@@ -120,7 +148,7 @@ function PriceChart({ points, up }: { points: { t: number; v: number }[]; up: bo
   }, []);
 
   const W = chartWidth;
-  const H = Math.round(Math.max(480, Math.min(780, W * 0.32)));
+  const H = Math.round(Math.max(320, Math.min(560, W * 0.32)));
   const PAD_R = 110;
   const PAD_B = 34;
   const model = useMemo(() => {
@@ -417,143 +445,6 @@ function MoneyFlowCard({ symbol, base }: { symbol: string; base: string }) {
           {flow.sampled && (
             <p className="tdx-updated">Most recent {Math.round((flow.coveredMs / flow.windowMs) * 100)}% of the window · {flow.trades.toLocaleString('en-US')} trades</p>
           )}
-        </>
-      )}
-    </section>
-  );
-}
-
-/* ==== TASK 2: Open Interest — Binance futures token data ================== */
-function OiCard({ symbol, base, hasPerp }: { symbol: string; base: string; hasPerp: boolean }) {
-  const [period, setPeriod] = useState<'5m' | '1h' | '4h' | '1d'>('1d');
-  const [rows, setRows] = useState<OiPoint[]>([]);
-  const [hov, setHov] = useState<number | null>(null);
-  const [mouse, setMouse] = useState<{ x: number } | null>(null);
-  const wrapRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!hasPerp) return;
-    let alive = true;
-    setRows([]);
-    setHov(null);
-    const load = () => {
-      void fetch(`/api/futures/oi-hist?symbol=${symbol}&period=${period}&limit=${period === '1d' ? 30 : 48}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => alive && Array.isArray(d) && setRows(d as OiPoint[]))
-        .catch(() => undefined);
-    };
-    load();
-    const t = setInterval(load, 60_000);
-    return () => { alive = false; clearInterval(t); };
-  }, [symbol, period, hasPerp]);
-
-  const W = 560;
-  const H = 380;
-  const PAD_L = 58;
-  const PAD_R = 74;
-  const PAD_B = 30;
-  const PAD_T = 12;
-  const model = useMemo(() => {
-    if (rows.length < 3) return null;
-    const cs = rows.map((r) => r.contracts);
-    const ns = rows.map((r) => r.notional);
-    const cMin = Math.min(...cs) * 0.995;
-    const cMax = Math.max(...cs) * 1.005;
-    const nMin = Math.min(...ns) * 0.995;
-    const nMax = Math.max(...ns) * 1.005;
-    const x = (i: number) => PAD_L + ((i + 0.5) / rows.length) * (W - PAD_L - PAD_R);
-    const cy = (v: number) => PAD_T + ((cMax - v) / (cMax - cMin)) * (H - PAD_T - PAD_B);
-    const ny = (v: number) => PAD_T + ((nMax - v) / (nMax - nMin)) * (H - PAD_T - PAD_B);
-    const bw = Math.max(2, ((W - PAD_L - PAD_R) / rows.length) * 0.45);
-    const line = rows.map((r, i) => `${i ? 'L' : 'M'}${x(i)},${ny(r.notional)}`).join(' ');
-    const cTicks = Array.from({ length: 3 }, (_, i) => cMin + ((i + 0.5) / 3) * (cMax - cMin));
-    const nTicks = Array.from({ length: 3 }, (_, i) => nMin + ((i + 0.5) / 3) * (nMax - nMin));
-    const times = [0, Math.floor(rows.length / 2), rows.length - 1];
-    return { x, cy, ny, bw, line, cTicks, nTicks, times };
-  }, [rows]);
-
-  const idxFromMouse = (clientX: number): number | null => {
-    const r = wrapRef.current?.getBoundingClientRect();
-    if (!r || !rows.length) return null;
-    const xv = ((clientX - r.left) / r.width) * W;
-    const i = Math.round(((xv - PAD_L) / (W - PAD_L - PAD_R)) * rows.length - 0.5);
-    return i >= 0 && i < rows.length ? i : null;
-  };
-
-  return (
-    <section className="tdx-cell tdx-third">
-      <div className="tdx-cardhead">
-        <h3 title="Binance USD-M open interest history: bars = open interest in base units (left axis), line = notional value in USDT (right axis).">
-          Open Interest <em className="tdx-src">Binance USD-M</em>
-        </h3>
-        {hasPerp && (
-          <PillSelect
-            value={period}
-            options={[{ id: '5m' as const, label: '5m' }, { id: '1h' as const, label: '1H' }, { id: '4h' as const, label: '4H' }, { id: '1d' as const, label: '1D' }]}
-            onChange={setPeriod}
-            ariaLabel="Open interest period"
-          />
-        )}
-      </div>
-      {!hasPerp ? (
-        <p className="tdx-dimnote">Spot Only — {base} has no Binance USD-M perpetual.</p>
-      ) : !model ? (
-        <div className="tdx-chart-empty small">Reading Open Interest…</div>
-      ) : (
-        <>
-          <div
-            ref={wrapRef}
-            className="tdx-chartwrap"
-            onMouseMove={(e) => {
-              const i = idxFromMouse(e.clientX);
-              setHov(i);
-              const r = wrapRef.current?.getBoundingClientRect();
-              if (r) setMouse({ x: e.clientX - r.left });
-            }}
-            onMouseLeave={() => { setHov(null); setMouse(null); }}
-          >
-            <svg viewBox={`0 0 ${W} ${H}`} className="tdx-datachart" aria-hidden>
-              {model.cTicks.map((v, i) => (
-                <text key={`c${i}`} x={PAD_L - 8} y={model.cy(v) + 4} textAnchor="end" className="tdx-axis">{fmtCompact(v)}</text>
-              ))}
-              {model.nTicks.map((v, i) => (
-                <g key={`n${i}`}>
-                  <line x1={PAD_L} x2={W - PAD_R} y1={model.ny(v)} y2={model.ny(v)} stroke="var(--line)" strokeWidth="1" />
-                  <text x={W - PAD_R + 8} y={model.ny(v) + 4} className="tdx-axis">{fmtCompact(v)}</text>
-                </g>
-              ))}
-              {hov !== null && (
-                <line x1={model.x(hov)} x2={model.x(hov)} y1={PAD_T} y2={H - PAD_B} stroke="var(--muted)" strokeWidth="1" strokeDasharray="3 3" />
-              )}
-              {rows.map((r, i) => (
-                <rect key={r.t} x={model.x(i) - model.bw / 2} y={model.cy(r.contracts)} width={model.bw} height={Math.max(1, H - PAD_B - model.cy(r.contracts))} fill="#F0B90B" opacity={hov === null ? 0.85 : hov === i ? 1 : 0.35} />
-              ))}
-              <path d={model.line} fill="none" stroke="var(--text)" strokeWidth="1.6" strokeLinejoin="round" />
-              {rows.map((r, i) => (
-                <circle key={`d${r.t}`} cx={model.x(i)} cy={model.ny(r.notional)} r={hov === i ? 4 : 2.6} fill="var(--panel)" stroke="var(--text)" strokeWidth={hov === i ? 1.8 : 1.3} />
-              ))}
-              {model.times.map((i) => (
-                <text key={`t${i}`} x={model.x(i)} y={H - 8} textAnchor="middle" className="tdx-axis">
-                  {new Date(rows[i].t).toLocaleDateString('en-US', period === '1d' ? { month: 'numeric', day: 'numeric' } : { hour: 'numeric', minute: '2-digit' })}
-                </text>
-              ))}
-            </svg>
-            {hov !== null && mouse && (
-              <ChartTip
-                x={mouse.x}
-                w={wrapRef.current?.clientWidth ?? W}
-                title={tipTime(rows[hov].t)}
-                rows={[
-                  { dot: '#F0B90B', label: `Open Interest (${base})`, value: fmtFull(rows[hov].contracts, 3) },
-                  { dot: 'var(--text)', label: 'Notional Value of OI (USDT)', value: fmtFull(rows[hov].notional, 2) },
-                ]}
-              />
-            )}
-          </div>
-          <div className="tdx-legend">
-            <span><i className="sw" style={{ background: '#F0B90B' }} />Open Interest ({base})</span>
-            <span><i className="dot" />Notional Value Of OI (USDT)</span>
-          </div>
         </>
       )}
     </section>
@@ -990,22 +881,127 @@ function CgxPanel({ symbol, base, name, hasPerp }: { symbol: string; base: strin
   );
 }
 
+function ProfilePanel({ profile, base }: { profile: TokenProfile | null; base: string }) {
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const copyAddress = async (address: string) => {
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopied(address);
+      window.setTimeout(() => setCopied((current) => current === address ? null : current), 1_500);
+    } catch {
+      setCopied(null);
+    }
+  };
+
+  if (!profile) {
+    return (
+      <section className="tdx-cell tkx-profile">
+        <div className="tdx-chart-empty small">Reading Verified Token Profile…</div>
+      </section>
+    );
+  }
+
+  const facts = [
+    ['Market Cap', fmtMoney(profile.marketCapUsd)],
+    ['Fully Diluted Value', fmtMoney(profile.fdvUsd)],
+    ['Profile Volume · 24h', fmtMoney(profile.vol24hUsd)],
+    ['Market Rank', profile.rank === null ? '—' : '#' + profile.rank.toLocaleString('en-US')],
+    ['Circulating Supply', fmtCompact(profile.circSupply) + ' ' + base],
+    ['Total Supply', fmtCompact(profile.totalSupply) + ' ' + base],
+    ['Maximum Supply', profile.maxSupply === null ? 'Uncapped / Unknown' : fmtCompact(profile.maxSupply) + ' ' + base],
+    ['All-Time High', fmtPrice(profile.athUsd)],
+  ] as const;
+
+  const performance = [
+    ['7 Days', profile.priceChange7dPct],
+    ['30 Days', profile.priceChange30dPct],
+    ['1 Year', profile.priceChange1yPct],
+  ] as const;
+
+  return (
+    <section className="tdx-cell tkx-profile">
+      <div className="tkx-profile-grid">
+        <div className="tkx-about">
+          <span className="tkx-section-label">About {profile.name}</span>
+          <p>{profile.description || 'Verified profile text is unavailable for this asset.'}</p>
+          <div className="tkx-profile-links">
+            {profile.homepage ? <a href={profile.homepage} target="_blank" rel="noreferrer noopener"><Globe2 size={14} />Official Website</a> : null}
+            {profile.whitepaper ? <a href={profile.whitepaper} target="_blank" rel="noreferrer noopener"><FileText size={14} />Whitepaper</a> : null}
+          </div>
+          <small>CoinGecko profile · Verified {timeAgo(profile.fetchedAt)}</small>
+        </div>
+
+        <div className="tkx-profile-facts">
+          <span className="tkx-section-label">Market Profile</span>
+          <dl>
+            {facts.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+          </dl>
+        </div>
+
+        <div className="tkx-performance">
+          <span className="tkx-section-label">Performance</span>
+          {performance.map(([label, value]) => (
+            <div key={label}>
+              <span>{label}</span>
+              <Chg pct={value}>{value === null ? '—' : fmtPct(Math.abs(value), 2, false)}</Chg>
+            </div>
+          ))}
+          <div><span>From All-Time High</span><strong className="down">{fmtPct(profile.athChangePct, 2)}</strong></div>
+          {profile.athDate ? <small>ATH recorded {new Date(profile.athDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</small> : null}
+        </div>
+      </div>
+
+      <div className="tkx-profile-lower">
+        <div className="tkx-networks">
+          <span className="tkx-section-label">Networks &amp; Addresses</span>
+          {profile.platforms.length ? profile.platforms.map((network) => (
+            <div className="tkx-network-row" key={network.network + network.address}>
+              <strong>{network.network}</strong>
+              <code title={network.address}>{network.address}</code>
+              <button type="button" onClick={() => void copyAddress(network.address)} aria-label={'Copy ' + network.network + ' address'}>
+                <Copy size={13} />{copied === network.address ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          )) : <p className="tdx-dimnote">Native chain or no verified contract addresses.</p>}
+        </div>
+
+        <div className="tkx-categories">
+          <span className="tkx-section-label">Classification</span>
+          <div>
+            {profile.categories.length ? profile.categories.map((category) => <span key={category}>{category}</span>) : <em>No verified categories.</em>}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function TokenDetail({ symbol }: { symbol: string }) {
   const { markets, state, toggleWatch, setPage, openDetail, prefs } = useStore();
   const [range, setRange] = useState<RangeKey>('1D');
   const [ivl, setIvl] = useState<'auto' | IntervalKey>('auto');
-  const [tv, setTv] = useState(true);
+  const [tv, setTv] = useState(false);
   const [src, setSrc] = useState<'spot' | 'futures'>('spot');
   const [chartFocus, setChartFocus] = useState(false);
   const [candles, setCandles] = useState<TvCandle[]>([]);
   const [profile, setProfile] = useState<TokenProfile | null>(null);
   const [q, setQ] = useState('');
+  const [view, setView] = useState<TokenView>('chart');
+  const [basisSnapshot, setBasisSnapshot] = useState<BasisEngineSnapshot | null>(null);
 
   const live = markets.find((m) => m.symbol === symbol);
   const base = baseOf(symbol);
   const name = profile?.name ?? tokenName(base);
   const watchlisted = state?.config.watchlist.includes(symbol) ?? false;
   const hasPerp = live?.hasPerp ?? false;
+
+  // The shell keeps one scroll container across routes. A symbol workspace
+  // must always open at its identity and live snapshot, never halfway down a
+  // chart left over from the previous route.
+  useEffect(() => {
+    document.querySelector('main')?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [symbol]);
 
   // Futures klines have no 1s granularity — coerce to 1m on that source.
   const raw = ivl === 'auto' ? RANGES[range] : { interval: ivl, limit: INTERVAL_LIMIT[ivl] };
@@ -1076,12 +1072,33 @@ export function TokenDetail({ symbol }: { symbol: string }) {
     return () => { alive = false; if (timer) window.clearTimeout(timer); };
   }, [base, symbol]);
 
+  // Basis context comes from the same crossed-book runtime that drives the
+  // Basis page. It is never recomputed or inferred in this component.
+  useEffect(() => {
+    if (!hasPerp) {
+      setBasisSnapshot(null);
+      return;
+    }
+    let alive = true;
+    const load = () => {
+      void fetch('/api/engine/basis', { cache: 'no-store' })
+        .then((response) => response.ok ? response.json() : null)
+        .then((next) => { if (alive && next) setBasisSnapshot(next as BasisEngineSnapshot); })
+        .catch(() => undefined);
+    };
+    setBasisSnapshot(null);
+    load();
+    const timer = window.setInterval(load, 2_000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, [hasPerp, symbol]);
+
   const points = useMemo(() => candles.map((c) => ({ t: c.t, v: c.c })), [candles]);
   const price = live?.spot ?? lastOf(points)?.v ?? null;
   const first = points[0]?.v ?? null;
   const rangeAbs = price !== null && first !== null ? price - first : null;
   const rangePct = price !== null && first && first > 0 ? ((price - first) / first) * 100 : null;
   const up = (rangePct ?? 0) >= 0;
+  const basisContext = basisSnapshot?.rows.find((row) => row.symbol === symbol) ?? null;
 
   const searchMatches = useMemo(() => {
     const needle = q.trim().toUpperCase();
@@ -1091,25 +1108,68 @@ export function TokenDetail({ symbol }: { symbol: string }) {
       .slice(0, 8);
   }, [markets, q]);
 
+  const executableDirection = live?.executableBasisSide === 'LONG_SPOT_SHORT_PERP'
+    ? 'Buy Spot · Sell Perp'
+    : live?.executableBasisSide === 'SHORT_SPOT_LONG_PERP'
+      ? 'Sell Spot · Buy Perp'
+      : hasPerp
+        ? 'No Crossed-Book Edge'
+        : 'Spot Only';
+  const fundingPosture = !hasPerp || live?.fundingRate === null || live?.fundingRate === undefined
+    ? 'Spot Only'
+    : live.fundingRate > 0
+      ? 'Longs Pay'
+      : live.fundingRate < 0
+        ? 'Shorts Pay'
+        : 'Flat Funding';
+  const engineLabel = basisContext?.rejectCode
+    ? basisContext.rejectCode.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+    : basisContext
+      ? basisContext.decisionKind.replace(/\b\w/g, (letter) => letter.toUpperCase())
+      : hasPerp
+        ? basisSnapshot
+          ? 'Outside Scanner Universe'
+          : 'Connecting'
+        : 'Spot Market Only';
+  const engineReason = basisContext?.reason
+    ?? (hasPerp
+      ? basisSnapshot
+        ? `Not inside the ${fmtMoney(state?.config.minQuoteVolume24h ?? null)} scanner liquidity universe.`
+        : 'Waiting for the crossed-book Basis runtime.'
+      : `${base} has no Binance USD-M perpetual contract.`);
+  const viewSource: Record<TokenView, string> = {
+    chart: `${src === 'futures' ? 'Binance USD-M' : 'Binance Spot'} · ${effective.interval}`,
+    flow: 'Binance Spot Aggregate Trades',
+    basis: hasPerp ? 'Binance USD-M Basis History' : 'Spot Only',
+    derivatives: hasPerp ? 'Binance USD-M Market Data' : 'Binance Spot Volume',
+    profile: 'Verified CoinGecko Profile',
+  };
+  const views: { id: TokenView; label: string }[] = [
+    { id: 'chart', label: 'Chart' },
+    { id: 'flow', label: 'Money Flow' },
+    { id: 'basis', label: 'Basis' },
+    { id: 'derivatives', label: 'Derivatives' },
+    { id: 'profile', label: 'Profile' },
+  ];
+
   return (
-    <div className="container page mkx tdx-page">
-      {/* ---- header strip: identity + whitepaper + watchlist + search ------ */}
-      <header className="tdx-head">
-        <TokenIcon symbol={symbol} size={40} />
-        <h1>{name} Price ({base})</h1>
-        <Star on={watchlisted} onClick={() => void toggleWatch(symbol)} />
-        {profile?.whitepaper ? (
-          <a className="mkx-pill tdx-headlink" href={profile.whitepaper} target="_blank" rel="noreferrer noopener">Whitepaper</a>
-        ) : null}
-        {profile?.homepage ? (
-          <a className="mkx-pill tdx-headlink" href={profile.homepage} target="_blank" rel="noreferrer noopener">Official Website <IconExternal size={12} /></a>
-        ) : null}
-        <span className="tdx-head-right">
+    <div className="container page tkx-page">
+      <section className="tkx-frame" aria-label="token workspace">
+        <header className="tkx-toolbar">
+          <div className="tkx-identity">
+            <TokenIcon symbol={symbol} size={34} />
+            <span>
+              <h1>{name}</h1>
+              <small>{base}/USDT</small>
+            </span>
+            <em>Binance</em>
+          </div>
+          <div className="tkx-tools">
           <span className="tdx-searchwrap">
-            <label className="mkx-search tdx-search">
-              <IconSearch size={16} />
-              <input placeholder="Search for an asset" value={q} onChange={(e) => setQ(e.target.value)} spellCheck={false} />
-              {q && <button aria-label="Clear search" onClick={() => setQ('')}>×</button>}
+            <label className="tkx-search">
+              <Search size={14} aria-hidden="true" />
+              <input aria-label="Search Token" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} spellCheck={false} />
+              {q ? <button type="button" aria-label="Clear Search" onClick={() => setQ('')}><X size={14} /></button> : null}
             </label>
             {searchMatches.length > 0 && (
               <div className="tdx-search-menu" role="listbox" aria-label="Assets">
@@ -1124,21 +1184,77 @@ export function TokenDetail({ symbol }: { symbol: string }) {
               </div>
             )}
           </span>
-          <button type="button" className="mkx-pill" onClick={() => setPage('markets')}>All Markets</button>
-        </span>
-      </header>
+            <button
+              type="button"
+              className={'tkx-icon-button' + (watchlisted ? ' active' : '')}
+              aria-label={watchlisted ? 'Remove from watchlist' : 'Add to watchlist'}
+              title={watchlisted ? 'Remove from watchlist' : 'Add to watchlist'}
+              onClick={() => void toggleWatch(symbol)}
+            >
+              <StarIcon size={16} fill={watchlisted ? 'currentColor' : 'none'} />
+            </button>
+            {profile?.homepage ? <a className="tkx-icon-button" href={profile.homepage} target="_blank" rel="noreferrer noopener" aria-label="Official Website" title="Official Website"><Globe2 size={16} /></a> : null}
+            {profile?.whitepaper ? <a className="tkx-icon-button" href={profile.whitepaper} target="_blank" rel="noreferrer noopener" aria-label="Whitepaper" title="Whitepaper"><FileText size={16} /></a> : null}
+            <button type="button" className="tkx-markets" onClick={() => setPage('markets')}><Grid2X2 size={14} />All Markets</button>
+          </div>
+        </header>
 
-      <div className="tdx-grid">
-        {/* ---- row 1: the chart, full width --------------------------------- */}
-        <section className="tdx-cell tdx-chartcell">
+        <div className="tkx-summary" aria-label="Token Summary">
+          <div>
+            <span>Spot Price</span>
+            <strong>{fmtPrice(price)}</strong>
+            <small><Chg pct={live?.change24hPct}>{live?.change24hPct === null || live?.change24hPct === undefined ? '—' : fmtPct(Math.abs(live.change24hPct), 2, false)}</Chg> · {fmtMoney(live?.quoteVolume24h)} 24h</small>
+          </div>
+          <div>
+            <span>Executable Gap</span>
+            <strong>{fmtBasis(live?.executableBasisBestPct)}</strong>
+            <small>
+              {executableDirection}
+              {basisContext && (basisContext.direction === 'long_spot_short_perp' || basisContext.borrow.status === 'available') && basisContext.netEdgePct !== null
+                ? ' · Net ' + fmtBasis(basisContext.netEdgePct)
+                : basisContext?.borrow.status === 'unknown'
+                  ? ' · Borrow Cost Unknown'
+                  : ''}
+            </small>
+          </div>
+          <div>
+            <span>Funding</span>
+            <strong>{hasPerp ? fmtFunding(live?.fundingRate) : 'Spot Only'}</strong>
+            <small>{fundingPosture}{live?.nextFundingTime ? ' · ' + countdown(live.nextFundingTime) : ''}</small>
+          </div>
+          <div>
+            <span>Open Interest</span>
+            <strong>{hasPerp ? fmtMoney(live?.openInterestUsd) : 'Spot Only'}</strong>
+            <small>{hasPerp ? <><Chg pct={live?.openInterestChangePct}>{live?.openInterestChangePct === null || live?.openInterestChangePct === undefined ? '—' : fmtPct(Math.abs(live.openInterestChangePct), 2, false)}</Chg> · {fmtMoney(live?.liquidations15mUsd)} Liq · 15m</> : 'No derivatives telemetry'}</small>
+          </div>
+        </div>
+
+        <div className="tkx-engine" aria-label="Basis Engine Context">
+          <span><em>Basis Engine</em><strong>{engineLabel}</strong></span>
+          <p>{engineReason}</p>
+          <dl>
+            <div><dt>Data Trust</dt><dd>{basisContext ? Math.round(basisContext.dataQuality.score * 100) + '%' : '—'}</dd></div>
+            <div><dt>Borrow</dt><dd>{basisContext ? basisContext.borrow.status.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) : '—'}</dd></div>
+            <div><dt>Decision</dt><dd>{basisContext?.decisionTs ? timeAgo(basisContext.decisionTs) : '—'}</dd></div>
+          </dl>
+        </div>
+
+        <div className="tkx-viewbar">
+          <div role="tablist" aria-label="Token Views">
+            {views.map((item) => (
+              <button type="button" role="tab" aria-selected={view === item.id} className={view === item.id ? 'selected' : ''} key={item.id} onClick={() => setView(item.id)}>{item.label}</button>
+            ))}
+          </div>
+          <span>{viewSource[view]}</span>
+        </div>
+
+        <div className="tkx-workspace">
+          {view === 'chart' ? <section className="tdx-cell tdx-chartcell tkx-chartview">
           <div className="tdx-price-row">
-            <div className="tdx-price">
-              <b>{price !== null ? fmtPrice(price) : '—'}</b>
-              <span className="tdx-delta">
-                <Chg pct={rangePct}>
-                  {rangeAbs !== null ? `${fmtPrice(Math.abs(rangeAbs))} (${fmtPct(Math.abs(rangePct ?? 0), 2, false)})` : '—'}
-                </Chg>
-              </span>
+            <div className="tkx-range-result">
+              <span>{ivl === 'auto' ? range : INTERVAL_LABEL[ivl]} Change</span>
+              <strong>{rangeAbs !== null ? fmtPrice(Math.abs(rangeAbs)) : '—'}</strong>
+              <Chg pct={rangePct}>{fmtPct(Math.abs(rangePct ?? 0), 2, false)}</Chg>
             </div>
             <div className="tdx-controls">
               <div className="tdx-ranges" role="tablist" aria-label="Chart range">
@@ -1174,22 +1290,19 @@ export function TokenDetail({ symbol }: { symbol: string }) {
             </div>
           </div>
           {tv ? (
-            <TradingViewWidget symbol={tvSymbol} win={tvInterval} height={560} />
+            <TradingViewWidget symbol={tvSymbol} win={tvInterval} height={390} />
           ) : (
             <div className="tdx-line-frame">
               <PriceChart points={points} up={up} />
             </div>
           )}
-        </section>
-
-        {/* ---- row 2: money flow | open interest | basis -------------------- */}
-        <MoneyFlowCard symbol={symbol} base={base} />
-        <OiCard symbol={symbol} base={base} hasPerp={hasPerp} />
-        <BasisCard symbol={symbol} base={base} hasPerp={hasPerp} />
-
-        {/* ---- row 3: the Coinglass panel ----------------------------------- */}
-        <CgxPanel symbol={symbol} base={base} name={name} hasPerp={hasPerp} />
-      </div>
+          </section> : null}
+          {view === 'flow' ? <MoneyFlowCard symbol={symbol} base={base} /> : null}
+          {view === 'basis' ? <BasisCard symbol={symbol} base={base} hasPerp={hasPerp} /> : null}
+          {view === 'derivatives' ? <CgxPanel symbol={symbol} base={base} name={name} hasPerp={hasPerp} /> : null}
+          {view === 'profile' ? <ProfilePanel profile={profile} base={base} /> : null}
+        </div>
+      </section>
       {chartFocus && (
         <div className="tdx-chart-modal" role="dialog" aria-modal="true" aria-label={`${base} Full Chart`}>
           <div className="tdx-chart-modal-head">

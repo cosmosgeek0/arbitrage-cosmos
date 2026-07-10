@@ -7,7 +7,7 @@ import type { Clock, FeatureSnapshot, TradeTick, BookTicker, WindowKey } from '.
 import { WINDOW_KEYS } from '../v0/types.js';
 import type { WakeupSnapshot, BaselineStats } from './types.js';
 import type { VolumeConfig } from './config.js';
-import { RollingTape } from './rolling.js';
+import { RollingTape, type SeedMinute } from './rolling.js';
 import { BookQualityTracker } from './depth.js';
 import { computeBaseline, volumeMultipleOf, tradeCountMultipleOf } from './baseline.js';
 import { analyzeTape } from './tape.js';
@@ -57,6 +57,13 @@ export class VolumeFeatureEngine {
   onBook(b: BookTicker): void {
     this.observe(b.symbol);
     this.state.get(b.symbol)!.book.onBook(b);
+  }
+
+  seedMinute(symbol: string, sample: SeedMinute): void {
+    this.observe(symbol);
+    const state = this.state.get(symbol)!;
+    state.tape.seedMinute(sample);
+    state.baselineCache = null;
   }
 
   symbols(): string[] {

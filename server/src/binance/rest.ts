@@ -243,6 +243,8 @@ export interface KlineCandle {
   c: number;
   v: number;
   qv: number;
+  trades: number;
+  takerBuyQv: number;
 }
 
 const klineCache = new Map<string, { fetchedAt: number; data: KlinePoint[] }>();
@@ -305,6 +307,8 @@ export async function fetchKlineCandles(
       c: close,
       v: Number(k[5]),
       qv: Number(k[7]) || Number(k[5]) * close,
+      trades: Number(k[8]) || 0,
+      takerBuyQv: Number(k[10]) || 0,
     };
   });
   candleCache.set(key, { fetchedAt: Date.now(), data });

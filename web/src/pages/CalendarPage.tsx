@@ -58,7 +58,7 @@ export function CalendarPage() {
   useEffect(() => {
     let alive = true;
     let timer: number | null = null;
-    const cadence = Math.min(60, Math.max(5, prefs.dataCadence?.calendar ?? 30));
+    const cadence = Math.min(10, Math.max(0.5, prefs.dataCadence?.calendar ?? 10));
     const load = () => {
       fetch('/api/calendar')
         .then((response) => response.ok ? response.json() : Promise.reject(new Error('calendar unavailable')))

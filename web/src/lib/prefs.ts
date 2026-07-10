@@ -4,12 +4,18 @@
 export type AccentKey = 'r' | 'o' | 'y' | 'g' | 'b' | 'i' | 'v';
 export type DataCadenceKey = 'market' | 'account' | 'news' | 'calendar' | 'fx' | 'health' | 'token';
 export type DataCadence = Record<DataCadenceKey, number>;
+export type MarketPingKey = 'market' | 'account' | 'news' | 'calendar';
+export type NotificationRuleKey = 'critical' | 'account' | 'bot' | 'opportunities' | 'news';
+export type NotificationRules = Record<NotificationRuleKey, boolean>;
+
+export const MARKET_PING_KEYS: MarketPingKey[] = ['market', 'account', 'news', 'calendar'];
+export const MARKET_PING_CHOICES = [0.5, 1, 3, 5, 10] as const;
 
 export const DATA_CADENCE_DEFAULTS: DataCadence = {
-  market: 6,
-  account: 30,
+  market: 5,
+  account: 10,
   news: 5,
-  calendar: 300,
+  calendar: 10,
   fx: 300,
   health: 10,
   token: 1,
@@ -26,10 +32,10 @@ export interface Prefs {
   timezone: 'local' | 'utc';
   basisUnit: 'pct' | 'bps';
   accent: AccentKey; // ROYGBIV accent swatch (default blue)
-  clockZone: string; // top-bar clock display zone: 'local' | 'UTC' | IANA id
+  clockZone: string; // top-bar clock display zone: UTC or a supported IANA market desk
   currency: string; // display fiat for money values: 'USD' | 'INR' | ...
   zoom: number; // whole-UI zoom factor
-  alerts: { proposals: boolean; fills: boolean; risk: boolean; news: boolean };
+  alerts: NotificationRules;
 }
 
 const DEFAULTS: Prefs = {
@@ -37,7 +43,7 @@ const DEFAULTS: Prefs = {
   motion: 'full',
   tape: false,
   density: 'comfortable',
-  refreshSec: 6,
+  refreshSec: 5,
   dataCadence: DATA_CADENCE_DEFAULTS,
   defaultPage: 'dashboard',
   timezone: 'local',
@@ -46,8 +52,10 @@ const DEFAULTS: Prefs = {
   clockZone: 'UTC',
   currency: 'USD',
   zoom: 1,
-  alerts: { proposals: true, fills: true, risk: true, news: false },
+  alerts: { critical: true, account: true, bot: true, opportunities: true, news: false },
 };
+
+const CLOCK_ZONES = new Set(['Asia/Kolkata', 'UTC', 'America/New_York', 'Asia/Singapore', 'Europe/London']);
 
 // Supported display currencies (symbol + label). Rates come live from /api/fx.
 export const CURRENCIES: Record<string, { symbol: string; label: string }> = {
@@ -61,7 +69,17 @@ export const CURRENCIES: Record<string, { symbol: string; label: string }> = {
 
 function normalizePrefs(raw: Partial<Prefs>): Prefs {
   const rawCadence = raw.dataCadence && typeof raw.dataCadence === 'object' ? raw.dataCadence : {};
-  const next = { ...DEFAULTS, ...raw, dataCadence: { ...DATA_CADENCE_DEFAULTS, ...rawCadence } };
+  const legacyAlerts = raw.alerts && typeof raw.alerts === 'object'
+    ? raw.alerts as Partial<NotificationRules> & { proposals?: boolean; fills?: boolean; risk?: boolean }
+    : {};
+  const alerts: NotificationRules = {
+    critical: legacyAlerts.critical ?? legacyAlerts.risk ?? DEFAULTS.alerts.critical,
+    account: legacyAlerts.account ?? legacyAlerts.fills ?? DEFAULTS.alerts.account,
+    bot: legacyAlerts.bot ?? DEFAULTS.alerts.bot,
+    opportunities: legacyAlerts.opportunities ?? legacyAlerts.proposals ?? DEFAULTS.alerts.opportunities,
+    news: legacyAlerts.news ?? DEFAULTS.alerts.news,
+  };
+  const next = { ...DEFAULTS, ...raw, alerts, dataCadence: { ...DATA_CADENCE_DEFAULTS, ...rawCadence } };
   const clamp = (v: unknown, fallback: number) => {
     const n = typeof v === 'number' ? v : Number(v);
     if (!Number.isFinite(n)) return fallback;
@@ -72,7 +90,15 @@ function normalizePrefs(raw: Partial<Prefs>): Prefs {
     next.dataCadence[key] = clamp(next.dataCadence[key], DATA_CADENCE_DEFAULTS[key]);
   }
   if (!raw.dataCadence?.market) next.dataCadence.market = next.refreshSec;
+  for (const key of MARKET_PING_KEYS) {
+    const current = next.dataCadence[key];
+    next.dataCadence[key] = MARKET_PING_CHOICES.reduce((closest, choice) => (
+      Math.abs(choice - current) < Math.abs(closest - current) ? choice : closest
+    ), MARKET_PING_CHOICES[0]);
+  }
+  next.refreshSec = next.dataCadence.market;
   if (!CURRENCIES[next.currency]) next.currency = DEFAULTS.currency;
+  if (!CLOCK_ZONES.has(next.clockZone)) next.clockZone = next.clockZone === 'local' ? 'Asia/Kolkata' : DEFAULTS.clockZone;
   if (next.defaultPage === 'trade' || next.defaultPage === 'settings') next.defaultPage = DEFAULTS.defaultPage; // pages removed 2026-07
   return next;
 }
@@ -98,7 +124,10 @@ export function getPrefs(): Prefs {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<Prefs>;
     cache = normalizePrefs(saved);
-    if (saved.currency && saved.currency !== cache.currency) {
+    const cadenceChanged = saved.refreshSec !== cache.refreshSec
+      || MARKET_PING_KEYS.some((key) => saved.dataCadence?.[key] !== cache!.dataCadence[key]);
+    const alertsChanged = JSON.stringify(saved.alerts ?? {}) !== JSON.stringify(cache.alerts);
+    if ((saved.currency && saved.currency !== cache.currency) || (saved.clockZone && saved.clockZone !== cache.clockZone) || cadenceChanged || alertsChanged) {
       localStorage.setItem(KEY, JSON.stringify(cache));
     }
   } catch {

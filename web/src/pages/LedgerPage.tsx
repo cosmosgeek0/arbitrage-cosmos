@@ -37,6 +37,7 @@ const SEVERITY_FILTERS: { id: SeverityFilter; label: string }[] = [
   { id: 'Debug', label: 'Debug' },
 ];
 const LOG_HISTORY_MS = 8 * 86_400_000;
+const LOG_PAGE_SIZE = 200;
 
 const KNOWN_KINDS = [
   'account_snapshot',
@@ -367,6 +368,7 @@ export function LedgerPage() {
   const [query, setQuery] = useState('');
   const [decision, setDecision] = useState<DecisionFilter>('all');
   const [showDebug, setShowDebug] = useState(false);
+  const [visibleLimit, setVisibleLimit] = useState(LOG_PAGE_SIZE);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [rawOpen, setRawOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -446,6 +448,8 @@ export function LedgerPage() {
     return true;
   }), [baseEvents, severity, showDebug]);
 
+  const renderedEvents = useMemo(() => visible.slice(0, visibleLimit), [visible, visibleLimit]);
+
   const selected = selectedId === null ? null : visible.find((ev) => ev.id === selectedId) ?? null;
   const debugHiddenCount = showDebug ? 0 : selectedCounts.Debug;
   const canClear = kind !== 'all' || severity !== 'all' || symbol !== '' || query !== '' || decision !== 'all' || showDebug;
@@ -454,6 +458,10 @@ export function LedgerPage() {
   useEffect(() => {
     setRawOpen(false);
   }, [selected?.id]);
+
+  useEffect(() => {
+    setVisibleLimit(LOG_PAGE_SIZE);
+  }, [decision, kind, query, selectedDay, severity, showDebug, symbol]);
 
   function clearFilters(): void {
     setKind('all');
@@ -501,7 +509,7 @@ export function LedgerPage() {
           {dayKeys.map((key) => {
             const rows = itemsByDay.get(key) ?? [];
             const counts = severityCounts(rows);
-            return <button type="button" key={key} className={`${key === selectedDay ? 'selected' : ''} ${key === today ? 'today' : ''}`} onClick={() => { setSelectedDay(key); setSelectedId(null); }}>
+            return <button type="button" key={key} aria-pressed={key === selectedDay} className={`${key === selectedDay ? 'selected' : ''} ${key === today ? 'today' : ''}`} onClick={() => { setSelectedDay(key); setSelectedId(null); }}>
               <span className="calx-day-name">{formatKey(key, { weekday: 'short' })} <b>{formatKey(key, { day: 'numeric' })}</b></span>
               <span><em>Logs</em><b>{rows.length}</b></span>
               <span className="logx-day-severity"><em>Severity</em><b><i className="critical">C {counts.Critical}</i><i className="warning">W {counts.Warning}</i><i className="info">I {counts.Info}</i><i className="debug">D {counts.Debug}</i></b></span>
@@ -511,7 +519,7 @@ export function LedgerPage() {
 
         <section className="lix-filters logx-filters" aria-label="Logs Filters">
           <div className="lix-segments logx-severity-tabs" role="group" aria-label="Severity">
-            {SEVERITY_FILTERS.map((option) => <button type="button" key={option.id} className={severity === option.id ? 'selected' : ''} onClick={() => selectSeverity(option.id)}>{option.label}</button>)}
+            {SEVERITY_FILTERS.map((option) => <button type="button" key={option.id} aria-pressed={severity === option.id} className={severity === option.id ? 'selected' : ''} onClick={() => selectSeverity(option.id)}>{option.label}</button>)}
           </div>
           <div className="logx-filter-actions">
             <PillSelect
@@ -557,7 +565,7 @@ export function LedgerPage() {
           </div>
           <div className="logx-header"><span>Time</span><span>Severity</span><span>Event</span><span>Symbol</span><span>Source</span><span>Status</span><span /></div>
           <div className="logx-day-body" key={selectedDay} role="listbox" aria-label="Log Activity">
-            {visible.map((ev) => {
+            {renderedEvents.map((ev) => {
               const evSeverity = eventSeverity(ev);
               const expanded = selected?.id === ev.id;
               const fields = detailFields(ev);
@@ -630,6 +638,12 @@ export function LedgerPage() {
                 </div>}
               </div>;
             })}
+            {renderedEvents.length < visible.length && <div className="logx-load-more">
+              <span>Showing {renderedEvents.length.toLocaleString('en-US')} Of {visible.length.toLocaleString('en-US')} Matching Logs</span>
+              <button type="button" onClick={() => setVisibleLimit((current) => Math.min(current + LOG_PAGE_SIZE, visible.length))}>
+                Load Older Logs
+              </button>
+            </div>}
             {loading && events.length === 0 && <div className="lix-empty">Loading Logs…</div>}
             {loadError && events.length === 0 && <div className="lix-empty">The Log Feed Is Currently Unavailable.</div>}
             {!loading && !loadError && visible.length === 0 && <div className="lix-empty">{query ? `Nothing Matches “${query}”.` : 'No Logs Match These Filters.'}</div>}

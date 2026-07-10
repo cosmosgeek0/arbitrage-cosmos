@@ -1,27 +1,22 @@
-/* Borrow — bot-operated lending, monitoring only. Nothing here places, repays,
-   or adjusts a loan; the engine does all of that in the backend (gated +
-   ledgered routes). The page tells the truth — debt, LTV, interest, history,
-   the loanable universe — and carries exactly ONE control: the owner's Borrow
-   Guard kill-switch. Anatomy: bwx hero + Binance ongoing-order stat grid,
-   Markets-style screener. */
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { useRefreshSignal } from '../lib/refresh';
 import { TokenIcon } from '../components/TokenIcon';
+import { BinanceMark } from '../components/BinanceMark';
+import { IconSearch } from '../components/Icons';
 import { PillSelect, pageList, Star } from '../components/PillSelect';
 import { tokenName } from '../lib/tokenNames';
-import { fmtPrice, fmtPct, fmtQty, timeAgo } from '../format';
+import { fmtBasis, fmtMoney, fmtPct, fmtQty, timeAgo } from '../format';
+import type { BasisRow, BasisSnapshot } from '../lib/basisRuntime';
 import type { BorrowGuardConfig, LoansSnapshot } from '../types';
 import './Markets.css';
 import './Loans.css';
 
-type LoanView = 'orders' | 'overview' | 'activity';
-type SortKey = 'asset' | 'hourly' | 'apr' | 'max' | 'perp';
-type AvailFilter = 'all' | 'basis';
+type LoanView = 'positions' | 'assets' | 'preflight' | 'activity' | 'market';
+type SortKey = 'asset' | 'hourly' | 'apr' | 'min' | 'max' | 'collateral' | 'perp';
+type CatalogFilter = 'all' | 'perp' | 'collateral' | 'watchlist';
 type OngoingLoan = LoansSnapshot['ongoing'][number];
 type LoanActivity = LoansSnapshot['activity'][number];
-
-const finite = (v: number | null | undefined): v is number => typeof v === 'number' && Number.isFinite(v);
 
 const DEFAULT_GUARD: BorrowGuardConfig = {
   enabled: true,
@@ -34,29 +29,43 @@ const DEFAULT_GUARD: BorrowGuardConfig = {
   blockedLoanCoins: [],
 };
 
-/** One row of the borrow screener: catalog truth + market context. */
 interface BorrowRow {
   coin: string;
   hourly: number | null;
   apr: number | null;
-  max: number | null;
+  minUsd: number | null;
+  maxUsd: number | null;
+  collateralEligible: boolean;
+  initialLtv: number | null;
+  callLtv: number | null;
+  liquidationLtv: number | null;
   perp: boolean;
   symbol: string | null;
 }
 
-function fmtRate(v: number | null, digits = 4): string {
-  if (!finite(v)) return '—';
-  return `${v.toFixed(digits)}%`;
+const finite = (value: number | null | undefined): value is number => typeof value === 'number' && Number.isFinite(value);
+
+function fmtRate(value: number | null, digits = 4): string {
+  return finite(value) ? `${value.toFixed(digits)}%` : '—';
 }
 
-function ltvPct(v: number | null | undefined, digits = 0): string {
-  if (!finite(v)) return '—';
-  return fmtPct(v * 100, digits, false);
+function fmtUsd(value: number | null | undefined): string {
+  if (!finite(value)) return '—';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    notation: Math.abs(value) >= 1_000 ? 'compact' : 'standard',
+    maximumFractionDigits: Math.abs(value) >= 1_000 ? 2 : 2,
+  }).format(value);
 }
 
-function riskOf(ltv: number, callLTV: number, liqLTV: number): 'low' | 'call' | 'liq' {
-  if (ltv >= liqLTV) return 'liq';
-  if (ltv >= callLTV) return 'call';
+function ltvPct(value: number | null | undefined, digits = 0): string {
+  return finite(value) ? fmtPct(value * 100, digits, false) : '—';
+}
+
+function riskOf(ltv: number, callLtv: number, liquidationLtv: number): 'low' | 'call' | 'liq' {
+  if (ltv >= liquidationLtv) return 'liq';
+  if (ltv >= callLtv) return 'call';
   return 'low';
 }
 
@@ -68,528 +77,383 @@ function activityTone(kind: LoanActivity['kind']): 'ok' | 'warn' | 'idle' {
   return 'idle';
 }
 
-function activityTitle(e: LoanActivity): string {
-  switch (e.kind) {
-    case 'flex_borrow':
-      return `Borrowed ${fmtQty(e.amount)} ${e.loanCoin}`;
-    case 'flex_repay':
-      return `Repaid ${fmtQty(e.amount)} ${e.loanCoin}`;
-    case 'ltv_adjust':
-      return `${e.detail?.startsWith('REDUCED') ? 'Removed' : 'Added'} ${fmtQty(e.amount)} ${e.collateralCoin ?? ''} Collateral`;
-    case 'margin_borrow':
-      return `Margin Borrowed ${fmtQty(e.amount)} ${e.loanCoin}`;
-    case 'margin_repay':
-      return `Margin Repaid ${fmtQty(e.amount)} ${e.loanCoin}`;
-    case 'margin_interest':
-      return `Margin Interest ${fmtQty(e.amount)} ${e.loanCoin}`;
+function activityTitle(event: LoanActivity): string {
+  switch (event.kind) {
+    case 'flex_borrow': return `Borrowed ${fmtQty(event.amount)} ${event.loanCoin}`;
+    case 'flex_repay': return `Repaid ${fmtQty(event.amount)} ${event.loanCoin}`;
+    case 'ltv_adjust': return `${event.detail?.startsWith('REDUCED') ? 'Removed' : 'Added'} ${fmtQty(event.amount)} ${event.collateralCoin ?? ''} Collateral`;
+    case 'margin_borrow': return `Margin Borrowed ${fmtQty(event.amount)} ${event.loanCoin}`;
+    case 'margin_repay': return `Margin Repaid ${fmtQty(event.amount)} ${event.loanCoin}`;
+    case 'margin_interest': return `Margin Interest ${fmtQty(event.amount)} ${event.loanCoin}`;
   }
 }
 
-function activityDetail(e: LoanActivity): string {
-  const parts = [
-    e.kind.startsWith('flex') || e.kind === 'ltv_adjust' ? 'Flexible Loan' : 'Cross Margin',
-    e.collateralCoin ? `Collateral ${e.collateralCoin}` : null,
-    e.detail && !e.detail.includes('Flexible loan') ? e.detail : null,
-  ].filter(Boolean);
-  return parts.join(' · ');
+function activityDetail(event: LoanActivity): string {
+  return [
+    event.kind.startsWith('flex') || event.kind === 'ltv_adjust' ? 'Flexible Loan' : 'Cross Margin',
+    event.collateralCoin ? `Collateral ${event.collateralCoin}` : null,
+    event.detail && !event.detail.includes('Flexible loan') ? event.detail : null,
+  ].filter(Boolean).join(' · ');
 }
 
 function statusLabel(status: string | null | undefined): string {
   if (!status) return 'Unknown';
-  return status
-    .replace(/[_-]+/g, ' ')
-    .toLowerCase()
-    .replace(/\b\w/g, (m) => m.toUpperCase());
+  return status.replace(/[_-]+/g, ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-/** Zone widths for the LTV meter: green to margin-call, amber to liquidation,
-    red beyond — all on a scale that leaves the red zone visible. */
-function meterZones(callLTV: number, liqLTV: number, currentLTV: number) {
-  const max = Math.max(liqLTV * 1.15, currentLTV * 1.05, 0.0001);
-  return {
-    low: (callLTV / max) * 100,
-    call: ((liqLTV - callLTV) / max) * 100,
-    liq: ((max - liqLTV) / max) * 100,
-    marker: Math.min(98.5, Math.max(1.5, (currentLTV / max) * 100)),
-  };
+function borrowStatusLabel(row: BasisRow): string {
+  if (row.borrow.status === 'available') return 'Available';
+  if (row.borrow.status === 'unavailable') return 'Unavailable';
+  if (row.borrow.status === 'unknown') return 'Unknown';
+  return 'Not Required';
+}
+
+function decisionLabel(row: BasisRow): string {
+  if (row.rejectCode) return row.rejectCode.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+  if (row.decisionKind === 'ignore') return 'Below Watch Gate';
+  return row.decisionKind.replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 export function Loans() {
-  const { state, markets, openDetail, saveConfig, toggleWatch, prefs } = useStore();
+  const { state, markets, openDetail, saveConfig, setPage, toggleWatch, prefs } = useStore();
   const [loans, setLoans] = useState<LoansSnapshot | null>(null);
+  const [loansFetchError, setLoansFetchError] = useState<string | null>(null);
+  const [basis, setBasis] = useState<BasisSnapshot | null>(null);
+  const [basisError, setBasisError] = useState<string | null>(null);
   const [earnAprs, setEarnAprs] = useState<Map<string, number>>(new Map());
-  const [loanView, setLoanView] = useState<LoanView>('orders');
+  const [earnStatus, setEarnStatus] = useState<{ fetchedAt: number | null; error: string | null }>({ fetchedAt: null, error: null });
+  const [view, setView] = useState<LoanView>('positions');
   const [guardBusy, setGuardBusy] = useState(false);
   const [search, setSearch] = useState('');
-  const [avail, setAvail] = useState<AvailFilter>('all');
+  const [catalogFilter, setCatalogFilter] = useState<CatalogFilter>('all');
   const [sortKey, setSortKey] = useState<SortKey>('hourly');
   const [sortDesc, setSortDesc] = useState(false);
   const [pageN, setPageN] = useState(0);
   const [pageSize, setPageSize] = useState(25);
   const [refreshTick, setRefreshTick] = useState(0);
-  useRefreshSignal(() => setRefreshTick((n) => n + 1));
+  useRefreshSignal(() => setRefreshTick((value) => value + 1));
 
   useEffect(() => {
     let alive = true;
-    void fetch('/api/loans')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => alive && d && setLoans(d as LoansSnapshot))
-      .catch(() => undefined);
-    void fetch('/api/earn')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!alive || !d) return;
-        const rows = (d as { rows?: { asset: string; apr: number }[] }).rows ?? [];
-        setEarnAprs(new Map(rows.map((r) => [r.asset, r.apr * 100])));
-      })
-      .catch(() => undefined);
-    const t = window.setInterval(() => setRefreshTick((n) => n + 1), Math.max(0.5, prefs.dataCadence?.account ?? 30) * 1000);
-    return () => { alive = false; window.clearInterval(t); };
+    const load = () => {
+      void fetch('/api/loans', { cache: 'no-store' })
+        .then((response) => {
+          if (!response.ok) throw new Error(`Loan Source HTTP ${response.status}`);
+          return response.json();
+        })
+        .then((next) => {
+          if (!alive || !next) return;
+          setLoans(next as LoansSnapshot);
+          setLoansFetchError(null);
+        })
+        .catch((error) => {
+          if (alive) setLoansFetchError(error instanceof Error ? error.message : 'Loan Source Unavailable');
+        });
+      void fetch('/api/earn', { cache: 'no-store' })
+        .then((response) => {
+          if (!response.ok) throw new Error(`Earn Source HTTP ${response.status}`);
+          return response.json();
+        })
+        .then((next) => {
+          if (!alive || !next) return;
+          const snapshot = next as { rows?: { asset: string; apr: number }[]; fetchedAt?: number | null; error?: string | null };
+          const rows = snapshot.rows ?? [];
+          setEarnAprs(new Map(rows.map((row) => [row.asset, row.apr * 100])));
+          setEarnStatus({ fetchedAt: snapshot.fetchedAt ?? null, error: snapshot.error ?? null });
+        })
+        .catch((error) => {
+          if (alive) setEarnStatus((current) => ({ ...current, error: error instanceof Error ? error.message : 'Earn Source Unavailable' }));
+        });
+    };
+    load();
+    const timer = window.setInterval(load, Math.max(5, prefs.dataCadence?.account ?? 30) * 1000);
+    return () => { alive = false; window.clearInterval(timer); };
   }, [refreshTick, prefs.dataCadence?.account]);
 
-  const priceOf = (asset: string): number | null =>
-    asset === 'USDT' || asset === 'USDC' || asset === 'FDUSD'
-      ? 1
-      : markets.find((m) => m.symbol === `${asset}USDT`)?.spot ?? null;
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const response = await fetch('/api/engine/basis', { cache: 'no-store' });
+        if (!response.ok) throw new Error(`Basis Runtime HTTP ${response.status}`);
+        const next = await response.json() as BasisSnapshot;
+        if (!alive) return;
+        setBasis(next);
+        setBasisError(null);
+      } catch (error) {
+        if (!alive) return;
+        setBasisError(error instanceof Error ? error.message : 'Basis Runtime Unavailable');
+      }
+    };
+    void load();
+    const timer = window.setInterval(() => void load(), 2_000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, []);
 
-  const perpBases = useMemo(() => new Set(markets.filter((m) => m.hasPerp).map((m) => m.base)), [markets]);
-  const marketSymbols = useMemo(() => new Set(markets.map((m) => m.symbol)), [markets]);
+  const priceOf = (asset: string): number | null => {
+    if (asset === 'USDT' || asset === 'USDC' || asset === 'FDUSD') return 1;
+    return markets.find((market) => market.symbol === `${asset}USDT`)?.spot ?? null;
+  };
 
-  // ---- screener universe: the live loanable catalog ------------------------
-  const rows = useMemo<BorrowRow[]>(() => {
-    return (loans?.loanable ?? []).map((c) => ({
-      coin: c.loanCoin,
-      hourly: c.hourlyRatePct,
-      apr: c.yearlyRatePct,
-      max: c.maxLimit,
-      perp: perpBases.has(c.loanCoin),
-      symbol: marketSymbols.has(`${c.loanCoin}USDT`) ? `${c.loanCoin}USDT` : null,
-    }));
-  }, [loans?.loanable, perpBases, marketSymbols]);
+  const perpBases = useMemo(() => new Set(markets.filter((market) => market.hasPerp).map((market) => market.base)), [markets]);
+  const marketSymbols = useMemo(() => new Set(markets.map((market) => market.symbol)), [markets]);
+  const collateralMap = useMemo(() => new Map((loans?.collateral ?? []).map((row) => [row.collateralCoin, row])), [loans?.collateral]);
+  const watchlist = state?.config.watchlist ?? [];
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toUpperCase();
-    let r = rows;
-    if (avail === 'basis') r = r.filter((x) => x.perp);
-    if (q) r = r.filter((x) => x.coin.includes(q) || tokenName(x.coin).toUpperCase().includes(q));
-    const dir = sortDesc ? -1 : 1;
-    const num = (v: number | null) => (finite(v) ? v : sortDesc ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY);
-    return [...r].sort((a, b) => {
+  const catalogRows = useMemo<BorrowRow[]>(() => (loans?.loanable ?? []).map((product) => {
+    const collateral = collateralMap.get(product.loanCoin);
+    return {
+      coin: product.loanCoin,
+      hourly: product.hourlyRatePct,
+      apr: product.yearlyRatePct,
+      minUsd: product.minLimit,
+      maxUsd: product.maxLimit,
+      collateralEligible: !!collateral,
+      initialLtv: collateral?.initialLTV ?? null,
+      callLtv: collateral?.marginCallLTV ?? null,
+      liquidationLtv: collateral?.liquidationLTV ?? null,
+      perp: perpBases.has(product.loanCoin),
+      symbol: marketSymbols.has(`${product.loanCoin}USDT`) ? `${product.loanCoin}USDT` : null,
+    };
+  }), [loans?.loanable, collateralMap, perpBases, marketSymbols]);
+
+  const filteredCatalog = useMemo(() => {
+    const query = search.trim().toUpperCase();
+    let rows = catalogRows;
+    if (catalogFilter === 'perp') rows = rows.filter((row) => row.perp);
+    if (catalogFilter === 'collateral') rows = rows.filter((row) => row.collateralEligible);
+    if (catalogFilter === 'watchlist') rows = rows.filter((row) => row.symbol && watchlist.includes(row.symbol));
+    if (query) rows = rows.filter((row) => row.coin.includes(query) || tokenName(row.coin).toUpperCase().includes(query));
+    const direction = sortDesc ? -1 : 1;
+    const number = (value: number | null) => finite(value) ? value : sortDesc ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
+    return [...rows].sort((a, b) => {
       switch (sortKey) {
-        case 'asset': return a.coin.localeCompare(b.coin) * dir;
-        case 'hourly': return (num(a.hourly) - num(b.hourly)) * dir;
-        case 'apr': return (num(a.apr) - num(b.apr)) * dir;
-        case 'max': return (num(a.max) - num(b.max)) * dir;
-        case 'perp': return ((a.perp ? 1 : 0) - (b.perp ? 1 : 0)) * -dir;
+        case 'asset': return a.coin.localeCompare(b.coin) * direction;
+        case 'hourly': return (number(a.hourly) - number(b.hourly)) * direction;
+        case 'apr': return (number(a.apr) - number(b.apr)) * direction;
+        case 'min': return (number(a.minUsd) - number(b.minUsd)) * direction;
+        case 'max': return (number(a.maxUsd) - number(b.maxUsd)) * direction;
+        case 'collateral': return (number(a.initialLtv) - number(b.initialLtv)) * direction;
+        case 'perp': return ((a.perp ? 1 : 0) - (b.perp ? 1 : 0)) * -direction;
       }
     });
-  }, [rows, search, avail, sortKey, sortDesc]);
+  }, [catalogRows, catalogFilter, search, sortKey, sortDesc, watchlist]);
 
-  useEffect(() => setPageN(0), [search, avail, sortKey, sortDesc, pageSize]);
-  const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  useEffect(() => setPageN(0), [catalogFilter, search, sortKey, sortDesc, pageSize]);
+  const pages = Math.max(1, Math.ceil(filteredCatalog.length / pageSize));
   const safePage = Math.min(pageN, pages - 1);
-  const visible = filtered.slice(safePage * pageSize, safePage * pageSize + pageSize);
+  const visibleCatalog = filteredCatalog.slice(safePage * pageSize, safePage * pageSize + pageSize);
 
-  // ---- posture numbers (all real) -------------------------------------------
   const margin = loans?.margin ?? null;
   const guard = state?.config.borrowGuard ?? DEFAULT_GUARD;
   const ongoing = loans?.ongoing ?? [];
-  const watchlist = state?.config.watchlist ?? [];
-  const marginDebts = (margin?.assets ?? []).filter((a) => a.borrowed > 0 || a.interest > 0);
-  const flexDebtUsd = ongoing.reduce((s, o) => s + o.totalDebt * (priceOf(o.loanCoin) ?? 0), 0);
-  const marginDebtUsd = marginDebts.reduce((s, a) => s + (a.borrowed + a.interest) * (priceOf(a.asset) ?? 0), 0);
-  const totalDebtUsd = flexDebtUsd + marginDebtUsd;
-  const collateralUsd = ongoing.reduce((sum, o) => sum + o.collateralAmount * (priceOf(o.collateralCoin) ?? 0), 0);
-  const live = !!loans?.available && !loans?.error;
   const activity = loans?.activity ?? [];
-  const loanBlocked = guard.newBorrowPaused || guard.repayOnly;
-  const maxLoanLtv = ongoing.reduce((m, o) => Math.max(m, o.currentLTV), 0);
-  const primaryLoan = ongoing[0] ?? null;
-  const primaryApr = primaryLoan ? (loans?.loanable ?? []).find((c) => c.loanCoin === primaryLoan.loanCoin)?.yearlyRatePct ?? null : null;
+  const marginDebts = (margin?.assets ?? []).filter((asset) => asset.borrowed > 0 || asset.interest > 0);
+  const policyPaused = guard.enabled && (guard.newBorrowPaused || guard.repayOnly);
+  const newLoansAllowed = guard.enabled && !guard.newBorrowPaused && !guard.repayOnly;
+  const loanLive = !!loans?.available && !loans?.error && !loansFetchError;
 
-  const collateralFor = (coin: string) => (loans?.collateral ?? []).find((c) => c.collateralCoin === coin) ?? null;
-  const highestLtvLoan = ongoing.reduce<OngoingLoan | null>((highest, order) => (!highest || order.currentLTV > highest.currentLTV ? order : highest), null);
-  const healthTerms = highestLtvLoan ? collateralFor(highestLtvLoan.collateralCoin) : null;
-  const healthCallLtv = healthTerms?.marginCallLTV ?? 0.85;
-  const healthLiqLtv = healthTerms?.liquidationLTV ?? 0.91;
-  const healthInitialLtv = healthTerms?.initialLTV ?? 0.78;
-  const healthRisk = highestLtvLoan ? riskOf(highestLtvLoan.currentLTV, healthCallLtv, healthLiqLtv) : null;
-  const healthZones = highestLtvLoan ? meterZones(healthCallLtv, healthLiqLtv, highestLtvLoan.currentLTV) : null;
-  const primaryCollateralApr = primaryLoan ? earnAprs.get(primaryLoan.collateralCoin) ?? null : null;
-  const primaryNetApr = finite(primaryApr) ? primaryApr - (primaryCollateralApr ?? 0) : null;
+  const valueItems = (items: { asset: string; amount: number }[]): number | null => {
+    let total = 0;
+    for (const item of items) {
+      const price = priceOf(item.asset);
+      if (!finite(price)) return null;
+      total += item.amount * price;
+    }
+    return total;
+  };
+
+  const flexDebtUsd = valueItems(ongoing.map((loan) => ({ asset: loan.loanCoin, amount: loan.totalDebt })));
+  const marginDebtUsd = valueItems(marginDebts.map((asset) => ({ asset: asset.asset, amount: asset.borrowed + asset.interest })));
+  const totalDebtUsd = finite(flexDebtUsd) && finite(marginDebtUsd) ? flexDebtUsd + marginDebtUsd : null;
+  const collateralUsd = valueItems(ongoing.map((loan) => ({ asset: loan.collateralCoin, amount: loan.collateralAmount })));
   const activeCount = ongoing.length + marginDebts.length;
-  const flexibleDebtShare = totalDebtUsd > 0 ? Math.max(0, Math.min(100, (flexDebtUsd / totalDebtUsd) * 100)) : 0;
+  const highestLtvLoan = ongoing.reduce<OngoingLoan | null>((highest, loan) => !highest || loan.currentLTV > highest.currentLTV ? loan : highest, null);
+  const highestTerms = highestLtvLoan ? collateralMap.get(highestLtvLoan.collateralCoin) ?? null : null;
+  const highestRisk = highestLtvLoan && highestTerms ? riskOf(highestLtvLoan.currentLTV, highestTerms.marginCallLTV, highestTerms.liquidationLTV) : null;
+  const ltvLimitLoan = guard.enabled ? ongoing.find((loan) => loan.currentLTV * 100 >= guard.maxLtvPct) ?? null : null;
+
+  const gate = useMemo(() => {
+    if (!state) return { label: 'Loading', reason: 'Waiting For Server State', tone: 'idle' };
+    if (state.config.killSwitch) return { label: 'Blocked', reason: 'Kill Switch On', tone: 'bad' };
+    if (state.config.fundsLocked) return { label: 'Blocked', reason: 'Funds Access Off', tone: 'bad' };
+    if (!state.binance.keysPresent) return { label: 'Unavailable', reason: 'Binance Keys Missing', tone: 'bad' };
+    if (state.binance.keyPermissions?.enableSpotAndMarginTrading === false) return { label: 'Read Only', reason: 'Margin Permission Off', tone: 'warn' };
+    if (state.binance.keyPermissions?.enableSpotAndMarginTrading == null) return { label: 'Unknown', reason: 'Margin Permission Not Verified', tone: 'warn' };
+    if (!guard.enabled) return { label: 'Unrestricted', reason: 'Borrow Guard Bypassed', tone: 'warn' };
+    if (policyPaused) return { label: 'Blocked', reason: 'New Loans Paused', tone: 'bad' };
+    if (ltvLimitLoan) return { label: 'Blocked', reason: `${ltvLimitLoan.loanCoin}/${ltvLimitLoan.collateralCoin} Above ${guard.maxLtvPct}% Guard`, tone: 'bad' };
+    if (guard.requireLiveCatalog && !loanLive) return { label: 'Unavailable', reason: loansFetchError || loans?.error || 'Live Loan Catalog Required', tone: 'bad' };
+    return { label: 'Policy Open', reason: 'Signed Preflight Still Required', tone: 'ok' };
+  }, [state, guard, policyPaused, ltvLimitLoan, loanLive, loans?.error, loansFetchError]);
+
+  const preflightRows = useMemo(() => {
+    const query = search.trim().toUpperCase();
+    return (basis?.rows ?? [])
+      .filter((row) => row.direction === 'short_spot_long_perp')
+      .filter((row) => !query || row.base.includes(query) || row.symbol.includes(query))
+      .sort((a, b) => (b.executableGapPct ?? Number.NEGATIVE_INFINITY) - (a.executableGapPct ?? Number.NEGATIVE_INFINITY));
+  }, [basis?.rows, search]);
+
+  const positionSearch = search.trim().toUpperCase();
+  const visibleOngoing = ongoing.filter((loan) => !positionSearch || loan.loanCoin.includes(positionSearch) || loan.collateralCoin.includes(positionSearch));
+  const visibleMarginDebts = marginDebts.filter((asset) => !positionSearch || asset.asset.includes(positionSearch));
+
+  const assetTotals = (items: { coin: string; quantity: number }[]) => {
+    const totals = new Map<string, { coin: string; quantity: number; usd: number | null; symbol: string | null }>();
+    for (const { coin, quantity } of items) {
+      const previous = totals.get(coin) ?? { coin, quantity: 0, usd: 0, symbol: marketSymbols.has(`${coin}USDT`) ? `${coin}USDT` : null };
+      previous.quantity += quantity;
+      const price = priceOf(coin);
+      previous.usd = finite(previous.usd) && finite(price) ? previous.usd + quantity * price : null;
+      totals.set(coin, previous);
+    }
+    return Array.from(totals.values()).sort((a, b) => (b.usd ?? -1) - (a.usd ?? -1));
+  };
+
+  const debtAssets = useMemo(() => assetTotals([
+    ...ongoing.map((loan) => ({ coin: loan.loanCoin, quantity: loan.totalDebt })),
+    ...marginDebts.map((asset) => ({ coin: asset.asset, quantity: asset.borrowed + asset.interest })),
+  ]), [ongoing, marginDebts, markets, marketSymbols]);
+  const collateralAssets = useMemo(() => assetTotals(ongoing.map((loan) => ({ coin: loan.collateralCoin, quantity: loan.collateralAmount }))), [ongoing, markets, marketSymbols]);
+  const assetRows = [...debtAssets.map((row) => ({ ...row, exposure: 'Debt' as const, total: totalDebtUsd })), ...collateralAssets.map((row) => ({ ...row, exposure: 'Collateral' as const, total: collateralUsd }))]
+    .filter((row) => !positionSearch || row.coin.includes(positionSearch));
+  const visibleActivity = activity.filter((event) => !positionSearch || event.loanCoin.includes(positionSearch) || (event.collateralCoin ?? '').includes(positionSearch));
+  const visibleActiveCount = visibleOngoing.length + visibleMarginDebts.length;
+  const collateralSummary = collateralAssets.length === 1
+    ? `${collateralAssets[0].coin} · ${earnAprs.has(collateralAssets[0].coin) ? 'Earn Position Linked' : 'Flexible Loan Collateral'}`
+    : collateralAssets.length > 1 ? `${collateralAssets.length} Collateral Assets` : 'No Flexible Collateral';
 
   const toggleLoanBlock = async () => {
-    if (guardBusy) return;
+    if (!state || guardBusy) return;
     setGuardBusy(true);
     try {
-      const nextBlocked = !loanBlocked;
-      await saveConfig({ borrowGuard: { ...guard, newBorrowPaused: nextBlocked, repayOnly: nextBlocked } });
+      const nextOpen = !newLoansAllowed;
+      await saveConfig({ borrowGuard: { ...guard, enabled: true, newBorrowPaused: !nextOpen, repayOnly: !nextOpen } });
     } finally {
       setGuardBusy(false);
     }
   };
 
-  const assetTotals = (pick: (o: OngoingLoan) => { coin: string; qty: number }) => {
-    const map = new Map<string, { coin: string; qty: number; usd: number; symbol: string | null }>();
-    for (const o of ongoing) {
-      const { coin, qty } = pick(o);
-      const prev = map.get(coin) ?? { coin, qty: 0, usd: 0, symbol: marketSymbols.has(`${coin}USDT`) ? `${coin}USDT` : null };
-      prev.qty += qty;
-      prev.usd += qty * (priceOf(coin) ?? 0);
-      map.set(coin, prev);
-    }
-    return Array.from(map.values()).sort((a, b) => b.usd - a.usd);
-  };
-  const debtAssets = useMemo(
-    () => assetTotals((o) => ({ coin: o.loanCoin, qty: o.totalDebt })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ongoing, markets, marketSymbols],
-  );
-  const collateralAssets = useMemo(
-    () => assetTotals((o) => ({ coin: o.collateralCoin, qty: o.collateralAmount })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ongoing, markets, marketSymbols],
-  );
-
-  const SortHead = ({ label, k, right = true }: { label: string; k: SortKey; right?: boolean }) => (
-    <th className={`${right ? 'r' : 'l'} ${sortKey === k ? 'sorted' : ''}`} aria-sort={sortKey === k ? (sortDesc ? 'descending' : 'ascending') : 'none'}>
-      <button className="mkx-th" type="button" onClick={() => { if (sortKey === k) setSortDesc((v) => !v); else { setSortKey(k); setSortDesc(k !== 'asset' && k !== 'hourly' && k !== 'apr'); } }}>
-        {label}
-        <i className="bwx-sort-glyph">{sortKey === k ? (sortDesc ? '▾' : '▴') : ''}</i>
+  const sortHead = (label: string, key: SortKey, align: 'l' | 'r' = 'r') => (
+    <th className={`${align} ${sortKey === key ? 'sorted' : ''}`} aria-sort={sortKey === key ? (sortDesc ? 'descending' : 'ascending') : 'none'}>
+      <button type="button" onClick={() => { if (sortKey === key) setSortDesc((value) => !value); else { setSortKey(key); setSortDesc(false); } }}>
+        {label}<span>{sortKey === key ? (sortDesc ? '↓' : '↑') : '↕'}</span>
       </button>
     </th>
   );
 
+  const viewCount = view === 'positions' ? visibleActiveCount : view === 'assets' ? assetRows.length : view === 'preflight' ? preflightRows.length : view === 'activity' ? visibleActivity.length : filteredCatalog.length;
+  const basisRuntimeError = basisError ?? basis?.status.lastError ?? null;
+  const basisLive = !!basis && !basisRuntimeError;
+  const marginLive = !!margin?.available && !margin.error;
+  const accountPartial = loanLive && (!marginLive || !!earnStatus.error);
+  const sourceTone = view === 'preflight' ? (basisLive ? 'on' : basis ? 'partial' : '') : (loanLive && !accountPartial ? 'on' : accountPartial ? 'partial' : '');
+  const sourceText = view === 'preflight'
+    ? basisRuntimeError ? `Source Error · ${basis ? 'Cached' : 'No Data'}` : basis ? `Live · ${timeAgo(basis.updatedAt)}` : 'Loading'
+    : loansFetchError || loans?.error ? `Source Error${loans ? ' · Cached' : ''}` : accountPartial ? 'Partial Sources' : loanLive ? `Live · ${loans?.fetchedAt ? timeAgo(loans.fetchedAt) : 'Now'}` : 'Loading';
+  const accountSourceSummary = `Flexible ${loanLive ? loans?.fetchedAt ? timeAgo(loans.fetchedAt) : 'Live' : loansFetchError || loans?.error ? 'Error' : 'Loading'} · Margin ${marginLive ? 'Live' : margin?.error ? 'Error' : 'Unavailable'} · Earn ${earnStatus.error ? 'Error' : earnStatus.fetchedAt ? timeAgo(earnStatus.fetchedAt) : 'Unavailable'}`;
+
   return (
-    <div className="container page mkx bwx-page">
-      {/* ---- Borrow header — the same calm hierarchy as Markets --------- */}
-      <header className="mkx-hero bwx-hero">
-        <div className="mkx-hero-text">
-          <h1>Borrow</h1>
-          <p className="mkx-index bwx-index">
-            {loans
-              ? activeCount > 0
-                ? `${activeCount} Active ${activeCount === 1 ? 'Position' : 'Positions'} · ${fmtPrice(totalDebtUsd)} Total Debt`
-                : 'No Active Borrow Positions'
-              : 'Loading Account Loan State'}
-            <span className={`mkx-live ${live ? 'on' : ''}`}>
-              <i />
-              {live ? `Catalog Live${loans?.fetchedAt ? ` · ${timeAgo(loans.fetchedAt)}` : ''}` : 'Catalog Loading'}
-            </span>
-          </p>
-        </div>
-        <div className="bwx-guard" aria-label="Borrow guard control">
-          <span className="bwx-guard-copy">
-            <b>Borrow Guard</b>
-            <em className={loanBlocked ? 'blocked' : 'open'}>{loanBlocked ? 'New Loans Blocked' : 'New Loans Open'}</em>
-          </span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={!loanBlocked}
-            aria-label="Borrow Guard"
-            className={`bwx-switch2 ${loanBlocked ? 'blocked' : 'open'}`}
-            disabled={guardBusy}
-            onClick={() => void toggleLoanBlock()}
-          >
-            <span aria-hidden="true" />
-          </button>
-        </div>
-      </header>
-
-      {/* ---- real account totals, using Markets' four-tile grammar ------- */}
-      <section className="mkx-stats bwx-health" aria-label="Loan health">
-        <h2>Loan Health</h2>
-        <p className="mkx-blurb">
-          {activeCount > 0
-            ? `${activeCount} active ${activeCount === 1 ? 'position is' : 'positions are'} monitored by the engine. Current debt is ${fmtPrice(totalDebtUsd)} against ${fmtPrice(collateralUsd)} in posted collateral.`
-            : 'There are no active flexible-loan or cross-margin debts on the connected account.'}
-        </p>
-        <div className="mkx-tiles bwx-health-tiles">
-          <div className="mkx-tile bwx-health-tile">
-            <span className="mkx-tile-k">Total Debt</span>
-            <span className="mkx-tile-v">
-              <b>{loans ? fmtPrice(totalDebtUsd) : '—'}</b>
-              <em className="mkx-dim2">{activeCount} Active</em>
-            </span>
-            <div className="bwx-tile-breakdown">
-              <span><em>Flexible</em><b>{fmtPrice(flexDebtUsd)}</b></span>
-              <span><em>Margin</em><b>{fmtPrice(marginDebtUsd)}</b></span>
-            </div>
-            <span className="bwx-debt-track" aria-hidden="true">
-              <i style={{ width: `${flexibleDebtShare}%` }} />
-            </span>
+    <div className="container page borrowx-page">
+      <section className="borrowx-frame" aria-label="Borrow Workspace">
+        <header className="borrowx-toolbar">
+          <div className="borrowx-identity">
+            <span className="borrowx-source-mark"><BinanceMark size={22} /></span>
+            <span><h1>Borrow</h1><small>Binance Flexible Loan + Cross Margin</small></span>
           </div>
-          <div className="mkx-tile bwx-health-tile">
-            <span className="mkx-tile-k">Posted Collateral</span>
-            <span className="mkx-tile-v">
-              <b>{loans ? fmtPrice(collateralUsd) : '—'}</b>
-              <em className="mkx-dim2">Flexible Loan</em>
-            </span>
-            <div className="bwx-collateral-line">
-              {primaryLoan ? (
-                <>
-                  <TokenIcon symbol={`${primaryLoan.collateralCoin}USDT`} size={28} />
-                  <span><b>{fmtQty(primaryLoan.collateralAmount)} {primaryLoan.collateralCoin}</b><em>Includes Simple Earn Collateral</em></span>
-                </>
-              ) : <span><b>No Collateral Posted</b><em>No Flexible Loan Position</em></span>}
+          <div className="borrowx-tools">
+            <label className="borrowx-search"><IconSearch size={15} /><input aria-label="Search Borrow" placeholder="Search" value={search} onChange={(event) => setSearch(event.target.value)} spellCheck={false} />{search && <button type="button" aria-label="Clear Search" onClick={() => setSearch('')}>×</button>}</label>
+            <div className="borrowx-guard">
+              <span><b>New Loans</b><small className={!state || !guard.enabled ? 'warn' : newLoansAllowed ? 'ok' : 'bad'}>{!state ? 'Loading' : !guard.enabled ? 'Guard Bypassed' : newLoansAllowed ? 'Policy Open' : 'Paused'}</small></span>
+              <button type="button" role="switch" aria-checked={newLoansAllowed} aria-label="New Loans" disabled={!state || guardBusy} className={newLoansAllowed ? 'open' : 'blocked'} onClick={() => void toggleLoanBlock()}><i /></button>
             </div>
           </div>
-          <div className="mkx-tile bwx-health-tile">
-            <span className="mkx-tile-k">Current LTV</span>
-            <span className="mkx-tile-v">
-              <b>{highestLtvLoan ? ltvPct(maxLoanLtv, 2) : '—'}</b>
-              {healthRisk ? <em className={`bwx-risk ${healthRisk}`}>{RISK_LABEL[healthRisk]}</em> : <em className="mkx-dim2">No Position</em>}
-            </span>
-            {healthZones ? (
-              <>
-                <span className="bwx-meter bwx-health-meter" aria-hidden="true">
-                  <i className="z-low" style={{ width: `${healthZones.low}%` }} />
-                  <i className="z-call" style={{ width: `${healthZones.call}%` }} />
-                  <i className="z-liq" style={{ width: `${healthZones.liq}%` }} />
-                  <u style={{ left: `${healthZones.marker}%` }} />
-                </span>
-                <span className="bwx-thresholds"><em>{ltvPct(healthInitialLtv)} Initial</em><em>{ltvPct(healthCallLtv)} Call</em><em>{ltvPct(healthLiqLtv)} Liquidation</em></span>
-              </>
-            ) : <span className="bwx-tile-note">No LTV Exposure</span>}
+        </header>
+
+        <div className="borrowx-summary" aria-label="Borrow Summary">
+          <article><span>Total Debt</span><strong>{finite(totalDebtUsd) ? fmtMoney(totalDebtUsd) : '—'}</strong><small>{activeCount} Active {activeCount === 1 ? 'Position' : 'Positions'}</small></article>
+          <article><span>Posted Collateral</span><strong>{finite(collateralUsd) ? fmtMoney(collateralUsd) : '—'}</strong><small>{collateralSummary}</small></article>
+          <article><span>Highest LTV</span><strong>{highestLtvLoan ? ltvPct(highestLtvLoan.currentLTV, 2) : '—'}</strong><small className={highestRisk ? highestRisk : ''}>{highestTerms ? `${RISK_LABEL[highestRisk ?? 'low']} · ${ltvPct(highestTerms.marginCallLTV)} Call · ${ltvPct(highestTerms.liquidationLTV)} Liq` : highestLtvLoan ? 'Collateral Terms Unavailable' : 'No LTV Exposure'}</small></article>
+          <article><span>Effective State</span><strong className={gate.tone}>{gate.label}</strong><small>{gate.reason}</small></article>
+        </div>
+
+        <nav className="borrowx-viewbar" aria-label="Borrow Views">
+          <div role="tablist">
+            {([
+              ['positions', 'Positions', search ? visibleActiveCount : activeCount],
+              ['assets', 'Assets', assetRows.length],
+              ['preflight', 'Borrow Preflight', preflightRows.length],
+              ['activity', 'Activity', search ? visibleActivity.length : activity.length],
+              ['market', 'Loan Market', filteredCatalog.length],
+            ] as [LoanView, string, number][]).map(([id, label, count]) => <button key={id} type="button" role="tab" aria-selected={view === id} onClick={() => setView(id)}>{label}<span>{count}</span></button>)}
           </div>
-          <div className="mkx-tile bwx-health-tile">
-            <span className="mkx-tile-k">Net Borrow Rate</span>
-            <span className="mkx-tile-v">
-              <b>{finite(primaryNetApr) ? `${primaryNetApr.toFixed(2)}%` : '—'}</b>
-              <em className="mkx-dim2">Annualized</em>
-            </span>
-            <div className="bwx-rate-grid">
-              <span><em>Borrow</em><b>{finite(primaryApr) ? `${primaryApr.toFixed(2)}%` : '—'}</b></span>
-              <span><em>Earn</em><b className="up">{finite(primaryCollateralApr) ? `${primaryCollateralApr.toFixed(2)}%` : '—'}</b></span>
-              <span><em>Net</em><b>{finite(primaryNetApr) ? `${primaryNetApr.toFixed(2)}%` : '—'}</b></span>
+          <span className={`borrowx-live ${sourceTone}`} title={view === 'preflight' ? basisRuntimeError ?? '' : loansFetchError ?? loans?.error ?? margin?.error ?? earnStatus.error ?? ''}><i />{sourceText}</span>
+        </nav>
+
+        {view === 'market' && (
+          <div className="borrowx-controls">
+            <div>
+              <PillSelect value={catalogFilter} options={[{ id: 'all', label: 'All Products' }, { id: 'perp', label: 'Perpetual Market' }, { id: 'collateral', label: 'Collateral Eligible' }, { id: 'watchlist', label: 'Watchlist' }]} onChange={setCatalogFilter} ariaLabel="Loan Market Filter" testId="borrow-market-filter" />
+              <PillSelect value={String(pageSize)} options={[25, 50, 100].map((count) => ({ id: String(count), label: `${count} Rows` }))} onChange={(value) => setPageSize(Number(value))} ariaLabel="Rows Per Page" testId="borrow-page-size" />
+              {(catalogFilter !== 'all' || search) && <button type="button" onClick={() => { setCatalogFilter('all'); setSearch(''); }}>Reset</button>}
             </div>
+            <span>{filteredCatalog.length} Products · {filteredCatalog.length ? `${safePage * pageSize + 1}-${safePage * pageSize + visibleCatalog.length}` : '0'}</span>
           </div>
-        </div>
-      </section>
-
-      {/* ---- one dense positions surface, not a field grid --------------- */}
-      <section className="mkx-prices bwx-console bwx-positions" aria-label="Loan positions">
-        <div className="mkx-prices-head bwx-positions-head">
-          <div className="mkx-prices-title">
-            <h2>Loan Positions <em>{activeCount} Active</em></h2>
-          </div>
-          <div className="bwx-view-tabs" role="tablist" aria-label="Loan position views">
-            <button type="button" role="tab" aria-selected={loanView === 'orders'} className={loanView === 'orders' ? 'on' : ''} onClick={() => setLoanView('orders')}>
-              Ongoing Orders <span>{activeCount}</span>
-            </button>
-            <button type="button" role="tab" aria-selected={loanView === 'overview'} className={loanView === 'overview' ? 'on' : ''} onClick={() => setLoanView('overview')}>
-              Asset Overview
-            </button>
-            <button type="button" role="tab" aria-selected={loanView === 'activity'} className={loanView === 'activity' ? 'on' : ''} onClick={() => setLoanView('activity')}>
-              Loan Activity <span>{activity.length}</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="bwx-console-body">
-          {loanView === 'orders' ? (
-            ongoing.length === 0 && marginDebts.length === 0 ? (
-              <div className="bwx-empty">No Active Loan Orders.</div>
-            ) : (
-              <div className="bwx-table-scroll">
-                <table className="mkx-table bwx-position-table">
-                  <thead>
-                    <tr>
-                      <th className="mkx-starcol" />
-                      <th className="l">Asset</th>
-                      <th className="r">Debt</th>
-                      <th className="r">Collateral</th>
-                      <th className="r">Current LTV</th>
-                      <th className="r">Margin Call</th>
-                      <th className="r">Liquidation</th>
-                      <th className="r">Rates</th>
-                      <th className="r">Net APR</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ongoing.map((o) => {
-                      const terms = collateralFor(o.collateralCoin);
-                      const initialLTV = terms?.initialLTV ?? 0.78;
-                      const callLTV = terms?.marginCallLTV ?? 0.85;
-                      const liqLTV = terms?.liquidationLTV ?? 0.91;
-                      const risk = riskOf(o.currentLTV, callLTV, liqLTV);
-                      const zones = meterZones(callLTV, liqLTV, o.currentLTV);
-                      const borrowApr = (loans?.loanable ?? []).find((c) => c.loanCoin === o.loanCoin)?.yearlyRatePct ?? null;
-                      const collEarnApr = earnAprs.get(o.collateralCoin) ?? null;
-                      const netApr = finite(borrowApr) ? borrowApr - (collEarnApr ?? 0) : null;
-                      const spot = priceOf(o.loanCoin);
-                      const collUsd = o.collateralAmount * (priceOf(o.collateralCoin) ?? 0);
-                      const liqPrice = o.totalDebt > 0 ? (liqLTV * collUsd) / o.totalDebt : null;
-                      const liqDelta = finite(liqPrice) && finite(spot) && spot > 0 ? ((liqPrice - spot) / spot) * 100 : null;
-                      const symbol = marketSymbols.has(`${o.loanCoin}USDT`) ? `${o.loanCoin}USDT` : null;
-                      return (
-                        <tr key={`${o.loanCoin}-${o.collateralCoin}`} className={symbol ? 'link' : ''} onClick={() => symbol && openDetail(symbol)}>
-                          <td className="mkx-starcol">{symbol ? <Star on={watchlist.includes(symbol)} onClick={() => void toggleWatch(symbol)} /> : null}</td>
-                          <td className="l mkx-asset">
-                            <TokenIcon symbol={`${o.loanCoin}USDT`} size={36} />
-                            <span className="mkx-asset-name"><b>{tokenName(o.loanCoin)}</b><em>{o.loanCoin} · Flexible Rate</em></span>
-                          </td>
-                          <td className="r"><span className="bwx-cell-main">{fmtQty(o.totalDebt)} {o.loanCoin}</span><span className="bwx-cell-sub">{fmtPrice(o.totalDebt * (spot ?? 0))}</span></td>
-                          <td className="r"><span className="bwx-cell-main">{fmtQty(o.collateralAmount)} {o.collateralCoin}</span><span className="bwx-cell-sub">{fmtPrice(collUsd)} · Simple Earn</span></td>
-                          <td className="r bwx-ltv-cell">
-                            <span className="bwx-cell-main">{ltvPct(o.currentLTV, 2)} <em className={`bwx-risk ${risk}`}>{RISK_LABEL[risk]}</em></span>
-                            <span className="bwx-meter" aria-hidden="true"><i className="z-low" style={{ width: `${zones.low}%` }} /><i className="z-call" style={{ width: `${zones.call}%` }} /><i className="z-liq" style={{ width: `${zones.liq}%` }} /><u style={{ left: `${zones.marker}%` }} /></span>
-                          </td>
-                          <td className="r"><span className="bwx-cell-main">{ltvPct(callLTV)}</span><span className="bwx-cell-sub">Initial {ltvPct(initialLTV)}</span></td>
-                          <td className="r"><span className="bwx-cell-main">{ltvPct(liqLTV)}</span><span className="bwx-cell-sub">{finite(liqPrice) ? `${fmtPrice(liqPrice)} / ${o.loanCoin}${finite(liqDelta) ? ` · ${fmtPct(liqDelta, 1)} Spot` : ''}` : '—'}</span></td>
-                          <td className="r"><span className="bwx-cell-main">{finite(borrowApr) ? `${borrowApr.toFixed(2)}%` : '—'}</span><span className="bwx-cell-sub bwx-up">Earn {finite(collEarnApr) ? `${collEarnApr.toFixed(2)}%` : '—'}</span></td>
-                          <td className="r"><span className="bwx-cell-main">{finite(netApr) ? `${netApr.toFixed(2)}%` : '—'}</span><span className="bwx-cell-sub">Annualized</span></td>
-                        </tr>
-                      );
-                    })}
-                    {marginDebts.map((a) => {
-                      const symbol = marketSymbols.has(`${a.asset}USDT`) ? `${a.asset}USDT` : null;
-                      const debt = a.borrowed + a.interest;
-                      return (
-                        <tr key={`margin-${a.asset}`} className={symbol ? 'link' : ''} onClick={() => symbol && openDetail(symbol)}>
-                          <td className="mkx-starcol">{symbol ? <Star on={watchlist.includes(symbol)} onClick={() => void toggleWatch(symbol)} /> : null}</td>
-                          <td className="l mkx-asset"><TokenIcon symbol={`${a.asset}USDT`} size={36} /><span className="mkx-asset-name"><b>{tokenName(a.asset)}</b><em>{a.asset} · Cross Margin</em></span></td>
-                          <td className="r"><span className="bwx-cell-main">{fmtQty(debt)} {a.asset}</span><span className="bwx-cell-sub">{fmtPrice(debt * (priceOf(a.asset) ?? 0))}</span></td>
-                          <td className="r"><span className="bwx-cell-main">Account Pool</span><span className="bwx-cell-sub">Cross Margin Collateral</span></td>
-                          <td className="r"><span className="bwx-cell-main">—</span><span className="bwx-cell-sub">Margin Level {margin && finite(margin.marginLevel) ? margin.marginLevel.toFixed(2) : '—'}</span></td>
-                          <td className="r"><span className="bwx-cell-main">—</span><span className="bwx-cell-sub">Account Level</span></td>
-                          <td className="r"><span className="bwx-cell-main">—</span><span className="bwx-cell-sub">Cross Margin</span></td>
-                          <td className="r"><span className="bwx-cell-main">{fmtQty(a.interest)} {a.asset}</span><span className="bwx-cell-sub">Accrued Interest</span></td>
-                          <td className="r"><span className="bwx-cell-main">Bot</span><span className="bwx-cell-sub">Engine Repay</span></td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )
-          ) : loanView === 'overview' ? (
-            debtAssets.length === 0 && collateralAssets.length === 0 ? <div className="bwx-empty">No Borrow Assets To Show.</div> : (
-              <div className="bwx-table-scroll">
-                <table className="mkx-table bwx-overview-table">
-                  <thead><tr><th className="mkx-starcol" /><th className="l">Asset</th><th className="l">Exposure</th><th className="r">Amount</th><th className="r">Value</th><th className="r">Share</th></tr></thead>
-                  <tbody>
-                    {[...debtAssets.map((r) => ({ ...r, exposure: 'Debt' as const, total: totalDebtUsd })), ...collateralAssets.map((r) => ({ ...r, exposure: 'Collateral' as const, total: collateralUsd }))].map((r) => (
-                      <tr key={`${r.exposure}-${r.coin}`} className={r.symbol ? 'link' : ''} onClick={() => r.symbol && openDetail(r.symbol)}>
-                        <td className="mkx-starcol">{r.symbol ? <Star on={watchlist.includes(r.symbol)} onClick={() => void toggleWatch(r.symbol as string)} /> : null}</td>
-                        <td className="l mkx-asset"><TokenIcon symbol={r.symbol ?? `${r.coin}USDT`} size={36} /><span className="mkx-asset-name"><b>{tokenName(r.coin)}</b><em>{r.coin}</em></span></td>
-                        <td className="l"><span className={`bwx-exposure ${r.exposure.toLowerCase()}`}>{r.exposure}</span></td>
-                        <td className="r"><span className="bwx-cell-main">{fmtQty(r.qty)} {r.coin}</span></td>
-                        <td className="r"><span className="bwx-cell-main">{fmtPrice(r.usd)}</span></td>
-                        <td className="r"><span className="bwx-cell-main">{r.total > 0 ? `${((r.usd / r.total) * 100).toFixed(1)}%` : '—'}</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )
-          ) : activity.length === 0 ? (
-            <div className="bwx-empty">No Flexible-Loan History Returned Yet. Active Positions Remain Live Account State.</div>
-          ) : (
-            <div className="bwx-table-scroll">
-              <table className="mkx-table bwx-activity-table">
-                <thead><tr><th className="l">Event</th><th className="l">Loan Asset</th><th className="l">Collateral</th><th className="r">Status</th><th className="r">Time</th></tr></thead>
-                <tbody>{activity.slice(0, 20).map((e, i) => (
-                  <tr key={`${e.kind}-${e.ts}-${e.loanCoin}-${i}`}>
-                    <td className="l"><span className="bwx-activity-event"><i className={`tbp-dot ${activityTone(e.kind)}`} /><span><b>{activityTitle(e)}</b><em>{activityDetail(e)}</em></span></span></td>
-                    <td className="l"><span className="bwx-cell-main">{e.loanCoin || '—'}</span></td>
-                    <td className="l"><span className="bwx-cell-main">{e.collateralCoin || '—'}</span></td>
-                    <td className="r"><span className={`bwx-status ${activityTone(e.kind)}`}>{statusLabel(e.status)}</span></td>
-                    <td className="r"><span className="bwx-cell-main">{timeAgo(e.ts)}</span></td>
-                  </tr>
-                ))}</tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* ---- the screener: every loanable asset --------------------------- */}
-      <section className="mkx-prices bwx-market" aria-label="Borrow market">
-        <div className="mkx-prices-head bwx-market-head">
-          <div className="mkx-prices-title">
-            <h2>Borrow Market <em>{filtered.length} Assets</em></h2>
-            <span className={`mkx-live ${live ? 'on' : ''}`}><i />{live ? `Live${loans?.fetchedAt ? ` · ${timeAgo(loans.fetchedAt)}` : ''}` : 'Loading'}</span>
-          </div>
-          <label className="mkx-search bwx-market-search">
-            <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="8.6" cy="8.6" r="5.6" fill="none" stroke="currentColor" strokeWidth="1.7" /><path d="m12.8 12.8 4 4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
-            <input placeholder="Search Asset" value={search} onChange={(e) => setSearch(e.target.value)} spellCheck={false} />
-            {search && <button type="button" aria-label="Clear asset search" onClick={() => setSearch('')}>×</button>}
-          </label>
-        </div>
-        <div className="mkx-pills bwx-market-controls">
-          <PillSelect
-            value={avail}
-            options={[{ id: 'all', label: 'All Loanable' }, { id: 'basis', label: 'Basis-Ready' }]}
-            onChange={setAvail}
-            ariaLabel="Availability filter"
-          />
-          <PillSelect
-            value={String(pageSize)}
-            options={[10, 25, 50, 100].map((n) => ({ id: String(n), label: `${n} Rows` }))}
-            onChange={(n) => setPageSize(Number(n))}
-            ariaLabel="Rows per page"
-          />
-        </div>
-
-        <div className="bwx-table-scroll bwx-market-table-scroll">
-          <table className="mkx-table bwx-table">
-            <thead>
-              <tr>
-                <th className="mkx-starcol" />
-                <SortHead label="Asset" k="asset" right={false} />
-                <SortHead label="Hourly Rate" k="hourly" />
-                <SortHead label="APR" k="apr" />
-                <SortHead label="Max Limit" k="max" />
-                <SortHead label="Basis" k="perp" />
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((r) => (
-                <tr key={r.coin} className={r.symbol ? 'link' : ''} onClick={() => r.symbol && openDetail(r.symbol)}>
-                  <td className="mkx-starcol">
-                    {r.symbol ? <Star on={watchlist.includes(r.symbol)} onClick={() => void toggleWatch(r.symbol as string)} /> : null}
-                  </td>
-                  <td className="l mkx-asset">
-                    <TokenIcon symbol={r.symbol ?? `${r.coin}USDT`} size={36} />
-                    <span className="mkx-asset-name">
-                      <b>{tokenName(r.coin)}</b>
-                      <em>{r.coin} · Flexible Rate</em>
-                    </span>
-                  </td>
-                  <td className="r mkx-num"><span>{fmtRate(r.hourly, 5)}</span></td>
-                  <td className="r mkx-num"><span>{fmtRate(r.apr, 2)}</span></td>
-                  <td className="r mkx-num"><span>{finite(r.max) ? fmtQty(r.max) : '—'}</span></td>
-                  <td className="r"><span className={`bwx-avail ${r.perp ? 'ok' : 'dim'}`}>{r.perp ? 'Perp' : '—'}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {pages > 1 && (
-          <nav className="mkx-pager" aria-label="Pagination">
-            <button className="mkx-page-nav" disabled={safePage === 0} onClick={() => setPageN(safePage - 1)} aria-label="Previous page">
-              <svg viewBox="0 0 16 16" width="15" height="15"><path d="M10 3.5L5.5 8 10 12.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </button>
-            {pageList(safePage, pages).map((p, i) =>
-              p === '…' ? (
-                <span key={`e${i}`} className="mkx-page-ellipsis">…</span>
-              ) : (
-                <button key={p} className={`mkx-page ${safePage === p ? 'current' : ''}`} onClick={() => setPageN(p)}>{p + 1}</button>
-              ),
-            )}
-            <button className="mkx-page-nav" disabled={safePage >= pages - 1} onClick={() => setPageN(safePage + 1)} aria-label="Next page">
-              <svg viewBox="0 0 16 16" width="15" height="15"><path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </button>
-          </nav>
         )}
-        <p className="mkx-rangeline">{filtered.length ? `${safePage * pageSize + 1}-${safePage * pageSize + visible.length} Of ${filtered.length} Assets` : 'Nothing Matches'}</p>
-      </section>
 
+        <div className="borrowx-workspace">
+          {view === 'positions' && (
+            <div className="borrowx-table-scroll"><table className="borrowx-table positions"><thead><tr><th /> <th className="l">Asset</th><th>Debt</th><th>Collateral</th><th>Current LTV</th><th>Margin Call</th><th>Liquidation</th><th>Borrow APR</th><th>Earn APR</th><th>Rate Spread</th></tr></thead><tbody>
+              {visibleOngoing.map((loan) => {
+                const terms = collateralMap.get(loan.collateralCoin) ?? null;
+                const risk = terms ? riskOf(loan.currentLTV, terms.marginCallLTV, terms.liquidationLTV) : null;
+                const borrowApr = (loans?.loanable ?? []).find((row) => row.loanCoin === loan.loanCoin)?.yearlyRatePct ?? null;
+                const earnApr = earnAprs.get(loan.collateralCoin) ?? null;
+                const netApr = finite(borrowApr) && finite(earnApr) ? borrowApr - earnApr : null;
+                const symbol = marketSymbols.has(`${loan.loanCoin}USDT`) ? `${loan.loanCoin}USDT` : null;
+                return <tr key={`${loan.loanCoin}-${loan.collateralCoin}`} tabIndex={symbol ? 0 : -1} className={symbol ? 'link' : ''} onClick={() => symbol && openDetail(symbol)} onKeyDown={(event) => { if (symbol && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); openDetail(symbol); } }}>
+                  <td>{symbol ? <Star on={watchlist.includes(symbol)} onClick={() => void toggleWatch(symbol)} /> : null}</td>
+                  <td className="l borrowx-asset"><TokenIcon symbol={`${loan.loanCoin}USDT`} size={32} /><span><b>{tokenName(loan.loanCoin)}</b><small>{loan.loanCoin} · Flexible Loan</small></span></td>
+                  <td><b>{fmtQty(loan.totalDebt)} {loan.loanCoin}</b><small>{finite(priceOf(loan.loanCoin)) ? fmtMoney(loan.totalDebt * (priceOf(loan.loanCoin) as number)) : 'Price Unavailable'}</small></td>
+                  <td><b>{fmtQty(loan.collateralAmount)} {loan.collateralCoin}</b><small>{finite(priceOf(loan.collateralCoin)) ? fmtMoney(loan.collateralAmount * (priceOf(loan.collateralCoin) as number)) : 'Price Unavailable'}</small></td>
+                  <td><b>{ltvPct(loan.currentLTV, 2)}</b><small className={risk ?? ''}>{risk ? RISK_LABEL[risk] : 'Terms Unavailable'}</small></td>
+                  <td><b>{terms ? ltvPct(terms.marginCallLTV) : '—'}</b><small>{terms ? `Initial ${ltvPct(terms.initialLTV)}` : 'Binance Terms Missing'}</small></td>
+                  <td><b>{terms ? ltvPct(terms.liquidationLTV) : '—'}</b><small>Threshold · Not Price Estimate</small></td>
+                  <td><b>{fmtRate(borrowApr, 2)}</b><small>Annualized</small></td>
+                  <td><b className={finite(earnApr) ? 'ok' : ''}>{fmtRate(earnApr, 2)}</b><small>{finite(earnApr) ? 'Linked Earn Position' : 'Earn Rate Unavailable'}</small></td>
+                  <td><b>{fmtRate(netApr, 2)}</b><small>Rate Comparison · Not Carry</small></td>
+                </tr>;
+              })}
+              {visibleMarginDebts.map((asset) => {
+                const symbol = marketSymbols.has(`${asset.asset}USDT`) ? `${asset.asset}USDT` : null;
+                const debt = asset.borrowed + asset.interest;
+                return <tr key={`margin-${asset.asset}`} tabIndex={symbol ? 0 : -1} className={symbol ? 'link' : ''} onClick={() => symbol && openDetail(symbol)} onKeyDown={(event) => { if (symbol && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); openDetail(symbol); } }}>
+                  <td>{symbol ? <Star on={watchlist.includes(symbol)} onClick={() => void toggleWatch(symbol)} /> : null}</td>
+                  <td className="l borrowx-asset"><TokenIcon symbol={`${asset.asset}USDT`} size={32} /><span><b>{tokenName(asset.asset)}</b><small>{asset.asset} · Cross Margin</small></span></td>
+                  <td><b>{fmtQty(debt)} {asset.asset}</b><small>{finite(priceOf(asset.asset)) ? fmtMoney(debt * (priceOf(asset.asset) as number)) : 'Price Unavailable'}</small></td>
+                  <td><b>Account Pool</b><small>Cross Margin</small></td><td><b>—</b><small>Margin Level {finite(margin?.marginLevel) ? margin?.marginLevel.toFixed(2) : '—'}</small></td><td><b>—</b><small>Account Level</small></td><td><b>—</b><small>Cross Margin</small></td><td><b>{fmtQty(asset.interest)} {asset.asset}</b><small>Accrued Interest</small></td><td><b>—</b><small>Not Applicable</small></td><td><b>—</b><small>Rate Unavailable</small></td>
+                </tr>;
+              })}
+            </tbody></table>{visibleOngoing.length === 0 && visibleMarginDebts.length === 0 && <div className="borrowx-empty">No Active Borrow Positions</div>}</div>
+          )}
+
+          {view === 'assets' && <div className="borrowx-table-scroll"><table className="borrowx-table assets"><thead><tr><th /><th className="l">Asset</th><th className="l">Exposure</th><th>Amount</th><th>Value</th><th>Class Share</th></tr></thead><tbody>{assetRows.map((row) => <tr key={`${row.exposure}-${row.coin}`} tabIndex={row.symbol ? 0 : -1} className={row.symbol ? 'link' : ''} onClick={() => row.symbol && openDetail(row.symbol)} onKeyDown={(event) => { if (row.symbol && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); openDetail(row.symbol); } }}><td>{row.symbol ? <Star on={watchlist.includes(row.symbol)} onClick={() => void toggleWatch(row.symbol as string)} /> : null}</td><td className="l borrowx-asset"><TokenIcon symbol={row.symbol ?? `${row.coin}USDT`} size={32} /><span><b>{tokenName(row.coin)}</b><small>{row.coin}</small></span></td><td className="l"><span className={`borrowx-chip ${row.exposure.toLowerCase()}`}>{row.exposure}</span></td><td><b>{fmtQty(row.quantity)} {row.coin}</b></td><td><b>{finite(row.usd) ? fmtMoney(row.usd) : '—'}</b><small>{finite(row.usd) ? 'Live Spot Valuation' : 'Price Unavailable'}</small></td><td><b>{finite(row.usd) && finite(row.total) && row.total > 0 ? `${((row.usd / row.total) * 100).toFixed(1)}%` : '—'}</b></td></tr>)}</tbody></table>{assetRows.length === 0 && <div className="borrowx-empty">No Borrow Assets</div>}</div>}
+
+          {view === 'preflight' && <div className="borrowx-table-scroll"><table className="borrowx-table preflight"><thead><tr><th className="l">Asset</th><th>Executable Gap</th><th>Intended Size</th><th>Borrow Status</th><th>Borrow Cost</th><th className="l">Decision</th><th>Age</th></tr></thead><tbody>{preflightRows.map((row) => <tr key={row.symbol} tabIndex={0} className="link" onClick={() => openDetail(row.symbol)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDetail(row.symbol); } }}><td className="l borrowx-asset"><TokenIcon symbol={row.symbol} size={32} /><span><b>{row.base}</b><small>Sell Spot · Buy Perp</small></span></td><td><b>{fmtBasis(row.executableGapPct)}</b><small>Crossed Books</small></td><td><b>{fmtMoney(basis?.thresholds.intendedNotionalUsd)}</b><small>Engine Target</small></td><td><b className={`borrow-${row.borrow.status}`}>{borrowStatusLabel(row)}</b><small>{row.borrow.human}</small></td><td><b>{row.borrow.status === 'available' ? fmtBasis(row.borrow.costPctOverHold) : '—'}</b><small>{row.borrow.status === 'available' ? 'Expected Hold' : 'Signed Rate Required'}</small></td><td className="l"><b>{decisionLabel(row)}</b><small>{row.reason}</small></td><td><b>{row.decisionTs ? timeAgo(row.decisionTs) : '—'}</b><small>{Math.round(row.dataQuality.score * 100)}% Trust</small></td></tr>)}</tbody></table>{preflightRows.length === 0 && <div className="borrowx-empty">{basisRuntimeError ?? 'No Reverse-Basis Rows In The Current Eligible Universe'}</div>}</div>}
+
+          {view === 'activity' && <div className="borrowx-table-scroll"><table className="borrowx-table activity"><thead><tr><th className="l">Event</th><th className="l">Loan Asset</th><th className="l">Collateral</th><th>Status</th><th>Time</th></tr></thead><tbody>{visibleActivity.map((event, index) => <tr key={`${event.kind}-${event.ts}-${event.loanCoin}-${index}`}><td className="l"><span className="borrowx-event"><i className={activityTone(event.kind)} /><span><b>{activityTitle(event)}</b><small>{activityDetail(event)}</small></span></span></td><td className="l"><b>{event.loanCoin || '—'}</b></td><td className="l"><b>{event.collateralCoin || '—'}</b></td><td><span className={`borrowx-chip ${activityTone(event.kind)}`}>{statusLabel(event.status)}</span></td><td><b>{timeAgo(event.ts)}</b></td></tr>)}</tbody></table>{visibleActivity.length === 0 && <div className="borrowx-empty">No Loan Activity Returned</div>}</div>}
+
+          {view === 'market' && <div className="borrowx-table-scroll"><table className="borrowx-table market"><thead><tr><th />{sortHead('Asset', 'asset', 'l')}{sortHead('Hourly Rate', 'hourly')}{sortHead('APR', 'apr')}{sortHead('Minimum', 'min')}{sortHead('Maximum', 'max')}{sortHead('Collateral LTV', 'collateral')}{sortHead('Perpetual', 'perp')}</tr></thead><tbody>{visibleCatalog.map((row) => <tr key={row.coin} tabIndex={row.symbol ? 0 : -1} className={row.symbol ? 'link' : ''} onClick={() => row.symbol && openDetail(row.symbol)} onKeyDown={(event) => { if (row.symbol && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); openDetail(row.symbol); } }}><td>{row.symbol ? <Star on={watchlist.includes(row.symbol)} onClick={() => void toggleWatch(row.symbol as string)} /> : null}</td><td className="l borrowx-asset"><TokenIcon symbol={row.symbol ?? `${row.coin}USDT`} size={32} /><span><b>{tokenName(row.coin)}</b><small>{row.coin} · Flexible Product</small></span></td><td><b>{fmtRate(row.hourly, 5)}</b><small>Catalog Conversion</small></td><td><b>{fmtRate(row.apr, 2)}</b><small>Annualized</small></td><td><b>{fmtUsd(row.minUsd)}</b><small>USD Product Limit</small></td><td><b>{fmtUsd(row.maxUsd)}</b><small>USD Product Limit</small></td><td><b>{row.collateralEligible ? ltvPct(row.initialLtv) : '—'}</b><small>{row.collateralEligible ? `${ltvPct(row.callLtv)} Call · ${ltvPct(row.liquidationLtv)} Liq` : 'Not Listed As Collateral'}</small></td><td><b className={row.perp ? 'ok' : ''}>{row.perp ? 'Available' : '—'}</b><small>{row.perp ? 'Binance USD-M' : 'No Perpetual Market'}</small></td></tr>)}</tbody></table>{filteredCatalog.length === 0 && <div className="borrowx-empty">No Loan Products Match</div>}</div>}
+        </div>
+
+        <footer className="borrowx-footer">
+          <span>{view === 'preflight' ? basisRuntimeError ? `Borrow Source Error: ${basisRuntimeError}` : `Borrow Source: ${basis?.status.borrowSource ?? 'Loading'}` : view === 'positions' || view === 'assets' ? accountSourceSummary : `Source: Binance Signed Flexible Loan${loans?.fetchedAt ? ` · ${timeAgo(loans.fetchedAt)}` : ''}`}</span>
+          <span>{viewCount} {view === 'market' ? 'Products' : view === 'activity' ? 'Events' : 'Rows'}</span>
+          {view === 'preflight' && <button type="button" onClick={() => setPage('strategies')}>Open Basis</button>}
+          {view === 'market' && pages > 1 && <nav aria-label="Loan Market Pagination"><button type="button" disabled={safePage === 0} onClick={() => setPageN(safePage - 1)}>‹</button>{pageList(safePage, pages).map((page, index) => page === '…' ? <span key={`e-${index}`}>…</span> : <button type="button" key={page} className={safePage === page ? 'current' : ''} onClick={() => setPageN(page)}>{page + 1}</button>)}<button type="button" disabled={safePage >= pages - 1} onClick={() => setPageN(safePage + 1)}>›</button></nav>}
+        </footer>
+      </section>
     </div>
   );
 }

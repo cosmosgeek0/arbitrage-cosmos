@@ -32,6 +32,18 @@ async function post(p, body) {
   return { status: res.status, body: await res.json().catch(() => null) };
 }
 
+async function awsControl(p, { method = 'GET', body } = {}) {
+  const res = await fetch(`${BASE}${p}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Cosmos-Control': 'aws-runner',
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  return { status: res.status, body: await res.json().catch(() => null) };
+}
+
 // ---------- static gates (no server needed) ----------
 console.log('\nStatic gates:');
 
@@ -249,6 +261,27 @@ check('max-borrowable honest without keys', maxB?.ok === false);
 const sys = (await get('/api/system')).body;
 check('system health responds', sys?.ok === true && typeof sys.uptimeSec === 'number' && sys.dbOk === true);
 
+const awsStatus = (await awsControl('/api/aws-control/status')).body;
+check(
+  'AWS runner control defaults closed and honest',
+  awsStatus?.status?.configured === false &&
+    awsStatus?.status?.connectionEnabled === false &&
+    awsStatus?.status?.executionEnabled === false &&
+    awsStatus?.status?.channel === 'not_configured'
+);
+const awsDenied = await post('/api/aws-control/gates', { connectionEnabled: false });
+check('AWS runner mutations require control header', awsDenied.status === 403 && awsDenied.body?.code === 'AWS_OPERATOR_DENIED');
+const awsClosed = await awsControl('/api/aws-control/gates', { method: 'POST', body: { connectionEnabled: false } });
+check('AWS runner gates can be explicitly locked', awsClosed.status === 200 && awsClosed.body?.gates?.connectionEnabled === false);
+const awsUnconfigured = await awsControl('/api/aws-control/gates', { method: 'POST', body: { connectionEnabled: true } });
+check('AWS runner channel cannot arm without target config', awsUnconfigured.status === 409 && awsUnconfigured.body?.code === 'AWS_NOT_CONFIGURED');
+const awsHelp = await awsControl('/api/aws-control/command', { method: 'POST', body: { command: 'help' } });
+check('AWS runner exposes restricted command help', awsHelp.status === 200 && /status/.test(awsHelp.body?.result?.output ?? ''));
+const awsArbitrary = await awsControl('/api/aws-control/command', { method: 'POST', body: { command: 'rm -rf /' } });
+check('AWS runner rejects arbitrary shell input', awsArbitrary.status === 400 && awsArbitrary.body?.code === 'AWS_COMMAND_NOT_ALLOWED');
+const awsBlocked = await awsControl('/api/aws-control/command', { method: 'POST', body: { command: 'status' } });
+check('AWS runner blocks remote command while channel is closed', awsBlocked.status === 423 && awsBlocked.body?.code === 'AWS_CHANNEL_BLOCKED');
+
 const evSearch = (await get('/api/events?kind=manual_action&q=kill')).body;
 check('ledger search works', Array.isArray(evSearch));
 
@@ -263,6 +296,21 @@ check(
 
 const volK = (await get('/api/klines?symbol=BTCUSDT&interval=5m&limit=50&field=volume')).body;
 check('volume klines respond', Array.isArray(volK) && volK.length > 10 && volK[0].v >= 0);
+
+const volumeRuntime = (await get('/api/engine/volume')).body;
+check(
+  'volume runtime endpoint exposes status and rows',
+  typeof volumeRuntime?.status?.running === 'boolean' && Array.isArray(volumeRuntime?.rows)
+);
+
+const basisRuntime = (await get('/api/engine/basis')).body;
+check(
+  'basis runtime exposes crossed-book decisions and borrow truth',
+  typeof basisRuntime?.status?.running === 'boolean' &&
+    Array.isArray(basisRuntime?.rows) &&
+    basisRuntime?.status?.verifiedBorrow === 0 &&
+    typeof basisRuntime?.thresholds?.watchGapPct === 'number'
+);
 
 const iconsRes = await fetch(`${BASE}/api/icons?bases=BTC,ETH,TLM,BREV`);
 const iconsBody = await iconsRes.json().catch(() => null);

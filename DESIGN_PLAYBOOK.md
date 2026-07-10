@@ -14,14 +14,17 @@ calls garbage and will redo the work five times.
 1. Judge in REAL Chrome at the owner's window (2940 CSS px, app zoom 1.25) —
    the preview tool's small viewport is for wiring only; it hid a half-width
    page and 25 bogus row lines in one day.
-2. Copy = measure: getComputedStyle the Markets tab LIVE and use those values.
-3. Type voices: numbers 16/430 ink · names 16/550 · headers/labels 14/440
-   muted · subs 13.5-14/430 · status words 14/430. Nothing else exists.
+2. Copy = measure: run the bottom-up reference sweep in §0.3 and compare live
+   computed styles. Never use one upper-navigation page as its own reference.
+3. One-frame operator type contract: page title `22/540/30`; summary label
+   `10.5/560` with `.055em` tracking; summary value `18/510`; persistent row
+   primary `12.5-13.25/470-510`; row secondary `10.5-11.5/410-420`.
+   Large numeric displays may be larger only with a thinner weight.
 4. ONE left rail: getBoundingClientRect().left of every block = one x.
    Wrappers get zero horizontal padding; tables flush first/last cell;
    header text over the icon column.
-5. Lines: zero borders between data rows (Markets has NONE anywhere);
-   exactly one ruled divider between sections.
+5. Lines: use razor-thin hairlines to stabilize dense tapes/tables; never box
+   individual rows or add decorative rails. Section boundaries remain singular.
 6. Asset tables always carry: Star watchlist column (shared Star in
    components/PillSelect.tsx + toggleWatch/config.watchlist), 36px TokenIcon,
    name-over-fullname, Title Case heads, PillSelect chrome, Coinbase pager.
@@ -76,23 +79,64 @@ Only an explicit owner request may reopen this information architecture. Normal
 bug fixes must preserve the `lix-`, `calx-`, and `newsx-` geometry in
 `web/src/pages/LiveIntelligence.css`.
 
-### 0.2 Logs Uses The Same One-Frame Skeleton (2026-07-10)
+### 0.2 Logs Is A Seven-Day Activity Tape (2026-07-10)
 
-Logs content is intentionally still open for the owner's detailed direction,
-but its page skeleton is fixed to the News/Calendar surface grammar:
+The owner explicitly rejected the first Logs skeleton's permanent left facet
+wall and right inspector wall. Logs now uses the full News daily-tape anatomy:
 
 - One `lix-frame` at the shared page rail: `1px` neutral border, `12px` radius,
   `57px` toolbar, `22px / 540` title, live state, and `286px × 34px` Search.
-- No separate header card, facet cards, feed card, inspector card, shadows, or
-  gaps between pseudo-cards. Filters, facets, activity, and event details are
-  regions inside the one frame, separated only by functional hairlines.
-- Logs may retain a facet rail and selected-event inspector because those are
-  real investigation tools. They must never recreate nested dashboard chrome.
-- Selected rows use a quiet background only; no blue/accent rail. Tape rows use
-  the same compact type and `46px` rhythm as News.
+- The rolling seven timezone-aware day cards are mandatory. Every card shows
+  the complete daily total plus Critical, Warning, Info, and Debug counts. A
+  zero is honest when the ledger had not started collecting on that day.
+- No permanent facet rail, inspector wall, nested feed card, selected-row
+  accent rail, shadow, or gap between pseudo-cards. Filters stay in one compact
+  band and the chronological activity tape owns the full frame width.
+- Severity is one complete three-bar signal glyph, never partial bars or a red
+  dot repeated on every row: Critical = red, Warning = amber, Info = green,
+  Debug = blue. The color applies to all three bars.
+- Selecting a row expands its real fields, related actions, and Raw JSON inline
+  beneath that row; selecting it again collapses the detail. Do not restore a
+  separate inspector. Rows keep the compact `46px` News rhythm.
+- A complete day can be large. Keep the totals complete but mount the tape in
+  progressive 200-row windows with an honest `Load Older Logs` control so day
+  navigation and filters stay responsive.
 - Future content edits may change fields, names, filters, grouping, or detail
-  logic when the owner directs them, but must preserve the `logx-` one-frame
-  geometry in `LiveIntelligence.css` unless explicitly reopened.
+  logic when the owner directs them, but must preserve this `logx-` one-frame,
+  seven-day, full-width geometry unless explicitly reopened.
+
+### 0.3 Bottom-Up Uniformity / No Quality Gradient (2026-07-10)
+
+This is a mandatory ship gate, not a suggestion. The owner identified a repeated
+failure where Calendar was polished first and quality progressively degraded on
+pages higher in the sidebar. Before any surface is called done, review in this
+exact order: **Calendar → News → Health → Logs → Risk → Opportunities → Volume
+→ Basis → Markets → Token → Borrow → Account → Dashboard**. Start again from
+Calendar after any correction that changes shared type, color, or geometry.
+
+- Compare the rendered page, not declared CSS. Capture `getBoundingClientRect`
+  and `getComputedStyle` for frame, title, summary, row primary, and row secondary.
+- Stable one-frame geometry is `22px` page inset; frame `x/y` must not move when
+  switching; `1px var(--line-2)` edge; `12px` radius; `57px` toolbar; summary
+  begins at the same y and is exactly `102px` high where that role exists.
+- Use the role contract in §0 item 3. An upper page may not become smaller,
+  darker, heavier, denser, or more tightly tracked than the accepted page below.
+  Persistent data rows must not use `600+` weights.
+- All audited pages use `var(--font)` with antialiasing. Do not introduce a
+  second page font through a local token or a legacy component stylesheet.
+- Secondary ink must use a declared shared token. An undefined custom property
+  silently drops the declaration and inherits dark primary ink; search every
+  touched stylesheet for undefined variables when text looks muddy.
+- Wide evidence belongs on a real internal canvas with its own horizontal
+  scroller. Do not shrink type or cram all columns into the left corner. Use
+  container queries so sidebar width and UI scale do not make pages reflow at
+  different points.
+- Light and dark are both required. Verify exact primary/secondary weights and
+  colors in both, restore the owner's theme and every toggled control, then leave
+  the browser on the completed surface.
+- A successful build is not visual proof. If a mounted row is absent from the
+  screenshot, inspect live geometry; circular `max-content`/percentage sizing can
+  produce million-pixel canvases while the DOM and accessibility tree look valid.
 
 ## 0.5 KNOWN FAILURE MODES OF THE AGENT (the owner should not have to babysit these)
 
@@ -240,7 +284,17 @@ before it is considered owner-grade:
     component. They should not create a giant blank area or expose hidden filter
     state.
 14. Verify in Chrome: inspect computed font/spacing, compare sibling sizes,
-    click every touched control, and take/measure a screenshot before final.
+   click every touched control, and take/measure a screenshot before final.
+
+**MARKET CLOCK LAW (owner ruling 2026-07-10):** the clock is the only topbar
+trigger with a persistent illustrative motion. Its code-native hourglass is
+large enough to read, uses the active Appearance accent, and performs a slow
+hold/flip/hold cycle while the time and zone stay perfectly still. Reduced
+Motion stops it. The trigger reads `HH:MM · ZONE`; never show `LOC`, browser
+time, seconds, a hardcoded color, an orbit, or a spinning border there. The
+popup uses the owner-supplied blue-ring clock anatomy as its large identity,
+keeps the dark time stage compact, makes the full date/year readable, and shows
+only India, UTC, New York, Asia, and Europe as truthful IANA-backed desks.
 
 **TRUST ADVISOR LAW (owner ruling 2026-07-09):** Trust Advisor is not a
 notification feed and not a decorative score tile. It is the audit surface for
@@ -294,6 +348,17 @@ and tune routing without switching to a separate Preferences tab.
   (7px dot · 12/500 label · 11px mono tabular value right, colored by state),
   faint centered 11px footer, quiet tile buttons 34px (primary=accent,
   danger=red). Opaque `var(--panel)` ALWAYS — never frosted (see §4).
+- For the current shared topbar sheet family, Execution Control is the semantic
+  type reference: title 16/600/21, subtitle 12/400/16, status 10/600/14 caps,
+  section label 11/500/16 caps, section metadata 11/400/16, row title
+  14/500/20, row detail and normal values 12/400/16. Large counters use a
+  thinner 430 weight. These are roles, not popup-specific decoration; preserve
+  them across Clock, Health, Refresh, Shell, API Keys, Advisor, Notifications,
+  Execution, Currency, Basis, Appearance, and Account.
+- Typography-only corrections must not silently alter panel width, height,
+  row spacing, icon treatment, color, border, shadow, or motion. Display-scale
+  exceptions such as the live clock time or terminal command do not create a
+  second hierarchy for the surrounding copy.
 
 **C. Account-v3 row recipe (the approved gold standard, acb-bl-row):**
 - Bare 19px glyph (no tile box) · name 16/550 -0.006em var(--text) · nothing
@@ -354,7 +419,7 @@ polylines; stablecoin sparks flat-line when range/mean < 0.1%.
 
 **G. Current surface baseline:** before editing the left sidebar, brand/topbar,
 global search, clock, AWS CLI, API key, Data Health, Trust Advisor,
-Notifications, Kill Switch / Trading Mode, Market Refresh, Display Currency,
+Notifications, Kill Switch / Trading Mode, Market Ping, Display Currency,
 Basis Display, Appearance, or Account Details profile, read
 `UI_SURFACE_BASELINE.md`. It records the measured current geometry, text sizes,
 motion timing, real endpoints, and old-code traps from the 2026-07-09 audit.

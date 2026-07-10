@@ -1,6 +1,6 @@
 # UI_SURFACE_BASELINE.md - Current Sidebar, Topbar, Search, Clock, And Profile Lessons
 
-Last audited: 2026-07-10 03:04 IST
+Last audited: 2026-07-10 08:30 IST
 
 Purpose: this file preserves the hard-won UI calibration for the surfaces that
 were edited repeatedly in the long polish pass: left sidebar, brand lockup,
@@ -153,26 +153,37 @@ Search beam rule:
 
 ## 6. Clock Lesson
 
-The clock is a precision instrument, not an animated toy.
+The owner explicitly reopened the former still-clock rule on 2026-07-10. The
+clock remains a precision instrument, but now has one deliberate animated mark.
 
 Current trigger:
 
-- Compact instrument, 86px wide and 34px high at 100%.
-- Shows `HH:MM` and the short zone label, for example `06:40 LOC`.
-- No printed `UTC+5:30` in the trigger.
+- `148px × 42px` at 100%, containing a `27px` code-native hourglass, `HH:MM`,
+  one small bullet, and the short market-desk code, for example `08:25 · IST`.
+- The trigger color comes from the live Appearance accent. Never hardcode the
+  old red rail tone or blue pill; changing Accent must recolor the hourglass,
+  bullet, zone, edge, and popup identity immediately.
+- `LOC` and Local Time are retired. A legacy local preference migrates to
+  India/IST. The supported market desks are India, UTC, New York, Asia
+  (Singapore), and Europe (London).
 
 Current motion:
 
-- The trigger itself is still. Time changes are the motion.
-- No orbit, glow, or aggressive second-hand decoration.
+- The sand-filled hourglass holds, flips to `180deg`, holds, then returns over
+  an `8.4s` cycle. Time and text never move. No orbit, glow, spinning border,
+  or animated popup logo.
+- Both the OS `prefers-reduced-motion` setting and the app's Reduced Motion
+  preference stop the hourglass and sand animations completely.
 
 Popover:
 
 - Width is the shared 400px shell.
-- Header says Desk Clock and names the selected city/offset.
-- The dark instrument stage carries the full time and date.
-- Zone rows use the shared 52px rhythm, with code, city/offset, and
-  current time.
+- Header says Market Clock and uses the owner's blue-ring clock reference as a
+  sharp 50px vector identity mark; its ring follows the Appearance accent.
+- The dark stage is a compact 58px instrument: 24px time plus a clearly visible
+  13px full date including year.
+- Exactly five 54px zone rows fit without a scrollbar. Every row carries its
+  code, human desk name, truthful IANA-backed time, and live seconds.
 
 ## 7. Topbar Trigger Law
 
@@ -191,7 +202,7 @@ Current trigger pattern:
   - Trust Advisor: green/security tone.
   - Notifications: teal/account feed tone.
   - Kill Switch/Trading Mode: blue control tone.
-  - Market Refresh: blue/indigo refresh tone.
+  - Market Ping: blue/cyan refresh tone.
   - Currency: indigo money tone.
   - Basis: violet percentage tone.
   - Appearance: purple/violet display tone.
@@ -223,38 +234,89 @@ All topbar panels use the same base chrome:
 - Labels and words are allowed when they clarify state or controls. "Less words"
   means remove filler, not remove necessary labels.
 
+### Shared Typography Contract
+
+Execution Control is the reference type hierarchy for every topbar popup. Keep
+the shell-specific artwork and controls, but do not invent a new font scale for
+each panel:
+
+- Popup title: 16px / 600 / 21px.
+- Header subtitle: 12px / 400 / 16px.
+- Header status: 10px / 600 / 14px, uppercase.
+- Section label: 11px / 500 / 16px, uppercase; section metadata is 11px / 400
+  / 16px.
+- Primary row copy: 14px / 500 / 20px.
+- Row detail: 12px / 400 / 16px.
+- Right-side values and times: 12px / 400 / 16px unless a denser timestamp
+  needs 11px / 400 / 16px.
+- Large informational counters use 18px / 430 / 27px so numbers remain crisp
+  rather than turning into heavy scoreboard type.
+
+The clock time and terminal command can retain their functional display scale.
+Their surrounding title, subtitle, section, row, detail, and status roles still
+follow this contract. Do not change popup geometry, color, borders, icons, or
+motion to solve a typography-only inconsistency.
+
 ## 9. Individual Topbar Panel Lessons
 
-### AWS CLI / CloudShell
+### AWS Runner Control
 
 What makes it work:
 
-- It is allowed to be dark because it is a terminal metaphor.
-- It uses AWS CLI language: `AWS CLI`, host, path, auth, command line.
-- The dark stage is compact and contained; the surrounding panel stays white.
-- It has real actions: open in-app CloudShell overlay and open AWS console.
-- It must not pretend an attached shell exists. Copy in code already says it is
-  a launcher, not an attached session.
+- The owner-supplied orange AWS cloud image is the identity on both the rail and
+  opened surface. Keep its native wide silhouette; do not put it in a circle.
+- The compact popup is a connection-control sheet, not a decorative terminal.
+  It shows the configured region, SSM instance, service, AWS Channel gate, and
+  Runner Changes gate from `/api/aws-control/status`.
+- The large workspace may use a dark terminal/editor stage, while its header,
+  tabs, target facts, and security controls remain in the shared panel theme.
+- Both gates are server-enforced and default closed. Closing AWS Channel also
+  closes Runner Changes. Configuration or operator failures remain visible.
+- The console accepts only `status`, `logs`, `read`, `validate`, `restart`, and
+  `help`; arbitrary shell input is rejected. The editor only reads/writes the
+  fixed configured runner file with size, hash-conflict, backup, and secret
+  checks. Do not broaden either surface into a browser-exposed shell.
+- Production mutations require a signed Cloudflare Access application JWT with
+  verified issuer/audience and the configured operator email claim. An email
+  header by itself is never trusted. AWS credentials and SSM session material
+  never enter browser state.
 
 ### API Key
 
 What makes it useful:
 
 - Data comes from `/api/apikey`.
-- Shows key count, live count, IP lock posture.
-- Shows read-only and planned/full key rows.
-- Shows a compact permission matrix with R/F columns.
-- Withdrawals are a special risk row.
-- Avoid fake "secure" badges; show actual permissions and status.
+- The Binance brand remains the popup identity. The owner-supplied green API
+  key artwork is used directly on the rail trigger and as the key-object mark;
+  do not redraw it as a generic glyph or wrap it in a circular badge.
+- The body is exactly two equal, sharp, hairline-bordered key objects:
+  `Read-Only` and `AWS Automation`. Each object shows only its role, one egress
+  IP, truthful state, and the six permission labels. Do not restore key names,
+  fingerprints, HMAC/type copy, restriction prose, trusted-network copy, or a
+  policy footer.
+- Live is a small green pulsing dot. Planned is a static amber dot. A declared
+  future permission may be shown green inside the planned AWS object, but that
+  must never make the key appear connected or live.
+- The Read-Only object enables only Reading. The planned AWS Automation object
+  declares Spot / Margin, Loan / Repay, Futures, Universal Transfer, and
+  Withdrawals while Reading stays off.
+- Keep both cards symmetric and fully visible inside the shared 400px shell;
+  no internal API-key scrollbar is part of the approved baseline.
 
 ### Data Health
 
 What makes it useful:
 
+- The owner-supplied green database-and-shield artwork is the Data Health
+  identity in both the trigger and popup header. Keep it source-exact; do not
+  swap it back to a generic database glyph.
 - Data comes from `/api/system`, `/api/news`, `/api/calendar`, and `/api/fx`.
 - Compact score and counters: streams, latency, request weight.
 - Rows are short but meaningful: Feed, Account, News, Calendar, FX, Drift,
   Pairs.
+- All measured rows fit inside the fixed 400px popup. `Open System Health` is a
+  real 374px by 42px full-width footer action, matching the Account Details
+  action footprint and routing to the real Health surface.
 - Do not turn this into verbose prose. Do not reduce it to unlabeled dots.
 
 ### Trust Advisor
@@ -268,7 +330,13 @@ What makes it useful:
   socket, market feeds, read key, allowlist, kill switch, Cloudflare gate.
 - It uses the Trusted Advisor severity model: Action Recommended, Investigation
   Recommended, and No Problems Detected. These three groups must stay visible.
-- Counts action/review/pass, then shows one or two focus checks from real state.
+- The owner-supplied green check shield is the source-exact identity on both the
+  rail and popup header. Do not replace it with the former hand-drawn scanner
+  seal or a generic line shield.
+- Action, Review, and Clear are three equal, separate 1px summary cells. Each
+  combines a thin number with a real symbol: strong amber triangle alert,
+  softer amber circular alert, and green verified tick. The same three-symbol
+  language is repeated on check rows; never restore the old cross mark.
 - Details/footer actions navigate to relevant existing pages such as Risk and
   Health/System. Do not create fake control pages.
 - Do not invent fake warnings. If there is no real check, do not show it.
@@ -280,51 +348,44 @@ What makes it useful:
 
 What makes it useful:
 
-- Uses `state.events`; compact topbar rows open the notification modal instead
-  of dumping the operator into the ledger.
-- Compact tray uses the Coinbase notification screenshot as the base: a quiet
-  title row, one settings/expand affordance, rounded pill filters, and one
-  repeated notification row grammar. Do not add a counter strip, score tile,
-  hero card, "Review new" prose, footer action strip, or multiple visual ways
-  of saying the same alert state.
-- Compact rows use category/date kicker, short title, and a readable summary
-  beside one real icon medallion. The tray is allowed to leave empty white
-  space; do not cram it into a mini-dashboard.
+- Notifications and Logs have deliberately different jobs. Logs is the complete
+  evidence ledger. Notifications is the much smaller owner-interruption layer:
+  failures, blocked actions, emergency controls, account/execution changes, bot
+  health, opened opportunities, and exchange announcements.
+- Scanner decisions, snapshots, heartbeats, reconnect attempts, candidate
+  telemetry, closed strategy signals, and logo/network decoration failures stay
+  in Logs. They never enter the notification inbox.
+- The topbar client maintains a five-second incremental ledger cursor so a real
+  alert cannot disappear merely because scanner telemetry pushed it outside the
+  server's latest 30-event state payload.
+- Compact tray uses the Coinbase-clean account popover grammar already approved:
+  sourced bell identity, quiet heading, curated grouped rows, and real Mark Read
+  / Open Center actions. Do not add filter strips or preferences to the tray.
+- Short bursts are grouped by category, alert title, subject, and time window;
+  rows show the exact grouped count and latest real timestamp. Investigation
+  evidence is never lost because the immutable source remains Logs.
 - Compact tray must stay in the topbar popover family, close to the clock and
   account-detail footprint. Do not force page-like dimensions or giant empty
-  regions. Hidden compact filters must not control the visible state; if Logs
-  is only available in the expanded center, the compact tray falls back to All.
-- Expanded modal uses a blurred backdrop and should use most of the available
-  page: about `min(1220px, 100vw - 68px)` CSS wide and
-  `calc((100vh - 48px) / var(--uiz, 1))` tall so it fits under the app zoom.
-  It stays a popup, not a route/page, but it must not feel cramped. It starts
-  near the top and keeps actions inside the surfaces that own them.
-- The event feed must not stretch rows just because the modal is tall. Use a
-  scroll/feed area that aligns content to the top; rows should keep their own
-  height and the footer must remain visible.
-- Current expanded modal is one integrated center, not a Feed/Preferences tab
-  switcher and not a duplicate status dashboard: left side = filterable
-  notification feed, right side = Advanced Alerts / Delivery / Types Of
-  Notifications. This is where interactive preference editing belongs.
-- Modal typography follows the crisp type law: title about 28px / 520, large
-  counters about 31px / 430, row titles about 16px / 520, subcopy about
-  13-15px / 420. Do not reintroduce 680-760 weights here.
-- Feed category marks are real icons, not random letters like A/O/L. Current
-  mapping: Critical = Shield, Opportunity = Radar, Account = Wallet, Logs =
-  Receipt.
-- Preference toggles are real `prefs.alerts` switches: Opportunity Alerts,
-  Account Activity, Critical Risk, Binance Announcements.
-- Preferences use Coinbase-style wording and rhythm: "Advanced Alerts" plus
-  "Select preferred channels and contents for control-room notifications."
-  Current baseline uses the same row system inside the expanded center: bare
-  line icons, roughly 64-74px rows, 18px / 430 labels, switch column hard-right,
-  and Cancel / Save Changes inside the settings column.
-- In-app delivery is shown as current; WhatsApp Agent can be shown as Planned
-  only until it is wired. Do not create fake delivery toggles.
-- Preferences are edited as a draft: Cancel discards, Save Changes writes
-  `prefs.alerts`. Verify this behavior before changing the surface.
-- The panel is an account/control-room alert inbox: opportunities, account
-  issues, risk blocks, and log/system signals. It is not random token spam.
+  regions.
+- Expanded view is one full-width popup, never a route and never a split feed /
+  inspector wall. It contains the sourced bell header, real notification rules,
+  honest delivery posture, seven selectable day cards, category filters, one
+  dense alert tape, and an always-visible footer.
+- The five persisted rule switches are Critical & Security, Account & Execution,
+  Bot Health, Opportunities, and Announcements. Old proposal/fill/risk settings
+  migrate into this schema. Draft changes preview the tape immediately; Discard
+  restores saved state and Save Changes writes `prefs.alerts`.
+- In-App is the only active channel. Email and WhatsApp remain static Planned
+  labels until a real contact-point backend exists. Never render them as working
+  toggles.
+- Seven-day history is fetched from `/api/events`, curated client-side, and
+  grouped only for presentation. Day cards show truthful total and critical
+  counts. Open Logs is a real navigation action back to the full evidence page.
+- Modal typography stays restrained: title around 22px/590, rule and row titles
+  around 12-13px/560, metadata around 9.5-11.5px/420-540, 1px hairlines, and no
+  swollen display counters.
+- Category marks are real icons: Critical = Shield Alert, Account = Wallet,
+  Bot = operations/log mark, Opportunities = Radar, Announcements = Newspaper.
 
 ### Kill Switch / Trading Mode
 
@@ -338,15 +399,23 @@ What makes it useful:
 - This is the model for bot guardrails. Do not create fake "blocked" toggles
   that only change text.
 
-### Market Refresh
+### Market Ping
 
 What makes it useful:
 
-- Presets are real: 3s, 6s, 12s, 30s.
-- Custom input clamps to 3-120 seconds.
-- Plus/minus adjusts the real preference.
-- "Now" calls the real `refresh()` path.
-- Keep the panel compact; no separate settings page for this.
+- The owner-supplied blue circular-arrow PNG is the identity in both the
+  trigger and popup header. Do not replace it with a generic refresh glyph.
+- The popup controls exactly four real browser-polling surfaces: Market Price,
+  Account Data, News Context, and Calendar.
+- Every selector exposes the same exact values: `<1s`, `1s`, `3s`, `5s`, and
+  `10s`. Old saved values migrate to the nearest supported choice.
+- Closed selectors are 58px by 32px. Keep the native single-select menu so the
+  open state retains the platform's smooth rounded list, selected checkmark,
+  and keyboard behavior.
+- News and Calendar must honor their selected values. Do not show a timing
+  option if the corresponding page silently clamps it to a different cadence.
+- Keep the panel compact and truthful; no separate settings page or duplicate
+  FX, Health, or Token cadence rows in this popup.
 
 ### Display Currency
 

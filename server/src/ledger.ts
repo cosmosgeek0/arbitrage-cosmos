@@ -298,6 +298,37 @@ export class Ledger extends EventEmitter {
       )
       .run(key, value);
   }
+
+  /**
+   * Proves that the on-disk ledger can write and read without leaving probe
+   * data behind. A savepoint is used so the config table is unchanged.
+   */
+  probeWritable(): boolean {
+    const key = '__health_write_probe__';
+    const value = String(Date.now());
+    try {
+      this.db.exec('SAVEPOINT health_write_probe');
+      this.db
+        .prepare(
+          'INSERT INTO config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+        )
+        .run(key, value);
+      const row = this.db.prepare('SELECT value FROM config WHERE key = ?').get(key) as
+        | { value: string }
+        | undefined;
+      this.db.exec('ROLLBACK TO health_write_probe');
+      this.db.exec('RELEASE health_write_probe');
+      return row?.value === value;
+    } catch {
+      try {
+        this.db.exec('ROLLBACK TO health_write_probe');
+        this.db.exec('RELEASE health_write_probe');
+      } catch {
+        // The original write failure is the health result.
+      }
+      return false;
+    }
+  }
 }
 
 function parseEvent(r: EventDbRow): LedgerEvent {

@@ -1,11 +1,9 @@
 export const TIME_ZONE_OPTIONS = [
-  { id: 'local', label: 'Local Time' },
+  { id: 'Asia/Kolkata', label: 'India' },
   { id: 'UTC', label: 'UTC' },
-  { id: 'Asia/Kolkata', label: 'Asia / Kolkata' },
   { id: 'America/New_York', label: 'New York' },
-  { id: 'Europe/London', label: 'London' },
-  { id: 'Asia/Singapore', label: 'Singapore' },
-  { id: 'Asia/Tokyo', label: 'Tokyo' },
+  { id: 'Asia/Singapore', label: 'Asia' },
+  { id: 'Europe/London', label: 'Europe' },
 ] as const;
 
 export function dayKey(date: Date, zone?: string): string {

@@ -1,26 +1,40 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useStore, useResolvedTheme, type Page } from '../store';
+import type { LedgerEvent } from '../types';
 import { fmtClockZone, timeAgo } from '../format';
 import { eventSummary } from '../lib/eventText';
 import { calVal, flag, type CalItem } from '../lib/calendar';
-import { ACCENTS, CURRENCIES, type AccentKey, type DataCadenceKey } from '../lib/prefs';
+import { curateNotifications, groupNotifications, notificationEnabled } from '../lib/notifications';
+import { ACCENTS, CURRENCIES, MARKET_PING_CHOICES, MARKET_PING_KEYS, type AccentKey, type DataCadenceKey, type NotificationRuleKey } from '../lib/prefs';
 import { openOverlay, useOverlay } from '../lib/overlay';
 import { TokenIcon } from './TokenIcon';
 import {
-  BadgePercent as LucideBasis,
+  AWS_CONSOLE_URL,
+  AWS_RUNNER_MARK,
+  AwsRunnerModal,
+  fetchAwsRunnerStatus,
+  updateAwsRunnerGates,
+  type AwsRunnerStatus,
+} from './AwsRunnerControl';
+import { CurrencyDollarIcon as PopupCurrencyIcon } from '@phosphor-icons/react/dist/csr/CurrencyDollar';
+import { PaletteIcon as PopupPaletteIcon } from '@phosphor-icons/react/dist/csr/Palette';
+import { PercentIcon as PopupPercentIcon } from '@phosphor-icons/react/dist/csr/Percent';
+import { PowerIcon as PopupPowerIcon } from '@phosphor-icons/react/dist/csr/Power';
+import {
+  BadgeCheck as LucideAdvisorClear,
   BellRing as LucideBell,
+  CircleAlert as LucideAdvisorReview,
   CircleDollarSign as LucideCurrency,
-  CircleStop as LucideStop,
-  Clock3 as LucideClock,
-  Database as LucideDatabase,
-  KeyRound as LucideKey,
   Laptop as LucideLaptop,
-  Moon as LucideMoon,
-  RefreshCw as LucideRefresh,
-  ShieldCheck as LucideShield,
+  Palette as LucidePalette,
+  Percent as LucideBasis,
+  Power as LucidePower,
+  Radar as LucideNotifOpportunity,
+  ScrollText as LucideNotifLog,
+  ShieldAlert as LucideNotifCritical,
   Smartphone as LucideSmartphone,
-  SquareTerminal as LucideTerminal,
-  SunMedium as LucideSun,
+  TriangleAlert as LucideAdvisorAction,
+  WalletCards as LucideNotifAccount,
 } from 'lucide-react';
 import {
   IconAlarm,
@@ -58,22 +72,26 @@ import {
   IconWifi,
 } from './Icons';
 
-// Top-bar clock zones. `id` is 'local' | 'UTC' | an IANA zone.
-const ZONES: { id: string; label: string; city: string }[] = [
-  { id: 'local', label: 'LOC', city: 'Local time' },
-  { id: 'UTC', label: 'UTC', city: 'Universal time' },
-  { id: 'Asia/Kolkata', label: 'IST', city: 'India · Kolkata' },
-  { id: 'America/New_York', label: 'NY', city: 'New York' },
-  { id: 'Europe/London', label: 'LDN', city: 'London' },
-  { id: 'Asia/Singapore', label: 'SGT', city: 'Singapore' },
-  { id: 'Asia/Tokyo', label: 'JST', city: 'Tokyo' },
+// Market-desk clock zones. Keep these names human and distinct; never expose
+// the browser-derived `LOC` label in the operator rail.
+const ZONES: { id: string; label: string; city: string; detail: string }[] = [
+  { id: 'Asia/Kolkata', label: 'IST', city: 'India', detail: 'India Standard Time' },
+  { id: 'UTC', label: 'UTC', city: 'UTC', detail: 'Coordinated Universal Time' },
+  { id: 'America/New_York', label: 'NYC', city: 'New York', detail: 'Eastern Market Desk' },
+  { id: 'Asia/Singapore', label: 'ASIA', city: 'Asia', detail: 'Singapore Market Desk' },
+  { id: 'Europe/London', label: 'EUR', city: 'Europe', detail: 'London Market Desk' },
 ];
 
 const ACCENT_ORDER: AccentKey[] = ['r', 'o', 'y', 'g', 'b', 'i', 'v'];
 
-const CLOUD_SHELL_URL = 'https://console.aws.amazon.com/cloudshell/home';
 const DEFAULT_PROFILE_LOGO = '/profile-logo.png';
+const API_KEY_MARK = '/api-key-mark.png';
+const DATA_HEALTH_MARK = '/data-health-shield.png';
+const MARKET_PING_MARK = '/market-ping.png';
+const TRUST_ADVISOR_MARK = '/trust-advisor-shield.png';
+const NOTIFICATION_MARK = '/notification-bell.png';
 const DEPLOYED_APP_HOST = 'arbitrage.cosmosgeek.org';
+const TOPBAR_POPOVER_CONTENT_HEIGHT = 486;
 
 // Binance announcement categories → real catalog IDs (shared with the News page).
 export const NEWS_TABS: { id: number; label: string }[] = [
@@ -229,21 +247,6 @@ function DataHealthGlyph({ size = 31 }: { size?: number }) {
         <circle className="node one" cx="8.3" cy="9" r="1.65" />
         <circle className="node two" cx="18.4" cy="15.5" r="1.65" />
         <circle className="node three" cx="23.3" cy="22" r="1.65" />
-      </svg>
-    </span>
-  );
-}
-
-function AdvisorSealGlyph({ size = 31 }: { size?: number }) {
-  return (
-    <span className="advisor-seal-logo" style={{ width: size, height: size }} aria-hidden="true">
-      <svg width={size} height={size} viewBox="0 0 31 31" fill="none">
-        <path className="scan" d="M5.7 15.5a9.8 9.8 0 0 1 16.7-7" />
-        <path className="scan cap" d="m22.5 8.5.2-3.1 3 1" />
-        <path className="plate" d="M15.5 7.1 22 9.7v4.7c0 4-2.4 7.2-6.5 9.1-4.1-1.9-6.5-5.1-6.5-9.1V9.7l6.5-2.6Z" />
-        <path className="edge" d="M15.5 10.1 19 11.5v2.8c0 2.2-1.2 4-3.5 5.3-2.3-1.3-3.5-3.1-3.5-5.3v-2.8l3.5-1.4Z" />
-        <path className="check" d="m12.1 15.4 2.3 2.3 4.7-5" />
-        <circle className="node" cx="6.7" cy="16.2" r="1.55" />
       </svg>
     </span>
   );
@@ -842,7 +845,7 @@ function ClockMenu() {
     const t = setInterval(() => setNow(new Date()), 250);
     return () => clearInterval(t);
   }, []);
-  const zone = ZONES.find((z) => z.id === prefs.clockZone) ?? ZONES[1];
+  const zone = ZONES.find((z) => z.id === prefs.clockZone) ?? ZONES[0];
   return (
     <div className="menu-wrap clock-menu" ref={ref}>
       <button className={`hdr-clock-btn ${open ? 'on' : ''}`} onClick={() => setOpen(!open)} title="Change clock timezone" aria-label={`Clock — ${zone.city}. Change timezone`}>
@@ -899,9 +902,10 @@ function AlertsMenu() {
   const { open, setOpen, ref } = useMenu<HTMLDivElement>();
   const a = prefs.alerts;
   const rows: { key: keyof typeof a; label: string; sub: string }[] = [
-    { key: 'proposals', label: 'Strategy proposals', sub: 'New basis / spread signals' },
-    { key: 'fills', label: 'Order fills', sub: 'Executions on your account' },
-    { key: 'risk', label: 'Risk rejects', sub: 'Gate blocks & kill-switch trips' },
+    { key: 'critical', label: 'Critical & security', sub: 'Failures, blocks, and emergency controls' },
+    { key: 'account', label: 'Account & execution', sub: 'Orders, fills, loans, and Binance state' },
+    { key: 'bot', label: 'Bot health', sub: 'Engines, streams, and control changes' },
+    { key: 'opportunities', label: 'Opportunities', sub: 'Opened basis and strategy signals' },
     { key: 'news', label: 'Binance announcements', sub: 'Listings, delistings, maintenance' },
   ];
   const on = Object.values(a).filter(Boolean).length;
@@ -1406,6 +1410,52 @@ function OpsSheetHeader({
   );
 }
 
+function PopupSourceMark({
+  children,
+  tone,
+  brand = false,
+}: {
+  children: ReactNode;
+  tone: string;
+  brand?: boolean;
+}) {
+  return (
+    <span
+      className={`popup-source-mark ${brand ? 'brand' : 'duotone'}`}
+      style={{ '--popup-mark-tone': tone } as CSSProperties}
+    >
+      {children}
+    </span>
+  );
+}
+
+function HourglassMotionMark() {
+  return (
+    <svg className="clock-hourglass-mark" viewBox="0 0 36 36" aria-hidden="true">
+      <g className="clock-hourglass-rotor">
+        <rect className="clock-hourglass-cap" x="6" y="3" width="24" height="4" rx="2" />
+        <rect className="clock-hourglass-cap" x="6" y="29" width="24" height="4" rx="2" />
+        <path className="clock-hourglass-glass" d="M10 7h16c0 6.2-3.1 8-8 11 4.9 3 8 4.8 8 11H10c0-6.2 3.1-8 8-11-4.9-3-8-4.8-8-11Z" />
+        <path className="clock-hourglass-sand" d="M12.2 9h11.6c-.7 3.2-2.7 4.8-5.8 6.8-3.1-2-5.1-3.6-5.8-6.8Zm0 18c.7-3.2 2.7-4.8 5.8-6.8 3.1 2 5.1 3.6 5.8 6.8H12.2Z" />
+        <path className="clock-hourglass-stream" d="M18 15.4v5.2" />
+      </g>
+    </svg>
+  );
+}
+
+function ClockPopupLogo({ accent }: { accent: string }) {
+  return (
+    <span className="clock-popup-logo" style={{ '--clock-accent': accent } as CSSProperties} aria-hidden="true">
+      <svg viewBox="0 0 56 56">
+        <circle className="clock-popup-ring" cx="28" cy="28" r="25" />
+        <circle className="clock-popup-face" cx="28" cy="28" r="19.5" />
+        <path className="clock-popup-hands" d="M28 15v13h11" />
+        <circle className="clock-popup-pin" cx="28" cy="28" r="3.4" />
+      </svg>
+    </span>
+  );
+}
+
 function OpsRow({
   icon,
   title,
@@ -1454,11 +1504,10 @@ const MENU_W: Record<MK, number> = {
   currency: 400,
   basisu: 400,
   appearance: 400,
-  account: 440,
+  account: 400,
 };
 
-type NotifTab = 'all' | 'critical' | 'opportunity' | 'account' | 'logs' | 'prefs';
-type NotifFeedTab = Exclude<NotifTab, 'all' | 'prefs'>;
+type NotifTab = 'all' | NotificationRuleKey | 'prefs';
 
 const clockParts = (zoneId: string, d: Date) => {
   try {
@@ -1521,27 +1570,13 @@ const clockOffset = (zoneId: string, d: Date) => {
 };
 const clockDate = (zoneId: string, d: Date) => {
   try {
-    const opts: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: '2-digit' };
+    const opts: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: '2-digit', year: 'numeric' };
     if (zoneId && zoneId !== 'local') opts.timeZone = zoneId;
     return new Intl.DateTimeFormat('en-US', opts).format(d);
   } catch {
     return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit' });
   }
 };
-const clockStamp = (zoneId: string, d: Date) => {
-  try {
-    const opts: Intl.DateTimeFormatOptions = { weekday: 'short', day: '2-digit', month: 'short' };
-    if (zoneId && zoneId !== 'local') opts.timeZone = zoneId;
-    const parts = new Intl.DateTimeFormat('en-GB', opts).formatToParts(d);
-    const weekday = parts.find((p) => p.type === 'weekday')?.value ?? '';
-    const day = parts.find((p) => p.type === 'day')?.value ?? '';
-    const month = parts.find((p) => p.type === 'month')?.value ?? '';
-    return `${weekday} · ${day} ${month}`.toUpperCase();
-  } catch {
-    return clockDate(zoneId, d).toUpperCase();
-  }
-};
-
 export interface ApiKeyInfo {
   id: string; name: string; type: string; scope: string;
   status: 'live' | 'declared' | 'planned' | 'missing'; live: boolean; keysPresent?: boolean;
@@ -1560,24 +1595,62 @@ export const API_PERMS: { key: keyof ApiKeyInfo['permissions']; label: string }[
   { key: 'withdrawals', label: 'Withdrawals' },
 ];
 
-const riskApiPerms: Array<keyof ApiKeyInfo['permissions']> = ['withdrawals', 'universalTransfer'];
-const enabledApiPerms = (ak: ApiKeyInfo) => API_PERMS.filter((p) => ak.permissions[p.key]);
 const apiKeyRole = (ak: ApiKeyInfo) => {
   const scope = ak.scope.toLowerCase();
-  if (ak.id === 'read-only' || scope.includes('read')) return 'Read-only';
-  if (ak.id === 'secrets-full' || scope.includes('automation') || scope.includes('full')) return 'Automation';
+  if (ak.id === 'read-only' || scope.includes('read')) return 'Read-Only';
+  if (ak.id === 'secrets-full' || scope.includes('automation') || scope.includes('full')) return 'AWS Automation';
   return ak.scope;
 };
-const apiKeyFingerprint = (ak: ApiKeyInfo) => ak.fingerprint || (ak.prefix && ak.prefix !== '—' ? `${ak.prefix}····` : 'Planned');
-const apiKeySourceLine = (ak: ApiKeyInfo) => {
-  const key = apiKeyFingerprint(ak);
-  return `${key} · ${ak.ipRestrict ? 'IP locked' : 'IP open'}`;
-};
-const apiKeyIpLine = (ak: ApiKeyInfo) => ak.ips.length
-  ? `${ak.ipRestrict ? 'Trusted IP' : 'Listed IP'} · ${ak.ips.join(', ')}`
-  : ak.ipRestrict
-    ? 'Trusted IP required'
-    : 'No IP restriction';
+
+const apiKeyIp = (ak: ApiKeyInfo) => ak.ips[0] ?? 'IP not set';
+const apiKeyStatus = (ak: ApiKeyInfo) => ak.live
+  ? 'Live'
+  : ak.status === 'planned'
+    ? 'Planned'
+    : ak.status === 'declared'
+      ? 'Syncing'
+      : 'Missing';
+
+function BinanceApiKeySheet({ keys }: { keys: ApiKeyInfo[] }) {
+  const visibleKeys = keys.slice(0, 2);
+  const liveCount = visibleKeys.filter((ak) => ak.live).length;
+  return (
+    <div className="ops-sheet ops-key-sheet api-key-sheet-v2">
+      <OpsSheetHeader
+        icon={<PopupSourceMark tone="#f0b90b" brand><BinanceLogo size={34} /></PopupSourceMark>}
+        title="Binance API Keys"
+        subtitle="Two IP-bound access keys"
+        status={liveCount ? `${liveCount} Live` : 'No Live Key'}
+        tone={liveCount ? 'ok' : 'warn'}
+      />
+      {visibleKeys.length ? (
+        <div className="api-key-pair" aria-label="Binance API key posture">
+          {visibleKeys.map((ak) => (
+            <section className={`api-key-object ${ak.status}`} key={ak.id}>
+              <header>
+                <span className="api-key-object-mark"><img src={API_KEY_MARK} alt="" /></span>
+                <span className="api-key-object-copy">
+                  <b>{apiKeyRole(ak)}</b>
+                  <em>{apiKeyIp(ak)}</em>
+                </span>
+                <span className={`api-key-object-state ${ak.live ? 'live' : ak.status}`}><i />{apiKeyStatus(ak)}</span>
+              </header>
+              <div className="api-key-scope" aria-label={`${apiKeyRole(ak)} permissions`}>
+                {API_PERMS.map((permission) => (
+                  <span className={ak.permissions[permission.key] ? 'on' : 'off'} key={permission.key}>
+                    <i />{permission.label}
+                  </span>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <div className="ops-empty-state"><IconKey size={18} /><b>No Key Inventory</b></div>
+      )}
+    </div>
+  );
+}
 
 function SharedTopBar() {
   const { state, connected, page, prefs, updatePref, setPage, setKill, setLive, saveConfig, refresh } = useStore();
@@ -1593,8 +1666,8 @@ function SharedTopBar() {
   const [contentActive, setContentActive] = useState<MK | null>(null);
   const [outgoingContent, setOutgoingContent] = useState<MK | null>(null);
   const [contentDirection, setContentDirection] = useState<-1 | 1>(1);
-  const [contentHeight, setContentHeight] = useState<number | null>(null);
-  const [contentMaxHeight, setContentMaxHeight] = useState(640);
+  const contentHeight = TOPBAR_POPOVER_CONTENT_HEIGHT;
+  const contentMaxHeight = TOPBAR_POPOVER_CONTENT_HEIGHT;
   const [geo, setGeo] = useState({ left: 0, width: 260, pointer: 130 });
   const geoRef = useRef(geo); geoRef.current = geo;
   const activeRef = useRef<MK | null>(null);
@@ -1612,7 +1685,6 @@ function SharedTopBar() {
     setActive(null);
     setContentActive(null);
     setOutgoingContent(null);
-    setContentHeight(null);
   }, []);
   const [now, setNow] = useState(() => new Date());
   const [sys, setSys] = useState<SystemLite | null>(null);
@@ -1622,6 +1694,12 @@ function SharedTopBar() {
   const [notifTab, setNotifTab] = useState<NotifTab>('all');
   const [notifDetailOpen, setNotifDetailOpen] = useState(false);
   const [notifDraftAlerts, setNotifDraftAlerts] = useState(() => prefs.alerts);
+  const [notifLiveEvents, setNotifLiveEvents] = useState<LedgerEvent[]>([]);
+  const notifLiveCursor = useRef(0);
+  const [notifArchive, setNotifArchive] = useState<LedgerEvent[]>([]);
+  const [notifArchiveBusy, setNotifArchiveBusy] = useState(false);
+  const [notifArchiveError, setNotifArchiveError] = useState<string | null>(null);
+  const [notifDay, setNotifDay] = useState('all');
   const [cadenceTarget, setCadenceTarget] = useState<DataCadenceKey>('market');
   const [refreshCustom, setRefreshCustom] = useState(() => String(prefs.refreshSec));
   const [menuRefreshState, setMenuRefreshState] = useState<'idle' | 'spin' | 'ok' | 'err'>('idle');
@@ -1630,6 +1708,9 @@ function SharedTopBar() {
   const [currencyBusy, setCurrencyBusy] = useState(false);
   const [currencyNotional, setCurrencyNotional] = useState(1000);
   const [basisSamplePct, setBasisSamplePct] = useState(0.042);
+  const [awsStatus, setAwsStatus] = useState<AwsRunnerStatus | null>(null);
+  const [awsStatusError, setAwsStatusError] = useState<string | null>(null);
+  const [awsGateBusy, setAwsGateBusy] = useState(false);
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 250); return () => clearInterval(t); }, []);
   useEffect(() => {
@@ -1652,10 +1733,65 @@ function SharedTopBar() {
       .finally(() => { if (alive) setCurrencyBusy(false); });
     return () => { alive = false; };
   }, [active]);
+  useEffect(() => {
+    if (active !== 'shell') return;
+    let alive = true;
+    setAwsStatusError(null);
+    fetchAwsRunnerStatus(true)
+      .then((next) => { if (alive) setAwsStatus(next); })
+      .catch((error) => { if (alive) setAwsStatusError(error instanceof Error ? error.message : String(error)); });
+    return () => { alive = false; };
+  }, [active]);
   useEffect(() => { let al = true; const load = () => fetch('/api/system').then((r) => (r.ok ? r.json() : null)).then((s) => al && s && setSys(s as SystemLite)).catch(() => undefined); void load(); const t = setInterval(load, 5000); return () => { al = false; clearInterval(t); }; }, []);
   useEffect(() => {
     if (notifDetailOpen) setNotifDraftAlerts(prefs.alerts);
   }, [notifDetailOpen, prefs.alerts]);
+  useEffect(() => {
+    let alive = true;
+    const load = () => {
+      const since = notifLiveCursor.current > 0
+        ? notifLiveCursor.current + 1
+        : Date.now() - 24 * 60 * 60_000;
+      fetch(`/api/events?since=${since}&limit=20000`)
+        .then((response) => response.ok ? response.json() as Promise<LedgerEvent[]> : [])
+        .then((items) => {
+          if (!alive || !Array.isArray(items) || items.length === 0) return;
+          const latestTs = Math.max(...items.map((item) => item.ts));
+          notifLiveCursor.current = Math.max(notifLiveCursor.current, latestTs);
+          setNotifLiveEvents((current) => {
+            const merged = new Map<number, LedgerEvent>();
+            for (const item of current) merged.set(item.id, item);
+            for (const item of items) merged.set(item.id, item);
+            return [...merged.values()].sort((a, b) => b.ts - a.ts || b.id - a.id).slice(0, 20000);
+          });
+        })
+        .catch(() => undefined);
+    };
+    void load();
+    const timer = window.setInterval(load, 5000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, []);
+  useEffect(() => {
+    if (!notifDetailOpen) return;
+    const controller = new AbortController();
+    const since = Date.now() - 7 * 24 * 60 * 60_000;
+    setNotifArchiveBusy(true);
+    setNotifArchiveError(null);
+    fetch(`/api/events?since=${since}&limit=20000`, { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error(`Archive request failed (${response.status})`);
+        return response.json() as Promise<LedgerEvent[]>;
+      })
+      .then((items) => setNotifArchive(Array.isArray(items) ? items : []))
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setNotifArchiveError(error instanceof Error ? error.message : 'Notification archive unavailable');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setNotifArchiveBusy(false);
+      });
+    return () => controller.abort();
+  }, [notifDetailOpen]);
   useEffect(() => {
     let al = true;
     fetch('/api/apikey').then((r) => (r.ok ? r.json() : null)).then((d) => {
@@ -1741,6 +1877,20 @@ function SharedTopBar() {
     if (currentCloser === closeShared) currentCloser = null;
     closeShared();
   }, [closeShared]);
+  const toggleAwsGate = useCallback(async (key: 'connectionEnabled' | 'executionEnabled') => {
+    if (!awsStatus || awsGateBusy) return;
+    setAwsGateBusy(true);
+    setAwsStatusError(null);
+    try {
+      await updateAwsRunnerGates({ [key]: !awsStatus[key] });
+      const next = await fetchAwsRunnerStatus(key === 'connectionEnabled' && !awsStatus.connectionEnabled);
+      setAwsStatus(next);
+    } catch (error) {
+      setAwsStatusError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setAwsGateBusy(false);
+    }
+  }, [awsGateBusy, awsStatus]);
   const scheduleClose = useCallback(() => {
     window.clearTimeout(closeT.current);
     closeT.current = window.setTimeout(() => {
@@ -1783,8 +1933,8 @@ function SharedTopBar() {
   const lat = sys?.restLatencyMs ?? null;
   const netGrade = !connected ? 'bad' : !feedsOk || (lat !== null && lat > 900) ? 'warn' : 'ok';
   const latTone = lat === null ? '' : lat < 400 ? 'ok' : lat < 900 ? 'warn' : 'bad';
-  const events = state?.events ?? []; const unread = events.filter((e) => e.id > seen).length;
-  const zone = ZONES.find((z) => z.id === prefs.clockZone) ?? ZONES[1];
+  const events = state?.events ?? [];
+  const zone = ZONES.find((z) => z.id === prefs.clockZone) ?? ZONES[0];
   const activeClock = clockParts(zone.id, now);
   const activeClockOffset = clockOffset(zone.id, now);
   const cur = CURRENCIES[prefs.currency] ? prefs.currency : 'USD';
@@ -1852,6 +2002,9 @@ function SharedTopBar() {
   const activeAccent = ACCENTS[prefs.accent] ?? ACCENTS.b;
   const appearanceZoom = Math.round((prefs.zoom || 1) * 100);
   const al = prefs.alerts; const alertsOn = Object.values(al).filter(Boolean).length;
+  const compactSource = notifLiveEvents.length ? notifLiveEvents : events;
+  const compactNotifications = groupNotifications(curateNotifications(compactSource).filter((item) => notificationEnabled(item, al)));
+  const unread = compactNotifications.filter((item) => item.id > seen).length;
   const mode = state?.mode ?? 'HALTED';
   const modeClass = mode === 'HALTED' ? 'm-halted' : mode === 'LIVE_ARMED' ? 'm-live' : 'm-manual';
   const killOn = !!cfg?.killSwitch;
@@ -1889,26 +2042,35 @@ function SharedTopBar() {
     void saveConfig({ borrowGuard: { ...cur, enabled: true, newBorrowPaused: !on, repayOnly: !on } });
   };
   const markNotificationsRead = () => {
-    if (!events.length) return;
-    const latest = Math.max(...events.map((e) => e.id));
+    if (!compactNotifications.length) return;
+    const latest = Math.max(...compactNotifications.map((item) => item.id));
     setSeen(latest);
     localStorage.setItem('cosmos-notif-seen', String(latest));
   };
   const openNotificationCenter = () => {
     setNotifDraftAlerts(prefs.alerts);
+    setNotifTab('all');
+    setNotifDay(new Intl.DateTimeFormat('en-CA', {
+      timeZone: prefs.clockZone || 'UTC',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date()));
     setActive(null);
     setNotifDetailOpen(true);
   };
-  const alertRows: { key: keyof typeof al; label: string; sub: string }[] = [
-    { key: 'proposals', label: 'Opportunity Alerts', sub: 'New basis, spread, and scanner signals' },
-    { key: 'fills', label: 'Account Activity', sub: 'Fills, orders, loans, and Binance sync' },
-    { key: 'risk', label: 'Critical Risk', sub: 'Risk rejects, guardrail blocks, kill switch' },
-    { key: 'news', label: 'Binance Announcements', sub: 'Maintenance, API changes, listings' },
+  const alertRows: { key: NotificationRuleKey; label: string; sub: string }[] = [
+    { key: 'critical', label: 'Critical & Security', sub: 'Failures, blocked actions, and emergency controls' },
+    { key: 'account', label: 'Account & Execution', sub: 'Orders, fills, loans, and Binance state' },
+    { key: 'bot', label: 'Bot Health', sub: 'Engine, runner, stream, and control changes' },
+    { key: 'opportunities', label: 'Opportunities', sub: 'Opened basis and strategy signals only' },
+    { key: 'news', label: 'Announcements', sub: 'Exchange maintenance, listings, and API notices' },
   ];
-  const alertShort: Record<keyof typeof al, string> = {
-    proposals: 'Opportunities',
-    fills: 'Account',
-    risk: 'Critical',
+  const alertShort: Record<NotificationRuleKey, string> = {
+    critical: 'Critical',
+    account: 'Account',
+    bot: 'Bot',
+    opportunities: 'Opportunities',
     news: 'News',
   };
   const draftAlertsOn = Object.values(notifDraftAlerts).filter(Boolean).length;
@@ -1918,45 +2080,87 @@ function SharedTopBar() {
   const saveNotificationPrefs = () => {
     updatePref('alerts', notifDraftAlerts);
   };
-  const notifStamp = (ts: number) => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase();
+  const notifTimeZone = prefs.clockZone || 'UTC';
+  const notifDayKey = (ts: number) => new Intl.DateTimeFormat('en-CA', {
+    timeZone: notifTimeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(ts));
+  const notifStamp = (ts: number) => new Intl.DateTimeFormat('en-US', {
+    timeZone: notifTimeZone,
+    month: 'short',
+    day: 'numeric',
+  }).format(new Date(ts)).toUpperCase();
+  const notifClock = (ts: number) => new Intl.DateTimeFormat('en-GB', {
+    timeZone: notifTimeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date(ts));
   const notifTabs: { id: typeof notifTab; label: string; code: string }[] = [
-    { id: 'all', label: 'All', code: 'All' },
+    { id: 'all', label: 'All Alerts', code: 'All' },
     { id: 'critical', label: 'Critical', code: 'Critical' },
-    { id: 'opportunity', label: 'Opportunities', code: 'Opps' },
     { id: 'account', label: 'Account', code: 'Account' },
-    { id: 'logs', label: 'Logs', code: 'Logs' },
+    { id: 'bot', label: 'Bot', code: 'Bot' },
+    { id: 'opportunities', label: 'Opportunities', code: 'Opps' },
+    { id: 'news', label: 'News', code: 'News' },
   ];
-  const notifMeta = (kind: string) => {
+  const notifMeta = (kind: string, data: Record<string, unknown> | null = null) => {
     const k = kind.toLowerCase();
-    if (k.includes('risk') || k.includes('error') || k.includes('reject') || k.includes('kill') || k.includes('block') || k.includes('fail')) {
+    const outcome = String(data?.kind ?? '').toLowerCase();
+    const rejected = outcome === 'reject' || Boolean(data?.rejectCode);
+    if (rejected || k.includes('risk') || k.includes('error') || k.includes('reject') || k.includes('kill') || k.includes('block') || k.includes('fail')) {
       return { bucket: 'critical' as const, scope: 'Critical Alert', title: 'Control Room Alert', tone: 'critical', mark: '!' };
     }
-    if (k.includes('strategy') || k.includes('proposal') || k.includes('signal') || k.includes('opportunity') || k.includes('basis') || k.includes('funding')) {
-      return { bucket: 'opportunity' as const, scope: 'Opportunity', title: 'Strategy Signal', tone: 'opportunity', mark: 'O' };
+    if (k.includes('candidate_opened') || k.includes('strategy') || k.includes('proposal') || k.includes('signal') || k.includes('opportunity') || k.includes('basis') || k.includes('funding')) {
+      return { bucket: 'opportunities' as const, scope: 'Opportunity', title: 'Strategy Signal', tone: 'opportunity', mark: 'O' };
     }
     if (k.includes('order') || k.includes('fill') || k.includes('loan') || k.includes('account') || k.includes('binance') || k.includes('user_stream')) {
       return { bucket: 'account' as const, scope: 'Account Activity', title: 'Account Update', tone: 'account', mark: 'A' };
     }
-    return { bucket: 'logs' as const, scope: 'System Log', title: 'Operations Log', tone: 'logs', mark: 'L' };
+    return { bucket: 'bot' as const, scope: 'Bot Health', title: 'Operations Event', tone: 'logs', mark: 'L' };
   };
   const notifIcon = (tone: string, size = 17) => {
-    if (tone === 'critical') return <IconShield size={size} />;
-    if (tone === 'opportunity') return <IconRadar size={size} />;
-    if (tone === 'account') return <IconWallet size={size} />;
-    return <IconReceipt size={size} />;
+    if (tone === 'critical') return <LucideNotifCritical size={size} strokeWidth={1.8} />;
+    if (tone === 'opportunity' || tone === 'opportunities') return <LucideNotifOpportunity size={size} strokeWidth={1.8} />;
+    if (tone === 'account') return <LucideNotifAccount size={size} strokeWidth={1.8} />;
+    if (tone === 'news') return <IconNewspaper size={size} />;
+    return <LucideNotifLog size={size} strokeWidth={1.8} />;
   };
   const filterNotifEvents = (tab: NotifTab) => events.filter((e) => {
     if (tab === 'all') return true;
     if (tab === 'prefs') return false;
-    return notifMeta(e.kind).bucket === tab;
+    return notifMeta(e.kind, (e.data as Record<string, unknown> | null) ?? null).bucket === tab;
   });
   const filteredNotifEvents = filterNotifEvents(notifTab);
   const compactNotifEvents = events;
-  const notifBucketCounts = events.reduce<Record<NotifFeedTab, number>>((acc, e) => {
-    acc[notifMeta(e.kind).bucket] += 1;
+  const compactNotifGroups = compactNotifications.slice(0, 7);
+  const archiveSource = notifArchive.length ? notifArchive : events;
+  const allArchiveNotifications = groupNotifications(curateNotifications(archiveSource));
+  const enabledArchiveNotifications = allArchiveNotifications.filter((item) => notificationEnabled(item, notifDraftAlerts));
+  const filteredNotifications = enabledArchiveNotifications.filter((item) => (
+    (notifTab === 'all' || notifTab === 'prefs' || item.category === notifTab)
+    && (notifDay === 'all' || notifDayKey(item.ts) === notifDay)
+  ));
+  const notifBucketCounts = allArchiveNotifications.reduce<Record<NotificationRuleKey, number>>((acc, item) => {
+    acc[item.category] += item.count;
     return acc;
-  }, { critical: 0, opportunity: 0, account: 0, logs: 0 });
-  const notifTone = notifBucketCounts.critical > 0 ? 'hot' : unread > 0 ? 'live' : events.length > 0 ? 'armed' : alertsOn > 0 ? 'armed' : 'idle';
+  }, { critical: 0, account: 0, bot: 0, opportunities: 0, news: 0 });
+  const notifDays = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(now.getTime() - index * 24 * 60 * 60_000);
+    const key = notifDayKey(date.getTime());
+    const items = enabledArchiveNotifications.filter((item) => notifDayKey(item.ts) === key);
+    return {
+      key,
+      day: new Intl.DateTimeFormat('en-US', { timeZone: notifTimeZone, weekday: 'short' }).format(date),
+      date: new Intl.DateTimeFormat('en-US', { timeZone: notifTimeZone, month: 'short', day: 'numeric' }).format(date),
+      total: items.reduce((sum, item) => sum + item.count, 0),
+      critical: items.filter((item) => item.severity === 'critical').reduce((sum, item) => sum + item.count, 0),
+    };
+  }).reverse();
+  const notifPrefsDirty = JSON.stringify(notifDraftAlerts) !== JSON.stringify(al);
+  const notifTone = notifBucketCounts.critical > 0 ? 'hot' : unread > 0 ? 'live' : compactNotifications.length > 0 ? 'armed' : alertsOn > 0 ? 'armed' : 'idle';
   const cadenceKeys: DataCadenceKey[] = ['market', 'account', 'news', 'calendar', 'fx', 'health', 'token'];
   const cadenceChoices = [
     { sec: 0.5, label: '<1s' },
@@ -1966,10 +2170,8 @@ function SharedTopBar() {
     { sec: 10, label: '10s' },
   ];
   const clampRefresh = (sec: number) => Math.min(300, Math.max(0.5, Math.round(sec * 10) / 10));
-  const cadenceSec = (key: DataCadenceKey) => {
-    const value = prefs.dataCadence?.[key] ?? (key === 'market' ? prefs.refreshSec : key === 'news' ? 5 : 10);
-    return key === 'news' ? Math.min(5, value) : value;
-  };
+  const cadenceSec = (key: DataCadenceKey) => prefs.dataCadence?.[key]
+    ?? (key === 'market' ? prefs.refreshSec : key === 'news' ? 5 : 10);
   const fmtCadence = (sec: number) => sec >= 60
     ? `${Number.isInteger(sec / 60) ? (sec / 60).toFixed(0) : (sec / 60).toFixed(1)}m`
     : sec < 1
@@ -2038,9 +2240,9 @@ function SharedTopBar() {
   const cadenceSpread = minCadence === maxCadence ? fmtCadence(minCadence) : `${fmtCadence(minCadence)}-${fmtCadence(maxCadence)}`;
   const selectedCadence = cadenceSec(cadenceTarget);
   const cadenceLabelFor = (key: DataCadenceKey) => ({
-    market: 'Market Prices',
+    market: 'Market Price',
     account: 'Account Data',
-    news: 'News Sources',
+    news: 'News Context',
     calendar: 'Calendar',
     fx: 'FX Rates',
     health: 'Health & Logs',
@@ -2057,7 +2259,7 @@ function SharedTopBar() {
       ? 'Market feed degraded'
       : `${refreshFeedCount} streams / ${msLabel(lat)} / ${cadenceSpread}`;
   const cadenceRows: { key: DataCadenceKey; label: string; sub: string; value: string; tone: 'ok' | 'warn' | 'bad' | 'idle'; icon: ReactNode }[] = [
-    { key: 'market', label: 'Market Prices', sub: 'Markets table, quotes, basis rows', value: fmtCadence(cadenceSec('market')), tone: connected && feedsOk ? 'ok' : connected ? 'warn' : 'bad', icon: <IconChart size={14} /> },
+    { key: 'market', label: 'Market Price', sub: 'Markets table, quotes, basis rows', value: fmtCadence(cadenceSec('market')), tone: connected && feedsOk ? 'ok' : connected ? 'warn' : 'bad', icon: <IconChart size={14} /> },
     { key: 'account', label: 'Account Data', sub: 'Balances, loans, fills, PnL', value: fmtCadence(cadenceSec('account')), tone: b?.connected ? 'ok' : 'warn', icon: <IconWallet size={14} /> },
     { key: 'news', label: 'News Context', sub: 'Aggregated server feed', value: fmtCadence(cadenceSec('news')), tone: srv.news === null ? 'idle' : srv.news ? 'ok' : 'bad', icon: <IconNewspaper size={14} /> },
     { key: 'calendar', label: 'Calendar', sub: 'Macro-event endpoint', value: fmtCadence(cadenceSec('calendar')), tone: srv.cal === null ? 'idle' : srv.cal ? 'ok' : 'bad', icon: <IconCalendar size={14} /> },
@@ -2065,6 +2267,7 @@ function SharedTopBar() {
     { key: 'health', label: 'Health & Logs', sub: 'System probes and event polling', value: fmtCadence(cadenceSec('health')), tone: netGrade === 'ok' ? 'ok' : netGrade === 'warn' ? 'warn' : 'bad', icon: <IconPulse size={14} /> },
     { key: 'token', label: 'Token Streams', sub: 'Detail candles and order-book panels', value: fmtCadence(cadenceSec('token')), tone: connected ? 'ok' : 'bad', icon: <IconLayers size={14} /> },
   ];
+  const marketPingRows = cadenceRows.filter((row) => MARKET_PING_KEYS.includes(row.key as (typeof MARKET_PING_KEYS)[number]));
   type DataTier = 'good' | 'warn' | 'bad' | 'idle';
   const probeTier = (ok: boolean | null): DataTier => ok === null ? 'idle' : ok ? 'good' : 'bad';
   const probeDetail = (ok: boolean | null) => ok === null ? 'Checking' : ok ? 'Reachable' : 'Down';
@@ -2183,21 +2386,7 @@ function SharedTopBar() {
     const pane = incomingPaneRef.current;
     if (!pane || !contentActive) return;
     pane.scrollTo({ top: 0, left: 0 });
-    const measure = () => {
-      const zoom = prefs.zoom || 1;
-      const viewportCap = Math.floor(Math.max(260, Math.min(640, (window.innerHeight - 84) / zoom)));
-      setContentMaxHeight(viewportCap);
-      setContentHeight(Math.ceil(Math.min(pane.scrollHeight, viewportCap)));
-    };
-    measure();
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
-    observer?.observe(pane);
-    window.addEventListener('resize', measure);
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener('resize', measure);
-    };
-  }, [contentActive, prefs.zoom]);
+  }, [contentActive]);
 
   const trig = (k: MK, cls: string, inner: JSX.Element, opts: { title?: string; onClick?: () => void } = {}) => (
     <button
@@ -2222,74 +2411,8 @@ function SharedTopBar() {
   );
 
   const keysBody = () => {
-    if (!roKey && !fullKey) {
-      return (
-        <div className="keyx-pop keyx-empty">
-          <TopPanelHeader
-            className="keyx-vault"
-            logo={<BinanceLogo size={31} />}
-            title="Binance API"
-            sub="No Binance key manifest"
-            status="Missing"
-          />
-          <div className="keyx-empty-line"><span /><span /><span /></div>
-        </div>
-      );
-    }
     const visibleKeys = [roKey, fullKey].filter(Boolean) as ApiKeyInfo[];
-    const withdrawalsOpen = visibleKeys.some((ak) => ak.permissions.withdrawals);
-    const transferOpen = visibleKeys.some((ak) => ak.permissions.universalTransfer);
-    const keyCards = [
-      roKey && {
-        role: 'Data Key',
-        key: roKey,
-      },
-      fullKey && {
-        role: 'Automation Key',
-        key: fullKey,
-      },
-    ].filter(Boolean) as { role: string; key: ApiKeyInfo }[];
-    return (
-      <div className="keyx-pop">
-        <TopPanelHeader
-          className="keyx-vault"
-          logo={<BinanceLogo size={31} />}
-          title="Binance API"
-          sub={withdrawalsOpen || transferOpen ? 'Review permissions' : 'HMAC · Withdrawals Off'}
-          status={withdrawalsOpen || transferOpen ? 'Review' : 'Locked'}
-        />
-        <div className="keyx-card-stack" aria-label="Binance API key posture">
-          {keyCards.map(({ role, key: ak }) => {
-            const enabled = enabledApiPerms(ak);
-            return (
-              <section key={`${role}-${ak.id}`} className={`keyx-card2 ${ak.status}`}>
-                <div className="keyx-card-head">
-                  <span className="keyx-source-mark"><BinanceLogo size={32} /></span>
-                  <span className="keyx-card-title">
-                    <span className="keyx-name-row"><b>{ak.name}</b><span className="keyx-type-pill">{apiKeyRole(ak)}</span></span>
-                    <em>{ak.type} · {apiKeyFingerprint(ak)}</em>
-                    <em className="keyx-ip-line">{apiKeyIpLine(ak)}</em>
-                  </span>
-                  <span className={`keyx-state ${ak.status}`}>{ak.status}</span>
-                </div>
-                <div className="keyx-enabled" aria-label={`${ak.name} enabled permissions`}>
-                  {enabled.length ? (
-                    <ul className="keyx-enabled-list">
-                      {enabled.map((p) => (
-                        <li key={p.key} className={riskApiPerms.includes(p.key) ? 'risk' : undefined}>
-                          <i aria-hidden />
-                          <span>{p.label}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : <span className="keyx-enabled-empty">No active permission</span>}
-                </div>
-              </section>
-            );
-          })}
-        </div>
-      </div>
-    );
+    return <BinanceApiKeySheet keys={visibleKeys} />;
   };
 
   const content = (k: MK) => {
@@ -2331,7 +2454,7 @@ function SharedTopBar() {
                     <span className="clock-zone-mark">{zz.label}</span>
                     <span className="clock-zone-copy">
                       <b>{zz.city}</b>
-                      <small>{zz.id === 'local' ? 'Browser time' : zz.id.replaceAll('_', ' ')}</small>
+                      <small>{zz.detail}</small>
                     </span>
                     <span className="clock-zone-time">
                       <span className="clock-zone-digits"><b>{p.hm}</b><small>:{p.ss}</small></span>
@@ -2349,29 +2472,22 @@ function SharedTopBar() {
           <div className="shell-pop shell-premium">
             <TopPanelHeader
               className="shell-head"
-              logo={<IconTerminal size={21} />}
-              title="AWS CLI"
-              sub="CloudShell · Session Manager"
-              status="Ready"
+              logo={<img className="shell-cloud-mark" src={AWS_RUNNER_MARK} alt="" />}
+              title="AWS Runner Control"
+              sub="Restricted Systems Manager channel"
+              status={awsStatus?.connectionEnabled ? 'Open' : 'Blocked'}
             />
-            <button className="shell-command-card" type="button" onClick={() => { setActive(null); openOverlay('cloudshell'); }}>
-              <span className="shell-command-copy">
-                <b>cg-arbitrage-01</b>
-                <em>ubuntu · /opt/arbitrage</em>
-              </span>
-              <span className="shell-command-line"><i>$</i> aws sts get-caller-identity</span>
-            </button>
             <div className="shell-status-list" aria-label="AWS CloudShell session details">
-              <div><span>Host</span><b>cg-arb-01</b></div>
-              <div><span>Auth</span><b>SSM</b></div>
-              <div><span>Region</span><b>ap-south-1</b></div>
+              <div><span>Target</span><b>{awsStatus?.instanceId ?? 'Not configured'}</b></div>
+              <div><span>Transport</span><b>SSM</b></div>
+              <div><span>Region</span><b>{awsStatus?.region ?? 'Not configured'}</b></div>
             </div>
             <div className="shell-actions">
-              <button className="shell-open primary" type="button" onClick={() => { setActive(null); openOverlay('cloudshell'); }} title="Open in-app CloudShell" aria-label="Open in-app CloudShell">
+              <button className="shell-open primary" type="button" onClick={() => { setActive(null); openOverlay('cloudshell'); }} title="Open runner workspace" aria-label="Open runner workspace">
                 <IconTerminal size={15} />
-                <span>Expand</span>
+                <span>Open Workspace</span>
               </button>
-              <a className="shell-open icon-only" href={CLOUD_SHELL_URL} target="_blank" rel="noreferrer noopener" onClick={() => setActive(null)} title="Open AWS Console" aria-label="Open AWS Console">
+              <a className="shell-open icon-only" href={AWS_CONSOLE_URL} target="_blank" rel="noreferrer noopener" onClick={() => setActive(null)} title="Open AWS Console" aria-label="Open AWS Console">
                 <IconExternal size={14} />
               </a>
             </div>
@@ -2419,7 +2535,7 @@ function SharedTopBar() {
           <div className={`advx-pop advisor-audit ${advTone}`}>
             <TopPanelHeader
               className="advx-audit-head"
-              logo={<AdvisorSealGlyph />}
+              logo={<img className="trust-advisor-source-image" src={TRUST_ADVISOR_MARK} alt="" />}
               title="Trusted Advisor"
               sub={`Bot controls audit · ${advChecks.length} checks`}
               status={advTone === 'bad' ? 'Action' : advTone === 'warn' ? 'Review' : 'Clear'}
@@ -2491,7 +2607,7 @@ function SharedTopBar() {
                   <em>Inbox clear</em>
                 </div>
               ) : compactNotifEvents.slice(0, 3).map((e) => {
-                const meta = notifMeta(e.kind);
+                const meta = notifMeta(e.kind, (e.data as Record<string, unknown> | null) ?? null);
                 const summary = eventSummary(e.kind, (e.data as Record<string, unknown> | null) ?? null, e.symbol);
                 const rightLabel = meta.bucket === 'opportunity' ? 'Signal' : meta.bucket === 'account' ? 'Account' : meta.bucket === 'critical' ? 'Critical' : 'System';
                 return (
@@ -2560,7 +2676,7 @@ function SharedTopBar() {
             <TopPanelHeader
               className="mrefx-cadence-head"
               logo={<IconRefresh size={21} />}
-              title="Data Cadence"
+              title="Market Ping"
               sub={refreshDetail}
               status={refreshLabel}
             />
@@ -2874,7 +2990,7 @@ function SharedTopBar() {
               {filteredNotifEvents.length === 0 ? (
                 <div className="topux-empty">No notifications in this filter.</div>
               ) : filteredNotifEvents.slice(0, 4).map((e) => {
-                const meta = notifMeta(e.kind);
+                const meta = notifMeta(e.kind, (e.data as Record<string, unknown> | null) ?? null);
                 const summary = eventSummary(e.kind, (e.data as Record<string, unknown> | null) ?? null, e.symbol);
                 return (
                   <button key={e.id} className="topux-row button" type="button" title={summary} onClick={() => { setActive(null); setPage('ledger'); }}>
@@ -3002,20 +3118,11 @@ function SharedTopBar() {
         : tone === 'warn'
           ? 'warn'
           : 'idle';
-    const cadenceChoicesFor = (key: DataCadenceKey) => ({
-      market: [0.5, 1, 3, 5],
-      account: [1, 3, 5, 10],
-      news: [5],
-      calendar: [30, 60, 300],
-      fx: [30, 60, 300],
-      health: [3, 5, 10, 30],
-      token: [0.5, 1, 3, 5],
-    } satisfies Record<DataCadenceKey, number[]>)[key];
     const cadenceNote = (key: DataCadenceKey) => ({
       market: 'Quotes, basis, and market tables',
       account: 'Balances, fills, loans, and PnL',
-      news: 'Server refresh floor is five seconds',
-      calendar: 'Upstream data is cached independently',
+      news: 'Headlines and context refresh',
+      calendar: 'Economic-event refresh',
       fx: 'Upstream rates use a thirty-minute cache',
       health: 'System probes and event polling',
       token: 'Candles and order-book panels',
@@ -3024,9 +3131,9 @@ function SharedTopBar() {
     switch (k) {
       case 'clock':
         return (
-          <div className="ops-sheet ops-clock-sheet">
+          <div className="ops-sheet ops-clock-sheet" style={{ '--clock-accent': activeAccent.hex, '--ops-accent': activeAccent.hex } as CSSProperties}>
             <OpsSheetHeader
-              icon={<LucideClock size={20} strokeWidth={1.7} />}
+              icon={<ClockPopupLogo accent={activeAccent.hex} />}
               title="Market Clock"
               subtitle={`${zone.city} · ${activeClockOffset}`}
               status={zone.label}
@@ -3045,7 +3152,7 @@ function SharedTopBar() {
                     key={zz.id}
                     icon={<span className="ops-zone-code">{zz.label}</span>}
                     title={zz.city}
-                    detail={zz.id === 'local' ? 'Browser timezone' : zz.id.replaceAll('_', ' ')}
+                    detail={zz.detail}
                     value={<><b>{p.hm}</b><em>:{p.ss}</em></>}
                     selected={zz.id === zone.id}
                     tone={zz.id === zone.id ? 'accent' : 'idle'}
@@ -3059,77 +3166,63 @@ function SharedTopBar() {
 
       case 'shell':
         return (
-          <div className="ops-sheet ops-aws-sheet">
+          <div className="ops-sheet ops-aws-sheet aws-control-sheet">
             <OpsSheetHeader
-              icon={<LucideTerminal size={20} strokeWidth={1.7} />}
-              title="AWS CloudShell"
-              subtitle="CloudShell command launcher"
-              status="Not attached"
-              tone="idle"
+              icon={<span className="aws-popup-mark"><img src={AWS_RUNNER_MARK} alt="" /></span>}
+              title="AWS Runner Control"
+              subtitle="Restricted Systems Manager channel"
+              status={!awsStatus ? 'Checking' : !awsStatus.configured ? 'Not configured' : !awsStatus.connectionEnabled ? 'Blocked' : awsStatus.channel === 'online' ? 'Online' : awsStatus.channel === 'offline' ? 'Offline' : 'Ready'}
+              tone={!awsStatus || !awsStatus.configured || !awsStatus.connectionEnabled ? 'idle' : awsStatus.channel === 'online' ? 'ok' : awsStatus.channel === 'offline' ? 'bad' : 'warn'}
             />
-            <button className="ops-terminal-stage" type="button" onClick={() => closeAndOpen('cloudshell')}>
-              <span className="ops-terminal-bar"><i /><i /><i /><em>COMMAND DRAFT</em></span>
-              <span className="ops-terminal-command"><i>$</i><b>aws sts get-caller-identity</b></span>
-              <span className="ops-terminal-help">Review or copy locally, then execute in your authenticated AWS CloudShell session.</span>
-            </button>
-            <div className="ops-note-row">
-              <IconShield size={15} />
-              <span><b>No AWS identity is inferred here.</b><em>Region, host, and role appear only after a verified backend connection exists.</em></span>
+            <section className="aws-pop-target" aria-label="Configured AWS runner target">
+              <div><span>Region</span><b>{awsStatus?.region ?? 'Not configured'}</b></div>
+              <div><span>Instance</span><b>{awsStatus?.instanceId ?? 'Not configured'}</b></div>
+              <div><span>Service</span><b>{awsStatus?.serviceName ?? 'Not configured'}</b></div>
+            </section>
+            <div className="aws-pop-gates" aria-label="AWS connection gates">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={awsStatus?.connectionEnabled === true}
+                className={awsStatus?.connectionEnabled ? 'on' : ''}
+                disabled={!awsStatus?.configured || !awsStatus?.operatorAuthorized || awsGateBusy}
+                onClick={() => { void toggleAwsGate('connectionEnabled'); }}
+              >
+                <span><b>AWS Channel</b><em>Block or allow website-to-AWS control traffic.</em></span>
+                <i><span /></i>
+              </button>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={awsStatus?.executionEnabled === true}
+                className={awsStatus?.executionEnabled ? 'on' : ''}
+                disabled={!awsStatus?.connectionEnabled || !awsStatus?.operatorAuthorized || awsGateBusy}
+                onClick={() => { void toggleAwsGate('executionEnabled'); }}
+              >
+                <span><b>Runner Changes</b><em>Write, validate, and restart the configured runner.</em></span>
+                <i><span /></i>
+              </button>
             </div>
+            {(awsStatusError || (awsStatus && (!awsStatus.configured || !awsStatus.operatorAuthorized))) && (
+              <div className="aws-pop-notice"><IconShield size={14} /><span>{awsStatusError ?? (!awsStatus?.configured ? `Set ${awsStatus?.missing.join(', ')}` : awsStatus?.authorizationReason ?? 'Verified operator access is required.')}</span></div>
+            )}
             <footer className="ops-sheet-foot split">
-              <button type="button" className="primary" onClick={() => closeAndOpen('cloudshell')}><IconTerminal size={14} /> Open draft</button>
-              <a href={CLOUD_SHELL_URL} target="_blank" rel="noreferrer noopener" onClick={closeMenu}><IconExternal size={14} /> AWS CloudShell</a>
+              <button type="button" className="primary" onClick={() => closeAndOpen('cloudshell')}><IconTerminal size={14} /> Open Runner Workspace</button>
+              <a href={AWS_CONSOLE_URL} target="_blank" rel="noreferrer noopener" onClick={closeMenu}><IconExternal size={14} /> AWS Console</a>
             </footer>
           </div>
         );
 
       case 'apikey': {
         const visibleKeys = [roKey, fullKey].filter(Boolean) as ApiKeyInfo[];
-        const risky = visibleKeys.some((ak) => ak.status !== 'planned' && (ak.permissions.withdrawals || ak.permissions.universalTransfer));
-        const liveCount = visibleKeys.filter((ak) => ak.live).length;
-        return (
-          <div className="ops-sheet ops-key-sheet">
-            <OpsSheetHeader
-              icon={<BinanceLogo size={25} />}
-              title="Binance API Keys"
-              subtitle="Masked Binance credential posture"
-              status={risky ? 'Review' : liveCount ? `${liveCount} live` : 'No live key'}
-              tone={risky ? 'bad' : liveCount ? 'ok' : 'warn'}
-            />
-            {visibleKeys.length ? (
-              <div className="ops-list ops-key-list">
-                {visibleKeys.map((ak) => {
-                  const actual = ak.status !== 'planned' && ak.status !== 'missing' && !!ak.keysPresent;
-                  const enabled = actual ? enabledApiPerms(ak) : [];
-                  const keyTone: OpsTone = ak.live ? 'ok' : ak.status === 'missing' ? 'bad' : ak.status === 'planned' ? 'idle' : 'warn';
-                  return (
-                    <section className={`ops-key-entry ${ak.status}`} key={ak.id}>
-                      <OpsRow
-                        icon={<IconKey size={15} />}
-                        title={ak.name}
-                        detail={`${apiKeyRole(ak)} · ${actual ? apiKeyFingerprint(ak) : ak.status === 'planned' ? 'No credential' : 'Not loaded'}`}
-                        value={ak.status === 'missing' ? 'Missing' : ak.live ? 'Live' : ak.status === 'planned' ? 'Planned' : 'Syncing'}
-                        tone={keyTone}
-                      />
-                      <div className="ops-key-meta">
-                        <span><b>Network</b><em>{actual ? (ak.ipRestrict ? 'IP restricted' : 'Open IP access') : 'Not active'}</em></span>
-                        <span><b>Permissions</b><em>{enabled.length ? enabled.map((p) => p.label).join(' · ') : 'None active'}</em></span>
-                      </div>
-                    </section>
-                  );
-                })}
-              </div>
-            ) : <div className="ops-empty-state"><IconKey size={18} /><b>No key inventory</b><em>The server returned no API-key posture.</em></div>}
-            <div className={`ops-policy-line ${risky ? 'bad' : 'ok'}`}><IconShield size={14} /><span>{risky ? 'A live key can move funds. Rotate it before automation.' : 'Withdrawal and transfer permissions are off on active keys.'}</span></div>
-          </div>
-        );
+        return <BinanceApiKeySheet keys={visibleKeys} />;
       }
 
       case 'data':
         return (
           <div className="ops-sheet ops-data-sheet">
             <OpsSheetHeader
-              icon={<LucideDatabase size={21} strokeWidth={1.7} />}
+              icon={<PopupSourceMark tone="#50ad1d" brand><img className="data-health-source-image" src={DATA_HEALTH_MARK} alt="" /></PopupSourceMark>}
               title="Data Health"
               subtitle={`${dataGood} of ${dataRows.length} source checks passing`}
               status={dataLabel}
@@ -3146,36 +3239,48 @@ function SharedTopBar() {
                 />
               ))}
             </div>
-            <footer className="ops-sheet-foot"><button type="button" className="primary" onClick={() => { closeMenu(); setPage('system'); }}><IconPulse size={14} /> Open System Health</button></footer>
+            <footer className="ops-sheet-foot ops-data-foot"><button type="button" className="primary ops-data-action" onClick={() => { closeMenu(); setPage('system'); }}><IconPulse size={14} /> Open System Health</button></footer>
           </div>
         );
 
       case 'advisor': {
-        const focus = advAtt.length ? advAtt.slice(0, 4) : advP.slice(0, 4);
         return (
           <div className="ops-sheet ops-advisor-sheet">
             <OpsSheetHeader
-              icon={<LucideShield size={20} strokeWidth={1.7} />}
+              icon={<PopupSourceMark tone="#24c85a" brand><img className="trust-advisor-source-image" src={TRUST_ADVISOR_MARK} alt="" /></PopupSourceMark>}
               title="Trust Advisor"
               subtitle={`${advChecks.length} live cockpit checks`}
               status={advTone === 'bad' ? 'Action' : advTone === 'warn' ? 'Review' : 'Clear'}
               tone={statusTone(advTone)}
             />
             <div className="ops-advisor-strip" aria-label="Advisor results">
-              <span className="bad"><b>{advA.length}</b><em>Action</em></span>
-              <span className="warn"><b>{advI.length}</b><em>Review</em></span>
-              <span className="ok"><b>{advP.length}</b><em>Clear</em></span>
+              <span className="bad">
+                <i className="ops-advisor-state-icon"><LucideAdvisorAction size={17} strokeWidth={1.8} /></i>
+                <span className="ops-advisor-state-copy"><b>{advA.length}</b><em>Action</em></span>
+              </span>
+              <span className="warn">
+                <i className="ops-advisor-state-icon"><LucideAdvisorReview size={17} strokeWidth={1.8} /></i>
+                <span className="ops-advisor-state-copy"><b>{advI.length}</b><em>Review</em></span>
+              </span>
+              <span className="ok">
+                <i className="ops-advisor-state-icon"><LucideAdvisorClear size={17} strokeWidth={1.8} /></i>
+                <span className="ops-advisor-state-copy"><b>{advP.length}</b><em>Clear</em></span>
+              </span>
             </div>
-            <div className="ops-section-label"><span>{advAtt.length ? 'Attention' : 'Passing controls'}</span><em>No weighted score</em></div>
-            <div className="ops-list">
-              {focus.map((check) => (
+            <div className="ops-section-label"><span>All checks</span><em>{advChecks.length} current</em></div>
+            <div className="ops-list ops-advisor-list">
+              {[...advA, ...advI, ...advP].map((check) => (
                 <OpsRow
                   key={check.name}
-                  icon={check.sev === 'action' ? <IconCross size={13} /> : check.sev === 'invest' ? <IconAlarm size={13} /> : <IconCheck size={13} />}
+                  icon={check.sev === 'action'
+                    ? <LucideAdvisorAction size={15} strokeWidth={1.8} />
+                    : check.sev === 'invest'
+                      ? <LucideAdvisorReview size={15} strokeWidth={1.8} />
+                      : <LucideAdvisorClear size={15} strokeWidth={1.8} />}
                   title={check.name}
                   detail={check.detail}
                   value={check.sev === 'action' ? 'Fix' : check.sev === 'invest' ? 'Review' : 'Clear'}
-                  tone={check.sev === 'action' ? 'bad' : check.sev === 'invest' ? 'warn' : 'ok'}
+                  tone={check.sev === 'action' || check.sev === 'invest' ? 'warn' : 'ok'}
                   onClick={check.page ? () => { closeMenu(); setPage(check.page!); } : undefined}
                 />
               ))}
@@ -3192,28 +3297,24 @@ function SharedTopBar() {
         return (
           <div className="ops-sheet ops-notification-sheet">
             <OpsSheetHeader
-              icon={<LucideBell size={20} strokeWidth={1.7} />}
+              icon={<PopupSourceMark tone="#f0a400" brand><img className="notification-source-image" src={NOTIFICATION_MARK} alt="" /></PopupSourceMark>}
               title="Notifications"
-              subtitle="Real ledger and control-room events"
-              status={unread ? `${unread} new` : events.length ? 'Read' : 'Clear'}
+              subtitle="Curated account and bot alerts"
+              status={unread ? `${unread} new` : compactNotifications.length ? 'Read' : 'Clear'}
               tone={unread ? 'accent' : 'ok'}
             />
             <div className="ops-list ops-notification-list">
-              {compactNotifEvents.length ? compactNotifEvents.slice(0, 3).map((e) => {
-                const meta = notifMeta(e.kind);
-                const summary = eventSummary(e.kind, (e.data as Record<string, unknown> | null) ?? null, e.symbol);
-                return (
-                  <OpsRow
-                    key={e.id}
-                    icon={notifIcon(meta.tone, 15)}
-                    title={meta.scope}
-                    detail={summary}
-                    value={timeAgo(e.ts)}
-                    tone={meta.tone === 'critical' ? 'bad' : meta.tone === 'opportunity' ? 'accent' : 'idle'}
-                    onClick={openNotificationCenter}
-                  />
-                );
-              }) : <div className="ops-empty-state"><IconBell size={18} /><b>Inbox clear</b><em>New control-room events will appear here.</em></div>}
+              {compactNotifGroups.length ? compactNotifGroups.map((item) => (
+                <OpsRow
+                  key={item.id}
+                  icon={notifIcon(item.severity === 'opportunity' ? 'opportunity' : item.category, 15)}
+                  title={item.title}
+                  detail={item.count > 1 ? `${item.detail} · ${item.count} grouped` : item.detail}
+                  value={timeAgo(item.ts)}
+                  tone={item.severity === 'critical' ? 'bad' : item.severity === 'opportunity' ? 'accent' : 'idle'}
+                  onClick={openNotificationCenter}
+                />
+              )) : <div className="ops-empty-state"><IconBell size={18} /><b>Inbox clear</b><em>Only owner-relevant alerts appear here. Full telemetry stays in Logs.</em></div>}
             </div>
             <footer className="ops-sheet-foot split">
               <button type="button" onClick={markNotificationsRead} disabled={!unread}>Mark read</button>
@@ -3226,7 +3327,7 @@ function SharedTopBar() {
         return (
           <div className={`ops-sheet ops-bot-sheet ${modeTone}`}>
             <OpsSheetHeader
-              icon={<LucideStop size={20} strokeWidth={1.7} />}
+              icon={<PopupSourceMark tone="#d43f4c"><PopupPowerIcon size={32} weight="duotone" /></PopupSourceMark>}
               title="Execution Control"
               subtitle={modeSub}
               status={modeLabel}
@@ -3265,27 +3366,24 @@ function SharedTopBar() {
         return (
           <div className="ops-sheet ops-cadence-sheet">
             <OpsSheetHeader
-              icon={<LucideRefresh size={20} strokeWidth={1.7} />}
-              title="Refresh Cadence"
-              subtitle="Per-surface browser polling"
+              icon={<PopupSourceMark tone="#208cf0" brand><img className="market-ping-source-image" src={MARKET_PING_MARK} alt="" /></PopupSourceMark>}
+              title="Market Ping"
+              subtitle="Live source polling"
               status={refreshCode}
               tone={statusTone(refreshTone)}
             />
             <div className="ops-list ops-cadence-list">
-              {cadenceRows.map((row) => {
-                const choices = Array.from(new Set([...cadenceChoicesFor(row.key), cadenceSec(row.key)])).sort((a, b) => a - b);
-                return (
+              {marketPingRows.map((row) => (
                   <div className="ops-cadence-row" key={row.key}>
                     <span className={`ops-row-icon ${statusTone(row.tone)}`}>{row.icon}</span>
                     <span className="ops-row-copy"><b>{row.label}</b><em>{cadenceNote(row.key)}</em></span>
-                    <select value={cadenceSec(row.key)} onChange={(e) => applyCadence(Number(e.target.value), row.key)} aria-label={`${row.label} cadence`}>
-                      {choices.map((sec) => <option key={sec} value={sec}>{fmtCadence(sec)}</option>)}
+                    <select className="ops-ping-select" value={cadenceSec(row.key)} onChange={(e) => applyCadence(Number(e.target.value), row.key)} aria-label={`${row.label} ping interval`}>
+                      {MARKET_PING_CHOICES.map((sec) => <option key={sec} value={sec}>{fmtCadence(sec)}</option>)}
                     </select>
                   </div>
-                );
-              })}
+              ))}
             </div>
-            <div className="ops-policy-line idle"><IconRefresh size={14} /><span>Polling never bypasses upstream server-cache windows.</span></div>
+            <div className="ops-policy-line idle"><IconRefresh size={14} /><span>Ping timing never bypasses upstream cache windows.</span></div>
           </div>
         );
 
@@ -3293,7 +3391,7 @@ function SharedTopBar() {
         return (
           <div className="ops-sheet ops-currency-sheet">
             <OpsSheetHeader
-              icon={<LucideCurrency size={20} strokeWidth={1.7} />}
+              icon={<PopupSourceMark tone="#315bea"><PopupCurrencyIcon size={32} weight="duotone" /></PopupSourceMark>}
               title="Display Currency"
               subtitle={currencyFx.fetchedAt ? `Rates updated ${timeAgo(currencyFx.fetchedAt)}` : 'Loading cached FX rates'}
               status={cur}
@@ -3321,7 +3419,7 @@ function SharedTopBar() {
         return (
           <div className="ops-sheet ops-basis-sheet">
             <OpsSheetHeader
-              icon={<LucideBasis size={20} strokeWidth={1.7} />}
+              icon={<PopupSourceMark tone="#6f52c9"><PopupPercentIcon size={32} weight="duotone" /></PopupSourceMark>}
               title="Basis Units"
               subtitle="One unit across tables and charts"
               status={basisCode}
@@ -3352,7 +3450,7 @@ function SharedTopBar() {
         return (
           <div className="ops-sheet ops-appearance-sheet" style={{ '--ops-accent': activeAccent.hex } as CSSProperties}>
             <OpsSheetHeader
-              icon={theme === 'dark' ? <LucideMoon size={20} strokeWidth={1.7} /> : <LucideSun size={20} strokeWidth={1.7} />}
+              icon={<PopupSourceMark tone="#9a50cf"><PopupPaletteIcon size={32} weight="duotone" /></PopupSourceMark>}
               title="Appearance"
               subtitle={`${activeAccent.label} accent · ${appearanceZoom}% scale`}
               status={prefs.theme === 'system' ? 'Auto' : prefs.theme}
@@ -3394,44 +3492,39 @@ function SharedTopBar() {
       }}
     >
       {trig('clock', 'hdr-clock-btn clock-pro-btn clock-premium-trigger', <>
-        <span className="clock-premium-pill" aria-hidden="true">
-          <LucideClock className="clock-premium-glyph" size={14} strokeWidth={1.8} />
-          <span className="clock-premium-readout">
-            <span className="clock-premium-main">
-              <b>{activeClock.hm}</b>
-              <em>:{activeClock.ss}</em>
-            </span>
-            <small>{clockStamp(zone.id, now)}</small>
-          </span>
-          <span className="clock-premium-zone">{zone.label}</span>
+        <span className="clock-command-pill" style={{ '--clock-accent': activeAccent.hex } as CSSProperties} aria-hidden="true">
+          <HourglassMotionMark />
+          <span className="clock-command-time">{activeClock.hm}</span>
+          <i className="clock-command-bullet" />
+          <span className="clock-command-zone">{zone.label}</span>
         </span>
-      </>, { title: `Clock & timezone — ${zone.city}` })}
+      </>, { title: `Market Clock — ${zone.city} · ${activeClockOffset}` })}
       {trig('data', `hdr-ic data-ghost data-pro grade-${dataGrade}`, <>
-        <span className={`rail-icon-core ${dataGrade}`}><LucideDatabase size={21} strokeWidth={1.7} /></span>
+        <span className={`rail-icon-core ${dataGrade}`}><img className="data-health-trigger-image" src={DATA_HEALTH_MARK} alt="" /></span>
       </>, { title: `Data Health — ${dataLabel} · ${dataSub}` })}
       {trig('mrefresh', `hdr-ic refresh-ghost refresh-premium-trigger ${refreshTone}`, <>
-        <span className={`rail-icon-core ${refreshTone}`}><LucideRefresh size={20} strokeWidth={1.7} /></span>
-      </>, { title: `Data cadence — market every ${refreshCode}` })}
+        <span className={`rail-icon-core ${refreshTone}`}><img className="market-ping-trigger-image" src={MARKET_PING_MARK} alt="" /></span>
+      </>, { title: `Market Ping — market every ${refreshCode}` })}
       <span className="topbar-suite-divider" aria-hidden="true" />
       {trig('shell', 'hdr-ic tint-shell shell-ghost shell-premium-trigger', <>
-        <span className="rail-icon-core"><LucideTerminal size={20} strokeWidth={1.7} /></span>
-      </>, { title: 'AWS CLI — CloudShell launcher, not attached' })}
+        <span className="rail-icon-core aws-runner-trigger-core"><img className="aws-runner-trigger-image" src={AWS_RUNNER_MARK} alt="" /></span>
+      </>, { title: `AWS Runner Control — ${!awsStatus ? 'checking' : !awsStatus.configured ? 'not configured' : awsStatus.connectionEnabled ? 'channel open' : 'blocked'}` })}
       {trig('apikey', `hdr-ic apikey-ghost apikey-premium-trigger s-${roKey?.status ?? 'missing'}`, <>
-        <span className={`rail-icon-core s-${roKey?.status ?? 'missing'}`}><LucideKey size={20} strokeWidth={1.7} /></span>
+        <span className={`rail-icon-core api-key-trigger-core s-${roKey?.status ?? 'missing'}`}><img className="api-key-trigger-image" src={API_KEY_MARK} alt="" /></span>
       </>, { title: `API keys — ${roKey?.live ? 'live posture' : roKey?.keysPresent ? 'permission sync pending' : 'no live key'}` })}
       {trig('advisor', `hdr-ic advisor-ghost advisor-premium-trigger grade-${advTone}`, <>
-        <span className={`rail-icon-core ${advTone}`}><LucideShield size={20} strokeWidth={1.7} /></span>
+        <span className={`rail-icon-core trust-advisor-trigger-core ${advTone}`}><img className="trust-advisor-trigger-image" src={TRUST_ADVISOR_MARK} alt="" /></span>
       </>, { title: 'Trust Advisor — live cockpit checks' })}
       <span className="topbar-suite-divider" aria-hidden="true" />
       {trig('notif', `hdr-ic notif-trigger notif-ghost notif-premium-trigger ${notifTone}`, <>
-        <span className={`rail-icon-core ${notifTone}`}>
-          <LucideBell size={20} strokeWidth={1.7} />
+        <span className={`rail-icon-core notification-trigger-core ${notifTone}`}>
+          <img className="notification-trigger-image" src={NOTIFICATION_MARK} alt="" />
           {unread > 0 && <b className="ops-trigger-count">{unread > 99 ? '99+' : unread}</b>}
         </span>
       </>, { title: `Notifications — ${unread ? `${unread} unread` : 'no unread events'}` })}
       {trig('power', `hdr-ic power-ghost power-premium-trigger ${modeClass}`, <>
-        <span className={`rail-icon-core ${modeTone}`}><LucideStop size={20} strokeWidth={1.7} /></span>
-      </>, { title: `Bot Control — ${modeLabel}` })}
+        <span className={`rail-icon-core ${modeTone}`}><LucidePower size={20} strokeWidth={1.7} /></span>
+      </>, { title: `Execution Control — ${modeLabel}` })}
       <span className="topbar-suite-divider" aria-hidden="true" />
       {trig('currency', `hdr-ic currency-ghost currency-premium-trigger ${curTone}`, <>
         <span className={`rail-icon-core ${curTone}`}><LucideCurrency size={20} strokeWidth={1.7} /></span>
@@ -3441,7 +3534,7 @@ function SharedTopBar() {
       </>, { title: `Basis units — ${basisIsBps ? 'basis points' : 'percent'}` })}
       {trig('appearance', `hdr-ic appearance-ghost appearance-premium-trigger ${theme}`, <>
         <span className={`rail-icon-core ${theme}`} style={{ '--apx-accent': activeAccent.hex } as CSSProperties}>
-          {theme === 'dark' ? <LucideMoon size={20} strokeWidth={1.7} /> : <LucideSun size={20} strokeWidth={1.7} />}
+          <LucidePalette size={20} strokeWidth={1.7} />
         </span>
       </>, { title: `Appearance — ${prefs.theme === 'system' ? 'auto' : prefs.theme} · ${appearanceZoom}%` })}
       {trig('account', `hdr-ic shared-account-trigger s-${accountTone}`, <>
@@ -3485,103 +3578,107 @@ function SharedTopBar() {
       </div>
       {notifDetailOpen && (
         <div
-          className="ntf-modal-backdrop"
+          className="ntf-modal-backdrop ntc-backdrop"
           role="presentation"
           onMouseDown={(e) => { if (e.currentTarget === e.target) setNotifDetailOpen(false); }}
         >
-          <section className={`ntf-modal ${notifTone} center-mode`} role="dialog" aria-modal="true" aria-labelledby="ntf-modal-title">
-            <header className="ntf-center-head">
-              <div className="ntf-prefs-copy">
+          <section className={`ntc-center ${notifTone}`} role="dialog" aria-modal="true" aria-labelledby="ntf-modal-title">
+            <header className="ntc-head">
+              <div className="ntc-title-mark" aria-hidden="true"><img src={NOTIFICATION_MARK} alt="" /></div>
+              <div className="ntc-title-copy">
                 <b id="ntf-modal-title">Notifications</b>
-                <em>Critical alerts, opportunities, account events, and logs.</em>
+                <em>Curated account, execution, bot, and market alerts. Detailed evidence remains in Logs.</em>
               </div>
-              <div className="ntf-center-actions">
-                <button type="button" onClick={markNotificationsRead} disabled={events.length === 0}>Mark Read</button>
-                <button className="ntf-modal-close" type="button" onClick={() => setNotifDetailOpen(false)} aria-label="Close notifications">
+              <div className="ntc-head-status"><i /><span><b>In-App Active</b><em>{draftAlertsOn} of {alertRows.length} rules</em></span></div>
+              <div className="ntc-head-actions">
+                <button type="button" onClick={markNotificationsRead} disabled={unread === 0}>Mark Read</button>
+                <button type="button" onClick={() => { setNotifDetailOpen(false); setPage('ledger'); }}><IconReceipt size={14} /> Open Logs</button>
+                <button className="ntc-close" type="button" onClick={() => setNotifDetailOpen(false)} aria-label="Close notifications">
                   <IconClose size={18} />
                 </button>
               </div>
             </header>
 
-            <div className="ntf-center-body">
-              <section className="ntf-center-feed" aria-label="Notification feed">
-                <div className="ntf-modal-filters" role="tablist" aria-label="Notification filters">
-                  {notifTabs.map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      className={notifTab === t.id ? 'on' : ''}
-                      role="tab"
-                      aria-selected={notifTab === t.id}
-                      onClick={() => setNotifTab(t.id)}
-                    >
-                      {t.label}
+            <section className="ntc-rules" aria-labelledby="ntc-rules-title">
+              <div className="ntc-rules-copy">
+                <b id="ntc-rules-title">Notification Rules</b>
+                <em>Select which Log events deserve an interruption.</em>
+              </div>
+              <div className="ntc-rule-grid">
+                {alertRows.map((rule) => (
+                  <button
+                    key={rule.key}
+                    className={`ntc-rule ${notifDraftAlerts[rule.key] ? 'on' : 'off'}`}
+                    type="button"
+                    aria-pressed={notifDraftAlerts[rule.key]}
+                    onClick={() => setNotifDraftAlerts((current) => ({ ...current, [rule.key]: !current[rule.key] }))}
+                  >
+                    <span className={`ntc-rule-icon ${rule.key}`}>{notifIcon(rule.key, 16)}</span>
+                    <span className="ntc-rule-copy"><b>{rule.label}</b><em>{rule.sub}</em></span>
+                    <strong>{notifBucketCounts[rule.key]}</strong>
+                    <i className="ntc-toggle" aria-hidden="true"><span /></i>
+                  </button>
+                ))}
+              </div>
+              <div className="ntc-delivery" aria-label="Delivery channels">
+                <span className="active"><IconBell size={14} /><b>In-App</b><em>Active</em></span>
+                <span><LucideLaptop size={14} /><b>Email</b><em>Planned</em></span>
+                <span><LucideSmartphone size={14} /><b>WhatsApp</b><em>Planned</em></span>
+              </div>
+            </section>
+
+            <section className="ntc-days" aria-label="Seven day alert history">
+              {notifDays.map((day) => (
+                <button key={day.key} type="button" className={notifDay === day.key ? 'on' : ''} onClick={() => setNotifDay((current) => current === day.key ? 'all' : day.key)}>
+                  <span><b>{day.day}</b><em>{day.date}</em></span>
+                  <strong>{day.total}</strong>
+                  <small className={day.critical ? 'hot' : ''}>{day.critical ? `${day.critical} critical` : 'Clear'}</small>
+                </button>
+              ))}
+            </section>
+
+            <section className="ntc-feed" aria-label="Curated notification feed">
+              <div className="ntc-toolbar">
+                <div className="ntc-filters" role="tablist" aria-label="Notification filters">
+                  {notifTabs.map((tab) => (
+                    <button key={tab.id} type="button" className={notifTab === tab.id ? 'on' : ''} role="tab" aria-selected={notifTab === tab.id} onClick={() => setNotifTab(tab.id)}>
+                      {tab.label}<span>{tab.id === 'all' ? enabledArchiveNotifications.reduce((sum, item) => sum + item.count, 0) : notifBucketCounts[tab.id as NotificationRuleKey]}</span>
                     </button>
                   ))}
                 </div>
-
-                <div className="ntf-center-list">
-                  {filteredNotifEvents.length === 0 ? (
-                    <div className="ntf-center-empty">
-                      <span className="ntf-setting-icon"><IconBell size={18} /></span>
-                      <span className="ntf-center-copy">
-                        <b>No notifications in this filter</b>
-                        <em>Matching control-room events will appear here.</em>
-                      </span>
-                    </div>
-                  ) : filteredNotifEvents.slice(0, 10).map((e) => {
-                    const meta = notifMeta(e.kind);
-                    const summary = eventSummary(e.kind, (e.data as Record<string, unknown> | null) ?? null, e.symbol);
-                    return (
-                      <article key={e.id} className={`ntf-center-row ${meta.tone}`}>
-                        <span className="ntf-setting-icon">{notifIcon(meta.tone, 18)}</span>
-                        <span className="ntf-center-copy">
-                          <span className="ntf-center-kicker"><b>{meta.scope}</b><time>{notifStamp(e.ts)}</time></span>
-                          <strong>{meta.title}</strong>
-                          <em>{summary}</em>
-                        </span>
-                      </article>
-                    );
-                  })}
+                <div className="ntc-context">
+                  {notifDay !== 'all' && <button type="button" onClick={() => setNotifDay('all')}>All 7 Days</button>}
+                  <span>{zone.city} · {notifTimeZone === 'UTC' ? 'UTC' : zone.label}</span>
                 </div>
-              </section>
+              </div>
 
-              <aside className="ntf-center-settings ntf-coverage" aria-label="Notification event coverage">
-                <div className="ntf-prefs-copy">
-                  <b>Event Coverage</b>
-                  <em>What the current ledger feed actually contains.</em>
-                </div>
+              <div className="ntc-table-head" aria-hidden="true"><span>Time</span><span>Alert</span><span>Notification</span><span>Source</span><span>Status</span></div>
+              <div className="ntc-list">
+                {notifArchiveBusy && notifArchive.length === 0 ? (
+                  <div className="ntc-empty"><IconRefresh size={18} /><b>Loading Notification History</b><em>Reading the last seven days from the immutable Log.</em></div>
+                ) : notifArchiveError ? (
+                  <div className="ntc-empty error"><IconAlarm size={18} /><b>Notification History Unavailable</b><em>{notifArchiveError}</em></div>
+                ) : filteredNotifications.length === 0 ? (
+                  <div className="ntc-empty"><IconBell size={18} /><b>No Alerts Match This View</b><em>Try another day or enable a rule above. Raw activity remains available in Logs.</em></div>
+                ) : filteredNotifications.map((item) => (
+                  <article key={`${item.id}-${item.category}`} className={`ntc-row ${item.severity}`}>
+                    <time><b>{notifClock(item.ts)}</b><em>{notifStamp(item.ts)}</em></time>
+                    <span className={`ntc-row-icon ${item.category}`}>{notifIcon(item.severity === 'opportunity' ? 'opportunity' : item.category, 17)}</span>
+                    <span className="ntc-row-copy"><b>{item.title}</b><em>{item.detail}</em></span>
+                    <span className="ntc-row-source"><b>{item.subject}</b><em>{alertShort[item.category]}</em></span>
+                    <span className={`ntc-row-status ${item.severity}`}>{item.count > 1 ? `${item.count} Grouped` : item.severity === 'critical' ? 'Action' : item.severity === 'warning' ? 'Review' : 'Notified'}</span>
+                  </article>
+                ))}
+              </div>
+            </section>
 
-                <section className="ntf-pref-group ntf-coverage-list" aria-label="Event categories">
-                  <div className="ntf-setting-row">
-                    <span className="ntf-setting-icon"><IconShield size={18} /></span>
-                    <span className="ntf-setting-label">Critical</span>
-                    <strong>{notifBucketCounts.critical}</strong>
-                  </div>
-                  <div className="ntf-setting-row">
-                    <span className="ntf-setting-icon"><IconRadar size={18} /></span>
-                    <span className="ntf-setting-label">Opportunities</span>
-                    <strong>{notifBucketCounts.opportunity}</strong>
-                  </div>
-                  <div className="ntf-setting-row">
-                    <span className="ntf-setting-icon"><IconWallet size={18} /></span>
-                    <span className="ntf-setting-label">Account</span>
-                    <strong>{notifBucketCounts.account}</strong>
-                  </div>
-                  <div className="ntf-setting-row">
-                    <span className="ntf-setting-icon"><IconReceipt size={18} /></span>
-                    <span className="ntf-setting-label">System logs</span>
-                    <strong>{notifBucketCounts.logs}</strong>
-                  </div>
-                </section>
-
-                <div className="ntf-delivery-truth">
-                  <IconBell size={16} />
-                  <span><b>In-app ledger only</b><em>External push and messaging delivery are not connected.</em></span>
-                </div>
-                <button className="ntf-open-ledger" type="button" onClick={() => { setNotifDetailOpen(false); setPage('ledger'); }}><IconReceipt size={15} /> Open full ledger</button>
-              </aside>
-            </div>
+            <footer className="ntc-foot">
+              <span><b>{filteredNotifications.reduce((sum, item) => sum + item.count, 0)}</b> alerts in view · {allArchiveNotifications.reduce((sum, item) => sum + item.count, 0)} curated from seven days of Logs</span>
+              <div>
+                <button type="button" onClick={cancelNotificationPrefs} disabled={!notifPrefsDirty}>Discard Changes</button>
+                <button className="primary" type="button" onClick={saveNotificationPrefs} disabled={!notifPrefsDirty}>Save Changes</button>
+              </div>
+            </footer>
           </section>
         </div>
       )}
@@ -3939,141 +4036,8 @@ function CalendarModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// AWS CloudShell quick-view. Terminal-styled launcher — it looks like AWS
-// CloudShell and is grounded in the real deploy target, but it does not fake an
-// attached session: "Open in AWS" (or Enter) starts the real console session.
 function CloudShellModal({ onClose }: { onClose: () => void }) {
-  const [cmd, setCmd] = useState('aws sts get-caller-identity');
-  const [copied, setCopied] = useState(false);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-  const launch = () => window.open(CLOUD_SHELL_URL, '_blank', 'noopener,noreferrer');
-  const copyCommand = async () => {
-    try {
-      await navigator.clipboard?.writeText(cmd);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1400);
-    } catch {
-      setCopied(false);
-    }
-  };
-
-  return (
-    <div className="ov-backdrop" onMouseDown={onClose}>
-      <div className="ov-modal cs-modal aws-console" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="cs-console-top">
-          <div className="cs-console-brand">
-            <span className="cs-aws-mark">aws</span>
-            <span>
-              <b>CloudShell</b>
-              <em>Local command draft · no AWS session attached</em>
-            </span>
-          </div>
-          <div className="cs-console-actions">
-            <button type="button" onClick={() => { void copyCommand(); }}><IconReceipt size={14} />{copied ? 'Copied' : 'Copy'}</button>
-            <button type="button" className="primary" onClick={launch}><IconExternal size={14} />Open AWS</button>
-            <button type="button" className="close" onClick={onClose} aria-label="Close"><IconClose size={16} /></button>
-          </div>
-        </div>
-        <div className="cs-console-tabs" aria-label="CloudShell terminal tabs">
-          <span className="on">terminal</span>
-          <em>draft · executes only after opening AWS</em>
-        </div>
-        <div className="cs-shell-grid">
-          <div className="cs-term" onMouseDown={() => inputRef.current?.focus()}>
-            <div className="cs-term-toolbar">
-              <span><i /> bash</span>
-              <em>not attached</em>
-            </div>
-            <div className="cs-line muted">Local editor — no remote output is fabricated.</div>
-            <div className="cs-line"><span className="cs-k">identity</span> <b>not attached</b></div>
-            <div className="cs-editor">
-              <div className="cs-promptline">
-                <span className="cs-prompt">draft$</span>
-                <textarea
-                  ref={inputRef}
-                  className="cs-input"
-                  autoFocus
-                  value={cmd}
-                  spellCheck={false}
-                  rows={7}
-                  aria-label="CloudShell command draft"
-                  onChange={(e) => setCmd(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="cs-output">
-              <span>local draft</span>
-              <em>Copy or open AWS CloudShell to execute.</em>
-            </div>
-          </div>
-          <aside className="cs-side" aria-label="CloudShell environment">
-            <span><em>identity</em><b>unknown</b></span>
-            <span><em>region</em><b>choose in AWS</b></span>
-            <span><em>session</em><b>not attached</b></span>
-            <span><em>mode</em><b>local draft</b></span>
-            <button type="button" onClick={() => { void copyCommand(); }}>{copied ? 'Copied' : 'Copy Command'}</button>
-            <button type="button" className="primary" onClick={launch}>Open CloudShell</button>
-          </aside>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ApiKeyModal({ onClose }: { onClose: () => void }) {
-  const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
-  useEffect(() => {
-    let al = true;
-    fetch('/api/apikey').then((r) => (r.ok ? r.json() : null)).then((d) => { if (al && d?.keys) setKeys(d.keys as ApiKeyInfo[]); }).catch(() => undefined);
-    return () => { al = false; };
-  }, []);
-  return (
-    <div className="ov-backdrop" onMouseDown={onClose}>
-      <div className="ov-modal ak-modal" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="ov-head">
-          <div className="ov-title"><IconKey size={16} /> API keys</div>
-          <div className="ov-actions"><button className="ov-close" onClick={onClose} aria-label="Close"><IconClose size={16} /></button></div>
-        </div>
-        <div className="ak-modal-body">
-          <p className="ak-modal-intro">Two Binance keys are expected: one data key and one guarded automation key. Secrets stay server-side; this only shows posture and enabled scope.</p>
-          {keys.length === 0 ? <div className="ak-empty">No key manifest available.</div> : (
-            <div className="ak-detail-cards">
-              {keys.map((ak) => {
-                const enabled = enabledApiPerms(ak);
-                return (
-                  <section key={ak.id} className={`keyx-card2 ak-card2 ${ak.status}`}>
-                    <div className="keyx-card-head">
-                      <span className="keyx-source-mark"><BinanceLogo size={32} /></span>
-                      <span className="keyx-card-title">
-                        <span className="keyx-name-row"><b>{apiKeyRole(ak)}</b><span className="keyx-type-pill">{ak.type}</span></span>
-                        <em className="keyx-ip-line">{apiKeyIpLine(ak)}</em>
-                        <em>{ak.name} · {apiKeySourceLine(ak)}</em>
-                      </span>
-                      <span className={`keyx-state ${ak.status}`}>{ak.status}</span>
-                    </div>
-                    <div className="keyx-enabled" aria-label={`${ak.name} enabled permissions`}>
-                      {enabled.length ? (
-                        <ul className="keyx-enabled-list">
-                          {enabled.map((p) => (
-                            <li key={p.key} className={riskApiPerms.includes(p.key) ? 'risk' : undefined}>
-                              <i aria-hidden />
-                              <span>{p.label}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : <span className="keyx-enabled-empty">No active permission</span>}
-                    </div>
-                    {ak.note && <p className="keyx-note">{ak.note}</p>}
-                  </section>
-                );
-              })}
-            </div>
-          )}
-        </div>
-        <div className="cs-foot">Rotate or rename keys server-side; this surface only verifies the visible posture.</div>
-      </div>
-    </div>
-  );
+  return <AwsRunnerModal onClose={onClose} />;
 }
 
 // Rendered once at the app root so fixed overlays escape the sidebar box.
@@ -4082,7 +4046,6 @@ export function Overlays() {
   if (kind === 'news') return <NewsModal onClose={() => set(null)} />;
   if (kind === 'calendar') return <CalendarModal onClose={() => set(null)} />;
   if (kind === 'cloudshell') return <CloudShellModal onClose={() => set(null)} />;
-  if (kind === 'apikey') return <ApiKeyModal onClose={() => set(null)} />;
   return null;
 }
 

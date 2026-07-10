@@ -151,6 +151,12 @@ export interface MyTrade {
   isBuyer: boolean;
 }
 
+export interface WalletBalance {
+  activate: boolean;
+  balance: string;
+  walletName: string;
+}
+
 /**
  * Signed spot REST client. Keys live ONLY here on the server, read from env.
  * There is deliberately no withdrawal or transfer method in this class.
@@ -259,6 +265,15 @@ export class BinanceClient {
     return this.request('GET', '/sapi/v1/simple-earn/flexible/position', { size: 100 }, true).then(
       (d) => ({ rows: ((d as { rows?: { asset: string; totalAmount: string; latestAnnualPercentageRate: string; canRedeem: boolean }[] }).rows ?? []) }),
     );
+  }
+
+  /** Binance's account-wide wallet valuation in the requested quote asset.
+   * This is the authoritative aggregate for Spot, Earn, Margin, Futures,
+   * Funding, Options, and other activated wallets. It is deliberately
+   * read-only and cached by the server because the upstream call costs 60 IP
+   * weight. */
+  walletBalances(quoteAsset = 'USDT'): Promise<WalletBalance[]> {
+    return this.request('GET', '/sapi/v1/asset/wallet/balance', { quoteAsset }, true);
   }
 
   marginAccount(): Promise<{

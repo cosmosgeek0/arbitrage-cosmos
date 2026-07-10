@@ -1,19 +1,19 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../store';
 import { TokenIcon, brandColor } from '../components/TokenIcon';
+import { BinanceMark } from '../components/BinanceMark';
 import { Num } from '../components/Num';
 import { EmptyState } from '../components/ui';
 import { IconSearch } from '../components/Icons';
-import { fmtPrice, fmtPct, fmtBasis, fmtMoney, fmtFunding, countdown, signClass } from '../format';
+import { fmtPrice, fmtPct, fmtBasis, fmtMoney, fmtFunding, signClass } from '../format';
 import { primeIcons } from '../lib/iconManifest';
 import { tokenName } from '../lib/tokenNames';
-import { Chev, PillSelect, pageList, Star } from '../components/PillSelect';
+import { PillSelect, pageList, Star } from '../components/PillSelect';
 import type { MarketRow } from '../types';
 import './Markets.css';
 
 type View = 'overview' | 'derivatives' | 'basis' | 'liquidity';
-type Filter = 'all' | 'watchlist' | 'paired' | 'spotOnly' | 'movers';
-type MarketSource = 'binance' | 'all' | 'coinbase' | 'bybit' | 'coingecko';
+type Filter = 'all' | 'watchlist' | 'paired' | 'books' | 'spotOnly' | 'movers';
 type SortKey =
   | 'base'
   | 'spot'
@@ -33,6 +33,8 @@ type SortKey =
   | 'perpChange24hPct'
   | 'sparkGrowth';
 
+const VIEW_STORAGE = 'cosmos-market-view-v2';
+
 const VIEWS: { id: View; label: string; sort: SortKey }[] = [
   { id: 'overview', label: 'Overview', sort: 'quoteVolume24h' },
   { id: 'derivatives', label: 'Derivatives', sort: 'openInterestUsd' },
@@ -40,69 +42,57 @@ const VIEWS: { id: View; label: string; sort: SortKey }[] = [
   { id: 'liquidity', label: 'Liquidity', sort: 'depth' },
 ];
 
-function readMarketView(): View {
-  if (typeof window === 'undefined') return 'derivatives';
-  try {
-    const saved = window.localStorage.getItem('cosmos-market-view') as View | null;
-    if (saved && VIEWS.some((item) => item.id === saved)) return saved;
-  } catch {
-    // Local persistence is optional; the useful operator view remains the fallback.
-  }
-  return 'derivatives';
-}
-
 const FILTERS: { id: Filter; label: string }[] = [
-  { id: 'all', label: 'All Assets' },
+  { id: 'all', label: 'All Markets' },
   { id: 'watchlist', label: 'Watchlist' },
   { id: 'paired', label: 'Spot + Perp' },
+  { id: 'books', label: 'Executable Books' },
   { id: 'spotOnly', label: 'Spot Only' },
-  { id: 'movers', label: 'Movers' },
+  { id: 'movers', label: 'Liquid Movers' },
 ];
 
-const MARKET_SOURCES: {
-  id: MarketSource;
-  name: string;
-  domain: string | null;
-  detail: string;
-  enabled: boolean;
-}[] = [
-  { id: 'binance', name: 'Binance', domain: 'binance.com', detail: 'Spot, Perpetuals, OI & Funding', enabled: true },
-  { id: 'all', name: 'All Sources', domain: null, detail: 'Unified Multi-Source Market Universe', enabled: false },
-  { id: 'coinbase', name: 'Coinbase', domain: 'coinbase.com', detail: 'Advanced Trade Spot Markets', enabled: false },
-  { id: 'bybit', name: 'Bybit', domain: 'bybit.com', detail: 'Spot & Derivatives Coverage', enabled: false },
-  { id: 'coingecko', name: 'CoinGecko', domain: 'coingecko.com', detail: 'Broader Token Discovery', enabled: false },
-];
-
-const finite = (v: number | null | undefined): v is number => typeof v === 'number' && Number.isFinite(v);
-const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
-const fmtCount = (v: number) => (Number.isFinite(v) ? compact.format(v) : '—');
-
-function fmtAgeMs(ms: number | null): string {
-  if (ms === null || !Number.isFinite(ms)) return '—';
-  if (ms < 1500) return 'just now';
-  if (ms < 60_000) return `${Math.round(ms / 1000)}s ago`;
-  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m ago`;
-  return `${Math.round(ms / 3_600_000)}h ago`;
+function readMarketView(): View {
+  if (typeof window === 'undefined') return 'overview';
+  try {
+    const saved = window.localStorage.getItem(VIEW_STORAGE) as View | null;
+    if (saved && VIEWS.some((item) => item.id === saved)) return saved;
+  } catch {
+    // Local persistence is optional. The native Overview remains the fallback.
+  }
+  return 'overview';
 }
+
+const finite = (value: number | null | undefined): value is number => typeof value === 'number' && Number.isFinite(value);
 
 function fmtLiveAge(ms: number | null): string {
   if (ms === null || !Number.isFinite(ms)) return '—';
-  if (ms < 1500) return 'now';
+  if (ms < 1500) return 'Now';
   if (ms < 60_000) return `${Math.max(1, Math.round(ms / 1000))}s`;
   if (ms < 3_600_000) return `${Math.max(1, Math.round(ms / 60_000))}m`;
   return `${Math.max(1, Math.round(ms / 3_600_000))}h`;
 }
 
 function depthUsd(row: MarketRow): number | null {
-  if (row.hasPerp && finite(row.spotTopQuoteUsd) && finite(row.perpTopQuoteUsd)) return Math.min(row.spotTopQuoteUsd, row.perpTopQuoteUsd);
+  if (row.hasPerp && finite(row.spotTopQuoteUsd) && finite(row.perpTopQuoteUsd)) {
+    return Math.min(row.spotTopQuoteUsd, row.perpTopQuoteUsd);
+  }
   return row.spotTopQuoteUsd ?? null;
 }
 
-function fmtBps(v: number | null | undefined): string {
-  if (!finite(v)) return '—';
-  const bps = v * 100;
-  const a = Math.abs(bps);
-  return `${bps.toFixed(a >= 100 ? 0 : a >= 10 ? 1 : 2)} bps`;
+function hasExecutableBooks(row: MarketRow): boolean {
+  return row.hasSpot
+    && row.hasPerp
+    && finite(row.spotBid)
+    && finite(row.spotAsk)
+    && finite(row.perpBid)
+    && finite(row.perpAsk);
+}
+
+function fmtBps(value: number | null | undefined): string {
+  if (!finite(value)) return '—';
+  const bps = value * 100;
+  const abs = Math.abs(bps);
+  return `${bps.toFixed(abs >= 100 ? 0 : abs >= 10 ? 1 : 2)} bps`;
 }
 
 function sortValue(row: MarketRow, key: SortKey): number | string {
@@ -124,339 +114,172 @@ function sortValue(row: MarketRow, key: SortKey): number | string {
     case 'depth': return depthUsd(row) ?? Number.NaN;
     case 'perpChange24hPct': return row.perpChange24hPct ?? Number.NaN;
     case 'sparkGrowth': {
-      const sp = row.spark;
-      if (!sp || sp.length < 2 || !Number.isFinite(sp[0]) || sp[0] === 0) return Number.NaN;
-      return ((sp[sp.length - 1] - sp[0]) / Math.abs(sp[0])) * 100;
+      const spark = row.spark;
+      if (!spark || spark.length < 2 || !Number.isFinite(spark[0]) || spark[0] === 0) return Number.NaN;
+      return ((spark[spark.length - 1] - spark[0]) / Math.abs(spark[0])) * 100;
     }
   }
 }
 
-/* ---- little coinbase-anatomy pieces ---------------------------------- */
-
-const Globe = () => (
-  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden>
-    <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
-    <ellipse cx="8" cy="8" rx="2.8" ry="6.2" fill="none" stroke="currentColor" strokeWidth="1.2" />
-    <path d="M2 8h12M2.8 5h10.4M2.8 11h10.4" fill="none" stroke="currentColor" strokeWidth="1.1" />
-  </svg>
-);
-
-/** Diagonal change arrow, Coinbase-style: ↗ for up, ↙ for down. */
-const DiagArrow = ({ up }: { up: boolean }) => (
-  <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden style={{ transform: up ? 'none' : 'rotate(180deg)' }}>
-    <path d="M3.5 8.5L8.5 3.5M4.6 3.5h3.9v3.9" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
-const SortGlyph = ({ dir }: { dir: 'asc' | 'desc' | null }) => (
-  <svg viewBox="0 0 10 14" width="9" height="13" aria-hidden className="mkx-sortglyph">
-    <path d="M5 1.5L8 5H2z" fill="currentColor" opacity={dir === 'asc' ? 1 : 0.34} />
-    <path d="M5 12.5L2 9h6z" fill="currentColor" opacity={dir === 'desc' ? 1 : 0.34} />
-  </svg>
-);
-
-function SourceLogo({ source, size = 24 }: { source: (typeof MARKET_SOURCES)[number]; size?: number }) {
-  if (source.id === 'binance') {
-    return (
-      <span className="mkx-source-logo mkx-source-logo-binance" style={{ width: size, height: size }} aria-hidden>
-        <svg viewBox="0 0 24 24" width={size} height={size}>
-          <path d="M16.624 13.9202l2.7175 2.7154-7.353 7.353-7.353-7.352 2.7175-2.7164 4.6355 4.6595 4.6356-4.6595zm4.6366-4.6366L24 12l-2.7154 2.7164L18.5682 12l2.6924-2.7164zm-9.272.001l2.7163 2.6914-2.7164 2.7174v-.001L9.2721 12l2.7164-2.7154zm-9.2722-.001L5.4088 12l-2.6914 2.6924L0 12l2.7164-2.7164zM11.9885.0115l7.353 7.329-2.7174 2.7154-4.6356-4.6356-4.6355 4.6595-2.7174-2.7154 7.353-7.353z" />
-        </svg>
-      </span>
-    );
-  }
-  if (!source.domain) {
-    return (
-      <span className="mkx-source-logo mkx-source-logo-all" style={{ width: size, height: size }} aria-hidden>
-        <svg viewBox="0 0 20 20" width="14" height="14">
-          <rect x="2.5" y="2.5" width="6" height="6" rx="1.5" />
-          <rect x="11.5" y="2.5" width="6" height="6" rx="1.5" />
-          <rect x="2.5" y="11.5" width="6" height="6" rx="1.5" />
-          <rect x="11.5" y="11.5" width="6" height="6" rx="1.5" />
-        </svg>
-      </span>
-    );
-  }
+function DiagArrow({ up }: { up: boolean }) {
   return (
-    <span className="mkx-source-logo" style={{ width: size, height: size }} data-fallback={source.name.slice(0, 1)} aria-hidden>
-      <img
-        src={`/api/source-logo?domain=${encodeURIComponent(source.domain)}&sz=64`}
-        alt=""
-        onError={(e) => { e.currentTarget.style.display = 'none'; }}
-      />
-    </span>
+    <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden style={{ transform: up ? 'none' : 'rotate(180deg)' }}>
+      <path d="M3.5 8.5L8.5 3.5M4.6 3.5h3.9v3.9" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
-function MarketSourcePicker() {
-  const [source, setSource] = useState<MarketSource>('binance');
-  const [open, setOpen] = useState(false);
-  const [openUp, setOpenUp] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const selected = MARKET_SOURCES.find((item) => item.id === source) ?? MARKET_SOURCES[0];
-
-  const toggleMenu = () => {
-    if (open) {
-      setOpen(false);
-      return;
-    }
-    const rect = ref.current?.getBoundingClientRect();
-    if (rect) {
-      const below = window.innerHeight - rect.bottom;
-      setOpenUp(below < 372 && rect.top > below);
-    }
-    setOpen(true);
-  };
-
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onDoc);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDoc);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-
+function SortGlyph({ dir }: { dir: 'asc' | 'desc' | null }) {
   return (
-    <div className="mkx-source-picker" ref={ref}>
-      <button
-        type="button"
-        className="mkx-source-trigger"
-        aria-label={`Market data source: ${selected.name}`}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        onClick={toggleMenu}
-      >
-        <SourceLogo source={selected} size={17} />
-        <span>{selected.name}</span>
-        <span className={`mkx-chev ${open ? 'up' : ''}`}><Chev /></span>
-      </button>
-      {open && (
-        <div className={`mkx-source-menu ${openUp ? 'upward' : ''}`} role="listbox" aria-label="Market data source">
-          <div className="mkx-source-menu-head">
-            <b>Market Data Source</b>
-            <span>Choose The Universe Behind This Table</span>
-          </div>
-          <div className="mkx-source-options">
-            {MARKET_SOURCES.map((item) => {
-              const active = item.id === source;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="option"
-                  aria-selected={active}
-                  disabled={!item.enabled}
-                  className={active ? 'selected' : ''}
-                  title={item.enabled ? `${item.name} Market Feed` : `${item.name} Integration Is Planned`}
-                  onClick={() => {
-                    setSource(item.id);
-                    setOpen(false);
-                  }}
-                >
-                  <SourceLogo source={item} size={30} />
-                  <span className="mkx-source-copy">
-                    <b>{item.name}</b>
-                    <em>{item.detail}</em>
-                  </span>
-                  <span className={`mkx-source-state ${item.enabled ? 'live' : 'planned'}`}>
-                    {item.enabled ? 'Live' : 'Planned'}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
+    <svg viewBox="0 0 10 14" width="9" height="13" aria-hidden className="mkx-sortglyph">
+      <path d="M5 1.5L8 5H2z" fill="currentColor" opacity={dir === 'asc' ? 1 : 0.3} />
+      <path d="M5 12.5L2 9h6z" fill="currentColor" opacity={dir === 'desc' ? 1 : 0.3} />
+    </svg>
   );
 }
 
-
-/** Downsample to ~n points, then a smooth Catmull-Rom→Bezier path — the
- * Coinbase spark is a flowing 2px line, never a raw tick-noise zigzag. */
-function smoothPath(values: number[], w: number, h: number, n = 26): string {
-  let vs = values;
-  if (vs.length > n) {
-    const step = (vs.length - 1) / (n - 1);
-    vs = Array.from({ length: n }, (_, i) => vs[Math.round(i * step)]);
+function smoothPath(values: number[], width: number, height: number, count = 26): string {
+  let sampled = values;
+  if (sampled.length > count) {
+    const step = (sampled.length - 1) / (count - 1);
+    sampled = Array.from({ length: count }, (_, index) => sampled[Math.round(index * step)]);
   }
-  const min = Math.min(...vs);
-  const max = Math.max(...vs);
+  const min = Math.min(...sampled);
+  const max = Math.max(...sampled);
   const span = max - min || 1;
-  const pts: [number, number][] = vs.map((v, i) => [
-    (i / (vs.length - 1)) * w,
-    h - 3 - ((v - min) / span) * (h - 6),
+  const points: [number, number][] = sampled.map((value, index) => [
+    (index / (sampled.length - 1)) * width,
+    height - 3 - ((value - min) / span) * (height - 6),
   ]);
-  let d = `M${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[Math.max(0, i - 1)];
-    const p1 = pts[i];
-    const p2 = pts[i + 1];
-    const p3 = pts[Math.min(pts.length - 1, i + 2)];
+  let path = `M${points[0][0].toFixed(1)} ${points[0][1].toFixed(1)}`;
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const p0 = points[Math.max(0, index - 1)];
+    const p1 = points[index];
+    const p2 = points[index + 1];
+    const p3 = points[Math.min(points.length - 1, index + 2)];
     const c1x = p1[0] + (p2[0] - p0[0]) / 6;
     const c1y = p1[1] + (p2[1] - p0[1]) / 6;
     const c2x = p2[0] - (p3[0] - p1[0]) / 6;
     const c2y = p2[1] - (p3[1] - p1[1]) / 6;
-    d += ` C${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`;
+    path += ` C${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`;
   }
-  return d;
+  return path;
 }
 
-/** Line sparkline for table rows — smooth stroke, brand colored. Stablecoins
- * (range under 0.1% of price) draw a calm midline instead of amplified noise. */
 function RowSpark({ values, color }: { values: number[] | null | undefined; color: string }) {
-  if (!values || values.length < 2) return <span className="mkx-spark-empty" />;
-  const w = 100;
-  const h = 36;
+  if (!values || values.length < 2) return <span className="mkx-spark-empty">Warming</span>;
+  const width = 118;
+  const height = 34;
   const min = Math.min(...values);
   const max = Math.max(...values);
-  const mean = values.reduce((s, v) => s + v, 0) / values.length;
-  if (mean !== 0 && (max - min) / Math.abs(mean) < 0.001) {
-    return (
-      <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} className="mkx-rowspark" aria-hidden>
-        <line x1="2" y1={h / 2} x2={w - 2} y2={h / 2} stroke={color} strokeWidth="2" strokeLinecap="round" />
-      </svg>
-    );
-  }
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const flat = mean !== 0 && (max - min) / Math.abs(mean) < 0.001;
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} className="mkx-rowspark" aria-hidden>
-      <path d={smoothPath(values, w, h)} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+    <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} className="mkx-rowspark" aria-label="Native market trend">
+      {flat ? (
+        <line x1="2" y1={height / 2} x2={width - 2} y2={height / 2} stroke={color} strokeWidth="1.6" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      ) : (
+        <path d={smoothPath(values, width, height)} fill="none" stroke={color} strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      )}
     </svg>
   );
 }
 
-/** Stat-tile chart: line over a halftone-dot area fill (the Coinbase tile look). */
-function DotSpark({ values, tone, id }: { values: number[]; tone: 'up' | 'down'; id: string }) {
-  const w = 260;
-  const h = 56;
-  if (!values || values.length < 2) return null;
-  const line = smoothPath(values, w, h, 34);
-  const area = `${line} L${w} ${h} L0 ${h} Z`;
-  const color = tone === 'up' ? 'var(--up)' : 'var(--down)';
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="mkx-dotspark" aria-hidden>
-      <defs>
-        <pattern id={`dots-${id}`} width="5" height="5" patternUnits="userSpaceOnUse">
-          <circle cx="1.4" cy="1.4" r="1" fill={color} opacity="0.3" />
-        </pattern>
-      </defs>
-      <path d={area} fill={`url(#dots-${id})`} />
-      <path d={line} fill="none" stroke={color} strokeWidth="1.7" strokeLinejoin="round" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-/** Change cell with honest tick flashing: on every update the cell pulses in
- * the TICK direction — green with an UP arrow when the value just rose, red
- * with a down arrow when it fell — then reverts to the steady 24h truth.
- * The arrow and the flash can never contradict each other. Values that round
- * to 0.00% rest plain and neutral (a red "down 0.00%" is a rounding lie). */
-function ChangeCell({ v }: { v: number | null | undefined }) {
+function ChangeCell({ value }: { value: number | null | undefined }) {
   const [flash, setFlash] = useState<null | 'up' | 'down'>(null);
-  const prev = useRef<number | null>(null);
+  const previous = useRef<number | null>(null);
   useEffect(() => {
-    const p = prev.current;
-    prev.current = finite(v) ? v : null;
-    if (p === null || !finite(v) || v === p) return;
-    setFlash(v > p ? 'up' : 'down');
-    const t = window.setTimeout(() => setFlash(null), 900);
-    return () => window.clearTimeout(t);
-  }, [v]);
-  const flat = !finite(v) || Math.abs(v ?? 0) < 0.005;
+    const old = previous.current;
+    previous.current = finite(value) ? value : null;
+    if (old === null || !finite(value) || value === old) return;
+    setFlash(value > old ? 'up' : 'down');
+    const timer = window.setTimeout(() => setFlash(null), 900);
+    return () => window.clearTimeout(timer);
+  }, [value]);
+
+  const flat = !finite(value) || Math.abs(value ?? 0) < 0.005;
   const showArrow = flash !== null || !flat;
-  const arrowUp = flash ? flash === 'up' : (v ?? 0) > 0;
-  const cls = flash ? (flash === 'up' ? 'pos' : 'neg') : flat ? '' : signClass(v);
+  const arrowUp = flash ? flash === 'up' : (value ?? 0) > 0;
+  const className = flash ? (flash === 'up' ? 'pos' : 'neg') : flat ? '' : signClass(value);
   return (
-    <td className={`r mkx-chg ${cls}`}>
-      {finite(v) ? (
-        <span className="mkx-chg-in">
-          {showArrow && <DiagArrow up={arrowUp} />}
-          {fmtPct(Math.abs(v ?? 0), 2, false)}
-        </span>
+    <td className={`r mkx-change ${className}`}>
+      {finite(value) ? (
+        <span>{showArrow && <DiagArrow up={arrowUp} />}{fmtPct(Math.abs(value), 2, false)}</span>
       ) : '—'}
     </td>
   );
 }
 
-
-/* ---- page ------------------------------------------------------------ */
-
 export function Markets() {
   const { markets, marketsUpdatedAt, marketsError, connected, state, prefs, openDetail, toggleWatch } = useStore();
-  const [view, setView] = useState<View>(readMarketView);
+  const initialView = readMarketView();
+  const [view, setView] = useState<View>(initialView);
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
-  const [sortKey, setSortKey] = useState<SortKey>(() => VIEWS.find((item) => item.id === readMarketView())?.sort ?? 'openInterestUsd');
+  const [sortKey, setSortKey] = useState<SortKey>(VIEWS.find((item) => item.id === initialView)?.sort ?? 'quoteVolume24h');
   const [sortDesc, setSortDesc] = useState(true);
   const [pageN, setPageN] = useState(0);
-  const [pageSize, setPageSize] = useState(10);
-  const [more, setMore] = useState(false);
+  const [pageSize, setPageSize] = useState(25);
   const [now, setNow] = useState(() => Date.now());
 
   const watchlist = state?.config.watchlist ?? [];
   const feesPct = state?.config.feesPct ?? 0;
-  const iconBases = useMemo(() => [...new Set(markets.map((m) => m.base))], [markets]);
+  const iconBases = useMemo(() => [...new Set(markets.map((market) => market.base))], [markets]);
+
   useEffect(() => { primeIcons(iconBases); }, [iconBases]);
   useEffect(() => {
-    const t = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(t);
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
   }, []);
   useEffect(() => {
-    try {
-      window.localStorage.setItem('cosmos-market-view', view);
-    } catch {
-      // Persistence is a convenience; the active in-memory view still works.
-    }
+    try { window.localStorage.setItem(VIEW_STORAGE, view); } catch { /* Optional preference. */ }
   }, [view]);
 
-  /* -- honest aggregates (all computed from live Binance rows) -- */
-  const withChange = markets.filter((m) => finite(m.change24hPct));
-  const gainers = withChange.filter((m) => (m.change24hPct ?? 0) > 0).length;
-  const losers = withChange.filter((m) => (m.change24hPct ?? 0) < 0).length;
-  const totalVol = markets.reduce((s, m) => s + (m.quoteVolume24h ?? 0), 0);
-  const byVol = useMemo(() => [...markets].filter((m) => (m.quoteVolume24h ?? 0) > 0).sort((a, b) => (b.quoteVolume24h ?? 0) - (a.quoteVolume24h ?? 0)), [markets]);
-  const top50 = byVol.slice(0, 50);
-  const idxWeight = top50.reduce((s, m) => s + (m.quoteVolume24h ?? 0), 0);
-  const idx50 = idxWeight > 0 ? top50.reduce((s, m) => s + (m.change24hPct ?? 0) * (m.quoteVolume24h ?? 0), 0) / idxWeight : null;
-  const btc = markets.find((m) => m.base === 'BTC') ?? null;
-  const btcShare = btc && totalVol > 0 ? ((btc.quoteVolume24h ?? 0) / totalVol) * 100 : null;
+  const withChange = markets.filter((market) => finite(market.change24hPct));
+  const gainers = withChange.filter((market) => (market.change24hPct ?? 0) > 0).length;
+  const losers = withChange.filter((market) => (market.change24hPct ?? 0) < 0).length;
+  const pairedCount = markets.filter((market) => market.hasSpot && market.hasPerp).length;
+  const executableCount = markets.filter(hasExecutableBooks).length;
+  const totalVolume = markets.reduce((sum, market) => sum + (market.quoteVolume24h ?? 0), 0);
+  const byVolume = useMemo(
+    () => [...markets].filter((market) => (market.quoteVolume24h ?? 0) > 0).sort((a, b) => (b.quoteVolume24h ?? 0) - (a.quoteVolume24h ?? 0)),
+    [markets],
+  );
+  const top50 = byVolume.slice(0, 50);
+  const top50Weight = top50.reduce((sum, market) => sum + (market.quoteVolume24h ?? 0), 0);
+  const top50Pulse = top50Weight > 0
+    ? top50.reduce((sum, market) => sum + (market.change24hPct ?? 0) * (market.quoteVolume24h ?? 0), 0) / top50Weight
+    : null;
   const marketAgeMs = marketsUpdatedAt ? now - marketsUpdatedAt : null;
   const live = connected && !marketsError && marketAgeMs !== null && marketAgeMs < Math.max(12_000, prefs.refreshSec * 2500);
 
-  /* -- filter → sort → page -- */
   const rows = useMemo(() => {
-    let r = markets;
+    let filtered = markets;
     if (search.trim()) {
-      const q = search.trim().toUpperCase();
-      r = r.filter((m) => m.base.includes(q) || m.symbol.includes(q));
+      const query = search.trim().toUpperCase();
+      filtered = filtered.filter((market) => market.base.includes(query) || market.symbol.includes(query) || tokenName(market.base).toUpperCase().includes(query));
     }
     switch (filter) {
-      case 'watchlist': r = r.filter((m) => watchlist.includes(m.symbol)); break;
-      case 'paired': r = r.filter((m) => m.hasSpot && m.hasPerp); break;
-      case 'spotOnly': r = r.filter((m) => m.hasSpot && !m.hasPerp); break;
-      case 'movers': r = r.filter((m) => finite(m.change24hPct) && (m.quoteVolume24h ?? 0) > 500_000); break;
+      case 'watchlist': filtered = filtered.filter((market) => watchlist.includes(market.symbol)); break;
+      case 'paired': filtered = filtered.filter((market) => market.hasSpot && market.hasPerp); break;
+      case 'books': filtered = filtered.filter(hasExecutableBooks); break;
+      case 'spotOnly': filtered = filtered.filter((market) => market.hasSpot && !market.hasPerp); break;
+      case 'movers': filtered = filtered.filter((market) => finite(market.change24hPct) && Math.abs(market.change24hPct) >= 2 && (market.quoteVolume24h ?? 0) >= 1_000_000); break;
+      case 'all': break;
     }
-    const dir = sortDesc ? -1 : 1;
-    return [...r].sort((a, b) => {
-      const av = sortValue(a, sortKey);
-      const bv = sortValue(b, sortKey);
-      if (typeof av === 'string' || typeof bv === 'string') return String(av).localeCompare(String(bv)) * dir;
-      const af = Number.isFinite(av);
-      const bf = Number.isFinite(bv);
-      if (!af && !bf) return a.base.localeCompare(b.base);
-      if (!af) return 1;
-      if (!bf) return -1;
-      return (av - bv) * dir;
+    const direction = sortDesc ? -1 : 1;
+    return [...filtered].sort((a, b) => {
+      const aValue = sortValue(a, sortKey);
+      const bValue = sortValue(b, sortKey);
+      if (typeof aValue === 'string' || typeof bValue === 'string') return String(aValue).localeCompare(String(bValue)) * direction;
+      const aFinite = Number.isFinite(aValue);
+      const bFinite = Number.isFinite(bValue);
+      if (!aFinite && !bFinite) return a.base.localeCompare(b.base);
+      if (!aFinite) return 1;
+      if (!bFinite) return -1;
+      return (aValue - bValue) * direction;
     });
-  }, [markets, filter, search, sortKey, sortDesc, watchlist]);
+  }, [markets, search, filter, watchlist, sortDesc, sortKey]);
 
   useEffect(() => setPageN(0), [filter, search, sortKey, sortDesc, pageSize, view]);
 
@@ -467,333 +290,139 @@ export function Markets() {
   const visibleEnd = safePage * pageSize + visible.length;
 
   const applyView = (next: View) => {
-    const preset = VIEWS.find((v) => v.id === next);
+    const preset = VIEWS.find((item) => item.id === next);
     setView(next);
-    if (preset) { setSortKey(preset.sort); setSortDesc(true); }
+    if (preset) {
+      setSortKey(preset.sort);
+      setSortDesc(true);
+    }
   };
 
-  const th = (label: string, key: SortKey | null, align: 'l' | 'r' = 'r', cls = '') => {
-    if (!key) return <th className={`${align} ${cls}`}>{label}</th>;
+  const tableHead = (label: string, key: SortKey | null, align: 'l' | 'r' = 'r', className = '') => {
+    if (!key) return <th className={`${align} ${className}`}>{label}</th>;
     const active = sortKey === key;
     return (
-      <th className={`${align} ${cls} ${active ? 'sorted' : ''}`} aria-sort={active ? (sortDesc ? 'descending' : 'ascending') : 'none'}>
+      <th className={`${align} ${className} ${active ? 'sorted' : ''}`} aria-sort={active ? (sortDesc ? 'descending' : 'ascending') : 'none'}>
         <button
+          type="button"
           className="mkx-th"
           onClick={() => {
             if (active) setSortDesc(!sortDesc);
-            else { setSortKey(key); setSortDesc(key !== 'base'); }
+            else {
+              setSortKey(key);
+              setSortDesc(key !== 'base');
+            }
           }}
         >
-          {label}
-          <SortGlyph dir={active ? (sortDesc ? 'desc' : 'asc') : null} />
+          {label}<SortGlyph dir={active ? (sortDesc ? 'desc' : 'asc') : null} />
         </button>
       </th>
     );
   };
 
-  const changeCell = (v: number | null | undefined) => <ChangeCell v={v} />;
+  const renderViewHead = () => {
+    if (view === 'derivatives') return <>{tableHead('Perp Mark', 'perpChange24hPct')}{tableHead('Funding', 'fundingRate')}{tableHead('Open Interest', 'openInterestUsd')}{tableHead('OI Change', 'openInterestChangePct')}{tableHead('Liq 15m', 'liquidations15mUsd')}{tableHead('Perp Volume', 'perpVolume24h')}</>;
+    if (view === 'basis') return <>{tableHead('Best Executable', 'executableBasisBestPct')}{tableHead('Long Spot', 'executableBasisLongSpotPct')}{tableHead('Short Spot', 'executableBasisShortSpotPct')}{tableHead('Net After Fees', 'executableBasisBestPct')}{tableHead('Funding', 'fundingRate')}{tableHead('Direction', null, 'l', 'mkx-direction-col')}</>;
+    if (view === 'liquidity') return <>{tableHead('Spot Spread', 'spotSpreadPct')}{tableHead('Perp Spread', 'perpSpreadPct')}{tableHead('Top Depth', 'depth')}{tableHead('Volume', 'quoteVolume24h')}{tableHead('24h Range', null)}{tableHead('Change', 'change24hPct')}</>;
+    return <>{tableHead('Market Price', 'spot')}{tableHead('Native Chart', 'sparkGrowth', 'r', 'mkx-chart-col')}{tableHead('Change', 'change24hPct')}{tableHead('Volume', 'quoteVolume24h')}{tableHead('Open Interest', 'openInterestUsd')}{tableHead('Funding', 'fundingRate')}</>;
+  };
 
-  /* -- per-view columns (data honest to what Binance actually publishes) -- */
-  const cols: { head: ReactNode; cells: (m: MarketRow) => ReactNode } = useMemo(() => {
-    if (view === 'derivatives') {
-      return {
-        head: (
-          <>
-            {th('Perp Mark', 'perpChange24hPct')}
-            {th('Funding', 'fundingRate')}
-            {th('Open Interest', 'openInterestUsd')}
-            {th('OI Change', 'openInterestChangePct')}
-            {th('Liq 15m', 'liquidations15mUsd')}
-            {th('Perp Volume', 'perpVolume24h')}
-          </>
-        ),
-        cells: (m) => (
-          <>
-            <td className="r mkx-num"><Num value={m.perpMark}>{fmtPrice(m.perpMark)}</Num></td>
-            <td className={`r mkx-num ${signClass(m.fundingRate)}`}><Num value={m.fundingRate}>{fmtFunding(m.fundingRate)}</Num></td>
-            <td className="r mkx-num"><Num value={m.openInterestUsd}>{fmtMoney(m.openInterestUsd)}</Num></td>
-            {changeCell(m.openInterestChangePct)}
-            <td className="r mkx-num"><Num value={m.liquidations15mUsd}>{fmtMoney(m.liquidations15mUsd)}</Num></td>
-            <td className="r mkx-num"><Num value={m.perpVolume24h}>{fmtMoney(m.perpVolume24h)}</Num></td>
-          </>
-        ),
-      };
-    }
+  const renderViewCells = (market: MarketRow) => {
+    if (view === 'derivatives') return <><td className="r mkx-num"><Num value={market.perpMark}>{fmtPrice(market.perpMark)}</Num></td><td className={`r mkx-num ${signClass(market.fundingRate)}`}><Num value={market.fundingRate}>{fmtFunding(market.fundingRate)}</Num></td><td className="r mkx-num"><Num value={market.openInterestUsd}>{fmtMoney(market.openInterestUsd)}</Num></td><ChangeCell value={market.openInterestChangePct} /><td className="r mkx-num"><Num value={market.liquidations15mUsd}>{fmtMoney(market.liquidations15mUsd)}</Num></td><td className="r mkx-num"><Num value={market.perpVolume24h}>{fmtMoney(market.perpVolume24h)}</Num></td></>;
     if (view === 'basis') {
-      return {
-        head: (
-          <>
-            {th('Best Executable', 'executableBasisBestPct')}
-            {th('Long Spot', 'executableBasisLongSpotPct')}
-            {th('Short Spot', 'executableBasisShortSpotPct')}
-            {th('Net After Fees', 'executableBasisBestPct')}
-            {th('Funding', 'fundingRate')}
-            {th('Direction', null, 'l', 'mkx-dircol')}
-          </>
-        ),
-        cells: (m) => {
-          const net = finite(m.executableBasisBestPct) ? m.executableBasisBestPct - feesPct : null;
-          return (
-            <>
-              <td className={`r mkx-num ${signClass(m.executableBasisBestPct)}`}><Num value={m.executableBasisBestPct}>{fmtBasis(m.executableBasisBestPct)}</Num></td>
-              <td className={`r mkx-num ${signClass(m.executableBasisLongSpotPct)}`}><Num value={m.executableBasisLongSpotPct}>{fmtBasis(m.executableBasisLongSpotPct)}</Num></td>
-              <td className={`r mkx-num ${signClass(m.executableBasisShortSpotPct)}`}><Num value={m.executableBasisShortSpotPct}>{fmtBasis(m.executableBasisShortSpotPct)}</Num></td>
-              <td className={`r mkx-num ${signClass(net)}`}><Num value={net}>{fmtBasis(net)}</Num></td>
-              <td className={`r mkx-num ${signClass(m.fundingRate)}`}><Num value={m.fundingRate}>{fmtFunding(m.fundingRate)}</Num></td>
-              <td className="l mkx-dir">{m.executableBasisSide === 'LONG_SPOT_SHORT_PERP' ? 'Buy spot / sell perp' : m.executableBasisSide === 'SHORT_SPOT_LONG_PERP' ? 'Sell spot / buy perp' : '—'}</td>
-            </>
-          );
-        },
-      };
+      const net = finite(market.executableBasisBestPct) ? market.executableBasisBestPct - feesPct : null;
+      return <><td className={`r mkx-num ${signClass(market.executableBasisBestPct)}`}><Num value={market.executableBasisBestPct}>{fmtBasis(market.executableBasisBestPct)}</Num></td><td className={`r mkx-num ${signClass(market.executableBasisLongSpotPct)}`}><Num value={market.executableBasisLongSpotPct}>{fmtBasis(market.executableBasisLongSpotPct)}</Num></td><td className={`r mkx-num ${signClass(market.executableBasisShortSpotPct)}`}><Num value={market.executableBasisShortSpotPct}>{fmtBasis(market.executableBasisShortSpotPct)}</Num></td><td className={`r mkx-num ${signClass(net)}`}><Num value={net}>{fmtBasis(net)}</Num></td><td className={`r mkx-num ${signClass(market.fundingRate)}`}><Num value={market.fundingRate}>{fmtFunding(market.fundingRate)}</Num></td><td className="l mkx-direction">{market.executableBasisSide === 'LONG_SPOT_SHORT_PERP' ? 'Buy Spot · Sell Perp' : market.executableBasisSide === 'SHORT_SPOT_LONG_PERP' ? 'Sell Spot · Buy Perp' : '—'}</td></>;
     }
-    if (view === 'liquidity') {
-      return {
-        head: (
-          <>
-            {th('Spot Spread', 'spotSpreadPct')}
-            {th('Perp Spread', 'perpSpreadPct')}
-            {th('Top Depth', 'depth')}
-            {th('Volume', 'quoteVolume24h')}
-            {th('24h Range', null, 'r')}
-            {th('Change', 'change24hPct')}
-          </>
-        ),
-        cells: (m) => (
-          <>
-            <td className="r mkx-num"><Num value={m.spotSpreadPct}>{fmtBps(m.spotSpreadPct)}</Num></td>
-            <td className="r mkx-num"><Num value={m.perpSpreadPct}>{fmtBps(m.perpSpreadPct)}</Num></td>
-            <td className="r mkx-num"><Num value={depthUsd(m)}>{fmtMoney(depthUsd(m))}</Num></td>
-            <td className="r mkx-num"><Num value={m.quoteVolume24h}>{fmtMoney(m.quoteVolume24h)}</Num></td>
-            <td className="r mkx-num mkx-range-cell">{finite(m.low24h) && finite(m.high24h) ? `${fmtPrice(m.low24h)} – ${fmtPrice(m.high24h)}` : '—'}</td>
-            {changeCell(m.change24hPct)}
-          </>
-        ),
-      };
-    }
-    return {
-      head: (
-        <>
-          {th('Market Price', 'spot', 'r', 'mkx-pricecol')}
-          {th('Chart', 'sparkGrowth', 'r', 'mkx-chartcol')}
-          {th('Change', 'change24hPct', 'r', 'mkx-chgcol')}
-          {th('Volume', 'quoteVolume24h', 'r', 'mkx-volcol')}
-          {th('Open Interest', 'openInterestUsd', 'r', 'mkx-oicol')}
-          {th('Funding', 'fundingRate', 'r', 'mkx-fundcol')}
-        </>
-      ),
-      cells: (m) => (
-        <>
-          <td className="r mkx-num mkx-price"><Num value={m.spot}>{fmtPrice(m.spot)}</Num></td>
-          <td className="r mkx-chart"><RowSpark values={m.spark} color={brandColor(m.symbol)} /></td>
-          {changeCell(m.change24hPct)}
-          <td className="r mkx-num"><Num value={m.quoteVolume24h}>{fmtMoney(m.quoteVolume24h)}</Num></td>
-          <td className="r mkx-num mkx-oicell">{m.hasPerp ? <Num value={m.openInterestUsd}>{fmtMoney(m.openInterestUsd)}</Num> : <span className="mkx-dim">Spot Only</span>}</td>
-          <td className={`r mkx-num mkx-fundcell ${finite(m.fundingRate) ? signClass(m.fundingRate) : ''}`}>{m.hasPerp && finite(m.fundingRate) ? <Num value={m.fundingRate}>{fmtFunding(m.fundingRate)}</Num> : <span className="mkx-dim">—</span>}</td>
-        </>
-      ),
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, sortKey, sortDesc, feesPct]);
+    if (view === 'liquidity') return <><td className="r mkx-num"><Num value={market.spotSpreadPct}>{fmtBps(market.spotSpreadPct)}</Num></td><td className="r mkx-num"><Num value={market.perpSpreadPct}>{fmtBps(market.perpSpreadPct)}</Num></td><td className="r mkx-num"><Num value={depthUsd(market)}>{fmtMoney(depthUsd(market))}</Num></td><td className="r mkx-num"><Num value={market.quoteVolume24h}>{fmtMoney(market.quoteVolume24h)}</Num></td><td className="r mkx-range">{finite(market.low24h) && finite(market.high24h) ? `${fmtPrice(market.low24h)} – ${fmtPrice(market.high24h)}` : '—'}</td><ChangeCell value={market.change24hPct} /></>;
+    return <><td className="r mkx-num mkx-price"><Num value={market.spot}>{fmtPrice(market.spot)}</Num></td><td className="r mkx-chart"><RowSpark values={market.spark} color={brandColor(market.symbol)} /></td><ChangeCell value={market.change24hPct} /><td className="r mkx-num"><Num value={market.quoteVolume24h}>{fmtMoney(market.quoteVolume24h)}</Num></td><td className="r mkx-num">{market.hasPerp ? <Num value={market.openInterestUsd}>{fmtMoney(market.openInterestUsd)}</Num> : <span className="mkx-dim">Spot Only</span>}</td><td className={`r mkx-num ${finite(market.fundingRate) ? signClass(market.fundingRate) : ''}`}>{market.hasPerp && finite(market.fundingRate) ? <Num value={market.fundingRate}>{fmtFunding(market.fundingRate)}</Num> : <span className="mkx-dim">—</span>}</td></>;
+  };
 
-  const idxUp = (idx50 ?? 0) >= 0;
+  const top50Up = (top50Pulse ?? 0) >= 0;
+  const filtersActive = filter !== 'all' || search.length > 0;
 
   return (
-    <div className="container page mkx">
-      {/* ---- Explore header ---- */}
-      <header className="mkx-hero">
-        <div className="mkx-hero-text">
-          <h1>Explore crypto</h1>
-          <p className="mkx-index">
-            Binance 50 Index is {idx50 === null ? 'warming up' : idxUp ? 'up' : 'down'}
-            {idx50 !== null && (
-              <span className={`mkx-index-delta ${idxUp ? 'pos' : 'neg'}`}>
-                <DiagArrow up={idxUp} /> {fmtPct(Math.abs(idx50), 2, false)}
-              </span>
-            )}
-            {idx50 !== null && ' (24hrs)'}
-            <span className="mkx-info" title="Volume-weighted 24h change across the 50 highest-volume Binance pairs tracked here. Computed live from Binance tickers.">
-              <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden><circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" strokeWidth="1.3" /><path d="M8 7.2v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /><circle cx="8" cy="4.9" r=".9" fill="currentColor" /></svg>
+    <div className="container page mkx mkx-page">
+      <section className="mkx-frame" aria-label="Binance Markets">
+        <header className="mkx-toolbar">
+          <div className="mkx-identity">
+            <div className="mkx-source-mark"><BinanceMark size={22} className="mkx-binance" /></div>
+            <span>
+              <h1>Markets</h1>
+              <small>Binance Spot + USD-M Reference Universe</small>
             </span>
-          </p>
-        </div>
-        <label className="mkx-search">
-          <IconSearch size={16} />
-          <input placeholder="Search for an asset" value={search} onChange={(e) => setSearch(e.target.value)} spellCheck={false} />
-          {search && <button aria-label="Clear search" onClick={() => setSearch('')}>×</button>}
-        </label>
-      </header>
+          </div>
+          <div className="mkx-tools">
+            <label className="mkx-search">
+              <IconSearch size={15} />
+              <input aria-label="Search Markets" placeholder="Search" value={search} onChange={(event) => setSearch(event.target.value)} spellCheck={false} />
+              {search && <button type="button" aria-label="Clear Search" onClick={() => setSearch('')}>×</button>}
+            </label>
+          </div>
+        </header>
 
-      {/* ---- Market stats ---- */}
-      <section className="mkx-stats" aria-label="Market stats">
-        <h2>Market Stats</h2>
-        <p className="mkx-blurb">
-          {markets.length
-            ? `Across ${fmtCount(markets.length)} tracked Binance pairs, 24-hour turnover is ${fmtMoney(totalVol)}. ${gainers} assets are up and ${losers} are down over the last day.`
-            : 'Waiting for the first Binance ticker snapshot.'}
-          {' '}
-          <button className="mkx-more-link" onClick={() => setMore((x) => !x)}>{more ? 'Show less' : 'Read more'}</button>
-        </p>
-        {more && (
-          <p className="mkx-more">
-            Every number on this page is computed live from Binance spot and futures tickers — nothing is estimated or cached beyond {prefs.refreshSec}s.
-            Feed {live ? 'is live' : marketsError ? `error: ${marketsError}` : 'is reconnecting'} · prices updated {fmtAgeMs(marketAgeMs)} ·
-            {' '}{fmtCount(byVol.filter((m) => m.hasPerp).length)} pairs carry an exact perp for basis work.
-          </p>
-        )}
-        <div className="mkx-tiles">
-          <div className="mkx-tile">
-            <span className="mkx-tile-k">Bitcoin</span>
-            <span className="mkx-tile-v">
-              <b><Num value={btc?.spot}>{fmtPrice(btc?.spot)}</Num></b>
-              {finite(btc?.change24hPct) && (
-                <em className={(btc!.change24hPct ?? 0) >= 0 ? 'pos' : 'neg'}>
-                  <DiagArrow up={(btc!.change24hPct ?? 0) >= 0} /> {fmtPct(Math.abs(btc!.change24hPct ?? 0), 2, false)}
-                </em>
-              )}
-            </span>
-            {btc?.spark && btc.spark.length > 1 && <DotSpark values={btc.spark} tone={(btc.change24hPct ?? 0) >= 0 ? 'up' : 'down'} id="btc" />}
-          </div>
-          <div className="mkx-tile">
-            <span className="mkx-tile-k">Trade Volume</span>
-            <span className="mkx-tile-v">
-              <b><Num value={totalVol}>{fmtMoney(totalVol)}</Num></b>
-              <em className="mkx-dim2">24h Quote</em>
-            </span>
-            {byVol.length > 0 && (
-              <span className="mkx-volbars" aria-hidden>
-                {byVol.slice(0, 12).map((m) => (
-                  <i
-                    key={m.symbol}
-                    title={`${m.base} ${fmtMoney(m.quoteVolume24h)}`}
-                    style={{
-                      height: `${Math.max(8, ((m.quoteVolume24h ?? 0) / (byVol[0].quoteVolume24h ?? 1)) * 100)}%`,
-                      background: brandColor(m.symbol),
-                    }}
-                  />
-                ))}
-              </span>
-            )}
-          </div>
-          <div className="mkx-tile">
-            <span className="mkx-tile-k">Gainers vs Losers</span>
-            <span className="mkx-tile-v">
-              <b>{withChange.length ? `${gainers} : ${losers}` : '—'}</b>
-              {withChange.length > 0 && (
-                <em className={gainers >= losers ? 'pos' : 'neg'}>
-                  {Math.round((gainers / Math.max(1, withChange.length)) * 100)}% Advancing
-                </em>
-              )}
-            </span>
-            {withChange.length > 0 && (
-              <span className="mkx-splitbar" aria-hidden>
-                <i style={{ width: `${(gainers / Math.max(1, withChange.length)) * 100}%` }} />
-              </span>
-            )}
-          </div>
-          <div className="mkx-tile">
-            <span className="mkx-tile-k">BTC Volume Share</span>
-            <span className="mkx-tile-v">
-              <b>{btcShare === null ? '—' : `${btcShare.toFixed(2)}%`}</b>
-              {btcShare !== null && (
-                <em className="mkx-dim2">Of All Pairs</em>
-              )}
-            </span>
-            {btc?.spark && btc.spark.length > 1 && <DotSpark values={btc.spark} tone={(btc.change24hPct ?? 0) >= 0 ? 'up' : 'down'} id="dom" />}
-          </div>
-        </div>
-      </section>
-
-      {/* ---- Prices table ---- */}
-      <section className="mkx-prices" aria-label="Market prices">
-        <div className="mkx-prices-head">
-          <h2>Market Prices <em>{fmtCount(markets.length)} Assets</em></h2>
-          <span className={`mkx-live ${live ? 'on' : ''}`}>
-            <i />
-            {marketsError ? 'Feed Error' : live ? `Live · ${fmtLiveAge(marketAgeMs)}` : 'Reconnecting'}
-          </span>
+        <div className="mkx-summary" aria-label="Market Summary">
+          <article><span>Tracked Markets</span><strong>{markets.length.toLocaleString('en-US')}</strong><small>USDT Universe</small></article>
+          <article><span>Spot + Perp</span><strong>{pairedCount.toLocaleString('en-US')}</strong><small>{executableCount.toLocaleString('en-US')} Executable Books</small></article>
+          <article><span>24h Volume</span><strong>{fmtMoney(totalVolume)}</strong><small>Binance Spot Quote</small></article>
+          <article><span>Market Breadth</span><strong>{gainers.toLocaleString('en-US')} / {losers.toLocaleString('en-US')}</strong><small className={top50Pulse === null ? '' : top50Up ? 'pos' : 'neg'}>{top50Pulse === null ? 'Warming' : `${top50Up ? 'Up' : 'Down'} ${fmtPct(Math.abs(top50Pulse), 2, false)} · Top 50`}</small></article>
         </div>
 
-        <div className="mkx-pills">
-          <div className="mkx-pills-left">
-            <PillSelect
-              icon={<Globe />}
-              value={filter}
-              options={FILTERS.map((f) => ({ id: f.id, label: f.label }))}
-              onChange={setFilter}
-              ariaLabel="Asset filter"
-            />
-            <PillSelect
-              value={view}
-              options={VIEWS.map((v) => ({ id: v.id, label: v.label }))}
-              onChange={applyView}
-              ariaLabel="Table view"
-            />
+        <nav className="mkx-viewbar" aria-label="Market Views">
+          <div role="tablist">
+            {VIEWS.map((item) => (
+              <button key={item.id} type="button" role="tab" aria-selected={view === item.id} onClick={() => applyView(item.id)}>{item.label}</button>
+            ))}
           </div>
-          <div className="mkx-pills-right">
-            <PillSelect
-              value={String(pageSize)}
-              options={[10, 25, 50, 100].map((n) => ({ id: String(n), label: `${n} Rows` }))}
-              onChange={(n) => setPageSize(Number(n))}
-              ariaLabel="Rows per page"
-            />
-            <MarketSourcePicker />
+          <span className={`mkx-live ${live ? 'on' : ''}`}><i />{marketsError ? 'Feed Error' : live ? `Live · ${fmtLiveAge(marketAgeMs)}` : 'Reconnecting'}</span>
+        </nav>
+
+        <div className="mkx-controls">
+          <div>
+            <PillSelect value={filter} options={FILTERS} onChange={setFilter} ariaLabel="Market Filter" testId="markets-filter" />
+            <PillSelect value={String(pageSize)} options={[25, 50, 100].map((count) => ({ id: String(count), label: `${count} Rows` }))} onChange={(value) => setPageSize(Number(value))} ariaLabel="Rows Per Page" testId="markets-page-size" />
+            {filtersActive && <button type="button" className="mkx-reset" onClick={() => { setFilter('all'); setSearch(''); }}>Reset</button>}
           </div>
+          <span>{rows.length.toLocaleString('en-US')} Markets · {visibleStart}-{visibleEnd}</span>
         </div>
 
-        <table className="mkx-table">
-          <thead>
-            <tr>
-              <th className="mkx-starcol" />
-              {th('Asset', 'base', 'l', 'mkx-assetcol')}
-              {cols.head}
-            </tr>
-          </thead>
-          <tbody>
-            {visible.map((m) => {
-              const watched = watchlist.includes(m.symbol);
-              return (
-                <tr key={m.symbol} onClick={() => openDetail(m.symbol)}>
-                  <td className="mkx-starcol"><Star on={watched} onClick={() => void toggleWatch(m.symbol)} /></td>
-                  <td className="l mkx-asset">
-                    <TokenIcon symbol={m.symbol} size={36} />
-                    <span className="mkx-asset-name">
-                      <b>{tokenName(m.base)}</b>
-                      <em>{m.base}{m.hasPerp ? ' · perp' : ''}</em>
-                    </span>
-                  </td>
-                  {cols.cells(m)}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div className="mkx-table-wrap">
+          <table className="mkx-table" data-view={view}>
+            <thead><tr><th className="mkx-star-col" />{tableHead('Asset', 'base', 'l', 'mkx-asset-col')}{renderViewHead()}</tr></thead>
+            <tbody>
+              {visible.map((market) => {
+                const watched = watchlist.includes(market.symbol);
+                return (
+                  <tr
+                    key={market.symbol}
+                    tabIndex={0}
+                    aria-label={`Open ${tokenName(market.base)} native chart`}
+                    onClick={() => openDetail(market.symbol)}
+                    onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDetail(market.symbol); } }}
+                  >
+                    <td className="mkx-star-col"><Star on={watched} onClick={() => void toggleWatch(market.symbol)} /></td>
+                    <td className="l mkx-asset">
+                      <TokenIcon symbol={market.symbol} size={34} />
+                      <span><b>{tokenName(market.base)}</b><small>{market.base}/USDT · {market.hasPerp ? 'Spot + Perp' : 'Spot Only'}</small></span>
+                    </td>
+                    {renderViewCells(market)}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {rows.length === 0 && <EmptyState title="No Markets Found">{filter === 'watchlist' ? 'Star markets to build the watchlist.' : 'Change the filter or search.'}</EmptyState>}
+        </div>
 
-        {rows.length === 0 && (
-          <EmptyState title="Nothing matches">
-            {filter === 'watchlist' ? 'Star assets to build the watchlist.' : 'Use another filter or search term.'}
-          </EmptyState>
-        )}
-
-        {pages > 1 && (
-          <nav className="mkx-pager" aria-label="Pagination">
-            <button className="mkx-page-nav" disabled={safePage === 0} onClick={() => setPageN(safePage - 1)} aria-label="Previous page">
-              <svg viewBox="0 0 16 16" width="15" height="15"><path d="M10 3.5L5.5 8 10 12.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </button>
-            {pageList(safePage, pages).map((p, i) =>
-              p === '…' ? (
-                <span key={`e${i}`} className="mkx-page-ellipsis">…</span>
-              ) : (
-                <button key={p} className={`mkx-page ${safePage === p ? 'current' : ''}`} onClick={() => setPageN(p)}>
-                  {(p + 1).toLocaleString('en-US')}
-                </button>
-              ),
-            )}
-            <button className="mkx-page-nav" disabled={safePage >= pages - 1} onClick={() => setPageN(safePage + 1)} aria-label="Next page">
-              <svg viewBox="0 0 16 16" width="15" height="15"><path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </button>
-          </nav>
-        )}
-        <p className="mkx-rangeline">{visibleStart}-{visibleEnd} of {rows.length.toLocaleString('en-US')} assets</p>
+        <footer className="mkx-footer">
+          <span>Source: Binance Public Market Data · Native Charts Use Tracked Market Samples</span>
+          {pages > 1 && (
+            <nav className="mkx-pager" aria-label="Market Pagination">
+              <button type="button" disabled={safePage === 0} onClick={() => setPageN(safePage - 1)} aria-label="Previous Page">‹</button>
+              {pageList(safePage, pages).map((page, index) => page === '…' ? <span key={`ellipsis-${index}`}>…</span> : <button type="button" key={page} className={safePage === page ? 'current' : ''} onClick={() => setPageN(page)}>{page + 1}</button>)}
+              <button type="button" disabled={safePage >= pages - 1} onClick={() => setPageN(safePage + 1)} aria-label="Next Page">›</button>
+            </nav>
+          )}
+        </footer>
       </section>
     </div>
   );

@@ -1,0 +1,527 @@
+.volx-page {
+  container-type: inline-size;
+  width: 100%;
+  min-width: 0;
+  padding: 22px;
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.volx-frame {
+  overflow: hidden;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 1px 2px rgba(16, 20, 28, .05);
+}
+
+.volx-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 57px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line-2);
+}
+
+.volx-title,
+.volx-asset,
+.volx-search,
+.volx-live,
+.volx-actions button,
+.volx-reason small {
+  display: flex;
+  align-items: center;
+}
+
+.volx-title { gap: 12px; min-width: 0; }
+
+.volx-title h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 540;
+  line-height: 30px;
+  letter-spacing: -.014em;
+}
+
+.volx-live {
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 440;
+  white-space: nowrap;
+}
+
+.volx-live i {
+  position: relative;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8b94a3;
+}
+
+.volx-live.active { color: #278b5d; }
+.volx-live.active i { background: #2ca36b; }
+.volx-live.degraded { color: #c34c4c; }
+.volx-live.degraded i { background: #dc5a5a; }
+
+.volx-live.active i::after {
+  position: absolute;
+  inset: -4px;
+  border: 1px solid rgba(44, 163, 107, .38);
+  border-radius: 50%;
+  content: '';
+  animation: volxBeacon 2.4s cubic-bezier(.22, 1, .36, 1) infinite;
+}
+
+@keyframes volxBeacon {
+  0% { opacity: .75; transform: scale(.45); }
+  70%, 100% { opacity: 0; transform: scale(1.45); }
+}
+
+.volx-updated {
+  overflow: hidden;
+  color: var(--muted-2);
+  font-size: 11.5px;
+  font-weight: 420;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.volx-search {
+  gap: 9px;
+  width: 286px;
+  height: 34px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--muted);
+  background: var(--panel);
+}
+
+.volx-search:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.volx-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 430;
+}
+
+.volx-search input::placeholder { color: var(--muted-2); opacity: 1; }
+
+.volx-search button {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  place-items: center;
+  color: var(--muted);
+  background: transparent;
+}
+
+.volx-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  min-height: 102px;
+  border-bottom: 1px solid var(--line-2);
+  background: color-mix(in srgb, var(--tile) 44%, var(--panel));
+}
+
+.volx-summary-cell {
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
+  min-width: 0;
+  padding: 17px 18px;
+  border-right: 1px solid var(--line-2);
+}
+
+.volx-summary-cell:last-child { border-right: 0; }
+
+.volx-summary-cell > span {
+  display: block;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 560;
+  line-height: 14px;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.volx-summary-cell > strong {
+  display: block;
+  overflow: hidden;
+  margin-top: 6px;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 510;
+  line-height: 23px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.volx-summary-cell > strong em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 430;
+}
+
+.volx-summary-cell > small {
+  display: block;
+  overflow: hidden;
+  margin-top: 4px;
+  color: var(--muted-2);
+  font-size: 11.5px;
+  font-weight: 420;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.volx-filters {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 53px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line-2);
+}
+
+.volx-segments { display: flex; align-items: center; gap: 7px; }
+
+.volx-segments button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 17px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--text) 3.8%, var(--panel));
+  font-size: 12.5px;
+  font-weight: 470;
+  white-space: nowrap;
+}
+
+.volx-segments button span {
+  min-width: 13px;
+  color: var(--muted-2);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.volx-segments button.selected {
+  color: var(--panel);
+  background: var(--text);
+}
+
+.volx-segments button.selected span { color: color-mix(in srgb, var(--panel) 74%, transparent); }
+
+.volx-view-note {
+  color: var(--muted-2);
+  font-size: 10.5px;
+  font-weight: 450;
+  white-space: nowrap;
+}
+
+.volx-table {
+  overflow: auto;
+  max-height: calc(100vh - 354px);
+  min-height: 230px;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted) 36%, transparent) transparent;
+}
+
+.volx-head,
+.volx-row {
+  display: grid;
+  grid-template-columns: 78px minmax(145px, 1fr) minmax(116px, .75fr) minmax(245px, 1.55fr) minmax(185px, 1.1fr) minmax(165px, 1fr) minmax(128px, .75fr) minmax(300px, 1.9fr) 20px;
+  min-width: 1450px;
+  align-items: center;
+}
+
+.volx-head {
+  position: sticky;
+  z-index: 3;
+  top: 0;
+  min-height: 35px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line-2);
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel) 96%, var(--bg));
+  font-size: 10.5px;
+  font-weight: 520;
+}
+
+.volx-head > *,
+.volx-row > * { min-width: 0; padding-right: 20px; }
+.volx-head > *:last-child,
+.volx-row > *:last-child { padding-right: 0; }
+
+.volx-item { border-bottom: 1px solid var(--line-2); }
+.volx-item:last-child { border-bottom: 0; }
+
+.volx-row {
+  width: 100%;
+  min-height: 66px;
+  padding: 0 16px;
+  border: 0;
+  color: var(--text);
+  background: transparent;
+  text-align: left;
+}
+
+.volx-row:hover { background: color-mix(in srgb, var(--text) 2.3%, transparent); }
+.volx-row:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 58%, transparent); outline-offset: -2px; }
+
+.volx-row svg:last-child {
+  color: var(--muted-2);
+  transition: transform 180ms ease;
+}
+
+.volx-row svg:last-child.expanded { transform: rotate(180deg); }
+
+.volx-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 430;
+}
+
+.volx-state i { width: 6px; height: 6px; border-radius: 50%; background: #8b94a3; }
+.volx-state.warming i { background: #d3a332; }
+.volx-state.watching i { background: #3d86d7; }
+.volx-state.focus i { background: #7b65d6; }
+.volx-state.proposal i { background: #2ca36b; }
+.volx-state.rejected i { background: #d05a58; }
+.volx-state.warming { color: #a57b19; }
+.volx-state.watching { color: #3376bc; }
+.volx-state.focus { color: #6d58c2; }
+.volx-state.proposal { color: #278b5d; }
+.volx-state.rejected { color: #b84e4b; }
+
+.volx-asset { gap: 9px; }
+.volx-asset > span { display: block; min-width: 0; }
+.volx-asset strong,
+.volx-number strong,
+.volx-tape strong,
+.volx-quality strong,
+.volx-move strong,
+.volx-decision strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 470;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.volx-asset small,
+.volx-number small,
+.volx-tape small,
+.volx-quality small,
+.volx-move small,
+.volx-decision small {
+  display: block;
+  overflow: hidden;
+  color: var(--muted-2);
+  font-size: 10.5px;
+  font-weight: 420;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.volx-number strong,
+.volx-move strong { font-variant-numeric: tabular-nums; }
+.volx-decision strong { font-size: 12px; }
+
+.volx-window-stack {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.volx-window-stack > span { min-width: 0; }
+.volx-window-stack em,
+.volx-window-stack strong,
+.volx-window-stack small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.volx-window-stack em {
+  color: var(--muted-2);
+  font-size: 9.5px;
+  font-style: normal;
+  font-weight: 520;
+  line-height: 12px;
+  text-transform: uppercase;
+}
+.volx-window-stack strong {
+  color: #278b5d;
+  font-size: 11.5px;
+  font-weight: 470;
+  line-height: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.volx-window-stack small {
+  color: var(--muted-2);
+  font-size: 10px;
+  font-weight: 420;
+  line-height: 14px;
+}
+
+.volx-detail {
+  display: grid;
+  grid-template-columns: minmax(260px, .95fr) minmax(580px, 2fr) auto;
+  gap: 24px;
+  padding: 18px 20px 20px 126px;
+  border-top: 1px solid var(--line-2);
+  background: color-mix(in srgb, var(--text) 1.8%, var(--panel));
+  animation: volxReveal 180ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+@keyframes volxReveal {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.volx-reason > span {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 520;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.volx-reason p {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 450;
+  line-height: 18px;
+}
+
+.volx-reason small { gap: 6px; color: var(--muted-2); font-size: 10px; line-height: 15px; }
+
+.volx-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 18px;
+  margin: 0;
+}
+
+.volx-facts div { min-width: 0; }
+.volx-facts dt {
+  overflow: hidden;
+  margin: 0 0 3px;
+  color: var(--muted-2);
+  font-size: 9.5px;
+  font-weight: 520;
+  letter-spacing: .055em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.volx-facts dd {
+  overflow: hidden;
+  margin: 0;
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 470;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.volx-actions { display: flex; align-items: flex-start; gap: 7px; flex-wrap: wrap; }
+.volx-actions button {
+  gap: 6px;
+  height: 31px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--text);
+  background: var(--panel);
+  font-size: 11px;
+  font-weight: 470;
+  white-space: nowrap;
+}
+.volx-actions button:hover { background: color-mix(in srgb, var(--text) 4%, var(--panel)); }
+.volx-actions button.active { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); }
+
+.volx-empty {
+  display: flex;
+  min-height: 230px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--muted-2);
+  text-align: center;
+}
+.volx-empty strong { color: var(--text); font-size: 13px; font-weight: 540; }
+.volx-empty span { max-width: 420px; font-size: 11px; line-height: 17px; }
+
+[data-theme='dark'] .volx-frame {
+  border-color: var(--line-2);
+  background: #15181d;
+  box-shadow: none;
+}
+[data-theme='dark'] .volx-head { background: #171b20; }
+
+@container (max-width: 1180px) {
+  .volx-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .volx-summary-cell:nth-child(2) { border-right: 0; }
+  .volx-summary-cell:nth-child(-n + 2) { border-bottom: 1px solid var(--line-2); }
+  .volx-table { max-height: calc(100vh - 456px); }
+  .volx-detail { grid-template-columns: 1fr; padding-left: 20px; }
+}
+
+@container (max-width: 760px) {
+  .volx-page { padding: 12px; }
+  .volx-toolbar { align-items: flex-start; min-height: 104px; padding: 14px; flex-direction: column; gap: 11px; }
+  .volx-search { width: 100%; }
+  .volx-summary { grid-template-columns: 1fr; }
+  .volx-summary-cell { border-right: 0; border-bottom: 1px solid var(--line-2); }
+  .volx-summary-cell:last-child { border-bottom: 0; }
+  .volx-filters { align-items: flex-start; padding: 10px 12px; flex-direction: column; gap: 9px; }
+  .volx-segments { overflow-x: auto; width: 100%; }
+  .volx-view-note { padding-left: 2px; }
+  .volx-table { max-height: none; }
+  .volx-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .volx-live.active i::after,
+  .volx-detail { animation: none; }
+  .volx-row svg:last-child { transition: none; }
+}

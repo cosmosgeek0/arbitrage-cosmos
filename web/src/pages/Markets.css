@@ -1,574 +1,483 @@
-/* ==========================================================================
-   MARKETS — Coinbase Explore anatomy, Binance data. (mkx- namespace)
-   Reference: coinbase.com/explore. White page, hairline section splits,
-   gray rounded tiles/pills, borderless 72px table rows, blue Trade pills,
-   centered numbered pagination. One label voice, one number voice.
-   ========================================================================== */
+.mkx-page {
+  width: 100%;
+  min-width: 0;
+  padding: 22px;
+  container-type: inline-size;
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
 
-.mkx { padding-bottom: 12px; container-type: inline-size; }
+.mkx-frame {
+  overflow: hidden;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 1px 2px rgba(16, 20, 28, .05);
+}
+
 .mkx .l { text-align: left; }
 .mkx .r { text-align: right; }
 .mkx .pos { color: var(--up); }
 .mkx .neg { color: var(--down); }
 
-/* ---- Explore header --------------------------------------------------- */
-.mkx-hero {
+.mkx-toolbar,
+.mkx-identity,
+.mkx-tools,
+.mkx-search,
+.mkx-viewbar,
+.mkx-viewbar > div,
+.mkx-controls,
+.mkx-controls > div,
+.mkx-live,
+.mkx-footer,
+.mkx-pager,
+.mkx-change span {
   display: flex;
   align-items: center;
+}
+
+.mkx-toolbar {
+  min-height: 57px;
   justify-content: space-between;
-  gap: 24px;
-  padding: 10px 0 26px;
+  gap: 18px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--line-2);
 }
-.mkx-hero-text { min-width: 0; }
-.mkx-hero h1 {
-  margin: 0 0 8px;
-  font-size: 40px;
-  font-weight: 520;
-  letter-spacing: -0.018em;
-  color: var(--text);
-}
-.mkx-index {
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 15px;
-  font-weight: 430;
-  color: var(--text-2);
-}
-.mkx-index-delta {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.mkx-index-delta.pos { color: var(--up); }
-.mkx-index-delta.neg { color: var(--down); }
-.mkx-info { display: inline-flex; color: var(--faint); cursor: help; }
 
+.mkx-identity { min-width: 0; gap: 10px; }
+.mkx-source-mark {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  place-items: center;
+  border-radius: 8px;
+  color: #f0b90b;
+  background: color-mix(in srgb, #f0b90b 9%, transparent);
+}
+.mkx-binance { display: block; flex: none; fill: currentColor; }
+.mkx-identity h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 540;
+  line-height: 30px;
+  letter-spacing: -.014em;
+}
+.mkx-identity small {
+  display: block;
+  color: var(--muted-2);
+  font-size: 10.5px;
+  font-weight: 420;
+  line-height: 13px;
+}
+
+.mkx-tools { flex: none; gap: 7px; }
 .mkx-search {
-  flex: 0 1 460px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 48px;
-  padding: 0 20px;
-  border-radius: 24px;
-  background: var(--tile);
+  width: 286px;
+  height: 34px;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
   color: var(--muted);
-  cursor: text;
+  background: var(--panel);
 }
-.mkx-search:focus-within { box-shadow: 0 0 0 3px var(--accent-soft); }
+.mkx-search:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 8%, transparent);
+}
 .mkx-search input {
-  flex: 1;
   min-width: 0;
+  flex: 1;
   border: 0;
-  background: none;
-  outline: none;
-  font: inherit;
-  font-size: 14.5px;
-  font-weight: 480;
+  outline: 0;
   color: var(--text);
-}
-.mkx-search input::placeholder { color: var(--muted); }
-.mkx-search button {
-  border: 0;
-  background: none;
-  color: var(--muted);
-  font-size: 17px;
-  cursor: pointer;
-  padding: 0 2px;
-}
-
-/* ---- Market stats ------------------------------------------------------ */
-.mkx-stats { padding: 26px 0 30px; border-bottom: 1px solid var(--line-2); }
-.mkx-stats h2 {
-  margin: 0 0 10px;
-  font-size: 28px;
-  font-weight: 560;
-  letter-spacing: -0.014em;
-  color: var(--text);
-}
-.mkx-blurb {
-  margin: 0;
-  max-width: 900px;
-  font-size: 15px;
-  font-weight: 430;
-  line-height: 1.55;
-  color: var(--text-2);
-}
-.mkx-more-link {
-  border: 0;
-  background: none;
-  padding: 0;
+  background: transparent;
   font: inherit;
-  font-size: 14px;
-  font-weight: 550;
-  color: var(--accent-ink);
-  cursor: pointer;
-}
-.mkx-more-link:hover { text-decoration: underline; }
-.mkx-more {
-  margin: 8px 0 0;
-  max-width: 860px;
   font-size: 13px;
-  font-weight: 450;
-  line-height: 1.55;
-  color: var(--muted);
+  font-weight: 430;
 }
-
-.mkx-tiles {
-  margin-top: 20px;
+.mkx-search input::placeholder { color: var(--muted-2); opacity: 1; }
+.mkx-search button {
+  display: grid;
+  width: 21px;
+  height: 21px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  place-items: center;
+  color: var(--muted);
+  background: transparent;
+}
+.mkx-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  min-height: 102px;
+  border-bottom: 1px solid var(--line-2);
+  background: color-mix(in srgb, var(--tile) 44%, var(--panel));
 }
-.mkx-tile {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 18px 18px 14px;
-  border-radius: 16px;
-  background: var(--tile);
+.mkx-summary article {
+  display: grid;
+  align-content: center;
+  gap: 5px;
   min-width: 0;
+  padding: 17px 18px;
 }
-.mkx-tile-k { font-size: 15px; font-weight: 440; color: var(--text); }
-.mkx-tile-v { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.mkx-tile-v b {
-  font-size: 16.5px;
-  font-weight: 580;
-  letter-spacing: -0.012em;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.mkx-tile-v em {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-style: normal;
-  font-size: 14px;
-  font-weight: 500;
-  font-variant-numeric: lining-nums;
-  white-space: nowrap;
-}
-.mkx-dim2 { color: var(--faint); font-weight: 480 !important; }
-.mkx-dotspark { width: 100%; height: 56px; margin-top: 6px; display: block; }
-.mkx-volbars {
-  margin-top: auto;
-  height: 56px;
-  display: flex;
-  align-items: flex-end;
-  gap: 4px;
-  padding-top: 6px;
-}
-.mkx-volbars i { flex: 1; border-radius: 3px 3px 1px 1px; opacity: .85; min-height: 4px; }
-.mkx-splitbar {
-  margin-top: auto;
-  height: 6px;
-  border-radius: 3px;
-  background: color-mix(in srgb, var(--down) 30%, var(--tile));
-  overflow: hidden;
-  display: block;
-}
-.mkx-splitbar i { display: block; height: 100%; background: var(--up); border-radius: 3px; }
-
-/* ---- Prices head + pills ---------------------------------------------- */
-.mkx-prices { padding-top: 26px; }
-.mkx-prices-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
-.mkx-prices-head h2 {
-  margin: 0;
-  font-size: 28px;
-  font-weight: 560;
-  letter-spacing: -0.014em;
-  color: var(--text);
-}
-.mkx-prices-head h2 em {
-  margin-left: 8px;
-  font-style: normal;
-  font-size: 13px;
-  font-weight: 480;
+.mkx-summary article + article { border-left: 1px solid var(--line-2); }
+.mkx-summary span {
   color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 560;
+  line-height: 13px;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+.mkx-summary strong,
+.mkx-summary strong .num {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 510;
+  line-height: 23px;
+  letter-spacing: -.018em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.mkx-summary small {
+  overflow: hidden;
+  color: var(--muted-2);
+  font-size: 11.5px;
+  font-weight: 420;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mkx-summary small.pos { color: var(--up); }
+.mkx-summary small.neg { color: var(--down); }
+
+.mkx-viewbar {
+  min-height: 53px;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line-2);
+}
+.mkx-viewbar > div { gap: 6px; }
+.mkx-viewbar [role="tab"] {
+  min-height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 18px;
+  color: var(--muted);
+  background: var(--tile);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 470;
+  cursor: pointer;
+}
+.mkx-viewbar [role="tab"]:hover { color: var(--text); }
+.mkx-viewbar [role="tab"][aria-selected="true"] {
+  color: var(--cta-fg);
+  background: var(--cta-bg);
 }
 .mkx-live {
-  display: inline-flex;
-  align-items: center;
   gap: 6px;
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 500;
   color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 420;
+  white-space: nowrap;
+}
+.mkx-live i { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+.mkx-live.on i { background: var(--up); box-shadow: 0 0 0 3px color-mix(in srgb, var(--up) 10%, transparent); }
+
+.mkx-controls {
+  min-height: 50px;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line-2);
+}
+.mkx-controls > div { gap: 7px; }
+.mkx-controls > span {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 440;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.mkx-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
-.mkx-live.on i { background: var(--up); }
+.mkx-reset {
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--accent);
+  background: transparent;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 530;
+  cursor: pointer;
+}
+.mkx-reset:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
 
-/* Data-source control: occupies the old live-status position. Only connected
-   providers are selectable; planned rows remain visible and explicit. */
-.mkx-source-picker { position: relative; z-index: 12; flex: none; }
-.mkx-source-trigger {
+/* Shared PillSelect chrome. Token and Borrow reuse this exact implementation. */
+.mkx-pillwrap { position: relative; display: inline-flex; }
+.mkx-pill {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  height: 40px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 20px;
-  background: var(--tile);
-  color: var(--text);
+  min-width: 0;
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--text-2);
+  background: var(--panel);
   font: inherit;
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 470;
   cursor: pointer;
   white-space: nowrap;
 }
-.mkx-source-trigger:hover { background: color-mix(in srgb, var(--tile) 82%, var(--text) 5%); }
-.mkx-source-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.mkx-source-logo {
-  position: relative;
-  display: grid;
-  place-items: center;
-  flex: none;
+.mkx-pill:hover { color: var(--text); background: var(--hover); }
+.mkx-pill > span:not(.mkx-chev) {
   overflow: hidden;
-  border: 1px solid var(--line-2);
-  border-radius: 50%;
-  background: var(--panel);
-  color: var(--text-2);
-  font-size: 11px;
-  font-weight: 560;
-}
-.mkx-source-logo::before { content: attr(data-fallback); position: absolute; inset: 0; display: grid; place-items: center; }
-.mkx-source-logo img { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: contain; }
-.mkx-source-logo-binance { overflow: visible; border: 0; border-radius: 0; background: transparent; color: #f0b90b; }
-.mkx-source-logo-binance::before { content: none; }
-.mkx-source-logo-binance svg { display: block; width: 100%; height: 100%; fill: currentColor; }
-.mkx-source-logo-all { border-radius: 8px; color: var(--text-2); background: var(--tile); }
-.mkx-source-logo-all svg { fill: none; stroke: currentColor; stroke-width: 1.4; }
-.mkx-source-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 80;
-  width: 332px;
-  padding: 6px;
-  border: 1px solid var(--line-2);
-  border-radius: 14px;
-  background: var(--panel);
-  box-shadow: var(--shadow-pop);
-}
-.mkx-source-menu.upward { top: auto; bottom: calc(100% + 8px); }
-.mkx-source-menu-head { padding: 10px 11px 9px; border-bottom: 1px solid var(--line); }
-.mkx-source-menu-head b { display: block; font-size: 14px; font-weight: 550; line-height: 20px; color: var(--text); }
-.mkx-source-menu-head span { display: block; margin-top: 1px; font-size: 12px; font-weight: 430; line-height: 17px; color: var(--muted); }
-.mkx-source-options { padding-top: 4px; }
-.mkx-source-options > button {
-  display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 56px;
-  padding: 6px 10px;
-  border: 0;
-  border-radius: 10px;
-  background: none;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-}
-.mkx-source-options > button:not(:disabled) { cursor: pointer; }
-.mkx-source-options > button:not(:disabled):hover,
-.mkx-source-options > button.selected { background: var(--hover); }
-.mkx-source-options > button:disabled { cursor: not-allowed; }
-.mkx-source-options > button:disabled .mkx-source-logo,
-.mkx-source-options > button:disabled .mkx-source-copy { opacity: .62; }
-.mkx-source-copy { display: grid; gap: 1px; min-width: 0; }
-.mkx-source-copy b { overflow: hidden; font-size: 14px; font-weight: 550; line-height: 19px; text-overflow: ellipsis; white-space: nowrap; }
-.mkx-source-copy em { overflow: hidden; color: var(--muted); font-size: 12px; font-style: normal; font-weight: 430; line-height: 17px; text-overflow: ellipsis; white-space: nowrap; }
-.mkx-source-state {
-  min-width: 52px;
-  padding: 3px 7px;
-  border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 550;
-  line-height: 15px;
-  text-align: center;
-}
-.mkx-source-state.live { color: var(--up); background: color-mix(in srgb, var(--up) 10%, transparent); }
-.mkx-source-state.planned { color: var(--muted); background: var(--tile); }
-
-.mkx-pills { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 16px 0 4px; }
-.mkx-pills-left, .mkx-pills-right { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.mkx-pills-right { margin-left: auto; }
-.mkx-pill {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 40px;
-  padding: 0 14px 0 16px;
-  border-radius: 20px;
-  background: var(--tile);
-  color: var(--text);
-  font-size: 14px;
-  font-weight: 510;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.mkx-pill:hover { background: color-mix(in srgb, var(--tile) 82%, var(--text) 5%); }
-.mkx-pill svg { color: var(--text-2); flex: none; }
-.mkx-pill { border: 0; font: inherit; }
-.mkx-pillwrap .mkx-pill { max-width: 100%; }
-.mkx-pillwrap .mkx-pill > span:not(.mkx-chev) {
   min-width: 0;
-  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.mkx-chev { display: inline-flex; transition: transform .15s ease; }
+.mkx-chev { display: inline-flex; transition: transform 160ms ease; }
 .mkx-chev.up { transform: rotate(180deg); }
-
-/* custom dropdown menu — the Coinbase popover: white, rounded, soft shadow,
-   generous option rows, blue check on the selected one. Opaque, never frosted. */
-.mkx-pillwrap { position: relative; display: inline-flex; }
 .mkx-menu {
   position: absolute;
-  top: calc(100% + 8px);
+  z-index: 80;
+  top: calc(100% + 7px);
   left: 0;
-  z-index: 70;
-  width: max-content;
-  min-width: max(172px, 100%);
-  max-width: min(520px, calc(100vw - 32px));
-  max-height: min(520px, calc(100vh - 128px));
-  padding: 6px;
-  border-radius: 14px;
-  background: var(--panel);
-  border: 1px solid var(--line-2);
-  box-shadow: var(--shadow-pop);
   overflow-y: auto;
+  width: max-content;
+  min-width: max(174px, 100%);
+  max-width: min(420px, calc(100vw - 32px));
+  max-height: min(430px, calc(100vh - 128px));
+  padding: 6px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow-pop);
   overscroll-behavior: contain;
 }
 .mkx-menu button {
   display: flex;
-  width: 100%;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  min-height: 42px;
-  padding: 0 12px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 11px;
   border: 0;
-  border-radius: 10px;
-  background: none;
-  font: inherit;
-  font-size: 14.5px;
-  font-weight: 500;
+  border-radius: 8px;
   color: var(--text);
-  cursor: pointer;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 470;
   text-align: left;
   white-space: nowrap;
-}
-.mkx-menu-label {
-  min-width: 0;
-  overflow: hidden;
-  line-height: 18px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.mkx-menu button:hover { background: var(--hover); }
-.mkx-menu button.sel { background: var(--tile); font-weight: 560; }
-.mkx-menu button svg { color: var(--accent); flex: none; }
-
-/* ---- Table ------------------------------------------------------------- */
-.mkx-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 6px; }
-.mkx-table th {
-  padding: 14px 10px;
-  font-size: 14px;
-  font-weight: 440;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.mkx-table th.sorted .mkx-th { color: var(--accent-ink); }
-.mkx-th {
-  border: 0;
-  background: none;
-  padding: 0;
-  font: inherit;
-  color: inherit;
   cursor: pointer;
+}
+.mkx-menu button:hover,
+.mkx-menu button.sel { background: var(--hover); }
+.mkx-menu button.sel { font-weight: 540; }
+.mkx-menu button svg { flex: none; color: var(--accent); }
+.mkx-menu-label { overflow: hidden; min-width: 0; text-overflow: ellipsis; white-space: nowrap; }
+
+.mkx-table-wrap {
+  overflow: auto;
+  min-height: 260px;
+  max-height: calc(100vh - 430px);
+  overscroll-behavior: contain;
+}
+.mkx-table {
+  width: 100%;
+  min-width: 960px;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+.mkx-table[data-view="basis"] { min-width: 1080px; }
+.mkx-table[data-view="liquidity"] { min-width: 1040px; }
+.mkx-table thead { position: sticky; z-index: 4; top: 0; }
+.mkx-table th {
+  height: 36px;
+  padding: 0 12px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel) 96%, var(--bg));
+  font-size: 10.5px;
+  font-weight: 520;
+  white-space: nowrap;
+}
+.mkx-table th.sorted .mkx-th { color: var(--accent); }
+.mkx-th {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
 }
 .mkx-th:hover { color: var(--text); }
 .mkx-sortglyph { flex: none; }
 
-.mkx-starcol { width: 44px; }
-.mkx-assetcol { width: 204px; }
-.mkx-pricecol { width: 138px; }
-.mkx-chartcol { width: 118px; }
-.mkx-chgcol { width: 104px; }
-.mkx-volcol { width: 108px; }
-.mkx-oicol { width: 118px; }
-.mkx-actcol { width: 98px; }
-.mkx-dircol { width: 180px; }
-td.mkx-starcol { padding: 0 0 0 2px; text-overflow: clip; }
-
+.mkx-star-col { width: 46px; }
+.mkx-asset-col { width: 220px; }
+.mkx-chart-col { width: 145px; }
+.mkx-direction-col { width: 166px; }
 .mkx-table td {
-  height: 84px;
-  padding: 0 10px;
-  vertical-align: middle;
-  white-space: nowrap;
   overflow: hidden;
-  /* clip, not ellipsis: a flex td paints a stray "…" marker at its edge
-     (Chrome) — inner name spans carry their own ellipsis instead */
+  height: 66px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line-2);
+  color: var(--text);
+  vertical-align: middle;
   text-overflow: clip;
+  white-space: nowrap;
 }
-.mkx-table tbody tr { cursor: pointer; }
-.mkx-table tbody tr:hover td { background: var(--hover); }
-.mkx-table tbody tr:hover td:first-child { border-radius: 12px 0 0 12px; }
-.mkx-table tbody tr:hover td:last-child { border-radius: 0 12px 12px 0; }
+.mkx-table tbody tr { cursor: pointer; outline: 0; }
+.mkx-table tbody tr:last-child td { border-bottom: 0; }
+.mkx-table tbody tr:hover td,
+.mkx-table tbody tr:focus-visible td { background: var(--hover); }
+.mkx-table tbody tr:hover td:first-child,
+.mkx-table tbody tr:focus-visible td:first-child { border-radius: 8px 0 0 8px; }
+.mkx-table tbody tr:hover td:last-child,
+.mkx-table tbody tr:focus-visible td:last-child { border-radius: 0 8px 8px 0; }
+.mkx-table tbody tr:focus-visible { box-shadow: inset 2px 0 var(--accent); }
 
+.mkx-star-col { padding-left: 8px !important; padding-right: 0 !important; }
 .mkx-star {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 30px;
   height: 30px;
+  padding: 0;
   border: 0;
-  border-radius: 8px;
-  background: none;
+  border-radius: 7px;
   color: var(--faint);
+  background: transparent;
   cursor: pointer;
 }
 .mkx-star:hover { color: var(--text-2); background: var(--tile); }
 .mkx-star.on { color: var(--accent); }
 
-.mkx-asset { display: flex; align-items: center; gap: 14px; height: 84px; }
-.mkx-asset-name { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.mkx-asset-name b {
-  font-size: 15px;
-  font-weight: 500;
-  line-height: 20px;
-  color: var(--text);
-  letter-spacing: -0.006em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.mkx-asset-name em {
-  font-style: normal;
-  font-size: 13px;
-  font-weight: 400;
-  line-height: 18px;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* the Coinbase number voice: 15.5px, REGULAR weight, PROPORTIONAL figures —
-   numbers are bigger and lighter than labels, never small-and-bold.
-   The global .num flash wrapper forces 620/tabular; neutralize it here so
-   the cell's voice reaches the actual glyphs. */
-.mkx-num, .mkx-price {
-  font-size: 16px;
-  font-weight: 430;
-  color: var(--text);
-  font-variant-numeric: lining-nums;
-}
-.mkx-price { font-weight: 430; }
-.mkx-table .num, .mkx-tile-v .num {
-  font-weight: inherit;
-  font-variant-numeric: inherit;
-  font-feature-settings: "lnum" 1;
-}
-.mkx-dim { color: var(--faint); font-size: 14px; font-weight: 430; }
-.mkx-range-cell { font-size: 13.5px; color: var(--text-2); }
-.mkx-dir { font-size: 13.5px; font-weight: 500; color: var(--text-2); }
-
-.mkx-chg { font-size: 16px; font-weight: 440; font-variant-numeric: lining-nums; }
-.mkx-chg-in { display: inline-flex; align-items: center; gap: 4px; }
-
-.mkx-chart { padding-right: 16px; }
-.mkx-rowspark { display: inline-block; vertical-align: middle; }
-.mkx-spark-empty { display: inline-block; width: 96px; }
-
-.mkx-fundcell { font-size: 15px; }
-
-/* ---- Pagination --------------------------------------------------------- */
-.mkx-pager {
+.mkx-asset {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  margin-top: 22px;
+  gap: 11px;
 }
-.mkx-page, .mkx-page-nav {
-  min-width: 34px;
-  height: 34px;
-  padding: 0 6px;
-  border: 0;
-  border-radius: 50%;
-  background: none;
-  color: var(--text-2);
-  font: inherit;
-  font-size: 14px;
+.mkx-asset > span { overflow: hidden; min-width: 0; }
+.mkx-asset b,
+.mkx-asset small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mkx-asset b {
+  color: var(--text);
+  font-size: 12.5px;
   font-weight: 470;
-  font-variant-numeric: lining-nums;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  line-height: 18px;
+  letter-spacing: -.008em;
 }
-.mkx-page:hover, .mkx-page-nav:hover:not(:disabled) { background: var(--tile); color: var(--text); }
-.mkx-page.current { background: var(--cta-bg); color: var(--cta-fg); font-weight: 620; }
-.mkx-page-nav:disabled { opacity: 0; pointer-events: none; }
-.mkx-page-ellipsis { color: var(--muted); padding: 0 2px; }
-.mkx-rangeline {
-  margin: 10px 0 0;
-  text-align: center;
-  font-size: 13px;
-  font-weight: 430;
-  color: var(--muted);
+.mkx-asset small {
+  color: var(--muted-2);
+  font-size: 10.5px;
+  font-weight: 420;
+  line-height: 16px;
+}
+
+.mkx-num,
+.mkx-price,
+.mkx-change {
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 470;
   font-variant-numeric: tabular-nums;
 }
+.mkx-table .num,
+.mkx-summary .num {
+  font-weight: inherit;
+  font-variant-numeric: inherit;
+}
+.mkx-dim { color: var(--muted-2); font-size: 10.5px; font-weight: 430; }
+.mkx-range { color: var(--text-2); font-size: 10.5px; font-weight: 440; font-variant-numeric: tabular-nums; }
+.mkx-direction { color: var(--text-2); font-size: 10.2px; font-weight: 470; }
+.mkx-change span { justify-content: flex-end; gap: 4px; }
+.mkx-chart { padding-right: 16px !important; }
+.mkx-rowspark { display: inline-block; overflow: visible; vertical-align: middle; }
+.mkx-spark-empty { color: var(--muted-2); font-size: 9px; font-weight: 430; }
 
-/* ---- Responsive (container queries: correct under :root zoom, where media
-   queries see the unzoomed window and lie about available layout width) ---- */
-@container (max-width: 940px) {
-  .mkx-chartcol, .mkx-chart { display: none; }
+.mkx-footer {
+  min-height: 50px;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 16px;
+  border-top: 1px solid var(--line-2);
 }
-@container (max-width: 900px) {
-  /* the search pill must never crush the title/index line mid-sentence —
-     Coinbase drops it below the heading instead */
-  .mkx-hero { flex-direction: column; align-items: stretch; gap: 16px; }
-  .mkx-search { flex: 1 1 auto; }
+.mkx-footer > span {
+  overflow: hidden;
+  color: var(--muted-2);
+  font-size: 10.5px;
+  font-weight: 420;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-@container (max-width: 720px) {
-  .mkx-prices-head { align-items: flex-start; flex-wrap: wrap; }
-  .mkx-pills { align-items: flex-start; flex-wrap: wrap; }
-  .mkx-pills-right { width: 100%; justify-content: flex-end; }
+.mkx-pager { gap: 3px; flex: none; }
+.mkx-pager button {
+  display: grid;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 7px;
+  place-items: center;
+  color: var(--text-2);
+  background: transparent;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 480;
+  cursor: pointer;
+}
+.mkx-pager button:hover:not(:disabled) { color: var(--text); background: var(--hover); }
+.mkx-pager button.current { color: var(--cta-fg); background: var(--cta-bg); }
+.mkx-pager button:disabled { opacity: .28; cursor: default; }
+.mkx-pager > span { padding: 0 2px; color: var(--muted); font-size: 10px; }
+
+[data-theme="dark"] .mkx-frame { box-shadow: none; }
+[data-theme="dark"] .mkx-source-mark { background: color-mix(in srgb, #f0b90b 11%, transparent); }
+
+@container (max-width: 850px) {
+  .mkx-toolbar { align-items: flex-start; flex-direction: column; padding-top: 14px; padding-bottom: 14px; }
+  .mkx-tools { width: 100%; }
+  .mkx-search { width: auto; flex: 1; }
+  .mkx-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mkx-summary article:nth-child(3) { border-top: 1px solid var(--line-2); border-left: 0; }
+  .mkx-summary article:nth-child(4) { border-top: 1px solid var(--line-2); }
+  .mkx-viewbar { align-items: flex-start; flex-direction: column; padding-top: 10px; padding-bottom: 10px; }
+  .mkx-viewbar > div { overflow-x: auto; width: 100%; }
+  .mkx-live { align-self: flex-end; }
 }
 
-/* Owner screenshot repair (2026-07-10): a smaller heading must carry less
-   ink than the Explore title; market identities stay crisp, not bold. */
-.app-page-frame .mkx-stats h2,
-.app-page-frame .mkx-prices-head h2 {
-  font-size: 24px !important;
-  font-weight: 500 !important;
-  line-height: 34px !important;
-  letter-spacing: -.01em !important;
-}
-.mkx-tile-k { font-size: 14px; font-weight: 430; }
-.mkx-tile-v b,
-.mkx-tile-v b .num { font-size: 16px; font-weight: 430; letter-spacing: 0; font-variant-numeric: lining-nums; }
-.mkx-tile-v em { font-size: 13px; font-weight: 430; }
-@container (max-width: 800px) {
-  .mkx-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .mkx-oicol, .mkx-oicell { display: none; }
-  .mkx-fundcol, .mkx-fundcell { display: none; }
-}
-@container (max-width: 660px) {
-  .mkx-assetcol { width: 150px; }
+@container (max-width: 650px) {
+  .mkx-page { padding: 14px; }
+  .mkx-controls { align-items: flex-start; flex-direction: column; padding-top: 10px; padding-bottom: 10px; }
+  .mkx-controls > span { align-self: flex-end; }
+  .mkx-footer > span { display: none; }
+  .mkx-footer { justify-content: center; }
 }

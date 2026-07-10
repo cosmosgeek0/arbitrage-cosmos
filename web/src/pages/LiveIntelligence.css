@@ -881,6 +881,8 @@
   font-weight: 470;
 }
 .logx-load-more button:hover { border-color: var(--line-strong); color: var(--text); }
+.logx-load-more button:disabled { opacity: .35; cursor: default; }
+.logx-page-actions { display: inline-flex; align-items: center; gap: 7px; }
 
 @keyframes logxDetailIn { from { opacity: .62; transform: translateY(-2px); } to { opacity: 1; transform: translateY(0); } }
 

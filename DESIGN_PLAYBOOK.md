@@ -116,8 +116,12 @@ Calendar after any correction that changes shared type, color, or geometry.
 
 - Compare the rendered page, not declared CSS. Capture `getBoundingClientRect`
   and `getComputedStyle` for frame, title, summary, row primary, and row secondary.
-- Stable one-frame geometry is `22px` page inset; frame `x/y` must not move when
-  switching; `1px var(--line-2)` edge; `12px` radius; `57px` toolbar; summary
+- Stable one-frame geometry now uses a `5px` shell edge plus `6px` route padding
+  on both axes, leaving an 11px visual gap from sidebar/header to content and
+  the same compact edge on the right. At 1280×720 the first real page surface
+  starts at `y=75`, 11px below the fixed 64px header. Frame `x/y` must not move
+  when switching; `1px var(--line-2)`
+  edge; `12px` radius; `57px` toolbar; summary
   begins at the same y and is exactly `102px` high where that role exists.
 - Use the role contract in §0 item 3. An upper page may not become smaller,
   darker, heavier, denser, or more tightly tracked than the accepted page below.
@@ -137,6 +141,52 @@ Calendar after any correction that changes shared type, color, or geometry.
 - A successful build is not visual proof. If a mounted row is absent from the
   screenshot, inspect live geometry; circular `max-content`/percentage sizing can
   produce million-pixel canvases while the DOM and accessibility tree look valid.
+
+### 0.4 Topbar Popover Canon / No Internal Quality Gradient (2026-07-10)
+
+The owner supplied the clean Logs `Strategy Decision` row as the type and data
+rhythm reference, then required every topbar popup to be audited left-to-right.
+This is now one shared system, not ten independently styled mini-apps.
+
+1. **Fixed shell:** every popup is `398 × 486px` inside the shared `400px`
+   shell. Operational headers are `70px`; Account is the one `84px` identity
+   header. Popup width, height, top edge, and type roles cannot change while
+   moving across the rail.
+2. **Type roles:** header title `16/540/21`; subtitle `11.25/400/16`; row
+   primary `12.75/470/18`; row secondary `10.5/400/15`; right-side values
+   `11.5/450/16` mono with tabular lining numerals. Status labels are
+   `9.75/500/14` mono/caps. Persistent popup data must not use `600+` weights.
+3. **One data grammar:** rows use a `14px` content rail, free-standing identity
+   marks, one hairline between rows, and the same primary/secondary/value
+   alignment as the Logs tape. Dense numbers are mono; descriptions are UI
+   text. A selected row may receive a quiet wash, never a nested card.
+4. **Symmetric, not equal:** measure left, right, top, and bottom distances on
+   the element that owns the content. Optical icon compensation is allowed;
+   arbitrary one-sided padding is not. A full-height list distributes its
+   real rows to the available track instead of leaving a false footer trench.
+5. **No bottom action bars:** topbar popovers do not use `ops-sheet-foot` or a
+   large two-button footer. A real action lives beside the object it controls
+   as a hairline tool row. Duplicate navigation is removed. Account logout is
+   the only destructive terminal action and is a plain full-width row—not a
+   tinted rounded button card.
+6. **No card-inside-card evidence:** API keys are two continuous evidence
+   sections; permissions are a structured two-column hairline list. Trust
+   counts are one three-cell summary band. Currency/Basis/Appearance notes are
+   flat provenance rows. Do not restore individual rounded cards or gray note
+   boxes inside the popover shell.
+7. **Truth before fill:** preserve real state, provenance, device/IP facts,
+   permission posture, disabled reasons, and actual controls. Do not invent a
+   row merely to occupy vertical space and do not repeat the same action in a
+   header, body, and footer.
+8. **Audit order:** Clock → AWS Runner → API Keys → Trust Advisor →
+   Notifications → Execution Control → Currency → Basis Units → Appearance →
+   Account Details. After any shared selector change, restart at Clock. For
+   every panel record shell/header rects, exact computed type roles, overflow,
+   footer count, and the rendered Light/Dark screenshot before moving right.
+
+This topbar-specific ruling supersedes any earlier generic instruction that a
+popover must keep footer actions visible. Actions remain visible by living next
+to their owner; bottom footer bars are retired.
 
 ## 0.5 KNOWN FAILURE MODES OF THE AGENT (the owner should not have to babysit these)
 
@@ -257,6 +307,9 @@ before it is considered owner-grade:
 4. Clean spacing: compact does not mean cramped; premium does not mean huge.
    Empty space is allowed only when it is balanced and scaled to the component.
    Never leave a page-sized blank region inside a small popover.
+   Do not solve duplication by shrinking the surviving controls into chips.
+   Preserve the spacing scale: 8px for related control gaps, 12-16px for
+   section air, and 40-44px for primary operator controls.
 5. Crisp typography: thinner and sharper beats bigger and heavier. Titles
    usually 520-560, labels 430-560, numbers 430-440. Keep casing consistent;
    do not mix random title case, lowercase, and all-caps without a role.
@@ -391,12 +444,21 @@ new toggle language.
   weight, line-height, transform, icon background, and root zoom before changing
   colors.
 
-**D. Shell scale (8px rhythm):** topbar 64px, 38px topbar icon targets
-(19px glyphs), search = Coinbase pill 42px r21 "Search for an asset" + ⌘K
-chip, sidebar currently 178px with 40px Flow-style rows, content stretches
+**D. Shell scale (8px rhythm):** topbar 64px, 42px topbar icon targets
+(24px optical marks; bell 25px), search = Coinbase pill 42px r21 "Search for an asset" + ⌘K
+chip, sidebar currently 178px with 36px Flow-style rows and 27-29px marks, content stretches
 with constant gutters, RefreshDock 28px off both edges. Footer = 12.5px
 all-muted whisper
 (navigation words carry ink; chrome/legal lines carry gray — never reversed).
+
+**D2. Owner identity system (2026-07-10):** screenshots define geometry and
+color, not a raster implementation. Rebuild supplied marks as transparent,
+code-native SVG with geometric precision; use the same component in its topbar
+trigger, popup header, and repeated object rows. Never ship the screenshot's
+white/pale canvas, never put a second shape behind the mark, and verify every
+identity in Dark Mode. Current family: neural brain brand, AWS cube, gold API
+key, red/green Execution power, green Currency dollar, and blue Appearance sun.
+Adjust only for optical weight, not arbitrary per-icon size drift.
 
 **THE STRETCH LAW (owner 2026-07-09):** no page caps its width — `.container`
 has `max-width: none`. Stretching the window stretches the CONTENT (fluid
@@ -429,10 +491,15 @@ polylines; stablecoin sparks flat-line when range/mean < 0.1%.
 - Profile/account popover is not a nav menu. It must show connected exchange
   and key posture from `/api/apikey`, active/recent devices from `/api/sessions`,
   and a real logout path. No Dashboard/Assets/Orders/Risk/Settings filler rows.
+- Related commands get one control grammar. If six backend targets perform the
+  same recovery operation, use one target selector plus one action; do not
+  repeat them as a card grid and again in a footer. Buttons sharing one action
+  group must use equal height and one spacing token; empty space is preferable
+  to duplicate navigation or decorative filler.
 
 **G. Current surface baseline:** before editing the left sidebar, brand/topbar,
-global search, clock, AWS CLI, API key, Data Health, Trust Advisor,
-Notifications, Kill Switch / Trading Mode, Connection Control, Display Currency,
+global search, clock, AWS CLI, API key, Trust Advisor,
+Notifications, Kill Switch / Trading Mode, Connection Watchman, Display Currency,
 Basis Display, Appearance, or Account Details profile, read
 `UI_SURFACE_BASELINE.md`. It records the measured current geometry, text sizes,
 motion timing, real endpoints, and old-code traps from the 2026-07-09 audit.
@@ -444,8 +511,8 @@ motion timing, real endpoints, and old-code traps from the 2026-07-09 audit.
   to Account. The withdrawal GATE bans `capital/withdraw/apply` (action);
   read-only `withdraw/history` is allowed for the equity chart.
 - NO Settings page/gear — currency/basis remain topbar triggers; market refresh,
-  connection health, and the four polling cadences live in the single bottom
-  Connection Control. Theme+accent live in the profile popover.
+  source health, lag/outage alerts, and the four polling cadences live in the
+  single bottom Connection Watchman. Theme+accent live in the profile popover.
   Dead prefs forever: zoom/interface-size, motion, density, timestamps,
   default page, reset.
 - Account = money only (keys/connection/permissions/sessions live in the

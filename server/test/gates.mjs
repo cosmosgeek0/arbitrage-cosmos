@@ -194,6 +194,9 @@ check(
     browserSessions.sessions[0]?.active === true &&
     browserSessions.sessions[0]?.system === 'macOS' &&
     /^Chrome /.test(browserSessions.sessions[0]?.browser ?? '') &&
+    browserSessions.sessions[0]?.device === 'Desktop' &&
+    browserSessions.sessions[0]?.ip === '127.0.0.1' &&
+    browserSessions.sessions[0]?.requests >= 2 &&
     /no-store/i.test(browserSessionsResponse.headers.get('cache-control') ?? '')
 );
 
@@ -327,6 +330,8 @@ check('max-borrowable honest without keys', maxB?.ok === false);
 
 const sys = (await get('/api/system')).body;
 check('system health responds', sys?.ok === true && typeof sys.uptimeSec === 'number' && sys.dbOk === true);
+const browserObservation = await post('/api/connections/browser-observation', { rttMs: 24, socketConnected: true });
+check('browser connection observation is sanitized and accepted', browserObservation.status === 200 && browserObservation.body?.observation?.status === 'operational');
 check(
   'connection inventory exposes live, cached, and planned source truth',
   typeof sys?.connections?.basis?.running === 'boolean' &&
@@ -334,6 +339,10 @@ check(
     typeof sys?.connections?.news?.sources === 'number' &&
     typeof sys?.connections?.calendar?.items === 'number' &&
     typeof sys?.connections?.fx?.currencies === 'number' &&
+    typeof sys?.connections?.watchman?.summary?.required === 'number' &&
+    Array.isArray(sys?.connections?.watchman?.components) &&
+    sys.connections.watchman.components.some((component) => component.id === 'market-streams' && component.resetTarget === 'market') &&
+    sys.connections.watchman.components.some((component) => component.id === 'aws-runner' && component.status === 'planned') &&
     sys?.connections?.planned?.awsRunner?.configured === false &&
     typeof sys?.connections?.planned?.cloudflareAccess?.reason === 'string'
 );

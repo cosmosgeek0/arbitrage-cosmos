@@ -121,6 +121,24 @@ export function curateNotification(event: LedgerEvent): CuratedNotification | nu
     return notice(event, 'health', 'resolved', 'Market Stream Recovered', `${feed} is receiving live market data`, 'Market Data', 'bot');
   }
 
+  if (kind === 'connection_alert' || kind === 'connection_recovered') {
+    const recovered = kind === 'connection_recovered';
+    const status = text(data.status).toLowerCase();
+    const component = text(data.component) || titleCase(text(data.componentId)) || 'Connection';
+    const infrastructure = text(data.group) === 'infrastructure';
+    const outage = status === 'outage';
+    return notice(
+      event,
+      recovered ? (infrastructure ? 'infrastructure' : 'health') : outage ? 'critical' : infrastructure ? 'infrastructure' : 'health',
+      recovered ? 'resolved' : outage ? 'critical' : 'warning',
+      recovered ? `${component} Recovered` : outage ? `${component} Offline` : `${component} Is Lagging`,
+      [text(data.value), text(data.detail)].filter(Boolean).join(' · ') || 'Connection state changed',
+      component,
+      infrastructure ? 'aws' : 'bot',
+      !recovered,
+    );
+  }
+
   if (kind === 'manual_action') {
     const action = text(data.action);
     if (action === 'kill_switch') {

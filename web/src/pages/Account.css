@@ -28,8 +28,6 @@
 .accountx-toolbar,
 .accountx-identity,
 .accountx-tools,
-.accountx-search,
-.accountx-live,
 .accountx-viewbar,
 .accountx-viewbar > div,
 .accountx-source-state,
@@ -53,23 +51,9 @@
   border-bottom: 1px solid var(--line-2);
 }
 
-.accountx-identity { min-width: 0; gap: 10px; }
+.accountx-identity { min-width: 0; }
 
-.accountx-source-mark {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  flex: none;
-  place-items: center;
-  border-radius: 8px;
-  background: color-mix(in srgb, #f0b90b 9%, transparent);
-  color: #f0b90b;
-}
-
-.accountx-source-mark svg { display: block; fill: currentColor; }
-.accountx-title-copy { min-width: 0; }
-
-.accountx-title-copy h1 {
+.accountx-identity h1 {
   margin: 0;
   color: var(--text);
   font-size: 22px;
@@ -78,27 +62,6 @@
   letter-spacing: -.014em;
 }
 
-.accountx-title-copy small {
-  display: block;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 10.5px;
-  font-weight: 420;
-  line-height: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.accountx-live {
-  gap: 7px;
-  margin-left: 4px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 450;
-  white-space: nowrap;
-}
-
-.accountx-live i,
 .accountx-source-state i {
   width: 6px;
   height: 6px;
@@ -107,62 +70,12 @@
   background: var(--faint);
 }
 
-.accountx-live.live { color: var(--up); }
-.accountx-live.live i,
 .accountx-source-state.on i { background: var(--up); }
-.accountx-live.partial { color: var(--muted); }
-.accountx-live.partial i,
 .accountx-source-state.partial i { background: #d5962e; }
 .accountx-source-state.loading i { background: var(--muted); }
-.accountx-live.bad { color: var(--down); }
-.accountx-live.bad i { background: var(--down); }
 
 .accountx-tools { flex: none; gap: 7px; }
 
-.accountx-search {
-  width: 286px;
-  height: 34px;
-  gap: 8px;
-  padding: 0 10px;
-  border: 1px solid var(--line-2);
-  border-radius: 7px;
-  background: var(--panel);
-  color: var(--muted);
-}
-
-.accountx-search:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 8%, transparent);
-}
-
-.accountx-search input {
-  min-width: 0;
-  flex: 1;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 430;
-}
-
-.accountx-search input::placeholder { color: var(--muted); opacity: 1; }
-
-.accountx-search > button {
-  display: grid;
-  width: 21px;
-  height: 21px;
-  padding: 0;
-  border: 0;
-  place-items: center;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 16px;
-}
-
-.accountx-search > button:focus-visible,
 .accountx-mask:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
   outline-offset: 2px;
@@ -190,9 +103,11 @@
 .accountx-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  min-height: 102px;
+  gap: 8px;
+  min-height: 128px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--line-2);
-  background: color-mix(in srgb, var(--tile) 44%, var(--panel));
+  background: var(--panel);
 }
 
 .accountx-summary article {
@@ -200,18 +115,19 @@
   align-content: center;
   gap: 5px;
   min-width: 0;
-  padding: 18px;
+  min-height: 104px;
+  padding: 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--panel);
 }
-
-.accountx-summary article + article { border-left: 1px solid var(--line-2); }
 
 .accountx-summary span {
   color: var(--muted);
-  font-size: 10.5px;
-  font-weight: 560;
-  line-height: 13px;
-  letter-spacing: .055em;
-  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 480;
+  line-height: 15px;
+  letter-spacing: 0;
 }
 
 .accountx-summary .accountx-estimated-label {
@@ -231,15 +147,13 @@
 .accountx-estimated-label b {
   color: inherit;
   font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
 }
 
 .accountx-summary strong {
   overflow: hidden;
   color: var(--text);
   font-size: 18px;
-  font-weight: 510;
+  font-weight: 470;
   line-height: 23px;
   letter-spacing: -.012em;
   text-overflow: ellipsis;
@@ -318,20 +232,19 @@
 }
 
 .accountx-overview {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 348px;
+  display: block;
   min-height: 430px;
 }
 
 .accountx-equity {
   min-width: 0;
-  padding: 18px 16px 14px;
+  padding: 18px 16px 16px;
 }
 
 .accountx-allocation {
   min-width: 0;
-  padding: 18px 20px 16px;
-  border-left: 1px solid var(--line-2);
+  padding: 18px 20px 20px;
+  border-top: 1px solid var(--line-2);
 }
 
 .accountx-section-head {
@@ -474,15 +387,16 @@
 
 .accountx-allocation .donut-wrap {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  justify-content: center;
   align-items: center;
-  gap: 16px;
-  padding-top: 12px;
+  gap: 44px;
+  padding: 16px 0 2px;
 }
 
 .accountx-allocation .donut-legend {
   display: flex;
-  width: 100%;
+  width: min(100%, 520px);
   flex-direction: column;
 }
 
@@ -510,21 +424,20 @@
 
 .accountx-wallet-zone {
   min-width: 0;
-  padding: 12px 0 14px;
+  padding: 0;
   border-top: 1px solid var(--line-2);
-  background: color-mix(in srgb, var(--tile) 22%, var(--panel));
+  background: var(--panel);
 }
 
 .accountx-wallet-zone-head {
   display: flex;
-  min-height: 58px;
+  min-height: 52px;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  margin: 0 12px 10px;
-  padding: 0 14px;
-  border: 1px solid var(--line-2);
-  border-radius: 10px;
+  margin: 0;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line-2);
   background: var(--panel);
 }
 
@@ -560,11 +473,9 @@
 }
 
 .accountx-wallet-table {
-  display: grid;
+  display: block;
   min-width: 0;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  padding: 0 12px;
+  padding: 0;
 }
 
 .accountx-table-scroll {
@@ -577,20 +488,20 @@
   scrollbar-width: thin;
 }
 
-.accountx-wallet-item { display: contents; }
+.accountx-wallet-item { display: block; }
 
 .accountx-wallet-row {
   display: grid;
   width: 100%;
   min-width: 0;
-  min-height: 154px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: 68px;
+  grid-template-columns: minmax(230px, 1.35fr) repeat(4, minmax(112px, .72fr));
   align-items: center;
-  align-content: start;
-  gap: 11px 18px;
-  padding: 13px 14px 14px;
-  border: 1px solid var(--line-2);
-  border-radius: 10px;
+  gap: 10px;
+  padding: 0 16px;
+  border: 0;
+  border-bottom: 1px solid var(--line-2);
+  border-radius: 0;
   background: var(--panel);
   color: var(--text);
   font: inherit;
@@ -606,7 +517,6 @@
 
 button.accountx-wallet-row:hover,
 button.accountx-wallet-row:focus-visible {
-  border-color: var(--line-strong);
   background: var(--hover);
 }
 button.accountx-wallet-row:focus-visible {
@@ -616,9 +526,8 @@ button.accountx-wallet-row:focus-visible {
   outline-offset: 1px;
 }
 .accountx-wallet-item.expanded > .accountx-wallet-row {
-  border-color: color-mix(in srgb, var(--accent) 22%, var(--line-2));
   background: color-mix(in srgb, var(--tile) 64%, var(--panel));
-  box-shadow: inset 0 2px 0 color-mix(in srgb, var(--accent) 62%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent) 62%, transparent);
 }
 
 .accountx-wallet-row > span:not(.accountx-wallet-name) > b,
@@ -662,7 +571,6 @@ button.accountx-wallet-row:focus-visible {
 [data-theme="dark"] .accountx-table b.warn { color: #e0a13a !important; }
 
 .accountx-wallet-name {
-  grid-column: 1 / -1;
   gap: 10px;
   color: var(--text-2);
 }
@@ -711,11 +619,10 @@ button.accountx-wallet-row:focus-visible {
 .accountx-detail-table {
   width: 100%;
   min-width: 0;
-  grid-column: 1 / -1;
-  order: 999;
   overflow-x: auto;
-  border: 1px solid var(--line-2);
-  border-radius: 10px;
+  border: 0;
+  border-bottom: 1px solid var(--line-2);
+  border-radius: 0;
   background: var(--panel);
   scrollbar-width: thin;
 }
@@ -859,38 +766,26 @@ button.accountx-wallet-row:focus-visible {
 .accountx-footer span:last-child { flex: none; }
 
 @container (max-width: 1120px) {
-  .accountx-overview { grid-template-columns: minmax(0, 1fr); }
-  .accountx-allocation { border-top: 1px solid var(--line-2); border-left: 0; }
-  .accountx-wallet-table { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .accountx-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .accountx-summary article:nth-child(3) { border-left: 0; }
-  .accountx-summary article:nth-child(-n + 2) { border-bottom: 1px solid var(--line-2); }
 }
 
 @container (max-width: 820px) {
-  .accountx-toolbar { align-items: flex-start; min-height: 108px; padding: 13px; flex-direction: column; }
-  .accountx-tools { width: 100%; }
-  .accountx-search { width: 100%; }
-  .accountx-live { margin-left: auto; }
   .accountx-viewbar { align-items: flex-start; min-height: 90px; padding-top: 9px; padding-bottom: 9px; flex-direction: column; }
   .accountx-source-state { padding-left: 4px; }
   .accountx-section-head { align-items: flex-start; flex-direction: column; }
   .accountx-equity-tools { width: 100%; justify-content: space-between; }
   .accountx-chart { height: 280px; }
+  .accountx-allocation .donut-wrap { flex-direction: column; gap: 16px; }
+  .accountx-wallet-table { overflow-x: auto; scrollbar-width: thin; }
+  .accountx-wallet-item { min-width: 850px; }
 }
 
 @container (max-width: 620px) {
   .accountx-summary { grid-template-columns: minmax(0, 1fr); }
-  .accountx-summary article { border-bottom: 1px solid var(--line-2); border-left: 0 !important; }
-  .accountx-summary article:last-child { border-bottom: 0; }
   .accountx-identity { width: 100%; }
-  .accountx-title-copy { flex: 1; }
-  .accountx-live { font-size: 10.5px; }
   .accountx-spot-change { display: none; }
   .accountx-equity { padding-right: 12px; padding-left: 12px; }
   .accountx-allocation { padding-right: 12px; padding-left: 12px; }
-  .accountx-wallet-table { grid-template-columns: minmax(0, 1fr); }
-  .accountx-wallet-zone-head { margin-right: 10px; margin-left: 10px; }
   .accountx-footer { align-items: flex-start; padding-top: 10px; padding-bottom: 10px; flex-direction: column; gap: 3px; }
 }
 

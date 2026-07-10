@@ -6,9 +6,10 @@ import { eventSummary } from '../lib/eventText';
 import { calVal, flag, type CalItem } from '../lib/calendar';
 import { curateNotifications, groupNotifications, notificationEnabled } from '../lib/notifications';
 import { fireRefresh } from '../lib/refresh';
-import { ACCENTS, CURRENCIES, MARKET_PING_CHOICES, MARKET_PING_KEYS, type AccentKey, type DataCadenceKey, type NotificationRuleKey } from '../lib/prefs';
+import { ACCENTS, CURRENCIES, DATA_CADENCE_DEFAULTS, MARKET_PING_CHOICES, MARKET_PING_KEYS, type AccentKey, type DataCadenceKey, type NotificationRuleKey } from '../lib/prefs';
 import { openOverlay, useOverlay } from '../lib/overlay';
 import { TokenIcon } from './TokenIcon';
+import { PillSelect } from './PillSelect';
 import {
   AWS_CONSOLE_URL,
   AWS_RUNNER_MARK,
@@ -77,15 +78,10 @@ const ZONES: { id: string; label: string; city: string; detail: string }[] = [
 
 const ACCENT_ORDER: AccentKey[] = ['r', 'o', 'y', 'g', 'b', 'i', 'v'];
 
-const DEFAULT_PROFILE_LOGO = '/profile-logo.png';
-const API_KEY_MARK = '/api-key-mark.png';
-const DATA_HEALTH_MARK = '/data-health-shield.png';
-const CONNECTION_RESET_MARK = '/connection-reset-mark.svg';
+const DEFAULT_PROFILE_LOGO = '/account-night-sky.png';
 const TRUST_ADVISOR_MARK = '/trust-advisor-shield.png';
 const NOTIFICATION_MARK = '/notification-bell.png';
-const EXECUTION_STOP_MARK = '/execution-stop.png';
-const EXECUTION_STOPPED_MARK = '/execution-stopped.png';
-const CURRENCY_MARK = '/currency-dollar.png';
+const BASIS_MARK = '/basis-percent.png';
 const DEPLOYED_APP_HOST = 'arbitrage.cosmosgeek.org';
 const TOPBAR_POPOVER_CONTENT_HEIGHT = 486;
 
@@ -208,9 +204,90 @@ function BasisUnitGlyph({ size = 31 }: { size?: number }) {
 
 function AppearanceIdentityMark({ size = 31 }: { size?: number }) {
   return (
-    <svg className="appearance-identity-mark" width={size} height={size} viewBox="0 0 40 40" aria-hidden="true">
-      <rect className="appearance-diamond-back" x="5" y="10" width="20" height="20" rx="5" transform="rotate(45 15 20)" />
-      <rect className="appearance-diamond-front" x="13" y="10" width="20" height="20" rx="5" transform="rotate(45 23 20)" />
+    <svg className="operator-identity-mark appearance-identity-mark" width={size} height={size} viewBox="0 0 48 48" aria-hidden="true" shapeRendering="geometricPrecision">
+      <defs>
+        <linearGradient id="appearanceDisc" x1="13" y1="11" x2="36" y2="37" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#69a8ff" />
+          <stop offset="1" stopColor="#3c82f1" />
+        </linearGradient>
+        <linearGradient id="appearanceCore" x1="19" y1="17" x2="31" y2="33" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#1c5fc4" />
+          <stop offset="1" stopColor="#10469f" />
+        </linearGradient>
+      </defs>
+      <g className="appearance-rays" fill="none" stroke="#1468f5" strokeWidth="4.2" strokeLinecap="round">
+        <path d="M24 2.8v7.1M24 38.1v7.1M2.8 24h7.1M38.1 24h7.1" />
+        <path d="m8.8 8.8 5 5m20.4 20.4 5 5M8.8 39.2l5-5m20.4-20.4 5-5" />
+      </g>
+      <circle cx="24" cy="24" r="13.2" fill="url(#appearanceDisc)" />
+      <circle cx="24" cy="24" r="8.9" fill="url(#appearanceCore)" />
+      <path d="M31.7 17.5a12.9 12.9 0 0 1-1.2 15.9" fill="none" stroke="#2a70d8" strokeWidth="1.4" strokeLinecap="round" opacity=".72" />
+    </svg>
+  );
+}
+
+function AwsCubeIdentityMark({ size = 31 }: { size?: number }) {
+  return (
+    <svg className="operator-identity-mark aws-cube-identity-mark" width={size} height={size} viewBox="0 0 48 48" aria-hidden="true" shapeRendering="geometricPrecision">
+      <defs>
+        <linearGradient id="awsCubeTop" x1="8" y1="6" x2="40" y2="18" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#ffb516" />
+          <stop offset="1" stopColor="#f69b00" />
+        </linearGradient>
+        <linearGradient id="awsCubeLeft" x1="6" y1="16" x2="23" y2="42" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#ffb413" />
+          <stop offset="1" stopColor="#f5a000" />
+        </linearGradient>
+      </defs>
+      <path d="M24 4.6 43 11.7 24 18.8 5 11.7 24 4.6Z" fill="url(#awsCubeTop)" />
+      <path d="m5 15.2 17.2 6.4v21.8L5 36.8V15.2Z" fill="url(#awsCubeLeft)" />
+      <path d="m25.8 21.6 17.2-6.4v21.6l-17.2 6.6V21.6Z" fill="#f6a000" />
+    </svg>
+  );
+}
+
+function ApiKeyIdentityMark({ size = 31 }: { size?: number }) {
+  return (
+    <svg className="operator-identity-mark api-key-identity-mark" width={size} height={size} viewBox="0 0 48 48" aria-hidden="true" shapeRendering="geometricPrecision">
+      <defs>
+        <linearGradient id="apiKeyGold" x1="6" y1="42" x2="42" y2="6" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#ffd51d" />
+          <stop offset="1" stopColor="#ff9f0a" />
+        </linearGradient>
+        <mask id="apiKeyCutout">
+          <rect width="48" height="48" fill="#fff" />
+          <circle cx="34.5" cy="13.5" r="5.2" fill="#000" />
+        </mask>
+      </defs>
+      <path d="M43.6 4.4a12.9 12.9 0 0 0-18.2 0 12.8 12.8 0 0 0-2.6 14.5L2.3 39.4A4.5 4.5 0 0 0 1 42.6V47h7.5l3.7-3.7h4.5v-4.5h4.5v-4.5h4.4l4.1-4.1A12.8 12.8 0 0 0 43.6 4.4Z" fill="url(#apiKeyGold)" mask="url(#apiKeyCutout)" />
+    </svg>
+  );
+}
+
+function ExecutionPowerIdentityMark({ stopped, size = 31 }: { stopped: boolean; size?: number }) {
+  return (
+    <svg className={`operator-identity-mark execution-power-identity-mark ${stopped ? 'stopped' : 'ready'}`} width={size} height={size} viewBox="0 0 48 48" aria-hidden="true" shapeRendering="geometricPrecision">
+      <defs>
+        <linearGradient id={stopped ? 'executionGreen' : 'executionRed'} x1="9" y1="7" x2="38" y2="42" gradientUnits="userSpaceOnUse">
+          {stopped ? <><stop stopColor="#77d83e" /><stop offset="1" stopColor="#45bb30" /></> : <><stop stopColor="#ff5939" /><stop offset="1" stopColor="#ff3e3e" /></>}
+        </linearGradient>
+      </defs>
+      <path d="M14.2 14.4a17.3 17.3 0 1 0 19.6 0" fill="none" stroke={`url(#${stopped ? 'executionGreen' : 'executionRed'})`} strokeWidth="7.1" strokeLinecap="round" />
+      <path d="M24 4.5v18.2" fill="none" stroke={stopped ? '#349a38' : '#ff5737'} strokeWidth="7.1" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CurrencyDollarIdentityMark({ size = 31 }: { size?: number }) {
+  return (
+    <svg className="operator-identity-mark currency-dollar-identity-mark" width={size} height={size} viewBox="0 0 48 48" aria-hidden="true" shapeRendering="geometricPrecision">
+      <defs>
+        <linearGradient id="currencyGreen" x1="8" y1="7" x2="40" y2="43" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#7bd13d" />
+          <stop offset="1" stopColor="#55b82c" />
+        </linearGradient>
+      </defs>
+      <path d="M22 2h5v6.1c7.4.8 12.2 4 15.2 8.4l-8.4 5.1c-2-2.9-5-4.7-8.9-4.7-3.5 0-5.7 1.2-5.7 3.2 0 2.3 2.9 3.3 8.7 5 9.8 2.7 15 6.4 15 14.1 0 7.7-6 12.5-15.9 13.4V59h-5v-6.4C12.5 51.7 6.5 47.8 3 42.4l8.9-5.5c2.7 4 6.8 6.4 12 6.4 4.1 0 6.8-1.3 6.8-3.6 0-2.5-2.6-3.6-8.8-5.4C12.5 31.7 7 28.1 7 20.5 7 13.3 12.6 8.9 22 8V2Z" transform="translate(1 -6) scale(.86)" fill="url(#currencyGreen)" />
     </svg>
   );
 }
@@ -270,19 +347,39 @@ function NotificationCenterGlyph({ size = 31 }: { size?: number }) {
   );
 }
 
-/* Arbitrage Capital mark: paired quote rails converge on one execution point. */
+/* Owner identity: dual-hemisphere neural network, rebuilt as transparent SVG. */
 const BRAND_MARK = (
-  <svg viewBox="0 0 48 48" className="brand-mark" aria-hidden shapeRendering="geometricPrecision">
+  <svg viewBox="0 0 64 64" className="brand-mark brain-brand-mark" aria-hidden shapeRendering="geometricPrecision">
     <defs>
-      <linearGradient id="brandCapitalLeg" x1="6" y1="40" x2="40" y2="8" gradientUnits="userSpaceOnUse">
-        <stop offset="0" stopColor="#2f6bff" />
-        <stop offset=".54" stopColor="#4868f7" />
-        <stop offset="1" stopColor="#7656d8" />
+      <linearGradient id="brainLeft" x1="7" y1="5" x2="30" y2="60" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#e6e8ea" />
+        <stop offset="1" stopColor="#c4c7ca" />
       </linearGradient>
+      <linearGradient id="brainRight" x1="34" y1="5" x2="57" y2="60" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#4dd7d4" />
+        <stop offset="1" stopColor="#24bec2" />
+      </linearGradient>
+      <mask id="brainLeftCircuit">
+        <rect width="64" height="64" fill="#fff" />
+        <g fill="none" stroke="#000" strokeWidth="4.4" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 18h10v8" />
+          <path d="M13 33h10v8h6" />
+          <path d="M18 49h11" />
+        </g>
+        <g fill="#000"><circle cx="16" cy="18" r="4" /><circle cx="11" cy="33" r="4" /><circle cx="16" cy="49" r="4" /></g>
+      </mask>
+      <mask id="brainRightCircuit">
+        <rect width="64" height="64" fill="#fff" />
+        <g fill="none" stroke="#000" strokeWidth="4.4" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M36 18h10" />
+          <path d="M35 28h9v7h8" />
+          <path d="M35 46h11" />
+        </g>
+        <g fill="#000"><circle cx="48" cy="18" r="4" /><circle cx="54" cy="35" r="4" /><circle cx="48" cy="46" r="4" /></g>
+      </mask>
     </defs>
-    <path className="brand-capital-leg" d="M6.75 39.25 20.2 8.65c1.45-3.3 6.15-3.3 7.6 0l13.45 30.6" fill="none" stroke="url(#brandCapitalLeg)" strokeWidth="7.25" strokeLinecap="round" strokeLinejoin="round" />
-    <path className="brand-capital-spread" d="M15.7 30.15h6.05M26.25 30.15h6.05" fill="none" strokeWidth="5.25" strokeLinecap="round" />
-    <path className="brand-capital-node" d="m24 26.65 3.5 3.5-3.5 3.5-3.5-3.5 3.5-3.5Z" strokeWidth="1.6" />
+    <path d="M29.5 5.5c-6-1.4-11.1 2.5-11.5 8.1-6.1-1.2-10.8 3.8-9.5 9.5-5.8 2-7.3 9-3 13.1-4 4.5-1.9 11.4 3.7 13-1 6 4.4 10.6 10.2 8.9 2.1 5.4 7.1 6.6 10.1 4.1V5.5Z" fill="url(#brainLeft)" mask="url(#brainLeftCircuit)" />
+    <path d="M34.5 5.5c6-1.4 11.1 2.5 11.5 8.1 6.1-1.2 10.8 3.8 9.5 9.5 5.8 2 7.3 9 3 13.1 4 4.5 1.9 11.4-3.7 13 1 6-4.4 10.6-10.2 8.9-2.1 5.4-7.1 6.6-10.1 4.1V5.5Z" fill="url(#brainRight)" mask="url(#brainRightCircuit)" />
   </svg>
 );
 
@@ -338,16 +435,16 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
     group: 'Control',
     items: [
       { id: 'risk', label: 'Risk', icon: <img className="snav-risk-mark" src="/risk-gauge.png" alt="" aria-hidden="true" /> },
-      { id: 'ledger', label: 'Logs', icon: <img className="snav-log-mark" src="/log-mark.png" alt="" aria-hidden="true" /> },
       { id: 'system', label: 'Health', icon: <img className="snav-health-mark" src="/health-shield.png" alt="" aria-hidden="true" /> },
     ],
   },
   {
     group: 'Utility',
     items: [
-      { id: 'notifications', label: 'Notifications', icon: <IconBell size={17} /> },
+      { id: 'ledger', label: 'Logs', icon: <img className="snav-log-mark" src="/log-mark.png" alt="" aria-hidden="true" /> },
       { id: 'news', label: 'News', icon: <img className="snav-news-mark" src="/news-mark.png" alt="" aria-hidden="true" /> },
       { id: 'calendar', label: 'Calendar', icon: <img className="snav-calendar-mark" src="/calendar-check.png" alt="" aria-hidden="true" /> },
+      { id: 'notifications', label: 'Notifications', icon: <img className="snav-notification-mark" src={NOTIFICATION_MARK} alt="" aria-hidden="true" /> },
     ],
   },
 ];
@@ -358,6 +455,8 @@ interface AccountSessionRow {
   country: string | null;
   system: string;
   browser: string;
+  device: string;
+  model: string | null;
   firstSeen: number;
   lastSeen: number;
   current: boolean;
@@ -452,7 +551,7 @@ function AccountSheet({ open }: { open: boolean }) {
                   <button type="submit">Save</button>
                 </form>
               )}
-              <span>Control room operator</span>
+              <span>Control Room Operator</span>
             </div>
             <span className={`account-v3-state ${accountTone}`}><i />{state?.binance.connected ? 'Live' : connected ? 'Review' : 'Offline'}</span>
           </header>
@@ -460,33 +559,35 @@ function AccountSheet({ open }: { open: boolean }) {
           <div className="account-v3-body">
             <section className="account-v3-section" aria-label="Exchange posture">
               <div className="account-v3-section-title">
-                <span>Exchange posture</span>
-                <em>{state?.binance.connected ? 'Verified now' : 'Needs attention'}</em>
+                <span>Exchange Connection</span>
+                <em>{state?.binance.connected ? 'Verified Now' : 'Needs Attention'}</em>
               </div>
               <div className="account-v3-exchange">
                 <span className="account-v3-exchange-mark"><BinanceLogo size={28} /></span>
                 <span className="account-v3-exchange-copy">
-                  <b>Binance account</b>
+                  <b>Binance Account</b>
                   <em>{keyFingerprint ? `Key ${keyFingerprint}` : connected ? 'Key loaded · fingerprint pending' : 'No server key loaded'}</em>
                 </span>
                 <span className={`account-v3-exchange-value ${state?.binance.connected ? 'ok' : connected ? 'warn' : 'idle'}`}>
-                  <b>{state?.binance.connected ? 'Connected' : connected ? 'Sync error' : 'Not linked'}</b>
-                  <em>{withdrawalsOff ? 'Withdrawals off' : 'Withdrawals on'}</em>
+                  <b>{state?.binance.connected ? 'Connected' : connected ? 'Sync Error' : 'Not Linked'}</b>
+                  <em>{withdrawalsOff ? 'Withdrawals Off' : 'Withdrawals On'}</em>
                 </span>
               </div>
             </section>
 
             <section className="account-v3-section" aria-label="Recent browser sessions">
               <div className="account-v3-section-title">
-                <span>Recent Browser Sessions</span>
-                <em>{sessionRows.length ? `${activeSessionCount} Active · ${sessionRows.length} / 24h` : 'None Reported'}</em>
+                <span>Recent Devices</span>
+                <em>{sessionRows.length ? `${activeSessionCount} Active · ${sessionRows.length} Seen / 24h` : 'None Reported'}</em>
               </div>
               <div className="account-v3-session-list">
                 {sessionRows.length > 0 ? sessionRows.map((s) => {
-                  const ipLine = s.ip ? [s.ip, s.country].filter(Boolean).join(' · ') : 'Local Network';
+                  const ipLine = s.ip || 'IP Unavailable';
                   const isPast = !s.current && !s.active;
-                  const isMobile = /android|ios|iphone|ipad/i.test(s.system);
+                  const isMobile = s.device === 'Mobile' || s.device === 'Tablet';
+                  const deviceLabel = s.model || s.device || (isMobile ? 'Mobile' : 'Desktop');
                   const activityLabel = s.current ? 'This Device' : s.active ? 'Active Now' : timeAgo(s.lastSeen);
+                  const requestLabel = typeof s.requests === 'number' ? `${s.requests.toLocaleString('en-US')} Requests` : 'Requests Unavailable';
                   return (
                     <div className={`account-v3-session ${isPast ? 'past' : 'active'}`} key={s.id}>
                       <span className={`account-v3-device-mark ${s.active ? 'on' : 'off'}`}>
@@ -494,20 +595,13 @@ function AccountSheet({ open }: { open: boolean }) {
                         <i aria-hidden="true" />
                       </span>
                       <span className="account-v3-session-copy">
-                        <b>{s.browser} on {s.system}</b>
-                        <em>{ipLine} · First Seen {timeAgo(s.firstSeen)}</em>
+                        <b>{deviceLabel} · {s.browser}</b>
+                        <em>{s.system} · First Seen {timeAgo(s.firstSeen)}</em>
                       </span>
                       <span className="account-v3-session-time">
-                        <b>{activityLabel}</b>
-                        {s.current ? (
-                          <a href={logoutHref} title="Log out this Cloudflare Access session" aria-label={`Log out ${s.browser} on ${s.system}`}>
-                            <IconPower size={13} /><span>Log out</span>
-                          </a>
-                        ) : (
-                          <button type="button" disabled title="Remote logout needs a Cloudflare session identifier; this row is browser telemetry only" aria-label={`Remote logout unavailable for ${s.browser} on ${s.system}`}>
-                            <IconPower size={13} /><span>Log out</span>
-                          </button>
-                        )}
+                        <b title={s.ip ? `Visitor IP ${s.ip}` : 'Visitor IP unavailable'}>{ipLine}</b>
+                        <em>{[activityLabel, s.country].filter(Boolean).join(' · ')}</em>
+                        <small>{requestLabel}</small>
                       </span>
                     </div>
                   );
@@ -515,10 +609,11 @@ function AccountSheet({ open }: { open: boolean }) {
                   <div className="account-v3-empty">No recent browser telemetry.</div>
                 )}
               </div>
+              <div className="account-v3-session-note"><IconShield size={13} /><span>Browser Request Telemetry · 2-Minute Active Window</span></div>
             </section>
 
             <a className="account-v3-logout" href={logoutHref} title="Sign out of the deployed Cloudflare Access session">
-              <IconPower size={16} /><span>Log out of access session</span>
+              <IconPower size={16} /><span>Log Out of Access Session</span>
             </a>
           </div>
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => onFile(e.target.files?.[0])} />
@@ -816,12 +911,13 @@ export function Sidebar() {
     <aside className="snav">
       <nav className="snav-nav">
         {NAV.map((g, i) => (
-          <div key={i} className="snav-group">
+          <div key={i} className="snav-group" data-nav-group={g.group?.toLowerCase() ?? 'utility'}>
             {g.group && <div className="snav-group-title">{g.group}</div>}
             {g.items.map((n) => (
               <button
                 key={n.id}
                 className={`snav-item ${page === n.id || n.match?.includes(page) ? 'active' : ''}`}
+                data-nav-id={n.id}
                 onClick={() => setPage(n.id!)}
                 title={n.label}
                 aria-current={page === n.id || n.match?.includes(page) ? 'page' : undefined}
@@ -982,6 +1078,26 @@ interface SystemLite {
     };
     calendar?: { fetchedAt: number | null; items: number; refreshing: boolean };
     fx?: { fetchedAt: number | null; currencies: number; refreshing: boolean };
+    watchman?: {
+      assessedAt: number;
+      status: 'operational' | 'degraded' | 'outage';
+      summary: { operational: number; degraded: number; outage: number; required: number; total: number; sourceCoverage: number; liveSources: number };
+      components: Array<{
+        id: string;
+        label: string;
+        group: 'control_path' | 'binance' | 'bot' | 'sources' | 'infrastructure';
+        status: 'operational' | 'degraded' | 'outage' | 'planned';
+        detail: string;
+        value: string;
+        required: boolean;
+        updatedAt: number | null;
+        latencyMs?: number | null;
+        resetTarget?: 'market' | 'runtime' | 'account' | 'news' | 'calendar' | 'fx';
+      }>;
+      recentTransitions: Array<{ ts: number; componentId: string; label: string; from: string; to: string; detail: string }>;
+      lastReset: { ts: number; target: string; ok: boolean; durationMs: number } | null;
+      browserObservation: { status: 'operational' | 'degraded' | 'outage'; rttMs: number; socketConnected: boolean; observedAt: number } | null;
+    };
     planned?: Record<string, { ready: boolean; configured: boolean; state: string; reason: string }>;
   };
 }
@@ -1521,13 +1637,12 @@ function OpsRow({
   );
 }
 
-type MK = 'clock' | 'shell' | 'apikey' | 'data' | 'advisor' | 'notif' | 'power' | 'currency' | 'basisu' | 'appearance' | 'account';
-const TOPBAR_KEYS: MK[] = ['clock', 'data', 'shell', 'apikey', 'advisor', 'notif', 'power', 'currency', 'basisu', 'appearance', 'account'];
+type MK = 'clock' | 'shell' | 'apikey' | 'advisor' | 'notif' | 'power' | 'currency' | 'basisu' | 'appearance' | 'account';
+const TOPBAR_KEYS: MK[] = ['clock', 'shell', 'apikey', 'advisor', 'notif', 'power', 'currency', 'basisu', 'appearance', 'account'];
 const MENU_W: Record<MK, number> = {
   clock: 400,
   shell: 400,
   apikey: 400,
-  data: 400,
   advisor: 400,
   notif: 400,
   power: 400,
@@ -1647,7 +1762,7 @@ function BinanceApiKeySheet({ keys }: { keys: ApiKeyInfo[] }) {
   return (
     <div className="ops-sheet ops-key-sheet api-key-sheet-v2">
       <OpsSheetHeader
-        icon={<PopupSourceMark tone="#f0b90b" brand><BinanceLogo size={34} /></PopupSourceMark>}
+        icon={<PopupSourceMark tone="#ffb000" brand><ApiKeyIdentityMark size={40} /></PopupSourceMark>}
         title="Binance API Keys"
         subtitle="Two IP-bound access keys"
         status={liveCount ? `${liveCount} Live` : 'No Live Key'}
@@ -1658,7 +1773,7 @@ function BinanceApiKeySheet({ keys }: { keys: ApiKeyInfo[] }) {
           {visibleKeys.map((ak) => (
             <section className={`api-key-object ${ak.status}`} key={ak.id}>
               <header>
-                <span className="api-key-object-mark"><img src={API_KEY_MARK} alt="" /></span>
+                <span className="api-key-object-mark" aria-hidden="true"><ApiKeyIdentityMark size={26} /></span>
                 <span className="api-key-object-copy">
                   <b>{apiKeyRole(ak)}</b>
                   <em>{apiKeyIp(ak)}</em>
@@ -1718,7 +1833,6 @@ function SharedTopBar() {
   }, []);
   const [now, setNow] = useState(() => new Date());
   const [sys, setSys] = useState<SystemLite | null>(null);
-  const [srv, setSrv] = useState<{ news: boolean | null; cal: boolean | null; fx: boolean | null }>({ news: null, cal: null, fx: null });
   const [seen, setSeen] = useState(() => Number(localStorage.getItem('cosmos-notif-seen') || 0));
   const [apiKeys, setApiKeys] = useState<ApiKeyInfo[]>([]);
   const [notifTab, setNotifTab] = useState<NotifTab>('all');
@@ -1790,12 +1904,6 @@ function SharedTopBar() {
     }).catch(() => undefined);
     return () => { al = false; };
   }, []);
-  useEffect(() => {
-    if (active !== 'data') return; let al = true;
-    const p = (u: string, k: 'news' | 'cal' | 'fx') => fetch(u).then((r) => al && setSrv((x) => ({ ...x, [k]: r.ok }))).catch(() => al && setSrv((x) => ({ ...x, [k]: false })));
-    void p('/api/news-context', 'news'); void p('/api/calendar', 'cal'); void p('/api/fx', 'fx');
-    return () => { al = false; };
-  }, [active]);
 
   // Compute the box geometry for a trigger, in the row's LOCAL (pre-zoom) space.
   const computeGeo = (k: MK) => {
@@ -1921,8 +2029,6 @@ function SharedTopBar() {
   const fullKey = apiKeys.find((k) => k.id === 'secrets-full') ?? apiKeys[1] ?? null;
   const feeds = state?.feeds ?? {}; const feedList = Object.entries(feeds);
   const feedsOk = feedList.length > 0 && feedList.every(([, s]) => s === 'open');
-  const lat = sys?.restLatencyMs ?? null;
-  const netGrade = !connected ? 'bad' : !feedsOk || (lat !== null && lat > 900) ? 'warn' : 'ok';
   const events = state?.events ?? [];
   const zone = ZONES.find((z) => z.id === prefs.clockZone) ?? ZONES[0];
   const activeClock = clockParts(zone.id, now);
@@ -2156,45 +2262,6 @@ function SharedTopBar() {
   const compactNotifEvents = compactNotifications;
   const compactNotifGroups = compactNotifications.slice(0, 7);
   const notifTone = compactNotifications.some((item) => item.severity === 'critical') ? 'hot' : unread > 0 ? 'live' : compactNotifications.length > 0 ? 'armed' : alertsOn > 0 ? 'armed' : 'idle';
-  type DataTier = 'good' | 'warn' | 'bad' | 'idle';
-  const probeTier = (ok: boolean | null): DataTier => ok === null ? 'idle' : ok ? 'good' : 'bad';
-  const probeDetail = (ok: boolean | null) => ok === null ? 'Checking' : ok ? 'Reachable' : 'Down';
-  const driftAbs = sys?.serverTimeDiffMs == null ? null : Math.abs(sys.serverTimeDiffMs);
-  const driftTier: DataTier = driftAbs == null ? 'idle' : driftAbs < 500 ? 'good' : driftAbs < 1500 ? 'warn' : 'bad';
-  const latTier: DataTier = lat === null ? 'idle' : lat < 400 ? 'good' : lat < 900 ? 'warn' : 'bad';
-  const userStream = String(b?.userStream ?? 'off');
-  const userStreamTier: DataTier = ['live', 'open', 'connected'].includes(userStream.toLowerCase())
-    ? 'good'
-    : userStream.toLowerCase() === 'failed'
-      ? 'bad'
-      : userStream.toLowerCase() === 'off'
-        ? 'idle'
-        : 'warn';
-  const accountAgo = b?.lastSyncTs ? timeAgo(b.lastSyncTs) : 'No sync';
-  const scannerAgo = sys?.lastScannerTickTs ?? state?.scanner.lastTickTs;
-  const rateTier: DataTier = sys?.usedWeight1m == null ? 'idle' : sys.usedWeight1m < 800 ? 'good' : sys.usedWeight1m < 1050 ? 'warn' : 'bad';
-  const engineTier: DataTier = sys?.dbOk === false ? 'bad' : state?.scanner.pairs ? 'good' : 'idle';
-  const engineBudgetTier: DataTier = engineTier === 'bad' || rateTier === 'bad' ? 'bad' : engineTier === 'idle' || rateTier === 'idle' ? 'idle' : rateTier === 'warn' ? 'warn' : 'good';
-  const streamNames = feedList
-    .map(([name]) => name.replace('spot-', 'spot ').replace('futures-', 'futures ').replace(/-/g, ' '))
-    .join(' · ');
-  const dataRows: { name: string; sub: string; value: string; tier: DataTier }[] = [
-    { name: 'Browser -> Server', sub: 'Dashboard state socket', value: connected ? 'live' : 'offline', tier: connected ? 'good' : 'bad' },
-    { name: 'Market Streams', sub: streamNames || 'Spot, mark price, liquidations', value: feedList.length ? `${feedList.length} open` : 'idle', tier: connected && feedsOk ? 'good' : connected ? 'warn' : 'bad' },
-    { name: 'Account Snapshot', sub: b?.keyFingerprint ? `Read key ${b.keyFingerprint}` : 'Read key missing', value: b?.connected ? accountAgo : 'failed', tier: b?.connected ? 'good' : b?.keysPresent ? 'bad' : 'idle' },
-    { name: 'User Stream', sub: 'Account event socket', value: userStream, tier: userStreamTier },
-    { name: 'News Context', sub: 'Aggregated server endpoint', value: probeDetail(srv.news), tier: probeTier(srv.news) },
-    { name: 'Calendar', sub: 'Macro-event endpoint', value: probeDetail(srv.cal), tier: probeTier(srv.cal) },
-    { name: 'FX Rates', sub: 'Cached display-rate endpoint', value: probeDetail(srv.fx), tier: probeTier(srv.fx) },
-    { name: 'Timing / REST', sub: `Clock drift ${msLabel(sys?.serverTimeDiffMs)}`, value: msLabel(lat), tier: latTier === 'good' ? driftTier : latTier },
-    { name: 'Engine / Budget', sub: `Scanner ${timeAgo(scannerAgo)} · ledger ${sys?.dbOk === false ? 'blocked' : 'writable'}`, value: state?.scanner.pairs ? `${state.scanner.pairs} pairs · ${sys?.usedWeight1m ?? '—'} weight` : 'idle', tier: engineBudgetTier },
-  ];
-  const dataGood = dataRows.filter((r) => r.tier === 'good').length;
-  const dataWarn = dataRows.filter((r) => r.tier === 'warn').length;
-  const dataBad = dataRows.filter((r) => r.tier === 'bad').length;
-  const dataGrade = !connected || dataBad > 1 ? 'bad' : dataBad || dataWarn ? 'warn' : 'ok';
-  const dataLabel = dataGrade === 'ok' ? 'Good' : dataGrade === 'bad' ? 'Down' : 'Watch';
-  const dataSub = `${dataGood}/${dataRows.length} sources passing`;
   const advRaw: ({ sev: Sev; name: string; detail: string; page?: Page } | null)[] = [
     b?.canWithdraw ? { sev: 'action', name: 'Withdrawals enabled on key', detail: 'Rotate to a read-only key.', page: 'account' } : { sev: 'pass', name: 'Withdrawals disabled', detail: 'Key cannot move funds.' },
     b?.keysPresent && !b?.connected ? { sev: 'action', name: 'Account sync failing', detail: b?.lastError ?? 'Not syncing.', page: 'system' } : null,
@@ -2382,42 +2449,6 @@ function SharedTopBar() {
           </div>
         );
       case 'apikey': return keysBody();
-      case 'data':
-        return (
-          <div className={`datax-pop datax-slim data-health-card ${dataGrade}`}>
-            <TopPanelHeader
-              className={`datax-hero ${dataGrade}`}
-              logo={<IconDatabase size={21} />}
-              title="Data Health"
-              sub={`Binance · ${dataSub}`}
-            />
-            <div className="datax-section-head">
-              <span><IconWifi size={15} />Sources</span>
-              <b className="ok">{dataGood} Active</b>
-            </div>
-            <div className="datax-source-list" aria-label="Measured data sources">
-              {dataRows.map((row) => (
-                <div key={row.name} className={`datax-source-row ${row.tier}`} title={row.sub} aria-label={`${row.name}: ${row.value}. ${row.sub}`}>
-                  <span className={`datax-source-dot ${row.tier}`} />
-                  <span className="datax-source-copy">
-                    <b>{row.name}</b>
-                    <em>{row.sub}</em>
-                  </span>
-                  <span className="datax-source-value">
-                    <em>{row.value}</em>
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div className="datax-foot">
-              <button type="button" onClick={() => { setActive(null); setPage('system'); }} aria-label="Open Health page">
-                <IconPulse size={15} />
-                Open Health
-              </button>
-              <span>{sys?.usedWeightTs ? `Weight ${timeAgo(sys.usedWeightTs)}` : 'Live Probes'}</span>
-            </div>
-          </div>
-        );
       case 'advisor':
         return (
           <div className={`advx-pop advisor-audit ${advTone}`}>
@@ -2747,31 +2778,6 @@ function SharedTopBar() {
       return keysBody();
     }
 
-    if (k === 'data') {
-      return (
-        <div className="topux-panel">
-          <div className="topux-head">
-            <span><IconDatabase size={16} />Data Health</span>
-            <em className={netGrade === 'ok' ? 'ok' : netGrade === 'warn' ? 'warn' : 'bad'}>{dataLabel}</em>
-          </div>
-          <div className="topux-list compact">
-            {dataRows.map((row) => (
-              <div key={row.name} className="topux-row">
-                <span>
-                  <b>{row.name}</b>
-                  <small>{row.sub}</small>
-                </span>
-                <em className={row.tier}>{row.value}</em>
-              </div>
-            ))}
-          </div>
-          <button className="topux-action" type="button" onClick={() => { setActive(null); setPage('system'); }}>
-            <IconPulse size={14} /> Open Health
-          </button>
-        </div>
-      );
-    }
-
     if (k === 'advisor') {
       const rows = advAtt.length ? advAtt : advChecks.filter((c) => c.sev === 'pass').slice(0, 4);
       return (
@@ -2998,10 +3004,10 @@ function SharedTopBar() {
         return (
           <div className="ops-sheet ops-aws-sheet aws-control-sheet">
             <OpsSheetHeader
-              icon={<span className="aws-popup-mark"><img src={AWS_RUNNER_MARK} alt="" /></span>}
+              icon={<span className="aws-popup-mark" aria-hidden="true"><AwsCubeIdentityMark size={42} /></span>}
               title="AWS Runner Control"
               subtitle="Restricted Systems Manager channel"
-              status={!awsStatus ? 'Checking' : !awsStatus.configured ? 'Not configured' : !awsStatus.connectionEnabled ? 'Blocked' : awsStatus.channel === 'online' ? 'Online' : awsStatus.channel === 'offline' ? 'Offline' : 'Ready'}
+              status={!awsStatus ? 'Checking' : !awsStatus.configured ? 'Not Configured' : !awsStatus.connectionEnabled ? 'Blocked' : awsStatus.channel === 'online' ? 'Online' : awsStatus.channel === 'offline' ? 'Offline' : 'Ready'}
               tone={!awsStatus || !awsStatus.configured || !awsStatus.connectionEnabled ? 'idle' : awsStatus.channel === 'online' ? 'ok' : awsStatus.channel === 'offline' ? 'bad' : 'warn'}
             />
             <section className="aws-pop-target" aria-label="Configured AWS runner target">
@@ -3009,6 +3015,10 @@ function SharedTopBar() {
               <div><span>Instance</span><b>{awsStatus?.instanceId ?? 'Not configured'}</b></div>
               <div><span>Service</span><b>{awsStatus?.serviceName ?? 'Not configured'}</b></div>
             </section>
+            <div className="ops-inline-actions aws-pop-actions" aria-label="AWS runner destinations">
+              <button type="button" onClick={() => closeAndOpen('cloudshell')}><IconTerminal size={14} /> Runner Workspace</button>
+              <a href={AWS_CONSOLE_URL} target="_blank" rel="noreferrer noopener" onClick={closeMenu}><IconExternal size={14} /> AWS Console</a>
+            </div>
             <div className="aws-pop-gates" aria-label="AWS connection gates">
               <button
                 type="button"
@@ -3036,10 +3046,9 @@ function SharedTopBar() {
             {(awsStatusError || (awsStatus && (!awsStatus.configured || !awsStatus.operatorAuthorized))) && (
               <div className="aws-pop-notice"><IconShield size={14} /><span>{awsStatusError ?? (!awsStatus?.configured ? `Set ${awsStatus?.missing.join(', ')}` : awsStatus?.authorizationReason ?? 'Verified operator access is required.')}</span></div>
             )}
-            <footer className="ops-sheet-foot split">
-              <button type="button" className="primary" onClick={() => closeAndOpen('cloudshell')}><IconTerminal size={14} /> Open Runner Workspace</button>
-              <a href={AWS_CONSOLE_URL} target="_blank" rel="noreferrer noopener" onClick={closeMenu}><IconExternal size={14} /> AWS Console</a>
-            </footer>
+            {!awsStatusError && (!awsStatus || (awsStatus.configured && awsStatus.operatorAuthorized)) && (
+              <div className="aws-pop-notice neutral"><IconShield size={14} /><span>{awsStatus ? 'Restricted Systems Manager · No browser credentials exposed.' : 'Checking runner configuration and operator authorization.'}</span></div>
+            )}
           </div>
         );
 
@@ -3047,31 +3056,6 @@ function SharedTopBar() {
         const visibleKeys = [roKey, fullKey].filter(Boolean) as ApiKeyInfo[];
         return <BinanceApiKeySheet keys={visibleKeys} />;
       }
-
-      case 'data':
-        return (
-          <div className="ops-sheet ops-data-sheet">
-            <OpsSheetHeader
-              icon={<PopupSourceMark tone="#50ad1d" brand><img className="data-health-source-image" src={DATA_HEALTH_MARK} alt="" /></PopupSourceMark>}
-              title="Data Health"
-              subtitle={`${dataGood} of ${dataRows.length} source checks passing`}
-              status={dataLabel}
-              tone={statusTone(dataGrade)}
-            />
-            <div className="ops-list ops-health-list" aria-label="Measured data checks">
-              {dataRows.map((row) => (
-                <OpsRow
-                  key={row.name}
-                  icon={<span className={`ops-health-dot ${row.tier}`} />}
-                  title={row.name}
-                  value={row.value}
-                  tone={statusTone(row.tier)}
-                />
-              ))}
-            </div>
-            <footer className="ops-sheet-foot ops-data-foot"><button type="button" className="primary ops-data-action" onClick={() => { closeMenu(); setPage('system'); }}><IconPulse size={14} /> Open System Health</button></footer>
-          </div>
-        );
 
       case 'advisor': {
         return (
@@ -3097,7 +3081,7 @@ function SharedTopBar() {
                 <span className="ops-advisor-state-copy"><b>{advP.length}</b><em>Clear</em></span>
               </span>
             </div>
-            <div className="ops-section-label"><span>All checks</span><em>{advChecks.length} current</em></div>
+            <div className="ops-section-label"><span>All Checks</span><em>{advChecks.length} Current</em></div>
             <div className="ops-list ops-advisor-list">
               {[...advA, ...advI, ...advP].map((check) => (
                 <OpsRow
@@ -3115,10 +3099,6 @@ function SharedTopBar() {
                 />
               ))}
             </div>
-            <footer className="ops-sheet-foot split">
-              <button type="button" className="primary" onClick={() => { closeMenu(); setPage('risk'); }}><IconRadar size={14} /> Risk controls</button>
-              <button type="button" onClick={() => { closeMenu(); setPage('system'); }}><IconPulse size={14} /> Health</button>
-            </footer>
           </div>
         );
       }
@@ -3133,6 +3113,11 @@ function SharedTopBar() {
               status={unread ? `${unread} new` : compactNotifications.length ? 'Read' : 'Clear'}
               tone={unread ? 'accent' : 'ok'}
             />
+            <div className="ops-inline-tools" aria-label="Notification actions">
+              <span><b>Recent Alerts</b><em>{unread ? `${unread} Unread` : 'Up To Date'}</em></span>
+              <button type="button" onClick={markNotificationsRead} disabled={!unread}>Mark Read</button>
+              <button type="button" onClick={openNotificationCenter}><IconMaximize size={13} /> Open Center</button>
+            </div>
             <div className="ops-list ops-notification-list">
               {compactNotifGroups.length ? compactNotifGroups.map((item) => (
                 <OpsRow
@@ -3146,10 +3131,6 @@ function SharedTopBar() {
                 />
               )) : <div className="ops-empty-state"><IconBell size={18} /><b>Inbox clear</b><em>Only owner-relevant alerts appear here. Full telemetry stays in Logs.</em></div>}
             </div>
-            <footer className="ops-sheet-foot split">
-              <button type="button" onClick={markNotificationsRead} disabled={!unread}>Mark read</button>
-              <button type="button" className="primary" onClick={openNotificationCenter}><IconMaximize size={14} /> Open center</button>
-            </footer>
           </div>
         );
 
@@ -3157,7 +3138,7 @@ function SharedTopBar() {
         return (
           <div className={`ops-sheet ops-bot-sheet ${modeTone}`}>
             <OpsSheetHeader
-              icon={<PopupSourceMark tone={killOn ? '#28d873' : '#fb4138'} brand><img className="execution-control-source-image" src={killOn ? EXECUTION_STOPPED_MARK : EXECUTION_STOP_MARK} alt="" /></PopupSourceMark>}
+              icon={<PopupSourceMark tone={killOn ? '#55c937' : '#ff493b'} brand><ExecutionPowerIdentityMark stopped={killOn} size={40} /></PopupSourceMark>}
               title="Execution Control"
               subtitle={modeSub}
               status={modeLabel}
@@ -3171,11 +3152,11 @@ function SharedTopBar() {
               }}
               aria-label={killOn ? 'Bot stopped. Resume configured controls' : 'Emergency stop. Stop every bot action'}
             >
-              <span className="ops-emergency-mark"><img src={killOn ? EXECUTION_STOPPED_MARK : EXECUTION_STOP_MARK} alt="" /></span>
+              <span className="ops-emergency-mark"><ExecutionPowerIdentityMark stopped={killOn} size={42} /></span>
               <span><b>{killOn ? 'Bot Stopped' : 'Emergency Stop'}</b><em>{killOn ? 'Emergency stop is holding every action.' : 'Press to stop every bot action immediately.'}</em></span>
               <strong>{killOn ? 'RESUME' : 'STOP BOT'}</strong>
             </button>
-            <div className="ops-section-label"><span>Execution modes</span><em>{modeNet}</em></div>
+            <div className="ops-section-label"><span>Execution Modes</span><em>{modeNet}</em></div>
             <div className="ops-list ops-control-list" aria-label="Bot execution modes">
               {executionControlRow('funds', 'Funds Access')}
               {executionControlRow('borrowing', 'Borrowing')}
@@ -3189,7 +3170,7 @@ function SharedTopBar() {
         return (
           <div className="ops-sheet ops-currency-sheet">
             <OpsSheetHeader
-              icon={<PopupSourceMark tone="#10c9ea" brand><img className="currency-source-image" src={CURRENCY_MARK} alt="" /></PopupSourceMark>}
+              icon={<PopupSourceMark tone="#69c634" brand><CurrencyDollarIdentityMark size={40} /></PopupSourceMark>}
               title="Display Currency"
               subtitle={currencyFx.fetchedAt ? `Rates updated ${timeAgo(currencyFx.fetchedAt)}` : 'Loading cached FX rates'}
               status={cur}
@@ -3217,7 +3198,7 @@ function SharedTopBar() {
         return (
           <div className="ops-sheet ops-basis-sheet">
             <OpsSheetHeader
-              icon={<PopupSourceMark tone="#6f52c9"><BasisUnitGlyph size={34} /></PopupSourceMark>}
+              icon={<PopupSourceMark tone="#8c5ce7" brand><img className="basis-source-image" src={BASIS_MARK} alt="" /></PopupSourceMark>}
               title="Basis Units"
               subtitle="One rate, three equivalent views"
               status={basisCode}
@@ -3319,15 +3300,12 @@ function SharedTopBar() {
           <span className="clock-command-zone">{zone.label}</span>
         </span>
       </>, { title: `Market Clock — ${zone.city} · ${activeClockOffset}` })}
-      {trig('data', `hdr-ic data-ghost data-pro grade-${dataGrade}`, <>
-        <span className={`rail-icon-core ${dataGrade}`}><img className="data-health-trigger-image" src={DATA_HEALTH_MARK} alt="" /></span>
-      </>, { title: `Data Health — ${dataLabel} · ${dataSub}` })}
       <span className="topbar-suite-divider" aria-hidden="true" />
       {trig('shell', 'hdr-ic tint-shell shell-ghost shell-premium-trigger', <>
-        <span className="rail-icon-core aws-runner-trigger-core"><img className="aws-runner-trigger-image" src={AWS_RUNNER_MARK} alt="" /></span>
+        <span className="rail-icon-core aws-runner-trigger-core" aria-hidden="true"><AwsCubeIdentityMark size={24} /></span>
       </>, { title: `AWS Runner Control — ${!awsStatus ? 'checking' : !awsStatus.configured ? 'not configured' : awsStatus.connectionEnabled ? 'channel open' : 'blocked'}` })}
       {trig('apikey', `hdr-ic apikey-ghost apikey-premium-trigger s-${roKey?.status ?? 'missing'}`, <>
-        <span className={`rail-icon-core api-key-trigger-core s-${roKey?.status ?? 'missing'}`}><img className="api-key-trigger-image" src={API_KEY_MARK} alt="" /></span>
+        <span className={`rail-icon-core api-key-trigger-core s-${roKey?.status ?? 'missing'}`}><ApiKeyIdentityMark size={24} /></span>
       </>, { title: `API keys — ${roKey?.live ? 'live posture' : roKey?.keysPresent ? 'permission sync pending' : 'no live key'}` })}
       {trig('advisor', `hdr-ic advisor-ghost advisor-premium-trigger grade-${advTone}`, <>
         <span className={`rail-icon-core trust-advisor-trigger-core ${advTone}`}><img className="trust-advisor-trigger-image" src={TRUST_ADVISOR_MARK} alt="" /></span>
@@ -3340,18 +3318,18 @@ function SharedTopBar() {
         </span>
       </>, { title: `Notifications — ${unread ? `${unread} unread` : 'no unread events'}` })}
       {trig('power', `hdr-ic power-ghost power-premium-trigger ${modeClass}`, <>
-        <span className={`rail-icon-core execution-control-trigger-core ${modeTone}`}><img className="execution-control-trigger-image" src={killOn ? EXECUTION_STOPPED_MARK : EXECUTION_STOP_MARK} alt="" /></span>
+        <span className={`rail-icon-core execution-control-trigger-core ${modeTone}`}><ExecutionPowerIdentityMark stopped={killOn} size={24} /></span>
       </>, { title: `Execution Control — ${modeLabel}` })}
       <span className="topbar-suite-divider" aria-hidden="true" />
       {trig('currency', `hdr-ic currency-ghost currency-premium-trigger ${curTone}`, <>
-        <span className={`rail-icon-core currency-trigger-core ${curTone}`}><img className="currency-trigger-image" src={CURRENCY_MARK} alt="" /></span>
+        <span className={`rail-icon-core currency-trigger-core ${curTone}`}><CurrencyDollarIdentityMark size={24} /></span>
       </>, { title: `Display currency — ${cur}` })}
       {trig('basisu', `hdr-ic basis-ghost basis-premium-trigger ${basisIsBps ? 'basis-bps' : basisIsDecimal ? 'basis-decimal' : 'basis-pct'}`, <>
-        <span className={`rail-icon-core basis-trigger-core ${prefs.basisUnit}`}><BasisUnitGlyph size={24} /></span>
+        <span className={`rail-icon-core basis-trigger-core ${prefs.basisUnit}`}><img className="basis-trigger-image" src={BASIS_MARK} alt="" /></span>
       </>, { title: `Basis units — ${basisUnitLabel}` })}
       {trig('appearance', `hdr-ic appearance-ghost appearance-premium-trigger ${theme}`, <>
         <span className={`rail-icon-core appearance-trigger-core ${theme}`} style={{ '--apx-accent': activeAccent.hex } as CSSProperties}>
-          <AppearanceIdentityMark size={27} />
+          <AppearanceIdentityMark size={24} />
         </span>
       </>, { title: `Appearance — ${prefs.theme === 'system' ? 'auto' : prefs.theme} · ${appearanceZoom}% · ${prefs.motion} motion` })}
       {trig('account', `hdr-ic shared-account-trigger s-${accountTone}`, <>
@@ -3405,35 +3383,57 @@ const IconCross = ({ size = 18 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.8} strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
 );
 
-type ConnTier = 'good' | 'avg' | 'slow' | 'bad';
-const TIER_SCORE: Record<ConnTier, number> = { good: 3, avg: 2, slow: 1, bad: 0 };
-function latTier(ms: number | null | undefined, good: number, avg: number, slow: number): ConnTier {
-  if (ms === null || ms === undefined) return 'bad';
-  if (ms < good) return 'good';
-  if (ms < avg) return 'avg';
-  if (ms < slow) return 'slow';
-  return 'bad';
-}
-
-// Always-on floating dock (bottom-right). Its resting colour reflects overall
-// connection health (neutral → green when strong, orange when slow, red when
-// laggy/down). Hover shows a small popover listing each connection's latency.
-// Click spins a few slow, smooth turns while it re-pulls + reconnects EVERYTHING
-// in the background (no page reload), then draws a green tick (payment-app style)
-// that fades back to the health colour — or a red cross if something failed.
 type ConnectionResetTarget = 'all' | 'market' | 'runtime' | 'account' | 'news' | 'calendar' | 'fx';
-type ConnectionRow = {
-  key: string;
+type WatchmanStatus = 'operational' | 'degraded' | 'outage' | 'planned';
+type WatchmanGroup = 'control_path' | 'binance' | 'bot' | 'sources' | 'infrastructure';
+type WatchmanView = 'overview' | 'connections' | 'sources' | 'controls';
+type WatchmanComponent = {
+  id: string;
   label: string;
+  group: WatchmanGroup;
+  status: WatchmanStatus;
   detail: string;
   value: string;
-  tier: ConnTier;
-  target?: ConnectionResetTarget;
-  icon: ReactNode;
+  required: boolean;
+  updatedAt: number | null;
+  latencyMs?: number | null;
+  resetTarget?: Exclude<ConnectionResetTarget, 'all'>;
 };
 
+function ConnectionWatchmanMark({ size = 52 }: { size?: number }) {
+  return (
+    <svg className="watchman-mark" width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden="true">
+      <path className="wm-shield" d="M32 5.5 53 13v16.8c0 13-8.6 23.6-21 28.7C19.6 53.4 11 42.8 11 29.8V13L32 5.5Z" />
+      <path className="wm-orbit wm-orbit-outer" d="M19.2 35.2a15.5 15.5 0 0 1 25.6-14.8" />
+      <path className="wm-orbit wm-orbit-inner" d="M23.5 36a10.5 10.5 0 0 1 17.7-10" />
+      <path className="wm-sweep" d="M32 32 44.5 19.5" />
+      <circle className="wm-core" cx="32" cy="32" r="4.2" />
+      <circle className="wm-node one" cx="19.4" cy="35.2" r="2.2" />
+      <circle className="wm-node two" cx="44.8" cy="20.3" r="2.2" />
+      <circle className="wm-node three" cx="42.3" cy="42.6" r="2.2" />
+    </svg>
+  );
+}
+
+const watchmanStatusLabel = (status: WatchmanStatus) => status === 'operational' ? 'Operational' : status === 'degraded' ? 'Degraded' : status === 'outage' ? 'Outage' : 'Not Configured';
+const watchmanGroupLabel: Record<WatchmanGroup, string> = {
+  control_path: 'Control Path',
+  binance: 'Binance',
+  bot: 'Bot Runtime',
+  sources: 'Source Network',
+  infrastructure: 'Infrastructure',
+};
+
+function watchmanGroupIcon(group: WatchmanGroup): ReactNode {
+  if (group === 'control_path') return <IconWifi size={17} />;
+  if (group === 'binance') return <IconExchange size={17} />;
+  if (group === 'bot') return <IconBrain size={17} />;
+  if (group === 'sources') return <IconNewspaper size={17} />;
+  return <IconShield size={17} />;
+}
+
 export function RefreshDock() {
-  const { state, connected, refresh, prefs, updatePref } = useStore();
+  const { connected, refresh, prefs, updatePref } = useStore();
   const [sys, setSys] = useState<SystemLite | null>(null);
   const [appRtt, setAppRtt] = useState<number | null>(null);
   const [st, setSt] = useState<'idle' | 'spin' | 'ok' | 'err'>('idle');
@@ -3441,21 +3441,11 @@ export function RefreshDock() {
   const [lastRefreshTs, setLastRefreshTs] = useState<number | null>(null);
   const [lastRefreshIssues, setLastRefreshIssues] = useState<string[]>([]);
   const [targetBusy, setTargetBusy] = useState<ConnectionResetTarget | null>(null);
+  const [dockView, setDockView] = useState<WatchmanView>('overview');
+  const [cadenceReset, setCadenceReset] = useState(false);
+  const [recoveryTarget, setRecoveryTarget] = useState<ConnectionResetTarget>('all');
   const busy = useRef(false);
-  const icRef = useRef<HTMLImageElement>(null);
-
-  // The supplied two-arrow anatomy remains visible throughout. A manual reset
-  // performs exactly three turns, then stops; the result is carried by the
-  // small state badge instead of replacing the identity with another icon.
-  useEffect(() => {
-    const el = icRef.current;
-    if (st !== 'spin' || !el) return;
-    const anim = el.animate(
-      [{ transform: 'rotate(0deg)' }, { transform: 'rotate(1080deg)' }],
-      { duration: 2100, iterations: 1, easing: 'cubic-bezier(.3,.72,.2,1)', fill: 'forwards' },
-    );
-    return () => anim.cancel();
-  }, [st]);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const pingHealthNow = useCallback(async (): Promise<number | null> => {
     const t0 = performance.now();
@@ -3464,12 +3454,17 @@ export function RefreshDock() {
       if (!response.ok) throw new Error();
       const next = performance.now() - t0;
       setAppRtt(next);
+      void fetch('/api/connections/browser-observation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rttMs: next, socketConnected: connected }),
+      }).catch(() => undefined);
       return next;
     } catch {
       setAppRtt(null);
       return null;
     }
-  }, []);
+  }, [connected]);
 
   const loadSystemNow = useCallback(async (): Promise<SystemLite | null> => {
     try {
@@ -3498,6 +3493,20 @@ export function RefreshDock() {
     void loadSystemNow();
   }, [loadSystemNow, open, pingHealthNow]);
 
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
   const cadenceSec = (key: DataCadenceKey) => prefs.dataCadence?.[key]
     ?? (key === 'market' ? prefs.refreshSec : key === 'news' ? 5 : 10);
   const fmtCadence = (sec: number) => sec < 1 ? '<1s' : `${sec.toFixed(0)}s`;
@@ -3505,130 +3514,49 @@ export function RefreshDock() {
     const next = { ...(prefs.dataCadence ?? {}), [key]: sec } as Record<DataCadenceKey, number>;
     updatePref('dataCadence', next);
     if (key === 'market') updatePref('refreshSec', sec);
+    setCadenceReset(false);
+  };
+  const cadenceOptions = MARKET_PING_CHOICES.map((seconds) => ({ id: String(seconds), label: fmtCadence(seconds) }));
+  const resetCadenceDefaults = () => {
+    const next = { ...(prefs.dataCadence ?? {}) } as Record<DataCadenceKey, number>;
+    for (const key of MARKET_PING_KEYS) next[key] = DATA_CADENCE_DEFAULTS[key];
+    updatePref('dataCadence', next);
+    updatePref('refreshSec', DATA_CADENCE_DEFAULTS.market);
+    setCadenceReset(true);
+    window.setTimeout(() => setCadenceReset(false), 1800);
   };
 
-  const feeds = state?.feeds ?? {};
-  const feedVals = Object.values(feeds);
-  const feedsOk = feedVals.length > 0 && feedVals.every((status) => status === 'open');
-  const rest = sys?.restLatencyMs ?? null;
-  const drift = sys?.serverTimeDiffMs ?? null;
-  const b = state?.binance;
-  const acctTs = b?.lastSyncTs ?? null;
-  const userStream = String(b?.userStream ?? 'unknown');
-  const lastError = b?.lastError ?? null;
-  const weight = sys?.usedWeight1m ?? null;
-  const dbOk = sys?.dbOk;
-  const volume = sys?.connections?.volume;
-  const basis = sys?.connections?.basis;
-  const news = sys?.connections?.news;
-  const calendar = sys?.connections?.calendar;
-  const fx = sys?.connections?.fx;
-
-  const ageTier = (ts: number | null | undefined, freshMs: number): ConnTier =>
-    !ts ? 'avg' : Date.now() - ts <= freshMs ? 'good' : Date.now() - ts <= freshMs * 3 ? 'avg' : Date.now() - ts <= freshMs * 6 ? 'slow' : 'bad';
-  const streamTier: ConnTier = userStream === 'open' ? 'good' : userStream === 'failed' ? 'slow' : 'avg';
-  const runtimeTier: ConnTier = basis?.running && basis.bookState === 'fresh' && volume?.running && volume.streamState === 'open' ? 'good' : basis?.lastError || volume?.streamState === 'degraded' ? 'bad' : 'avg';
-  const newsTier: ConnTier = !news ? 'avg' : news.errors > Math.max(2, news.live) ? 'slow' : ageTier(news.fetchedAt, 20_000);
-
-  const conns: ConnectionRow[] = [
-    {
-      key: 'app',
-      label: 'Browser / Server',
-      detail: `Control API · cockpit socket ${connected ? 'live' : 'reconnecting'}`,
-      value: appRtt != null ? msLabel(appRtt) : 'Offline',
-      tier: connected ? latTier(appRtt, 120, 350, 800) : 'bad',
-      target: 'all',
-      icon: <IconWifi size={17} />,
-    },
-    {
-      key: 'market',
-      label: 'Market Streams',
-      detail: 'Binance spot, mark price, and liquidation feeds',
-      value: feedVals.length ? `${feedVals.filter((status) => status === 'open').length} / ${feedVals.length} Open` : 'Starting',
-      tier: feedVals.length ? (feedsOk ? 'good' : 'slow') : 'avg',
-      target: 'market',
-      icon: <IconChart size={17} />,
-    },
-    {
-      key: 'rest',
-      label: 'Binance REST',
-      detail: `Clock drift ${msLabel(drift)} · ${weight ?? '—'} weight / 1m`,
-      value: rest != null ? msLabel(rest) : 'No Probe',
-      tier: latTier(rest, 300, 600, 1100),
-      target: 'account',
-      icon: <IconExchange size={17} />,
-    },
-    {
-      key: 'account',
-      label: 'Account Data',
-      detail: 'Balances, loans, orders, fills, and PnL',
-      value: b?.keysPresent ? (acctTs ? timeAgo(acctTs) : 'No Sync') : 'No Key',
-      tier: b?.keysPresent ? ageTier(acctTs, 90_000) : 'avg',
-      target: 'account',
-      icon: <IconWallet size={17} />,
-    },
-    {
-      key: 'runtime',
-      label: 'Strategy Runtimes',
-      detail: `Basis ${basis?.bookState ?? 'starting'} · volume ${volume?.openConnections ?? 0}/${volume?.streamConnections ?? 0}`,
-      value: runtimeTier === 'good' ? 'Fresh' : runtimeTier === 'bad' ? 'Degraded' : 'Starting',
-      tier: runtimeTier,
-      target: 'runtime',
-      icon: <IconBrain size={17} />,
-    },
-    {
-      key: 'news',
-      label: 'News Context',
-      detail: `${news?.live ?? 0}/${news?.sources ?? 0} sources live · ${news?.items ?? 0} retained`,
-      value: news?.refreshing ? 'Refreshing' : news?.fetchedAt ? timeAgo(news.fetchedAt) : 'Starting',
-      tier: newsTier,
-      target: 'news',
-      icon: <IconNewspaper size={17} />,
-    },
-    {
-      key: 'calendar',
-      label: 'Economic Calendar',
-      detail: `${calendar?.items ?? 0} TradingView events cached`,
-      value: calendar?.refreshing ? 'Refreshing' : calendar?.fetchedAt ? timeAgo(calendar.fetchedAt) : 'Starting',
-      tier: ageTier(calendar?.fetchedAt, 90_000),
-      target: 'calendar',
-      icon: <IconCalendar size={17} />,
-    },
-    {
-      key: 'fx',
-      label: 'FX Rates',
-      detail: `${fx?.currencies ?? 0} display currencies · 30m upstream cache`,
-      value: fx?.refreshing ? 'Refreshing' : fx?.fetchedAt ? timeAgo(fx.fetchedAt) : 'Starting',
-      tier: ageTier(fx?.fetchedAt, 35 * 60_000),
-      target: 'fx',
-      icon: <IconCoins size={17} />,
-    },
-    {
-      key: 'db',
-      label: 'Ledger Database',
-      detail: 'Decisions, events, fills, and browser sessions',
-      value: dbOk === undefined ? 'Checking' : dbOk ? 'Writable' : 'Broken',
-      tier: dbOk === undefined ? 'avg' : dbOk ? 'good' : 'bad',
-      icon: <IconDatabase size={17} />,
-    },
-    {
-      key: 'stream',
-      label: 'User Stream',
-      detail: userStream === 'failed' ? 'Optional stream unavailable · 30s REST fallback active' : 'Signed account-event socket',
-      value: userStream === 'failed' ? 'Fallback' : userStream,
-      tier: streamTier,
-      target: 'account',
-      icon: <IconPulse size={17} />,
-    },
-  ];
-
-  let overall: ConnTier;
-  if (!connected || dbOk === false || !!lastError || (b?.keysPresent && !b?.connected)) overall = 'bad';
-  else {
-    const core = conns.filter((connection) => !['stream', 'rest'].includes(connection.key));
-    const average = core.reduce((sum, connection) => sum + TIER_SCORE[connection.tier], 0) / core.length;
-    overall = average >= 2.6 ? 'good' : average >= 1.8 ? 'avg' : average >= 0.9 ? 'slow' : 'bad';
-  }
+  const backendWatchman = sys?.connections?.watchman;
+  const effectiveLastResetTs = lastRefreshTs ?? backendWatchman?.lastReset?.ts ?? null;
+  const browserStatus: WatchmanStatus = !connected || appRtt === null
+    ? 'outage'
+    : appRtt >= 800
+      ? 'outage'
+      : appRtt >= 350
+        ? 'degraded'
+        : 'operational';
+  const browserComponent: WatchmanComponent = {
+    id: 'browser-session',
+    label: 'Browser / Website Session',
+    group: 'control_path',
+    status: browserStatus,
+    detail: `Cockpit state socket ${connected ? 'live' : 'reconnecting'} · direct /api/health round trip`,
+    value: appRtt === null ? 'Offline' : msLabel(appRtt),
+    required: true,
+    updatedAt: Date.now(),
+    latencyMs: appRtt,
+  };
+  const components: WatchmanComponent[] = [browserComponent, ...(backendWatchman?.components ?? [])];
+  const requiredComponents = components.filter((component) => component.required && component.status !== 'planned');
+  const operationalCount = requiredComponents.filter((component) => component.status === 'operational').length;
+  const degradedCount = requiredComponents.filter((component) => component.status === 'degraded').length;
+  const outageCount = requiredComponents.filter((component) => component.status === 'outage').length;
+  const overallStatus: WatchmanStatus = outageCount > 0 ? 'outage' : degradedCount > 0 ? 'degraded' : 'operational';
+  const activeProblems = components.filter((component) => component.required && (component.status === 'degraded' || component.status === 'outage'));
+  const sourceComponents = components.filter((component) => component.group === 'sources');
+  const infrastructureComponents = components.filter((component) => component.group === 'infrastructure');
+  const chainIds = ['browser-session', 'control-api', 'strategy-runtimes', 'market-streams', 'binance-account', 'aws-runner'];
+  const pathComponents = chainIds.map((id) => components.find((component) => component.id === id)).filter((component): component is WatchmanComponent => Boolean(component));
 
   const finish = (ok: boolean, issues: string[], ts: number) => {
     setLastRefreshTs(ts);
@@ -3696,114 +3624,189 @@ export function RefreshDock() {
     }, wait);
   };
 
-  const overallLabel = overall === 'good' ? 'Good' : overall === 'avg' ? 'Stable' : overall === 'slow' ? 'Watch' : 'Down';
-  const liveCount = conns.filter((connection) => connection.tier === 'good').length;
-  const label = st === 'spin' ? 'Resetting All Connections' : st === 'ok' ? 'All Connections Reset' : st === 'err' ? 'Connection Reset Needs Review' : `Connection Control · ${overallLabel}`;
-  const planned = sys?.connections?.planned ?? {};
-  const plannedRows = [
-    { key: 'awsRunner', label: 'AWS Runner Channel', detail: planned.awsRunner?.reason ?? 'Secure SSM target is not configured', state: planned.awsRunner?.ready ? 'Ready' : planned.awsRunner?.configured ? 'Configured' : 'Planned', icon: <IconTerminal size={16} /> },
-    { key: 'cloudflareAccess', label: 'Cloudflare Access', detail: planned.cloudflareAccess?.reason ?? 'Available only on the deployed hostname', state: planned.cloudflareAccess?.ready ? 'Live' : planned.cloudflareAccess?.configured ? 'Configured' : 'Planned', icon: <IconShield size={16} /> },
-    { key: 'externalAlerts', label: 'External Alert Delivery', detail: planned.externalAlerts?.reason ?? 'Provider credentials are not connected', state: planned.externalAlerts?.ready ? 'Ready' : 'Planned', icon: <IconBell size={16} /> },
+  const overallLabel = watchmanStatusLabel(overallStatus);
+  const label = st === 'spin' ? 'Recovery Running' : st === 'ok' ? 'Connections Recovered' : st === 'err' ? 'Recovery Needs Review' : `Connection Watchman · ${overallLabel}`;
+  const groupedConnections = (Object.keys(watchmanGroupLabel) as WatchmanGroup[]).map((group) => ({
+    group,
+    rows: components.filter((component) => component.group === group),
+  })).filter((section) => section.rows.length > 0);
+  const resetControls: Array<{ target: ConnectionResetTarget; label: string; detail: string }> = [
+    { target: 'all', label: 'All Connections', detail: 'Rebuild the browser socket and every server-owned connection' },
+    { target: 'market', label: 'Market Network', detail: 'Rebuild Binance public sockets' },
+    { target: 'runtime', label: 'Bot Runtimes', detail: 'Restart Basis and Volume engines' },
+    { target: 'account', label: 'Signed Account', detail: 'Resync wallets, orders, loans, and user stream' },
+    { target: 'news', label: 'News Sources', detail: 'Refresh every configured source adapter' },
+    { target: 'calendar', label: 'Calendar', detail: 'Rebuild the economic-event cache' },
+    { target: 'fx', label: 'FX Rates', detail: 'Refresh display-currency references' },
   ];
+  const selectedRecovery = resetControls.find((control) => control.target === recoveryTarget) ?? resetControls[0];
+  const recoveryOptions = resetControls.map((control) => ({ id: control.target, label: control.label }));
+
+  const renderComponentRow = (component: WatchmanComponent) => (
+    <div key={component.id} className={`watchman-component status-${component.status}`}>
+      <span className="watchman-component-icon">{watchmanGroupIcon(component.group)}<i /></span>
+      <span className="watchman-component-copy"><b>{component.label}</b><em>{component.detail}</em></span>
+      <span className="watchman-component-value"><b>{component.value}</b><em>{watchmanStatusLabel(component.status)}</em></span>
+      {component.resetTarget ? (
+        <button
+          type="button"
+          disabled={busy.current || component.status === 'planned'}
+          className={targetBusy === component.resetTarget ? 'busy' : ''}
+          onClick={() => void runTarget(component.resetTarget!)}
+          aria-label={`Recover ${component.label}`}
+          title={`Recover ${component.label}`}
+        ><IconRefresh size={14} /></button>
+      ) : <span className="watchman-component-spacer" />}
+    </div>
+  );
 
   return (
-    <div
-      className={`rdock rdock-control ${open ? 'open' : ''}`}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onFocusCapture={() => setOpen(true)}
-      onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false); }}
-    >
+    <div className={`rdock rdock-control watchman-dock ${open ? 'open' : ''}`} ref={rootRef}>
       {open && (
-        <section className="rdock-pop rdock-control-pop" aria-label="Connection Control">
-          <header className="rdock-control-head">
-            <span className="rdock-control-logo"><img src={CONNECTION_RESET_MARK} alt="" /></span>
-            <span className="rdock-control-title"><b>Connection Control</b><em>Live latency, source health, and reset controls</em></span>
-            <span className={`rdock-pop-tag t-${overall}`}>{overallLabel}</span>
+        <section className={`rdock-pop rdock-control-pop watchman-panel status-${overallStatus}`} aria-label="Connection Watchman">
+          <header className="rdock-control-head watchman-head">
+            <span className={`rdock-control-logo status-${overallStatus}`}><ConnectionWatchmanMark size={54} /></span>
+            <span className="rdock-control-title"><b>Connection Watchman</b><em>Website · bot · AWS · Binance · source network</em></span>
+            <span className={`watchman-live-pulse status-${overallStatus}`}><i />Live Monitor</span>
+            <span className={`rdock-pop-tag status-${overallStatus}`}>{overallLabel}</span>
+            <button className="watchman-close" type="button" onClick={() => setOpen(false)} aria-label="Close Connection Watchman"><IconCross size={14} /></button>
           </header>
 
-          <div className="rdock-summary" aria-label="Connection Summary">
-            <span><em>Browser RTT</em><b>{appRtt == null ? '—' : msLabel(appRtt)}</b></span>
-            <span><em>Healthy</em><b>{liveCount} / {conns.length}</b></span>
-            <span><em>Last Reset</em><b>{lastRefreshTs ? timeAgo(lastRefreshTs) : 'Not Run'}</b></span>
+          <div className="rdock-summary watchman-summary" aria-label="Connection Summary">
+            <span><em>Required Healthy</em><b>{operationalCount}/{requiredComponents.length}</b><small>{outageCount ? `${outageCount} outage` : degradedCount ? `${degradedCount} degraded` : 'No lag detected'}</small></span>
+            <span><em>Browser RTT</em><b>{appRtt == null ? '—' : msLabel(appRtt)}</b><small>Direct control API probe</small></span>
+            <span><em>Source Coverage</em><b>{backendWatchman?.summary.liveSources ?? 0}/{backendWatchman?.summary.sourceCoverage ?? 0}</b><small>News adapters live</small></span>
+            <span><em>Active Incidents</em><b>{activeProblems.length}</b><small>{outageCount ? `${outageCount} outage` : 'Transition-only alerts'}</small></span>
+            <span><em>Last Recovery</em><b>{effectiveLastResetTs ? timeAgo(effectiveLastResetTs) : 'Not Run'}</b><small>{lastRefreshIssues.length || backendWatchman?.lastReset?.ok === false ? 'Needs review' : backendWatchman?.lastReset ? `${backendWatchman.lastReset.target} · ${backendWatchman.lastReset.durationMs} ms` : 'Manual recovery'}</small></span>
           </div>
 
-          <div className="rdock-scroll">
-            <div className="rdock-section-label"><span>Live Connections</span><em>{connected ? 'Monitoring' : 'Reconnecting'}</em></div>
-            <div className="rdock-connection-list">
-              {conns.map((connection) => (
-                <div key={connection.key} className={`rdock-conn rdock-connection-row t-${connection.tier}`}>
-                  <span className={`rdock-connection-icon t-${connection.tier}`}>{connection.icon}<i /></span>
-                  <span className="rdock-connection-copy"><b>{connection.label}</b><em>{connection.detail}</em></span>
-                  <span className={`rdock-conn-val t-${connection.tier}`}>{connection.value}</span>
-                  {connection.target ? (
-                    <button
-                      className={`rdock-row-reset ${targetBusy === connection.target ? 'busy' : ''}`}
-                      type="button"
-                      disabled={busy.current}
-                      onClick={() => void runTarget(connection.target!)}
-                      aria-label={`Reset ${connection.label}`}
-                      title={`Reset ${connection.label}`}
-                    >
-                      <IconRefresh size={14} />
-                    </button>
-                  ) : <span className="rdock-row-spacer" />}
-                </div>
-              ))}
-            </div>
+          <div className="rdock-view-tabs" role="tablist" aria-label="Connection Control View">
+            <button type="button" role="tab" aria-selected={dockView === 'overview'} className={dockView === 'overview' ? 'on' : ''} onClick={() => setDockView('overview')}><IconPulse size={14} /> Overview</button>
+            <button type="button" role="tab" aria-selected={dockView === 'connections'} className={dockView === 'connections' ? 'on' : ''} onClick={() => setDockView('connections')}><IconWifi size={14} /> Connections</button>
+            <button type="button" role="tab" aria-selected={dockView === 'sources'} className={dockView === 'sources' ? 'on' : ''} onClick={() => setDockView('sources')}><IconNewspaper size={14} /> Sources</button>
+            <button type="button" role="tab" aria-selected={dockView === 'controls'} className={dockView === 'controls' ? 'on' : ''} onClick={() => setDockView('controls')}><IconGear size={14} /> Controls</button>
+          </div>
 
-            <div className="rdock-section-label"><span>Polling Cadence</span><em>Browser Requests</em></div>
-            <div className="rdock-cadence-list">
-              {MARKET_PING_KEYS.map((key) => {
-                const labelFor = { market: 'Market Price', account: 'Account Data', news: 'News Context', calendar: 'Calendar' } as const;
-                return (
-                  <div className="rdock-cadence-row" key={key}>
-                    <span><b>{labelFor[key]}</b><em>{fmtCadence(cadenceSec(key))}</em></span>
-                    <span role="radiogroup" aria-label={`${labelFor[key]} polling cadence`}>
-                      {MARKET_PING_CHOICES.map((seconds) => (
-                        <button
-                          type="button"
-                          key={seconds}
-                          role="radio"
-                          aria-checked={cadenceSec(key) === seconds}
-                          className={cadenceSec(key) === seconds ? 'on' : ''}
-                          onClick={() => setCadence(key, seconds)}
-                        >
-                          {fmtCadence(seconds)}
-                        </button>
-                      ))}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="rdock-section-label"><span>Planned Channels</span><em>Disabled Until Configured</em></div>
-            <div className="rdock-planned-list">
-              {plannedRows.map((row) => (
-                <div className="rdock-planned-row" key={row.key}>
-                  <span>{row.icon}</span>
-                  <span><b>{row.label}</b><em>{row.detail}</em></span>
-                  <strong>{row.state}</strong>
+          <div className={`rdock-scroll ${dockView}-view`}>
+            {dockView === 'overview' && (
+              <div className="watchman-overview">
+                <div className="watchman-section-head"><span><b>Monitored Path</b><em>Every layer reports its own evidence</em></span><strong>{backendWatchman?.assessedAt ? `Assessed ${timeAgo(backendWatchman.assessedAt)}` : 'Connecting'}</strong></div>
+                <div className="watchman-path" aria-label="Monitored connection path">
+                  {pathComponents.map((component, index) => (
+                    <div className={`watchman-path-node status-${component.status}`} key={component.id}>
+                      <span>{watchmanGroupIcon(component.group)}<i /></span>
+                      <b>{component.label.replace('Binance ', '').replace('Browser / Website Session', 'Browser')}</b>
+                      <em>{component.value}</em>
+                      {index < pathComponents.length - 1 && <svg viewBox="0 0 28 8" aria-hidden="true"><path d="M1 4h23m-4-3 4 3-4 3" /></svg>}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+                <div className="watchman-overview-grid">
+                  <section>
+                    <div className="watchman-section-head"><span><b>Attention Queue</b><em>Required components only</em></span><strong>{activeProblems.length}</strong></div>
+                    <div className="watchman-attention-list">
+                      {activeProblems.length ? activeProblems.slice(0, 5).map(renderComponentRow) : (
+                        <div className="watchman-clear-state"><IconCheck size={18} /><span><b>All Required Connections Operational</b><em>The watchman will notify on a lag, outage, or recovery transition.</em></span></div>
+                      )}
+                    </div>
+                  </section>
+                  <section>
+                    <div className="watchman-section-head"><span><b>Recent Transitions</b><em>Notification-backed state changes</em></span><strong>{backendWatchman?.recentTransitions.length ?? 0}</strong></div>
+                    <div className="watchman-transition-list">
+                      {backendWatchman?.recentTransitions.length ? backendWatchman.recentTransitions.slice(0, 5).map((transition) => (
+                        <div key={`${transition.componentId}-${transition.ts}`}><i className={`status-${transition.to}`} /><span><b>{transition.label}</b><em>{transition.from} → {transition.to}</em></span><time>{timeAgo(transition.ts)}</time></div>
+                      )) : <div className="watchman-empty">No connection transitions since this server started.</div>}
+                    </div>
+                  </section>
+                </div>
+              </div>
+            )}
+
+            {dockView === 'connections' && (
+              <>
+                {groupedConnections.map((section) => (
+                  <section className="watchman-connection-group" key={section.group}>
+                    <div className="watchman-section-head"><span>{watchmanGroupIcon(section.group)}<b>{watchmanGroupLabel[section.group]}</b></span><strong>{section.rows.filter((row) => row.status === 'operational').length}/{section.rows.length}</strong></div>
+                    <div className="watchman-component-list">{section.rows.map(renderComponentRow)}</div>
+                  </section>
+                ))}
+              </>
+            )}
+
+            {dockView === 'sources' && (
+              <div className="watchman-sources-view">
+                <div className="watchman-source-hero">
+                  <span><IconNewspaper size={22} /></span>
+                  <span><b>{backendWatchman?.summary.liveSources ?? 0} Live Sources</b><em>Adapters are rolled up by service so hundreds of feeds remain operable without an unreadable wall.</em></span>
+                  <strong>{backendWatchman?.summary.sourceCoverage ?? 0} Tracked</strong>
+                </div>
+                <section>
+                  <div className="watchman-section-head"><span><b>Market Intelligence Sources</b><em>Grouped upstream coverage and cache health</em></span><strong>{sourceComponents.length}</strong></div>
+                  <div className="watchman-component-list">{sourceComponents.map(renderComponentRow)}</div>
+                </section>
+                <section>
+                  <div className="watchman-section-head"><span><b>Deployment And Delivery</b><em>Honest readiness; unconfigured channels stay disabled</em></span><strong>{infrastructureComponents.length}</strong></div>
+                  <div className="watchman-component-list">{infrastructureComponents.map(renderComponentRow)}</div>
+                </section>
+              </div>
+            )}
+
+            {dockView === 'controls' && (
+              <div className="watchman-controls-view">
+                <div className="watchman-section-head watchman-controls-section-head">
+                  <span><b>Polling Cadence</b><em>Browser request timing only · live sockets remain event-driven</em></span>
+                  <button className={cadenceReset ? 'ok' : ''} type="button" disabled={busy.current} onClick={resetCadenceDefaults}><IconRefresh size={13} />{cadenceReset ? 'Restored' : 'Defaults'}</button>
+                </div>
+                <div className="watchman-cadence-grid">
+                  {MARKET_PING_KEYS.map((key, index) => {
+                    const labelFor = { market: 'Market Prices', account: 'Account Data', news: 'News Context', calendar: 'Calendar' } as const;
+                    const detailFor = { market: 'Prices, breadth, and market rows', account: 'Balances, orders, fills, and loans', news: 'Feed fallback and new-item context', calendar: 'Macro releases and value changes' } as const;
+                    return (
+                      <div className="rdock-cadence-row" key={key}>
+                        <span><b>{labelFor[key]}</b><em>{detailFor[key]}</em></span>
+                        <PillSelect
+                          value={String(cadenceSec(key))}
+                          options={cadenceOptions}
+                          onChange={(value) => setCadence(key, Number(value))}
+                          ariaLabel={`${labelFor[key]} Polling Cadence`}
+                          className="rdock-cadence-select"
+                          buttonClassName="rdock-cadence-trigger"
+                          menuClassName={`rdock-cadence-menu ${index > 1 ? 'opens-up' : ''}`}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="watchman-section-head"><span><b>Recovery</b><em>Choose one connection owner, then run one deliberate action</em></span><strong>{selectedRecovery.label}</strong></div>
+                <div className="watchman-recovery-console">
+                  <span className="watchman-recovery-icon"><IconRefresh size={18} /></span>
+                  <span className="watchman-recovery-copy"><b>{selectedRecovery.label}</b><em>{selectedRecovery.detail}</em></span>
+                  <PillSelect
+                    value={recoveryTarget}
+                    options={recoveryOptions}
+                    onChange={(value) => setRecoveryTarget(value as ConnectionResetTarget)}
+                    ariaLabel="Recovery Target"
+                    className="watchman-recovery-select"
+                    buttonClassName="watchman-recovery-trigger"
+                    menuClassName="watchman-recovery-menu opens-up"
+                  />
+                  <button className={targetBusy === recoveryTarget ? 'busy' : ''} type="button" disabled={busy.current} onClick={() => void runTarget(recoveryTarget)}>
+                    <IconRefresh size={15} /><span>{targetBusy === recoveryTarget ? 'Recovering' : 'Run Recovery'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {lastRefreshIssues.length > 0 && (
             <div className="rdock-issues" title={lastRefreshIssues.join(' · ')}><IconAlarm size={14} /><span>{lastRefreshIssues[0]}</span></div>
           )}
-          <button className={`rdock-reset-all ${st}`} type="button" disabled={busy.current} onClick={() => void run()}>
-            <img src={CONNECTION_RESET_MARK} alt="" />
-            <span><b>{st === 'spin' ? 'Resetting Connections' : 'Reset All Connections'}</b><em>Reconnect live sockets and refresh every server-owned source</em></span>
-            <strong>{st === 'spin' ? 'Running' : st === 'ok' ? 'Complete' : st === 'err' ? 'Review' : 'Run'}</strong>
-          </button>
         </section>
       )}
 
-      <button className={`rdock-btn rdock-control-btn t-${overall} ${st}`} onClick={() => void run()} title={label} aria-label={label}>
-        <span className="rdock-control-image"><img ref={icRef} src={CONNECTION_RESET_MARK} alt="" /></span>
-        <i className={`rdock-control-state t-${st === 'ok' ? 'good' : st === 'err' ? 'bad' : overall}`} />
+      <button className={`rdock-btn rdock-control-btn status-${overallStatus} ${st}`} onClick={() => setOpen((value) => !value)} title={label} aria-label={label} aria-expanded={open}>
+        <span className="rdock-control-image"><img src="/connection-reset-mark.svg" alt="" /></span>
+        <i className={`rdock-control-state status-${st === 'ok' ? 'operational' : st === 'err' ? 'outage' : overallStatus}`} />
       </button>
     </div>
   );
@@ -3813,16 +3816,16 @@ export function Topbar() {
   const { page, setPage } = useStore();
 
   useEffect(() => {
-    document.title = `Arbitrage Capital Control Room · ${TITLES[page]}`;
+    document.title = `Arbitrage Control Room · ${TITLES[page]}`;
   }, [page]);
 
   return (
     <header className="hdr">
       <div className="hdr-in">
-        <div className="hdr-brand" onClick={() => setPage('dashboard')} title="Arbitrage Capital Control Room" role="button" aria-label="Arbitrage Capital Control Room home">
+        <div className="hdr-brand" onClick={() => setPage('dashboard')} title="Arbitrage Control Room" role="button" aria-label="Arbitrage Control Room home">
           {BRAND_MARK}
           <div className="brand-lockup">
-            <div className="brand-name">Arbitrage Capital</div>
+            <div className="brand-name">Arbitrage</div>
             <div className="brand-sub">Control Room</div>
           </div>
         </div>

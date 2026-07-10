@@ -85,6 +85,12 @@ export class VolumeRuntime {
     this.running = false;
     for (const stream of this.streams) stream.stop();
     this.streams = [];
+    // A subsequent start() must rebuild sockets even when the eligible symbol
+    // universe is unchanged. Keeping the old key left the runtime running with
+    // zero streams after an operator-initiated recovery.
+    this.streamStatus.clear();
+    this.symbolSetKey = '';
+    this.eligibleSymbols = [];
     if (this.tickTimer) clearInterval(this.tickTimer);
     if (this.bookTimer) clearInterval(this.bookTimer);
     if (this.universeTimer) clearInterval(this.universeTimer);

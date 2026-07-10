@@ -3,7 +3,7 @@ import { useStore, type Page } from '../store';
 import { Empty, Pill, type Tone } from '../components/px';
 import { eventSummary } from '../lib/eventText';
 import { fmtPrice, timeAgo } from '../format';
-import { TIME_ZONE_OPTIONS, addDays, dayKey, formatKey, resolvedZoneLabel } from '../lib/time';
+import { TIME_ZONE_OPTIONS, addDays, dayBounds, dayKey, formatKey, resolvedZoneLabel } from '../lib/time';
 import type { LedgerEvent } from '../types';
 import { TokenIcon } from '../components/TokenIcon';
 import { PillSelect } from '../components/PillSelect';
@@ -36,8 +36,7 @@ const SEVERITY_FILTERS: { id: SeverityFilter; label: string }[] = [
   { id: 'Info', label: 'Info' },
   { id: 'Debug', label: 'Debug' },
 ];
-const LOG_HISTORY_MS = 8 * 86_400_000;
-const LOG_PAGE_SIZE = 200;
+const LOG_PAGE_SIZES = [25, 50, 100] as const;
 
 const KNOWN_KINDS = [
   'account_snapshot',
@@ -368,7 +367,10 @@ export function LedgerPage() {
   const [query, setQuery] = useState('');
   const [decision, setDecision] = useState<DecisionFilter>('all');
   const [showDebug, setShowDebug] = useState(false);
-  const [visibleLimit, setVisibleLimit] = useState(LOG_PAGE_SIZE);
+  const [pageSize, setPageSize] = useState<number>(25);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [dayTotals, setDayTotals] = useState<Record<string, number>>({});
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [rawOpen, setRawOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -385,19 +387,31 @@ export function LedgerPage() {
   }, [prefs.clockZone, today]);
 
   const load = useCallback(() => {
-    const params = new URLSearchParams({ limit: '20000', since: String(Date.now() - LOG_HISTORY_MS) });
+    const bounds = dayBounds(selectedDay, zone);
+    const params = new URLSearchParams({
+      limit: String(pageSize),
+      offset: String(pageIndex * pageSize),
+      since: String(bounds.since),
+      until: String(bounds.until),
+    });
+    if (kind !== 'all') params.set('kind', kind);
+    if (symbol.trim()) params.set('symbol', symbol.trim().toUpperCase());
+    if (query.trim()) params.set('q', query.trim());
 
     setLoading(true);
-    return fetch(`/api/events?${params}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((payload) => {
+    return Promise.all([
+      fetch(`/api/events?${params}`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))),
+      fetch(`/api/events/count?${params}`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))),
+    ])
+      .then(([payload, countPayload]) => {
         setApiEvents(Array.isArray(payload) ? payload as LedgerEvent[] : []);
+        setTotalCount(Number(countPayload?.count) || 0);
         setLoadError(null);
         setLastLoaded(Date.now());
       })
       .catch((err) => setLoadError(err instanceof Error ? err.message : 'Failed to load events'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [kind, pageIndex, pageSize, query, selectedDay, symbol, zone]);
 
   useEffect(() => {
     void load();
@@ -405,12 +419,28 @@ export function LedgerPage() {
     return () => window.clearInterval(t);
   }, [load, prefs.dataCadence?.health]);
 
+  useEffect(() => {
+    let live = true;
+    const readTotals = async () => {
+      const pairs = await Promise.all(dayKeys.map(async (key) => {
+        const bounds = dayBounds(key, zone);
+        const params = new URLSearchParams({ since: String(bounds.since), until: String(bounds.until) });
+        const response = await fetch(`/api/events/count?${params}`, { cache: 'no-store' });
+        const payload = response.ok ? await response.json() as { count?: number } : {};
+        return [key, Number(payload.count) || 0] as const;
+      }));
+      if (live) setDayTotals(Object.fromEntries(pairs));
+    };
+    void readTotals();
+    const timer = window.setInterval(() => void readTotals(), 60_000);
+    return () => { live = false; window.clearInterval(timer); };
+  }, [dayKeys, zone]);
+
   const events = useMemo(() => {
     const map = new Map<number, LedgerEvent>();
-    for (const ev of stateEvents) map.set(ev.id, ev);
     for (const ev of apiEvents) map.set(ev.id, ev);
     return sortEvents([...map.values()]);
-  }, [apiEvents, stateEvents]);
+  }, [apiEvents]);
 
   const kindOptions = useMemo(() => {
     const seen = new Set([...KNOWN_KINDS, ...events.map((ev) => ev.kind)]);
@@ -448,7 +478,7 @@ export function LedgerPage() {
     return true;
   }), [baseEvents, severity, showDebug]);
 
-  const renderedEvents = useMemo(() => visible.slice(0, visibleLimit), [visible, visibleLimit]);
+  const renderedEvents = visible;
 
   const selected = selectedId === null ? null : visible.find((ev) => ev.id === selectedId) ?? null;
   const debugHiddenCount = showDebug ? 0 : selectedCounts.Debug;
@@ -460,8 +490,8 @@ export function LedgerPage() {
   }, [selected?.id]);
 
   useEffect(() => {
-    setVisibleLimit(LOG_PAGE_SIZE);
-  }, [decision, kind, query, selectedDay, severity, showDebug, symbol]);
+    setPageIndex(0);
+  }, [decision, kind, pageSize, query, selectedDay, severity, showDebug, symbol]);
 
   function clearFilters(): void {
     setKind('all');
@@ -512,8 +542,8 @@ export function LedgerPage() {
             const counts = severityCounts(rows);
             return <button type="button" key={key} aria-pressed={key === selectedDay} className={`${key === selectedDay ? 'selected' : ''} ${key === today ? 'today' : ''}`} onClick={() => { setSelectedDay(key); setSelectedId(null); }}>
               <span className="calx-day-name">{formatKey(key, { weekday: 'short' })} <b>{formatKey(key, { day: 'numeric' })}</b></span>
-              <span><em>Logs</em><b>{rows.length}</b></span>
-              <span className="logx-day-severity"><em>Severity</em><b><i className="critical">C {counts.Critical}</i><i className="warning">W {counts.Warning}</i><i className="info">I {counts.Info}</i><i className="debug">D {counts.Debug}</i></b></span>
+              <span><em>Logs</em><b>{dayTotals[key] ?? '—'}</b></span>
+              <span className="logx-day-severity"><em>{key === selectedDay ? 'Current Page' : 'Select Day'}</em><b>{key === selectedDay ? <><i className="critical">C {counts.Critical}</i><i className="warning">W {counts.Warning}</i><i className="info">I {counts.Info}</i><i className="debug">D {counts.Debug}</i></> : <i className="info">{dayTotals[key] ?? '—'} Total</i>}</b></span>
             </button>;
           })}
         </section>
@@ -539,6 +569,13 @@ export function LedgerPage() {
               ]}
               onChange={(value) => { setDecision(value); setSelectedId(null); }}
               ariaLabel="Decision Filter"
+              className="lix-select"
+            />
+            <PillSelect
+              value={String(pageSize)}
+              options={LOG_PAGE_SIZES.map((count) => ({ id: String(count), label: `${count} Per Page` }))}
+              onChange={(value) => setPageSize(Number(value))}
+              ariaLabel="Logs Per Page"
               className="lix-select"
             />
             {symbol && <button type="button" className="logx-symbol-chip" onClick={() => setSymbol('')} title={`Clear ${symbol} filter`}>{symbol}<span>×</span></button>}
@@ -639,11 +676,12 @@ export function LedgerPage() {
                 </div>}
               </div>;
             })}
-            {renderedEvents.length < visible.length && <div className="logx-load-more">
-              <span>Showing {renderedEvents.length.toLocaleString('en-US')} Of {visible.length.toLocaleString('en-US')} Matching Logs</span>
-              <button type="button" onClick={() => setVisibleLimit((current) => Math.min(current + LOG_PAGE_SIZE, visible.length))}>
-                Load Older Logs
-              </button>
+            {totalCount > pageSize && <div className="logx-load-more">
+              <span>Showing {(pageIndex * pageSize + 1).toLocaleString('en-US')}–{Math.min((pageIndex + 1) * pageSize, totalCount).toLocaleString('en-US')} Of {totalCount.toLocaleString('en-US')} Logs</span>
+              <span className="logx-page-actions">
+                <button type="button" disabled={pageIndex === 0} onClick={() => setPageIndex((current) => Math.max(0, current - 1))}>Newer</button>
+                <button type="button" disabled={(pageIndex + 1) * pageSize >= totalCount} onClick={() => setPageIndex((current) => current + 1)}>Older</button>
+              </span>
             </div>}
             {loading && events.length === 0 && <div className="lix-empty">Loading Logs…</div>}
             {loadError && events.length === 0 && <div className="lix-empty">The Log Feed Is Currently Unavailable.</div>}

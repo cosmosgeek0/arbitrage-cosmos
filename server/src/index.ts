@@ -352,16 +352,18 @@ app.use((_req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  res.setHeader('Accept-CH', 'Sec-CH-UA-Model, Sec-CH-UA-Form-Factors');
   next();
 });
 
 // ---- active session tracking ------------------------------------------------
 // Records each visiting device by (IP + user-agent) so the account panel can
 // show who is currently on the cockpit. Cloudflare injects the real IP + country
-// in prod; on localhost it collapses to a single "local" session. Real, not faked.
+// in prod; on localhost it collapses to the real loopback address. Real, not faked.
 interface Sess {
   id: string; ip: string; country: string | null; ua: string;
-  system: string; browser: string; firstSeen: number; lastSeen: number;
+  system: string; browser: string; device: string; model: string | null;
+  firstSeen: number; lastSeen: number;
   reqs: number; pendingReqs: number; persistedAt: number;
 }
 const sessions = new Map<string, Sess>();
@@ -371,7 +373,15 @@ const SESSION_DB_RETENTION_MS = 30 * 24 * 60 * 60_000;
 const SESSION_MEMORY_RETENTION_MS = 30 * 60_000;
 const SESSION_PERSIST_FLOOR_MS = 15_000;
 
-function parseUA(ua: string): { system: string; browser: string } {
+function headerText(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? value[0] ?? '' : value ?? '';
+}
+
+function cleanClientHint(value: string): string {
+  return value.trim().replace(/^"|"$/g, '').slice(0, 80);
+}
+
+function parseClient(req: express.Request, ua: string): { system: string; browser: string; device: string; model: string | null } {
   let system = 'Unknown OS';
   if (/iPhone|iPad/i.test(ua)) system = 'iOS';
   else if (/Android/i.test(ua)) system = 'Android';
@@ -381,16 +391,50 @@ function parseUA(ua: string): { system: string; browser: string } {
   const bm = ua.match(/(Edg|OPR|CriOS|FxiOS|Chrome|Firefox|Safari)\/([\d.]+)/);
   const map: Record<string, string> = { Edg: 'Edge', OPR: 'Opera', CriOS: 'Chrome', FxiOS: 'Firefox', Chrome: 'Chrome', Firefox: 'Firefox', Safari: 'Safari' };
   const bkey = bm ? Object.keys(map).find((k) => bm[0].startsWith(k)) ?? '' : '';
-  const browser = bm ? `${map[bkey] ?? 'Browser'} ${bm[2].split('.')[0]}` : 'Browser';
-  return { system, browser };
+  let browser = bm ? `${map[bkey] ?? 'Browser'} ${bm[2].split('.')[0]}` : 'Browser';
+
+  const platformHint = cleanClientHint(headerText(req.headers['sec-ch-ua-platform']));
+  if (platformHint && platformHint !== 'Unknown') system = platformHint;
+
+  const brandHeader = headerText(req.headers['sec-ch-ua']);
+  const brands = [...brandHeader.matchAll(/"([^"]+)";v="([^"]+)"/g)]
+    .map((match) => ({ name: match[1], version: match[2].split('.')[0] }));
+  const preferred = ['Microsoft Edge', 'Google Chrome', 'Opera', 'Brave', 'Chromium']
+    .map((name) => brands.find((brand) => brand.name === name))
+    .find(Boolean);
+  if (preferred) {
+    const browserName = preferred.name === 'Google Chrome' ? 'Chrome' : preferred.name === 'Microsoft Edge' ? 'Edge' : preferred.name;
+    browser = `${browserName} ${preferred.version}`;
+  }
+
+  const formFactors = cleanClientHint(headerText(req.headers['sec-ch-ua-form-factors'])).toLowerCase();
+  const mobileHint = headerText(req.headers['sec-ch-ua-mobile']);
+  const model = cleanClientHint(headerText(req.headers['sec-ch-ua-model'])) || null;
+  const device = formFactors.includes('tablet') || /iPad/i.test(ua)
+    ? 'Tablet'
+    : formFactors.includes('mobile') || mobileHint === '?1' || /iPhone|Android.+Mobile/i.test(ua)
+      ? 'Mobile'
+      : 'Desktop';
+  return { system, browser, device, model };
 }
 function sessKey(ip: string, ua: string): string {
   return createHash('sha256').update(`${ip}|${ua}`).digest('hex').slice(0, 16);
 }
+
+function normalizedRequestIp(req: express.Request): string {
+  const cloudflare = headerText(req.headers['cf-connecting-ip']);
+  const forwarded = headerText(req.headers['x-forwarded-for']).split(',')[0]?.trim() ?? '';
+  const realIp = headerText(req.headers['x-real-ip']);
+  const socketIp = req.socket.remoteAddress ?? '';
+  const raw = cloudflare || forwarded || realIp || socketIp || 'unknown';
+  if (raw === '::1') return '127.0.0.1';
+  return raw.replace(/^::ffff:/, '');
+}
+
 function reqIdent(req: express.Request): { id: string; ip: string; ua: string; country: string | null } {
-  const ip = (req.headers['cf-connecting-ip'] as string) || 'local';
-  const ua = (req.headers['user-agent'] as string) || 'unknown';
-  const country = (req.headers['cf-ipcountry'] as string) || null;
+  const ip = normalizedRequestIp(req);
+  const ua = headerText(req.headers['user-agent']) || 'unknown';
+  const country = headerText(req.headers['cf-ipcountry']) || null;
   return { id: sessKey(ip, ua), ip, ua, country };
 }
 
@@ -409,6 +453,8 @@ function persistBrowserSession(session: Sess, now = Date.now(), force = false): 
     country: session.country,
     system: session.system,
     browser: session.browser,
+    device: session.device,
+    model: session.model,
     firstSeen: session.firstSeen,
     lastSeen: session.lastSeen,
     requests: session.pendingReqs,
@@ -425,15 +471,19 @@ app.use((req, _res, next) => {
   const { id, ip, ua, country } = reqIdent(req);
   const now = Date.now();
   const s = sessions.get(id);
+  const client = parseClient(req, ua);
   if (s) {
     s.lastSeen = now;
     s.reqs++;
     s.pendingReqs++;
+    s.system = client.system;
+    s.browser = client.browser;
+    s.device = client.device;
+    if (client.model) s.model = client.model;
     if (country) s.country = country;
     persistBrowserSession(s, now);
   } else {
-    const { system, browser } = parseUA(ua);
-    const session = { id, ip, country, ua, system, browser, firstSeen: now, lastSeen: now, reqs: 1, pendingReqs: 1, persistedAt: 0 };
+    const session = { id, ip, country, ua, ...client, firstSeen: now, lastSeen: now, reqs: 1, pendingReqs: 1, persistedAt: 0 };
     sessions.set(id, session);
     persistBrowserSession(session, now, true);
   }
@@ -523,17 +573,24 @@ app.get('/api/sessions', (req, res) => {
   for (const session of sessions.values()) persistBrowserSession(session, now, true);
   ledger.pruneBrowserSessions(now - SESSION_DB_RETENTION_MS);
   const list = ledger.listBrowserSessions(now - SESSION_API_RETENTION_MS, 100)
-    .map((s) => ({
+    .map((s) => {
+      const live = sessions.get(s.id);
+      const fallbackDevice = /Android|iOS/i.test(s.system) ? 'Mobile' : 'Desktop';
+      return {
       id: s.id,
-      ip: s.ip === 'local' ? null : s.ip,
+      ip: s.ip || null,
       country: s.country,
       system: s.system,
       browser: s.browser,
+      device: live?.device ?? s.device ?? fallbackDevice,
+      model: live?.model ?? s.model ?? null,
       firstSeen: s.firstSeen,
       lastSeen: s.lastSeen,
+      requests: s.requests,
       current: s.id === meId,
       active: now - s.lastSeen < SESSION_ACTIVE_MS,
-    }));
+      };
+    });
   res.setHeader('Cache-Control', 'private, no-store');
   res.json({
     sessions: list,
@@ -571,7 +628,22 @@ app.get('/api/events', (req, res) => {
   const since = Number.isFinite(requestedSince) && requestedSince > 0 ? requestedSince : undefined;
   const requestedBeforeId = Number(req.query.beforeId);
   const beforeId = Number.isFinite(requestedBeforeId) && requestedBeforeId > 0 ? requestedBeforeId : undefined;
-  res.json(ledger.recentEvents(limit, kind, symbol, q, since, beforeId));
+  const requestedUntil = Number(req.query.until);
+  const until = Number.isFinite(requestedUntil) && requestedUntil > 0 ? requestedUntil : undefined;
+  const requestedOffset = Number(req.query.offset ?? 0);
+  const offset = Math.max(0, Math.min(Number.isFinite(requestedOffset) ? requestedOffset : 0, 20_000));
+  res.json(ledger.recentEvents(limit, kind, symbol, q, since, beforeId, until, offset));
+});
+
+app.get('/api/events/count', (req, res) => {
+  const kind = req.query.kind ? String(req.query.kind) : undefined;
+  const symbol = req.query.symbol ? String(req.query.symbol).toUpperCase() : undefined;
+  const q = req.query.q ? String(req.query.q).slice(0, 60) : undefined;
+  const requestedSince = Number(req.query.since);
+  const since = Number.isFinite(requestedSince) && requestedSince > 0 ? requestedSince : undefined;
+  const requestedUntil = Number(req.query.until);
+  const until = Number.isFinite(requestedUntil) && requestedUntil > 0 ? requestedUntil : undefined;
+  res.json({ count: ledger.countEvents(kind, symbol, q, since, until) });
 });
 
 // ---- Binance announcements proxy (real critical announcements; cached) ------
@@ -880,11 +952,46 @@ function gapPct(a: number | null, b: number | null, den: number | null): number 
 // 15-minute snapshots take over from wherever these end.
 let eqHistCache: { ts: number; rows: { ts: number; totalUsdt: number }[]; reconstructedBefore: number | null } | null = null;
 const STABLE_FLOW = new Set(['USDT', 'USDC', 'FDUSD', 'TUSD', 'BUSD', 'DAI']);
+
+function recentCompleteEquityRows(afterTs = 0): { ts: number; totalUsdt: number }[] {
+  return ledger
+    .recentEvents(500, 'account_snapshot')
+    .map((event) => {
+      const data = event.data as { totalUsdt?: unknown; availableUsdt?: unknown; assets?: unknown } | null;
+      return {
+        ts: event.ts,
+        totalUsdt: Number(data?.totalUsdt),
+        availableUsdt: Number(data?.availableUsdt),
+        assets: Number(data?.assets),
+      };
+    })
+    .filter((row) => row.ts > afterTs && Number.isFinite(row.totalUsdt) && row.totalUsdt >= 0)
+    .filter((row) => {
+      if (!(row.assets > 1) || !Number.isFinite(row.availableUsdt)) return true;
+      const partialTolerance = Math.max(0.05, Math.abs(row.totalUsdt) * 0.001);
+      return Math.abs(row.totalUsdt - row.availableUsdt) > partialTolerance;
+    })
+    .map(({ ts, totalUsdt }) => ({ ts, totalUsdt }))
+    .reverse();
+}
+
+function withRecentEquityRows(base: { ts: number; totalUsdt: number }[]): { ts: number; totalUsdt: number }[] {
+  const newestBaseTs = base[base.length - 1]?.ts ?? 0;
+  const merged = [...base, ...recentCompleteEquityRows(newestBaseTs)].sort((a, b) => a.ts - b.ts);
+  const deduped: { ts: number; totalUsdt: number }[] = [];
+  for (const row of merged) {
+    const prior = deduped[deduped.length - 1];
+    if (prior && Math.abs(prior.ts - row.ts) < 1_000) deduped[deduped.length - 1] = row;
+    else deduped.push(row);
+  }
+  return deduped;
+}
+
 app.get('/api/equity-history', (_req, res) => {
   void (async () => {
     const now = Date.now();
     if (eqHistCache && now - eqHistCache.ts < 3_600_000) {
-      res.json({ rows: eqHistCache.rows, reconstructedBefore: eqHistCache.reconstructedBefore, fetchedAt: eqHistCache.ts });
+      res.json({ rows: withRecentEquityRows(eqHistCache.rows), reconstructedBefore: eqHistCache.reconstructedBefore, fetchedAt: eqHistCache.ts });
       return;
     }
     if (!client) {
@@ -980,9 +1087,9 @@ app.get('/api/equity-history', (_req, res) => {
         rows.unshift(...back.sort((x, y) => x.ts - y.ts));
       }
       eqHistCache = { ts: now, rows, reconstructedBefore };
-      res.json({ rows, reconstructedBefore, fetchedAt: now });
+      res.json({ rows: withRecentEquityRows(rows), reconstructedBefore, fetchedAt: now });
     } catch (e) {
-      res.json({ rows: eqHistCache?.rows ?? [], reconstructedBefore: eqHistCache?.reconstructedBefore ?? null, fetchedAt: eqHistCache?.ts ?? null, error: e instanceof Error ? e.message : 'history failed' });
+      res.json({ rows: withRecentEquityRows(eqHistCache?.rows ?? []), reconstructedBefore: eqHistCache?.reconstructedBefore ?? null, fetchedAt: eqHistCache?.ts ?? null, error: e instanceof Error ? e.message : 'history failed' });
     }
   })();
 });
@@ -1661,6 +1768,207 @@ app.get('/api/loans/max-borrowable', (req, res) => {
 // System health for the dedicated page.
 const bootTs = Date.now();
 let timeSync: { diffMs: number; latencyMs: number; ts: number } | null = null;
+
+type WatchmanStatus = 'operational' | 'degraded' | 'outage' | 'planned';
+type WatchmanGroup = 'control_path' | 'binance' | 'bot' | 'sources' | 'infrastructure';
+type WatchmanResetTarget = 'market' | 'runtime' | 'account' | 'news' | 'calendar' | 'fx';
+interface WatchmanComponent {
+  id: string;
+  label: string;
+  group: WatchmanGroup;
+  status: WatchmanStatus;
+  detail: string;
+  value: string;
+  required: boolean;
+  updatedAt: number | null;
+  latencyMs?: number | null;
+  resetTarget?: WatchmanResetTarget;
+}
+interface WatchmanTransition {
+  ts: number;
+  componentId: string;
+  label: string;
+  from: WatchmanStatus;
+  to: WatchmanStatus;
+  detail: string;
+}
+
+const watchmanPrevious = new Map<string, WatchmanStatus>();
+const watchmanTransitions: WatchmanTransition[] = [];
+let watchmanSuppressUntil = 0;
+let watchmanLastReset: { ts: number; target: string; ok: boolean; durationMs: number } | null = null;
+let browserWatchmanObservation: { status: WatchmanStatus; rttMs: number; socketConnected: boolean; observedAt: number } | null = null;
+
+function connectionWatchmanSnapshot(
+  dbOk: boolean,
+  awsStatus: { configured: boolean; connectionEnabled: boolean; channel: string; region: string | null; instanceId: string | null },
+  notificationRouting: ReturnType<typeof notificationRoutingSnapshot>,
+  cloudflarePresent: boolean,
+) {
+  const now = Date.now();
+  const feedStates = Object.values(engine.feeds);
+  const openFeeds = feedStates.filter((state) => state === 'open').length;
+  const basis = basisRuntime.connectionStatus();
+  const volume = volumeRuntime.connectionStatus();
+  const news = newsContextStatus();
+  const accountAgeMs = account.lastSyncTs ? now - account.lastSyncTs : null;
+  const newsAgeMs = news.fetchedAt ? now - news.fetchedAt : null;
+  const calendarAgeMs = calCache?.at ? now - calCache.at : null;
+  const fxAgeMs = fxCache?.at ? now - fxCache.at : null;
+  const privateStream = String(userStream?.status ?? 'off').toLowerCase();
+
+  const accountStatus: WatchmanStatus = !account.keysPresent
+    ? 'planned'
+    : !account.connected || accountAgeMs === null || accountAgeMs > 6 * 60_000
+      ? 'outage'
+      : accountAgeMs > 2 * 60_000
+        ? 'degraded'
+        : 'operational';
+  const runtimeStatus: WatchmanStatus = !basis.running || !volume.running
+    ? 'outage'
+    : basis.bookState !== 'fresh' || basis.markState !== 'fresh' || volume.bookState !== 'fresh' || volume.streamState !== 'open'
+      ? 'degraded'
+      : 'operational';
+  const newsStatus: WatchmanStatus = !news.fetchedAt || news.live === 0 || (newsAgeMs !== null && newsAgeMs > 5 * 60_000)
+    ? 'outage'
+    : news.errors > Math.max(3, Math.floor(news.sources * 0.2)) || (newsAgeMs !== null && newsAgeMs > 90_000)
+      ? 'degraded'
+      : 'operational';
+  const awsConnectionStatus: WatchmanStatus = !awsStatus.configured
+    ? 'planned'
+    : awsStatus.channel === 'offline'
+      ? 'outage'
+      : awsStatus.channel === 'online'
+        ? 'operational'
+        : 'degraded';
+
+  const components: WatchmanComponent[] = [
+    {
+      id: 'control-api', label: 'Website / Control API', group: 'control_path', status: 'operational',
+      detail: 'This server answered the authenticated cockpit health probe', value: 'Online', required: true,
+      updatedAt: now,
+    },
+    {
+      id: 'market-streams', label: 'Binance Market Streams', group: 'binance',
+      status: feedStates.length === 0 ? 'degraded' : openFeeds === feedStates.length ? 'operational' : openFeeds === 0 ? 'outage' : 'degraded',
+      detail: 'Spot book, USD-M mark price, and liquidation stream sockets',
+      value: `${openFeeds}/${feedStates.length} open`, required: true, updatedAt: now, resetTarget: 'market',
+    },
+    {
+      id: 'binance-rest', label: 'Binance REST / Clock', group: 'binance',
+      status: !timeSync ? 'outage' : timeSync.latencyMs > 1_100 ? 'outage' : timeSync.latencyMs > 600 ? 'degraded' : 'operational',
+      detail: `Server clock drift ${timeSync ? Math.round(timeSync.diffMs) : '—'} ms · ${rateLimit.ts > 0 ? rateLimit.usedWeight1m : '—'} weight / 1m`,
+      value: timeSync ? `${Math.round(timeSync.latencyMs)} ms` : 'No probe', required: true,
+      updatedAt: timeSync?.ts ?? null, latencyMs: timeSync?.latencyMs ?? null,
+    },
+    {
+      id: 'binance-account', label: 'Binance Signed Account', group: 'binance', status: accountStatus,
+      detail: account.keysPresent ? 'Balances, orders, loans, fills, and key posture' : 'No signed read key is configured on this server',
+      value: !account.keysPresent ? 'Not configured' : account.lastSyncTs ? `${Math.max(0, Math.round((now - account.lastSyncTs) / 1000))}s ago` : 'No sync',
+      required: account.keysPresent, updatedAt: account.lastSyncTs, resetTarget: 'account',
+    },
+    {
+      id: 'strategy-runtimes', label: 'Bot Strategy Runtimes', group: 'bot', status: runtimeStatus,
+      detail: `Basis ${basis.bookState}/${basis.markState} · Volume ${volume.streamState} ${volume.openConnections}/${volume.streamConnections}`,
+      value: runtimeStatus === 'operational' ? 'Processing' : runtimeStatus === 'degraded' ? 'Lagging' : 'Stopped',
+      required: true, updatedAt: Math.max(basis.lastBookTs ?? 0, volume.lastTradeTs ?? 0) || null, resetTarget: 'runtime',
+    },
+    {
+      id: 'ledger-db', label: 'Ledger Database', group: 'bot', status: dbOk ? 'operational' : 'outage',
+      detail: 'Decisions, fills, events, configuration, and visitor telemetry', value: dbOk ? 'Writable' : 'Write failed',
+      required: true, updatedAt: now,
+    },
+    {
+      id: 'user-stream', label: 'Binance User Stream', group: 'binance',
+      status: ['open', 'live', 'connected'].includes(privateStream) ? 'operational' : 'degraded',
+      detail: ['open', 'live', 'connected'].includes(privateStream) ? 'Private account-event socket' : 'Optional socket unavailable · 30s signed REST fallback active',
+      value: ['open', 'live', 'connected'].includes(privateStream) ? 'Live' : 'Fallback', required: false,
+      updatedAt: account.lastSyncTs, resetTarget: 'account',
+    },
+    {
+      id: 'news-sources', label: 'News Source Network', group: 'sources', status: newsStatus,
+      detail: `${news.live} live · ${news.delayed} delayed · ${news.errors} errors · ${news.items} retained`,
+      value: `${news.live}/${news.sources} live`, required: true, updatedAt: news.fetchedAt, resetTarget: 'news',
+    },
+    {
+      id: 'calendar-source', label: 'Economic Calendar', group: 'sources',
+      status: !calCache?.at || !calCache.items.length ? 'outage' : calendarAgeMs !== null && calendarAgeMs > 10 * 60_000 ? 'degraded' : 'operational',
+      detail: 'TradingView macro-event cache with actual, forecast, and prior values',
+      value: `${calCache?.items.length ?? 0} events`, required: true, updatedAt: calCache?.at ?? null, resetTarget: 'calendar',
+    },
+    {
+      id: 'fx-source', label: 'FX Reference Rates', group: 'sources',
+      status: !fxCache?.at || !Object.keys(fxCache.rates).length ? 'outage' : fxAgeMs !== null && fxAgeMs > 45 * 60_000 ? 'degraded' : 'operational',
+      detail: 'Display-currency conversion cache; trading decisions remain USD based',
+      value: `${fxCache ? Object.keys(fxCache.rates).length : 0} currencies`, required: true, updatedAt: fxCache?.at ?? null, resetTarget: 'fx',
+    },
+    {
+      id: 'aws-runner', label: 'AWS EC2 Runner', group: 'infrastructure', status: awsConnectionStatus,
+      detail: !awsStatus.configured ? 'Secure SSM runner target is not configured' : `${awsStatus.region ?? 'Region unknown'} · ${awsStatus.instanceId ?? 'Instance unknown'} · ${awsStatus.connectionEnabled ? 'channel allowed' : 'channel blocked'}`,
+      value: !awsStatus.configured ? 'Planned' : awsStatus.channel === 'online' ? 'Online' : awsStatus.channel === 'offline' ? 'Offline' : 'Ready',
+      required: awsStatus.configured, updatedAt: now,
+    },
+    {
+      id: 'cloudflare-edge', label: 'Cloudflare Access Edge', group: 'infrastructure',
+      status: cloudflarePresent ? 'operational' : 'planned',
+      detail: cloudflarePresent ? 'Verified edge request and routed visitor identity' : 'Only available on the deployed hostname',
+      value: cloudflarePresent ? 'Present' : 'Localhost', required: cloudflarePresent, updatedAt: now,
+    },
+    {
+      id: 'alert-routing', label: 'Failure Notification Route', group: 'infrastructure', status: 'operational',
+      detail: `${Object.values(notificationRouting.destinations).filter((destination) => destination.available).length} active route · transition-only policy`,
+      value: 'In-App Live', required: true, updatedAt: now,
+    },
+  ];
+
+  for (const component of components) {
+    const previous = watchmanPrevious.get(component.id);
+    watchmanPrevious.set(component.id, component.status);
+    if (!previous || previous === component.status || !component.required || component.status === 'planned' || now - bootTs < 30_000 || now < watchmanSuppressUntil) continue;
+    const recovered = component.status === 'operational' && previous !== 'operational';
+    const actionable = component.status === 'degraded' || component.status === 'outage';
+    if (!recovered && !actionable) continue;
+    const transition: WatchmanTransition = {
+      ts: now, componentId: component.id, label: component.label, from: previous, to: component.status, detail: component.detail,
+    };
+    watchmanTransitions.unshift(transition);
+    watchmanTransitions.splice(20);
+    ledger.logEvent(recovered ? 'connection_recovered' : 'connection_alert', null, {
+      componentId: component.id,
+      component: component.label,
+      group: component.group,
+      previousStatus: previous,
+      status: component.status,
+      detail: component.detail,
+      value: component.value,
+      resetTarget: component.resetTarget ?? null,
+      observedAt: now,
+    });
+  }
+
+  const required = components.filter((component) => component.required && component.status !== 'planned');
+  const outage = required.filter((component) => component.status === 'outage').length;
+  const degraded = required.filter((component) => component.status === 'degraded').length;
+  const operational = required.filter((component) => component.status === 'operational').length;
+  return {
+    assessedAt: now,
+    status: outage > 0 ? 'outage' : degraded > 0 ? 'degraded' : 'operational',
+    summary: {
+      operational,
+      degraded,
+      outage,
+      required: required.length,
+      total: components.length,
+      sourceCoverage: news.sources,
+      liveSources: news.live,
+    },
+    components,
+    recentTransitions: watchmanTransitions.slice(0, 8),
+    lastReset: watchmanLastReset,
+    browserObservation: browserWatchmanObservation,
+  };
+}
+
 app.get('/api/system', (req, res) => {
   void (async () => {
     if (!timeSync || Date.now() - timeSync.ts > 60_000) {
@@ -1674,6 +1982,7 @@ app.get('/api/system', (req, res) => {
     const dbOk = ledger.probeWritable();
     const awsStatus = await awsRunnerControl.status(false, null, false);
     const notificationRouting = notificationRoutingSnapshot();
+    const watchman = connectionWatchmanSnapshot(dbOk, awsStatus, notificationRouting, Boolean(req.headers['cf-ray']));
     res.json({
       ok: true,
       uptimeSec: Math.round((Date.now() - bootTs) / 1000),
@@ -1713,6 +2022,7 @@ app.get('/api/system', (req, res) => {
           currencies: fxCache ? Object.keys(fxCache.rates).length : 0,
           refreshing: fxInFlight !== null,
         },
+        watchman,
         planned: {
           awsRunner: {
             ready: awsStatus.configured && awsStatus.channel === 'online',
@@ -1744,6 +2054,49 @@ app.get('/api/system', (req, res) => {
       serverStartTs: bootTs,
     });
   })();
+});
+
+// Browser RTT is measurable only from the browser. Accept a small, sanitized
+// observation so material client-path lag and recovery use the same
+// transition-only notification pipeline as server-owned connections.
+app.post('/api/connections/browser-observation', (req, res) => {
+  const body = (req.body && typeof req.body === 'object' ? req.body : {}) as Record<string, unknown>;
+  const rttMs = Number(body.rttMs);
+  const socketConnected = body.socketConnected === true;
+  if (!Number.isFinite(rttMs) || rttMs < 0 || rttMs > 120_000) {
+    res.status(400).json({ ok: false, error: 'valid rttMs required' });
+    return;
+  }
+  const now = Date.now();
+  const status: WatchmanStatus = !socketConnected || rttMs >= 800 ? 'outage' : rttMs >= 350 ? 'degraded' : 'operational';
+  const previous = watchmanPrevious.get('browser-session');
+  watchmanPrevious.set('browser-session', status);
+  browserWatchmanObservation = { status, rttMs, socketConnected, observedAt: now };
+  if (previous && previous !== status && now - bootTs >= 30_000 && now >= watchmanSuppressUntil) {
+    const recovered = status === 'operational';
+    const transition: WatchmanTransition = {
+      ts: now,
+      componentId: 'browser-session',
+      label: 'Browser / Website Session',
+      from: previous,
+      to: status,
+      detail: `Control API ${Math.round(rttMs)} ms · cockpit socket ${socketConnected ? 'live' : 'reconnecting'}`,
+    };
+    watchmanTransitions.unshift(transition);
+    watchmanTransitions.splice(20);
+    ledger.logEvent(recovered ? 'connection_recovered' : 'connection_alert', null, {
+      componentId: transition.componentId,
+      component: transition.label,
+      group: 'control_path',
+      previousStatus: previous,
+      status,
+      detail: transition.detail,
+      value: `${Math.round(rttMs)} ms`,
+      resetTarget: null,
+      observedAt: now,
+    });
+  }
+  res.json({ ok: true, observation: browserWatchmanObservation });
 });
 
 // ---- API key inventory (top-bar "API Key" tab) -----------------------------
@@ -1834,6 +2187,10 @@ app.post('/api/refresh', (req, res) => {
       return;
     }
     connectionRefreshBusy = true;
+    // An intentional restart briefly closes sockets by design. Do not promote
+    // those expected transitions as outages; keep monitoring and resume alerts
+    // after the recovery has had time to converge.
+    watchmanSuppressUntil = Date.now() + 60_000;
     const startedAt = Date.now();
     const issues: string[] = [];
     const steps: { key: string; ok: boolean; durationMs: number; detail: string }[] = [];
@@ -1912,6 +2269,12 @@ app.post('/api/refresh', (req, res) => {
         durationMs: Date.now() - startedAt,
         steps,
       });
+      watchmanLastReset = {
+        ts: Date.now(),
+        target: requested,
+        ok: issues.length === 0,
+        durationMs: Date.now() - startedAt,
+      };
       res.json({
         ok: issues.length === 0,
         binanceConnected: account.connected,
@@ -1924,6 +2287,7 @@ app.post('/api/refresh', (req, res) => {
       });
     } finally {
       connectionRefreshBusy = false;
+      watchmanSuppressUntil = Math.max(watchmanSuppressUntil, Date.now() + 15_000);
     }
   })();
 });
@@ -2329,6 +2693,7 @@ setTimeout(primeIconUniverse, 20_000);
 setTimeout(() => {
   void startCalendarRefresh();
   void getNewsContext(false).catch(() => undefined);
+  void refreshFx().catch((error) => ledger.logEvent('error_event', null, { source: 'fx.fetch', message: String(error) }));
   startNewsRefreshLoop();
 }, 250);
 function warmProfileUniverse(): void {

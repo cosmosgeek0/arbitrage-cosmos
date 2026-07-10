@@ -1,0 +1,140 @@
+/* Shared executive-metric grammar.
+   These are the only inset cards on operator pages: large, scan-first facts.
+   Everything beneath them remains a continuous hairline-divided surface. */
+
+:is(
+  .accountx-summary,
+  .borrowx-summary,
+  .mkx-summary,
+  .tkx-summary,
+  .volx-summary,
+  .opportunityx-summary,
+  .riskx-summary,
+  .healthx-summary,
+  .notifx-command,
+  .dcx-summary,
+  .dcx-performance-summary
+) {
+  display: grid;
+  gap: 8px;
+  min-height: 128px;
+  padding: 12px 14px;
+  border-top: 0;
+  border-bottom: 1px solid var(--line-2);
+  background: var(--panel);
+}
+
+:is(
+  .accountx-summary > article,
+  .borrowx-summary > article,
+  .mkx-summary > article,
+  .tkx-summary > div,
+  .volx-summary-cell,
+  .opportunityx-summary-cell,
+  .riskx-summary-cell,
+  .healthx-summary-cell,
+  .notifx-command > div,
+  .dcx-summary > .dcx-summary-cell,
+  .dcx-performance-summary > .dcx-summary-cell
+) {
+  display: flex;
+  min-width: 0;
+  min-height: 104px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: none;
+}
+
+:is(
+  .accountx-summary > article,
+  .borrowx-summary > article,
+  .mkx-summary > article,
+  .tkx-summary > div,
+  .volx-summary-cell,
+  .opportunityx-summary-cell,
+  .riskx-summary-cell,
+  .healthx-summary-cell,
+  .notifx-command > div,
+  .dcx-summary > .dcx-summary-cell,
+  .dcx-performance-summary > .dcx-summary-cell
+) + :is(article, div) {
+  border-left: 1px solid var(--line-2);
+}
+
+:is(
+  .accountx-summary span,
+  .borrowx-summary span,
+  .mkx-summary span,
+  .tkx-summary > div > span:first-child,
+  .volx-summary-cell > span,
+  .opportunityx-summary-cell > span,
+  .riskx-summary-cell > span,
+  .healthx-summary-cell > span,
+  .notifx-command > div > span,
+  .dcx-summary-cell > span
+) {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 480;
+  line-height: 15px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+:is(
+  .accountx-summary strong,
+  .borrowx-summary strong,
+  .mkx-summary strong,
+  .mkx-summary strong .num,
+  .tkx-summary strong,
+  .volx-summary-cell > strong,
+  .opportunityx-summary-cell > strong,
+  .riskx-summary-cell > strong,
+  .healthx-summary-cell > strong,
+  .notifx-command > div > strong,
+  .dcx-summary-cell > strong
+) {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 470;
+  line-height: 23px;
+  letter-spacing: -.012em;
+}
+
+:is(
+  .accountx-summary small,
+  .borrowx-summary small,
+  .mkx-summary small,
+  .tkx-summary small,
+  .volx-summary-cell > small,
+  .opportunityx-summary-cell > small,
+  .riskx-summary-cell > small,
+  .healthx-summary-cell > small,
+  .notifx-command > div > em,
+  .dcx-summary-cell > small
+) {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 420;
+  line-height: 15px;
+}
+
+@container (max-width: 1120px) {
+  :is(.dcx-summary, .dcx-performance-summary) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  :is(.accountx-summary, .borrowx-summary, .mkx-summary, .tkx-summary, .volx-summary, .opportunityx-summary, .riskx-summary, .healthx-summary, .notifx-command) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 620px) {
+  :is(.dcx-summary, .dcx-performance-summary, .accountx-summary, .borrowx-summary, .mkx-summary, .tkx-summary, .volx-summary, .opportunityx-summary, .riskx-summary, .healthx-summary, .notifx-command) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

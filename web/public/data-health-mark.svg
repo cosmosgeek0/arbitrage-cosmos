@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title">
+  <title id="title">Data Health</title>
+  <defs>
+    <linearGradient id="databaseGreen" x1="8" y1="6" x2="42" y2="50" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#75CF2C"/>
+      <stop offset="1" stop-color="#3E9F19"/>
+    </linearGradient>
+    <linearGradient id="shieldGreen" x1="35" y1="24" x2="57" y2="57" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#60BE24"/>
+      <stop offset="1" stop-color="#278A18"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="24" cy="11" rx="19" ry="7" fill="url(#databaseGreen)"/>
+  <path d="M5 11v12c0 3.9 8.5 7 19 7s19-3.1 19-7V11c0 3.9-8.5 7-19 7S5 14.9 5 11Z" fill="url(#databaseGreen)"/>
+  <path d="M5 27v12c0 3.9 8.5 7 19 7 3.2 0 6.3-.3 9-.8V30.8c-2.7.8-5.8 1.2-9 1.2-10.5 0-19-3.1-19-7Z" fill="url(#databaseGreen)"/>
+  <path d="M5 43v7c0 4.5 8.5 8 19 8 4.4 0 8.4-.6 11.6-1.7A25 25 0 0 1 33 46.1c-2.7.6-5.7.9-9 .9-10.5 0-19-3.1-19-7Z" fill="url(#databaseGreen)"/>
+  <path d="M47 23c3.8 3.3 8.1 4.8 13 4.8v12.5c0 9-5.3 16.8-13 20.7-7.7-3.9-13-11.7-13-20.7V27.8c4.9 0 9.2-1.5 13-4.8Z" fill="url(#shieldGreen)" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"/>
+  <path d="m40.4 41.7 4.4 4.5 9.2-10" fill="none" stroke="#fff" stroke-width="4.3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

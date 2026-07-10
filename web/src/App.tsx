@@ -19,6 +19,7 @@ import { SystemHealth } from './pages/SystemHealth';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { News } from './pages/News';
 import { CalendarPage } from './pages/CalendarPage';
+import './pages/MetricTiles.css';
 
 function Shell() {
   const { page, detailSymbol, prefs } = useStore();
@@ -60,7 +61,7 @@ function Shell() {
             <footer className="footer">
               <div className="ftr-line">
                 <span className="ftr-left">
-                  <span className="ftr-brand">© 2026 Arbitrage Capital Control Room</span>
+                  <span className="ftr-brand">© 2026 Arbitrage Control Room</span>
                   <i>•</i>
                   <span>Private</span>
                   <i>•</i>

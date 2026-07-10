@@ -78,8 +78,6 @@ interface TokenProfile {
   fetchedAt: number;
 }
 
-type TokenView = 'chart' | 'flow' | 'basis' | 'derivatives' | 'profile';
-
 interface MoneyFlow {
   symbol: string;
   window: string;
@@ -987,7 +985,6 @@ export function TokenDetail({ symbol }: { symbol: string }) {
   const [candles, setCandles] = useState<TvCandle[]>([]);
   const [profile, setProfile] = useState<TokenProfile | null>(null);
   const [q, setQ] = useState('');
-  const [view, setView] = useState<TokenView>('chart');
   const [basisSnapshot, setBasisSnapshot] = useState<BasisEngineSnapshot | null>(null);
 
   const live = markets.find((m) => m.symbol === symbol);
@@ -1137,21 +1134,6 @@ export function TokenDetail({ symbol }: { symbol: string }) {
         ? `Not inside the ${fmtMoney(state?.config.minQuoteVolume24h ?? null)} scanner liquidity universe.`
         : 'Waiting for the crossed-book Basis runtime.'
       : `${base} has no Binance USD-M perpetual contract.`);
-  const viewSource: Record<TokenView, string> = {
-    chart: `${src === 'futures' ? 'Binance USD-M' : 'Binance Spot'} · ${effective.interval}`,
-    flow: 'Binance Spot Aggregate Trades',
-    basis: hasPerp ? 'Binance USD-M Basis History' : 'Spot Only',
-    derivatives: hasPerp ? 'Binance USD-M Market Data' : 'Binance Spot Volume',
-    profile: 'Verified CoinGecko Profile',
-  };
-  const views: { id: TokenView; label: string }[] = [
-    { id: 'chart', label: 'Chart' },
-    { id: 'flow', label: 'Money Flow' },
-    { id: 'basis', label: 'Basis' },
-    { id: 'derivatives', label: 'Derivatives' },
-    { id: 'profile', label: 'Profile' },
-  ];
-
   return (
     <div className="container page tkx-page">
       <section className="tkx-frame" aria-label="token workspace">
@@ -1239,17 +1221,8 @@ export function TokenDetail({ symbol }: { symbol: string }) {
           </dl>
         </div>
 
-        <div className="tkx-viewbar">
-          <div role="tablist" aria-label="Token Views">
-            {views.map((item) => (
-              <button type="button" role="tab" aria-selected={view === item.id} className={view === item.id ? 'selected' : ''} key={item.id} onClick={() => setView(item.id)}>{item.label}</button>
-            ))}
-          </div>
-          <span>{viewSource[view]}</span>
-        </div>
-
         <div className="tkx-workspace">
-          {view === 'chart' ? <section className="tdx-cell tdx-chartcell tkx-chartview">
+          <section className="tdx-cell tdx-chartcell tkx-chartview">
           <div className="tdx-price-row">
             <div className="tkx-range-result">
               <span>{ivl === 'auto' ? range : INTERVAL_LABEL[ivl]} Change</span>
@@ -1296,11 +1269,11 @@ export function TokenDetail({ symbol }: { symbol: string }) {
               <PriceChart points={points} up={up} />
             </div>
           )}
-          </section> : null}
-          {view === 'flow' ? <MoneyFlowCard symbol={symbol} base={base} /> : null}
-          {view === 'basis' ? <BasisCard symbol={symbol} base={base} hasPerp={hasPerp} /> : null}
-          {view === 'derivatives' ? <CgxPanel symbol={symbol} base={base} name={name} hasPerp={hasPerp} /> : null}
-          {view === 'profile' ? <ProfilePanel profile={profile} base={base} /> : null}
+          </section>
+          <MoneyFlowCard symbol={symbol} base={base} />
+          <BasisCard symbol={symbol} base={base} hasPerp={hasPerp} />
+          <CgxPanel symbol={symbol} base={base} name={name} hasPerp={hasPerp} />
+          <ProfilePanel profile={profile} base={base} />
         </div>
       </section>
       {chartFocus && (

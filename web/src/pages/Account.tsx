@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BinanceMark } from '../components/BinanceMark';
 import { Donut } from '../components/Donut';
 import {
   IconBook,
@@ -11,7 +10,6 @@ import {
   IconLayers,
   IconPulse,
   IconReceipt,
-  IconSearch,
   IconWallet,
 } from '../components/Icons';
 import { TokenIcon } from '../components/TokenIcon';
@@ -188,8 +186,7 @@ export function Account() {
   const { state, markets, prefs, toggleWatch } = useStore();
   const [view, setView] = useState<AccountView>('overview');
   const [range, setRange] = useState<RangeId>('1M');
-  const [query, setQuery] = useState('');
-  const [expandedWallet, setExpandedWallet] = useState<string | null>('Spot');
+  const [expandedWallet, setExpandedWallet] = useState<string | null>(null);
   const [mask, setMask] = useState(() => localStorage.getItem('cosmos-balance-mask') === '1');
   const [walletSource, setWalletSource] = useState<SourceState<WalletBalanceRow[]>>(EMPTY_SOURCE);
   const [earnSource, setEarnSource] = useState<SourceState<{ asset: string; amount: number; apr: number }[]>>(EMPTY_SOURCE);
@@ -301,21 +298,9 @@ export function Account() {
     return (leftIndex < 0 ? 999 : leftIndex) - (rightIndex < 0 ? 999 : rightIndex);
   }), [walletSource.data]);
   const allocation = walletRows.filter((wallet) => wallet.balance > 0).map((wallet) => ({ label: wallet.walletName, value: wallet.balance }));
-  const queryText = query.trim().toLowerCase();
-  const walletMatches = (walletName: string) => {
-    if (!queryText) return true;
-    if (walletName.toLowerCase().includes(queryText)) return true;
-    if (walletName === 'Spot') return spotRows.some((row) => row.asset.toLowerCase().includes(queryText));
-    if (walletName === 'Earn') {
-      return earnRows.some((row) => row.asset.toLowerCase().includes(queryText))
-        || (loans?.ongoing ?? []).some((loan) => `${loan.loanCoin} ${loan.collateralCoin} flexible loan`.toLowerCase().includes(queryText));
-    }
-    if (walletName === 'Cross Margin') return (margin?.assets ?? []).some((row) => row.asset.toLowerCase().includes(queryText));
-    return false;
-  };
-  const visibleWallets = walletRows.filter((wallet) => walletMatches(wallet.walletName));
-  const openOrders = (state?.openOrders ?? []).filter((order) => !queryText || `${order.symbol} ${order.side} ${order.type} ${order.status} ${order.orderId}`.toLowerCase().includes(queryText));
-  const visibleFills = fills.filter((fill) => !queryText || `${fill.symbol} ${fill.side} ${fill.source} ${fill.tradeId} ${fill.orderId ?? ''}`.toLowerCase().includes(queryText));
+  const visibleWallets = walletRows;
+  const openOrders = state?.openOrders ?? [];
+  const visibleFills = fills;
 
   const toggleMask = () => {
     setMask((current) => {
@@ -332,12 +317,6 @@ export function Account() {
   const sourceErrors = [walletSource.error, earnSource.error, loanSource.error, historySource.error, fillsError].filter(Boolean) as string[];
   const sourcesPending = walletSource.data === null || earnSource.data === null || loanSource.data === null || historySource.data === null;
   const streamOpen = binance?.userStream === 'open' || binance?.userStream === 'live';
-  const syncClass = !binance?.keysPresent || !binance.connected ? 'bad' : streamOpen ? 'live' : 'partial';
-  const syncLabel = !binance?.keysPresent
-    ? 'Not Connected'
-    : !binance.connected
-      ? 'Sync Failed'
-      : `${streamOpen ? 'Live' : 'Polling'} · ${timeAgo(binance.lastSyncTs)}`;
   const sourceClass = sourceErrors.length > 0 ? 'partial' : sourcesPending ? 'loading' : 'on';
   const sourceLabel = sourceErrors.length > 0 ? 'Partial Source Coverage' : sourcesPending ? 'Sources Loading' : 'Signed Read Sources';
   const rowCount = view === 'orders' ? openOrders.length : visibleFills.length;
@@ -360,29 +339,16 @@ export function Account() {
   const hasDetails = (name: string): boolean => name === 'Spot' || name === 'Earn' || name === 'Cross Margin';
   const selectedWallet = expandedWallet && visibleWallets.some((wallet) => wallet.walletName === expandedWallet && hasDetails(wallet.walletName))
     ? expandedWallet
-    : visibleWallets.find((wallet) => hasDetails(wallet.walletName))?.walletName ?? null;
+    : null;
 
   return (
     <div className="container page accountx-page">
       <section className="accountx-frame" aria-label="account workspace">
         <header className="accountx-toolbar">
           <div className="accountx-identity">
-            <span className="accountx-source-mark"><BinanceMark size={22} /></span>
-            <span className="accountx-title-copy"><h1>Account</h1><small>Binance Wallets and Capital</small></span>
-            <span className={`accountx-live ${syncClass}`}><i />{syncLabel}</span>
+            <h1>Account</h1>
           </div>
           <div className="accountx-tools">
-            <div className="accountx-search" role="search">
-              <IconSearch size={15} />
-              <input
-                aria-label="Search Account"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search"
-                spellCheck={false}
-              />
-              {query && <button type="button" aria-label="Clear Search" onClick={() => setQuery('')}>×</button>}
-            </div>
             <button type="button" className="accountx-mask" onClick={toggleMask} title={mask ? 'Show Balances' : 'Hide Balances'} aria-label={mask ? 'Show Balances' : 'Hide Balances'}>
               <EyeIcon off={mask} />
             </button>
@@ -432,7 +398,7 @@ export function Account() {
             <section className="accountx-overview" aria-label="Portfolio Overview">
               <div className="accountx-equity">
                 <div className="accountx-section-head">
-                  <span><b>Spot Balance History</b><small>{historySource.data?.reconstructedBefore ? 'Transfers and borrowing included · earlier history reconstructed' : 'Transfers and borrowing included · not PnL'}</small></span>
+                  <span><b>Spot Balance History</b><small>{historySource.data?.reconstructedBefore ? 'Binance daily snapshots + complete intraday observations · earlier history reconstructed' : 'Binance daily snapshots + complete intraday observations · not PnL'}</small></span>
                   <div className="accountx-equity-tools">
                     <span className={`accountx-spot-change ${signClass(spotChange)}`}>
                       <em>Spot Change</em>
@@ -489,7 +455,7 @@ export function Account() {
                 return (
                   <div className={`accountx-wallet-item ${expanded ? 'expanded' : ''}`} key={wallet.walletName}>
                     {hasDetails(wallet.walletName) ? (
-                      <button type="button" className="accountx-wallet-row" aria-pressed={expanded} onClick={() => setExpandedWallet(wallet.walletName)}>{rowContent}</button>
+                      <button type="button" className="accountx-wallet-row" aria-pressed={expanded} onClick={() => setExpandedWallet((current) => current === wallet.walletName ? null : wallet.walletName)}>{rowContent}</button>
                     ) : (
                       <div className="accountx-wallet-row">{rowContent}</div>
                     )}
@@ -497,7 +463,7 @@ export function Account() {
                       <div className="accountx-detail-table">
                         <div className="accountx-detail-title"><span><b>Spot Assets</b><small>Signed free and locked balances</small></span></div>
                         <div className="accountx-detail-head"><span>Asset</span><span>Total</span><span>Available</span><span>Locked</span><span>Price</span><span>Value</span><span aria-label="Watchlist" /></div>
-                        {spotRows.filter((row) => !queryText || row.asset.toLowerCase().includes(queryText)).map((row) => (
+                        {spotRows.map((row) => (
                           <div className="accountx-detail-row" key={`spot-${row.asset}`}>
                             <span className="accountx-asset"><TokenIcon symbol={`${row.asset}USDT`} size={36} /><span><b>{row.asset}</b><small>Spot</small></span></span>
                             <span><b>{quantity(row.free + row.locked)}</b><small>{row.asset}</small></span>
@@ -514,7 +480,7 @@ export function Account() {
                       <div className="accountx-detail-table">
                         <div className="accountx-detail-title"><span><b>Earn and Flexible Loan Positions</b><small>Yield, collateral, debt, and net value</small></span></div>
                         <div className="accountx-detail-head"><span>Position</span><span>Amount</span><span>Rate / LTV</span><span>Collateral</span><span>Liability</span><span>Net Value</span><span aria-label="Watchlist" /></div>
-                        {earnRows.filter((row) => !queryText || row.asset.toLowerCase().includes(queryText)).map((row) => {
+                        {earnRows.map((row) => {
                           const value = valueOf(row.asset, row.amount);
                           return <div className="accountx-detail-row" key={`earn-${row.asset}`}>
                             <span className="accountx-asset"><TokenIcon symbol={`${row.asset}USDT`} size={36} /><span><b>{row.asset}</b><small>Flexible Earn</small></span></span>
@@ -526,7 +492,7 @@ export function Account() {
                             <span className="accountx-watch">{marketSymbolFor(row.asset) ? <Star on={watchlist.includes(marketSymbolFor(row.asset)!)} onClick={() => void toggleWatch(marketSymbolFor(row.asset)!)} /> : '—'}</span>
                           </div>;
                         })}
-                        {(loans?.ongoing ?? []).filter((loan) => !queryText || `${loan.loanCoin} ${loan.collateralCoin} flexible loan`.toLowerCase().includes(queryText)).map((loan) => {
+                        {(loans?.ongoing ?? []).map((loan) => {
                           const debtValue = valueOf(loan.loanCoin, loan.totalDebt);
                           const collateralValue = valueOf(loan.collateralCoin, loan.collateralAmount);
                           const netValue = finite(debtValue) && finite(collateralValue) ? collateralValue - debtValue : null;
@@ -546,7 +512,7 @@ export function Account() {
                       <div className="accountx-detail-table">
                         <div className="accountx-detail-title"><span><b>Cross Margin Assets</b><small>Signed balances, borrowings, and accrued interest</small></span></div>
                         <div className="accountx-detail-head"><span>Asset</span><span>Net</span><span>Available</span><span>Locked</span><span>Borrowed</span><span>Interest</span><span aria-label="Watchlist" /></div>
-                        {(margin?.assets ?? []).filter((row) => !queryText || row.asset.toLowerCase().includes(queryText)).map((row) => (
+                        {(margin?.assets ?? []).map((row) => (
                           <div className="accountx-detail-row" key={`margin-${row.asset}`}>
                             <span className="accountx-asset"><TokenIcon symbol={`${row.asset}USDT`} size={36} /><span><b>{row.asset}</b><small>Cross Margin</small></span></span>
                             <span><b>{quantity(row.netAsset)}</b><small>{row.asset}</small></span>
@@ -567,7 +533,6 @@ export function Account() {
                 {walletSource.data === null && !walletSource.error && <div className="accountx-empty"><b>Loading Binance Wallets</b><span>The signed wallet aggregate is being fetched.</span></div>}
                 {walletSource.error && visibleWallets.length === 0 && <div className="accountx-empty"><b>Binance Wallets Are Unavailable</b><span>No verified wallet snapshot is available yet.</span></div>}
                 {!walletSource.error && walletSource.data !== null && walletRows.length === 0 && <div className="accountx-empty"><b>No Wallets Returned</b><span>The signed Binance source returned an empty wallet list.</span></div>}
-                {queryText && walletRows.length > 0 && visibleWallets.length === 0 && <div className="accountx-empty"><b>No Wallets Match Search</b><span>Clear Search to restore the complete Binance wallet list.</span></div>}
               </div>
             </section>
           )}
@@ -606,7 +571,7 @@ export function Account() {
                   </tr>
                 ))}</tbody>
               </table>
-              {visibleFills.length === 0 && <div className="accountx-empty"><b>{queryText ? 'No Fills Match Search' : 'No Ledgered Fills'}</b><span>{queryText ? 'Clear Search or use a different symbol.' : streamOpen ? 'New Binance executions will be recorded here.' : 'The user stream is unavailable; only observed or imported Binance fills can appear.'}</span></div>}
+              {visibleFills.length === 0 && <div className="accountx-empty"><b>No Ledgered Fills</b><span>{streamOpen ? 'New Binance executions will be recorded here.' : 'The user stream is unavailable; only observed or imported Binance fills can appear.'}</span></div>}
             </section>
           )}
         </div>

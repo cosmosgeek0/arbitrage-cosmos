@@ -22,8 +22,6 @@ import './LiveIntelligence.css';
 import './NotificationsPage.css';
 
 type NotificationFilter = 'all' | 'action' | 'execution' | 'health' | 'infrastructure';
-type NotificationView = 'inbox' | 'routing';
-
 interface ConnectorState {
   available: boolean;
   label: string;
@@ -109,7 +107,6 @@ export function NotificationsPage() {
   const { state, prefs, updatePref } = useStore();
   const zone = prefs.clockZone && prefs.clockZone !== 'local' ? prefs.clockZone : undefined;
   const today = dayKey(new Date(), zone);
-  const [view, setView] = useState<NotificationView>('inbox');
   const [events, setEvents] = useState<LedgerEvent[]>([]);
   const [fetchedAt, setFetchedAt] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
@@ -139,21 +136,14 @@ export function NotificationsPage() {
         return [...merged.values()].sort((a, b) => b.ts - a.ts || b.id - a.id);
       });
     };
-    const fetchBatch = (since: number, beforeId?: number) => {
-      const before = beforeId ? `&beforeId=${beforeId}` : '';
-      return fetch(`/api/events?since=${since}&limit=5000${before}`)
+    const fetchKind = (since: number, kind: string) => {
+      return fetch(`/api/events?since=${since}&limit=2000&kind=${encodeURIComponent(kind)}`)
         .then((response) => response.ok ? response.json() as Promise<LedgerEvent[]> : Promise.reject(new Error('notification archive unavailable')));
     };
     const loadArchive = async () => {
       const since = Date.now() - 7 * 24 * 60 * 60_000;
-      const archive: LedgerEvent[] = [];
-      let beforeId: number | undefined;
-      for (let page = 0; page < 60; page += 1) {
-        const batch = await fetchBatch(since, beforeId);
-        archive.push(...batch);
-        if (batch.length < 5000) break;
-        beforeId = Math.min(...batch.map((item) => item.id));
-      }
+      const relevantKinds = ['risk_decision', 'error_event', 'user_stream', 'ws.closed', 'ws.open', 'connection_alert', 'connection_recovered', 'manual_action', 'order_intent', 'order_request', 'order_response', 'fill_event', 'loan_request', 'loan_response', 'binance.connected', 'engine.start', 'engine_started', 'basis.engine_started', 'config_change', 'aws_notification'];
+      const archive = (await Promise.all(relevantKinds.map((kind) => fetchKind(since, kind)))).flat();
       if (!alive) return;
       merge(archive);
       setFetchedAt(Date.now());
@@ -161,7 +151,8 @@ export function NotificationsPage() {
     };
     const loadIncremental = () => {
       if (!cursorRef.current) return;
-      fetchBatch(cursorRef.current + 1)
+      fetch(`/api/events?since=${cursorRef.current + 1}&limit=500`)
+        .then((response) => response.ok ? response.json() as Promise<LedgerEvent[]> : Promise.reject(new Error('notification feed unavailable')))
         .then((incoming) => {
           if (!alive) return;
           merge(incoming);
@@ -249,15 +240,11 @@ export function NotificationsPage() {
     <div className="lix-frame">
       <header className="lix-toolbar notifx-toolbar">
         <div className="lix-title"><h1>Notifications</h1><span className={`lix-live ${failed ? 'error' : 'streaming'}`}><i />{status}</span></div>
-        <div className="notifx-view-switch" role="group" aria-label="Notification View">
-          <button type="button" className={view === 'inbox' ? 'selected' : ''} onClick={() => setView('inbox')}>Inbox</button>
-          <button type="button" className={view === 'routing' ? 'selected' : ''} onClick={() => setView('routing')}>Routing</button>
-        </div>
-        {view === 'inbox' && <label className="lix-search">
+        <label className="lix-search">
           <IconSearch size={15} />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" spellCheck={false} />
           {query && <button type="button" aria-label="Clear Search" onClick={() => setQuery('')}>×</button>}
-        </label>}
+        </label>
       </header>
 
       <section className="notifx-command" aria-label="Notification Control Summary">
@@ -267,7 +254,7 @@ export function NotificationsPage() {
         <div className={latestAction ? 'attention' : ''}><span>Attention</span><strong>{latestAction ? latestAction.title : 'No Active Blocker'}</strong><em>{latestAction ? latestAction.subject : 'No curated intervention is open'}</em></div>
       </section>
 
-      {view === 'inbox' ? <>
+      <>
         <section className="calx-navigation notifx-navigation" aria-label="Notifications Navigation">
           <div className="calx-range-controls">
             <button type="button" className="calx-today" onClick={() => setSelectedDay(today)}>Today</button>
@@ -300,7 +287,7 @@ export function NotificationsPage() {
             <div className="lix-segments newsx-category-tabs" role="group" aria-label="Alert Category">
               {FILTERS.map((option) => <button type="button" key={option.id} className={filter === option.id ? 'selected' : ''} onClick={() => setFilter(option.id)}>{option.label}</button>)}
             </div>
-            <button type="button" className="notifx-route-summary" onClick={() => setView('routing')}><IconShield size={13} /><span>In-App Active</span><em>Manage Sources & Delivery</em></button>
+            <button type="button" className="notifx-route-summary" onClick={() => document.querySelector('.notifx-routing')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><IconShield size={13} /><span>In-App Active</span><em>Manage Sources & Delivery</em></button>
           </div>
         </section>
 
@@ -322,7 +309,8 @@ export function NotificationsPage() {
             {fetchedAt && filtered.length === 0 && <div className="lix-empty">{query ? `Nothing Matches “${query}”.` : 'No Curated Alerts Match This View.'}</div>}
           </div>
         </section>
-      </> : <section className="notifx-routing" aria-label="Notification Routing">
+      </>
+      <section className="notifx-routing" aria-label="Notification Routing">
         <div className="notifx-routing-intro">
           <div><span>Routing</span><h2>Choose What Interrupts You — And Where It Goes.</h2><p>Logs keep every event. Notifications keep only transitions, interventions, and selected outcomes.</p></div>
           <span className="notifx-policy-badge"><IconShield size={14} />State Changes Only</span>
@@ -362,7 +350,7 @@ export function NotificationsPage() {
           <div><IconPulse size={16} /><span><b>Incident Grouping</b><em>State repeats and execution bursts collapse with a real count.</em></span></div>
           <div><IconActivity size={16} /><span><b>Logs Stay Complete</b><em>No raw evidence is deleted or hidden.</em></span></div>
         </section>
-      </section>}
+      </section>
     </div>
   </div>;
 }

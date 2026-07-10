@@ -55,11 +55,11 @@ Use these as first-pass guardrails before taking screenshots:
 | --- | ---: | ---: | --- |
 | Header | 64px high | about 64px at 100% | Flat, no tint band. |
 | Sidebar | 178px wide | about 178px at 100% | Calm nav rail, no gradient/tint exterior. |
-| Sidebar Row | 40px high | about 40px | Flow-style calm row rhythm. |
+| Sidebar Row | 36px high | about 36px | Compact enough to keep every Utility item visible. |
 | Sidebar Label | 14px / 20px, 500 | active 560 | Crisp text matters more than background. |
 | Sidebar Group | 9px / 12px, 720, uppercase | muted caps | Small section labels, not huge category banners. |
 | Topbar Search | 42px high, about 440px wide | 44px x 462px | Coinbase pill aligned to content start. |
-| Topbar Icon | 34px target + 4px halo | about 34px | Icon-first, transparent hit target, semantic color. |
+| Topbar Icon | 24px optical mark in 42px target | 24px; bell 25px | Smaller than the 27-29px sidebar marks. |
 | Shared Popover | 400px, 14px radius | measured height | One persistent shell for every panel. |
 | Account Sheet | 400px shared shell | same as every trigger | Real profile, exchange, session, and logout rows. |
 
@@ -74,14 +74,16 @@ quality, not background decoration.
 Current sidebar standard:
 
 - White panel background, no exterior tint, no gradient wash.
-- Group spacing: 12px group gap, group title margin 12px 11px 8px.
+- Shell padding is 4px top / 5px sides; the old 15px top and 10px side trench is retired.
+- Group spacing: 6px group gap, group title margin 6px 7px 5px.
 - Group title: 9px, 12px line-height, 720, uppercase, letter spacing 0.16em,
   muted gray.
-- Row: 40px high, 8px radius, 11px horizontal padding, 22px icon column, 9px
-  gap.
+- Row: 36px high, 8px radius, 7px horizontal padding, 28px icon column, 8px
+  gap. Active/hover backgrounds stretch symmetrically across the rail.
 - Label: 14px, 20px line-height, weight 500 normal, 560 active.
-- Inactive icon: bare glyph in a 22px slot, transparent background, 18px glyph,
-  stroke about 2.05.
+- Navigation images: 27px optical mark in a 28px slot, transparent background,
+  translated down by 1px. Calendar may use 29px width to offset its source
+  canvas. This scale is intentionally larger than the 25px topbar marks.
 - Active row: subtle warm fill (`#f0ede6`), not a loud blue block. Hover uses
   `#f5f2ec`.
 - No `translateX(1px)` or subpixel text movement on persistent nav labels.
@@ -90,6 +92,9 @@ Current sidebar standard:
   premium.
 - No random dots, active lines, or side rails unless the owner asks for a new
   nav language.
+- Utility order is fixed in both themes and every active state: Logs → News →
+  Calendar → Notifications. The DOM exposes `data-nav-group` and `data-nav-id`
+  so future CSS cannot visually move Notifications above the audit surfaces.
 
 If the sidebar looks blurry, inspect in this order:
 
@@ -105,16 +110,15 @@ The brand is a restrained control-room identity, not a landing-page hero.
 
 Current standard:
 
-- Product lockup: `ARBITRAGE CAPITAL` over `CONTROL ROOM`; the browser title,
-  accessible home label, footer, and favicon use the same identity.
-- Header brand hit area: 194px × 48px at the desktop baseline.
-- Mark: an original 42px `A` built from two blue/violet market rails converging
-  on a central execution diamond. It has a restrained shadow and one-pixel
-  hover lift; there is no container tile or decorative spin.
-- Name: 13.5px / 16px, weight 650, uppercase, `.045em` tracking.
-- Sub: 9.5px / 11px mono/caps, weight 590, `.17em` tracking.
-- Search begins 16px after the brand frame at the 1280px verification viewport,
-  so the longer wordmark has clear space without shifting the page rail.
+- Product lockup: `ARBITRAGE` over `CONTROL ROOM`; the browser title,
+  accessible home label, and footer use the shorter identity.
+- Header brand hit area: 160px × 48px at the desktop baseline.
+- Mark: a 34px code-native pair of opposing blue/violet venue-flow arrows with
+  one controlled midpoint. The rejected letter `A` is retired.
+- Name: 14px / 16px, weight 650, uppercase, `.075em` tracking.
+- Sub: 8.5px / 11px mono/caps, restrained tracking.
+- Search begins at `sidebar width + 10px`, leaving a compact gap after the
+  shorter brand and aligning with the tightened route rail.
 - No huge sidebar masthead, no extra decorative line collisions around the
   brand, no tint block behind the logo.
 
@@ -164,11 +168,12 @@ clock remains a precision instrument, but now has one deliberate animated mark.
 
 Current trigger:
 
-- `148px × 42px` at 100%, containing a `27px` code-native hourglass, `HH:MM`,
+- `130px × 42px` at 100%, containing a `24px` code-native hourglass, `HH:MM`,
   one small bullet, and the short market-desk code, for example `08:25 · IST`.
-- The trigger color comes from the live Appearance accent. Never hardcode the
-  old red rail tone or blue pill; changing Accent must recolor the hourglass,
-  bullet, zone, edge, and popup identity immediately.
+- The inner instrument is a 32px-high, 10px-radius near-square capsule with a
+  neutral hairline and transparent fill. Never restore the blue/white tint.
+- The accent applies to the hourglass, bullet, zone, and popup identity; the
+  capsule surface itself stays neutral. IST is 11.5px and the time stays 14px.
 - `LOC` and Local Time are retired. A legacy local preference migrates to
   India/IST. The supported market desks are India, UTC, New York, Asia
   (Singapore), and Europe (London).
@@ -198,19 +203,18 @@ The topbar is for expert operator controls. It should look alive, but not noisy.
 Current trigger pattern:
 
 - Topbar triggers are icon-first.
-- Trigger targets are 34px CSS with a 4px invisible halo, transparent background, no visible box by
-  default.
-- Use color identity across the row, roughly ROYGBIV from AWS CLI through
-  Appearance:
-  - AWS CLI: red/salmon terminal tone.
-  - API Key: orange/vault tone.
-  - Data Health: yellow/ops tone.
+- Trigger targets are 42px CSS, transparent background, no visible box by
+  default. Visible operational marks are 24px; the bell is 25px for optical
+  compensation. Sidebar marks remain larger at 27-29px.
+- Use source-driven color identity across the row:
+  - AWS Runner: orange three-face cube.
+  - API Key: yellow-to-orange key.
   - Trust Advisor: green/security tone.
   - Notifications: teal/account feed tone.
-  - Kill Switch/Trading Mode: blue control tone.
-  - Currency: indigo money tone.
+  - Execution Control: red ready-to-stop / green bot-stopped power mark.
+  - Currency: green dollar.
   - Basis: violet percentage tone.
-  - Appearance: purple/violet display tone.
+  - Appearance: blue radial display/sun mark.
 - No words on the trigger itself except compact meaningful symbols like `$`,
   `%`, or `bp`.
 - Words belong in title/aria and inside the popover.
@@ -268,8 +272,9 @@ motion to solve a typography-only inconsistency.
 
 What makes it work:
 
-- The owner-supplied orange AWS cloud image is the identity on both the rail and
-  opened surface. Keep its native wide silhouette; do not put it in a circle.
+- The owner's orange three-face cube is reconstructed as transparent SVG and
+  is the identity on both the rail and opened surface. It has no square service
+  tile, raster canvas, or generic cloud/cog glyph.
 - The compact popup is a connection-control sheet, not a decorative terminal.
   It shows the configured region, SSM instance, service, AWS Channel gate, and
   Runner Changes gate from `/api/aws-control/status`.
@@ -291,9 +296,10 @@ What makes it work:
 What makes it useful:
 
 - Data comes from `/api/apikey`.
-- The Binance brand remains the popup identity. The owner-supplied green API
-  key artwork is used directly on the rail trigger and as the key-object mark;
-  do not redraw it as a generic glyph or wrap it in a circular badge.
+- The owner's yellow-to-orange key is reconstructed as transparent SVG and is
+  used on the rail, popup header, and key objects. It replaces both the former
+  Binance tile and every opaque screenshot canvas; the connected objects remain
+  truthfully named Read-Only and AWS Automation.
 - The body is exactly two equal, sharp, hairline-bordered key objects:
   `Read-Only` and `AWS Automation`. Each object shows only its role, one egress
   IP, truthful state, and the six permission labels. Do not restore key names,
@@ -308,21 +314,12 @@ What makes it useful:
 - Keep both cards symmetric and fully visible inside the shared 400px shell;
   no internal API-key scrollbar is part of the approved baseline.
 
-### Data Health
+### Data Health ownership
 
-What makes it useful:
-
-- The owner-supplied green database-and-shield artwork is the Data Health
-  identity in both the trigger and popup header. Keep it source-exact; do not
-  swap it back to a generic database glyph.
-- Data comes from `/api/system`, `/api/news`, `/api/calendar`, and `/api/fx`.
-- Compact score and counters: streams, latency, request weight.
-- Rows are short but meaningful: Feed, Account, News, Calendar, FX, Drift,
-  Pairs.
-- All measured rows fit inside the fixed 400px popup. `Open System Health` is a
-  real 374px by 42px full-width footer action, matching the Account Details
-  action footprint and routing to the real Health surface.
-- Do not turn this into verbose prose. Do not reduce it to unlabeled dots.
+Data Health is not a topbar trigger or a second compact popup. Its source
+evidence, readiness grade, lag/outage state, and link to full System Health are
+owned by bottom-right Connection Watchman. Do not restore the removed topbar
+button or duplicate its request probes.
 
 ### Trust Advisor
 
@@ -377,11 +374,11 @@ What makes it useful:
 - Compact tray must stay in the topbar popover family, close to the clock and
   account-detail footprint. Do not force page-like dimensions or giant empty
   regions.
-- The full notification center is a first-class Utility page directly above
-  News, not a modal. The topbar bell remains the compact tray and its Open Center
-  action navigates to `page='notifications'`.
-- Notifications uses the exact News / Calendar one-frame geometry: `x=218`,
-  `y=102`, `1px` edge, `12px` radius at the owner viewport, a `57px` toolbar,
+- The full notification center is a first-class Utility page directly below
+  Calendar, not a modal. The topbar bell remains the compact tray and its Open
+  Center action navigates to `page='notifications'`.
+- Notifications uses the exact News / Calendar one-frame geometry: `x=189`,
+  `y=75`, `1px` edge, `12px` radius at the current 1280×720 owner viewport, a `57px` toolbar,
   rolling seven-day cards, segmented filters, and one curated inbox. Route changes
   between Notifications, News, and Calendar must not move the frame.
 - Inbox and Routing are the only two page views. Inbox keeps Needs Attention
@@ -429,34 +426,54 @@ What makes it useful:
   labelled three-state component and persisted server mode rather than adding
   unrelated toggle styles.
 
-### Connection Control
+### Connection Watchman
 
 What makes it useful:
 
-- Market Ping no longer exists in the topbar. Its four real browser-polling
-  controls — Market Price, Account Data, News Context, and Calendar — live in
-  the single bottom-right `RefreshDock` Connection Control.
-- The owner-supplied separated dual-arrow anatomy is reproduced as the
-  transparent `/connection-reset-mark.svg` identity in the dock and panel.
-  Do not replace it with a generic circular glyph or an opaque screenshot.
-- The outer control is 62px in a 66px dock, 22px from the right and bottom.
-  Its idle image completes one turn in each five-second cycle. A real reset
-  completes exactly three turns, then stops even if a slow upstream refresh is
-  still reporting progress. Reduced Motion disables both animations.
-- Hover/focus opens a 500px operator panel. At 1280x720 it keeps at least 22px
-  of top breathing room; internal content scrolls while header, summary, and
-  Reset All stay visible. The panel uses 1px edges, 15px radius, thin 13px row
-  type, 10.5-11.5px detail type, and the same status vocabulary as Health.
-- Live rows come from current evidence: browser RTT/socket; public market
+- Market Ping and Data Health no longer exist in the topbar. Their four real
+  browser-polling controls and every source-health check live in the single
+  bottom-right `RefreshDock` Connection Watchman.
+- The launcher uses the owner's supplied solid-blue two-arrow refresh identity,
+  traced into transparent `/connection-reset-mark.svg`. The mark is 76px — 30%
+  larger than the previous 58px identity — with a slow one-turn pause cycle and
+  a deliberate recovery spin. It has no visible circle or tinted container.
+  The popup header keeps the separate shield/radar Watchman mark. Reduced Motion
+  freezes the launcher, header scan, and live wave.
+- At 1280×720 the panel measures `900×566`, x=`338`, y=`16`, with a 1px edge,
+  15px radius, no document overflow, and fixed header, five-fact summary,
+  four-view rail, and scrolling evidence area.
+- Live rows come from current evidence: browser RTT/socket; server control API; public market
   streams; Binance REST latency/clock/rate weight; account sync; Basis and
   Volume runtimes; News; Calendar; FX; Ledger DB; optional user-stream fallback.
   Per-row controls call real reset targets. The outer control calls `all` and
   also rebuilds the browser WebSocket.
-- Planned AWS Runner, deployed Cloudflare Access, and external alert delivery
-  remain visibly Planned/Not Configured until server prerequisites exist.
+- `GET /api/system.connections.watchman` owns the component inventory and
+  summary. AWS Runner and Cloudflare remain visibly Planned/Not Configured
+  until prerequisites exist. The always-available in-app notification route is
+  explicit; external delivery remains honest in Notifications.
+- The server logs only status transitions as `connection_alert` or
+  `connection_recovered`; these are promoted into Notifications without copying
+  raw health logs or spamming every five-second probe. Browser RTT/socket state
+  is reported through the sanitized `/api/connections/browser-observation`
+  endpoint because that path cannot be measured truthfully from the server.
 - Cadence choices are exact persisted radio groups: `<1s`, `1s`, `3s`, `5s`,
   and `10s`. News and Calendar must honor the selected value; never present a
   cadence that the mounted page silently ignores.
+- Controls must not repeat recovery as six cards plus a footer reset. One
+  Recovery Target selector owns `all/market/runtime/account/news/calendar/fx`
+  and one equal-height `Run Recovery` action calls the existing backend. The
+  target and action are balanced `182×44` controls with 14px separation;
+  cadence selectors are `112×42`, cadence rows are 72px, and section padding is
+  16px. Cadence Defaults is a visible `112×36` action in the Polling Cadence
+  header. No action footer is part of this popup.
+
+### Route Edge
+
+- The shared page shell uses 5px outer padding plus 6px route padding on every
+  edge. At 1280×720 the first real surface is `y=75`, exactly 11px below the
+  fixed 64px header, on Dashboard through Notifications in both themes.
+- Do not restore the former stacked 16px + 22px top inset. It created a 38px
+  empty trench above every page and was especially visible in Dark Mode.
 
 ### Display Currency
 
@@ -465,6 +482,8 @@ What makes it useful:
 - Uses `/api/fx` for rates.
 - Options are real display preferences: USD, INR, EUR, JPY.
 - Trigger can show the currency symbol, but the popover must show code/rate.
+- The green dollar reference is a transparent code-native SVG in the trigger
+  and popup header; never restore the white screenshot canvas.
 - Do not name this "Color" or another unrelated setting.
 
 ### Basis Display
@@ -495,9 +514,10 @@ What makes it useful:
 - Keep accent choices as small circles/dots, not named color cards.
 - Theme buttons may use compact symbols, but do not remove all context if the
   owner says it feels like symbol soup.
-- The owner-supplied overlapping blue-diamond geometry is the identity in both
+- The owner-supplied blue radial sun/display geometry is the identity in both
   the trigger and popup header. It is implemented as a transparent code-native
-  mark so the pale screenshot canvas never becomes a white tile in Dark Mode.
+  mark with eight balanced rays and a two-level blue center, so the pale
+  screenshot canvas never becomes a white tile in Dark Mode.
 - The box should fit without scroll in the same window.
 
 ## 10. Account Profile Lesson
@@ -527,9 +547,10 @@ Real behavior:
 Current profile layout:
 
 - Panel: the same 400px shared shell used by Appearance and every other trigger.
-- Topbar trigger: a 48px circular identity frame (1.5x the former 32px image
-  slot), with the source mark enlarged inside it rather than shown as a square.
-- Header: 96px circular avatar, 11px gap to identity text.
+- Topbar trigger: 42px hit target with a 34px circular photograph, exactly 30%
+  smaller than the former 48px photograph.
+- Header: 84px-high identity row with a 42px circular avatar, exactly half the
+  former 84px avatar, and a 12px gap to identity text.
 - Name: 15px / 20px, weight 600.
 - Sub line: 12px / 16px, weight 400.
 - Sections:
@@ -579,3 +600,46 @@ Before saying a topbar/sidebar/search/profile change is done:
 7. Verify no page scrollbar was introduced by a topbar popover.
 8. Verify the control is real or honestly disabled/planned.
 9. Compare against this file and `DESIGN_PLAYBOOK.md` before replying.
+
+## 13. Shared Topbar Popover Baseline (2026-07-10 16:44 IST)
+
+The rendered topbar is now one left-to-right family. These measurements are the
+live baseline, not design suggestions:
+
+| Role | Measured Value |
+| --- | --- |
+| Sheet | `398 × 486px`, zero document or sheet overflow |
+| Operational Header | `70px`; Account identity header `84px` |
+| Header Title | `16px / 540 / 21px` |
+| Header Subtitle | `11.25px / 400 / 16px` |
+| Persistent Row Primary | `12.75px / 470 / 18px` |
+| Persistent Row Secondary | `10.5px / 400 / 15px` |
+| Numeric / Right Value | mono `11.5px / 450 / 16px`, tabular lining figures |
+| Status | mono/caps `9.75px / 500 / 14px` |
+| Content Rail | `14px` left/right; hairline row boundaries |
+| Footer Bars | `0` visible across all ten popovers |
+
+Panel-specific contracts:
+
+- Clock has one 58px precision stage and five equal timezone tracks.
+- AWS keeps target facts, two inline destinations, two real gates, and one
+  truthful channel note. Destination actions are adjacent to the target—not a
+  footer.
+- API Keys uses two continuous key sections; six permissions per key form a
+  two-column structured list with no outer key cards or permission pills.
+- Trust uses one continuous three-cell summary band and five equal check rows.
+  The duplicate Risk/Health footer navigation is removed.
+- Notifications has one compact inline tool row followed by the live alert
+  tape. Mark Read and Open Center are not repeated at the bottom.
+- Execution preserves the emergency control at the top and distributes four
+  real mode rows to the remaining height.
+- Currency, Basis, and Appearance provenance is a flat hairline row with
+  transparent background, zero margin, and zero radius.
+- Account keeps real profile, exchange posture, browser IP/device/request
+  telemetry, and one plain destructive logout row. It contains no generic
+  navigation or filler features.
+
+The mandatory visual sweep is Clock → AWS → API → Trust → Notifications →
+Execution → Currency → Basis → Appearance → Account in Light, then Dark. Test
+Clock zone, display currency, basis unit, and Open Center controls; restore IST,
+USD, Percent, Light, and the original page before handoff.

@@ -284,6 +284,7 @@
   padding: 18px 20px 20px;
   border: 0;
 }
+.tkx-workspace > .tdx-cell + .tdx-cell { border-top: 1px solid var(--line-2); }
 .tkx-chartview .tdx-price-row { align-items: center; margin-bottom: 10px; }
 .tkx-range-result { display: grid; grid-template-columns: auto auto; align-items: baseline; gap: 2px 10px; }
 .tkx-range-result > span {

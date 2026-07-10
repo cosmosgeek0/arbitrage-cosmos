@@ -1326,3 +1326,118 @@ STATUS / NEXT: (1) Borrow→Account-style restyle [IN PROGRESS], (2) Basis Scann
 - `GET /api/system` now reports real connection evidence for Basis/Volume runtimes, News, Calendar, FX, and planned AWS/Cloudflare/external-alert channels. The 500px panel combines that evidence with browser RTT/socket, Binance REST/clock/rate weight, market streams, account sync, Ledger DB, and the honest optional user-stream REST fallback. Planned channels remain disabled with concrete missing prerequisites.
 - `POST /api/refresh` now accepts `all`, `market`, `runtime`, `account`, `news`, `calendar`, and `fx`; it rejects unknown/concurrent requests, reports timed work steps, and performs actual engine/runtime restarts or upstream refreshes. Global reset also rebuilds the browser WebSocket with duplicate reconnect protection. Per-source row buttons call their real target.
 - Rendered verification on `localhost:8080` at 1280x720 measured the dock at 62x62 with a five-second idle animation and the panel at 500px wide, 1px edge, 15px radius, visible fixed footer, and at least 22px top clearance. A real full reset returned Browser RTT, 3/3 market streams, live News sources, 1,037 Calendar events, 166 FX currencies, writable Ledger DB, and the honest account-stream fallback. Production build, `npm test` `69/69`, and `git diff --check` pass.
+
+## 2026-07-10 — Metric-tile and continuous-surface correction
+
+- Permanent visual law: only executive scan metrics use inset Calendar-style tiles (`104px` height, `10px` radius, `1px` edge, `8px` gap, `12px` internal padding). Operational content underneath is one continuous outer frame separated by hairlines; do not create nested card grids for ledger rows, tables, inboxes, or evidence panels. `MetricTiles.css` is now the shared authority across Dashboard, Account, Borrow, Markets, Token, Basis, Volume, Opportunities, Risk, Health, and Notifications.
+- Account supersedes the earlier wallet-tile layout. The Binance/search/polling toolbar clutter is gone. Summary facts use the shared metric tiles; Spot Balance History and Wallet Allocation each span the full frame in vertical order; the wallet buckets remain in Binance's signed order as one full-width hairline ledger. No wallet is expanded by default, and Spot/Earn/Cross Margin open or close their real signed detail table immediately below the selected row.
+- Account history combines Binance daily account snapshots with complete intraday SQLite account observations. Partial observations where a multi-asset snapshot collapses to available USDT are rejected; no artificial interpolation is added. The expensive Binance history remains cached while recent complete ledger points merge into every response.
+- Borrow Overview is one natural-height continuous workspace: Active Positions flows directly into Loan Market with one divider and no inset group frames. Token now renders Chart, Money Flow, Basis, Derivatives, and verified Profile sequentially, rather than hiding operational telemetry behind mutually exclusive tabs.
+- Logs moved beside Notifications under Utility. Logs now issue day-bounded backend queries and render a real 25/50/100 selector (25 default), exact lightweight day totals, and bounded newer/older pagination instead of pulling 20,000 rows every refresh. Notifications is an inbox first and routing/preferences second in the same page; archive collection queries only event kinds the curator can actually promote, rather than repeatedly downloading the complete raw ledger.
+- Live wide-viewport audit measured every affected four-metric page at the same `104px` tile height, `10px` radius, `1px` edge, and aligned x coordinates with zero document overflow. Dashboard's six tiles follow the same contract. Account expansion is full-width, Borrow sections are borderless inside the outer frame, Token shows all five telemetry sections, Notifications routing follows the inbox, and Logs defaults to 25 per page.
+
+## 2026-07-10 — Account Details identity and real visitor telemetry
+
+- The supplied night-sky image is the exact default account identity asset (`/account-night-sky.png`) in both the topbar trigger and Account Details. Uploaded profile images still override it through the existing real profile-image control.
+- Recent Devices now reports the visiting browser's routed IP, device class/model when the browser supplies it, browser, OS, first-seen age, request count, current/active state, and Cloudflare country when present. IP resolution is Cloudflare `CF-Connecting-IP` first, then the first proxy-forwarded address, `X-Real-IP`, and finally the socket address; localhost correctly renders `127.0.0.1` instead of the former fake `Local Network` label.
+- Device details use browser Client Hints when available and conservative UA fallbacks otherwise. IP, device, optional model, first/last seen, and request counts persist in SQLite for the 24-hour Recent Devices view; legacy placeholder rows are removed. The surface remains explicitly labelled browser-request telemetry with a two-minute active window, not a fabricated authenticated-session inventory.
+- Account Details retains one real Cloudflare Access logout only. Duplicate per-row logout actions were removed because browser telemetry does not provide a Cloudflare session identifier for remote device revocation.
+- Final rendered geometry at 1280x720 is the shared `398x486` Account pane with an `84x84` identity image, `112px` header, `58px` exchange row, `74px` device row, zero overflow, one logout, and no row-level actions. Light and dark were visually verified; Light was restored. `npm run build`, `npm test` `69/69`, and `git diff --check` pass.
+
+## 2026-07-10 — Topbar identity uniformity and Connection Control management pass
+
+- The complete topbar family now follows the Account Details typography and geometry contract: every compact popup stays within the shared `398x486` pane, uses `16px/560` titles and `12.5px/500` row copy, preserves hairline alignment, and has zero horizontal overflow. Persistent triggers are normalized to `42x42` with clean transparent marks rather than screenshot canvases.
+- Source identity is explicit without pretending every concept has an official logo. AWS Runner uses a clean orange cloud-control glyph informed by AWS architecture icon conventions; API Keys uses the real Binance brand; Basis reuses the approved purple percentage asset from the left rail. Data Health, Trust Advisor, Notifications, Execution, Currency, Appearance, and Account retain their own established identity marks.
+- Data Health now treats the optional Binance user stream truthfully: an unavailable socket is shown as `Fallback` with the real 30-second REST fallback, but is excluded from the required-check denominator. News, Calendar, and FX readiness can hydrate from `/api/system` connection evidence before their individual browser probes complete. Required health remains dynamic rather than cosmetic; browser QA observed both `8/8 Good` and a truthful `7/8 Watch` while a required live check was warning.
+- Connection Control supersedes the earlier cramped dock geometry. The launcher is a true `64px` circle placed `28px` from the right and bottom edges with a transparent square dual-arrow mark. Its panel is `500x588` at 1280x720 and separates `Connections` from `Polling`, keeping monitoring rows readable while making cadence controls immediately discoverable.
+- Polling exposes persisted browser intervals for Market Prices, Account Data, News Context, and Calendar with the exact `<1s`, `1s`, `3s`, `5s`, and `10s` choices. `Reset Defaults` restores `5s/10s/5s/10s`; `Reset All` rebuilds sockets and refreshes server sources; every supported connection row calls its real targeted backend reset. The summary counts `good` and stable `avg` connections as Healthy while leaving slow/down/fallback sources out, so `Good · 9/10` is no longer contradicted by an optimal-only count.
+- Final live verification at `localhost:8080` covered the Polling menu, exact cadence choices, targeted Market Streams reset, Reset Defaults, Reset All, fixed footer actions, `9/10` healthy aggregate, light/dark rendering, and restoration to Light. Production build passes, full gates pass `69/69`, and `git diff --check` is clean.
+
+## 2026-07-10 — Topbar/sidebar optical correction from owner dark-mode screenshots
+
+- The visible brand is now `ARBITRAGE / CONTROL ROOM`; `Capital` and the rejected letter-A mark are removed. The new 34px code-native identity is two opposing blue/violet venue-flow arrows around one controlled midpoint. Document title, home aria label, and footer use `Arbitrage Control Room` consistently.
+- Clock is a 130×42px trigger with a 32px-high, 10px-radius transparent instrument, neutral hairline, 24px rotating hourglass, unchanged 14px time, and enlarged 11.5px IST. The blue/white capsule tint and inset highlight are gone; the existing 8.4-second rotation remains and Reduced Motion still stops it.
+- Data Health and API Key no longer expose opaque white bitmap canvases in Dark Mode. Both use deterministic transparent SVG identities. AWS Runner uses the current official AWS CloudShell service icon from the 2026-04-30 AWS Architecture Icon package instead of a generic cloud/cog. Topbar marks are normalized to a 25px optical scale; Notification is 27px to compensate for its bell silhouette; Trust Advisor is reduced to the same family.
+- Sidebar spacing is compact and complete: 4px top / 5px sides, 36px rows, 6px group gaps, 28px icon slots, and 27-29px source marks shifted down 1px. Utility order is Logs → News → Calendar → Notifications, so Notifications is directly under Calendar and every item fits at 1280×720 without scrolling.
+- The route shell now stretches symmetrically: 5px outer shell padding plus 6px route padding leaves an 11px visual sidebar-to-content gap instead of the former 40px screenshot trench. Connection Control moved to 40px from the right and bottom; its panel contracts at short viewports to preserve top breathing room.
+- Browser QA in Dark Mode verified the full sidebar, compact neutral clock, transparent Data Health identity, official AWS CloudShell popup, green Binance API-key popup, larger bell, Utility navigation, and lower-right dock clearance. Production build passes, full gates pass `69/69`, and `git diff --check` is clean.
+
+## 2026-07-10 — Connection Watchman consolidation
+
+- Data Health is removed from the topbar. Bottom-right Connection Watchman is now the only source-health, latency, alert, cadence, and recovery surface, while the dedicated Health page remains the deep diagnostic destination.
+- The former click-to-reset 64px circle is replaced by a 72px rounded-square code-native watchman mark: shield, radar sweep, connection nodes, and status point. Click persistently opens/closes the workspace; no launcher click can accidentally restart live connections. Reduced Motion disables the sweep and live wave.
+- `GET /api/system.connections.watchman` exposes 13 truthful components across Control Path, Binance, Bot Runtime, Source Network, and Infrastructure. Required status ignores Planned AWS/Cloudflare and the optional Binance user-stream REST fallback. News exposes exact live/total adapter counts; FX is primed on server boot. The browser posts sanitized RTT/socket observations to `/api/connections/browser-observation`, allowing material website-path lag and recovery to use the same notification pipeline.
+- The server records transition-only `connection_alert` and `connection_recovered` events after startup grace. Notifications promotes them as lag, outage, or recovery alerts. No repeated five-second health probe becomes an inbox item.
+- The workspace has Overview, Connections, Sources, and Controls; exact `<1s / 1s / 3s / 5s / 10s` persisted cadences; six targeted backend recoveries; Reset Defaults; Open System Health; and Reset All browser/server recovery.
+- Rendered light/dark QA at 1280×720 measured panel `x=338`, `y=20`, `900×566`, dock `72×72` at `x=1164`, `y=602`, zero document overflow, and no Data Health topbar trigger. Live state converged to `10/10` server-required plus the operational browser path, with up to `98/99` News adapters live, 1,041 Calendar events, 166 FX currencies, and the honest user-stream fallback. Production build, full `70/70` gates, and `git diff --check` pass.
+
+## 2026-07-10 — Connection Watchman owner-logo and action simplification
+
+- The launcher now uses the owner's exact solid-blue two-arrow refresh anatomy as a transparent SVG. It is 76px, exactly 30% larger than the replaced 58px identity, rotates once during a long paused idle cycle, and performs the existing recovery spin. The popup header deliberately retains the shield/radar Watchman mark.
+- Controls no longer repeat recovery through six cards plus three unequal footer buttons. One Recovery Target selector covers All, Market, Runtimes, Account, News, Calendar, and FX; one 40px `Run Recovery` button calls the same real backend. Cadence Defaults moved into its own section header, Open System Health was removed as duplicate navigation, and the popup has no action footer.
+- Rendered verification at 1280×720 measured the closed launcher image at `76×76`, panel `900×566` at `x=338/y=16`, zero document overflow, zero old recovery cards, zero footer buttons, and matched 40px recovery selector/action heights. A real FX recovery completed and persisted `fx · 540 ms` in Last Recovery.
+
+## 2026-07-10 — Shared top-edge and Watchman spacing correction
+
+- The apparent Dark Mode gap was a shared-shell defect, not a page defect: the
+  main shell still contributed 16px top padding and every route added another
+  22px. The outer/route rhythm is now 5px + 6px on both axes, so every real
+  surface from Dashboard through Notifications starts at `y=75` at 1280×720,
+  exactly 11px below the 64px header instead of 38px below it.
+- The Watchman cleanup had compressed the remaining controls too far. It still
+  has one recovery selector and one backend action, but cadence rows are now
+  72px with 16px padding, cadence controls are 112×42, Defaults is 112×36, and
+  Recovery Target / Run Recovery are balanced 182×44 controls separated by
+  14px. The layout uses the full 900×566 panel without adding duplicate actions.
+- Sidebar Utility order is explicit and stable in every theme and active state:
+  Logs → News → Calendar → Notifications. Navigation rows remain 36px with
+  27px marks; none were shrunk.
+
+## 2026-07-10 — Owner topbar identity system
+
+- Replaced screenshot-canvas assets with six transparent, code-native SVG
+  identities: the dual-hemisphere gray/teal neural brain is the website mark;
+  AWS Runner uses the orange three-face cube; API Keys uses the yellow/orange
+  key; Execution uses one red ready / green stopped power component; Currency
+  uses the green dollar; Appearance uses the blue eight-ray display mark.
+- The new operational marks share a measured 24px topbar optical size inside
+  the existing 42px hit targets. Notification is 25px for silhouette balance;
+  Trust Advisor and Basis are 24px. Popup identities are transparent 40px
+  marks, with the optically lighter AWS cube at 42px. No mark has a white tile,
+  colored container, raster background, or document overflow in either theme.
+- Account is the intentional photographic exception. The topbar photo is now
+  34px, down 30% from 48px, inside a 42px hit target. Account Details uses a
+  42px avatar, down 50% from 84px, inside an 84px aligned header row. Real
+  exchange, visitor-IP/device telemetry, and logout behavior are unchanged.
+- Browser verification at 1280×720 inspected every new trigger and the AWS,
+  API Key, Execution, Currency, Appearance, and Account Details popups in Dark
+  Mode. Every SVG background computed transparent, popup wrappers had no border
+  or shadow tile, document width stayed 1280/1280, and the original Light theme
+  was restored. Production build, `70/70` gates, and `git diff --check` pass.
+
+## 2026-07-10 — Final topbar popup canon and left-to-right audit
+
+- Consolidated Clock, AWS Runner, API Keys, Trust Advisor, Notifications,
+  Execution Control, Currency, Basis Units, Appearance, and Account Details
+  into one `398×486` operator-sheet grammar derived from the clean Logs
+  `Strategy Decision` row: `16/540` title, `11.25/400` subtitle,
+  `12.75/470` row primary, `10.5/400` secondary, and `11.5/450` mono values.
+- Removed every large bottom action footer. AWS destinations and Notification
+  tools now sit beside the data they affect; duplicate Trust navigation is
+  gone. Account logout remains the sole terminal action as a transparent
+  hairline row rather than a rounded tinted button.
+- Flattened API key cards/permission pills into two structured evidence
+  sections, Trust metrics into one three-cell band, and Currency/Basis/
+  Appearance notes into transparent provenance rows. Full-height Clock,
+  Trust, Execution, and Currency lists now distribute their real rows evenly
+  to the shell edge instead of leaving accidental dead space.
+- The browser audit restarted after each shared-selector correction and checked
+  all ten popovers in order. Every operational header measured `70px`, Account
+  `84px`; all sheets measured `398×486`; all visible footer counts and document/
+  sheet overflow measured zero. Light and Dark screenshots were inspected.
+- Safe control verification changed and restored Clock UTC→IST, Currency
+  INR→USD, and Basis Points→Percent; Notification Open Center navigated to the
+  real Notifications page and closed the popover. Light was restored.
+- Current research anchors are Apple Popovers/Layout for compact related tasks
+  and scan alignment, plus Carbon Structured List for consistent row anatomy.
+  Final production build, `70/70` gates, and `git diff --check` pass.

@@ -43,6 +43,8 @@ export interface BrowserSessionRecord {
   country: string | null;
   system: string;
   browser: string;
+  device: string | null;
+  model: string | null;
   firstSeen: number;
   lastSeen: number;
   requests: number;
@@ -88,6 +90,8 @@ interface BrowserSessionDbRow {
   country: string | null;
   system: string;
   browser: string;
+  device: string | null;
+  model: string | null;
   first_seen: number;
   last_seen: number;
   requests: number;
@@ -144,6 +148,8 @@ export class Ledger extends EventEmitter {
         country TEXT,
         system TEXT NOT NULL,
         browser TEXT NOT NULL,
+        device TEXT,
+        model TEXT,
         first_seen INTEGER NOT NULL,
         last_seen INTEGER NOT NULL,
         requests INTEGER NOT NULL DEFAULT 0
@@ -153,6 +159,14 @@ export class Ledger extends EventEmitter {
       CREATE INDEX IF NOT EXISTS idx_fills_ts ON fills (ts DESC);
       CREATE INDEX IF NOT EXISTS idx_browser_sessions_last_seen ON browser_sessions (last_seen DESC);
     `);
+    const browserSessionColumns = new Set(
+      (this.db.prepare('PRAGMA table_info(browser_sessions)').all() as { name: string }[]).map((column) => column.name),
+    );
+    if (!browserSessionColumns.has('device')) this.db.exec('ALTER TABLE browser_sessions ADD COLUMN device TEXT');
+    if (!browserSessionColumns.has('model')) this.db.exec('ALTER TABLE browser_sessions ADD COLUMN model TEXT');
+    // `local` was a display placeholder from the first telemetry version, not
+    // a real address. New sessions persist the actual socket/proxy/edge IP.
+    this.db.prepare("DELETE FROM browser_sessions WHERE ip = 'local'").run();
   }
 
   logEvent(kind: string, symbol?: string | null, data?: unknown): LedgerEvent {
@@ -171,7 +185,7 @@ export class Ledger extends EventEmitter {
     return ev;
   }
 
-  recentEvents(limit = 100, kind?: string, symbol?: string, q?: string, since?: number, beforeId?: number): LedgerEvent[] {
+  recentEvents(limit = 100, kind?: string, symbol?: string, q?: string, since?: number, beforeId?: number, until?: number, offset = 0): LedgerEvent[] {
     const clauses: string[] = [];
     const params: (string | number)[] = [];
     if (kind) {
@@ -195,11 +209,32 @@ export class Ledger extends EventEmitter {
       clauses.push('id < ?');
       params.push(beforeId);
     }
+    if (until !== undefined && Number.isFinite(until)) {
+      clauses.push('ts < ?');
+      params.push(until);
+    }
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
     const rows = this.db
-      .prepare(`SELECT * FROM events ${where} ORDER BY id DESC LIMIT ?`)
-      .all(...params, limit) as EventDbRow[];
+      .prepare(`SELECT * FROM events ${where} ORDER BY id DESC LIMIT ? OFFSET ?`)
+      .all(...params, limit, Math.max(0, offset)) as EventDbRow[];
     return rows.map(parseEvent);
+  }
+
+  countEvents(kind?: string, symbol?: string, q?: string, since?: number, until?: number): number {
+    const clauses: string[] = [];
+    const params: (string | number)[] = [];
+    if (kind) { clauses.push('kind = ?'); params.push(kind); }
+    if (symbol) { clauses.push('symbol = ?'); params.push(symbol); }
+    if (q) {
+      clauses.push('(data LIKE ? OR kind LIKE ? OR symbol LIKE ?)');
+      const like = `%${q}%`;
+      params.push(like, like, like);
+    }
+    if (since !== undefined && Number.isFinite(since)) { clauses.push('ts >= ?'); params.push(since); }
+    if (until !== undefined && Number.isFinite(until)) { clauses.push('ts < ?'); params.push(until); }
+    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    const row = this.db.prepare(`SELECT COUNT(*) AS count FROM events ${where}`).get(...params) as { count?: number } | undefined;
+    return Number(row?.count) || 0;
   }
 
   eventsSince(ts: number, kind: string): LedgerEvent[] {
@@ -325,13 +360,15 @@ export class Ledger extends EventEmitter {
     this.db
       .prepare(
         `INSERT INTO browser_sessions
-         (id, ip, country, system, browser, first_seen, last_seen, requests)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         (id, ip, country, system, browser, device, model, first_seen, last_seen, requests)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            ip = excluded.ip,
            country = COALESCE(excluded.country, browser_sessions.country),
            system = excluded.system,
            browser = excluded.browser,
+           device = COALESCE(excluded.device, browser_sessions.device),
+           model = COALESCE(excluded.model, browser_sessions.model),
            first_seen = MIN(browser_sessions.first_seen, excluded.first_seen),
            last_seen = MAX(browser_sessions.last_seen, excluded.last_seen),
            requests = browser_sessions.requests + excluded.requests`
@@ -342,6 +379,8 @@ export class Ledger extends EventEmitter {
         session.country,
         session.system,
         session.browser,
+        session.device,
+        session.model,
         session.firstSeen,
         session.lastSeen,
         Math.max(0, Math.floor(session.requests)),
@@ -358,6 +397,8 @@ export class Ledger extends EventEmitter {
       country: row.country,
       system: row.system,
       browser: row.browser,
+      device: row.device,
+      model: row.model,
       firstSeen: row.first_seen,
       lastSeen: row.last_seen,
       requests: row.requests,

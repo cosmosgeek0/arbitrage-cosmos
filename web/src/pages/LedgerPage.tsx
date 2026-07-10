@@ -483,7 +483,8 @@ export function LedgerPage() {
     <div className="container page lix-page logx-page">
       <div className="lix-frame logx-frame">
         <header className="lix-toolbar">
-          <div className="lix-title">
+          <div className="lix-title logx-title">
+            <img className="logx-page-mark" src="/log-mark.png" alt="" aria-hidden="true" />
             <h1>Logs</h1>
             <span className={`lix-live ${loadError ? 'error' : ''}`}>
               <i />

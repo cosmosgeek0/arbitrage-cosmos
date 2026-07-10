@@ -199,6 +199,7 @@ export function Risk() {
         <section className="riskx-frame">
           <header className="riskx-toolbar">
             <div className="riskx-title">
+              <img className="riskx-page-mark" src="/risk-gauge.png" alt="" aria-hidden="true" />
               <h1>Risk</h1>
               <span className="riskx-posture idle"><i aria-hidden="true" />Connecting</span>
             </div>
@@ -363,6 +364,7 @@ export function Risk() {
       <section className="riskx-frame">
         <header className="riskx-toolbar">
           <div className="riskx-title">
+            <img className="riskx-page-mark" src="/risk-gauge.png" alt="" aria-hidden="true" />
             <h1>Risk</h1>
             <span className={'riskx-posture ' + posture}><i aria-hidden="true" />{postureLabel}</span>
             <span className="riskx-blocker-count">

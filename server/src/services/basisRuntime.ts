@@ -94,6 +94,25 @@ export class BasisRuntime {
     this.engine.stop();
   }
 
+  connectionStatus(): {
+    running: boolean;
+    bookState: 'fresh' | 'stale';
+    markState: 'fresh' | 'stale';
+    lastBookTs: number | null;
+    lastMarkTs: number | null;
+    lastError: string | null;
+  } {
+    const now = Date.now();
+    return {
+      running: this.running && this.engine.isRunning(),
+      bookState: this.lastBookTs !== null && now - this.lastBookTs < 10_000 ? 'fresh' : 'stale',
+      markState: this.lastMarkTs !== null && now - this.lastMarkTs < 10_000 ? 'fresh' : 'stale',
+      lastBookTs: this.lastBookTs,
+      lastMarkTs: this.lastMarkTs,
+      lastError: this.lastError,
+    };
+  }
+
   private onEngineEvent(event: EngineEvent): void {
     const decisionKind = typeof event.payload.kind === 'string' ? event.payload.kind : null;
     if (event.kind === 'strategy_decision' && decisionKind === 'ignore') return;

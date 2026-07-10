@@ -317,19 +317,32 @@ nested boxes, colored bell tiles, fake channel toggles, or dashboard counters.
 If a channel is not wired, show Planned as static state; only real persisted
 preferences get switches.
 
-**NOTIFICATION-HUB LAW (owner ruling 2026-07-09):** do not describe the same
-notification state in multiple visual languages. The compact topbar tray uses
-the Coinbase notification reference as its base: quiet title row, one
-settings/expand affordance, pill filters, and repeated notification rows with
-category/date kicker, title, summary, and one real icon. No metric strip, hero
-card, extra bell score, duplicate footer buttons, or "Review new" status
-prose. Empty white space is acceptable only at the same scale as the other
-topbar popovers; do not force a page-sized empty region. Hidden compact filters
-must not drive visible state: if a filter is only exposed in the expanded
-center, compact view falls back to All.
-The expanded popup is the interactive surface: feed and alert preferences sit
-together in one larger Coinbase-style sheet, so the operator can inspect events
-and tune routing without switching to a separate Preferences tab.
+**NOTIFICATION-HUB LAW (owner ruling 2026-07-10):** Logs is exhaustive evidence;
+Notifications is curated interruption plus routing. If a row does not answer
+"what is stuck, what changed, or what execution needs attention," it belongs in
+Logs. Never admit opportunities, news, scanner decisions, candidate telemetry,
+snapshots, heartbeats, ordinary sync chatter, or decorative failures. Collapse
+repeat runtime/infrastructure transitions into incidents and retain the exact
+underlying count; a later recovery replaces the old firing state in the inbox.
+The compact topbar tray shows only the same curated incidents and opens the
+full Utility page. The page keeps News/Calendar geometry and has two purposeful
+views only: Inbox and Routing. Routing separates sources, delivery destinations,
+noise policy, and persisted alert rules. In-App may show Active; Email, Telegram,
+WhatsApp, AWS SNS, and AWS intake must show Not Connected or Connector Required
+until their real server-side capability exists. No fake delivery toggles, no
+browser-held credentials, and no second Logs tape disguised as notifications.
+
+**EXECUTION-CONTROL LAW (owner ruling 2026-07-10):** operational permissions
+are not vague binary switches. Every extensible guard row uses the same explicit
+three-position selector: Blocked left/red, Paused center/neutral, Allowed
+right/green. Each state is persisted and server-backed; Blocked and Paused fail
+closed through the existing risk fields, while Allowed opens only that one gate.
+Use a labelled radio group with visible focus and full-segment click targets.
+Emergency Stop is a separate, unmistakable action: red `STOP BOT` while ready,
+green `Bot Stopped` after activation, and confirmed Resume. A stopped bot is a
+safe achieved state, so do not leave the engaged action red or disguise it as a
+small switch. Future control rows must reuse this model rather than inventing a
+new toggle language.
 
 **A. Data pages (Coinbase voice — Markets, Account, any table surface):**
 - Font: InterVariable (loaded; variable weights are honored exactly).
@@ -419,7 +432,7 @@ polylines; stablecoin sparks flat-line when range/mean < 0.1%.
 
 **G. Current surface baseline:** before editing the left sidebar, brand/topbar,
 global search, clock, AWS CLI, API key, Data Health, Trust Advisor,
-Notifications, Kill Switch / Trading Mode, Market Ping, Display Currency,
+Notifications, Kill Switch / Trading Mode, Connection Control, Display Currency,
 Basis Display, Appearance, or Account Details profile, read
 `UI_SURFACE_BASELINE.md`. It records the measured current geometry, text sizes,
 motion timing, real endpoints, and old-code traps from the 2026-07-09 audit.
@@ -430,8 +443,9 @@ motion timing, real endpoints, and old-code traps from the 2026-07-09 audit.
   Sell buttons. Execution tab deleted; Orders/Positions/Fills/PnL ids route
   to Account. The withdrawal GATE bans `capital/withdraw/apply` (action);
   read-only `withdraw/history` is allowed for the equity chart.
-- NO Settings page/gear — market-refresh/currency/basis are topbar triggers
-  in the shared morphing popover; theme+accent live in the profile popover.
+- NO Settings page/gear — currency/basis remain topbar triggers; market refresh,
+  connection health, and the four polling cadences live in the single bottom
+  Connection Control. Theme+accent live in the profile popover.
   Dead prefs forever: zoom/interface-size, motion, density, timestamps,
   default page, reset.
 - Account = money only (keys/connection/permissions/sessions live in the

@@ -54,11 +54,10 @@
   height: 32px;
   flex: none;
   place-items: center;
-  border-radius: 8px;
-  color: #f0b90b;
-  background: color-mix(in srgb, #f0b90b 9%, transparent);
+  border-radius: 0;
+  background: transparent;
 }
-.mkx-binance { display: block; flex: none; fill: currentColor; }
+.mkx-market-mark { display: block; width: 30px; height: 30px; object-fit: contain; }
 .mkx-identity h1 {
   margin: 0;
   color: var(--text);
@@ -460,7 +459,7 @@
 .mkx-pager > span { padding: 0 2px; color: var(--muted); font-size: 10px; }
 
 [data-theme="dark"] .mkx-frame { box-shadow: none; }
-[data-theme="dark"] .mkx-source-mark { background: color-mix(in srgb, #f0b90b 11%, transparent); }
+[data-theme="dark"] .mkx-source-mark { background: transparent; }
 
 @container (max-width: 850px) {
   .mkx-toolbar { align-items: flex-start; flex-direction: column; padding-top: 14px; padding-bottom: 14px; }

@@ -1,7 +1,7 @@
-# DIRECTOR_RULEBOOK.md — Cosmos Arbitrage Control Room
+# DIRECTOR_RULEBOOK.md — Arbitrage Capital Control Room
 
 Last updated: 2026-07-06  
-Owner/project: deepak / Cosmos Arbitrage Control Room  
+Owner/project: deepak / Arbitrage Capital Control Room
 Permanent role of this file: operating manual for the active Director chat.
 
 This file is not a historical essay. It is the working rulebook for the Director who has repo access and coordinates Codex, Fable, Opus, Claude Code, GitHub, EC2, Cloudflare, and deployment. Read it at the start of every Director session. Update it whenever the project state or workflow changes. Keep it accurate enough that a new Director can replace the current Director without reading old chats.
@@ -12,7 +12,7 @@ The Director is not the owner. The Director is the project controller. It inspec
 
 ## 1. Mission in one paragraph
 
-Cosmos Arbitrage Control Room is a private Binance account cockpit and engine-control system for one owner. It is not CG Signal Lab, not a public market website, and not a Binance clone. The cockpit exists to show account state, engine state, opportunities, risk decisions, orders, fills, PnL, and ledger truth. The engine exists to detect basis and volume-spike opportunities, produce proposals, run deterministic risk checks, and write every decision to the ledger. The default posture is paper/manual-first. No autonomous live trading in v0. No withdrawal or transfer-out code ever.
+Arbitrage Capital Control Room is a private Binance account cockpit and engine-control system for one owner. It is not CG Signal Lab, not a public market website, and not a Binance clone. The cockpit exists to show account state, engine state, opportunities, risk decisions, orders, fills, PnL, and ledger truth. The engine exists to detect basis and volume-spike opportunities, produce proposals, run deterministic risk checks, and write every decision to the ledger. The default posture is paper/manual-first. No autonomous live trading in v0. No withdrawal or transfer-out code ever.
 
 ---
 
@@ -22,7 +22,7 @@ There are two different projects. Do not merge them.
 
 CG Signal Lab / Binance Signal Lab is the public market intelligence site at `https://radar.cosmosgeek.org`. Its Mac repo was `/Users/cosmosgeek/Desktop/binance-signal-lab-public`; its EC2 runtime path was `/opt/binance-signal-lab-public`; its runtime was Starlette/Uvicorn on `127.0.0.1:8501`. It is public-data-only: no private Binance account, no orders, no account state, no money controls.
 
-Cosmos Arbitrage Control Room is the private app at target hostname `https://arbitrage.cosmosgeek.org`. Its intended Mac repo path is `/Users/cosmosgeek/Desktop/arbitrage-cosmos`, though the owner may currently be using a folder named `Main`, `mains`, or another active repo folder. Its EC2 runtime path is `/opt/arbitrage-cosmos`. Its private runtime target is `127.0.0.1:8601` behind Cloudflare Access and Cloudflare Tunnel. The app is live-capable in long-term scope, but v0 is manual approval, risk gate, kill switch, typed confirmation, and ledger before any live order.
+Arbitrage Capital Control Room is the private app at target hostname `https://arbitrage.cosmosgeek.org`. Its intended Mac repo path is `/Users/cosmosgeek/Desktop/arbitrage-cosmos`, though the owner may currently be using a folder named `Main`, `mains`, or another active repo folder. Its EC2 runtime path is `/opt/arbitrage-cosmos`. Its private runtime target is `127.0.0.1:8601` behind Cloudflare Access and Cloudflare Tunnel. The app is live-capable in long-term scope, but v0 is manual approval, risk gate, kill switch, typed confirmation, and ledger before any live order.
 
 If a file, prompt, or memory talks about `radar.cosmosgeek.org`, public pages, Starlette/Uvicorn `8501`, heatmaps, public Signal Lab, or CG Signal Lab UI polish, treat that as donor/reference only. The current project is private control room.
 
@@ -97,7 +97,7 @@ Cloudflare Tunnel name: `cosmosgeek-arbitrage`.
 
 Tunnel origin target: `http://localhost:8601`.
 
-Cloudflare Access app: appears as `arbitrage`; product target name is `CG Arbitrage` / `Cosmos Arbitrage Control Room`.
+Cloudflare Access app: appears as `arbitrage`; product target name is `Arbitrage Capital Control Room`.
 
 Cloudflare Access intended policy: allow only `cosmosgeek@proton.me`. Do not use the broken `Require Authentication Method = mfa` rule that previously blocked valid login. Use application-specific/Independent MFA/security key settings instead.
 
@@ -337,7 +337,7 @@ Every button must either perform a real action or be disabled with a compact rea
 Use this pattern for Codex/Claude UI workers:
 
 ```text
-You are in WORKTREE_PATH for Cosmos Arbitrage Control Room.
+You are in WORKTREE_PATH for Arbitrage Capital Control Room.
 
 Read DIRECTOR_RULEBOOK.md and BLUEPRINT.md first.
 Do not read old chats.
@@ -376,7 +376,7 @@ Stop after this surface group. Do not continue into another group.
 Use this for the first Fable/Opus/Fable 5 engine run:
 
 ```text
-You are in the Cosmos Arbitrage Control Room repo.
+You are in the Arbitrage Capital Control Room repo.
 
 Read DIRECTOR_RULEBOOK.md, BLUEPRINT.md, and ENGINE.md fully.
 Inspect server/, web/, package files, tests, current engine-related code, current API routes, and docs.
@@ -404,7 +404,7 @@ Do not start coding until the Director approves the plan.
 Use this after planning approval:
 
 ```text
-You are in WORKTREE_PATH for Cosmos Arbitrage Control Room.
+You are in WORKTREE_PATH for Arbitrage Capital Control Room.
 
 Read DIRECTOR_RULEBOOK.md, BLUEPRINT.md, and ENGINE.md.
 Implement only MODULE_NAME.

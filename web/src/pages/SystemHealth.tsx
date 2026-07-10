@@ -523,6 +523,7 @@ export function SystemHealth() {
       <section className="healthx-frame">
         <header className="healthx-toolbar">
           <div className="healthx-title">
+            <img className="healthx-page-mark" src="/health-shield.png" alt="" aria-hidden="true" />
             <h1>Health</h1>
             <span className={'healthx-live ' + overallState}>
               <i aria-hidden="true" />

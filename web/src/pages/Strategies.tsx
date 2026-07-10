@@ -157,7 +157,8 @@ export function Strategies() {
     <div className="container page volx-page basx-page">
       <section className="volx-frame" aria-label="basis workspace">
         <header className="volx-toolbar">
-          <div className="volx-title">
+          <div className="volx-title basx-title">
+            <img className="basx-page-mark" src="/basis-percent.png" alt="" aria-hidden="true" />
             <h1>Basis</h1>
             <span className={'volx-live ' + (liveFeed ? 'active' : error ? 'degraded' : 'starting')}>
               <i aria-hidden="true" />

@@ -1,628 +1,599 @@
-/* Command Center — a strategy control room, not a homepage.
-   Zone 1 (overview): equity + quant performance truth from the ledger —
-   cumulative PnL, daily bars, distribution, attribution, profit structure.
-   Zone 2 (strategy brain): the engines and their live output. Small names,
-   no boxes — this is where behind-the-scenes scripts are monitored.
-   Zone 3 (ops): control & security, system sources, market intelligence.
-   Every number is server truth. Metrics that need more history say so. */
-import { useEffect, useMemo, useState } from 'react';
-import { useStore } from '../store';
-import { useRefreshSignal } from '../lib/refresh';
-import { Dot, Empty, Group, Pill, Row, Sec, Seg, TINT, type Tone } from '../components/px';
-import { PerfChart, DistChart, EquityChart, WinLoseBar, type PerfDay } from '../components/PerfChart';
-import { Donut } from '../components/Donut';
-import { TokenIcon, brandColor } from '../components/TokenIcon';
-import { Num } from '../components/Num';
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import {
-  IconBook,
-  IconTerminal,
-  IconBrain,
-  IconCalendar,
-  IconChart,
-  IconKey,
-  IconList,
-  IconNewspaper,
-  IconPower,
-  IconPulse,
-  IconShield,
-  IconTicket,
-  IconWallet,
-  IconWifi,
-} from '../components/Icons';
-import { baseOf, duration, fmtMoney, fmtPct, fmtPrice, signClass, timeAgo } from '../format';
+  Activity,
+  ArrowUpRight,
+  BarChart3,
+  Check,
+  ChevronRight,
+  CircleAlert,
+  Database,
+  Gauge,
+  Radio,
+  ScanLine,
+  ShieldCheck,
+  WalletCards,
+  X,
+} from 'lucide-react';
+import { EquityChart, PerfChart, type PerfDay } from '../components/PerfChart';
+import { TokenIcon } from '../components/TokenIcon';
+import { useRefreshSignal } from '../lib/refresh';
+import type { BasisSnapshot } from '../lib/basisRuntime';
+import { useStore, type Page } from '../store';
+import { fmtMoney, fmtPrice, signClass, timeAgo } from '../format';
 import type { LedgerEvent } from '../types';
+import './Dashboard.css';
+
+type RangeId = '1W' | '1M' | '3M' | '6M';
+type Tone = 'ok' | 'warn' | 'bad' | 'idle';
+
+const RANGES: { id: RangeId; ms: number }[] = [
+  { id: '1W', ms: 7 * 86_400_000 },
+  { id: '1M', ms: 31 * 86_400_000 },
+  { id: '3M', ms: 93 * 86_400_000 },
+  { id: '6M', ms: 186 * 86_400_000 },
+];
+
+interface Source<T> {
+  data: T | null;
+  error: string | null;
+}
 
 interface PnlData {
   realizedByDay: PerfDay[];
   realizedBySymbol: { symbol: string; usd: number }[];
   feesByAsset: { asset: string; amount: number }[];
-  equitySnapshots: { ts: number; totalUsdt: number }[];
 }
 
-interface NewsItem { id: string; title: string; url: string; date?: string }
-interface CalItem { id: string; title: string; country: string; date: string; importance: number }
-
-function num(v: number | string | null | undefined): number {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
+interface EquityHistory {
+  rows: { ts: number; totalUsdt: number }[];
+  reconstructedBefore: number | null;
+  fetchedAt: number | null;
 }
 
-function rejectionInfo(ev: LedgerEvent): string {
-  const d = (ev.data && typeof ev.data === 'object' ? ev.data : {}) as Record<string, unknown>;
-  const reasons = Array.isArray(d.reasons) ? d.reasons.map(String).filter(Boolean).join(' / ') : '';
-  return reasons || 'risk gate rejected the intent';
+interface VolumeRow {
+  symbol: string;
+  base: string;
+  state: 'IDLE' | 'WATCHING' | 'FOCUS' | 'PROPOSED' | 'REJECTED' | 'ACTIVE' | 'COOLDOWN';
+  decisionKind: 'ignore' | 'watch' | 'focus' | 'proposal' | 'reject' | 'warming';
+  rejectCode: string | null;
+  reason: string;
+  decisionTs: number | null;
+  volumeMultiple: Record<string, number | null | undefined>;
 }
 
-function maxDrawdown(values: number[]): { pct: number; usd: number } | null {
-  if (values.length < 2) return null;
-  let peak = -Infinity;
-  let ddPct = 0;
-  let ddUsd = 0;
-  for (const v of values) {
-    peak = Math.max(peak, v);
-    if (peak > 0) {
-      ddPct = Math.max(ddPct, ((peak - v) / peak) * 100);
-      ddUsd = Math.max(ddUsd, peak - v);
-    }
-  }
-  return { pct: ddPct, usd: ddUsd };
+interface VolumeSnapshot {
+  updatedAt: number;
+  status: {
+    running: boolean;
+    streamState: 'starting' | 'connecting' | 'open' | 'degraded';
+    streamConnections: number;
+    openConnections: number;
+    bookState: 'fresh' | 'stale';
+    universeSize: number;
+    eligibleSize: number;
+    observedSymbols: number;
+    baselineReady: number;
+    baselineTotal: number;
+    watching: number;
+    focused: number;
+    openProposals: number;
+    lastTradeTs: number | null;
+    lastBookTs: number | null;
+    tradeMessages: number;
+    source: string;
+    bookSource: string;
+    baselineSource: string;
+  };
+  rows: VolumeRow[];
 }
 
-/** Annualized Sharpe from equity snapshot day-over-day returns. Honest: null until enough points. */
-function sharpe(equity: number[]): number | null {
-  if (equity.length < 8) return null;
-  const rets: number[] = [];
-  for (let i = 1; i < equity.length; i++) {
-    if (equity[i - 1] > 0) rets.push(equity[i] / equity[i - 1] - 1);
-  }
-  if (rets.length < 7) return null;
-  const mean = rets.reduce((s, r) => s + r, 0) / rets.length;
-  const varr = rets.reduce((s, r) => s + (r - mean) ** 2, 0) / (rets.length - 1);
-  const sd = Math.sqrt(varr);
-  if (sd === 0) return null;
-  // snapshots are ~15min; scale to daily (96 per day) then annualize
-  return (mean / sd) * Math.sqrt(96 * 365);
+interface SystemSnapshot {
+  ok: boolean;
+  dbOk: boolean;
+  restLatencyMs: number | null;
+  serverTimeDiffMs: number | null;
+  usedWeight1m: number | null;
+  uptimeSec: number;
+}
+
+interface RuntimeRow {
+  id: 'basis' | 'volume';
+  name: string;
+  source: string;
+  tone: Tone;
+  state: string;
+  intake: string;
+  coverage: string;
+  watching: number;
+  focused: number;
+  proposals: number;
+  constraint: string;
+  updatedAt: number | null;
+  page: Page;
+}
+
+interface IntegrityCheck {
+  label: string;
+  detail: string;
+  tone: Tone;
+}
+
+function finite(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function source<T>(): Source<T> {
+  return { data: null, error: null };
+}
+
+function titleCase(value: string): string {
+  return value.replace(/[._-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function eventData(event: LedgerEvent): Record<string, unknown> {
+  return event.data && typeof event.data === 'object' ? event.data as Record<string, unknown> : {};
+}
+
+function eventTone(event: LedgerEvent): Tone {
+  const data = eventData(event);
+  if (data.kind === 'proposal' || event.kind.includes('approved')) return 'ok';
+  if (data.kind === 'reject' || data.rejectCode || event.kind.includes('rejected')) return 'bad';
+  if (data.kind === 'focus' || event.kind.includes('candidate')) return 'warn';
+  return 'idle';
+}
+
+function decisionMessage(event: LedgerEvent): string {
+  const data = eventData(event);
+  return String(data.message ?? data.reason ?? data.rejectCode ?? event.kind);
+}
+
+function strategyLabel(event: LedgerEvent): string {
+  const data = eventData(event);
+  const strategy = String(data.strategy ?? (event.kind.startsWith('basis.') ? 'basis' : 'system'));
+  return strategy === 'volume_spike' ? 'Volume' : titleCase(strategy);
+}
+
+function sourceAge(updatedAt: number | null): string {
+  return updatedAt ? timeAgo(updatedAt) : 'Unavailable';
+}
+
+function useDashboardSources(refreshTick: number) {
+  const [basis, setBasis] = useState<Source<BasisSnapshot>>(source);
+  const [volume, setVolume] = useState<Source<VolumeSnapshot>>(source);
+  const [pnl, setPnl] = useState<Source<PnlData>>(source);
+  const [history, setHistory] = useState<Source<EquityHistory>>(source);
+  const [system, setSystem] = useState<Source<SystemSnapshot>>(source);
+
+  useEffect(() => {
+    let live = true;
+
+    const read = async <T,>(url: string): Promise<T> => {
+      const response = await fetch(url, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      return response.json() as Promise<T>;
+    };
+
+    const update = <T,>(setter: Dispatch<SetStateAction<Source<T>>>, promise: Promise<T>) => {
+      void promise
+        .then((data) => live && setter({ data, error: null }))
+        .catch((reason) => live && setter((current) => ({
+          data: current.data,
+          error: reason instanceof Error ? reason.message : 'Source unavailable',
+        })));
+    };
+
+    const fast = () => {
+      update(setBasis, read<BasisSnapshot>('/api/engine/basis'));
+      update(setVolume, read<VolumeSnapshot>('/api/engine/volume'));
+    };
+    const slow = () => {
+      update(setPnl, read<PnlData>('/api/pnl'));
+      update(setHistory, read<EquityHistory>('/api/equity-history'));
+      update(setSystem, read<SystemSnapshot>('/api/system'));
+    };
+
+    fast();
+    slow();
+    const fastTimer = window.setInterval(fast, 2_000);
+    const slowTimer = window.setInterval(slow, 30_000);
+    return () => {
+      live = false;
+      window.clearInterval(fastTimer);
+      window.clearInterval(slowTimer);
+    };
+  }, [refreshTick]);
+
+  return { basis, volume, pnl, history, system };
+}
+
+function StatusMark({ tone }: { tone: Tone }) {
+  return <span className={`dcx-status-mark ${tone}`} aria-hidden="true">{tone === 'ok' ? <Check size={11} /> : tone === 'bad' ? <X size={10} /> : <CircleAlert size={11} />}</span>;
+}
+
+function Metric({ label, value, detail, tone = 'idle' }: { label: string; value: string; detail: string; tone?: Tone }) {
+  return (
+    <div className={`dcx-summary-cell ${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{detail}</small>
+    </div>
+  );
 }
 
 export function Dashboard() {
-  const { state, setPage, openDetail, approveProposal } = useStore();
-  const [pnl, setPnl] = useState<PnlData | null>(null);
-  const [news, setNews] = useState<NewsItem[] | null>(null);
-  const [cal, setCal] = useState<CalItem[] | null>(null);
-  const [perfMode, setPerfMode] = useState<'usd' | 'pct' | 'equity'>('usd');
-  const [btcCloses, setBtcCloses] = useState<{ t: number; v: number }[] | null>(null);
-  const [tick, setTick] = useState(0);
-  useRefreshSignal(() => setTick((n) => n + 1));
+  const { state, connected, setPage } = useStore();
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [range, setRange] = useState<RangeId>('1M');
+  useRefreshSignal(() => setRefreshTick((value) => value + 1));
+  const sources = useDashboardSources(refreshTick);
 
-  useEffect(() => {
-    let alive = true;
-    void fetch('/api/pnl').then((r) => (r.ok ? r.json() : null)).then((d) => alive && d && setPnl(d as PnlData)).catch(() => undefined);
-    const t = window.setInterval(() => {
-      void fetch('/api/pnl').then((r) => (r.ok ? r.json() : null)).then((d) => alive && d && setPnl(d as PnlData)).catch(() => undefined);
-    }, 30_000);
-    return () => { alive = false; window.clearInterval(t); };
-  }, [tick]);
+  const account = state?.account ?? null;
+  const positions = state?.positions ?? [];
+  const openOrders = state?.openOrders ?? [];
+  const exposure = positions.reduce((sum, position) => sum + position.valueUsdt, 0);
+  const heldNotional = openOrders.reduce((sum, order) => sum + order.price * order.origQty, 0);
+  const dayChange = account?.dayChangeUsd ?? null;
+  const dayChangePct = finite(dayChange) && finite(account?.dayOpenEquity) && account!.dayOpenEquity! > 0
+    ? (dayChange / account!.dayOpenEquity!) * 100
+    : null;
 
-  useEffect(() => {
-    let alive = true;
-    void fetch('/api/news?catalog=48').then((r) => (r.ok ? r.json() : null))
-      .then((d) => alive && d && setNews(((d as { items: NewsItem[] }).items ?? []).slice(0, 3)))
-      .catch(() => alive && setNews([]));
-    void fetch('/api/klines?symbol=BTCUSDT&interval=1d&limit=120')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => alive && Array.isArray(d) && setBtcCloses(d as { t: number; v: number }[]))
-      .catch(() => undefined);
-    void fetch('/api/calendar').then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!alive || !d) return;
-        const items = ((d as { items: CalItem[] }).items ?? []).filter((it) => it.importance >= 1 && new Date(it.date).getTime() > Date.now());
-        setCal(items.slice(0, 3));
+  const historyPoints = useMemo(() => {
+    const rows = [...(sources.history.data?.rows ?? [])]
+      .filter((row) => finite(row.totalUsdt) && finite(row.ts))
+      .map((row) => ({ ts: row.ts, totalUsdt: row.totalUsdt }));
+    if (account && finite(account.totalUsdt)) {
+      rows.push({ ts: state?.binance.lastSyncTs ?? sources.history.data?.fetchedAt ?? Date.now(), totalUsdt: account.totalUsdt });
+    }
+    rows.sort((left, right) => left.ts - right.ts);
+    const deduped: { ts: number; totalUsdt: number }[] = [];
+    for (const point of rows) {
+      const previous = deduped[deduped.length - 1];
+      if (previous && Math.abs(previous.ts - point.ts) < 1_000) deduped[deduped.length - 1] = point;
+      else deduped.push(point);
+    }
+    const rangeMs = RANGES.find((item) => item.id === range)?.ms ?? RANGES[1].ms;
+    const cutoff = Date.now() - rangeMs;
+    const selected = deduped.filter((point) => point.ts >= cutoff);
+    const previous = [...deduped].reverse().find((point) => point.ts < cutoff);
+    if (previous) selected.unshift(previous);
+    return selected;
+  }, [account?.totalUsdt, range, sources.history.data, state?.binance.lastSyncTs]);
+
+  const historyStats = useMemo(() => {
+    if (historyPoints.length < 2) return null;
+    const first = historyPoints[0].totalUsdt;
+    const last = historyPoints[historyPoints.length - 1].totalUsdt;
+    const values = historyPoints.map((point) => point.totalUsdt);
+    return {
+      first,
+      last,
+      change: last - first,
+      changePct: first > 0 ? ((last / first) - 1) * 100 : null,
+      high: Math.max(...values),
+      low: Math.min(...values),
+    };
+  }, [historyPoints]);
+
+  const basis = sources.basis.data;
+  const volume = sources.volume.data;
+  const system = sources.system.data;
+  const basisLive = Boolean(basis?.status.running && basis.status.bookState === 'fresh' && basis.status.markState === 'fresh' && !basis.status.lastError);
+  const volumeLive = Boolean(volume?.status.running && volume.status.streamState === 'open' && volume.status.bookState === 'fresh');
+  const accountFresh = Boolean(state?.binance.connected && state.binance.lastSyncTs && Date.now() - state.binance.lastSyncTs < 90_000);
+  const feedsOpen = state ? Object.values(state.feeds).length > 0 && Object.values(state.feeds).every((feed) => feed === 'open') : false;
+  const keySafe = state?.binance.keyPosture.level === 'read_only';
+  const ledgerReady = system?.dbOk === true;
+
+  const integrityChecks: IntegrityCheck[] = [
+    {
+      label: 'Account Sync',
+      detail: accountFresh ? `Fresh · ${timeAgo(state?.binance.lastSyncTs ?? null)}` : state?.binance.connected ? 'Stale Signed Snapshot' : 'Not Connected',
+      tone: accountFresh ? 'ok' : 'bad',
+    },
+    {
+      label: 'Public Market Feeds',
+      detail: feedsOpen ? `${Object.keys(state?.feeds ?? {}).length} Streams Open` : 'One Or More Streams Down',
+      tone: feedsOpen ? 'ok' : 'bad',
+    },
+    {
+      label: 'Basis Runtime',
+      detail: basisLive ? `${basis?.status.dataQualityPassing ?? 0}/${basis?.status.universeSize ?? 0} Quality Passing` : sources.basis.error ?? basis?.status.lastError ?? 'Starting',
+      tone: basisLive ? 'ok' : sources.basis.error ? 'bad' : 'warn',
+    },
+    {
+      label: 'Volume Runtime',
+      detail: volumeLive ? `${volume?.status.baselineReady ?? 0}/${volume?.status.baselineTotal ?? 0} Baselines Ready` : sources.volume.error ?? 'Starting',
+      tone: volumeLive ? 'ok' : sources.volume.error ? 'bad' : 'warn',
+    },
+    {
+      label: 'Ledger Database',
+      detail: ledgerReady ? 'Writable' : system ? 'Unavailable' : 'Checking',
+      tone: ledgerReady ? 'ok' : system ? 'bad' : 'warn',
+    },
+    {
+      label: 'API Key Posture',
+      detail: state?.binance.keyPosture.label ?? 'Checking',
+      tone: keySafe ? 'ok' : state?.binance.keyPosture.tone ?? 'warn',
+    },
+  ];
+  const passingChecks = integrityChecks.filter((check) => check.tone === 'ok').length;
+  const systemLive = connected && accountFresh && feedsOpen && basisLive && volumeLive && ledgerReady;
+
+  const topBasis = useMemo(() => {
+    if (!basis) return null;
+    return [...basis.rows]
+      .filter((row) => finite(row.netEdgePct) && row.decisionKind !== 'ignore')
+      .sort((left, right) => (right.netEdgePct ?? -Infinity) - (left.netEdgePct ?? -Infinity))[0] ?? null;
+  }, [basis]);
+
+  const topVolume = useMemo(() => {
+    if (!volume) return null;
+    const rank = (row: VolumeRow) => row.state === 'PROPOSED' ? 5 : row.state === 'FOCUS' ? 4 : row.state === 'WATCHING' ? 3 : row.decisionKind === 'reject' ? 2 : 1;
+    return [...volume.rows].sort((left, right) => {
+      const stateRank = rank(right) - rank(left);
+      if (stateRank) return stateRank;
+      return Number(right.volumeMultiple['5s'] ?? 0) - Number(left.volumeMultiple['5s'] ?? 0);
+    })[0] ?? null;
+  }, [volume]);
+
+  const runtimeRows: RuntimeRow[] = [
+    {
+      id: 'basis',
+      name: 'Basis Engine',
+      source: basis?.status.bookSource ?? 'Binance Spot + USD-M Books',
+      tone: basisLive ? 'ok' : sources.basis.error ? 'bad' : 'warn',
+      state: basisLive ? 'Live' : sources.basis.error ? 'Unavailable' : 'Starting',
+      intake: basis ? `${basis.status.universeSize} Pairs` : '—',
+      coverage: basis ? `${basis.status.dataQualityPassing}/${basis.status.universeSize}` : '—',
+      watching: basis?.status.watching ?? 0,
+      focused: basis?.status.focused ?? 0,
+      proposals: basis?.status.openProposals ?? 0,
+      constraint: basis?.status.borrowBlocked ? `${basis.status.borrowBlocked} Borrow Blocked` : topBasis?.reason ?? 'No Active Constraint',
+      updatedAt: basis?.updatedAt ?? null,
+      page: 'strategies',
+    },
+    {
+      id: 'volume',
+      name: 'Volume Engine',
+      source: volume?.status.source ?? 'Binance Aggregate Trades',
+      tone: volumeLive ? 'ok' : sources.volume.error ? 'bad' : 'warn',
+      state: volumeLive ? 'Live' : sources.volume.error ? 'Unavailable' : 'Starting',
+      intake: volume ? `${volume.status.observedSymbols}/${volume.status.eligibleSize}` : '—',
+      coverage: volume ? `${volume.status.baselineReady}/${volume.status.baselineTotal}` : '—',
+      watching: volume?.status.watching ?? 0,
+      focused: volume?.status.focused ?? 0,
+      proposals: volume?.status.openProposals ?? 0,
+      constraint: topVolume?.rejectCode ? titleCase(topVolume.rejectCode) : topVolume?.reason ?? 'No Verified Wakeup',
+      updatedAt: volume?.updatedAt ?? null,
+      page: 'volume',
+    },
+  ];
+
+  const recentDecisions = useMemo(() => {
+    const seen = new Set<string>();
+    return (state?.events ?? [])
+      .filter((event) => event.kind.includes('strategy_decision') || event.kind === 'candidate_opened' || event.kind === 'candidate_rejected' || event.kind === 'risk_decision')
+      .filter((event) => {
+        const data = eventData(event);
+        const key = String(data.correlationId ?? `${strategyLabel(event)}:${event.symbol ?? 'system'}:${decisionMessage(event)}`);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
       })
-      .catch(() => alive && setCal([]));
-    return () => { alive = false; };
-  }, [tick]);
+      .slice(0, 6);
+  }, [state?.events]);
 
-  const s = state;
-  const days = pnl?.realizedByDay ?? [];
-  useEffect(() => {
-    if (days.length < 2 && (pnl?.equitySnapshots.length ?? 0) >= 2) setPerfMode('equity');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pnl === null]);
-  const equity = (pnl?.equitySnapshots ?? []).map((x) => x.totalUsdt).filter((v) => Number.isFinite(v));
-  const bySymbol = pnl?.realizedBySymbol ?? [];
-  const proposals = useMemo(() => [...(s?.proposals ?? [])].sort((a, b) => b.netEdgePct - a.netEdgePct), [s?.proposals]);
-  const openOrders = s?.openOrders ?? [];
-  const positions = s?.positions ?? [];
-  const exposure = positions.reduce((acc, p) => acc + p.valueUsdt, 0);
-  const heldNotional = openOrders.reduce((acc, o) => acc + num(o.price) * num(o.origQty), 0);
-  const lastRejection = useMemo(
-    () =>
-      (s?.events ?? []).find((ev) => {
-        if (ev.kind !== 'risk_decision') return false;
-        const d = (ev.data && typeof ev.data === 'object' ? ev.data : {}) as Record<string, unknown>;
-        return d.allowed === false;
-      }) ?? null,
-    [s?.events],
-  );
+  const pnlDays = sources.pnl.data?.realizedByDay ?? [];
+  const realizedTotal = pnlDays.reduce((sum, day) => sum + day.usd, 0);
+  const winningDays = pnlDays.filter((day) => day.usd > 0);
+  const losingDays = pnlDays.filter((day) => day.usd < 0);
+  const grossProfit = winningDays.reduce((sum, day) => sum + day.usd, 0);
+  const grossLoss = Math.abs(losingDays.reduce((sum, day) => sum + day.usd, 0));
+  const dailyProfitFactor = grossLoss > 0 ? grossProfit / grossLoss : winningDays.length ? Infinity : null;
+  const usdtFees = sources.pnl.data?.feesByAsset.find((fee) => fee.asset === 'USDT')?.amount ?? 0;
 
-  // ---- honest quant metrics -------------------------------------------
-  const totalRealized = days.reduce((acc, d) => acc + d.usd, 0);
-  const winDays = days.filter((d) => d.usd > 0);
-  const lossDays = days.filter((d) => d.usd < 0);
-  const grossProfit = winDays.reduce((acc, d) => acc + d.usd, 0);
-  const grossLoss = Math.abs(lossDays.reduce((acc, d) => acc + d.usd, 0));
-  const winRate = days.length ? (winDays.length / days.length) * 100 : null;
-  const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : winDays.length > 0 ? Infinity : null;
-  const dd = maxDrawdown(equity);
-  const sr = sharpe(equity);
-  const baseEquity = equity[0] ?? null;
-  const totalPct = baseEquity && baseEquity > 0 ? (totalRealized / baseEquity) * 100 : null;
-  const usdtFees = pnl?.feesByAsset.find((f) => f.asset === 'USDT')?.amount ?? 0;
-  const otherFeeAssets = (pnl?.feesByAsset ?? []).filter((f) => f.asset !== 'USDT').length;
-  const winnersBySymbol = bySymbol.filter((r) => r.usd > 0);
+  const controlState = state?.config.killSwitch
+    ? { label: 'Bot Stopped', detail: 'Kill Switch On', tone: 'ok' as Tone }
+    : state?.config.liveTradingEnabled
+      ? { label: 'Live Armed', detail: 'Risk Gate Required', tone: 'warn' as Tone }
+      : { label: 'Manual Guarded', detail: 'Live Orders Off', tone: 'ok' as Tone };
 
-  // BTC buy & hold benchmark: real daily closes aligned to the PnL days.
-  const bench = useMemo(() => {
-    if (!btcCloses?.length || !days.length) return null;
-    const closeByDay = new Map<string, number>();
-    for (const k of btcCloses) closeByDay.set(new Date(k.t).toISOString().slice(0, 10), k.v);
-    const first = closeByDay.get(days[0].day);
-    if (!first || first <= 0) return null;
-    let last = first;
-    return days.map((d) => {
-      const c = closeByDay.get(d.day);
-      if (c && c > 0) last = c;
-      return (last / first - 1) * 100;
-    });
-  }, [btcCloses, days]);
+  const queueCount = (basis?.status.watching ?? 0) + (basis?.status.focused ?? 0) + (volume?.status.watching ?? 0) + (volume?.status.focused ?? 0);
+  const latestUpdate = Math.max(basis?.updatedAt ?? 0, volume?.updatedAt ?? 0, state?.binance.lastSyncTs ?? 0);
 
-  // Run-up / drawdown segments from equity snapshots (peak/trough walk).
-  const segs = useMemo(() => {
-    const snaps = pnl?.equitySnapshots ?? [];
-    if (snaps.length < 3) return null;
-    const ups: { ms: number; pct: number }[] = [];
-    const downs: { ms: number; pct: number }[] = [];
-    let start = 0;
-    let dir: 'up' | 'down' | null = null;
-    for (let i = 1; i < snaps.length; i++) {
-      const step: 'up' | 'down' = snaps[i].totalUsdt >= snaps[i - 1].totalUsdt ? 'up' : 'down';
-      if (dir === null) dir = step;
-      if (step !== dir || i === snaps.length - 1) {
-        const endIdx = i === snaps.length - 1 && step === dir ? i : i - 1;
-        const pct = snaps[start].totalUsdt > 0 ? (snaps[endIdx].totalUsdt / snaps[start].totalUsdt - 1) * 100 : 0;
-        const ms = snaps[endIdx].ts - snaps[start].ts;
-        if (Math.abs(pct) >= 0.01 && ms > 0) (dir === 'up' ? ups : downs).push({ ms, pct });
-        start = endIdx;
-        dir = step;
-      }
-    }
-    const avg = (arr: { ms: number }[]) => (arr.length ? arr.reduce((x, y) => x + y.ms, 0) / arr.length : null);
-    const maxUp = ups.length ? Math.max(...ups.map((u) => u.pct)) : null;
-    return { ups, downs, avgUpMs: avg(ups), avgDownMs: avg(downs), maxUp };
-  }, [pnl?.equitySnapshots]);
-
-  // Day analysis (TradingView "trades analysis", honestly per-day).
-  const dayStats = useMemo(() => {
-    if (!days.length) return null;
-    const best = days.reduce((a, b) => (b.usd > a.usd ? b : a));
-    const worst = days.reduce((a, b) => (b.usd < a.usd ? b : a));
-    const winsArr = days.filter((d) => d.usd > 0).map((d) => d.usd);
-    const lossArr = days.filter((d) => d.usd < 0).map((d) => d.usd);
-    const avgWin = winsArr.length ? winsArr.reduce((a, b) => a + b, 0) / winsArr.length : null;
-    const avgLoss = lossArr.length ? Math.abs(lossArr.reduce((a, b) => a + b, 0) / lossArr.length) : null;
-    let streak = 0;
-    let maxStreak = 0;
-    for (const d of days) {
-      streak = d.usd > 0 ? streak + 1 : 0;
-      maxStreak = Math.max(maxStreak, streak);
-    }
-    return { best, worst, avgWin, avgLoss, plRatio: avgWin !== null && avgLoss ? avgWin / avgLoss : null, maxStreak, curStreak: streak };
-  }, [days]);
-
-  if (!s) {
+  if (!state) {
     return (
-      <div className="container page hp-page">
-        <div className="hp-loading">
-          <Pill tone="idle">Connecting</Pill>
-          <b>Waiting for server state…</b>
-        </div>
+      <div className="container page dash-page dcx-page">
+        <section className="dcx-frame dcx-loading" aria-label="dashboard workspace">
+          <Radio size={18} />
+          <span><b>Connecting Dashboard</b><small>Waiting for account, engine, and ledger state.</small></span>
+        </section>
       </div>
     );
   }
 
-  const scannerFresh = s.scanner.lastTickTs ? Date.now() - s.scanner.lastTickTs < 45_000 : false;
-  const acct = s.account;
-  const posture = s.binance.keyPosture;
-
-  const structureRows = [
-    { label: 'Total profit', value: grossProfit, cls: 'pos' },
-    { label: 'Total loss', value: -grossLoss, cls: 'neg' },
-    { label: 'Fees (USDT)', value: -usdtFees, cls: 'fee' },
-    { label: 'Net PnL', value: totalRealized - usdtFees, cls: totalRealized - usdtFees >= 0 ? 'pos' : 'neg' },
-  ];
-  const structureMax = Math.max(1e-9, ...structureRows.map((r) => Math.abs(r.value)));
+  const open = (page: Page) => setPage(page);
 
   return (
-    <div className="container page hp-page wide dash-page">
-      {/* ================= ZONE 1 · OVERVIEW ============================ */}
-      <section className="hp-group lg-feed dash-perf">
-        <div className="lg-feed-head">
-          <h3>Account performance</h3>
-          <span className="hp-val">
-            {perfMode === 'equity' ? (
-              <>
-                <span className="pc-key pos" /> live equity · {pnl?.equitySnapshots.length ?? 0} snapshots
-              </>
-            ) : perfMode === 'usd' ? (
-              <>
-                <span className="pc-key pos" /> cumulative PnL
-                <span className="pc-key bars" /> daily realized
-              </>
-            ) : (
-              <>
-                <span className="pc-key pos" /> strategy %
-                <span className="pc-key bench" /> BTC buy &amp; hold
-              </>
-            )}
-            <Seg
-              value={perfMode}
-              options={[
-                { id: 'equity', label: 'Equity' },
-                { id: 'usd', label: 'PnL' },
-                { id: 'pct', label: 'ROI %' },
-              ]}
-              onChange={setPerfMode}
-            />
-          </span>
-        </div>
-      <div className="hp-stats dash-keystats">
-        <div className="hp-stat">
-          <span className="k">Total equity</span>
-          <span className="v">{acct ? <Num value={acct.totalUsdt}>{fmtPrice(acct.totalUsdt)}</Num> : '—'}</span>
-          <span className="s">{acct ? `${fmtPrice(acct.availableUsdt)} free · ${fmtPrice(exposure)} exposed` : 'read sync pending'}</span>
-        </div>
-        <div className="hp-stat">
-          <span className="k">Total PnL</span>
-          <span className={`v ${days.length ? signClass(totalRealized) : ''}`}>
-            {days.length ? fmtPrice(totalRealized) : '—'}
-          </span>
-          <span className="s">{totalPct !== null && days.length ? `${totalPct >= 0 ? '+' : ''}${totalPct.toFixed(2)}% on starting equity` : `realized · ${days.length} day${days.length === 1 ? '' : 's'} of history`}</span>
-        </div>
-        <div className="hp-stat">
-          <span className="k">Max drawdown</span>
-          <span className="v">{dd ? `${dd.pct.toFixed(2)}%` : '—'}</span>
-          <span className="s">{dd ? `${fmtPrice(dd.usd)} peak to trough` : 'needs equity snapshots'}</span>
-        </div>
-        <div className="hp-stat">
-          <span className="k">Win rate</span>
-          <span className="v">{winRate !== null ? `${winRate.toFixed(0)}%` : '—'}</span>
-          <span className="s">{days.length ? `${winDays.length}W / ${lossDays.length}L days` : 'no closed PnL days yet'}</span>
-        </div>
-        <div className="hp-stat">
-          <span className="k">Profit factor</span>
-          <span className="v">{profitFactor === null ? '—' : profitFactor === Infinity ? '∞' : profitFactor.toFixed(2)}</span>
-          <span className="s">{profitFactor === Infinity ? 'no losing day recorded yet' : 'gross profit / gross loss'}</span>
-        </div>
-        <div className="hp-stat">
-          <span className="k">Sharpe</span>
-          <span className="v">{sr !== null ? sr.toFixed(2) : '—'}</span>
-          <span className="s">{sr !== null ? 'annualized from snapshots' : `needs ${Math.max(0, 8 - equity.length)} more snapshots`}</span>
-        </div>
-      </div>
+    <div className="container page dash-page dcx-page">
+      <section className="dcx-frame" aria-label="dashboard workspace">
+        <header className="dcx-toolbar">
+          <div className="dcx-title">
+            <h1>Dashboard</h1>
+            <span className={`dcx-live ${systemLive ? 'active' : 'degraded'}`}><i aria-hidden="true" />{systemLive ? 'System Live' : 'Review Required'}</span>
+            <span className="dcx-updated">{latestUpdate ? `Updated ${timeAgo(latestUpdate)}` : 'Connecting Sources'}</span>
+          </div>
+          <div className="dcx-toolbar-actions">
+            <button type="button" onClick={() => open('account')}><WalletCards size={14} />Account</button>
+            <button type="button" onClick={() => open('risk')}><ShieldCheck size={14} />Risk</button>
+          </div>
+        </header>
 
+        <div className="dcx-summary" aria-label="Executive Summary">
+          <Metric label="Estimated Total Value" value={account ? fmtPrice(account.totalUsdt) : '—'} detail="Signed Binance Account" />
+          <Metric
+            label="Today’s Account Change"
+            value={finite(dayChange) ? `${dayChange > 0 ? '+' : ''}${fmtPrice(dayChange)}` : '—'}
+            detail={dayChangePct === null ? 'Day Open Unavailable' : `${dayChangePct > 0 ? '+' : ''}${dayChangePct.toFixed(2)}% From Day Open`}
+            tone={finite(dayChange) ? (dayChange >= 0 ? 'ok' : 'bad') : 'idle'}
+          />
+          <Metric label="Available USDT" value={account ? fmtPrice(account.availableUsdt) : '—'} detail="Free Spot Balance" />
+          <Metric label="Active Exposure" value={fmtPrice(exposure)} detail={`${positions.length} Position${positions.length === 1 ? '' : 's'} · ${fmtMoney(heldNotional)} Held`} />
+          <Metric label="Engine Queue" value={String(queueCount)} detail={`${(basis?.status.openProposals ?? 0) + (volume?.status.openProposals ?? 0)} Open Proposals`} tone={queueCount ? 'warn' : 'idle'} />
+          <Metric label="Control State" value={controlState.label} detail={controlState.detail} tone={controlState.tone} />
+        </div>
 
-        {perfMode === 'equity' ? (
-          (pnl?.equitySnapshots.length ?? 0) >= 2 ? (
-            <div className="dash-perf-body">
-              <EquityChart snaps={pnl!.equitySnapshots} />
+        <section className="dcx-section dcx-capital-section">
+          <header className="dcx-section-head">
+            <span><b>Account Progress</b><small>Spot Balance History · Transfers And Borrowing Included · Not Strategy PnL</small></span>
+            <div className="dcx-range" role="tablist" aria-label="Account History Range">
+              {RANGES.map((item) => (
+                <button key={item.id} type="button" role="tab" aria-selected={range === item.id} onClick={() => setRange(item.id)}>{item.id}</button>
+              ))}
             </div>
-          ) : (
-            <div className="lg-empty-pad">
-              <Empty title="Equity snapshots are warming up">The account is snapshotted every 15 minutes once connected.</Empty>
+          </header>
+          <div className="dcx-capital-grid">
+            <div className="dcx-chart-wrap">
+              {historyPoints.length >= 2 ? (
+                <EquityChart snaps={historyPoints} height={230} />
+              ) : (
+                <div className="dcx-empty"><BarChart3 size={18} /><span><b>Balance History Is Loading</b><small>The chart waits for the signed Binance history route.</small></span></div>
+              )}
+              <div className="dcx-chart-facts">
+                <span><small>Range Open</small><b>{historyStats ? fmtPrice(historyStats.first) : '—'}</b></span>
+                <span><small>Range Change</small><b className={historyStats ? signClass(historyStats.change) : ''}>{historyStats ? `${historyStats.change > 0 ? '+' : ''}${fmtPrice(historyStats.change)}` : '—'}</b></span>
+                <span><small>Range High</small><b>{historyStats ? fmtPrice(historyStats.high) : '—'}</b></span>
+                <span><small>Range Low</small><b>{historyStats ? fmtPrice(historyStats.low) : '—'}</b></span>
+              </div>
             </div>
-          )
-        ) : days.length >= 2 ? (
-          <div className="dash-perf-body">
-            <PerfChart days={days} mode={baseEquity && perfMode === 'pct' ? 'pct' : 'usd'} base={baseEquity} bench={bench} />
-            {perfMode === 'pct' && !bench && <p className="loan-console-note">Benchmark needs BTC daily closes covering the PnL window.</p>}
-          </div>
-        ) : (
-          <div className="lg-empty-pad">
-            <Empty title="Realized PnL curve arms after the first closed round-trips">
-              Switch to Equity for the live account curve — realized PnL and daily bars draw from ledgered fills only, never simulated.
-            </Empty>
-          </div>
-        )}
-      </section>
-
-      {days.length === 0 && winnersBySymbol.length === 0 ? (
-        <div className="hp-note dash-arming">
-          Realized analytics — distribution, attribution, profit structure, day analysis — arm automatically when the first round-trips close. Nothing here is simulated.
-        </div>
-      ) : (
-      <div className="dash-analytics">
-        <section className="hp-group lg-feed">
-          <div className="lg-feed-head">
-            <h3>Returns distribution</h3>
-            <span>{days.length ? `${days.length} daily results` : 'waiting'}</span>
-          </div>
-          {days.length >= 3 ? (
-            <div className="dash-chart-pad"><DistChart days={days} /></div>
-          ) : (
-            <div className="lg-empty-pad"><Empty title="Needs 3+ PnL days">The histogram of daily results appears with history.</Empty></div>
-          )}
-        </section>
-
-        <section className="hp-group lg-feed">
-          <div className="lg-feed-head">
-            <h3>Attribution</h3>
-            <span>{winnersBySymbol.length ? `${bySymbol.length} symbols` : 'waiting'}</span>
-          </div>
-          {winnersBySymbol.length ? (
-            <div className="dash-donut">
-              <Donut slices={winnersBySymbol.map((r) => ({ label: baseOf(r.symbol), value: r.usd }))} size={124} />
-              <div className="dash-donut-legend">
-                {bySymbol.slice(0, 5).map((r) => (
-                  <button key={r.symbol} type="button" onClick={() => openDetail(r.symbol)}>
-                    <span><i style={{ background: brandColor(r.symbol) }} />{baseOf(r.symbol)}</span>
-                    <b className={signClass(r.usd)}>{fmtPrice(r.usd)}</b>
-                  </button>
+            <aside className="dcx-integrity" aria-label="Core Systems">
+              <div className="dcx-integrity-head">
+                <span><b>Core Systems</b><small>{passingChecks} Of {integrityChecks.length} Core Checks Passing</small></span>
+                <strong>{passingChecks}/{integrityChecks.length}</strong>
+              </div>
+              <div className="dcx-integrity-list">
+                {integrityChecks.map((check) => (
+                  <div key={check.label} className="dcx-integrity-row">
+                    <StatusMark tone={check.tone} />
+                    <span><b>{check.label}</b><small>{check.detail}</small></span>
+                  </div>
                 ))}
               </div>
-            </div>
-          ) : (
-            <div className="lg-empty-pad"><Empty title="No closed symbol PnL">Attribution starts after the first sell fill matches average cost.</Empty></div>
-          )}
+            </aside>
+          </div>
         </section>
 
-        <section className="hp-group lg-feed">
-          <div className="lg-feed-head">
-            <h3>Profit structure</h3>
-            <span>{otherFeeAssets ? `+${otherFeeAssets} non-USDT fee asset${otherFeeAssets === 1 ? '' : 's'}` : 'ledger totals'}</span>
-          </div>
-          <div className="dash-structure">
-            {structureRows.map((r) => (
-              <div key={r.label} className="dash-struct-row">
-                <span className="dash-struct-label">{r.label}</span>
-                <span className="dash-struct-track">
-                  <i className={r.cls} style={{ width: `${Math.max(days.length ? 2 : 0, (Math.abs(r.value) / structureMax) * 100)}%` }} />
-                </span>
-                <b className={`num ${r.value > 0 ? 'up' : r.value < 0 ? 'down' : ''}`}>{days.length ? fmtPrice(r.value) : '—'}</b>
+        <section className="dcx-section dcx-runtime-section">
+          <header className="dcx-section-head">
+            <span><b>Strategy Runtime</b><small>Live Engine Stages · Intake To Proposal</small></span>
+            <em>{runtimeRows.filter((row) => row.tone === 'ok').length}/{runtimeRows.length} Engines Live</em>
+          </header>
+          <div className="dcx-runtime-scroll">
+            <div className="dcx-runtime-canvas" role="table" aria-label="Strategy Runtime">
+              <div className="dcx-runtime-header" role="row">
+                <span role="columnheader">Engine</span><span role="columnheader">Intake</span><span role="columnheader">Coverage</span><span role="columnheader">Watching</span><span role="columnheader">Focused</span><span role="columnheader">Proposals</span><span role="columnheader">Primary Constraint</span><span role="columnheader">Updated</span>
               </div>
-            ))}
-          </div>
-        </section>
-      </div>
-
-      )}
-
-      {/* ================= ZONE 2 · STRATEGY BRAIN ====================== */}
-      <Sec>Strategy brain</Sec>
-      <Group>
-        <Row
-          icon={<IconBrain size={15} />}
-          tint={TINT.indigo}
-          label="basis-scanner"
-          sub={`${s.scanner.pairs} pairs · ${s.scanner.watching} watching · gate ${s.scanner.grossThresholdPct.toFixed(2)}% · tick ${s.scanner.lastTickTs ? timeAgo(s.scanner.lastTickTs) : '—'}`}
-          end={
-            <>
-              <span className="hp-val">{proposals.length} proposal{proposals.length === 1 ? '' : 's'}</span>
-              <Pill tone={scannerFresh ? 'ok' : 'bad'}>{scannerFresh ? 'running' : 'stale'}</Pill>
-              <button className="hp-btn" type="button" onClick={() => setPage('strategies')}>Monitor</button>
-            </>
-          }
-        />
-        <Row
-          icon={<IconPulse size={15} />}
-          tint={TINT.teal}
-          label="volume-scanner"
-          sub="88/88 synthetic proofs · live stream adapters pending — never simulated."
-          end={
-            <>
-              <Pill tone="idle">not wired</Pill>
-              <button className="hp-btn" type="button" onClick={() => setPage('volume')}>Board</button>
-            </>
-          }
-        />
-        {proposals.slice(0, 3).map((p) => (
-          <Row
-            key={p.id}
-            icon={<TokenIcon symbol={p.symbol} size={16} />}
-            label={`${baseOf(p.symbol)} · ${p.side === 'SHORT_PERP_LONG_SPOT' ? 'carry' : 'borrow'} setup`}
-            sub={p.reason}
-            end={
-              <>
-                <span className={`hp-val ${signClass(p.netEdgePct)}`}>{fmtPct(p.netEdgePct, 2)}</span>
-                <button className="hp-btn" type="button" onClick={() => void approveProposal(p.id)}>Ticket</button>
-                <button className="hp-btn" type="button" onClick={() => setPage('opportunities')}>Inspect</button>
-              </>
-            }
-          />
-        ))}
-        <Row
-          icon={<IconShield size={15} />}
-          tint={TINT.red}
-          label="risk-gate"
-          sub={lastRejection ? `last reject ${timeAgo(lastRejection.ts)} — ${rejectionInfo(lastRejection)}` : 'No rejected decisions in the current snapshot.'}
-          end={
-            <>
-              <span className="hp-val">{s.risk.rejectionsToday} today</span>
-              <button className="hp-btn" type="button" onClick={() => setPage('ledger')}>Logs</button>
-            </>
-          }
-        />
-      </Group>
-
-      {/* ================= ZONE 3 · OPS & CONTEXT ======================= */}
-      <div className="dash-grid">
-        <div className="dash-col">
-          <Sec>Control &amp; security</Sec>
-          <Group>
-            <Row
-              icon={<IconPower size={15} />}
-              tint={TINT.red}
-              label="Kill switch"
-              sub={s.config.killSwitch ? 'Live orders stop before routing.' : 'Off — the server risk gate still checks every order.'}
-              end={
-                <>
-                  <Pill tone={s.config.killSwitch ? 'bad' : 'ok'}>{s.config.killSwitch ? 'On' : 'Off'}</Pill>
-                  <button className="hp-btn" type="button" onClick={() => setPage('risk')}>Risk</button>
-                </>
-              }
-            />
-            <Row
-              icon={<IconKey size={15} />}
-              tint={TINT.orange}
-              label="Key posture"
-              sub={s.binance.keyFingerprint ? `key ${s.binance.keyFingerprint} · server-side only` : 'no server keys configured'}
-              end={<Pill tone={posture.tone as Tone}>{posture.label}</Pill>}
-            />
-            <Row
-              icon={<IconList size={15} />}
-              tint={TINT.blue}
-              label="Execution truth"
-              sub={`${openOrders.length}/${s.config.maxOpenOrders} open orders · ${fmtMoney(heldNotional)} held · ${positions.length} position${positions.length === 1 ? '' : 's'}`}
-              end={<button className="hp-btn" type="button" onClick={() => setPage('orders')}>Execution</button>}
-            />
-            <Row
-              icon={<IconWallet size={15} />}
-              tint={TINT.green}
-              label="Daily notional"
-              sub={`${fmtMoney(s.risk.dailyNotionalUsedUsd)} used of ${fmtMoney(s.config.maxDailyNotionalUsd)} cap`}
-              end={
-                <span className="hp-val">
-                  <Dot tone={s.risk.dailyNotionalUsedUsd < s.config.maxDailyNotionalUsd ? 'ok' : 'bad'} />
-                  {fmtMoney(Math.max(0, s.config.maxDailyNotionalUsd - s.risk.dailyNotionalUsedUsd))} left
-                </span>
-              }
-            />
-          </Group>
-        </div>
-
-        <div className="dash-col">
-          <Sec>System</Sec>
-          <Group>
-            <Row
-              icon={<IconWifi size={15} />}
-              tint={TINT.blue}
-              label="Account stream"
-              sub={s.binance.userStream === 'open' ? 'User stream live.' : 'Signed polling keeps account truth fresh.'}
-              end={<Pill tone={s.binance.connected ? (s.binance.userStream === 'open' ? 'ok' : 'warn') : 'bad'}>{s.binance.connected ? (s.binance.userStream === 'open' ? 'stream' : 'polling') : 'down'}</Pill>}
-            />
-            <Row
-              icon={<IconPulse size={15} />}
-              tint={TINT.green}
-              label="Market feed"
-              sub={s.scanner.lastTickTs ? `scanner tick ${timeAgo(s.scanner.lastTickTs)}` : 'waiting for first tick'}
-              end={<Pill tone={scannerFresh ? 'ok' : 'bad'}>{scannerFresh ? 'live' : 'stale'}</Pill>}
-            />
-            <Row
-              icon={<IconBrain size={15} />}
-              tint={TINT.indigo}
-              label="Engine heartbeat"
-              sub="Engine process heartbeat not started."
-              end={
-                <>
-                  <Pill tone="idle">not started</Pill>
-                  <button className="hp-btn" type="button" onClick={() => setPage('system')}>Health</button>
-                </>
-              }
-            />
-            <Row
-              icon={<IconBook size={15} />}
-              tint={TINT.indigo}
-              label="Ledger"
-              sub={`${s.events.length} events in state · every action recorded`}
-              end={<button className="hp-btn" type="button" onClick={() => setPage('ledger')}>Logs</button>}
-            />
-            <Row
-              icon={<IconTerminal size={15} />}
-              tint={TINT.orange}
-              label="AWS cost &amp; usage"
-              sub="Cost Explorer not connected — no invented billing numbers."
-              end={<Pill tone="idle">not connected</Pill>}
-            />
-          </Group>
-        </div>
-
-        <div className="dash-col">
-          <Sec>Intelligence</Sec>
-          <section className="hp-group lg-facet dash-events">
-            <h3><IconNewspaper size={12} /> Latest listings</h3>
-            {news === null ? (
-              <div className="lg-empty-pad"><Empty title="Fetching news…" /></div>
-            ) : news.length === 0 ? (
-              <div className="lg-empty-pad"><Empty title="News feed unavailable">Binance could not be reached — nothing is invented.</Empty></div>
-            ) : (
-              news.map((it) => (
-                <a key={it.id} href={it.url} target="_blank" rel="noreferrer noopener" title={it.title}>
-                  <span>{it.title}</span>
-                </a>
-              ))
-            )}
-            <h3><IconCalendar size={12} /> High-impact events</h3>
-            {cal === null ? (
-              <div className="lg-empty-pad"><Empty title="Fetching calendar…" /></div>
-            ) : cal.length === 0 ? (
-              <div className="lg-empty-pad"><Empty title="No upcoming high-impact events" /></div>
-            ) : (
-              cal.map((it) => (
-                <button key={it.id} type="button" onClick={() => setPage('calendar')} title={it.title}>
-                  <span>{it.country} · {it.title}</span>
-                  <b>{new Date(it.date).toLocaleString('en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</b>
+              {runtimeRows.map((row) => (
+                <button className="dcx-runtime-row" type="button" role="row" key={row.id} onClick={() => open(row.page)}>
+                  <span className="dcx-runtime-engine" role="cell">
+                    <i className={`dcx-runtime-icon ${row.id}`}>{row.id === 'basis' ? <Gauge size={17} /> : <ScanLine size={17} />}</i>
+                    <span><b>{row.name}</b><small>{row.source}</small></span>
+                    <em className={row.tone}><i />{row.state}</em>
+                  </span>
+                  <span className="dcx-runtime-value" role="cell"><b>{row.intake}</b><small>Source Universe</small></span>
+                  <span className="dcx-runtime-value" role="cell"><b>{row.coverage}</b><small>{row.id === 'basis' ? 'Quality Passing' : 'Baselines Ready'}</small></span>
+                  <span className="dcx-runtime-value" role="cell"><b>{row.watching}</b><small>Near Gate</small></span>
+                  <span className="dcx-runtime-value" role="cell"><b>{row.focused}</b><small>Deep Checks</small></span>
+                  <span className="dcx-runtime-value" role="cell"><b>{row.proposals}</b><small>All Gates Passed</small></span>
+                  <span className="dcx-runtime-constraint" role="cell"><b>{row.constraint}</b><small>{row.id === 'basis' ? `${basis?.status.verifiedBorrow ?? 0} Borrow Verified` : `${volume?.status.tradeMessages.toLocaleString() ?? '—'} Trade Messages`}</small></span>
+                  <span className="dcx-runtime-open" role="cell"><b>{sourceAge(row.updatedAt)}</b><ChevronRight size={14} /></span>
                 </button>
-              ))
-            )}
-            <button type="button" onClick={() => setPage('news')}>
-              <span>Open News &amp; Calendar</span>
-              <b>→</b>
-            </button>
-          </section>
-        </div>
-      </div>
-
-      <Sec>Performance diagnostics</Sec>
-      <div className="dash-analytics dash-analytics2">
-        <section className="hp-group lg-feed">
-          <div className="lg-feed-head">
-            <h3>Equity movement</h3>
-            <span>{segs ? `${segs.ups.length} run-ups · ${segs.downs.length} drawdowns` : 'needs equity snapshots'}</span>
+              ))}
+            </div>
           </div>
-          {segs ? (
-            <dl className="lg-facts dash-facts">
-              <div><dt>Avg run-up</dt><dd className="num">{segs.avgUpMs !== null ? duration(0, segs.avgUpMs) : '—'}</dd></div>
-              <div><dt>Avg drawdown</dt><dd className="num">{segs.avgDownMs !== null ? duration(0, segs.avgDownMs) : '—'}</dd></div>
-              <div><dt>Max run-up</dt><dd className="num up">{segs.maxUp !== null ? `+${segs.maxUp.toFixed(2)}%` : '—'}</dd></div>
-              <div><dt>Max DD of capital</dt><dd className="num down">{dd && baseEquity ? `${((dd.usd / baseEquity) * 100).toFixed(2)}%` : '—'}</dd></div>
-              <div><dt>Return / max DD</dt><dd className="num">{dd && dd.usd > 0 ? (totalRealized / dd.usd).toFixed(2) : '—'}</dd></div>
-            </dl>
-          ) : (
-            <div className="lg-empty-pad"><Empty title="Needs 3+ equity snapshots">Run-up and drawdown durations are measured on the real equity curve.</Empty></div>
-          )}
         </section>
 
-        <section className="hp-group lg-feed">
-          <div className="lg-feed-head">
-            <h3>Day analysis</h3>
-            <span>{days.length ? `${days.length} PnL days` : 'waiting'}</span>
+        <section className="dcx-operations">
+          <div className="dcx-attention">
+            <header className="dcx-section-head">
+              <span><b>Attention Queue</b><small>Current Constraints And Highest-Signal Work</small></span>
+            </header>
+            <div className="dcx-attention-list">
+              <button type="button" onClick={() => open('loans')}>
+                <StatusMark tone={basis?.status.borrowBlocked ? 'warn' : 'ok'} />
+                <span><b>Borrow Verification</b><small>{basis?.status.borrowBlocked ? `${basis.status.borrowBlocked} Reverse-Basis Decisions Blocked` : 'No Borrow Blocker In The Current Runtime'}</small></span>
+                <em>{basis?.status.verifiedBorrow ?? 0} Verified</em><ChevronRight size={14} />
+              </button>
+              <button type="button" onClick={() => open('strategies')}>
+                <StatusMark tone={topBasis ? (topBasis.decisionKind === 'proposal' ? 'ok' : 'warn') : 'idle'} />
+                <span><b>{topBasis ? `${topBasis.base} Basis Decision` : 'Basis Decision Queue'}</b><small>{topBasis?.reason ?? 'No Basis Decision Above The Watch Gate'}</small></span>
+                <em className={finite(topBasis?.netEdgePct) ? signClass(topBasis?.netEdgePct ?? 0) : ''}>{finite(topBasis?.netEdgePct) ? `${(topBasis?.netEdgePct ?? 0) > 0 ? '+' : ''}${topBasis?.netEdgePct.toFixed(2)}%` : '—'}</em><ChevronRight size={14} />
+              </button>
+              <button type="button" onClick={() => open('volume')}>
+                <StatusMark tone={topVolume ? (topVolume.state === 'PROPOSED' ? 'ok' : topVolume.state === 'FOCUS' ? 'warn' : 'idle') : 'idle'} />
+                <span><b>{topVolume ? `${topVolume.base} Volume Decision` : 'Volume Decision Queue'}</b><small>{topVolume?.reason ?? 'No Volume Decision Above The Watch Gate'}</small></span>
+                <em>{topVolume?.state ? titleCase(topVolume.state.toLowerCase()) : '—'}</em><ChevronRight size={14} />
+              </button>
+              <button type="button" onClick={() => open('risk')}>
+                <StatusMark tone={state.config.killSwitch ? 'ok' : state.config.liveTradingEnabled ? 'warn' : 'ok'} />
+                <span><b>Execution Guard</b><small>{state.config.killSwitch ? 'Bot Stopped Before Order Routing' : state.config.liveTradingEnabled ? 'Live Orders Require The Full Risk Gate' : 'Manual Guarded Mode · Live Orders Off'}</small></span>
+                <em>{state.risk.rejectionsToday} Rejected Today</em><ChevronRight size={14} />
+              </button>
+            </div>
           </div>
-          {dayStats ? (
+
+          <div className="dcx-decisions">
+            <header className="dcx-section-head">
+              <span><b>Recent Decisions</b><small>Ledgered Engine And Risk Evidence</small></span>
+              <button type="button" onClick={() => open('ledger')}>Open Logs <ArrowUpRight size={13} /></button>
+            </header>
+            <div className="dcx-decision-list">
+              {recentDecisions.length ? recentDecisions.map((event) => (
+                <button type="button" key={event.id} onClick={() => open('ledger')}>
+                  <span className="dcx-decision-time">{new Date(event.ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                  <StatusMark tone={eventTone(event)} />
+                  <span className="dcx-decision-source"><b>{strategyLabel(event)}</b><small>{event.symbol ?? 'System'}</small></span>
+                  <span className="dcx-decision-message">{decisionMessage(event)}</span>
+                  <em>{titleCase(String(eventData(event).kind ?? eventData(event).rejectCode ?? event.kind))}</em>
+                </button>
+              )) : (
+                <div className="dcx-empty compact"><Activity size={17} /><span><b>No Recent Strategy Decisions</b><small>The ledger has no decision evidence in the current state window.</small></span></div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className="dcx-section dcx-performance">
+          <header className="dcx-section-head">
+            <span><b>Validated Strategy Performance</b><small>Closed Ledger Round-Trips Only · Account Balance Movement Is Excluded</small></span>
+            <em>{pnlDays.length} Realized Day{pnlDays.length === 1 ? '' : 's'}</em>
+          </header>
+          {pnlDays.length ? (
             <>
-            <div className="dash-wl"><WinLoseBar win={winDays.length} lose={lossDays.length} winLabel="Win days" loseLabel="Loss days" /></div>
-            <dl className="lg-facts dash-facts">
-              <div><dt>Best day</dt><dd className="num up">{fmtPrice(dayStats.best.usd)} <em>{dayStats.best.day.slice(5)}</em></dd></div>
-              <div><dt>Worst day</dt><dd className={`num ${dayStats.worst.usd < 0 ? 'down' : ''}`}>{fmtPrice(dayStats.worst.usd)} <em>{dayStats.worst.day.slice(5)}</em></dd></div>
-              <div><dt>Avg win / loss day</dt><dd className="num">{dayStats.avgWin !== null ? fmtPrice(dayStats.avgWin) : '—'} / {dayStats.avgLoss !== null ? fmtPrice(-dayStats.avgLoss) : '—'}</dd></div>
-              <div><dt>Win : loss ratio</dt><dd className="num">{dayStats.plRatio !== null ? `${dayStats.plRatio.toFixed(2)} : 1` : '—'}</dd></div>
-              <div><dt>Win streak</dt><dd className="num">{dayStats.curStreak} now · {dayStats.maxStreak} best</dd></div>
-            </dl>
+              <div className="dcx-performance-summary">
+                <Metric label="Realized PnL" value={`${realizedTotal > 0 ? '+' : ''}${fmtPrice(realizedTotal)}`} detail="Ledgered Closed Fills" tone={realizedTotal >= 0 ? 'ok' : 'bad'} />
+                <Metric label="Trading Days" value={String(pnlDays.length)} detail="With Realized PnL" />
+                <Metric label="Winning Days" value={String(winningDays.length)} detail={`${pnlDays.length ? ((winningDays.length / pnlDays.length) * 100).toFixed(0) : 0}% Day Win Rate`} />
+                <Metric label="Losing Days" value={String(losingDays.length)} detail="Closed-Day Outcomes" />
+                <Metric label="Daily Profit Factor" value={dailyProfitFactor === null ? '—' : dailyProfitFactor === Infinity ? '∞' : dailyProfitFactor.toFixed(2)} detail="Gross Winning Days / Losing Days" />
+                <Metric label="USDT Fees" value={fmtPrice(usdtFees)} detail="Recorded Fee Asset" />
+              </div>
+              {pnlDays.length >= 2 ? <div className="dcx-performance-chart"><PerfChart days={pnlDays} /></div> : null}
             </>
           ) : (
-            <div className="lg-empty-pad"><Empty title="No PnL days yet">Best/worst days, averages, and streaks appear with closed round-trips.</Empty></div>
+            <div className="dcx-empty-performance">
+              <BarChart3 size={20} />
+              <span><b>Performance Reporting Is Waiting For The First Closed Round-Trip</b><small>Trade PnL, win rate, profit factor, and drawdown remain unreported until the ledger has real closed outcomes. No account snapshot is used as a substitute.</small></span>
+              <button type="button" onClick={() => open('account')}>Review Fills <ChevronRight size={14} /></button>
+            </div>
           )}
         </section>
-      </div>
 
+        <footer className="dcx-source-footer">
+          <span><Database size={13} />Sources: Binance Signed Account, Spot And USD-M Streams, Engine Snapshots, SQLite Ledger</span>
+          <span>{system ? `${system.restLatencyMs ?? '—'} ms REST · ${system.usedWeight1m ?? '—'} Weight / Min · ${Math.round(system.uptimeSec / 60)} Min Uptime` : 'System Source Checking'}</span>
+        </footer>
+      </section>
     </div>
   );
 }

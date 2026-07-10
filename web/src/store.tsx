@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { applyPrefs, getPrefs, onPrefs, resolvedTheme, setPref, CURRENCIES, type Prefs } from './lib/prefs';
-import { setBasisBps, setDisplayUtc, setFxRate } from './format';
+import { setBasisUnit, setDisplayUtc, setFxRate } from './format';
 import { fireRefresh } from './lib/refresh';
 import type {
   AppConfig,
@@ -47,13 +47,14 @@ export type Page =
   | 'risk'
   | 'ledger'
   | 'system'
+  | 'notifications'
   | 'news'
   | 'calendar';
 
 const PAGE_IDS: Page[] = [
   'dashboard', 'account', 'wallets', 'markets', 'detail', 'loans', 'orders',
   'positions', 'fills', 'pnl', 'strategies', 'volume', 'opportunities', 'risk', 'ledger', 'system',
-  'news', 'calendar',
+  'notifications', 'news', 'calendar',
 ];
 
 interface Store {
@@ -142,7 +143,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     applyPrefs();
     const p = getPrefs();
     setDisplayUtc(p.timezone === 'utc');
-    setBasisBps(p.basisUnit === 'bps');
+    setBasisUnit(p.basisUnit);
     return p;
   });
   // Restore the tab the owner was on across a hard refresh (localStorage),
@@ -157,7 +158,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [, bumpFx] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
-  const connectRef = useRef<(() => void) | null>(null);
+  const reconnectRef = useRef<(() => void) | null>(null);
 
   // Display currency → live FX rate (USD base). USD is identity; others fetch.
   useEffect(() => {
@@ -191,17 +192,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => onPrefs((p) => {
     setPrefs(p);
     setDisplayUtc(p.timezone === 'utc');
-    setBasisBps(p.basisUnit === 'bps');
+    setBasisUnit(p.basisUnit);
   }), []);
 
   // follow system theme changes when theme = system
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const motionMq = window.matchMedia('(prefers-reduced-motion: reduce)');
     const fn = () => {
-      if (getPrefs().theme === 'system') applyPrefs();
+      const current = getPrefs();
+      if (current.theme === 'system' || current.motion === 'system') applyPrefs();
     };
     mq.addEventListener('change', fn);
-    return () => mq.removeEventListener('change', fn);
+    motionMq.addEventListener('change', fn);
+    return () => {
+      mq.removeEventListener('change', fn);
+      motionMq.removeEventListener('change', fn);
+    };
   }, []);
 
   useEffect(() => {
@@ -212,7 +219,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     let closed = false;
     let retry: number | undefined;
+    let generation = 0;
     function connect() {
+      const socketGeneration = ++generation;
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       const ws = new WebSocket(`${proto}://${location.host}/ws`);
       wsRef.current = ws;
@@ -233,17 +242,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       };
       ws.onclose = () => {
+        if (socketGeneration !== generation) return;
         setConnected(false);
         if (!closed) retry = window.setTimeout(connect, 3000);
       };
       ws.onerror = () => ws.close();
     }
-    connectRef.current = connect;
+    reconnectRef.current = () => {
+      if (retry) window.clearTimeout(retry);
+      generation += 1;
+      const previous = wsRef.current;
+      wsRef.current = null;
+      if (previous && previous.readyState !== WebSocket.CLOSED) previous.close();
+      setConnected(false);
+      window.setTimeout(connect, 80);
+    };
     connect();
 
     return () => {
       closed = true;
       if (retry) clearTimeout(retry);
+      reconnectRef.current = null;
       wsRef.current?.close();
     };
   }, []);
@@ -290,15 +309,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return next;
   }, []);
 
-  // In-place "refresh everything" for the top-bar button: force a server-side
-  // Binance/account resync, re-pull the shared snapshot + markets, reconnect a
-  // dead socket, and fan a signal out to per-page fetchers — all WITHOUT a page
-  // reload. Returns a health verdict so the button can go green or red.
+  // In-place reset for the bottom Connection Control: rebuild the browser
+  // socket, ask the server to reset every live source, then fan a refresh signal
+  // to page-owned fetchers without reloading the document.
   const refresh = useCallback(async (): Promise<RefreshResult> => {
     const issues: string[] = [];
     let health: RefreshResult | null = null;
     try {
-      health = await post<RefreshResult>('/api/refresh', {});
+      health = await post<RefreshResult>('/api/refresh', { target: 'all' });
+      if (!health) issues.push('Server refresh request failed');
     } catch {
       issues.push('Server refresh request failed');
     }
@@ -320,11 +339,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     } catch {
       issues.push('Market refresh failed');
     }
-    // Reconnect the live socket if it dropped.
-    const ws = wsRef.current;
-    if (!ws || (ws.readyState !== WebSocket.OPEN && ws.readyState !== WebSocket.CONNECTING)) {
-      connectRef.current?.();
-    }
+    // A reset is explicit: rebuild the browser's cockpit socket too, then
+    // re-attach any active token book subscription on open.
+    reconnectRef.current?.();
     setDataNonce((n) => n + 1);
     fireRefresh();
     if (health?.issues?.length) for (const i of health.issues) issues.push(i);
@@ -378,7 +395,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }, []),
     setLive: useCallback(async (on) => {
       const next = await post<{ liveTradingEnabled: boolean }>('/api/live', { on });
-      if (next) setState((s) => (s ? { ...s, config: { ...s.config, liveTradingEnabled: next.liveTradingEnabled }, mode: s.config.killSwitch ? 'HALTED' : next.liveTradingEnabled ? 'LIVE_ARMED' : 'MANUAL' } : s));
+      if (next) setState((s) => (s ? {
+        ...s,
+        config: {
+          ...s.config,
+          liveTradingEnabled: next.liveTradingEnabled,
+          controlModes: { ...s.config.controlModes, liveOrders: next.liveTradingEnabled ? 'allowed' : 'paused' },
+        },
+        mode: s.config.killSwitch ? 'HALTED' : next.liveTradingEnabled ? 'LIVE_ARMED' : 'MANUAL',
+      } : s));
     }, []),
     preview: useCallback((intent) => post<PreviewResult>('/api/trade/preview', intent), []),
     testOrder: useCallback(

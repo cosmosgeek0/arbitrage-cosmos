@@ -25,6 +25,18 @@
   padding: 10px 16px;
 }
 .lix-title { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.lix-title.calx-title,
+.lix-title.newsx-title,
+.lix-title.logx-title { gap: 8px; }
+.calx-page-mark,
+.newsx-page-mark,
+.logx-page-mark {
+  display: block;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
 .lix-title h1 {
   margin: 0;
   color: var(--text);

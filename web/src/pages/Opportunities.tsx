@@ -186,6 +186,7 @@ export function Opportunities() {
         <section className="opportunityx-frame">
           <header className="opportunityx-toolbar">
             <div className="opportunityx-title">
+              <img className="opportunityx-page-mark" src="/opportunities-bulb.png" alt="" aria-hidden="true" />
               <h1>Opportunities</h1>
               <span className="opportunityx-live idle"><i aria-hidden="true" />Connecting</span>
             </div>
@@ -204,6 +205,7 @@ export function Opportunities() {
       <section className="opportunityx-frame">
         <header className="opportunityx-toolbar">
           <div className="opportunityx-title">
+            <img className="opportunityx-page-mark" src="/opportunities-bulb.png" alt="" aria-hidden="true" />
             <h1>Opportunities</h1>
             <span className={'opportunityx-live ' + (proposals.length ? 'active' : 'idle')}>
               <i aria-hidden="true" />

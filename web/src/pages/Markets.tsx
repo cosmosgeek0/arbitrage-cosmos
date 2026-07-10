@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../store';
 import { TokenIcon, brandColor } from '../components/TokenIcon';
-import { BinanceMark } from '../components/BinanceMark';
 import { Num } from '../components/Num';
 import { EmptyState } from '../components/ui';
 import { IconSearch } from '../components/Icons';
@@ -345,7 +344,7 @@ export function Markets() {
       <section className="mkx-frame" aria-label="Binance Markets">
         <header className="mkx-toolbar">
           <div className="mkx-identity">
-            <div className="mkx-source-mark"><BinanceMark size={22} className="mkx-binance" /></div>
+            <div className="mkx-source-mark"><img className="mkx-market-mark" src="/markets-chart.png" alt="" aria-hidden="true" /></div>
             <span>
               <h1>Markets</h1>
               <small>Binance Spot + USD-M Reference Universe</small>

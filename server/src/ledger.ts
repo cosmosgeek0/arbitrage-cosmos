@@ -37,6 +37,17 @@ export interface SignalRecord {
   fundingOpen: number | null;
 }
 
+export interface BrowserSessionRecord {
+  id: string;
+  ip: string;
+  country: string | null;
+  system: string;
+  browser: string;
+  firstSeen: number;
+  lastSeen: number;
+  requests: number;
+}
+
 interface EventDbRow {
   id: number;
   ts: number;
@@ -69,6 +80,17 @@ interface SignalDbRow {
   basis_peak: number;
   basis_close: number | null;
   funding_open: number | null;
+}
+
+interface BrowserSessionDbRow {
+  id: string;
+  ip: string;
+  country: string | null;
+  system: string;
+  browser: string;
+  first_seen: number;
+  last_seen: number;
+  requests: number;
 }
 
 export class Ledger extends EventEmitter {
@@ -116,9 +138,20 @@ export class Ledger extends EventEmitter {
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS browser_sessions (
+        id TEXT PRIMARY KEY,
+        ip TEXT NOT NULL,
+        country TEXT,
+        system TEXT NOT NULL,
+        browser TEXT NOT NULL,
+        first_seen INTEGER NOT NULL,
+        last_seen INTEGER NOT NULL,
+        requests INTEGER NOT NULL DEFAULT 0
+      );
       CREATE INDEX IF NOT EXISTS idx_events_ts ON events (ts DESC);
       CREATE INDEX IF NOT EXISTS idx_events_kind ON events (kind, ts DESC);
       CREATE INDEX IF NOT EXISTS idx_fills_ts ON fills (ts DESC);
+      CREATE INDEX IF NOT EXISTS idx_browser_sessions_last_seen ON browser_sessions (last_seen DESC);
     `);
   }
 
@@ -138,7 +171,7 @@ export class Ledger extends EventEmitter {
     return ev;
   }
 
-  recentEvents(limit = 100, kind?: string, symbol?: string, q?: string, since?: number): LedgerEvent[] {
+  recentEvents(limit = 100, kind?: string, symbol?: string, q?: string, since?: number, beforeId?: number): LedgerEvent[] {
     const clauses: string[] = [];
     const params: (string | number)[] = [];
     if (kind) {
@@ -157,6 +190,10 @@ export class Ledger extends EventEmitter {
     if (since !== undefined && Number.isFinite(since)) {
       clauses.push('ts >= ?');
       params.push(since);
+    }
+    if (beforeId !== undefined && Number.isFinite(beforeId)) {
+      clauses.push('id < ?');
+      params.push(beforeId);
     }
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
     const rows = this.db
@@ -282,6 +319,53 @@ export class Ledger extends EventEmitter {
       basisClose: r.basis_close,
       fundingOpen: r.funding_open,
     }));
+  }
+
+  recordBrowserSessionActivity(session: BrowserSessionRecord): void {
+    this.db
+      .prepare(
+        `INSERT INTO browser_sessions
+         (id, ip, country, system, browser, first_seen, last_seen, requests)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           ip = excluded.ip,
+           country = COALESCE(excluded.country, browser_sessions.country),
+           system = excluded.system,
+           browser = excluded.browser,
+           first_seen = MIN(browser_sessions.first_seen, excluded.first_seen),
+           last_seen = MAX(browser_sessions.last_seen, excluded.last_seen),
+           requests = browser_sessions.requests + excluded.requests`
+      )
+      .run(
+        session.id,
+        session.ip,
+        session.country,
+        session.system,
+        session.browser,
+        session.firstSeen,
+        session.lastSeen,
+        Math.max(0, Math.floor(session.requests)),
+      );
+  }
+
+  listBrowserSessions(since: number, limit = 100): BrowserSessionRecord[] {
+    const rows = this.db
+      .prepare('SELECT * FROM browser_sessions WHERE last_seen >= ? ORDER BY last_seen DESC LIMIT ?')
+      .all(since, limit) as BrowserSessionDbRow[];
+    return rows.map((row) => ({
+      id: row.id,
+      ip: row.ip,
+      country: row.country,
+      system: row.system,
+      browser: row.browser,
+      firstSeen: row.first_seen,
+      lastSeen: row.last_seen,
+      requests: row.requests,
+    }));
+  }
+
+  pruneBrowserSessions(before: number): void {
+    this.db.prepare('DELETE FROM browser_sessions WHERE last_seen < ?').run(before);
   }
 
   getConfigValue(key: string): string | null {

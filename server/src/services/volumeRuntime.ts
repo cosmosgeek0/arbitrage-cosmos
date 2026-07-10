@@ -94,6 +94,35 @@ export class VolumeRuntime {
     this.engine.stop();
   }
 
+  connectionStatus(): {
+    running: boolean;
+    streamState: 'starting' | 'open' | 'connecting' | 'degraded';
+    streamConnections: number;
+    openConnections: number;
+    bookState: 'fresh' | 'stale';
+    lastBookTs: number | null;
+    lastTradeTs: number | null;
+  } {
+    const now = Date.now();
+    const openConnections = [...this.streamStatus.values()].filter((status) => status === 'open').length;
+    const streamState = this.streams.length === 0
+      ? 'starting'
+      : openConnections === this.streams.length
+        ? 'open'
+        : [...this.streamStatus.values()].some((status) => status === 'connecting')
+          ? 'connecting'
+          : 'degraded';
+    return {
+      running: this.running && this.engine.isRunning(),
+      streamState,
+      streamConnections: this.streams.length,
+      openConnections,
+      bookState: this.lastBookTs !== null && now - this.lastBookTs < 10_000 ? 'fresh' : 'stale',
+      lastBookTs: this.lastBookTs,
+      lastTradeTs: this.lastTradeTs,
+    };
+  }
+
   private async refreshUniverse(): Promise<void> {
     const sourceRows = this.getUniverse().filter((row) => row.hasSpot);
     const metas = sourceRows.map((row) => {

@@ -46,6 +46,15 @@
 
 .opportunityx-title { min-width: 0; gap: 12px; }
 
+.opportunityx-page-mark {
+  display: block;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  margin-right: -4px;
+  object-fit: contain;
+}
+
 .opportunityx-title h1 {
   margin: 0;
   color: var(--text);

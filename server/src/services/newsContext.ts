@@ -938,6 +938,31 @@ export function subscribeNewsContext(listener: (payload: NewsContextPayload) => 
   return () => subscribers.delete(listener);
 }
 
+export function newsContextStatus(): {
+  fetchedAt: number | null;
+  sources: number;
+  live: number;
+  delayed: number;
+  errors: number;
+  items: number;
+  refreshing: boolean;
+} {
+  const sources = cache?.sources ?? [];
+  return {
+    fetchedAt: cache?.fetchedAt ?? null,
+    sources: sources.length,
+    live: sources.filter((source) => source.status === 'live').length,
+    delayed: sources.filter((source) => source.status === 'delayed').length,
+    errors: sources.filter((source) => source.status === 'error').length,
+    items: cache?.items.length ?? archive.length,
+    refreshing: inFlight !== null,
+  };
+}
+
+export function refreshNewsContextNow(): Promise<NewsContextPayload> {
+  return startRefresh();
+}
+
 function startRefresh(): Promise<NewsContextPayload> {
   if (!inFlight) {
     inFlight = refreshNewsContext()

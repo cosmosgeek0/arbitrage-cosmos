@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { useRefreshSignal } from '../lib/refresh';
 import { TokenIcon } from '../components/TokenIcon';
-import { BinanceMark } from '../components/BinanceMark';
 import { IconSearch } from '../components/Icons';
 import { PillSelect, pageList, Star } from '../components/PillSelect';
 import { tokenName } from '../lib/tokenNames';
@@ -12,7 +11,7 @@ import type { BorrowGuardConfig, LoansSnapshot } from '../types';
 import './Markets.css';
 import './Loans.css';
 
-type LoanView = 'positions' | 'assets' | 'preflight' | 'activity' | 'market';
+type LoanView = 'overview' | 'assets' | 'preflight' | 'activity';
 type SortKey = 'asset' | 'hourly' | 'apr' | 'min' | 'max' | 'collateral' | 'perp';
 type CatalogFilter = 'all' | 'perp' | 'collateral' | 'watchlist';
 type OngoingLoan = LoansSnapshot['ongoing'][number];
@@ -122,7 +121,7 @@ export function Loans() {
   const [basisError, setBasisError] = useState<string | null>(null);
   const [earnAprs, setEarnAprs] = useState<Map<string, number>>(new Map());
   const [earnStatus, setEarnStatus] = useState<{ fetchedAt: number | null; error: string | null }>({ fetchedAt: null, error: null });
-  const [view, setView] = useState<LoanView>('positions');
+  const [view, setView] = useState<LoanView>('overview');
   const [guardBusy, setGuardBusy] = useState(false);
   const [search, setSearch] = useState('');
   const [catalogFilter, setCatalogFilter] = useState<CatalogFilter>('all');
@@ -343,7 +342,7 @@ export function Loans() {
     </th>
   );
 
-  const viewCount = view === 'positions' ? visibleActiveCount : view === 'assets' ? assetRows.length : view === 'preflight' ? preflightRows.length : view === 'activity' ? visibleActivity.length : filteredCatalog.length;
+  const viewCount = view === 'overview' ? visibleActiveCount : view === 'assets' ? assetRows.length : view === 'preflight' ? preflightRows.length : visibleActivity.length;
   const basisRuntimeError = basisError ?? basis?.status.lastError ?? null;
   const basisLive = !!basis && !basisRuntimeError;
   const marginLive = !!margin?.available && !margin.error;
@@ -359,7 +358,7 @@ export function Loans() {
       <section className="borrowx-frame" aria-label="Borrow Workspace">
         <header className="borrowx-toolbar">
           <div className="borrowx-identity">
-            <span className="borrowx-source-mark"><BinanceMark size={22} /></span>
+            <span className="borrowx-source-mark"><img className="borrowx-page-mark" src="/borrow-money-bag.png" alt="" aria-hidden="true" /></span>
             <span><h1>Borrow</h1><small>Binance Flexible Loan + Cross Margin</small></span>
           </div>
           <div className="borrowx-tools">
@@ -381,30 +380,23 @@ export function Loans() {
         <nav className="borrowx-viewbar" aria-label="Borrow Views">
           <div role="tablist">
             {([
-              ['positions', 'Positions', search ? visibleActiveCount : activeCount],
+              ['overview', 'Overview', search ? visibleActiveCount : activeCount],
               ['assets', 'Assets', assetRows.length],
               ['preflight', 'Borrow Preflight', preflightRows.length],
               ['activity', 'Activity', search ? visibleActivity.length : activity.length],
-              ['market', 'Loan Market', filteredCatalog.length],
             ] as [LoanView, string, number][]).map(([id, label, count]) => <button key={id} type="button" role="tab" aria-selected={view === id} onClick={() => setView(id)}>{label}<span>{count}</span></button>)}
           </div>
           <span className={`borrowx-live ${sourceTone}`} title={view === 'preflight' ? basisRuntimeError ?? '' : loansFetchError ?? loans?.error ?? margin?.error ?? earnStatus.error ?? ''}><i />{sourceText}</span>
         </nav>
 
-        {view === 'market' && (
-          <div className="borrowx-controls">
-            <div>
-              <PillSelect value={catalogFilter} options={[{ id: 'all', label: 'All Products' }, { id: 'perp', label: 'Perpetual Market' }, { id: 'collateral', label: 'Collateral Eligible' }, { id: 'watchlist', label: 'Watchlist' }]} onChange={setCatalogFilter} ariaLabel="Loan Market Filter" testId="borrow-market-filter" />
-              <PillSelect value={String(pageSize)} options={[25, 50, 100].map((count) => ({ id: String(count), label: `${count} Rows` }))} onChange={(value) => setPageSize(Number(value))} ariaLabel="Rows Per Page" testId="borrow-page-size" />
-              {(catalogFilter !== 'all' || search) && <button type="button" onClick={() => { setCatalogFilter('all'); setSearch(''); }}>Reset</button>}
-            </div>
-            <span>{filteredCatalog.length} Products · {filteredCatalog.length ? `${safePage * pageSize + 1}-${safePage * pageSize + visibleCatalog.length}` : '0'}</span>
-          </div>
-        )}
-
         <div className="borrowx-workspace">
-          {view === 'positions' && (
-            <div className="borrowx-table-scroll"><table className="borrowx-table positions"><thead><tr><th /> <th className="l">Asset</th><th>Debt</th><th>Collateral</th><th>Current LTV</th><th>Margin Call</th><th>Liquidation</th><th>Borrow APR</th><th>Earn APR</th><th>Rate Spread</th></tr></thead><tbody>
+          {view === 'overview' && (<>
+            <section className="borrowx-section" aria-labelledby="borrow-active-title">
+              <header className="borrowx-section-head">
+                <span><strong id="borrow-active-title">Active Positions</strong><small>Flexible Loan + Cross Margin</small></span>
+                <span>{visibleActiveCount} {visibleActiveCount === 1 ? 'Position' : 'Positions'}</span>
+              </header>
+              <div className="borrowx-table-scroll"><table className="borrowx-table positions"><thead><tr><th /> <th className="l">Asset</th><th>Debt</th><th>Collateral</th><th>Current LTV</th><th>Margin Call</th><th>Liquidation</th><th>Borrow APR</th><th>Earn APR</th><th>Rate Spread</th></tr></thead><tbody>
               {visibleOngoing.map((loan) => {
                 const terms = collateralMap.get(loan.collateralCoin) ?? null;
                 const risk = terms ? riskOf(loan.currentLTV, terms.marginCallLTV, terms.liquidationLTV) : null;
@@ -435,8 +427,23 @@ export function Loans() {
                   <td><b>Account Pool</b><small>Cross Margin</small></td><td><b>—</b><small>Margin Level {finite(margin?.marginLevel) ? margin?.marginLevel.toFixed(2) : '—'}</small></td><td><b>—</b><small>Account Level</small></td><td><b>—</b><small>Cross Margin</small></td><td><b>{fmtQty(asset.interest)} {asset.asset}</b><small>Accrued Interest</small></td><td><b>—</b><small>Not Applicable</small></td><td><b>—</b><small>Rate Unavailable</small></td>
                 </tr>;
               })}
-            </tbody></table>{visibleOngoing.length === 0 && visibleMarginDebts.length === 0 && <div className="borrowx-empty">No Active Borrow Positions</div>}</div>
-          )}
+              </tbody></table>{visibleOngoing.length === 0 && visibleMarginDebts.length === 0 && <div className="borrowx-empty compact"><span><b>No Active Borrow Positions</b><small>Loan Market remains available below.</small></span></div>}</div>
+            </section>
+
+            <section className="borrowx-section borrowx-market-section" aria-labelledby="borrow-market-title">
+              <header className="borrowx-section-head borrowx-market-head">
+                <span><strong id="borrow-market-title">Loan Market</strong><small>Signed Binance Flexible Loan catalog</small></span>
+                <div className="borrowx-market-tools">
+                  <PillSelect value={catalogFilter} options={[{ id: 'all', label: 'All Products' }, { id: 'perp', label: 'Perpetual Market' }, { id: 'collateral', label: 'Collateral Eligible' }, { id: 'watchlist', label: 'Watchlist' }]} onChange={setCatalogFilter} ariaLabel="Loan Market Filter" testId="borrow-market-filter" />
+                  <PillSelect value={String(pageSize)} options={[25, 50, 100].map((count) => ({ id: String(count), label: `${count} Rows` }))} onChange={(value) => setPageSize(Number(value))} ariaLabel="Rows Per Page" testId="borrow-page-size" />
+                  {(catalogFilter !== 'all' || search) && <button type="button" onClick={() => { setCatalogFilter('all'); setSearch(''); }}>Reset</button>}
+                </div>
+                <span className="borrowx-market-count">{filteredCatalog.length} Products · {filteredCatalog.length ? `${safePage * pageSize + 1}-${safePage * pageSize + visibleCatalog.length}` : '0'}</span>
+              </header>
+              <div className="borrowx-table-scroll"><table className="borrowx-table market"><thead><tr><th />{sortHead('Asset', 'asset', 'l')}{sortHead('Hourly Rate', 'hourly')}{sortHead('APR', 'apr')}{sortHead('Minimum', 'min')}{sortHead('Maximum', 'max')}{sortHead('Collateral LTV', 'collateral')}{sortHead('Perpetual', 'perp')}</tr></thead><tbody>{visibleCatalog.map((row) => <tr key={row.coin} tabIndex={row.symbol ? 0 : -1} className={row.symbol ? 'link' : ''} onClick={() => row.symbol && openDetail(row.symbol)} onKeyDown={(event) => { if (row.symbol && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); openDetail(row.symbol); } }}><td>{row.symbol ? <Star on={watchlist.includes(row.symbol)} onClick={() => void toggleWatch(row.symbol as string)} /> : null}</td><td className="l borrowx-asset"><TokenIcon symbol={row.symbol ?? `${row.coin}USDT`} size={32} /><span><b>{tokenName(row.coin)}</b><small>{row.coin} · Flexible Product</small></span></td><td><b>{fmtRate(row.hourly, 5)}</b><small>Catalog Conversion</small></td><td><b>{fmtRate(row.apr, 2)}</b><small>Annualized</small></td><td><b>{fmtUsd(row.minUsd)}</b><small>USD Product Limit</small></td><td><b>{fmtUsd(row.maxUsd)}</b><small>USD Product Limit</small></td><td><b>{row.collateralEligible ? ltvPct(row.initialLtv) : '—'}</b><small>{row.collateralEligible ? `${ltvPct(row.callLtv)} Call · ${ltvPct(row.liquidationLtv)} Liq` : 'Not Listed As Collateral'}</small></td><td><b className={row.perp ? 'ok' : ''}>{row.perp ? 'Available' : '—'}</b><small>{row.perp ? 'Binance USD-M' : 'No Perpetual Market'}</small></td></tr>)}</tbody></table>{filteredCatalog.length === 0 && <div className="borrowx-empty compact">No Loan Products Match</div>}</div>
+              {pages > 1 && <nav className="borrowx-section-pages" aria-label="Loan Market Pagination"><button type="button" disabled={safePage === 0} onClick={() => setPageN(safePage - 1)}>‹</button>{pageList(safePage, pages).map((page, index) => page === '…' ? <span key={`e-${index}`}>…</span> : <button type="button" key={page} className={safePage === page ? 'current' : ''} onClick={() => setPageN(page)}>{page + 1}</button>)}<button type="button" disabled={safePage >= pages - 1} onClick={() => setPageN(safePage + 1)}>›</button></nav>}
+            </section>
+          </>)}
 
           {view === 'assets' && <div className="borrowx-table-scroll"><table className="borrowx-table assets"><thead><tr><th /><th className="l">Asset</th><th className="l">Exposure</th><th>Amount</th><th>Value</th><th>Class Share</th></tr></thead><tbody>{assetRows.map((row) => <tr key={`${row.exposure}-${row.coin}`} tabIndex={row.symbol ? 0 : -1} className={row.symbol ? 'link' : ''} onClick={() => row.symbol && openDetail(row.symbol)} onKeyDown={(event) => { if (row.symbol && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); openDetail(row.symbol); } }}><td>{row.symbol ? <Star on={watchlist.includes(row.symbol)} onClick={() => void toggleWatch(row.symbol as string)} /> : null}</td><td className="l borrowx-asset"><TokenIcon symbol={row.symbol ?? `${row.coin}USDT`} size={32} /><span><b>{tokenName(row.coin)}</b><small>{row.coin}</small></span></td><td className="l"><span className={`borrowx-chip ${row.exposure.toLowerCase()}`}>{row.exposure}</span></td><td><b>{fmtQty(row.quantity)} {row.coin}</b></td><td><b>{finite(row.usd) ? fmtMoney(row.usd) : '—'}</b><small>{finite(row.usd) ? 'Live Spot Valuation' : 'Price Unavailable'}</small></td><td><b>{finite(row.usd) && finite(row.total) && row.total > 0 ? `${((row.usd / row.total) * 100).toFixed(1)}%` : '—'}</b></td></tr>)}</tbody></table>{assetRows.length === 0 && <div className="borrowx-empty">No Borrow Assets</div>}</div>}
 
@@ -444,14 +451,12 @@ export function Loans() {
 
           {view === 'activity' && <div className="borrowx-table-scroll"><table className="borrowx-table activity"><thead><tr><th className="l">Event</th><th className="l">Loan Asset</th><th className="l">Collateral</th><th>Status</th><th>Time</th></tr></thead><tbody>{visibleActivity.map((event, index) => <tr key={`${event.kind}-${event.ts}-${event.loanCoin}-${index}`}><td className="l"><span className="borrowx-event"><i className={activityTone(event.kind)} /><span><b>{activityTitle(event)}</b><small>{activityDetail(event)}</small></span></span></td><td className="l"><b>{event.loanCoin || '—'}</b></td><td className="l"><b>{event.collateralCoin || '—'}</b></td><td><span className={`borrowx-chip ${activityTone(event.kind)}`}>{statusLabel(event.status)}</span></td><td><b>{timeAgo(event.ts)}</b></td></tr>)}</tbody></table>{visibleActivity.length === 0 && <div className="borrowx-empty">No Loan Activity Returned</div>}</div>}
 
-          {view === 'market' && <div className="borrowx-table-scroll"><table className="borrowx-table market"><thead><tr><th />{sortHead('Asset', 'asset', 'l')}{sortHead('Hourly Rate', 'hourly')}{sortHead('APR', 'apr')}{sortHead('Minimum', 'min')}{sortHead('Maximum', 'max')}{sortHead('Collateral LTV', 'collateral')}{sortHead('Perpetual', 'perp')}</tr></thead><tbody>{visibleCatalog.map((row) => <tr key={row.coin} tabIndex={row.symbol ? 0 : -1} className={row.symbol ? 'link' : ''} onClick={() => row.symbol && openDetail(row.symbol)} onKeyDown={(event) => { if (row.symbol && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); openDetail(row.symbol); } }}><td>{row.symbol ? <Star on={watchlist.includes(row.symbol)} onClick={() => void toggleWatch(row.symbol as string)} /> : null}</td><td className="l borrowx-asset"><TokenIcon symbol={row.symbol ?? `${row.coin}USDT`} size={32} /><span><b>{tokenName(row.coin)}</b><small>{row.coin} · Flexible Product</small></span></td><td><b>{fmtRate(row.hourly, 5)}</b><small>Catalog Conversion</small></td><td><b>{fmtRate(row.apr, 2)}</b><small>Annualized</small></td><td><b>{fmtUsd(row.minUsd)}</b><small>USD Product Limit</small></td><td><b>{fmtUsd(row.maxUsd)}</b><small>USD Product Limit</small></td><td><b>{row.collateralEligible ? ltvPct(row.initialLtv) : '—'}</b><small>{row.collateralEligible ? `${ltvPct(row.callLtv)} Call · ${ltvPct(row.liquidationLtv)} Liq` : 'Not Listed As Collateral'}</small></td><td><b className={row.perp ? 'ok' : ''}>{row.perp ? 'Available' : '—'}</b><small>{row.perp ? 'Binance USD-M' : 'No Perpetual Market'}</small></td></tr>)}</tbody></table>{filteredCatalog.length === 0 && <div className="borrowx-empty">No Loan Products Match</div>}</div>}
         </div>
 
         <footer className="borrowx-footer">
-          <span>{view === 'preflight' ? basisRuntimeError ? `Borrow Source Error: ${basisRuntimeError}` : `Borrow Source: ${basis?.status.borrowSource ?? 'Loading'}` : view === 'positions' || view === 'assets' ? accountSourceSummary : `Source: Binance Signed Flexible Loan${loans?.fetchedAt ? ` · ${timeAgo(loans.fetchedAt)}` : ''}`}</span>
-          <span>{viewCount} {view === 'market' ? 'Products' : view === 'activity' ? 'Events' : 'Rows'}</span>
+          <span>{view === 'preflight' ? basisRuntimeError ? `Borrow Source Error: ${basisRuntimeError}` : `Borrow Source: ${basis?.status.borrowSource ?? 'Loading'}` : view === 'overview' || view === 'assets' ? accountSourceSummary : `Source: Binance Signed Flexible Loan${loans?.fetchedAt ? ` · ${timeAgo(loans.fetchedAt)}` : ''}`}</span>
+          <span>{view === 'overview' ? `${viewCount} Positions · ${filteredCatalog.length} Products` : `${viewCount} ${view === 'activity' ? 'Events' : 'Rows'}`}</span>
           {view === 'preflight' && <button type="button" onClick={() => setPage('strategies')}>Open Basis</button>}
-          {view === 'market' && pages > 1 && <nav aria-label="Loan Market Pagination"><button type="button" disabled={safePage === 0} onClick={() => setPageN(safePage - 1)}>‹</button>{pageList(safePage, pages).map((page, index) => page === '…' ? <span key={`e-${index}`}>…</span> : <button type="button" key={page} className={safePage === page ? 'current' : ''} onClick={() => setPageN(page)}>{page + 1}</button>)}<button type="button" disabled={safePage >= pages - 1} onClick={() => setPageN(safePage + 1)}>›</button></nav>}
         </footer>
       </section>
     </div>

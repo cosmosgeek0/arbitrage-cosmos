@@ -54,20 +54,27 @@ export function fmtPct(v: number | null | undefined, digits = 2, withSign = true
   return (withSign && parseFloat(s) > 0 ? '+' : '') + s + '%';
 }
 
-// Basis display unit: percent (default) or basis points — set from Settings.
-let basisBps = false;
-export function setBasisBps(v: boolean): void {
-  basisBps = v;
+// Basis display unit: percent (default), basis points, or decimal rate.
+type BasisUnit = 'pct' | 'bps' | 'decimal';
+let basisUnit: BasisUnit = 'pct';
+export function setBasisUnit(v: BasisUnit): void {
+  basisUnit = v;
 }
 
 export function fmtBasis(vPct: number | null | undefined, digits = 3): string {
   const n = Number(vPct);
   if (!isFinite(n) || vPct === null || vPct === undefined) return '—';
-  if (basisBps) {
+  if (basisUnit === 'bps') {
     const b = n * 100;
     let s = b.toFixed(Math.abs(b) >= 100 ? 0 : 1);
     if (parseFloat(s) === 0) s = s.replace('-', '');
     return (parseFloat(s) > 0 ? '+' : '') + s + ' bps';
+  }
+  if (basisUnit === 'decimal') {
+    const decimal = n / 100;
+    let s = decimal.toFixed(Math.abs(decimal) >= 0.01 ? 4 : 5);
+    if (parseFloat(s) === 0) s = s.replace('-', '');
+    return (parseFloat(s) > 0 ? '+' : '') + s;
   }
   return fmtPct(n, digits);
 }

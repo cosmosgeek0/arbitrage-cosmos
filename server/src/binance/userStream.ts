@@ -39,6 +39,7 @@ export class UserStream {
   ) {}
 
   async start(): Promise<void> {
+    this.stopped = false;
     this.setStatus('connecting');
     try {
       const { listenKey } = await this.client.createListenKey();

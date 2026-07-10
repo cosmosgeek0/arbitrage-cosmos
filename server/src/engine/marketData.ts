@@ -166,8 +166,11 @@ export class MarketEngine {
 
   stop(): void {
     for (const s of this.streams) s.stop();
+    this.streams = [];
     if (this.sampler) clearInterval(this.sampler);
     if (this.oiTimer) clearInterval(this.oiTimer);
+    this.sampler = null;
+    this.oiTimer = null;
   }
 
   sparkOf(symbol: string, points = 40): number[] {

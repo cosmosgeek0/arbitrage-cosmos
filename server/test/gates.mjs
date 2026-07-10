@@ -20,7 +20,16 @@ function check(name, pass, detail = '') {
 
 async function get(p) {
   const res = await fetch(`${BASE}${p}`);
-  return { status: res.status, body: await res.json().catch(() => null) };
+  return { status: res.status, headers: res.headers, body: await res.json().catch(() => null) };
+}
+
+async function browserGet(p) {
+  const res = await fetch(`${BASE}${p}`, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/150.0.0.0 Safari/537.36',
+    },
+  });
+  return { status: res.status, headers: res.headers, body: await res.json().catch(() => null) };
 }
 
 async function post(p, body) {
@@ -108,6 +117,13 @@ scanDir('web/src');
 scanDir('server/src');
 check('no withdrawal/transfer-out feature in source', noWithdrawFeature);
 
+const serverIndex = readFileSync('server/src/index.ts', 'utf8');
+check(
+  'declared Binance keys never request withdrawal or universal-transfer permission',
+  !/permissions\s*:\s*\{[^}]*withdrawals\s*:\s*true/si.test(serverIndex)
+    && !/permissions\s*:\s*\{[^}]*universalTransfer\s*:\s*true/si.test(serverIndex)
+);
+
 // ---------- boot server ----------
 console.log('\nBooting server (no keys, isolated data dir)…');
 const dataDir = mkdtempSync(path.join(tmpdir(), 'cosmos-gates-'));
@@ -163,6 +179,24 @@ check('disconnected state: account is null', state.account === null);
 check('disconnected state: binance.connected=false', state.binance.connected === false);
 check('state includes config/risk/events', !!state.config && !!state.risk && Array.isArray(state.events));
 
+await browserGet('/api/state');
+const browserSessionsResponse = await browserGet('/api/sessions');
+const browserSessions = browserSessionsResponse.body;
+check(
+  'browser sessions persist truthful browser-only activity',
+  browserSessionsResponse.status === 200 &&
+    browserSessions?.source === 'browser-request-telemetry' &&
+    browserSessions?.retentionHours === 24 &&
+    browserSessions?.activeWindowSeconds === 120 &&
+    browserSessions?.cloudflareActiveSessions === false &&
+    browserSessions?.sessions?.length === 1 &&
+    browserSessions.sessions[0]?.current === true &&
+    browserSessions.sessions[0]?.active === true &&
+    browserSessions.sessions[0]?.system === 'macOS' &&
+    /^Chrome /.test(browserSessions.sessions[0]?.browser ?? '') &&
+    /no-store/i.test(browserSessionsResponse.headers.get('cache-control') ?? '')
+);
+
 // oversized order must be rejected by risk
 const big = (await post('/api/trade/preview', { symbol: 'BTCUSDT', side: 'BUY', type: 'MARKET', quoteQty: 100 })).body;
 const bigNotional = big?.risk?.checks?.find((c) => c.name === 'max_order_notional');
@@ -189,6 +223,26 @@ await post('/api/config', { maxOrderNotionalUsd: 15 });
 const cfg = (await get('/api/config')).body;
 check('config saves and persists', cfg?.maxOrderNotionalUsd === 15);
 
+await post('/api/config', {
+  controlModes: { funds: 'paused', borrowing: 'paused', automation: 'blocked', liveOrders: 'blocked' },
+});
+const pausedModes = (await get('/api/config')).body;
+check(
+  'three-state execution modes persist and fail closed',
+  pausedModes?.controlModes?.funds === 'paused' &&
+    pausedModes?.controlModes?.borrowing === 'paused' &&
+    pausedModes?.controlModes?.automation === 'blocked' &&
+    pausedModes?.controlModes?.liveOrders === 'blocked' &&
+    pausedModes?.fundsLocked === true &&
+    pausedModes?.automationPaused === true &&
+    pausedModes?.liveTradingEnabled === false &&
+    pausedModes?.borrowGuard?.newBorrowPaused === true &&
+    pausedModes?.borrowGuard?.repayOnly === false
+);
+await post('/api/config', {
+  controlModes: { funds: 'blocked', borrowing: 'blocked', automation: 'paused', liveOrders: 'paused' },
+});
+
 // kill switch + live arm flow
 await post('/api/kill', { on: false });
 let h = (await get('/api/health')).body;
@@ -196,6 +250,7 @@ check('kill off → mode MANUAL', h.mode === 'MANUAL');
 await post('/api/live', { on: true });
 h = (await get('/api/health')).body;
 check('live armed → mode LIVE_ARMED', h.mode === 'LIVE_ARMED');
+check('direct live arm synchronizes the explicit control mode', (await get('/api/config')).body?.controlModes?.liveOrders === 'allowed');
 await post('/api/kill', { on: true });
 h = (await get('/api/health')).body;
 check('kill switch overrides → HALTED', h.mode === 'HALTED');
@@ -224,6 +279,18 @@ check('market detail responds', detail?.row?.symbol === 'BTCUSDT' && detail?.fil
 
 const loansSnap = (await get('/api/loans')).body;
 check('loans endpoint honest without keys', loansSnap?.available === false && /keys/i.test(loansSnap?.error ?? ''));
+
+const walletBalanceResponse = await get('/api/wallet-balances');
+const walletBalances = walletBalanceResponse.body;
+check(
+  'wallet balance aggregate honest without keys',
+  Array.isArray(walletBalances?.rows) && walletBalances.rows.length === 0 && /keys/i.test(walletBalances?.error ?? '')
+);
+check(
+  'wallet balance aggregate is never browser/proxy cached',
+  /private/i.test(walletBalanceResponse.headers.get('cache-control') ?? '')
+    && /no-store/i.test(walletBalanceResponse.headers.get('cache-control') ?? '')
+);
 
 const borrow = (await post('/api/loans/borrow', { loanCoin: 'BTC', collateralCoin: 'USDT', amount: 1, confirmCoin: 'BTC' })).body;
 check('loan borrow blocked without keys/arm', borrow?.ok === false);
@@ -260,6 +327,42 @@ check('max-borrowable honest without keys', maxB?.ok === false);
 
 const sys = (await get('/api/system')).body;
 check('system health responds', sys?.ok === true && typeof sys.uptimeSec === 'number' && sys.dbOk === true);
+check(
+  'connection inventory exposes live, cached, and planned source truth',
+  typeof sys?.connections?.basis?.running === 'boolean' &&
+    typeof sys?.connections?.volume?.streamConnections === 'number' &&
+    typeof sys?.connections?.news?.sources === 'number' &&
+    typeof sys?.connections?.calendar?.items === 'number' &&
+    typeof sys?.connections?.fx?.currencies === 'number' &&
+    sys?.connections?.planned?.awsRunner?.configured === false &&
+    typeof sys?.connections?.planned?.cloudflareAccess?.reason === 'string'
+);
+const accountConnectionReset = await post('/api/refresh', { target: 'account' });
+check(
+  'targeted connection reset is real and reports its work',
+  accountConnectionReset.status === 200 &&
+    accountConnectionReset.body?.reset?.target === 'account' &&
+    accountConnectionReset.body?.reset?.steps?.some?.((step) => step.key === 'account-data' && step.ok === true)
+);
+
+const notificationRouting = (await get('/api/notification-routing')).body;
+check(
+  'notification routing exposes real source and destination readiness',
+  notificationRouting?.sources?.bot?.available === true &&
+    notificationRouting?.sources?.execution?.available === true &&
+    notificationRouting?.sources?.aws?.available === false &&
+    notificationRouting?.destinations?.inApp?.available === true &&
+    notificationRouting?.destinations?.telegram?.available === false
+);
+const awsNotificationClosed = await post('/api/notifications/ingest/aws', {
+  source: 'aws.ec2',
+  'detail-type': 'EC2 Instance State-change Notification',
+  detail: { state: 'stopped' },
+});
+check(
+  'AWS notification intake fails closed until a server token is configured',
+  awsNotificationClosed.status === 503 && /not configured/i.test(awsNotificationClosed.body?.error ?? '')
+);
 
 const awsStatus = (await awsControl('/api/aws-control/status')).body;
 check(

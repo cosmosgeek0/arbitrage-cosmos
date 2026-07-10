@@ -1,4 +1,4 @@
-# README.md — Cosmos Arbitrage Control Room
+# README.md — Arbitrage Capital Control Room
 
 Private Binance account cockpit and engine-control system behind Cloudflare Access.
 

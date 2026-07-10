@@ -16,6 +16,7 @@ import { Opportunities } from './pages/Opportunities';
 import { Risk } from './pages/Risk';
 import { LedgerPage } from './pages/LedgerPage';
 import { SystemHealth } from './pages/SystemHealth';
+import { NotificationsPage } from './pages/NotificationsPage';
 import { News } from './pages/News';
 import { CalendarPage } from './pages/CalendarPage';
 
@@ -51,6 +52,7 @@ function Shell() {
                 {page === 'risk' && <Risk />}
                 {page === 'ledger' && <LedgerPage />}
                 {page === 'system' && <SystemHealth />}
+                {page === 'notifications' && <NotificationsPage />}
                 {page === 'news' && <News />}
                 {page === 'calendar' && <CalendarPage />}
               </ErrorBoundary>
@@ -58,7 +60,7 @@ function Shell() {
             <footer className="footer">
               <div className="ftr-line">
                 <span className="ftr-left">
-                  <span className="ftr-brand">© 2026 Arbitrage Control Room</span>
+                  <span className="ftr-brand">© 2026 Arbitrage Capital Control Room</span>
                   <i>•</i>
                   <span>Private</span>
                   <i>•</i>

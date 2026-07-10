@@ -1,6 +1,14 @@
 export type SymbolStatus = 'idle' | 'watching' | 'signal';
 export type Side = 'BUY' | 'SELL';
 export type OrderType = 'MARKET' | 'LIMIT';
+export type ControlMode = 'blocked' | 'paused' | 'allowed';
+
+export interface ExecutionControlModes {
+  funds: ControlMode;
+  borrowing: ControlMode;
+  automation: ControlMode;
+  liveOrders: ControlMode;
+}
 
 export interface SymbolRow {
   symbol: string;
@@ -62,6 +70,7 @@ export interface AppConfig {
   liveTradingEnabled: boolean; // false = live send blocked even if kill switch is off
   fundsLocked: boolean; // true = money-state-changing actions are blocked
   automationPaused: boolean; // true = proposal/bot-originated live sends are blocked
+  controlModes: ExecutionControlModes; // explicit operator intent behind the legacy fail-closed booleans
   // risk limits
   maxOrderNotionalUsd: number;
   maxDailyNotionalUsd: number;

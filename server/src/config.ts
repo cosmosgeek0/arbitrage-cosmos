@@ -1,4 +1,4 @@
-import type { AppConfig } from './types.js';
+import type { AppConfig, ControlMode } from './types.js';
 import type { Ledger } from './ledger.js';
 
 export const DEFAULTS: AppConfig = {
@@ -16,6 +16,12 @@ export const DEFAULTS: AppConfig = {
   liveTradingEnabled: false,
   fundsLocked: true,
   automationPaused: true,
+  controlModes: {
+    funds: 'blocked',
+    borrowing: 'blocked',
+    automation: 'paused',
+    liveOrders: 'paused',
+  },
 
   // Risk limits sized for a ~$10 account. Raise them deliberately, in the UI.
   maxOrderNotionalUsd: 12,
@@ -42,6 +48,7 @@ export const DEFAULTS: AppConfig = {
 };
 
 const CONFIG_KEY = 'app';
+const isControlMode = (value: unknown): value is ControlMode => value === 'blocked' || value === 'paused' || value === 'allowed';
 
 export function loadConfig(ledger: Ledger): AppConfig {
   const raw = ledger.getConfigValue(CONFIG_KEY);
@@ -49,12 +56,26 @@ export function loadConfig(ledger: Ledger): AppConfig {
   try {
     const parsed = JSON.parse(raw) as Partial<AppConfig>;
     const base = structuredClone(DEFAULTS);
-    return {
+    const merged = {
       ...base,
       ...parsed,
       borrowGuard: { ...base.borrowGuard, ...(parsed.borrowGuard ?? {}) },
       profile: { ...base.profile, ...(parsed.profile ?? {}) },
     };
+    const savedModes = (parsed.controlModes ?? {}) as Partial<AppConfig['controlModes']>;
+    merged.controlModes = {
+      funds: isControlMode(savedModes.funds) ? savedModes.funds : (merged.fundsLocked ? 'blocked' : 'allowed'),
+      borrowing: isControlMode(savedModes.borrowing) ? savedModes.borrowing : (
+        !merged.borrowGuard.newBorrowPaused && !merged.borrowGuard.repayOnly
+          ? 'allowed'
+          : merged.borrowGuard.repayOnly
+            ? 'blocked'
+            : 'paused'
+      ),
+      automation: isControlMode(savedModes.automation) ? savedModes.automation : (merged.automationPaused ? 'paused' : 'allowed'),
+      liveOrders: isControlMode(savedModes.liveOrders) ? savedModes.liveOrders : (merged.liveTradingEnabled ? 'allowed' : 'paused'),
+    };
+    return merged;
   } catch {
     return structuredClone(DEFAULTS);
   }

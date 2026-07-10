@@ -1,5 +1,13 @@
 export type Side = 'BUY' | 'SELL';
 export type OrderType = 'MARKET' | 'LIMIT';
+export type ControlMode = 'blocked' | 'paused' | 'allowed';
+
+export interface ExecutionControlModes {
+  funds: ControlMode;
+  borrowing: ControlMode;
+  automation: ControlMode;
+  liveOrders: ControlMode;
+}
 
 export interface AppConfig {
   feesPct: number;
@@ -10,6 +18,7 @@ export interface AppConfig {
   liveTradingEnabled: boolean;
   fundsLocked: boolean;
   automationPaused: boolean;
+  controlModes: ExecutionControlModes;
   maxOrderNotionalUsd: number;
   maxDailyNotionalUsd: number;
   maxDailyLossUsd: number;

@@ -176,18 +176,33 @@ export class BinanceClient {
     }
     if (sign) {
       sp.set('timestamp', String(Date.now()));
-      sp.set('recvWindow', '10000');
+      sp.set('recvWindow', '5000');
       const sig = createHmac('sha256', this.creds.apiSecret).update(sp.toString()).digest('hex');
       sp.append('signature', sig);
     }
     const qs = sp.toString();
-    const res = await fetch(`${SPOT_API}${path}${qs ? `?${qs}` : ''}`, {
-      method,
-      headers: { 'X-MBX-APIKEY': this.creds.apiKey },
-    });
-    const uw = res.headers.get('x-mbx-used-weight-1m');
-    if (uw) {
-      rateLimit.usedWeight1m = Number(uw);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+    let res: Response;
+    try {
+      res = await fetch(`${SPOT_API}${path}${qs ? `?${qs}` : ''}`, {
+        method,
+        headers: { 'X-MBX-APIKEY': this.creds.apiKey },
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`Binance request timed out: ${path}`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+    const usedWeight = res.headers.get('x-mbx-used-weight-1m')
+      ?? res.headers.get('x-sapi-used-ip-weight-1m');
+    const parsedWeight = Number(usedWeight);
+    if (usedWeight !== null && Number.isFinite(parsedWeight)) {
+      rateLimit.usedWeight1m = parsedWeight;
       rateLimit.ts = Date.now();
     }
     const body: unknown = await res.json().catch(() => null);

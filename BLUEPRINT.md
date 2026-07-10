@@ -1,4 +1,4 @@
-# BLUEPRINT.md — Cosmos Arbitrage Control Room
+# BLUEPRINT.md — Arbitrage Capital Control Room
 
 Last updated: 2026-07-06  
 Permanent role of this file: full product/system/UI blueprint for rebuilding or steering the whole project without old chats.
@@ -9,7 +9,7 @@ Read this after `DIRECTOR_RULEBOOK.md`. Engine internals live in `ENGINE.md`.
 
 ## 1. Product identity
 
-Cosmos Arbitrage Control Room is a private, single-owner Binance account cockpit and engine control system.
+Arbitrage Capital Control Room is a private, single-owner Binance account cockpit and engine control system.
 
 It is not a public crypto website. It is not CG Signal Lab. It is not Binance Signal Lab. It is not a Binance clone. It is not a giant chart page. It is not a generic “AI bot” dashboard. It is not a marketing landing page. It is not a place to show all possible Binance services.
 
@@ -57,7 +57,7 @@ Cloudflare Tunnel name: `cosmosgeek-arbitrage`.
 
 Tunnel target: `http://localhost:8601`.
 
-Cloudflare Access app: appears as `arbitrage`, product name `CG Arbitrage` / `Cosmos Arbitrage Control Room`.
+Cloudflare Access app: appears as `arbitrage`, product name `Arbitrage Capital Control Room`.
 
 Access policy target: allow only `cosmosgeek@proton.me`. Avoid the previously broken `Require Authentication Method = mfa` rule; use application-specific MFA/security-key posture instead.
 
@@ -128,25 +128,33 @@ The sidebar source-of-truth (Product Truth Pass, 2026-07-07) — **Settings is N
 - **ENGINE** — Basis Scanner, Volume Scanner, Opportunities
 - **EXECUTION** — Execution (one page, internal tabs: Ticket, Orders, Positions, Fills, PnL)
 - **CONTROL** — Risk, Logs, Health (three real operator pages — no Settings)
-- **BOTTOM / UTILITY** (`snav-utils`) — News, Calendar, **Settings** (local UI preferences, utility not a brain page)
+- **BOTTOM / UTILITY** (`snav-utils`) — Notifications, News, Calendar, **Settings** (local UI preferences, utility not a brain page)
 
 Control section responsibilities (three operator pages — never merged; Settings is utility, not Control):
 - **Risk** — "can anything act?" Execution guard controls only: kill switch, live/paper mode, order/daily-notional/daily-loss/symbol-exposure caps, max open orders/positions, cooldown, order rate, spread/slippage/borrow guards, allowlist/blocklist, dry-run probe, save/reset. No API-key info (→ Account), no local UI prefs (→ Settings), no governance essays. Links to Logs for rejected decisions.
 - **Logs** (page id `ledger`, title may stay "Ledger / Logs") — "what happened and why?" Operator audit surface with a severity model (Critical/Warning/Info/Debug); **debug/system-noise (heartbeats, ws.open) is hidden by default** behind a toggle; filters by severity/kind/symbol/text/time/accepted-rejected/group; summary counts; useful selected-event detail. Not a raw spam feed.
 - **Health** (page id `system`, title may stay "System Health") — "can we trust the data/system?" Streams, account read/user-stream-or-polling, REST latency, clock drift, rate budget, DB/ledger writable, cache/sync age, last error, engine heartbeat, AWS/CloudShell admin area. State colors: green healthy / amber degraded-or-stale / red broken / gray not-configured.
-**Settings** (bottom utility, page id `settings`) — "how does this browser display the cockpit?" **Local UI preferences ONLY**: theme, density, motion, table density, ticker tape, refresh cadence, timezone, currency, basis units, default page, keyboard note, reset local preferences, plus a small "keys are server-only" reminder. No API/security dashboard, no permission map, no session/security center, no risk controls, no source-health table (those live in Account/Health/Risk).
+**Settings** (bottom utility, page id `settings`) — "how does this browser display the cockpit?" **Local UI preferences ONLY**: theme, density, motion, table density, ticker tape, timezone, currency, basis units, default page, keyboard note, reset local preferences, plus a small "keys are server-only" reminder. Connection polling cadence belongs to Connection Control, not Settings or the topbar. No API/security dashboard, no permission map, no session/security center, no risk controls, no source-health table (those live in Account/Health/Risk).
 
-Bottom-right **Sync / Health bubble = the existing `RefreshDock`** (one component, not a separate SyncHub). Fixed bottom-right; hover opens a status micro-panel (browser→server latency, Binance REST latency, live socket, market feed, account sync age, user stream state, clock drift, rate budget, Ledger DB writable, last error); click refreshes + reconnects (`refresh()` → `/api/refresh`) with a smooth spin then green-check/red-cross. Never invents latency (shows "—"/"offline" if unmeasured). The overall colour deliberately excludes the read-only user-stream (`failed` is expected — server polls) so the button isn't perpetually red. It owns detailed refresh/health; the topbar keeps only compact indicators. A standalone `SyncHub` component is NOT used — do not add a second bottom-right bubble.
+Bottom-right **Connection Control = the existing `RefreshDock`** (one component, not a separate SyncHub). Fixed bottom-right; hover/focus opens a 500px operator panel with real browser RTT, browser socket, Binance public streams and REST, account sync, Basis/Volume runtimes, News, Calendar, FX, Ledger DB, user-stream fallback, last reset, per-source reset actions, and the four browser polling cadences. Clicking the outer supplied dual-arrow mark performs a real `all` reset: browser WebSocket rebuild plus `POST /api/refresh`; the server also supports `market`, `runtime`, `account`, `news`, `calendar`, and `fx` targets. Never invent latency (show "—"/"offline" if unmeasured), never count the optional read-only user-stream fallback as a global failure, and label unconfigured AWS/Cloudflare/alert channels Planned or Not Configured. Idle motion is one turn per five seconds; manual reset is exactly three turns and then stops. Connection Control owns health/reset/cadence detail; there is no topbar Market Ping trigger and no second bottom-right bubble.
 
 Earn belongs in Wallets/Capital, not Control: Simple Earn flexible/locked positions are a future read-only Wallets adapter (signed, high request-weight — cache, don't poll aggressively).
 
-Kept below the nav (bottom-left `snav-utils`): News and Calendar full-page tiles (owner restored 2026-07-07 — they coexist with the topbar quick-views).
+Kept below the nav (bottom-left `snav-utils`): Notifications, News, and Calendar full-page tiles. The topbar bell is only the compact notification tray and entry point; the seven-day center is the Notifications page.
+
+Notifications is not a smaller Logs page. Logs retains every audit event;
+Notifications is the exception-routing plane. It curates intervention-worthy
+bot/execution transitions plus explicitly connected AWS infrastructure events,
+groups repeat incidents, and exposes honest destination readiness for In-App,
+Email, Telegram, WhatsApp, and AWS SNS. Unconfigured connectors remain visibly
+closed. The secure AWS intake accepts selected EventBridge state changes only
+when a server-side bearer token is configured.
 
 Removed from the sidebar: Tokens (Token Detail opens from Markets rows / search only) and Rules (folded into Risk as "Rules & governance" section).
 
-Topbar (fixed set — do not add more buttons): search, clock, currency, news quick-view, calendar quick-view, **AWS Runner Control**, network signal, data health, alerts, notifications, kill/power, zoom, settings, theme, account/profile.
+Topbar (fixed set — do not add more buttons): search, clock, currency, news quick-view, calendar quick-view, **AWS Runner Control**, network signal, data health, alerts, notifications, kill/power, zoom, settings, theme, account/profile. Do not restore a separate Market Ping/cadence trigger; that ownership moved to bottom-right Connection Control.
 
-Refresh dock: a persistent bottom control (`RefreshDock`) that re-pulls shared state/markets and forces a server-side resync (`POST /api/refresh`), broadcasting a global `fireRefresh` signal so any page can re-pull; it shows connection health with success/fail marks.
+Connection Control: the persistent bottom `RefreshDock` re-pulls shared state/markets, rebuilds the browser socket, performs real server-side targeted resets through `POST /api/refresh`, and broadcasts `fireRefresh` so mounted pages can re-pull. It is the single source-health, latency, reset, and cadence surface.
 
 Key manifest / permissions: `GET /api/apikey` returns a masked key manifest (fingerprint + first-8 prefix only — never the full key/secret). Per-key scope comes from the authoritative `/sapi/v1/account/apiRestrictions` (client `apiRestrictions()`), which is the real "can this key trade/withdraw" — unlike account-level `canWithdraw`. `state.binance` exposes `keyPermissions` (raw flags) + a derived `keyPosture` (`read_only`/`trading`/`elevated`/`unsafe`, with `ipRestricted`); the fingerprint is first-6 + last-4. The Account page shows the full per-key permission map and posture badge; System Health shows an "API key scope" row. `canTrade`/`canWithdraw` are sourced from the key flags, not account-level.
 

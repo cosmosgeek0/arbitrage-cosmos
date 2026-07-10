@@ -446,7 +446,11 @@ export function News() {
   return <div className="container page lix-page newsx-page">
     <div className="lix-frame">
       <header className="lix-toolbar">
-        <div className="lix-title"><h1>News</h1><span className={`lix-live ${failed ? 'error' : reconnecting ? 'reconnecting' : streamConnected ? 'streaming' : ''}`}><i />{status}</span></div>
+        <div className="lix-title newsx-title">
+          <img className="newsx-page-mark" src="/news-mark.png" alt="" aria-hidden="true" />
+          <h1>News</h1>
+          <span className={`lix-live ${failed ? 'error' : reconnecting ? 'reconnecting' : streamConnected ? 'streaming' : ''}`}><i />{status}</span>
+        </div>
         <label className="lix-search">
           <IconSearch size={15} />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" spellCheck={false} />

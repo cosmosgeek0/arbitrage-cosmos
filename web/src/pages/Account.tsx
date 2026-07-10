@@ -15,13 +15,14 @@ import {
   IconWallet,
 } from '../components/Icons';
 import { TokenIcon } from '../components/TokenIcon';
+import { Star } from '../components/PillSelect';
 import { fmtMoney, fmtPct, fmtPrice, fmtQty, signClass, timeAgo } from '../format';
 import { useRefreshSignal } from '../lib/refresh';
 import { useStore } from '../store';
-import type { BalanceEntry, FillRow, LoansSnapshot, OpenOrderRow } from '../types';
+import type { FillRow, LoansSnapshot, OpenOrderRow } from '../types';
 import './Account.css';
 
-type AccountView = 'overview' | 'wallets' | 'orders' | 'fills';
+type AccountView = 'overview' | 'orders' | 'fills';
 type RangeId = '1W' | '1M' | '3M' | '6M';
 
 interface WalletBalanceRow {
@@ -98,15 +99,27 @@ function SpotBalanceChart({
   points,
   rangeMs,
   hidden,
-  rebuiltBefore,
 }: {
   points: { ts: number; v: number }[];
   rangeMs: number;
   hidden: boolean;
-  rebuiltBefore: number | null;
 }) {
   const plotRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{ x: number; value: number; ts: number } | null>(null);
+  const [chartSize, setChartSize] = useState({ width: 1000, height: 330 });
+
+  useEffect(() => {
+    const node = plotRef.current;
+    if (!node) return;
+    const update = () => {
+      const rect = node.getBoundingClientRect();
+      setChartSize({ width: Math.max(420, Math.round(rect.width)), height: Math.max(220, Math.round(rect.height)) });
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hidden]);
 
   if (hidden) return <div className="accountx-private">Balances Hidden</div>;
 
@@ -118,8 +131,8 @@ function SpotBalanceChart({
   const visible = samplePoints(sorted.filter((point) => point.ts >= start));
   if (visible.length < 2) return <div className="accountx-empty compact"><b>History Is Warming Up</b><span>Spot snapshots appear after the signed account source records enough points.</span></div>;
 
-  const width = 1000;
-  const height = 236;
+  const width = chartSize.width;
+  const height = chartSize.height;
   const axisWidth = 68;
   const plotWidth = width - axisWidth;
   const values = visible.map((point) => point.v);
@@ -142,12 +155,12 @@ function SpotBalanceChart({
     const target = start + fraction * (end - start);
     let closest = visible[0];
     for (const point of visible) if (Math.abs(point.ts - target) < Math.abs(closest.ts - target)) closest = point;
-    setHover({ x: x(closest.ts) / plotWidth, value: closest.v, ts: closest.ts });
+    setHover({ x: x(closest.ts) / width, value: closest.v, ts: closest.ts });
   };
 
   return (
     <div className="accountx-chart" ref={plotRef} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
-      <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-label="Spot balance history">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Spot balance history">
         {grid.map((value) => (
           <g key={value}>
             <line x1="0" x2={plotWidth} y1={y(value)} y2={y(value)} className="accountx-gridline" vectorEffect="non-scaling-stroke" />
@@ -167,15 +180,12 @@ function SpotBalanceChart({
           </span>
         </>
       )}
-      {rebuiltBefore !== null && start < rebuiltBefore && (
-        <span className="accountx-history-note">Earlier values are reconstructed from real deposits and withdrawals; recent values use Binance Spot snapshots.</span>
-      )}
     </div>
   );
 }
 
 export function Account() {
-  const { state, markets, prefs } = useStore();
+  const { state, markets, prefs, toggleWatch } = useStore();
   const [view, setView] = useState<AccountView>('overview');
   const [range, setRange] = useState<RangeId>('1M');
   const [query, setQuery] = useState('');
@@ -235,26 +245,35 @@ export function Account() {
     if (STABLE_ASSETS.has(asset)) return 1;
     return markets.find((market) => market.symbol === `${asset}USDT`)?.spot ?? null;
   };
+  const valueOf = (asset: string, amount: number): number | null => {
+    const price = priceOf(asset);
+    return finite(price) ? amount * price : null;
+  };
   const btcSpot = priceOf('BTC');
-  const earnValue = earnRows.reduce((sum, row) => sum + row.amount * (priceOf(row.asset) ?? 0), 0);
-  const weightedEarnApr = earnValue > 0
-    ? earnRows.reduce((sum, row) => sum + row.amount * (priceOf(row.asset) ?? 0) * row.apr, 0) / earnValue
+  const earnValues = earnRows.map((row) => valueOf(row.asset, row.amount));
+  const earnHasSnapshot = earnSource.fetchedAt !== null;
+  const earnValue = earnHasSnapshot && earnValues.every(finite)
+    ? earnValues.reduce<number>((sum, value) => sum + value, 0)
     : null;
   const margin = loans?.margin ?? null;
-  const marginNet = margin?.available && finite(btcSpot) ? margin.totalNetAssetBtc * btcSpot : null;
-  const marginLiability = margin?.available && finite(btcSpot) ? margin.totalLiabilityBtc * btcSpot : null;
-  const flexibleDebt = (loans?.ongoing ?? []).reduce((sum, loan) => sum + loan.totalDebt * (priceOf(loan.loanCoin) ?? 0), 0);
-  const flexibleCollateral = (loans?.ongoing ?? []).reduce((sum, loan) => sum + loan.collateralAmount * (priceOf(loan.collateralCoin) ?? 0), 0);
-  const flexibleNet = flexibleCollateral - flexibleDebt;
-  const fallbackCapital = account
-    ? account.totalUsdt + earnValue + (marginNet ?? 0) + flexibleNet
+  const marginLiability = margin?.fetchedAt !== null && margin?.fetchedAt !== undefined && finite(btcSpot)
+    ? margin.totalLiabilityBtc * btcSpot
     : null;
-  const officialWalletTotal = walletSource.data === null
-    ? null
-    : walletSource.data.reduce((sum, wallet) => sum + wallet.balance, 0);
-  const netCapital = officialWalletTotal ?? fallbackCapital;
+  const loansHaveSnapshot = loans?.fetchedAt !== null && loans?.fetchedAt !== undefined;
+  const flexibleDebtValues = (loans?.ongoing ?? []).map((loan) => valueOf(loan.loanCoin, loan.totalDebt));
+  const flexibleCollateralValues = (loans?.ongoing ?? []).map((loan) => valueOf(loan.collateralCoin, loan.collateralAmount));
+  const flexibleDebt = loansHaveSnapshot && flexibleDebtValues.every(finite)
+    ? flexibleDebtValues.reduce<number>((sum, value) => sum + value, 0)
+    : null;
+  const flexibleCollateral = loansHaveSnapshot && flexibleCollateralValues.every(finite)
+    ? flexibleCollateralValues.reduce<number>((sum, value) => sum + value, 0)
+    : null;
+  const officialWalletTotal = walletSource.data && walletSource.data.length > 0
+    ? walletSource.data.reduce((sum, wallet) => sum + wallet.balance, 0)
+    : null;
+  const netCapital = officialWalletTotal;
   const btcEquivalent = finite(netCapital) && finite(btcSpot) && btcSpot > 0 ? netCapital / btcSpot : null;
-  const totalLiability = flexibleDebt + (marginLiability ?? 0);
+  const totalLiability = finite(flexibleDebt) && finite(marginLiability) ? flexibleDebt + marginLiability : null;
   const realizedToday = account?.realizedTodayUsd ?? null;
   const spotChange = account?.dayChangeUsd ?? null;
   const spotChangePct = finite(spotChange) && finite(account?.dayOpenEquity) && account!.dayOpenEquity! > 0
@@ -265,7 +284,7 @@ export function Account() {
     const rows = [...(historySource.data?.rows ?? [])]
       .filter((row) => finite(row.totalUsdt))
       .map((row) => ({ ts: row.ts, v: row.totalUsdt }));
-    if (account && finite(account.totalUsdt)) rows.push({ ts: Date.now(), v: account.totalUsdt });
+    if (account && finite(account.totalUsdt)) rows.push({ ts: binance?.lastSyncTs ?? historySource.fetchedAt ?? Date.now(), v: account.totalUsdt });
     rows.sort((a, b) => a.ts - b.ts);
     const deduped: { ts: number; v: number }[] = [];
     for (const point of rows) {
@@ -274,7 +293,7 @@ export function Account() {
       else deduped.push(point);
     }
     return deduped;
-  }, [account?.totalUsdt, historySource.data?.rows]);
+  }, [account?.totalUsdt, binance?.lastSyncTs, historySource.data?.rows, historySource.fetchedAt]);
 
   const walletRows = useMemo(() => [...(walletSource.data ?? [])].sort((left, right) => {
     const leftIndex = WALLET_ORDER.indexOf(left.walletName);
@@ -306,10 +325,12 @@ export function Account() {
   };
   const money = (value: number | null | undefined) => mask ? '••••••' : fmtPrice(value);
   const quantity = (value: number | null | undefined) => mask ? '••••' : fmtQty(value);
+  const shortQuantity = (value: number | null | undefined) => mask ? '••••' : finite(value) ? value.toLocaleString('en-US', { maximumFractionDigits: 4 }) : '—';
   const share = (value: number) => mask ? '••' : finite(netCapital) && netCapital > 0 ? fmtPct((value / netCapital) * 100, 2, false) : '—';
 
   const currentRange = RANGES.find((item) => item.id === range) ?? RANGES[1];
   const sourceErrors = [walletSource.error, earnSource.error, loanSource.error, historySource.error, fillsError].filter(Boolean) as string[];
+  const sourcesPending = walletSource.data === null || earnSource.data === null || loanSource.data === null || historySource.data === null;
   const streamOpen = binance?.userStream === 'open' || binance?.userStream === 'live';
   const syncClass = !binance?.keysPresent || !binance.connected ? 'bad' : streamOpen ? 'live' : 'partial';
   const syncLabel = !binance?.keysPresent
@@ -317,14 +338,19 @@ export function Account() {
     : !binance.connected
       ? 'Sync Failed'
       : `${streamOpen ? 'Live' : 'Polling'} · ${timeAgo(binance.lastSyncTs)}`;
-  const rowCount = view === 'wallets' ? visibleWallets.length : view === 'orders' ? openOrders.length : view === 'fills' ? visibleFills.length : historyPoints.length;
-  const rowLabel = view === 'wallets' ? 'Wallets' : view === 'orders' ? 'Orders' : view === 'fills' ? 'Fills' : 'History Points';
+  const sourceClass = sourceErrors.length > 0 ? 'partial' : sourcesPending ? 'loading' : 'on';
+  const sourceLabel = sourceErrors.length > 0 ? 'Partial Source Coverage' : sourcesPending ? 'Sources Loading' : 'Signed Read Sources';
+  const rowCount = view === 'orders' ? openOrders.length : visibleFills.length;
+  const rowLabel = view === 'orders' ? 'Orders' : 'Fills';
+  const displayCurrency = prefs.currency || 'USD';
+  const watchlist = state?.config.watchlist ?? [];
+  const marketSymbolFor = (asset: string): string | null => markets.some((market) => market.symbol === `${asset}USDT`) ? `${asset}USDT` : null;
 
-  const walletPositionCount = (name: string): string => {
+  const walletPositionCount = (name: string): string | null => {
     if (name === 'Spot') return `${spotRows.length} Assets`;
-    if (name === 'Earn') return `${earnRows.length} Earn · ${loans?.ongoing.length ?? 0} Loan`;
-    if (name === 'Cross Margin') return `${margin?.assets.length ?? 0} Assets`;
-    return 'Wallet Total';
+    if (name === 'Earn') return earnHasSnapshot && loansHaveSnapshot ? `${earnRows.length} Earn · ${loans?.ongoing.length ?? 0} Loan` : null;
+    if (name === 'Cross Margin') return margin?.fetchedAt ? `${margin.assets.length} Assets` : null;
+    return null;
   };
   const walletLiability = (name: string): number | null => {
     if (name === 'Earn') return flexibleDebt;
@@ -332,6 +358,9 @@ export function Account() {
     return null;
   };
   const hasDetails = (name: string): boolean => name === 'Spot' || name === 'Earn' || name === 'Cross Margin';
+  const selectedWallet = expandedWallet && visibleWallets.some((wallet) => wallet.walletName === expandedWallet && hasDetails(wallet.walletName))
+    ? expandedWallet
+    : visibleWallets.find((wallet) => hasDetails(wallet.walletName))?.walletName ?? null;
 
   return (
     <div className="container page accountx-page">
@@ -343,53 +372,43 @@ export function Account() {
             <span className={`accountx-live ${syncClass}`}><i />{syncLabel}</span>
           </div>
           <div className="accountx-tools">
-            <label className="accountx-search">
+            <div className="accountx-search" role="search">
               <IconSearch size={15} />
               <input
+                aria-label="Search Account"
                 value={query}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setQuery(value);
-                  if (value && view === 'overview') setView('wallets');
-                }}
+                onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search"
                 spellCheck={false}
               />
               {query && <button type="button" aria-label="Clear Search" onClick={() => setQuery('')}>×</button>}
-            </label>
+            </div>
             <button type="button" className="accountx-mask" onClick={toggleMask} title={mask ? 'Show Balances' : 'Hide Balances'} aria-label={mask ? 'Show Balances' : 'Hide Balances'}>
               <EyeIcon off={mask} />
             </button>
           </div>
         </header>
 
-        {binance?.keyPosture.level === 'unsafe' && (
-          <div className="accountx-alert bad">{binance.keyPosture.label}. The cockpit has no withdrawal route, but the Binance key should still be recreated without withdrawal or transfer permission.</div>
-        )}
-        {sourceErrors.length > 0 && (
-          <div className="accountx-alert warn">Some account sources are using cached or partial data. The last known values remain visible and are not replaced with zero.</div>
-        )}
-
         <section className="accountx-summary" aria-label="Account Summary">
           <article>
-            <span>Net Capital</span>
+            <span className="accountx-estimated-label"><img className="accountx-balance-mark" src="/account-wallet.png" alt="" aria-hidden="true" /><b>Estimated Total Value</b></span>
             <strong>{money(netCapital)}</strong>
-            <small>{btcEquivalent === null ? 'Binance wallet aggregate loading' : `≈ ${mask ? '••••' : btcEquivalent.toFixed(8)} BTC`}</small>
+            <small>{btcEquivalent === null ? (walletSource.error ? 'Wallet Aggregate Unavailable' : 'Wallet Aggregate Loading') : `≈ ${mask ? '••••' : btcEquivalent.toFixed(8)} BTC`}</small>
           </article>
           <article>
-            <span>Available USDT</span>
+            <span>Available Cash</span>
             <strong>{money(account?.availableUsdt)}</strong>
-            <small>{earnSource.data === null ? 'Earn source loading' : `${money(earnValue)} Flexible Earn`}</small>
+            <small>{`${shortQuantity(account?.availableUsdt)} USDT Free · ${finite(earnValue) ? `${money(earnValue)} Earn` : 'Earn Unavailable'}`}</small>
           </article>
           <article>
             <span>Liabilities</span>
             <strong>{money(totalLiability)}</strong>
-            <small>{`${loans?.ongoing.length ?? 0} Flexible Loan${(loans?.ongoing.length ?? 0) === 1 ? '' : 's'} · ${money(flexibleCollateral)} Collateral`}</small>
+            <small>{finite(totalLiability) ? `${loans?.ongoing.length ?? 0} Flexible Loan${(loans?.ongoing.length ?? 0) === 1 ? '' : 's'} · ${money(flexibleCollateral)} Collateral` : 'Loan Sources Unavailable'}</small>
           </article>
           <article>
-            <span>Realized PnL</span>
+            <span>Gross Realized</span>
             <strong className={signClass(realizedToday)}>{money(realizedToday)}</strong>
-            <small>Ledgered Fills · Today UTC</small>
+            <small>{streamOpen ? 'Before Fees · Ledgered Today UTC' : 'Before Fees · Partial Fill Coverage'}</small>
           </article>
         </section>
 
@@ -397,7 +416,6 @@ export function Account() {
           <div role="tablist">
             {([
               ['overview', 'Overview', ''],
-              ['wallets', 'Wallets', String(walletRows.length)],
               ['orders', 'Open Orders', String(state?.openOrders.length ?? 0)],
               ['fills', 'Recent Fills', String(fills.length)],
             ] as [AccountView, string, string][]).map(([id, label, count]) => (
@@ -406,7 +424,7 @@ export function Account() {
               </button>
             ))}
           </div>
-          <span className={`accountx-source-state ${sourceErrors.length ? 'partial' : 'on'}`}><i />{sourceErrors.length ? 'Partial Source Coverage' : 'Signed Read Sources'}</span>
+          <span className={`accountx-source-state ${sourceClass}`} title={sourceErrors[0] ?? undefined}><i />{sourceLabel}</span>
         </nav>
 
         <div className="accountx-workspace">
@@ -414,7 +432,7 @@ export function Account() {
             <section className="accountx-overview" aria-label="Portfolio Overview">
               <div className="accountx-equity">
                 <div className="accountx-section-head">
-                  <span><b>Spot Balance History</b><small>Transfers and borrowing are included · this is not PnL</small></span>
+                  <span><b>Spot Balance History</b><small>{historySource.data?.reconstructedBefore ? 'Transfers and borrowing included · earlier history reconstructed' : 'Transfers and borrowing included · not PnL'}</small></span>
                   <div className="accountx-equity-tools">
                     <span className={`accountx-spot-change ${signClass(spotChange)}`}>
                       <em>Spot Change</em>
@@ -425,7 +443,7 @@ export function Account() {
                     </div>
                   </div>
                 </div>
-                <SpotBalanceChart points={historyPoints} rangeMs={currentRange.ms} hidden={mask} rebuiltBefore={historySource.data?.reconstructedBefore ?? null} />
+                <SpotBalanceChart points={historyPoints} rangeMs={currentRange.ms} hidden={mask} />
               </div>
               <aside className="accountx-allocation">
                 <div className="accountx-section-head"><span><b>Wallet Allocation</b><small>Official Binance wallet valuation</small></span></div>
@@ -433,89 +451,110 @@ export function Account() {
                   <div className="accountx-private">Balances Hidden</div>
                 ) : allocation.length > 0 ? (
                   <Donut slices={allocation} size={168} topN={6} />
+                ) : walletSource.data === null && !walletSource.error ? (
+                  <div className="accountx-empty compact"><b>Allocation Is Loading</b><span>The signed wallet aggregate is still being fetched.</span></div>
+                ) : walletSource.error ? (
+                  <div className="accountx-empty compact"><b>Allocation Is Unavailable</b><span>No verified wallet aggregate is available yet.</span></div>
                 ) : (
-                  <div className="accountx-empty compact"><b>Allocation Is Loading</b><span>Wallet totals appear after the signed aggregate returns.</span></div>
+                  <div className="accountx-empty compact"><b>No Wallet Balance</b><span>Binance returned no positive wallet allocation.</span></div>
                 )}
               </aside>
             </section>
           )}
 
-          {view === 'wallets' && (
-            <section className="accountx-wallet-table" aria-label="Binance Wallets">
-              <div className="accountx-wallet-head">
-                <span>Wallet</span><span>Balance</span><span>Positions</span><span>Liability</span><span>State</span><span>Share</span>
-              </div>
-              {visibleWallets.map((wallet) => {
-                const expanded = expandedWallet === wallet.walletName || (!!queryText && hasDetails(wallet.walletName));
+          {view === 'overview' && (
+            <section className="accountx-wallet-zone" aria-label="Binance Wallets">
+              <header className="accountx-wallet-zone-head">
+                <span><b>Wallets</b><small>Official Binance wallet valuation and signed position detail</small></span>
+                <em>{visibleWallets.length} of {walletRows.length}</em>
+              </header>
+              <div className="accountx-wallet-table">
+                {visibleWallets.map((wallet) => {
+                const expanded = selectedWallet === wallet.walletName;
+                const positions = walletPositionCount(wallet.walletName);
+                const liability = walletLiability(wallet.walletName);
+                const stateLabel = walletSource.error ? 'Cached' : wallet.active ? 'Active' : 'Inactive';
                 const rowContent = <>
-                  <span className="accountx-wallet-name"><i>{walletIcon(wallet.walletName)}</i><b>{wallet.walletName}</b>{hasDetails(wallet.walletName) && <IconCaret size={10} />}</span>
-                  <span className="accountx-wallet-value"><b>{money(wallet.balance)}</b><small>USDT Valuation</small></span>
-                  <span><b>{walletPositionCount(wallet.walletName)}</b><small>{wallet.walletName === 'Earn' && weightedEarnApr !== null ? `${fmtPct(weightedEarnApr * 100, 2, false)} Weighted APR` : 'Signed Wallet Source'}</small></span>
-                  <span><b>{walletLiability(wallet.walletName) === null ? '—' : money(walletLiability(wallet.walletName))}</b><small>{wallet.walletName === 'Earn' ? 'Flexible Loan Debt' : wallet.walletName === 'Cross Margin' ? 'Cross Margin Debt' : 'No Liability Source'}</small></span>
-                  <span><b className={walletSource.error ? 'warn' : wallet.active ? 'ok' : ''}>{walletSource.error ? 'Cached' : wallet.active ? 'Active' : 'Inactive'}</b><small>{wallet.active ? 'Binance Enabled' : 'Not Activated'}</small></span>
-                  <span><b>{share(wallet.balance)}</b><small>Net Capital</small></span>
+                  <span className="accountx-wallet-name">
+                    <i>{walletIcon(wallet.walletName)}</i>
+                    <span><b>{wallet.walletName}</b><small>{hasDetails(wallet.walletName) ? 'Position Detail Available' : 'Binance Wallet'}</small></span>
+                    <em className={walletSource.error ? 'warn' : wallet.active ? 'ok' : ''}>{stateLabel}</em>
+                    {hasDetails(wallet.walletName) && <IconCaret size={10} />}
+                  </span>
+                  <span className="accountx-wallet-value"><small>Balance</small><b>{money(wallet.balance)}</b></span>
+                  <span><small>Positions</small><b>{positions ?? '—'}</b></span>
+                  <span><small>Liability</small><b>{liability === null ? '—' : money(liability)}</b></span>
+                  <span><small>Wallet Share</small><b>{share(wallet.balance)}</b></span>
                 </>;
                 return (
                   <div className={`accountx-wallet-item ${expanded ? 'expanded' : ''}`} key={wallet.walletName}>
                     {hasDetails(wallet.walletName) ? (
-                      <button type="button" className="accountx-wallet-row" aria-expanded={expanded} onClick={() => setExpandedWallet((current) => current === wallet.walletName ? null : wallet.walletName)}>{rowContent}</button>
+                      <button type="button" className="accountx-wallet-row" aria-pressed={expanded} onClick={() => setExpandedWallet(wallet.walletName)}>{rowContent}</button>
                     ) : (
                       <div className="accountx-wallet-row">{rowContent}</div>
                     )}
                     {expanded && wallet.walletName === 'Spot' && (
                       <div className="accountx-detail-table">
-                        <div className="accountx-detail-head"><span>Asset</span><span>Total</span><span>Available</span><span>Locked</span><span>Price</span><span>Value</span></div>
+                        <div className="accountx-detail-title"><span><b>Spot Assets</b><small>Signed free and locked balances</small></span></div>
+                        <div className="accountx-detail-head"><span>Asset</span><span>Total</span><span>Available</span><span>Locked</span><span>Price</span><span>Value</span><span aria-label="Watchlist" /></div>
                         {spotRows.filter((row) => !queryText || row.asset.toLowerCase().includes(queryText)).map((row) => (
                           <div className="accountx-detail-row" key={`spot-${row.asset}`}>
-                            <span className="accountx-asset"><TokenIcon symbol={`${row.asset}USDT`} size={28} /><b>{row.asset}</b><small>Spot</small></span>
+                            <span className="accountx-asset"><TokenIcon symbol={`${row.asset}USDT`} size={36} /><span><b>{row.asset}</b><small>Spot</small></span></span>
                             <span><b>{quantity(row.free + row.locked)}</b><small>{row.asset}</small></span>
                             <span><b>{quantity(row.free)}</b><small>{row.asset}</small></span>
                             <span><b>{quantity(row.locked)}</b><small>{row.asset}</small></span>
-                            <span><b>{fmtPrice(row.priceUsdt)}</b><small>USDT</small></span>
-                            <span><b>{money(row.valueUsdt)}</b><small>Market Value</small></span>
+                            <span><b>{fmtPrice(row.priceUsdt)}</b><small>{displayCurrency}</small></span>
+                            <span><b>{money(finite(row.priceUsdt) ? row.valueUsdt : null)}</b><small>{finite(row.priceUsdt) ? 'Market Value' : 'Price Unavailable'}</small></span>
+                            <span className="accountx-watch">{marketSymbolFor(row.asset) ? <Star on={watchlist.includes(marketSymbolFor(row.asset)!)} onClick={() => void toggleWatch(marketSymbolFor(row.asset)!)} /> : '—'}</span>
                           </div>
                         ))}
                       </div>
                     )}
                     {expanded && wallet.walletName === 'Earn' && (
                       <div className="accountx-detail-table">
-                        <div className="accountx-detail-head"><span>Position</span><span>Amount</span><span>Rate / LTV</span><span>Collateral</span><span>Liability</span><span>Net Value</span></div>
+                        <div className="accountx-detail-title"><span><b>Earn and Flexible Loan Positions</b><small>Yield, collateral, debt, and net value</small></span></div>
+                        <div className="accountx-detail-head"><span>Position</span><span>Amount</span><span>Rate / LTV</span><span>Collateral</span><span>Liability</span><span>Net Value</span><span aria-label="Watchlist" /></div>
                         {earnRows.filter((row) => !queryText || row.asset.toLowerCase().includes(queryText)).map((row) => {
-                          const value = row.amount * (priceOf(row.asset) ?? 0);
+                          const value = valueOf(row.asset, row.amount);
                           return <div className="accountx-detail-row" key={`earn-${row.asset}`}>
-                            <span className="accountx-asset"><TokenIcon symbol={`${row.asset}USDT`} size={28} /><b>{row.asset}</b><small>Flexible Earn</small></span>
+                            <span className="accountx-asset"><TokenIcon symbol={`${row.asset}USDT`} size={36} /><span><b>{row.asset}</b><small>Flexible Earn</small></span></span>
                             <span><b>{quantity(row.amount)}</b><small>{row.asset}</small></span>
                             <span><b className="ok">{fmtPct(row.apr * 100, 2, false)}</b><small>Current APR</small></span>
                             <span><b>—</b><small>Redeemable Position</small></span>
                             <span><b>—</b><small>No Liability</small></span>
                             <span><b>{money(value)}</b><small>Market Value</small></span>
+                            <span className="accountx-watch">{marketSymbolFor(row.asset) ? <Star on={watchlist.includes(marketSymbolFor(row.asset)!)} onClick={() => void toggleWatch(marketSymbolFor(row.asset)!)} /> : '—'}</span>
                           </div>;
                         })}
                         {(loans?.ongoing ?? []).filter((loan) => !queryText || `${loan.loanCoin} ${loan.collateralCoin} flexible loan`.toLowerCase().includes(queryText)).map((loan) => {
-                          const debtValue = loan.totalDebt * (priceOf(loan.loanCoin) ?? 0);
-                          const collateralValue = loan.collateralAmount * (priceOf(loan.collateralCoin) ?? 0);
+                          const debtValue = valueOf(loan.loanCoin, loan.totalDebt);
+                          const collateralValue = valueOf(loan.collateralCoin, loan.collateralAmount);
+                          const netValue = finite(debtValue) && finite(collateralValue) ? collateralValue - debtValue : null;
                           return <div className="accountx-detail-row" key={`loan-${loan.loanCoin}-${loan.collateralCoin}`}>
-                            <span className="accountx-asset"><TokenIcon symbol={`${loan.loanCoin}USDT`} size={28} /><b>{loan.loanCoin}</b><small>Flexible Loan</small></span>
+                            <span className="accountx-asset"><TokenIcon symbol={`${loan.loanCoin}USDT`} size={36} /><span><b>{loan.loanCoin}</b><small>Flexible Loan</small></span></span>
                             <span><b>{quantity(loan.totalDebt)}</b><small>{loan.loanCoin} Borrowed</small></span>
                             <span><b>{fmtPct(loan.currentLTV * 100, 2, false)}</b><small>Current LTV</small></span>
                             <span><b>{money(collateralValue)}</b><small>{quantity(loan.collateralAmount)} {loan.collateralCoin}</small></span>
                             <span><b>{money(debtValue)}</b><small>Current Debt</small></span>
-                            <span><b>{money(collateralValue - debtValue)}</b><small>Collateral Minus Debt</small></span>
+                            <span><b>{money(netValue)}</b><small>Collateral Minus Debt</small></span>
+                            <span className="accountx-watch">{marketSymbolFor(loan.loanCoin) ? <Star on={watchlist.includes(marketSymbolFor(loan.loanCoin)!)} onClick={() => void toggleWatch(marketSymbolFor(loan.loanCoin)!)} /> : '—'}</span>
                           </div>;
                         })}
                       </div>
                     )}
                     {expanded && wallet.walletName === 'Cross Margin' && (
                       <div className="accountx-detail-table">
-                        <div className="accountx-detail-head"><span>Asset</span><span>Net</span><span>Available</span><span>Locked</span><span>Borrowed</span><span>Interest</span></div>
+                        <div className="accountx-detail-title"><span><b>Cross Margin Assets</b><small>Signed balances, borrowings, and accrued interest</small></span></div>
+                        <div className="accountx-detail-head"><span>Asset</span><span>Net</span><span>Available</span><span>Locked</span><span>Borrowed</span><span>Interest</span><span aria-label="Watchlist" /></div>
                         {(margin?.assets ?? []).filter((row) => !queryText || row.asset.toLowerCase().includes(queryText)).map((row) => (
                           <div className="accountx-detail-row" key={`margin-${row.asset}`}>
-                            <span className="accountx-asset"><TokenIcon symbol={`${row.asset}USDT`} size={28} /><b>{row.asset}</b><small>Cross Margin</small></span>
+                            <span className="accountx-asset"><TokenIcon symbol={`${row.asset}USDT`} size={36} /><span><b>{row.asset}</b><small>Cross Margin</small></span></span>
                             <span><b>{quantity(row.netAsset)}</b><small>{row.asset}</small></span>
                             <span><b>{quantity(row.free)}</b><small>{row.asset}</small></span>
                             <span><b>{quantity(row.locked)}</b><small>{row.asset}</small></span>
                             <span><b>{quantity(row.borrowed)}</b><small>{row.asset}</small></span>
                             <span><b>{quantity(row.interest)}</b><small>{row.asset}</small></span>
+                            <span className="accountx-watch">{marketSymbolFor(row.asset) ? <Star on={watchlist.includes(marketSymbolFor(row.asset)!)} onClick={() => void toggleWatch(marketSymbolFor(row.asset)!)} /> : '—'}</span>
                           </div>
                         ))}
                         {margin?.available && margin.assets.length === 0 && <div className="accountx-empty compact"><b>No Cross Margin Balances</b><span>The signed source is readable and currently reports no assets or liabilities.</span></div>}
@@ -524,9 +563,12 @@ export function Account() {
                     )}
                   </div>
                 );
-              })}
-              {walletSource.data === null && <div className="accountx-empty"><b>Loading Binance Wallets</b><span>The signed wallet aggregate is cached server-side and never replaced with made-up balances.</span></div>}
-              {walletSource.data !== null && visibleWallets.length === 0 && <div className="accountx-empty"><b>No Wallets Match Search</b><span>Clear Search to restore the complete Binance wallet list.</span></div>}
+                })}
+                {walletSource.data === null && !walletSource.error && <div className="accountx-empty"><b>Loading Binance Wallets</b><span>The signed wallet aggregate is being fetched.</span></div>}
+                {walletSource.error && visibleWallets.length === 0 && <div className="accountx-empty"><b>Binance Wallets Are Unavailable</b><span>No verified wallet snapshot is available yet.</span></div>}
+                {!walletSource.error && walletSource.data !== null && walletRows.length === 0 && <div className="accountx-empty"><b>No Wallets Returned</b><span>The signed Binance source returned an empty wallet list.</span></div>}
+                {queryText && walletRows.length > 0 && visibleWallets.length === 0 && <div className="accountx-empty"><b>No Wallets Match Search</b><span>Clear Search to restore the complete Binance wallet list.</span></div>}
+              </div>
             </section>
           )}
 
@@ -536,7 +578,7 @@ export function Account() {
                 <thead><tr><th className="l">Order</th><th>Price</th><th>Quantity</th><th>Filled</th><th>Status</th><th>Age</th></tr></thead>
                 <tbody>{openOrders.map((order: OpenOrderRow) => (
                   <tr key={`${order.symbol}-${order.orderId}`}>
-                    <td className="l"><span className="accountx-order"><TokenIcon symbol={order.symbol} size={30} /><span><b>{order.symbol}</b><small><em className={order.side === 'BUY' ? 'up' : 'down'}>{order.side}</em> · {order.type}</small></span></span></td>
+                    <td className="l"><span className="accountx-order"><TokenIcon symbol={order.symbol} size={36} /><span><b>{order.symbol}</b><small><em className={order.side === 'BUY' ? 'up' : 'down'}>{order.side}</em> · {order.type}</small></span></span></td>
                     <td><b>{fmtPrice(order.price)}</b><small>Limit Price</small></td>
                     <td><b>{quantity(order.origQty)}</b><small>{order.symbol.replace(/USDT$/, '')}</small></td>
                     <td><b>{fmtPct(order.origQty > 0 ? (order.executedQty / order.origQty) * 100 : 0, 0, false)}</b><small>{quantity(order.executedQty)} Filled</small></td>
@@ -555,7 +597,7 @@ export function Account() {
                 <thead><tr><th className="l">Fill</th><th>Price</th><th>Quantity</th><th>Value</th><th>Fee</th><th>Time</th></tr></thead>
                 <tbody>{visibleFills.map((fill) => (
                   <tr key={`${fill.symbol}-${fill.tradeId}`}>
-                    <td className="l"><span className="accountx-order"><TokenIcon symbol={fill.symbol} size={30} /><span><b>{fill.symbol}</b><small><em className={fill.side === 'BUY' ? 'up' : 'down'}>{fill.side}</em> · {fill.source.replaceAll('_', ' ')}</small></span></span></td>
+                    <td className="l"><span className="accountx-order"><TokenIcon symbol={fill.symbol} size={36} /><span><b>{fill.symbol}</b><small><em className={fill.side === 'BUY' ? 'up' : 'down'}>{fill.side}</em> · {fill.source.replaceAll('_', ' ')}</small></span></span></td>
                     <td><b>{fmtPrice(fill.price)}</b><small>Execution Price</small></td>
                     <td><b>{quantity(fill.qty)}</b><small>{fill.symbol.replace(/USDT$/, '')}</small></td>
                     <td><b>{money(fill.quoteQty)}</b><small>Quote Value</small></td>
@@ -573,7 +615,7 @@ export function Account() {
           <span>
             Spot {timeAgo(binance?.lastSyncTs)} · Wallets {timeAgo(walletSource.fetchedAt)} · Earn {timeAgo(earnSource.fetchedAt)} · Loans {timeAgo(loanSource.fetchedAt)}
           </span>
-          <span>{rowCount} {rowLabel}</span>
+          {view !== 'overview' && <span>{rowCount} {rowLabel}</span>}
         </footer>
       </section>
     </div>

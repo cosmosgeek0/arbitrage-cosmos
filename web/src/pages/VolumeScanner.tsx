@@ -206,6 +206,7 @@ export function VolumeScanner() {
       <section className="volx-frame" aria-label="volume workspace">
         <header className="volx-toolbar">
           <div className="volx-title">
+            <img className="volx-page-mark" src="/volume-bars.png" alt="" aria-hidden="true" />
             <h1>Volume</h1>
             <span className={'volx-live ' + (liveFeed ? 'active' : error ? 'degraded' : 'starting')}>
               <i aria-hidden="true" />

@@ -1,4 +1,4 @@
-# ENGINE.md — Cosmos Arbitrage Control Room Engine
+# ENGINE.md — Arbitrage Capital Control Room Engine
 
 Status (2026-07-07): engine NOT started — Part 0 planning-only survey is the next step; cockpit/UI phase is complete.
 
@@ -736,7 +736,7 @@ Only after account/risk/ledger proven. Testnet first. Manual approval only.
 Use this exactly for first engine run:
 
 ```text
-You are in the Cosmos Arbitrage Control Room repo.
+You are in the Arbitrage Capital Control Room repo.
 
 Read DIRECTOR_RULEBOOK.md, BLUEPRINT.md, and ENGINE.md fully.
 Inspect server/, web/, package files, tests, current engine-related code, current API routes, and docs.

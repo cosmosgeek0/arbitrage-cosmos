@@ -136,7 +136,11 @@ export function CalendarPage() {
     <div className="container page lix-page calx-page">
       <div className="lix-frame">
       <header className="lix-toolbar">
-        <div className="lix-title"><h1>Economic Calendar</h1><span className={`lix-live ${failed ? 'error' : ''}`}><i />{status}</span></div>
+        <div className="lix-title calx-title">
+          <img className="calx-page-mark" src="/calendar-check.png" alt="" aria-hidden="true" />
+          <h1>Economic Calendar</h1>
+          <span className={`lix-live ${failed ? 'error' : ''}`}><i />{status}</span>
+        </div>
         <label className="lix-search">
           <IconSearch size={15} />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" spellCheck={false} />

@@ -5,8 +5,9 @@ export type AccentKey = 'r' | 'o' | 'y' | 'g' | 'b' | 'i' | 'v';
 export type DataCadenceKey = 'market' | 'account' | 'news' | 'calendar' | 'fx' | 'health' | 'token';
 export type DataCadence = Record<DataCadenceKey, number>;
 export type MarketPingKey = 'market' | 'account' | 'news' | 'calendar';
-export type NotificationRuleKey = 'critical' | 'account' | 'bot' | 'opportunities' | 'news';
+export type NotificationRuleKey = 'critical' | 'execution' | 'health' | 'infrastructure';
 export type NotificationRules = Record<NotificationRuleKey, boolean>;
+export type BasisUnit = 'pct' | 'bps' | 'decimal';
 
 export const MARKET_PING_KEYS: MarketPingKey[] = ['market', 'account', 'news', 'calendar'];
 export const MARKET_PING_CHOICES = [0.5, 1, 3, 5, 10] as const;
@@ -23,14 +24,14 @@ export const DATA_CADENCE_DEFAULTS: DataCadence = {
 
 export interface Prefs {
   theme: 'light' | 'dark' | 'system';
-  motion: 'full' | 'reduced';
+  motion: 'system' | 'full' | 'reduced';
   tape: boolean;
   density: 'comfortable' | 'compact';
   refreshSec: number; // markets poll
   dataCadence: DataCadence; // per-source data pressure controls
   defaultPage: string;
   timezone: 'local' | 'utc';
-  basisUnit: 'pct' | 'bps';
+  basisUnit: BasisUnit;
   accent: AccentKey; // ROYGBIV accent swatch (default blue)
   clockZone: string; // top-bar clock display zone: UTC or a supported IANA market desk
   currency: string; // display fiat for money values: 'USD' | 'INR' | ...
@@ -52,7 +53,7 @@ const DEFAULTS: Prefs = {
   clockZone: 'UTC',
   currency: 'USD',
   zoom: 1,
-  alerts: { critical: true, account: true, bot: true, opportunities: true, news: false },
+  alerts: { critical: true, execution: true, health: true, infrastructure: true },
 };
 
 const CLOCK_ZONES = new Set(['Asia/Kolkata', 'UTC', 'America/New_York', 'Asia/Singapore', 'Europe/London']);
@@ -70,14 +71,19 @@ export const CURRENCIES: Record<string, { symbol: string; label: string }> = {
 function normalizePrefs(raw: Partial<Prefs>): Prefs {
   const rawCadence = raw.dataCadence && typeof raw.dataCadence === 'object' ? raw.dataCadence : {};
   const legacyAlerts = raw.alerts && typeof raw.alerts === 'object'
-    ? raw.alerts as Partial<NotificationRules> & { proposals?: boolean; fills?: boolean; risk?: boolean }
+    ? raw.alerts as Partial<NotificationRules> & {
+      account?: boolean;
+      bot?: boolean;
+      proposals?: boolean;
+      fills?: boolean;
+      risk?: boolean;
+    }
     : {};
   const alerts: NotificationRules = {
     critical: legacyAlerts.critical ?? legacyAlerts.risk ?? DEFAULTS.alerts.critical,
-    account: legacyAlerts.account ?? legacyAlerts.fills ?? DEFAULTS.alerts.account,
-    bot: legacyAlerts.bot ?? DEFAULTS.alerts.bot,
-    opportunities: legacyAlerts.opportunities ?? legacyAlerts.proposals ?? DEFAULTS.alerts.opportunities,
-    news: legacyAlerts.news ?? DEFAULTS.alerts.news,
+    execution: legacyAlerts.execution ?? legacyAlerts.account ?? legacyAlerts.fills ?? DEFAULTS.alerts.execution,
+    health: legacyAlerts.health ?? legacyAlerts.bot ?? DEFAULTS.alerts.health,
+    infrastructure: legacyAlerts.infrastructure ?? DEFAULTS.alerts.infrastructure,
   };
   const next = { ...DEFAULTS, ...raw, alerts, dataCadence: { ...DATA_CADENCE_DEFAULTS, ...rawCadence } };
   const clamp = (v: unknown, fallback: number) => {
@@ -98,6 +104,8 @@ function normalizePrefs(raw: Partial<Prefs>): Prefs {
   }
   next.refreshSec = next.dataCadence.market;
   if (!CURRENCIES[next.currency]) next.currency = DEFAULTS.currency;
+  if (!['pct', 'bps', 'decimal'].includes(next.basisUnit)) next.basisUnit = DEFAULTS.basisUnit;
+  if (!['system', 'full', 'reduced'].includes(next.motion)) next.motion = DEFAULTS.motion;
   if (!CLOCK_ZONES.has(next.clockZone)) next.clockZone = next.clockZone === 'local' ? 'Asia/Kolkata' : DEFAULTS.clockZone;
   if (next.defaultPage === 'trade' || next.defaultPage === 'settings') next.defaultPage = DEFAULTS.defaultPage; // pages removed 2026-07
   return next;
@@ -154,10 +162,15 @@ export function resolvedTheme(p = getPrefs()): 'light' | 'dark' {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
+export function resolvedMotion(p = getPrefs()): 'full' | 'reduced' {
+  if (p.motion !== 'system') return p.motion;
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'reduced' : 'full';
+}
+
 export function applyPrefs(): void {
   const p = getPrefs();
   document.documentElement.dataset.theme = resolvedTheme(p);
-  document.documentElement.dataset.motion = p.motion;
+  document.documentElement.dataset.motion = resolvedMotion(p);
   document.body.classList.toggle('dense-tables', p.density === 'compact');
 
   // Accent swatch → CSS variables (overrides the stylesheet defaults for both

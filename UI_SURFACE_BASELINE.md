@@ -1,6 +1,6 @@
 # UI_SURFACE_BASELINE.md - Current Sidebar, Topbar, Search, Clock, And Profile Lessons
 
-Last audited: 2026-07-10 08:30 IST
+Last audited: 2026-07-10 12:43 IST
 
 Purpose: this file preserves the hard-won UI calibration for the surfaces that
 were edited repeatedly in the long polish pass: left sidebar, brand lockup,
@@ -105,10 +105,16 @@ The brand is a restrained control-room identity, not a landing-page hero.
 
 Current standard:
 
-- Header brand hit area: 48px high.
-- Mark: 37px, subtle drop shadow, only tiny hover lift.
-- Name: "Arbitrage", 18px, weight about 740, tight but not decorative.
-- Sub: "CONTROL ROOM", 10px mono/caps, 680, letter spacing about 0.135em.
+- Product lockup: `ARBITRAGE CAPITAL` over `CONTROL ROOM`; the browser title,
+  accessible home label, footer, and favicon use the same identity.
+- Header brand hit area: 194px × 48px at the desktop baseline.
+- Mark: an original 42px `A` built from two blue/violet market rails converging
+  on a central execution diamond. It has a restrained shadow and one-pixel
+  hover lift; there is no container tile or decorative spin.
+- Name: 13.5px / 16px, weight 650, uppercase, `.045em` tracking.
+- Sub: 9.5px / 11px mono/caps, weight 590, `.17em` tracking.
+- Search begins 16px after the brand frame at the 1280px verification viewport,
+  so the longer wordmark has clear space without shifting the page rail.
 - No huge sidebar masthead, no extra decorative line collisions around the
   brand, no tint block behind the logo.
 
@@ -202,7 +208,6 @@ Current trigger pattern:
   - Trust Advisor: green/security tone.
   - Notifications: teal/account feed tone.
   - Kill Switch/Trading Mode: blue control tone.
-  - Market Ping: blue/cyan refresh tone.
   - Currency: indigo money tone.
   - Basis: violet percentage tone.
   - Appearance: purple/violet display tone.
@@ -349,41 +354,53 @@ What makes it useful:
 What makes it useful:
 
 - Notifications and Logs have deliberately different jobs. Logs is the complete
-  evidence ledger. Notifications is the much smaller owner-interruption layer:
-  failures, blocked actions, emergency controls, account/execution changes, bot
-  health, opened opportunities, and exchange announcements.
-- Scanner decisions, snapshots, heartbeats, reconnect attempts, candidate
-  telemetry, closed strategy signals, and logo/network decoration failures stay
-  in Logs. They never enter the notification inbox.
+  evidence ledger. Notifications is the operator exception and routing layer:
+  it answers what is stuck, what changed state, what execution needs attention,
+  and where the selected alert is delivered.
+- The admitted set is intentionally narrow: execution/risk failures, order/fill/
+  loan outcomes, emergency/control transitions, bot/runtime dependency state,
+  and explicitly connected AWS EC2/CloudWatch/Health state changes.
+- Scanner decisions, opportunities, news, announcements, snapshots, heartbeats,
+  candidate telemetry, ordinary account sync, watch/config churn, and decoration
+  failures stay in Logs. They never enter the notification inbox.
 - The topbar client maintains a five-second incremental ledger cursor so a real
   alert cannot disappear merely because scanner telemetry pushed it outside the
   server's latest 30-event state payload.
 - Compact tray uses the Coinbase-clean account popover grammar already approved:
   sourced bell identity, quiet heading, curated grouped rows, and real Mark Read
   / Open Center actions. Do not add filter strips or preferences to the tray.
-- Short bursts are grouped by category, alert title, subject, and time window;
-  rows show the exact grouped count and latest real timestamp. Investigation
-  evidence is never lost because the immutable source remains Logs.
+- Repeated runtime and infrastructure transitions collapse into one daily
+  incident carrying the exact underlying event count. Execution bursts use a
+  shorter grouping window. The newest state wins, so a recovery replaces an old
+  firing state instead of leaving both as open blockers. Investigation evidence
+  is never lost because the immutable source remains Logs.
 - Compact tray must stay in the topbar popover family, close to the clock and
   account-detail footprint. Do not force page-like dimensions or giant empty
   regions.
-- Expanded view is one full-width popup, never a route and never a split feed /
-  inspector wall. It contains the sourced bell header, real notification rules,
-  honest delivery posture, seven selectable day cards, category filters, one
-  dense alert tape, and an always-visible footer.
-- The five persisted rule switches are Critical & Security, Account & Execution,
-  Bot Health, Opportunities, and Announcements. Old proposal/fill/risk settings
-  migrate into this schema. Draft changes preview the tape immediately; Discard
-  restores saved state and Save Changes writes `prefs.alerts`.
-- In-App is the only active channel. Email and WhatsApp remain static Planned
-  labels until a real contact-point backend exists. Never render them as working
-  toggles.
-- Seven-day history is fetched from `/api/events`, curated client-side, and
-  grouped only for presentation. Day cards show truthful total and critical
-  counts. Open Logs is a real navigation action back to the full evidence page.
-- Modal typography stays restrained: title around 22px/590, rule and row titles
-  around 12-13px/560, metadata around 9.5-11.5px/420-540, 1px hairlines, and no
-  swollen display counters.
+- The full notification center is a first-class Utility page directly above
+  News, not a modal. The topbar bell remains the compact tray and its Open Center
+  action navigates to `page='notifications'`.
+- Notifications uses the exact News / Calendar one-frame geometry: `x=218`,
+  `y=102`, `1px` edge, `12px` radius at the owner viewport, a `57px` toolbar,
+  rolling seven-day cards, segmented filters, and one curated inbox. Route changes
+  between Notifications, News, and Calendar must not move the frame.
+- Inbox and Routing are the only two page views. Inbox keeps Needs Attention
+  first and reports the real number of raw events excluded and repeats grouped.
+  Routing owns source readiness, destination readiness, noise policy, and the
+  four persisted rules: Needs Attention, Execution Outcomes, Bot Health, and
+  Infrastructure.
+- In-App is the only active destination. Email, Telegram, WhatsApp, and AWS SNS
+  show Not Connected until a real server-side provider exists. They are never
+  rendered as working toggles. AWS is an optional real input through
+  `/api/notifications/ingest/aws`; it fails closed until the server bearer token
+  is configured and accepts only EC2, CloudWatch, and AWS Health sources.
+- Seven-day history is fetched from `/api/events` with `beforeId` cursor
+  pagination, curated client-side, and grouped only for presentation. This is
+  required because a busy ledger can exceed the 20,000-row per-request ceiling;
+  never let that cap falsely render an older day as empty.
+- Page typography stays restrained and matches News / Calendar: title 22px/540,
+  rule and alert titles around 10.5-13px/480-540, metadata around
+  9.5-11.5px/410-470, 1px hairlines, and no swollen display counters.
 - Category marks are real icons: Critical = Shield Alert, Account = Wallet,
   Bot = operations/log mark, Opportunities = Radar, Announcements = Newspaper.
 
@@ -391,31 +408,55 @@ What makes it useful:
 
 What makes it useful:
 
-- Real controls only:
-  - Halt calls `setKill(true)`.
-  - Manual calls `saveConfig({ killSwitch: false, liveTradingEnabled: false })`.
-  - Live calls `saveConfig({ killSwitch: false, liveTradingEnabled: true })`.
-- Live can be disabled based on real prerequisites.
-- This is the model for bot guardrails. Do not create fake "blocked" toggles
-  that only change text.
+- Emergency Stop remains a separate immediate action. Ready state is an obvious
+  red `STOP BOT` button using the owner-supplied red power mark. After activation
+  the whole action becomes green and reads `Bot Stopped`; `RESUME` requires
+  confirmation. Stopped is a safe confirmed state, not a red ongoing failure.
+- Funds Access, Borrowing, Strategy Automation, and Live Orders use one real
+  three-position radio control: Blocked on the left, Paused in the middle, and
+  Allowed on the right. Blocked is red, Paused is neutral, Allowed is green.
+  The entire segment is clickable and keyboard-operable; never restore vague
+  binary switches.
+- `config.controlModes` persists the four explicit operator intentions. Legacy
+  fail-closed fields remain synchronized for the existing risk/loan services:
+  Blocked and Paused both prevent the relevant new action, while Allowed opens
+  only that configured gate. Borrowing maps Blocked to repay-only, Paused to
+  new-borrow pause, and Allowed to guarded borrowing.
+- Live Orders Allowed remains disabled when a real prerequisite is missing.
+  Never let visual green bypass the kill switch, key posture, funds gate,
+  automation state, or symbol allowlist.
+- The layout is deliberately extensible: future control rows reuse the same
+  labelled three-state component and persisted server mode rather than adding
+  unrelated toggle styles.
 
-### Market Ping
+### Connection Control
 
 What makes it useful:
 
-- The owner-supplied blue circular-arrow PNG is the identity in both the
-  trigger and popup header. Do not replace it with a generic refresh glyph.
-- The popup controls exactly four real browser-polling surfaces: Market Price,
-  Account Data, News Context, and Calendar.
-- Every selector exposes the same exact values: `<1s`, `1s`, `3s`, `5s`, and
-  `10s`. Old saved values migrate to the nearest supported choice.
-- Closed selectors are 58px by 32px. Keep the native single-select menu so the
-  open state retains the platform's smooth rounded list, selected checkmark,
-  and keyboard behavior.
-- News and Calendar must honor their selected values. Do not show a timing
-  option if the corresponding page silently clamps it to a different cadence.
-- Keep the panel compact and truthful; no separate settings page or duplicate
-  FX, Health, or Token cadence rows in this popup.
+- Market Ping no longer exists in the topbar. Its four real browser-polling
+  controls — Market Price, Account Data, News Context, and Calendar — live in
+  the single bottom-right `RefreshDock` Connection Control.
+- The owner-supplied separated dual-arrow anatomy is reproduced as the
+  transparent `/connection-reset-mark.svg` identity in the dock and panel.
+  Do not replace it with a generic circular glyph or an opaque screenshot.
+- The outer control is 62px in a 66px dock, 22px from the right and bottom.
+  Its idle image completes one turn in each five-second cycle. A real reset
+  completes exactly three turns, then stops even if a slow upstream refresh is
+  still reporting progress. Reduced Motion disables both animations.
+- Hover/focus opens a 500px operator panel. At 1280x720 it keeps at least 22px
+  of top breathing room; internal content scrolls while header, summary, and
+  Reset All stay visible. The panel uses 1px edges, 15px radius, thin 13px row
+  type, 10.5-11.5px detail type, and the same status vocabulary as Health.
+- Live rows come from current evidence: browser RTT/socket; public market
+  streams; Binance REST latency/clock/rate weight; account sync; Basis and
+  Volume runtimes; News; Calendar; FX; Ledger DB; optional user-stream fallback.
+  Per-row controls call real reset targets. The outer control calls `all` and
+  also rebuilds the browser WebSocket.
+- Planned AWS Runner, deployed Cloudflare Access, and external alert delivery
+  remain visibly Planned/Not Configured until server prerequisites exist.
+- Cadence choices are exact persisted radio groups: `<1s`, `1s`, `3s`, `5s`,
+  and `10s`. News and Calendar must honor the selected value; never present a
+  cadence that the mounted page silently ignores.
 
 ### Display Currency
 
@@ -430,19 +471,33 @@ What makes it useful:
 
 What makes it useful:
 
-- Only switches the real basis unit preference: percent or basis points.
-- Two options are enough.
-- Keep examples: `+0.042%` and `+4.2`.
-- Do not make a large decorative panel for two states.
+- Switches one real persisted basis-unit preference across every formatter:
+  Percent, Basis Points, or Decimal Rate. The equivalent example is
+  `+0.042%` = `+4.2 bps` = `+0.00042`.
+- Decimal Rate is the calculation ratio, not a second percentage. It equals
+  Percent divided by 100.
+- Keep the compact conversion ladder: 1 / 10 / 100 basis points map to their
+  Percent and Per-$1 effects. This is explanatory evidence, not a calculator.
+- The code-native crossed-rate mark is the identity in both the trigger and
+  popup header. Keep the panel inside the shared 400px shell; do not expand it
+  into a decorative explainer page.
 
 ### Appearance
 
 What makes it useful:
 
-- Real controls: theme mode, accent dots, zoom scale.
+- Real controls, in this order: Theme mode, Accent dots, Interface Scale, and
+  Motion. Scale is a full third section in normal flow; never push it into a
+  shrunken footer with `margin-top: auto`.
+- Motion is a persisted `System / Full / Reduced` control. System resolves the
+  OS `prefers-reduced-motion` setting and updates live when that setting changes;
+  Reduced stops the app's transitions and animations through `data-motion`.
 - Keep accent choices as small circles/dots, not named color cards.
 - Theme buttons may use compact symbols, but do not remove all context if the
   owner says it feels like symbol soup.
+- The owner-supplied overlapping blue-diamond geometry is the identity in both
+  the trigger and popup header. It is implemented as a transparent code-native
+  mark so the pale screenshot canvas never becomes a white tile in Dark Mode.
 - The box should fit without scroll in the same window.
 
 ## 10. Account Profile Lesson
@@ -457,8 +512,14 @@ Real behavior:
 - Linked exchange rows are loaded from `/api/apikey` only while the popover is
   open.
 - Device rows are loaded from `/api/sessions` only while the popover is open.
-- Devices shown are current, active, or seen in the last 90 seconds, capped at
-  10.
+- `/api/sessions` is persisted browser-request telemetry: real browser user
+  agents only, the last 24 hours returned (up to 100 rows), two minutes defining
+  `Active`, and thirty days retained in SQLite. Command-line probes, bots, and
+  API tools are excluded so health checks never appear as fake devices.
+- This telemetry survives a server restart and records first seen, last seen,
+  request count, browser, OS, IP, and country whenever those facts are actually
+  available. It is not presented as Cloudflare's authenticated-session
+  inventory; that API is not wired in the current deployment.
 - Logout goes to Cloudflare Access:
   - Localhost links to `https://arbitrage.cosmosgeek.org/cdn-cgi/access/logout`.
   - Deployed host uses `/cdn-cgi/access/logout`.
@@ -466,13 +527,18 @@ Real behavior:
 Current profile layout:
 
 - Panel: the same 400px shared shell used by Appearance and every other trigger.
-- Header: 42px avatar, 11px gap to identity text, 70px overall.
+- Topbar trigger: a 48px circular identity frame (1.5x the former 32px image
+  slot), with the source mark enlarged inside it rather than shown as a square.
+- Header: 96px circular avatar, 11px gap to identity text.
 - Name: 15px / 20px, weight 600.
 - Sub line: 12px / 16px, weight 400.
 - Sections:
   - Connected Exchange with real key row.
-  - Linked Devices with real session rows.
+  - Recent Browser Sessions with every returned 24-hour row in a bounded,
+    scrollable list and a visible thin scrollbar when the list overflows.
   - Log Out full-width bar.
+- Live dots use a restrained 1.65-second signal pulse. Reduced Motion disables
+  the animation.
 - Exchange/device rows are 52-56px with a hairline divider.
 - No Dashboard, Assets, Orders, Risk, or Settings filler rows in this popover.
 

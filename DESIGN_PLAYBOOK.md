@@ -30,31 +30,43 @@ calls garbage and will redo the work five times.
 8. Click every control in real Chrome; restore any state you flipped.
 9. Log the pass in PROJECT_MEMORY.md before moving on.
 
-### 0.1 News And Calendar Are Frozen Tape Surfaces (2026-07-10)
+### 0.1 News And Calendar Are Daily Tape Surfaces (2026-07-10)
 
-The owner explicitly closed both surfaces after the TradingView-reference pass.
-Do not re-template them from Markets and do not add hero statistics, sparklines,
-summary cards, ten-row pagination, large headline type, or example-filled search
-copy. Their permanent reference is the current rendered implementation:
+The owner explicitly reopened News after the first TradingView-reference pass.
+The current daily-tape implementation is the permanent reference. Do not add
+hero statistics, sparklines, ten-row pagination, large headline type, example-
+filled search copy, blue priority rails, URL subcopy, or decorative source cards.
 
-- Calendar: functional seven-day navigator, compact Today/week controls, real
-  Economic and High Impact counts, one impact/country filter row, grouped dense
-  release tape, importance bars, and aligned Actual/Forecast/Prior columns.
-- News: Must Know by default, All News as the raw strict-chronological flow,
-  category chips, one provider dropdown, then a continuous Published/Provider/
-  Headline/Category tape with visible source identity.
+- Both pages use one Account/Markets/Borrow-style outer surface: `1px` neutral
+  border, `12px` radius, no nested page card, and the same left/right geometry.
+- Calendar keeps its functional seven-day navigator, compact Today/week controls,
+  real Economic and High Impact counts, impact/country filters, grouped release
+  tape, importance bars, and aligned Actual/Forecast/Prior columns.
+- News mirrors that calendar navigation model: seven timezone-aware day cells,
+  previous/next week controls, News and High Impact counts, and the complete
+  retained tape for the selected day. Day membership starts at `00:00` in the
+  selected timezone; changing Local Time/UTC must change the partition honestly.
+- News rows carry only time, a free-standing publisher logo, impact bars,
+  headline, category, and the outbound link. Never print provider names, domains,
+  summaries, or URLs beneath the headline. A date-only source must show an honest
+  dash rather than invent an exact time.
+- Impact is a semantic three-bar phone-signal glyph: High = three green bars,
+  Medium = two orange bars, Low = one red bar. Do not infer a critical incident
+  from a generic category such as `Security`; score the actual headline/event.
+- Source identity belongs in the enlarged searchable source directory, where
+  source health and selected-day counts are useful. Coverage is 100 visible
+  sources as of this ruling; additions must be verified, relevant, and non-spammy.
 - Typography: page title 22/540; tape headlines and events 13–13.25/470–480;
-  providers, times and values 12.5/430–490; secondary metadata 10.5/410.
-- The zero-row-border Markets rule does not apply here. TradingView-style
-  hairlines are required because they stabilize high-density time-series rows.
-- Motion is limited to one short incoming-data wash. Persistent text never
-  moves or changes opacity during navigation.
-- The backend refresh architecture is part of the freeze: one shared News SSE
-  refresh owner, client delta merge, upstream safety floors, and Calendar
-  stale-while-revalidate/startup prewarm. Do not reintroduce per-client polling
-  storms or block a warm Calendar response on TradingView.
+  times and values 12.5/430–490; secondary metadata 10.5/410. Hairlines stabilize
+  the dense chronological rows; the Markets zero-row-border rule does not apply.
+- Motion is limited to a short day-content entrance and incoming-data wash.
+  Persistent text never shifts, fades, or transforms during ordinary hover.
+- The backend refresh architecture remains one shared News SSE refresh owner,
+  client delta merge, upstream safety floors, a bounded persisted rolling archive,
+  and Calendar stale-while-revalidate/startup prewarm. Do not reintroduce polling
+  storms or block warm responses on upstream calls.
 
-Only an explicit owner request may reopen the information architecture. Normal
+Only an explicit owner request may reopen this information architecture. Normal
 bug fixes must preserve the `lix-`, `calx-`, and `newsx-` geometry in
 `web/src/pages/LiveIntelligence.css`.
 

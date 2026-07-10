@@ -35,7 +35,7 @@ import { RiskService } from './services/risk.js';
 import { OrderService } from './services/orders.js';
 import { LoanService } from './services/loans.js';
 import { BookStreamHub } from './services/bookStream.js';
-import { getNewsContext, subscribeNewsContext } from './services/newsContext.js';
+import { getNewsContext, scoreNewsImpact, subscribeNewsContext } from './services/newsContext.js';
 import type { AppConfig, OrderIntent } from './types.js';
 
 // Minimal .env loader (no dependency). Never logs values.
@@ -355,7 +355,7 @@ app.get('/api/events', (req, res) => {
 // New-listing / futures-launch announcements move markets, so they belong in an
 // arbitrage cockpit. Fetched server-side (CORS + one shared cache), never faked.
 // Categories map to Binance's own announcement catalog IDs.
-type NewsItem = { id: number; title: string; date: string | null; url: string };
+type NewsItem = { id: number; title: string; date: string | null; url: string; impact: 1 | 2 | 3 };
 const NEWS_CATALOGS = new Set([48, 49, 93, 50, 161, 157, 51, 128]);
 const NEWS_AGGREGATE_CATALOGS = [48, 49, 93, 50, 161, 157, 51, 128];
 const newsCache = new Map<number, { at: number; items: NewsItem[] }>();
@@ -374,11 +374,13 @@ async function refreshNews(catalogId: number): Promise<void> {
     const json = (await res.json()) as { data?: { articles?: { id: number; code: string; title: string }[] } };
     const items: NewsItem[] = (json.data?.articles ?? []).map((a) => {
       const m = a.title.match(/\s*\((\d{4}-\d{2}-\d{2})\)\s*$/);
+      const title = m ? a.title.slice(0, m.index).trim() : a.title.trim();
       return {
         id: a.id,
-        title: m ? a.title.slice(0, m.index).trim() : a.title.trim(),
+        title,
         date: m ? m[1] : null,
         url: `https://www.binance.com/en/support/announcement/${a.code}`,
+        impact: scoreNewsImpact({ sourceKey: 'binance', channel: 'venue', title, tags: [] }),
       };
     });
     newsCache.set(catalogId, { at: Date.now(), items });

@@ -3,32 +3,9 @@ import { IconSearch } from '../components/Icons';
 import { PillSelect } from '../components/PillSelect';
 import { CALENDAR_COUNTRIES, calVal, categoryName, countryName, flag, type CalItem } from '../lib/calendar';
 import { liveAge } from '../format';
+import { TIME_ZONE_OPTIONS, addDays, dayKey, formatKey, mondayFor } from '../lib/time';
 import { useStore } from '../store';
 import './LiveIntelligence.css';
-
-function dayKey(date: Date, zone?: string): string {
-  return date.toLocaleDateString('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' });
-}
-
-function keyDate(key: string): Date {
-  return new Date(`${key}T12:00:00Z`);
-}
-
-function addDays(key: string, days: number): string {
-  const date = keyDate(key);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
-function mondayFor(key: string): string {
-  const date = keyDate(key);
-  const weekday = date.getUTCDay();
-  return addDays(key, weekday === 0 ? -6 : 1 - weekday);
-}
-
-function formatKey(key: string, options: Intl.DateTimeFormatOptions): string {
-  return keyDate(key).toLocaleDateString('en-US', { ...options, timeZone: 'UTC' });
-}
 
 function eventFingerprint(item: CalItem): string {
   return `${item.actual ?? ''}|${item.forecast ?? ''}|${item.previous ?? ''}|${item.date}`;
@@ -51,7 +28,7 @@ function ImpactBars({ importance }: { importance: number }) {
 }
 
 export function CalendarPage() {
-  const { prefs } = useStore();
+  const { prefs, updatePref } = useStore();
   const zone = prefs.clockZone && prefs.clockZone !== 'local' ? prefs.clockZone : undefined;
   const initialToday = dayKey(new Date(), zone);
   const [items, setItems] = useState<CalItem[] | null>(null);
@@ -71,6 +48,12 @@ export function CalendarPage() {
     const timer = window.setInterval(() => setClock(Date.now()), 1_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const today = dayKey(new Date(), zone);
+    setWeekStart(mondayFor(today));
+    setSelectedDay(today);
+  }, [zone]);
 
   useEffect(() => {
     let alive = true;
@@ -135,7 +118,6 @@ export function CalendarPage() {
     return CALENDAR_COUNTRIES.filter((code) => present.has(code));
   }, [allItems]);
   const status = failed ? 'Feed Unavailable' : fetchedAt ? `Live · ${liveAge(fetchedAt)}` : 'Loading';
-  const zoneLabel = prefs.clockZone === 'local' ? Intl.DateTimeFormat().resolvedOptions().timeZone : prefs.clockZone;
   const rangeLabel = `${formatKey(weekStart, { month: 'short', day: 'numeric' })} — ${formatKey(addDays(weekStart, 6), { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
   const moveWeek = (delta: number) => {
@@ -151,6 +133,7 @@ export function CalendarPage() {
 
   return (
     <div className="container page lix-page calx-page">
+      <div className="lix-frame">
       <header className="lix-toolbar">
         <div className="lix-title"><h1>Economic Calendar</h1><span className={`lix-live ${failed ? 'error' : ''}`}><i />{status}</span></div>
         <label className="lix-search">
@@ -167,7 +150,7 @@ export function CalendarPage() {
           <button type="button" className="calx-arrow" onClick={() => moveWeek(1)} aria-label="Next Week">›</button>
           <strong>{rangeLabel}</strong>
         </div>
-        <span className="calx-zone">{zoneLabel}</span>
+        <PillSelect value={prefs.clockZone} options={TIME_ZONE_OPTIONS.map((option) => ({ ...option }))} onChange={(value) => updatePref('clockZone', value)} ariaLabel="Time Zone" className="lix-select lix-zone-select" />
       </section>
 
       <section className="calx-week" aria-label="Week">
@@ -218,6 +201,7 @@ export function CalendarPage() {
           {items !== null && !failed && visible.length === 0 && <div className="lix-empty">No Events Match These Filters.</div>}
         </div>
       </section>
+      </div>
     </div>
   );
 }

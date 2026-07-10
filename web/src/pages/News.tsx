@@ -2,12 +2,14 @@ import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useSta
 import { IconExternal, IconNewspaper, IconSearch } from '../components/Icons';
 import { PillSelect } from '../components/PillSelect';
 import { liveAge } from '../format';
+import { TIME_ZONE_OPTIONS, addDays, dayKey, formatKey, resolvedZoneLabel } from '../lib/time';
 import { useStore } from '../store';
 import './LiveIntelligence.css';
 
 type NewsTone = 'ok' | 'warn' | 'bad' | 'idle';
 type FeedChannel = 'primary' | 'venue' | 'protocol' | 'issuer' | 'tree' | 'rss' | 'lookonchain' | 'binance';
-type NewsBucket = 'all' | 'must-know' | 'exchange' | 'macro-policy' | 'crypto-market' | 'onchain-security' | 'long-research';
+type NewsBucket = 'all' | 'exchange' | 'macro-policy' | 'crypto-market' | 'onchain-security' | 'long-research';
+type ImpactFilter = 'all' | 'high';
 
 interface NewsItem {
   id: string;
@@ -19,10 +21,12 @@ interface NewsItem {
   sourceDomain?: string | null;
   channel: FeedChannel;
   ts: number | null;
+  publishedDay?: string | null;
   timeLabel: string;
   symbols: string[];
   tags: string[];
   tone: NewsTone;
+  impact?: 1 | 2 | 3;
 }
 
 interface NewsSource {
@@ -43,25 +47,26 @@ interface NewsPayload {
   sources: NewsSource[];
 }
 
-interface BinanceItem { id: number; title: string; date: string | null; url: string }
+interface BinanceItem { id: number; title: string; date: string | null; url: string; impact?: 1 | 2 | 3 }
 interface BinancePayload { catalog: number | string; fetchedAt?: number; items: BinanceItem[] }
 
-const FEED_CACHE_KEY = 'cosmos-news-feed-cache-v2';
-const READ_KEY = 'cosmos-news-read-v3';
-const CONTEXT_LIMIT = 900;
-const INITIAL_ROWS = 80;
+const FEED_CACHE_KEY = 'cosmos-news-feed-cache-v3';
+const CONTEXT_LIMIT = 1_200;
 const BUCKETS: { id: NewsBucket; label: string }[] = [
-  { id: 'all', label: 'All News' },
-  { id: 'must-know', label: 'Must Know' },
+  { id: 'all', label: 'All Categories' },
   { id: 'exchange', label: 'Exchange' },
   { id: 'macro-policy', label: 'Macro / Policy' },
-  { id: 'crypto-market', label: 'Crypto' },
-  { id: 'onchain-security', label: 'Security' },
+  { id: 'crypto-market', label: 'Crypto Markets' },
+  { id: 'onchain-security', label: 'Security / On-Chain' },
   { id: 'long-research', label: 'Research' },
 ];
 const SOURCE_PRIORITY: Record<FeedChannel, number> = {
   primary: 0, venue: 1, issuer: 2, protocol: 3, binance: 4, rss: 5, lookonchain: 6, tree: 7,
 };
+const MACRO_SOURCE_KEYS = new Set([
+  'fed', 'bls', 'bea', 'sec', 'cftc', 'treasury', 'ofac', 'ecb', 'boe', 'boj', 'japan-mof',
+  'japan-fsa', 'china-nbs', 'pboc', 'safe', 'uk-fca', 'esma', 'bis-press', 'bis-speeches', 'bis-statistics',
+]);
 
 function readFeedCache(): { context: NewsPayload | null; binance: BinancePayload | null } {
   try {
@@ -71,15 +76,7 @@ function readFeedCache(): { context: NewsPayload | null; binance: BinancePayload
 }
 
 function persistFeedCache(context: NewsPayload | null, binance: BinancePayload | null): void {
-  try { localStorage.setItem(FEED_CACHE_KEY, JSON.stringify({ context, binance })); } catch { /* storage is optional */ }
-}
-
-function readSet(): Set<string> {
-  try { return new Set(JSON.parse(localStorage.getItem(READ_KEY) ?? '[]') as string[]); } catch { return new Set(); }
-}
-
-function persistRead(ids: Set<string>): void {
-  try { localStorage.setItem(READ_KEY, JSON.stringify([...ids].slice(-2_000))); } catch { /* storage is optional */ }
+  try { localStorage.setItem(FEED_CACHE_KEY, JSON.stringify({ context, binance })); } catch { /* cache is optional */ }
 }
 
 function cleanDomain(value: string | null | undefined): string | null {
@@ -88,7 +85,9 @@ function cleanDomain(value: string | null | undefined): string | null {
 }
 
 function itemDomain(item: NewsItem): string | null {
-  return item.sourceDomain || cleanDomain(item.url);
+  const linked = cleanDomain(item.url);
+  if (item.channel === 'tree' && linked) return linked;
+  return item.sourceDomain || linked;
 }
 
 function itemSourceKey(item: NewsItem): string {
@@ -99,14 +98,23 @@ function itemTimestamp(item: NewsItem): number {
   return item.ts && Number.isFinite(item.ts) && item.ts <= Date.now() ? item.ts : 0;
 }
 
-function binanceTimestamp(date: string | null): number | null {
-  if (!date) return null;
-  const parsed = Date.parse(`${date}T00:00:00Z`);
-  return Number.isFinite(parsed) && parsed <= Date.now() ? parsed : null;
+function itemDay(item: NewsItem, zone?: string): string | null {
+  const timestamp = itemTimestamp(item);
+  if (timestamp) return dayKey(new Date(timestamp), zone);
+  return item.publishedDay || null;
+}
+
+function fallbackImpact(item: NewsItem): 1 | 2 | 3 {
+  if (item.impact) return item.impact;
+  const text = `${item.title} ${item.tags.join(' ')}`.toLowerCase();
+  if (/\b(hack|exploit|breach|stolen|drain(?:ed)?|depeg|bankruptcy|trading suspension|withdrawal halt|bridge pause|chain halt|service outage)\b/.test(text)) return 3;
+  if (item.tags.includes('Security') || item.tags.includes('Delisting')) return 3;
+  if (item.channel === 'primary' || item.channel === 'venue' || item.channel === 'protocol' || item.channel === 'issuer') return 2;
+  return 1;
 }
 
 function mapBinance(item: BinanceItem): NewsItem {
-  const titleDate = item.title.match(/(?:\(|[-–—]\s*)(\d{4}-\d{2}-\d{2})\)?\s*$/)?.[1] ?? item.date;
+  const publishedDay = item.title.match(/(?:\(|[-–—]\s*)(\d{4}-\d{2}-\d{2})\)?\s*$/)?.[1] ?? item.date;
   return {
     id: `binance:${item.id}`,
     title: item.title.replace(/\s*(?:\(|[-–—]\s*)\d{4}-\d{2}-\d{2}\)?\s*$/, '').trim(),
@@ -116,17 +124,20 @@ function mapBinance(item: BinanceItem): NewsItem {
     sourceKey: 'binance',
     sourceDomain: 'binance.com',
     channel: 'binance',
-    ts: binanceTimestamp(titleDate),
-    timeLabel: titleDate || 'Official',
+    ts: null,
+    publishedDay,
+    timeLabel: 'Date Only',
     symbols: [],
     tags: ['Exchange'],
     tone: 'idle',
+    impact: item.impact ?? 2,
   };
 }
 
 function compareItems(a: NewsItem, b: NewsItem): number {
-  const byTime = itemTimestamp(b) - itemTimestamp(a);
-  if (byTime) return byTime;
+  const aTime = itemTimestamp(a) || (a.publishedDay ? Date.parse(`${a.publishedDay}T00:00:00Z`) : 0);
+  const bTime = itemTimestamp(b) || (b.publishedDay ? Date.parse(`${b.publishedDay}T00:00:00Z`) : 0);
+  if (aTime !== bTime) return bTime - aTime;
   const bySource = SOURCE_PRIORITY[a.channel] - SOURCE_PRIORITY[b.channel];
   return bySource || a.id.localeCompare(b.id);
 }
@@ -158,11 +169,12 @@ function mergeContextPayload(incoming: NewsPayload, current: NewsPayload | null)
 }
 
 function classification(item: NewsItem): string {
+  const key = itemSourceKey(item);
   const tags = item.tags.join(' ').toLowerCase();
-  const text = `${item.title} ${item.summary ?? ''} ${tags}`.toLowerCase();
+  const text = `${item.title} ${tags}`.toLowerCase();
   if (/security|hack|exploit|phishing|stolen|attack|vulnerability/.test(text)) return 'Security';
   if (item.channel === 'venue' || item.channel === 'binance' || /listing|delisting|maintenance|exchange/.test(tags)) return 'Exchange';
-  if (item.channel === 'primary' || /macro|policy|inflation|rates|treasury|regulation/.test(text)) return 'Macro';
+  if (item.channel === 'primary' || MACRO_SOURCE_KEYS.has(key) || /macro|policy|inflation|rates|treasury|regulation/.test(text)) return 'Macro';
   if (item.channel === 'lookonchain' || /on-chain|whale|wallet flow/.test(text)) return 'On-Chain';
   if (item.channel === 'protocol' || /release|governance/.test(tags)) return 'Protocol';
   if (item.channel === 'issuer' || /research|etf|stablecoin/.test(tags)) return 'Research';
@@ -176,64 +188,96 @@ function matchesBucket(item: NewsItem, bucket: NewsBucket): boolean {
   if (bucket === 'macro-policy') return type === 'Macro';
   if (bucket === 'crypto-market') return type === 'Markets';
   if (bucket === 'onchain-security') return type === 'Security' || type === 'On-Chain' || type === 'Protocol';
-  if (bucket === 'long-research') return type === 'Research';
-  const text = `${item.title} ${item.tags.join(' ')}`.toLowerCase();
-  const official = ['primary', 'venue', 'issuer', 'binance'].includes(item.channel);
-  return official || /hack|exploit|depeg|etf approval|legal ruling|trading suspension|delist|outage|withdrawal halt|bridge pause|hard fork/.test(text);
+  return type === 'Research';
 }
 
 function matchesQuery(item: NewsItem, query: string): boolean {
   if (!query) return true;
-  const haystack = `${item.title} ${item.summary ?? ''} ${item.source} ${itemDomain(item) ?? ''} ${item.symbols.join(' ')} ${item.tags.join(' ')} ${classification(item)}`.toLowerCase();
+  const haystack = `${item.title} ${item.source} ${item.symbols.join(' ')} ${item.tags.join(' ')} ${classification(item)}`.toLowerCase();
   return query.split(/\s+/).every((token) => haystack.includes(token));
 }
 
-function ageLabel(item: NewsItem): string {
-  const timestamp = itemTimestamp(item);
-  if (!timestamp) return item.timeLabel || 'Undated';
-  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1_000));
-  if (seconds < 60) return `${seconds}s Ago`;
-  if (seconds < 3_600) return `${Math.floor(seconds / 60)}m Ago`;
-  if (seconds < 172_800) return `${Math.floor(seconds / 3_600)}h Ago`;
-  return `${Math.floor(seconds / 86_400)}d Ago`;
-}
-
-function publishedLabel(item: NewsItem): string {
+function publishedTime(item: NewsItem, zone?: string): string {
   const timestamp = itemTimestamp(item);
   if (!timestamp) return '—';
-  if (new Date(timestamp).toDateString() === new Date().toDateString()) {
-    return new Date(timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-  }
-  return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return new Date(timestamp).toLocaleTimeString('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit' });
 }
 
-const SourceLogo = memo(function SourceLogo({ domain, label }: { domain: string | null; label: string }) {
+const SourceLogo = memo(function SourceLogo({ domain, label, size = 24 }: { domain: string | null; label: string; size?: number }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [domain]);
-  const url = domain && !failed ? `/api/source-logo?domain=${encodeURIComponent(domain)}&sz=48` : null;
-  return <span className="newsx-logo" aria-label={`${label} Logo`}>
-    {url ? <img src={url} alt="" width="24" height="24" loading="lazy" decoding="async" onError={() => setFailed(true)} /> : <IconNewspaper size={13} />}
+  const url = domain && !failed ? `/api/source-logo?domain=${encodeURIComponent(domain)}&sz=${Math.max(32, size * 2)}` : null;
+  return <span className="newsx-logo" style={{ width: size, height: size }} title={label} aria-label={`${label} Logo`}>
+    {url ? <img src={url} alt="" width={size} height={size} loading="lazy" decoding="async" onError={() => setFailed(true)} /> : <IconNewspaper size={Math.max(12, size - 9)} />}
   </span>;
 });
 
-const NewsRow = memo(function NewsRow({ item, read, fresh, onRead }: { item: NewsItem; read: boolean; fresh: boolean; onRead: (id: string) => void }) {
-  const domain = itemDomain(item);
+function ImpactBars({ impact }: { impact: 1 | 2 | 3 }) {
+  const label = impact === 3 ? 'High Impact' : impact === 2 ? 'Medium Impact' : 'Low Impact';
+  return <span className={`newsx-impact level-${impact}`} title={label} aria-label={label}>
+    {[1, 2, 3].map((bar) => <i key={bar} className={bar <= impact ? 'on' : ''} />)}
+  </span>;
+}
+
+const NewsRow = memo(function NewsRow({ item, fresh, zone }: { item: NewsItem; fresh: boolean; zone?: string }) {
   const type = classification(item);
-  const detail = [...item.symbols.slice(0, 3), ...item.tags.slice(0, 2)].filter((value, index, values) => value && values.indexOf(value) === index).join(' · ');
-  return <div className={`newsx-row ${read ? 'read' : ''} ${fresh ? 'fresh' : ''}`}>
-    <span className="newsx-time"><b>{publishedLabel(item)}</b><em>{ageLabel(item)}</em></span>
-    <span className="newsx-provider"><SourceLogo domain={domain} label={item.source} /><span><b>{item.source}</b><em>{domain || item.channel}</em></span></span>
+  return <div className={`newsx-row ${fresh ? 'fresh' : ''}`}>
+    <span className="newsx-time" title={item.timeLabel}><b>{publishedTime(item, zone)}</b></span>
+    <span className="newsx-source-mark"><SourceLogo domain={itemDomain(item)} label={item.source} /></span>
+    <ImpactBars impact={fallbackImpact(item)} />
     <span className="newsx-headline">
-      {item.url ? <a href={item.url} target="_blank" rel="noreferrer noopener" onClick={() => onRead(item.id)} title={item.title}>{item.title}</a> : <b title={item.title}>{item.title}</b>}
-      {detail && <em>{detail}</em>}
+      {item.url ? <a href={item.url} target="_blank" rel="noreferrer noopener" title={`${item.source} · ${item.title}`}>{item.title}</a> : <b title={item.title}>{item.title}</b>}
     </span>
     <span className="newsx-type">{type}</span>
     <span className="newsx-open">{item.url ? <IconExternal size={13} /> : null}</span>
   </div>;
 });
 
+function SourcePicker({ value, sources, counts, onChange }: {
+  value: string;
+  sources: NewsSource[];
+  counts: Map<string, number>;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: MouseEvent) => { if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false); };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', escape);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', escape); };
+  }, [open]);
+  const selected = sources.find((source) => source.key === value);
+  const visible = sources.filter((source) => source.label.toLowerCase().includes(query.trim().toLowerCase()));
+  const live = sources.filter((source) => source.status === 'live').length;
+  return <div className="newsx-source-picker" ref={ref}>
+    <button type="button" className="newsx-source-trigger" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
+      <span>{selected?.label || 'Sources'}</span><em>{sources.length}</em><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
+    </button>
+    {open && <div className="newsx-source-menu" role="listbox" aria-label="Sources">
+      <div className="newsx-source-menu-head"><strong>Sources</strong><span>{sources.length} Available · {live} Live</span></div>
+      <label className="newsx-source-search"><IconSearch size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Sources" spellCheck={false} /></label>
+      <div className="newsx-source-options">
+        <button type="button" role="option" aria-selected={value === 'all'} className={value === 'all' ? 'selected' : ''} onClick={() => { onChange('all'); setOpen(false); }}>
+          <span className="newsx-source-all"><IconNewspaper size={14} /></span><b>All Sources</b><em>{[...counts.values()].reduce((sum, count) => sum + count, 0)}</em>
+        </button>
+        {visible.map((source) => <button type="button" key={source.key} role="option" aria-selected={value === source.key} className={value === source.key ? 'selected' : ''} onClick={() => { onChange(source.key); setOpen(false); }}>
+          <SourceLogo domain={source.domain || cleanDomain(source.url)} label={source.label} size={22} />
+          <b>{source.label}</b>
+          <span className={`newsx-source-status ${source.status}`}><i />{counts.get(source.key) ?? 0}</span>
+        </button>)}
+      </div>
+    </div>}
+  </div>;
+}
+
 export function News() {
-  const { prefs } = useStore();
+  const { prefs, updatePref } = useStore();
+  const zone = prefs.clockZone && prefs.clockZone !== 'local' ? prefs.clockZone : undefined;
+  const today = dayKey(new Date(), zone);
   const [initial] = useState(readFeedCache);
   const [context, setContext] = useState<NewsPayload | null>(initial.context);
   const [binance, setBinance] = useState<BinancePayload | null>(initial.binance);
@@ -241,11 +285,12 @@ export function News() {
   const [contextFailed, setContextFailed] = useState(false);
   const [binanceFailed, setBinanceFailed] = useState(false);
   const [streamConnected, setStreamConnected] = useState(false);
-  const [bucket, setBucket] = useState<NewsBucket>('must-know');
+  const [impactFilter, setImpactFilter] = useState<ImpactFilter>('all');
+  const [bucket, setBucket] = useState<NewsBucket>('all');
   const [provider, setProvider] = useState('all');
   const [query, setQuery] = useState('');
-  const [visibleLimit, setVisibleLimit] = useState(INITIAL_ROWS);
-  const [readIds, setReadIds] = useState(readSet);
+  const [rangeEnd, setRangeEnd] = useState(today);
+  const [selectedDay, setSelectedDay] = useState(today);
   const [freshIds, setFreshIds] = useState<Set<string>>(new Set());
   const knownIdsRef = useRef(new Set(mergeItems(initial.context, initial.binance).map((item) => item.id)));
   const contextRef = useRef(context);
@@ -255,13 +300,14 @@ export function News() {
 
   useEffect(() => { binanceRef.current = binance; }, [binance]);
   useEffect(() => { contextRef.current = context; }, [context]);
+  useEffect(() => { setRangeEnd(today); setSelectedDay(today); }, [today]);
 
   const applyContext = useCallback((payload: NewsPayload, animate = true, mergeExisting = false) => {
     const committed = mergeExisting ? mergeContextPayload(payload, contextRef.current) : payload;
     const next = mergeItems(committed, binanceRef.current);
-    const incoming = animate ? next.slice(0, 16).filter((item) => !knownIdsRef.current.has(item.id)).map((item) => item.id) : [];
+    const incoming = animate ? next.slice(0, 20).filter((item) => !knownIdsRef.current.has(item.id)).map((item) => item.id) : [];
     next.forEach((item) => knownIdsRef.current.add(item.id));
-    if (knownIdsRef.current.size > 2_000) knownIdsRef.current = new Set(next.slice(0, 1_800).map((item) => item.id));
+    if (knownIdsRef.current.size > 2_400) knownIdsRef.current = new Set(next.slice(0, 2_000).map((item) => item.id));
     setContext(committed);
     contextRef.current = committed;
     setLastCheckedAt(committed.fetchedAt);
@@ -270,7 +316,7 @@ export function News() {
     if (incoming.length) {
       setFreshIds(new Set(incoming));
       if (freshTimerRef.current !== null) window.clearTimeout(freshTimerRef.current);
-      freshTimerRef.current = window.setTimeout(() => setFreshIds(new Set()), 1_400);
+      freshTimerRef.current = window.setTimeout(() => setFreshIds(new Set()), 1_200);
     }
   }, []);
 
@@ -279,8 +325,8 @@ export function News() {
     const contextRequest = fetch(`/api/news-context?limit=${CONTEXT_LIMIT}`, { signal: ctrl.signal }).then((response) => response.ok ? response.json() : Promise.reject()) as Promise<NewsPayload>;
     const binanceRequest = fetch('/api/news?catalog=all', { signal: ctrl.signal }).then((response) => response.ok ? response.json() : Promise.reject()) as Promise<BinancePayload>;
     Promise.allSettled([contextRequest, binanceRequest]).then(([contextResult, binanceResult]) => {
-      let nextContext = context;
-      let nextBinance = binance;
+      let nextContext = contextRef.current;
+      let nextBinance = binanceRef.current;
       if (contextResult.status === 'fulfilled') { nextContext = contextResult.value; applyContext(contextResult.value, false); }
       else setContextFailed(true);
       if (binanceResult.status === 'fulfilled') { nextBinance = binanceResult.value; setBinance(binanceResult.value); setBinanceFailed(false); }
@@ -289,8 +335,6 @@ export function News() {
       persistFeedCache(nextContext, nextBinance);
     });
     return () => ctrl.abort();
-  // Initial cache state is intentionally captured once.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applyContext]);
 
   useEffect(() => {
@@ -319,67 +363,116 @@ export function News() {
     const timer = window.setInterval(() => {
       fetch('/api/news?catalog=all&refresh=1')
         .then((response) => response.ok ? response.json() : Promise.reject())
-        .then((payload: BinancePayload) => {
-          setBinance(payload);
-          setBinanceFailed(false);
-          persistFeedCache(contextRef.current, payload);
-        })
+        .then((payload: BinancePayload) => { setBinance(payload); setBinanceFailed(false); persistFeedCache(contextRef.current, payload); })
         .catch(() => setBinanceFailed(true));
     }, 60_000);
     return () => window.clearInterval(timer);
   }, []);
 
-  const markRead = useCallback((id: string) => {
-    setReadIds((current) => {
-      const next = new Set(current);
-      next.add(id);
-      persistRead(next);
-      return next;
-    });
-  }, []);
-
   const items = useMemo(() => mergeItems(context, binance), [context, binance]);
   const deferredQuery = useDeferredValue(query).trim().toLowerCase();
-  const providers = useMemo(() => {
-    const map = new Map<string, string>();
-    items.forEach((item) => map.set(itemSourceKey(item), item.source));
-    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [items]);
-  const filtered = useMemo(() => items.filter((item) =>
+  const itemsByDay = useMemo(() => {
+    const grouped = new Map<string, NewsItem[]>();
+    items.forEach((item) => {
+      const key = itemDay(item, zone);
+      if (key) grouped.set(key, [...(grouped.get(key) ?? []), item]);
+    });
+    return grouped;
+  }, [items, zone]);
+  const dayKeys = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(rangeEnd, index - 6)), [rangeEnd]);
+  const selectedItems = itemsByDay.get(selectedDay) ?? [];
+  const providerCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    selectedItems.forEach((item) => counts.set(itemSourceKey(item), (counts.get(itemSourceKey(item)) ?? 0) + 1));
+    return counts;
+  }, [selectedItems]);
+  const sourceDirectory = useMemo<NewsSource[]>(() => {
+    const sources = [...(context?.sources ?? [])];
+    sources.push({
+      key: 'binance', label: 'Binance Announcements', status: binanceFailed ? 'error' : binance ? 'live' : 'delayed',
+      detail: 'Official Binance announcements.', fetchedAt: binance?.fetchedAt ?? null, count: binance?.items.length ?? 0,
+      url: 'https://www.binance.com/en/support/announcement', domain: 'binance.com',
+    });
+    return sources.sort((a, b) => a.label.localeCompare(b.label));
+  }, [binance, binanceFailed, context?.sources]);
+  const filtered = useMemo(() => selectedItems.filter((item) =>
+    (impactFilter === 'all' || fallbackImpact(item) === 3) &&
     matchesBucket(item, bucket) &&
     (provider === 'all' || itemSourceKey(item) === provider) &&
     matchesQuery(item, deferredQuery)
-  ), [bucket, deferredQuery, items, provider]);
-  const visible = filtered.slice(0, visibleLimit);
+  ), [bucket, deferredQuery, impactFilter, provider, selectedItems]);
   const failed = contextFailed && binanceFailed;
   const status = failed ? 'Feed Unavailable' : lastCheckedAt ? `${streamConnected ? 'Streaming' : 'Live'} · ${liveAge(lastCheckedAt)}` : 'Loading';
+  const selectedHigh = selectedItems.filter((item) => fallbackImpact(item) === 3).length;
+  const rangeLabel = `${formatKey(dayKeys[0], { month: 'short', day: 'numeric' })} — ${formatKey(dayKeys[6], { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  const canMoveForward = rangeEnd < today;
 
-  useEffect(() => { setVisibleLimit(INITIAL_ROWS); }, [bucket, deferredQuery, provider]);
+  const moveRange = (direction: -1 | 1) => {
+    if (direction === 1 && !canMoveForward) return;
+    const nextEnd = addDays(rangeEnd, direction * 7);
+    const clampedEnd = nextEnd > today ? today : nextEnd;
+    setRangeEnd(clampedEnd);
+    setSelectedDay(clampedEnd);
+  };
+  const returnToday = () => { setRangeEnd(today); setSelectedDay(today); };
 
   return <div className="container page lix-page newsx-page">
-    <header className="lix-toolbar">
-      <div className="lix-title"><h1>News</h1><span className={`lix-live ${failed ? 'error' : ''}`}><i />{status}</span></div>
-      <label className="lix-search">
-        <IconSearch size={15} />
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" spellCheck={false} />
-        {query && <button type="button" aria-label="Clear Search" onClick={() => setQuery('')}>×</button>}
-      </label>
-    </header>
+    <div className="lix-frame">
+      <header className="lix-toolbar">
+        <div className="lix-title"><h1>News</h1><span className={`lix-live ${failed ? 'error' : ''}`}><i />{status}</span></div>
+        <label className="lix-search">
+          <IconSearch size={15} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" spellCheck={false} />
+          {query && <button type="button" aria-label="Clear Search" onClick={() => setQuery('')}>×</button>}
+        </label>
+      </header>
 
-    <section className="lix-filters newsx-filters" aria-label="News Filters">
-      <div className="lix-segments newsx-segments" role="group" aria-label="News Category">
-        {BUCKETS.map((option) => <button type="button" key={option.id} className={bucket === option.id ? 'selected' : ''} onClick={() => setBucket(option.id)}>{option.label}</button>)}
-      </div>
-      <PillSelect value={provider} options={[{ id: 'all', label: 'All Providers' }, ...providers.map(([id, label]) => ({ id, label }))]} onChange={setProvider} ariaLabel="Provider" className="lix-select newsx-provider-select" />
-    </section>
+      <section className="calx-navigation newsx-navigation" aria-label="News Navigation">
+        <div className="calx-range-controls">
+          <button type="button" className="calx-today" onClick={returnToday}>Today</button>
+          <button type="button" className="calx-arrow" onClick={() => moveRange(-1)} aria-label="Previous Seven Days">‹</button>
+          <button type="button" className="calx-arrow" disabled={!canMoveForward} onClick={() => moveRange(1)} aria-label="Next Seven Days">›</button>
+          <strong>{rangeLabel}</strong>
+        </div>
+        <PillSelect value={prefs.clockZone} options={TIME_ZONE_OPTIONS.map((option) => ({ ...option }))} onChange={(value) => updatePref('clockZone', value)} ariaLabel="Time Zone" className="lix-select lix-zone-select" />
+      </section>
 
-    <section className="newsx-tape" aria-label="Live News Feed">
-      <div className="newsx-header"><span>Published</span><span>Provider</span><span>Headline</span><span>Category</span><span /></div>
-      {visible.map((item) => <NewsRow key={item.id} item={item} read={readIds.has(item.id)} fresh={freshIds.has(item.id)} onRead={markRead} />)}
-      {!context && !binance && !failed && <div className="lix-empty">Loading Headlines…</div>}
-      {failed && <div className="lix-empty">The News Feed Is Currently Unavailable.</div>}
-      {(context || binance) && filtered.length === 0 && <div className="lix-empty">{deferredQuery ? `Nothing Matches “${query}”.` : 'No Headlines Match These Filters.'}</div>}
-    </section>
-    {visible.length < filtered.length && <div className="newsx-more"><button type="button" onClick={() => setVisibleLimit((value) => value + INITIAL_ROWS)}>Load More</button><span>{visible.length.toLocaleString('en-US')} of {filtered.length.toLocaleString('en-US')}</span></div>}
+      <section className="calx-week newsx-week" aria-label="News Days">
+        {dayKeys.map((key) => {
+          const rows = itemsByDay.get(key) ?? [];
+          const high = rows.filter((item) => fallbackImpact(item) === 3).length;
+          return <button type="button" key={key} className={`${key === selectedDay ? 'selected' : ''} ${key === today ? 'today' : ''}`} onClick={() => setSelectedDay(key)}>
+            <span className="calx-day-name">{formatKey(key, { weekday: 'short' })} <b>{formatKey(key, { day: 'numeric' })}</b></span>
+            <span><em>News</em><b>{rows.length}</b></span>
+            <span><em>High Impact</em><b>{high}</b></span>
+          </button>;
+        })}
+      </section>
+
+      <section className="lix-filters newsx-filters" aria-label="News Filters">
+        <div className="lix-segments" role="group" aria-label="Impact">
+          <button type="button" className={impactFilter === 'all' ? 'selected' : ''} onClick={() => setImpactFilter('all')}>All News</button>
+          <button type="button" className={impactFilter === 'high' ? 'selected' : ''} onClick={() => setImpactFilter('high')}>High Impact</button>
+        </div>
+        <div className="newsx-filter-actions">
+          <PillSelect value={bucket} options={BUCKETS} onChange={setBucket} ariaLabel="Category" className="lix-select newsx-category-select" />
+          <SourcePicker value={provider} sources={sourceDirectory} counts={providerCounts} onChange={setProvider} />
+        </div>
+      </section>
+
+      <section className="newsx-tape" aria-label="News Feed">
+        <div className="newsx-day-header">
+          <strong>{formatKey(selectedDay, { weekday: 'long', month: 'long', day: 'numeric' })}</strong>
+          <span>{selectedItems.length} News · {selectedHigh} High Impact · {resolvedZoneLabel(prefs.clockZone)}</span>
+        </div>
+        <div className="newsx-header"><span>Time</span><span /><span>Impact</span><span>Headline</span><span>Category</span><span /></div>
+        <div className="newsx-day-body" key={selectedDay}>
+          {filtered.map((item) => <NewsRow key={item.id} item={item} fresh={freshIds.has(item.id)} zone={zone} />)}
+          {!context && !binance && !failed && <div className="lix-empty">Loading Headlines…</div>}
+          {failed && <div className="lix-empty">The News Feed Is Currently Unavailable.</div>}
+          {(context || binance) && filtered.length === 0 && <div className="lix-empty">{deferredQuery ? `Nothing Matches “${query}”.` : 'No News Matches These Filters.'}</div>}
+        </div>
+      </section>
+    </div>
   </div>;
 }

@@ -5,7 +5,6 @@ import { Num } from '../components/Num';
 import { EmptyState } from '../components/ui';
 import { IconSearch } from '../components/Icons';
 import { fmtPrice, fmtPct, fmtBasis, fmtMoney, fmtFunding, countdown, signClass } from '../format';
-import { CURRENCIES } from '../lib/prefs';
 import { primeIcons } from '../lib/iconManifest';
 import { tokenName } from '../lib/tokenNames';
 import { Chev, PillSelect, pageList, Star } from '../components/PillSelect';
@@ -41,6 +40,17 @@ const VIEWS: { id: View; label: string; sort: SortKey }[] = [
   { id: 'liquidity', label: 'Liquidity', sort: 'depth' },
 ];
 
+function readMarketView(): View {
+  if (typeof window === 'undefined') return 'derivatives';
+  try {
+    const saved = window.localStorage.getItem('cosmos-market-view') as View | null;
+    if (saved && VIEWS.some((item) => item.id === saved)) return saved;
+  } catch {
+    // Local persistence is optional; the useful operator view remains the fallback.
+  }
+  return 'derivatives';
+}
+
 const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'All Assets' },
   { id: 'watchlist', label: 'Watchlist' },
@@ -73,6 +83,14 @@ function fmtAgeMs(ms: number | null): string {
   if (ms < 60_000) return `${Math.round(ms / 1000)}s ago`;
   if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m ago`;
   return `${Math.round(ms / 3_600_000)}h ago`;
+}
+
+function fmtLiveAge(ms: number | null): string {
+  if (ms === null || !Number.isFinite(ms)) return '—';
+  if (ms < 1500) return 'now';
+  if (ms < 60_000) return `${Math.max(1, Math.round(ms / 1000))}s`;
+  if (ms < 3_600_000) return `${Math.max(1, Math.round(ms / 60_000))}m`;
+  return `${Math.max(1, Math.round(ms / 3_600_000))}h`;
 }
 
 function depthUsd(row: MarketRow): number | null {
@@ -138,6 +156,15 @@ const SortGlyph = ({ dir }: { dir: 'asc' | 'desc' | null }) => (
 );
 
 function SourceLogo({ source, size = 24 }: { source: (typeof MARKET_SOURCES)[number]; size?: number }) {
+  if (source.id === 'binance') {
+    return (
+      <span className="mkx-source-logo mkx-source-logo-binance" style={{ width: size, height: size }} aria-hidden>
+        <svg viewBox="0 0 24 24" width={size} height={size}>
+          <path d="M16.624 13.9202l2.7175 2.7154-7.353 7.353-7.353-7.352 2.7175-2.7164 4.6355 4.6595 4.6356-4.6595zm4.6366-4.6366L24 12l-2.7154 2.7164L18.5682 12l2.6924-2.7164zm-9.272.001l2.7163 2.6914-2.7164 2.7174v-.001L9.2721 12l2.7164-2.7154zm-9.2722-.001L5.4088 12l-2.6914 2.6924L0 12l2.7164-2.7164zM11.9885.0115l7.353 7.329-2.7174 2.7154-4.6356-4.6356-4.6355 4.6595-2.7174-2.7154 7.353-7.353z" />
+        </svg>
+      </span>
+    );
+  }
   if (!source.domain) {
     return (
       <span className="mkx-source-logo mkx-source-logo-all" style={{ width: size, height: size }} aria-hidden>
@@ -207,7 +234,7 @@ function MarketSourcePicker() {
         aria-expanded={open}
         onClick={toggleMenu}
       >
-        <SourceLogo source={selected} size={22} />
+        <SourceLogo source={selected} size={17} />
         <span>{selected.name}</span>
         <span className={`mkx-chev ${open ? 'up' : ''}`}><Chev /></span>
       </button>
@@ -363,11 +390,11 @@ function ChangeCell({ v }: { v: number | null | undefined }) {
 /* ---- page ------------------------------------------------------------ */
 
 export function Markets() {
-  const { markets, marketsUpdatedAt, marketsError, connected, state, prefs, updatePref, openDetail, toggleWatch } = useStore();
-  const [view, setView] = useState<View>('overview');
+  const { markets, marketsUpdatedAt, marketsError, connected, state, prefs, openDetail, toggleWatch } = useStore();
+  const [view, setView] = useState<View>(readMarketView);
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
-  const [sortKey, setSortKey] = useState<SortKey>('quoteVolume24h');
+  const [sortKey, setSortKey] = useState<SortKey>(() => VIEWS.find((item) => item.id === readMarketView())?.sort ?? 'openInterestUsd');
   const [sortDesc, setSortDesc] = useState(true);
   const [pageN, setPageN] = useState(0);
   const [pageSize, setPageSize] = useState(10);
@@ -382,6 +409,13 @@ export function Markets() {
     const t = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(t);
   }, []);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('cosmos-market-view', view);
+    } catch {
+      // Persistence is a convenience; the active in-memory view still works.
+    }
+  }, [view]);
 
   /* -- honest aggregates (all computed from live Binance rows) -- */
   const withChange = markets.filter((m) => finite(m.change24hPct));
@@ -672,42 +706,38 @@ export function Markets() {
       {/* ---- Prices table ---- */}
       <section className="mkx-prices" aria-label="Market prices">
         <div className="mkx-prices-head">
-          <div className="mkx-prices-title">
-            <h2>Market Prices <em>{fmtCount(markets.length)} Assets</em></h2>
-            <span className={`mkx-live ${live ? 'on' : ''}`}>
-              <i />
-              {marketsError ? 'Feed Error' : live ? `Live · ${fmtAgeMs(marketAgeMs)}` : 'Reconnecting'}
-            </span>
-          </div>
-          <MarketSourcePicker />
+          <h2>Market Prices <em>{fmtCount(markets.length)} Assets</em></h2>
+          <span className={`mkx-live ${live ? 'on' : ''}`}>
+            <i />
+            {marketsError ? 'Feed Error' : live ? `Live · ${fmtLiveAge(marketAgeMs)}` : 'Reconnecting'}
+          </span>
         </div>
 
         <div className="mkx-pills">
-          <PillSelect
-            icon={<Globe />}
-            value={filter}
-            options={FILTERS.map((f) => ({ id: f.id, label: f.label }))}
-            onChange={setFilter}
-            ariaLabel="Asset filter"
-          />
-          <PillSelect
-            value={view}
-            options={VIEWS.map((v) => ({ id: v.id, label: v.label }))}
-            onChange={applyView}
-            ariaLabel="Table view"
-          />
-          <PillSelect
-            value={prefs.currency}
-            options={Object.keys(CURRENCIES).map((c) => ({ id: c, label: c }))}
-            onChange={(c) => updatePref('currency', c)}
-            ariaLabel="Display currency"
-          />
-          <PillSelect
-            value={String(pageSize)}
-            options={[10, 25, 50, 100].map((n) => ({ id: String(n), label: `${n} Rows` }))}
-            onChange={(n) => setPageSize(Number(n))}
-            ariaLabel="Rows per page"
-          />
+          <div className="mkx-pills-left">
+            <PillSelect
+              icon={<Globe />}
+              value={filter}
+              options={FILTERS.map((f) => ({ id: f.id, label: f.label }))}
+              onChange={setFilter}
+              ariaLabel="Asset filter"
+            />
+            <PillSelect
+              value={view}
+              options={VIEWS.map((v) => ({ id: v.id, label: v.label }))}
+              onChange={applyView}
+              ariaLabel="Table view"
+            />
+          </div>
+          <div className="mkx-pills-right">
+            <PillSelect
+              value={String(pageSize)}
+              options={[10, 25, 50, 100].map((n) => ({ id: String(n), label: `${n} Rows` }))}
+              onChange={(n) => setPageSize(Number(n))}
+              ariaLabel="Rows per page"
+            />
+            <MarketSourcePicker />
+          </div>
         </div>
 
         <table className="mkx-table">

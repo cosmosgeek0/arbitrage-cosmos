@@ -177,8 +177,7 @@
 
 /* ---- Prices head + pills ---------------------------------------------- */
 .mkx-prices { padding-top: 26px; }
-.mkx-prices-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.mkx-prices-title { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.mkx-prices-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
 .mkx-prices-head h2 {
   margin: 0;
   font-size: 28px;
@@ -213,16 +212,16 @@
 .mkx-source-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   height: 40px;
-  padding: 0 13px 0 9px;
+  padding: 0 14px;
   border: 0;
   border-radius: 20px;
   background: var(--tile);
   color: var(--text);
   font: inherit;
-  font-size: 14px;
-  font-weight: 510;
+  font-size: 13.5px;
+  font-weight: 470;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -243,6 +242,9 @@
 }
 .mkx-source-logo::before { content: attr(data-fallback); position: absolute; inset: 0; display: grid; place-items: center; }
 .mkx-source-logo img { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: contain; }
+.mkx-source-logo-binance { overflow: visible; border: 0; border-radius: 0; background: transparent; color: #f0b90b; }
+.mkx-source-logo-binance::before { content: none; }
+.mkx-source-logo-binance svg { display: block; width: 100%; height: 100%; fill: currentColor; }
 .mkx-source-logo-all { border-radius: 8px; color: var(--text-2); background: var(--tile); }
 .mkx-source-logo-all svg { fill: none; stroke: currentColor; stroke-width: 1.4; }
 .mkx-source-menu {
@@ -298,7 +300,9 @@
 .mkx-source-state.live { color: var(--up); background: color-mix(in srgb, var(--up) 10%, transparent); }
 .mkx-source-state.planned { color: var(--muted); background: var(--tile); }
 
-.mkx-pills { display: flex; align-items: center; gap: 10px; margin: 16px 0 4px; flex-wrap: wrap; }
+.mkx-pills { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 16px 0 4px; }
+.mkx-pills-left, .mkx-pills-right { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mkx-pills-right { margin-left: auto; }
 .mkx-pill {
   position: relative;
   display: inline-flex;
@@ -445,8 +449,9 @@ td.mkx-starcol { padding: 0 0 0 2px; text-overflow: clip; }
 .mkx-asset { display: flex; align-items: center; gap: 14px; height: 84px; }
 .mkx-asset-name { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .mkx-asset-name b {
-  font-size: 16px;
-  font-weight: 550;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 20px;
   color: var(--text);
   letter-spacing: -0.006em;
   overflow: hidden;
@@ -454,8 +459,9 @@ td.mkx-starcol { padding: 0 0 0 2px; text-overflow: clip; }
 }
 .mkx-asset-name em {
   font-style: normal;
-  font-size: 14px;
-  font-weight: 430;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -541,9 +547,23 @@ td.mkx-starcol { padding: 0 0 0 2px; text-overflow: clip; }
 }
 @container (max-width: 720px) {
   .mkx-prices-head { align-items: flex-start; flex-wrap: wrap; }
-  .mkx-prices-title { align-items: flex-start; flex-direction: column; gap: 2px; }
-  .mkx-source-picker { margin-left: auto; }
+  .mkx-pills { align-items: flex-start; flex-wrap: wrap; }
+  .mkx-pills-right { width: 100%; justify-content: flex-end; }
 }
+
+/* Owner screenshot repair (2026-07-10): a smaller heading must carry less
+   ink than the Explore title; market identities stay crisp, not bold. */
+.app-page-frame .mkx-stats h2,
+.app-page-frame .mkx-prices-head h2 {
+  font-size: 24px !important;
+  font-weight: 500 !important;
+  line-height: 34px !important;
+  letter-spacing: -.01em !important;
+}
+.mkx-tile-k { font-size: 14px; font-weight: 430; }
+.mkx-tile-v b,
+.mkx-tile-v b .num { font-size: 16px; font-weight: 430; letter-spacing: 0; font-variant-numeric: lining-nums; }
+.mkx-tile-v em { font-size: 13px; font-weight: 430; }
 @container (max-width: 800px) {
   .mkx-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mkx-oicol, .mkx-oicell { display: none; }

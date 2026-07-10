@@ -1,3 +1,6 @@
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+
 export type NewsContextChannel = 'primary' | 'venue' | 'protocol' | 'issuer' | 'tree' | 'rss' | 'lookonchain';
 export type NewsContextTone = 'bad' | 'warn' | 'ok' | 'idle';
 export type NewsSourceStatus = 'live' | 'delayed' | 'error';
@@ -16,6 +19,7 @@ export interface NewsContextItem {
   symbols: string[];
   tags: string[];
   tone: NewsContextTone;
+  impact: 1 | 2 | 3;
 }
 
 export interface NewsContextSource {
@@ -49,7 +53,25 @@ const PROTOCOL_DEFAULT_MIN_FETCH_MS = 120_000;
 const ISSUER_DEFAULT_MIN_FETCH_MS = 120_000;
 const OFFICIAL_SOURCE_CONCURRENCY = 4;
 const RSS_SOURCE_CONCURRENCY = 6;
+const NEWS_ARCHIVE_RETENTION_MS = 14 * 86_400_000;
+const NEWS_ARCHIVE_MAX_ITEMS = 4_000;
+const NEWS_ARCHIVE_PATH = path.join(process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.resolve(process.cwd(), 'data'), 'news-archive.json');
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+const OFFICIAL_MACRO_KEYS = new Set([
+  'fed', 'bls', 'bea', 'sec', 'cftc', 'treasury', 'ofac', 'ecb', 'boe', 'boj',
+  'japan-mof', 'japan-fsa', 'china-nbs', 'pboc', 'safe', 'uk-fca', 'esma',
+  'bis-press', 'bis-speeches', 'bis-statistics',
+]);
+const VENUE_KEYS = new Set([
+  'binance', 'coinbase-assets', 'kraken', 'okx', 'bybit', 'upbit-bithumb',
+  'deribit', 'cme-crypto', 'exchange-status',
+]);
+const TRUSTED_EDITORIAL_KEYS = new Set([
+  'financialjuice', 'wsj-markets', 'ft-alphaville', 'cnbc-markets', 'marketwatch',
+  'ap-business', 'coindesk', 'the-block', 'blockworks', 'dl-news', 'unchained',
+  'protos', 'the-defiant', 'crypto-news', 'ledger-insights', 'rekt', 'kaiko',
+  'glassnode-insights', 'coinshares-research',
+]);
 
 interface FeedConfig {
   key: string;
@@ -662,6 +684,29 @@ const ISSUER_SOURCES: OfficialSourceConfig[] = [
 
 const RSS_FEEDS: FeedConfig[] = [
   {
+    key: 'bis-press', label: 'BIS Press Releases', url: 'https://www.bis.org/doclist/all_pressrels.rss', domain: 'bis.org', minFetchMs: 185_000,
+    includeKeywords: ['crypto', 'token', 'stablecoin', 'market', 'monetary', 'rate', 'inflation', 'central bank', 'liquidity', 'capital', 'banking', 'financial'],
+  },
+  {
+    key: 'bis-speeches', label: 'BIS Central Bank Speeches', url: 'https://www.bis.org/doclist/cbspeeches.rss', domain: 'bis.org', minFetchMs: 185_000,
+    includeKeywords: ['crypto', 'token', 'stablecoin', 'market', 'monetary', 'rate', 'inflation', 'central bank', 'liquidity', 'capital', 'banking', 'financial'],
+  },
+  { key: 'bis-statistics', label: 'BIS Statistics', url: 'https://www.bis.org/doclist/all_statistics.rss', domain: 'bis.org', minFetchMs: 185_000 },
+  { key: 'japan-fsa', label: 'Japan FSA', url: 'https://www.fsa.go.jp/fsaNewsListAll_rss2.xml', domain: 'fsa.go.jp', minFetchMs: 185_000 },
+  {
+    key: 'uk-fca', label: 'UK Financial Conduct Authority', url: 'https://www.fca.org.uk/news/rss.xml', domain: 'fca.org.uk', minFetchMs: 60_000,
+    includeKeywords: ['crypto', 'market', 'fund', 'asset', 'trading', 'stablecoin', 'investment', 'financial', 'enforcement'],
+  },
+  {
+    key: 'esma', label: 'ESMA', url: 'https://www.esma.europa.eu/rss.xml', domain: 'esma.europa.eu', minFetchMs: 60_000,
+    includeKeywords: ['crypto', 'market', 'fund', 'asset', 'trading', 'stablecoin', 'investment', 'financial', 'enforcement'],
+  },
+  { key: 'crypto-news', label: 'Crypto.news', url: 'https://crypto.news/feed/', domain: 'crypto.news', minFetchMs: 30_000 },
+  { key: 'ledger-insights', label: 'Ledger Insights', url: 'https://www.ledgerinsights.com/feed/', domain: 'ledgerinsights.com', minFetchMs: 60_000 },
+  { key: 'rekt', label: 'Rekt', url: 'https://www.rekt.news/rss/feed.xml', domain: 'rekt.news', minFetchMs: 185_000 },
+  { key: 'beincrypto', label: 'BeInCrypto', url: 'https://beincrypto.com/feed/', domain: 'beincrypto.com', minFetchMs: 30_000 },
+  { key: 'coinshares-research', label: 'CoinShares Research', url: 'https://researchblog.coinshares.com/feed', domain: 'coinshares.com', minFetchMs: 185_000 },
+  {
     key: 'financialjuice', label: 'FinancialJuice', url: 'https://www.financialjuice.com/feed.ashx', domain: 'financialjuice.com', minFetchMs: 15_000,
     includeKeywords: ['fed', 'ecb', 'boj', 'rate', 'inflation', 'cpi', 'ppi', 'payroll', 'jobs', 'gdp', 'treasury', 'bond', 'oil', 'gold', 'dollar', 'bitcoin', 'ethereum', 'crypto'],
   },
@@ -768,7 +813,15 @@ const COMMON_SYMBOLS = new Set([
   'USDC', 'HYPE', 'PEPE', 'WIF', 'SHIB', 'FLOKI', 'AI', 'MSTR',
 ]);
 
-let cache: NewsContextPayload | null = null;
+let archive = loadNewsArchive();
+let cache: NewsContextPayload | null = archive.length ? {
+  source: 'primary+venue+protocol+issuer+tree+rss+lookonchain',
+  // Mark the bootstrap snapshot stale so the first caller starts a background
+  // live sweep while still receiving the persisted tape immediately.
+  fetchedAt: Date.now() - CACHE_MS,
+  items: archive.slice(0, 1200),
+  sources: bootstrapNewsSources(),
+} : null;
 let inFlight: Promise<NewsContextPayload> | null = null;
 let treeSourceCache: (RssFetchResult & { fetchedAt: number }) | null = null;
 let lookonchainSourceCache: (RssFetchResult & { fetchedAt: number }) | null = null;
@@ -778,6 +831,84 @@ const primarySourceCache = new Map<string, RssFetchResult & { fetchedAt: number 
 const venueSourceCache = new Map<string, RssFetchResult & { fetchedAt: number }>();
 const protocolSourceCache = new Map<string, RssFetchResult & { fetchedAt: number }>();
 const issuerSourceCache = new Map<string, RssFetchResult & { fetchedAt: number }>();
+let archivePersistedAt = 0;
+
+function bootstrapNewsSources(): NewsContextSource[] {
+  const configured = [
+    ...PRIMARY_SOURCES,
+    ...VENUE_SOURCES,
+    ...PROTOCOL_SOURCES,
+    ...ISSUER_SOURCES,
+    ...RSS_FEEDS,
+    { key: 'tree', label: 'Tree Of Alpha Relay', url: TREE_URL, domain: 'treeofalpha.com' },
+    { key: 'lookonchain', label: 'Lookonchain', url: LOOKONCHAIN_URL, domain: 'lookonchain.com' },
+  ];
+  const seen = new Set<string>();
+  return configured
+    .filter((source) => {
+      if (seen.has(source.key)) return false;
+      seen.add(source.key);
+      return true;
+    })
+    .map((source) => ({
+      key: source.key,
+      label: source.label,
+      status: 'delayed' as const,
+      detail: 'Loading the latest source state.',
+      fetchedAt: null,
+      count: 0,
+      url: source.url,
+      domain: source.domain,
+    }));
+}
+
+function loadNewsArchive(): NewsContextItem[] {
+  try {
+    const parsed = JSON.parse(readFileSync(NEWS_ARCHIVE_PATH, 'utf8')) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item): item is NewsContextItem => Boolean(item && typeof item === 'object' && typeof (item as NewsContextItem).id === 'string'))
+      .filter(isUsefulNewsItem)
+      .map((item) => ({
+        ...item,
+        impact: scoreNewsImpact(item),
+      }))
+      .sort(compareContextItems)
+      .slice(0, NEWS_ARCHIVE_MAX_ITEMS);
+  } catch {
+    return [];
+  }
+}
+
+function commitNewsArchive(currentItems: NewsContextItem[]): NewsContextItem[] {
+  const cutoff = Date.now() - NEWS_ARCHIVE_RETENTION_MS;
+  const seen = new Set<string>();
+  archive = [...currentItems, ...archive]
+    .filter((item) => item.ts !== null && item.ts >= cutoff && item.ts <= Date.now())
+    .filter(isUsefulNewsItem)
+    .map((item) => ({ ...item, impact: scoreNewsImpact(item) }))
+    .sort(compareContextItems)
+    .filter((item) => {
+      const key = canonicalNewsKey(item);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, NEWS_ARCHIVE_MAX_ITEMS);
+
+  if (Date.now() - archivePersistedAt >= 60_000) {
+    archivePersistedAt = Date.now();
+    try {
+      mkdirSync(path.dirname(NEWS_ARCHIVE_PATH), { recursive: true });
+      writeFileSync(NEWS_ARCHIVE_PATH, JSON.stringify(archive));
+    } catch {
+      // Persistence is best effort; the in-memory archive remains authoritative.
+    }
+  }
+
+  const undated = currentItems.filter((item) => item.ts === null);
+  return [...archive, ...undated].sort(compareContextItems).slice(0, 1200);
+}
 
 export async function getNewsContext(force = false): Promise<NewsContextPayload> {
   if (cache) {
@@ -822,7 +953,7 @@ async function refreshNewsContext(): Promise<NewsContextPayload> {
   ]);
   const seen = new Set<string>();
   // First-party and original-publisher rows win over relay copies.
-  const items = [...primary.items, ...venue.items, ...protocol.items, ...issuer.items, ...rss.items, ...lookonchain.items, ...tree.items]
+  const currentItems = [...primary.items, ...venue.items, ...protocol.items, ...issuer.items, ...rss.items, ...lookonchain.items, ...tree.items]
     .filter((item) => {
       if (!isUsefulNewsItem(item)) return false;
       const key = canonicalNewsKey(item);
@@ -832,6 +963,7 @@ async function refreshNewsContext(): Promise<NewsContextPayload> {
     })
     .sort(compareContextItems)
     .slice(0, 1200);
+  const items = commitNewsArchive(currentItems);
 
   return {
     source: 'primary+venue+protocol+issuer+tree+rss+lookonchain',
@@ -1893,6 +2025,7 @@ function buildItem(input: {
     symbols: extractSymbols(text, input.extraSymbols),
     tags,
     tone: toneForTags(tags),
+    impact: scoreNewsImpact({ sourceKey: input.sourceKey, channel: input.channel, title: input.title, tags }),
   };
 }
 
@@ -2049,6 +2182,29 @@ function toneForTags(tags: string[]): NewsContextTone {
   if (tags.some((tag) => tag === 'Ops' || tag === 'Policy' || tag === 'On-Chain' || tag === 'Release' || tag === 'Governance' || tag === 'Stablecoin' || tag === 'ETF')) return 'warn';
   if (tags.some((tag) => tag === 'Listing' || tag === 'Exchange')) return 'ok';
   return 'idle';
+}
+
+export function scoreNewsImpact(item: Pick<NewsContextItem, 'sourceKey' | 'channel' | 'title' | 'tags'>): 1 | 2 | 3 {
+  const key = item.sourceKey;
+  const title = item.title.toLowerCase();
+  const text = `${item.title} ${item.tags.join(' ')}`.toLowerCase();
+  const critical = /\b(hack|exploit|breach|stolen|drain(?:ed)?|depeg|bankruptcy|insolven(?:t|cy)|trading suspension|withdrawal halt|bridge pause|chain halt|service outage|emergency pause)\b/.test(title);
+  const macroRelease = /\b(fomc|interest rate|rate decision|cpi|pce|ppi|payroll|employment situation|unemployment|gdp|monetary policy|sanction|enforcement action|etf approval|court ruling|final rule)\b/.test(text);
+  const venueMove = /\b(listing|delisting|trading support|perpetual contract|margin pair|network suspension|deposit suspension|withdrawal suspension|maintenance|tick size|removal of .*trading pairs?)\b/.test(text);
+  const issuerMove = /\b(stablecoin|reserve|redemption|attestation|etf|fund launch|approval)\b/.test(text);
+
+  if (critical) return 3;
+  if (OFFICIAL_MACRO_KEYS.has(key) && macroRelease) return 3;
+  if (VENUE_KEYS.has(key) && venueMove) return 3;
+  if (item.channel === 'issuer' && issuerMove) return 3;
+  if (item.tags.includes('Delisting')) return 3;
+
+  if (item.channel === 'primary' || item.channel === 'venue' || item.channel === 'protocol' || item.channel === 'issuer') return 2;
+  if (TRUSTED_EDITORIAL_KEYS.has(key)) return 2;
+  if (item.channel === 'lookonchain' && item.tags.some((tag) =>
+    ['Exchange', 'Listing', 'Delisting', 'Ops', 'On-Chain', 'Security', 'Stablecoin', 'Macro', 'Policy', 'ETF'].includes(tag)
+  )) return 2;
+  return 1;
 }
 
 function extractSymbols(text: string, extra: string[] = []): string[] {
@@ -2286,5 +2442,9 @@ function isUsefulNewsItem(item: NewsContextItem): boolean {
   if (item.channel !== 'tree') return true;
   const text = `${item.title} ${item.summary ?? ''}`.toLowerCase();
   if (/^finance feeds?\b/i.test(item.title)) return false;
+  // The relay is valuable for speed, but it can occasionally surface a
+  // keyword-matched tabloid story. Keep the tape market-grade instead of
+  // letting breadth alone decide what reaches the operator.
+  if (/\b(?:dailymail|thesun|mirror|express|nypost)\.(?:com|co\.uk)\b/i.test(item.url ?? '')) return false;
   return /\b(bitcoin|btc|ethereum|eth|crypto|token|stablecoin|blockchain|defi|exchange|binance|coinbase|kraken|bybit|okx|sec|cftc|fed|ecb|boj|rate|inflation|cpi|ppi|payroll|jobs|gdp|treasury|bond|yield|oil|gold|dollar|market|futures|options|nasdaq|s&p|dow|hack|exploit|listing|delist|wallet|on[ -]?chain)\b/.test(text);
 }

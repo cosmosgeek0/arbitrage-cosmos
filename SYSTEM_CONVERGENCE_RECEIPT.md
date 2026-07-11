@@ -202,7 +202,7 @@ commits. Every authored checkpoint below was committed only by the lead.
 | Integration/restart/security proof | `6891c65ff8f11cc5efe2b90d19864e3f4edaaf3b` | Exact SC-01..SC-30, zero-egress fixtures, static security, unified scripts |
 | Recovered-failure truth correction | `29d42216e3ceb40081dbb9d69677954be888d915` | Historical failure remains visible without becoming a current blocker; application 7/7, integration 180/180 |
 | Legacy/canonical UI authority correction | `b62225254ef5f2087f4044183723a4918dfbbe08` | Existing scanner queue visibly labeled legacy; rendered Opportunities readback verified |
-| Final components/receipt/current truth | `DOCS_CHECKPOINT_PENDING_COMMIT` | This row is sealed with the docs checkpoint SHA after the commit is created; the final self-referential handoff SHA is reported in the Section 22 response |
+| Final components/receipt/current truth | `b8ed770935ec4f57e85f03e606ea07ff650a475b` | Components manifest, receipt evidence, ENGINE current truth, and PROJECT_MEMORY current state committed; the final receipt-seal SHA is reported in the Section 22 response because a commit cannot contain its own SHA |
 
 ## Safety scope
 

@@ -11,6 +11,13 @@ import { RollingTape, type SeedMinute } from './rolling.js';
 import { BookQualityTracker } from './depth.js';
 import { computeBaseline, volumeMultipleOf, tradeCountMultipleOf } from './baseline.js';
 import { analyzeTape } from './tape.js';
+import {
+  MAX_ENGINE_SYMBOLS,
+  isCanonicalSymbol,
+  validBookTicker,
+  validSeedMinute,
+  validTradeTick,
+} from './validation.js';
 
 const WINDOW_SECONDS: Record<WindowKey, number> = {
   '1s': 1,
@@ -38,8 +45,10 @@ export class VolumeFeatureEngine {
   ) {}
 
   /** Register a symbol for observation (starts its baseline clock). */
-  observe(symbol: string): void {
+  observe(symbol: string): boolean {
+    if (!isCanonicalSymbol(symbol)) return false;
     if (!this.state.has(symbol)) {
+      if (this.state.size >= MAX_ENGINE_SYMBOLS) return false;
       this.state.set(symbol, {
         tape: new RollingTape(this.cfg, this.clock.now()),
         book: new BookQualityTracker(this.cfg),
@@ -47,23 +56,40 @@ export class VolumeFeatureEngine {
         baselineCache: null,
       });
     }
+    return true;
   }
 
-  onTrade(t: TradeTick, printCount = 1): void {
-    this.observe(t.symbol);
-    this.state.get(t.symbol)!.tape.addTrade(t, printCount);
+  onTrade(t: TradeTick, printCount = 1): boolean {
+    const existing = this.state.get(t.symbol);
+    const maxAgeMs = Math.max(this.cfg.rawTradeWindowMs, this.cfg.staleMs);
+    if (!validTradeTick(t, this.clock.now(), maxAgeMs, existing?.tape.lastTradeTs ?? null)) return false;
+    if (!this.observe(t.symbol)) return false;
+    return this.state.get(t.symbol)!.tape.addTrade(t, printCount);
   }
 
-  onBook(b: BookTicker): void {
-    this.observe(b.symbol);
-    this.state.get(b.symbol)!.book.onBook(b);
+  onBook(b: BookTicker): boolean {
+    const existing = this.state.get(b.symbol);
+    if (!validBookTicker(b, this.clock.now(), this.cfg.staleMs, existing?.book.lastBook()?.ts ?? null)) return false;
+    if (!this.observe(b.symbol)) return false;
+    return this.state.get(b.symbol)!.book.onBook(b);
   }
 
-  seedMinute(symbol: string, sample: SeedMinute): void {
-    this.observe(symbol);
+  seedMinute(symbol: string, sample: SeedMinute): boolean {
+    if (!isCanonicalSymbol(symbol) || !validSeedMinute(sample, this.clock.now(), this.cfg.baselineWindowMinutes)) {
+      return false;
+    }
+    if (!this.observe(symbol)) return false;
     const state = this.state.get(symbol)!;
-    state.tape.seedMinute(sample);
+    if (!state.tape.seedMinute(sample)) return false;
     state.baselineCache = null;
+    return true;
+  }
+
+  /** Remove state for symbols that are no longer in the configured universe. */
+  reconcileSymbols(symbols: ReadonlySet<string>): void {
+    for (const symbol of this.state.keys()) {
+      if (!symbols.has(symbol)) this.state.delete(symbol);
+    }
   }
 
   symbols(): string[] {

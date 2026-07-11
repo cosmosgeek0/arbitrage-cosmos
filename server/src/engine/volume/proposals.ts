@@ -10,7 +10,7 @@ import type { Clock, Decision, EngineProposal, EventSink, OrderIntentStub } from
 import { newCorrelationId } from '../v0/clock.js';
 import type { InvalidationReason, InvalidationRule, WakeupSnapshot } from './types.js';
 import type { VolumeConfig } from './config.js';
-import { makeEvent } from './events.js';
+import { boundedEvidence, makeEvent } from './events.js';
 
 export type IntentResult =
   | { ok: true; intent: OrderIntentStub }
@@ -21,9 +21,21 @@ interface StoredProposal extends EngineProposal {
   invalidatedBy: InvalidationReason | null;
 }
 
+const MAX_PROPOSALS = 2_000;
+
+function proposalFingerprint(
+  direction: 'long' | 'short',
+  confidence: number | null,
+  reason: string,
+  evidence: Record<string, number | string | boolean | null>,
+): string {
+  return JSON.stringify({ direction, confidence, reason, evidence });
+}
+
 export class ProposalStore {
   private proposals = new Map<string, StoredProposal>(); // by id
   private openBySymbol = new Map<string, string>(); // symbol -> open proposal id
+  private fingerprintById = new Map<string, string>();
 
   constructor(
     private cfg: VolumeConfig,
@@ -35,17 +47,23 @@ export class ProposalStore {
   upsertFromDecision(d: Decision, f: WakeupSnapshot): EngineProposal {
     const now = this.clock.now();
     const direction = d.evidence.direction === 'short' ? 'short' : 'long';
-    const confidence = typeof d.evidence.confidence === 'number' ? d.evidence.confidence : null;
+    const confidence = typeof d.evidence.confidence === 'number' && Number.isFinite(d.evidence.confidence)
+      ? Math.max(0, Math.min(1, d.evidence.confidence))
+      : null;
+    const evidence = boundedEvidence(d.evidence);
+    const fingerprint = proposalFingerprint(direction, confidence, d.humanReason, evidence);
     const refPrice = f.spotAsk ?? f.spotBid ?? 0;
     const existingId = this.openBySymbol.get(d.symbol);
     const existing = existingId ? this.proposals.get(existingId) : undefined;
 
     if (existing && existing.status !== 'expired' && existing.status !== 'rejected') {
+      if (this.fingerprintById.get(existing.id) === fingerprint) return existing;
       existing.updatedTs = now;
       existing.status = 'updated';
       existing.confidence = confidence;
-      existing.evidence = { ...d.evidence };
+      existing.evidence = evidence;
       existing.reason = d.humanReason;
+      this.fingerprintById.set(existing.id, fingerprint);
       this.sink.emit(
         makeEvent('proposal_updated', now, existing.correlationId, `proposal refreshed: ${d.humanReason}`, {
           symbol: d.symbol,
@@ -79,11 +97,13 @@ export class ProposalStore {
       suggestedNotionalUsd: this.cfg.suggestedNotionalUsd,
       confidence,
       invalidation: `invalid if 60s volume multiple < ${rule.volumeNormalizedBelowMultiple}×, spread > ${rule.spreadBlownOutBps}bps, |move| from ${refPrice} > ${rule.moveExhaustedPct}%, or ${this.cfg.proposalTtlMs / 60000}min TTL`,
-      evidence: { ...d.evidence },
+      evidence,
       rule,
       invalidatedBy: null,
     };
+    this.makeRoomForProposal();
     this.proposals.set(p.id, p);
+    this.fingerprintById.set(p.id, fingerprint);
     this.openBySymbol.set(d.symbol, p.id);
     this.sink.emit(
       makeEvent('proposal_created', now, p.correlationId, `proposal: ${d.humanReason}`, {
@@ -92,6 +112,61 @@ export class ProposalStore {
       }),
     );
     return p;
+  }
+
+  /** Expire proposals whose symbols left the configured universe. */
+  reconcileSymbols(symbols: ReadonlySet<string>): void {
+    const now = this.clock.now();
+    for (const [symbol, id] of this.openBySymbol) {
+      if (symbols.has(symbol)) continue;
+      const proposal = this.proposals.get(id);
+      this.openBySymbol.delete(symbol);
+      if (!proposal || (proposal.status !== 'open' && proposal.status !== 'updated')) continue;
+      proposal.status = 'expired';
+      proposal.updatedTs = now;
+      proposal.invalidatedBy = 'universe_removed';
+      this.sink.emit(
+        makeEvent('proposal_expired', now, proposal.correlationId, 'proposal invalidated: universe_removed', {
+          symbol,
+          payload: { id, invalidatedBy: 'universe_removed' },
+        }),
+      );
+    }
+    this.pruneTerminal(MAX_PROPOSALS);
+  }
+
+  private pruneTerminal(targetSize: number): void {
+    if (this.proposals.size <= targetSize) return;
+    const removable = [...this.proposals.values()]
+      .filter((proposal) => proposal.status !== 'open' && proposal.status !== 'updated')
+      .sort((left, right) => left.updatedTs - right.updatedTs);
+    for (const proposal of removable) {
+      if (this.proposals.size <= targetSize) break;
+      this.proposals.delete(proposal.id);
+      this.fingerprintById.delete(proposal.id);
+    }
+  }
+
+  private makeRoomForProposal(): void {
+    this.pruneTerminal(MAX_PROPOSALS - 1);
+    if (this.proposals.size < MAX_PROPOSALS) return;
+    let oldest: StoredProposal | null = null;
+    for (const proposal of this.proposals.values()) {
+      if (!oldest || proposal.updatedTs < oldest.updatedTs) oldest = proposal;
+    }
+    if (!oldest) return;
+    oldest.status = 'expired';
+    oldest.updatedTs = this.clock.now();
+    oldest.invalidatedBy = 'capacity_pruned';
+    if (this.openBySymbol.get(oldest.symbol) === oldest.id) this.openBySymbol.delete(oldest.symbol);
+    this.proposals.delete(oldest.id);
+    this.fingerprintById.delete(oldest.id);
+    this.sink.emit(
+      makeEvent('proposal_expired', this.clock.now(), oldest.correlationId, 'proposal invalidated: capacity_pruned', {
+        symbol: oldest.symbol,
+        payload: { id: oldest.id, invalidatedBy: 'capacity_pruned', cap: MAX_PROPOSALS },
+      }),
+    );
   }
 
   /** Re-check invalidation conditions for a symbol's open proposal. */

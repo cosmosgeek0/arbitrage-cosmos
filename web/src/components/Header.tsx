@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useStore, useResolvedTheme, type Page } from '../store';
-import type { ControlMode, ExecutionControlModes, LedgerEvent } from '../types';
+import type { AppConfig, ControlMode, ExecutionControlModes, LedgerEvent } from '../types';
 import { fmtClockZone, timeAgo } from '../format';
 import { eventSummary } from '../lib/eventText';
 import { calVal, flag, type CalItem } from '../lib/calendar';
@@ -443,6 +443,8 @@ function AccountSheet({ open }: { open: boolean }) {
   const [preview, setPreview] = useState<string | null>(null); // instant feedback before the 2s state tick
   const [editName, setEditName] = useState<string | null>(null);
   const [sessions, setSessions] = useState<AccountSessionRow[]>([]);
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const avatar = preview ?? profile.avatar ?? DEFAULT_PROFILE_LOGO;
   const usesDefaultLogo = !preview && !profile.avatar;
   const name = profile.name || 'Operator';
@@ -453,7 +455,11 @@ function AccountSheet({ open }: { open: boolean }) {
   const activeSessionCount = sessions.filter((s) => s.current || s.active).length;
   const sessionRows = sessions;
   const keyFingerprint = state?.binance.keyFingerprint ?? null;
-  const withdrawalsOff = !state?.binance.canWithdraw;
+  const withdrawalLabel = state?.binance.canWithdraw === true
+    ? 'Withdrawals On'
+    : state?.binance.canWithdraw === false
+      ? 'Withdrawals Off'
+      : 'Permission Unknown';
   const logoutHref = typeof window !== 'undefined' && window.location.hostname === DEPLOYED_APP_HOST
     ? '/cdn-cgi/access/logout'
     : `https://${DEPLOYED_APP_HOST}/cdn-cgi/access/logout`;
@@ -478,8 +484,31 @@ function AccountSheet({ open }: { open: boolean }) {
     return () => { alive = false; clearInterval(t); };
   }, [open]);
 
+  const persistProfile = async (next: { name: string; avatar: string | null }): Promise<boolean> => {
+    if (profileBusy) return false;
+    setProfileBusy(true);
+    setProfileError(null);
+    try {
+      const saved = await saveConfig({ profile: next } as never);
+      if (!saved) {
+        setProfileError('Profile change was not acknowledged.');
+        return false;
+      }
+      return true;
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : 'Profile change failed.');
+      return false;
+    } finally {
+      setProfileBusy(false);
+    }
+  };
+
   const onFile = (f: File | undefined) => {
-    if (!f || !f.type.startsWith('image/')) return;
+    if (!f) return;
+    if (!f.type.startsWith('image/')) {
+      setProfileError('Choose a PNG, JPEG, or WebP image.');
+      return;
+    }
     const img = new Image();
     const url = URL.createObjectURL(f);
     img.onload = () => {
@@ -488,13 +517,22 @@ function AccountSheet({ open }: { open: boolean }) {
       const c = document.createElement('canvas');
       c.width = S;
       c.height = S;
-      const ctx = c.getContext('2d')!;
+      const ctx = c.getContext('2d');
+      if (!ctx) {
+        URL.revokeObjectURL(url);
+        setProfileError('This browser could not prepare the profile image.');
+        return;
+      }
       const side = Math.min(img.width, img.height);
       ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, S, S);
       const dataUrl = c.toDataURL('image/jpeg', 0.85);
       URL.revokeObjectURL(url);
       setPreview(dataUrl);
-      void saveConfig({ profile: { name: profile.name, avatar: dataUrl } } as never);
+      void persistProfile({ name: profile.name, avatar: dataUrl }).then(() => setPreview(null));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      setProfileError('The selected image could not be read.');
     };
     img.src = url;
   };
@@ -502,7 +540,7 @@ function AccountSheet({ open }: { open: boolean }) {
   return (
     <div className="ops-sheet ops-account-sheet account-sheet-v3">
           <header className="account-v3-head">
-            <button className={`cb-profile-avatar ${usesDefaultLogo ? 'profile-logo' : ''}`} onClick={() => fileRef.current?.click()} title="Change profile image">
+            <button className={`cb-profile-avatar ${usesDefaultLogo ? 'profile-logo' : ''}`} disabled={profileBusy} onClick={() => fileRef.current?.click()} title={profileError ?? 'Change profile image'}>
               {avatar ? <img src={avatar} alt="" /> : initial}
               <span className="acct-cam"><IconCamera size={11} /></span>
             </button>
@@ -514,12 +552,14 @@ function AccountSheet({ open }: { open: boolean }) {
                   className="cb-profile-name-form"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    void saveConfig({ profile: { name: editName.slice(0, 40), avatar: profile.avatar } } as never);
-                    setEditName(null);
+                    if (profileBusy) return;
+                    void persistProfile({ name: editName.slice(0, 40), avatar: profile.avatar }).then((saved) => {
+                      if (saved) setEditName(null);
+                    });
                   }}
                 >
-                  <input autoFocus value={editName} maxLength={40} placeholder="Display name" onChange={(e) => setEditName(e.target.value)} />
-                  <button type="submit">Save</button>
+                  <input autoFocus disabled={profileBusy} value={editName} maxLength={40} placeholder="Display name" onChange={(e) => setEditName(e.target.value)} />
+                  <button type="submit" disabled={profileBusy}>{profileBusy ? 'Saving…' : 'Save'}</button>
                 </form>
               )}
               <span>Control Room Operator</span>
@@ -528,6 +568,7 @@ function AccountSheet({ open }: { open: boolean }) {
           </header>
 
           <div className="account-v3-body">
+            {profileError ? <div className="account-v3-empty" role="alert">{profileError}</div> : null}
             <section className="account-v3-section" aria-label="Exchange posture">
               <div className="account-v3-section-title">
                 <span>Exchange Connection</span>
@@ -541,7 +582,7 @@ function AccountSheet({ open }: { open: boolean }) {
                 </span>
                 <span className={`account-v3-exchange-value ${state?.binance.connected ? 'ok' : connected ? 'warn' : 'idle'}`}>
                   <b>{state?.binance.connected ? 'Connected' : connected ? 'Sync Error' : 'Not Linked'}</b>
-                  <em>{withdrawalsOff ? 'Withdrawals Off' : 'Withdrawals On'}</em>
+                  <em>{withdrawalLabel}</em>
                 </span>
               </div>
             </section>
@@ -1342,8 +1383,15 @@ function TrustedAdvisor() {
   const feedsOk = Object.values(feeds).length > 0 && Object.values(feeds).every((s) => s === 'open');
   const lat = sys?.restLatencyMs ?? null;
 
+  const withdrawalCheck = !b?.keysPresent
+    ? null
+    : b.canWithdraw === true
+      ? { sev: 'action' as const, name: 'Withdrawals enabled on key', detail: 'Rotate to a read-only key with withdrawals OFF.', page: 'account' as Page }
+      : b.canWithdraw === false
+        ? { sev: 'pass' as const, name: 'Withdrawals disabled', detail: 'Verified key posture cannot withdraw.' }
+        : { sev: 'invest' as const, name: 'Withdrawal permission unknown', detail: 'Per-key restrictions have not been verified.', page: 'account' as Page };
   const raw: ({ sev: Sev; name: string; detail: string; page?: Page } | null)[] = [
-    b?.canWithdraw ? { sev: 'action', name: 'Withdrawals enabled on key', detail: 'Rotate to a read-only key with withdrawals OFF.', page: 'account' } : { sev: 'pass', name: 'Withdrawals disabled', detail: 'The key cannot move funds.' },
+    withdrawalCheck,
     cfg && !cfg.killSwitch && cfg.liveTradingEnabled && (cfg.allowedSymbols?.length ?? 0) === 0 ? { sev: 'action', name: 'Live armed, allowlist empty', detail: 'Nothing can trade — set an allowlist or halt.', page: 'risk' } : null,
     b?.keysPresent && !b?.connected ? { sev: 'action', name: 'Account sync failing', detail: b?.lastError ?? 'Keys present but not syncing.', page: 'system' } : null,
     !connected ? { sev: 'invest', name: 'Cockpit socket offline', detail: 'Reconnecting to the server.', page: 'system' } : null,
@@ -1699,10 +1747,10 @@ const clockDate = (zoneId: string, d: Date) => {
 };
 export interface ApiKeyInfo {
   id: string; name: string; type: string; scope: string;
-  status: 'live' | 'declared' | 'planned' | 'missing'; live: boolean; keysPresent?: boolean;
+  status: 'live' | 'declared' | 'planned' | 'missing' | 'unknown'; live: boolean; keysPresent?: boolean;
   prefix: string; fingerprint: string | null;
-  ipRestrict: boolean; ips: string[]; ipNote: string;
-  permissions: { reading: boolean; spotMargin: boolean; marginLoan: boolean; withdrawals: boolean; universalTransfer: boolean; futures: boolean };
+  ipRestrict: boolean | null; ips: string[]; ipNote: string;
+  permissions: { reading: boolean | null; spotMargin: boolean | null; marginLoan: boolean | null; withdrawals: boolean | null; universalTransfer: boolean | null; futures: boolean | null };
   note: string | null;
 }
 // The six permissions the owner wants visible, in display order.
@@ -1717,6 +1765,10 @@ export const API_PERMS: { key: keyof ApiKeyInfo['permissions']; label: string }[
 
 const apiKeyRole = (ak: ApiKeyInfo) => {
   const scope = ak.scope.toLowerCase();
+  if (scope.includes('unknown')) return 'Permission Unknown';
+  if (scope.includes('unsafe')) return 'Unsafe Permissions';
+  if (scope.includes('elevated')) return 'Elevated Permissions';
+  if (scope.includes('trading')) return 'Trading Key';
   if (ak.id === 'read-only' || scope.includes('read')) return 'Read-Only';
   if (ak.id === 'secrets-full' || scope.includes('automation') || scope.includes('full')) return 'AWS Automation';
   return ak.scope;
@@ -1729,17 +1781,24 @@ const apiKeyStatus = (ak: ApiKeyInfo) => ak.live
     ? 'Planned'
     : ak.status === 'declared'
       ? 'Syncing'
+      : ak.status === 'unknown'
+        ? 'Unknown'
       : 'Missing';
 
 function BinanceApiKeySheet({ keys }: { keys: ApiKeyInfo[] }) {
   const visibleKeys = keys.slice(0, 2);
   const liveCount = visibleKeys.filter((ak) => ak.live).length;
+  const plannedCount = visibleKeys.filter((ak) => ak.status === 'planned').length;
+  const liveIpRestricted = visibleKeys.filter((ak) => ak.live && ak.ipRestrict === true).length;
+  const keySummary = liveCount > 0
+    ? `${liveCount} Live${liveIpRestricted === liveCount ? ' · IP Restricted' : ''}${plannedCount ? ` · ${plannedCount} Planned` : ''}`
+    : plannedCount > 0 ? `No Live Key · ${plannedCount} Planned` : 'No Verified Key';
   return (
     <div className="ops-sheet ops-key-sheet api-key-sheet-v2">
       <OpsSheetHeader
         icon={<PopupSourceMark tone="#ffb000" brand><ApiKeyIdentityMark size={40} /></PopupSourceMark>}
         title="Binance API Keys"
-        subtitle="Two IP-bound access keys"
+        subtitle={keySummary}
         status={liveCount ? `${liveCount} Live` : 'No Live Key'}
         tone={liveCount ? 'ok' : 'warn'}
       />
@@ -1757,8 +1816,8 @@ function BinanceApiKeySheet({ keys }: { keys: ApiKeyInfo[] }) {
               </header>
               <div className="api-key-scope" aria-label={`${apiKeyRole(ak)} permissions`}>
                 {API_PERMS.map((permission) => (
-                  <span className={ak.permissions[permission.key] ? 'on' : 'off'} key={permission.key}>
-                    <i />{permission.label}
+                  <span className={ak.permissions[permission.key] === true ? 'on' : 'off'} key={permission.key}>
+                    <i />{permission.label}{ak.permissions[permission.key] === null ? ' ?' : ''}
                   </span>
                 ))}
               </div>
@@ -1820,6 +1879,8 @@ function SharedTopBar() {
   const [awsStatus, setAwsStatus] = useState<AwsRunnerStatus | null>(null);
   const [awsStatusError, setAwsStatusError] = useState<string | null>(null);
   const [awsGateBusy, setAwsGateBusy] = useState(false);
+  const [controlBusy, setControlBusy] = useState(false);
+  const [controlMutationError, setControlMutationError] = useState<string | null>(null);
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 250); return () => clearInterval(t); }, []);
   useEffect(() => {
@@ -1849,28 +1910,62 @@ function SharedTopBar() {
   useEffect(() => { let al = true; const load = () => fetch('/api/system').then((r) => (r.ok ? r.json() : null)).then((s) => al && s && setSys(s as SystemLite)).catch(() => undefined); void load(); const t = setInterval(load, 5000); return () => { al = false; clearInterval(t); }; }, []);
   useEffect(() => {
     let alive = true;
-    const load = () => {
-      const since = notifLiveCursor.current > 0
-        ? notifLiveCursor.current + 1
-        : Date.now() - 24 * 60 * 60_000;
-      fetch(`/api/events?since=${since}&limit=20000`)
-        .then((response) => response.ok ? response.json() as Promise<LedgerEvent[]> : [])
-        .then((items) => {
-          if (!alive || !Array.isArray(items) || items.length === 0) return;
-          const latestTs = Math.max(...items.map((item) => item.ts));
-          notifLiveCursor.current = Math.max(notifLiveCursor.current, latestTs);
-          setNotifLiveEvents((current) => {
-            const merged = new Map<number, LedgerEvent>();
-            for (const item of current) merged.set(item.id, item);
-            for (const item of items) merged.set(item.id, item);
-            return [...merged.values()].sort((a, b) => b.ts - a.ts || b.id - a.id).slice(0, 20000);
-          });
-        })
-        .catch(() => undefined);
+    let running = false;
+    let bootstrapped = false;
+    let controller: AbortController | null = null;
+    const relevantKinds = ['risk_decision', 'error_event', 'user_stream', 'ws.closed', 'ws.open', 'connection_alert', 'connection_recovered', 'manual_action', 'order_intent', 'order_request', 'order_response', 'order_outcome_unknown', 'cancel_outcome_unknown', 'fill_event', 'loan_request', 'loan_response', 'binance.connected', 'engine.start', 'engine_started', 'basis.engine_started', 'config_change', 'aws_notification'];
+    const load = async () => {
+      if (running) return;
+      running = true;
+      controller = new AbortController();
+      try {
+        let items: LedgerEvent[] = [];
+        if (!bootstrapped) {
+          const headResponse = await fetch('/api/events?limit=1', { signal: controller.signal });
+          if (!headResponse.ok) throw new Error(`events HTTP ${headResponse.status}`);
+          const head = await headResponse.json() as LedgerEvent[];
+          const highWater = head[0]?.id ?? 0;
+          const since = Date.now() - 24 * 60 * 60_000;
+          const before = highWater > 0 ? `&beforeId=${highWater + 1}` : '';
+          items = (await Promise.all(relevantKinds.map(async (kind) => {
+            const response = await fetch(`/api/events?since=${since}&kind=${encodeURIComponent(kind)}&limit=2000${before}`, { signal: controller!.signal });
+            if (!response.ok) throw new Error(`events HTTP ${response.status}`);
+            const rows = await response.json() as LedgerEvent[];
+            if (!Array.isArray(rows)) throw new Error('events payload is invalid');
+            return rows;
+          }))).flat();
+          notifLiveCursor.current = Math.max(notifLiveCursor.current, highWater);
+          bootstrapped = true;
+        } else {
+          let afterId = notifLiveCursor.current;
+          for (let page = 0; page < 5; page += 1) {
+            const response = await fetch(`/api/events?afterId=${afterId}&limit=2000`, { signal: controller.signal });
+            if (!response.ok) throw new Error(`events HTTP ${response.status}`);
+            const rows = await response.json() as LedgerEvent[];
+            if (!Array.isArray(rows)) throw new Error('events payload is invalid');
+            items.push(...rows);
+            if (rows.length < 2_000) break;
+            afterId = Math.max(afterId, ...rows.map((item) => item.id));
+          }
+        }
+        if (!alive || items.length === 0) return;
+        notifLiveCursor.current = Math.max(notifLiveCursor.current, ...items.map((item) => item.id));
+        setNotifLiveEvents((current) => {
+          const merged = new Map<number, LedgerEvent>();
+          for (const item of current) merged.set(item.id, item);
+          for (const item of items) merged.set(item.id, item);
+          return [...merged.values()].sort((a, b) => b.ts - a.ts || b.id - a.id).slice(0, 2_000);
+        });
+      } catch {
+        // The next settled interval retries; compact notification state stays intact.
+      } finally {
+        running = false;
+        controller = null;
+      }
     };
     void load();
-    const timer = window.setInterval(load, 5000);
-    return () => { alive = false; window.clearInterval(timer); };
+    const timer = window.setInterval(() => { void load(); }, 5000);
+    return () => { alive = false; controller?.abort(); window.clearInterval(timer); };
   }, []);
   useEffect(() => {
     let al = true;
@@ -2080,10 +2175,13 @@ function SharedTopBar() {
   const appearanceZoom = Math.round((prefs.zoom || 1) * 100);
   const al = prefs.alerts; const alertsOn = Object.values(al).filter(Boolean).length;
   const compactSource = notifLiveEvents.length ? notifLiveEvents : events;
+  // Collapse state transitions before applying category preferences. Otherwise
+  // disabling routine health notices drops a recovery while leaving its older
+  // critical outage visible as if it were still active.
   const compactNotifications = groupNotifications(
-    curateNotifications(compactSource).filter((item) => notificationEnabled(item, al)),
+    curateNotifications(compactSource),
     prefs.clockZone && prefs.clockZone !== 'local' ? prefs.clockZone : undefined,
-  );
+  ).filter((item) => notificationEnabled(item, al));
   const unread = compactNotifications.filter((item) => item.id > seen).length;
   const mode = state?.mode ?? 'HALTED';
   const modeClass = mode === 'HALTED' ? 'm-halted' : mode === 'LIVE_ARMED' ? 'm-live' : 'm-manual';
@@ -2100,36 +2198,81 @@ function SharedTopBar() {
   const liveOrdersAllowed = controlModes.liveOrders === 'allowed';
   const newLoansAllowed = controlModes.borrowing === 'allowed';
   const allowCount = cfg?.allowedSymbols?.length ?? 0;
-  const liveBlocker = killOn
-    ? 'Emergency stop is active'
-    : !b?.keysPresent
-      ? 'Binance key is missing'
-      : !b?.connected
-        ? 'Binance account is not synchronized'
-        : b?.canWithdraw
-          ? 'Withdrawals must be disabled on the key'
-          : allowCount === 0
-            ? 'Symbol allowlist is empty'
-            : !fundsAllowed
-              ? 'Funds access is locked'
-              : !botRunning
-                ? 'Automation is paused'
-                : null;
+  const accountSyncAge = b?.lastSyncTs === null || b?.lastSyncTs === undefined
+    ? Number.POSITIVE_INFINITY
+    : now.getTime() - b.lastSyncTs;
+  const liveBlocker = (() => {
+    if (killOn) return 'Emergency stop is active';
+    if (!b?.keysPresent) return 'Binance key is missing';
+    if (!b.connected) return 'Binance account is not synchronized';
+    if (!Number.isFinite(accountSyncAge) || accountSyncAge < -1_000 || accountSyncAge > 60_000) {
+      return 'Binance account snapshot is stale';
+    }
+    if (!b.keyPermissions) return 'Binance key permissions are not verified';
+    if (!b.keyPermissions.enableReading) return 'Reading permission is not verified on the key';
+    if (b.keyPermissions.enableWithdrawals || b.keyPermissions.enableInternalTransfer || b.keyPermissions.permitsUniversalTransfer) {
+      return 'Transfer-out permissions must be disabled on the key';
+    }
+    if (!b.keyPermissions.enableSpotAndMarginTrading) return 'Spot trading permission is not verified on the key';
+    if (allowCount === 0) return 'Symbol allowlist is empty';
+    if (!fundsAllowed) return 'Funds access is locked';
+    if (!botRunning) return 'Automation is paused';
+    return null;
+  })();
   const modeTone = killOn ? 'ok' : liveBlocker ? 'warn' : liveOrdersAllowed ? 'ok' : 'warn';
   const modeLabel = killOn ? 'Bot Stopped' : liveBlocker ? 'Limited' : liveOrdersAllowed ? 'Armed' : 'Ready';
-  const modeSub = killOn ? 'Emergency stop is holding every bot action.' : liveBlocker ?? (liveOrdersAllowed ? 'Live sends remain behind the risk gate.' : 'Prerequisites pass; live sends remain off.');
+  const modeSub = controlMutationError ?? (killOn ? 'Emergency stop is holding every bot action.' : liveBlocker ?? (liveOrdersAllowed ? 'Live sends remain behind the risk gate.' : 'Prerequisites pass; live sends remain off.'));
   const modeNet = b?.connected ? 'Synced' : 'Offline';
   const liveTitle = liveBlocker ?? 'Allow live order sends after the risk gate';
-  const setFundsAccess = (on: boolean) => { void saveConfig({ fundsLocked: !on }); };
-  const setBotRunning = (on: boolean) => { void saveConfig({ automationPaused: !on }); };
+  const runConfigMutation = async (patch: Partial<AppConfig>) => {
+    if (controlBusy) return;
+    setControlBusy(true);
+    setControlMutationError(null);
+    try {
+      const next = await saveConfig(patch);
+      if (!next) setControlMutationError('Control change was not acknowledged. State was not changed.');
+    } catch (error) {
+      setControlMutationError(error instanceof Error ? error.message : 'Control change failed.');
+    } finally {
+      setControlBusy(false);
+    }
+  };
+  const runKillMutation = async (on: boolean) => {
+    if (controlBusy) return;
+    setControlBusy(true);
+    setControlMutationError(null);
+    try {
+      const error = await setKill(on);
+      if (error) setControlMutationError(error.message);
+    } catch (error) {
+      setControlMutationError(error instanceof Error ? error.message : 'Emergency-stop change failed.');
+    } finally {
+      setControlBusy(false);
+    }
+  };
+  const runLiveMutation = async (on: boolean) => {
+    if (controlBusy) return;
+    setControlBusy(true);
+    setControlMutationError(null);
+    try {
+      const error = await setLive(on);
+      if (error) setControlMutationError(error.message);
+    } catch (error) {
+      setControlMutationError(error instanceof Error ? error.message : 'Live-control change failed.');
+    } finally {
+      setControlBusy(false);
+    }
+  };
+  const setFundsAccess = (on: boolean) => { void runConfigMutation({ fundsLocked: !on }); };
+  const setBotRunning = (on: boolean) => { void runConfigMutation({ automationPaused: !on }); };
   const setNewLoans = (on: boolean) => {
     const cur = cfg?.borrowGuard;
     if (!cur) return;
-    void saveConfig({ borrowGuard: { ...cur, enabled: true, newBorrowPaused: !on, repayOnly: !on } });
+    void runConfigMutation({ borrowGuard: { ...cur, enabled: true, newBorrowPaused: !on, repayOnly: !on } });
   };
   const setExecutionControlMode = (key: keyof ExecutionControlModes, value: ControlMode) => {
     if (!cfg || controlModes[key] === value) return;
-    void saveConfig({ controlModes: { ...controlModes, [key]: value } });
+    void runConfigMutation({ controlModes: { ...controlModes, [key]: value } });
   };
   const executionControlCopy: Record<keyof ExecutionControlModes, Record<ControlMode, string>> = {
     funds: {
@@ -2173,7 +2316,7 @@ function SharedTopBar() {
                   name={`execution-${key}`}
                   value={option.value}
                   checked={current === option.value}
-                  disabled={blockedByPrerequisite}
+                  disabled={blockedByPrerequisite || controlBusy}
                   onChange={() => setExecutionControlMode(key, option.value)}
                 />
                 <span>{option.label}</span>
@@ -2237,8 +2380,15 @@ function SharedTopBar() {
   const compactNotifEvents = compactNotifications;
   const compactNotifGroups = compactNotifications.slice(0, 7);
   const notifTone = compactNotifications.some((item) => item.severity === 'critical') ? 'hot' : unread > 0 ? 'live' : compactNotifications.length > 0 ? 'armed' : alertsOn > 0 ? 'armed' : 'idle';
+  const advWithdrawalCheck = !b?.keysPresent
+    ? null
+    : b.canWithdraw === true
+      ? { sev: 'action' as const, name: 'Withdrawals enabled on key', detail: 'Rotate to a read-only key.', page: 'account' as Page }
+      : b.canWithdraw === false
+        ? { sev: 'pass' as const, name: 'Withdrawals disabled', detail: 'Verified key posture cannot withdraw.' }
+        : { sev: 'invest' as const, name: 'Withdrawal permission unknown', detail: 'Per-key restrictions are not verified.', page: 'account' as Page };
   const advRaw: ({ sev: Sev; name: string; detail: string; page?: Page } | null)[] = [
-    b?.canWithdraw ? { sev: 'action', name: 'Withdrawals enabled on key', detail: 'Rotate to a read-only key.', page: 'account' } : { sev: 'pass', name: 'Withdrawals disabled', detail: 'Key cannot move funds.' },
+    advWithdrawalCheck,
     b?.keysPresent && !b?.connected ? { sev: 'action', name: 'Account sync failing', detail: b?.lastError ?? 'Not syncing.', page: 'system' } : null,
     !connected ? { sev: 'invest', name: 'Cockpit socket offline', detail: 'Reconnecting.', page: 'system' } : null,
     !feedsOk ? { sev: 'invest', name: 'Market feed degraded', detail: 'A stream is not open.', page: 'system' } : { sev: 'pass', name: 'Market feeds live', detail: `${Object.keys(feeds).length} open.` },
@@ -2540,23 +2690,23 @@ function SharedTopBar() {
               status={modeLabel}
             />
             <div className="modex-rows" role="group" aria-label="Bot guardrail controls">
-              <button className={`modex-row emergency ${killOn ? 'on' : ''}`} type="button" onClick={() => { void setKill(!killOn); }} aria-pressed={killOn}>
+              <button className={`modex-row emergency ${killOn ? 'on' : ''}`} type="button" disabled={controlBusy} onClick={() => { void runKillMutation(!killOn); }} aria-pressed={killOn}>
                 <span><b>Emergency Stop</b><em>Stops orders, loans, and bot actions.</em></span>
                 <i className="cb-switch" aria-hidden><span /></i>
               </button>
-              <button className={`modex-row ${fundsAllowed ? 'on' : ''}`} type="button" onClick={() => setFundsAccess(!fundsAllowed)} aria-pressed={fundsAllowed}>
+              <button className={`modex-row ${fundsAllowed ? 'on' : ''}`} type="button" disabled={controlBusy} onClick={() => setFundsAccess(!fundsAllowed)} aria-pressed={fundsAllowed}>
                 <span><b>Funds Access</b><em>Allow the bot to use account funds.</em></span>
                 <i className="cb-switch" aria-hidden><span /></i>
               </button>
-              <button className={`modex-row ${newLoansAllowed ? 'on' : ''}`} type="button" onClick={() => setNewLoans(!newLoansAllowed)} aria-pressed={newLoansAllowed}>
+              <button className={`modex-row ${newLoansAllowed ? 'on' : ''}`} type="button" disabled={controlBusy} onClick={() => setNewLoans(!newLoansAllowed)} aria-pressed={newLoansAllowed}>
                 <span><b>New Loans</b><em>Allow margin or flexible borrow requests.</em></span>
                 <i className="cb-switch" aria-hidden><span /></i>
               </button>
-              <button className={`modex-row ${botRunning ? 'on' : ''}`} type="button" onClick={() => setBotRunning(!botRunning)} aria-pressed={botRunning}>
+              <button className={`modex-row ${botRunning ? 'on' : ''}`} type="button" disabled={controlBusy} onClick={() => setBotRunning(!botRunning)} aria-pressed={botRunning}>
                 <span><b>Bot Running</b><em>Allow strategy automation to act.</em></span>
                 <i className="cb-switch" aria-hidden><span /></i>
               </button>
-              <button className={`modex-row ${liveOrdersAllowed ? 'on' : ''}`} type="button" onClick={() => { void setLive(!liveOrdersAllowed); }} aria-pressed={liveOrdersAllowed} title={liveTitle}>
+              <button className={`modex-row ${liveOrdersAllowed ? 'on' : ''}`} type="button" disabled={controlBusy} onClick={() => { void runLiveMutation(!liveOrdersAllowed); }} aria-pressed={liveOrdersAllowed} title={liveTitle}>
                 <span><b>Live Orders</b><em>Allow live sends after the risk gate.</em></span>
                 <i className="cb-switch" aria-hidden><span /></i>
               </button>
@@ -3097,11 +3247,11 @@ function SharedTopBar() {
               {compactNotifGroups.length ? compactNotifGroups.map((item) => (
                 <OpsRow
                   key={item.id}
-                  icon={notifIcon(item.severity === 'opportunity' ? 'opportunity' : item.category, 15)}
+                  icon={notifIcon(item.category, 15)}
                   title={item.title}
                   detail={item.count > 1 ? `${item.detail} · ${item.count} grouped` : item.detail}
                   value={timeAgo(item.ts)}
-                  tone={item.severity === 'critical' ? 'bad' : item.severity === 'opportunity' ? 'accent' : 'idle'}
+                  tone={item.severity === 'critical' ? 'bad' : item.severity === 'resolved' ? 'ok' : 'idle'}
                   onClick={openNotificationCenter}
                 />
               )) : <div className="ops-empty-state"><IconBell size={18} /><b>Inbox clear</b><em>Only owner-relevant alerts appear here. Full telemetry stays in Logs.</em></div>}
@@ -3122,9 +3272,10 @@ function SharedTopBar() {
                   className={`ops-execution-action ${killOn ? 'resume' : 'stop'}`}
                   type="button"
                   onClick={() => {
-                    if (!killOn || window.confirm('Resume bot actions and return control to the configured risk gates?')) void setKill(!killOn);
+                    if (!killOn || window.confirm('Resume bot actions and return control to the configured risk gates?')) void runKillMutation(!killOn);
                   }}
                   aria-label={killOn ? 'Resume configured bot controls' : 'Stop every bot action'}
+                  disabled={controlBusy}
                 >
                   <ExecutionPowerIdentityMark stopped={killOn} size={15} />
                   <span>{killOn ? 'Resume' : 'Stop Bot'}</span>
@@ -3330,7 +3481,13 @@ function SharedTopBar() {
           } as CSSProperties}
         >
           {outgoingContent && (
-            <div className="smenu-pane outgoing" data-pane-key={outgoingContent} aria-hidden="true" inert key={outgoingContent}>
+            <div
+              className="smenu-pane outgoing"
+              data-pane-key={outgoingContent}
+              aria-hidden="true"
+              ref={(node) => { if (node) node.inert = true; }}
+              key={outgoingContent}
+            >
               {premiumContent(outgoingContent)}
             </div>
           )}

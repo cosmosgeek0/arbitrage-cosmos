@@ -32,7 +32,7 @@ export class GapTracker {
     let b = this.buckets.get(k);
     if (!b) {
       b = { samples: [], openedTs: null, persistTicks: 0 };
-      this.buckets.set(k, b);
+      if (this.buckets.size < this.cfg.maxUniverseSize * 2) this.buckets.set(k, b);
     }
     return b;
   }
@@ -87,5 +87,16 @@ export class GapTracker {
   reset(symbol: string): void {
     this.buckets.delete(this.key(symbol, 'long_spot_short_perp'));
     this.buckets.delete(this.key(symbol, 'short_spot_long_perp'));
+  }
+
+  retainSymbols(symbols: ReadonlySet<string>): void {
+    for (const key of this.buckets.keys()) {
+      const separator = key.indexOf('|');
+      if (separator < 0 || !symbols.has(key.slice(0, separator))) this.buckets.delete(key);
+    }
+  }
+
+  clear(): void {
+    this.buckets.clear();
   }
 }

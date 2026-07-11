@@ -141,6 +141,13 @@ export class BasisScanner implements Scanner {
         `data quality ${s.dq.score.toFixed(2)} < ${cfg.minDataQuality} (${s.dq.suspectReasons.join(',') || 'composite'})`,
       );
     }
+    if (!funding.fresh || funding.fundingRate === null || funding.carryPctOverHold === null) {
+      return v(
+        'reject',
+        'data_stale',
+        `funding unavailable or stale (${funding.stalenessMs ?? 'never'}ms > ${cfg.fundingStaleMs}ms)`,
+      );
+    }
 
     // --- gap exists? ---
     if (gap.gapPct === null) {
@@ -294,6 +301,7 @@ export class BasisScanner implements Scanner {
         markDivergenceBps: s?.dq.markDivergenceBps ?? null,
         spotStalenessMs: bf.spotStalenessMs,
         perpStalenessMs: bf.perpStalenessMs,
+        fundingStalenessMs: funding?.stalenessMs ?? null,
         borrowStatus: ctx.borrowStatus,
         grossEdgePct: edge?.grossEdgePct ?? null,
         feesPct: edge?.costs.feesPct ?? null,

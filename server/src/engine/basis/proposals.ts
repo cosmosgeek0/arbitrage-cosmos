@@ -21,6 +21,7 @@ let proposalSeq = 0;
 
 export class BasisProposalStore {
   private byId = new Map<string, BasisProposal>();
+  private openBySymbol = new Map<string, string>();
 
   constructor(
     private clock: Clock,
@@ -30,10 +31,14 @@ export class BasisProposalStore {
 
   /** The single open proposal for a symbol, if any. */
   openFor(symbol: string): BasisProposal | null {
-    for (const p of this.byId.values()) {
-      if (p.symbol === symbol && (p.status === 'open' || p.status === 'updated')) return p;
+    const id = this.openBySymbol.get(symbol);
+    if (!id) return null;
+    const proposal = this.byId.get(id);
+    if (!proposal || (proposal.status !== 'open' && proposal.status !== 'updated')) {
+      this.openBySymbol.delete(symbol);
+      return null;
     }
-    return null;
+    return proposal;
   }
 
   all(): BasisProposal[] {
@@ -41,7 +46,13 @@ export class BasisProposalStore {
   }
 
   open(): BasisProposal[] {
-    return this.all().filter((p) => p.status === 'open' || p.status === 'updated');
+    const out: BasisProposal[] = [];
+    for (const [symbol, id] of this.openBySymbol) {
+      const proposal = this.byId.get(id);
+      if (proposal && (proposal.status === 'open' || proposal.status === 'updated')) out.push(proposal);
+      else this.openBySymbol.delete(symbol);
+    }
+    return out.sort((left, right) => right.priority.score - left.priority.score);
   }
 
   get(id: string): BasisProposal | null {
@@ -68,6 +79,9 @@ export class BasisProposalStore {
     const gap = direction === 'long_spot_short_perp' ? s.gapA : s.gapB;
     const liq = direction === 'long_spot_short_perp' ? s.liquidity.A : s.liquidity.B;
     const needsBorrow = direction === 'short_spot_long_perp';
+    if (!funding.fresh || edge.netEdgePct === null || (needsBorrow && !s.borrowVerdictB.ok)) {
+      throw new Error(`cannot create basis proposal from unverified inputs for ${bf.symbol}`);
+    }
 
     const invalidationSpec: InvalidationSpec = {
       gapClosesBelowPct: this.cfg.watchGapPct,
@@ -124,6 +138,10 @@ export class BasisProposalStore {
       this.expire(existing.id, 'direction_flipped');
     }
 
+    if (this.openBySymbol.size >= this.cfg.maxUniverseSize) {
+      throw new RangeError(`basis proposal capacity ${this.cfg.maxUniverseSize} reached`);
+    }
+
     proposalSeq += 1;
     const p: BasisProposal = {
       id: `bp_${now.toString(36)}_${proposalSeq.toString(36)}`,
@@ -150,6 +168,8 @@ export class BasisProposalStore {
       costBreakdown: edge.costs,
     };
     this.byId.set(p.id, p);
+    this.openBySymbol.set(p.symbol, p.id);
+    this.pruneHistory();
     this.emitter.emit('proposal_created', correlationId, `proposal: ${bf.symbol} ${direction} — ${humanReason}`, {
       symbol: bf.symbol,
       payload: {
@@ -170,10 +190,41 @@ export class BasisProposalStore {
     p.status = 'expired';
     p.updatedTs = this.clock.now();
     p.reason = `${p.reason} | expired: ${why}`;
+    if (this.openBySymbol.get(p.symbol) === p.id) this.openBySymbol.delete(p.symbol);
     this.emitter.emit('proposal_expired', p.correlationId, `proposal expired (${why})`, {
       symbol: p.symbol,
       payload: { proposalId: p.id, why },
     });
+    this.pruneHistory();
+  }
+
+  expireForSymbol(symbol: string, why: string): void {
+    const proposal = this.openFor(symbol);
+    if (proposal) this.expire(proposal.id, why);
+  }
+
+  expireAll(why: string): void {
+    for (const proposal of this.open()) this.expire(proposal.id, why);
+  }
+
+  retainSymbols(
+    symbols: ReadonlySet<string>,
+    reasonFor: (symbol: string) => string = () => 'symbol_left_universe',
+  ): Array<{ id: string; symbol: string; why: string }> {
+    const expired: Array<{ id: string; symbol: string; why: string }> = [];
+    for (const proposal of this.open()) {
+      if (!symbols.has(proposal.symbol)) {
+        const why = reasonFor(proposal.symbol);
+        this.expire(proposal.id, why);
+        expired.push({ id: proposal.id, symbol: proposal.symbol, why });
+      }
+    }
+    this.pruneHistory();
+    return expired;
+  }
+
+  reconcileConfigBounds(): void {
+    this.pruneHistory();
   }
 
   /**
@@ -197,12 +248,23 @@ export class BasisProposalStore {
         continue;
       }
       const bf = snapshotFor(p.symbol);
-      if (!bf?.basis) continue;
+      if (!bf?.basis) {
+        kill(p, 'market_data_missing');
+        continue;
+      }
       const gap = p.direction === 'long_spot_short_perp' ? bf.basis.gapA : bf.basis.gapB;
       const funding = p.direction === 'long_spot_short_perp' ? bf.basis.funding.A : bf.basis.funding.B;
       const liq = p.direction === 'long_spot_short_perp' ? bf.basis.liquidity.A : bf.basis.liquidity.B;
 
-      if (gap.gapPct !== null && gap.gapPct < spec.gapClosesBelowPct) {
+      if (gap.gapPct === null) {
+        kill(p, 'book_missing');
+      } else if (!funding.fresh || funding.fundingRate === null || funding.carryPctOverHold === null) {
+        kill(p, 'funding_stale');
+      } else if (p.direction === 'short_spot_long_perp' && !bf.basis.borrowVerdictB.ok) {
+        kill(p, 'borrow_invalid');
+      } else if (bf.basis.dq.score < this.cfg.minDataQuality) {
+        kill(p, 'data_quality_failed');
+      } else if (gap.gapPct < spec.gapClosesBelowPct) {
         kill(p, 'gap_closed');
       } else if (
         // same tolerance the scanner proposes under: funding "flips against"
@@ -213,19 +275,36 @@ export class BasisProposalStore {
       ) {
         kill(p, 'funding_flipped_against');
       } else if (
-        (bf.spotStalenessMs !== null && bf.spotStalenessMs > spec.maxStaleMs) ||
-        (bf.perpStalenessMs !== null && bf.perpStalenessMs > spec.maxStaleMs)
+        bf.spotStalenessMs === null ||
+        bf.perpStalenessMs === null ||
+        bf.spotStalenessMs > spec.maxStaleMs ||
+        bf.perpStalenessMs > spec.maxStaleMs
       ) {
         kill(p, 'data_stale');
       } else if (
-        (bf.spotSpreadBps !== null && bf.spotSpreadBps > spec.spreadAboveBps) ||
-        (bf.perpSpreadBps !== null && bf.perpSpreadBps > spec.spreadAboveBps)
+        bf.spotSpreadBps === null ||
+        bf.perpSpreadBps === null ||
+        bf.spotSpreadBps > spec.spreadAboveBps ||
+        bf.perpSpreadBps > spec.spreadAboveBps
       ) {
         kill(p, 'spread_widened');
-      } else if (liq.depthScore !== null && liq.depthScore < spec.depthBelowScore) {
+      } else if (liq.depthScore === null || liq.depthScore < spec.depthBelowScore) {
         kill(p, 'depth_vanished');
       }
     }
     return expired;
+  }
+
+  private pruneHistory(): void {
+    if (this.byId.size <= this.cfg.proposalHistoryKeep) return;
+    const closed = [...this.byId.values()]
+      .filter((proposal) => proposal.status !== 'open' && proposal.status !== 'updated')
+      .sort((left, right) => left.updatedTs - right.updatedTs);
+    let remove = this.byId.size - this.cfg.proposalHistoryKeep;
+    for (const proposal of closed) {
+      if (remove <= 0) break;
+      this.byId.delete(proposal.id);
+      remove -= 1;
+    }
   }
 }

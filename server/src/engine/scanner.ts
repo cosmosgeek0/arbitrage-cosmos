@@ -7,6 +7,29 @@ interface TrackState {
   proposal: Proposal | null;
 }
 
+type ReconciliationReason = 'symbol_removed' | 'evidence_stale' | 'symbol_ineligible';
+
+interface ReconciliationFailure {
+  reason: ReconciliationReason;
+  detail: string;
+  basisClose: number | null;
+}
+
+interface Retirement extends ReconciliationFailure {
+  symbol: string;
+  proposal: Proposal | null;
+  ticksAbove: number;
+  ticksBelow: number;
+}
+
+function finite(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function positive(value: unknown): value is number {
+  return finite(value) && value > 0;
+}
+
 /**
  * Basis strategy — monitor only. Produces PROPOSALS with an explanation.
  * It never places orders: approving a proposal only prefills the manual
@@ -81,12 +104,133 @@ export class Scanner {
     );
   }
 
+  /**
+   * Scanner eligibility is deliberately recomputed from each complete tick.
+   * MarketEngine nulls price/basis fields once either leg is stale, so missing
+   * or non-finite evidence must invalidate an existing proposal immediately.
+   */
+  private reconciliationFailure(row: SymbolRow): ReconciliationFailure | null {
+    if (!positive(row.spot) || !positive(row.perpMark) || !finite(row.basisPct)) {
+      return {
+        reason: 'evidence_stale',
+        detail: 'fresh spot/perpetual basis evidence is unavailable',
+        basisClose: null,
+      };
+    }
+
+    if (
+      !finite(row.quoteVolume24h) ||
+      row.quoteVolume24h < 0 ||
+      row.quoteVolume24h < this.cfg.minQuoteVolume24h
+    ) {
+      return {
+        reason: 'symbol_ineligible',
+        detail: finite(row.quoteVolume24h)
+          ? `24h spot quote volume ${row.quoteVolume24h} is below ${this.cfg.minQuoteVolume24h}`
+          : '24h spot quote volume is unavailable',
+        basisClose: row.basisPct,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Remove approvability before touching persistence. If SQLite is degraded,
+   * stale evidence still cannot leave a proposal available through the API.
+   */
+  private retireTrackedSymbols(retirements: Retirement[], now: number): void {
+    let firstError: unknown = null;
+    for (const retirement of retirements) {
+      const { proposal } = retirement;
+      if (proposal) {
+        const basisClose = finite(retirement.basisClose) ? retirement.basisClose : proposal.basisNow;
+        try {
+          this.ledger.closeSignal(proposal.id, now, basisClose);
+          this.ledger.logEvent('strategy_signal', retirement.symbol, {
+            action: 'closed',
+            reason: retirement.reason,
+            closureReason: retirement.reason,
+            detail: retirement.detail,
+            id: proposal.id,
+            basisClose,
+            basisPeak: proposal.basisPeak,
+          });
+        } catch (error) {
+          firstError ??= error;
+        }
+        continue;
+      }
+
+      if (retirement.ticksAbove > 0 || retirement.ticksBelow > 0) {
+        try {
+          this.ledger.logEvent('strategy_signal', retirement.symbol, {
+            action: 'watch_reset',
+            reason: retirement.reason,
+            closureReason: retirement.reason,
+            detail: retirement.detail,
+            ticksAbove: retirement.ticksAbove,
+            ticksBelow: retirement.ticksBelow,
+          });
+        } catch (error) {
+          firstError ??= error;
+        }
+      }
+    }
+    if (firstError) throw firstError;
+  }
+
   tick(rows: SymbolRow[]): void {
-    this.lastTickTs = Date.now();
+    const now = Date.now();
+    this.lastTickTs = now;
     const threshold = this.grossThresholdPct;
+
+    const seen = new Set<string>();
+    const eligible = new Map<string, SymbolRow>();
+    const failures = new Map<string, ReconciliationFailure>();
     for (const row of rows) {
-      if (row.basisPct === null) continue;
-      if ((row.quoteVolume24h ?? 0) < this.cfg.minQuoteVolume24h) continue;
+      if (typeof row.symbol !== 'string' || !/^[A-Z0-9]{4,20}$/.test(row.symbol)) continue;
+      seen.add(row.symbol);
+      const failure = this.reconciliationFailure(row);
+      if (failure) {
+        failures.set(row.symbol, failure);
+        eligible.delete(row.symbol);
+      } else {
+        failures.delete(row.symbol);
+        eligible.set(row.symbol, row);
+      }
+    }
+
+    // Reconcile before scanning new evidence. Deleting the map entries first is
+    // intentional: even if the audit write fails, stale proposals are no longer
+    // returned by proposals() and cannot reach the approval endpoint.
+    const retirements: Retirement[] = [];
+    for (const [symbol, state] of this.track) {
+      const failure = !seen.has(symbol)
+        ? {
+            reason: 'symbol_removed' as const,
+            detail: 'symbol is absent from the current scanner universe',
+            basisClose: null,
+          }
+        : failures.get(symbol);
+      if (!failure) continue;
+      retirements.push({
+        symbol,
+        proposal: state.proposal,
+        ticksAbove: state.ticksAbove,
+        ticksBelow: state.ticksBelow,
+        ...failure,
+      });
+      state.proposal = null;
+      state.ticksAbove = 0;
+      state.ticksBelow = 0;
+      this.track.delete(symbol);
+    }
+    this.retireTrackedSymbols(retirements, now);
+
+    for (const row of eligible.values()) {
+      // reconciliationFailure() proves this is a finite basis value.
+      const basisPct = row.basisPct as number;
 
       let t = this.track.get(row.symbol);
       if (!t) {
@@ -94,28 +238,30 @@ export class Scanner {
         this.track.set(row.symbol, t);
       }
 
-      const gross = Math.abs(row.basisPct);
+      const gross = Math.abs(basisPct);
 
       if (t.proposal) {
         const p = t.proposal;
-        p.basisNow = row.basisPct;
+        p.basisNow = basisPct;
         p.netEdgePct = gross - this.cfg.feesPct;
         p.spotPrice = row.spot;
         p.perpMark = row.perpMark;
         p.fundingRate = row.fundingRate;
-        p.confidence = this.confidence(row, Date.now() - p.openedTs);
-        if (Math.abs(row.basisPct) > Math.abs(p.basisPeak)) {
-          p.basisPeak = row.basisPct;
-          this.ledger.updateSignalPeak(p.id, row.basisPct);
+        p.confidence = this.confidence(row, now - p.openedTs);
+        if (Math.abs(basisPct) > Math.abs(p.basisPeak)) {
+          p.basisPeak = basisPct;
+          this.ledger.updateSignalPeak(p.id, basisPct);
         }
         if (gross < this.cfg.feesPct) {
           t.ticksBelow++;
           if (t.ticksBelow >= this.cfg.persistTicks) {
-            this.ledger.closeSignal(p.id, Date.now(), row.basisPct);
+            this.ledger.closeSignal(p.id, now, basisPct);
             this.ledger.logEvent('strategy_signal', row.symbol, {
               action: 'closed',
+              reason: 'gap_closed',
+              closureReason: 'gap_closed',
               id: p.id,
-              basisClose: row.basisPct,
+              basisClose: basisPct,
               basisPeak: p.basisPeak,
             });
             t.proposal = null;
@@ -131,22 +277,22 @@ export class Scanner {
       if (gross >= threshold) {
         t.ticksAbove++;
         if (t.ticksAbove >= this.cfg.persistTicks) {
-          const side = row.basisPct > 0 ? 'SHORT_PERP_LONG_SPOT' : 'LONG_PERP_SHORT_SPOT';
+          const side = basisPct > 0 ? 'SHORT_PERP_LONG_SPOT' : 'LONG_PERP_SHORT_SPOT';
           const id = this.ledger.openSignal({
             symbol: row.symbol,
             side,
-            openedTs: Date.now(),
-            basisOpen: row.basisPct,
+            openedTs: now,
+            basisOpen: basisPct,
             fundingOpen: row.fundingRate,
           });
           t.proposal = {
             id,
             symbol: row.symbol,
             side,
-            openedTs: Date.now(),
-            basisOpen: row.basisPct,
-            basisNow: row.basisPct,
-            basisPeak: row.basisPct,
+            openedTs: now,
+            basisOpen: basisPct,
+            basisNow: basisPct,
+            basisPeak: basisPct,
             fundingRate: row.fundingRate,
             spotPrice: row.spot,
             perpMark: row.perpMark,
@@ -164,7 +310,7 @@ export class Scanner {
             action: 'opened',
             id,
             side,
-            basisOpen: row.basisPct,
+            basisOpen: basisPct,
             fundingOpen: row.fundingRate,
             reason: t.proposal.reason,
           });

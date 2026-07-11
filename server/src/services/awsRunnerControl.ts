@@ -11,7 +11,10 @@ import type { Ledger } from '../ledger.js';
 
 const CONFIG_KEY = 'aws-runner-control';
 const MAX_RUNNER_BYTES = 16_000;
+const MAX_COMMAND_OUTPUT_BYTES = 64_000;
+const MAX_STATUS_OUTPUT_BYTES = 4_000;
 const TERMINAL = new Set(['Success', 'Cancelled', 'TimedOut', 'Failed', 'Cancelling']);
+const BASE64_RE = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
 export interface AwsRunnerGates {
   connectionEnabled: boolean;
@@ -74,6 +77,10 @@ function validAbsolutePath(value: string): boolean {
   return value.startsWith('/') && value.length <= 240 && !/[\r\n\0]/.test(value);
 }
 
+function validRunnerPath(value: string): boolean {
+  return validAbsolutePath(value) && /\.(?:ts|js|mjs|cjs|json|sh|bash|py)$/.test(value);
+}
+
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'"'"'`)}'`;
 }
@@ -87,7 +94,47 @@ function sha256(value: string): string {
 }
 
 function containsSecretMaterial(value: string): boolean {
-  return /(?:AWS_SECRET_ACCESS_KEY|BINANCE_(?:API_)?SECRET|-----BEGIN [A-Z ]*PRIVATE KEY-----|apiSecret\s*[:=])/i.test(value);
+  return /(?:AWS_(?:SECRET_ACCESS_KEY|SESSION_TOKEN)|BINANCE_(?:API_)?SECRET|-----BEGIN [A-Z ]*PRIVATE KEY-----|apiSecret\s*[:=]|(?:secret|token|password)\s*[:=]\s*['"][^'"\s]{8,})/i.test(value);
+}
+
+function strictBase64(value: string): Buffer | null {
+  if (value.length % 4 !== 0 || !BASE64_RE.test(value)) return null;
+  const decoded = Buffer.from(value, 'base64');
+  if (decoded.toString('base64') !== value) return null;
+  return decoded;
+}
+
+function redactText(value: string, maximumBytes = MAX_COMMAND_OUTPUT_BYTES): string {
+  const withoutControls = value.replace(/[\0\u0001-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '');
+  const redacted = withoutControls
+    .replace(/(AWS_(?:ACCESS_KEY_ID|SECRET_ACCESS_KEY|SESSION_TOKEN)\s*[=:]\s*)\S+/gi, '$1[REDACTED]')
+    .replace(/((?:secret|token|password|authorization|api[_-]?key)\s*[=:]\s*)\S+/gi, '$1[REDACTED]')
+    .replace(/AKIA[0-9A-Z]{16}/g, '[REDACTED_AWS_KEY]')
+    .replace(/(?:Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, 'Bearer [REDACTED]');
+  const bytes = Buffer.from(redacted, 'utf8');
+  if (bytes.length <= maximumBytes) return redacted;
+  return `${bytes.subarray(0, maximumBytes).toString('utf8')}\n[output truncated]`;
+}
+
+function safeFailureDetail(error: unknown): string {
+  if (!error || typeof error !== 'object') return 'unknown error';
+  const candidate = error as { name?: unknown; $metadata?: { httpStatusCode?: unknown } };
+  const name = typeof candidate.name === 'string' && /^[A-Za-z0-9_.-]{1,80}$/.test(candidate.name)
+    ? candidate.name
+    : 'AWS service error';
+  const status = typeof candidate.$metadata?.httpStatusCode === 'number'
+    ? `, HTTP ${candidate.$metadata.httpStatusCode}`
+    : '';
+  return `${name}${status}`;
+}
+
+function publicActionResult(result: AwsRunnerActionResult): AwsRunnerActionResult {
+  const sensitiveOutput = result.action === 'read_runner' || result.action === 'save_runner';
+  return {
+    ...result,
+    output: sensitiveOutput ? '' : redactText(result.output, MAX_STATUS_OUTPUT_BYTES),
+    error: redactText(result.error, MAX_STATUS_OUTPUT_BYTES),
+  };
 }
 
 export class AwsRunnerControl {
@@ -119,8 +166,12 @@ export class AwsRunnerControl {
       return {
         connectionEnabled,
         executionEnabled: connectionEnabled && saved.executionEnabled === true,
-        updatedAt: typeof saved.updatedAt === 'number' ? saved.updatedAt : Date.now(),
-        updatedBy: typeof saved.updatedBy === 'string' ? saved.updatedBy : null,
+        updatedAt: typeof saved.updatedAt === 'number' && Number.isSafeInteger(saved.updatedAt) && saved.updatedAt > 0
+          ? saved.updatedAt
+          : Date.now(),
+        updatedBy: typeof saved.updatedBy === 'string'
+          ? saved.updatedBy.replace(/[\r\n\0]/g, ' ').trim().slice(0, 160) || null
+          : null,
       };
     } catch {
       return { connectionEnabled: false, executionEnabled: false, updatedAt: Date.now(), updatedBy: null };
@@ -131,10 +182,13 @@ export class AwsRunnerControl {
     const missing: string[] = [];
     if (!/^[a-z]{2}(?:-gov)?-[a-z]+-\d$/.test(this.region)) missing.push('AWS_CONTROL_REGION');
     if (!/^i-[a-f0-9]{8,17}$/i.test(this.instanceId)) missing.push('AWS_CONTROL_INSTANCE_ID');
-    if (!validAbsolutePath(this.runnerPath)) missing.push('AWS_CONTROL_RUNNER_PATH');
+    if (!validRunnerPath(this.runnerPath)) missing.push('AWS_CONTROL_RUNNER_PATH');
     if (!validAbsolutePath(this.workdir)) missing.push('AWS_CONTROL_WORKDIR');
     if (!/^[A-Za-z0-9_.@-]{1,120}$/.test(this.serviceName)) missing.push('AWS_CONTROL_SERVICE');
     if (!/^[a-zA-Z0-9_\-.:/]{3,128}$/.test(this.documentName)) missing.push('AWS_CONTROL_DOCUMENT');
+    if (!this.validateCommand || this.validateCommand.length > 500 || /[\r\n\0]/.test(this.validateCommand)) {
+      missing.push('AWS_CONTROL_VALIDATE_COMMAND');
+    }
     return missing;
   }
 
@@ -160,6 +214,12 @@ export class AwsRunnerControl {
   }
 
   setGates(patch: { connectionEnabled?: boolean; executionEnabled?: boolean }, operator: string | null): AwsRunnerGates {
+    if (
+      (patch.connectionEnabled !== undefined && typeof patch.connectionEnabled !== 'boolean')
+      || (patch.executionEnabled !== undefined && typeof patch.executionEnabled !== 'boolean')
+    ) {
+      throw new AwsRunnerControlError(400, 'AWS_GATE_INPUT_INVALID', 'AWS gate values must be booleans.');
+    }
     let connectionEnabled = patch.connectionEnabled ?? this.gates.connectionEnabled;
     let executionEnabled = patch.executionEnabled ?? this.gates.executionEnabled;
     if (connectionEnabled && !this.configured()) {
@@ -169,10 +229,21 @@ export class AwsRunnerControl {
     if (executionEnabled && !connectionEnabled) {
       throw new AwsRunnerControlError(409, 'AWS_CHANNEL_REQUIRED', 'Enable AWS Channel before Runner Changes.');
     }
-    this.gates = { connectionEnabled, executionEnabled, updatedAt: Date.now(), updatedBy: operator };
-    this.ledger.setConfigValue(CONFIG_KEY, JSON.stringify(this.gates));
-    this.ledger.logEvent('aws_control_gate', null, { connectionEnabled, executionEnabled, operator });
-    return this.gates;
+    const updatedBy = typeof operator === 'string'
+      ? operator.replace(/[\r\n\0]/g, ' ').trim().slice(0, 160) || null
+      : null;
+    const nextGates = { connectionEnabled, executionEnabled, updatedAt: Date.now(), updatedBy };
+    // Persistence and audit commit together before the live gates move. If the
+    // disk write fails, the running process remains in its previous state.
+    this.ledger.setConfigValueAndLogEvent(
+      CONFIG_KEY,
+      JSON.stringify(nextGates),
+      'aws_control_gate',
+      null,
+      { connectionEnabled, executionEnabled, operator: updatedBy },
+    );
+    this.gates = nextGates;
+    return { ...this.gates };
   }
 
   async status(operatorAuthorized: boolean, operator: string | null, probe = false): Promise<AwsRunnerStatus> {
@@ -210,7 +281,7 @@ export class AwsRunnerControl {
           action: 'probe',
           status: 'Failed',
           output: '',
-          error: error instanceof Error ? error.message : String(error),
+          error: `AWS probe failed (${safeFailureDetail(error)}).`,
           startedAt: Date.now(),
           finishedAt: Date.now(),
         };
@@ -243,13 +314,21 @@ export class AwsRunnerControl {
     this.requireConnection();
     const startedAt = Date.now();
     const { ssm } = this.clients();
-    const sent = await ssm.send(new SendCommandCommand({
-      DocumentName: this.documentName,
-      InstanceIds: [this.instanceId],
-      TimeoutSeconds: Math.max(30, Math.min(600, timeoutSeconds)),
-      Comment: `Cosmos runner control: ${action}`.slice(0, 100),
-      Parameters: { commands: [`set -euo pipefail\n${script}`] },
-    }));
+    let sent;
+    try {
+      sent = await ssm.send(new SendCommandCommand({
+        DocumentName: this.documentName,
+        InstanceIds: [this.instanceId],
+        TimeoutSeconds: Math.max(30, Math.min(600, timeoutSeconds)),
+        Comment: `Cosmos runner control: ${action}`.slice(0, 100),
+        // AWS-RunShellScript starts commands with /bin/sh. Pipefail is a Bash
+        // feature, so invoke Bash explicitly and quote the whole script as one
+        // argument instead of relying on the instance's /bin/sh implementation.
+        Parameters: { commands: [`/usr/bin/env bash -lc ${shellQuote(`set -euo pipefail\n${script}`)}`] },
+      }));
+    } catch (error) {
+      throw new AwsRunnerControlError(502, 'AWS_COMMAND_DISPATCH_FAILED', `AWS command dispatch failed (${safeFailureDetail(error)}).`);
+    }
     const commandId = sent.Command?.CommandId;
     if (!commandId) throw new AwsRunnerControlError(502, 'AWS_COMMAND_ID_MISSING', 'AWS accepted no command identifier.');
     const deadline = Date.now() + (timeoutSeconds + 20) * 1000;
@@ -267,19 +346,32 @@ export class AwsRunnerControl {
         if (TERMINAL.has(status)) break;
       } catch (pollError) {
         const name = pollError instanceof Error ? pollError.name : '';
-        if (name !== 'InvocationDoesNotExist') throw pollError;
+        if (name !== 'InvocationDoesNotExist') {
+          throw new AwsRunnerControlError(502, 'AWS_COMMAND_POLL_FAILED', `AWS command status failed (${safeFailureDetail(pollError)}).`);
+        }
       }
       await sleep(650);
     }
     if (!invocation || !TERMINAL.has(status)) status = 'TimedOut';
-    const result: AwsRunnerActionResult = { commandId, action, status, output, error, startedAt, finishedAt: Date.now() };
-    this.lastAction = result;
+    const rawOutputBytes = Buffer.byteLength(output, 'utf8');
+    const result: AwsRunnerActionResult = {
+      commandId,
+      action,
+      status,
+      output: action === 'read_runner'
+        ? rawOutputBytes <= MAX_COMMAND_OUTPUT_BYTES ? output : ''
+        : redactText(output),
+      error: redactText(error),
+      startedAt,
+      finishedAt: Date.now(),
+    };
+    this.lastAction = publicActionResult(result);
     this.ledger.logEvent('aws_runner_action', null, {
       action,
       commandId,
       status,
       outputBytes: Buffer.byteLength(output),
-      error: error.slice(0, 800),
+      error: redactText(error, 800),
     });
     return result;
   }
@@ -328,12 +420,22 @@ export class AwsRunnerControl {
       `test -f ${path}\nbytes=$(wc -c < ${path})\nif [ "$bytes" -gt ${MAX_RUNNER_BYTES} ]; then echo "Runner file exceeds ${MAX_RUNNER_BYTES} bytes" >&2; exit 65; fi\nbase64 < ${path} | tr -d '\\n'`,
       45,
     );
-    if (result.status !== 'Success') throw new AwsRunnerControlError(502, 'AWS_RUNNER_READ_FAILED', result.error || `Runner read finished with ${result.status}.`);
-    let content = '';
+    if (result.status !== 'Success') {
+      throw new AwsRunnerControlError(502, 'AWS_RUNNER_READ_FAILED', `Runner read command failed (${result.status}).`);
+    }
+    const encoded = result.output.trim();
+    if (encoded.length > Math.ceil(MAX_RUNNER_BYTES / 3) * 4 + 4) {
+      throw new AwsRunnerControlError(502, 'AWS_RUNNER_DECODE_FAILED', 'AWS returned an invalid runner payload.');
+    }
+    const decoded = strictBase64(encoded);
+    if (!decoded || decoded.length > MAX_RUNNER_BYTES) {
+      throw new AwsRunnerControlError(502, 'AWS_RUNNER_DECODE_FAILED', 'AWS returned an invalid runner payload.');
+    }
+    let content: string;
     try {
-      content = Buffer.from(result.output.trim(), 'base64').toString('utf8');
+      content = new TextDecoder('utf-8', { fatal: true }).decode(decoded);
     } catch {
-      throw new AwsRunnerControlError(502, 'AWS_RUNNER_DECODE_FAILED', 'AWS returned runner content that could not be decoded.');
+      throw new AwsRunnerControlError(502, 'AWS_RUNNER_DECODE_FAILED', 'AWS returned an invalid UTF-8 runner payload.');
     }
     return { path: this.runnerPath, content, sha256: sha256(content), bytes: Buffer.byteLength(content), fetchedAt: Date.now() };
   }
@@ -341,22 +443,110 @@ export class AwsRunnerControl {
   async saveRunner(content: string, expectedSha256: string | null): Promise<AwsRunnerFile> {
     this.requireExecution();
     const bytes = Buffer.byteLength(content, 'utf8');
+    if (bytes === 0) throw new AwsRunnerControlError(400, 'AWS_RUNNER_EMPTY', 'Runner content must not be empty.');
     if (bytes > MAX_RUNNER_BYTES) throw new AwsRunnerControlError(413, 'AWS_RUNNER_TOO_LARGE', `Runner file exceeds ${MAX_RUNNER_BYTES} bytes.`);
+    if (content.includes('\0')) throw new AwsRunnerControlError(400, 'AWS_RUNNER_BINARY_REJECTED', 'Runner content must be UTF-8 source text.');
     if (containsSecretMaterial(content)) throw new AwsRunnerControlError(400, 'AWS_RUNNER_SECRET_REJECTED', 'Runner content appears to contain secret material. Keep secrets in AWS Secrets Manager or Parameter Store.');
-    if (expectedSha256) {
-      const current = await this.readRunner();
-      if (current.sha256 !== expectedSha256) throw new AwsRunnerControlError(409, 'AWS_RUNNER_CONFLICT', 'Runner changed after it was loaded. Reload before saving.');
+    if (expectedSha256 !== null && !/^[a-f0-9]{64}$/.test(expectedSha256)) {
+      throw new AwsRunnerControlError(400, 'AWS_RUNNER_HASH_INVALID', 'Expected runner SHA-256 must be 64 lowercase hexadecimal characters.');
     }
     const encoded = Buffer.from(content, 'utf8').toString('base64');
     const target = shellQuote(this.runnerPath);
+    const workdir = shellQuote(this.workdir);
     const payload = shellQuote(encoded);
+    const nextSha256 = sha256(content);
+    const expected = shellQuote(expectedSha256 ?? '');
     const result = await this.runShell(
       'save_runner',
-      `target=${target}\ntmp="${this.runnerPath}.cosmos-$$"\nprintf %s ${payload} | base64 --decode > "$tmp"\ntest "$(wc -c < "$tmp")" -le ${MAX_RUNNER_BYTES}\nif [ -e "$target" ]; then cp -p -- "$target" "$target.cosmos-backup"; chmod --reference="$target" "$tmp"; chown --reference="$target" "$tmp"; fi\nmv -f -- "$tmp" "$target"`,
-      60,
+      `target=${target}
+workdir=${workdir}
+expected=${expected}
+payload=${payload}
+next_sha=${shellQuote(nextSha256)}
+had_target=0
+promoted=0
+rollback="${this.runnerPath}.cosmos-rollback-$$"
+durable_backup="${this.runnerPath}.cosmos-backup"
+backup_stage="${this.runnerPath}.cosmos-backup-stage-$$"
+case "$target" in
+  *.ts) stage="${this.runnerPath}.cosmos-stage-$$.ts" ;;
+  *.mjs) stage="${this.runnerPath}.cosmos-stage-$$.mjs" ;;
+  *.cjs) stage="${this.runnerPath}.cosmos-stage-$$.cjs" ;;
+  *.js) stage="${this.runnerPath}.cosmos-stage-$$.js" ;;
+  *.json) stage="${this.runnerPath}.cosmos-stage-$$.json" ;;
+  *.bash) stage="${this.runnerPath}.cosmos-stage-$$.bash" ;;
+  *.sh) stage="${this.runnerPath}.cosmos-stage-$$.sh" ;;
+  *.py) stage="${this.runnerPath}.cosmos-stage-$$.py" ;;
+  *) echo 'Unsupported runner source type' >&2; exit 64 ;;
+esac
+cleanup() {
+  code=$?
+  trap - EXIT HUP INT TERM
+  rm -f -- "$stage"
+  if [ "$promoted" -eq 1 ]; then
+    if [ "$had_target" -eq 1 ] && [ -f "$rollback" ]; then
+      mv -f -- "$rollback" "$target"
+    else
+      rm -f -- "$target"
+    fi
+  fi
+  rm -f -- "$rollback"
+  rm -f -- "$backup_stage"
+  exit "$code"
+}
+trap cleanup EXIT HUP INT TERM
+printf %s "$payload" | base64 --decode > "$stage"
+test "$(wc -c < "$stage")" -eq ${bytes}
+test "$(sha256sum "$stage" | awk '{print $1}')" = "$next_sha"
+case "$stage" in
+  *.ts)
+    test -x "$workdir/node_modules/.bin/tsc"
+    "$workdir/node_modules/.bin/tsc" --pretty false --noEmit --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext "$stage"
+    ;;
+  *.js|*.mjs|*.cjs) node --check "$stage" ;;
+  *.json) node -e 'JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"))' "$stage" ;;
+  *.sh|*.bash) bash -n "$stage" ;;
+  *.py) python3 -c 'import pathlib,sys; compile(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"), sys.argv[1], "exec")' "$stage" ;;
+esac
+if [ -e "$target" ]; then
+  test -f "$target"
+  had_target=1
+  cp -p -- "$target" "$rollback"
+  chmod --reference="$target" "$stage"
+  chown --reference="$target" "$stage"
+elif [ -n "$expected" ]; then
+  echo 'Runner changed after it was loaded' >&2
+  exit 73
+fi
+if [ -n "$expected" ]; then
+  test "$(sha256sum "$target" | awk '{print $1}')" = "$expected" || { echo 'Runner changed after it was loaded' >&2; exit 73; }
+fi
+mv -f -- "$stage" "$target"
+promoted=1
+if ! (cd -- "$workdir" && ${this.validateCommand}); then
+  echo 'Configured validation failed; original runner restored' >&2
+  exit 65
+fi
+test "$(sha256sum "$target" | awk '{print $1}')" = "$next_sha"
+if [ "$had_target" -eq 1 ]; then
+  cp -p -- "$rollback" "$backup_stage"
+  mv -f -- "$backup_stage" "$durable_backup"
+fi
+promoted=0
+rm -f -- "$rollback"
+trap - EXIT HUP INT TERM
+rm -f -- "$stage"`,
+      360,
     );
-    if (result.status !== 'Success') throw new AwsRunnerControlError(502, 'AWS_RUNNER_SAVE_FAILED', result.error || `Runner save finished with ${result.status}.`);
-    this.ledger.logEvent('aws_runner_save', null, { path: this.runnerPath, bytes, sha256: sha256(content) });
-    return { path: this.runnerPath, content, sha256: sha256(content), bytes, fetchedAt: Date.now() };
+    if (result.status !== 'Success') {
+      const conflict = /Runner changed after it was loaded/.test(result.error);
+      throw new AwsRunnerControlError(
+        conflict ? 409 : 502,
+        conflict ? 'AWS_RUNNER_CONFLICT' : 'AWS_RUNNER_SAVE_FAILED',
+        conflict ? 'Runner changed after it was loaded. Reload before saving.' : `Runner save and validation failed (${result.status}); the previous source was restored.`,
+      );
+    }
+    this.ledger.logEvent('aws_runner_save', null, { path: this.runnerPath, bytes, sha256: nextSha256 });
+    return { path: this.runnerPath, content, sha256: nextSha256, bytes, fetchedAt: Date.now() };
   }
 }

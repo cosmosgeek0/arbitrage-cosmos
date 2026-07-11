@@ -14,11 +14,23 @@ export class BookQualityTracker {
   private depthHistory: number[] = []; // rolling topDepthUsd samples
   constructor(private cfg: VolumeConfig) {}
 
-  onBook(b: BookTicker): void {
-    this.last = b;
+  onBook(b: BookTicker): boolean {
+    if (
+      !Number.isFinite(b.bid) || b.bid <= 0 ||
+      !Number.isFinite(b.ask) || b.ask <= b.bid ||
+      !Number.isFinite(b.bidQty) || b.bidQty <= 0 ||
+      !Number.isFinite(b.askQty) || b.askQty <= 0 ||
+      !Number.isSafeInteger(b.ts) || b.ts < 0 ||
+      (this.last !== null && b.ts < this.last.ts)
+    ) {
+      return false;
+    }
     const depthUsd = (b.bid * b.bidQty + b.ask * b.askQty) / 2;
+    if (!Number.isFinite(depthUsd) || depthUsd <= 0) return false;
+    this.last = b;
     this.depthHistory.push(depthUsd);
     if (this.depthHistory.length > this.cfg.bookHistorySize) this.depthHistory.shift();
+    return true;
   }
 
   lastBook(): BookTicker | null {
@@ -50,7 +62,7 @@ export class BookQualityTracker {
       topDepthUsd,
       depthScore: spreadComponent * depthComponent,
       depthVsNorm: medDepth && medDepth > 0 ? topDepthUsd / medDepth : null,
-      stalenessMs: nowTs - b.ts,
+      stalenessMs: Math.max(0, nowTs - b.ts),
     };
   }
 }

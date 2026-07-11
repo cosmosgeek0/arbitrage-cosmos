@@ -21,6 +21,7 @@ import type {
 } from '../v0/types.js';
 import type { VolumeConfig } from './config.js';
 import { makeEvent } from './events.js';
+import { MAX_ENGINE_SYMBOLS, isCanonicalSymbol } from './validation.js';
 
 interface FocusEntry extends FocusSession {
   lastSignalTs: number;
@@ -41,16 +42,28 @@ export class FocusManager {
     private sink: EventSink,
   ) {}
 
+  private candidateCap(): number {
+    return Math.max(100, Math.min(1_000, this.cfg.focusHardCap * 20));
+  }
+
   // ---- external flags ----
   pin(symbol: string, pinned = true): void {
-    if (pinned) this.pinnedSet.add(symbol);
+    if (!isCanonicalSymbol(symbol)) return;
+    if (pinned) {
+      if (!this.pinnedSet.has(symbol) && this.pinnedSet.size >= MAX_ENGINE_SYMBOLS) return;
+      this.pinnedSet.add(symbol);
+    }
     else this.pinnedSet.delete(symbol);
     const f = this.focus.get(symbol);
     if (f) f.pinned = this.isProtected(symbol);
   }
 
   markOpenPosition(symbol: string, open: boolean): void {
-    if (open) this.openPositions.add(symbol);
+    if (!isCanonicalSymbol(symbol)) return;
+    if (open) {
+      if (!this.openPositions.has(symbol) && this.openPositions.size >= MAX_ENGINE_SYMBOLS) return;
+      this.openPositions.add(symbol);
+    }
     else this.openPositions.delete(symbol);
     const f = this.focus.get(symbol);
     if (f) f.pinned = this.isProtected(symbol);
@@ -92,7 +105,9 @@ export class FocusManager {
   }
 
   closedFocusSessions(limit = 100): FocusSession[] {
-    return this.closedSessions.slice(-limit);
+    const safeLimit = Number.isSafeInteger(limit) ? Math.max(0, Math.min(limit, 500)) : 100;
+    if (safeLimit === 0) return [];
+    return this.closedSessions.slice(-safeLimit);
   }
 
   markProposed(symbol: string): void {
@@ -103,6 +118,7 @@ export class FocusManager {
   noteDecision(d: Decision, priority: number): void {
     const now = this.clock.now();
     const symbol = d.symbol;
+    priority = Number.isFinite(priority) ? priority : 0;
     if (this.inCooldown(symbol) && !this.isProtected(symbol)) return;
 
     switch (d.kind) {
@@ -115,6 +131,24 @@ export class FocusManager {
         if (existing) {
           existing.score = priority;
           return;
+        }
+        if (this.candidates.size >= this.candidateCap()) {
+          let weakest: Candidate | null = null;
+          for (const candidate of this.candidates.values()) {
+            if (!weakest || candidate.score < weakest.score || (
+              candidate.score === weakest.score && candidate.openedTs < weakest.openedTs
+            )) weakest = candidate;
+          }
+          if (weakest && weakest.score >= priority) return;
+          if (weakest) {
+            this.candidates.delete(weakest.symbol);
+            this.sink.emit(
+              makeEvent('candidate_rejected', now, weakest.correlationId, 'candidate evicted by bounded queue', {
+                symbol: weakest.symbol,
+                payload: { candidateCap: this.candidateCap() },
+              }),
+            );
+          }
         }
         const cand: Candidate = {
           symbol,
@@ -144,6 +178,15 @@ export class FocusManager {
           this.touch(symbol, priority, now);
           return;
         }
+        // A configuration policy can change at runtime. Do not strand a
+        // newly-allowed symbol in a ten-minute cooldown merely because it was
+        // blocked on the previous tick.
+        if (d.rejectCode === 'symbol_blocked') {
+          if (this.focus.has(symbol)) this.close(symbol, 'risk_rejected', now);
+          this.candidates.delete(symbol);
+          this.cooldownUntil.delete(symbol);
+          return;
+        }
         // fake/blocked signal: close focus if held, cool the symbol down
         if (this.focus.has(symbol)) {
           this.close(symbol, d.rejectCode === 'risk_blocked' ? 'risk_rejected' : 'signal_expired', now);
@@ -166,6 +209,29 @@ export class FocusManager {
         }
         return;
       }
+    }
+  }
+
+  /** Remove focus/candidate/cooldown state for symbols no longer configured. */
+  reconcileSymbols(symbols: ReadonlySet<string>): void {
+    const now = this.clock.now();
+    for (const symbol of this.focus.keys()) {
+      if (!symbols.has(symbol)) this.close(symbol, 'signal_expired', now);
+    }
+    for (const symbol of this.candidates.keys()) {
+      if (!symbols.has(symbol)) this.candidates.delete(symbol);
+    }
+    for (const symbol of this.cooldownUntil.keys()) {
+      if (!symbols.has(symbol)) this.cooldownUntil.delete(symbol);
+    }
+    for (const symbol of this.pinnedSet) {
+      if (!symbols.has(symbol)) this.pinnedSet.delete(symbol);
+    }
+    for (const symbol of this.openPositions) {
+      if (!symbols.has(symbol)) this.openPositions.delete(symbol);
+    }
+    for (const symbol of this.proposedSet) {
+      if (!symbols.has(symbol)) this.proposedSet.delete(symbol);
     }
   }
 

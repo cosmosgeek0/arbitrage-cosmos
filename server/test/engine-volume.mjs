@@ -21,6 +21,7 @@ import {
   mapAggTrade,
   miniTickerDelta,
 } from '../dist/engine/volume/index.js';
+import { VolumeRuntime } from '../dist/services/volumeRuntime.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 let passCount = 0;
@@ -49,11 +50,33 @@ const TEST_CFG = {
   cooldownMs: 60_000,
 };
 
+const TEST_SYMBOLS = [
+  SYM,
+  'AAAUSDT', 'BBBUSDT', 'CCCUSDT', 'DDDUSDT', 'PINUSDT',
+  'E1USDT', 'E2USDT', 'E3USDT', 'E4USDT', 'E5USDT',
+];
+
+const symbolMeta = (symbol) => ({
+  symbol,
+  base: symbol.slice(0, -4),
+  quote: 'USDT',
+  hasSpot: true,
+  hasPerp: false,
+  marginBorrowable: null,
+  minNotionalUsd: 5,
+  tickSize: 0.00001,
+  stepSize: 0.1,
+  quoteVolume24hUsd: 5_000_000,
+  eligible: true,
+  ineligibleReason: null,
+});
+
 function mkWorld(cfg = {}) {
   const clock = new ManualClock(0);
   const engine = new VolumeEngine(clock, { ...TEST_CFG, ...cfg });
   const runner = new SyntheticReplayRunner(engine, clock);
   engine.start();
+  engine.setUniverse(TEST_SYMBOLS.map(symbolMeta));
   return { clock, engine, runner };
 }
 
@@ -476,6 +499,208 @@ section('19. adapter mappers (fixture payloads, zero network)');
   const delta = miniTickerDelta(prev, cur);
   check('miniTicker delta → universe volume tick', delta?.quoteQty === 250 && delta.ts === 2000);
   check('shrinking 24h window never fabricates volume', miniTickerDelta(cur, prev) === null);
+}
+
+// ================================================================
+section('20. feed boundary rejects unknown, invalid, stale, and out-of-order data');
+{
+  const clock = new ManualClock(100_000);
+  const engine = new VolumeEngine(clock, TEST_CFG);
+  engine.setUniverse([symbolMeta('SAFEUSDT')]);
+  engine.start();
+
+  check('unknown symbol trade rejected', engine.onTrade({
+    symbol: 'UNKNOWNUSDT', price: 10, qty: 1, quoteQty: 10, isBuyerMaker: false, ts: 100_000,
+  }) === false);
+  check('non-finite trade rejected', engine.onTrade({
+    symbol: 'SAFEUSDT', price: Number.NaN, qty: 1, quoteQty: 10, isBuyerMaker: false, ts: 100_000,
+  }) === false);
+  check('stale trade rejected', engine.onTrade({
+    symbol: 'SAFEUSDT', price: 10, qty: 1, quoteQty: 10, isBuyerMaker: false, ts: 1,
+  }) === false);
+  check('valid trade accepted', engine.onTrade({
+    symbol: 'SAFEUSDT', price: 10, qty: 1, quoteQty: 10, isBuyerMaker: false, ts: 100_000,
+  }) === true);
+  check('out-of-order trade rejected', engine.onTrade({
+    symbol: 'SAFEUSDT', price: 10, qty: 1, quoteQty: 10, isBuyerMaker: false, ts: 99_999,
+  }) === false);
+  check('crossed book rejected', engine.onBook({
+    symbol: 'SAFEUSDT', bid: 10.1, ask: 10, bidQty: 5, askQty: 5, ts: 100_000,
+  }) === false);
+  check('non-positive depth rejected', engine.onBook({
+    symbol: 'SAFEUSDT', bid: 9.9, ask: 10, bidQty: 0, askQty: 5, ts: 100_000,
+  }) === false);
+  check('valid book accepted', engine.onBook({
+    symbol: 'SAFEUSDT', bid: 9.9, ask: 10, bidQty: 5, askQty: 5, ts: 100_000,
+  }) === true);
+  check('out-of-order book rejected', engine.onBook({
+    symbol: 'SAFEUSDT', bid: 9.9, ask: 10, bidQty: 5, askQty: 5, ts: 99_999,
+  }) === false);
+  check('only accepted trade reached rolling state', approx(engine.featureSnapshot('SAFEUSDT').windows['1s'].quoteVolume, 10));
+}
+
+// ================================================================
+section('21. universe reconciliation prunes stale symbol state');
+{
+  const clock = new ManualClock(200_000);
+  const engine = new VolumeEngine(clock, TEST_CFG);
+  engine.setUniverse([symbolMeta('OLDUSDT')]);
+  engine.start();
+  engine.onTrade({ symbol: 'OLDUSDT', price: 2, qty: 2, quoteQty: 4, isBuyerMaker: false, ts: 200_000 });
+  engine.onBook({ symbol: 'OLDUSDT', bid: 1.99, ask: 2.01, bidQty: 100, askQty: 100, ts: 200_000 });
+  check('old symbol initially observed', engine.featureSnapshot('OLDUSDT') !== null);
+  engine.setUniverse([symbolMeta('NEWUSDT')]);
+  check('removed symbol feature state pruned', engine.featureSnapshot('OLDUSDT') === null);
+  check('removed symbol no longer accepts input', engine.onTrade({
+    symbol: 'OLDUSDT', price: 2, qty: 2, quoteQty: 4, isBuyerMaker: false, ts: 200_000,
+  }) === false);
+  check('new universe is authoritative', engine.universe().length === 1 && engine.universe()[0].symbol === 'NEWUSDT');
+}
+
+// ================================================================
+section('22. lifecycle and proposal persistence are idempotent');
+{
+  const clock = new ManualClock(300_000);
+  const engine = new VolumeEngine(clock, TEST_CFG);
+  engine.setUniverse([symbolMeta('IDEMUSDT')]);
+  engine.start();
+  engine.start();
+  check('double start emits one engine_started event', engine.memSink.byKind('engine_started').length === 1);
+  engine.onTrade({ symbol: 'IDEMUSDT', price: 5, qty: 2, quoteQty: 10, isBuyerMaker: false, ts: 300_000 });
+  engine.onBook({ symbol: 'IDEMUSDT', bid: 4.99, ask: 5.01, bidQty: 100, askQty: 100, ts: 300_000 });
+  const feature = engine.featureSnapshot('IDEMUSDT');
+  const decision = {
+    symbol: 'IDEMUSDT',
+    ts: 300_000,
+    strategy: 'volume_spike',
+    kind: 'proposal',
+    rejectCode: null,
+    humanReason: 'same verified signal',
+    correlationId: 'same-correlation',
+    evidence: { direction: 'long', confidence: 0.8 },
+  };
+  engine.proposalStore.upsertFromDecision(decision, feature);
+  engine.proposalStore.upsertFromDecision(decision, feature);
+  check('identical proposal persisted exactly once', engine.memSink.byKind('proposal_created').length === 1 &&
+    engine.memSink.byKind('proposal_updated').length === 0);
+  engine.stop();
+  engine.stop();
+  check('double stop emits one engine_stopped event', engine.memSink.byKind('engine_stopped').length === 1);
+}
+
+// ================================================================
+section('23. runtime symbol policy applies immediately without cooldown debt');
+{
+  const clock = new ManualClock(400_000);
+  const engine = new VolumeEngine(clock, { ...TEST_CFG, heartbeatMs: 30_000 });
+  engine.setUniverse([symbolMeta('POLICYUSDT')]);
+  engine.setSymbolPolicy([], []);
+  engine.start();
+  engine.onTrade({ symbol: 'POLICYUSDT', price: 10, qty: 1, quoteQty: 10, isBuyerMaker: false, ts: 400_000 });
+  engine.onBook({ symbol: 'POLICYUSDT', bid: 9.99, ask: 10.01, bidQty: 100, askQty: 100, ts: 400_000 });
+  engine.tick();
+  clock.advance(2_000);
+  engine.tick();
+  check('blocked decision persisted once inside dedupe window',
+    engine.memSink.byKind('strategy_decision').filter((event) => event.rejectCode === 'symbol_blocked').length === 1);
+  check('policy rejection does not create cooldown', !engine.focusMgr.inCooldown('POLICYUSDT'));
+  engine.setSymbolPolicy(['POLICYUSDT'], []);
+  clock.advance(1_000);
+  engine.tick();
+  check('new allowlist takes effect on next tick', !engine.decisions(10).some((decision) =>
+    decision.ts === clock.now() && decision.rejectCode === 'symbol_blocked'));
+  check('symbol remains free of stale cooldown', engine.focusMgr.stateOf('POLICYUSDT') === 'IDLE');
+}
+
+// ================================================================
+section('24. external sink failures are contained');
+{
+  const clock = new ManualClock(500_000);
+  const engine = new VolumeEngine(clock, TEST_CFG, {
+    emit: () => Promise.reject(new Error('synthetic sink failure')),
+  });
+  engine.setUniverse([symbolMeta('SINKUSDT')]);
+  engine.start();
+  await Promise.resolve();
+  await Promise.resolve();
+  check('memory evidence remains available', engine.memSink.byKind('engine_started').length === 1);
+  check('async sink rejection recorded without escaping', engine.sinkFailures() >= 1);
+}
+
+// ================================================================
+section('25. live runtime start/stop generations are idempotent (zero network)');
+{
+  const config = {
+    killSwitch: true,
+    maxOrderNotionalUsd: 10,
+    minQuoteVolume24h: 3_000_000,
+    allowedSymbols: [],
+    blockedSymbols: [],
+  };
+  const runtime = new VolumeRuntime(
+    { logEvent: () => { throw new Error('synthetic ledger outage'); } },
+    () => config,
+    () => [],
+  );
+  await Promise.all([runtime.start(), runtime.start()]);
+  check('concurrent starts share one live generation', runtime.connectionStatus().running === true);
+  check('empty universe opens no sockets', runtime.connectionStatus().streamConnections === 0);
+  check('ledger outage is surfaced without stopping runtime', runtime.snapshot().status.ledgerFailures >= 1);
+  runtime.stop();
+  runtime.stop();
+  check('double stop leaves runtime stopped', runtime.connectionStatus().running === false);
+  await runtime.start();
+  check('restart creates a fresh live generation', runtime.connectionStatus().running === true);
+  runtime.stop();
+  check('final stop is clean', runtime.snapshot().status.running === false);
+}
+
+// ================================================================
+section('26. hostile config values are normalized to bounded invariants');
+{
+  const cfg = volumeConfig({
+    maxRawTrades: Number.POSITIVE_INFINITY,
+    focusSoftCap: 50_000,
+    focusHardCap: 50_000,
+    tickMs: -1,
+    baselineWindowMinutes: 1_000_000,
+    baselineMinSamples: 1_000_000,
+    onePrintDominanceRatio: 9,
+  });
+  check('non-finite override falls back to default', cfg.maxRawTrades === 512);
+  check('focus capacity hard bounded', cfg.focusSoftCap === 100 && cfg.focusHardCap === 100);
+  check('tick interval has safe floor', cfg.tickMs === 100);
+  check('baseline history is bounded and internally consistent',
+    cfg.baselineWindowMinutes === 1_440 && cfg.baselineMinSamples === 1_440);
+  check('ratio threshold clamped', cfg.onePrintDominanceRatio === 1);
+}
+
+// ================================================================
+section('27. proposal history has a hard retention cap');
+{
+  const clock = new ManualClock(600_000);
+  const engine = new VolumeEngine(clock, TEST_CFG);
+  engine.setUniverse([symbolMeta('CAPUSDT')]);
+  engine.start();
+  engine.onTrade({ symbol: 'CAPUSDT', price: 5, qty: 2, quoteQty: 10, isBuyerMaker: false, ts: 600_000 });
+  engine.onBook({ symbol: 'CAPUSDT', bid: 4.99, ask: 5.01, bidQty: 100, askQty: 100, ts: 600_000 });
+  const feature = engine.featureSnapshot('CAPUSDT');
+  for (let index = 0; index < 2_005; index++) {
+    const symbol = `P${index}USDT`;
+    engine.proposalStore.upsertFromDecision({
+      symbol,
+      ts: clock.now(),
+      strategy: 'volume_spike',
+      kind: 'proposal',
+      rejectCode: null,
+      humanReason: 'retention proof',
+      correlationId: `retention-${index}`,
+      evidence: { direction: 'long', confidence: 0.5 },
+    }, { ...feature, symbol });
+  }
+  check('proposal map never exceeds cap', engine.proposalStore.all().length === 2_000);
+  check('capacity pruning is explicit in evidence', engine.memSink.byKind('proposal_expired').some((event) =>
+    event.payload.invalidatedBy === 'capacity_pruned'));
 }
 
 // ---------- summary ----------

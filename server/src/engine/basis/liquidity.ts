@@ -95,13 +95,14 @@ export function assessLiquidity(
 export function assessDataQuality(args: {
   spotStalenessMs: number | null;
   perpStalenessMs: number | null;
+  markStalenessMs: number | null;
   legSkewMs: number | null;
   perpBook: BookTicker | null;
   markPrice: number | null;
   ladderBacked: boolean;
   cfg: BasisConfig;
 }): DataQuality {
-  const { spotStalenessMs, perpStalenessMs, legSkewMs, perpBook, markPrice, ladderBacked, cfg } = args;
+  const { spotStalenessMs, perpStalenessMs, markStalenessMs, legSkewMs, perpBook, markPrice, ladderBacked, cfg } = args;
   const suspectReasons: string[] = [];
 
   // each component maps to 0..1 (1 = pristine)
@@ -114,6 +115,11 @@ export function assessDataQuality(args: {
   };
   const spotFresh = staleComponent(spotStalenessMs);
   const perpFresh = staleComponent(perpStalenessMs);
+  const markFresh = markStalenessMs === null
+    ? 0
+    : clamp(1 - markStalenessMs / cfg.fundingStaleMs, 0, 1);
+  if (markStalenessMs === null) suspectReasons.push('funding_never_seen');
+  else if (markStalenessMs > cfg.fundingStaleMs) suspectReasons.push('funding_stale');
 
   let skewComponent = 1;
   if (legSkewMs === null) {
@@ -138,7 +144,7 @@ export function assessDataQuality(args: {
 
   // freshness is the backbone; skew/divergence/ladder modulate it
   const score = clamp(
-    Math.min(spotFresh, perpFresh) * (0.5 + 0.5 * skewComponent) * (0.6 + 0.4 * divergenceComponent) * ladderComponent,
+    Math.min(spotFresh, perpFresh, markFresh) * (0.5 + 0.5 * skewComponent) * (0.6 + 0.4 * divergenceComponent) * ladderComponent,
     0,
     1,
   );
@@ -147,6 +153,7 @@ export function assessDataQuality(args: {
     score,
     spotStalenessMs,
     perpStalenessMs,
+    markStalenessMs,
     legSkewMs,
     markDivergenceBps: divergence,
     suspectReasons,

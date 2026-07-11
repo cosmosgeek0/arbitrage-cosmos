@@ -1,4 +1,6 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
+import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 
 export type NewsContextChannel = 'primary' | 'venue' | 'protocol' | 'issuer' | 'tree' | 'rss' | 'lookonchain';
@@ -47,6 +49,9 @@ const TREE_HISTORY_URL = 'https://news.treeofalpha.com/api/news?limit=5000';
 const LOOKONCHAIN_URL = 'https://www.lookonchain.com/ashx/index.ashx?type=1&page=1&pageSize=24';
 const CACHE_MS = 5_000;
 const FETCH_TIMEOUT_MS = 8_000;
+const NEWS_BODY_LIMIT_BYTES = 8 * 1024 * 1024;
+const FETCH_FAILURE_TTL_MS = 15_000;
+const MAX_FETCH_STATE_ENTRIES = 1_024;
 const TREE_MIN_FETCH_MS = 15_000;
 const TREE_HISTORY_FETCH_MS = 10 * 60_000;
 const LOOKONCHAIN_MIN_FETCH_MS = 15_000;
@@ -278,11 +283,11 @@ const PRIMARY_SOURCES: OfficialSourceConfig[] = [
     key: 'safe',
     label: 'SAFE',
     domain: 'safe.gov.cn',
-    url: 'http://www.safe.gov.cn/en/SAFENews/index.html',
+    url: 'https://www.safe.gov.cn/en/SAFENews/index.html',
     detail: 'Official SAFE English news and FX reserve/statistics rows parsed carefully from the agency site.',
     pages: [
-      { url: 'http://www.safe.gov.cn/en/SAFENews/index.html', parser: 'safe-home' },
-      { url: 'http://www.safe.gov.cn/en/DataandStatistics/index.html', parser: 'safe-home' },
+      { url: 'https://www.safe.gov.cn/en/SAFENews/index.html', parser: 'safe-home' },
+      { url: 'https://www.safe.gov.cn/en/DataandStatistics/index.html', parser: 'safe-home' },
     ],
   },
 ];
@@ -849,6 +854,10 @@ const venueSourceCache = new Map<string, RssFetchResult & { fetchedAt: number }>
 const protocolSourceCache = new Map<string, RssFetchResult & { fetchedAt: number }>();
 const issuerSourceCache = new Map<string, RssFetchResult & { fetchedAt: number }>();
 let archivePersistedAt = 0;
+let archivePersistTail: Promise<void> = Promise.resolve();
+const bodyInFlight = new Map<string, Promise<string>>();
+const bodyFailures = new Map<string, { until: number; message: string }>();
+let configuredFetchHosts: Set<string> | null = null;
 
 function bootstrapNewsSources(): NewsContextSource[] {
   const configured = [
@@ -881,17 +890,36 @@ function bootstrapNewsSources(): NewsContextSource[] {
 
 function loadNewsArchive(): NewsContextItem[] {
   try {
+    if (statSync(NEWS_ARCHIVE_PATH).size > 16 * 1024 * 1024) return [];
     const parsed = JSON.parse(readFileSync(NEWS_ARCHIVE_PATH, 'utf8')) as unknown;
     if (!Array.isArray(parsed)) return [];
     return parsed
-      .filter((item): item is NewsContextItem => Boolean(item && typeof item === 'object' && typeof (item as NewsContextItem).id === 'string'))
+      .slice(0, NEWS_ARCHIVE_MAX_ITEMS)
+      .map(sanitizeStoredNewsItem)
+      .filter((item): item is NewsContextItem => Boolean(item))
       .filter(isUsefulNewsItem)
-      .map(refreshItemSignals)
       .sort(compareContextItems)
       .slice(0, NEWS_ARCHIVE_MAX_ITEMS);
   } catch {
     return [];
   }
+}
+
+function persistNewsArchive(snapshot: NewsContextItem[]): void {
+  const payload = JSON.stringify(snapshot.slice(0, NEWS_ARCHIVE_MAX_ITEMS));
+  archivePersistTail = archivePersistTail
+    .catch(() => undefined)
+    .then(async () => {
+      const temp = `${NEWS_ARCHIVE_PATH}.${process.pid}.${Date.now()}.tmp`;
+      try {
+        await mkdir(path.dirname(NEWS_ARCHIVE_PATH), { recursive: true });
+        await writeFile(temp, payload, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+        await rename(temp, NEWS_ARCHIVE_PATH);
+      } finally {
+        await unlink(temp).catch(() => undefined);
+      }
+    })
+    .catch(() => undefined);
 }
 
 function commitNewsArchive(currentItems: NewsContextItem[]): NewsContextItem[] {
@@ -912,12 +940,7 @@ function commitNewsArchive(currentItems: NewsContextItem[]): NewsContextItem[] {
 
   if (Date.now() - archivePersistedAt >= 60_000) {
     archivePersistedAt = Date.now();
-    try {
-      mkdirSync(path.dirname(NEWS_ARCHIVE_PATH), { recursive: true });
-      writeFileSync(NEWS_ARCHIVE_PATH, JSON.stringify(archive));
-    } catch {
-      // Persistence is best effort; the in-memory archive remains authoritative.
-    }
+    persistNewsArchive(archive);
   }
 
   const undated = currentItems.filter((item) => item.ts === null);
@@ -926,7 +949,7 @@ function commitNewsArchive(currentItems: NewsContextItem[]): NewsContextItem[] {
 
 export async function getNewsContext(force = false): Promise<NewsContextPayload> {
   if (cache) {
-    if (force || Date.now() - cache.fetchedAt >= CACHE_MS) void startRefresh();
+    if (force || Date.now() - cache.fetchedAt >= CACHE_MS) void startRefresh().catch(() => undefined);
     return cache;
   }
   return startRefresh();
@@ -965,17 +988,24 @@ export function refreshNewsContextNow(): Promise<NewsContextPayload> {
 
 function startRefresh(): Promise<NewsContextPayload> {
   if (!inFlight) {
-    inFlight = refreshNewsContext()
+    const refresh = refreshNewsContext()
       .then((payload) => {
         cache = payload;
         subscribers.forEach((listener) => {
           try { listener(payload); } catch { /* stream disconnected */ }
         });
         return payload;
-      })
-      .finally(() => {
-        inFlight = null;
       });
+    inFlight = refresh;
+    // Attach a rejection handler immediately, before any detached caller can
+    // abandon the promise. Explicit callers still receive the original
+    // rejection, while the internal cleanup branch can never become an
+    // unhandled secondary rejection (the common `.finally()` footgun).
+    void refresh.catch(() => undefined);
+    void refresh.then(
+      () => { if (inFlight === refresh) inFlight = null; },
+      () => { if (inFlight === refresh) inFlight = null; },
+    );
   }
   return inFlight;
 }
@@ -1186,7 +1216,7 @@ async function fetchTree(): Promise<{ items: NewsContextItem[]; source: NewsCont
   try {
     const data = await fetchJson<unknown[]>(endpoint, { headers: { Accept: 'application/json' } });
     const fresh = Array.isArray(data)
-      ? data.map((row) => normalizeTree(row)).filter((row): row is NewsContextItem => Boolean(row)).filter(isUsefulNewsItem)
+      ? data.slice(0, 5_000).map((row) => normalizeTree(row)).filter((row): row is NewsContextItem => Boolean(row)).filter(isUsefulNewsItem)
       : [];
     const seen = new Set<string>();
     const items = [...fresh, ...(treeSourceCache?.items ?? [])]
@@ -1254,7 +1284,7 @@ async function fetchLookonchain(): Promise<{ items: NewsContextItem[]; source: N
     const data = parseLooseJson<{ success?: string; time?: string; content?: unknown[] }>(text);
     const sourceNow = parseLookonchainDate(String(data.time ?? '')) ?? Date.now();
     const items = data.success === 'Y' && Array.isArray(data.content)
-      ? data.content.map((row) => normalizeLookonchain(row, sourceNow)).filter((row): row is NewsContextItem => Boolean(row)).slice(0, 24)
+      ? data.content.slice(0, 24).map((row) => normalizeLookonchain(row, sourceNow)).filter((row): row is NewsContextItem => Boolean(row))
       : [];
     const result: RssFetchResult = {
       items,
@@ -1461,9 +1491,9 @@ function normalizeOfficialFeed(feed: OfficialFeedEndpoint): { url: string; label
 }
 
 function parseFeed(xml: string, feed: FeedConfig, channel: NewsContextChannel = 'rss'): NewsContextItem[] {
-  const rssItems = matchBlocks(xml, 'item');
-  const atomItems = rssItems.length ? [] : matchBlocks(xml, 'entry');
   const maxBlocks = feed.includeKeywords?.length ? 160 : channel === 'primary' || channel === 'venue' ? 120 : 100;
+  const rssItems = matchBlocks(xml, 'item', maxBlocks);
+  const atomItems = rssItems.length ? [] : matchBlocks(xml, 'entry', maxBlocks);
   const feedBuildTs = parseDateMillis(readTag(xml, 'lastBuildDate') ?? readTag(xml, 'updated') ?? '');
   const rows = (rssItems.length ? rssItems : atomItems)
     .slice(0, maxBlocks)
@@ -1835,6 +1865,7 @@ function parseBybitAnnouncementsPage(html: string, source: OfficialSourceConfig,
 function parseCoinbaseProductsJson(data: unknown, source: OfficialSourceConfig, endpoint: OfficialJsonEndpoint, channel: NewsContextChannel): NewsContextItem[] {
   if (!Array.isArray(data)) return [];
   return data
+    .slice(0, 5_000)
     .map((row) => {
       const product = row as Record<string, unknown>;
       const id = cleanText(String(product.id ?? product.display_name ?? ''));
@@ -2049,6 +2080,51 @@ function parseCryptoSlateNewsPage(html: string, feed: RssFeed): NewsContextItem[
   return items;
 }
 
+function boundedIdentifier(value: unknown): string {
+  const raw = String(value ?? '');
+  const text = cleanText(raw.slice(0, 4_096));
+  if (text.length <= 240) return text;
+  const digest = createHash('sha256').update(raw).digest('hex').slice(0, 24);
+  return `${text.slice(0, 210)}:${digest}`;
+}
+
+function safeExternalUrl(value: unknown, base?: string): string | null {
+  if (typeof value !== 'string' || value.length > 4_096) return null;
+  try {
+    const url = base ? new URL(value, base) : new URL(value);
+    if (url.protocol !== 'https:') return null;
+    url.username = '';
+    url.password = '';
+    return url.toString().slice(0, 2_048);
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeStoredNewsItem(value: unknown): NewsContextItem | null {
+  if (!value || typeof value !== 'object') return null;
+  const item = value as Partial<NewsContextItem>;
+  const channels = new Set<NewsContextChannel>(['primary', 'venue', 'protocol', 'issuer', 'tree', 'rss', 'lookonchain']);
+  const channel = channels.has(item.channel as NewsContextChannel) ? item.channel as NewsContextChannel : null;
+  const title = typeof item.title === 'string' ? item.title : '';
+  const sourceKey = typeof item.sourceKey === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(item.sourceKey)
+    ? item.sourceKey
+    : null;
+  if (!channel || !sourceKey || !title.trim() || typeof item.id !== 'string') return null;
+  return buildItem({
+    id: item.id,
+    title,
+    summary: typeof item.summary === 'string' ? item.summary : null,
+    url: typeof item.url === 'string' ? item.url : null,
+    source: typeof item.source === 'string' ? item.source : sourceKey,
+    sourceKey,
+    sourceDomain: typeof item.sourceDomain === 'string' ? item.sourceDomain : null,
+    channel,
+    ts: typeof item.ts === 'number' && Number.isFinite(item.ts) ? item.ts : null,
+    extraSymbols: Array.isArray(item.symbols) ? item.symbols.slice(0, 8).map(String) : [],
+  });
+}
+
 function buildItem(input: {
   id: string;
   title: string;
@@ -2062,25 +2138,32 @@ function buildItem(input: {
   extraSymbols?: string[];
 }): NewsContextItem {
   const ts = normalizeTimestamp(input.ts);
-  const text = `${input.title} ${input.summary ?? ''}`;
+  const title = cleanText(input.title).slice(0, 320);
+  const summary = input.summary ? cleanText(input.summary).slice(0, 260) : null;
+  const sourceKey = /^[a-z0-9][a-z0-9-]{0,63}$/.test(input.sourceKey) ? input.sourceKey : 'unknown';
+  const source = cleanText(input.source).slice(0, 100) || 'Unknown';
+  const domain = typeof input.sourceDomain === 'string' && /^(?:[a-z0-9-]+\.)*[a-z0-9-]{1,63}$/i.test(input.sourceDomain)
+    ? input.sourceDomain.toLowerCase().slice(0, 253)
+    : null;
+  const text = `${title} ${summary ?? ''}`;
   const tags = classifyTags(text);
-  const category = classifyNewsCategory({ sourceKey: input.sourceKey, channel: input.channel, title: input.title, tags });
+  const category = classifyNewsCategory({ sourceKey, channel: input.channel, title, tags });
   return {
-	    id: input.id,
-	    url: input.url,
-	    source: input.source,
-	    sourceKey: input.sourceKey,
-	    sourceDomain: input.sourceDomain,
-	    channel: input.channel,
+    id: boundedIdentifier(input.id),
+    url: safeExternalUrl(input.url),
+    source,
+    sourceKey,
+    sourceDomain: domain,
+    channel: input.channel,
     ts,
-    title: cleanText(input.title),
-    summary: input.summary ? cleanText(input.summary).slice(0, 260) : null,
+    title,
+    summary,
     timeLabel: ts ? ageLabel(ts) : 'Undated',
     symbols: extractSymbols(text, input.extraSymbols),
     tags,
     category,
     tone: toneForTags(tags),
-    impact: scoreNewsImpact({ sourceKey: input.sourceKey, channel: input.channel, title: input.title, tags }),
+    impact: scoreNewsImpact({ sourceKey, channel: input.channel, title, tags }),
   };
 }
 
@@ -2094,47 +2177,208 @@ function parseLooseJson<T>(text: string): T {
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetchWithRetry(url, init);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return (await res.json()) as T;
+  const parseKey = `parse:${validateFetchUrl(url).toString()}`;
+  const failure = bodyFailures.get(parseKey);
+  if (failure && failure.until > Date.now()) throw new Error(failure.message);
+  if (failure) bodyFailures.delete(parseKey);
+  const text = await fetchBodyWithRetry(url, init, 'json');
+  try {
+    const parsed = JSON.parse(text) as T;
+    bodyFailures.delete(parseKey);
+    return parsed;
+  } catch {
+    const message = 'Invalid upstream JSON';
+    boundedStateSet(bodyFailures, parseKey, { until: Date.now() + FETCH_FAILURE_TTL_MS, message });
+    throw new Error(message);
+  }
 }
 
 async function fetchText(url: string, init?: RequestInit): Promise<string> {
-  const res = await fetchWithRetry(url, init);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return await res.text();
+  const accept = new Headers(init?.headers).get('accept')?.toLowerCase() ?? '';
+  const expected = accept.includes('json') && !accept.includes('html') && !accept.includes('xml')
+    ? 'json'
+    : accept.includes('html')
+      ? 'html'
+      : 'xml';
+  return fetchBodyWithRetry(url, init, expected);
 }
 
-async function fetchWithRetry(url: string, init?: RequestInit): Promise<Response> {
-  let lastErr: unknown;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+type ExpectedBody = 'json' | 'html' | 'xml';
+
+function fetchHostAllowlist(): Set<string> {
+  if (configuredFetchHosts) return configuredFetchHosts;
+  const hosts = new Set<string>([
+    'www.ft.com',
+    'ft.com',
+    'feeds.feedburner.com',
+  ]);
+  const add = (value: string | undefined): void => {
+    if (!value) return;
     try {
-      return await fetchWithTimeout(url, init);
-    } catch (err) {
-      lastErr = err;
-      if (err instanceof Error && err.name === 'AbortError') break;
-      if (attempt === 2) break;
-      await sleep(350 * (attempt + 1));
-    }
+      const url = new URL(value);
+      if (url.protocol === 'https:') hosts.add(url.hostname.toLowerCase());
+    } catch { /* static configuration is validated when fetched */ }
+  };
+  add(TREE_URL);
+  add(TREE_HISTORY_URL);
+  add(LOOKONCHAIN_URL);
+  for (const source of [...PRIMARY_SOURCES, ...VENUE_SOURCES, ...PROTOCOL_SOURCES, ...ISSUER_SOURCES]) {
+    add(source.url);
+    for (const feed of source.feeds ?? []) add(normalizeOfficialFeed(feed).url);
+    for (const page of source.pages ?? []) add(page.url);
+    for (const json of source.jsons ?? []) add(json.url);
   }
-  throw lastErr;
+  for (const feed of RSS_FEEDS) {
+    add(feed.url);
+    add(feed.fallbackUrl);
+  }
+  configuredFetchHosts = hosts;
+  return hosts;
 }
 
-async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
+function validateFetchUrl(value: string, base?: URL): URL {
+  const url = base ? new URL(value, base) : new URL(value);
+  if (url.protocol !== 'https:' || url.username || url.password || !fetchHostAllowlist().has(url.hostname.toLowerCase())) {
+    throw new Error('Disallowed upstream redirect');
+  }
+  return url;
+}
+
+function boundedStateSet<V>(map: Map<string, V>, key: string, value: V): void {
+  if (!map.has(key) && map.size >= MAX_FETCH_STATE_ENTRIES) {
+    const oldest = map.keys().next().value;
+    if (oldest) map.delete(oldest);
+  }
+  map.set(key, value);
+}
+
+function acceptsContentType(contentType: string, expected: ExpectedBody): boolean {
+  const type = contentType.split(';', 1)[0].trim().toLowerCase();
+  if (expected === 'json') return type === 'application/json' || type === 'text/json' || type.endsWith('+json') || type === 'text/plain';
+  if (expected === 'html') return type === 'text/html' || type === 'application/xhtml+xml';
+  return type === 'application/rss+xml'
+    || type === 'application/atom+xml'
+    || type === 'application/xml'
+    || type === 'text/xml'
+    || type === 'text/plain';
+}
+
+async function readBoundedText(res: Response): Promise<string> {
+  const advertised = Number(res.headers.get('content-length'));
+  if (Number.isFinite(advertised) && advertised > NEWS_BODY_LIMIT_BYTES) {
+    await res.body?.cancel().catch(() => undefined);
+    throw new Error('Upstream response too large');
+  }
+  if (!res.body) return '';
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > NEWS_BODY_LIMIT_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        throw new Error('Upstream response too large');
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8');
+}
+
+async function fetchBodyOnce(urlValue: string, init: RequestInit | undefined, expected: ExpectedBody): Promise<string> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+  const onCallerAbort = (): void => ctrl.abort();
+  init?.signal?.addEventListener('abort', onCallerAbort, { once: true });
   try {
-    return await fetch(url, {
-      ...init,
-      headers: {
-        'User-Agent': USER_AGENT,
-        'Accept-Language': 'en-US,en;q=0.9',
-        ...(init?.headers ?? {}),
-      },
-      signal: ctrl.signal,
-    });
+    let current = validateFetchUrl(urlValue);
+    for (let redirects = 0; redirects <= 3; redirects += 1) {
+      const res = await fetch(current, {
+        ...init,
+        headers: {
+          'User-Agent': USER_AGENT,
+          'Accept-Language': 'en-US,en;q=0.9',
+          ...(init?.headers ?? {}),
+        },
+        redirect: 'manual',
+        signal: ctrl.signal,
+      });
+      if (res.status >= 300 && res.status < 400) {
+        const location = res.headers.get('location');
+        await res.body?.cancel().catch(() => undefined);
+        if (!location || redirects === 3) throw new Error('Disallowed upstream redirect');
+        current = validateFetchUrl(location, current);
+        continue;
+      }
+      if (!res.ok) {
+        await res.body?.cancel().catch(() => undefined);
+        throw new Error(`Upstream HTTP ${res.status}`);
+      }
+      if (!acceptsContentType(res.headers.get('content-type') ?? '', expected)) {
+        await res.body?.cancel().catch(() => undefined);
+        throw new Error('Unexpected upstream content type');
+      }
+      return await readBoundedText(res);
+    }
+    throw new Error('Disallowed upstream redirect');
+  } catch (err) {
+    if (ctrl.signal.aborted) throw new Error('Upstream timeout');
+    if (err instanceof Error && (/^Upstream HTTP \d{3}$/.test(err.message)
+      || err.message === 'Upstream response too large'
+      || err.message === 'Unexpected upstream content type'
+      || err.message === 'Disallowed upstream redirect')) throw err;
+    throw new Error('Upstream unavailable');
   } finally {
     clearTimeout(timer);
+    init?.signal?.removeEventListener('abort', onCallerAbort);
+  }
+}
+
+function retryableFetchError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : '';
+  if (message === 'Upstream timeout' || message === 'Upstream unavailable') return true;
+  const status = Number(message.match(/^Upstream HTTP (\d{3})$/)?.[1]);
+  return status === 408 || status === 429 || status >= 500;
+}
+
+async function fetchBodyWithRetry(urlValue: string, init: RequestInit | undefined, expected: ExpectedBody): Promise<string> {
+  const url = validateFetchUrl(urlValue);
+  const accept = new Headers(init?.headers).get('accept') ?? '';
+  const key = `${expected}:${url.toString()}:${accept.slice(0, 256)}`;
+  const failure = bodyFailures.get(key);
+  if (failure && failure.until > Date.now()) throw new Error(failure.message);
+  if (failure) bodyFailures.delete(key);
+  const existing = bodyInFlight.get(key);
+  if (existing) return existing;
+
+  const work = (async (): Promise<string> => {
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const body = await fetchBodyOnce(url.toString(), init, expected);
+        bodyFailures.delete(key);
+        return body;
+      } catch (err) {
+        lastErr = err;
+        if (!retryableFetchError(err) || attempt === 1) break;
+        await sleep(350 * (attempt + 1));
+      }
+    }
+    const message = errorMessage(lastErr);
+    boundedStateSet(bodyFailures, key, { until: Date.now() + FETCH_FAILURE_TTL_MS, message });
+    throw new Error(message);
+  })();
+  boundedStateSet(bodyInFlight, key, work);
+  try {
+    return await work;
+  } finally {
+    bodyInFlight.delete(key);
   }
 }
 
@@ -2167,7 +2411,14 @@ function rssDetail(feed: RssFeed): string {
 }
 
 function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+  const message = err instanceof Error ? err.message : '';
+  if (/^Upstream HTTP \d{3}$/.test(message)) return message;
+  if (message === 'Upstream timeout'
+    || message === 'Upstream response too large'
+    || message === 'Unexpected upstream content type'
+    || message === 'Disallowed upstream redirect'
+    || message === 'Invalid upstream JSON') return message;
+  return 'Upstream unavailable';
 }
 
 async function mapWithConcurrency<T, R>(
@@ -2309,15 +2560,7 @@ export function scoreNewsImpact(item: Pick<NewsContextItem, 'sourceKey' | 'chann
 }
 
 function refreshItemSignals(item: NewsContextItem): NewsContextItem {
-  const tags = classifyTags(`${item.title} ${item.summary ?? ''}`);
-  const signal = { sourceKey: item.sourceKey, channel: item.channel, title: item.title, tags };
-  return {
-    ...item,
-    tags,
-    category: classifyNewsCategory(signal),
-    tone: toneForTags(tags),
-    impact: scoreNewsImpact(signal),
-  };
+  return sanitizeStoredNewsItem(item) ?? item;
 }
 
 function extractSymbols(text: string, extra: string[] = []): string[] {
@@ -2335,8 +2578,12 @@ function extractSymbols(text: string, extra: string[] = []): string[] {
   return Array.from(found).filter((sym) => COMMON_SYMBOLS.has(sym) || sym.length >= 3).slice(0, 8);
 }
 
-function matchBlocks(xml: string, tag: string): string[] {
-  return Array.from(xml.matchAll(new RegExp(`<${tag}\\b[\\s\\S]*?<\\/${tag}>`, 'gi')), (m) => m[0]);
+function matchBlocks(xml: string, tag: string, limit = 160): string[] {
+  const out: string[] = [];
+  const pattern = new RegExp(`<${tag}\\b[\\s\\S]*?<\\/${tag}>`, 'gi');
+  let match: RegExpExecArray | null;
+  while (out.length < limit && (match = pattern.exec(xml))) out.push(match[0]);
+  return out;
 }
 
 function readTag(block: string, tag: string): string | null {
@@ -2407,13 +2654,8 @@ function secondsToMillis(value: unknown): number | null {
 }
 
 function absolutizeUrl(value: string | null, base: string): string {
-  const raw = cleanText(value ?? '');
-  if (!raw) return base;
-  try {
-    return new URL(raw, base).toString();
-  } catch {
-    return raw;
-  }
+  const raw = cleanText(value ?? '').slice(0, 4_096);
+  return safeExternalUrl(raw || base, base) ?? safeExternalUrl(base) ?? '';
 }
 
 function decodeXml(value: string): string {

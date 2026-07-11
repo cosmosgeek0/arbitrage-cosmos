@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../store';
 import { Dot, Empty, Pill, Seg } from '../components/px';
 import { PillSelect } from '../components/PillSelect';
@@ -6,6 +6,7 @@ import { TokenIcon } from '../components/TokenIcon';
 import { IconRefresh } from '../components/Icons';
 import { baseOf, fmtDateTime, fmtMoney, fmtPrice, fmtQty, timeAgo } from '../format';
 import type { OpenOrderRow } from '../types';
+import { fetchJson, apiErrorMessage } from '../lib/http';
 
 type OrdersTab = 'open' | 'history';
 type SideFilter = 'ALL' | 'BUY' | 'SELL';
@@ -68,6 +69,19 @@ function remainingQty(order: OpenOrderRow | HistOrder): number {
   return Math.max(0, num(order.origQty) - num(order.executedQty));
 }
 
+function cancelMessage(
+  result: { ok: boolean; outcome?: 'canceled' | 'not_canceled' | 'unknown'; reconciliationRequired?: boolean; error?: string },
+  confirmed: string,
+): { tone: MsgTone; text: string } {
+  if (result.ok && result.outcome === 'canceled' && !result.reconciliationRequired) {
+    return { tone: 'ok', text: confirmed };
+  }
+  if (result.outcome === 'unknown' || result.reconciliationRequired) {
+    return { tone: 'warn', text: result.error ?? 'Cancel outcome requires authoritative reconciliation.' };
+  }
+  return { tone: 'bad', text: result.error ?? 'Binance did not confirm the cancellation.' };
+}
+
 export function Orders() {
   const { state, cancelOrder, cancelAll, openLedger, openDetail } = useStore();
   const [tab, setTab] = useState<OrdersTab>('open');
@@ -80,6 +94,8 @@ export function Orders() {
   const [side, setSide] = useState<SideFilter>('ALL');
   const [status, setStatus] = useState('ALL');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [cancelBusy, setCancelBusy] = useState<string | null>(null);
+  const historyRequestRef = useRef<AbortController | null>(null);
 
   const openOrders = useMemo<AnyOrder[]>(() => (state?.openOrders ?? []).map((o) => ({ ...o, origin: 'open' })), [state?.openOrders]);
   const histOrders = useMemo<AnyOrder[]>(() => (hist ?? []).map((o) => ({ ...o, origin: 'history' })), [hist]);
@@ -120,24 +136,36 @@ export function Orders() {
   useEffect(() => {
     if (!selectedKey && currentOrders.length > 0) setSelectedKey(orderKey(currentOrders[0]));
   }, [currentOrders, selectedKey]);
+  useEffect(() => () => historyRequestRef.current?.abort(), []);
 
   const loadHistory = async () => {
     if (historyDisabledReason) return;
     setLoadingHist(true);
     setHistErr(null);
     setMsg(null);
+    historyRequestRef.current?.abort();
+    const controller = new AbortController();
+    historyRequestRef.current = controller;
+    const requestedSymbol = symbol;
     try {
-      const res = await fetch(`/api/orders/history?symbol=${symbol}`);
-      const d = (await res.json()) as { available: boolean; error?: string; orders: HistOrder[] };
+      const d = await fetchJson<{ available: boolean; error?: string; orders: HistOrder[] }>(
+        `/api/orders/history?symbol=${requestedSymbol}`,
+        { cache: 'no-store', signal: controller.signal },
+      );
+      if (controller.signal.aborted) return;
       if (!d.available) setHistErr(d.error ?? 'Binance history unavailable');
       setHist(d.orders ?? []);
       setTab('history');
       setSelectedKey(d.orders?.[0] ? orderKey({ ...d.orders[0], origin: 'history' }) : null);
-    } catch {
-      setHistErr('Network error while loading Binance order history');
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setHistErr(apiErrorMessage(error, 'Network error while loading Binance order history'));
       setHist([]);
     } finally {
-      setLoadingHist(false);
+      if (historyRequestRef.current === controller) {
+        historyRequestRef.current = null;
+        setLoadingHist(false);
+      }
     }
   };
 
@@ -203,7 +231,7 @@ export function Orders() {
       </div>
 
       {histErr && <div className="hp-alert" style={{ marginBottom: 12 }}>{histErr}</div>}
-      {msg && msg.tone === 'bad' && <div className="hp-alert" style={{ marginBottom: 12 }}>{msg.text}</div>}
+      {msg && <div className={msg.tone === 'bad' ? 'hp-alert' : 'hp-note'} role={msg.tone === 'bad' ? 'alert' : 'status'} style={{ marginBottom: 12 }}>{msg.text}</div>}
 
       <div className={`lg-grid exec-grid ${selected ? '' : 'solo'}`}>
         <section className="hp-group lg-feed" aria-label="Order blotter">
@@ -291,16 +319,25 @@ export function Orders() {
                             <button
                               className="hp-btn danger exec-cancel"
                               type="button"
-                              disabled={!keysPresent}
+                              disabled={!keysPresent || cancelBusy !== null}
                               title={keysPresent ? `Cancel ${o.symbol} order ${o.orderId}` : 'Cancel locked: server-side Binance keys are not configured'}
                               onClick={async (e) => {
                                 e.stopPropagation();
-                                if (!keysPresent) return;
-                                const res = await cancelOrder(o.symbol, o.orderId);
-                                setMsg(res.ok ? { tone: 'ok', text: `Cancel requested for ${o.symbol} order ${o.orderId}` } : { tone: 'bad', text: res.error ?? 'Cancel failed' });
+                                if (!keysPresent || cancelBusy !== null) return;
+                                const key = orderKey(o);
+                                setCancelBusy(key);
+                                setMsg(null);
+                                try {
+                                  const res = await cancelOrder(o.symbol, o.orderId);
+                                  setMsg(cancelMessage(res, `Cancel confirmed for ${o.symbol} order ${o.orderId}`));
+                                } catch (error) {
+                                  setMsg({ tone: 'bad', text: error instanceof Error ? error.message : 'Cancel request failed.' });
+                                } finally {
+                                  setCancelBusy(null);
+                                }
                               }}
                             >
-                              Cancel
+                              {cancelBusy === orderKey(o) ? 'Canceling…' : 'Cancel'}
                             </button>
                           </td>
                         )}
@@ -339,15 +376,23 @@ export function Orders() {
                   <button
                     className="hp-btn danger"
                     type="button"
-                    disabled={!keysPresent}
+                    disabled={!keysPresent || cancelBusy !== null}
                     title={keysPresent ? `Cancel all open ${selected.symbol} orders` : 'Cancel-all locked: server-side Binance keys are not configured'}
                     onClick={async () => {
-                      if (!keysPresent) return;
-                      const res = await cancelAll(selected.symbol);
-                      setMsg(res.ok ? { tone: 'ok', text: `Cancel-all requested for ${selected.symbol}` } : { tone: 'bad', text: res.error ?? 'Cancel-all failed' });
+                      if (!keysPresent || cancelBusy !== null) return;
+                      setCancelBusy(`all:${selected.symbol}`);
+                      setMsg(null);
+                      try {
+                        const res = await cancelAll(selected.symbol);
+                        setMsg(cancelMessage(res, `Cancel-all confirmed for ${selected.symbol}`));
+                      } catch (error) {
+                        setMsg({ tone: 'bad', text: error instanceof Error ? error.message : 'Cancel-all request failed.' });
+                      } finally {
+                        setCancelBusy(null);
+                      }
                     }}
                   >
-                    Cancel all {baseOf(selected.symbol)}
+                    {cancelBusy === `all:${selected.symbol}` ? 'Canceling…' : `Cancel all ${baseOf(selected.symbol)}`}
                   </button>
                 )}
               </div>

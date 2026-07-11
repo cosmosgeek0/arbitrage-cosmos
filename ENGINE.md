@@ -1,8 +1,13 @@
 # ENGINE.md — Arbitrage Capital Control Room Engine
 
-Status (2026-07-07): engine NOT started — Part 0 planning-only survey is the next step; cockpit/UI phase is complete.
+Status (2026-07-11): basis and volume engines are implemented, wired to real
+public Binance feeds, exposed through runtime snapshots, and covered by
+deterministic proof suites. Signed account synchronization, guarded manual
+order/cancel, and guarded loan mutation services also exist. Autonomous
+strategy-to-order execution remains intentionally prohibited. The current work
+is production hardening and verification, not the Part 0 survey below.
 
-Last updated: 2026-07-06  
+Last updated: 2026-07-11
 Permanent role of this file: engine/algorithm/brain blueprint for Fable, Opus, Claude Code, Codex, or any future agent.
 
 Read `DIRECTOR_RULEBOOK.md` and `BLUEPRINT.md` first. This file is only for the engine. The UI/cockpit exists to expose this engine’s state, not to replace it.
@@ -41,13 +46,16 @@ Reason: the existing architecture described `server/` as Node 22 + TypeScript, `
 
 Do not blindly create a Python engine because older context mentioned `engine/*.py`. That was an earlier blueprint. If Director/Fable believes a Python sidecar is still better, it must first write an Architecture Decision Record explaining why, how it communicates with the TS server, how it is supervised/deployed/tested, and how data/ledger consistency is maintained. Until that ADR is approved, TS-first.
 
-Preferred first implementation location if repo matches old structure:
+Current implementation and proof locations:
 
 - `server/src/engine/`
 - `server/src/services/risk.ts`
 - `server/src/ledger.ts`
 - `server/src/binance/`
-- `server/test/gates.mjs` plus focused new tests
+- `server/test/engine-basis.mjs` and `server/test/engine-volume.mjs`
+- focused security, financial-safety, storage, transport, loan, and lifecycle
+  regressions under `server/test/`
+- `server/test/gates.mjs` as the separate live public-market integration gate
 
 Never confuse `server/src/engine/marketData.ts` / `scanner.ts` legacy feed with the final engine. Keep or refactor carefully, but do not assume old scanner is enough.
 
@@ -651,9 +659,11 @@ If existing route style differs, adapt names but keep concepts.
 
 ---
 
-## 16. Build order
+## 16. Initial build order (implemented; retained as architecture history)
 
-Do not build the whole engine in one shot.
+This staged order explains how the engine was decomposed. It is not the current
+work queue; inspect the implementation and `PROJECT_MEMORY.md` before planning
+new work.
 
 ### Part 0 — Planning-only survey
 
@@ -721,19 +731,25 @@ Implement baseline/focus/proposal/reject logic. Tests for dead symbol waking, on
 
 Run synthetic loop. Do not require Binance in tests. Prove event → feature → decision → proposal/reject → ledger.
 
-### Part 13 — Account read-only
+### Part 13 — Account synchronization
 
-Load keys server-side if present. Read balances/orders/fills. User stream/poll fallback. No trading yet.
+Implemented with server-side credentials, signed REST reconciliation, a signed
+private WebSocket API subscription, fill/order/account truth, and explicit
+stale or partial states. Credentials never enter the browser.
 
-### Part 14 — Manual execution/testnet
+### Part 14 — Guarded manual execution boundary
 
-Only after account/risk/ledger proven. Testnet first. Manual approval only.
+Implemented as manual-only order/cancel and loan mutation services behind
+account, permission, control-mode, kill/live, risk, confirmation, and audit
+gates. Unknown outcomes fail closed for reconciliation. This does not authorize
+an autonomous strategy-to-order loop.
 
 ---
 
-## 17. First Fable prompt
+## 17. Historical initial planning prompt
 
-Use this exactly for first engine run:
+Retained only to explain the original planning phase. Do not use it as a current
+work order; the engine and its tests now exist.
 
 ```text
 You are in the Arbitrage Capital Control Room repo.

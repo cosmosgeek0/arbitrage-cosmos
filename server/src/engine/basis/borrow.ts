@@ -15,6 +15,7 @@ export function preflightBorrow(
   refPriceUsd: number | null,
   holdMs: number,
   cfg: BasisConfig,
+  nowTs?: number,
 ): BorrowVerdict {
   if (!needsBorrow) {
     return { status: 'not_needed', ok: true, rejectCode: null, human: 'no borrow needed', costPctOverHold: 0 };
@@ -30,6 +31,18 @@ export function preflightBorrow(
     };
   }
 
+  const observedAt = nowTs ?? Date.now();
+  const ageMs = observedAt - info.asOfTs;
+  if (!Number.isFinite(info.asOfTs) || ageMs < -cfg.maxFutureSkewMs || ageMs > cfg.borrowStaleMs) {
+    return {
+      status: 'unknown',
+      ok: false,
+      rejectCode: 'borrow_unknown',
+      human: `borrow state stale or invalid for ${info.asset}`,
+      costPctOverHold: 0,
+    };
+  }
+
   if (info.status === 'unavailable') {
     return {
       status: 'unavailable',
@@ -40,21 +53,37 @@ export function preflightBorrow(
     };
   }
 
-  // status === 'available' — check size and cost
-  if (info.maxBorrowableBase !== null && refPriceUsd !== null && refPriceUsd > 0) {
-    const neededBase = (intendedNotionalUsd / refPriceUsd) * cfg.borrowSafetyFactor;
-    if (info.maxBorrowableBase < neededBase) {
-      return {
-        status: 'available',
-        ok: false,
-        rejectCode: 'borrow_too_small',
-        human: `max borrowable ${info.maxBorrowableBase} ${info.asset} < needed ${neededBase.toFixed(8)} (incl. ${cfg.borrowSafetyFactor}× safety)`,
-        costPctOverHold: 0,
-      };
-    }
+  // status === 'available' — every quantity needed to prove executability is mandatory.
+  if (
+    info.maxBorrowableBase === null ||
+    !Number.isFinite(info.maxBorrowableBase) ||
+    info.maxBorrowableBase < 0 ||
+    refPriceUsd === null ||
+    !Number.isFinite(refPriceUsd) ||
+    refPriceUsd <= 0 ||
+    !Number.isFinite(intendedNotionalUsd) ||
+    intendedNotionalUsd <= 0
+  ) {
+    return {
+      status: 'unknown',
+      ok: false,
+      rejectCode: 'borrow_unknown',
+      human: `borrow capacity or reference price unknown for ${info.asset}`,
+      costPctOverHold: 0,
+    };
+  }
+  const neededBase = (intendedNotionalUsd / refPriceUsd) * cfg.borrowSafetyFactor;
+  if (info.maxBorrowableBase < neededBase) {
+    return {
+      status: 'available',
+      ok: false,
+      rejectCode: 'borrow_too_small',
+      human: `max borrowable ${info.maxBorrowableBase} ${info.asset} < needed ${neededBase.toFixed(8)} (incl. ${cfg.borrowSafetyFactor}× safety)`,
+      costPctOverHold: 0,
+    };
   }
 
-  if (info.hourlyRatePct === null) {
+  if (info.hourlyRatePct === null || !Number.isFinite(info.hourlyRatePct) || info.hourlyRatePct < 0) {
     return {
       status: 'unknown',
       ok: false,

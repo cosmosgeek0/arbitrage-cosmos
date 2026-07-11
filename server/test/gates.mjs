@@ -4,14 +4,80 @@
  * dir and NO Binance keys, then asserts the contract the spec demands.
  * Run: node server/test/gates.mjs   (after npm run build)
  */
-import { spawn, execSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, readdirSync, existsSync } from 'node:fs';
+import { execFileSync, spawn } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-const PORT = 8093;
-const BASE = `http://localhost:${PORT}`;
+const HOST = '127.0.0.1';
+const REQUEST_TIMEOUT_MS = 20_000;
 const results = [];
+
+async function availablePort() {
+  return new Promise((resolve, reject) => {
+    const probe = createServer();
+    probe.unref();
+    probe.once('error', reject);
+    probe.listen(0, HOST, () => {
+      const address = probe.address();
+      if (!address || typeof address === 'string') {
+        probe.close();
+        reject(new Error('could not reserve a test port'));
+        return;
+      }
+      probe.close((error) => {
+        if (error) reject(error);
+        else resolve(address.port);
+      });
+    });
+  });
+}
+
+function childFinished(child) {
+  return child.exitCode !== null || child.signalCode !== null;
+}
+
+function waitForExit(child, timeoutMs = 12_000) {
+  if (childFinished(child)) return Promise.resolve({ code: child.exitCode, signal: child.signalCode });
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      clearTimeout(timer);
+      child.off('close', onClose);
+    };
+    const onClose = (code, signal) => {
+      cleanup();
+      resolve({ code, signal });
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error('server did not exit in time'));
+    }, timeoutMs);
+    child.once('close', onClose);
+  });
+}
+
+async function stopChild(child) {
+  if (childFinished(child)) return waitForExit(child);
+  child.kill('SIGTERM');
+  try {
+    return await waitForExit(child);
+  } catch (error) {
+    if (!childFinished(child)) child.kill('SIGKILL');
+    await waitForExit(child, 3_000).catch(() => undefined);
+    throw error;
+  }
+}
+
+const PORT = await availablePort();
+const BASE = `http://${HOST}:${PORT}`;
+
+async function request(p, init = {}) {
+  return fetch(`${BASE}${p}`, {
+    ...init,
+    signal: init.signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+}
 
 function check(name, pass, detail = '') {
   results.push({ name, pass, detail });
@@ -19,12 +85,12 @@ function check(name, pass, detail = '') {
 }
 
 async function get(p) {
-  const res = await fetch(`${BASE}${p}`);
+  const res = await request(p);
   return { status: res.status, headers: res.headers, body: await res.json().catch(() => null) };
 }
 
 async function browserGet(p, deviceId = 'gate-primary-device-2026') {
-  const res = await fetch(`${BASE}${p}`, {
+  const res = await request(p, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/150.0.0.0 Safari/537.36',
       Cookie: `cosmos_device=${deviceId}`,
@@ -34,7 +100,7 @@ async function browserGet(p, deviceId = 'gate-primary-device-2026') {
 }
 
 async function post(p, body) {
-  const res = await fetch(`${BASE}${p}`, {
+  const res = await request(p, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -43,7 +109,7 @@ async function post(p, body) {
 }
 
 async function awsControl(p, { method = 'GET', body } = {}) {
-  const res = await fetch(`${BASE}${p}`, {
+  const res = await request(p, {
     method,
     headers: {
       'Content-Type': 'application/json',
@@ -60,20 +126,23 @@ console.log('\nStatic gates:');
 const gitignore = readFileSync('.gitignore', 'utf8');
 check('.env is gitignored', /^\.env$/m.test(gitignore));
 
-let staged = '';
+let envTracked = false;
 try {
-  staged = execSync('git status --porcelain', { encoding: 'utf8' });
+  execFileSync('git', ['ls-files', '--error-unmatch', '--', '.env'], { stdio: 'ignore' });
+  envTracked = true;
 } catch {
-  /* not a repo */
+  // `git ls-files --error-unmatch` exits non-zero when .env is not in the index.
 }
-check('.env is not staged/tracked', !staged.split('\n').some((l) => l.trim().endsWith('.env') && !l.includes('.env.example')));
+check('.env is not tracked', !envTracked);
 
 // The real danger is client code READING key material — not the env var
 // names appearing in setup-instruction copy. Flag env access patterns and
 // key-value-shaped literals in the shipped bundle.
 const distDir = 'web/dist/assets';
-let bundleClean = true;
-if (existsSync(distDir)) {
+const bundleExists = existsSync(distDir);
+check('frontend production bundle exists', bundleExists);
+let bundleClean = bundleExists;
+if (bundleExists) {
   for (const f of readdirSync(distDir)) {
     const txt = readFileSync(path.join(distDir, f), 'utf8');
     if (
@@ -131,16 +200,29 @@ const dataDir = mkdtempSync(path.join(tmpdir(), 'cosmos-gates-'));
 const child = spawn(process.execPath, ['server/dist/index.js'], {
   // SKIP_DOTENV keeps gates deterministic/keyless even when a real .env exists,
   // so the disconnected-state contract is what gets tested.
-  env: { PATH: process.env.PATH, PORT: String(PORT), DATA_DIR: dataDir, SKIP_DOTENV: '1' },
+  env: {
+    PATH: process.env.PATH,
+    PORT: String(PORT),
+    HOST,
+    DATA_DIR: dataDir,
+    PROFILE_CACHE: path.join(dataDir, 'profile-cache.json'),
+    ICON_CACHE: path.join(dataDir, 'icon-cache.json'),
+    LIQ_CACHE: path.join(dataDir, 'liquidations.json'),
+    SKIP_DOTENV: '1',
+  },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 let bootLog = '';
-child.stdout.on('data', (d) => (bootLog += d));
-child.stderr.on('data', (d) => (bootLog += d));
+let spawnError = null;
+child.on('error', (error) => { spawnError = error; });
+child.stdout.on('data', (d) => { bootLog = `${bootLog}${d}`.slice(-32_000); });
+child.stderr.on('data', (d) => { bootLog = `${bootLog}${d}`.slice(-32_000); });
 
+try {
 const deadline = Date.now() + 90_000;
 let booted = false;
 while (Date.now() < deadline) {
+  if (spawnError || childFinished(child)) break;
   try {
     const { body } = await get('/api/health');
     if (body?.ok) {
@@ -155,13 +237,13 @@ while (Date.now() < deadline) {
 console.log('\nRuntime gates:');
 check('app boots', booted, booted ? '' : bootLog.slice(-300));
 if (!booted) {
-  child.kill();
-  process.exit(1);
+  throw new Error(`app did not boot${spawnError ? `: ${spawnError.message}` : `: ${bootLog.slice(-500)}`}`);
 }
 
 // wait for a BTC price so notional estimation works
+const priceDeadline = Date.now() + 90_000;
 let priced = false;
-while (Date.now() < deadline) {
+while (Date.now() < priceDeadline) {
   const { body } = await get('/api/market/quote?symbol=BTCUSDT');
   if (body?.last) {
     priced = true;
@@ -169,7 +251,7 @@ while (Date.now() < deadline) {
   }
   await new Promise((r) => setTimeout(r, 1000));
 }
-check('market data flows (BTC price)', priced);
+check('market data flows (BTC price)', priced, priced ? '' : bootLog.slice(-1_000));
 
 const health = (await get('/api/health')).body;
 check('keys absent → keysPresent=false', health.keysPresent === false);
@@ -409,7 +491,7 @@ check('AWS runner blocks remote command while channel is closed', awsBlocked.sta
 const evSearch = (await get('/api/events?kind=manual_action&q=kill')).body;
 check('ledger search works', Array.isArray(evSearch));
 
-const secRes = await fetch(`${BASE}/api/health`);
+const secRes = await request('/api/health');
 check(
   'security headers set (CSP, nosniff, frame, referrer)',
   (secRes.headers.get('content-security-policy') ?? '').includes("frame-ancestors 'none'") &&
@@ -436,7 +518,7 @@ check(
     typeof basisRuntime?.thresholds?.watchGapPct === 'number'
 );
 
-const iconsRes = await fetch(`${BASE}/api/icons?bases=BTC,ETH,TLM,BREV`);
+const iconsRes = await request('/api/icons?bases=BTC,ETH,TLM,BREV');
 const iconsBody = await iconsRes.json().catch(() => null);
 check('icon manifest endpoint responds', iconsRes.status === 200 && iconsBody !== null && typeof iconsBody === 'object');
 check(
@@ -445,11 +527,16 @@ check(
     (secRes.headers.get('content-security-policy') ?? '').includes('coincap.io')
 );
 
-child.kill();
-
 const failed = results.filter((r) => !r.pass);
 console.log(`\n${results.length - failed.length}/${results.length} gates passed`);
 if (failed.length > 0) {
   console.log('FAILED:', failed.map((f) => f.name).join(', '));
-  process.exit(1);
+  process.exitCode = 1;
+}
+} finally {
+  await stopChild(child).catch((error) => {
+    console.error(`failed to stop gate server: ${error.message}`);
+    process.exitCode = 1;
+  });
+  rmSync(dataDir, { recursive: true, force: true });
 }

@@ -8,6 +8,7 @@
  * Tests exercise the mappers with fixture payloads.
  */
 import type { BookTicker, TradeTick } from '../v0/types.js';
+import { isCanonicalSymbol, positive } from './validation.js';
 
 // ---------- raw Binance payload shapes (spot, verified 2026-07) ----------
 
@@ -54,12 +55,25 @@ export interface RawMiniTicker {
 export function mapAggTrade(raw: RawAggTrade): { tick: TradeTick; printCount: number } {
   const price = Number(raw.p);
   const qty = Number(raw.q);
+  if (
+    raw.e !== 'aggTrade' ||
+    !isCanonicalSymbol(raw.s) ||
+    !positive(price) ||
+    !positive(qty) ||
+    !Number.isSafeInteger(raw.T) || raw.T < 0 ||
+    !Number.isSafeInteger(raw.f) || !Number.isSafeInteger(raw.l) || raw.f < 0 || raw.l < raw.f ||
+    typeof raw.m !== 'boolean'
+  ) {
+    throw new TypeError('invalid aggregate trade payload');
+  }
+  const quoteQty = price * qty;
+  if (!positive(quoteQty)) throw new TypeError('invalid aggregate trade notional');
   return {
     tick: {
       symbol: raw.s,
       price,
       qty,
-      quoteQty: price * qty,
+      quoteQty,
       isBuyerMaker: raw.m,
       ts: raw.T,
     },
@@ -68,7 +82,7 @@ export function mapAggTrade(raw: RawAggTrade): { tick: TradeTick; printCount: nu
 }
 
 export function mapBookTicker(raw: RawBookTicker, receivedTs: number): BookTicker {
-  return {
+  const mapped = {
     symbol: raw.s,
     bid: Number(raw.b),
     ask: Number(raw.a),
@@ -76,6 +90,18 @@ export function mapBookTicker(raw: RawBookTicker, receivedTs: number): BookTicke
     askQty: Number(raw.A),
     ts: receivedTs,
   };
+  if (
+    !isCanonicalSymbol(mapped.symbol) ||
+    !positive(mapped.bid) ||
+    !positive(mapped.ask) ||
+    mapped.bid >= mapped.ask ||
+    !positive(mapped.bidQty) ||
+    !positive(mapped.askQty) ||
+    !Number.isSafeInteger(mapped.ts) || mapped.ts < 0
+  ) {
+    throw new TypeError('invalid book ticker payload');
+  }
+  return mapped;
 }
 
 /**
@@ -87,10 +113,16 @@ export function mapBookTicker(raw: RawBookTicker, receivedTs: number): BookTicke
  * after candidate promotion).
  */
 export function miniTickerDelta(prev: RawMiniTicker, cur: RawMiniTicker): TradeTick | null {
+  if (
+    !isCanonicalSymbol(prev.s) ||
+    cur.s !== prev.s ||
+    !Number.isSafeInteger(prev.E) || !Number.isSafeInteger(cur.E) ||
+    cur.E <= prev.E
+  ) return null;
   const dq = Number(cur.q) - Number(prev.q);
-  if (!(dq > 0)) return null; // rolling window can shrink; never fabricate volume
+  if (!positive(dq)) return null; // rolling window can shrink; never fabricate volume
   const price = Number(cur.c);
-  if (!(price > 0)) return null;
+  if (!positive(price)) return null;
   return {
     symbol: cur.s,
     price,

@@ -38,9 +38,9 @@ export class LifecycleManager {
         enteredStateTs: this.clock.now(),
         cooldownUntilTs: null,
         lastDecision: null,
-        pinned: false,
+        pinned: this.pinnedSymbols.has(symbol),
       };
-      this.lifecycles.set(symbol, lc);
+      if (this.lifecycles.size < this.cfg.maxUniverseSize) this.lifecycles.set(symbol, lc);
     }
     return lc;
   }
@@ -61,6 +61,29 @@ export class LifecycleManager {
     return this.activeFocus.size;
   }
 
+  /** Remove live state for symbols no longer present in the current universe. */
+  retainSymbols(symbols: ReadonlySet<string>): void {
+    for (const symbol of [...this.activeFocus.keys()]) {
+      if (!symbols.has(symbol)) this.closeFocus(symbol, 'signal_expired');
+    }
+    for (const symbol of this.candidates.keys()) {
+      if (!symbols.has(symbol)) this.candidates.delete(symbol);
+    }
+    for (const symbol of this.lifecycles.keys()) {
+      if (!symbols.has(symbol)) this.lifecycles.delete(symbol);
+    }
+    for (const symbol of this.pinnedSymbols) {
+      if (!symbols.has(symbol)) this.pinnedSymbols.delete(symbol);
+    }
+  }
+
+  /** A config revision invalidates in-flight signal state but preserves valid pins. */
+  resetSignals(): void {
+    for (const symbol of [...this.activeFocus.keys()]) this.closeFocus(symbol, 'signal_expired');
+    this.candidates.clear();
+    this.lifecycles.clear();
+  }
+
   inCooldown(symbol: string): boolean {
     const lc = this.lifecycles.get(symbol);
     if (!lc || lc.cooldownUntilTs === null) return false;
@@ -68,6 +91,7 @@ export class LifecycleManager {
   }
 
   pin(symbol: string): void {
+    if (!this.pinnedSymbols.has(symbol) && this.pinnedSymbols.size >= this.cfg.maxUniverseSize) return;
     this.pinnedSymbols.add(symbol);
     this.get(symbol).pinned = true;
   }

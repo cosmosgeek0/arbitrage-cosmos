@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { useRefreshSignal } from '../lib/refresh';
+import { apiErrorMessage, fetchJson } from '../lib/http';
+import { createSettledPoll } from '../lib/polling';
 import { Empty, Pill, Seg } from '../components/px';
 import { TokenIcon } from '../components/TokenIcon';
 import { SparkArea } from '../components/Spark';
@@ -14,6 +16,11 @@ interface PnlData {
   realizedBySymbol: { symbol: string; usd: number }[];
   feesByAsset: { asset: string; amount: number }[];
   equitySnapshots: { ts: number; totalUsdt: number }[];
+  integrity: {
+    complete: boolean;
+    reasons: string[];
+    days: { day: string; complete: boolean; reasons: string[]; feeUsd: number; netUsd: number }[];
+  };
 }
 
 type Lens = 'realized' | 'equity' | 'costs';
@@ -85,22 +92,30 @@ export function Pnl() {
   const [fills, setFills] = useState<FillRow[]>([]);
   const [lens, setLens] = useState<Lens>('realized');
   const [refreshTick, setRefreshTick] = useState(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
   useRefreshSignal(() => setRefreshTick((n) => n + 1));
 
   useEffect(() => {
-    const load = () => {
-      void fetch('/api/pnl')
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => d && setData(d as PnlData))
-        .catch(() => undefined);
-      void fetch('/api/fills')
-        .then((r) => (r.ok ? r.json() : []))
-        .then((d) => setFills(d as FillRow[]))
-        .catch(() => undefined);
-    };
-    load();
-    const t = window.setInterval(load, Math.max(0.5, prefs.dataCadence?.account ?? 30) * 1000);
-    return () => window.clearInterval(t);
+    const poll = createSettledPoll<[
+      PromiseSettledResult<PnlData>,
+      PromiseSettledResult<FillRow[]>,
+    ]>({
+      intervalMs: Math.max(0.5, prefs.dataCadence?.account ?? 30) * 1_000,
+      request: (signal) => Promise.allSettled([
+        fetchJson<PnlData>('/api/pnl', { cache: 'no-store', signal }),
+        fetchJson<FillRow[]>('/api/fills', { cache: 'no-store', signal }),
+      ]) as Promise<[PromiseSettledResult<PnlData>, PromiseSettledResult<FillRow[]>]>,
+      onSuccess: ([pnlResult, fillsResult]) => {
+        const failures: string[] = [];
+        if (pnlResult.status === 'fulfilled') setData(pnlResult.value);
+        else failures.push(`PnL: ${apiErrorMessage(pnlResult.reason)}`);
+        if (fillsResult.status === 'fulfilled') setFills(fillsResult.value);
+        else failures.push(`Fills: ${apiErrorMessage(fillsResult.reason)}`);
+        setLoadError(failures.length ? failures.join(' · ') : null);
+      },
+    });
+    poll.start();
+    return poll.stop;
   }, [state?.recentFills.length, refreshTick, prefs.dataCadence?.account]);
 
   const days = data?.realizedByDay ?? [];
@@ -131,9 +146,9 @@ export function Pnl() {
           <span className="s">{state?.account ? 'server account state' : 'ledger fallback — account disconnected'}</span>
         </div>
         <div className="hp-stat">
-          <span className="k">Realized all-time</span>
+          <span className="k">{data?.integrity.complete === false ? 'Partial realized' : 'Realized all-time'}</span>
           <span className={`v ${signClass(totalRealized)}`}>{fmtPrice(totalRealized)}</span>
-          <span className="s">{days.length} PnL day{days.length === 1 ? '' : 's'} · {wins}W / {losses}L</span>
+          <span className="s" title={data?.integrity.reasons.join(' · ') || undefined}>{data?.integrity.complete === false ? 'Incomplete cost or fee basis' : `${days.length} PnL day${days.length === 1 ? '' : 's'} · ${wins}W / ${losses}L`}</span>
         </div>
         <div className="hp-stat">
           <span className="k">Equity change</span>
@@ -158,7 +173,9 @@ export function Pnl() {
           onChange={setLens}
         />
         <span className="pnl-lens-note">
-          {lens === 'realized'
+          {loadError
+            ? `Stale data · ${loadError}`
+            : lens === 'realized'
             ? 'avg-cost from ledgered fills'
             : lens === 'equity'
               ? 'account snapshots, not deposits-adjusted'

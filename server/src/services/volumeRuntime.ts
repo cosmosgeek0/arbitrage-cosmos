@@ -3,6 +3,8 @@ import { fetchAllBookTickers, fetchKlineCandles } from '../binance/rest.js';
 import { mapAggTrade, type RawAggTrade } from '../engine/volume/adapters.js';
 import { VolumeEngine } from '../engine/volume/engine.js';
 import { systemClock } from '../engine/v0/clock.js';
+import { MAX_ENGINE_SYMBOLS, finite, isCanonicalSymbol, positive } from '../engine/volume/validation.js';
+import type { EngineEvent } from '../engine/v0/types.js';
 import type { AppConfig } from '../types.js';
 import type { Ledger } from '../ledger.js';
 
@@ -24,30 +26,38 @@ function chunks<T>(rows: T[], size: number): T[][] {
   return out;
 }
 
-function finite(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
-}
-
 export class VolumeRuntime {
   private readonly engine: VolumeEngine;
   private streams: BinanceStream[] = [];
   private streamStatus = new Map<string, FeedStatus>();
   private eligibleSymbols: string[] = [];
+  private eligibleSymbolSet = new Set<string>();
   private symbolSetKey = '';
   private running = false;
+  private generation = 0;
+  private streamEpoch = 0;
+  private startPromise: Promise<void> | null = null;
   private tickTimer: NodeJS.Timeout | null = null;
   private bookTimer: NodeJS.Timeout | null = null;
   private universeTimer: NodeJS.Timeout | null = null;
-  private bookBusy = false;
-  private warmBusy = false;
+  private streamRetryTimer: NodeJS.Timeout | null = null;
+  private streamRetryMs = 1_000;
+  private bookBusyGeneration: number | null = null;
+  private warmingSymbols = new Map<string, number>();
   private seeded = new Set<string>();
   private baselineTotal = 0;
   private baselineCompleted = 0;
   private baselineFailed = 0;
+  private baselineFailures = new Set<string>();
   private lastBookTs: number | null = null;
   private lastTradeTs: number | null = null;
   private symbolLastTradeTs = new Map<string, number>();
+  private lastAggTradeId = new Map<string, number>();
   private tradeMessages = 0;
+  private configKey = '';
+  private persistedEventKeys = new Set<string>();
+  private persistedEventOrder: string[] = [];
+  private ledgerFailureCount = 0;
 
   constructor(
     private readonly ledger: Ledger,
@@ -55,34 +65,27 @@ export class VolumeRuntime {
     private readonly getUniverse: () => MarketUniverseRow[],
   ) {
     this.engine = new VolumeEngine(systemClock, undefined, {
-      emit: (event) => {
-        this.ledger.logEvent(event.kind, event.symbol, {
-          strategy: event.strategy,
-          correlationId: event.correlationId,
-          rejectCode: event.rejectCode,
-          message: event.message,
-          ...event.payload,
-        });
-      },
+      emit: (event) => this.persistEvent(event),
     });
   }
 
   async start(): Promise<void> {
-    if (this.running) return;
+    if (this.running) return this.startPromise ?? Promise.resolve();
+    const generation = ++this.generation;
     this.running = true;
     this.engine.start();
-    await this.refreshUniverse();
-    this.tickTimer = setInterval(() => {
-      this.engine.setKillSwitch(this.getConfig().killSwitch);
-      this.engine.tick();
-    }, this.engine.cfg.tickMs);
-    this.bookTimer = setInterval(() => void this.refreshBooks(), BOOK_REFRESH_MS);
-    this.universeTimer = setInterval(() => void this.refreshUniverse(), UNIVERSE_REFRESH_MS);
-    void this.refreshBooks();
+    const promise = this.startGeneration(generation);
+    this.startPromise = promise;
+    await promise;
+    if (this.startPromise === promise) this.startPromise = null;
   }
 
   stop(): void {
+    if (!this.running && !this.startPromise && !this.engine.isRunning()) return;
+    ++this.generation;
+    ++this.streamEpoch;
     this.running = false;
+    this.startPromise = null;
     for (const stream of this.streams) stream.stop();
     this.streams = [];
     // A subsequent start() must rebuild sockets even when the eligible symbol
@@ -91,13 +94,63 @@ export class VolumeRuntime {
     this.streamStatus.clear();
     this.symbolSetKey = '';
     this.eligibleSymbols = [];
+    this.eligibleSymbolSet.clear();
     if (this.tickTimer) clearInterval(this.tickTimer);
     if (this.bookTimer) clearInterval(this.bookTimer);
     if (this.universeTimer) clearInterval(this.universeTimer);
+    if (this.streamRetryTimer) clearTimeout(this.streamRetryTimer);
     this.tickTimer = null;
     this.bookTimer = null;
     this.universeTimer = null;
+    this.streamRetryTimer = null;
+    this.streamRetryMs = 1_000;
+    this.bookBusyGeneration = null;
+    this.warmingSymbols.clear();
     this.engine.stop();
+  }
+
+  private async startGeneration(generation: number): Promise<void> {
+    try {
+      this.configKey = this.applyDynamicConfig();
+      await this.refreshUniverse(generation);
+      if (!this.isActive(generation)) return;
+      this.tickTimer = setInterval(() => this.onTick(generation), this.engine.cfg.tickMs);
+      this.bookTimer = setInterval(
+        () => this.launch('book refresh', generation, () => this.refreshBooks(generation)),
+        BOOK_REFRESH_MS,
+      );
+      this.universeTimer = setInterval(
+        () => this.launch('universe refresh', generation, () => this.refreshUniverse(generation)),
+        UNIVERSE_REFRESH_MS,
+      );
+      this.launch('initial book refresh', generation, () => this.refreshBooks(generation));
+    } catch (error) {
+      this.safeLog('error_event', null, {
+        source: 'volume-runtime.start',
+        message: error instanceof Error ? error.message : String(error),
+      });
+      if (this.isActive(generation)) {
+        this.stop();
+      }
+    }
+  }
+
+  private onTick(generation: number): void {
+    if (!this.isActive(generation)) return;
+    try {
+      const previousKey = this.configKey;
+      const nextKey = this.applyDynamicConfig();
+      this.configKey = nextKey;
+      if (nextKey !== previousKey) {
+        this.launch('config universe refresh', generation, () => this.refreshUniverse(generation));
+      }
+      this.engine.tick();
+    } catch (error) {
+      this.safeLog('error_event', null, {
+        source: 'volume-runtime.tick',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   connectionStatus(): {
@@ -129,11 +182,26 @@ export class VolumeRuntime {
     };
   }
 
-  private async refreshUniverse(): Promise<void> {
-    const sourceRows = this.getUniverse().filter((row) => row.hasSpot);
+  private async refreshUniverse(generation: number): Promise<void> {
+    if (!this.isActive(generation)) return;
+    const config = this.readConfig();
+    const threshold = config && positive(config.minQuoteVolume24h)
+      ? config.minQuoteVolume24h
+      : this.engine.cfg.minQuoteVolume24hUsd;
+    const sourceRows: MarketUniverseRow[] = [];
+    const seen = new Set<string>();
+    let examined = 0;
+    for (const row of this.getUniverse()) {
+      if (++examined > MAX_ENGINE_SYMBOLS * 2) break;
+      if (sourceRows.length >= MAX_ENGINE_SYMBOLS) break;
+      if (!row.hasSpot || !isCanonicalSymbol(row.symbol) || seen.has(row.symbol)) continue;
+      if (typeof row.base !== 'string' || row.base.length === 0 || row.base.length > 24) continue;
+      seen.add(row.symbol);
+      sourceRows.push(row);
+    }
     const metas = sourceRows.map((row) => {
-      const quoteVolume = finite(row.quoteVolume24h) ? row.quoteVolume24h : null;
-      const eligible = quoteVolume !== null && quoteVolume >= this.engine.cfg.minQuoteVolume24hUsd;
+      const quoteVolume = finite(row.quoteVolume24h) && row.quoteVolume24h >= 0 ? row.quoteVolume24h : null;
+      const eligible = quoteVolume !== null && quoteVolume >= threshold;
       return {
         symbol: row.symbol,
         base: row.base,
@@ -153,106 +221,197 @@ export class VolumeRuntime {
             : 'below volume universe floor',
       };
     });
+    if (!this.isActive(generation)) return;
     this.engine.setUniverse(metas);
 
     const nextSymbols = metas.filter((meta) => meta.eligible).map((meta) => meta.symbol).sort();
     const nextKey = nextSymbols.join(',');
     this.eligibleSymbols = nextSymbols;
+    this.eligibleSymbolSet = new Set(nextSymbols);
+    for (const symbol of this.seeded) if (!this.eligibleSymbolSet.has(symbol)) this.seeded.delete(symbol);
+    for (const symbol of this.symbolLastTradeTs.keys()) {
+      if (!this.eligibleSymbolSet.has(symbol)) this.symbolLastTradeTs.delete(symbol);
+    }
+    for (const symbol of this.lastAggTradeId.keys()) {
+      if (!this.eligibleSymbolSet.has(symbol)) this.lastAggTradeId.delete(symbol);
+    }
+    for (const symbol of this.warmingSymbols.keys()) {
+      if (!this.eligibleSymbolSet.has(symbol)) this.warmingSymbols.delete(symbol);
+    }
+    for (const symbol of this.baselineFailures) {
+      if (!this.eligibleSymbolSet.has(symbol)) this.baselineFailures.delete(symbol);
+    }
     this.baselineTotal = nextSymbols.length;
     this.baselineCompleted = nextSymbols.filter((symbol) => this.seeded.has(symbol)).length;
+    this.baselineFailed = this.baselineFailures.size;
     if (nextKey !== this.symbolSetKey) {
-      this.symbolSetKey = nextKey;
-      this.restartTradeStreams(nextSymbols);
+      try {
+        this.restartTradeStreams(nextSymbols, generation);
+        this.symbolSetKey = nextKey;
+        this.clearStreamRetry();
+      } catch (error) {
+        this.scheduleStreamRetry(nextSymbols, nextKey, generation);
+        throw error;
+      }
     }
-    void this.warmBaselines(nextSymbols.filter((symbol) => !this.seeded.has(symbol)));
+    this.launch(
+      'baseline warmup',
+      generation,
+      () => this.warmBaselines(nextSymbols.filter((symbol) => !this.seeded.has(symbol)), generation),
+    );
   }
 
-  private restartTradeStreams(symbols: string[]): void {
+  private restartTradeStreams(symbols: string[], generation: number): void {
+    if (!this.isActive(generation)) return;
+    const streamEpoch = ++this.streamEpoch;
     for (const stream of this.streams) stream.stop();
     this.streams = [];
     this.streamStatus.clear();
+    const nextStreams: BinanceStream[] = [];
     for (const [index, group] of chunks(symbols, STREAM_CHUNK).entries()) {
       if (!group.length) continue;
       const names = group.map((symbol) => symbol.toLowerCase() + '@aggTrade').join('/');
       const stream = new BinanceStream(
         'volume-aggtrade-' + String(index + 1),
         'wss://stream.binance.com:9443/stream?streams=' + names,
-        (data) => this.onTradeMessage(data),
-        (name, status) => this.onStreamStatus(name, status),
+        (data) => this.onTradeMessage(data, generation, streamEpoch),
+        (name, status) => this.onStreamStatus(name, status, generation, streamEpoch),
       );
-      this.streams.push(stream);
-      stream.start();
+      nextStreams.push(stream);
+    }
+    try {
+      for (const stream of nextStreams) stream.start();
+      this.streams = nextStreams;
+    } catch (error) {
+      for (const stream of nextStreams) stream.stop();
+      this.streamStatus.clear();
+      throw error;
     }
   }
 
-  private onTradeMessage(data: unknown): void {
+  private scheduleStreamRetry(symbols: string[], key: string, generation: number): void {
+    if (!this.isActive(generation)) return;
+    if (this.streamRetryTimer) clearTimeout(this.streamRetryTimer);
+    this.streamRetryTimer = null;
+    const delay = this.streamRetryMs;
+    this.streamRetryMs = Math.min(this.streamRetryMs * 2, 30_000);
+    this.streamRetryTimer = setTimeout(() => {
+      this.streamRetryTimer = null;
+      if (!this.isActive(generation) || key !== this.eligibleSymbols.join(',')) return;
+      try {
+        this.restartTradeStreams(symbols, generation);
+        this.symbolSetKey = key;
+        this.clearStreamRetry();
+      } catch (error) {
+        this.safeLog('error_event', null, {
+          source: 'volume-runtime.stream-retry',
+          message: error instanceof Error ? error.message : String(error),
+        });
+        this.scheduleStreamRetry(symbols, key, generation);
+      }
+    }, delay);
+  }
+
+  private clearStreamRetry(): void {
+    if (this.streamRetryTimer) clearTimeout(this.streamRetryTimer);
+    this.streamRetryTimer = null;
+    this.streamRetryMs = 1_000;
+  }
+
+  private onTradeMessage(data: unknown, generation: number, streamEpoch: number): void {
+    if (!this.isActive(generation) || streamEpoch !== this.streamEpoch) return;
     const raw = data && typeof data === 'object' && 'data' in data
       ? (data as { data: unknown }).data
       : data;
     if (!raw || typeof raw !== 'object' || (raw as { e?: string }).e !== 'aggTrade') return;
-    const mapped = mapAggTrade(raw as RawAggTrade);
-    this.engine.onTrade(mapped.tick, mapped.printCount);
+    const candidate = raw as Partial<RawAggTrade>;
+    if (!isCanonicalSymbol(candidate.s) || !this.eligibleSymbolSet.has(candidate.s)) return;
+    if (!Number.isSafeInteger(candidate.a) || (candidate.a as number) < 0) return;
+    const previousId = this.lastAggTradeId.get(candidate.s);
+    if (previousId !== undefined && (candidate.a as number) <= previousId) return;
+    let mapped: ReturnType<typeof mapAggTrade>;
+    try {
+      mapped = mapAggTrade(raw as RawAggTrade);
+    } catch {
+      return;
+    }
+    if (!this.engine.onTrade(mapped.tick, mapped.printCount)) return;
+    this.lastAggTradeId.set(mapped.tick.symbol, candidate.a as number);
     this.lastTradeTs = mapped.tick.ts;
     this.symbolLastTradeTs.set(mapped.tick.symbol, mapped.tick.ts);
     this.tradeMessages += 1;
   }
 
-  private onStreamStatus(name: string, status: FeedStatus): void {
+  private onStreamStatus(name: string, status: FeedStatus, generation: number, streamEpoch: number): void {
+    if (!this.isActive(generation) || streamEpoch !== this.streamEpoch) return;
     const previous = this.streamStatus.get(name);
     this.streamStatus.set(name, status);
     if (previous === status || status === 'connecting') return;
-    this.ledger.logEvent(status === 'open' ? 'ws.open' : 'ws.closed', null, {
+    this.safeLog(status === 'open' ? 'ws.open' : 'ws.closed', null, {
       feed: name,
       source: 'volume-runtime',
     });
   }
 
-  private async refreshBooks(): Promise<void> {
-    if (this.bookBusy || !this.eligibleSymbols.length) return;
-    this.bookBusy = true;
+  private async refreshBooks(generation: number): Promise<void> {
+    if (!this.isActive(generation) || this.bookBusyGeneration === generation) return;
+    this.bookBusyGeneration = generation;
     try {
+      if (!this.eligibleSymbols.length) {
+        await this.refreshUniverse(generation);
+        if (!this.isActive(generation) || !this.eligibleSymbols.length) return;
+      }
       const books = await fetchAllBookTickers('spot');
+      if (!this.isActive(generation)) return;
       const receivedTs = Date.now();
+      let accepted = 0;
       for (const symbol of this.eligibleSymbols) {
         const book = books.get(symbol);
         if (!book) continue;
-        this.engine.onBook({
+        if (this.engine.onBook({
           symbol,
           bid: book.bidPrice,
           ask: book.askPrice,
           bidQty: book.bidQty,
           askQty: book.askQty,
           ts: receivedTs,
-        });
+        })) accepted += 1;
       }
-      this.lastBookTs = receivedTs;
+      if (accepted > 0) this.lastBookTs = receivedTs;
     } catch (error) {
-      this.ledger.logEvent('error_event', null, {
+      this.safeLog('error_event', null, {
         source: 'volume-runtime.book',
         message: error instanceof Error ? error.message : String(error),
       });
     } finally {
-      this.bookBusy = false;
+      if (this.bookBusyGeneration === generation) this.bookBusyGeneration = null;
     }
   }
 
-  private async warmBaselines(symbols: string[]): Promise<void> {
-    if (this.warmBusy || !symbols.length) return;
-    this.warmBusy = true;
-    this.baselineFailed = 0;
+  private async warmBaselines(symbols: string[], generation: number): Promise<void> {
+    if (!this.isActive(generation) || !symbols.length) return;
+    const pending = [...new Set(symbols)].filter((symbol) => (
+      this.eligibleSymbolSet.has(symbol) &&
+      !this.seeded.has(symbol) &&
+      this.warmingSymbols.get(symbol) !== generation
+    ));
+    if (!pending.length) return;
+    for (const symbol of pending) this.warmingSymbols.set(symbol, generation);
     let cursor = 0;
-    const workers = Array.from({ length: Math.min(6, symbols.length) }, async () => {
+    const workers = Array.from({ length: Math.min(6, pending.length) }, async () => {
       for (;;) {
         const index = cursor++;
-        if (index >= symbols.length) return;
-        const symbol = symbols[index];
+        if (index >= pending.length) return;
+        const symbol = pending[index];
         try {
           const currentMinute = Math.floor(Date.now() / 60_000) * 60_000;
           const candles = (await fetchKlineCandles(symbol, '1m', 61, 'spot'))
             .filter((candle) => candle.t < currentMinute)
             .slice(-60);
+          if (!this.isActive(generation) || !this.eligibleSymbolSet.has(symbol)) continue;
+          let accepted = 0;
           for (const candle of candles) {
-            this.engine.seedMinute(symbol, {
+            if (this.engine.seedMinute(symbol, {
               startMs: candle.t,
               quoteVolume: candle.qv,
               tradeCount: candle.trades,
@@ -261,17 +420,124 @@ export class VolumeRuntime {
               close: candle.c,
               high: candle.h,
               low: candle.l,
-            });
+            })) accepted += 1;
           }
-          if (candles.length >= this.engine.cfg.baselineMinSamples) this.seeded.add(symbol);
+          if (accepted >= this.engine.cfg.baselineMinSamples) {
+            this.seeded.add(symbol);
+            this.baselineFailures.delete(symbol);
+          } else {
+            this.baselineFailures.add(symbol);
+          }
         } catch {
-          this.baselineFailed += 1;
+          if (this.isActive(generation)) this.baselineFailures.add(symbol);
+        } finally {
+          if (this.warmingSymbols.get(symbol) === generation) this.warmingSymbols.delete(symbol);
         }
-        this.baselineCompleted = this.eligibleSymbols.filter((item) => this.seeded.has(item)).length;
+        if (this.isActive(generation)) {
+          this.baselineCompleted = this.eligibleSymbols.filter((item) => this.seeded.has(item)).length;
+          this.baselineFailed = this.baselineFailures.size;
+        }
       }
     });
     await Promise.all(workers);
-    this.warmBusy = false;
+  }
+
+  private isActive(generation: number): boolean {
+    return this.running && this.generation === generation;
+  }
+
+  private launch(label: string, generation: number, task: () => Promise<void>): void {
+    if (!this.isActive(generation)) return;
+    void Promise.resolve()
+      .then(task)
+      .catch((error) => {
+        if (!this.isActive(generation)) return;
+        this.safeLog('error_event', null, {
+          source: 'volume-runtime.background',
+          task: label,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      });
+  }
+
+  private readConfig(): AppConfig | null {
+    try {
+      const config = this.getConfig();
+      return config && typeof config === 'object' ? config : null;
+    } catch (error) {
+      this.safeLog('error_event', null, {
+        source: 'volume-runtime.config',
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
+  /** Apply mutable operator controls on every engine tick, fail closed. */
+  private applyDynamicConfig(): string {
+    const config = this.readConfig();
+    if (!config) {
+      this.engine.setKillSwitch(true);
+      this.engine.setSymbolPolicy([], []);
+      return 'invalid';
+    }
+
+    const allowed = Array.isArray(config.allowedSymbols)
+      ? [...new Set(config.allowedSymbols.slice(0, MAX_ENGINE_SYMBOLS * 2).filter(isCanonicalSymbol))]
+        .slice(0, MAX_ENGINE_SYMBOLS)
+      : [];
+    const blocked = Array.isArray(config.blockedSymbols)
+      ? [...new Set(config.blockedSymbols.slice(0, MAX_ENGINE_SYMBOLS * 2).filter(isCanonicalSymbol))]
+        .slice(0, MAX_ENGINE_SYMBOLS)
+      : [];
+    this.engine.setKillSwitch(
+      typeof config.killSwitch === 'boolean' && positive(config.maxOrderNotionalUsd)
+        ? config.killSwitch
+        : true,
+    );
+    this.engine.setSymbolPolicy(allowed, blocked);
+    if (positive(config.maxOrderNotionalUsd)) this.engine.setSuggestedNotionalUsd(config.maxOrderNotionalUsd);
+
+    const threshold = positive(config.minQuoteVolume24h)
+      ? config.minQuoteVolume24h
+      : this.engine.cfg.minQuoteVolume24hUsd;
+    return String(threshold);
+  }
+
+  private persistEvent(event: EngineEvent): void {
+    let key: string;
+    try {
+      key = JSON.stringify(event);
+    } catch {
+      return;
+    }
+    if (this.persistedEventKeys.has(key)) return;
+    this.persistedEventKeys.add(key);
+    this.persistedEventOrder.push(key);
+    if (this.persistedEventOrder.length > 5_000) {
+      const removed = this.persistedEventOrder.shift();
+      if (removed !== undefined) this.persistedEventKeys.delete(removed);
+    }
+    const persisted = this.safeLog(event.kind, event.symbol, {
+      strategy: event.strategy,
+      correlationId: event.correlationId,
+      rejectCode: event.rejectCode,
+      message: event.message,
+      ...event.payload,
+    });
+    if (!persisted) throw new Error('volume runtime ledger unavailable');
+  }
+
+  private safeLog(kind: string, symbol: string | null, payload: Record<string, unknown>): boolean {
+    try {
+      this.ledger.logEvent(kind, symbol, payload);
+      return true;
+    } catch {
+      this.ledgerFailureCount += 1;
+      // Ledger failures must degrade observability, never terminate market-data
+      // ingestion or leave an interval with an unhandled rejection.
+      return false;
+    }
   }
 
   snapshot(): Record<string, unknown> {
@@ -380,6 +646,8 @@ export class VolumeRuntime {
         lastTradeTs: this.lastTradeTs,
         lastBookTs: this.lastBookTs,
         tradeMessages: this.tradeMessages,
+        sinkFailures: this.engine.sinkFailures(),
+        ledgerFailures: this.ledgerFailureCount,
         source: 'Binance Spot Aggregate Trade Streams',
         bookSource: 'Binance Spot All Book Tickers',
         baselineSource: 'Binance Spot 1m Klines',

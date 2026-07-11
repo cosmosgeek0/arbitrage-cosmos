@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ConfirmModal } from '../components/Modal';
 import { IconBook } from '../components/Icons';
 import { TokenIcon } from '../components/TokenIcon';
@@ -43,6 +43,8 @@ const LIMIT_FIELDS: {
 ];
 
 const RISK_CHECK_LABELS: Record<string, string> = {
+  risk_config_valid: 'Risk Configuration',
+  order_intent_valid: 'Order Intent',
   kill_switch_off: 'Kill Switch',
   funds_access_unlocked: 'Funds Access',
   automation_running: 'Automation',
@@ -53,7 +55,9 @@ const RISK_CHECK_LABELS: Record<string, string> = {
   notional_known: 'Order Notional',
   max_order_notional: 'Per-Order Notional',
   max_daily_notional: 'Daily Notional',
+  daily_notional_state_known: 'Daily Notional State',
   daily_loss_limit: 'Daily Loss',
+  daily_loss_basis_known: 'Daily Loss Basis',
   max_daily_loss: 'Daily Loss',
   max_open_orders: 'Open Orders',
   cooldown: 'Cooldown',
@@ -88,10 +92,11 @@ function limitValue(config: AppConfig, draft: LimitDraft, key: LimitKey): string
 
 function parseLimitDraft(draft: LimitDraft): Partial<AppConfig> {
   const patch: Partial<AppConfig> = {};
+  const integerKeys = new Set<LimitKey>(['maxOpenOrders', 'cooldownSec', 'staleOrderMaxMin']);
   for (const field of LIMIT_FIELDS) {
     if (draft[field.key] === undefined) continue;
     const value = Number(draft[field.key]);
-    if (Number.isFinite(value)) {
+    if (Number.isFinite(value) && (!integerKeys.has(field.key) || Number.isInteger(value))) {
       (patch as Record<LimitKey, number>)[field.key] = value;
     }
   }
@@ -192,6 +197,11 @@ export function Risk() {
   const [probeError, setProbeError] = useState<string | null>(null);
   const [modal, setModal] = useState<'resume' | 'arm' | null>(null);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [policyBusy, setPolicyBusy] = useState(false);
+  const [controlBusy, setControlBusy] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const probeGeneration = useRef(0);
 
   if (!state) {
     return (
@@ -213,11 +223,14 @@ export function Risk() {
   const config = state.config;
   const perOrderLimit = configNumber(config, 'maxOrderNotionalUsd');
   const dailyLimit = configNumber(config, 'maxDailyNotionalUsd');
-  const dailyUsed = state.risk.dailyNotionalUsedUsd;
+  const dailyUsedKnown = Number.isFinite(state.risk.dailyNotionalUsedUsd) && state.risk.dailyNotionalUsedUsd >= 0;
+  const dailyUsed = dailyUsedKnown ? state.risk.dailyNotionalUsedUsd : 0;
   const dailyRemaining = dailyLimit > 0 ? Math.max(0, dailyLimit - dailyUsed) : 0;
   const dailyLossLimit = configNumber(config, 'maxDailyLossUsd');
   const realizedToday = state.account?.realizedTodayUsd ?? null;
-  const realizedLoss = realizedToday === null ? dailyLossLimit : Math.max(0, -realizedToday);
+  const lossPolicy = state.account?.dailyLossPolicy ?? null;
+  const accountAge = state.binance.lastSyncTs === null ? Number.POSITIVE_INFINITY : Date.now() - state.binance.lastSyncTs;
+  const keyPermissions = state.binance.keyPermissions;
   const openOrderLimit = configNumber(config, 'maxOpenOrders');
   const openOrdersCount = state.openOrders.length;
   const cooldownLeft =
@@ -248,6 +261,34 @@ export function Risk() {
       detail: config.liveTradingEnabled ? 'Live routing is armed and still requires every order check.' : 'The system remains paper/manual-only.',
     },
     {
+      id: 'account-source',
+      label: 'Signed Account',
+      pass: state.binance.connected && Number.isFinite(accountAge) && accountAge >= -1_000 && accountAge <= 60_000,
+      value: state.binance.connected ? (accountAge <= 60_000 ? 'Fresh' : 'Stale') : 'Offline',
+      detail: 'Live admission requires a signed account sync no older than 60 seconds.',
+    },
+    {
+      id: 'key-posture',
+      label: 'API Key Posture',
+      pass: Boolean(
+        keyPermissions?.enableReading
+        && keyPermissions.enableSpotAndMarginTrading
+        && !keyPermissions.enableWithdrawals
+        && !keyPermissions.enableInternalTransfer
+        && !keyPermissions.permitsUniversalTransfer
+      ),
+      value: keyPermissions ? state.binance.keyPosture.label : 'Unknown',
+      detail: !keyPermissions
+        ? 'Binance has not verified this key’s permissions.'
+        : !keyPermissions.enableReading
+          ? 'The key must have Binance reading permission before account truth can be verified.'
+          : !keyPermissions.enableSpotAndMarginTrading
+            ? 'This key is read-only. Live orders require Spot / Margin Trading permission.'
+            : keyPermissions.enableWithdrawals || keyPermissions.enableInternalTransfer || keyPermissions.permitsUniversalTransfer
+              ? 'Withdrawals and transfer-out authority must remain disabled.'
+              : 'Trading permission is verified and transfer-out powers are disabled.',
+    },
+    {
       id: 'symbol-policy',
       label: 'Symbol Policy',
       pass: config.allowedSymbols.length > 0,
@@ -266,18 +307,20 @@ export function Risk() {
     {
       id: 'daily-notional',
       label: 'Daily Notional',
-      pass: dailyLimit > 0 && dailyUsed < dailyLimit,
-      value: fmtMoney(dailyRemaining) + ' Left',
-      detail: fmtMoney(dailyUsed) + ' used of the ' + fmtMoney(dailyLimit) + ' UTC-day cap.',
+      pass: dailyUsedKnown && dailyLimit > 0 && dailyUsed < dailyLimit,
+      value: dailyUsedKnown ? fmtMoney(dailyRemaining) + ' Left' : 'Unavailable',
+      detail: dailyUsedKnown
+        ? fmtMoney(dailyUsed) + ' used of the ' + fmtMoney(dailyLimit) + ' UTC-day cap.'
+        : 'The server did not return a valid daily-notional total.',
     },
     {
       id: 'daily-loss',
       label: 'Daily Loss',
-      pass: realizedToday !== null && realizedToday > -dailyLossLimit,
-      value: realizedToday === null ? 'Unavailable' : fmtMoney(realizedToday),
-      detail: realizedToday === null
-        ? 'Account realized PnL is unavailable.'
-        : 'New orders stop at -' + fmtMoney(dailyLossLimit) + ' realized for the UTC day.',
+      pass: lossPolicy?.complete === true && lossPolicy.valueUsd > -dailyLossLimit,
+      value: lossPolicy?.complete ? fmtMoney(lossPolicy.valueUsd) : 'Incomplete',
+      detail: lossPolicy?.complete
+        ? 'Fee-adjusted policy PnL; new orders stop at -' + fmtMoney(dailyLossLimit) + ' for the UTC day.'
+        : lossPolicy?.reasons.join(' · ') || 'Daily loss cost basis is unavailable.',
     },
     {
       id: 'open-orders',
@@ -309,7 +352,8 @@ export function Risk() {
     const raw = draft[field.key];
     if (raw === undefined) return false;
     const value = Number(raw);
-    return raw.trim() === '' || !Number.isFinite(value) || value < field.min;
+    const requiresInteger = field.key === 'maxOpenOrders' || field.key === 'cooldownSec' || field.key === 'staleOrderMaxMin';
+    return raw.trim() === '' || !Number.isFinite(value) || value < field.min || (requiresInteger && !Number.isInteger(value));
   });
   const canSaveLimits = dirtyLimitKeys.length > 0 && invalidLimitKeys.length === 0;
 
@@ -321,15 +365,60 @@ export function Risk() {
   const lastOrderText = state.risk.lastOrderTs ? timeAgo(state.risk.lastOrderTs) : 'No Order Yet';
   const lastOrderDetail = state.risk.lastOrderTs ? fmtDateTime(state.risk.lastOrderTs) : 'No order response is present in the ledger.';
 
-  const patchList = async (key: 'allowedSymbols' | 'blockedSymbols', list: string[]) => {
-    await saveConfig({ [key]: uniqueSymbols(list) });
+  const patchList = async (key: 'allowedSymbols' | 'blockedSymbols', list: string[]): Promise<boolean> => {
+    if (policyBusy) return false;
+    setPolicyBusy(true);
+    setSaveError(null);
+    try {
+      const next = await saveConfig({ [key]: uniqueSymbols(list) });
+      if (next) return true;
+      setSaveError('The server did not acknowledge the symbol-policy change.');
+      return false;
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'The symbol-policy change failed.');
+      return false;
+    } finally {
+      setPolicyBusy(false);
+    }
   };
 
   const saveDraft = async () => {
-    if (!canSaveLimits) return;
-    await saveConfig(parseLimitDraft(draft));
-    setDraft({});
-    setSaved(true);
+    if (!canSaveLimits || saving) return;
+    setSaving(true);
+    setSaved(false);
+    setSaveError(null);
+    try {
+      const next = await saveConfig(parseLimitDraft(draft));
+      if (!next) {
+        setSaveError('The server did not acknowledge the risk-limit change. Your draft was kept.');
+        return;
+      }
+      setDraft({});
+      setSaved(true);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'The risk-limit change failed. Your draft was kept.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const mutateControl = async (kind: 'kill' | 'live', on: boolean): Promise<boolean> => {
+    if (controlBusy) return false;
+    setControlBusy(true);
+    setSaveError(null);
+    try {
+      const error = kind === 'kill' ? await setKill(on) : await setLive(on);
+      if (error) {
+        setSaveError(error.message);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'The execution-control change failed.');
+      return false;
+    } finally {
+      setControlBusy(false);
+    }
   };
 
   const runProbe = async () => {
@@ -347,16 +436,25 @@ export function Risk() {
       return;
     }
 
+    const generation = ++probeGeneration.current;
     setProbeBusy(true);
-    const result = await preview({ symbol, side: probeSide, type: 'MARKET', quoteQty: amount });
-    setProbeBusy(false);
-    if (!result) {
-      setProbeError('The server did not return a dry-run result.');
-      return;
-    }
+    try {
+      const result = await preview({ symbol, side: probeSide, type: 'MARKET', quoteQty: amount });
+      if (generation !== probeGeneration.current) return;
+      if (!result) {
+        setProbeError('The server did not return a dry-run result.');
+        return;
+      }
 
-    setProbeResult(result);
-    if (result.errors.length > 0) setProbeError(result.errors.map(cleanRiskText).join(' / '));
+      setProbeResult(result);
+      if (result.errors.length > 0) setProbeError(result.errors.map(cleanRiskText).join(' / '));
+    } catch (error) {
+      if (generation === probeGeneration.current) {
+        setProbeError(error instanceof Error ? error.message : 'The dry run failed.');
+      }
+    } finally {
+      if (generation === probeGeneration.current) setProbeBusy(false);
+    }
   };
 
   return (
@@ -379,7 +477,9 @@ export function Risk() {
                 <strong>{config.liveTradingEnabled ? 'Live Armed' : 'Paper / Manual'}</strong>
               </span>
               {config.liveTradingEnabled ? (
-                <button type="button" className="riskx-button" onClick={() => void setLive(false)}>Disarm</button>
+                <button type="button" className="riskx-button" disabled={controlBusy} onClick={() => void mutateControl('live', false)}>
+                  {controlBusy ? 'Working…' : 'Disarm'}
+                </button>
               ) : (
                 <button
                   type="button"
@@ -404,13 +504,16 @@ export function Risk() {
                 aria-checked={config.killSwitch}
                 aria-label="Kill Switch"
                 className={'riskx-switch ' + (config.killSwitch ? 'on' : 'off')}
-                onClick={() => (config.killSwitch ? setModal('resume') : void setKill(true))}
+                disabled={controlBusy}
+                onClick={() => (config.killSwitch ? setModal('resume') : void mutateControl('kill', true))}
               >
                 <span aria-hidden="true" />
               </button>
             </div>
           </div>
         </header>
+
+        {saveError ? <div className="riskx-probe-error" role="alert">{saveError}</div> : null}
 
         <div className="riskx-summary" aria-label="Risk Summary">
           <div className="riskx-summary-cell">
@@ -525,11 +628,11 @@ export function Risk() {
                   <button
                     type="button"
                     className="riskx-button primary"
-                    disabled={!canSaveLimits}
+                    disabled={!canSaveLimits || saving}
                     title={invalidLimitKeys.length ? 'Fix: ' + invalidLimitKeys.map((field) => field.label).join(', ') : 'Save server limits'}
                     onClick={saveDraft}
                   >
-                    Save Changes
+                    {saving ? 'Saving…' : 'Save Changes'}
                   </button>
                 </>
               ) : null}
@@ -596,10 +699,9 @@ export function Risk() {
               <button
                 type="button"
                 className="riskx-button primary"
-                disabled={allowInput.length < 4 || config.allowedSymbols.includes(allowInput)}
+                disabled={policyBusy || allowInput.length < 4 || config.allowedSymbols.includes(allowInput)}
                 onClick={async () => {
-                  await patchList('allowedSymbols', [...config.allowedSymbols, allowInput]);
-                  setAllowInput('');
+                  if (await patchList('allowedSymbols', [...config.allowedSymbols, allowInput])) setAllowInput('');
                 }}
               >
                 Allow
@@ -612,6 +714,7 @@ export function Risk() {
                 type="button"
                 key={symbol}
                 className="riskx-symbol-chip"
+                disabled={policyBusy}
                 title={'Remove ' + symbol + ' from allowed symbols'}
                 onClick={() => void patchList('allowedSymbols', config.allowedSymbols.filter((candidate) => candidate !== symbol))}
               >
@@ -638,10 +741,9 @@ export function Risk() {
               <button
                 type="button"
                 className="riskx-button danger"
-                disabled={blockInput.length < 4 || config.blockedSymbols.includes(blockInput)}
+                disabled={policyBusy || blockInput.length < 4 || config.blockedSymbols.includes(blockInput)}
                 onClick={async () => {
-                  await patchList('blockedSymbols', [...config.blockedSymbols, blockInput]);
-                  setBlockInput('');
+                  if (await patchList('blockedSymbols', [...config.blockedSymbols, blockInput])) setBlockInput('');
                 }}
               >
                 Block
@@ -654,6 +756,7 @@ export function Risk() {
                 type="button"
                 key={symbol}
                 className="riskx-symbol-chip blocked"
+                disabled={policyBusy}
                 title={'Remove ' + symbol + ' from blocked symbols'}
                 onClick={() => void patchList('blockedSymbols', config.blockedSymbols.filter((candidate) => candidate !== symbol))}
               >
@@ -742,9 +845,9 @@ export function Risk() {
           title="Resume Live Orders"
           requireText="RESUME"
           confirmLabel="Resume"
+          busy={controlBusy}
           onConfirm={async () => {
-            await setKill(false);
-            setModal(null);
+            if (await mutateControl('kill', false)) setModal(null);
           }}
           onClose={() => setModal(null)}
         >
@@ -760,9 +863,9 @@ export function Risk() {
           requireText="ARM"
           confirmLabel="Arm Live"
           danger
+          busy={controlBusy}
           onConfirm={async () => {
-            await setLive(true);
-            setModal(null);
+            if (await mutateControl('live', true)) setModal(null);
           }}
           onClose={() => setModal(null)}
         >

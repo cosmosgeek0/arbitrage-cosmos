@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   ArrowUpRight,
@@ -17,6 +17,8 @@ import {
 import { EquityChart, PerfChart, type PerfDay } from '../components/PerfChart';
 import { TokenIcon } from '../components/TokenIcon';
 import { useRefreshSignal } from '../lib/refresh';
+import { apiErrorMessage, fetchJson } from '../lib/http';
+import { createSettledPoll } from '../lib/polling';
 import type { BasisSnapshot } from '../lib/basisRuntime';
 import { useStore, type Page } from '../store';
 import { fmtMoney, fmtPrice, signClass, timeAgo } from '../format';
@@ -42,11 +44,13 @@ interface PnlData {
   realizedByDay: PerfDay[];
   realizedBySymbol: { symbol: string; usd: number }[];
   feesByAsset: { asset: string; amount: number }[];
+  integrity: { complete: boolean; reasons: string[] };
 }
 
 interface EquityHistory {
   rows: { ts: number; totalUsdt: number }[];
   reconstructedBefore: number | null;
+  reconstruction?: { complete: boolean; reasons: string[] };
   fetchedAt: number | null;
 }
 
@@ -165,41 +169,71 @@ function useDashboardSources(refreshTick: number) {
   const [system, setSystem] = useState<Source<SystemSnapshot>>(source);
 
   useEffect(() => {
-    let live = true;
-
-    const read = async <T,>(url: string): Promise<T> => {
-      const response = await fetch(url, { cache: 'no-store' });
-      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-      return response.json() as Promise<T>;
+    const commit = <T,>(
+      result: PromiseSettledResult<T>,
+      setter: React.Dispatch<React.SetStateAction<Source<T>>>,
+    ) => {
+      if (result.status === 'fulfilled') setter({ data: result.value, error: null });
+      else setter((current) => ({ data: current.data, error: apiErrorMessage(result.reason, 'Source unavailable') }));
     };
-
-    const update = <T,>(setter: Dispatch<SetStateAction<Source<T>>>, promise: Promise<T>) => {
-      void promise
-        .then((data) => live && setter({ data, error: null }))
-        .catch((reason) => live && setter((current) => ({
-          data: current.data,
-          error: reason instanceof Error ? reason.message : 'Source unavailable',
-        })));
-    };
-
-    const fast = () => {
-      update(setBasis, read<BasisSnapshot>('/api/engine/basis'));
-      update(setVolume, read<VolumeSnapshot>('/api/engine/volume'));
-    };
-    const slow = () => {
-      update(setPnl, read<PnlData>('/api/pnl'));
-      update(setHistory, read<EquityHistory>('/api/equity-history'));
-      update(setSystem, read<SystemSnapshot>('/api/system'));
-    };
-
-    fast();
-    slow();
-    const fastTimer = window.setInterval(fast, 2_000);
-    const slowTimer = window.setInterval(slow, 30_000);
+    const fast = createSettledPoll<[PromiseSettledResult<BasisSnapshot>, PromiseSettledResult<VolumeSnapshot>]>({
+      intervalMs: 2_000,
+      request: (signal) => Promise.allSettled([
+        fetchJson<BasisSnapshot>('/api/engine/basis', { cache: 'no-store', signal }),
+        fetchJson<VolumeSnapshot>('/api/engine/volume', { cache: 'no-store', signal }),
+      ]) as Promise<[PromiseSettledResult<BasisSnapshot>, PromiseSettledResult<VolumeSnapshot>]>,
+      onSuccess: ([basisResult, volumeResult]) => {
+        commit(basisResult, setBasis);
+        commit(volumeResult, setVolume);
+      },
+      onError: (error) => {
+        const message = apiErrorMessage(error, 'Source unavailable');
+        setBasis((current) => ({ data: current.data, error: message }));
+        setVolume((current) => ({ data: current.data, error: message }));
+      },
+    });
+    const slow = createSettledPoll<[
+      PromiseSettledResult<PnlData>,
+      PromiseSettledResult<EquityHistory>,
+      PromiseSettledResult<SystemSnapshot>,
+    ]>({
+      intervalMs: 30_000,
+      request: (signal) => Promise.allSettled([
+        fetchJson<PnlData>('/api/pnl', { cache: 'no-store', signal }),
+        fetchJson<EquityHistory>('/api/equity-history', { cache: 'no-store', signal }),
+        fetchJson<SystemSnapshot>('/api/system', { cache: 'no-store', signal }),
+      ]) as Promise<[
+        PromiseSettledResult<PnlData>,
+        PromiseSettledResult<EquityHistory>,
+        PromiseSettledResult<SystemSnapshot>,
+      ]>,
+      onSuccess: ([pnlResult, historyResult, systemResult]) => {
+        commit(pnlResult, setPnl);
+        if (historyResult.status === 'fulfilled') {
+          const integrity = historyResult.value.reconstruction;
+          setHistory({
+            data: historyResult.value,
+            error: integrity && !integrity.complete
+              ? integrity.reasons[0] ?? 'Older account reconstruction is unavailable'
+              : null,
+          });
+        } else {
+          setHistory((current) => ({ data: current.data, error: apiErrorMessage(historyResult.reason, 'Source unavailable') }));
+        }
+        commit(systemResult, setSystem);
+      },
+      onError: (error) => {
+        const message = apiErrorMessage(error, 'Source unavailable');
+        setPnl((current) => ({ data: current.data, error: message }));
+        setHistory((current) => ({ data: current.data, error: message }));
+        setSystem((current) => ({ data: current.data, error: message }));
+      },
+    });
+    fast.start();
+    slow.start();
     return () => {
-      live = false;
-      window.clearInterval(fastTimer);
-      window.clearInterval(slowTimer);
+      fast.stop();
+      slow.stop();
     };
   }, [refreshTick]);
 
@@ -241,7 +275,7 @@ export function Dashboard() {
     const rows = [...(sources.history.data?.rows ?? [])]
       .filter((row) => finite(row.totalUsdt) && finite(row.ts))
       .map((row) => ({ ts: row.ts, totalUsdt: row.totalUsdt }));
-    if (account && finite(account.totalUsdt)) {
+    if (account?.complete && finite(account.totalUsdt)) {
       rows.push({ ts: state?.binance.lastSyncTs ?? sources.history.data?.fetchedAt ?? Date.now(), totalUsdt: account.totalUsdt });
     }
     rows.sort((left, right) => left.ts - right.ts);
@@ -257,7 +291,7 @@ export function Dashboard() {
     const previous = [...deduped].reverse().find((point) => point.ts < cutoff);
     if (previous) selected.unshift(previous);
     return selected;
-  }, [account?.totalUsdt, range, sources.history.data, state?.binance.lastSyncTs]);
+  }, [account?.complete, account?.totalUsdt, range, sources.history.data, state?.binance.lastSyncTs]);
 
   const historyStats = useMemo(() => {
     if (historyPoints.length < 2) return null;
@@ -273,16 +307,19 @@ export function Dashboard() {
       low: Math.min(...values),
     };
   }, [historyPoints]);
+  const historyCoverage = sources.history.data?.reconstruction?.complete
+    ? 'Spot Balance History · Transfers And Borrowing Included · Not Strategy PnL'
+    : 'Spot Balance History · Signed Snapshots Only · Older Reconstruction Unavailable';
 
   const basis = sources.basis.data;
   const volume = sources.volume.data;
   const system = sources.system.data;
-  const basisLive = Boolean(basis?.status.running && basis.status.bookState === 'fresh' && basis.status.markState === 'fresh' && !basis.status.lastError);
-  const volumeLive = Boolean(volume?.status.running && volume.status.streamState === 'open' && volume.status.bookState === 'fresh');
+  const basisLive = Boolean(!sources.basis.error && basis?.status.running && basis.status.bookState === 'fresh' && basis.status.markState === 'fresh' && !basis.status.lastError);
+  const volumeLive = Boolean(!sources.volume.error && volume?.status.running && volume.status.streamState === 'open' && volume.status.bookState === 'fresh');
   const accountFresh = Boolean(state?.binance.connected && state.binance.lastSyncTs && Date.now() - state.binance.lastSyncTs < 90_000);
   const feedsOpen = state ? Object.values(state.feeds).length > 0 && Object.values(state.feeds).every((feed) => feed === 'open') : false;
   const keySafe = state?.binance.keyPosture.level === 'read_only';
-  const ledgerReady = system?.dbOk === true;
+  const ledgerReady = !sources.system.error && system?.dbOk === true;
 
   const integrityChecks: IntegrityCheck[] = [
     {
@@ -433,11 +470,16 @@ export function Dashboard() {
         </header>
 
         <div className="dcx-summary" aria-label="Executive Summary">
-          <Metric label="Estimated Total Value" value={account ? fmtPrice(account.totalUsdt) : '—'} detail="Signed Binance Account" />
+          <Metric
+            label={account?.complete === false ? 'Partial Account Value' : 'Estimated Total Value'}
+            value={account ? fmtPrice(account.totalUsdt) : '—'}
+            detail={account?.complete === false ? (account.unpricedAssets.length ? `${account.unpricedAssets.join(', ')} Unpriced` : 'Signed Account Source Is Stale') : 'Signed Binance Account'}
+            tone={account?.complete === false ? 'warn' : 'idle'}
+          />
           <Metric
             label="Today’s Account Change"
             value={finite(dayChange) ? `${dayChange > 0 ? '+' : ''}${fmtPrice(dayChange)}` : '—'}
-            detail={dayChangePct === null ? 'Day Open Unavailable' : `${dayChangePct > 0 ? '+' : ''}${dayChangePct.toFixed(2)}% From Day Open`}
+            detail={account?.complete === false ? 'Current Equity Is Partially Priced' : dayChangePct === null ? 'Day Open Unavailable' : `${dayChangePct > 0 ? '+' : ''}${dayChangePct.toFixed(2)}% From Day Open`}
             tone={finite(dayChange) ? (dayChange >= 0 ? 'ok' : 'bad') : 'idle'}
           />
           <Metric label="Available USDT" value={account ? fmtPrice(account.availableUsdt) : '—'} detail="Free Spot Balance" />
@@ -448,7 +490,7 @@ export function Dashboard() {
 
         <section className="dcx-section dcx-capital-section">
           <header className="dcx-section-head">
-            <span><b>Account Progress</b><small>Spot Balance History · Transfers And Borrowing Included · Not Strategy PnL</small></span>
+            <span><b>Account Progress</b><small title={sources.history.data?.reconstruction?.reasons.join(' · ') || undefined}>{historyCoverage}</small></span>
             <div className="dcx-range" role="tablist" aria-label="Account History Range">
               {RANGES.map((item) => (
                 <button key={item.id} type="button" role="tab" aria-selected={range === item.id} onClick={() => setRange(item.id)}>{item.id}</button>
@@ -568,13 +610,16 @@ export function Dashboard() {
 
         <section className="dcx-section dcx-performance">
           <header className="dcx-section-head">
-            <span><b>Validated Strategy Performance</b><small>Closed Ledger Round-Trips Only · Account Balance Movement Is Excluded</small></span>
+            <span>
+              <b>{sources.pnl.data?.integrity.complete === false ? 'Partial Strategy Performance' : 'Validated Strategy Performance'}</b>
+              <small title={sources.pnl.data?.integrity.reasons.join(' · ') || undefined}>{sources.pnl.data?.integrity.complete === false ? 'Missing Cost Basis Or Fee Valuation · Review Fill Coverage' : 'Closed Ledger Round-Trips Only · Account Balance Movement Is Excluded'}</small>
+            </span>
             <em>{pnlDays.length} Realized Day{pnlDays.length === 1 ? '' : 's'}</em>
           </header>
           {pnlDays.length ? (
             <>
               <div className="dcx-performance-summary">
-                <Metric label="Realized PnL" value={`${realizedTotal > 0 ? '+' : ''}${fmtPrice(realizedTotal)}`} detail="Ledgered Closed Fills" tone={realizedTotal >= 0 ? 'ok' : 'bad'} />
+                <Metric label={sources.pnl.data?.integrity.complete === false ? 'Partial Realized PnL' : 'Realized PnL'} value={`${realizedTotal > 0 ? '+' : ''}${fmtPrice(realizedTotal)}`} detail={sources.pnl.data?.integrity.complete === false ? 'Incomplete Basis' : 'Ledgered Closed Fills'} tone={sources.pnl.data?.integrity.complete === false ? 'warn' : realizedTotal >= 0 ? 'ok' : 'bad'} />
                 <Metric label="Trading Days" value={String(pnlDays.length)} detail="With Realized PnL" />
                 <Metric label="Winning Days" value={String(winningDays.length)} detail={`${pnlDays.length ? ((winningDays.length / pnlDays.length) * 100).toFixed(0) : 0}% Day Win Rate`} />
                 <Metric label="Losing Days" value={String(losingDays.length)} detail="Closed-Day Outcomes" />

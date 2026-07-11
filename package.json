@@ -2,14 +2,34 @@
   "name": "arbitrage-cosmos",
   "private": true,
   "version": "0.1.0",
+  "packageManager": "npm@10.9.8",
+  "engines": {
+    "node": "22.x"
+  },
   "workspaces": [
     "server",
     "web"
   ],
   "scripts": {
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w web",
     "build": "npm run build -w server && npm run build -w web",
     "start": "node server/dist/index.js",
     "dev": "npm run dev -w server",
-    "test": "node server/test/gates.mjs"
+    "test:app:built": "node server/test/gates.mjs",
+    "test:app": "npm run build && npm run test:app:built",
+    "test:engine:basis:built": "node server/test/engine-basis.mjs",
+    "test:engine:basis": "npm run build -w server && npm run test:engine:basis:built",
+    "test:engine:volume:built": "node server/test/engine-volume.mjs",
+    "test:engine:volume": "npm run build -w server && npm run test:engine:volume:built",
+    "test:engine:built": "npm run test:engine:basis:built && npm run test:engine:volume:built",
+    "test:engine": "npm run build -w server && npm run test:engine:built",
+    "test:focused:built": "node server/test/financial-safety.mjs && node server/test/storage-aws-hardening.mjs && node --test --test-concurrency=1 server/test/access.mjs server/test/binance-client.mjs server/test/legacy-scanner.mjs server/test/loans.mjs server/test/network-cache.mjs && node --import tsx --test --test-concurrency=1 server/test/stream-lifecycle.mjs && node --test --test-concurrency=1 server/test/perimeter.mjs",
+    "test:focused": "npm run build -w server && npm run test:focused:built",
+    "test:deterministic:built": "npm run test:engine:built && npm run test:focused:built",
+    "test:server:built": "npm run test:deterministic:built",
+    "test:server": "npm run build && npm run test:server:built",
+    "test:integration": "npm run test:app",
+    "test:all": "npm test && npm run test:integration",
+    "test": "npm run typecheck && npm run build && npm run test:deterministic:built"
   }
 }

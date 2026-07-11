@@ -4,7 +4,6 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import WebSocket, { WebSocketServer } from 'ws';
-import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { MarketEngine } from './engine/marketData.js';
 import { Scanner } from './engine/scanner.js';
 import { Ledger } from './ledger.js';
@@ -30,7 +29,7 @@ import { BinanceClient, credsFromEnv, maskApiKey, keyPosture, rateLimit } from '
 import { resolveIcons, STOCK_TOKENS } from './binance/icons.js';
 import { tokenProfile, warmAllProfiles, profileWarmStatus } from './binance/profile.js';
 import { fetchMoneyFlow, FLOW_WINDOWS } from './binance/moneyflow.js';
-import { startLiquidationCollector, liquidationSeries, liquidationStats } from './binance/liquidations.js';
+import { startLiquidationCollector, stopLiquidationCollector, liquidationSeries, liquidationStats } from './binance/liquidations.js';
 import { UserStream, type ExecutionReport } from './binance/userStream.js';
 import { AccountService } from './services/account.js';
 import { RiskService } from './services/risk.js';
@@ -41,6 +40,7 @@ import { BasisRuntime } from './services/basisRuntime.js';
 import { VolumeRuntime } from './services/volumeRuntime.js';
 import { AwsRunnerControl, AwsRunnerControlError } from './services/awsRunnerControl.js';
 import { getNewsContext, newsContextStatus, refreshNewsContextNow, scoreNewsImpact, subscribeNewsContext } from './services/newsContext.js';
+import { OperatorAccess } from './security/access.js';
 import type { AppConfig, ControlMode, ExecutionControlModes, OrderIntent } from './types.js';
 
 // Minimal .env loader (no dependency). Never logs values.
@@ -63,7 +63,7 @@ function loadDotEnv(): void {
 loadDotEnv();
 
 const PORT = Number(process.env.PORT ?? 8080);
-const HOST = process.env.HOST ?? '0.0.0.0';
+const HOST = process.env.HOST ?? '127.0.0.1';
 const TICK_MS = 2_000;
 const POLL_MS = 30_000;
 const SOURCE_LOGO_TTL_MS = 24 * 60 * 60 * 1000;
@@ -71,7 +71,12 @@ const SOURCE_LOGO_MAX_BYTES = 256 * 1024;
 const DIRECT_SOURCE_LOGOS: Record<string, string> = {
   'financialjuice.com': 'https://www.financialjuice.com/favicon.ico',
 };
-const sourceLogoCache = new Map<string, { ts: number; contentType: string; body: Buffer }>();
+type SourceLogoEntry = { ts: number; contentType: string; body: Buffer };
+const SOURCE_LOGO_CACHE_MAX = 256;
+const SOURCE_LOGO_FAILURE_TTL_MS = 60_000;
+const sourceLogoCache = new Map<string, SourceLogoEntry>();
+const sourceLogoInFlight = new Map<string, Promise<SourceLogoEntry>>();
+const sourceLogoFailures = new Map<string, number>();
 
 const ledger = new Ledger(
   process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : undefined
@@ -80,23 +85,39 @@ const awsRunnerControl = new AwsRunnerControl(ledger);
 const config = loadConfig(ledger);
 const engine = new MarketEngine(ledger);
 const scanner = new Scanner(config, ledger);
-const basisRuntime = new BasisRuntime(ledger, () => config, () => engine.allRows());
+const basisRuntime = new BasisRuntime(ledger, () => config, () => engine.allRows().map((row) => ({
+  ...row,
+  markUpdatedAt: engine.markEventTimestamp(row.symbol),
+})));
 const volumeRuntime = new VolumeRuntime(ledger, () => config, () => engine.allRows());
+let shuttingDown = false;
+let basisStartTimer: NodeJS.Timeout | null = null;
+let volumeStartTimer: NodeJS.Timeout | null = null;
 
 // The control plane, News and Calendar must stay available when Binance is
 // temporarily unreachable. Market initialization retries in the background
 // instead of blocking the HTTP server and every non-market route.
 void (async () => {
-  for (;;) {
+  while (!shuttingDown) {
     try {
       await engine.init();
+      if (shuttingDown) break;
       engine.start();
-      setTimeout(() => void basisRuntime.start(), 3_000);
-      setTimeout(() => void volumeRuntime.start(), 5_000);
+      basisStartTimer = setTimeout(() => {
+        if (!shuttingDown) void basisRuntime.start();
+      }, 3_000);
+      volumeStartTimer = setTimeout(() => {
+        if (!shuttingDown) void volumeRuntime.start();
+      }, 5_000);
       break;
     } catch (err) {
+      if (shuttingDown) break;
       console.error('engine init failed, retrying in 15s:', err);
-      ledger.logEvent('error_event', null, { source: 'engine.init', message: String(err) });
+      try {
+        ledger.logEvent('error_event', null, { source: 'engine.init', message: String(err) });
+      } catch {
+        // Retry remains available while persistence is degraded.
+      }
       await new Promise((resolve) => setTimeout(resolve, 15_000));
     }
   }
@@ -106,8 +127,15 @@ const creds = credsFromEnv();
 const client = creds ? new BinanceClient(creds) : null;
 const account = new AccountService(client, ledger, (s) => engine.priceOf(s));
 const risk = new RiskService(config, ledger);
-const orders = new OrderService(client, engine.filters, (s) => engine.priceOf(s), risk, ledger, account);
-const loans = new LoanService(client, config, ledger);
+const orders = new OrderService(
+  client,
+  engine.filters,
+  (s) => engine.priceOf(s),
+  risk,
+  ledger,
+  account,
+);
+const loans = new LoanService(client, config, ledger, account, (symbol) => engine.priceOf(symbol));
 
 function normalizeLogoDomain(value: string): string | null {
   let host = value.trim().toLowerCase();
@@ -124,9 +152,39 @@ function normalizeLogoDomain(value: string): string | null {
 }
 
 let userStream: UserStream | null = null;
+let accountSyncTimer: NodeJS.Timeout | null = null;
+let orderSyncTimer: NodeJS.Timeout | null = null;
+let fillReconcileTimer: NodeJS.Timeout | null = null;
+
+function fillReconciliationSymbols(): string[] {
+  const symbols = new Set<string>([...config.allowedSymbols, ...config.watchlist]);
+  for (const order of orders.openOrdersCache) symbols.add(order.symbol);
+  for (const request of ledger.unresolvedOrderRequests(500)) symbols.add(request.symbol);
+  for (const fill of ledger.listFills(200)) symbols.add(fill.symbol);
+  for (const entry of account.equity().entries) {
+    if (entry.asset !== 'USDT') {
+      const symbol = `${entry.asset}USDT`;
+      if (engine.filters.has(symbol)) symbols.add(symbol);
+    }
+  }
+  return [...symbols];
+}
+
+async function reconcileAccountFills(): Promise<void> {
+  if (!client || shuttingDown) return;
+  account.setRequiredFillSymbols(fillReconciliationSymbols());
+  await account.reconcileFills();
+}
+
 if (client) {
   await account.sync();
-  await orders.syncOpenOrders().catch(() => undefined);
+  await orders.syncOpenOrders().catch((error) => {
+    safeLogEvent('error_event', null, { source: 'orders.initial_sync', message: error instanceof Error ? error.message : String(error) });
+  });
+  void orders.reconcilePendingOrders().catch((error) => {
+    safeLogEvent('error_event', null, { source: 'orders.initial_reconciliation', message: error instanceof Error ? error.message : String(error) });
+  });
+  void reconcileAccountFills();
   userStream = new UserStream(
     client,
     (ev) => {
@@ -148,18 +206,48 @@ if (client) {
             source: 'user_stream',
           });
         }
-        void orders.syncOpenOrders().catch(() => undefined);
+        void orders.syncOpenOrders().catch((error) => {
+          safeLogEvent('error_event', r.s, { source: 'orders.stream_sync', message: error instanceof Error ? error.message : String(error) });
+        });
       } else if (e === 'outboundAccountPosition') {
-        account.applyStreamBalances(ev.B as { a: string; f: string; l: string }[]);
+        account.applyStreamBalances(ev.B as { a: string; f: string; l: string }[], Number(ev.u));
       }
     },
     (status, detail) => {
       ledger.logEvent('user_stream', null, { status, detail });
+      if (status === 'open') void reconcileAccountFills();
     }
   );
   void userStream.start();
-  setInterval(() => void account.sync(), POLL_MS);
-  setInterval(() => void orders.syncOpenOrders().catch(() => undefined), POLL_MS);
+  accountSyncTimer = setInterval(() => {
+    void account.sync().catch((error) => {
+      try {
+        ledger.logEvent('error_event', null, { source: 'account.sync', message: error instanceof Error ? error.message : String(error) });
+      } catch {
+        // Health state in AccountService remains the primary signal.
+      }
+    });
+  }, POLL_MS);
+  orderSyncTimer = setInterval(() => {
+    void (async () => {
+      await orders.syncOpenOrders();
+      await orders.reconcilePendingOrders();
+    })().catch((error) => {
+      safeLogEvent('error_event', null, { source: 'orders.periodic_sync', message: error instanceof Error ? error.message : String(error) });
+    });
+  }, POLL_MS);
+  fillReconcileTimer = setInterval(() => {
+    void reconcileAccountFills().catch((error) => {
+      try {
+        ledger.logEvent('error_event', null, {
+          source: 'account.fill_reconciliation',
+          message: error instanceof Error ? error.message : String(error),
+        });
+      } catch {
+        // AccountService retains the reconciliation error for risk admission.
+      }
+    });
+  }, POLL_MS);
 }
 
 ledger.logEvent('engine.start', null, {
@@ -167,16 +255,34 @@ ledger.logEvent('engine.start', null, {
   keysPresent: account.keysPresent,
 });
 console.log(
-  `cosmos control room: ${engine.pairCount} pairs, Binance keys ${account.keysPresent ? 'PRESENT' : 'absent'}, listening :${PORT}`
+  `cosmos control room: ${engine.pairCount} pairs, Binance keys ${account.keysPresent ? 'PRESENT' : 'absent'}, booting ${HOST}:${PORT}`
 );
 
-setInterval(() => {
+const scannerTimer = setInterval(() => {
   try {
     scanner.tick(engine.rows());
   } catch (err) {
     console.error('scanner tick failed:', err);
   }
 }, TICK_MS);
+
+function pruneEphemeralLedgerEvents(maxBatches = 1): void {
+  try {
+    const now = Date.now();
+    const batches = Math.max(1, Math.min(5, Math.trunc(maxBatches)));
+    for (let batch = 0; batch < batches; batch += 1) {
+      if (ledger.pruneEphemeralEvents(now, 10_000) < 10_000) break;
+    }
+  } catch (error) {
+    safeLogEvent('error_event', null, {
+      source: 'ledger.retention',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+// Drain a bounded historical backlog at boot, then maintain it incrementally.
+pruneEphemeralLedgerEvents(5);
+const eventRetentionTimer = setInterval(() => pruneEphemeralLedgerEvents(1), 10 * 60_000);
 
 function mode(): string {
   if (config.killSwitch) return 'HALTED';
@@ -186,6 +292,7 @@ function mode(): string {
 function buildState() {
   const eq = account.keysPresent ? account.equity() : null;
   const dayOpen = account.keysPresent ? account.dayOpenEquity() : null;
+  const dailyLossPolicy = account.keysPresent ? account.dailyLossPolicy() : null;
   const staleMs = config.staleOrderMaxMin * 60 * 1000;
   return {
     now: Date.now(),
@@ -200,6 +307,7 @@ function buildState() {
       userStream: userStream?.status ?? 'off',
       keyFingerprint: creds ? maskApiKey(creds.apiKey) : null,
       keyPermissions: account.keyRestrictions,
+      keyPermissionsTs: account.lastRestrictionsTs,
       keyPosture: keyPosture(account.keyRestrictions, account.keysPresent),
     },
     feeds: engine.feeds,
@@ -208,9 +316,15 @@ function buildState() {
       ? {
           totalUsdt: eq.totalUsdt,
           availableUsdt: eq.availableUsdt,
+          complete: eq.complete,
+          sourceFresh: eq.sourceFresh,
+          pricedAssets: eq.pricedAssets,
+          unpricedAssets: eq.unpricedAssets,
           dayOpenEquity: dayOpen,
-          dayChangeUsd: dayOpen !== null ? eq.totalUsdt - dayOpen : null,
+          dayChangeUsd: eq.complete && dayOpen !== null ? eq.totalUsdt - dayOpen : null,
           realizedTodayUsd: account.realizedTodayUsd(),
+          dailyLossPolicy,
+          fillReconciliation: account.fillReconciliationStatus(),
           entries: eq.entries,
         }
       : null,
@@ -246,7 +360,58 @@ function buildState() {
 }
 
 const app = express();
-app.use(express.json());
+const operatorAccess = new OperatorAccess();
+app.disable('x-powered-by');
+app.disable('etag');
+
+// These headers must cover every response, including authentication and JSON
+// parser failures. CSP allows only the resources used by the existing UI.
+app.use((_req, res, next) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' https://s3.tradingview.com; style-src 'self' 'unsafe-inline'; " +
+      "img-src 'self' data: https://cdn.jsdelivr.net https://assets.coincap.io https://coin-images.coingecko.com https://assets.coingecko.com https://*.tradingview.com; " +
+      "connect-src 'self' ws: wss: https://*.tradingview.com; frame-src https://www.tradingview.com https://s.tradingview.com https://www.tradingview-widget.com; font-src 'self'; object-src 'none'; " +
+      "frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+  );
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  res.setHeader('Accept-CH', 'Sec-CH-UA-Model, Sec-CH-UA-Form-Factors');
+  if (/^\/api(?:\/|$)/i.test(_req.path)) {
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Pragma', 'no-cache');
+  }
+  next();
+});
+app.use(express.json({ limit: '192kb', strict: true }));
+
+function runAsync(res: express.Response, task: () => Promise<void>): void {
+  void task().catch((error) => {
+    try {
+      ledger.logEvent('error_event', null, { source: 'http.async', message: error instanceof Error ? error.message : String(error) });
+    } catch {
+      // Response containment must not depend on the event sink being healthy.
+    }
+    if (!res.headersSent) {
+      res.status(500).json({ ok: false, code: 'REQUEST_FAILED', error: 'Request could not be completed.' });
+    } else {
+      res.end();
+    }
+  });
+}
+
+function safeLogEvent(kind: string, symbol: string | null, data: unknown): void {
+  try {
+    ledger.logEvent(kind, symbol, data);
+  } catch {
+    // Detached refresh/error paths must remain contained when persistence is
+    // degraded; primary health state still exposes the upstream failure.
+  }
+}
 
 function secretMatches(received: string, expected: string): boolean {
   const left = Buffer.from(received);
@@ -281,10 +446,6 @@ function notificationRoutingSnapshot() {
     },
   };
 }
-
-app.get('/api/notification-routing', (_req, res) => {
-  res.json(notificationRoutingSnapshot());
-});
 
 /**
  * Optional AWS EventBridge/API-Destination intake. It is unavailable until a
@@ -337,23 +498,12 @@ app.post('/api/notifications/ingest/aws', (req, res) => {
   res.status(202).json({ accepted: true, id: ev.id });
 });
 
-// Security headers. CSP allows exactly what the app uses: self-hosted
-// scripts, inline styles (React style props), the two icon CDNs, and the
-// app's own WebSocket. Nothing else loads, nothing can frame us.
-app.use((_req, res, next) => {
-  res.setHeader(
-    'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' https://s3.tradingview.com; style-src 'self' 'unsafe-inline'; " +
-      "img-src 'self' data: https://cdn.jsdelivr.net https://assets.coincap.io https://coin-images.coingecko.com https://assets.coingecko.com https://*.tradingview.com; " +
-      "connect-src 'self' ws: wss: https://*.tradingview.com; frame-src https://www.tradingview.com https://s.tradingview.com https://www.tradingview-widget.com; font-src 'self'; object-src 'none'; " +
-      "frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
-  );
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Referrer-Policy', 'no-referrer');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
-  res.setHeader('Accept-CH', 'Sec-CH-UA-Model, Sec-CH-UA-Form-Factors');
-  next();
+// The notification intake has its own exact bearer-token contract. Every
+// other API route shares one operator admission boundary.
+app.use('/api', operatorAccess.middleware());
+
+app.get('/api/notification-routing', (_req, res) => {
+  res.json(notificationRoutingSnapshot());
 });
 
 // ---- active session tracking ------------------------------------------------
@@ -372,6 +522,7 @@ const SESSION_API_RETENTION_MS = 24 * 60 * 60_000;
 const SESSION_DB_RETENTION_MS = 30 * 24 * 60 * 60_000;
 const SESSION_MEMORY_RETENTION_MS = 30 * 60_000;
 const SESSION_PERSIST_FLOOR_MS = 15_000;
+const SESSION_MEMORY_MAX = 256;
 const DEVICE_ID_COOKIE = 'cosmos_device';
 
 function headerText(value: string | string[] | undefined): string {
@@ -462,23 +613,29 @@ function isBrowserTelemetryRequest(req: express.Request): boolean {
     && !/(bot|crawler|spider|curl|wget|postmanruntime)/i.test(ua);
 }
 
-function persistBrowserSession(session: Sess, now = Date.now(), force = false): void {
-  if (session.pendingReqs <= 0) return;
-  if (!force && now - session.persistedAt < SESSION_PERSIST_FLOOR_MS) return;
-  ledger.recordBrowserSessionActivity({
-    id: session.id,
-    ip: session.ip,
-    country: session.country,
-    system: session.system,
-    browser: session.browser,
-    device: session.device,
-    model: session.model,
-    firstSeen: session.firstSeen,
-    lastSeen: session.lastSeen,
-    requests: session.pendingReqs,
-  });
-  session.pendingReqs = 0;
-  session.persistedAt = now;
+function persistBrowserSession(session: Sess, now = Date.now(), force = false): boolean {
+  if (session.pendingReqs <= 0) return true;
+  if (!force && now - session.persistedAt < SESSION_PERSIST_FLOOR_MS) return true;
+  try {
+    ledger.recordBrowserSessionActivity({
+      id: session.id,
+      ip: session.ip,
+      country: session.country,
+      system: session.system,
+      browser: session.browser,
+      device: session.device,
+      model: session.model,
+      firstSeen: session.firstSeen,
+      lastSeen: session.lastSeen,
+      requests: session.pendingReqs,
+    });
+    session.pendingReqs = 0;
+    session.persistedAt = now;
+    return true;
+  } catch {
+    // Visitor telemetry is best-effort and must never break the control API.
+    return false;
+  }
 }
 
 app.use((req, _res, next) => {
@@ -509,8 +666,14 @@ app.use((req, _res, next) => {
   }
   for (const [k, v] of sessions) {
     if (now - v.lastSeen <= SESSION_MEMORY_RETENTION_MS) continue;
-    persistBrowserSession(v, now, true);
-    sessions.delete(k);
+    if (persistBrowserSession(v, now, true)) sessions.delete(k);
+  }
+  if (sessions.size > SESSION_MEMORY_MAX) {
+    const oldest = [...sessions.values()].sort((a, b) => a.lastSeen - b.lastSeen);
+    for (const stale of oldest.slice(0, sessions.size - SESSION_MEMORY_MAX)) {
+      persistBrowserSession(stale, now, true);
+      sessions.delete(stale.id);
+    }
   }
   next();
 });
@@ -521,53 +684,12 @@ interface AwsOperatorResult {
   reason: string | null;
 }
 
-let cloudflareJwks: ReturnType<typeof createRemoteJWKSet> | null = null;
-let cloudflareJwksDomain = '';
-
 async function awsOperator(req: express.Request): Promise<AwsOperatorResult> {
   const controlHeader = req.headers['x-cosmos-control'];
   if (controlHeader !== 'aws-runner') return { authorized: false, operator: null, reason: 'Missing control-channel header.' };
-  const host = String(req.headers.host ?? '').toLowerCase();
-  const hostName = host.split(':')[0];
-  const local = hostName === 'localhost' || hostName === '127.0.0.1' || hostName === '[::1]';
-  const origin = String(req.headers.origin ?? '');
-  if (origin) {
-    try {
-      if (new URL(origin).host.toLowerCase() !== host) return { authorized: false, operator: null, reason: 'Cross-origin control request blocked.' };
-    } catch {
-      return { authorized: false, operator: null, reason: 'Invalid request origin.' };
-    }
-  }
-  if (local) return { authorized: true, operator: 'local-operator', reason: null };
-  const expected = String(process.env.AWS_CONTROL_OPERATOR_EMAIL ?? '').trim().toLowerCase();
-  const teamDomainRaw = String(process.env.CF_ACCESS_TEAM_DOMAIN ?? '').trim();
-  const audience = String(process.env.CF_ACCESS_AUD ?? '').trim();
-  const assertion = String(req.headers['cf-access-jwt-assertion'] ?? '').trim();
-  if (!expected) return { authorized: false, operator: null, reason: 'AWS_CONTROL_OPERATOR_EMAIL is not configured.' };
-  if (!teamDomainRaw || !audience) return { authorized: false, operator: null, reason: 'Cloudflare Access JWT verification is not configured.' };
-  if (!assertion) return { authorized: false, operator: null, reason: 'Cloudflare Access JWT assertion is missing.' };
-  let teamDomain: string;
-  try {
-    const parsed = new URL(teamDomainRaw);
-    if (parsed.protocol !== 'https:' || !parsed.hostname.endsWith('.cloudflareaccess.com')) {
-      return { authorized: false, operator: null, reason: 'Cloudflare Access team domain is invalid.' };
-    }
-    teamDomain = parsed.origin;
-  } catch {
-    return { authorized: false, operator: null, reason: 'Cloudflare Access team domain is invalid.' };
-  }
-  try {
-    if (!cloudflareJwks || cloudflareJwksDomain !== teamDomain) {
-      cloudflareJwks = createRemoteJWKSet(new URL(`${teamDomain}/cdn-cgi/access/certs`));
-      cloudflareJwksDomain = teamDomain;
-    }
-    const { payload } = await jwtVerify(assertion, cloudflareJwks, { issuer: teamDomain, audience });
-    const cfUser = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : '';
-    if (!cfUser || cfUser !== expected) return { authorized: false, operator: cfUser || null, reason: 'Verified Cloudflare Access operator does not match.' };
-    return { authorized: true, operator: cfUser, reason: null };
-  } catch {
-    return { authorized: false, operator: null, reason: 'Cloudflare Access JWT verification failed.' };
-  }
+  const verified = operatorAccess.operator(req) ?? (await operatorAccess.verify(req)).operator;
+  if (!verified) return { authorized: false, operator: null, reason: 'Verified operator identity is required.' };
+  return { authorized: true, operator: verified.email ?? verified.id, reason: null };
 }
 
 async function requireAwsOperator(req: express.Request, res: express.Response): Promise<AwsOperatorResult | null> {
@@ -584,7 +706,12 @@ function sendAwsControlError(res: express.Response, error: unknown): void {
     res.status(error.statusCode).json({ ok: false, code: error.code, error: error.message });
     return;
   }
-  res.status(500).json({ ok: false, code: 'AWS_CONTROL_ERROR', error: error instanceof Error ? error.message : String(error) });
+  try {
+    ledger.logEvent('error_event', null, { source: 'aws.control', message: error instanceof Error ? error.message : String(error) });
+  } catch {
+    // Preserve a stable control-plane response if persistence is degraded.
+  }
+  res.status(500).json({ ok: false, code: 'AWS_CONTROL_ERROR', error: 'AWS control request failed.' });
 }
 
 app.get('/api/sessions', (req, res) => {
@@ -650,32 +777,92 @@ app.get('/api/state', (_req, res) => {
   res.json(buildState());
 });
 
+function integerQuery(
+  value: unknown,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+): number | null {
+  if (value === undefined) return fallback;
+  if (typeof value !== 'string' || !/^-?\d+$/.test(value.trim())) return null;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) return null;
+  return parsed;
+}
+
+function integerBody(
+  value: unknown,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+): number | null {
+  if (value === undefined) return fallback;
+  const parsed = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && /^-?\d+$/.test(value.trim()) ? Number(value) : Number.NaN;
+  return Number.isSafeInteger(parsed) && parsed >= minimum && parsed <= maximum ? parsed : null;
+}
+
+function rejectGetRefresh(req: express.Request, res: express.Response): boolean {
+  if (!Object.prototype.hasOwnProperty.call(req.query, 'refresh')) return false;
+  res.status(400).json({
+    ok: false,
+    code: 'REFRESH_REQUIRES_POST',
+    error: 'Forced refreshes require an authenticated same-origin POST request.',
+  });
+  return true;
+}
+
+function optionalPositiveInteger(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || !/^\d+$/.test(value.trim())) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function marketSymbol(value: unknown, minimum = 1, maximum = 20): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toUpperCase();
+  const pattern = new RegExp(`^[A-Z0-9]{${minimum},${maximum}}$`);
+  return pattern.test(normalized) ? normalized : null;
+}
+
+function eventFilters(req: express.Request):
+  | { ok: true; kind?: string; symbol?: string; q?: string; since?: number; until?: number }
+  | { ok: false; error: string } {
+  const kind = req.query.kind === undefined ? undefined : String(req.query.kind).trim();
+  const symbol = req.query.symbol === undefined ? undefined : String(req.query.symbol).trim().toUpperCase();
+  const q = req.query.q === undefined ? undefined : String(req.query.q).trim();
+  const since = optionalPositiveInteger(req.query.since);
+  const until = optionalPositiveInteger(req.query.until);
+  if (kind !== undefined && !/^[a-zA-Z0-9._:-]{1,80}$/.test(kind)) return { ok: false, error: 'invalid event kind' };
+  if (symbol !== undefined && !/^[A-Z0-9]{2,20}$/.test(symbol)) return { ok: false, error: 'invalid event symbol' };
+  if (q !== undefined && (q.length < 2 || q.length > 60 || /^[%_*\s]+$/.test(q))) return { ok: false, error: 'event search must contain 2-60 literal characters' };
+  if (since === null || until === null) return { ok: false, error: 'event timestamps must be positive integers' };
+  return { ok: true, kind, symbol, q, since, until };
+}
+
 app.get('/api/events', (req, res) => {
-  const requestedLimit = Number(req.query.limit ?? 200);
-  const limit = Math.max(1, Math.min(Number.isFinite(requestedLimit) ? requestedLimit : 200, 20_000));
-  const kind = req.query.kind ? String(req.query.kind) : undefined;
-  const symbol = req.query.symbol ? String(req.query.symbol).toUpperCase() : undefined;
-  const q = req.query.q ? String(req.query.q).slice(0, 60) : undefined;
-  const requestedSince = Number(req.query.since);
-  const since = Number.isFinite(requestedSince) && requestedSince > 0 ? requestedSince : undefined;
-  const requestedBeforeId = Number(req.query.beforeId);
-  const beforeId = Number.isFinite(requestedBeforeId) && requestedBeforeId > 0 ? requestedBeforeId : undefined;
-  const requestedUntil = Number(req.query.until);
-  const until = Number.isFinite(requestedUntil) && requestedUntil > 0 ? requestedUntil : undefined;
-  const requestedOffset = Number(req.query.offset ?? 0);
-  const offset = Math.max(0, Math.min(Number.isFinite(requestedOffset) ? requestedOffset : 0, 20_000));
-  res.json(ledger.recentEvents(limit, kind, symbol, q, since, beforeId, until, offset));
+  const limit = integerQuery(req.query.limit, 200, 1, 2_000);
+  const offset = integerQuery(req.query.offset, 0, 0, 10_000);
+  const beforeId = optionalPositiveInteger(req.query.beforeId);
+  const afterId = optionalPositiveInteger(req.query.afterId);
+  const filters = eventFilters(req);
+  if (limit === null || offset === null || beforeId === null || afterId === null || (beforeId !== undefined && afterId !== undefined) || !filters.ok) {
+    const error = !filters.ok ? filters.error : 'event pagination must use bounded integers';
+    res.status(400).json({ code: 'INVALID_EVENT_QUERY', error });
+    return;
+  }
+  res.json(ledger.recentEvents(limit, filters.kind, filters.symbol, filters.q, filters.since, beforeId, filters.until, offset, afterId));
 });
 
 app.get('/api/events/count', (req, res) => {
-  const kind = req.query.kind ? String(req.query.kind) : undefined;
-  const symbol = req.query.symbol ? String(req.query.symbol).toUpperCase() : undefined;
-  const q = req.query.q ? String(req.query.q).slice(0, 60) : undefined;
-  const requestedSince = Number(req.query.since);
-  const since = Number.isFinite(requestedSince) && requestedSince > 0 ? requestedSince : undefined;
-  const requestedUntil = Number(req.query.until);
-  const until = Number.isFinite(requestedUntil) && requestedUntil > 0 ? requestedUntil : undefined;
-  res.json({ count: ledger.countEvents(kind, symbol, q, since, until) });
+  const filters = eventFilters(req);
+  if (!filters.ok) {
+    res.status(400).json({ code: 'INVALID_EVENT_QUERY', error: filters.error });
+    return;
+  }
+  res.json({ count: ledger.countEvents(filters.kind, filters.symbol, filters.q, filters.since, filters.until) });
 });
 
 // ---- Binance announcements proxy (real critical announcements; cached) ------
@@ -686,7 +873,7 @@ type NewsItem = { id: number; title: string; date: string | null; url: string; i
 const NEWS_CATALOGS = new Set([48, 49, 93, 50, 161, 157, 51, 128]);
 const NEWS_AGGREGATE_CATALOGS = [48, 49, 93, 50, 161, 157, 51, 128];
 const newsCache = new Map<number, { at: number; items: NewsItem[] }>();
-const newsInFlight = new Map<number, Promise<void>>();
+const newsInFlight = new Map<number, Promise<boolean>>();
 
 async function refreshNews(catalogId: number): Promise<void> {
   const url = `https://www.binance.com/bapi/apex/v1/public/apex/cms/article/catalog/list/query?catalogId=${catalogId}&pageNo=1&pageSize=16`;
@@ -696,9 +883,10 @@ async function refreshNews(catalogId: number): Promise<void> {
     const res = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' },
       signal: ctrl.signal,
+      redirect: 'error',
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = (await res.json()) as { data?: { articles?: { id: number; code: string; title: string }[] } };
+    const json = await readBoundedJson<{ data?: { articles?: { id: number; code: string; title: string }[] } }>(res, 512 * 1024);
     const items: NewsItem[] = (json.data?.articles ?? []).map((a) => {
       const m = a.title.match(/\s*\((\d{4}-\d{2}-\d{2})\)\s*$/);
       const title = m ? a.title.slice(0, m.index).trim() : a.title.trim();
@@ -723,27 +911,30 @@ function compareNewsItems(a: NewsItem, b: NewsItem): number {
   return b.id - a.id;
 }
 
-async function ensureNewsCatalog(catalogId: number, force: boolean): Promise<void> {
+async function ensureNewsCatalog(catalogId: number, force: boolean): Promise<boolean> {
   const cached = newsCache.get(catalogId);
   const fresh = !force && cached && Date.now() - cached.at < 5 * 60_000;
   if (!fresh && !newsInFlight.has(catalogId)) {
     const p = refreshNews(catalogId)
+      .then(() => true)
       .catch((err) => {
-        ledger.logEvent('error_event', null, { source: 'news.fetch', message: String(err), catalogId });
+        safeLogEvent('error_event', null, { source: 'news.fetch', message: String(err), catalogId });
+        return false;
       })
       .finally(() => newsInFlight.delete(catalogId));
     newsInFlight.set(catalogId, p);
   }
-  if ((force || !newsCache.get(catalogId)) && newsInFlight.has(catalogId)) await newsInFlight.get(catalogId)!.catch(() => undefined);
+  if ((force || !newsCache.get(catalogId)) && newsInFlight.has(catalogId)) return newsInFlight.get(catalogId)!;
+  return Boolean(fresh || newsCache.get(catalogId));
 }
 
 app.get('/api/news', (req, res) => {
-  void (async () => {
-    const force = req.query.refresh === '1' || req.query.refresh === 'true';
+  runAsync(res, async () => {
+    if (rejectGetRefresh(req, res)) return;
     const aggregate = String(req.query.catalog ?? '') === 'all';
     const catalogId = NEWS_CATALOGS.has(Number(req.query.catalog)) ? Number(req.query.catalog) : 48;
     const catalogIds = aggregate ? NEWS_AGGREGATE_CATALOGS : [catalogId];
-    await Promise.all(catalogIds.map((id) => ensureNewsCatalog(id, force)));
+    await Promise.all(catalogIds.map((id) => ensureNewsCatalog(id, false)));
     const outputs = catalogIds.map((id) => newsCache.get(id)).filter((out): out is { at: number; items: NewsItem[] } => Boolean(out));
     if (outputs.length) {
       const byId = new Map<number, NewsItem>();
@@ -753,22 +944,80 @@ app.get('/api/news', (req, res) => {
       res.json({ catalog: aggregate ? 'all' : catalogId, items, fetchedAt });
     }
     else res.status(503).json({ error: 'binance announcements unavailable', items: [] });
-  })();
+  });
+});
+
+app.post('/api/news/refresh', (req, res) => {
+  runAsync(res, async () => {
+    const requestedCatalog = (req.body as { catalog?: unknown } | null)?.catalog;
+    const aggregate = requestedCatalog === 'all';
+    const numericCatalog = typeof requestedCatalog === 'number' || typeof requestedCatalog === 'string'
+      ? Number(requestedCatalog)
+      : 48;
+    if (!aggregate && !NEWS_CATALOGS.has(numericCatalog)) {
+      res.status(400).json({ ok: false, error: 'news catalog is invalid' });
+      return;
+    }
+    const catalogIds = aggregate ? NEWS_AGGREGATE_CATALOGS : [numericCatalog];
+    const refreshResults = await Promise.all(catalogIds.map((id) => ensureNewsCatalog(id, true)));
+    const outputs = catalogIds.map((id) => newsCache.get(id)).filter((out): out is { at: number; items: NewsItem[] } => Boolean(out));
+    if (!outputs.length || refreshResults.some((ok) => !ok)) {
+      const byId = new Map<number, NewsItem>();
+      outputs.flatMap((out) => out.items).forEach((item) => byId.set(item.id, item));
+      res.status(503).json({
+        ok: false,
+        stale: outputs.length > 0,
+        error: 'binance announcement refresh failed',
+        items: Array.from(byId.values()).sort(compareNewsItems).slice(0, aggregate ? 96 : 20),
+        fetchedAt: outputs.length ? Math.max(...outputs.map((out) => out.at)) : null,
+      });
+      return;
+    }
+    const byId = new Map<number, NewsItem>();
+    outputs.flatMap((out) => out.items).forEach((item) => byId.set(item.id, item));
+    res.json({
+      ok: true,
+      catalog: aggregate ? 'all' : numericCatalog,
+      items: Array.from(byId.values()).sort(compareNewsItems).slice(0, aggregate ? 96 : 20),
+      fetchedAt: Math.max(...outputs.map((out) => out.at)),
+    });
+  });
 });
 
 // ---- Market news context proxy (primary + venue + protocol + issuer + Tree/RSS/Lookonchain) ----
 app.get('/api/news-context', (req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     try {
-      const force = req.query.refresh === '1' || req.query.refresh === 'true';
-      const limit = Math.max(20, Math.min(Number(req.query.limit ?? 220), 8000));
-      const payload = await getNewsContext(force);
+      if (rejectGetRefresh(req, res)) return;
+      const limit = integerQuery(req.query.limit, 220, 20, 600);
+      if (limit === null) {
+        res.status(400).json({ error: 'news limit must be an integer between 20 and 600' });
+        return;
+      }
+      const payload = await getNewsContext(false);
       res.json({ ...payload, items: payload.items.slice(0, limit) });
     } catch (err) {
-      ledger.logEvent('error_event', null, { source: 'news-context.fetch', message: String(err) });
+      safeLogEvent('error_event', null, { source: 'news-context.fetch', message: String(err) });
       res.status(503).json({ error: 'news context unavailable', source: 'primary+venue+protocol+issuer+tree+rss+lookonchain', items: [], sources: [] });
     }
-  })();
+  });
+});
+
+app.post('/api/news-context/refresh', (req, res) => {
+  runAsync(res, async () => {
+    const limit = integerBody((req.body as { limit?: unknown } | null)?.limit, 220, 20, 600);
+    if (limit === null) {
+      res.status(400).json({ ok: false, error: 'news limit must be an integer between 20 and 600' });
+      return;
+    }
+    try {
+      const payload = await refreshNewsContextNow();
+      res.json({ ok: true, ...payload, items: payload.items.slice(0, limit) });
+    } catch (err) {
+      safeLogEvent('error_event', null, { source: 'news-context.refresh', message: String(err) });
+      res.status(503).json({ ok: false, error: 'news context refresh failed', items: [], sources: [] });
+    }
+  });
 });
 
 // One server-owned refresh loop runs whether or not a browser is open. This is
@@ -781,24 +1030,49 @@ function startNewsRefreshLoop(): void {
   newsRefreshTimer = setInterval(() => { void getNewsContext(true).catch(() => undefined); }, 5_000);
 }
 
+let newsStreamClients = 0;
+const NEWS_STREAM_MAX_CLIENTS = 16;
+
 app.get('/api/news-stream', (req, res) => {
-  const limit = Math.max(20, Math.min(Number(req.query.limit ?? 220), 600));
+  const limit = integerQuery(req.query.limit, 220, 20, 600);
+  if (limit === null) {
+    res.status(400).json({ error: 'news stream limit must be an integer between 20 and 600' });
+    return;
+  }
+  if (newsStreamClients >= NEWS_STREAM_MAX_CLIENTS) {
+    res.status(429).json({ error: 'news stream capacity reached' });
+    return;
+  }
+  newsStreamClients++;
+  let slowWrites = 0;
+  let closed = false;
   res.status(200);
   res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Cache-Control', 'private, no-store, no-transform');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
   const send = (payload: Awaited<ReturnType<typeof getNewsContext>>) => {
-    res.write(`event: news\ndata: ${JSON.stringify({ ...payload, items: payload.items.slice(0, limit) })}\n\n`);
+    if (closed) return;
+    const accepted = res.write(`event: news\ndata: ${JSON.stringify({ ...payload, items: payload.items.slice(0, limit) })}\n\n`);
+    slowWrites = accepted ? 0 : slowWrites + 1;
+    if (slowWrites >= 3) res.end();
   };
   const unsubscribe = subscribeNewsContext(send);
   void getNewsContext(false).catch(() => undefined);
-  const heartbeat = setInterval(() => res.write(': keep-alive\n\n'), 15_000);
-  req.on('close', () => {
+  const heartbeat = setInterval(() => {
+    if (!closed && !res.write(': keep-alive\n\n')) slowWrites++;
+    if (slowWrites >= 3) res.end();
+  }, 15_000);
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    newsStreamClients--;
     clearInterval(heartbeat);
     unsubscribe();
-  });
+  };
+  req.on('close', close);
+  res.on('close', close);
 });
 
 // ---- TradingView economic calendar proxy (real events; cached 60 sec) -------
@@ -809,7 +1083,7 @@ type CalItem = {
   comment: string | null; source: string | null; sourceUrl: string | null;
 };
 let calCache: { at: number; items: CalItem[] } | null = null;
-let calInFlight: Promise<void> | null = null;
+let calInFlight: Promise<boolean> | null = null;
 
 async function refreshCalendar(): Promise<void> {
   const now = new Date();
@@ -826,9 +1100,10 @@ async function refreshCalendar(): Promise<void> {
     const res = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json', Origin: 'https://www.tradingview.com' },
       signal: ctrl.signal,
+      redirect: 'error',
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = (await res.json()) as { result?: Record<string, unknown>[] };
+    const json = await readBoundedJson<{ result?: Record<string, unknown>[] }>(res, 2 * 1024 * 1024);
     const items: CalItem[] = (json.result ?? []).map((e) => ({
       id: String(e.id),
       title: String(e.title ?? ''),
@@ -854,26 +1129,38 @@ async function refreshCalendar(): Promise<void> {
   }
 }
 
-function startCalendarRefresh(): Promise<void> {
+function startCalendarRefresh(): Promise<boolean> {
   if (!calInFlight) {
     calInFlight = refreshCalendar()
-      .catch((err) => { ledger.logEvent('error_event', null, { source: 'calendar.fetch', message: String(err) }); })
+      .then(() => true)
+      .catch((err) => {
+        safeLogEvent('error_event', null, { source: 'calendar.fetch', message: String(err) });
+        return false;
+      })
       .finally(() => { calInFlight = null; });
   }
   return calInFlight;
 }
 
 app.get('/api/calendar', (req, res) => {
-  void (async () => {
-    const force = req.query.refresh === '1' || req.query.refresh === 'true';
-    const fresh = !force && calCache && Date.now() - calCache.at < 60_000;
+  runAsync(res, async () => {
+    if (rejectGetRefresh(req, res)) return;
+    const fresh = calCache && Date.now() - calCache.at < 60_000;
     if (!fresh) void startCalendarRefresh();
-    // Cached responses stay instant. A requested refresh updates the shared
-    // cache in the background instead of making every browser wait upstream.
+    // Cached reads stay instant; only authenticated same-origin POST routes
+    // may intentionally force upstream work.
     if (!calCache && calInFlight) await calInFlight.catch(() => undefined);
     if (calCache) res.json({ items: calCache.items, fetchedAt: calCache.at });
     else res.status(503).json({ error: 'calendar unavailable', items: [] });
-  })();
+  });
+});
+
+app.post('/api/calendar/refresh', (_req, res) => {
+  runAsync(res, async () => {
+    const refreshed = await startCalendarRefresh();
+    if (refreshed && calCache) res.json({ ok: true, items: calCache.items, fetchedAt: calCache.at });
+    else res.status(503).json({ ok: false, stale: Boolean(calCache), error: 'calendar refresh failed', items: calCache?.items ?? [], fetchedAt: calCache?.at ?? null });
+  });
 });
 
 // ---- FX rates proxy (real USD rates; cached 30 min) -------------------------
@@ -884,9 +1171,9 @@ async function refreshFx(): Promise<void> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 10_000);
   try {
-    const res = await fetch('https://open.er-api.com/v6/latest/USD', { signal: ctrl.signal });
+    const res = await fetch('https://open.er-api.com/v6/latest/USD', { signal: ctrl.signal, redirect: 'error' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = (await res.json()) as { result?: string; rates?: Record<string, number> };
+    const json = await readBoundedJson<{ result?: string; rates?: Record<string, number> }>(res, 512 * 1024);
     if (json.result !== 'success' || !json.rates) throw new Error('bad fx payload');
     fxCache = { at: Date.now(), rates: json.rates };
   } finally {
@@ -895,17 +1182,17 @@ async function refreshFx(): Promise<void> {
 }
 
 app.get('/api/fx', (_req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     const fresh = fxCache && Date.now() - fxCache.at < 30 * 60_000;
     if (!fresh && !fxInFlight) {
       fxInFlight = refreshFx()
-        .catch((err) => { ledger.logEvent('error_event', null, { source: 'fx.fetch', message: String(err) }); })
+        .catch((err) => { safeLogEvent('error_event', null, { source: 'fx.fetch', message: String(err) }); })
         .finally(() => { fxInFlight = null; });
     }
     if (!fxCache && fxInFlight) await fxInFlight.catch(() => undefined);
     if (fxCache) res.json({ base: 'USD', rates: fxCache.rates, fetchedAt: fxCache.at });
     else res.status(503).json({ error: 'fx unavailable', rates: {} });
-  })();
+  });
 });
 
 app.get('/api/fills', (_req, res) => {
@@ -913,21 +1200,23 @@ app.get('/api/fills', (_req, res) => {
 });
 
 app.post('/api/fills/import', (req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     const symbol = String((req.body as Record<string, unknown>).symbol ?? '');
     if (!client) {
       res.status(400).json({ error: 'Binance keys not configured' });
       return;
     }
-    if (!/^[A-Z0-9]{4,20}$/.test(symbol)) {
-      res.status(400).json({ error: 'bad symbol' });
+    if (!/^[A-Z0-9]{1,16}USDT$/.test(symbol)) {
+      res.status(400).json({ error: 'fill imports currently support USDT symbols only' });
       return;
     }
+    account.registerFillSymbols([symbol]);
     try {
       const trades = await client.myTrades(symbol, 200);
       let imported = 0;
       for (const t of trades) {
-        const isNew = ledger.insertFill({
+        if (t.symbol !== symbol) throw new Error('Binance trade payload symbol mismatch');
+        const isNew = account.recordFill({
           symbol: t.symbol,
           tradeId: t.id,
           orderId: t.orderId,
@@ -947,7 +1236,7 @@ app.post('/api/fills/import', (req, res) => {
     } catch (err) {
       res.status(502).json({ error: String((err as Error).message) });
     }
-  })();
+  });
 });
 
 function usableBook(b: BookTicker | undefined): BookTicker | null {
@@ -982,27 +1271,28 @@ function gapPct(a: number | null, b: number | null, den: number | null): number 
 // Real balance history: Binance's daily SPOT account snapshots (~30 days is
 // all their API exposes) converted to USD with daily BTCUSDT closes. Our own
 // 15-minute snapshots take over from wherever these end.
-let eqHistCache: { ts: number; rows: { ts: number; totalUsdt: number }[]; reconstructedBefore: number | null } | null = null;
-const STABLE_FLOW = new Set(['USDT', 'USDC', 'FDUSD', 'TUSD', 'BUSD', 'DAI']);
+type EquityHistorySnapshot = {
+  ts: number;
+  rows: { ts: number; totalUsdt: number }[];
+  reconstructedBefore: number | null;
+  reconstruction: { complete: boolean; reasons: string[] };
+};
+let eqHistCache: EquityHistorySnapshot | null = null;
+let eqHistInFlight: Promise<EquityHistorySnapshot> | null = null;
+const STABLE_FLOW = new Set(['USDT']);
 
 function recentCompleteEquityRows(afterTs = 0): { ts: number; totalUsdt: number }[] {
   return ledger
     .recentEvents(500, 'account_snapshot')
     .map((event) => {
-      const data = event.data as { totalUsdt?: unknown; availableUsdt?: unknown; assets?: unknown } | null;
+      const data = event.data as { totalUsdt?: unknown; complete?: unknown } | null;
       return {
         ts: event.ts,
         totalUsdt: Number(data?.totalUsdt),
-        availableUsdt: Number(data?.availableUsdt),
-        assets: Number(data?.assets),
+        complete: data?.complete === true,
       };
     })
-    .filter((row) => row.ts > afterTs && Number.isFinite(row.totalUsdt) && row.totalUsdt >= 0)
-    .filter((row) => {
-      if (!(row.assets > 1) || !Number.isFinite(row.availableUsdt)) return true;
-      const partialTolerance = Math.max(0.05, Math.abs(row.totalUsdt) * 0.001);
-      return Math.abs(row.totalUsdt - row.availableUsdt) > partialTolerance;
-    })
+    .filter((row) => row.complete && row.ts > afterTs && Number.isFinite(row.totalUsdt) && row.totalUsdt >= 0)
     .map(({ ts, totalUsdt }) => ({ ts, totalUsdt }))
     .reverse();
 }
@@ -1019,116 +1309,242 @@ function withRecentEquityRows(base: { ts: number; totalUsdt: number }[]): { ts: 
   return deduped;
 }
 
+function externalFlowId(
+  direction: 'deposit' | 'withdrawal',
+  row: { id?: unknown; txId?: unknown },
+  fallback: readonly (string | number)[],
+): string {
+  for (const value of [row.id, row.txId]) {
+    const normalized = typeof value === 'number' && Number.isSafeInteger(value)
+      ? String(value)
+      : typeof value === 'string' ? value.trim() : '';
+    if (normalized && normalized.length <= 256 && !/[\u0000-\u001f\u007f]/.test(normalized)) {
+      return `${direction}:${normalized}`;
+    }
+  }
+  return `${direction}:fallback:${createHash('sha256').update(JSON.stringify(fallback)).digest('hex')}`;
+}
+
+function nonNegativeDecimal(value: unknown): number | null {
+  if (typeof value === 'string' && value.trim() === '') return null;
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+async function buildEquityHistorySnapshot(): Promise<EquityHistorySnapshot> {
+  if (!client) throw new Error('Binance key is not configured');
+  const now = Date.now();
+  const reconstructionReasons = new Set<string>();
+  const [snaps, btcCandles] = await Promise.all([
+    client.accountSnapshots(),
+    fetchKlineCandles('BTCUSDT', '1d', 40, 'spot'),
+  ]);
+  if (!snaps || !Array.isArray(snaps.snapshotVos) || snaps.snapshotVos.length === 0) {
+    throw new Error('No signed Binance account snapshots are available');
+  }
+  const closeByDay = new Map<string, number>();
+  for (const candle of btcCandles) {
+    if (!Number.isSafeInteger(candle.t) || !Number.isFinite(candle.c) || candle.c <= 0) {
+      throw new Error('BTC history returned an invalid candle');
+    }
+    closeByDay.set(new Date(candle.t).toISOString().slice(0, 10), candle.c);
+  }
+  const dailies = snaps.snapshotVos.map((snapshot) => {
+    const btc = nonNegativeDecimal(snapshot.data?.totalAssetOfBtc);
+    const updateTime = Number(snapshot.updateTime);
+    if (!Number.isSafeInteger(updateTime) || updateTime <= 0 || btc === null) {
+      throw new Error('A signed Binance account snapshot is malformed');
+    }
+    const day = new Date(updateTime).toISOString().slice(0, 10);
+    const close = closeByDay.get(day);
+    if (!close) throw new Error(`BTC valuation is unavailable for signed snapshot ${day}`);
+    const totalUsdt = btc * close;
+    if (!Number.isFinite(totalUsdt) || totalUsdt < 0) throw new Error(`Signed snapshot valuation is invalid for ${day}`);
+    return { ts: updateTime, totalUsdt };
+  }).sort((a, b) => a.ts - b.ts);
+
+  const windows: [number, number][] = [
+    [now - 90 * 86_400_000, now],
+    [now - 180 * 86_400_000, now - 90 * 86_400_000],
+    [now - 200 * 86_400_000, now - 180 * 86_400_000],
+  ];
+  const flows: { id: string; ts: number; usd: number }[] = [];
+  const seenFlows = new Set<string>();
+  const priceCache = new Map<string, Map<string, number>>();
+  const flowUsd = async (coin: string, amount: number, ts: number): Promise<number | null> => {
+    if (!/^[A-Z0-9]{1,20}$/.test(coin) || !Number.isFinite(amount) || amount < 0 || !Number.isSafeInteger(ts) || ts <= 0) {
+      throw new Error('A completed wallet flow is malformed');
+    }
+    if (STABLE_FLOW.has(coin)) return amount;
+    let closes = priceCache.get(coin);
+    if (!closes) {
+      closes = new Map<string, number>();
+      try {
+        for (const candle of await fetchKlineCandles(`${coin}USDT`, '1d', 220, 'spot')) {
+          if (Number.isSafeInteger(candle.t) && Number.isFinite(candle.c) && candle.c > 0) {
+            closes.set(new Date(candle.t).toISOString().slice(0, 10), candle.c);
+          }
+        }
+      } catch {
+        reconstructionReasons.add(`Historical ${coin}USDT prices are unavailable`);
+      }
+      priceCache.set(coin, closes);
+    }
+    const close = closes.get(new Date(ts).toISOString().slice(0, 10));
+    if (!close) {
+      reconstructionReasons.add(`Historical ${coin} valuation is incomplete`);
+      return null;
+    }
+    return amount * close;
+  };
+
+  for (const [startTime, endTime] of windows) {
+    // This refresh is atomic: a failed signed history window leaves the last
+    // known-good cache untouched instead of publishing a partial chart.
+    const [deposits, withdrawals] = await Promise.all([
+      client.depositHistory(startTime, endTime),
+      client.withdrawHistory(startTime, endTime),
+    ]);
+    if (!Array.isArray(deposits) || !Array.isArray(withdrawals)) throw new Error('Binance wallet history is malformed');
+    if (deposits.length >= 1_000) reconstructionReasons.add('Deposit history may exceed Binance page limits');
+    if (withdrawals.length >= 1_000) reconstructionReasons.add('Withdrawal history may exceed Binance page limits');
+    for (const deposit of deposits) {
+      if (deposit.status !== 1) continue;
+      const coin = String(deposit.coin);
+      const amount = nonNegativeDecimal(deposit.amount);
+      const ts = Number(deposit.insertTime);
+      const runtimeRow = deposit as typeof deposit & { id?: unknown; txId?: unknown };
+      const id = externalFlowId('deposit', runtimeRow, [coin, String(deposit.amount), ts]);
+      if (seenFlows.has(id)) continue;
+      seenFlows.add(id);
+      if (amount === null || ts < startTime - 1_000 || ts > endTime + 5 * 60_000) throw new Error('A completed deposit is malformed');
+      const usd = await flowUsd(coin, amount, ts);
+      if (usd !== null) flows.push({ id, ts, usd });
+    }
+    for (const withdrawal of withdrawals) {
+      if (withdrawal.status !== 6) continue;
+      const coin = String(withdrawal.coin);
+      const ts = Date.parse(`${String(withdrawal.applyTime).replace(' ', 'T')}Z`);
+      const amount = nonNegativeDecimal(withdrawal.amount);
+      const fee = nonNegativeDecimal(withdrawal.transactionFee);
+      if (amount === null || fee === null || ts < startTime - 1_000 || ts > endTime + 5 * 60_000) {
+        throw new Error('A completed withdrawal is malformed');
+      }
+      const runtimeRow = withdrawal as typeof withdrawal & { id?: unknown; txId?: unknown };
+      const id = externalFlowId('withdrawal', runtimeRow, [coin, String(withdrawal.amount), String(withdrawal.transactionFee), ts]);
+      if (seenFlows.has(id)) continue;
+      seenFlows.add(id);
+      const usd = await flowUsd(coin, amount + fee, ts);
+      if (usd !== null) flows.push({ id, ts, usd: -usd });
+    }
+  }
+
+  const rows: { ts: number; totalUsdt: number }[] = [...dailies];
+  let reconstructedBefore: number | null = null;
+  if (reconstructionReasons.size === 0) {
+    const anchor = dailies[0];
+    const horizon = now - 185 * 86_400_000;
+    const older = flows
+      .filter((flow) => flow.ts < anchor.ts && flow.ts >= horizon)
+      .sort((a, b) => b.ts - a.ts);
+    reconstructedBefore = anchor.ts;
+    let running = anchor.totalUsdt;
+    const back: { ts: number; totalUsdt: number }[] = [];
+    for (const flow of older) {
+      back.push({ ts: flow.ts, totalUsdt: running });
+      running = Math.max(0, running - flow.usd);
+      back.push({ ts: flow.ts - 1, totalUsdt: running });
+    }
+    back.push({ ts: horizon, totalUsdt: running });
+    rows.unshift(...back.sort((a, b) => a.ts - b.ts));
+    reconstructionReasons.add('Pre-anchor balances are estimates from external wallet flows; trading PnL and internal transfers are not reconstructed');
+  }
+  return {
+    ts: Date.now(),
+    rows,
+    reconstructedBefore,
+    reconstruction: { complete: false, reasons: [...reconstructionReasons].slice(0, 20) },
+  };
+}
+
+function startEquityHistoryRefresh(): Promise<EquityHistorySnapshot> {
+  if (!eqHistInFlight) {
+    const refresh = buildEquityHistorySnapshot().then((snapshot) => {
+      eqHistCache = snapshot;
+      return snapshot;
+    });
+    eqHistInFlight = refresh;
+    void refresh.catch(() => undefined);
+    void refresh.then(
+      () => { if (eqHistInFlight === refresh) eqHistInFlight = null; },
+      () => { if (eqHistInFlight === refresh) eqHistInFlight = null; },
+    );
+  }
+  return eqHistInFlight;
+}
+
 app.get('/api/equity-history', (_req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     const now = Date.now();
     if (eqHistCache && now - eqHistCache.ts < 3_600_000) {
-      res.json({ rows: withRecentEquityRows(eqHistCache.rows), reconstructedBefore: eqHistCache.reconstructedBefore, fetchedAt: eqHistCache.ts });
+      res.json({ rows: withRecentEquityRows(eqHistCache.rows), reconstructedBefore: eqHistCache.reconstructedBefore, reconstruction: eqHistCache.reconstruction, fetchedAt: eqHistCache.ts });
       return;
     }
     if (!client) {
-      res.json({ rows: [], reconstructedBefore: null, fetchedAt: null });
+      res.json({ rows: [], reconstructedBefore: null, reconstruction: { complete: false, reasons: ['Binance key is not configured'] }, fetchedAt: null });
       return;
     }
     try {
-      // 1. last ~30 days of REAL daily snapshots, valued at daily BTC closes
-      const [snaps, btcCandles] = await Promise.all([
-        client.accountSnapshots(),
-        fetchKlineCandles('BTCUSDT', '1d', 40, 'spot'),
-      ]);
-      const closeByDay = new Map<string, number>();
-      for (const k of btcCandles) closeByDay.set(new Date(k.t).toISOString().slice(0, 10), k.c);
-      const dailies = (snaps.snapshotVos ?? [])
-        .map((v) => {
-          const btc = Number(v.data?.totalAssetOfBtc) || 0;
-          const day = new Date(v.updateTime).toISOString().slice(0, 10);
-          const close = closeByDay.get(day) ?? btcCandles[btcCandles.length - 1]?.c ?? null;
-          return close ? { ts: v.updateTime, totalUsdt: btc * close } : null;
-        })
-        .filter((r): r is { ts: number; totalUsdt: number } => r !== null)
-        .sort((a, b) => a.ts - b.ts);
-
-      // 2. REAL external flows over ~190 days (deposits + withdrawals, 90d pages)
-      const windows: [number, number][] = [
-        [now - 90 * 86_400_000, now],
-        [now - 180 * 86_400_000, now - 90 * 86_400_000],
-        [now - 200 * 86_400_000, now - 180 * 86_400_000],
-      ];
-      const flows: { ts: number; usd: number }[] = []; // +usd entered the account
-      const priceCache = new Map<string, Map<string, number>>();
-      const flowUsd = async (coin: string, amount: number, ts: number): Promise<number> => {
-        if (STABLE_FLOW.has(coin)) return amount;
-        let closes = priceCache.get(coin);
-        if (!closes) {
-          closes = new Map<string, number>();
-          try {
-            for (const k of await fetchKlineCandles(`${coin}USDT`, '1d', 220, 'spot')) {
-              closes.set(new Date(k.t).toISOString().slice(0, 10), k.c);
-            }
-          } catch { /* no pair — valued 0, noted by honesty of omission */ }
-          priceCache.set(coin, closes);
-        }
-        return amount * (closes.get(new Date(ts).toISOString().slice(0, 10)) ?? 0);
-      };
-      for (const [a, b] of windows) {
-        const [deps, wds] = await Promise.all([
-          client.depositHistory(a, b).catch(() => []),
-          client.withdrawHistory(a, b).catch(() => []),
-        ]);
-        for (const d of deps) {
-          if (d.status !== 1) continue;
-          flows.push({ ts: d.insertTime, usd: await flowUsd(d.coin, Number(d.amount) || 0, d.insertTime) });
-        }
-        for (const w of wds) {
-          if (w.status !== 6) continue;
-          const ts = Date.parse(w.applyTime.replace(' ', 'T') + 'Z');
-          const amt = (Number(w.amount) || 0) + (Number(w.transactionFee) || 0);
-          flows.push({ ts, usd: -(await flowUsd(w.coin, amt, ts)) });
-        }
-      }
-
-      // 3. walk BACKWARD from the oldest real snapshot, undoing each flow —
-      //    a step series identical in shape to Binance's own wallet chart
-      const rows: { ts: number; totalUsdt: number }[] = [...dailies];
-      let reconstructedBefore: number | null = null;
-      if (dailies.length > 0) {
-        const anchor = dailies[0];
-        const horizon = now - 185 * 86_400_000;
-        // dedupe (overlapping windows) + keep only flows inside the chart span
-        const seen = new Set<string>();
-        const older = flows
-          .filter((f) => {
-            if (f.ts >= anchor.ts || f.ts < horizon) return false;
-            const key = `${f.ts}:${f.usd.toFixed(6)}`;
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-          })
-          .sort((x, y) => y.ts - x.ts);
-        reconstructedBefore = anchor.ts;
-        let running = anchor.totalUsdt;
-        const back: { ts: number; totalUsdt: number }[] = [];
-        for (const f of older) {
-          back.push({ ts: f.ts, totalUsdt: running });
-          // clamp: tiny negatives are valuation noise (flows valued at daily
-          // closes vs real execution prices + trading pnl between flows)
-          running = Math.max(0, running - f.usd);
-          back.push({ ts: f.ts - 1, totalUsdt: running });
-        }
-        back.push({ ts: horizon, totalUsdt: running });
-        rows.unshift(...back.sort((x, y) => x.ts - y.ts));
-      }
-      eqHistCache = { ts: now, rows, reconstructedBefore };
-      res.json({ rows: withRecentEquityRows(rows), reconstructedBefore, fetchedAt: now });
-    } catch (e) {
-      res.json({ rows: withRecentEquityRows(eqHistCache?.rows ?? []), reconstructedBefore: eqHistCache?.reconstructedBefore ?? null, fetchedAt: eqHistCache?.ts ?? null, error: e instanceof Error ? e.message : 'history failed' });
+      const snapshot = await startEquityHistoryRefresh();
+      res.json({ rows: withRecentEquityRows(snapshot.rows), reconstructedBefore: snapshot.reconstructedBefore, reconstruction: snapshot.reconstruction, fetchedAt: snapshot.ts });
+    } catch (error) {
+      res.json({
+        rows: withRecentEquityRows(eqHistCache?.rows ?? []),
+        reconstructedBefore: eqHistCache?.reconstructedBefore ?? null,
+        reconstruction: eqHistCache?.reconstruction ?? { complete: false, reasons: ['Signed history refresh failed'] },
+        fetchedAt: eqHistCache?.ts ?? null,
+        error: error instanceof Error ? error.message : 'history failed',
+      });
     }
-  })();
+  });
 });
 
-let earnCache: { ts: number; rows: { asset: string; amount: number; apr: number }[] } | null = null;
+type EarnSnapshot = { ts: number; rows: { asset: string; amount: number; apr: number }[] };
+let earnCache: EarnSnapshot | null = null;
+let earnInFlight: Promise<EarnSnapshot> | null = null;
+
+function startEarnRefresh(): Promise<EarnSnapshot> {
+  if (!client) return Promise.reject(new Error('Binance key is not configured'));
+  if (!earnInFlight) {
+    const refresh = client.earnFlexiblePositions().then((payload) => {
+      if (!payload || !Array.isArray(payload.rows)) throw new Error('Simple Earn returned a malformed payload');
+      if (payload.rows.length >= 100) throw new Error('Simple Earn positions may exceed the current page limit');
+      const rows = payload.rows.map((row) => {
+        const asset = typeof row.asset === 'string' ? row.asset.trim().toUpperCase() : '';
+        const amount = nonNegativeDecimal(row.totalAmount);
+        const apr = nonNegativeDecimal(row.latestAnnualPercentageRate);
+        if (!/^[A-Z0-9]{1,20}$/.test(asset) || amount === null || apr === null || typeof row.canRedeem !== 'boolean') {
+          throw new Error('Simple Earn returned an invalid position');
+        }
+        return { asset, amount, apr };
+      });
+      const snapshot = { ts: Date.now(), rows };
+      earnCache = snapshot;
+      return snapshot;
+    });
+    earnInFlight = refresh;
+    void refresh.catch(() => undefined);
+    void refresh.then(
+      () => { if (earnInFlight === refresh) earnInFlight = null; },
+      () => { if (earnInFlight === refresh) earnInFlight = null; },
+    );
+  }
+  return earnInFlight;
+}
+
 app.get('/api/earn', (_req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     const now = Date.now();
     if (earnCache && now - earnCache.ts < 60_000) {
       res.json({ rows: earnCache.rows, fetchedAt: earnCache.ts });
@@ -1139,14 +1555,12 @@ app.get('/api/earn', (_req, res) => {
       return;
     }
     try {
-      const d = await client.earnFlexiblePositions();
-      const rows = d.rows.map((r) => ({ asset: r.asset, amount: Number(r.totalAmount) || 0, apr: Number(r.latestAnnualPercentageRate) || 0 }));
-      earnCache = { ts: now, rows };
-      res.json({ rows, fetchedAt: now });
-    } catch (e) {
-      res.json({ rows: earnCache?.rows ?? [], fetchedAt: earnCache?.ts ?? null, error: e instanceof Error ? e.message : 'earn fetch failed' });
+      const snapshot = await startEarnRefresh();
+      res.json({ rows: snapshot.rows, fetchedAt: snapshot.ts });
+    } catch (error) {
+      res.json({ rows: earnCache?.rows ?? [], fetchedAt: earnCache?.ts ?? null, error: error instanceof Error ? error.message : 'earn fetch failed' });
     }
-  })();
+  });
 });
 
 // Account-wide wallet totals from Binance's signed wallet-balance endpoint.
@@ -1200,7 +1614,7 @@ async function refreshWalletBalances(force = false): Promise<WalletBalanceSnapsh
 
 app.get('/api/wallet-balances', (_req, res) => {
   res.setHeader('Cache-Control', 'private, no-store, max-age=0');
-  void (async () => {
+  runAsync(res, async () => {
     try {
       const snapshot = await refreshWalletBalances();
       res.json({ rows: snapshot.rows, fetchedAt: snapshot.ts });
@@ -1211,16 +1625,39 @@ app.get('/api/wallet-balances', (_req, res) => {
         error: error instanceof Error ? error.message : 'wallet balance fetch failed',
       });
     }
-  })();
+  });
 });
 
+type MarketSourceSnapshot = {
+  at: number;
+  spotBookRes: PromiseSettledResult<Map<string, BookTicker>>;
+  perpBookRes: PromiseSettledResult<Map<string, BookTicker>>;
+  perp24hRes: PromiseSettledResult<Map<string, Futures24hTicker>>;
+};
+let marketSourceCache: MarketSourceSnapshot | null = null;
+let marketSourceInFlight: Promise<MarketSourceSnapshot> | null = null;
+
+async function marketSources(): Promise<MarketSourceSnapshot> {
+  const now = Date.now();
+  if (marketSourceCache && now - marketSourceCache.at < 2_000) return marketSourceCache;
+  if (marketSourceInFlight) return marketSourceInFlight;
+  marketSourceInFlight = Promise.allSettled([
+    fetchAllBookTickers('spot'),
+    fetchAllBookTickers('futures'),
+    fetchAllFutures24hTickers(),
+  ]).then(([spotBookRes, perpBookRes, perp24hRes]) => {
+    const snapshot = { at: Date.now(), spotBookRes, perpBookRes, perp24hRes };
+    marketSourceCache = snapshot;
+    return snapshot;
+  }).finally(() => {
+    marketSourceInFlight = null;
+  });
+  return marketSourceInFlight;
+}
+
 app.get('/api/markets', (_req, res) => {
-  void (async () => {
-    const [spotBookRes, perpBookRes, perp24hRes] = await Promise.allSettled([
-      fetchAllBookTickers('spot'),
-      fetchAllBookTickers('futures'),
-      fetchAllFutures24hTickers(),
-    ]);
+  runAsync(res, async () => {
+    const { spotBookRes, perpBookRes, perp24hRes } = await marketSources();
     const spotBooks = spotBookRes.status === 'fulfilled' ? spotBookRes.value : new Map<string, BookTicker>();
     const perpBooks = perpBookRes.status === 'fulfilled' ? perpBookRes.value : new Map<string, BookTicker>();
     const perp24h = perp24hRes.status === 'fulfilled' ? perp24hRes.value : new Map<string, Futures24hTicker>();
@@ -1288,11 +1725,11 @@ app.get('/api/markets', (_req, res) => {
       },
       rows,
     });
-  })();
+  });
 });
 
 app.get('/api/market/detail', (req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     const symbol = String(req.query.symbol ?? '');
     if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
       res.status(400).json({ error: 'bad symbol' });
@@ -1317,60 +1754,85 @@ app.get('/api/market/detail', (req, res) => {
       watchlisted: config.watchlist.includes(symbol),
       allowlisted: config.allowedSymbols.includes(symbol),
     });
-  })();
+  });
 });
 
-app.get('/api/loans', (req, res) => {
-  void (async () => {
-    res.json(await loans.snapshot(req.query.force === '1'));
-  })();
+app.get('/api/loans', (_req, res) => {
+  runAsync(res, async () => {
+    res.json(await loans.snapshot(false));
+  });
 });
+
+app.post('/api/loans/refresh', (_req, res) => {
+  runAsync(res, async () => {
+    res.json(await loans.snapshot(true));
+  });
+});
+
+app.post('/api/loans/reconcile', (req, res) => {
+  const confirm = typeof (req.body as Record<string, unknown>).confirm === 'string'
+    ? String((req.body as Record<string, unknown>).confirm)
+    : '';
+  res.json(loans.acknowledgeReconciliation(confirm));
+});
+
+function loanCoin(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  return /^[A-Z0-9]{2,10}$/.test(value) ? value : null;
+}
+
+function positiveFinite(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
 
 app.post('/api/loans/borrow', (req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     const b = req.body as Record<string, unknown>;
-    const loanCoin = String(b.loanCoin ?? '').toUpperCase();
-    const collateralCoin = String(b.collateralCoin ?? '').toUpperCase();
-    const amount = Number(b.amount);
-    if (!/^[A-Z0-9]{2,10}$/.test(loanCoin) || !/^[A-Z0-9]{2,10}$/.test(collateralCoin) || !(amount > 0)) {
+    const requestedLoanCoin = loanCoin(b.loanCoin);
+    const collateralCoin = loanCoin(b.collateralCoin);
+    const amount = positiveFinite(b.amount);
+    const confirmCoin = loanCoin(b.confirmCoin);
+    if (!requestedLoanCoin || !collateralCoin || amount === null || !confirmCoin) {
       res.status(400).json({ error: 'bad borrow request' });
       return;
     }
-    res.json(await loans.borrow(loanCoin, collateralCoin, amount, String(b.confirmCoin ?? '')));
-  })();
+    res.json(await loans.borrow(requestedLoanCoin, collateralCoin, amount, confirmCoin));
+  });
 });
 
 app.post('/api/loans/adjust-ltv', (req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     const b = req.body as Record<string, unknown>;
-    const loanCoin = String(b.loanCoin ?? '').toUpperCase();
-    const collateralCoin = String(b.collateralCoin ?? '').toUpperCase();
-    const amount = Number(b.amount);
-    const direction = b.direction === 'REDUCED' ? 'REDUCED' as const : 'ADDITIONAL' as const;
-    if (!/^[A-Z0-9]{2,10}$/.test(loanCoin) || !/^[A-Z0-9]{2,10}$/.test(collateralCoin) || !(amount > 0)) {
+    const requestedLoanCoin = loanCoin(b.loanCoin);
+    const collateralCoin = loanCoin(b.collateralCoin);
+    const amount = positiveFinite(b.amount);
+    const direction = b.direction === 'REDUCED' || b.direction === 'ADDITIONAL' ? b.direction : null;
+    const confirmCoin = loanCoin(b.confirmCoin);
+    if (!requestedLoanCoin || !collateralCoin || amount === null || !direction || !confirmCoin) {
       res.status(400).json({ error: 'bad adjust request' });
       return;
     }
-    res.json(await loans.adjustLtv(loanCoin, collateralCoin, amount, direction));
-  })();
+    res.json(await loans.adjustLtv(requestedLoanCoin, collateralCoin, amount, direction, confirmCoin));
+  });
 });
 
 app.post('/api/loans/repay', (req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     const b = req.body as Record<string, unknown>;
-    const loanCoin = String(b.loanCoin ?? '').toUpperCase();
-    const collateralCoin = String(b.collateralCoin ?? '').toUpperCase();
-    const amount = Number(b.amount);
-    if (!/^[A-Z0-9]{2,10}$/.test(loanCoin) || !/^[A-Z0-9]{2,10}$/.test(collateralCoin) || !(amount > 0)) {
+    const requestedLoanCoin = loanCoin(b.loanCoin);
+    const collateralCoin = loanCoin(b.collateralCoin);
+    const amount = positiveFinite(b.amount);
+    const confirmCoin = loanCoin(b.confirmCoin);
+    if (!requestedLoanCoin || !collateralCoin || amount === null || !confirmCoin) {
       res.status(400).json({ error: 'bad repay request' });
       return;
     }
-    res.json(await loans.repay(loanCoin, collateralCoin, amount));
-  })();
+    res.json(await loans.repay(requestedLoanCoin, collateralCoin, amount, confirmCoin));
+  });
 });
 
 app.get('/api/orders/history', (req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     const symbol = String(req.query.symbol ?? '');
     if (!client) {
       res.json({ available: false, error: 'Binance keys not configured', orders: [] });
@@ -1386,11 +1848,11 @@ app.get('/api/orders/history', (req, res) => {
     } catch (err) {
       res.json({ available: false, error: String((err as Error).message), orders: [] });
     }
-  })();
+  });
 });
 
 app.get('/api/pnl', (_req, res) => {
-  const { realizedByDay, realizedBySymbol, feesByAsset } = account.pnl();
+  const { realizedByDay, realizedBySymbol, feesByAsset, feeUsdByDay, incompleteByDay } = account.pnl();
   const days = [...realizedByDay.entries()]
     .map(([day, usd]) => ({ day, usd }))
     .sort((a, b) => a.day.localeCompare(b.day));
@@ -1398,12 +1860,36 @@ app.get('/api/pnl', (_req, res) => {
     .map(([symbol, usd]) => ({ symbol, usd }))
     .sort((a, b) => Math.abs(b.usd) - Math.abs(a.usd));
   const fees = [...feesByAsset.entries()].map(([asset, amount]) => ({ asset, amount }));
+  const integrityDays = new Set([...realizedByDay.keys(), ...feeUsdByDay.keys(), ...incompleteByDay.keys()]);
+  const integrity = [...integrityDays]
+    .sort()
+    .map((day) => ({
+      day,
+      complete: (incompleteByDay.get(day) ?? []).length === 0,
+      reasons: [...(incompleteByDay.get(day) ?? [])],
+      feeUsd: feeUsdByDay.get(day) ?? 0,
+      netUsd: (realizedByDay.get(day) ?? 0) - (feeUsdByDay.get(day) ?? 0),
+    }));
   const snapshots = ledger
     .recentEvents(500, 'account_snapshot')
-    .map((ev) => ({ ts: ev.ts, totalUsdt: (ev.data as { totalUsdt?: number } | null)?.totalUsdt ?? null }))
-    .filter((s) => s.totalUsdt !== null)
+    .map((ev) => {
+      const data = ev.data as { totalUsdt?: number; complete?: unknown } | null;
+      return { ts: ev.ts, totalUsdt: data?.totalUsdt ?? null, complete: data?.complete === true };
+    })
+    .filter((s) => s.complete && s.totalUsdt !== null)
+    .map(({ ts, totalUsdt }) => ({ ts, totalUsdt }))
     .reverse();
-  res.json({ realizedByDay: days, realizedBySymbol: bySymbol, feesByAsset: fees, equitySnapshots: snapshots });
+  res.json({
+    realizedByDay: days,
+    realizedBySymbol: bySymbol,
+    feesByAsset: fees,
+    equitySnapshots: snapshots,
+    integrity: {
+      complete: integrity.every((row) => row.complete),
+      reasons: [...new Set(integrity.flatMap((row) => row.reasons))],
+      days: integrity,
+    },
+  });
 });
 
 app.get('/api/signals', (_req, res) => {
@@ -1451,8 +1937,8 @@ app.post('/api/proposals/:id/reject', (req, res) => {
 // Token icon manifest: resolved real logo URLs (CoinGecko) for the requested
 // bases. Unknown ones resolve in the background and appear on a later call.
 app.get('/api/token/moneyflow', (req, res) => {
-  void (async () => {
-    const symbol = String(req.query.symbol ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
+  runAsync(res, async () => {
+    const symbol = marketSymbol(req.query.symbol, 1, 20) ?? '';
     const window = String(req.query.window ?? '15m');
     if (!symbol || !FLOW_WINDOWS[window]) {
       res.status(400).json({ error: 'symbol + window (15m|1h|4h|1d) required' });
@@ -1463,30 +1949,30 @@ app.get('/api/token/moneyflow', (req, res) => {
     } catch (err) {
       res.status(502).json({ error: String(err) });
     }
-  })();
+  });
 });
 
 app.get('/api/futures/funding-hist', (req, res) => {
-  void (async () => {
-    const symbol = String(req.query.symbol ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
-    const limit = Number(req.query.limit ?? 1000);
-    if (!symbol) {
-      res.status(400).json({ error: 'symbol required' });
+  runAsync(res, async () => {
+    const symbol = marketSymbol(req.query.symbol, 1, 20) ?? '';
+    const limit = integerQuery(req.query.limit, 1_000, 1, 1_000);
+    if (!symbol || limit === null) {
+      res.status(400).json({ error: 'valid symbol and integer limit are required' });
       return;
     }
     try {
-      res.json(await fetchFundingHist(symbol, Number.isFinite(limit) ? limit : 1000));
+      res.json(await fetchFundingHist(symbol, limit));
     } catch (err) {
       res.status(502).json({ error: String(err) });
     }
-  })();
+  });
 });
 
 app.get('/api/futures/liquidations', (req, res) => {
-  const symbol = String(req.query.symbol ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
-  const bucketMs = Math.max(5 * 60_000, Math.min(Number(req.query.bucketMs ?? 3_600_000), 24 * 3_600_000));
-  if (!symbol) {
-    res.status(400).json({ error: 'symbol required' });
+  const symbol = marketSymbol(req.query.symbol, 1, 20) ?? '';
+  const bucketMs = integerQuery(req.query.bucketMs, 3_600_000, 5 * 60_000, 24 * 3_600_000);
+  if (!symbol || bucketMs === null) {
+    res.status(400).json({ error: 'valid symbol and integer bucket are required' });
     return;
   }
   res.json(liquidationSeries(symbol, bucketMs));
@@ -1497,37 +1983,37 @@ app.get('/api/futures/liquidations/stats', (_req, res) => {
 });
 
 app.get('/api/futures/oi-hist', (req, res) => {
-  void (async () => {
-    const symbol = String(req.query.symbol ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
+  runAsync(res, async () => {
+    const symbol = marketSymbol(req.query.symbol, 1, 20) ?? '';
     const period = String(req.query.period ?? '1d');
-    const limit = Number(req.query.limit ?? 30);
-    if (!symbol || !/^(5m|15m|30m|1h|2h|4h|6h|12h|1d)$/.test(period)) {
-      res.status(400).json({ error: 'symbol + valid period required' });
+    const limit = integerQuery(req.query.limit, 30, 1, 500);
+    if (!symbol || limit === null || !/^(5m|15m|30m|1h|2h|4h|6h|12h|1d)$/.test(period)) {
+      res.status(400).json({ error: 'symbol, valid period, and integer limit required' });
       return;
     }
     try {
-      res.json(await fetchOiHist(symbol, period, Number.isFinite(limit) ? limit : 30));
+      res.json(await fetchOiHist(symbol, period, limit));
     } catch (err) {
       res.status(502).json({ error: String(err) });
     }
-  })();
+  });
 });
 
 app.get('/api/futures/basis-hist', (req, res) => {
-  void (async () => {
-    const symbol = String(req.query.symbol ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
+  runAsync(res, async () => {
+    const symbol = marketSymbol(req.query.symbol, 1, 20) ?? '';
     const period = String(req.query.period ?? '1h');
-    const limit = Number(req.query.limit ?? 48);
-    if (!symbol || !/^(5m|15m|30m|1h|2h|4h|6h|12h|1d)$/.test(period)) {
-      res.status(400).json({ error: 'symbol + valid period required' });
+    const limit = integerQuery(req.query.limit, 48, 1, 500);
+    if (!symbol || limit === null || !/^(5m|15m|30m|1h|2h|4h|6h|12h|1d)$/.test(period)) {
+      res.status(400).json({ error: 'symbol, valid period, and integer limit required' });
       return;
     }
     try {
-      res.json(await fetchBasisHist(symbol, period, Number.isFinite(limit) ? limit : 48));
+      res.json(await fetchBasisHist(symbol, period, limit));
     } catch (err) {
       res.status(502).json({ error: String(err) });
     }
-  })();
+  });
 });
 
 app.get('/api/token/profiles/status', (_req, res) => {
@@ -1542,72 +2028,180 @@ app.post('/api/token/profiles/warm', (_req, res) => {
 });
 
 app.get('/api/token/profile', (req, res) => {
-  void (async () => {
-    const base = String(req.query.base ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
+  runAsync(res, async () => {
+    const rawBase = String(req.query.base ?? '').trim().toUpperCase();
+    const base = /^[A-Z0-9\u3400-\u9fff]{1,24}$/u.test(rawBase) ? rawBase : '';
     if (!base) {
       res.status(400).json({ error: 'base required' });
       return;
     }
-    const profile = await tokenProfile(base);
-    res.json({ ok: !!profile, profile });
-  })();
+    try {
+      const profile = await tokenProfile(base);
+      res.json({ ok: !!profile, profile });
+    } catch (error) {
+      try {
+        ledger.logEvent('error_event', null, { source: 'token.profile', message: error instanceof Error ? error.message : String(error) });
+      } catch {
+        // Preserve a stable response if persistence is degraded.
+      }
+      res.status(502).json({ ok: false, profile: null, error: 'token profile unavailable' });
+    }
+  });
 });
 
 app.get('/api/icons', (req, res) => {
   const bases = String(req.query.bases ?? '')
     .split(',')
     .map((s) => s.trim().toUpperCase())
-    .filter((b) => /^[A-Z0-9]{1,12}$/.test(b))
+    .filter((b) => /^[A-Z0-9\u3400-\u9fff]{1,24}$/u.test(b))
     .slice(0, 200);
   res.json(resolveIcons(bases));
 });
 
-app.get('/api/source-logo', (req, res) => {
-  void (async () => {
-    const domain = normalizeLogoDomain(String(req.query.domain ?? ''));
-    const size = Math.max(16, Math.min(Number(req.query.sz ?? 64) || 64, 128));
-    if (!domain) {
-      res.status(400).json({ error: 'valid domain required' });
-      return;
+async function readBoundedBody(response: Response, maximumBytes: number): Promise<Buffer> {
+  const declared = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > maximumBytes) throw new Error('upstream payload is too large');
+  if (!response.body) throw new Error('upstream payload is empty');
+  const reader = response.body.getReader();
+  const chunks: Buffer[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maximumBytes) {
+        await reader.cancel('payload limit exceeded');
+        throw new Error('upstream payload is too large');
+      }
+      chunks.push(Buffer.from(value));
     }
-    const key = `${domain}:${size}`;
-    const cached = sourceLogoCache.get(key);
-    if (cached && Date.now() - cached.ts < SOURCE_LOGO_TTL_MS) {
-      res.setHeader('Cache-Control', 'public, max-age=86400');
-      res.type(cached.contentType);
-      res.send(cached.body);
-      return;
-    }
+  } finally {
+    reader.releaseLock();
+  }
+  if (total === 0) throw new Error('upstream payload is empty');
+  return Buffer.concat(chunks, total);
+}
 
+async function readBoundedJson<T>(response: Response, maximumBytes: number): Promise<T> {
+  const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
+  if (!contentType.includes('application/json') && !contentType.includes('+json')) {
+    throw new Error('upstream response is not JSON');
+  }
+  const body = await readBoundedBody(response, maximumBytes);
+  return JSON.parse(body.toString('utf8')) as T;
+}
+
+function sourceLogoType(body: Buffer): string | null {
+  if (body.length >= 8 && body.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
+  if (body.length >= 3 && body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff) return 'image/jpeg';
+  if (body.length >= 12 && body.toString('ascii', 0, 4) === 'RIFF' && body.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
+  if (body.length >= 4 && body[0] === 0 && body[1] === 0 && body[2] === 1 && body[3] === 0) return 'image/x-icon';
+  return null;
+}
+
+function cachedSourceLogo(key: string): SourceLogoEntry | null {
+  const cached = sourceLogoCache.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.ts >= SOURCE_LOGO_TTL_MS) {
+    sourceLogoCache.delete(key);
+    return null;
+  }
+  sourceLogoCache.delete(key);
+  sourceLogoCache.set(key, cached);
+  return cached;
+}
+
+function rememberSourceLogo(key: string, entry: SourceLogoEntry): void {
+  sourceLogoCache.delete(key);
+  sourceLogoCache.set(key, entry);
+  while (sourceLogoCache.size > SOURCE_LOGO_CACHE_MAX) {
+    const oldest = sourceLogoCache.keys().next().value as string | undefined;
+    if (!oldest) break;
+    sourceLogoCache.delete(oldest);
+  }
+}
+
+async function loadSourceLogo(domain: string, size: number): Promise<SourceLogoEntry> {
+  const key = `${domain}:${size}`;
+  const cached = cachedSourceLogo(key);
+  if (cached) return cached;
+  const failedAt = sourceLogoFailures.get(key) ?? 0;
+  if (Date.now() - failedAt < SOURCE_LOGO_FAILURE_TTL_MS) throw new Error('source logo is cooling down');
+  const existing = sourceLogoInFlight.get(key);
+  if (existing) return existing;
+
+  const request = (async () => {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 5_000);
     try {
       const faviconUrl = DIRECT_SOURCE_LOGOS[domain] ?? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=${size}`;
       const upstream = await fetch(faviconUrl, {
-        headers: { Accept: 'image/avif,image/webp,image/png,image/svg+xml,image/*,*/*;q=0.8' },
+        headers: { Accept: 'image/avif,image/webp,image/png,image/jpeg,image/x-icon,*/*;q=0.5' },
         signal: ctrl.signal,
+        redirect: 'error',
       });
       if (!upstream.ok) throw new Error(`favicon HTTP ${upstream.status}`);
-      const contentType = upstream.headers.get('content-type')?.split(';')[0] || 'image/png';
-      const body = Buffer.from(await upstream.arrayBuffer());
-      if (!body.length || body.length > SOURCE_LOGO_MAX_BYTES || !contentType.startsWith('image/')) {
-        throw new Error('invalid favicon payload');
+      const body = await readBoundedBody(upstream, SOURCE_LOGO_MAX_BYTES);
+      const contentType = sourceLogoType(body);
+      if (!contentType) throw new Error('unsupported favicon payload');
+      const entry = { ts: Date.now(), contentType, body };
+      rememberSourceLogo(key, entry);
+      sourceLogoFailures.delete(key);
+      return entry;
+    } catch (error) {
+      sourceLogoFailures.set(key, Date.now());
+      while (sourceLogoFailures.size > SOURCE_LOGO_CACHE_MAX) {
+        const oldest = sourceLogoFailures.keys().next().value as string | undefined;
+        if (!oldest) break;
+        sourceLogoFailures.delete(oldest);
       }
-      sourceLogoCache.set(key, { ts: Date.now(), contentType, body });
-      res.setHeader('Cache-Control', 'public, max-age=86400');
-      res.type(contentType);
-      res.send(body);
-    } catch (err) {
-      ledger.logEvent('error_event', null, { source: 'source-logo.fetch', domain, message: String(err) });
-      res.status(502).json({ error: 'source logo unavailable' });
+      throw error;
     } finally {
       clearTimeout(timer);
     }
-  })();
+  })().finally(() => sourceLogoInFlight.delete(key));
+  sourceLogoInFlight.set(key, request);
+  return request;
+}
+
+app.get('/api/source-logo', (req, res) => {
+  runAsync(res, async () => {
+    const domain = normalizeLogoDomain(String(req.query.domain ?? ''));
+    const size = integerQuery(req.query.sz, 64, 16, 128);
+    if (!domain || size === null) {
+      res.status(400).json({ error: 'valid domain and integer size required' });
+      return;
+    }
+    const key = `${domain}:${size}`;
+    const cached = cachedSourceLogo(key);
+    if (cached) {
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.type(cached.contentType);
+      res.send(cached.body);
+      return;
+    }
+
+    try {
+      const entry = await loadSourceLogo(domain, size);
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.type(entry.contentType);
+      res.send(entry.body);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      // The first upstream failure is observable; repeated browser image
+      // retries during the negative-cache window are expected and must not
+      // flood the operational ledger.
+      if (message !== 'source logo is cooling down') {
+        safeLogEvent('error_event', null, { source: 'source-logo.fetch', domain, message });
+      }
+      res.status(502).json({ error: 'source logo unavailable' });
+    }
+  });
 });
 
 app.get('/api/market/quote', (req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     const symbol = String(req.query.symbol ?? '');
     if (!/^[A-Z0-9]{4,20}$/.test(symbol)) {
       res.status(400).json({ error: 'bad symbol' });
@@ -1621,19 +2215,19 @@ app.get('/api/market/quote', (req, res) => {
       // book unavailable — last price may still exist
     }
     res.json({ symbol, last, change24hPct: engine.changeOf(symbol), book, tradable: engine.filters.has(symbol) });
-  })();
+  });
 });
 
 const KLINE_INTERVALS = new Set(['1s', '1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M']);
 const FUTURES_DATA_PERIODS = new Set(['5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d']);
 app.get('/api/klines', (req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     const symbol = String(req.query.symbol ?? 'BTCUSDT');
     const interval = String(req.query.interval ?? '5m');
-    const limit = Math.min(Number(req.query.limit ?? 288), 1000);
+    const limit = integerQuery(req.query.limit, 288, 1, 1_000);
     const market = req.query.market === 'futures' ? 'futures' : 'spot';
     const field = req.query.field === 'volume' ? 'volume' : 'close';
-    if (!KLINE_INTERVALS.has(interval) || !/^[A-Z0-9]{1,20}$/.test(symbol)) {
+    if (limit === null || !KLINE_INTERVALS.has(interval) || !/^[A-Z0-9]{1,20}$/.test(symbol)) {
       res.status(400).json({ error: 'bad symbol or interval' });
       return;
     }
@@ -1642,16 +2236,16 @@ app.get('/api/klines', (req, res) => {
     } catch (err) {
       res.status(502).json({ error: String(err) });
     }
-  })();
+  });
 });
 
 app.get('/api/candles', (req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     const symbol = String(req.query.symbol ?? 'BTCUSDT');
     const interval = String(req.query.interval ?? '5m');
-    const limit = Math.min(Number(req.query.limit ?? 288), 1000);
+    const limit = integerQuery(req.query.limit, 288, 1, 1_000);
     const market = req.query.market === 'futures' ? 'futures' : 'spot';
-    if (!KLINE_INTERVALS.has(interval) || !/^[A-Z0-9]{1,20}$/.test(symbol)) {
+    if (limit === null || !KLINE_INTERVALS.has(interval) || !/^[A-Z0-9]{1,20}$/.test(symbol)) {
       res.status(400).json({ error: 'bad symbol or interval' });
       return;
     }
@@ -1660,11 +2254,11 @@ app.get('/api/candles', (req, res) => {
     } catch (err) {
       res.status(502).json({ error: String(err) });
     }
-  })();
+  });
 });
 
 app.get('/api/market/depth', (req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     const symbol = String(req.query.symbol ?? '');
     if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
       res.status(400).json({ error: 'bad symbol' });
@@ -1675,11 +2269,11 @@ app.get('/api/market/depth', (req, res) => {
     } catch (err) {
       res.status(502).json({ error: String(err) });
     }
-  })();
+  });
 });
 
 app.get('/api/market/trades', (req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     const symbol = String(req.query.symbol ?? '');
     if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
       res.status(400).json({ error: 'bad symbol' });
@@ -1690,11 +2284,11 @@ app.get('/api/market/trades', (req, res) => {
     } catch (err) {
       res.status(502).json({ error: String(err) });
     }
-  })();
+  });
 });
 
 app.get('/api/funding/history', (req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     const symbol = String(req.query.symbol ?? '');
     if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
       res.status(400).json({ error: 'bad symbol' });
@@ -1705,15 +2299,15 @@ app.get('/api/funding/history', (req, res) => {
     } catch (err) {
       res.status(502).json({ error: String(err) });
     }
-  })();
+  });
 });
 
 app.get('/api/futures/telemetry', (req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     const symbol = String(req.query.symbol ?? '');
     const period = String(req.query.period ?? '5m');
-    const limit = Math.min(Number(req.query.limit ?? 40), 120);
-    if (!/^[A-Z0-9]{5,20}$/.test(symbol) || !FUTURES_DATA_PERIODS.has(period)) {
+    const limit = integerQuery(req.query.limit, 40, 1, 120);
+    if (limit === null || !/^[A-Z0-9]{5,20}$/.test(symbol) || !FUTURES_DATA_PERIODS.has(period)) {
       res.status(400).json({ error: 'bad symbol or period' });
       return;
     }
@@ -1722,7 +2316,7 @@ app.get('/api/futures/telemetry', (req, res) => {
     } catch (err) {
       res.status(502).json({ error: String((err as Error).message) });
     }
-  })();
+  });
 });
 
 // Live funding extremes across all pairs — the data behind the funding monitor.
@@ -1762,39 +2356,25 @@ app.get('/api/symbol/context', (req, res) => {
 });
 
 app.post('/api/orders/cancel-all', (req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     const symbol = String((req.body as Record<string, unknown>).symbol ?? '');
     if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
       res.status(400).json({ error: 'bad symbol' });
       return;
     }
-    if (!client) {
-      res.json({ ok: false, error: 'Binance keys not configured' });
-      return;
-    }
-    ledger.logEvent('manual_action', symbol, { action: 'cancel_all_orders' });
-    try {
-      await client.cancelAllOrders(symbol);
-      ledger.logEvent('order_response', symbol, { status: 'ALL_CANCELED', executedQuoteUsd: 0 });
-      await orders.syncOpenOrders().catch(() => undefined);
-      res.json({ ok: true });
-    } catch (err) {
-      const msg = String((err as Error).message);
-      ledger.logEvent('error_event', symbol, { source: 'order.cancelAll', message: msg });
-      res.json({ ok: false, error: msg });
-    }
-  })();
+    res.json(await orders.cancelAll(symbol));
+  });
 });
 
 app.get('/api/loans/max-borrowable', (req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     const asset = String(req.query.asset ?? '').toUpperCase();
     if (!/^[A-Z0-9]{2,10}$/.test(asset)) {
       res.status(400).json({ error: 'bad asset' });
       return;
     }
     res.json(await loans.maxBorrowable(asset));
-  })();
+  });
 });
 
 // System health for the dedicated page.
@@ -1965,17 +2545,23 @@ function connectionWatchmanSnapshot(
     };
     watchmanTransitions.unshift(transition);
     watchmanTransitions.splice(20);
-    ledger.logEvent(recovered ? 'connection_recovered' : 'connection_alert', null, {
-      componentId: component.id,
-      component: component.label,
-      group: component.group,
-      previousStatus: previous,
-      status: component.status,
-      detail: component.detail,
-      value: component.value,
-      resetTarget: component.resetTarget ?? null,
-      observedAt: now,
-    });
+    if (dbOk) {
+      try {
+        ledger.logEvent(recovered ? 'connection_recovered' : 'connection_alert', null, {
+          componentId: component.id,
+          component: component.label,
+          group: component.group,
+          previousStatus: previous,
+          status: component.status,
+          detail: component.detail,
+          value: component.value,
+          resetTarget: component.resetTarget ?? null,
+          observedAt: now,
+        });
+      } catch {
+        // Health reporting must remain available while persistence is degraded.
+      }
+    }
   }
 
   const required = components.filter((component) => component.required && component.status !== 'planned');
@@ -2002,7 +2588,7 @@ function connectionWatchmanSnapshot(
 }
 
 app.get('/api/system', (req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     if (!timeSync || Date.now() - timeSync.ts > 60_000) {
       try {
         const t = await fetchBinanceServerTime();
@@ -2030,6 +2616,7 @@ app.get('/api/system', (req, res) => {
         userStream: userStream?.status ?? 'off',
         keyFingerprint: creds ? maskApiKey(creds.apiKey) : null,
         keyPermissions: account.keyRestrictions,
+        keyPermissionsTs: account.lastRestrictionsTs,
         keyPosture: keyPosture(account.keyRestrictions, account.keysPresent),
       },
       restLatencyMs: timeSync?.latencyMs ?? null,
@@ -2037,6 +2624,7 @@ app.get('/api/system', (req, res) => {
       timeSyncTs: timeSync?.ts ?? null,
       usedWeight1m: rateLimit.ts > 0 ? rateLimit.usedWeight1m : null,
       usedWeightTs: rateLimit.ts || null,
+      binanceCooldownUntil: rateLimit.cooldownUntil > Date.now() ? rateLimit.cooldownUntil : null,
       lastScannerTickTs: scanner.lastTickTs,
       lastOrdersSyncTs: orders.lastOrdersSyncTs,
       dbOk,
@@ -2078,14 +2666,14 @@ app.get('/api/system', (req, res) => {
       },
       killSwitch: config.killSwitch,
       liveTradingEnabled: config.liveTradingEnabled,
-      cfUser: (req.headers['cf-access-authenticated-user-email'] as string | undefined) ?? null,
+      cfUser: operatorAccess.operator(req)?.email ?? null,
       // Real edge session facts from Cloudflare (present in prod; null on localhost).
       cfIp: (req.headers['cf-connecting-ip'] as string | undefined) ?? null,
       cfCountry: (req.headers['cf-ipcountry'] as string | undefined) ?? null,
       cfRay: (req.headers['cf-ray'] as string | undefined) ?? null,
       serverStartTs: bootTs,
     });
-  })();
+  });
 });
 
 // Browser RTT is measurable only from the browser. Accept a small, sanitized
@@ -2116,17 +2704,21 @@ app.post('/api/connections/browser-observation', (req, res) => {
     };
     watchmanTransitions.unshift(transition);
     watchmanTransitions.splice(20);
-    ledger.logEvent(recovered ? 'connection_recovered' : 'connection_alert', null, {
-      componentId: transition.componentId,
-      component: transition.label,
-      group: 'control_path',
-      previousStatus: previous,
-      status,
-      detail: transition.detail,
-      value: `${Math.round(rttMs)} ms`,
-      resetTarget: null,
-      observedAt: now,
-    });
+    try {
+      ledger.logEvent(recovered ? 'connection_recovered' : 'connection_alert', null, {
+        componentId: transition.componentId,
+        component: transition.label,
+        group: 'control_path',
+        previousStatus: previous,
+        status,
+        detail: transition.detail,
+        value: `${Math.round(rttMs)} ms`,
+        resetTarget: null,
+        observedAt: now,
+      });
+    } catch {
+      // The browser observation remains valid even when telemetry storage is degraded.
+    }
   }
   res.json({ ok: true, observation: browserWatchmanObservation });
 });
@@ -2140,11 +2732,12 @@ app.post('/api/connections/browser-observation', (req, res) => {
 // full-access key by editing these env vars (or the defaults below).
 function apiKeyManifest() {
   const declaredPrefix = process.env.BINANCE_KEY_PREFIX || '—';
-  const ips = (process.env.BINANCE_KEY_IPS || '223.181.45.88')
+  const ips = (process.env.BINANCE_KEY_IPS || '')
     .split(',').map((s) => s.trim()).filter(Boolean);
-  // Prefer the LIVE per-key permissions from Binance apiRestrictions; fall back
-  // to this key's declared read-only posture until a real fetch lands.
+  // Only Binance's live per-key restriction response is authoritative. Never
+  // turn an unavailable permission read into reassuring false values.
   const r = account.keyRestrictions;
+  const posture = keyPosture(r, Boolean(creds));
   const permissions = r
     ? {
         reading: r.enableReading,
@@ -2154,26 +2747,40 @@ function apiKeyManifest() {
         universalTransfer: r.permitsUniversalTransfer,
         futures: r.enableFutures,
       }
-    : { reading: true, spotMargin: false, marginLoan: false, withdrawals: false, universalTransfer: false, futures: false };
-  const fullIps = (process.env.BINANCE_FULL_KEY_IPS || '13.235.86.162')
+    : { reading: null, spotMargin: null, marginLoan: null, withdrawals: null, universalTransfer: null, futures: null };
+  const fullIps = (process.env.BINANCE_FULL_KEY_IPS || '')
     .split(',').map((s) => s.trim()).filter(Boolean);
   return [
     {
       id: 'read-only',
       name: process.env.BINANCE_KEY_NAME || 'cosmos-local-read-only',
       type: process.env.BINANCE_KEY_TYPE || 'HMAC',
-      scope: 'Read-only',
-      status: r ? 'live' : creds ? 'declared' : 'missing',
+      scope: posture.level === 'unsafe'
+        ? 'Unsafe permissions'
+        : posture.level === 'elevated'
+          ? 'Elevated permissions'
+          : posture.level === 'trading'
+            ? 'Trading'
+            : posture.level === 'read_only'
+              ? 'Read-only'
+              : 'Unknown',
+      status: r ? 'live' : creds ? 'unknown' : 'missing',
       live: !!r, // permissions are the real, cross-checkable ones from Binance
       keysPresent: !!creds,
       prefix: creds ? creds.apiKey.slice(0, 8) : declaredPrefix, // first 8 only — never the full key
       fingerprint: creds ? maskApiKey(creds.apiKey) : null,
-      ipRestrict: r ? r.ipRestrict : ips.length > 0,
+      ipRestrict: r ? r.ipRestrict : null,
       ips,
       ipNote: creds ? 'Restriction declared by server environment' : 'No key is loaded',
       permissions,
-      note: creds ? (r ? null : 'Live permissions pending first account sync — showing declared read-only posture.') : 'Declared config — no key wired into this server yet.',
-      updatedAt: bootTs,
+      note: creds
+        ? r
+          ? posture.level === 'unsafe'
+            ? 'Unsafe transfer or withdrawal authority is enabled. Recreate this key before operating the control room.'
+            : null
+          : 'Live permissions are unavailable; every permission remains unknown until Binance verifies it.'
+        : 'Declared config — no key wired into this server yet.',
+      updatedAt: account.lastRestrictionsTs,
     },
     {
       // Future AWS automation key, restricted to the EC2 egress IP. Its
@@ -2208,14 +2815,16 @@ let connectionRefreshBusy = false;
 // Targeted retries use the same implementation without pretending that a local
 // polling preference can restart an upstream connection by itself.
 app.post('/api/refresh', (req, res) => {
-  void (async () => {
-    const requested = String((req.body as { target?: unknown } | null)?.target ?? 'all') as ConnectionRefreshTarget;
-    if (!CONNECTION_REFRESH_TARGETS.has(requested)) {
-      res.status(400).json({ ok: false, issues: ['Unknown connection refresh target'], target: requested, ts: Date.now() });
+  runAsync(res, async () => {
+    const rawTarget = (req.body as { target?: unknown } | null)?.target;
+    const requested = typeof rawTarget === 'string' ? rawTarget : '';
+    if (!CONNECTION_REFRESH_TARGETS.has(requested as ConnectionRefreshTarget)) {
+      res.status(400).json({ ok: false, issues: ['An explicit connection refresh target is required'], target: requested || null, ts: Date.now() });
       return;
     }
+    const target = requested as ConnectionRefreshTarget;
     if (connectionRefreshBusy) {
-      res.status(409).json({ ok: false, issues: ['A connection reset is already running'], target: requested, ts: Date.now() });
+      res.status(409).json({ ok: false, issues: ['A connection reset is already running'], target, ts: Date.now() });
       return;
     }
     connectionRefreshBusy = true;
@@ -2239,7 +2848,7 @@ app.post('/api/refresh', (req, res) => {
     };
 
     try {
-      if (requested === 'all' || requested === 'market') {
+      if (target === 'all' || target === 'market') {
         await runStep('market-streams', async () => {
           basisRuntime.stop();
           volumeRuntime.stop();
@@ -2248,7 +2857,7 @@ app.post('/api/refresh', (req, res) => {
           await Promise.all([basisRuntime.start(), volumeRuntime.start()]);
           return `${Object.keys(engine.feeds).length} core feeds restarted`;
         });
-      } else if (requested === 'runtime') {
+      } else if (target === 'runtime') {
         await runStep('strategy-runtimes', async () => {
           basisRuntime.stop();
           volumeRuntime.stop();
@@ -2257,10 +2866,11 @@ app.post('/api/refresh', (req, res) => {
         });
       }
 
-      if (requested === 'all' || requested === 'account') {
+      if (target === 'all' || target === 'account') {
         await runStep('account-data', async () => {
           await account.sync();
           await orders.syncOpenOrders();
+          await orders.reconcilePendingOrders();
           if (account.keysPresent) await refreshWalletBalances(true);
           if (userStream) {
             userStream.stop();
@@ -2270,19 +2880,19 @@ app.post('/api/refresh', (req, res) => {
         });
       }
 
-      if (requested === 'all' || requested === 'news') {
+      if (target === 'all' || target === 'news') {
         await runStep('news-context', async () => {
           const payload = await refreshNewsContextNow();
           return `${payload.sources.length} source states refreshed`;
         });
       }
-      if (requested === 'all' || requested === 'calendar') {
+      if (target === 'all' || target === 'calendar') {
         await runStep('economic-calendar', async () => {
-          await startCalendarRefresh();
+          if (!(await startCalendarRefresh())) throw new Error('Economic calendar refresh failed');
           return `${calCache?.items.length ?? 0} events cached`;
         });
       }
-      if (requested === 'all' || requested === 'fx') {
+      if (target === 'all' || target === 'fx') {
         await runStep('fx-rates', async () => {
           await refreshFx();
           return `${fxCache ? Object.keys(fxCache.rates).length : 0} currencies cached`;
@@ -2296,14 +2906,14 @@ app.post('/api/refresh', (req, res) => {
         issues.push(account.lastError ? `Binance account: ${account.lastError}` : 'Binance account not synced');
       }
       ledger.logEvent('connections.reset', null, {
-        target: requested,
+        target,
         ok: issues.length === 0,
         durationMs: Date.now() - startedAt,
         steps,
       });
       watchmanLastReset = {
         ts: Date.now(),
-        target: requested,
+        target,
         ok: issues.length === 0,
         durationMs: Date.now() - startedAt,
       };
@@ -2315,13 +2925,13 @@ app.post('/api/refresh', (req, res) => {
         keysPresent: account.keysPresent,
         issues,
         ts: Date.now(),
-        reset: { target: requested, startedAt, finishedAt: Date.now(), steps },
+        reset: { target, startedAt, finishedAt: Date.now(), steps },
       });
     } finally {
       connectionRefreshBusy = false;
       watchmanSuppressUntil = Math.max(watchmanSuppressUntil, Date.now() + 15_000);
     }
-  })();
+  });
 });
 
 app.get('/api/apikey', (_req, res) => {
@@ -2342,6 +2952,11 @@ app.post('/api/aws-control/gates', (req, res) => {
     const operator = await requireAwsOperator(req, res);
     if (!operator) return;
     const body = req.body as Record<string, unknown>;
+    const provided = ['connectionEnabled', 'executionEnabled'].filter((key) => body[key] !== undefined);
+    if (provided.length === 0 || provided.some((key) => typeof body[key] !== 'boolean')) {
+      res.status(400).json({ ok: false, code: 'INVALID_AWS_GATES', error: 'At least one explicit boolean gate is required.' });
+      return;
+    }
     const gates = awsRunnerControl.setGates({
       connectionEnabled: typeof body.connectionEnabled === 'boolean' ? body.connectionEnabled : undefined,
       executionEnabled: typeof body.executionEnabled === 'boolean' ? body.executionEnabled : undefined,
@@ -2354,9 +2969,12 @@ app.post('/api/aws-control/command', (req, res) => {
   void (async () => {
     const operator = await requireAwsOperator(req, res);
     if (!operator) return;
-    const command = typeof (req.body as Record<string, unknown>).command === 'string'
-      ? String((req.body as Record<string, unknown>).command).slice(0, 80)
-      : '';
+    const rawCommand = (req.body as Record<string, unknown>).command;
+    const command = typeof rawCommand === 'string' && rawCommand.length <= 80 ? rawCommand : '';
+    if (!command) {
+      res.status(400).json({ ok: false, code: 'INVALID_AWS_COMMAND', error: 'A valid command is required.' });
+      return;
+    }
     ledger.logEvent('aws_runner_request', null, { operator: operator.operator, command: command.toLowerCase() });
     const result = await awsRunnerControl.runCommand(command);
     res.json({ ok: true, result });
@@ -2378,8 +2996,14 @@ app.put('/api/aws-control/runner', (req, res) => {
     const operator = await requireAwsOperator(req, res);
     if (!operator) return;
     const body = req.body as Record<string, unknown>;
-    const content = typeof body.content === 'string' ? body.content : '';
-    const expectedSha256 = typeof body.expectedSha256 === 'string' ? body.expectedSha256 : null;
+    const content = typeof body.content === 'string' ? body.content : null;
+    const expectedSha256 = typeof body.expectedSha256 === 'string' && /^[a-f0-9]{64}$/.test(body.expectedSha256)
+      ? body.expectedSha256
+      : body.expectedSha256 === null || body.expectedSha256 === undefined ? null : undefined;
+    if (content === null || expectedSha256 === undefined) {
+      res.status(400).json({ ok: false, code: 'INVALID_RUNNER_SOURCE', error: 'Runner content or expected hash is invalid.' });
+      return;
+    }
     ledger.logEvent('aws_runner_request', null, { operator: operator.operator, command: 'save_runner', bytes: Buffer.byteLength(content) });
     const file = await awsRunnerControl.saveRunner(content, expectedSha256);
     res.json({ ok: true, file: { ...file, content: undefined } });
@@ -2402,6 +3026,18 @@ const NUMERIC_KEYS: (keyof AppConfig)[] = [
   'cooldownSec',
   'staleOrderMaxMin',
 ];
+const NUMERIC_RULES: Partial<Record<keyof AppConfig, { minimum: number; maximum: number; integer?: boolean }>> = {
+  feesPct: { minimum: 0, maximum: 10 },
+  minNetBasisPct: { minimum: 0, maximum: 100 },
+  persistTicks: { minimum: 1, maximum: 10_000, integer: true },
+  minQuoteVolume24h: { minimum: 0, maximum: 1_000_000_000_000 },
+  maxOrderNotionalUsd: { minimum: 0.01, maximum: 1_000_000_000 },
+  maxDailyNotionalUsd: { minimum: 0.01, maximum: 10_000_000_000 },
+  maxDailyLossUsd: { minimum: 0.01, maximum: 1_000_000_000 },
+  maxOpenOrders: { minimum: 1, maximum: 10_000, integer: true },
+  cooldownSec: { minimum: 0, maximum: 86_400, integer: true },
+  staleOrderMaxMin: { minimum: 1, maximum: 43_200, integer: true },
+};
 const LIST_KEYS: (keyof AppConfig)[] = ['allowedSymbols', 'blockedSymbols', 'watchlist'];
 const BOOLEAN_KEYS: (keyof AppConfig)[] = ['killSwitch', 'liveTradingEnabled', 'fundsLocked', 'automationPaused'];
 const COIN_RE = /^[A-Z0-9]{1,20}$/;
@@ -2409,10 +3045,8 @@ const CONTROL_MODE_VALUES = new Set<ControlMode>(['blocked', 'paused', 'allowed'
 
 function parseCoinList(v: unknown, max = 40): string[] | null {
   if (!Array.isArray(v)) return null;
-  const rows = v
-    .map((x) => String(x ?? '').trim().toUpperCase())
-    .filter((x) => COIN_RE.test(x))
-    .slice(0, max);
+  if (v.length > max || !v.every((x) => typeof x === 'string' && COIN_RE.test(x))) return null;
+  const rows = v as string[];
   return [...new Set(rows)];
 }
 
@@ -2420,28 +3054,39 @@ app.post('/api/config', (req, res) => {
   const body = req.body as Record<string, unknown>;
   const patch: Record<string, unknown> = {}; // applied to config
   const logPatch: Record<string, unknown> = {}; // written to the ledger (no image bytes)
+  const invalidFields: string[] = [];
   const nextControlModes: ExecutionControlModes = { ...config.controlModes };
   const touchedControlModes = new Set<keyof ExecutionControlModes>();
   for (const key of NUMERIC_KEYS) {
     const v = body[key];
-    if (typeof v === 'number' && Number.isFinite(v) && v >= 0) {
+    if (v === undefined) continue;
+    const rule = NUMERIC_RULES[key]!;
+    if (
+      typeof v === 'number'
+      && Number.isFinite(v)
+      && v >= rule.minimum
+      && v <= rule.maximum
+      && (!rule.integer || Number.isSafeInteger(v))
+    ) {
       patch[key] = v;
       logPatch[key] = v;
-    }
+    } else invalidFields.push(String(key));
   }
   for (const key of LIST_KEYS) {
     const v = body[key];
-    if (Array.isArray(v) && v.every((x) => typeof x === 'string' && /^[A-Z0-9]{4,20}$/.test(x))) {
+    if (v === undefined) continue;
+    if (Array.isArray(v) && v.length <= 500 && v.every((x) => typeof x === 'string' && /^[A-Z0-9]{4,20}$/.test(x))) {
       patch[key] = [...new Set(v)];
       logPatch[key] = patch[key];
-    }
+    } else invalidFields.push(String(key));
   }
   for (const key of BOOLEAN_KEYS) {
     const v = body[key];
+    if (v === undefined) continue;
     if (typeof v === 'boolean') {
       patch[key] = v;
       logPatch[key] = v;
-    }
+    } else invalidFields.push(String(key));
   }
   if (typeof body.fundsLocked === 'boolean') {
     nextControlModes.funds = body.fundsLocked ? 'blocked' : 'allowed';
@@ -2455,18 +3100,30 @@ app.post('/api/config', (req, res) => {
     nextControlModes.liveOrders = body.liveTradingEnabled ? 'allowed' : 'paused';
     touchedControlModes.add('liveOrders');
   }
-  if (body.borrowGuard && typeof body.borrowGuard === 'object') {
+  if (body.borrowGuard !== undefined && (!body.borrowGuard || typeof body.borrowGuard !== 'object' || Array.isArray(body.borrowGuard))) {
+    invalidFields.push('borrowGuard');
+  } else if (body.borrowGuard && typeof body.borrowGuard === 'object') {
     const g = body.borrowGuard as Record<string, unknown>;
     const cur = config.borrowGuard;
     const next = { ...cur };
+    for (const key of ['enabled', 'newBorrowPaused', 'repayOnly', 'requireLiveCatalog'] as const) {
+      if (g[key] !== undefined && typeof g[key] !== 'boolean') invalidFields.push(`borrowGuard.${key}`);
+    }
+    if (g.requireLiveCatalog === false) invalidFields.push('borrowGuard.requireLiveCatalog');
+    if (g.maxLtvPct !== undefined && (typeof g.maxLtvPct !== 'number' || !Number.isFinite(g.maxLtvPct) || g.maxLtvPct < 10 || g.maxLtvPct > 90)) invalidFields.push('borrowGuard.maxLtvPct');
+    if (g.maxAprPct !== undefined && (typeof g.maxAprPct !== 'number' || !Number.isFinite(g.maxAprPct) || g.maxAprPct < 0 || g.maxAprPct > 200)) invalidFields.push('borrowGuard.maxAprPct');
+    if (g.maxBorrowNotionalUsd !== undefined && (typeof g.maxBorrowNotionalUsd !== 'number' || !Number.isFinite(g.maxBorrowNotionalUsd) || g.maxBorrowNotionalUsd < 0.01 || g.maxBorrowNotionalUsd > 10_000_000)) invalidFields.push('borrowGuard.maxBorrowNotionalUsd');
     if (typeof g.enabled === 'boolean') next.enabled = g.enabled;
     if (typeof g.newBorrowPaused === 'boolean') next.newBorrowPaused = g.newBorrowPaused;
     if (typeof g.repayOnly === 'boolean') next.repayOnly = g.repayOnly;
-    if (typeof g.requireLiveCatalog === 'boolean') next.requireLiveCatalog = g.requireLiveCatalog;
-    if (typeof g.maxLtvPct === 'number' && Number.isFinite(g.maxLtvPct)) next.maxLtvPct = Math.min(90, Math.max(10, g.maxLtvPct));
-    if (typeof g.maxAprPct === 'number' && Number.isFinite(g.maxAprPct)) next.maxAprPct = Math.min(200, Math.max(0, g.maxAprPct));
+    next.requireLiveCatalog = true;
+    if (typeof g.maxLtvPct === 'number' && Number.isFinite(g.maxLtvPct) && g.maxLtvPct >= 10 && g.maxLtvPct <= 90) next.maxLtvPct = g.maxLtvPct;
+    if (typeof g.maxAprPct === 'number' && Number.isFinite(g.maxAprPct) && g.maxAprPct >= 0 && g.maxAprPct <= 200) next.maxAprPct = g.maxAprPct;
+    if (typeof g.maxBorrowNotionalUsd === 'number' && Number.isFinite(g.maxBorrowNotionalUsd) && g.maxBorrowNotionalUsd >= 0.01 && g.maxBorrowNotionalUsd <= 10_000_000) next.maxBorrowNotionalUsd = g.maxBorrowNotionalUsd;
     const allowedCollateralCoins = parseCoinList(g.allowedCollateralCoins, 12);
-    const blockedLoanCoins = parseCoinList(g.blockedLoanCoins, 80);
+    const blockedLoanCoins = parseCoinList(g.blockedLoanCoins, 40);
+    if (g.allowedCollateralCoins !== undefined && allowedCollateralCoins === null) invalidFields.push('borrowGuard.allowedCollateralCoins');
+    if (g.blockedLoanCoins !== undefined && blockedLoanCoins === null) invalidFields.push('borrowGuard.blockedLoanCoins');
     if (allowedCollateralCoins) next.allowedCollateralCoins = allowedCollateralCoins;
     if (blockedLoanCoins) next.blockedLoanCoins = blockedLoanCoins;
     patch.borrowGuard = next;
@@ -2476,6 +3133,8 @@ app.post('/api/config', (req, res) => {
       repayOnly: next.repayOnly,
       maxLtvPct: next.maxLtvPct,
       maxAprPct: next.maxAprPct,
+      maxBorrowNotionalUsd: next.maxBorrowNotionalUsd,
+      requireLiveCatalog: next.requireLiveCatalog,
       allowedCollateralCoins: next.allowedCollateralCoins,
       blockedLoanCoins: next.blockedLoanCoins,
     };
@@ -2486,14 +3145,16 @@ app.post('/api/config', (req, res) => {
         : 'paused';
     touchedControlModes.add('borrowing');
   }
-  if (body.controlModes && typeof body.controlModes === 'object') {
+  if (body.controlModes !== undefined && (!body.controlModes || typeof body.controlModes !== 'object' || Array.isArray(body.controlModes))) {
+    invalidFields.push('controlModes');
+  } else if (body.controlModes && typeof body.controlModes === 'object') {
     const incoming = body.controlModes as Record<string, unknown>;
     for (const key of ['funds', 'borrowing', 'automation', 'liveOrders'] as const) {
       const value = incoming[key];
       if (typeof value === 'string' && CONTROL_MODE_VALUES.has(value as ControlMode)) {
         nextControlModes[key] = value as ControlMode;
         touchedControlModes.add(key);
-      }
+      } else if (value !== undefined) invalidFields.push(`controlModes.${key}`);
     }
   }
   if (touchedControlModes.size > 0) {
@@ -2526,14 +3187,20 @@ app.post('/api/config', (req, res) => {
         repayOnly: nextGuard.repayOnly,
         maxLtvPct: nextGuard.maxLtvPct,
         maxAprPct: nextGuard.maxAprPct,
+        maxBorrowNotionalUsd: nextGuard.maxBorrowNotionalUsd,
+        requireLiveCatalog: nextGuard.requireLiveCatalog,
         allowedCollateralCoins: nextGuard.allowedCollateralCoins,
         blockedLoanCoins: nextGuard.blockedLoanCoins,
       };
     }
   }
   // owner profile: short name + small data-URL avatar (server-side, follows the box)
-  if (body.profile && typeof body.profile === 'object') {
+  if (body.profile !== undefined && (!body.profile || typeof body.profile !== 'object' || Array.isArray(body.profile))) {
+    invalidFields.push('profile');
+  } else if (body.profile && typeof body.profile === 'object') {
     const p = body.profile as Record<string, unknown>;
+    if (p.name !== undefined && typeof p.name !== 'string') invalidFields.push('profile.name');
+    if (p.avatar !== undefined && p.avatar !== null && (typeof p.avatar !== 'string' || !/^data:image\/(png|jpeg|webp);base64,/.test(p.avatar) || p.avatar.length > 160_000)) invalidFields.push('profile.avatar');
     const name = typeof p.name === 'string' ? p.name.slice(0, 40) : config.profile.name;
     const avatar =
       p.avatar === null
@@ -2563,34 +3230,63 @@ app.post('/api/config', (req, res) => {
       .filter((r) => r.name.length > 0);
     patch.customRules = rules;
     logPatch.customRules = rules.map((r) => `${r.effect}:${r.name}${r.strict ? ' (strict)' : ''}`);
+  } else if (body.customRules !== undefined) {
+    invalidFields.push('customRules');
   }
-  Object.assign(config, patch);
-  saveConfig(ledger, config);
+  if (invalidFields.length > 0) {
+    res.status(400).json({ code: 'INVALID_CONFIG', error: 'Configuration contains invalid fields.', fields: [...new Set(invalidFields)] });
+    return;
+  }
+  const nextConfig = { ...config, ...patch } as AppConfig;
+  saveConfig(ledger, nextConfig);
+  Object.assign(config, nextConfig);
   ledger.logEvent('config_change', null, logPatch);
   res.json(config);
 });
 
 app.post('/api/kill', (req, res) => {
-  config.killSwitch = Boolean((req.body as Record<string, unknown>).on);
-  saveConfig(ledger, config);
+  const on = (req.body as Record<string, unknown>).on;
+  if (typeof on !== 'boolean') {
+    res.status(400).json({ error: 'kill switch requires a boolean on value' });
+    return;
+  }
+  const nextConfig = { ...config, killSwitch: on };
+  saveConfig(ledger, nextConfig);
+  Object.assign(config, nextConfig);
   ledger.logEvent('manual_action', null, { action: 'kill_switch', on: config.killSwitch });
   res.json({ killSwitch: config.killSwitch });
 });
 
 app.post('/api/live', (req, res) => {
-  config.liveTradingEnabled = Boolean((req.body as Record<string, unknown>).on);
-  config.controlModes.liveOrders = config.liveTradingEnabled ? 'allowed' : 'paused';
-  saveConfig(ledger, config);
+  const on = (req.body as Record<string, unknown>).on;
+  if (typeof on !== 'boolean') {
+    res.status(400).json({ error: 'live trading requires a boolean on value' });
+    return;
+  }
+  const nextConfig = {
+    ...config,
+    liveTradingEnabled: on,
+    controlModes: { ...config.controlModes, liveOrders: on ? 'allowed' as const : 'paused' as const },
+  };
+  saveConfig(ledger, nextConfig);
+  Object.assign(config, nextConfig);
   ledger.logEvent('manual_action', null, { action: 'live_trading', on: config.liveTradingEnabled });
   res.json({ liveTradingEnabled: config.liveTradingEnabled });
 });
 
 function parseIntent(body: Record<string, unknown>): OrderIntent | null {
-  const symbol = String(body.symbol ?? '').toUpperCase();
+  if (typeof body.symbol !== 'string') return null;
+  const symbol = body.symbol;
   const side = body.side === 'SELL' ? 'SELL' : body.side === 'BUY' ? 'BUY' : null;
   const type = body.type === 'LIMIT' ? 'LIMIT' : body.type === 'MARKET' ? 'MARKET' : null;
   if (!/^[A-Z0-9]{4,20}$/.test(symbol) || !side || !type) return null;
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined);
+  for (const value of [body.quantity, body.quoteQty, body.price]) {
+    if (value !== undefined && num(value) === undefined) return null;
+  }
+  if (body.quantity !== undefined && body.quoteQty !== undefined) return null;
+  if (body.timeInForce !== undefined && !['GTC', 'IOC', 'FOK'].includes(String(body.timeInForce))) return null;
+  if (body.source !== undefined && body.source !== 'manual' && body.source !== 'proposal') return null;
   const tif = body.timeInForce === 'IOC' ? 'IOC' : body.timeInForce === 'FOK' ? 'FOK' : 'GTC';
   return {
     symbol,
@@ -2614,40 +3310,90 @@ app.post('/api/trade/preview', (req, res) => {
 });
 
 app.post('/api/trade/test', (req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     const intent = parseIntent(req.body as Record<string, unknown>);
     if (!intent) {
       res.status(400).json({ error: 'invalid order intent' });
       return;
     }
     res.json(await orders.testOrder(intent));
-  })();
+  });
 });
 
 app.post('/api/trade/send', (req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     const body = req.body as Record<string, unknown>;
     const intent = parseIntent(body);
     if (!intent) {
       res.status(400).json({ error: 'invalid order intent' });
       return;
     }
-    const confirmSymbol = String(body.confirmSymbol ?? '');
+    const confirmSymbol = typeof body.confirmSymbol === 'string' ? body.confirmSymbol : '';
     res.json(await orders.send(intent, confirmSymbol));
-  })();
+  });
+});
+
+app.get('/api/orders/recovery', (req, res) => {
+  const requested = Number(req.query.limit ?? 100);
+  const limit = Number.isSafeInteger(requested) && requested >= 1 && requested <= 500 ? requested : 100;
+  const requestedAfter = Number(req.query.afterRequestId ?? 0);
+  const afterRequestId = Number.isSafeInteger(requestedAfter) && requestedAfter >= 0
+    ? requestedAfter
+    : 0;
+  const requests = orders.pendingOrderRecoveries(limit, afterRequestId);
+  const nextAfterRequestId = requests.at(-1)?.requestId ?? afterRequestId;
+  res.json({
+    requests,
+    afterRequestId,
+    nextAfterRequestId,
+    hasMore: requests.length === limit && orders.pendingOrderRecoveries(1, nextAfterRequestId).length > 0,
+  });
+});
+
+app.post('/api/orders/recovery/resolve', (req, res) => {
+  runAsync(res, async () => {
+    const body = req.body as Record<string, unknown>;
+    const action = body.action === 'hold'
+      || body.action === 'confirm_not_sent'
+      || body.action === 'confirm_accepted'
+      ? body.action
+      : null;
+    if (!action) {
+      res.status(400).json({ ok: false, error: 'invalid order-recovery action' });
+      return;
+    }
+    const verified = operatorAccess.operator(req);
+    if (!verified) {
+      res.status(403).json({ ok: false, error: 'verified operator identity is required' });
+      return;
+    }
+    const result = await orders.resolveOrderRecovery({
+      reservationId: typeof body.reservationId === 'string' ? body.reservationId : '',
+      clientOrderId: typeof body.clientOrderId === 'string' ? body.clientOrderId : '',
+      action,
+      confirm: typeof body.confirm === 'string' ? body.confirm : '',
+      reason: typeof body.reason === 'string' ? body.reason : '',
+      operator: verified.email ?? verified.id,
+      orderId: typeof body.orderId === 'number' ? body.orderId : undefined,
+      status: typeof body.status === 'string' ? body.status : undefined,
+      executedQty: typeof body.executedQty === 'number' ? body.executedQty : undefined,
+      executedQuoteUsd: typeof body.executedQuoteUsd === 'number' ? body.executedQuoteUsd : undefined,
+    });
+    res.status(result.ok ? 200 : 409).json(result);
+  });
 });
 
 app.post('/api/orders/cancel', (req, res) => {
-  void (async () => {
+  runAsync(res, async () => {
     const body = req.body as Record<string, unknown>;
-    const symbol = String(body.symbol ?? '');
-    const orderId = Number(body.orderId);
-    if (!/^[A-Z0-9]{4,20}$/.test(symbol) || !Number.isInteger(orderId)) {
+    const symbol = typeof body.symbol === 'string' ? body.symbol : '';
+    const orderId = body.orderId;
+    if (!/^[A-Z0-9]{4,20}$/.test(symbol) || typeof orderId !== 'number' || !Number.isSafeInteger(orderId) || orderId <= 0) {
       res.status(400).json({ error: 'bad cancel request' });
       return;
     }
     res.json(await orders.cancel(symbol, orderId));
-  })();
+  });
 });
 
 // Serve the built dashboard (web/dist) with SPA fallback.
@@ -2685,17 +3431,154 @@ if (fs.existsSync(webDist)) {
   });
 }
 
+app.use('/api', (_req, res) => {
+  res.status(404).json({ ok: false, code: 'API_NOT_FOUND', error: 'API route not found.' });
+});
+
+app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const details = error as { status?: number; type?: string } | null;
+  const malformedJson = details?.type === 'entity.parse.failed';
+  const tooLarge = details?.type === 'entity.too.large' || details?.status === 413;
+  const status = tooLarge ? 413 : malformedJson ? 400 : 500;
+  const code = tooLarge ? 'BODY_TOO_LARGE' : malformedJson ? 'INVALID_JSON' : 'INTERNAL_ERROR';
+  const message = tooLarge ? 'Request body exceeds the allowed size.' : malformedJson ? 'Request body is not valid JSON.' : 'Request could not be completed.';
+  try {
+    if (status === 500) ledger.logEvent('error_event', null, { source: 'http.error', message: error instanceof Error ? error.message : String(error) });
+  } catch {
+    // The response must remain available even if persistence is degraded.
+  }
+  if (!res.headersSent) res.status(status).json({ ok: false, code, error: message });
+  else res.end();
+});
+
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server, path: '/ws' });
+server.requestTimeout = 30_000;
+server.headersTimeout = 10_000;
+server.keepAliveTimeout = 5_000;
+server.maxRequestsPerSocket = 1_000;
+
+const wss = new WebSocketServer({
+  noServer: true,
+  clientTracking: true,
+  maxPayload: 16 * 1024,
+  perMessageDeflate: false,
+});
+const WS_MAX_CLIENTS = 64;
+const WS_MAX_CLIENTS_PER_IP = 8;
+const WS_MAX_PENDING_UPGRADES = 16;
+const WS_MAX_BUFFERED_BYTES = 512 * 1024;
+const WS_MESSAGES_PER_WINDOW = 30;
+const WS_MESSAGE_WINDOW_MS = 10_000;
+const wsClientIp = new WeakMap<WebSocket, string>();
+const wsAlive = new WeakMap<WebSocket, boolean>();
+const wsMessageRate = new WeakMap<WebSocket, { startedAt: number; count: number }>();
+let pendingWsUpgrades = 0;
+const pendingWsUpgradeSockets = new Set<import('node:stream').Duplex>();
+
+function websocketCountForIp(ip: string): number {
+  let count = 0;
+  for (const client of wss.clients) if (wsClientIp.get(client) === ip) count++;
+  return count;
+}
+
+function rejectUpgrade(socket: import('node:stream').Duplex, status: 400 | 401 | 404 | 429 | 503, reason: string): void {
+  if (socket.destroyed) return;
+  const label = status === 401
+    ? 'Unauthorized'
+    : status === 404
+      ? 'Not Found'
+      : status === 429
+        ? 'Too Many Requests'
+        : status === 503
+          ? 'Service Unavailable'
+          : 'Bad Request';
+  socket.end(`HTTP/1.1 ${status} ${label}\r\nConnection: close\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: ${Buffer.byteLength(reason)}\r\n\r\n${reason}`);
+}
+
+server.on('upgrade', (request, socket, head) => {
+  // A raw upgrade socket can emit before `ws` owns it. Keep that failure
+  // contained for the entire underlying socket lifetime.
+  socket.on('error', () => undefined);
+  if (shuttingDown) {
+    rejectUpgrade(socket, 503, 'WebSocket service is shutting down.');
+    return;
+  }
+  let pathname = '';
+  try {
+    pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
+  } catch {
+    rejectUpgrade(socket, 400, 'Invalid WebSocket request.');
+    return;
+  }
+  if (pathname !== '/ws') {
+    rejectUpgrade(socket, 404, 'WebSocket endpoint not found.');
+    return;
+  }
+  if (pendingWsUpgrades >= WS_MAX_PENDING_UPGRADES || wss.clients.size >= WS_MAX_CLIENTS) {
+    rejectUpgrade(socket, 429, 'WebSocket capacity reached.');
+    return;
+  }
+  pendingWsUpgrades++;
+  pendingWsUpgradeSockets.add(socket);
+  void operatorAccess.verify(request, { websocket: true })
+    .then((verification) => {
+      if (shuttingDown || socket.destroyed) {
+        rejectUpgrade(socket, 503, 'WebSocket service is shutting down.');
+        return;
+      }
+      if (!verification.authorized) {
+        rejectUpgrade(socket, 401, 'WebSocket operator verification failed.');
+        return;
+      }
+      if (wss.clients.size >= WS_MAX_CLIENTS) {
+        rejectUpgrade(socket, 429, 'WebSocket capacity reached.');
+        return;
+      }
+      const ip = request.socket.remoteAddress?.replace(/^::ffff:/, '') ?? 'unknown';
+      if (websocketCountForIp(ip) >= WS_MAX_CLIENTS_PER_IP) {
+        rejectUpgrade(socket, 429, 'WebSocket per-client capacity reached.');
+        return;
+      }
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        if (shuttingDown) {
+          ws.close(1012, 'service restart');
+          return;
+        }
+        wsClientIp.set(ws, ip);
+        wss.emit('connection', ws, request);
+      });
+    })
+    .catch(() => rejectUpgrade(socket, 401, 'WebSocket operator verification failed.'))
+    .finally(() => {
+      pendingWsUpgradeSockets.delete(socket);
+      pendingWsUpgrades = Math.max(0, pendingWsUpgrades - 1);
+    });
+});
 
 // Live order-book/trade fan-out (public market data only, symbol-validated).
 const bookHub = new BookStreamHub((s) => engine.filters.has(s));
 wss.on('connection', (ws) => {
+  wsAlive.set(ws, true);
+  ws.on('error', () => {
+    bookHub.drop(ws);
+    try { ws.terminate(); } catch { /* already closed */ }
+  });
+  ws.on('pong', () => wsAlive.set(ws, true));
   ws.on('message', (buf) => {
+    const now = Date.now();
+    const current = wsMessageRate.get(ws);
+    const rate = !current || now - current.startedAt >= WS_MESSAGE_WINDOW_MS
+      ? { startedAt: now, count: 1 }
+      : { startedAt: current.startedAt, count: current.count + 1 };
+    wsMessageRate.set(ws, rate);
+    if (rate.count > WS_MESSAGES_PER_WINDOW) {
+      ws.close(1008, 'message rate exceeded');
+      return;
+    }
     try {
       bookHub.handleMessage(ws, JSON.parse(buf.toString()));
     } catch {
-      // ignore malformed client frames
+      ws.close(1007, 'invalid message');
     }
   });
   ws.on('close', () => bookHub.drop(ws));
@@ -2704,11 +3587,27 @@ wss.on('connection', (ws) => {
 function broadcast(msg: unknown): void {
   const s = JSON.stringify(msg);
   for (const c of wss.clients) {
-    if (c.readyState === WebSocket.OPEN) c.send(s);
+    if (c.bufferedAmount > WS_MAX_BUFFERED_BYTES) {
+      c.close(1013, 'slow consumer');
+      continue;
+    }
+    if (c.readyState === WebSocket.OPEN) c.send(s, (error) => {
+      if (error && c.readyState === WebSocket.OPEN) c.close(1011, 'send failed');
+    });
   }
 }
 
-setInterval(() => broadcast({ type: 'state', payload: buildState() }), TICK_MS);
+const websocketHeartbeatTimer = setInterval(() => {
+  for (const client of wss.clients) {
+    if (wsAlive.get(client) === false) {
+      client.terminate();
+      continue;
+    }
+    wsAlive.set(client, false);
+    try { client.ping(); } catch { client.terminate(); }
+  }
+}, 30_000);
+const stateBroadcastTimer = setInterval(() => broadcast({ type: 'state', payload: buildState() }), TICK_MS);
 ledger.on('event', (ev) => broadcast({ type: 'event', payload: ev }));
 
 // Prime the icon resolver with the full market universe so logo coverage
@@ -2721,11 +3620,11 @@ function primeIconUniverse(): void {
     // non-fatal — the client-driven path still works
   }
 }
-setTimeout(primeIconUniverse, 20_000);
-setTimeout(() => {
+const primeIconStartTimer = setTimeout(primeIconUniverse, 20_000);
+const initialRefreshTimer = setTimeout(() => {
   void startCalendarRefresh();
   void getNewsContext(false).catch(() => undefined);
-  void refreshFx().catch((error) => ledger.logEvent('error_event', null, { source: 'fx.fetch', message: String(error) }));
+  void refreshFx().catch((error) => safeLogEvent('error_event', null, { source: 'fx.fetch', message: String(error) }));
   startNewsRefreshLoop();
 }, 250);
 function warmProfileUniverse(): void {
@@ -2738,11 +3637,99 @@ function warmProfileUniverse(): void {
     // non-fatal
   }
 }
-setTimeout(warmProfileUniverse, 45_000);
+const warmProfileStartTimer = setTimeout(warmProfileUniverse, 45_000);
 startLiquidationCollector();
-setInterval(warmProfileUniverse, 24 * 3_600_000);
-setInterval(primeIconUniverse, 3_600_000);
+const warmProfileTimer = setInterval(warmProfileUniverse, 24 * 3_600_000);
+const primeIconTimer = setInterval(primeIconUniverse, 3_600_000);
 
 server.listen(PORT, HOST, () => {
-  console.log(`cosmos control room listening on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
+  console.log(`cosmos control room listening on http://${HOST}:${PORT}`);
 });
+server.on('error', (error) => {
+  console.error('control-room listener failed:', error instanceof Error ? error.message : String(error));
+  void gracefulShutdown('SIGTERM').finally(() => process.exit(1));
+});
+
+let shutdownPromise: Promise<void> | null = null;
+
+function gracefulShutdown(signal: NodeJS.Signals): Promise<void> {
+  if (shutdownPromise) return shutdownPromise;
+  const current = (async () => {
+    shuttingDown = true;
+    console.log(`received ${signal}; draining control-room services`);
+
+    for (const timer of [
+      basisStartTimer,
+      volumeStartTimer,
+      accountSyncTimer,
+      orderSyncTimer,
+      fillReconcileTimer,
+      newsRefreshTimer,
+      scannerTimer,
+      eventRetentionTimer,
+      websocketHeartbeatTimer,
+      stateBroadcastTimer,
+      primeIconStartTimer,
+      initialRefreshTimer,
+      warmProfileStartTimer,
+      warmProfileTimer,
+      primeIconTimer,
+    ]) {
+      if (timer) clearTimeout(timer);
+    }
+
+    userStream?.stop();
+    bookHub.stop();
+    basisRuntime.stop();
+    volumeRuntime.stop();
+    engine.stop();
+    stopLiquidationCollector();
+    for (const socket of pendingWsUpgradeSockets) {
+      rejectUpgrade(socket, 503, 'WebSocket service is shutting down.');
+      socket.destroy();
+    }
+    pendingWsUpgradeSockets.clear();
+
+    const websocketClosed = new Promise<void>((resolve) => {
+      wss.close(() => resolve());
+      for (const client of wss.clients) client.close(1012, 'service restart');
+      if (wss.clients.size === 0) resolve();
+    });
+    const httpClosed = new Promise<void>((resolve) => {
+      if (!server.listening) {
+        resolve();
+        return;
+      }
+      server.close(() => resolve());
+      server.closeIdleConnections();
+    });
+
+    const deadline = setTimeout(() => {
+      for (const client of wss.clients) client.terminate();
+      server.closeAllConnections();
+    }, 8_000);
+    deadline.unref();
+    await Promise.all([httpClosed, websocketClosed]);
+    clearTimeout(deadline);
+
+    try {
+      (ledger as Ledger & { close?: () => void }).close?.();
+    } catch (error) {
+      console.error('ledger close failed:', error instanceof Error ? error.message : String(error));
+    }
+    console.log('control-room shutdown complete');
+  })();
+  shutdownPromise = current;
+  return current;
+}
+
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.once(signal, () => {
+    void gracefulShutdown(signal)
+      .then(() => process.exit(0))
+      .catch((error) => {
+        console.error('graceful shutdown failed:', error instanceof Error ? error.message : String(error));
+        process.exit(1);
+      });
+  });
+}

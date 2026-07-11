@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { fetchJson } from '../lib/http';
+import { normalizeBook, normalizeTrades, type BookLevel, type NormalizedTrade } from '../lib/marketData';
+import { createSettledPoll } from '../lib/polling';
 import { subscribeLiveBook } from '../store';
 import { Num } from './Num';
 
@@ -9,15 +12,9 @@ import { Num } from './Num';
  * bids continue below it; cumulative depth bars glide, sizes flash on change.
  */
 
-type Level = [number, number]; // price, qty
+type Level = BookLevel; // price, qty
 type BookLayout = 'both' | 'asks' | 'bids';
-interface Trade {
-  id: number;
-  price: number;
-  qty: number;
-  time: number;
-  isBuyerMaker: boolean;
-}
+type Trade = NormalizedTrade;
 
 const LEVELS_SHOWN = 12;
 const TRADES_SHOWN = 24;
@@ -79,36 +76,35 @@ export function OrderBook({
   // Reset + REST seed for instant paint, then keep polling only as a fallback
   // for when the live stream is quiet.
   useEffect(() => {
-    let alive = true;
     liveTsRef.current = 0;
     setBook(null);
     setTrades([]);
-    const seed = () => {
-      if (Date.now() - liveTsRef.current < LIVE_STALE_MS) return; // stream is alive — skip REST
-      void fetch(`/api/market/depth?symbol=${symbol}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d: { bids: { price: number; qty: number }[]; asks: { price: number; qty: number }[] } | null) => {
-          if (!alive || !d || Date.now() - liveTsRef.current < LIVE_STALE_MS) return;
-          setBook({
-            bids: d.bids.map((l) => [l.price, l.qty] as Level),
-            asks: d.asks.map((l) => [l.price, l.qty] as Level),
-          });
-        })
-        .catch(() => undefined);
-      void fetch(`/api/market/trades?symbol=${symbol}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d: Trade[] | null) => {
-          if (!alive || !d || !Array.isArray(d) || Date.now() - liveTsRef.current < LIVE_STALE_MS) return;
-          setTrades(d.slice(0, TRADES_SHOWN + 10));
-        })
-        .catch(() => undefined);
-    };
-    seed();
-    const t = setInterval(seed, 10_000);
-    return () => {
-      alive = false;
-      clearInterval(t);
-    };
+    const poll = createSettledPoll<[
+      PromiseSettledResult<unknown>,
+      PromiseSettledResult<unknown>,
+    ] | null>({
+      intervalMs: 10_000,
+      request: (signal) => Date.now() - liveTsRef.current < LIVE_STALE_MS
+        ? Promise.resolve(null)
+        : Promise.allSettled([
+          fetchJson<unknown>(`/api/market/depth?symbol=${symbol}`, { signal }),
+          fetchJson<unknown>(`/api/market/trades?symbol=${symbol}`, { signal }),
+        ]) as Promise<[PromiseSettledResult<unknown>, PromiseSettledResult<unknown>]>,
+      onSuccess: (results) => {
+        if (!results || Date.now() - liveTsRef.current < LIVE_STALE_MS) return;
+        const [bookResult, tradesResult] = results;
+        if (bookResult.status === 'fulfilled') {
+          const next = normalizeBook(bookResult.value);
+          if (next) setBook(next);
+        }
+        if (tradesResult.status === 'fulfilled') {
+          const next = normalizeTrades(tradesResult.value, TRADES_SHOWN + 10);
+          if (next.length) setTrades(next);
+        }
+      },
+    });
+    poll.start();
+    return poll.stop;
   }, [symbol]);
 
   // Live stream: depth snapshots ~100ms, trade prints flushed ~250ms.
@@ -117,11 +113,10 @@ export function OrderBook({
       const unsub = subscribeLiveBook(symbol, (m) => {
         if (m.symbol !== symbol) return;
         if (m.type === 'book') {
+          const next = normalizeBook({ bids: m.bids, asks: m.asks });
+          if (!next) return;
           liveTsRef.current = Date.now();
-          pendingBookRef.current = {
-            bids: m.bids.map(([p, q]) => [Number(p), Number(q)] as Level),
-            asks: m.asks.map(([p, q]) => [Number(p), Number(q)] as Level),
-          };
+          pendingBookRef.current = next;
           if (bookRafRef.current === null) {
             bookRafRef.current = requestAnimationFrame(() => {
               bookRafRef.current = null;
@@ -129,9 +124,10 @@ export function OrderBook({
             });
           }
         } else if (m.type === 'btrades') {
+          const incoming = normalizeTrades(m.trades, 60);
+          if (!incoming.length) return;
           setTrades((prev) => {
-            const next = [...m.trades].reverse().concat(prev);
-            return next.length > 60 ? next.slice(0, 60) : next;
+            return normalizeTrades([...incoming, ...prev], 60);
           });
         }
       });

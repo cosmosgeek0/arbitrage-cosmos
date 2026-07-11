@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { TokenIcon } from '../components/TokenIcon';
 import { countdown, fmtBasis, fmtFunding, fmtMoney, fmtPrice, timeAgo } from '../format';
+import { apiErrorMessage, fetchJson } from '../lib/http';
+import { createSettledPoll } from '../lib/polling';
 import { useStore } from '../store';
 import type { BasisRow, BasisSnapshot } from '../lib/basisRuntime';
 import './VolumeScanner.css';
@@ -97,26 +99,17 @@ export function Strategies() {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
-    let live = true;
-    const load = async () => {
-      try {
-        const response = await fetch('/api/engine/basis', { cache: 'no-store' });
-        if (!response.ok) throw new Error('Basis runtime HTTP ' + String(response.status));
-        const next = await response.json() as BasisSnapshot;
-        if (!live) return;
+    const poll = createSettledPoll<BasisSnapshot>({
+      intervalMs: 2_000,
+      request: (signal) => fetchJson('/api/engine/basis', { cache: 'no-store', signal }),
+      onSuccess: (next) => {
         setSnapshot(next);
         setError(null);
-      } catch (reason) {
-        if (!live) return;
-        setError(reason instanceof Error ? reason.message : 'Basis runtime unavailable');
-      }
-    };
-    void load();
-    const timer = window.setInterval(() => void load(), 2_000);
-    return () => {
-      live = false;
-      window.clearInterval(timer);
-    };
+      },
+      onError: (reason) => setError(apiErrorMessage(reason, 'Basis runtime unavailable')),
+    });
+    poll.start();
+    return poll.stop;
   }, []);
 
   const rows = snapshot?.rows ?? [];
@@ -145,6 +138,7 @@ export function Strategies() {
   }), [filter, query, rows]);
 
   const liveFeed = Boolean(
+    !error &&
     snapshot?.status.running &&
     snapshot.status.bookState === 'fresh' &&
     snapshot.status.markState === 'fresh' &&

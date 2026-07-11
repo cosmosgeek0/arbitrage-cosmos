@@ -22,6 +22,7 @@ import { MemoryEventSink, makeEvent } from './events.js';
 import { priorityOf } from './priority.js';
 import type { WakeupSnapshot } from './types.js';
 import type { SeedMinute } from './rolling.js';
+import { MAX_ENGINE_SYMBOLS, isCanonicalSymbol, positive, validSymbolMeta } from './validation.js';
 
 export class VolumeEngine {
   readonly cfg: VolumeConfig;
@@ -35,6 +36,8 @@ export class VolumeEngine {
 
   private universeMap = new Map<string, SymbolMeta>();
   private blocked = new Set<string>();
+  private policyAllowed: Set<string> | null = null;
+  private policyBlocked = new Set<string>();
   private decisionsRing: Decision[] = [];
   private ignoredDecisionCount = 0;
   private killSwitchOn = false;
@@ -43,17 +46,18 @@ export class VolumeEngine {
   private lastHeartbeatTs: number | null = null;
   /** symbol → correlationId of the currently-live signal path */
   private signalCorrelation = new Map<string, string>();
+  private universeKey = '';
+  private emittedKeys = new Set<string>();
+  private emittedKeyOrder: string[] = [];
+  private sinkFailureCount = 0;
+  private lastDecisionKey = new Map<string, string>();
+  private lastDecisionPersistedAt = new Map<string, number>();
 
   constructor(clock: Clock, cfgPartial?: Partial<VolumeConfig>, externalSink?: EventSink) {
     this.cfg = volumeConfig(cfgPartial);
     this.clock = clock;
     this.memSink = new MemoryEventSink();
-    this.sink = {
-      emit: (ev) => {
-        this.memSink.emit(ev);
-        externalSink?.emit(ev);
-      },
-    };
+    this.sink = { emit: (event) => this.emitSafely(event, externalSink) };
     this.features = new VolumeFeatureEngine(this.cfg, clock);
     this.detector = new WakeupDetector(this.cfg);
     this.focusMgr = new FocusManager(this.cfg, clock, this.sink);
@@ -62,6 +66,7 @@ export class VolumeEngine {
 
   // ---- lifecycle ----
   start(): void {
+    if (this.running) return;
     this.running = true;
     this.sink.emit(
       makeEvent('engine_started', this.clock.now(), newCorrelationId(this.clock, 've'), 'volume engine started'),
@@ -69,6 +74,7 @@ export class VolumeEngine {
   }
 
   stop(): void {
+    if (!this.running) return;
     this.running = false;
     this.sink.emit(
       makeEvent('engine_stopped', this.clock.now(), newCorrelationId(this.clock, 've'), 'volume engine stopped'),
@@ -83,7 +89,7 @@ export class VolumeEngine {
   setKillSwitch(on: boolean): void {
     // NOTE for Director: v0 EngineEventKind has no kill_switch_changed —
     // ENGINE.md §14 lists it. Flagged in the lane report; not ledgered here.
-    this.killSwitchOn = on;
+    this.killSwitchOn = on === true;
   }
 
   killSwitch(): boolean {
@@ -91,12 +97,30 @@ export class VolumeEngine {
   }
 
   blockSymbol(symbol: string, blocked = true): void {
-    if (blocked) this.blocked.add(symbol);
+    if (!isCanonicalSymbol(symbol)) return;
+    if (blocked) {
+      if (!this.universeMap.has(symbol) || this.blocked.size >= MAX_ENGINE_SYMBOLS) return;
+      this.blocked.add(symbol);
+    }
     else this.blocked.delete(symbol);
   }
 
+  /** Apply the operator's current allow/block lists without rebuilding the engine. */
+  setSymbolPolicy(allowedSymbols: readonly string[] | null, blockedSymbols: readonly string[]): void {
+    this.policyAllowed = allowedSymbols === null
+      ? null
+      : new Set(allowedSymbols.slice(0, MAX_ENGINE_SYMBOLS * 2).filter(isCanonicalSymbol).slice(0, MAX_ENGINE_SYMBOLS));
+    this.policyBlocked = new Set(
+      blockedSymbols.slice(0, MAX_ENGINE_SYMBOLS * 2).filter(isCanonicalSymbol).slice(0, MAX_ENGINE_SYMBOLS),
+    );
+  }
+
+  setSuggestedNotionalUsd(value: number): void {
+    if (positive(value)) this.cfg.suggestedNotionalUsd = Math.min(value, 1_000_000);
+  }
+
   pin(symbol: string, pinned = true): void {
-    this.features.observe(symbol);
+    if (!this.universeMap.get(symbol)?.eligible || !this.features.observe(symbol)) return;
     this.focusMgr.pin(symbol, pinned);
     if (pinned) {
       this.focusMgr.promote(symbol, 'user_pin', 0, this.correlationFor(symbol), this.clock.now());
@@ -104,7 +128,7 @@ export class VolumeEngine {
   }
 
   markOpenPosition(symbol: string, open: boolean): void {
-    this.features.observe(symbol);
+    if (!this.universeMap.get(symbol)?.eligible || !this.features.observe(symbol)) return;
     this.focusMgr.markOpenPosition(symbol, open);
     if (open) {
       this.focusMgr.promote(symbol, 'open_position', 0, this.correlationFor(symbol), this.clock.now());
@@ -112,33 +136,56 @@ export class VolumeEngine {
   }
 
   setUniverse(metas: SymbolMeta[]): void {
-    this.universeMap.clear();
-    for (const m of metas) {
-      this.universeMap.set(m.symbol, m);
-      if (m.eligible) this.features.observe(m.symbol);
+    const next = new Map<string, SymbolMeta>();
+    for (const m of metas.slice(0, MAX_ENGINE_SYMBOLS * 2)) {
+      if (next.size >= MAX_ENGINE_SYMBOLS) break;
+      if (!validSymbolMeta(m) || next.has(m.symbol)) continue;
+      const normalized = { ...m };
+      next.set(normalized.symbol, normalized);
     }
+    const eligible = new Set([...next.values()].filter((meta) => meta.eligible).map((meta) => meta.symbol));
+    const nextKey = JSON.stringify([...next.values()]);
+
+    this.proposalStore.reconcileSymbols(eligible);
+    this.focusMgr.reconcileSymbols(eligible);
+    this.features.reconcileSymbols(eligible);
+    for (const symbol of eligible) this.features.observe(symbol);
+    for (const symbol of this.blocked) if (!next.has(symbol)) this.blocked.delete(symbol);
+    for (const symbol of this.signalCorrelation.keys()) if (!eligible.has(symbol)) this.signalCorrelation.delete(symbol);
+    for (const symbol of this.lastDecisionKey.keys()) if (!eligible.has(symbol)) this.lastDecisionKey.delete(symbol);
+    for (const symbol of this.lastDecisionPersistedAt.keys()) {
+      if (!eligible.has(symbol)) this.lastDecisionPersistedAt.delete(symbol);
+    }
+    this.decisionsRing = this.decisionsRing.filter((decision) => eligible.has(decision.symbol));
+    this.universeMap = next;
+
+    if (nextKey === this.universeKey) return;
+    this.universeKey = nextKey;
     this.sink.emit(
       makeEvent(
         'universe_refreshed',
         this.clock.now(),
         newCorrelationId(this.clock, 've'),
-        `universe: ${metas.length} symbols, ${metas.filter((m) => m.eligible).length} eligible`,
-        { payload: { size: metas.length } },
+        `universe: ${next.size} symbols, ${eligible.size} eligible`,
+        { payload: { size: next.size, eligible: eligible.size } },
       ),
     );
   }
 
   // ---- market data ingestion ----
-  onTrade(t: TradeTick, printCount = 1): void {
-    this.features.onTrade(t, printCount);
+  onTrade(t: TradeTick, printCount = 1): boolean {
+    if (!this.universeMap.get(t.symbol)?.eligible) return false;
+    return this.features.onTrade(t, printCount);
   }
 
-  onBook(b: BookTicker): void {
-    this.features.onBook(b);
+  onBook(b: BookTicker): boolean {
+    if (!this.universeMap.get(b.symbol)?.eligible) return false;
+    return this.features.onBook(b);
   }
 
-  seedMinute(symbol: string, sample: SeedMinute): void {
-    this.features.seedMinute(symbol, sample);
+  seedMinute(symbol: string, sample: SeedMinute): boolean {
+    if (!this.universeMap.get(symbol)?.eligible) return false;
+    return this.features.seedMinute(symbol, sample);
   }
 
   // ---- execution-path bridge (manual, risk-gated; never automatic) ----
@@ -148,6 +195,7 @@ export class VolumeEngine {
 
   // ---- core tick ----
   tick(): void {
+    if (!this.running) return;
     const now = this.clock.now();
     for (const symbol of this.features.symbols()) {
       // COOLDOWN = temporarily ignored (ENGINE.md §5); protected symbols never cool down
@@ -180,7 +228,11 @@ export class VolumeEngine {
       if (f) this.proposalStore.refresh(f);
     }
     this.focusMgr.tick();
-    if (this.lastHeartbeatTs === null || now - this.lastHeartbeatTs >= this.cfg.heartbeatMs) {
+    if (
+      this.lastHeartbeatTs === null ||
+      now < this.lastHeartbeatTs ||
+      now - this.lastHeartbeatTs >= this.cfg.heartbeatMs
+    ) {
       this.lastHeartbeatTs = now;
       this.sink.emit(
         makeEvent('heartbeat', now, newCorrelationId(this.clock, 've'), 'volume engine heartbeat', {
@@ -202,8 +254,10 @@ export class VolumeEngine {
 
   private symbolAllowed(symbol: string): boolean {
     if (this.blocked.has(symbol)) return false;
+    if (this.policyBlocked.has(symbol)) return false;
+    if (this.policyAllowed !== null && !this.policyAllowed.has(symbol)) return false;
     const meta = this.universeMap.get(symbol);
-    return meta ? meta.eligible : true; // unknown symbols default-allowed in synthetic runs
+    return meta?.eligible === true;
   }
 
   private recordDecision(d: Decision): void {
@@ -212,6 +266,22 @@ export class VolumeEngine {
       this.ignoredDecisionCount++;
       return;
     }
+    const decisionKey = JSON.stringify({
+      correlationId: d.correlationId,
+      kind: d.kind,
+      rejectCode: d.rejectCode,
+      humanReason: d.humanReason,
+      evidence: d.evidence,
+    });
+    const previousKey = this.lastDecisionKey.get(d.symbol);
+    const previousAt = this.lastDecisionPersistedAt.get(d.symbol) ?? -Infinity;
+    if (
+      decisionKey === previousKey &&
+      d.ts >= previousAt &&
+      d.ts - previousAt < this.cfg.heartbeatMs
+    ) return;
+    this.lastDecisionKey.set(d.symbol, decisionKey);
+    this.lastDecisionPersistedAt.set(d.symbol, d.ts);
     this.decisionsRing.push(d);
     if (this.decisionsRing.length > 2_000) this.decisionsRing.splice(0, this.decisionsRing.length - 2_000);
     this.sink.emit(
@@ -225,7 +295,9 @@ export class VolumeEngine {
 
   // ---- snapshot accessors ----
   decisions(limit = 100): Decision[] {
-    return this.decisionsRing.slice(-limit);
+    const safeLimit = Number.isSafeInteger(limit) ? Math.max(0, Math.min(limit, 2_000)) : 100;
+    if (safeLimit === 0) return [];
+    return this.decisionsRing.slice(-safeLimit);
   }
 
   ignoredCount(): number {
@@ -241,6 +313,41 @@ export class VolumeEngine {
   }
 
   featureSnapshot(symbol: string): WakeupSnapshot | null {
+    if (!this.universeMap.get(symbol)?.eligible) return null;
     return this.features.snapshotEx(symbol, this.focusMgr.focusAgeMs(symbol));
+  }
+
+  sinkFailures(): number {
+    return this.sinkFailureCount;
+  }
+
+  private emitSafely(event: Parameters<EventSink['emit']>[0], externalSink?: EventSink): void {
+    let key: string;
+    try {
+      key = JSON.stringify(event);
+    } catch {
+      this.sinkFailureCount += 1;
+      return;
+    }
+    if (this.emittedKeys.has(key)) return;
+    this.emittedKeys.add(key);
+    this.emittedKeyOrder.push(key);
+    if (this.emittedKeyOrder.length > 5_000) {
+      const removed = this.emittedKeyOrder.shift();
+      if (removed !== undefined) this.emittedKeys.delete(removed);
+    }
+
+    this.memSink.emit(event);
+    if (!externalSink) return;
+    try {
+      const result = externalSink.emit(event) as unknown;
+      if (result && typeof (result as PromiseLike<void>).then === 'function') {
+        void Promise.resolve(result).catch(() => {
+          this.sinkFailureCount += 1;
+        });
+      }
+    } catch {
+      this.sinkFailureCount += 1;
+    }
   }
 }

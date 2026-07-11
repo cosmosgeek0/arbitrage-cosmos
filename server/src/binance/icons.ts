@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 /**
@@ -17,6 +17,9 @@ const DISK = path.resolve(process.cwd(), process.env.ICON_CACHE ?? 'data/icon_ca
 // CoinGecko keyless throttles harder than its published limit — 1.3s gaps got
 // 429s that looked like "no logo". 4.5s converges slower but never lies.
 const RESOLVE_GAP_MS = 4500;
+const FETCH_TIMEOUT_MS = 10_000;
+const MAX_SEARCH_BYTES = 512 * 1024;
+const MAX_CACHE_ENTRIES = 2_048;
 
 // Ambiguous / short tickers search better by project name; still exact-symbol
 // matched afterward so this only disambiguates, never mismatches.
@@ -60,24 +63,96 @@ const pending = new Set<string>();
 let queue: string[] = [];
 let draining = false;
 
+function canonicalBase(value: string): string | null {
+  const base = value.trim().toUpperCase();
+  return /^[A-Z0-9\u3400-\u9fff]{1,24}$/u.test(base) ? base : null;
+}
+
+function safeIconUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > 2_048) return null;
+  try {
+    const url = new URL(value);
+    const allowed = url.hostname === 'assets.coingecko.com'
+      || url.hostname === 'coin-images.coingecko.com'
+      || url.hostname.endsWith('.coingecko.com');
+    return url.protocol === 'https:' && allowed ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function cacheSet(base: string, value: { ts: number; url: string | null }): void {
+  if (!cache.has(base) && cache.size >= MAX_CACHE_ENTRIES) {
+    const oldest = cache.keys().next().value;
+    if (oldest) cache.delete(oldest);
+  }
+  cache.set(base, value);
+}
+
+async function readBoundedJson(res: Response): Promise<{ coins?: { symbol?: string; large?: string; thumb?: string }[] }> {
+  const contentType = (res.headers.get('content-type') ?? '').toLowerCase();
+  if (!contentType.includes('application/json') && !contentType.includes('+json')) {
+    await res.body?.cancel().catch(() => undefined);
+    throw new Error('CoinGecko icon invalid content type');
+  }
+  const advertised = Number(res.headers.get('content-length'));
+  if (Number.isFinite(advertised) && advertised > MAX_SEARCH_BYTES) {
+    await res.body?.cancel().catch(() => undefined);
+    throw new Error('CoinGecko icon response too large');
+  }
+  if (!res.body) throw new Error('CoinGecko icon invalid JSON');
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > MAX_SEARCH_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        throw new Error('CoinGecko icon response too large');
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8')) as { coins?: { symbol?: string; large?: string; thumb?: string }[] };
+  } catch {
+    throw new Error('CoinGecko icon invalid JSON');
+  }
+}
+
 function loadDisk(): void {
   try {
+    if (statSync(DISK).size > 4 * 1024 * 1024) return;
     const stored = JSON.parse(readFileSync(DISK, 'utf8')) as Record<string, string>;
     const now = Date.now();
-    for (const [base, url] of Object.entries(stored)) if (url) cache.set(base.toUpperCase(), { ts: now, url });
+    for (const [rawBase, rawUrl] of Object.entries(stored).slice(0, MAX_CACHE_ENTRIES)) {
+      const base = canonicalBase(rawBase);
+      const url = safeIconUrl(rawUrl);
+      if (base && url) cacheSet(base, { ts: now, url });
+    }
   } catch {
     // no cache yet
   }
 }
 
 function saveDisk(): void {
+  const temp = `${DISK}.${process.pid}.${Date.now()}.tmp`;
   try {
     mkdirSync(path.dirname(DISK), { recursive: true });
     const data: Record<string, string> = {};
-    for (const [b, v] of cache) if (v.url) data[b] = v.url;
-    writeFileSync(DISK, JSON.stringify(data));
+    for (const [b, v] of [...cache.entries()].slice(-MAX_CACHE_ENTRIES)) if (v.url) data[b] = v.url;
+    writeFileSync(temp, JSON.stringify(data), { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+    renameSync(temp, DISK);
   } catch {
     // non-fatal
+  } finally {
+    try { unlinkSync(temp); } catch { /* promoted or never created */ }
   }
 }
 
@@ -85,17 +160,29 @@ loadDisk();
 
 async function searchIcon(base: string): Promise<string | null> {
   const q = QUERY_ALIASES[base] ?? base;
-  const res = await fetch(`${CG}/search?query=${encodeURIComponent(q)}`, {
-    headers: { accept: 'application/json' },
-  });
-  if (!res.ok) return null;
-  const data = (await res.json()) as { coins?: { symbol?: string; large?: string; thumb?: string }[] };
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+  let data: { coins?: { symbol?: string; large?: string; thumb?: string }[] };
+  try {
+    const res = await fetch(`${CG}/search?query=${encodeURIComponent(q)}`, {
+      headers: { Accept: 'application/json' },
+      redirect: 'error',
+      signal: ctrl.signal,
+    });
+    if (!res.ok) {
+      await res.body?.cancel().catch(() => undefined);
+      return null;
+    }
+    data = await readBoundedJson(res);
+  } finally {
+    clearTimeout(timer);
+  }
   const want = base.toUpperCase();
   const alt = want.replace(/^1000|^1M/, ''); // Binance multiplier contracts (1000SATS, 1MBABYDOGE…)
   const mapped = MATCH_ALIASES[want]?.toUpperCase();
-  for (const coin of (data.coins ?? []).slice(0, 10)) {
+  for (const coin of (Array.isArray(data.coins) ? data.coins : []).slice(0, 10)) {
     const sym = String(coin.symbol ?? '').toUpperCase();
-    if (sym === want || sym === alt || (mapped && sym === mapped)) return coin.large ?? coin.thumb ?? null;
+    if (sym === want || sym === alt || (mapped && sym === mapped)) return safeIconUrl(coin.large) ?? safeIconUrl(coin.thumb);
   }
   return null;
 }
@@ -112,7 +199,7 @@ async function drain(): Promise<void> {
     } catch {
       url = null;
     }
-    cache.set(b, { ts: Date.now(), url });
+    cacheSet(b, { ts: Date.now(), url });
     pending.delete(b);
     // save as we go — a restart mid-drain must never lose resolved logos
     if (url && ++sinceSave >= 5) {
@@ -131,7 +218,8 @@ export function resolveIcons(bases: string[]): Record<string, string> {
   const now = Date.now();
   const out: Record<string, string> = {};
   for (const base of bases) {
-    const b = base.toUpperCase();
+    const b = canonicalBase(base);
+    if (!b) continue;
     if (STOCK_TOKENS.has(b)) continue; // equities: no crypto logo exists, never queue
     const hit = cache.get(b);
     const ttl = hit && hit.url ? ICON_TTL : ICON_RETRY;

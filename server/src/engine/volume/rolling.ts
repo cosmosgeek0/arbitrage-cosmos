@@ -22,6 +22,11 @@ interface Bucket {
   low: number;
 }
 
+const MAX_BUCKET_QUOTE = 1_000_000_000_000_000_000;
+const MAX_BUCKET_TRADES = 1_000_000;
+const MAX_PRICE = 1_000_000_000_000_000;
+const MAX_QUANTITY = 1_000_000_000_000_000_000_000_000;
+
 export interface SeedMinute {
   startMs: number;
   quoteVolume: number;
@@ -89,17 +94,17 @@ class BucketRing {
       if (t.price < b.low) b.low = t.price;
     }
     b.close = t.price;
-    b.quoteVolume += t.quoteQty;
-    b.tradeCount += 1;
-    if (!t.isBuyerMaker) b.takerBuyQuote += t.quoteQty;
-    if (t.quoteQty >= largeTradeQuoteUsd) b.largeTradeCount += 1;
-    if (t.quoteQty > b.maxTradeQuote) b.maxTradeQuote = t.quoteQty;
+    b.quoteVolume = Math.min(MAX_BUCKET_QUOTE, b.quoteVolume + t.quoteQty);
+    b.tradeCount = Math.min(MAX_BUCKET_TRADES, b.tradeCount + 1);
+    if (!t.isBuyerMaker) b.takerBuyQuote = Math.min(b.quoteVolume, b.takerBuyQuote + t.quoteQty);
+    if (t.quoteQty >= largeTradeQuoteUsd) b.largeTradeCount = Math.min(MAX_BUCKET_TRADES, b.largeTradeCount + 1);
+    if (t.quoteQty > b.maxTradeQuote) b.maxTradeQuote = Math.min(MAX_BUCKET_QUOTE, t.quoteQty);
   }
 
   seedMinute(sample: SeedMinute): void {
     const bucket = this.slotFor(sample.startMs);
-    bucket.quoteVolume = Math.max(0, sample.quoteVolume);
-    bucket.tradeCount = Math.max(0, Math.round(sample.tradeCount));
+    bucket.quoteVolume = Math.min(MAX_BUCKET_QUOTE, Math.max(0, sample.quoteVolume));
+    bucket.tradeCount = Math.min(MAX_BUCKET_TRADES, Math.max(0, Math.round(sample.tradeCount)));
     bucket.takerBuyQuote = Math.max(0, Math.min(bucket.quoteVolume, sample.takerBuyQuote));
     bucket.largeTradeCount = 0;
     bucket.maxTradeQuote = bucket.tradeCount > 0 ? bucket.quoteVolume / bucket.tradeCount : 0;
@@ -163,7 +168,16 @@ export class RollingTape {
     this.coarse = new BucketRing(Math.max(cfg.baselineWindowMinutes, 60) + 2, 60_000);
   }
 
-  addTrade(t: TradeTick, printCount = 1): void {
+  addTrade(t: TradeTick, printCount = 1): boolean {
+    if (
+      !Number.isFinite(t.price) || t.price <= 0 || t.price > MAX_PRICE ||
+      !Number.isFinite(t.qty) || t.qty <= 0 || t.qty > MAX_QUANTITY ||
+      !Number.isFinite(t.quoteQty) || t.quoteQty <= 0 || t.quoteQty > MAX_BUCKET_QUOTE ||
+      !Number.isSafeInteger(t.ts) || t.ts < 0 ||
+      (this.lastTradeTs !== null && t.ts < this.lastTradeTs)
+    ) {
+      return false;
+    }
     this.fine.add(t, this.cfg.largeTradeQuoteUsd);
     this.coarse.add(t, this.cfg.largeTradeQuoteUsd);
     this.lastTradeTs = t.ts;
@@ -174,7 +188,7 @@ export class RollingTape {
       quoteQty: t.quoteQty,
       isBuyerMaker: t.isBuyerMaker,
       ts: t.ts,
-      printCount,
+      printCount: Number.isSafeInteger(printCount) && printCount > 0 ? Math.min(printCount, 1_000_000) : 1,
     });
     // bound the raw window by time and count
     const cutoff = t.ts - this.cfg.rawTradeWindowMs;
@@ -183,12 +197,29 @@ export class RollingTape {
     if (drop > 0) this.raw.splice(0, drop);
     if (this.raw.length > this.cfg.maxRawTrades)
       this.raw.splice(0, this.raw.length - this.cfg.maxRawTrades);
+    return true;
   }
 
   /** Seed a completed Binance 1m candle into the coarse history only. */
-  seedMinute(sample: SeedMinute): void {
+  seedMinute(sample: SeedMinute): boolean {
+    if (
+      !Number.isSafeInteger(sample.startMs) || sample.startMs < 0 ||
+      !Number.isFinite(sample.quoteVolume) || sample.quoteVolume < 0 || sample.quoteVolume > MAX_BUCKET_QUOTE ||
+      !Number.isSafeInteger(sample.tradeCount) || sample.tradeCount < 0 ||
+      !Number.isFinite(sample.takerBuyQuote) || sample.takerBuyQuote < 0 ||
+      sample.takerBuyQuote > sample.quoteVolume ||
+      !Number.isFinite(sample.open) || sample.open <= 0 || sample.open > MAX_PRICE ||
+      !Number.isFinite(sample.close) || sample.close <= 0 || sample.close > MAX_PRICE ||
+      !Number.isFinite(sample.high) || sample.high <= 0 || sample.high > MAX_PRICE ||
+      !Number.isFinite(sample.low) || sample.low <= 0 || sample.low > MAX_PRICE ||
+      sample.low > sample.high || sample.open < sample.low || sample.open > sample.high ||
+      sample.close < sample.low || sample.close > sample.high
+    ) {
+      return false;
+    }
     this.firstSeenTs = Math.min(this.firstSeenTs, sample.startMs);
     this.coarse.seedMinute(sample);
+    return true;
   }
 
   rawWindow(nowTs: number, windowMs: number): RawTrade[] {

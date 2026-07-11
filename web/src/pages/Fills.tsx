@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../store';
 import { useRefreshSignal } from '../lib/refresh';
+import { apiErrorMessage, fetchJson } from '../lib/http';
+import { createSettledPoll, type SettledPoll } from '../lib/polling';
 import { Empty, Pill, Seg } from '../components/px';
 import { PillSelect } from '../components/PillSelect';
 import { TokenIcon } from '../components/TokenIcon';
@@ -47,26 +49,32 @@ export function Fills() {
   const [side, setSide] = useState<SideFilter>('ALL');
   const [source, setSource] = useState<SourceFilter>('ALL');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/fills');
-      const d = res.ok ? await res.json() : [];
-      setFills(d as FillRow[]);
-    } catch {
-      setImportMsg({ tone: 'bad', text: 'Could not refresh fills from the local ledger.' });
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const pollRef = useRef<SettledPoll | null>(null);
 
   useEffect(() => {
-    void load();
-    const t = window.setInterval(load, Math.max(0.5, prefs.dataCadence?.account ?? 30) * 1000);
-    return () => window.clearInterval(t);
-  }, [load, state?.recentFills.length, prefs.dataCadence?.account]);
-  useRefreshSignal(() => void load());
+    const poll = createSettledPoll<FillRow[]>({
+      intervalMs: Math.max(0.5, prefs.dataCadence?.account ?? 30) * 1_000,
+      request: (signal) => {
+        setLoading(true);
+        return fetchJson('/api/fills', { signal });
+      },
+      onSuccess: (next) => {
+        setFills(next);
+        setLoading(false);
+      },
+      onError: (error) => {
+        setImportMsg({ tone: 'bad', text: apiErrorMessage(error, 'Could not refresh fills from the local ledger.') });
+        setLoading(false);
+      },
+    });
+    pollRef.current = poll;
+    poll.start();
+    return () => {
+      if (pollRef.current === poll) pollRef.current = null;
+      poll.stop();
+    };
+  }, [state?.recentFills.length, prefs.dataCadence?.account]);
+  useRefreshSignal(() => pollRef.current?.refresh());
 
   useEffect(() => {
     if (!selectedKey && fills.length > 0) setSelectedKey(fillKey(fills[0]));
@@ -117,7 +125,7 @@ export function Fills() {
         setImportMsg({ tone: 'ok', text: `Imported ${res.imported ?? 0} new fills for ${normalizedImport}` });
         setImportSymbol('');
       }
-      await load();
+      pollRef.current?.refresh();
     } finally {
       setImporting(false);
     }
@@ -170,7 +178,7 @@ export function Fills() {
             testId="fills-source-filter"
           />
         )}
-        <button className="hp-btn" type="button" onClick={() => void load()} disabled={loading}>
+        <button className="hp-btn" type="button" onClick={() => pollRef.current?.refresh()} disabled={loading}>
           <IconRefresh size={13} />
           Refresh
         </button>

@@ -77,6 +77,10 @@ export interface GapState {
 
 export interface FundingContext {
   fundingRate: number | null;
+  /** age of the mark/funding observation at snapshot time */
+  stalenessMs: number | null;
+  /** false unless a finite rate is inside the configured freshness window */
+  fresh: boolean;
   nextFundingTs: number | null;
   msToFunding: number | null;
   /**
@@ -110,6 +114,7 @@ export interface DataQuality {
   score: number;
   spotStalenessMs: number | null;
   perpStalenessMs: number | null;
+  markStalenessMs: number | null;
   /** |spot book ts − perp book ts| — a gap computed across skewed books is fiction */
   legSkewMs: number | null;
   /** |perp mid − mark| in bps of mark — large divergence smells like a bad tick */

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { useRefreshSignal } from '../lib/refresh';
+import { apiErrorMessage, fetchJson } from '../lib/http';
+import { createSettledPoll } from '../lib/polling';
 import { TokenIcon } from '../components/TokenIcon';
 import { IconSearch } from '../components/Icons';
 import { PillSelect, pageList, Star } from '../components/PillSelect';
@@ -23,6 +25,7 @@ const DEFAULT_GUARD: BorrowGuardConfig = {
   repayOnly: true,
   maxLtvPct: 80,
   maxAprPct: 12,
+  maxBorrowNotionalUsd: 12,
   requireLiveCatalog: true,
   allowedCollateralCoins: ['USDT', 'USDC', 'FDUSD'],
   blockedLoanCoins: [],
@@ -133,64 +136,53 @@ export function Loans() {
   useRefreshSignal(() => setRefreshTick((value) => value + 1));
 
   useEffect(() => {
-    let alive = true;
-    const load = () => {
-      void fetch('/api/loans', { cache: 'no-store' })
-        .then((response) => {
-          if (!response.ok) throw new Error(`Loan Source HTTP ${response.status}`);
-          return response.json();
-        })
-        .then((next) => {
-          if (!alive || !next) return;
-          setLoans(next as LoansSnapshot);
+    type EarnSnapshot = { rows?: { asset: string; apr: number }[]; fetchedAt?: number | null; error?: string | null };
+    const poll = createSettledPoll<[
+      PromiseSettledResult<LoansSnapshot>,
+      PromiseSettledResult<EarnSnapshot>,
+    ]>({
+      intervalMs: Math.max(5, prefs.dataCadence?.account ?? 30) * 1_000,
+      request: (signal) => Promise.allSettled([
+        fetchJson<LoansSnapshot>('/api/loans', { cache: 'no-store', signal }),
+        fetchJson<EarnSnapshot>('/api/earn', { cache: 'no-store', signal }),
+      ]) as Promise<[PromiseSettledResult<LoansSnapshot>, PromiseSettledResult<EarnSnapshot>]>,
+      onSuccess: ([loanResult, earnResult]) => {
+        if (loanResult.status === 'fulfilled') {
+          setLoans(loanResult.value);
           setLoansFetchError(null);
-        })
-        .catch((error) => {
-          if (alive) setLoansFetchError(error instanceof Error ? error.message : 'Loan Source Unavailable');
-        });
-      void fetch('/api/earn', { cache: 'no-store' })
-        .then((response) => {
-          if (!response.ok) throw new Error(`Earn Source HTTP ${response.status}`);
-          return response.json();
-        })
-        .then((next) => {
-          if (!alive || !next) return;
-          const snapshot = next as { rows?: { asset: string; apr: number }[]; fetchedAt?: number | null; error?: string | null };
+        } else {
+          setLoansFetchError(apiErrorMessage(loanResult.reason, 'Loan Source Unavailable'));
+        }
+        if (earnResult.status === 'fulfilled') {
+          const snapshot = earnResult.value;
           const rows = snapshot.rows ?? [];
           setEarnAprs(new Map(rows.map((row) => [row.asset, row.apr * 100])));
           setEarnStatus({ fetchedAt: snapshot.fetchedAt ?? null, error: snapshot.error ?? null });
-        })
-        .catch((error) => {
-          if (alive) setEarnStatus((current) => ({ ...current, error: error instanceof Error ? error.message : 'Earn Source Unavailable' }));
-        });
-    };
-    load();
-    const timer = window.setInterval(load, Math.max(5, prefs.dataCadence?.account ?? 30) * 1000);
-    return () => { alive = false; window.clearInterval(timer); };
+        } else {
+          setEarnStatus((current) => ({ ...current, error: apiErrorMessage(earnResult.reason, 'Earn Source Unavailable') }));
+        }
+      },
+    });
+    poll.start();
+    return poll.stop;
   }, [refreshTick, prefs.dataCadence?.account]);
 
   useEffect(() => {
-    let alive = true;
-    const load = async () => {
-      try {
-        const response = await fetch('/api/engine/basis', { cache: 'no-store' });
-        if (!response.ok) throw new Error(`Basis Runtime HTTP ${response.status}`);
-        const next = await response.json() as BasisSnapshot;
-        if (!alive) return;
+    const poll = createSettledPoll<BasisSnapshot>({
+      intervalMs: 2_000,
+      request: (signal) => fetchJson('/api/engine/basis', { cache: 'no-store', signal }),
+      onSuccess: (next) => {
         setBasis(next);
         setBasisError(null);
-      } catch (error) {
-        if (!alive) return;
-        setBasisError(error instanceof Error ? error.message : 'Basis Runtime Unavailable');
-      }
-    };
-    void load();
-    const timer = window.setInterval(() => void load(), 2_000);
-    return () => { alive = false; window.clearInterval(timer); };
+      },
+      onError: (error) => setBasisError(apiErrorMessage(error, 'Basis Runtime Unavailable')),
+    });
+    poll.start();
+    return poll.stop;
   }, []);
 
   const priceOf = (asset: string): number | null => {
-    if (asset === 'USDT' || asset === 'USDC' || asset === 'FDUSD') return 1;
+    if (asset === 'USDT') return 1;
     return markets.find((market) => market.symbol === `${asset}USDT`)?.spot ?? null;
   };
 
@@ -276,13 +268,22 @@ export function Loans() {
     if (!state) return { label: 'Loading', reason: 'Waiting For Server State', tone: 'idle' };
     if (state.config.killSwitch) return { label: 'Blocked', reason: 'Kill Switch On', tone: 'bad' };
     if (state.config.fundsLocked) return { label: 'Blocked', reason: 'Funds Access Off', tone: 'bad' };
+    if (state.config.controlModes?.funds !== 'allowed') return { label: 'Blocked', reason: 'Funds Control Not Allowed', tone: 'bad' };
     if (!state.binance.keysPresent) return { label: 'Unavailable', reason: 'Binance Keys Missing', tone: 'bad' };
-    if (state.binance.keyPermissions?.enableSpotAndMarginTrading === false) return { label: 'Read Only', reason: 'Margin Permission Off', tone: 'warn' };
-    if (state.binance.keyPermissions?.enableSpotAndMarginTrading == null) return { label: 'Unknown', reason: 'Margin Permission Not Verified', tone: 'warn' };
-    if (!guard.enabled) return { label: 'Unrestricted', reason: 'Borrow Guard Bypassed', tone: 'warn' };
+    if (!state.binance.connected) return { label: 'Unavailable', reason: 'Signed Account Offline', tone: 'bad' };
+    const syncAge = state.binance.lastSyncTs === null ? Number.POSITIVE_INFINITY : Date.now() - state.binance.lastSyncTs;
+    if (!Number.isFinite(syncAge) || syncAge < -1_000 || syncAge > 60_000) return { label: 'Unavailable', reason: 'Signed Account State Stale', tone: 'bad' };
+    const permissions = state.binance.keyPermissions;
+    if (!permissions) return { label: 'Unknown', reason: 'API-Key Permissions Not Verified', tone: 'warn' };
+    if (!permissions.enableReading || !permissions.enableSpotAndMarginTrading) return { label: 'Read Only', reason: 'Signed Money Permission Off', tone: 'warn' };
+    if (permissions.enableWithdrawals) return { label: 'Blocked', reason: 'Unsafe Key: Withdrawals Enabled', tone: 'bad' };
+    if (permissions.enableInternalTransfer || permissions.permitsUniversalTransfer) return { label: 'Blocked', reason: 'Unsafe Key: Transfers Enabled', tone: 'bad' };
+    if (!state.config.liveTradingEnabled || state.config.controlModes?.liveOrders !== 'allowed') return { label: 'Blocked', reason: 'Live Money Actions Not Armed', tone: 'bad' };
+    if (state.config.controlModes?.borrowing !== 'allowed') return { label: 'Blocked', reason: 'Borrowing Control Not Allowed', tone: 'bad' };
+    if (!guard.enabled) return { label: 'Blocked', reason: 'Borrow Guard Disabled', tone: 'bad' };
     if (policyPaused) return { label: 'Blocked', reason: 'New Loans Paused', tone: 'bad' };
     if (ltvLimitLoan) return { label: 'Blocked', reason: `${ltvLimitLoan.loanCoin}/${ltvLimitLoan.collateralCoin} Above ${guard.maxLtvPct}% Guard`, tone: 'bad' };
-    if (guard.requireLiveCatalog && !loanLive) return { label: 'Unavailable', reason: loansFetchError || loans?.error || 'Live Loan Catalog Required', tone: 'bad' };
+    if (!loanLive) return { label: 'Unavailable', reason: loansFetchError || loans?.error || 'Live Loan Catalog Required', tone: 'bad' };
     return { label: 'Policy Open', reason: 'Signed Preflight Still Required', tone: 'ok' };
   }, [state, guard, policyPaused, ltvLimitLoan, loanLive, loans?.error, loansFetchError]);
 
@@ -364,7 +365,7 @@ export function Loans() {
           <div className="borrowx-tools">
             <label className="borrowx-search"><IconSearch size={15} /><input aria-label="Search Borrow" placeholder="Search" value={search} onChange={(event) => setSearch(event.target.value)} spellCheck={false} />{search && <button type="button" aria-label="Clear Search" onClick={() => setSearch('')}>×</button>}</label>
             <div className="borrowx-guard">
-              <span><b>New Loans</b><small className={!state || !guard.enabled ? 'warn' : newLoansAllowed ? 'ok' : 'bad'}>{!state ? 'Loading' : !guard.enabled ? 'Guard Bypassed' : newLoansAllowed ? 'Policy Open' : 'Paused'}</small></span>
+              <span><b>New Loans</b><small className={!state ? 'warn' : newLoansAllowed ? 'ok' : 'bad'}>{!state ? 'Loading' : !guard.enabled ? 'Guard Disabled' : newLoansAllowed ? 'Policy Open' : 'Paused'}</small></span>
               <button type="button" role="switch" aria-checked={newLoansAllowed} aria-label="New Loans" disabled={!state || guardBusy} className={newLoansAllowed ? 'open' : 'blocked'} onClick={() => void toggleLoanBlock()}><i /></button>
             </div>
           </div>

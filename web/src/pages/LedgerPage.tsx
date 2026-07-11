@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore, type Page } from '../store';
 import { Empty, Pill, type Tone } from '../components/px';
 import { eventSummary } from '../lib/eventText';
+import { apiErrorMessage, fetchJson } from '../lib/http';
+import { createSettledPoll, type SettledPoll } from '../lib/polling';
 import { fmtPrice, timeAgo } from '../format';
 import { TIME_ZONE_OPTIONS, addDays, dayBounds, dayKey, formatKey, resolvedZoneLabel } from '../lib/time';
 import type { LedgerEvent } from '../types';
@@ -376,6 +378,7 @@ export function LedgerPage() {
   const [loading, setLoading] = useState(false);
   const [lastLoaded, setLastLoaded] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const eventPollRef = useRef<SettledPoll | null>(null);
 
   useEffect(() => {
     if (stateEvents.length && apiEvents.length === 0) setApiEvents(stateEvents);
@@ -386,7 +389,9 @@ export function LedgerPage() {
     setSelectedId(null);
   }, [prefs.clockZone, today]);
 
-  const load = useCallback(() => {
+  const load = useCallback(() => eventPollRef.current?.refresh(), []);
+
+  useEffect(() => {
     const bounds = dayBounds(selectedDay, zone);
     const params = new URLSearchParams({
       limit: String(pageSize),
@@ -397,43 +402,51 @@ export function LedgerPage() {
     if (kind !== 'all') params.set('kind', kind);
     if (symbol.trim()) params.set('symbol', symbol.trim().toUpperCase());
     if (query.trim()) params.set('q', query.trim());
-
-    setLoading(true);
-    return Promise.all([
-      fetch(`/api/events?${params}`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))),
-      fetch(`/api/events/count?${params}`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))),
-    ])
-      .then(([payload, countPayload]) => {
-        setApiEvents(Array.isArray(payload) ? payload as LedgerEvent[] : []);
-        setTotalCount(Number(countPayload?.count) || 0);
+    const poll = createSettledPoll<[LedgerEvent[], { count?: number }]>({
+      intervalMs: Math.max(30, prefs.dataCadence?.health ?? 10) * 1_000,
+      request: (signal) => {
+        setLoading(true);
+        return Promise.all([
+          fetchJson<LedgerEvent[]>(`/api/events?${params}`, { signal }),
+          fetchJson<{ count?: number }>(`/api/events/count?${params}`, { signal }),
+        ]);
+      },
+      onSuccess: ([payload, countPayload]) => {
+        setApiEvents(Array.isArray(payload) ? payload : []);
+        setTotalCount(Number(countPayload.count) || 0);
         setLoadError(null);
         setLastLoaded(Date.now());
-      })
-      .catch((err) => setLoadError(err instanceof Error ? err.message : 'Failed to load events'))
-      .finally(() => setLoading(false));
-  }, [kind, pageIndex, pageSize, query, selectedDay, symbol, zone]);
+        setLoading(false);
+      },
+      onError: (error) => {
+        setLoadError(apiErrorMessage(error, 'Failed to load events'));
+        setLoading(false);
+      },
+    });
+    eventPollRef.current = poll;
+    poll.start();
+    return () => {
+      if (eventPollRef.current === poll) eventPollRef.current = null;
+      poll.stop();
+    };
+  }, [kind, pageIndex, pageSize, prefs.dataCadence?.health, query, selectedDay, symbol, zone]);
 
   useEffect(() => {
-    void load();
-    const t = window.setInterval(() => void load(), Math.max(30, prefs.dataCadence?.health ?? 10) * 1000);
-    return () => window.clearInterval(t);
-  }, [load, prefs.dataCadence?.health]);
-
-  useEffect(() => {
-    let live = true;
-    const readTotals = async () => {
-      const pairs = await Promise.all(dayKeys.map(async (key) => {
+    const poll = createSettledPoll<Record<string, number>>({
+      intervalMs: 60_000,
+      request: async (signal) => {
+        const pairs = await Promise.all(dayKeys.map(async (key) => {
         const bounds = dayBounds(key, zone);
         const params = new URLSearchParams({ since: String(bounds.since), until: String(bounds.until) });
-        const response = await fetch(`/api/events/count?${params}`, { cache: 'no-store' });
-        const payload = response.ok ? await response.json() as { count?: number } : {};
+        const payload = await fetchJson<{ count?: number }>(`/api/events/count?${params}`, { cache: 'no-store', signal });
         return [key, Number(payload.count) || 0] as const;
-      }));
-      if (live) setDayTotals(Object.fromEntries(pairs));
-    };
-    void readTotals();
-    const timer = window.setInterval(() => void readTotals(), 60_000);
-    return () => { live = false; window.clearInterval(timer); };
+        }));
+        return Object.fromEntries(pairs);
+      },
+      onSuccess: setDayTotals,
+    });
+    poll.start();
+    return poll.stop;
   }, [dayKeys, zone]);
 
   const events = useMemo(() => {

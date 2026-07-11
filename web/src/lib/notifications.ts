@@ -65,6 +65,7 @@ export function curateNotification(event: LedgerEvent): CuratedNotification | nu
   const subject = symbol || 'Execution Control';
 
   if (kind === 'risk_decision') {
+    if (text(data.stage) !== 'live_send') return null;
     if (data.allowed === true) return null;
     const reasons = Array.isArray(data.reasons)
       ? data.reasons.filter((item): item is string => typeof item === 'string')
@@ -171,14 +172,34 @@ export function curateNotification(event: LedgerEvent): CuratedNotification | nu
   }
 
   if (kind === 'order_intent') {
+    if (text(data.stage) === 'preview') return null;
     const intent = data.intent && typeof data.intent === 'object' ? data.intent as Record<string, unknown> : {};
     const detail = [titleCase(text(intent.side)), symbol, titleCase(text(intent.type))].filter(Boolean).join(' · ');
     return notice(event, 'execution', 'info', 'Order Entered Execution', detail || 'A signed order preview entered the execution path', subject, 'execution');
   }
 
+  if (kind === 'order_outcome_unknown' || kind === 'cancel_outcome_unknown') {
+    const cancel = kind.startsWith('cancel_');
+    return notice(
+      event,
+      'critical',
+      'critical',
+      cancel ? 'Cancel Outcome Needs Reconciliation' : 'Order Outcome Needs Reconciliation',
+      text(data.detail) || 'Binance may have accepted the request; reconcile authoritative order state before retrying.',
+      subject,
+      'execution',
+      true,
+    );
+  }
+
   if (['order_request', 'order_response', 'fill_event', 'loan_request', 'loan_response'].includes(kind)) {
     const responseStatus = text(data.status).toUpperCase();
-    const failed = ['REJECTED', 'FAILED', 'ERROR'].includes(responseStatus) || data.ok === false;
+    const outcome = text(data.outcome).toLowerCase();
+    const unknown = outcome === 'unknown' || data.reconciliationRequired === true;
+    const failed = outcome === 'failed'
+      || outcome === 'not_sent'
+      || ['REJECTED', 'FAILED', 'ERROR', 'EXPIRED', 'EXPIRED_IN_MATCH', 'CANCELED'].includes(responseStatus)
+      || data.ok === false;
     const label = kind === 'fill_event'
       ? 'Trade Filled'
       : kind.startsWith('loan_')
@@ -188,13 +209,15 @@ export function curateNotification(event: LedgerEvent): CuratedNotification | nu
           : 'Order Sent';
     return notice(
       event,
-      failed ? 'critical' : 'execution',
-      failed ? 'critical' : 'info',
-      failed ? `${label} Failed` : label,
-      responseStatus || `${titleCase(text(data.side))}${symbol ? ` · ${symbol}` : ''}` || 'Binance execution event',
+      failed || unknown ? 'critical' : 'execution',
+      failed || unknown ? 'critical' : 'info',
+      unknown ? `${label} Needs Reconciliation` : failed ? `${label} Failed` : label,
+      unknown
+        ? text(data.error) || 'Signed state is ambiguous; reconcile before retrying.'
+        : responseStatus || titleCase(outcome) || `${titleCase(text(data.side))}${symbol ? ` · ${symbol}` : ''}` || 'Binance execution event',
       subject,
       'execution',
-      failed,
+      failed || unknown,
     );
   }
 
@@ -262,7 +285,7 @@ export function groupNotifications(items: CuratedNotification[], zone?: string):
   const groups = new Map<string, CuratedNotification>();
   for (const item of items) {
     const stateFamily = item.title
-      .replace(/\s+(Failed|Recovered|Closed|Started|Engaged|Released|Paused)$/i, '')
+      .replace(/\s+(Failed|Recovered|Closed|Started|Engaged|Released|Paused|Offline|Is Lagging|Needs Attention|State Changed)$/i, '')
       .replace(/^AWS Infrastructure\s+/i, 'AWS ');
     const stateChange = item.origin !== 'execution' || item.category === 'health';
     const windowMs = item.category === 'execution' ? 10 * 60_000 : 15 * 60_000;

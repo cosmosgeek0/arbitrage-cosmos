@@ -13,6 +13,7 @@ import {
   type IChartApi,
   type ISeriesApi,
   type LineData,
+  type Time,
   type UTCTimestamp,
 } from 'lightweight-charts';
 
@@ -35,6 +36,28 @@ type Kind = 'candles' | 'line' | 'histogram';
 
 function timeOf(ms: number): UTCTimestamp {
   return Math.floor(ms / 1000) as UTCTimestamp;
+}
+
+export function normalizeTvCandles(input: readonly TvCandle[]): TvCandle[] {
+  const bySecond = new Map<number, TvCandle>();
+  for (const raw of input) {
+    if (![raw.t, raw.o, raw.h, raw.l, raw.c, raw.v, raw.qv].every(Number.isFinite)) continue;
+    if (raw.t <= 0 || raw.o <= 0 || raw.h <= 0 || raw.l <= 0 || raw.c <= 0 || raw.v < 0 || raw.qv < 0) continue;
+    if (raw.h < Math.max(raw.o, raw.c) || raw.l > Math.min(raw.o, raw.c) || raw.h < raw.l) continue;
+    const second = Math.floor(raw.t / 1_000);
+    bySecond.set(second, { ...raw, t: second * 1_000 });
+  }
+  return [...bySecond.values()].sort((left, right) => left.t - right.t).slice(-50_000);
+}
+
+export function normalizeTvPoints(input: readonly TvPoint[]): TvPoint[] {
+  const bySecond = new Map<number, TvPoint>();
+  for (const raw of input) {
+    if (!Number.isFinite(raw.t) || !Number.isFinite(raw.v) || raw.t <= 0) continue;
+    const second = Math.floor(raw.t / 1_000);
+    bySecond.set(second, { t: second * 1_000, v: raw.v });
+  }
+  return [...bySecond.values()].sort((left, right) => left.t - right.t).slice(-50_000);
 }
 
 function css(name: string, fallback: string): string {
@@ -101,33 +124,36 @@ export function TradingViewChart({
     return () => mo.disconnect();
   }, []);
 
+  const normalizedCandles = useMemo(() => normalizeTvCandles(candles ?? []), [candles]);
+  const normalizedPoints = useMemo(() => normalizeTvPoints(points ?? []), [points]);
+
   const candleData = useMemo<CandlestickData[]>(() => {
-    return (candles ?? []).map((d) => ({
+    return normalizedCandles.map((d) => ({
       time: timeOf(d.t),
       open: d.o,
       high: d.h,
       low: d.l,
       close: d.c,
     }));
-  }, [candles]);
+  }, [normalizedCandles]);
 
   const volumeData = useMemo<HistogramData[]>(() => {
-    return (candles ?? []).map((d) => ({
+    return normalizedCandles.map((d) => ({
       time: timeOf(d.t),
       value: d.qv || d.v,
       color: d.c >= d.o ? 'rgba(22, 163, 74, .42)' : 'rgba(239, 68, 68, .42)',
     }));
-  }, [candles, themeTick]);
+  }, [normalizedCandles, themeTick]);
 
-  const lineData = useMemo<LineData[]>(() => (points ?? []).map((d) => ({ time: timeOf(d.t), value: d.v })), [points]);
+  const lineData = useMemo<LineData[]>(() => normalizedPoints.map((d) => ({ time: timeOf(d.t), value: d.v })), [normalizedPoints]);
   const histData = useMemo<HistogramData[]>(
     () =>
-      (points ?? []).map((d, i, arr) => ({
+      normalizedPoints.map((d, i, arr) => ({
         time: timeOf(d.t),
         value: d.v,
         color: i === 0 || d.v >= arr[i - 1].v ? 'rgba(22, 163, 74, .58)' : 'rgba(239, 68, 68, .58)',
       })),
-    [points]
+    [normalizedPoints]
   );
 
   useEffect(() => {
@@ -147,8 +173,8 @@ export function TradingViewChart({
         attributionLogo: true,
       },
       localization: {
-        priceFormatter: (v) => fmtRef.current(v),
-        timeFormatter: (time) => (typeof time === 'number' ? fmtTime(time as UTCTimestamp) : String(time)),
+        priceFormatter: (v: number) => fmtRef.current(v),
+        timeFormatter: (time: Time) => (typeof time === 'number' ? fmtTime(time as UTCTimestamp) : String(time)),
       },
       grid: {
         vertLines: { color: 'rgba(148, 163, 184, .10)' },
@@ -193,7 +219,6 @@ export function TradingViewChart({
         wickDownColor: t.down,
         lastValueVisible: true,
         priceLineVisible: true,
-        lastPriceAnimation: LastPriceAnimationMode.Continuous,
       });
       volumeRef.current = chart.addSeries(HistogramSeries, {
         priceFormat: { type: 'volume' },

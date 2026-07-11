@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { TokenIcon } from '../components/TokenIcon';
 import { fmtMoney, fmtPct, fmtPrice, timeAgo } from '../format';
+import { apiErrorMessage, fetchJson } from '../lib/http';
+import { createSettledPoll } from '../lib/polling';
 import { useStore } from '../store';
 import './VolumeScanner.css';
 
@@ -157,26 +159,17 @@ export function VolumeScanner() {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
-    let live = true;
-    const load = async () => {
-      try {
-        const response = await fetch('/api/engine/volume', { cache: 'no-store' });
-        if (!response.ok) throw new Error('Volume runtime HTTP ' + String(response.status));
-        const next = await response.json() as VolumeSnapshot;
-        if (!live) return;
+    const poll = createSettledPoll<VolumeSnapshot>({
+      intervalMs: 2_000,
+      request: (signal) => fetchJson('/api/engine/volume', { cache: 'no-store', signal }),
+      onSuccess: (next) => {
         setSnapshot(next);
         setError(null);
-      } catch (reason) {
-        if (!live) return;
-        setError(reason instanceof Error ? reason.message : 'Volume runtime unavailable');
-      }
-    };
-    void load();
-    const timer = window.setInterval(() => void load(), 2_000);
-    return () => {
-      live = false;
-      window.clearInterval(timer);
-    };
+      },
+      onError: (reason) => setError(apiErrorMessage(reason, 'Volume runtime unavailable')),
+    });
+    poll.start();
+    return poll.stop;
   }, []);
 
   const rows = snapshot?.rows ?? [];
@@ -198,7 +191,7 @@ export function VolumeScanner() {
     return true;
   }), [filter, query, rows]);
 
-  const liveFeed = snapshot?.status.streamState === 'open' && snapshot.status.bookState === 'fresh';
+  const liveFeed = !error && snapshot?.status.streamState === 'open' && snapshot.status.bookState === 'fresh';
   const watchlist = state?.config.watchlist ?? [];
 
   return (

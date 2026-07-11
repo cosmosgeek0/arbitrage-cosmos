@@ -74,7 +74,7 @@ export class BasisEngine {
   ) {
     this.cfg = basisConfig(cfg);
     this.emitter = new EventEmitter(sink, clock, 'basis');
-    this.market = new BasisMarketState(clock);
+    this.market = new BasisMarketState(clock, this.cfg);
     this.gaps = new GapTracker(clock, this.cfg);
     this.features = new BasisFeatureBuilder(this.market, this.gaps, clock, this.cfg);
     this.scanner = new BasisScanner(this.cfg);
@@ -108,6 +108,7 @@ export class BasisEngine {
    * ledgered as an annotated heartbeat so it is never invisible.)
    */
   setKillSwitch(on: boolean): void {
+    if (typeof on !== 'boolean') on = true;
     if (this.killSwitchOn === on) return;
     this.killSwitchOn = on;
     this.emitter.emit('heartbeat', newCorrelationId(this.clock, 'basis_sys'), `kill switch ${on ? 'ON' : 'off'}`, {
@@ -119,15 +120,55 @@ export class BasisEngine {
     return this.killSwitchOn;
   }
 
+  /** Apply a validated config revision and invalidate state derived under old thresholds. */
+  updateConfig(partial: Partial<BasisConfig>): boolean {
+    const merged = { ...this.cfg, ...partial };
+    if (partial.stagedSizeFractions === undefined) merged.stagedSizeFractions = this.cfg.stagedSizeFractions;
+    const next = basisConfig(merged);
+    if (this.market.symbols().length > next.maxUniverseSize) {
+      throw new RangeError(`basis maxUniverseSize ${next.maxUniverseSize} is below the active universe`);
+    }
+    if (sameConfig(this.cfg, next)) return false;
+    Object.assign(this.cfg, next, { stagedSizeFractions: [...next.stagedSizeFractions] });
+    this.market.reconcileConfigBounds();
+    this.proposals.expireAll('config_changed');
+    this.proposals.reconcileConfigBounds();
+    this.lifecycle.resetSignals();
+    this.gaps.clear();
+    this.latestPriority.clear();
+    this.decisionLog = [];
+    this.lastTickTs = null;
+    this.lastHeartbeatTs = null;
+    if (this.blocked.size > this.cfg.maxUniverseSize) {
+      this.blocked = new Set([...this.blocked].sort().slice(0, this.cfg.maxUniverseSize));
+    }
+    this.emitter.emit('heartbeat', newCorrelationId(this.clock, 'basis_sys'), 'basis config revised; signal state reset', {
+      payload: { configChanged: true },
+    });
+    return true;
+  }
+
   blockSymbol(symbol: string): void {
+    if (!/^[A-Z0-9]{2,32}$/.test(symbol)) return;
+    if (!this.blocked.has(symbol) && this.blocked.size >= this.cfg.maxUniverseSize) return;
     this.blocked.add(symbol);
+    if (this.market.hasSymbol(symbol)) this.proposals.expireForSymbol(symbol, 'symbol_blocked');
   }
 
   unblockSymbol(symbol: string): void {
     this.blocked.delete(symbol);
   }
 
+  replaceBlockedSymbols(symbols: Iterable<string>): void {
+    const next = new Set([...symbols].filter((symbol) => this.market.hasSymbol(symbol)));
+    for (const symbol of this.blocked) {
+      if (!next.has(symbol)) this.blocked.delete(symbol);
+    }
+    for (const symbol of next) this.blockSymbol(symbol);
+  }
+
   pin(symbol: string): void {
+    if (!this.market.hasSymbol(symbol)) return;
     this.lifecycle.pin(symbol);
   }
 
@@ -135,8 +176,23 @@ export class BasisEngine {
 
   setUniverse(symbols: SymbolMeta[]): void {
     this.market.setUniverse(symbols);
-    this.emitter.emit('universe_refreshed', newCorrelationId(this.clock, 'basis_sys'), `universe: ${symbols.length} symbols`, {
-      payload: { size: symbols.length, eligible: symbols.filter((s) => s.eligible).length },
+    const accepted = this.market.universe();
+    const known = new Set(accepted.map((meta) => meta.symbol));
+    const eligible = new Set(accepted.filter((meta) => meta.eligible).map((meta) => meta.symbol));
+    this.gaps.retainSymbols(known);
+    const expired = this.proposals.retainSymbols(
+      eligible,
+      (symbol) => known.has(symbol) ? 'symbol_ineligible' : 'symbol_left_universe',
+    );
+    for (const proposal of expired) {
+      if (known.has(proposal.symbol)) this.lifecycle.onProposalExpired(proposal.symbol, proposal.why);
+    }
+    this.lifecycle.retainSymbols(known);
+    for (const symbol of this.latestPriority.keys()) if (!known.has(symbol)) this.latestPriority.delete(symbol);
+    for (const symbol of this.blocked) if (!known.has(symbol)) this.blocked.delete(symbol);
+    this.decisionLog = this.decisionLog.filter((decision) => known.has(decision.symbol));
+    this.emitter.emit('universe_refreshed', newCorrelationId(this.clock, 'basis_sys'), `universe: ${accepted.length} symbols`, {
+      payload: { size: accepted.length, eligible: eligible.size },
     });
   }
 
@@ -249,6 +305,8 @@ export class BasisEngine {
    */
   prepareOrderIntents(proposalId: string): PreparedIntents {
     const now = this.clock.now();
+    const expired = this.proposals.sweep((symbol) => this.features.build(symbol, false));
+    for (const item of expired) this.lifecycle.onProposalExpired(item.symbol, item.why);
     const p = this.proposals.get(proposalId);
 
     if (!p || (p.status !== 'open' && p.status !== 'updated')) {
@@ -256,6 +314,22 @@ export class BasisEngine {
       return {
         blocked: true,
         verdict: { allowed: false, reasons: ['proposal_not_open'], correlationId: corr, ts: now },
+        intents: [],
+      };
+    }
+
+    const proposalValid =
+      (p.direction === 'long_spot_short_perp' || p.direction === 'short_spot_long_perp') &&
+      this.market.meta(p.symbol)?.eligible === true &&
+      !this.blocked.has(p.symbol) &&
+      p.suggestedNotionalUsd !== null &&
+      Number.isFinite(p.suggestedNotionalUsd) &&
+      p.suggestedNotionalUsd > 0;
+    if (!proposalValid) {
+      this.proposals.expire(p.id, 'proposal_invalid');
+      return {
+        blocked: true,
+        verdict: { allowed: false, reasons: ['proposal_invalid'], correlationId: p.correlationId, ts: now },
         intents: [],
       };
     }
@@ -298,7 +372,10 @@ export class BasisEngine {
   // ---------- reads for snapshots ----------
 
   decisions(limit = 100): Decision[] {
-    return this.decisionLog.slice(-limit);
+    const safeLimit = Number.isFinite(limit)
+      ? Math.max(0, Math.min(DECISION_LOG_KEEP, Math.trunc(limit)))
+      : 0;
+    return safeLimit === 0 ? [] : this.decisionLog.slice(-safeLimit);
   }
 
   priorities(): PriorityScore[] {
@@ -333,4 +410,15 @@ function borrowCtxStatus(b: BorrowInfo): ScanContext['borrowStatus'] {
 function directionOf(d: Decision): BasisDirection | null {
   const dir = d.evidence['direction'];
   return dir === 'long_spot_short_perp' || dir === 'short_spot_long_perp' ? dir : null;
+}
+
+function sameConfig(left: BasisConfig, right: BasisConfig): boolean {
+  const keys = Object.keys(left) as Array<keyof BasisConfig>;
+  return keys.every((key) => {
+    const a = left[key];
+    const b = right[key];
+    return Array.isArray(a) && Array.isArray(b)
+      ? a.length === b.length && a.every((value, index) => value === b[index])
+      : a === b;
+  });
 }

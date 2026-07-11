@@ -23,7 +23,7 @@ import './pages/MetricTiles.css';
 
 function Shell() {
   const { page, detailSymbol, prefs } = useStore();
-  const mainRef = useRef<HTMLMainElement | null>(null);
+  const mainRef = useRef<HTMLElement | null>(null);
   const framePage = page === 'detail' ? 'detail' : page;
 
   useEffect(() => {

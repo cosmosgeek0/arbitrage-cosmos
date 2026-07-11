@@ -3,6 +3,8 @@ import { IconSearch } from '../components/Icons';
 import { PillSelect } from '../components/PillSelect';
 import { CALENDAR_COUNTRIES, calVal, categoryName, countryName, flag, type CalItem } from '../lib/calendar';
 import { liveAge } from '../format';
+import { fetchJson } from '../lib/http';
+import { createSettledPoll } from '../lib/polling';
 import { TIME_ZONE_OPTIONS, addDays, dayKey, formatKey, mondayFor } from '../lib/time';
 import { useStore } from '../store';
 import './LiveIntelligence.css';
@@ -56,14 +58,11 @@ export function CalendarPage() {
   }, [zone]);
 
   useEffect(() => {
-    let alive = true;
-    let timer: number | null = null;
     const cadence = Math.min(10, Math.max(0.5, prefs.dataCadence?.calendar ?? 10));
-    const load = () => {
-      fetch('/api/calendar')
-        .then((response) => response.ok ? response.json() : Promise.reject(new Error('calendar unavailable')))
-        .then((payload: { items: CalItem[]; fetchedAt?: number }) => {
-          if (!alive) return;
+    const poll = createSettledPoll<{ items: CalItem[]; fetchedAt?: number }>({
+      intervalMs: cadence * 1_000,
+      request: (signal) => fetchJson('/api/calendar', { signal }),
+      onSuccess: (payload) => {
           const next = [...(payload.items ?? [])].sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
           if (previousRef.current.size) {
             const changed = next.filter((item) => previousRef.current.get(item.id) !== eventFingerprint(item)).map((item) => item.id);
@@ -77,14 +76,12 @@ export function CalendarPage() {
           setItems(next);
           setFetchedAt(payload.fetchedAt ?? Date.now());
           setFailed(false);
-        })
-        .catch(() => { if (alive) setFailed(true); });
-    };
-    load();
-    timer = window.setInterval(load, cadence * 1_000);
+      },
+      onError: () => setFailed(true),
+    });
+    poll.start();
     return () => {
-      alive = false;
-      if (timer !== null) window.clearInterval(timer);
+      poll.stop();
       if (changeTimerRef.current !== null) window.clearTimeout(changeTimerRef.current);
     };
   }, [prefs.dataCadence?.calendar]);

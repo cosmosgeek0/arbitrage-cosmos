@@ -1,6 +1,6 @@
 # PROJECT_MEMORY.md — Arbitrage Capital Control Room
 
-Last updated: 2026-07-10 17:36 IST
+Last updated: 2026-07-11
 Permanent role of this file: the durable living-state log for the project. The other three core docs are mostly static blueprints; this file records what is *true right now* — current source-of-truth folder, git/deploy state, active phase, outstanding decisions, and a dated changelog. A new Director should read this file to learn the present state without any old chat history.
 
 **UI WORK? Read `DESIGN_PLAYBOOK.md` FIRST** — the distilled, owner-calibrated design system, process, and gotcha catalog from the 2026-07-08 quality passes. The Account page is the owner's only approved "real quality" surface; the playbook is how to hit that bar without redoing five rounds.
@@ -52,17 +52,58 @@ Owner directive (2026-07-07):
 
 ## 4. Current app-state snapshot
 
-- Stack: npm workspaces — `server/` (Node + TypeScript, `src/{binance,engine,services,config.ts,index.ts,ledger.ts,types.ts}`) and `web/` (React + Vite, `src/{App.tsx,pages,components,store.tsx,styles.css}`).
-- Root scripts (`package.json`): `build` = server+web builds; `start` = `node server/dist/index.js`; `dev` = `npm run dev -w server`; `test` = `node server/test/gates.mjs`.
-- `data/cosmos.db` present (SQLite ledger/state, active WAL). Preserve.
-- `.env` absent (good). `.env.example` present, placeholders only — no real keys anywhere in tree.
-- No Binance keys wired yet. Account surfaces should show disconnected/setup state, not fake data.
+- Stack: Node 22 / npm 10 workspaces — `server/` is strict TypeScript on
+  Express/SQLite and `web/` is strict TypeScript on React/Vite. Node is pinned
+  by `.nvmrc`, `engines`, and `packageManager` metadata.
+- Root verification contract: `npm test` is the deterministic typecheck, clean
+  build, engine-proof, and focused-regression lane. `npm run test:integration`
+  boots an isolated built server and exercises the public Binance market path;
+  `npm run test:all` runs both.
+- `data/cosmos.db` is the active SQLite ledger/state store. It is runtime data,
+  intentionally ignored by Git, and must be preserved and backed up by the
+  operator. Local `.env` state is also ignored; never inventory or publish its
+  contents.
+- The server binds to loopback by default. Non-local HTTP and WebSocket access
+  is fail-closed behind verified Cloudflare Access identity; the optional AWS
+  notification ingress has a separate bearer-token boundary.
+- Basis and volume engines consume real public Binance feeds and expose
+  runtime snapshots with freshness/quality evidence. Account state uses signed
+  REST plus the current signed WebSocket API private-stream protocol, with
+  reconciliation and stale/partial truth surfaced to the UI.
+- Manual order/cancel and loan mutation paths exist, but are not autonomous.
+  They are fail-closed behind account and key posture, control modes, kill/live
+  state, risk limits, typed confirmation where applicable, and durable audit
+  correlation. Withdrawal and transfer-out actions remain prohibited.
 
 ---
 
 ## 5. Active phase and next actions
 
-**PHASE SNAPSHOT (2026-07-07 night): UI PHASE CLOSED + WORKSPACE CLEANED — ENGINE SPRINT READY.**
+**PHASE SNAPSHOT (2026-07-11): REPOSITORY-WIDE PRODUCTION HARDENING — COMPLETE
+AND PUSH-READY.**
+
+- A full repository security and reliability review covered the HTTP/WebSocket
+  perimeter, Binance transports, account/order/loan money paths, storage,
+  engines, runtime lifecycle, and frontend truth/error handling. The initial
+  canonical scan contained 21 findings (2 high, 15 medium, 4 low); the working
+  tree contains the corresponding remediation and focused regressions.
+- The visual design contract was preserved: this pass changes operational
+  truth, failure handling, and backend safety rather than restyling the product.
+- The settled tree passed `npm test`, the 72/72 live-market integration gate,
+  a zero-vulnerability production dependency audit, SQLite integrity and
+  foreign-key checks, `git diff --check`, and the mandatory rendered-browser
+  page/topbar sweeps. Exact evidence is recorded in the newest run-log entry
+  and `PRODUCTION_AUDIT.md`.
+- The remaining handoff action is to commit intentionally on `current-main`
+  and push only that branch. Do not overwrite the unrelated historical `main`
+  branch.
+
+### Archived 2026-07-07 phase snapshot
+
+The planning notes below are retained as history and are not current work
+orders.
+
+**UI PHASE CLOSED + WORKSPACE CLEANED — ENGINE SPRINT READY (superseded).**
 - Cockpit done to owner's product-truth standard (see run log); read-only Binance live; build clean, gates 50/50; localhost:8080 serving HTTP 200 with 3 feeds + account connected.
 - Recovery tags on origin: **`baseline-pre-engine-sprint` = THE restore point if the engine sprint fails** (→ 2de6061, full clean state, gates 50/50); plus checkpoint-ui-complete-pre-engine, skeleton-pass1, session-tracking. Restore: `git checkout baseline-pre-engine-sprint` or branch from it.
 - **Workspace cleaned for the engine sprint:** all `cosmos-*` worktree folders removed (owner deleted; registry pruned); all `rebuild-*` + `engine-part0` branches deleted (content byte-verified on current-main, pushed + tagged); stale worktree dev servers killed; stale TASK briefs removed; old `Main-safety-*` copy gone (covered by pushed commit 68b28c7). Single worktree = Main, single branch = current-main. Clean highway.
@@ -82,11 +123,56 @@ Owner directive (2026-07-07):
 
 - Whether to publish `current-main` to GitHub on every milestone or keep local-only between milestones.
 - How/when to reconcile (or formally retire) the old GitHub `main` and the separate `arbitrage-cosmos` folder — not to be touched unless the owner asks.
-- All infra unknowns from RULEBOOK §6 (AWS region, instance ID, security groups, tunnel ID, deploy-key write state, whether Binance keys exist) remain unverified.
+- Production Cloudflare, AWS, system-service, egress-IP, Binance-permission, and
+  backup/restore facts must be verified against the actual deployment; repo
+  defaults and UI labels are not evidence of deployed configuration.
+- The live-market integration gate can fail when an external Binance feed is
+  unavailable. Keep it separate from deterministic CI, investigate failures,
+  and never convert missing market truth into a passing synthetic state.
 
 ---
 
 ## 7. Run log (newest first)
+
+### 2026-07-11 — Production hardening audit and deterministic CI contract
+
+- Repository-wide security/reliability review produced 21 canonical findings
+  (2 high, 15 medium, 4 low) across perimeter trust, Binance transport and
+  protocol handling, financial mutation safety, storage/runtime lifecycle, and
+  frontend operational truth. Remediation and targeted regressions are present
+  in the current working tree; `PRODUCTION_AUDIT.md` records scope and release
+  gates without treating deployment configuration as code-verified fact.
+- Node is pinned to 22 and npm to 10.9.8. Server builds now clean stale compiled
+  output first. Root `npm test` is the deterministic CI lane; the external
+  public-market app gate moved to `npm run test:integration`, with
+  `npm run test:all` available for the full local release run.
+- Added a least-privilege GitHub Actions workflow for `current-main` and pull
+  requests. It uses the lockfile and runs typecheck, clean builds, engine proofs,
+  and focused safety regressions.
+- Final settled-tree evidence: server/web typechecks and clean builds passed;
+  basis 107/107, volume 124/124, financial 59/59, storage/AWS 29/29, focused
+  safety 50/50, stream lifecycle 7/7, perimeter 1/1, and live-market integration
+  72/72 passed. The integration observed 447 Binance markets and 359 paired
+  spot-plus-perpetual markets. The production dependency audit reported zero
+  vulnerabilities across 305 dependencies. SQLite `quick_check` returned `ok`,
+  foreign-key violations were zero, and the event table remained under active
+  bounded retention without pruning financial/audit event classes.
+  `git diff --check` passed.
+- Final financial review closed three additional medium edge cases. The current
+  UTC day's configured/requested/observed fill-symbol universe is durable and
+  explicitly reported as symbol-scoped rather than account-wide; daily-loss
+  admission therefore remains fail-closed. Unknown orders use a persisted fair
+  recovery cursor, held/operator-review states, paginated authenticated operator
+  resolution with exact confirmation/evidence, and atomic terminal commits.
+  A definitive Binance rejection cannot be reported as `not_sent` unless its
+  correlated response audit is durable.
+- The mandatory Calendar through Dashboard rendered sweep passed with no body
+  overflow, console warnings/errors, ARIA alerts, or broken page identity. All
+  ten topbar panels passed left-to-right at `398 x 486` with no overflow; safe
+  changed controls and the honest disabled live-trading state were exercised,
+  and Dashboard was restored for handoff. The only build advisory is the
+  existing Vite 607.01 kB app chunk (177.39 kB gzip), retained as a future
+  performance-splitting task rather than hidden as a release failure.
 
 ### 2026-07-10 18:09 IST — Account Rebuilt As A Clear Capital Master-Detail Workspace
 

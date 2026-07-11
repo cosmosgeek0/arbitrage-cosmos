@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { fetchJson } from '../lib/http';
+import { normalizeBook, type BookLevel } from '../lib/marketData';
+import { createSettledPoll } from '../lib/polling';
 import { subscribeLiveBook } from '../store';
 
-type Level = [number, number];
+type Level = BookLevel;
 
 const LIVE_STALE_MS = 6_000;
 
@@ -27,28 +30,23 @@ export function DepthChart({ symbol, base, height = 520 }: { symbol: string; bas
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
-    let alive = true;
     liveTsRef.current = 0;
     setBook(null);
-    const seed = () => {
-      if (Date.now() - liveTsRef.current < LIVE_STALE_MS) return;
-      void fetch(`/api/market/depth?symbol=${symbol}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d: { bids: { price: number; qty: number }[]; asks: { price: number; qty: number }[] } | null) => {
-          if (!alive || !d || Date.now() - liveTsRef.current < LIVE_STALE_MS) return;
-          setBook({
-            bids: d.bids.map((l) => [l.price, l.qty] as Level),
-            asks: d.asks.map((l) => [l.price, l.qty] as Level),
-          });
-        })
-        .catch(() => undefined);
-    };
-    seed();
-    const poll = setInterval(seed, 10_000);
+    const poll = createSettledPoll<unknown | null>({
+      intervalMs: 10_000,
+      request: (signal) => Date.now() - liveTsRef.current < LIVE_STALE_MS
+        ? Promise.resolve(null)
+        : fetchJson(`/api/market/depth?symbol=${symbol}`, { signal }),
+      onSuccess: (payload) => {
+        if (!payload || Date.now() - liveTsRef.current < LIVE_STALE_MS) return;
+        const next = normalizeBook(payload);
+        if (next) setBook(next);
+      },
+    });
+    poll.start();
     const clock = setInterval(() => setTick((n) => n + 1), 1_000);
     return () => {
-      alive = false;
-      clearInterval(poll);
+      poll.stop();
       clearInterval(clock);
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
@@ -59,11 +57,10 @@ export function DepthChart({ symbol, base, height = 520 }: { symbol: string; bas
     () =>
       subscribeLiveBook(symbol, (m) => {
         if (m.symbol !== symbol || m.type !== 'book') return;
+        const next = normalizeBook({ bids: m.bids, asks: m.asks });
+        if (!next) return;
         liveTsRef.current = Date.now();
-        pendingBookRef.current = {
-          bids: m.bids.map(([p, q]) => [Number(p), Number(q)] as Level),
-          asks: m.asks.map(([p, q]) => [Number(p), Number(q)] as Level),
-        };
+        pendingBookRef.current = next;
         if (rafRef.current !== null) return;
         rafRef.current = requestAnimationFrame(() => {
           rafRef.current = null;
@@ -178,7 +175,7 @@ export function DepthChart({ symbol, base, height = 520 }: { symbol: string; bas
           {live ? 'live depth' : 'REST fallback'}
         </span>
       </div>
-      <svg className="depth-svg" viewBox={`0 0 ${view.w} ${view.h}`} preserveAspectRatio="none" role="img" aria-label={`${symbol} live depth chart`}>
+      <svg className="depth-svg" viewBox={`0 0 ${view.w} ${view.h}`} preserveAspectRatio="none" role="img" aria-label={`${symbol} ${live ? 'live' : 'REST fallback'} depth chart`}>
         <defs>
           <linearGradient id={`bidDepth-${symbol}`} x1="0" y1="0" x2="1" y2="0">
             <stop offset="0%" stopColor="var(--up)" stopOpacity=".24" />

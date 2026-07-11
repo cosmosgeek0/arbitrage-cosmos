@@ -59,8 +59,9 @@ export class BasisFeatureBuilder implements FeatureSource {
 
     // --- funding, per direction (sign flips meaning) ---
     const history = this.market.fundingHistory(symbol);
-    const fundingA = buildFundingContext(mark, history, 'long_spot_short_perp', gapA, now, this.cfg);
-    const fundingB = buildFundingContext(mark, history, 'short_spot_long_perp', gapB, now, this.cfg);
+    const markStale = this.market.markStalenessMs(symbol);
+    const fundingA = buildFundingContext(mark, history, 'long_spot_short_perp', gapA, now, this.cfg, markStale);
+    const fundingB = buildFundingContext(mark, history, 'short_spot_long_perp', gapB, now, this.cfg, markStale);
 
     // --- liquidity at the intended size, per direction ---
     const notional = this.cfg.suggestedNotionalUsd;
@@ -77,6 +78,7 @@ export class BasisFeatureBuilder implements FeatureSource {
       refPrice,
       expectedHoldMs(gapB, this.cfg),
       this.cfg,
+      now,
     );
 
     // --- data quality (shared across directions) ---
@@ -85,6 +87,7 @@ export class BasisFeatureBuilder implements FeatureSource {
     const dq = assessDataQuality({
       spotStalenessMs: spotStale,
       perpStalenessMs: perpStale,
+      markStalenessMs: markStale,
       legSkewMs: this.market.legSkewMs(symbol),
       perpBook: perp,
       markPrice: mark?.markPrice ?? null,

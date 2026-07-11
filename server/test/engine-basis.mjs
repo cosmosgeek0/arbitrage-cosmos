@@ -6,6 +6,7 @@
  * Prints ✓/✗ per case and exits non-zero on any failure.
  */
 import { createReplayHarness, buildSnapshots } from '../dist/engine/basis/index.js';
+import { BasisRuntime } from '../dist/services/basisRuntime.js';
 
 const results = [];
 function check(name, pass, detail = '') {
@@ -394,6 +395,248 @@ section('19. EXTRA: symbol blocklist ⇒ symbol_blocked');
   h.engine.blockSymbol(SYM);
   const r = h.run([initStep(T0), ...gapSeries([0.78])]);
   check('blocked symbol rejected symbol_blocked', r.decisions[0]?.rejectCode === 'symbol_blocked', r.decisions[0]?.humanReason);
+}
+
+// =====================================================================
+section('20. SAFETY: ingress accepts only known, finite, monotonic, uncrossed books');
+{
+  const h = createReplayHarness(CFG, T0);
+  h.run([initStep(T0), marketStep(T0 + 2000)]);
+  const validSpot = h.engine.market.spotBook(SYM);
+  h.engine.onSpotBook({ symbol: 'UNKNOWNUSDT', bid: 1, ask: 2, bidQty: 1, askQty: 1, ts: T0 + 2000 });
+  check('unknown symbol does not allocate market state', !h.engine.market.symbols().includes('UNKNOWNUSDT'));
+  h.engine.onSpotBook({ symbol: SYM, bid: 999, ask: 1000, bidQty: 1, askQty: 1, ts: T0 + 1000 });
+  check('out-of-order book cannot replace the latest book', h.engine.market.spotBook(SYM)?.bid === validSpot?.bid);
+
+  const crossed = marketStep(T0 + 4000);
+  crossed.events[0] = {
+    type: 'spotBook',
+    tick: { symbol: SYM, bid: 101, ask: 100, bidQty: 10, askQty: 10, ts: T0 + 4000 },
+  };
+  const crossedResult = h.run([crossed]);
+  check('crossed book is invalidated, not priced', crossedResult.decisions[0]?.rejectCode === 'spot_missing');
+
+  const bad = createReplayHarness(CFG, T0);
+  const badStep = marketStep(T0 + 2000);
+  badStep.events = badStep.events.map((event) => event.type === 'markFunding'
+    ? { ...event, tick: { ...event.tick, fundingRate: Number.NaN } }
+    : event);
+  const badResult = bad.run([initStep(T0), badStep]);
+  check('non-finite funding is invalidated and fails closed', badResult.decisions[0]?.rejectCode === 'data_stale');
+  check('invalid funding never opens a proposal', bad.engine.proposals.open().length === 0);
+}
+
+// =====================================================================
+section('21. SAFETY: missing/stale funding and borrow inputs fail closed');
+{
+  const missing = createReplayHarness(CFG, T0);
+  const noMark = marketStep(T0 + 2000);
+  noMark.events = noMark.events.filter((event) => event.type !== 'markFunding');
+  const missingResult = missing.run([initStep(T0), noMark]);
+  check('missing funding produces data_stale', missingResult.decisions[0]?.rejectCode === 'data_stale');
+
+  const stale = createReplayHarness({ ...CFG, fundingStaleMs: 5_000, staleMs: 20_000 }, T0);
+  stale.run([initStep(T0), marketStep(T0 + 2000)]);
+  const freshBooksOnly = marketStep(T0 + 9000);
+  freshBooksOnly.events = freshBooksOnly.events.filter((event) => event.type !== 'markFunding');
+  const staleResult = stale.run([freshBooksOnly]);
+  check('stale funding produces data_stale despite fresh books', staleResult.decisions[0]?.rejectCode === 'data_stale');
+  check('stale funding exposes no carry estimate', stale.engine.featureSnapshot(SYM)?.basis.funding.A.carryPctOverHold === null);
+
+  const borrow = createReplayHarness({ ...CFG, borrowStaleMs: 3_000 }, T0);
+  const reverse = (atMs) => marketStep(atMs, { spotBid: 100.8, spotAsk: 100.82, perpBid: 100, perpAsk: 100.02 });
+  const borrowResult = borrow.run([
+    initStep(T0, [meta()], [{ type: 'borrow', info: { asset: 'TEST', status: 'available', maxBorrowableBase: 1000, hourlyRatePct: 0.002, asOfTs: T0 } }]),
+    reverse(T0 + 2000),
+    reverse(T0 + 4000),
+  ]);
+  check('stale borrow state becomes borrow_unknown', borrowResult.decisions.at(-1)?.rejectCode === 'borrow_unknown');
+  check('stale borrow state never reaches a proposal', borrow.engine.proposals.open().length === 0);
+}
+
+// =====================================================================
+section('22. SAFETY: universe/config reconciliation prunes derived state');
+{
+  const h = createReplayHarness(CFG, T0);
+  h.run([initStep(T0), ...gapSeries([0.78, 0.78, 0.78])]);
+  const oldProposal = h.engine.proposals.open()[0];
+  h.run([{ atMs: T0 + 6000, events: [{ type: 'universe', symbols: [meta('NEWUSDT')] }], tick: false }]);
+  check('removed symbol leaves market state', !h.engine.market.symbols().includes(SYM));
+  check('removed symbol leaves lifecycle state', !h.engine.lifecycle.all().some((row) => row.symbol === SYM));
+  check('removed symbol leaves priority state', h.engine.priorityOf(SYM) === null);
+  check('removed symbol proposal expires immediately', oldProposal?.status === 'expired' && h.engine.proposals.open().length === 0);
+
+  h.engine.seedFundingHistory('NEWUSDT', [
+    { fundingRate: 0.001, ts: T0 + 1 },
+    { fundingRate: 0.002, ts: T0 + 2 },
+    { fundingRate: 0.003, ts: T0 + 3 },
+    { fundingRate: 0.004, ts: T0 + 4 },
+    { fundingRate: 0.005, ts: T0 + 5 },
+  ]);
+  h.engine.updateConfig({ fundingHistoryKeep: 3 });
+  h.engine.seedFundingHistory('NEWUSDT', [
+    { fundingRate: 0.001, ts: T0 + 1 },
+    { fundingRate: 0.002, ts: T0 + 2 },
+    { fundingRate: 0.003, ts: T0 + 3 },
+    { fundingRate: 0.004, ts: T0 + 4 },
+    { fundingRate: 0.005, ts: T0 + 5 },
+  ]);
+  check('funding history is bounded by config', h.engine.market.fundingHistory('NEWUSDT').length === 3);
+
+  const revised = createReplayHarness(CFG, T0);
+  revised.run([initStep(T0), ...gapSeries([0.78, 0.78, 0.78])]);
+  const proposal = revised.engine.proposals.open()[0];
+  check('config revision is detected', revised.engine.updateConfig({ persistTicks: 4 }) === true);
+  check('config revision invalidates old proposal', proposal?.status === 'expired' && proposal.reason.includes('config_changed'));
+  check('config revision clears signal-derived priorities', revised.engine.priorityOf(SYM) === null);
+  let invalidConfigRejected = false;
+  try {
+    revised.engine.updateConfig({ fundingPeriodMs: 0 });
+  } catch {
+    invalidConfigRejected = true;
+  }
+  check('invalid zero funding period is rejected', invalidConfigRejected);
+
+  const capped = createReplayHarness({ maxUniverseSize: 1 }, T0);
+  let oversizedRejected = false;
+  try {
+    capped.engine.setUniverse([meta('AAAUSDT'), meta('BBBUSDT')]);
+  } catch {
+    oversizedRejected = true;
+  }
+  check('oversized universe is rejected before allocation', oversizedRejected && capped.engine.market.symbols().length === 0);
+}
+
+// =====================================================================
+section('23. SAFETY: proposal history and execution validity remain bounded');
+{
+  const h = createReplayHarness({ persistTicks: 1, proposalHistoryKeep: 2 }, T0);
+  h.run([initStep(T0, [meta()], [{ type: 'borrow', info: { asset: 'TEST', status: 'available', maxBorrowableBase: 1000, hourlyRatePct: 0.002, asOfTs: T0 } }])]);
+  const forward = (atMs) => marketStep(atMs, { spotBid: 100, spotAsk: 100.02, perpBid: 100.8, perpAsk: 100.82 });
+  const reverse = (atMs) => marketStep(atMs, { spotBid: 100.8, spotAsk: 100.82, perpBid: 100, perpAsk: 100.02 });
+  h.run([forward(T0 + 2000), reverse(T0 + 4000), forward(T0 + 6000), reverse(T0 + 8000)]);
+  check('closed proposal history stays within configured bound', h.engine.proposals.all().length <= 2, `got ${h.engine.proposals.all().length}`);
+  check('one current proposal remains discoverable', h.engine.proposals.open().length === 1);
+
+  const ttl = createReplayHarness({ persistTicks: 1, proposalTtlMs: 3_000 }, T0);
+  ttl.run([initStep(T0), forward(T0 + 2000)]);
+  const live = ttl.engine.proposals.open()[0];
+  ttl.clock.set(T0 + 6000);
+  const prepared = ttl.engine.prepareOrderIntents(live.id);
+  check('prepare path revalidates elapsed proposal TTL', prepared.blocked && prepared.verdict.reasons.includes('proposal_not_open'));
+  check('expired proposal cannot emit intents', prepared.intents.length === 0 && live.status === 'expired');
+  check('decision reads clamp untrusted limits', ttl.engine.decisions(999_999).length <= 2_000 && ttl.engine.decisions(Number.POSITIVE_INFINITY).length === 0);
+
+  const tampered = createReplayHarness({ persistTicks: 1 }, T0);
+  tampered.run([initStep(T0), forward(T0 + 2000)]);
+  const tamperedProposal = tampered.engine.proposals.open()[0];
+  tamperedProposal.suggestedNotionalUsd = Number.POSITIVE_INFINITY;
+  const tamperedResult = tampered.engine.prepareOrderIntents(tamperedProposal.id);
+  check('non-finite proposal sizing is rejected at the execution bridge', tamperedResult.blocked && tamperedResult.verdict.reasons.includes('proposal_invalid'));
+}
+
+// =====================================================================
+section('24. SAFETY: runtime generations own timers and persistence failures stay isolated');
+{
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  let fetchCalls = 0;
+  let hold = true;
+  const fakeFetch = async () => {
+    fetchCalls += 1;
+    if (hold) await gate;
+    return new Map([[SYM, { bidPrice: 100, askPrice: 100.02, bidQty: 10, askQty: 10 }]]);
+  };
+  let ledgerCalls = 0;
+  const throwingLedger = {
+    logEvent() {
+      ledgerCalls += 1;
+      throw new Error('simulated ledger write failure');
+    },
+  };
+  const runtimeConfig = {
+    feesPct: 0.3,
+    minNetBasisPct: 0.25,
+    persistTicks: 3,
+    minQuoteVolume24h: 0,
+    killSwitch: false,
+    blockedSymbols: [],
+  };
+  const runtimeUniverse = [{
+    symbol: SYM,
+    base: 'TEST',
+    quoteVolume24h: 50_000_000,
+    hasSpot: true,
+    hasPerp: true,
+    perpMark: 100.01,
+    fundingRate: 0.0001,
+    nextFundingTime: Date.now() + 3_600_000,
+    markUpdatedAt: Date.now(),
+  }];
+  const runtime = new BasisRuntime(throwingLedger, () => runtimeConfig, () => runtimeUniverse, fakeFetch);
+  const firstStart = runtime.start();
+  runtime.stop();
+  hold = false;
+  release();
+  await firstStart;
+  const stopped = runtime.connectionStatus();
+  check('stopped generation cannot publish late book state', !stopped.running && stopped.lastBookTs === null);
+
+  const callsBeforeRestart = fetchCalls;
+  await Promise.all([runtime.start(), runtime.start()]);
+  const restarted = runtime.connectionStatus();
+  check('concurrent starts share one generation refresh', fetchCalls - callsBeforeRestart === 2, `calls=${fetchCalls - callsBeforeRestart}`);
+  check('fresh generation starts after cancelled generation', restarted.running && restarted.bookState === 'fresh');
+  check('ledger callback failures do not abort engine refresh', restarted.lastError?.includes('basis-runtime.ledger') === true);
+  check('ledger failure handling is non-recursive and bounded', ledgerCalls > 0 && ledgerCalls < 50, `calls=${ledgerCalls}`);
+  runtime.stop();
+}
+
+// =====================================================================
+section('25. SAFETY: runtime retries an empty startup and trusts source timestamps');
+{
+  const runtimeConfig = {
+    feesPct: 0.3,
+    minNetBasisPct: 0.25,
+    persistTicks: 3,
+    minQuoteVolume24h: 0,
+    killSwitch: false,
+    blockedSymbols: [],
+  };
+  let universe = [];
+  let fetchCalls = 0;
+  const fakeFetch = async () => {
+    fetchCalls += 1;
+    return new Map([[SYM, { bidPrice: 100, askPrice: 100.02, bidQty: 10, askQty: 10 }]]);
+  };
+  const ledger = { logEvent() {} };
+  const runtime = new BasisRuntime(ledger, () => runtimeConfig, () => universe, fakeFetch);
+  await runtime.start();
+  check('empty startup avoids pointless book requests', fetchCalls === 0);
+  universe = [{
+    symbol: SYM,
+    base: 'TEST',
+    quoteVolume24h: 50_000_000,
+    hasSpot: true,
+    hasPerp: true,
+    perpMark: 100.01,
+    fundingRate: 0.0001,
+    nextFundingTime: Date.now() + 3_600_000,
+    markUpdatedAt: Date.now(),
+  }];
+  await runtime.refreshBooks();
+  check('short book refresh recovers an initially empty universe', fetchCalls === 2 && runtime.connectionStatus().bookState === 'fresh');
+  runtime.stop();
+
+  const staleRuntime = new BasisRuntime(
+    ledger,
+    () => runtimeConfig,
+    () => [{ ...universe[0], markUpdatedAt: Date.now() - 60_000 }],
+    fakeFetch,
+  );
+  await staleRuntime.start();
+  check('unchanged stale mark is not refreshed by adapter receipt time', staleRuntime.connectionStatus().markState === 'stale');
+  staleRuntime.stop();
 }
 
 // ---------- summary ----------

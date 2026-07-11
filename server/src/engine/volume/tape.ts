@@ -67,13 +67,21 @@ function washScoreOf(trades: RawTrade[], priceRangePct: number, cfg: VolumeConfi
 }
 
 export function analyzeTape(trades: RawTrade[], windowMs: number, cfg: VolumeConfig): TapeAnalysis {
+  const cleanTrades = trades.filter((trade) => (
+    Number.isFinite(trade.price) && trade.price > 0 && trade.price <= 1_000_000_000_000_000 &&
+    Number.isFinite(trade.qty) && trade.qty > 0 && trade.qty <= 1_000_000_000_000_000_000_000_000 &&
+    Number.isFinite(trade.quoteQty) && trade.quoteQty > 0 && trade.quoteQty <= 1_000_000_000_000_000_000 &&
+    Number.isSafeInteger(trade.ts) && trade.ts >= 0 &&
+    typeof trade.isBuyerMaker === 'boolean' &&
+    Number.isSafeInteger(trade.printCount) && trade.printCount > 0
+  )).slice(-cfg.maxRawTrades);
   let quoteVolume = 0;
   let takerBuyQuote = 0;
   let maxTradeQuote = 0;
   let maxTradePrintCount = 1;
   let hi = -Infinity;
   let lo = Infinity;
-  for (const t of trades) {
+  for (const t of cleanTrades) {
     quoteVolume += t.quoteQty;
     if (!t.isBuyerMaker) takerBuyQuote += t.quoteQty;
     if (t.quoteQty > maxTradeQuote) {
@@ -83,17 +91,19 @@ export function analyzeTape(trades: RawTrade[], windowMs: number, cfg: VolumeCon
     if (t.price > hi) hi = t.price;
     if (t.price < lo) lo = t.price;
   }
-  const priceRangePct = trades.length > 0 && lo > 0 ? ((hi - lo) / lo) * 100 : 0;
-  const washReady = trades.length >= cfg.washMinTrades;
+  const priceRangePct = cleanTrades.length > 0 && lo > 0 ? ((hi - lo) / lo) * 100 : 0;
+  const washReady = cleanTrades.length >= cfg.washMinTrades;
   return {
-    windowMs,
-    trades: trades.length,
+    windowMs: Number.isFinite(windowMs) && windowMs > 0 ? windowMs : cfg.rawTradeWindowMs,
+    trades: cleanTrades.length,
     quoteVolume,
     maxTradeDominance: quoteVolume > 0 ? maxTradeQuote / quoteVolume : 0,
     maxTradePrintCount,
-    takerBuyRatio: trades.length >= cfg.minTradesForImbalance ? takerBuyQuote / quoteVolume : null,
-    burst: burstStats(trades, cfg.clusterGapMs),
-    washScore: washScoreOf(trades, priceRangePct, cfg),
+    takerBuyRatio: cleanTrades.length >= cfg.minTradesForImbalance && quoteVolume > 0
+      ? takerBuyQuote / quoteVolume
+      : null,
+    burst: burstStats(cleanTrades, cfg.clusterGapMs),
+    washScore: washScoreOf(cleanTrades, priceRangePct, cfg),
     washReady,
     priceRangePct,
   };

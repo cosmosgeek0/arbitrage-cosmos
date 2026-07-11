@@ -39,6 +39,7 @@ export interface BorrowGuardConfig {
   repayOnly: boolean;
   maxLtvPct: number;
   maxAprPct: number;
+  maxBorrowNotionalUsd: number;
   requireLiveCatalog: boolean;
   allowedCollateralCoins: string[];
   blockedLoanCoins: string[];
@@ -246,9 +247,18 @@ export interface PreviewResult {
 
 export interface SendResult {
   sent: boolean;
+  outcome?: 'accepted' | 'not_sent' | 'unknown';
+  reconciliationRequired?: boolean;
   risk?: RiskDecision;
   error?: string;
   order?: { orderId: number; status: string; executedQty: string; cummulativeQuoteQty: string };
+}
+
+export interface CancelResult {
+  ok: boolean;
+  outcome?: 'canceled' | 'not_canceled' | 'unknown';
+  reconciliationRequired?: boolean;
+  error?: string;
 }
 
 export interface ServerState {
@@ -274,6 +284,7 @@ export interface ServerState {
       permitsUniversalTransfer: boolean;
       enableVanillaOptions?: boolean;
     } | null;
+    keyPermissionsTs?: number | null;
     keyPosture: {
       level: 'no_key' | 'unknown' | 'read_only' | 'trading' | 'elevated' | 'unsafe';
       label: string;
@@ -286,9 +297,26 @@ export interface ServerState {
   account: {
     totalUsdt: number;
     availableUsdt: number;
+    complete: boolean;
+    sourceFresh: boolean;
+    pricedAssets: string[];
+    unpricedAssets: string[];
     dayOpenEquity: number | null;
     dayChangeUsd: number | null;
     realizedTodayUsd: number;
+    dailyLossPolicy: { valueUsd: number; complete: boolean; reasons: string[] } | null;
+    fillReconciliation?: {
+      complete: boolean;
+      scopeComplete: boolean;
+      fresh: boolean;
+      reconciledAt: number | null;
+      dayStart: number | null;
+      symbols: string[];
+      coverageScope: 'not_applicable' | 'configured_and_observed_symbols';
+      accountWide: boolean | null;
+      limitation: string | null;
+      error: string | null;
+    };
     entries: BalanceEntry[];
   } | null;
   positions: PositionEntry[];

@@ -2,6 +2,8 @@ import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useSta
 import { IconExternal, IconNewspaper, IconSearch } from '../components/Icons';
 import { PillSelect } from '../components/PillSelect';
 import { liveAge } from '../format';
+import { fetchJson } from '../lib/http';
+import { createSettledPoll } from '../lib/polling';
 import { TIME_ZONE_OPTIONS, addDays, dayKey, formatKey, resolvedZoneLabel } from '../lib/time';
 import { useStore } from '../store';
 import './LiveIntelligence.css';
@@ -53,7 +55,8 @@ interface BinanceItem { id: number; title: string; date: string | null; url: str
 interface BinancePayload { catalog: number | string; fetchedAt?: number; items: BinanceItem[] }
 
 const FEED_CACHE_KEY = 'cosmos-news-feed-cache-v4';
-const CONTEXT_LIMIT = 8_000;
+const CONTEXT_LIMIT = 600;
+const FALLBACK_CONTEXT_LIMIT = 220;
 const LOCAL_CACHE_LIMIT = 700;
 const BUCKETS: { id: NewsBucket; label: string }[] = [
   { id: 'all', label: 'All News' },
@@ -178,8 +181,43 @@ function mergeItems(context: NewsPayload | null, binance: BinancePayload | null)
 function mergeContextPayload(incoming: NewsPayload, current: NewsPayload | null): NewsPayload {
   if (!current) return incoming;
   const byId = new Map<string, NewsItem>();
-  [...incoming.items, ...current.items].forEach((item) => byId.set(item.id, item));
-  return { ...incoming, items: [...byId.values()].sort(compareItems).slice(0, CONTEXT_LIMIT) };
+  [...current.items, ...incoming.items].forEach((item) => byId.set(item.id, item));
+  const metadata = incoming.fetchedAt >= current.fetchedAt ? incoming : current;
+  return { ...metadata, items: [...byId.values()].sort(compareItems).slice(0, CONTEXT_LIMIT) };
+}
+
+function validContextPayload(payload: NewsPayload): boolean {
+  return Boolean(
+    payload &&
+    Number.isFinite(payload.fetchedAt) &&
+    payload.fetchedAt > 0 &&
+    Array.isArray(payload.items) &&
+    payload.items.every((item) => (
+      item &&
+      typeof item.id === 'string' &&
+      typeof item.title === 'string' &&
+      typeof item.source === 'string' &&
+      Array.isArray(item.symbols) &&
+      Array.isArray(item.tags) &&
+      (item.ts === null || Number.isFinite(item.ts))
+    )) &&
+    Array.isArray(payload.sources) &&
+    payload.sources.every((source) => source && typeof source.key === 'string' && typeof source.label === 'string')
+  );
+}
+
+function validBinancePayload(payload: BinancePayload): boolean {
+  return Boolean(
+    payload &&
+    Array.isArray(payload.items) &&
+    payload.items.every((item) => (
+      item &&
+      Number.isSafeInteger(item.id) &&
+      typeof item.title === 'string' &&
+      typeof item.url === 'string' &&
+      (item.date === null || typeof item.date === 'string')
+    ))
+  );
 }
 
 function classification(item: NewsItem): string {
@@ -328,6 +366,10 @@ export function News() {
   useEffect(() => { setSelectedDay(today); }, [today]);
 
   const applyContext = useCallback((payload: NewsPayload, animate = true, mergeExisting = false) => {
+    if (!validContextPayload(payload)) {
+      setContextFailed(true);
+      return;
+    }
     const committed = mergeExisting ? mergeContextPayload(payload, contextRef.current) : payload;
     const next = mergeItems(committed, binanceRef.current);
     const incoming = animate ? next.slice(0, 20).filter((item) => !knownIdsRef.current.has(item.id)).map((item) => item.id) : [];
@@ -335,7 +377,7 @@ export function News() {
     if (knownIdsRef.current.size > 2_400) knownIdsRef.current = new Set(next.slice(0, 2_000).map((item) => item.id));
     setContext(committed);
     contextRef.current = committed;
-    setLastCheckedAt(committed.fetchedAt);
+    setLastCheckedAt((current) => Math.max(current, committed.fetchedAt));
     setContextFailed(false);
     persistFeedCache(committed, binanceRef.current);
     if (incoming.length) {
@@ -345,54 +387,59 @@ export function News() {
     }
   }, []);
 
-  useEffect(() => {
-    const ctrl = new AbortController();
-    const contextRequest = fetch(`/api/news-context?limit=${CONTEXT_LIMIT}`, { signal: ctrl.signal }).then((response) => response.ok ? response.json() : Promise.reject()) as Promise<NewsPayload>;
-    const binanceRequest = fetch('/api/news?catalog=all', { signal: ctrl.signal }).then((response) => response.ok ? response.json() : Promise.reject()) as Promise<BinancePayload>;
-    Promise.allSettled([contextRequest, binanceRequest]).then(([contextResult, binanceResult]) => {
-      let nextContext = contextRef.current;
-      let nextBinance = binanceRef.current;
-      if (contextResult.status === 'fulfilled') { nextContext = contextResult.value; applyContext(contextResult.value, false); }
-      else setContextFailed(true);
-      if (binanceResult.status === 'fulfilled') { nextBinance = binanceResult.value; setBinance(binanceResult.value); setBinanceFailed(false); }
-      else setBinanceFailed(true);
-      setLastCheckedAt(Math.max(nextContext?.fetchedAt ?? 0, nextBinance?.fetchedAt ?? 0, Date.now()));
-      persistFeedCache(nextContext, nextBinance);
-    });
-    return () => ctrl.abort();
-  }, [applyContext]);
+  const applyBinance = useCallback((payload: BinancePayload) => {
+    if (!validBinancePayload(payload)) {
+      setBinanceFailed(true);
+      return;
+    }
+    const current = binanceRef.current;
+    const incomingAt = payload.fetchedAt ?? 0;
+    const currentAt = current?.fetchedAt ?? 0;
+    if (current && incomingAt > 0 && currentAt > incomingAt) {
+      setBinanceFailed(false);
+      return;
+    }
+    setBinance(payload);
+    binanceRef.current = payload;
+    setBinanceFailed(false);
+    setLastCheckedAt((checkedAt) => Math.max(checkedAt, incomingAt || Date.now()));
+    persistFeedCache(contextRef.current, payload);
+  }, []);
 
   useEffect(() => {
     const stream = new EventSource('/api/news-stream?limit=220');
     const onNews = (event: MessageEvent<string>) => {
-      try { applyContext(JSON.parse(event.data) as NewsPayload, true, true); } catch { /* REST fallback remains active */ }
+      try { applyContext(JSON.parse(event.data) as NewsPayload, true, true); } catch { setContextFailed(true); }
     };
     stream.onopen = () => setStreamConnected(true);
-    stream.onerror = () => setStreamConnected(false);
+    stream.onerror = () => { setStreamConnected(false); setContextFailed(true); };
     stream.addEventListener('news', onNews as EventListener);
     return () => { stream.close(); if (freshTimerRef.current !== null) window.clearTimeout(freshTimerRef.current); };
   }, [applyContext]);
 
   useEffect(() => {
     if (streamConnected) return;
-    const timer = window.setInterval(() => {
-      fetch(`/api/news-context?limit=${CONTEXT_LIMIT}&refresh=1`)
-        .then((response) => response.ok ? response.json() : Promise.reject())
-        .then((payload: NewsPayload) => applyContext(payload, true))
-        .catch(() => setContextFailed(true));
-    }, fallbackCadence * 1_000);
-    return () => window.clearInterval(timer);
+    const poll = createSettledPoll<NewsPayload>({
+      intervalMs: fallbackCadence * 1_000,
+      timeoutMs: Math.min(12_000, Math.max(4_000, fallbackCadence * 1_000)),
+      request: (signal) => fetchJson(`/api/news-context?limit=${FALLBACK_CONTEXT_LIMIT}`, { signal }),
+      onSuccess: (payload) => applyContext(payload, true, true),
+      onError: () => setContextFailed(true),
+    });
+    poll.start();
+    return poll.stop;
   }, [applyContext, fallbackCadence, streamConnected]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      fetch('/api/news?catalog=all&refresh=1')
-        .then((response) => response.ok ? response.json() : Promise.reject())
-        .then((payload: BinancePayload) => { setBinance(payload); setBinanceFailed(false); persistFeedCache(contextRef.current, payload); })
-        .catch(() => setBinanceFailed(true));
-    }, 60_000);
-    return () => window.clearInterval(timer);
-  }, []);
+    const poll = createSettledPoll<BinancePayload>({
+      intervalMs: 60_000,
+      request: (signal) => fetchJson('/api/news?catalog=all', { signal }),
+      onSuccess: applyBinance,
+      onError: () => setBinanceFailed(true),
+    });
+    poll.start();
+    return poll.stop;
+  }, [applyBinance]);
 
   const items = useMemo(() => mergeItems(context, binance), [context, binance]);
   const deferredQuery = useDeferredValue(query).trim().toLowerCase();

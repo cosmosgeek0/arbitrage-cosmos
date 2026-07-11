@@ -15,6 +15,8 @@ import {
 import { TokenIcon } from '../components/TokenIcon';
 import { Star } from '../components/PillSelect';
 import { fmtMoney, fmtPct, fmtPrice, fmtQty, signClass, timeAgo } from '../format';
+import { apiErrorMessage, fetchJson } from '../lib/http';
+import { createSettledPoll } from '../lib/polling';
 import { useRefreshSignal } from '../lib/refresh';
 import { useStore } from '../store';
 import type { FillRow, LoansSnapshot, OpenOrderRow } from '../types';
@@ -182,43 +184,85 @@ export function Account() {
   const [walletSource, setWalletSource] = useState<SourceState<WalletBalanceRow[]>>(EMPTY_SOURCE);
   const [earnSource, setEarnSource] = useState<SourceState<{ asset: string; amount: number; apr: number }[]>>(EMPTY_SOURCE);
   const [loanSource, setLoanSource] = useState<SourceState<LoansSnapshot>>(EMPTY_SOURCE);
-  const [historySource, setHistorySource] = useState<SourceState<{ rows: { ts: number; totalUsdt: number }[]; reconstructedBefore: number | null }>>(EMPTY_SOURCE);
+  const [historySource, setHistorySource] = useState<SourceState<{
+    rows: { ts: number; totalUsdt: number }[];
+    reconstructedBefore: number | null;
+    reconstruction: { complete: boolean; reasons: string[] };
+  }>>(EMPTY_SOURCE);
   const [fills, setFills] = useState<FillRow[]>([]);
   const [fillsError, setFillsError] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
   useRefreshSignal(() => setRefreshTick((value) => value + 1));
 
   useEffect(() => {
-    let alive = true;
-    const load = async () => {
-      const read = async <T,>(url: string): Promise<T> => {
-        const response = await fetch(url, { cache: 'no-store' });
-        if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-        return response.json() as Promise<T>;
-      };
-      void read<{ rows?: WalletBalanceRow[]; fetchedAt?: number | null; error?: string }>('/api/wallet-balances')
-        .then((payload) => alive && setWalletSource({ data: payload.rows ?? [], fetchedAt: payload.fetchedAt ?? null, error: payload.error ?? null }))
-        .catch((error) => alive && setWalletSource((current) => ({ ...current, error: String(error instanceof Error ? error.message : error) })));
-      void read<{ rows?: { asset: string; amount: number; apr: number }[]; fetchedAt?: number | null; error?: string }>('/api/earn')
-        .then((payload) => alive && setEarnSource({ data: payload.rows ?? [], fetchedAt: payload.fetchedAt ?? null, error: payload.error ?? null }))
-        .catch((error) => alive && setEarnSource((current) => ({ ...current, error: String(error instanceof Error ? error.message : error) })));
-      void read<LoansSnapshot>('/api/loans')
-        .then((payload) => alive && setLoanSource({ data: payload, fetchedAt: payload.fetchedAt ?? null, error: payload.error ?? null }))
-        .catch((error) => alive && setLoanSource((current) => ({ ...current, error: String(error instanceof Error ? error.message : error) })));
-      void read<{ rows?: { ts: number; totalUsdt: number }[]; reconstructedBefore?: number | null; fetchedAt?: number | null; error?: string }>('/api/equity-history')
-        .then((payload) => alive && setHistorySource({
-          data: { rows: payload.rows ?? [], reconstructedBefore: payload.reconstructedBefore ?? null },
-          fetchedAt: payload.fetchedAt ?? null,
-          error: payload.error ?? null,
-        }))
-        .catch((error) => alive && setHistorySource((current) => ({ ...current, error: String(error instanceof Error ? error.message : error) })));
-      void read<FillRow[]>('/api/fills')
-        .then((payload) => { if (alive) { setFills(payload); setFillsError(null); } })
-        .catch((error) => { if (alive) setFillsError(String(error instanceof Error ? error.message : error)); });
+    type WalletPayload = { rows?: WalletBalanceRow[]; fetchedAt?: number | null; error?: string };
+    type EarnPayload = { rows?: { asset: string; amount: number; apr: number }[]; fetchedAt?: number | null; error?: string };
+    type HistoryPayload = {
+      rows?: { ts: number; totalUsdt: number }[];
+      reconstructedBefore?: number | null;
+      reconstruction?: { complete?: boolean; reasons?: string[] };
+      fetchedAt?: number | null;
+      error?: string;
     };
-    void load();
-    const timer = window.setInterval(load, Math.max(5, prefs.dataCadence?.account ?? 10) * 1_000);
-    return () => { alive = false; window.clearInterval(timer); };
+    const poll = createSettledPoll<[
+      PromiseSettledResult<WalletPayload>,
+      PromiseSettledResult<EarnPayload>,
+      PromiseSettledResult<LoansSnapshot>,
+      PromiseSettledResult<HistoryPayload>,
+      PromiseSettledResult<FillRow[]>,
+    ]>({
+      intervalMs: Math.max(5, prefs.dataCadence?.account ?? 10) * 1_000,
+      request: (signal) => Promise.allSettled([
+        fetchJson<WalletPayload>('/api/wallet-balances', { cache: 'no-store', signal }),
+        fetchJson<EarnPayload>('/api/earn', { cache: 'no-store', signal }),
+        fetchJson<LoansSnapshot>('/api/loans', { cache: 'no-store', signal }),
+        fetchJson<HistoryPayload>('/api/equity-history', { cache: 'no-store', signal }),
+        fetchJson<FillRow[]>('/api/fills', { cache: 'no-store', signal }),
+      ]) as Promise<[
+        PromiseSettledResult<WalletPayload>,
+        PromiseSettledResult<EarnPayload>,
+        PromiseSettledResult<LoansSnapshot>,
+        PromiseSettledResult<HistoryPayload>,
+        PromiseSettledResult<FillRow[]>,
+      ]>,
+      onSuccess: ([wallet, earn, loansResult, history, fillsResult]) => {
+        if (wallet.status === 'fulfilled') setWalletSource({ data: wallet.value.rows ?? [], fetchedAt: wallet.value.fetchedAt ?? null, error: wallet.value.error ?? null });
+        else setWalletSource((current) => ({ ...current, error: apiErrorMessage(wallet.reason) }));
+        if (earn.status === 'fulfilled') setEarnSource({ data: earn.value.rows ?? [], fetchedAt: earn.value.fetchedAt ?? null, error: earn.value.error ?? null });
+        else setEarnSource((current) => ({ ...current, error: apiErrorMessage(earn.reason) }));
+        if (loansResult.status === 'fulfilled') setLoanSource({ data: loansResult.value, fetchedAt: loansResult.value.fetchedAt ?? null, error: loansResult.value.error ?? null });
+        else setLoanSource((current) => ({ ...current, error: apiErrorMessage(loansResult.reason) }));
+        if (history.status === 'fulfilled') setHistorySource({
+          data: {
+            rows: history.value.rows ?? [],
+            reconstructedBefore: history.value.reconstructedBefore ?? null,
+            reconstruction: {
+              complete: history.value.reconstruction?.complete === true,
+              reasons: Array.isArray(history.value.reconstruction?.reasons) ? history.value.reconstruction.reasons : [],
+            },
+          },
+          fetchedAt: history.value.fetchedAt ?? null,
+          error: history.value.error ?? null,
+        });
+        else setHistorySource((current) => ({ ...current, error: apiErrorMessage(history.reason) }));
+        if (fillsResult.status === 'fulfilled') {
+          setFills(fillsResult.value);
+          setFillsError(null);
+        } else {
+          setFillsError(apiErrorMessage(fillsResult.reason));
+        }
+      },
+      onError: (error) => {
+        const message = apiErrorMessage(error);
+        setWalletSource((current) => ({ ...current, error: message }));
+        setEarnSource((current) => ({ ...current, error: message }));
+        setLoanSource((current) => ({ ...current, error: message }));
+        setHistorySource((current) => ({ ...current, error: message }));
+        setFillsError(message);
+      },
+    });
+    poll.start();
+    return poll.stop;
   }, [prefs.dataCadence?.account, refreshTick]);
 
   const account = state?.account ?? null;
@@ -272,7 +316,7 @@ export function Account() {
     const rows = [...(historySource.data?.rows ?? [])]
       .filter((row) => finite(row.totalUsdt))
       .map((row) => ({ ts: row.ts, v: row.totalUsdt }));
-    if (account && finite(account.totalUsdt)) rows.push({ ts: binance?.lastSyncTs ?? historySource.fetchedAt ?? Date.now(), v: account.totalUsdt });
+    if (account?.complete && finite(account.totalUsdt)) rows.push({ ts: binance?.lastSyncTs ?? historySource.fetchedAt ?? Date.now(), v: account.totalUsdt });
     rows.sort((a, b) => a.ts - b.ts);
     const deduped: { ts: number; v: number }[] = [];
     for (const point of rows) {
@@ -281,7 +325,7 @@ export function Account() {
       else deduped.push(point);
     }
     return deduped;
-  }, [account?.totalUsdt, binance?.lastSyncTs, historySource.data?.rows, historySource.fetchedAt]);
+  }, [account?.complete, account?.totalUsdt, binance?.lastSyncTs, historySource.data?.rows, historySource.fetchedAt]);
 
   const walletRows = useMemo(() => [...(walletSource.data ?? [])].sort((left, right) => {
     const leftIndex = WALLET_ORDER.indexOf(left.walletName);
@@ -309,7 +353,7 @@ export function Account() {
   const sourcesPending = walletSource.data === null || earnSource.data === null || loanSource.data === null || historySource.data === null;
   const streamOpen = binance?.userStream === 'open' || binance?.userStream === 'live';
   const sourceClass = sourceErrors.length > 0 ? 'partial' : sourcesPending ? 'loading' : 'on';
-  const sourceLabel = sourceErrors.length > 0 ? 'Partial Source Coverage' : sourcesPending ? 'Sources Loading' : 'Signed Read Sources';
+  const sourceLabel = sourceErrors.length > 0 || account?.complete === false ? 'Partial Source Coverage' : sourcesPending ? 'Sources Loading' : 'Signed Read Sources';
   const rowCount = view === 'orders' ? openOrders.length : visibleFills.length;
   const rowLabel = view === 'orders' ? 'Orders' : 'Fills';
   const displayCurrency = prefs.currency || 'USD';
@@ -391,7 +435,7 @@ export function Account() {
               <section className="accountx-portfolio-band" aria-label="Balance And Allocation">
                 <div className="accountx-equity">
                   <div className="accountx-section-head">
-                    <span><b>Spot Balance History</b><small>{historySource.data?.reconstructedBefore ? 'Signed Binance snapshots · verified wallet-flow reconstruction' : 'Signed Binance snapshots · balance movement, not PnL'}</small></span>
+                    <span><b>Spot Balance History</b><small title={historySource.data?.reconstruction.reasons.join(' · ') || undefined}>{historySource.data?.reconstruction.complete && historySource.data.reconstructedBefore ? 'Signed Binance snapshots · verified wallet-flow reconstruction' : historySource.data?.reconstruction.reasons.length ? 'Signed Binance snapshots · older reconstruction unavailable' : 'Signed Binance snapshots · balance movement, not PnL'}</small></span>
                     <div className="accountx-equity-tools">
                       <span className={`accountx-spot-change ${signClass(spotChange)}`}>
                         <em>Spot Change</em>

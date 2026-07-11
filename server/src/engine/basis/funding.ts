@@ -33,15 +33,15 @@ export function expectedHoldMs(gap: GapState, cfg: BasisConfig): number {
  * magnitude both make the current funding sign untrustworthy.
  */
 export function fundingFlipRisk(history: FundingHistoryPoint[], current: number | null): number | null {
-  if (history.length < 3) return null;
-  const rates = history.map((h) => h.fundingRate);
+  const rates = history.map((h) => h.fundingRate).filter(Number.isFinite);
+  if (rates.length < 3) return null;
   let flips = 0;
   for (let i = 1; i < rates.length; i++) {
     if (Math.sign(rates[i]) !== Math.sign(rates[i - 1]) && rates[i] !== 0 && rates[i - 1] !== 0) flips++;
   }
   const flipShare = flips / (rates.length - 1);
   // magnitude component: |rate| ≥ 5bps/period is a confident sign, ~0 is a coin toss
-  const mag = Math.abs(current ?? rates[rates.length - 1]);
+  const mag = Math.abs(current !== null && Number.isFinite(current) ? current : rates[rates.length - 1]);
   const magRisk = clamp(1 - mag / 0.0005, 0, 1);
   return clamp(0.6 * flipShare + 0.4 * magRisk, 0, 1);
 }
@@ -57,11 +57,27 @@ export function buildFundingContext(
   gap: GapState,
   nowTs: number,
   cfg: BasisConfig,
+  markStalenessMs: number | null = mark ? nowTs - mark.ts : null,
 ): FundingContext {
   const holdMs = expectedHoldMs(gap, cfg);
-  if (!mark) {
+  const reportedStalenessMs = markStalenessMs === null ? null : Math.max(0, markStalenessMs);
+  const fresh = Boolean(
+    mark &&
+      Number.isFinite(mark.fundingRate) &&
+      Math.abs(mark.fundingRate) <= 0.1 &&
+      Number.isFinite(mark.markPrice) &&
+      mark.markPrice > 0 &&
+      Number.isSafeInteger(mark.ts) &&
+      mark.ts > 0 &&
+      markStalenessMs !== null &&
+      markStalenessMs >= -cfg.maxFutureSkewMs &&
+      markStalenessMs <= cfg.fundingStaleMs,
+  );
+  if (!mark || !fresh) {
     return {
       fundingRate: null,
+      stalenessMs: reportedStalenessMs,
+      fresh: false,
       nextFundingTs: null,
       msToFunding: null,
       carryPctOverHold: null,
@@ -87,6 +103,8 @@ export function buildFundingContext(
 
   return {
     fundingRate: mark.fundingRate,
+    stalenessMs: reportedStalenessMs,
+    fresh: true,
     nextFundingTs: mark.nextFundingTs,
     msToFunding,
     carryPctOverHold: carry,

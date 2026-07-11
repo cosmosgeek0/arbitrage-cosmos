@@ -596,10 +596,11 @@ motion timing, real endpoints, and old-code traps from the 2026-07-09 audit.
    `(abs, 2, false)` or you print "down +0.82%".
 8. fmtPrice/fmtMoney are FX-converted (fxRate/fxSymbol); any NEW money
    formatter must route through them (fmtPrice was FX-blind for weeks).
-9. Preview/server traps: launch.json `cosmos` has autoPort → a STALE server
-   can serve OLD dist on a random port with the preview attached. Before
-   debugging "broken" behavior: `preview_list` + check which port the page's
-   network requests hit. Vite (5273, "web") proxies /api→8080. After editing
+9. Preview/server traps: `.claude/launch.json` pins the built server to 8080
+   and Vite to 5173 with auto-port disabled. If either port is occupied, find
+   and stop the stale process instead of silently attaching to old dist on a
+   random port. Before debugging "broken" behavior, check which port the page's
+   network requests hit. Vite proxies `/api` to 8080. After editing
    the 390KB styles.css an immediate reload can race the rebuild — rebuild,
    reload again before concluding a fix failed. Preview tab is HIDDEN: rAF/
    CSS motion can't be sampled; verify timing via getAnimations/computed.
@@ -632,7 +633,10 @@ motion timing, real endpoints, and old-code traps from the 2026-07-09 audit.
   earnFlexiblePositions, accountSnapshots, deposit/withdrawHistory.
   `index.ts` — /api/earn (60s cache), /api/equity-history (1h cache, flow
   reconstruction), CSP img-src hosts.
-- Gates: `server/test/gates.mjs` (`npm test` from root, 50 must pass).
+- Verification: root `npm test` runs typecheck, clean production builds,
+  engine proofs, and focused deterministic regressions. The live public-market
+  app gate is `npm run test:integration`; `npm run test:all` runs both. Never
+  hardcode an expected test count in this playbook because the suite grows.
 
 ### 5.1 Current page map (2026-07-09, all 13 tabs)
 - Prefixes: `mkx` Markets · `acb` Account (gold standard) · `bwx` Borrow (card
@@ -652,11 +656,13 @@ motion timing, real endpoints, and old-code traps from the 2026-07-09 audit.
 
 1. Reference in hand → extract exact values (or reuse §2 voices).
 2. Edit. Imports FIRST when scripting edits (HMR executes mid-edit states).
-3. `npm run build` (web and/or server) + `npx tsc --noEmit` (vite doesn't
-   typecheck!). Server changes: rebuild dist + restart the 8080 process.
+3. `npm run typecheck`, then `npm run build`. Vite transpilation alone does not
+   typecheck. Server changes: rebuild dist + restart the 8080 process.
 4. Verify in preview: computed styles on glyph spans, click every control,
    screenshot at 125% AND 100%, 1440 AND 1920, light AND dark.
 5. Nav crash sweep (click all sidebar items, check for error boundary),
-   console errors, `npm test` → 50/50.
+   console errors, then run `npm test`. For a release or backend/network change,
+   also run `npm run test:integration`; investigate external-feed failure rather
+   than replacing it with fake data.
 6. Log the pass in PROJECT_MEMORY.md (what/why/gotchas) BEFORE moving on —
    update as you move, not at the end.

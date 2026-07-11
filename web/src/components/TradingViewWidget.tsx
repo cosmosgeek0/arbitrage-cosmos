@@ -7,7 +7,7 @@ function currentTheme(): 'light' | 'dark' {
 }
 
 function tvInterval(win: string): string {
-  if (win === '1s') return '1';
+  if (win === '1s') return '1S';
   if (win.endsWith('m')) return win.replace('m', '');
   if (win.endsWith('h')) return String(Number(win.replace('h', '')) * 60);
   if (win.endsWith('H')) return String(Number(win.replace('H', '')) * 60);

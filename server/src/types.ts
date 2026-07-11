@@ -96,6 +96,7 @@ export interface BorrowGuardConfig {
   repayOnly: boolean;
   maxLtvPct: number;
   maxAprPct: number;
+  maxBorrowNotionalUsd: number;
   requireLiveCatalog: boolean;
   allowedCollateralCoins: string[];
   blockedLoanCoins: string[];

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -21,6 +21,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useRefreshSignal } from '../lib/refresh';
+import { apiErrorMessage, fetchJson } from '../lib/http';
+import { createSettledPoll, type SettledPoll } from '../lib/polling';
 import { useStore } from '../store';
 import { timeAgo } from '../format';
 import './Health.css';
@@ -57,6 +59,7 @@ interface SystemInfo {
   timeSyncTs: number | null;
   usedWeight1m: number | null;
   usedWeightTs: number | null;
+  binanceCooldownUntil?: number | null;
   lastScannerTickTs: number | null;
   lastOrdersSyncTs: number | null;
   dbOk: boolean;
@@ -210,6 +213,8 @@ export function SystemHealth() {
   const [browserLatencyMs, setBrowserLatencyMs] = useState<number | null>(null);
   const [filter, setFilter] = useState<HealthFilter>('all');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const systemPollRef = useRef<SettledPoll | null>(null);
   const [profiles, setProfiles] = useState<{
     running: boolean;
     total: number;
@@ -222,54 +227,52 @@ export function SystemHealth() {
     suspect: { base: string; reason: string }[];
   } | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const started = performance.now();
-    try {
-      const response = await fetch('/api/system', { cache: 'no-store' });
-      setBrowserLatencyMs(Math.round(performance.now() - started));
-      if (!response.ok) throw new Error('HTTP ' + String(response.status));
-      setInfo((await response.json()) as SystemInfo);
-      setLoadError(null);
-      setReadTs(Date.now());
-    } catch (error) {
-      setBrowserLatencyMs(Math.round(performance.now() - started));
-      setLoadError(error instanceof Error ? error.message : 'Failed to read system state');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const load = useCallback(() => systemPollRef.current?.refresh(), []);
 
   useEffect(() => {
-    void load();
-    const timer = window.setInterval(
-      () => void load(),
-      Math.max(0.5, prefs.dataCadence?.health ?? 10) * 1_000,
-    );
-    return () => window.clearInterval(timer);
-  }, [load, prefs.dataCadence?.health]);
+    let started = performance.now();
+    const poll = createSettledPoll<SystemInfo>({
+      intervalMs: Math.max(0.5, prefs.dataCadence?.health ?? 10) * 1_000,
+      request: (signal) => {
+        started = performance.now();
+        setLoading(true);
+        return fetchJson('/api/system', { cache: 'no-store', signal });
+      },
+      onSuccess: (next) => {
+        setBrowserLatencyMs(Math.round(performance.now() - started));
+        setInfo(next);
+        setLoadError(null);
+        setReadTs(Date.now());
+        setLoading(false);
+      },
+      onError: (error) => {
+        setBrowserLatencyMs(Math.round(performance.now() - started));
+        setLoadError(apiErrorMessage(error, 'Failed to read system state'));
+        setLoading(false);
+      },
+    });
+    systemPollRef.current = poll;
+    poll.start();
+    return () => {
+      if (systemPollRef.current === poll) systemPollRef.current = null;
+      poll.stop();
+    };
+  }, [prefs.dataCadence?.health]);
 
   useRefreshSignal(() => void load());
 
   useEffect(() => {
-    let alive = true;
-    const loadProfiles = () => {
-      void fetch('/api/token/profiles/status', { cache: 'no-store' })
-        .then((response) => (response.ok ? response.json() : null))
-        .then((payload) => {
-          if (alive && payload) setProfiles(payload);
-        })
-        .catch(() => undefined);
-    };
-    loadProfiles();
-    const timer = window.setInterval(
-      loadProfiles,
-      Math.max(0.5, prefs.dataCadence?.health ?? 10) * 1_000,
-    );
-    return () => {
-      alive = false;
-      window.clearInterval(timer);
-    };
+    const poll = createSettledPoll<NonNullable<typeof profiles>>({
+      intervalMs: Math.max(0.5, prefs.dataCadence?.health ?? 10) * 1_000,
+      request: (signal) => fetchJson('/api/token/profiles/status', { cache: 'no-store', signal }),
+      onSuccess: (payload) => {
+        setProfiles(payload);
+        setProfileError(null);
+      },
+      onError: (error) => setProfileError(apiErrorMessage(error, 'Token profile status unavailable')),
+    });
+    poll.start();
+    return poll.stop;
   }, [prefs.dataCadence?.health]);
 
   const checks = useMemo<HealthCheck[]>(() => {
@@ -308,7 +311,9 @@ export function SystemHealth() {
       ? 'not_configured'
       : ageState(info.lastOrdersSyncTs, 90_000, 5 * 60_000, 'degraded');
 
-    const profileState: HealthState = !profiles || profiles.total <= 0
+    const profileState: HealthState = profileError
+      ? 'broken'
+      : !profiles || profiles.total <= 0
       ? 'not_configured'
       : profiles.running
         ? 'degraded'
@@ -316,7 +321,7 @@ export function SystemHealth() {
           ? 'healthy'
           : 'degraded';
 
-    return [
+    const currentChecks: HealthCheck[] = [
       {
         id: 'browser-server',
         group: 'Path',
@@ -414,7 +419,9 @@ export function SystemHealth() {
         source: 'Request Weight',
         measurement: 'X-MBX-USED-WEIGHT-1M header snapshot',
         value: info.usedWeight1m === null ? 'Not Exposed' : String(info.usedWeight1m),
-        detail: info.usedWeightTs
+        detail: info.binanceCooldownUntil && info.binanceCooldownUntil > Date.now()
+          ? `Exchange cooldown active for ${Math.max(1, Math.ceil((info.binanceCooldownUntil - Date.now()) / 1_000))}s.`
+          : info.usedWeightTs
           ? 'Last observed ' + fmtAge(info.usedWeightTs) + '. The exchange limit is not exposed here.'
           : 'No signed Binance call has returned a request-weight header.',
         state: weightState(info.usedWeight1m),
@@ -450,7 +457,7 @@ export function SystemHealth() {
         group: 'Account',
         source: 'Open-Order Cache',
         measurement: 'Latest signed open-orders sync',
-        value: info.lastOrdersSyncTs ? fmtAge(info.lastOrdersSyncTs) : 'Not Configured',
+        value: info.lastOrdersSyncTs ? fmtAge(info.lastOrdersSyncTs) : binance.keysPresent ? 'Never Synced' : 'Not Configured',
         detail: binance.keysPresent ? 'Open-order truth is refreshed by signed account polling.' : 'Order sync is unavailable without server-side keys.',
         state: orderSyncState,
         fix: 'Confirm open-order polling completes and the resulting account actions remain ledgered.',
@@ -466,7 +473,9 @@ export function SystemHealth() {
           : profiles.running
             ? String(profiles.done) + ' / ' + String(profiles.total)
             : String(profiles.ok + profiles.na) + ' / ' + String(profiles.total) + ' Ready',
-        detail: !profiles || profiles.total <= 0
+        detail: profileError
+          ? profileError
+          : !profiles || profiles.total <= 0
           ? 'The token-profile warmer has not reported a tracked universe yet.'
           : profiles.running
             ? 'Warming ' + (profiles.current ?? 'next asset') + ' · ' + String(profiles.ok) + ' verified.'
@@ -487,7 +496,13 @@ export function SystemHealth() {
         icon: Cpu,
       },
     ];
-  }, [browserLatencyMs, connected, info, loadError, profiles, state?.binance, state?.scanner.lastTickTs]);
+    if (!loadError) return currentChecks;
+    return currentChecks.map((check) => check.state === 'healthy' ? {
+      ...check,
+      state: 'degraded' as HealthState,
+      detail: `Latest system refresh failed; retained evidence may be stale. ${check.detail}`,
+    } : check);
+  }, [browserLatencyMs, connected, info, loadError, profileError, profiles, state?.binance, state?.scanner.lastTickTs]);
 
   const sortedChecks = useMemo(() => [...checks].sort((left, right) => {
     const rank = STATE_RANK[right.state] - STATE_RANK[left.state];

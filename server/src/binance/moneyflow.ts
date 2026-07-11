@@ -8,6 +8,10 @@
 
 const API = 'https://api.binance.com';
 const MAX_CALLS = 60; // 60k aggTrades ceiling per refresh
+const WALK_TIMEOUT_MS = 20_000;
+const MAX_PAGE_BYTES = 2 * 1024 * 1024;
+const MAX_CACHE_ENTRIES = 512;
+const NEGATIVE_CACHE_MS = 5_000;
 
 export interface MoneyFlowBucket {
   buy: number;
@@ -45,69 +49,177 @@ interface AggTrade {
 }
 
 const cache = new Map<string, { fetchedAt: number; data: MoneyFlow }>();
+const inFlight = new Map<string, Promise<MoneyFlow | null>>();
+const failures = new Map<string, number>();
 const CACHE_MS = 45_000;
 
+function canonicalSymbol(value: string): string | null {
+  const symbol = value.trim().toUpperCase();
+  return /^[A-Z0-9]{1,20}$/.test(symbol) ? symbol : null;
+}
+
+function boundedSet<K, V>(map: Map<K, V>, key: K, value: V, max = MAX_CACHE_ENTRIES): void {
+  if (!map.has(key) && map.size >= max) {
+    const oldest = map.keys().next().value as K | undefined;
+    if (oldest !== undefined) map.delete(oldest);
+  }
+  map.set(key, value);
+}
+
+async function readAggTrades(res: Response): Promise<AggTrade[]> {
+  const contentType = (res.headers.get('content-type') ?? '').toLowerCase();
+  if (!contentType.includes('application/json') && !contentType.includes('+json')) {
+    await res.body?.cancel().catch(() => undefined);
+    throw new Error('money flow unavailable');
+  }
+  const advertised = Number(res.headers.get('content-length'));
+  if (Number.isFinite(advertised) && advertised > MAX_PAGE_BYTES) {
+    await res.body?.cancel().catch(() => undefined);
+    throw new Error('money flow unavailable');
+  }
+  if (!res.body) throw new Error('money flow unavailable');
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > MAX_PAGE_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        throw new Error('money flow unavailable');
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  try {
+    const parsed = JSON.parse(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8')) as unknown;
+    if (!Array.isArray(parsed)) throw new Error('invalid');
+    return parsed.slice(0, 1_000) as AggTrade[];
+  } catch {
+    throw new Error('money flow unavailable');
+  }
+}
+
+async function fetchAggTrades(symbol: string, endTime: number, signal: AbortSignal): Promise<AggTrade[]> {
+  try {
+    const url = new URL('/api/v3/aggTrades', API);
+    url.searchParams.set('symbol', symbol);
+    url.searchParams.set('endTime', String(Math.trunc(endTime)));
+    url.searchParams.set('limit', '1000');
+    const res = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      redirect: 'error',
+      signal,
+    });
+    if (!res.ok) {
+      await res.body?.cancel().catch(() => undefined);
+      throw new Error('money flow unavailable');
+    }
+    return await readAggTrades(res);
+  } catch {
+    throw new Error('money flow unavailable');
+  }
+}
+
 export async function fetchMoneyFlow(symbol: string, window: string): Promise<MoneyFlow | null> {
+  const safeSymbol = canonicalSymbol(symbol);
   const windowMs = FLOW_WINDOWS[window];
-  if (!windowMs) return null;
-  const key = `${symbol}:${window}`;
+  if (!safeSymbol || !windowMs) return null;
+  const key = `${safeSymbol}:${window}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.fetchedAt < CACHE_MS) return hit.data;
-
-  const now = Date.now();
-  const start = now - windowMs;
-  const flow: MoneyFlow = {
-    symbol,
-    window,
-    large: { buy: 0, sell: 0 },
-    medium: { buy: 0, sell: 0 },
-    small: { buy: 0, sell: 0 },
-    totalBuy: 0,
-    totalSell: 0,
-    inflow: 0,
-    trades: 0,
-    coveredMs: 0,
-    windowMs,
-    sampled: false,
-    fetchedAt: now,
-  };
-
-  let cursorEnd = now;
-  let oldestSeen = now;
-  let calls = 0;
-  while (cursorEnd > start && calls < MAX_CALLS) {
-    calls++;
-    const res = await fetch(`${API}/api/v3/aggTrades?symbol=${encodeURIComponent(symbol)}&endTime=${cursorEnd}&limit=1000`);
-    if (!res.ok) break;
-    const rows = (await res.json()) as AggTrade[];
-    if (!rows.length) break;
-    for (const tr of rows) {
-      if (tr.T < start) continue;
-      const price = Number(tr.p);
-      const qty = Number(tr.q);
-      const quote = price * qty;
-      const bucket = quote >= 100_000 ? flow.large : quote >= 10_000 ? flow.medium : flow.small;
-      if (tr.m) {
-        bucket.sell += qty;
-        flow.totalSell += qty;
-      } else {
-        bucket.buy += qty;
-        flow.totalBuy += qty;
-      }
-      flow.trades++;
-    }
-    oldestSeen = Math.min(oldestSeen, rows[0].T);
-    if (rows[0].T <= start) break;
-    if (rows.length < 1000) {
-      oldestSeen = Math.min(oldestSeen, start);
-      break;
-    }
-    cursorEnd = rows[0].T - 1;
+  if ((failures.get(key) ?? 0) > Date.now()) {
+    if (hit) return hit.data;
+    throw new Error('money flow unavailable');
   }
+  failures.delete(key);
+  const existing = inFlight.get(key);
+  if (existing) return existing;
 
-  flow.coveredMs = now - Math.max(oldestSeen, start);
-  flow.sampled = oldestSeen > start + 1_000;
-  flow.inflow = flow.totalBuy - flow.totalSell;
-  cache.set(key, { fetchedAt: now, data: flow });
-  return flow;
+  const work = (async (): Promise<MoneyFlow | null> => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), WALK_TIMEOUT_MS);
+    try {
+      const now = Date.now();
+      const start = now - windowMs;
+      const flow: MoneyFlow = {
+        symbol: safeSymbol,
+        window,
+        large: { buy: 0, sell: 0 },
+        medium: { buy: 0, sell: 0 },
+        small: { buy: 0, sell: 0 },
+        totalBuy: 0,
+        totalSell: 0,
+        inflow: 0,
+        trades: 0,
+        coveredMs: 0,
+        windowMs,
+        sampled: false,
+        fetchedAt: now,
+      };
+
+      let cursorEnd = now;
+      let oldestSeen = now;
+      let calls = 0;
+      while (cursorEnd > start && calls < MAX_CALLS) {
+        calls++;
+        const rows = await fetchAggTrades(safeSymbol, cursorEnd, ctrl.signal);
+        if (!rows.length) break;
+        for (const tr of rows) {
+          if (!tr || !Number.isFinite(tr.T) || tr.T < start || typeof tr.m !== 'boolean') continue;
+          const price = Number(tr.p);
+          const qty = Number(tr.q);
+          if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(qty) || qty <= 0) continue;
+          const quote = price * qty;
+          if (!Number.isFinite(quote)) continue;
+          const bucket = quote >= 100_000 ? flow.large : quote >= 10_000 ? flow.medium : flow.small;
+          const nextBucket = (tr.m ? bucket.sell : bucket.buy) + qty;
+          const nextTotal = (tr.m ? flow.totalSell : flow.totalBuy) + qty;
+          if (!Number.isFinite(nextBucket) || !Number.isFinite(nextTotal)) continue;
+          if (tr.m) {
+            bucket.sell = nextBucket;
+            flow.totalSell = nextTotal;
+          } else {
+            bucket.buy = nextBucket;
+            flow.totalBuy = nextTotal;
+          }
+          flow.trades++;
+        }
+        const firstTs = Number(rows[0]?.T);
+        if (!Number.isFinite(firstTs) || firstTs <= 0 || firstTs > cursorEnd) throw new Error('money flow unavailable');
+        oldestSeen = Math.min(oldestSeen, firstTs);
+        if (firstTs <= start) break;
+        if (rows.length < 1000) {
+          oldestSeen = Math.min(oldestSeen, start);
+          break;
+        }
+        cursorEnd = firstTs - 1;
+      }
+
+      flow.coveredMs = now - Math.max(oldestSeen, start);
+      flow.sampled = oldestSeen > start + 1_000;
+      flow.inflow = flow.totalBuy - flow.totalSell;
+      if (!Number.isFinite(flow.inflow)) throw new Error('money flow unavailable');
+      boundedSet(cache, key, { fetchedAt: now, data: flow });
+      failures.delete(key);
+      return flow;
+    } catch {
+      boundedSet(failures, key, Date.now() + NEGATIVE_CACHE_MS, MAX_CACHE_ENTRIES);
+      if (hit) return hit.data;
+      throw new Error('money flow unavailable');
+    } finally {
+      clearTimeout(timer);
+    }
+  })();
+  boundedSet(inFlight, key, work, 256);
+  try {
+    return await work;
+  } finally {
+    inFlight.delete(key);
+  }
 }

@@ -18,10 +18,16 @@ export function computeBaseline(
   minuteSamples: { quoteVolume: number; tradeCount: number }[],
   cfg: VolumeConfig,
 ): BaselineStats {
-  const samples = minuteSamples.length;
+  const cleanSamples = minuteSamples
+    .filter((sample) => (
+      Number.isFinite(sample.quoteVolume) && sample.quoteVolume >= 0 && sample.quoteVolume <= 1_000_000_000_000_000_000 &&
+      Number.isFinite(sample.tradeCount) && sample.tradeCount >= 0 && sample.tradeCount <= 1_000_000
+    ))
+    .slice(-cfg.baselineWindowMinutes);
+  const samples = cleanSamples.length;
   const ready = samples >= cfg.baselineMinSamples;
-  const quoteSorted = minuteSamples.map((s) => s.quoteVolume).sort((a, b) => a - b);
-  const tradeSorted = minuteSamples.map((s) => s.tradeCount).sort((a, b) => a - b);
+  const quoteSorted = cleanSamples.map((s) => s.quoteVolume).sort((a, b) => a - b);
+  const tradeSorted = cleanSamples.map((s) => s.tradeCount).sort((a, b) => a - b);
   const quoteMed = median(quoteSorted);
   const tradeMed = median(tradeSorted);
   const quoteMad = median(quoteSorted.map((v) => Math.abs(v - quoteMed)).sort((a, b) => a - b));
@@ -47,8 +53,13 @@ export function volumeMultipleOf(
   windowSeconds: number,
   baseline: BaselineStats,
 ): number | null {
-  if (!baseline.ready) return null;
-  return windowQuoteVolume / (baseline.quotePerSecNorm * windowSeconds);
+  if (
+    !baseline.ready || !Number.isFinite(windowQuoteVolume) || windowQuoteVolume < 0 ||
+    !Number.isFinite(windowSeconds) || windowSeconds <= 0 ||
+    !Number.isFinite(baseline.quotePerSecNorm) || baseline.quotePerSecNorm <= 0
+  ) return null;
+  const multiple = windowQuoteVolume / (baseline.quotePerSecNorm * windowSeconds);
+  return Number.isFinite(multiple) ? multiple : null;
 }
 
 export function tradeCountMultipleOf(
@@ -56,6 +67,11 @@ export function tradeCountMultipleOf(
   windowSeconds: number,
   baseline: BaselineStats,
 ): number | null {
-  if (!baseline.ready) return null;
-  return windowTradeCount / (baseline.tradesPerSecNorm * windowSeconds);
+  if (
+    !baseline.ready || !Number.isFinite(windowTradeCount) || windowTradeCount < 0 ||
+    !Number.isFinite(windowSeconds) || windowSeconds <= 0 ||
+    !Number.isFinite(baseline.tradesPerSecNorm) || baseline.tradesPerSecNorm <= 0
+  ) return null;
+  const multiple = windowTradeCount / (baseline.tradesPerSecNorm * windowSeconds);
+  return Number.isFinite(multiple) ? multiple : null;
 }

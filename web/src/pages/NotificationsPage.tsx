@@ -13,7 +13,9 @@ import {
 } from '../components/Icons';
 import { PillSelect } from '../components/PillSelect';
 import { liveAge } from '../format';
+import { fetchJson } from '../lib/http';
 import { curateNotifications, groupNotifications, notificationEnabled, type CuratedNotification } from '../lib/notifications';
+import { createSettledPoll } from '../lib/polling';
 import { type NotificationRuleKey, type NotificationRules } from '../lib/prefs';
 import { TIME_ZONE_OPTIONS, addDays, dayKey, formatKey, resolvedZoneLabel } from '../lib/time';
 import { useStore } from '../store';
@@ -118,72 +120,103 @@ export function NotificationsPage() {
   const [routing, setRouting] = useState<RoutingSnapshot>(EMPTY_ROUTING);
   const [basisRuntime, setBasisRuntime] = useState<RuntimeSnapshot | null>(null);
   const [volumeRuntime, setVolumeRuntime] = useState<RuntimeSnapshot | null>(null);
+  const [routingFailed, setRoutingFailed] = useState(false);
+  const [runtimeFailed, setRuntimeFailed] = useState(false);
   const cursorRef = useRef(0);
 
   useEffect(() => setSelectedDay(dayKey(new Date(), zone)), [zone]);
   useEffect(() => setDraftRules(prefs.alerts), [prefs.alerts]);
 
   useEffect(() => {
-    let alive = true;
-    let timer: number | null = null;
     const merge = (incoming: LedgerEvent[]) => {
-      if (!incoming.length) return;
-      cursorRef.current = Math.max(cursorRef.current, ...incoming.map((item) => item.ts));
+      if (incoming.length) cursorRef.current = Math.max(cursorRef.current, ...incoming.map((item) => item.id));
+      const cutoff = Date.now() - 7 * 24 * 60 * 60_000;
       setEvents((current) => {
         const merged = new Map<number, LedgerEvent>();
-        current.forEach((item) => merged.set(item.id, item));
-        incoming.forEach((item) => merged.set(item.id, item));
-        return [...merged.values()].sort((a, b) => b.ts - a.ts || b.id - a.id);
+        current.filter((item) => item.ts >= cutoff).forEach((item) => merged.set(item.id, item));
+        incoming.filter((item) => item.ts >= cutoff).forEach((item) => merged.set(item.id, item));
+        return [...merged.values()].sort((a, b) => b.ts - a.ts || b.id - a.id).slice(0, 10_000);
       });
     };
-    const fetchKind = (since: number, kind: string) => {
-      return fetch(`/api/events?since=${since}&limit=2000&kind=${encodeURIComponent(kind)}`)
-        .then((response) => response.ok ? response.json() as Promise<LedgerEvent[]> : Promise.reject(new Error('notification archive unavailable')));
-    };
-    const loadArchive = async () => {
-      const since = Date.now() - 7 * 24 * 60 * 60_000;
-      const relevantKinds = ['risk_decision', 'error_event', 'user_stream', 'ws.closed', 'ws.open', 'connection_alert', 'connection_recovered', 'manual_action', 'order_intent', 'order_request', 'order_response', 'fill_event', 'loan_request', 'loan_response', 'binance.connected', 'engine.start', 'engine_started', 'basis.engine_started', 'config_change', 'aws_notification'];
-      const archive = (await Promise.all(relevantKinds.map((kind) => fetchKind(since, kind)))).flat();
-      if (!alive) return;
-      merge(archive);
-      setFetchedAt(Date.now());
-      setFailed(false);
-    };
-    const loadIncremental = () => {
-      if (!cursorRef.current) return;
-      fetch(`/api/events?since=${cursorRef.current + 1}&limit=500`)
-        .then((response) => response.ok ? response.json() as Promise<LedgerEvent[]> : Promise.reject(new Error('notification feed unavailable')))
-        .then((incoming) => {
-          if (!alive) return;
-          merge(incoming);
-          setFetchedAt(Date.now());
-          setFailed(false);
-        })
-        .catch(() => { if (alive) setFailed(true); });
-    };
-    void loadArchive()
-      .catch(() => { if (alive) setFailed(true); })
-      .finally(() => { if (alive) timer = window.setInterval(loadIncremental, 5_000); });
-    return () => { alive = false; if (timer !== null) window.clearInterval(timer); };
+    let bootstrapped = false;
+    let bootstrapHighWater = 0;
+    const relevantKinds = ['risk_decision', 'error_event', 'user_stream', 'ws.closed', 'ws.open', 'connection_alert', 'connection_recovered', 'manual_action', 'order_intent', 'order_request', 'order_response', 'order_outcome_unknown', 'cancel_outcome_unknown', 'fill_event', 'loan_request', 'loan_response', 'binance.connected', 'engine.start', 'engine_started', 'basis.engine_started', 'config_change', 'aws_notification'];
+    const poll = createSettledPoll<LedgerEvent[]>({
+      intervalMs: 5_000,
+      timeoutMs: 15_000,
+      request: async (signal) => {
+        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60_000;
+        if (!bootstrapped) {
+          const head = await fetchJson<LedgerEvent[]>('/api/events?limit=1', { signal });
+          bootstrapHighWater = head[0]?.id ?? 0;
+          const before = bootstrapHighWater > 0 ? `&beforeId=${bootstrapHighWater + 1}` : '';
+          return (await Promise.all(relevantKinds.map((kind) => fetchJson<LedgerEvent[]>(
+            `/api/events?since=${sevenDaysAgo}&limit=2000&kind=${encodeURIComponent(kind)}${before}`,
+            { signal },
+          )))).flat();
+        }
+        // Drain oldest-first pages after the last seen ledger id. This cannot
+        // skip alerts when more than one page arrives between polls.
+        const incoming: LedgerEvent[] = [];
+        let afterId = cursorRef.current;
+        for (let page = 0; page < 10; page += 1) {
+          const cursor = afterId > 0 ? `&afterId=${afterId}` : '';
+          const rows = await fetchJson<LedgerEvent[]>(`/api/events?since=${sevenDaysAgo}&limit=2000${cursor}`, { signal });
+          incoming.push(...rows);
+          if (rows.length < 2_000) break;
+          afterId = Math.max(afterId, ...rows.map((item) => item.id));
+        }
+        return incoming;
+      },
+      onSuccess: (incoming) => {
+        if (!bootstrapped) cursorRef.current = Math.max(cursorRef.current, bootstrapHighWater);
+        bootstrapped = true;
+        merge(incoming);
+        setFetchedAt(Date.now());
+        setFailed(false);
+      },
+      onError: () => setFailed(true),
+    });
+    poll.start();
+    return poll.stop;
   }, []);
 
   useEffect(() => {
-    let alive = true;
-    let timer: number | null = null;
-    const load = async () => {
-      const [routingResponse, basisResponse, volumeResponse] = await Promise.all([
-        fetch('/api/notification-routing', { cache: 'no-store' }),
-        fetch('/api/engine/basis', { cache: 'no-store' }),
-        fetch('/api/engine/volume', { cache: 'no-store' }),
-      ]);
-      if (!alive) return;
-      if (routingResponse.ok) setRouting(await routingResponse.json() as RoutingSnapshot);
-      if (basisResponse.ok) setBasisRuntime(await basisResponse.json() as RuntimeSnapshot);
-      if (volumeResponse.ok) setVolumeRuntime(await volumeResponse.json() as RuntimeSnapshot);
-    };
-    void load().catch(() => undefined);
-    timer = window.setInterval(() => void load().catch(() => undefined), 10_000);
-    return () => { alive = false; if (timer !== null) window.clearInterval(timer); };
+    const poll = createSettledPoll<[
+      PromiseSettledResult<RoutingSnapshot>,
+      PromiseSettledResult<RuntimeSnapshot>,
+      PromiseSettledResult<RuntimeSnapshot>,
+    ]>({
+      intervalMs: 10_000,
+      request: (signal) => Promise.allSettled([
+        fetchJson<RoutingSnapshot>('/api/notification-routing', { cache: 'no-store', signal }),
+        fetchJson<RuntimeSnapshot>('/api/engine/basis', { cache: 'no-store', signal }),
+        fetchJson<RuntimeSnapshot>('/api/engine/volume', { cache: 'no-store', signal }),
+      ]) as Promise<[
+        PromiseSettledResult<RoutingSnapshot>,
+        PromiseSettledResult<RuntimeSnapshot>,
+        PromiseSettledResult<RuntimeSnapshot>,
+      ]>,
+      onSuccess: ([routingResult, basisResult, volumeResult]) => {
+        if (routingResult.status === 'fulfilled') {
+          setRouting(routingResult.value);
+          setRoutingFailed(false);
+        } else setRoutingFailed(true);
+        if (basisResult.status === 'fulfilled') setBasisRuntime(basisResult.value);
+        else setBasisRuntime(null);
+        if (volumeResult.status === 'fulfilled') setVolumeRuntime(volumeResult.value);
+        else setVolumeRuntime(null);
+        setRuntimeFailed(basisResult.status === 'rejected' || volumeResult.status === 'rejected');
+      },
+      onError: () => {
+        setRoutingFailed(true);
+        setRuntimeFailed(true);
+        setBasisRuntime(null);
+        setVolumeRuntime(null);
+      },
+    });
+    poll.start();
+    return poll.stop;
   }, []);
 
   const curatedRaw = useMemo(() => curateNotifications(events), [events]);
@@ -225,7 +258,7 @@ export function NotificationsPage() {
   const botTone = config?.killSwitch ? 'bad' : config?.automationPaused ? 'warn' : 'good';
   const executionState = state?.mode === 'LIVE_ARMED' ? 'Live Armed' : state?.mode === 'MANUAL' ? 'Manual' : 'Halted';
   const enginesOnline = [basisRuntime?.status?.running, volumeRuntime?.status?.running].filter(Boolean).length;
-  const enginesKnown = basisRuntime !== null && volumeRuntime !== null;
+  const enginesKnown = !runtimeFailed && basisRuntime !== null && volumeRuntime !== null;
   const latestAction = enabled.find((item) => item.needsAction);
 
   const markRead = () => {
@@ -254,7 +287,7 @@ export function NotificationsPage() {
       <section className="notifx-command" aria-label="Notification Control Summary">
         <div><span>Bot</span><strong className={botTone}><i />{botState}</strong><em>{config?.killSwitch ? 'Emergency stop is active' : config?.automationPaused ? 'Automation is not sending' : 'Automation is processing'}</em></div>
         <div><span>Execution</span><strong>{executionState}</strong><em>{config?.liveTradingEnabled ? 'Risk-gated live routing' : 'No automatic live sends'}</em></div>
-        <div><span>Engines</span><strong>{enginesKnown ? `${enginesOnline} / 2 Online` : 'Checking'}</strong><em>{enginesOnline === 2 ? 'Basis and volume are online' : 'Runtime status is being verified'}</em></div>
+        <div><span>Engines</span><strong>{runtimeFailed ? 'Unavailable' : enginesKnown ? `${enginesOnline} / 2 Online` : 'Checking'}</strong><em>{!runtimeFailed && enginesOnline === 2 ? 'Basis and volume are online' : runtimeFailed ? 'Latest runtime checks failed' : 'Runtime status is being verified'}</em></div>
         <div className={latestAction ? 'attention' : ''}><span>Attention</span><strong>{latestAction ? latestAction.title : 'No Active Blocker'}</strong><em>{latestAction ? latestAction.subject : 'No curated intervention is open'}</em></div>
       </section>
 
@@ -291,7 +324,7 @@ export function NotificationsPage() {
             <div className="lix-segments newsx-category-tabs" role="group" aria-label="Alert Category">
               {FILTERS.map((option) => <button type="button" key={option.id} className={filter === option.id ? 'selected' : ''} onClick={() => setFilter(option.id)}>{option.label}</button>)}
             </div>
-            <button type="button" className="notifx-route-summary" onClick={() => document.querySelector('.notifx-routing')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><IconShield size={13} /><span>In-App Active</span><em>Manage Sources & Delivery</em></button>
+            <button type="button" className="notifx-route-summary" onClick={() => document.querySelector('.notifx-routing')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><IconShield size={13} /><span>{routingFailed ? 'Routing Unavailable' : 'In-App Active'}</span><em>Manage Sources & Delivery</em></button>
           </div>
         </section>
 
@@ -322,11 +355,11 @@ export function NotificationsPage() {
 
         <div className="notifx-routing-grid">
           <section className="notifx-connector-group">
-            <header><div><span>Sources</span><h3>Signals Into The Inbox</h3></div><em>{Object.values(routing.sources).filter((item) => item.available).length} Connected · 1 Optional</em></header>
+            <header><div><span>Sources</span><h3>Signals Into The Inbox</h3></div><em>{routingFailed ? 'Status Unavailable' : `${Object.values(routing.sources).filter((item) => item.available).length} Connected · 1 Optional`}</em></header>
             {(Object.entries(routing.sources) as [keyof RoutingSnapshot['sources'], ConnectorState][]).map(([key, connector]) => <article key={key}>
               <span className="notifx-connector-icon">{connectorIcon(key)}</span>
               <span><b>{connector.label}</b><em>{connector.detail}</em>{connector.endpoint && <small>{connector.endpoint}</small>}</span>
-              <strong className={connector.available ? 'ready' : 'waiting'}><i />{connector.available ? 'Connected' : 'Connector Required'}</strong>
+              <strong className={!routingFailed && connector.available ? 'ready' : 'waiting'}><i />{routingFailed ? 'Unavailable' : connector.available ? 'Connected' : 'Connector Required'}</strong>
             </article>)}
           </section>
 
@@ -335,7 +368,7 @@ export function NotificationsPage() {
             {(Object.entries(routing.destinations) as [keyof RoutingSnapshot['destinations'], ConnectorState][]).map(([key, connector]) => <article key={key}>
               <span className="notifx-connector-icon">{connectorIcon(key)}</span>
               <span><b>{connector.label}</b><em>{connector.detail}</em></span>
-              <strong className={connector.available ? 'ready' : 'waiting'}><i />{connector.available ? 'Active' : 'Not Connected'}</strong>
+              <strong className={!routingFailed && connector.available ? 'ready' : 'waiting'}><i />{routingFailed ? 'Unavailable' : connector.available ? 'Active' : 'Not Connected'}</strong>
             </article>)}
           </section>
         </div>

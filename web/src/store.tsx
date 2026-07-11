@@ -10,8 +10,11 @@ import {
 import { applyPrefs, getPrefs, onPrefs, resolvedTheme, setPref, CURRENCIES, type Prefs } from './lib/prefs';
 import { setBasisUnit, setDisplayUtc, setFxRate } from './format';
 import { fireRefresh } from './lib/refresh';
+import { ApiRequestError, fetchJson, type ApiFailure } from './lib/http';
+import { createSettledPoll } from './lib/polling';
 import type {
   AppConfig,
+  CancelResult,
   MarketRow,
   PreviewResult,
   SendResult,
@@ -62,6 +65,7 @@ interface Store {
   markets: MarketRow[];
   marketsUpdatedAt: number | null;
   marketsError: string | null;
+  mutationError: ApiFailure | null;
   connected: boolean;
   dataNonce: number;
   refresh: () => Promise<RefreshResult>;
@@ -74,16 +78,16 @@ interface Store {
   updatePref: <K extends keyof Prefs>(k: K, v: Prefs[K]) => void;
   paletteOpen: boolean;
   setPaletteOpen: (v: boolean) => void;
-  toggleWatch: (symbol: string) => Promise<void>;
+  toggleWatch: (symbol: string) => Promise<ApiFailure | null>;
   saveConfig: (patch: Partial<AppConfig>) => Promise<AppConfig | null>;
-  setKill: (on: boolean) => Promise<void>;
-  setLive: (on: boolean) => Promise<void>;
+  setKill: (on: boolean) => Promise<ApiFailure | null>;
+  setLive: (on: boolean) => Promise<ApiFailure | null>;
   preview: (intent: Record<string, unknown>) => Promise<PreviewResult | null>;
   testOrder: (intent: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
   sendLive: (intent: Record<string, unknown>, confirmSymbol: string) => Promise<SendResult>;
-  cancelOrder: (symbol: string, orderId: number) => Promise<{ ok: boolean; error?: string }>;
-  cancelAll: (symbol: string) => Promise<{ ok: boolean; error?: string }>;
-  approveProposal: (id: number) => Promise<void>;
+  cancelOrder: (symbol: string, orderId: number) => Promise<CancelResult>;
+  cancelAll: (symbol: string) => Promise<CancelResult>;
+  approveProposal: (id: number) => Promise<ApiFailure | null>;
   importFills: (symbol: string) => Promise<{ imported?: number; error?: string }>;
 }
 
@@ -120,16 +124,60 @@ export function subscribeLiveBook(symbol: string, fn: (m: LiveBookMsg) => void):
 }
 // ---------------------------------------------------------------------------
 
-async function post<T>(url: string, body: unknown): Promise<T | null> {
+type MutationResult<T> = { data: T; error: null } | { data: null; error: ApiFailure };
+
+function mutationFailure(error: unknown): ApiFailure {
+  if (error instanceof ApiRequestError) {
+    return { status: error.status, code: error.code, message: error.message, details: error.details };
+  }
+  return {
+    status: 0,
+    code: 'NETWORK_ERROR',
+    message: error instanceof Error && error.message ? error.message : 'Network request failed',
+  };
+}
+
+function acknowledgementFailure(message: string): ApiFailure {
+  return { status: 502, code: 'INVALID_ACKNOWLEDGEMENT', message };
+}
+
+function isConfigAcknowledgement(value: unknown): value is AppConfig {
+  if (!value || typeof value !== 'object') return false;
+  const config = value as Partial<AppConfig>;
+  return (
+    typeof config.killSwitch === 'boolean' &&
+    typeof config.liveTradingEnabled === 'boolean' &&
+    typeof config.fundsLocked === 'boolean' &&
+    typeof config.automationPaused === 'boolean' &&
+    Array.isArray(config.allowedSymbols) &&
+    Array.isArray(config.blockedSymbols) &&
+    Array.isArray(config.watchlist) &&
+    Boolean(config.controlModes && typeof config.controlModes === 'object') &&
+    Boolean(config.borrowGuard && typeof config.borrowGuard === 'object')
+  );
+}
+
+function isCancelAcknowledgement(value: unknown): value is CancelResult {
+  if (!value || typeof value !== 'object') return false;
+  const result = value as CancelResult;
+  return (
+    typeof result.ok === 'boolean' &&
+    (result.outcome === undefined || ['canceled', 'not_canceled', 'unknown'].includes(result.outcome)) &&
+    (result.reconciliationRequired === undefined || typeof result.reconciliationRequired === 'boolean') &&
+    (result.error === undefined || typeof result.error === 'string')
+  );
+}
+
+async function post<T>(url: string, body: unknown): Promise<MutationResult<T>> {
   try {
-    const res = await fetch(url, {
+    const data = await fetchJson<T>(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-    });
-    return (await res.json()) as T;
-  } catch {
-    return null;
+    }, 12_000);
+    return { data, error: null };
+  } catch (error) {
+    return { data: null, error: mutationFailure(error) };
   }
 }
 
@@ -138,6 +186,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [markets, setMarkets] = useState<MarketRow[]>([]);
   const [marketsUpdatedAt, setMarketsUpdatedAt] = useState<number | null>(null);
   const [marketsError, setMarketsError] = useState<string | null>(null);
+  const [mutationError, setMutationError] = useState<ApiFailure | null>(null);
   const [connected, setConnected] = useState(false);
   const [prefs, setPrefs] = useState<Prefs>(() => {
     applyPrefs();
@@ -169,24 +218,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       bumpFx((n) => n + 1);
       return;
     }
-    let alive = true;
-    const load = () => fetch('/api/fx')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { rates?: Record<string, number> } | null) => {
-        if (!alive || !d?.rates) return;
+    const poll = createSettledPoll<{ rates?: Record<string, number> }>({
+      intervalMs: Math.max(0.5, prefs.dataCadence?.fx ?? 300) * 1_000,
+      request: (signal) => fetchJson('/api/fx', { signal }),
+      onSuccess: (d) => {
+        if (!d?.rates) return;
         const rate = d.rates[cur];
         if (rate) {
           setFxRate(rate, sym);
           bumpFx((n) => n + 1);
         }
-      })
-      .catch(() => undefined);
-    void load();
-    const t = window.setInterval(load, Math.max(0.5, prefs.dataCadence?.fx ?? 300) * 1000);
-    return () => {
-      alive = false;
-      window.clearInterval(t);
-    };
+      },
+    });
+    poll.start();
+    return poll.stop;
   }, [prefs.currency, prefs.dataCadence?.fx]);
 
   useEffect(() => onPrefs((p) => {
@@ -212,25 +257,52 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    void fetch('/api/state')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((s) => s && setState(s as ServerState))
+    void fetchJson<ServerState>('/api/state')
+      .then((s) => setState(s))
       .catch(() => undefined);
 
     let closed = false;
-    let retry: number | undefined;
+    let retry: number | null = null;
     let generation = 0;
+    const clearRetry = () => {
+      if (retry !== null) window.clearTimeout(retry);
+      retry = null;
+    };
+    const closeCurrent = () => {
+      const previous = wsRef.current;
+      wsRef.current = null;
+      if (liveWs === previous) liveWs = null;
+      if (!previous) return;
+      previous.onopen = null;
+      previous.onmessage = null;
+      previous.onclose = null;
+      previous.onerror = null;
+      if (previous.readyState === WebSocket.CONNECTING || previous.readyState === WebSocket.OPEN) previous.close();
+    };
+    const scheduleConnect = (delay: number) => {
+      clearRetry();
+      if (closed) return;
+      retry = window.setTimeout(() => {
+        retry = null;
+        connect();
+      }, delay);
+    };
     function connect() {
+      if (closed) return;
+      clearRetry();
+      closeCurrent();
       const socketGeneration = ++generation;
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       const ws = new WebSocket(`${proto}://${location.host}/ws`);
       wsRef.current = ws;
       liveWs = ws;
       ws.onopen = () => {
+        if (closed || socketGeneration !== generation || wsRef.current !== ws) return;
         setConnected(true);
         sendLiveSub(); // re-attach any live book subscription after reconnect
       };
       ws.onmessage = (msg) => {
+        if (closed || socketGeneration !== generation || wsRef.current !== ws) return;
         try {
           const data = JSON.parse(msg.data as string) as { type: string; payload: unknown };
           if (data.type === 'state') setState(data.payload as ServerState);
@@ -242,28 +314,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       };
       ws.onclose = () => {
-        if (socketGeneration !== generation) return;
+        if (closed || socketGeneration !== generation || wsRef.current !== ws) return;
+        wsRef.current = null;
+        if (liveWs === ws) liveWs = null;
         setConnected(false);
-        if (!closed) retry = window.setTimeout(connect, 3000);
+        scheduleConnect(3_000);
       };
-      ws.onerror = () => ws.close();
+      ws.onerror = () => {
+        if (socketGeneration === generation && wsRef.current === ws) ws.close();
+      };
     }
     reconnectRef.current = () => {
-      if (retry) window.clearTimeout(retry);
       generation += 1;
-      const previous = wsRef.current;
-      wsRef.current = null;
-      if (previous && previous.readyState !== WebSocket.CLOSED) previous.close();
+      clearRetry();
+      closeCurrent();
       setConnected(false);
-      window.setTimeout(connect, 80);
+      scheduleConnect(80);
     };
     connect();
 
     return () => {
       closed = true;
-      if (retry) clearTimeout(retry);
+      generation += 1;
+      clearRetry();
       reconnectRef.current = null;
-      wsRef.current?.close();
+      closeCurrent();
+      setConnected(false);
     };
   }, []);
 
@@ -271,20 +347,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // the legacy market value; `dataCadence.market` is the new source map.
   useEffect(() => {
     const marketSec = prefs.dataCadence?.market ?? prefs.refreshSec;
-    const load = () =>
-      fetch('/api/markets')
-        .then((r) => (r.ok ? r.json() : null))
-        .then((m) => {
-          if (!m) return;
-          const payload = m as { updatedAt?: number; rows: MarketRow[] };
+    const poll = createSettledPoll<{ updatedAt?: number; rows: MarketRow[] }>({
+      intervalMs: Math.max(0.5, marketSec) * 1_000,
+      request: (signal) => fetchJson('/api/markets', { signal }),
+      onSuccess: (payload) => {
+          if (!Array.isArray(payload.rows)) throw new Error('Invalid market response');
           setMarkets(payload.rows);
           setMarketsUpdatedAt(payload.updatedAt ?? Date.now());
           setMarketsError(null);
-        })
-        .catch(() => setMarketsError('market refresh failed'));
-    void load();
-    const t = setInterval(load, Math.max(0.5, marketSec) * 1000);
-    return () => clearInterval(t);
+      },
+      onError: () => setMarketsError('market refresh failed'),
+    });
+    poll.start();
+    return poll.stop;
   }, [prefs.refreshSec, prefs.dataCadence?.market]);
 
   const openDetail = useCallback((symbol: string) => {
@@ -304,9 +379,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const saveConfig = useCallback(async (patch: Partial<AppConfig>) => {
-    const next = await post<AppConfig>('/api/config', patch);
-    if (next) setState((s) => (s ? { ...s, config: next, mode: next.killSwitch ? 'HALTED' : next.liveTradingEnabled ? 'LIVE_ARMED' : 'MANUAL' } : s));
-    return next;
+    const result = await post<AppConfig>('/api/config', patch);
+    const config = result.data && isConfigAcknowledgement(result.data) ? result.data : null;
+    const error = result.error ?? (config ? null : acknowledgementFailure('Configuration acknowledgement was malformed.'));
+    setMutationError(error);
+    if (config) setState((s) => (s ? { ...s, config, mode: config.killSwitch ? 'HALTED' : config.liveTradingEnabled ? 'LIVE_ARMED' : 'MANUAL' } : s));
+    return config;
   }, []);
 
   // In-place reset for the bottom Connection Control: rebuild the browser
@@ -316,22 +394,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const issues: string[] = [];
     let health: RefreshResult | null = null;
     try {
-      health = await post<RefreshResult>('/api/refresh', { target: 'all' });
-      if (!health) issues.push('Server refresh request failed');
+      const result = await post<RefreshResult>('/api/refresh', { target: 'all' });
+      health = result.data;
+      setMutationError(result.error);
+      if (!health) issues.push(result.error?.message ?? 'Server refresh request failed');
     } catch {
       issues.push('Server refresh request failed');
     }
     try {
-      const s = await fetch('/api/state').then((r) => (r.ok ? r.json() : null));
-      if (s) setState(s as ServerState);
-      else issues.push('State snapshot unavailable');
+      const s = await fetchJson<ServerState>('/api/state');
+      setState(s);
     } catch {
       issues.push('State snapshot failed');
     }
     try {
-      const m = await fetch('/api/markets').then((r) => (r.ok ? r.json() : null));
-      if (m) {
-        const payload = m as { updatedAt?: number; rows: MarketRow[] };
+      const payload = await fetchJson<{ updatedAt?: number; rows: MarketRow[] }>('/api/markets');
+      if (Array.isArray(payload.rows)) {
         setMarkets(payload.rows);
         setMarketsUpdatedAt(payload.updatedAt ?? Date.now());
         setMarketsError(null);
@@ -360,6 +438,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     markets,
     marketsUpdatedAt,
     marketsError,
+    mutationError,
     connected,
     dataNonce,
     refresh,
@@ -384,65 +463,101 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       async (symbol: string) => {
         const cur = state?.config.watchlist ?? [];
         const next = cur.includes(symbol) ? cur.filter((s) => s !== symbol) : [...cur, symbol];
-        await saveConfig({ watchlist: next });
+        const saved = await saveConfig({ watchlist: next });
+        return saved ? null : acknowledgementFailure('The watchlist change was not acknowledged.');
       },
       [state, saveConfig]
     ),
     saveConfig,
     setKill: useCallback(async (on) => {
-      const next = await post<{ killSwitch: boolean }>('/api/kill', { on });
-      if (next) setState((s) => (s ? { ...s, config: { ...s.config, killSwitch: next.killSwitch }, mode: next.killSwitch ? 'HALTED' : s.config.liveTradingEnabled ? 'LIVE_ARMED' : 'MANUAL' } : s));
+      const result = await post<{ killSwitch: boolean }>('/api/kill', { on });
+      const error = result.error ?? (result.data?.killSwitch === on ? null : acknowledgementFailure('Kill-switch acknowledgement did not match the requested state.'));
+      setMutationError(error);
+      if (!error && result.data) setState((s) => (s ? { ...s, config: { ...s.config, killSwitch: result.data.killSwitch }, mode: result.data.killSwitch ? 'HALTED' : s.config.liveTradingEnabled ? 'LIVE_ARMED' : 'MANUAL' } : s));
+      return error;
     }, []),
     setLive: useCallback(async (on) => {
-      const next = await post<{ liveTradingEnabled: boolean }>('/api/live', { on });
-      if (next) setState((s) => (s ? {
+      const result = await post<{ liveTradingEnabled: boolean }>('/api/live', { on });
+      const error = result.error ?? (result.data?.liveTradingEnabled === on ? null : acknowledgementFailure('Live-control acknowledgement did not match the requested state.'));
+      setMutationError(error);
+      if (!error && result.data) setState((s) => (s ? {
         ...s,
         config: {
           ...s.config,
-          liveTradingEnabled: next.liveTradingEnabled,
-          controlModes: { ...s.config.controlModes, liveOrders: next.liveTradingEnabled ? 'allowed' : 'paused' },
+          liveTradingEnabled: result.data.liveTradingEnabled,
+          controlModes: { ...s.config.controlModes, liveOrders: result.data.liveTradingEnabled ? 'allowed' : 'paused' },
         },
-        mode: s.config.killSwitch ? 'HALTED' : next.liveTradingEnabled ? 'LIVE_ARMED' : 'MANUAL',
+        mode: s.config.killSwitch ? 'HALTED' : result.data.liveTradingEnabled ? 'LIVE_ARMED' : 'MANUAL',
       } : s));
+      return error;
     }, []),
-    preview: useCallback((intent) => post<PreviewResult>('/api/trade/preview', intent), []),
+    preview: useCallback(async (intent) => {
+      const result = await post<PreviewResult>('/api/trade/preview', intent);
+      setMutationError(result.error);
+      return result.data;
+    }, []),
     testOrder: useCallback(
-      async (intent) =>
-        (await post<{ ok: boolean; error?: string }>('/api/trade/test', intent)) ?? { ok: false, error: 'network error' },
+      async (intent) => {
+        const result = await post<{ ok: boolean; error?: string }>('/api/trade/test', intent);
+        setMutationError(result.error);
+        return result.data ?? { ok: false, error: result.error.message };
+      },
       []
     ),
     sendLive: useCallback(
-      async (intent, confirmSymbol) =>
-        (await post<SendResult>('/api/trade/send', { ...intent, confirmSymbol })) ?? { sent: false, error: 'network error' },
+      async (intent, confirmSymbol) => {
+        const result = await post<SendResult>('/api/trade/send', { ...intent, confirmSymbol });
+        setMutationError(result.error);
+        return result.data ?? { sent: false, error: result.error.message };
+      },
       []
     ),
     cancelOrder: useCallback(
-      async (symbol, orderId) =>
-        (await post<{ ok: boolean; error?: string }>('/api/orders/cancel', { symbol, orderId })) ?? {
+      async (symbol, orderId) => {
+        const result = await post<CancelResult>('/api/orders/cancel', { symbol, orderId });
+        const data = result.data && isCancelAcknowledgement(result.data) ? result.data : null;
+        const error = result.error ?? (data ? null : acknowledgementFailure('Cancel acknowledgement was malformed.'));
+        setMutationError(error);
+        return data ?? {
           ok: false,
-          error: 'network error',
-        },
+          outcome: 'unknown',
+          reconciliationRequired: true,
+          error: error?.message ?? 'Cancel acknowledgement was unavailable.',
+        };
+      },
       []
     ),
     cancelAll: useCallback(
-      async (symbol) =>
-        (await post<{ ok: boolean; error?: string }>('/api/orders/cancel-all', { symbol })) ?? {
+      async (symbol) => {
+        const result = await post<CancelResult>('/api/orders/cancel-all', { symbol });
+        const data = result.data && isCancelAcknowledgement(result.data) ? result.data : null;
+        const error = result.error ?? (data ? null : acknowledgementFailure('Cancel-all acknowledgement was malformed.'));
+        setMutationError(error);
+        return data ?? {
           ok: false,
-          error: 'network error',
-        },
+          outcome: 'unknown',
+          reconciliationRequired: true,
+          error: error?.message ?? 'Cancel-all acknowledgement was unavailable.',
+        };
+      },
       []
     ),
     approveProposal: useCallback(
       async (id) => {
         // approval is server-side; with execution removed the returned intent
         // is informational only — orders go through Binance itself
-        await post(`/api/proposals/${id}/approve`, {});
+        const result = await post(`/api/proposals/${id}/approve`, {});
+        setMutationError(result.error);
+        return result.error;
       },
       []
     ),
     importFills: useCallback(
-      async (symbol) =>
-        (await post<{ imported?: number; error?: string }>('/api/fills/import', { symbol })) ?? { error: 'network error' },
+      async (symbol) => {
+        const result = await post<{ imported?: number; error?: string }>('/api/fills/import', { symbol });
+        setMutationError(result.error);
+        return result.data ?? { error: result.error.message };
+      },
       []
     ),
   };

@@ -1,7 +1,7 @@
 import { fetchAllBookTickers } from '../binance/rest.js';
 import { BasisEngine } from '../engine/basis/engine.js';
 import { systemClock } from '../engine/v0/clock.js';
-import type { EngineEvent, EventSink } from '../engine/v0/types.js';
+import type { Decision, EngineEvent, EventSink } from '../engine/v0/types.js';
 import type { Ledger } from '../ledger.js';
 import type { AppConfig } from '../types.js';
 
@@ -14,6 +14,7 @@ interface MarketUniverseRow {
   perpMark: number | null;
   fundingRate: number | null;
   nextFundingTime: number | null;
+  markUpdatedAt?: number | null;
 }
 
 // The basis quality gate intentionally decays inside the 5s stale window.
@@ -30,6 +31,10 @@ function finite(value: unknown): value is number {
 function usableBook(book: { bidPrice: number; askPrice: number; bidQty: number; askQty: number } | undefined): boolean {
   return Boolean(
     book &&
+      finite(book.bidPrice) &&
+      finite(book.askPrice) &&
+      finite(book.bidQty) &&
+      finite(book.askQty) &&
       book.bidPrice > 0 &&
       book.askPrice > 0 &&
       book.askPrice >= book.bidPrice &&
@@ -46,23 +51,41 @@ function usableBook(book: { bidPrice: number; askPrice: number; bidQty: number; 
  */
 export class BasisRuntime {
   private readonly engine: BasisEngine;
+  private readonly fetchBookTickers: typeof fetchAllBookTickers;
   private eligibleSymbols: string[] = [];
   private running = false;
-  private bookBusy = false;
+  private generation = 0;
+  private starting: { generation: number; promise: Promise<void> } | null = null;
+  private bookBusyGeneration: number | null = null;
   private bookTimer: NodeJS.Timeout | null = null;
   private universeTimer: NodeJS.Timeout | null = null;
   private lastBookTs: number | null = null;
   private lastMarkTs: number | null = null;
   private lastError: string | null = null;
-  private eventLastLogged = new Map<string, number>();
+  private errorRevision = 0;
+  private universePolicyKey = '';
+  private lastErrorLogAttemptTs = 0;
+  private eventLastLogged = new Map<string, { ts: number; symbol: string | null }>();
 
   constructor(
     private readonly ledger: Ledger,
     private readonly getConfig: () => AppConfig,
     private readonly getUniverse: () => MarketUniverseRow[],
+    fetchBookTickers: typeof fetchAllBookTickers = fetchAllBookTickers,
   ) {
+    this.fetchBookTickers = fetchBookTickers;
     const config = getConfig();
-    const sink: EventSink = { emit: (event) => this.onEngineEvent(event) };
+    const sink: EventSink = {
+      emit: (event) => {
+        try {
+          this.onEngineEvent(event);
+        } catch (error) {
+          // Persistence is outside the deterministic engine. Never let a
+          // callback failure corrupt the tick, and never recursively log it.
+          this.noteError('basis-runtime.event-sink', error);
+        }
+      },
+    };
     this.engine = new BasisEngine(systemClock, sink, {
       feesPct: config.feesPct,
       minNetBasisPct: config.minNetBasisPct,
@@ -76,21 +99,32 @@ export class BasisRuntime {
   }
 
   async start(): Promise<void> {
-    if (this.running) return;
+    if (this.running) {
+      await (this.starting?.promise ?? Promise.resolve());
+      return;
+    }
+    const generation = ++this.generation;
     this.running = true;
+    this.lastBookTs = null;
+    this.lastMarkTs = null;
     this.engine.start();
-    this.refreshUniverse();
-    await this.refreshBooks();
-    this.bookTimer = setInterval(() => void this.refreshBooks(), BOOK_REFRESH_MS);
-    this.universeTimer = setInterval(() => this.refreshUniverse(), UNIVERSE_REFRESH_MS);
+    const promise = this.startGeneration(generation);
+    this.starting = { generation, promise };
+    try {
+      await promise;
+    } finally {
+      if (this.starting?.generation === generation) this.starting = null;
+    }
   }
 
   stop(): void {
+    ++this.generation;
     this.running = false;
     if (this.bookTimer) clearInterval(this.bookTimer);
     if (this.universeTimer) clearInterval(this.universeTimer);
     this.bookTimer = null;
     this.universeTimer = null;
+    this.eligibleSymbols = [];
     this.engine.stop();
   }
 
@@ -119,60 +153,138 @@ export class BasisRuntime {
 
     const signature = [event.kind, event.symbol ?? '', event.rejectCode ?? '', decisionKind ?? ''].join('|');
     const now = Date.now();
-    const previous = this.eventLastLogged.get(signature) ?? 0;
+    const previous = this.eventLastLogged.get(signature)?.ts ?? 0;
     if (now - previous < LEDGER_REPEAT_MS) return;
-    this.eventLastLogged.set(signature, now);
-    this.ledger.logEvent(`basis.${event.kind}`, event.symbol, {
-      strategy: event.strategy,
-      correlationId: event.correlationId,
-      rejectCode: event.rejectCode,
-      message: event.message,
-      ...event.payload,
-    });
-  }
-
-  private refreshUniverse(): void {
-    const floor = this.getConfig().minQuoteVolume24h;
-    const eligible = this.getUniverse().filter(
-      (row) => row.hasSpot && row.hasPerp && finite(row.quoteVolume24h) && row.quoteVolume24h >= floor,
-    );
-    const nextSymbols = eligible.map((row) => row.symbol).sort();
-    const next = new Set(nextSymbols);
-    for (const symbol of this.eligibleSymbols) {
-      if (!next.has(symbol)) this.engine.blockSymbol(symbol);
-    }
-    for (const symbol of nextSymbols) this.engine.unblockSymbol(symbol);
-    this.eligibleSymbols = nextSymbols;
-    this.engine.setUniverse(eligible.map((row) => ({
-      symbol: row.symbol,
-      base: row.base,
-      quote: 'USDT',
-      hasSpot: true,
-      hasPerp: true,
-      marginBorrowable: null,
-      minNotionalUsd: null,
-      tickSize: null,
-      stepSize: null,
-      quoteVolume24hUsd: row.quoteVolume24h,
-      eligible: true,
-      ineligibleReason: null,
-    })));
-  }
-
-  private async refreshBooks(): Promise<void> {
-    if (this.bookBusy || !this.eligibleSymbols.length) return;
-    this.bookBusy = true;
     try {
+      this.ledger.logEvent(`basis.${event.kind}`, event.symbol, {
+        ...event.payload,
+        strategy: event.strategy,
+        correlationId: event.correlationId,
+        rejectCode: event.rejectCode,
+        message: event.message,
+      });
+      this.eventLastLogged.set(signature, { ts: now, symbol: event.symbol });
+      this.pruneEventDedupe(now);
+    } catch (error) {
+      this.eventLastLogged.set(signature, { ts: now, symbol: event.symbol });
+      this.noteError('basis-runtime.ledger', error);
+    }
+  }
+
+  private async startGeneration(generation: number): Promise<void> {
+    this.refreshUniverse(generation);
+    await this.refreshBooks(generation);
+    if (!this.owns(generation)) return;
+    this.bookTimer = setInterval(() => void this.refreshBooks(generation), BOOK_REFRESH_MS);
+    this.universeTimer = setInterval(() => this.refreshUniverse(generation), UNIVERSE_REFRESH_MS);
+  }
+
+  private refreshUniverse(generation = this.generation): void {
+    if (!this.owns(generation)) return;
+    try {
+      const config = this.getConfig();
+      this.engine.updateConfig({
+        feesPct: config.feesPct,
+        minNetBasisPct: config.minNetBasisPct,
+        persistTicks: config.persistTicks,
+        minQuoteVolume24hUsd: config.minQuoteVolume24h,
+        spotTakerFeePct: config.feesPct / 3,
+        perpTakerFeePct: config.feesPct / 6,
+      });
+      this.engine.setKillSwitch(config.killSwitch);
+      const floor = config.minQuoteVolume24h;
+      const universe = this.getUniverse();
+      if (!Array.isArray(universe) || universe.length > this.engine.cfg.maxUniverseSize) {
+        throw new RangeError(`basis runtime universe exceeds ${this.engine.cfg.maxUniverseSize} rows`);
+      }
+      const eligible = universe.filter(
+        (row) => row.hasSpot && row.hasPerp && finite(row.quoteVolume24h) && row.quoteVolume24h >= floor,
+      );
+      this.engine.setUniverse(eligible.map((row) => ({
+        symbol: row.symbol,
+        base: row.base,
+        quote: 'USDT',
+        hasSpot: true,
+        hasPerp: true,
+        marginBorrowable: null,
+        minNotionalUsd: null,
+        tickSize: null,
+        stepSize: null,
+        quoteVolume24hUsd: row.quoteVolume24h,
+        eligible: true,
+        ineligibleReason: null,
+      })));
+      this.engine.replaceBlockedSymbols(Array.isArray(config.blockedSymbols) ? config.blockedSymbols : []);
+      this.eligibleSymbols = this.engine.market.universe().filter((meta) => meta.eligible).map((meta) => meta.symbol).sort();
+      this.universePolicyKey = this.policyKey(config);
+      if (this.eligibleSymbols.length === 0) {
+        this.lastBookTs = null;
+        this.lastMarkTs = null;
+      }
+      this.pruneEventDedupe(Date.now(), new Set(this.eligibleSymbols));
+    } catch (error) {
+      this.noteError('basis-runtime.universe', error);
+      this.engine.setKillSwitch(true);
+      this.eligibleSymbols = [];
+      this.lastBookTs = null;
+      this.lastMarkTs = null;
+      try {
+        this.engine.setUniverse([]);
+      } catch {
+        // An empty universe is valid; if this ever fails, preserve the first
+        // error and remain stopped from producing fresh proposals.
+      }
+      this.safeLogError('basis-runtime.universe');
+    }
+  }
+
+  private async refreshBooks(generation = this.generation): Promise<void> {
+    if (!this.owns(generation) || this.bookBusyGeneration === generation) return;
+    this.bookBusyGeneration = generation;
+    const errorRevision = this.errorRevision;
+    try {
+      let config = this.getConfig();
+      const configChanged = this.engine.updateConfig({
+        feesPct: config.feesPct,
+        minNetBasisPct: config.minNetBasisPct,
+        persistTicks: config.persistTicks,
+        minQuoteVolume24hUsd: config.minQuoteVolume24h,
+        spotTakerFeePct: config.feesPct / 3,
+        perpTakerFeePct: config.feesPct / 6,
+      });
+      if (configChanged || this.universePolicyKey !== this.policyKey(config)) this.refreshUniverse(generation);
+      // A process can start before MarketEngine has received its first public
+      // ticker payload. Recheck the universe on the short book cadence until
+      // at least one eligible pair exists instead of waiting 15 minutes.
+      if (this.owns(generation) && this.eligibleSymbols.length === 0) this.refreshUniverse(generation);
+      if (!this.owns(generation) || !this.eligibleSymbols.length) return;
       const [spotBooks, perpBooks] = await Promise.all([
-        fetchAllBookTickers('spot'),
-        fetchAllBookTickers('futures'),
+        this.fetchBookTickers('spot'),
+        this.fetchBookTickers('futures'),
       ]);
-      const source = new Map(this.getUniverse().map((row) => [row.symbol, row]));
+      if (!this.owns(generation)) return;
+      config = this.getConfig();
+      const changedDuringFetch = this.engine.updateConfig({
+        feesPct: config.feesPct,
+        minNetBasisPct: config.minNetBasisPct,
+        persistTicks: config.persistTicks,
+        minQuoteVolume24hUsd: config.minQuoteVolume24h,
+        spotTakerFeePct: config.feesPct / 3,
+        perpTakerFeePct: config.feesPct / 6,
+      });
+      if (changedDuringFetch || this.universePolicyKey !== this.policyKey(config)) this.refreshUniverse(generation);
+      if (!this.owns(generation) || !this.eligibleSymbols.length) return;
+      const universe = this.getUniverse();
+      if (!Array.isArray(universe) || universe.length > this.engine.cfg.maxUniverseSize) {
+        throw new RangeError(`basis runtime universe exceeds ${this.engine.cfg.maxUniverseSize} rows`);
+      }
+      const source = new Map(universe.map((row) => [row.symbol, row]));
       const receivedTs = Date.now();
       let booksSeen = 0;
       let marksSeen = 0;
+      const active = new Set(this.eligibleSymbols);
 
-      for (const symbol of this.eligibleSymbols) {
+      for (const symbol of active) {
         const spot = spotBooks.get(symbol);
         const perp = perpBooks.get(symbol);
         if (usableBook(spot)) {
@@ -195,45 +307,104 @@ export class BasisRuntime {
             ts: receivedTs,
           });
         }
-        if (usableBook(spot) && usableBook(perp)) booksSeen += 1;
+        if (this.engine.market.spotBook(symbol)?.ts === receivedTs && this.engine.market.perpBook(symbol)?.ts === receivedTs) {
+          booksSeen += 1;
+        }
 
         const row = source.get(symbol);
-        if (row && finite(row.perpMark) && row.perpMark > 0 && finite(row.fundingRate)) {
+        if (
+          row &&
+          finite(row.perpMark) &&
+          row.perpMark > 0 &&
+          finite(row.fundingRate) &&
+          Number.isSafeInteger(row.markUpdatedAt) &&
+          row.markUpdatedAt! > 0
+        ) {
+          const sourceTs = row.markUpdatedAt!;
           this.engine.onMarkFunding({
             symbol,
             markPrice: row.perpMark,
             fundingRate: row.fundingRate,
             nextFundingTs: finite(row.nextFundingTime) ? row.nextFundingTime : null,
-            ts: receivedTs,
+            ts: sourceTs,
           });
-          marksSeen += 1;
+          if (this.engine.market.markFunding(symbol)?.ts === sourceTs) {
+            marksSeen += 1;
+            this.lastMarkTs = Math.max(this.lastMarkTs ?? 0, sourceTs);
+          }
         }
       }
 
       if (booksSeen > 0) this.lastBookTs = receivedTs;
-      if (marksSeen > 0) this.lastMarkTs = receivedTs;
+      if (marksSeen === 0 && this.lastMarkTs !== null && receivedTs - this.lastMarkTs > this.engine.cfg.fundingStaleMs) {
+        this.lastMarkTs = null;
+      }
       // Tick in the same turn as ingestion so the feature numbers, named
       // decision, and evidence exposed by snapshot() are one coherent book.
-      this.engine.setKillSwitch(this.getConfig().killSwitch);
+      this.engine.setKillSwitch(config.killSwitch);
       this.engine.tick();
-      this.lastError = null;
+      if (this.errorRevision === errorRevision) this.lastError = null;
     } catch (error) {
-      this.lastError = error instanceof Error ? error.message : String(error);
-      this.ledger.logEvent('error_event', null, {
-        source: 'basis-runtime.book',
-        message: this.lastError,
-      });
+      if (this.owns(generation)) {
+        this.noteError('basis-runtime.book', error);
+        this.safeLogError('basis-runtime.book');
+      }
     } finally {
-      this.bookBusy = false;
+      if (this.bookBusyGeneration === generation) this.bookBusyGeneration = null;
+    }
+  }
+
+  private owns(generation: number): boolean {
+    return this.running && this.generation === generation;
+  }
+
+  private policyKey(config: AppConfig): string {
+    const blocked = Array.isArray(config.blockedSymbols)
+      ? config.blockedSymbols.slice(0, this.engine.cfg.maxUniverseSize).filter((symbol): symbol is string => typeof symbol === 'string').sort()
+      : [];
+    return JSON.stringify([config.minQuoteVolume24h, blocked]);
+  }
+
+  private noteError(source: string, error: unknown): void {
+    const message = (error instanceof Error ? error.message : String(error)).replace(/[\r\n\t]+/g, ' ').slice(0, 400);
+    this.lastError = `${source}: ${message || 'unknown error'}`;
+    this.errorRevision += 1;
+  }
+
+  private safeLogError(source: string): void {
+    const now = Date.now();
+    if (now - this.lastErrorLogAttemptTs < LEDGER_REPEAT_MS) return;
+    this.lastErrorLogAttemptTs = now;
+    try {
+      this.ledger.logEvent('error_event', null, { source, message: this.lastError });
+    } catch (error) {
+      // Do not recurse through the same failing persistence callback.
+      this.noteError('basis-runtime.ledger', error);
+    }
+  }
+
+  private pruneEventDedupe(now: number, symbols?: ReadonlySet<string>): void {
+    const maxEntries = Math.max(256, this.engine.cfg.maxUniverseSize * 8);
+    for (const [signature, entry] of this.eventLastLogged) {
+      if (now - entry.ts > LEDGER_REPEAT_MS * 2 || (symbols && entry.symbol && !symbols.has(entry.symbol))) {
+        this.eventLastLogged.delete(signature);
+      }
+    }
+    if (this.eventLastLogged.size <= maxEntries) return;
+    const oldest = [...this.eventLastLogged.entries()].sort((left, right) => left[1].ts - right[1].ts);
+    for (let index = 0; index < oldest.length - maxEntries; index += 1) {
+      this.eventLastLogged.delete(oldest[index][0]);
     }
   }
 
   snapshot(): Record<string, unknown> {
     const now = Date.now();
-    const decisions = this.engine.decisions(5_000);
-    const latestDecision = new Map<string, (typeof decisions)[number]>();
-    for (const decision of decisions) latestDecision.set(decision.symbol, decision);
-    const lifecycles = new Map(this.engine.lifecycle.all().map((row) => [row.symbol, row]));
+    const lifecycleRows = this.engine.lifecycle.all();
+    const latestDecision = new Map<string, Decision>();
+    for (const lifecycle of lifecycleRows) {
+      if (lifecycle.lastDecision) latestDecision.set(lifecycle.symbol, lifecycle.lastDecision);
+    }
+    const lifecycles = new Map(lifecycleRows.map((row) => [row.symbol, row]));
     const proposals = new Map(this.engine.openProposals().map((row) => [row.symbol, row]));
 
     const rows = this.engine.market.universe().filter((meta) => meta.eligible).map((meta) => {

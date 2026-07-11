@@ -137,7 +137,9 @@ export type InvalidationReason =
   | 'volume_normalized'
   | 'spread_blown_out'
   | 'move_exhausted'
-  | 'ttl_expired';
+  | 'ttl_expired'
+  | 'universe_removed'
+  | 'capacity_pruned';
 
 export interface InvalidationRule {
   /** 60s volume multiple at/below this ⇒ volume_normalized */

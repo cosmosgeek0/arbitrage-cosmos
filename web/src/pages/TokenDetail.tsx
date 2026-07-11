@@ -8,9 +8,11 @@ import { Copy, FileText, Globe2, Grid2X2, Search, Star as StarIcon, X } from 'lu
 import { useStore } from '../store';
 import { TokenIcon } from '../components/TokenIcon';
 import { PillSelect } from '../components/PillSelect';
-import { type TvCandle } from '../components/TradingViewChart';
+import { normalizeTvCandles, type TvCandle } from '../components/TradingViewChart';
 import { TradingViewWidget } from '../components/TradingViewWidget';
 import type { BasisRow as BasisEngineRow, BasisSnapshot as BasisEngineSnapshot } from '../lib/basisRuntime';
+import { apiErrorMessage, fetchJson } from '../lib/http';
+import { createSettledPoll } from '../lib/polling';
 import { IconClose, IconMaximize } from '../components/Icons';
 import { baseOf, countdown, fmtBasis, fmtFunding, fmtMoney, fmtPct, fmtPrice, timeAgo } from '../format';
 import { tokenName } from '../lib/tokenNames';
@@ -79,6 +81,15 @@ interface TokenProfile {
   fetchedAt: number;
 }
 
+function normalizeTimedRows<T extends { t: number }>(rows: readonly T[], valid: (row: T) => boolean): T[] {
+  const byTime = new Map<number, T>();
+  for (const row of rows) {
+    if (!Number.isFinite(row.t) || row.t <= 0 || !valid(row)) continue;
+    byTime.set(row.t, row);
+  }
+  return [...byTime.values()].sort((left, right) => left.t - right.t).slice(-5_000);
+}
+
 interface MoneyFlow {
   symbol: string;
   window: string;
@@ -116,6 +127,46 @@ interface TimedCache<T> { value: T; updatedAt: number }
 const tokenCandleCache = new Map<string, TimedCache<TvCandle[]>>();
 const moneyFlowCache = new Map<string, TimedCache<MoneyFlow>>();
 const positioningCache = new Map<string, TimedCache<FuturesTelemetry>>();
+
+function nonNegative(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function validMoneyFlow(payload: MoneyFlow, symbol: string): boolean {
+  const buckets = [payload.large, payload.medium, payload.small];
+  return (
+    payload.symbol === symbol &&
+    buckets.every((bucket) => nonNegative(bucket?.buy) && nonNegative(bucket?.sell)) &&
+    nonNegative(payload.totalBuy) &&
+    nonNegative(payload.totalSell) &&
+    Number.isFinite(payload.inflow) &&
+    Number.isSafeInteger(payload.trades) &&
+    payload.trades >= 0 &&
+    nonNegative(payload.coveredMs) &&
+    Number.isFinite(payload.windowMs) &&
+    payload.windowMs > 0
+  );
+}
+
+function validTelemetry(payload: FuturesTelemetry, symbol: string): boolean {
+  const ratios = [...payload.topAccountRatio, ...payload.topPositionRatio, ...payload.globalRatio];
+  return (
+    payload.symbol === symbol &&
+    Number.isFinite(payload.updatedAt) &&
+    payload.updatedAt > 0 &&
+    Array.isArray(payload.errors) &&
+    payload.errors.every((error) => typeof error === 'string') &&
+    ratios.every((row) => (
+      Number.isFinite(row.t) && row.t > 0 && nonNegative(row.ratio) &&
+      nonNegative(row.longPct) && row.longPct <= 100 &&
+      nonNegative(row.shortPct) && row.shortPct <= 100
+    )) &&
+    payload.takerFlow.every((row) => (
+      Number.isFinite(row.t) && row.t > 0 &&
+      nonNegative(row.buyVol) && nonNegative(row.sellVol) && nonNegative(row.ratio)
+    ))
+  );
+}
 
 function fmtCompact(v: number | null | undefined): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return '—';
@@ -282,26 +333,27 @@ function MoneyFlowCard({ symbol, base }: { symbol: string; base: string }) {
   const [hov, setHov] = useState<FlowKey | null>(null);
   const [hovBucket, setHovBucket] = useState<'Large' | 'Medium' | 'Small' | null>(null);
   const [mouse, setMouse] = useState<{ x: number; y: number } | null>(null);
+  const [flowError, setFlowError] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
-    let alive = true;
     const key = `${symbol}:${win}`;
     setFlow(moneyFlowCache.get(key)?.value ?? null);
-    const load = () => {
-      void fetch(`/api/token/moneyflow?symbol=${symbol}&window=${win}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => {
-          if (!d) return;
-          moneyFlowCache.set(key, { value: d as MoneyFlow, updatedAt: Date.now() });
-          if (alive) setFlow(d as MoneyFlow);
-        })
-        .catch(() => undefined);
-    };
-    load();
-    const t = setInterval(load, 60_000);
-    return () => { alive = false; clearInterval(t); };
+    setFlowError(null);
+    const poll = createSettledPoll<MoneyFlow>({
+      intervalMs: 60_000,
+      request: (signal) => fetchJson(`/api/token/moneyflow?symbol=${symbol}&window=${win}`, { signal }),
+      onSuccess: (next) => {
+        if (!validMoneyFlow(next, symbol)) throw new Error('Money-flow payload is invalid');
+        moneyFlowCache.set(key, { value: next, updatedAt: Date.now() });
+        setFlow(next);
+        setFlowError(null);
+      },
+      onError: (error) => setFlowError(apiErrorMessage(error, 'Money flow is unavailable')),
+    });
+    poll.start();
+    return poll.stop;
   }, [symbol, win]);
 
   // The Binance sweep: rAF-driven (CSS keyframes freeze at fractional zoom).
@@ -379,7 +431,7 @@ function MoneyFlowCard({ symbol, base }: { symbol: string; base: string }) {
         />
       </div>
       {!flow ? (
-        <div className="tdx-chart-empty small">Reading Trades…</div>
+        <div className="tdx-chart-empty small">{flowError ?? 'Reading Trades…'}</div>
       ) : total <= 0 ? (
         <p className="tdx-dimnote">No trades in the window.</p>
       ) : (
@@ -477,6 +529,7 @@ function MoneyFlowCard({ symbol, base }: { symbol: string; base: string }) {
           {flow.sampled && (
             <p className="tdx-updated">Most recent {Math.round((flow.coveredMs / flow.windowMs) * 100)}% of the window · {flow.trades.toLocaleString('en-US')} trades</p>
           )}
+          {flowError ? <p className="tdx-updated" role="status">Refresh unavailable · showing the last verified money-flow snapshot.</p> : null}
         </>
       )}
     </section>
@@ -486,28 +539,36 @@ function MoneyFlowCard({ symbol, base }: { symbol: string; base: string }) {
 function PositioningCard({ symbol, base, hasPerp }: { symbol: string; base: string; hasPerp: boolean }) {
   const [period, setPeriod] = useState<'5m' | '15m' | '1h' | '4h'>('5m');
   const [telemetry, setTelemetry] = useState<FuturesTelemetry | null>(null);
+  const [telemetryError, setTelemetryError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!hasPerp) {
       setTelemetry(null);
+      setTelemetryError(null);
       return;
     }
-    let alive = true;
     const key = `${symbol}:${period}`;
     setTelemetry(positioningCache.get(key)?.value ?? null);
-    const load = () => {
-      void fetch(`/api/futures/telemetry?symbol=${symbol}&period=${period}&limit=120`)
-        .then((response) => response.ok ? response.json() : null)
-        .then((next) => {
-          if (!next) return;
-          positioningCache.set(key, { value: next as FuturesTelemetry, updatedAt: Date.now() });
-          if (alive) setTelemetry(next as FuturesTelemetry);
-        })
-        .catch(() => undefined);
-    };
-    load();
-    const timer = window.setInterval(load, 60_000);
-    return () => { alive = false; window.clearInterval(timer); };
+    setTelemetryError(null);
+    const poll = createSettledPoll<FuturesTelemetry>({
+      intervalMs: 60_000,
+      request: (signal) => fetchJson(`/api/futures/telemetry?symbol=${symbol}&period=${period}&limit=120`, { signal }),
+      onSuccess: (next) => {
+        if (
+          !Array.isArray(next.topAccountRatio) ||
+          !Array.isArray(next.topPositionRatio) ||
+          !Array.isArray(next.globalRatio) ||
+          !Array.isArray(next.takerFlow) ||
+          !validTelemetry(next, symbol)
+        ) throw new Error('Positioning payload is invalid');
+        positioningCache.set(key, { value: next, updatedAt: Date.now() });
+        setTelemetry(next);
+        setTelemetryError(null);
+      },
+      onError: (error) => setTelemetryError(apiErrorMessage(error, 'Positioning is unavailable')),
+    });
+    poll.start();
+    return poll.stop;
   }, [hasPerp, period, symbol]);
 
   const taker = lastOf(telemetry?.takerFlow);
@@ -545,7 +606,7 @@ function PositioningCard({ symbol, base, hasPerp }: { symbol: string; base: stri
       {!hasPerp ? (
         <p className="tdx-dimnote">Spot Only — {base} has no Binance USD-M positioning feed.</p>
       ) : !telemetry ? (
-        <div className="tdx-chart-empty small">Reading Positioning…</div>
+        <div className="tdx-chart-empty small">{telemetryError ?? 'Reading Positioning…'}</div>
       ) : rows.length === 0 ? (
         <p className="tdx-dimnote">Positioning is currently unavailable from Binance for this contract.</p>
       ) : (
@@ -560,6 +621,7 @@ function PositioningCard({ symbol, base, hasPerp }: { symbol: string; base: stri
             </div>
           ))}
           <p className="tdx-updated">{telemetry.errors.length ? `${telemetry.errors.length} optional feed${telemetry.errors.length === 1 ? '' : 's'} unavailable · ` : ''}Updated {timeAgo(telemetry.updatedAt)}</p>
+          {telemetryError ? <p className="tdx-updated" role="status">Refresh unavailable · showing the last verified positioning snapshot.</p> : null}
         </div>
       )}
     </section>
@@ -577,18 +639,19 @@ function BasisCard({ symbol, base, hasPerp, market }: { symbol: string; base: st
 
   useEffect(() => {
     if (!hasPerp) return;
-    let alive = true;
     setRows([]);
     setHov(null);
-    const load = () => {
-      void fetch(`/api/futures/basis-hist?symbol=${symbol}&period=${period}&limit=48`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => alive && Array.isArray(d) && setRows((d as BasisPoint[]).filter((p) => p.futuresPrice > 0)))
-        .catch(() => undefined);
-    };
-    load();
-    const t = setInterval(load, 60_000);
-    return () => { alive = false; clearInterval(t); };
+    const poll = createSettledPoll<BasisPoint[]>({
+      intervalMs: 60_000,
+      request: (signal) => fetchJson(`/api/futures/basis-hist?symbol=${symbol}&period=${period}&limit=48`, { signal }),
+      onSuccess: (next) => setRows(normalizeTimedRows(next, (point) => (
+        Number.isFinite(point.futuresPrice) && point.futuresPrice > 0 &&
+        Number.isFinite(point.indexPrice) && point.indexPrice > 0 &&
+        Number.isFinite(point.basisRatePct)
+      ))),
+    });
+    poll.start();
+    return poll.stop;
   }, [symbol, period, hasPerp]);
 
   useEffect(() => {
@@ -753,18 +816,16 @@ const INTEL_CACHE_MS = 5 * 60_000;
 const intelKey = (symbol: string, tab: IntelTab, opt: string, hasPerp: boolean) =>
   `${symbol}:${hasPerp ? 'perp' : 'spot'}:${tab}:${opt}`;
 
-async function fetchIntelDataset(symbol: string, tab: IntelTab, opt: string, hasPerp: boolean): Promise<IntelDataset> {
+async function fetchIntelDataset(symbol: string, tab: IntelTab, opt: string, hasPerp: boolean, signal?: AbortSignal): Promise<IntelDataset> {
   const candleMarket = hasPerp ? 'futures' : 'spot';
   const priceFor = async (interval: string, limit: number) => {
-    const response = await fetch(`/api/candles?symbol=${symbol}&interval=${interval}&limit=${limit}&market=${candleMarket}`);
-    const rows = response.ok ? await response.json() as TvCandle[] : [];
-    return Array.isArray(rows) ? rows.map((row) => ({ t: row.t, v: row.c })) : [];
+    const rows = await fetchJson<TvCandle[]>(`/api/candles?symbol=${symbol}&interval=${interval}&limit=${limit}&market=${candleMarket}`, { signal });
+    return normalizeTvCandles(Array.isArray(rows) ? rows : []).map((row) => ({ t: row.t, v: row.c }));
   };
 
   if (tab === 'volume') {
-    const response = await fetch(`/api/candles?symbol=${symbol}&interval=${opt}&limit=1000&market=${candleMarket}`);
-    const rows = response.ok ? await response.json() as TvCandle[] : [];
-    const candles = Array.isArray(rows) ? rows : [];
+    const rows = await fetchJson<TvCandle[]>(`/api/candles?symbol=${symbol}&interval=${opt}&limit=1000&market=${candleMarket}`, { signal });
+    const candles = normalizeTvCandles(Array.isArray(rows) ? rows : []);
     return {
       points: candles.map((row) => ({ t: row.t, a: row.qv || row.v * row.c })),
       price: candles.map((row) => ({ t: row.t, v: row.c })),
@@ -775,21 +836,21 @@ async function fetchIntelDataset(symbol: string, tab: IntelTab, opt: string, has
   if (!hasPerp) return { points: [], price: [], liqSince: null };
 
   if (tab === 'oi') {
-    const response = await fetch(`/api/futures/oi-hist?symbol=${symbol}&period=${opt}&limit=500`);
-    const rows = response.ok ? await response.json() as OiPoint[] : [];
+    const rows = await fetchJson<OiPoint[]>(`/api/futures/oi-hist?symbol=${symbol}&period=${opt}&limit=500`, { signal });
+    const normalized = normalizeTimedRows(Array.isArray(rows) ? rows : [], (row) => Number.isFinite(row.notional) && row.notional > 0);
     return {
-      points: Array.isArray(rows) ? rows.map((row) => ({ t: row.t, a: row.notional })) : [],
+      points: normalized.map((row) => ({ t: row.t, a: row.notional })),
       price: await priceFor(opt, 500),
       liqSince: null,
     };
   }
 
   if (tab === 'funding') {
-    const response = await fetch(`/api/futures/funding-hist?symbol=${symbol}&limit=1000`);
-    const rows = response.ok ? await response.json() as { t: number; ratePct: number }[] : [];
+    const rows = await fetchJson<{ t: number; ratePct: number }[]>(`/api/futures/funding-hist?symbol=${symbol}&limit=1000`, { signal });
     const cut = opt === '30d' ? Date.now() - 30 * 864e5 : opt === '90d' ? Date.now() - 90 * 864e5 : 0;
+    const normalized = normalizeTimedRows(Array.isArray(rows) ? rows : [], (row) => Number.isFinite(row.ratePct));
     return {
-      points: Array.isArray(rows) ? rows.filter((row) => row.t >= cut).map((row) => ({ t: row.t, a: row.ratePct })) : [],
+      points: normalized.filter((row) => row.t >= cut).map((row) => ({ t: row.t, a: row.ratePct })),
       price: await priceFor('8h', 1000),
       liqSince: null,
     };
@@ -797,18 +858,21 @@ async function fetchIntelDataset(symbol: string, tab: IntelTab, opt: string, has
 
   if (tab === 'liq') {
     const buckets: Record<string, number> = { '5m': 3e5, '15m': 9e5, '1h': 36e5, '4h': 144e5, '12h': 432e5, '1d': 864e5 };
-    const response = await fetch(`/api/futures/liquidations?symbol=${symbol}&bucketMs=${buckets[opt] ?? 36e5}`);
-    const data = response.ok ? await response.json() as { since: number; points: { t: number; long: number; short: number }[] } : null;
+    const data = await fetchJson<{ since: number; points: { t: number; long: number; short: number }[] }>(`/api/futures/liquidations?symbol=${symbol}&bucketMs=${buckets[opt] ?? 36e5}`, { signal });
+    const normalized = normalizeTimedRows(data.points ?? [], (point) => (
+      Number.isFinite(point.long) && point.long >= 0 && Number.isFinite(point.short) && point.short >= 0
+    ));
     return {
-      points: data?.points?.map((point) => ({ t: point.t, a: point.long, b: point.short })) ?? [],
+      points: normalized.map((point) => ({ t: point.t, a: point.long, b: point.short })),
       price: await priceFor(opt === '5m' || opt === '15m' ? opt : '1h', 1000),
-      liqSince: data?.since ?? null,
+      liqSince: Number.isFinite(data.since) && data.since > 0 ? data.since : null,
     };
   }
 
-  const response = await fetch(`/api/futures/basis-hist?symbol=${symbol}&period=${opt}&limit=240`);
-  const rows = response.ok ? await response.json() as BasisPoint[] : [];
-  const basis = Array.isArray(rows) ? rows.filter((row) => row.futuresPrice > 0 && Number.isFinite(row.basisRatePct)) : [];
+  const rows = await fetchJson<BasisPoint[]>(`/api/futures/basis-hist?symbol=${symbol}&period=${opt}&limit=240`, { signal });
+  const basis = normalizeTimedRows(Array.isArray(rows) ? rows : [], (row) => (
+    Number.isFinite(row.futuresPrice) && row.futuresPrice > 0 && Number.isFinite(row.basisRatePct)
+  ));
   return {
     points: basis.map((row) => ({ t: row.t, a: row.basisRatePct })),
     price: basis.map((row) => ({ t: row.t, v: row.futuresPrice })),
@@ -816,13 +880,16 @@ async function fetchIntelDataset(symbol: string, tab: IntelTab, opt: string, has
   };
 }
 
-function requestIntelDataset(symbol: string, tab: IntelTab, opt: string, hasPerp: boolean, force = false): Promise<IntelDataset> {
+function requestIntelDataset(symbol: string, tab: IntelTab, opt: string, hasPerp: boolean, force = false, signal?: AbortSignal): Promise<IntelDataset> {
   const key = intelKey(symbol, tab, opt, hasPerp);
   const cached = intelCache.get(key);
   if (!force && cached && Date.now() - cached.updatedAt < INTEL_CACHE_MS) return Promise.resolve(cached.value);
   const pending = intelInflight.get(key);
-  if (pending) return pending;
-  const request = fetchIntelDataset(symbol, tab, opt, hasPerp)
+  // Only unowned warm-up requests are shared. A request carrying a component
+  // AbortSignal belongs to that poll generation and must never be reused by a
+  // later tab/symbol generation after its owner aborts.
+  if (!signal && pending) return pending;
+  const request = fetchIntelDataset(symbol, tab, opt, hasPerp, signal)
     .then((value) => {
       // An upstream warm-up failure must not become a five-minute blank chart.
       // Liquidations are the exception: an empty live bucket is valid data.
@@ -831,8 +898,10 @@ function requestIntelDataset(symbol: string, tab: IntelTab, opt: string, hasPerp
       }
       return value;
     })
-    .finally(() => intelInflight.delete(key));
-  intelInflight.set(key, request);
+    .finally(() => {
+      if (!signal && intelInflight.get(key) === request) intelInflight.delete(key);
+    });
+  if (!signal) intelInflight.set(key, request);
   return request;
 }
 
@@ -854,11 +923,13 @@ const INTEL_TITLE: Record<IntelTab, string> = {
 };
 
 function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInterestSnapshot }: { symbol: string; base: string; name: string; hasPerp: boolean; market: MarketRow | undefined; openInterestSnapshot: { usd: number; changePct: number | null } | null }) {
-  const initial = intelCache.get(intelKey(symbol, 'funding', INTEL_DEFAULT.funding, hasPerp))?.value;
-  const [tab, setTab] = useState<IntelTab>('funding');
-  const [opt, setOpt] = useState(INTEL_DEFAULT.funding);
+  const initialTab: IntelTab = hasPerp ? 'funding' : 'volume';
+  const initial = intelCache.get(intelKey(symbol, initialTab, INTEL_DEFAULT[initialTab], hasPerp))?.value;
+  const [tab, setTab] = useState<IntelTab>(initialTab);
+  const [opt, setOpt] = useState(INTEL_DEFAULT[initialTab]);
   const [dataset, setDataset] = useState<IntelDataset>(initial ?? { points: [], price: [], liqSince: null });
   const [loading, setLoading] = useState(!initial);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [hov, setHov] = useState<number | null>(null);
   const [mouse, setMouse] = useState<{ x: number } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -866,32 +937,47 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
 
   useEffect(() => {
     const tabs: IntelTab[] = hasPerp ? ['funding', 'oi', 'volume', 'liq', 'basis'] : ['volume'];
-    for (const next of tabs) void requestIntelDataset(symbol, next, INTEL_DEFAULT[next], hasPerp);
+    for (const next of tabs) void requestIntelDataset(symbol, next, INTEL_DEFAULT[next], hasPerp).catch(() => undefined);
   }, [hasPerp, symbol]);
 
   useEffect(() => {
-    let alive = true;
+    if (!hasPerp && tab !== 'volume') {
+      setTab('volume');
+      setOpt(INTEL_DEFAULT.volume);
+    }
+  }, [hasPerp, tab]);
+
+  useEffect(() => {
     const key = intelKey(symbol, tab, opt, hasPerp);
     const cached = intelCache.get(key)?.value;
     if (cached) {
       setDataset(cached);
       setLoading(false);
+      setLoadError(null);
     } else {
       setDataset({ points: [], price: [], liqSince: null });
       setLoading(true);
     }
-    const load = (force = false) => {
-      void requestIntelDataset(symbol, tab, opt, hasPerp, force)
-        .then((next) => {
-          if (!alive) return;
-          setDataset(next);
-          setLoading(false);
-        })
-        .catch(() => { if (alive) setLoading(false); });
-    };
-    load();
-    const timer = window.setInterval(() => load(true), 60_000);
-    return () => { alive = false; window.clearInterval(timer); };
+    let first = true;
+    const poll = createSettledPoll<IntelDataset>({
+      intervalMs: 60_000,
+      request: (signal) => {
+        const force = !first;
+        first = false;
+        return requestIntelDataset(symbol, tab, opt, hasPerp, force, signal);
+      },
+      onSuccess: (next) => {
+        setDataset(next);
+        setLoading(false);
+        setLoadError(null);
+      },
+      onError: (error) => {
+        setLoading(false);
+        setLoadError(error instanceof Error ? error.message : 'Data source unavailable');
+      },
+    });
+    poll.start();
+    return poll.stop;
   }, [hasPerp, opt, symbol, tab]);
 
   useEffect(() => {
@@ -1060,9 +1146,11 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
         <div className="tdx-cgx-empty"><p className="tdx-dimnote">Spot Only — {base} has no Binance USD-M perpetual feed for this view.</p></div>
       ) : !model ? (
         <div className="tdx-cgx-empty">
-          {tab === 'liq' && !loading
+          {loading
+            ? <div className="tkx-chart-skeleton" aria-label={`Loading ${INTEL_TITLE[tab]}`}><i /><i /><i /><i /></div>
+            : tab === 'liq'
             ? <p className="tdx-dimnote">The live liquidation recorder is active. The chart will populate as force-order events arrive.</p>
-            : <div className="tkx-chart-skeleton" aria-label={`Loading ${INTEL_TITLE[tab]}`}><i /><i /><i /><i /></div>}
+            : <p className="tdx-dimnote" role={loadError ? 'alert' : undefined}>{loadError ? `${INTEL_TITLE[tab]} unavailable — ${loadError}` : `No ${INTEL_TITLE[tab].toLowerCase()} data returned for this interval.`}</p>}
         </div>
       ) : (
         <>
@@ -1519,7 +1607,10 @@ export function TokenDetail({ symbol }: { symbol: string }) {
   const [src, setSrc] = useState<'spot' | 'futures'>('spot');
   const [chartFocus, setChartFocus] = useState(false);
   const [candles, setCandles] = useState<TvCandle[]>([]);
+  const [candleError, setCandleError] = useState<string | null>(null);
   const [profile, setProfile] = useState<TokenProfile | null>(null);
+  const [watchBusy, setWatchBusy] = useState(false);
+  const [watchError, setWatchError] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [basisSnapshot, setBasisSnapshot] = useState<BasisEngineSnapshot | null>(null);
   const [openInterestSnapshot, setOpenInterestSnapshot] = useState<{ usd: number; changePct: number | null } | null>(null);
@@ -1543,74 +1634,127 @@ export function TokenDetail({ symbol }: { symbol: string }) {
   const tvSymbol = src === 'futures' && hasPerp ? `BINANCE:${symbol}.P` : `BINANCE:${symbol}`;
   const tvInterval = effective.interval;
 
+  useEffect(() => {
+    if (!hasPerp && src === 'futures') setSrc('spot');
+  }, [hasPerp, src]);
+
   // ---- price series: real klines + the live public kline stream -----------
   useEffect(() => {
     const { interval, limit } = effective;
-    let alive = true;
     const cacheKey = `${symbol}:${src}:${interval}:${limit}`;
     setCandles(tokenCandleCache.get(cacheKey)?.value ?? []);
-    const load = () => {
-      void fetch(`/api/candles?symbol=${symbol}&interval=${interval}&limit=${limit}&market=${src}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => {
-          if (!Array.isArray(d)) return;
-          tokenCandleCache.set(cacheKey, { value: d as TvCandle[], updatedAt: Date.now() });
-          if (alive) setCandles(d as TvCandle[]);
-        })
-        .catch(() => undefined);
-    };
-    load();
+    setCandleError(null);
     // REST hydrates and periodically reconciles history; the exchange kline
     // socket below owns live updates so the series does not jump on a 1s refetch.
-    const t = setInterval(load, 30_000);
-    return () => { alive = false; clearInterval(t); };
+    const poll = createSettledPoll<TvCandle[]>({
+      intervalMs: 30_000,
+      request: (signal) => fetchJson(`/api/candles?symbol=${symbol}&interval=${interval}&limit=${limit}&market=${src}`, { signal }),
+      onSuccess: (payload) => {
+        const next = normalizeTvCandles(Array.isArray(payload) ? payload : []);
+        if (!next.length) {
+          setCandleError('Candle source returned no usable rows.');
+          return;
+        }
+        tokenCandleCache.set(cacheKey, { value: next, updatedAt: Date.now() });
+        setCandles(next);
+        setCandleError(null);
+      },
+      onError: (error) => setCandleError(apiErrorMessage(error, 'Candle history is unavailable')),
+    });
+    poll.start();
+    return poll.stop;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol, range, ivl, src]);
 
   useEffect(() => {
     const { interval, limit } = effective;
-    let alive = true;
-    const host = src === 'futures' ? 'wss://fstream.binance.com/ws' : 'wss://stream.binance.com:9443/ws';
-    const ws = new WebSocket(`${host}/${symbol.toLowerCase()}@kline_${interval}`);
-    ws.onmessage = (ev) => {
-      if (!alive) return;
-      try {
-        const msg = JSON.parse(String(ev.data)) as BinanceKlineMsg;
-        const k = msg.k;
-        if (!k) return;
-        const next: TvCandle = { t: k.t, o: Number(k.o), h: Number(k.h), l: Number(k.l), c: Number(k.c), v: Number(k.v), qv: Number(k.q) || Number(k.v) * Number(k.c) };
-        setCandles((prev) => {
-          const out = [...prev];
-          const idx = out.findIndex((c) => c.t === next.t);
-          if (idx >= 0) out[idx] = next;
-          else out.push(next);
-          out.sort((a, b) => a.t - b.t);
-          return out.length > limit ? out.slice(out.length - limit) : out;
-        });
-      } catch { /* malformed frame */ }
+    let closed = false;
+    let generation = 0;
+    let retry: number | null = null;
+    let socket: WebSocket | null = null;
+    const host = src === 'futures' ? 'wss://fstream.binance.com/market/ws' : 'wss://stream.binance.com:9443/ws';
+    const clearRetry = () => {
+      if (retry !== null) window.clearTimeout(retry);
+      retry = null;
     };
-    ws.onerror = () => ws.close();
-    return () => { alive = false; ws.close(); };
+    const connect = () => {
+      if (closed) return;
+      clearRetry();
+      const socketGeneration = ++generation;
+      const ws = new WebSocket(`${host}/${symbol.toLowerCase()}@kline_${interval}`);
+      socket = ws;
+      ws.onmessage = (ev) => {
+        if (closed || socket !== ws || generation !== socketGeneration) return;
+        try {
+          const msg = JSON.parse(String(ev.data)) as BinanceKlineMsg;
+          const k = msg.k;
+          if (!k) return;
+          const candidate: TvCandle = { t: Number(k.t), o: Number(k.o), h: Number(k.h), l: Number(k.l), c: Number(k.c), v: Number(k.v), qv: Number(k.q) };
+          const next = normalizeTvCandles([candidate])[0];
+          if (!next) return;
+          setCandleError(null);
+          setCandles((previous) => normalizeTvCandles([...previous, next]).slice(-limit));
+        } catch { /* malformed frame */ }
+      };
+      ws.onerror = () => {
+        if (socket === ws && generation === socketGeneration) ws.close();
+      };
+      ws.onclose = () => {
+        if (closed || socket !== ws || generation !== socketGeneration) return;
+        socket = null;
+        retry = window.setTimeout(connect, 3_000);
+      };
+    };
+    connect();
+    return () => {
+      closed = true;
+      generation += 1;
+      clearRetry();
+      const current = socket;
+      socket = null;
+      if (current) {
+        current.onopen = null;
+        current.onmessage = null;
+        current.onerror = null;
+        current.onclose = null;
+        current.close();
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol, range, ivl, src]);
 
-  // profile: name + whitepaper/homepage for the header (retry until warmed)
+  // profile: name + whitepaper/homepage for the header (bounded warm-up retry)
   useEffect(() => {
-    let alive = true;
+    let stopped = false;
     let timer: number | null = null;
-    const loadProfile = () => {
-      void fetch(`/api/token/profile?base=${base}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => {
-          if (!alive) return;
-          if (d?.profile) setProfile(d.profile as TokenProfile);
-          else timer = window.setTimeout(loadProfile, 10_000);
-        })
-        .catch(() => { if (alive) timer = window.setTimeout(loadProfile, 15_000); });
+    let controller: AbortController | null = null;
+    let attempt = 0;
+    const schedule = () => {
+      if (stopped || attempt >= 6) return;
+      timer = window.setTimeout(loadProfile, Math.min(30_000, 5_000 * (2 ** Math.max(0, attempt - 1))));
+    };
+    const loadProfile = async () => {
+      if (stopped || controller) return;
+      attempt += 1;
+      controller = new AbortController();
+      try {
+        const payload = await fetchJson<{ profile?: TokenProfile | null }>(`/api/token/profile?base=${base}`, { signal: controller.signal }, 8_000);
+        if (stopped) return;
+        if (payload.profile) setProfile(payload.profile);
+        else schedule();
+      } catch {
+        if (!stopped) schedule();
+      } finally {
+        controller = null;
+      }
     };
     setProfile(null);
-    loadProfile();
-    return () => { alive = false; if (timer) window.clearTimeout(timer); };
+    void loadProfile();
+    return () => {
+      stopped = true;
+      controller?.abort();
+      if (timer !== null) window.clearTimeout(timer);
+    };
   }, [base, symbol]);
 
   // Basis context comes from the same crossed-book runtime that drives the
@@ -1620,17 +1764,15 @@ export function TokenDetail({ symbol }: { symbol: string }) {
       setBasisSnapshot(null);
       return;
     }
-    let alive = true;
-    const load = () => {
-      void fetch('/api/engine/basis', { cache: 'no-store' })
-        .then((response) => response.ok ? response.json() : null)
-        .then((next) => { if (alive && next) setBasisSnapshot(next as BasisEngineSnapshot); })
-        .catch(() => undefined);
-    };
     setBasisSnapshot(null);
-    load();
-    const timer = window.setInterval(load, 2_000);
-    return () => { alive = false; window.clearInterval(timer); };
+    const poll = createSettledPoll<BasisEngineSnapshot>({
+      intervalMs: 2_000,
+      request: (signal) => fetchJson('/api/engine/basis', { cache: 'no-store', signal }),
+      onSuccess: setBasisSnapshot,
+      onError: () => setBasisSnapshot(null),
+    });
+    poll.start();
+    return poll.stop;
   }, [hasPerp, symbol]);
 
   // Hydrate OI directly from Binance history so the instrument summary does
@@ -1640,26 +1782,27 @@ export function TokenDetail({ symbol }: { symbol: string }) {
       setOpenInterestSnapshot(null);
       return;
     }
-    let alive = true;
     setOpenInterestSnapshot(null);
-    const load = () => {
-      void fetch(`/api/futures/oi-hist?symbol=${symbol}&period=5m&limit=3`)
-        .then((response) => response.ok ? response.json() : null)
-        .then((next) => {
-          if (!alive || !Array.isArray(next) || next.length === 0) return;
-          const rows = next as OiPoint[];
+    const poll = createSettledPoll<OiPoint[]>({
+      intervalMs: 60_000,
+      request: (signal) => fetchJson(`/api/futures/oi-hist?symbol=${symbol}&period=5m&limit=3`, { signal }),
+      onSuccess: (next) => {
+          const rows = normalizeTimedRows(Array.isArray(next) ? next : [], (row) => Number.isFinite(row.notional) && row.notional > 0);
+          if (!rows.length) {
+            setOpenInterestSnapshot(null);
+            return;
+          }
           const latest = rows[rows.length - 1];
           const previous = rows.length > 1 ? rows[rows.length - 2] : null;
           setOpenInterestSnapshot({
             usd: latest.notional,
             changePct: previous && previous.notional > 0 ? ((latest.notional - previous.notional) / previous.notional) * 100 : null,
           });
-        })
-        .catch(() => undefined);
-    };
-    load();
-    const timer = window.setInterval(load, 60_000);
-    return () => { alive = false; window.clearInterval(timer); };
+      },
+      onError: () => setOpenInterestSnapshot(null),
+    });
+    poll.start();
+    return poll.stop;
   }, [hasPerp, symbol]);
 
   const points = useMemo(() => {
@@ -1682,6 +1825,20 @@ export function TokenDetail({ symbol }: { symbol: string }) {
       .filter((m) => m.base.includes(needle) || tokenName(m.base).toUpperCase().includes(needle))
       .slice(0, 8);
   }, [markets, q]);
+
+  const toggleCurrentWatch = async () => {
+    if (watchBusy) return;
+    setWatchBusy(true);
+    setWatchError(null);
+    try {
+      const error = await toggleWatch(symbol);
+      if (error) setWatchError(error.message);
+    } catch (error) {
+      setWatchError(error instanceof Error ? error.message : 'Watchlist change failed.');
+    } finally {
+      setWatchBusy(false);
+    }
+  };
 
   const executableDirection = live?.executableBasisSide === 'LONG_SPOT_SHORT_PERP'
     ? 'Buy Spot · Sell Perp'
@@ -1733,8 +1890,9 @@ export function TokenDetail({ symbol }: { symbol: string }) {
               type="button"
               className={'tkx-icon-button' + (watchlisted ? ' active' : '')}
               aria-label={watchlisted ? 'Remove from watchlist' : 'Add to watchlist'}
-              title={watchlisted ? 'Remove from watchlist' : 'Add to watchlist'}
-              onClick={() => void toggleWatch(symbol)}
+              title={watchError ?? (watchlisted ? 'Remove from watchlist' : 'Add to watchlist')}
+              disabled={watchBusy}
+              onClick={() => void toggleCurrentWatch()}
             >
               <StarIcon size={16} fill={watchlisted ? 'currentColor' : 'none'} />
             </button>
@@ -1820,6 +1978,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
           ) : (
             <div className="tdx-line-frame">
               <PriceChart points={points} up={up} />
+              {candleError ? <p className="tdx-updated" role="status">{candles.length ? 'Candle refresh unavailable · showing the last verified series.' : candleError}</p> : null}
             </div>
           )}
           </section>

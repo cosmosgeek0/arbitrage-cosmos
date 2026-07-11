@@ -1,0 +1,68 @@
+import type { ThesisFeatureBindings, ThesisRules } from './types.js';
+
+export const THESIS_FEATURE_BINDINGS: Readonly<ThesisFeatureBindings> = Object.freeze({
+  spotRelativeVolume: 'spot_relative_volume',
+  perpetualRelativeVolume: 'perpetual_relative_volume',
+  spotArrivalAcceleration: 'spot_arrival_acceleration',
+  perpetualArrivalAcceleration: 'perpetual_arrival_acceleration',
+  symbolReturnPct: 'symbol_return_pct',
+  spotReturnPct: 'spot_return_pct',
+  perpetualReturnPct: 'perpetual_return_pct',
+  aggressorImbalance: 'aggressor_imbalance',
+  priceResponsePerFlow: 'price_response_per_flow',
+  depthSupportRatio: 'depth_support_ratio',
+  depthChangeRatio: 'depth_change_ratio',
+  spreadChangeBps: 'spread_change_bps',
+  replenishmentRatio: 'replenishment_ratio',
+  absorptionRatio: 'absorption_ratio',
+  fundingRateChange: 'funding_rate_change',
+  openInterestChangePct: 'open_interest_change_pct',
+  liquidationFlowShare: 'liquidation_flow_share',
+  marketParticipationRatio: 'market_participation_ratio',
+  symbolMarketResidualReturnPct: 'symbol_market_residual_return_pct',
+  fadeFromPeakPct: 'fade_from_peak_pct',
+  historicalAnalogueCount: 'historical_analogue_count',
+  tradeSizeRepeatRatio: 'trade_size_repeat_ratio',
+  sideAlternationRatio: 'side_alternation_ratio',
+  deadBaselineFlag: 'dead_baseline_flag',
+});
+
+export const THESIS_RULE_DEFAULTS: Readonly<ThesisRules> = Object.freeze({
+  version: 'thesis-rules-v1',
+  bindings: THESIS_FEATURE_BINDINGS,
+  shortWindowMs: 5_000,
+  confirmationWindowMs: 60_000,
+  mediumWindowMs: 5 * 60_000,
+  leadLagTieMs: 250,
+  activityMultiple: 2,
+  arrivalAcceleration: 1.5,
+  visibleMovePct: 0.35,
+  continuationMovePct: 0.6,
+  quietMovePct: 0.08,
+  flowImbalanceAbs: 0.2,
+  lowPriceResponsePerFlow: 0.05,
+  depthSupportRatio: 1.25,
+  depthCollapseRatio: 0.65,
+  marketParticipationRatio: 0.55,
+  maxSymbolResidualPct: 0.15,
+  liquidationFlowShare: 0.2,
+  oiDropPct: -0.5,
+  fundingChangeAbs: 0.0001,
+  oiChangeAbs: 0.5,
+  absorptionRatio: 1.2,
+  replenishmentRatio: 1.2,
+  churnRepeatRatio: 0.5,
+  churnAlternationRatio: 0.5,
+  exhaustionMovePct: 1.2,
+  reversalFadePct: 0.5,
+  tooLateDetectionLagMs: 90_000,
+  maxFreshAgeMs: 30_000,
+});
+
+export function thesisRules(overrides: Partial<ThesisRules> = {}): ThesisRules {
+  return {
+    ...THESIS_RULE_DEFAULTS,
+    ...overrides,
+    bindings: { ...THESIS_FEATURE_BINDINGS, ...(overrides.bindings ?? {}) },
+  };
+}

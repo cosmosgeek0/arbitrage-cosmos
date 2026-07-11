@@ -372,6 +372,19 @@ try {
     check('post-READY proposal expiry emits no submission', !proposalPorts.calls.some((call) => call.method === 'submitPaper'));
   }
 
+  section('6c. Failures name the safe state after reducer transitions');
+  {
+    const preflightPorts = new FakePorts();
+    preflightPorts.preflightResult = {
+      ok: false,
+      failure: portFailure('RISK_PREFLIGHT_REJECTED'),
+    };
+    const preflightCoordinator = createExecutionCoordinator(planInput(), new ManualClock(), preflightPorts);
+    const preflightRejected = await preflightCoordinator.preflight();
+    check('preflight rejection reaches FAILED', !preflightRejected.ok && preflightCoordinator.snapshot().lifecycle === 'FAILED');
+    check('preflight failure names post-transition FAILED state', !preflightRejected.ok && preflightRejected.failure.safeCurrentState === preflightCoordinator.snapshot().lifecycle);
+  }
+
   section('7. First-leg rejection stops the sequence');
   {
     const ports = new FakePorts().queueSubmission('OPEN:SPOT', {
@@ -381,6 +394,7 @@ try {
     const result = await coordinator.open();
     check('first-leg rejection returns named failure', !result.ok && result.failure.code === 'FIRST_LEG_REJECTED');
     check('first-leg rejection with no exposure becomes FAILED', coordinator.snapshot().lifecycle === 'FAILED');
+    check('first-leg rejection names post-transition FAILED state', !result.ok && result.failure.safeCurrentState === coordinator.snapshot().lifecycle);
     check('second leg is never submitted', !ports.calls.some((c) => c.method === 'submitPaper' && c.request.phase === 'OPEN' && c.request.leg.key === 'PERP'));
   }
 
@@ -407,6 +421,7 @@ try {
     const rejectedResult = await rejected.open();
     check('second-leg reject returns its failure', !rejectedResult.ok && rejectedResult.failure.code === 'SECOND_LEG_REJECTED');
     check('filled first + rejected second is ONE_LEG_EXPOSED', rejected.snapshot().lifecycle === 'ONE_LEG_EXPOSED');
+    check('second-leg rejection names retained exposure state', !rejectedResult.ok && rejectedResult.failure.safeCurrentState === rejected.snapshot().lifecycle);
     check('failed second leg does not erase first fill', rejected.snapshot().openingLegs.SPOT.lifecycle === 'FILLED' && rejected.snapshot().openingLegs.SPOT.cumulativeFilledQuantity === 1);
   }
 
@@ -435,11 +450,22 @@ try {
     const unresolvedResult = await unresolved.open();
     check('thrown submission becomes AMBIGUOUS, never rejected/success', !unresolvedResult.ok && unresolved.snapshot().openingLegs.SPOT.lifecycle === 'AMBIGUOUS');
     check('unresolved lookup escalates RECOVERY_REQUIRED', unresolved.snapshot().lifecycle === 'RECOVERY_REQUIRED');
+    check('unresolved lookup failure names recovery state', !unresolvedResult.ok && unresolvedResult.failure.safeCurrentState === unresolved.snapshot().lifecycle);
     check('unknown first leg blocks second risk-increasing submission', !unresolvedPorts.calls.some((c) => c.method === 'submitPaper' && c.request.leg.key === 'PERP'));
     const recs = recommendExecutionRecovery(unresolved.snapshot(), clock.nowMs());
     check('recovery names exact ambiguous client-order ID', recs.some((r) => r.action === 'VERIFY_AMBIGUOUS_ORDER' && r.clientOrderId === unresolved.snapshot().openingLegs.SPOT.definition.clientOrderId));
     const cancelled = unresolved.cancel();
     check('ambiguous exposure cannot be silently cancelled', !cancelled.ok && cancelled.failure.code === 'UNRESOLVED_EXPOSURE');
+
+    const absentPorts = new FakePorts()
+      .queueSubmission('OPEN:SPOT', { kind: 'AMBIGUOUS', failure: portFailure('RESPONSE_LOST_ABSENT') })
+      .queueLookup('OPEN:SPOT', { kind: 'PROVEN_ABSENT', failure: portFailure('ORDER_PROVEN_ABSENT') });
+    const { coordinator: provenAbsent } = await readyCoordinator({}, absentPorts);
+    const absentResult = await provenAbsent.open();
+    check('read-only lookup can prove an ambiguous first order absent', !absentResult.ok && absentResult.failure.code === 'ORDER_PROVEN_ABSENT');
+    check('proven-absent first order exits OPENING as FAILED', provenAbsent.snapshot().lifecycle === 'FAILED');
+    check('proven-absent failure names post-transition FAILED state', !absentResult.ok && absentResult.failure.safeCurrentState === provenAbsent.snapshot().lifecycle);
+    check('proven-absent first order never permits second-leg submission', !absentPorts.calls.some((call) => call.method === 'submitPaper' && call.request.leg.key === 'PERP'));
 
     const cancelledFillPorts = new FakePorts()
       .queueSubmission('OPEN:SPOT', { kind: 'AMBIGUOUS', failure: portFailure('RESPONSE_LOST_CANCELLED') })
@@ -515,6 +541,7 @@ try {
     deadlineDeferred.resolve({ kind: 'FILLED', venueOrderId: 'delayed-first-fill', cumulativeFilledQuantity: 1 });
     const deadlineResult = await deadlineOpen;
     check('elapsed naked deadline blocks second leg after first response', !deadlineResult.ok && deadlineResult.failure.code === 'NAKED_DURATION_EXPIRED' && deadlineCoordinator.snapshot().lifecycle === 'RECOVERY_REQUIRED');
+    check('naked-deadline failure names recovery state', !deadlineResult.ok && deadlineResult.failure.safeCurrentState === deadlineCoordinator.snapshot().lifecycle);
     check('deadline breach submits no second risk-increasing leg', !deadlinePorts.calls.some((c) => c.method === 'submitPaper' && c.request.leg.key === 'PERP'));
   }
 

@@ -653,11 +653,13 @@ export function reduceExecutionEvent(
   if (event.phase === 'OPEN' && event.type.startsWith('LEG_')) {
     const safelyHedged = isSafelyHedged(projected);
     const anyFill = openingLegs.SPOT.cumulativeFilledQuantity > EPSILON || openingLegs.PERP.cumulativeFilledQuantity > EPSILON;
+    const rejectedAfterAmbiguity =
+      event.type === 'LEG_AMBIGUITY_RESOLVED' && event.ambiguityResolution === 'REJECTED';
     if (safelyHedged && lifecycle !== 'RECOVERY_REQUIRED' && lifecycle !== 'FAILED') {
       if (!setLifecycle('HEDGED_OPEN')) return reject('INVALID_PLAN_TRANSITION');
     } else if (anyFill && lifecycle !== 'RECOVERY_REQUIRED' && lifecycle !== 'FAILED') {
       if (!setLifecycle('ONE_LEG_EXPOSED')) return reject('INVALID_PLAN_TRANSITION');
-    } else if (event.type === 'LEG_REJECTED' && !anyFill && lifecycle === 'OPENING') {
+    } else if ((event.type === 'LEG_REJECTED' || rejectedAfterAmbiguity) && !anyFill && lifecycle === 'OPENING') {
       if (!setLifecycle('FAILED')) return reject('INVALID_PLAN_TRANSITION');
     }
   }
@@ -667,8 +669,10 @@ export function reduceExecutionEvent(
   }
 
   if (event.phase === 'CLOSE' && event.type.startsWith('LEG_')) {
+    const rejectedAfterAmbiguity =
+      event.type === 'LEG_AMBIGUITY_RESOLVED' && event.ambiguityResolution === 'REJECTED';
     if (
-      (event.type === 'LEG_REJECTED' || event.type === 'LEG_AMBIGUITY_UNRESOLVED') &&
+      (event.type === 'LEG_REJECTED' || event.type === 'LEG_AMBIGUITY_UNRESOLVED' || rejectedAfterAmbiguity) &&
       lifecycle !== 'RECOVERY_REQUIRED' &&
       !setLifecycle('RECOVERY_REQUIRED')
     ) return reject('INVALID_PLAN_TRANSITION');

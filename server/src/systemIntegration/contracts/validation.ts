@@ -1,4 +1,5 @@
 import {
+  evaluateFreshness,
   isCompleteness,
   isDataAuthority,
   isDesiredRuntimeState,
@@ -7,6 +8,10 @@ import {
   isValidUtcMillis,
   validateSourcedTimestamp,
   validateStructuredFailure,
+  weakestAuthority,
+  type DataAuthority,
+  type FreshnessReport,
+  type SourcedTimestamp,
   type ValidationIssue,
 } from '../../foundation/contracts/index.js';
 import {
@@ -44,6 +49,27 @@ import type {
 
 const UPPER_CODE = /^[A-Z][A-Z0-9_]{0,99}$/;
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9._:-]{8,128}$/;
+const LIVE_PUBLIC_AUTHORITIES = new Set<DataAuthority>(['LIVE_PUBLIC', 'DERIVED_LIVE']);
+const FRESH_SOURCE_COMPONENTS = new Set<SystemComponentId>([
+  'public-spot-source',
+  'public-usdm-source',
+  'market-universe',
+  'intelligence-runtime',
+  'market-intelligence',
+  'basis-engine',
+  'volume-engine',
+]);
+const UNAVAILABLE_TRUTH_LOSS_CODES = new Set([
+  'MAX_AGE_MISSING',
+  'RUNTIME_UNKNOWN_MAPPED_UNAVAILABLE',
+  'MI_MISSING_MAPPED_UNAVAILABLE',
+  'MI_UNKNOWN_MAPPED_UNAVAILABLE',
+  'UPSTREAM_AUTHORITY_MISSING',
+  'AUTHORITY_CONTEXT_MISMATCH',
+  'OPERATOR_AUTHORITY_UNREPRESENTABLE',
+  'UNKNOWN_AUTHORITY',
+  'STALE_AUTHORITY_DOWNGRADED',
+]);
 
 function issue(path: string, code: string, message: string): ValidationIssue {
   return { path, code, message };
@@ -98,6 +124,52 @@ function unique(values: readonly string[]): boolean {
 
 function has<T extends readonly string[]>(values: T, value: unknown): value is T[number] {
   return typeof value === 'string' && (values as readonly string[]).includes(value);
+}
+
+function isLivePublicAuthority(value: unknown): value is Extract<DataAuthority, 'LIVE_PUBLIC' | 'DERIVED_LIVE'> {
+  return isDataAuthority(value) && LIVE_PUBLIC_AUTHORITIES.has(value);
+}
+
+function validateFreshnessReport(value: unknown): ValidationIssue[] {
+  if (!plainRecord(value)) return [issue('freshness', 'FRESHNESS_INVALID', 'freshness must retain the Foundation shape')];
+  const issues = exactFields(value, ['state', 'ageMs', 'basis', 'effectiveAuthority', 'evaluatedAt'], 'freshness');
+  const stateValid = isFreshnessState(value.state);
+  const authorityValid = isDataAuthority(value.effectiveAuthority);
+  const basisValid = value.basis === 'SOURCE_TIME' || value.basis === 'RECEIPT_TIME' || value.basis === 'NONE';
+  const ageValid = value.ageMs === null || (typeof value.ageMs === 'number' && Number.isSafeInteger(value.ageMs));
+  if (!stateValid) issues.push(issue('freshness.state', 'FRESHNESS_STATE_INVALID', 'state must reuse Foundation FreshnessState'));
+  if (!ageValid) issues.push(issue('freshness.ageMs', 'FRESHNESS_AGE_INVALID', 'ageMs must be a safe integer or null'));
+  if (!basisValid) issues.push(issue('freshness.basis', 'FRESHNESS_BASIS_INVALID', 'basis must reuse Foundation FreshnessBasis'));
+  if (!authorityValid) issues.push(issue('freshness.effectiveAuthority', 'FRESHNESS_AUTHORITY_INVALID', 'effectiveAuthority must reuse Foundation DataAuthority'));
+  if (!isValidUtcMillis(value.evaluatedAt)) issues.push(issue('freshness.evaluatedAt', 'UTC_MILLIS_INVALID', 'evaluatedAt must be UTC ms'));
+
+  if (stateValid && authorityValid && basisValid && ageValid) {
+    if (value.state === 'UNAVAILABLE'
+        && (value.ageMs !== null || value.basis !== 'NONE' || value.effectiveAuthority !== 'UNAVAILABLE')) {
+      issues.push(issue('freshness', 'FRESHNESS_UNAVAILABLE_CONFLICT', 'unavailable freshness must have no basis, age, or authority'));
+    }
+    if (value.state !== 'UNAVAILABLE' && (value.ageMs === null || value.basis === 'NONE')) {
+      issues.push(issue('freshness', 'FRESHNESS_BASIS_REQUIRED', 'available freshness requires an age and temporal basis'));
+    }
+    if (value.state !== 'FRESH' && value.effectiveAuthority !== 'UNAVAILABLE') {
+      issues.push(issue('freshness.effectiveAuthority', 'STALE_AUTHORITY_NOT_DOWNGRADED', 'non-fresh truth must downgrade authority to UNAVAILABLE'));
+    }
+    if (value.state === 'FRESH' && value.effectiveAuthority === 'UNAVAILABLE') {
+      issues.push(issue('freshness.effectiveAuthority', 'FRESH_AUTHORITY_UNAVAILABLE', 'fresh truth cannot claim unavailable effective authority'));
+    }
+  }
+  return issues;
+}
+
+function freshnessMatchesSource(
+  sourceTimestamp: Readonly<SourcedTimestamp>,
+  freshness: Readonly<FreshnessReport>,
+): boolean {
+  const expected = evaluateFreshness(sourceTimestamp, freshness.evaluatedAt);
+  return expected.state === freshness.state
+    && expected.ageMs === freshness.ageMs
+    && expected.basis === freshness.basis
+    && expected.effectiveAuthority === freshness.effectiveAuthority;
 }
 
 export function isSystemSafeMode(value: unknown): value is SystemSafeMode {
@@ -286,14 +358,21 @@ export function validateSystemComponentSnapshot(value: unknown): ValidationIssue
   if (!has(SYSTEM_READINESS_STATES, value.readiness)) issues.push(issue('readiness', 'READINESS_INVALID', 'unknown readiness'));
   if (!isDataAuthority(value.authority)) issues.push(issue('authority', 'AUTHORITY_INVALID', 'must reuse Foundation DataAuthority'));
   if (!isCompleteness(value.completeness)) issues.push(issue('completeness', 'COMPLETENESS_INVALID', 'must reuse Foundation Completeness'));
-  if (value.sourceTimestamp !== null) {
-    for (const nested of validateSourcedTimestamp(value.sourceTimestamp)) issues.push({ ...nested, path: `sourceTimestamp.${nested.path}` });
-  }
-  if (value.freshness !== null) {
-    if (!plainRecord(value.freshness) || !isFreshnessState(value.freshness.state)
-        || !isValidUtcMillis(value.freshness.evaluatedAt) || !isDataAuthority(value.freshness.effectiveAuthority)) {
-      issues.push(issue('freshness', 'FRESHNESS_INVALID', 'freshness must retain the Foundation shape'));
-    }
+  const sourceTimestampIssues = value.sourceTimestamp === null
+    ? []
+    : validateSourcedTimestamp(value.sourceTimestamp);
+  for (const nested of sourceTimestampIssues) issues.push({ ...nested, path: `sourceTimestamp.${nested.path}` });
+  const freshnessIssues = value.freshness === null
+    ? []
+    : validateFreshnessReport(value.freshness);
+  issues.push(...freshnessIssues);
+  if (value.sourceTimestamp !== null && value.freshness !== null
+      && sourceTimestampIssues.length === 0 && freshnessIssues.length === 0
+      && !freshnessMatchesSource(
+        value.sourceTimestamp as Readonly<SourcedTimestamp>,
+        value.freshness as Readonly<FreshnessReport>,
+      )) {
+    issues.push(issue('freshness', 'FRESHNESS_SOURCE_MISMATCH', 'freshness must be the canonical evaluation of sourceTimestamp'));
   }
   for (const field of ['lastReceiveAtMs', 'lastProcessAtMs', 'lastSuccessAtMs'] as const) {
     if (value[field] !== null && !isValidUtcMillis(value[field])) issues.push(issue(field, 'UTC_MILLIS_INVALID', `${field} must be null or UTC ms`));
@@ -309,6 +388,47 @@ export function validateSystemComponentSnapshot(value: unknown): ValidationIssue
   if (typeof value.capitalExposed !== 'boolean' || typeof value.operatorAttentionRequired !== 'boolean') issues.push(issue('capitalExposed', 'BOOLEAN_REQUIRED', 'attention/exposure flags must be boolean'));
   const statuses = Array.isArray(value.releaseStatuses) ? new Set(value.releaseStatuses) : new Set<unknown>();
   if (value.truthLabel !== 'LIVE_PUBLIC' && statuses.has('LIVE_PUBLIC')) issues.push(issue('truthLabel', 'LIVE_TRUTH_CONFLICT', 'non-live truth cannot carry LIVE_PUBLIC release status'));
+  if (value.truthLabel === 'LIVE_PUBLIC') {
+    if (!statuses.has('WIRED') || !statuses.has('LIVE_PUBLIC')) {
+      issues.push(issue('truthLabel', 'LIVE_TRUTH_RELEASE_REQUIRED', 'LIVE_PUBLIC truth requires WIRED and LIVE_PUBLIC release evidence'));
+    }
+    if (!isLivePublicAuthority(value.authority)) {
+      issues.push(issue('authority', 'LIVE_TRUTH_AUTHORITY_INVALID', 'LIVE_PUBLIC truth requires LIVE_PUBLIC or DERIVED_LIVE authority'));
+    }
+    if (value.sourceTimestamp !== null && plainRecord(value.sourceTimestamp)
+        && !isLivePublicAuthority(value.sourceTimestamp.authority)) {
+      issues.push(issue('sourceTimestamp.authority', 'LIVE_SOURCE_AUTHORITY_INVALID', 'live source evidence requires public or derived-live authority'));
+    }
+    if (value.freshness !== null && plainRecord(value.freshness)
+        && (value.freshness.state !== 'FRESH' || !isLivePublicAuthority(value.freshness.effectiveAuthority))) {
+      issues.push(issue('freshness', 'LIVE_FRESHNESS_INVALID', 'represented live freshness must be fresh with public or derived-live authority'));
+    }
+    if (value.sourceTimestamp !== null && value.freshness !== null
+        && sourceTimestampIssues.length === 0 && freshnessIssues.length === 0
+        && isLivePublicAuthority(value.authority)
+        && isLivePublicAuthority((value.sourceTimestamp as Readonly<SourcedTimestamp>).authority)
+        && isLivePublicAuthority((value.freshness as Readonly<FreshnessReport>).effectiveAuthority)
+        && weakestAuthority(
+          value.authority,
+          (value.sourceTimestamp as Readonly<SourcedTimestamp>).authority,
+          (value.freshness as Readonly<FreshnessReport>).effectiveAuthority,
+        ) !== value.authority) {
+      issues.push(issue('authority', 'LIVE_AUTHORITY_UPGRADE', 'component authority cannot exceed its source or freshness authority'));
+    }
+  }
+  if (value.truthLabel === 'LIVE_PUBLIC' && value.readiness === 'READY'
+      && isSystemComponentId(value.componentId) && FRESH_SOURCE_COMPONENTS.has(value.componentId)) {
+    if (value.sourceTimestamp === null || value.freshness === null) {
+      issues.push(issue('freshness', 'READY_LIVE_FRESHNESS_REQUIRED', 'READY live source components require sourceTimestamp and freshness evidence'));
+    } else if (sourceTimestampIssues.length === 0 && freshnessIssues.length === 0) {
+      const timestamp = value.sourceTimestamp as Readonly<SourcedTimestamp>;
+      const freshness = value.freshness as Readonly<FreshnessReport>;
+      if (freshness.state !== 'FRESH' || !isLivePublicAuthority(timestamp.authority)
+          || !isLivePublicAuthority(freshness.effectiveAuthority)) {
+        issues.push(issue('freshness', 'READY_LIVE_FRESHNESS_INVALID', 'READY live source evidence must be fresh and publicly authoritative'));
+      }
+    }
+  }
   if (value.readiness === 'READY' && (value.authority === 'UNAVAILABLE' || value.completeness === 'UNAVAILABLE' || value.phase !== 'RUNNING')) issues.push(issue('readiness', 'READY_TRUTH_INVALID', 'READY requires running and available truth'));
   return issues;
 }
@@ -387,6 +507,18 @@ export function validateSystemTraceEvent(value: unknown): ValidationIssue[] {
   if (value.failure !== null && validateStructuredFailure(value.failure).length > 0) issues.push(issue('failure', 'STRUCTURED_FAILURE_INVALID', 'failure must retain Foundation shape'));
   if (!stringList(value.referenceIds, 256) || !unique(value.referenceIds as string[])) issues.push(issue('referenceIds', 'REFERENCES_INVALID', 'reference IDs must be unique bounded strings'));
   if (!Array.isArray(value.lossCodes) || value.lossCodes.some((entry) => !has(DIALECT_LOSS_CODES, entry)) || !unique(value.lossCodes as string[])) issues.push(issue('lossCodes', 'LOSS_CODES_INVALID', 'loss codes must be unique canonical values'));
-  if (value.truthLabel !== 'LIVE_PUBLIC' && Array.isArray(value.releaseStatuses) && value.releaseStatuses.includes('LIVE_PUBLIC')) issues.push(issue('truthLabel', 'LIVE_TRUTH_CONFLICT', 'dry-run/synthetic trace cannot look live'));
+  const statuses = Array.isArray(value.releaseStatuses) ? new Set(value.releaseStatuses) : new Set<unknown>();
+  if (value.truthLabel !== 'LIVE_PUBLIC' && statuses.has('LIVE_PUBLIC')) issues.push(issue('truthLabel', 'LIVE_TRUTH_CONFLICT', 'dry-run/synthetic trace cannot look live'));
+  if (value.truthLabel === 'LIVE_PUBLIC' && (!statuses.has('WIRED') || !statuses.has('LIVE_PUBLIC'))) {
+    issues.push(issue('truthLabel', 'LIVE_TRACE_RELEASE_REQUIRED', 'LIVE_PUBLIC trace truth requires WIRED and LIVE_PUBLIC release evidence'));
+  }
+  if (value.truthLabel === 'LIVE_PUBLIC'
+      && ['SYNTHETIC_ONLY', 'NOT_CONFIGURED', 'MISSING'].some((status) => statuses.has(status))) {
+    issues.push(issue('truthLabel', 'LIVE_TRACE_UNAVAILABLE_CONFLICT', 'LIVE_PUBLIC trace truth cannot carry synthetic or unavailable release semantics'));
+  }
+  if (value.truthLabel === 'LIVE_PUBLIC' && Array.isArray(value.lossCodes)
+      && value.lossCodes.some((code) => UNAVAILABLE_TRUTH_LOSS_CODES.has(String(code)))) {
+    issues.push(issue('lossCodes', 'LIVE_TRACE_AUTHORITY_CONFLICT', 'LIVE_PUBLIC trace truth cannot carry an authority/completeness downgrade to unavailable'));
+  }
   return issues;
 }

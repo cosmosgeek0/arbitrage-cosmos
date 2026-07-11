@@ -1,5 +1,5 @@
 import { BinanceStream, type FeedStatus } from '../binance/ws.js';
-import { fetchExchangeUniverse, fetchOpenInterest, type SymbolFilters } from '../binance/rest.js';
+import { fetchExchangeUniverse, fetchOpenInterest, type ExchangeUniverse, type SymbolFilters } from '../binance/rest.js';
 import type { Ledger } from '../ledger.js';
 import type { SymbolRow } from '../types.js';
 
@@ -112,21 +112,26 @@ export class MarketEngine {
   private oiBusy = false;
   private running = false;
   private generation = 0;
+  private initGeneration = 0;
 
-  constructor(private readonly ledger: Ledger) {}
+  constructor(
+    private readonly ledger: Ledger,
+    private readonly fetchUniverse: () => Promise<ExchangeUniverse> = fetchExchangeUniverse,
+  ) {}
 
   get pairCount(): number {
     return this.features.size;
   }
 
   async init(): Promise<void> {
-    const { pairs, filters } = await fetchExchangeUniverse();
-    this.filters.clear();
-    this.features.clear();
+    const initGeneration = ++this.initGeneration;
+    const { pairs, filters } = await this.fetchUniverse();
+    const nextFilters = new Map<string, SymbolFilters>();
+    const nextFeatures = new Map<string, FeatureEntry>();
     let examinedFilters = 0;
     for (const [key, value] of filters) {
       if (++examinedFilters > MAX_MARKET_SYMBOLS * 2) break;
-      if (this.filters.size >= MAX_MARKET_SYMBOLS) break;
+      if (nextFilters.size >= MAX_MARKET_SYMBOLS) break;
       if (
         !validSymbol(key) || key !== value.symbol || !validSymbol(value.symbol) ||
         typeof value.base !== 'string' || value.base.length === 0 || value.base.length > 24 ||
@@ -136,13 +141,13 @@ export class MarketEngine {
         !finite(value.tickSize) || value.tickSize < 0 ||
         !finite(value.minNotional) || value.minNotional < 0
       ) continue;
-      this.filters.set(key, value);
+      nextFilters.set(key, value);
     }
     for (const p of pairs.slice(0, MAX_MARKET_SYMBOLS * 2)) {
-      if (this.features.size >= MAX_MARKET_SYMBOLS) break;
-      const filter = this.filters.get(p.symbol);
-      if (!validSymbol(p.symbol) || !filter || this.features.has(p.symbol)) continue;
-      this.features.set(p.symbol, {
+      if (nextFeatures.size >= MAX_MARKET_SYMBOLS) break;
+      const filter = nextFilters.get(p.symbol);
+      if (!validSymbol(p.symbol) || !filter || nextFeatures.has(p.symbol)) continue;
+      nextFeatures.set(p.symbol, {
         symbol: p.symbol,
         base: filter.base,
         spotLast: null,
@@ -160,6 +165,14 @@ export class MarketEngine {
         openInterestUpdatedAt: null,
       });
     }
+    // A managed timeout/stop may invalidate an in-flight public REST read. Its
+    // eventual settlement is harmless: only the currently admitted generation
+    // may publish the fully built universe, and publication is one atomic turn.
+    if (initGeneration !== this.initGeneration) return;
+    this.filters.clear();
+    for (const [symbol, filter] of nextFilters) this.filters.set(symbol, filter);
+    this.features.clear();
+    for (const [symbol, feature] of nextFeatures) this.features.set(symbol, feature);
     this.reconcileSymbolState();
   }
 
@@ -240,6 +253,8 @@ export class MarketEngine {
   }
 
   stop(): void {
+    // Invalidate public-universe reads even when start() has not yet activated.
+    ++this.initGeneration;
     if (!this.running) return;
     this.running = false;
     ++this.generation;

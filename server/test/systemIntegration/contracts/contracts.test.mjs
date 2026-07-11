@@ -26,6 +26,7 @@ import {
   validateSystemTraceEvent,
 } from '../../../dist/systemIntegration/contracts/index.js';
 import {
+  evaluateFreshness,
   STRUCTURED_FAILURE_KEYS,
 } from '../../../dist/foundation/contracts/index.js';
 import {
@@ -106,6 +107,46 @@ function sourceRecord(overrides = {}) {
     maximumAuthority: 'LIVE_PUBLIC',
     duplicatePolicy: 'SINGLE_PRODUCER_ONLY',
     notes: ['No integration-owned socket.'],
+    ...overrides,
+  };
+}
+
+function liveComponent(overrides = {}) {
+  const sourceTimestamp = {
+    sourceTimeMs: NOW - 100,
+    receivedAtMs: NOW - 80,
+    maxAgeMs: 5_000,
+    authority: 'LIVE_PUBLIC',
+    completeness: 'COMPLETE',
+    sourceId: 'runtime-source:spot-test',
+  };
+  return {
+    componentId: 'public-spot-source',
+    owner: 'INTELLIGENCE_RUNTIME',
+    ownerPath: 'server/src/intelligenceRuntime',
+    releaseStatuses: ['BUILT_AND_TESTED', 'WIRED', 'LIVE_PUBLIC'],
+    truthLabel: 'LIVE_PUBLIC',
+    desiredState: 'RUNNING',
+    phase: 'RUNNING',
+    domainObservedState: 'LIVE',
+    sourceLifecycle: 'LIVE',
+    readiness: 'READY',
+    authority: 'LIVE_PUBLIC',
+    completeness: 'COMPLETE',
+    sourceTimestamp,
+    freshness: evaluateFreshness(sourceTimestamp, NOW),
+    lastReceiveAtMs: NOW - 80,
+    lastProcessAtMs: NOW - 60,
+    lastSuccessAtMs: NOW - 60,
+    dependencies: ['ledger-persistence'],
+    queue: null,
+    lastFailure: null,
+    blockerCodes: [],
+    generation: 1,
+    restartCount: 0,
+    supportedControls: ['RESTART_COMPONENT'],
+    capitalExposed: false,
+    operatorAttentionRequired: false,
     ...overrides,
   };
 }
@@ -351,6 +392,103 @@ test('release and component validation prevents dry-run/live and READY/unknown c
   const issues = validateSystemComponentSnapshot(component);
   assert.ok(issues.some((entry) => entry.code === 'LIVE_TRUTH_CONFLICT'));
   assert.ok(issues.some((entry) => entry.code === 'READY_TRUTH_INVALID'));
+});
+
+test('LIVE_PUBLIC component truth requires matching release and public authority evidence', () => {
+  const forged = liveComponent({
+    releaseStatuses: ['MISSING'],
+    authority: 'UNAVAILABLE',
+    sourceTimestamp: null,
+    freshness: null,
+  });
+  const issues = validateSystemComponentSnapshot(forged);
+  assert.ok(issues.some((entry) => entry.code === 'LIVE_TRUTH_RELEASE_REQUIRED'));
+  assert.ok(issues.some((entry) => entry.code === 'LIVE_TRUTH_AUTHORITY_INVALID'));
+  assert.ok(issues.some((entry) => entry.code === 'READY_LIVE_FRESHNESS_REQUIRED'));
+
+  assert.deepEqual(validateSystemComponentSnapshot(liveComponent()), []);
+  assert.deepEqual(validateSystemComponentSnapshot(liveComponent({
+    componentId: 'ledger-persistence',
+    owner: 'EXISTING_LEDGER',
+    ownerPath: 'server/src/db.ts',
+    domainObservedState: 'WRITABLE',
+    sourceLifecycle: null,
+    sourceTimestamp: null,
+    freshness: null,
+    dependencies: [],
+  })), []);
+});
+
+test('READY live source truth rejects stale, forged, or misaligned freshness', () => {
+  const base = liveComponent();
+  const stale = validateSystemComponentSnapshot(liveComponent({
+    freshness: {
+      ...base.freshness,
+      state: 'STALE',
+      effectiveAuthority: 'UNAVAILABLE',
+    },
+  }));
+  assert.ok(stale.some((entry) => entry.code === 'FRESHNESS_SOURCE_MISMATCH'));
+  assert.ok(stale.some((entry) => entry.code === 'LIVE_FRESHNESS_INVALID'));
+  assert.ok(stale.some((entry) => entry.code === 'READY_LIVE_FRESHNESS_INVALID'));
+
+  const forgedAge = validateSystemComponentSnapshot(liveComponent({
+    freshness: { ...base.freshness, ageMs: 0 },
+  }));
+  assert.ok(forgedAge.some((entry) => entry.code === 'FRESHNESS_SOURCE_MISMATCH'));
+
+  const unavailableSource = validateSystemComponentSnapshot(liveComponent({
+    sourceTimestamp: { ...base.sourceTimestamp, authority: 'UNAVAILABLE' },
+    freshness: {
+      state: 'UNAVAILABLE',
+      ageMs: null,
+      basis: 'NONE',
+      effectiveAuthority: 'UNAVAILABLE',
+      evaluatedAt: NOW,
+    },
+  }));
+  assert.ok(unavailableSource.some((entry) => entry.code === 'LIVE_SOURCE_AUTHORITY_INVALID'));
+  assert.ok(unavailableSource.some((entry) => entry.code === 'READY_LIVE_FRESHNESS_INVALID'));
+
+  const derivedTimestamp = { ...base.sourceTimestamp, authority: 'DERIVED_LIVE' };
+  const authorityUpgrade = validateSystemComponentSnapshot(liveComponent({
+    sourceTimestamp: derivedTimestamp,
+    freshness: evaluateFreshness(derivedTimestamp, NOW),
+  }));
+  assert.ok(authorityUpgrade.some((entry) => entry.code === 'LIVE_AUTHORITY_UPGRADE'));
+});
+
+test('LIVE_PUBLIC trace truth requires matching release evidence and excludes authority smuggling', () => {
+  const base = {
+    id: 'trace:live:1',
+    sequence: 1,
+    kind: 'SOURCE',
+    componentId: 'public-spot-source',
+    correlationId: 'cor_trace_live_1',
+    occurredAtMs: NOW,
+    persistedAtMs: null,
+    truthLabel: 'LIVE_PUBLIC',
+    releaseStatuses: ['WIRED', 'LIVE_PUBLIC'],
+    ownerId: 'runtime-source:spot-test',
+    canonicalProjectionId: null,
+    revisionDigest: null,
+    domainLifecycle: 'LIVE',
+    machinePhase: 'RUNNING',
+    failure: null,
+    referenceIds: ['book:1'],
+    lossCodes: [],
+  };
+  assert.deepEqual(validateSystemTraceEvent(base), []);
+
+  const missing = validateSystemTraceEvent({ ...base, releaseStatuses: ['MISSING'] });
+  assert.ok(missing.some((entry) => entry.code === 'LIVE_TRACE_RELEASE_REQUIRED'));
+  assert.ok(missing.some((entry) => entry.code === 'LIVE_TRACE_UNAVAILABLE_CONFLICT'));
+
+  const forgedAuthority = validateSystemTraceEvent({ ...base, authority: 'UNAVAILABLE' });
+  assert.ok(forgedAuthority.some((entry) => entry.code === 'UNKNOWN_FIELD' && entry.path === 'authority'));
+
+  const downgraded = validateSystemTraceEvent({ ...base, lossCodes: ['STALE_AUTHORITY_DOWNGRADED'] });
+  assert.ok(downgraded.some((entry) => entry.code === 'LIVE_TRACE_AUTHORITY_CONFLICT'));
 });
 
 test('control and trace validators reject live mode and forged live labels', () => {

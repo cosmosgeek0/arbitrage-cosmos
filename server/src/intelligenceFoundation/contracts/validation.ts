@@ -423,13 +423,13 @@ export function validateNormalizedEvidence(value: unknown): ValidationResult<Nor
         !nonEmptyString(value.asset) || !['ELIGIBLE', 'INELIGIBLE', 'UNKNOWN'].includes(String(value.eligibility)) ||
         !['AVAILABLE', 'UNAVAILABLE', 'UNKNOWN'].includes(String(value.availability)) ||
         !nullableNonNegative(value.systemAvailableAmount) || !nullableNonNegative(value.accountBorrowLimit) ||
-        !nullableNonNegative(value.hourlyInterestRate) || !nullableNonNegative(value.inventoryAmount) ||
+        !nullableNonNegative(value.hourlyInterestRateDecimal) || !nullableNonNegative(value.inventoryAmount) ||
         (value.availability === 'AVAILABLE' && !positive(value.systemAvailableAmount)) ||
         (value.availability === 'UNKNOWN' && value.systemAvailableAmount !== null)
       ) {
         return { ok: false, failure: failure('INVALID_VALUE', 'normalized_evidence', 'invalid borrow values', null) };
       }
-      return { ok: true, value: { ...common, kind: 'BORROW', asset: value.asset, eligibility: value.eligibility as 'ELIGIBLE' | 'INELIGIBLE' | 'UNKNOWN', availability: value.availability as 'AVAILABLE' | 'UNAVAILABLE' | 'UNKNOWN', systemAvailableAmount: value.systemAvailableAmount as number | null, accountBorrowLimit: value.accountBorrowLimit as number | null, hourlyInterestRate: value.hourlyInterestRate as number | null, inventoryAmount: value.inventoryAmount as number | null } };
+      return { ok: true, value: { ...common, kind: 'BORROW', asset: value.asset, eligibility: value.eligibility as 'ELIGIBLE' | 'INELIGIBLE' | 'UNKNOWN', availability: value.availability as 'AVAILABLE' | 'UNAVAILABLE' | 'UNKNOWN', systemAvailableAmount: value.systemAvailableAmount as number | null, accountBorrowLimit: value.accountBorrowLimit as number | null, hourlyInterestRateDecimal: value.hourlyInterestRateDecimal as number | null, inventoryAmount: value.inventoryAmount as number | null } };
     }
     case 'CONTEXT': {
       if (!nonEmptyString(value.contextType) || !['SYMBOL', 'SECTOR', 'MARKET', 'VENUE'].includes(String(value.scope)) || !contextValues(value.values)) {

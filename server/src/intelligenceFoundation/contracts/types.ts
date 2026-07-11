@@ -172,7 +172,8 @@ export interface NormalizedBorrow extends EvidenceBase {
   availability: 'AVAILABLE' | 'UNAVAILABLE' | 'UNKNOWN';
   systemAvailableAmount: number | null;
   accountBorrowLimit: number | null;
-  hourlyInterestRate: number | null;
+  /** Decimal rate per hour: 0.00002 means 0.002% per hour. */
+  hourlyInterestRateDecimal: number | null;
   inventoryAmount: number | null;
 }
 

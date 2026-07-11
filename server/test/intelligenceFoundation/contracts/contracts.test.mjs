@@ -151,7 +151,7 @@ test('depth ordering and borrow numeric invariants fail closed', () => {
   const invalidBorrow = validateNormalizedEvidence({
     id: 'borrow:1', kind: 'BORROW', instrument: borrowInstrument, truth: truth(), asset: 'BTC',
     eligibility: 'ELIGIBLE', availability: 'AVAILABLE', systemAvailableAmount: -1,
-    accountBorrowLimit: null, hourlyInterestRate: 0.001, inventoryAmount: null,
+    accountBorrowLimit: null, hourlyInterestRateDecimal: 0.00001, inventoryAmount: null,
   });
   assert.equal(invalidBorrow.ok, false);
 });

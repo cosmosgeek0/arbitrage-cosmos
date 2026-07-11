@@ -47,6 +47,7 @@ import type {
   StagedPlanConfigurationDraft,
   StagedPlanRevisionReceipt,
 } from './types.js';
+import { evaluateOperatorApproval } from '../approvals/index.js';
 
 type Prerequisite = GovernedStagedExposureStep['prerequisites'][number];
 type NextRule = GovernedStagedExposureStep['nextStageConditions'][number];
@@ -78,6 +79,10 @@ function positiveInteger(value: unknown): value is number {
 
 function sortedUnique(values: readonly string[]): readonly string[] {
   return Object.freeze([...new Set(values)].sort());
+}
+
+function compareText(left: string, right: string): -1 | 0 | 1 {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function hasDuplicates(values: readonly unknown[]): boolean {
@@ -174,6 +179,9 @@ export function validateStagedPlanConfiguration(configuration: Readonly<StagedPl
   issues.push(...integerBoundIssues('MAXIMUM_EVIDENCE_AGE_MS', configuration?.maximumEvidenceAgeMs));
   issues.push(...exactBoundIssues('MAXIMUM_NAKED_LEG_AMOUNT', configuration?.maximumNakedLegAmount));
   issues.push(...integerBoundIssues('MAXIMUM_NAKED_LEG_DURATION_MS', configuration?.maximumNakedLegDurationMs));
+  if (configuration?.maximumPlanExposure?.unit !== configuration?.maximumNakedLegAmount?.unit) {
+    issues.push('CONFIG_EXACT_BOUND_UNITS_DIVERGENT');
+  }
   if (authority && nonEmpty(authority.revision) && issues.length === 0
       && authority.revision !== expectedConfigurationRevision(configuration)) issues.push('CONFIG_REVISION_DIGEST_MISMATCH');
   if (!authority || !nonEmpty(authority.revision)) issues.push('CONFIG_REVISION_INVALID');
@@ -220,7 +228,7 @@ function cloneStep(step: Readonly<GovernedStagedExposureStep>): Readonly<Governe
     maximumTotalExposure: step.maximumTotalExposure,
     reservationConsumption: step.reservationConsumption,
     prerequisites: Object.freeze([...step.prerequisites]
-      .sort((a, b) => a.code.localeCompare(b.code))
+      .sort((a, b) => compareText(a.code, b.code))
       .map((item) => Object.freeze({ ...item }))),
     economicThesisConditions: sortedUnique(step.economicThesisConditions),
     invalidationConditions: sortedUnique(step.invalidationConditions),
@@ -352,6 +360,19 @@ export function validateGovernedStages(
     ? sumExactDecimals(stages.map((step) => step.reservationConsumption))
     : null;
   if (reservationConsumption !== null && compareExactDecimals(reservationConsumption, reservationAvailable) > 0) issues.push('STAGE_RESERVATION_OVERCOMMITTED');
+  let cumulativeReservationConsumption: ExactDecimal = ZERO;
+  for (const step of stages) {
+    if (!canonicalNonNegative(step.reservationConsumption)) continue;
+    cumulativeReservationConsumption = addExactDecimals(cumulativeReservationConsumption, step.reservationConsumption);
+    if (canonicalNonNegative(step.maximumAdditionalExposure)
+        && compareExactDecimals(step.maximumAdditionalExposure, step.reservationConsumption) > 0) {
+      issues.push('STAGE_RESERVATION_UNDERCOVERS_ADDITIONAL');
+    }
+    if (canonicalNonNegative(step.maximumTotalExposure)
+        && compareExactDecimals(step.maximumTotalExposure, cumulativeReservationConsumption) > 0) {
+      issues.push('STAGE_TOTAL_EXCEEDS_CUMULATIVE_RESERVATION');
+    }
+  }
   return Object.freeze([...new Set(issues)]);
 }
 
@@ -409,6 +430,10 @@ function planConfigurationIssues(
 ): readonly string[] {
   const issues = [...planEnvelopeIssues(plan), ...validateStagedPlanConfiguration(configuration)];
   if (plan.configRevision !== configuration.authority.revision) issues.push('PLAN_CONFIG_REVISION_MISMATCH');
+  if (configuration.maximumPlanExposure.unit !== plan.valuationAsset
+      || configuration.maximumNakedLegAmount.unit !== plan.valuationAsset) {
+    issues.push('CONFIG_VALUATION_UNIT_MISMATCH');
+  }
   if (issues.length === 0) issues.push(...validateGovernedStages(plan.stages, configuration, plan.remainingReservedAmount));
   return Object.freeze([...new Set(issues)]);
 }
@@ -443,6 +468,10 @@ function buildStagedPlanInternal(
   const configIssues = validateStagedPlanConfiguration(input.configuration);
   if (configIssues.length > 0) return reject(configIssues[0], configIssues.join(','), input.createdAtMs, input.correlationId, 'build-plan', 'RESERVED');
   if (!isStagedPlanConfigurationEffective(input.configuration, input.createdAtMs)) return reject('CONFIG_NOT_EFFECTIVE', 'configuration is not effective at plan creation', input.createdAtMs, input.correlationId, 'build-plan', 'RESERVED');
+  if (input.configuration.maximumPlanExposure.unit !== input.valuationAsset
+      || input.configuration.maximumNakedLegAmount.unit !== input.valuationAsset) {
+    return reject('CONFIG_VALUATION_UNIT_MISMATCH', 'staged-plan exact bounds must use the reservation valuation asset', input.createdAtMs, input.correlationId, 'build-plan', 'RESERVED');
+  }
   if (!nonEmpty(input.proposalIntakeDigest, 256) || !nonEmpty(input.valuationAsset, 40)
       || input.valuationAsset !== input.reservation.valuationAsset
       || !positiveInteger(input.reservation.revision) || !nonEmpty(input.reservation.considerationId)) {
@@ -568,7 +597,7 @@ function canonicalStageEvidence(values: readonly EvaluateStageTransitionInput['e
     if (!prior) byCode.set(observation.code, Object.freeze({ ...observation }));
   }
   return Object.freeze({
-    observations: Object.freeze([...byCode.values()].sort((left, right) => left.code.localeCompare(right.code))),
+    observations: Object.freeze([...byCode.values()].sort((left, right) => compareText(left.code, right.code))),
     issue: null,
   });
 }
@@ -605,12 +634,16 @@ export function evaluateStageTransition(input: Readonly<EvaluateStageTransitionI
   const resultingTotal = addExactDecimals(input.currentTotalExposure, input.requestedAdditionalExposure);
   if (increasing && (compareExactDecimals(input.requestedAdditionalExposure, target.maximumAdditionalExposure) > 0
       || compareExactDecimals(resultingTotal, target.maximumTotalExposure) > 0)) return failGate('STAGE_EXPOSURE_LIMIT_EXCEEDED', 'requested exposure exceeds exact stage limits');
+  if (increasing && compareExactDecimals(input.requestedAdditionalExposure, target.reservationConsumption) > 0) {
+    return failGate('STAGE_RESERVATION_COVERAGE_EXCEEDED', 'requested additional exposure exceeds exact same-valuation reservation consumption');
+  }
   if (!Number.isSafeInteger(input.proposedNakedLegDurationMs) || input.proposedNakedLegDurationMs < 0
       || compareExactDecimals(input.proposedNakedLegAmount, target.maximumNakedLegAmount) > 0
       || input.proposedNakedLegDurationMs > target.maximumNakedLegDurationMs) return failGate('NAKED_LEG_LIMIT_EXCEEDED', 'proposed naked-leg amount or duration exceeds the executor envelope');
   let reservationAvailable: NonNegativeDecimal | null = null;
   let approvalId: string | null = null;
   let approvalRevision: number | null = null;
+  let approvalValidated = false;
   let canonicalEvidence: readonly EvaluateStageTransitionInput['evidence'][number][] = Object.freeze([]);
   if (increasing) {
     if (input.nowMs - input.stageEnteredAtMs > source.maximumTimeInStageMs) return failGate('STAGE_TIME_LIMIT_EXCEEDED', 'increasing transition arrived after the source-stage time limit');
@@ -648,20 +681,57 @@ export function evaluateStageTransition(input: Readonly<EvaluateStageTransitionI
     const approval = input.approval;
     const expectedAction: ApprovalActionClass = input.to === 'ADD' ? 'ADD' : 'OPEN';
     const expectedUseScopeKey = stageUseScopeKey(input.plan, from, input.to);
-    if (!approval || !approval.validated || !nonEmpty(approval.approvalId) || !positiveInteger(approval.approvalRevision)
-        || approval.mode !== 'MANUAL_ARMED' || approval.validatedAtMs !== input.nowMs
-        || !isValidUtcMillis(approval.expiresAtMs) || approval.expiresAtMs <= input.nowMs || approval.revokedAtMs !== null
-        || approval.useScopeKey !== expectedUseScopeKey || approval.actionClass !== expectedAction || approval.stage !== target.stage
-        || approval.stagedPlanId !== input.plan.id
-        || approval.stagedPlanRevision !== input.plan.revision || approval.stagedPlanDigest !== input.plan.digest
-        || approval.configRevision !== input.plan.configRevision
-        || !Array.isArray(approval.allowedActionClasses) || !approval.allowedActionClasses.includes(expectedAction)
-        || target.requiredApprovalActions.some((action) => !approval.allowedActionClasses.includes(action))
-        || !canonicalNonNegative(approval.maximumAdditionalExposure) || !canonicalNonNegative(approval.maximumTotalExposure)
-        || compareExactDecimals(input.requestedAdditionalExposure, approval.maximumAdditionalExposure) > 0
-        || compareExactDecimals(resultingTotal, approval.maximumTotalExposure) > 0) return failGate('SCOPED_APPROVAL_REQUIRED', 'current approval is absent, stale, unbound, or too narrow');
-    approvalId = approval.approvalId;
-    approvalRevision = approval.approvalRevision;
+    if (!approval) return failGate('SCOPED_APPROVAL_REQUIRED', 'current approval state, context, policy, and mandate are required');
+    const approvalRecord = approval.state?.approval;
+    const approvalContext = approval.context;
+    const mandate = approval.mandate;
+    const mandateSemantic = mandate && typeof mandate === 'object'
+      ? Object.fromEntries(Object.entries(mandate).filter(([key]) => key !== 'digest'))
+      : null;
+    const mandateDigestValid = mandateSemantic !== null && capitalDigest(mandateSemantic) === mandate.digest;
+    const bindingValid = mandateDigestValid
+      && mandate.stagedPlanId === input.plan.id
+      && mandate.stagedPlanRevision === input.plan.revision
+      && mandate.stagedPlanDigest === input.plan.digest
+      && mandate.reservationId === input.plan.reservationId
+      && mandate.proposalIntakeDigest === input.plan.proposalIntakeDigest
+      && mandate.configRevision === input.plan.configRevision
+      && mandate.valuationAsset === input.plan.valuationAsset
+      && mandate.expiresAtMs > input.nowMs
+      && compareExactDecimals(resultingTotal, mandate.targetMaximumExposure) <= 0
+      && approvalContext.nowMs === input.nowMs
+      && approvalContext.correlationId === input.correlationId
+      && approvalContext.proposalIntakeDigest === input.plan.proposalIntakeDigest
+      && approvalContext.mandateId === mandate.id
+      && approvalContext.mandateRevision === mandate.revision
+      && approvalContext.mandateDigest === mandate.digest
+      && approvalContext.stagedPlanId === input.plan.id
+      && approvalContext.stagedPlanRevision === input.plan.revision
+      && approvalContext.stagedPlanDigest === input.plan.digest
+      && approvalContext.configRevision === input.plan.configRevision
+      && approvalContext.useScopeKey === expectedUseScopeKey
+      && approvalContext.actionClass === expectedAction
+      && approvalContext.stage === target.stage
+      && approvalContext.requestedNotional === input.requestedAdditionalExposure
+      && approvalRecord?.mode === 'MANUAL_ARMED'
+      && approvalRecord.valuationAsset === input.plan.valuationAsset
+      && target.requiredApprovalActions.every((action) => approvalRecord.allowedActionClasses.includes(action));
+    if (!bindingValid) return failGate('SCOPED_APPROVAL_REQUIRED', 'approval state or validation context is stale, unbound, or too narrow');
+    let evaluatedApproval;
+    try {
+      evaluatedApproval = evaluateOperatorApproval(approval.state, approvalContext, approval.policy);
+    } catch {
+      return failGate('SCOPED_APPROVAL_REQUIRED', 'approval state, validation context, or policy is malformed');
+    }
+    if (!evaluatedApproval.ok || !evaluatedApproval.value.allowedForExternalRiskEvaluation
+        || evaluatedApproval.value.mode !== 'MANUAL_ARMED' || evaluatedApproval.value.executionReady !== false
+        || evaluatedApproval.value.approvalId !== approvalRecord.id
+        || evaluatedApproval.value.validatedAtMs !== input.nowMs) {
+      return failGate('SCOPED_APPROVAL_REQUIRED', 'public approval evaluation did not grant current scoped external-risk authority');
+    }
+    approvalId = approvalRecord.id;
+    approvalRevision = approval.state.revision;
+    approvalValidated = true;
     const risk = input.futureRiskRecheck;
     if (!risk || !risk.required || risk.owner !== 'FOUNDATION_MULTI_LEG_RISK'
         || risk.stagedPlanId !== input.plan.id || risk.stagedPlanRevision !== input.plan.revision
@@ -672,7 +742,7 @@ export function evaluateStageTransition(input: Readonly<EvaluateStageTransitionI
     correlationId: input.correlationId,
     freshEvidence: !increasing || target.prerequisites.every((item) => !item.required || canonicalEvidence.some((fact) => fact.code === item.code && fact.available)),
     reservationAvailable: !increasing || (reservationAvailable !== null && compareExactDecimals(target.reservationConsumption, reservationAvailable) <= 0),
-    approvalValidated: !increasing || input.approval?.validated === true,
+    approvalValidated: !increasing || approvalValidated,
     futureRiskRecheckRequired: !increasing || input.futureRiskRecheck?.required === true,
     adversePriceMoveIsSoleReason: input.adversePriceMoveIsSoleReason,
   });

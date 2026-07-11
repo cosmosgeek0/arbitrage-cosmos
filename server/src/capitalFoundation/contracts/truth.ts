@@ -5,13 +5,13 @@ import {
   type SourcedTimestamp,
 } from '../../foundation/contracts/index.js';
 
-export const CAPITAL_TRUTH_STATES = [
+export const CAPITAL_TRUTH_STATES = Object.freeze([
   'COMPLETE',
   'PARTIAL',
   'STALE',
   'UNKNOWN',
   'DIVERGENT',
-] as const;
+] as const);
 export type CapitalTruthState = (typeof CAPITAL_TRUTH_STATES)[number];
 
 export interface TruthMetadata {

@@ -6,7 +6,7 @@ import {
   type ContractResult,
 } from '../../foundation/contracts/index.js';
 
-export const CAPITAL_LIFECYCLE_STATES = [
+export const CAPITAL_LIFECYCLE_STATES = Object.freeze([
   'OBSERVED',
   'ELIGIBLE',
   'BLOCKED',
@@ -27,10 +27,10 @@ export const CAPITAL_LIFECYCLE_STATES = [
   'CANCELLED',
   'EXPIRED',
   'UNKNOWN',
-] as const;
+] as const);
 export type CapitalLifecycleState = (typeof CAPITAL_LIFECYCLE_STATES)[number];
 
-export const TERMINAL_CAPITAL_LIFECYCLE_STATES = ['CLOSED', 'CANCELLED', 'EXPIRED'] as const;
+export const TERMINAL_CAPITAL_LIFECYCLE_STATES = Object.freeze(['CLOSED', 'CANCELLED', 'EXPIRED'] as const);
 
 export const CAPITAL_LIFECYCLE_TRANSITIONS: Readonly<
   Record<CapitalLifecycleState, readonly CapitalLifecycleState[]>
@@ -75,10 +75,6 @@ export function canTransitionCapitalLifecycle(
 export interface CapitalTransitionEvidence {
   readonly nowMs: number;
   readonly correlationId: string;
-  readonly approvalValidated: boolean;
-  readonly approvalMode: 'READ_ONLY' | 'ADVISORY' | 'VALIDATE_ONLY' | 'MANUAL_ARMED' | null;
-  readonly boundRiskAllowed: boolean;
-  readonly boundRiskCurrent: boolean;
 }
 
 export interface CapitalTransitionReceipt {
@@ -86,18 +82,26 @@ export interface CapitalTransitionReceipt {
   readonly to: CapitalLifecycleState;
   readonly transitionedAtMs: number;
   readonly correlationId: string;
+  /** A graph transition receipt never carries approval, risk, or execution authority. */
+  readonly authority: 'NONE';
+  readonly executionReady: false;
 }
 
 /**
- * Authoritative lifecycle transition guard. The boolean helper above is for
- * graph inspection only; state reducers must use this typed result.
+ * Pure lifecycle graph guard. Approval and execution readiness are deliberately
+ * not projected from caller assertions here: the approvals lane owns the
+ * former and Backend Foundation owns the latter. Those two externally owned
+ * edges therefore fail closed until a future composition reducer consumes the
+ * complete bound owner records.
  */
 export function transitionCapitalLifecycle(
   from: CapitalLifecycleState,
   to: CapitalLifecycleState,
   evidence: CapitalTransitionEvidence,
 ): ContractResult<Readonly<CapitalTransitionReceipt>> {
-  if (!isValidUtcMillis(evidence.nowMs) || evidence.correlationId.trim().length === 0) {
+  if (!isValidUtcMillis(evidence.nowMs) || typeof evidence.correlationId !== 'string'
+      || evidence.correlationId.length === 0 || evidence.correlationId.length > 128
+      || evidence.correlationId.trim() !== evidence.correlationId) {
     throw new TypeError('capital transition requires injected UTC time and a correlation ID');
   }
   const reject = (code: string, message: string) => fail<Readonly<CapitalTransitionReceipt>>(
@@ -117,27 +121,28 @@ export function transitionCapitalLifecycle(
     return reject('ILLEGAL_CAPITAL_LIFECYCLE_TRANSITION', `${from} cannot transition to ${to}`);
   }
   if (from === 'AWAITING_APPROVAL' && to === 'AWAITING_RISK') {
-    if (!evidence.approvalValidated || (evidence.approvalMode !== 'VALIDATE_ONLY' && evidence.approvalMode !== 'MANUAL_ARMED')) {
-      return reject('APPROVAL_REQUIRED_FOR_RISK', 'a current VALIDATE_ONLY or MANUAL_ARMED approval is required before external risk evaluation');
-    }
+    return reject(
+      'APPROVAL_LANE_TRANSITION_REQUIRED',
+      'the approvals lane must consume a complete current scoped approval before projecting external risk evaluation',
+    );
   }
   if (from === 'AWAITING_RISK' && to === 'READY_FOR_EXECUTION') {
-    if (!evidence.approvalValidated || evidence.approvalMode !== 'MANUAL_ARMED') {
-      return reject('MANUAL_ARMED_APPROVAL_REQUIRED', 'only a current MANUAL_ARMED approval may become execution-ready');
-    }
-    if (!evidence.boundRiskAllowed || !evidence.boundRiskCurrent) {
-      return reject('BOUND_CURRENT_RISK_REQUIRED', 'a current allowed Foundation risk verdict bound to this mandate is required');
-    }
+    return reject(
+      'FOUNDATION_EXECUTION_TRANSITION_REQUIRED',
+      'Capital Supervision cannot mint execution readiness; Backend Foundation must project its bound current risk and execution state',
+    );
   }
   return ok(Object.freeze({
     from,
     to,
     transitionedAtMs: evidence.nowMs,
     correlationId: evidence.correlationId,
+    authority: 'NONE' as const,
+    executionReady: false as const,
   }));
 }
 
-export const CAPITAL_STAGES = ['OBSERVE', 'PROBE', 'CONFIRM', 'ADD', 'HOLD', 'REDUCE', 'EXIT'] as const;
+export const CAPITAL_STAGES = Object.freeze(['OBSERVE', 'PROBE', 'CONFIRM', 'ADD', 'HOLD', 'REDUCE', 'EXIT'] as const);
 export type CapitalStage = (typeof CAPITAL_STAGES)[number];
 
 export const CAPITAL_STAGE_TRANSITIONS: Readonly<Record<CapitalStage, readonly CapitalStage[]>> = Object.freeze({
@@ -172,14 +177,26 @@ export interface CapitalStageTransitionReceipt {
   readonly to: CapitalStage;
   readonly transitionedAtMs: number;
   readonly correlationId: string;
+  /** Precondition receipts never carry approval, risk, or execution authority. */
+  readonly authority: 'NONE';
+  readonly executionReady: false;
 }
 
+/**
+ * Pure stage graph/precondition helper. Caller booleans can only explain why
+ * a graph edge is locally admissible; they cannot mint stage authority. The
+ * stages lane's evaluateStageTransition is the sole producer of a bound
+ * StageTransitionAuthorization after it revalidates plan, reservation,
+ * approval-state, mandate, evidence, liquidity, and the future risk gate.
+ */
 export function transitionCapitalStage(
   from: CapitalStage,
   to: CapitalStage,
   evidence: CapitalStageTransitionEvidence,
 ): ContractResult<Readonly<CapitalStageTransitionReceipt>> {
-  if (!isValidUtcMillis(evidence.nowMs) || evidence.correlationId.trim().length === 0) {
+  if (!isValidUtcMillis(evidence.nowMs) || typeof evidence.correlationId !== 'string'
+      || evidence.correlationId.length === 0 || evidence.correlationId.length > 128
+      || evidence.correlationId.trim() !== evidence.correlationId) {
     throw new TypeError('capital stage transition requires injected UTC time and a correlation ID');
   }
   const reject = (code: string, message: string) => fail<Readonly<CapitalStageTransitionReceipt>>(
@@ -207,5 +224,12 @@ export function transitionCapitalStage(
     if (!evidence.approvalValidated) return reject('APPROVAL_REQUIRED', 'ADD requires current scoped approval');
     if (!evidence.futureRiskRecheckRequired) return reject('FUTURE_RISK_RECHECK_REQUIRED', 'ADD must remain gated by a future Foundation risk recheck');
   }
-  return ok(Object.freeze({ from, to, transitionedAtMs: evidence.nowMs, correlationId: evidence.correlationId }));
+  return ok(Object.freeze({
+    from,
+    to,
+    transitionedAtMs: evidence.nowMs,
+    correlationId: evidence.correlationId,
+    authority: 'NONE' as const,
+    executionReady: false as const,
+  }));
 }

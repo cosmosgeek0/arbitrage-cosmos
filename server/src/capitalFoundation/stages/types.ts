@@ -1,6 +1,5 @@
 import type {
   ApprovalActionClass,
-  ApprovalMode,
   CapitalMandate,
   CapitalReservation,
   CapitalStage,
@@ -13,6 +12,11 @@ import type {
   StagedExposureStep,
   StagedPlan,
 } from '../contracts/index.js';
+import type {
+  ApprovalPolicyBounds,
+  OperatorApprovalState,
+  ScopedApprovalValidationContext,
+} from '../approvals/index.js';
 
 export interface StagedPlanConfiguration {
   readonly authority: Readonly<ConfigurationAuthority>;
@@ -92,23 +96,14 @@ export interface StageEvidenceObservation {
 }
 
 export interface ScopedStageApproval {
-  readonly validated: boolean;
-  readonly approvalId: string;
-  readonly approvalRevision: number;
-  readonly mode: ApprovalMode;
-  readonly validatedAtMs: number;
-  readonly expiresAtMs: number;
-  readonly revokedAtMs: number | null;
-  readonly useScopeKey: string;
-  readonly actionClass: ApprovalActionClass;
-  readonly stage: CapitalStage;
-  readonly stagedPlanId: string;
-  readonly stagedPlanRevision: number;
-  readonly stagedPlanDigest: string;
-  readonly configRevision: string;
-  readonly allowedActionClasses: readonly ApprovalActionClass[];
-  readonly maximumAdditionalExposure: NonNegativeDecimal;
-  readonly maximumTotalExposure: NonNegativeDecimal;
+  /** Current revisioned approval state owned by the approvals lane. */
+  readonly state: Readonly<OperatorApprovalState>;
+  /** Exact context evaluated again by the public approvals policy. */
+  readonly context: Readonly<ScopedApprovalValidationContext>;
+  /** Content-addressed approval bounds used by that evaluation. */
+  readonly policy: Readonly<ApprovalPolicyBounds>;
+  /** Concrete mandate whose identity and digest the approval must bind. */
+  readonly mandate: Readonly<CapitalMandate>;
 }
 
 export interface FutureRiskRecheckBinding {

@@ -227,6 +227,49 @@ test('unvalued non-native collateral blocks allocation but preserves its asset q
   assert.ok(result.allocatable.unknownReasons.includes('UNVALUED_REQUIRED_ASSET_BTC'));
 });
 
+test('zero unit value cannot turn a positive non-native liability into known zero capital usage', () => {
+  const input = completeInput();
+  input.liabilities.value = [{
+    liabilityId: 'liability-btc',
+    asset: 'BTC',
+    principal: '0.4',
+    accruedInterest: '0.01',
+    fees: '0.001',
+    total: '0.411',
+  }];
+  input.valuations.value[0].conservativeUnitValue = '0';
+  const result = deriveAccountCapitalProjection(input);
+  const liability = result.liabilitiesByAsset.find((row) => row.asset === 'BTC');
+  assert.equal(liability.total, '0.411');
+  assert.equal(liability.conservativeValue, null);
+  assert.equal(result.allocatable.liabilityValue, null);
+  assert.equal(result.allocatable.amount, null);
+  assert.equal(result.allocatable.status, 'UNKNOWN');
+  assert.ok(result.allocatable.unknownReasons.includes('ZERO_UNIT_VALUE_INVALID_FOR_POSITIVE_LIABILITY_BTC'));
+  assert.equal(result.truth.allRequiredSourcesFreshAndComplete, false);
+  assert.equal(result.supervisionVisible, true);
+});
+
+test('zero unit value remains an exact known zero only when the non-native liability itself is zero', () => {
+  const input = completeInput();
+  input.liabilities.value = [{
+    liabilityId: 'liability-btc-zero',
+    asset: 'BTC',
+    principal: '0',
+    accruedInterest: '0',
+    fees: '0',
+    total: '0',
+  }];
+  input.valuations.value[0].conservativeUnitValue = '0';
+  const result = deriveAccountCapitalProjection(input);
+  const liability = result.liabilitiesByAsset.find((row) => row.asset === 'BTC');
+  assert.equal(liability.conservativeValue, '0');
+  assert.equal(result.allocatable.liabilityValue, '0');
+  assert.equal(result.allocatable.status, 'AVAILABLE');
+  assert.equal(result.allocatable.amount, '930');
+  assert.equal(result.allocatable.unknownReasons.length, 0);
+});
+
 test('contradictory balance arithmetic blocks allocation and keeps observed exposure visible', () => {
   const input = completeInput();
   input.spot.value.balances[0].total = '999';

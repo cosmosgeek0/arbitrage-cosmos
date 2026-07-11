@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   createOperatorApprovalState,
+  deriveApprovalPolicyDigest,
   evaluateOperatorApproval,
   reduceOperatorApprovalState,
   validateApprovalPolicyBounds,
@@ -61,9 +62,16 @@ function approval(overrides = {}) {
 }
 
 function policy(overrides = {}) {
-  return {
+  const authorityOverrides = overrides.authority ?? {};
+  const candidate = {
+    authority: {
+      sourceId: 'capital-policy-registry:approvals',
+      issuedAtMs: NOW - 2_000,
+      effectiveFromMs: NOW - 1_500,
+      effectiveUntilMs: NOW + 10_000,
+      ...authorityOverrides,
+    },
     configRevision: 'cfg-1',
-    sourcePolicyDigest: 'policy-digest-1',
     strategy: 'BASIS',
     symbols: ['BTCUSDT'],
     instruments: ['BINANCE:SPOT:BTCUSDT', 'BINANCE:PERP:BTCUSDT'],
@@ -72,6 +80,22 @@ function policy(overrides = {}) {
     valuationAsset: 'USDT',
     stageLimits: [{ stage: 'PROBE', maximumExposure: '10.25' }, { stage: 'ADD', maximumExposure: '50' }],
     ...overrides,
+    authority: {
+      sourceId: 'capital-policy-registry:approvals',
+      issuedAtMs: NOW - 2_000,
+      effectiveFromMs: NOW - 1_500,
+      effectiveUntilMs: NOW + 10_000,
+      ...authorityOverrides,
+    },
+  };
+  return {
+    ...candidate,
+    authority: {
+      ...candidate.authority,
+      revision: Object.prototype.hasOwnProperty.call(authorityOverrides, 'revision')
+        ? authorityOverrides.revision
+        : deriveApprovalPolicyDigest(candidate),
+    },
   };
 }
 
@@ -101,8 +125,12 @@ function context(overrides = {}) {
   };
 }
 
-function evaluate(overrides = {}, approvalOverrides = {}, policyOverrides = {}, boundPolicyDigest = 'policy-digest-1') {
-  return evaluateOperatorApproval(createOperatorApprovalState(approval(approvalOverrides), boundPolicyDigest), context(overrides), policy(policyOverrides));
+function evaluate(overrides = {}, approvalOverrides = {}, policyOverrides = {}, boundPolicyOverrides = policyOverrides) {
+  return evaluateOperatorApproval(
+    createOperatorApprovalState(approval(approvalOverrides), policy(boundPolicyOverrides)),
+    context(overrides),
+    policy(policyOverrides),
+  );
 }
 
 test('MANUAL_ARMED approval permits only progression to external owners and is never execution-ready', () => {
@@ -183,13 +211,112 @@ test('mandate and staged-plan ID, revision, and digest changes require reapprova
 
 test('configuration revision mismatch rejects approval and policy drift', () => {
   assert.equal(evaluate({ configRevision: 'cfg-2' }).failure.code, 'APPROVAL_CONFIG_MISMATCH');
-  assert.equal(evaluate({}, {}, { configRevision: 'cfg-2' }).failure.code, 'APPROVAL_CONFIG_MISMATCH');
+  assert.equal(evaluate({}, {}, { configRevision: 'cfg-2' }, {}).failure.code, 'APPROVAL_CONFIG_MISMATCH');
 });
 
 test('policy content digest drift requires a fresh approval even when revision text is unchanged', () => {
-  const result = evaluate({}, {}, { sourcePolicyDigest: 'policy-digest-2' });
+  const result = evaluate({}, {}, { maximumNotional: '100000000000000000000.00000002' }, {});
   assert.equal(result.ok, false);
   assert.equal(result.failure.code, 'APPROVAL_POLICY_DIGEST_MISMATCH');
+});
+
+test('full policy bundle cannot widen a limit while retaining the prior content address', () => {
+  const honest = policy();
+  const widenedWithRetainedDigest = {
+    ...honest,
+    maximumNotional: '999999999999999999999999999999999999',
+    stageLimits: [{ stage: 'PROBE', maximumExposure: '999999999999999999999999999999999999' }],
+  };
+  const issues = validateApprovalPolicyBounds(widenedWithRetainedDigest);
+  assert.ok(issues.some((issue) => issue.code === 'POLICY_DIGEST_CONTENT_MISMATCH'));
+  assert.throws(
+    () => createOperatorApprovalState(approval(), widenedWithRetainedDigest),
+    /POLICY_DIGEST_CONTENT_MISMATCH/,
+    'issue path must reject a forged retained digest',
+  );
+  const issued = createOperatorApprovalState(approval(), honest);
+  assert.throws(
+    () => evaluateOperatorApproval(issued, context(), widenedWithRetainedDigest),
+    /POLICY_DIGEST_CONTENT_MISMATCH/,
+    'use path must reject a forged retained digest before considering widened bounds',
+  );
+});
+
+test('policy digest is deterministic across ordering of set-like scopes', () => {
+  const first = policy();
+  const reordered = policy({
+    symbols: [...first.symbols].reverse(),
+    instruments: [...first.instruments].reverse(),
+    allowedActionClasses: [...first.allowedActionClasses].reverse(),
+    stageLimits: [...first.stageLimits].reverse(),
+  });
+  assert.equal(reordered.authority.revision, first.authority.revision);
+});
+
+test('every approval policy semantic participates in the content address', () => {
+  const baseline = policy();
+  const semanticChanges = [
+    { authority: { sourceId: 'capital-policy-registry:other' } },
+    { authority: { issuedAtMs: NOW - 2_001 } },
+    { authority: { effectiveFromMs: NOW - 1_499 } },
+    { authority: { effectiveUntilMs: NOW + 10_001 } },
+    { configRevision: 'cfg-2' },
+    { strategy: 'VOLUME' },
+    { symbols: ['ETHUSDT'] },
+    { instruments: ['BINANCE:SPOT:ETHUSDT', 'BINANCE:PERP:ETHUSDT'] },
+    { allowedActionClasses: ['OPEN', 'REDUCE', 'EXIT'] },
+    { maximumNotional: '100000000000000000000.00000002' },
+    { valuationAsset: 'USDC' },
+    { stageLimits: [{ stage: 'PROBE', maximumExposure: '10.25000000000000001' }, { stage: 'ADD', maximumExposure: '50' }] },
+  ];
+  for (const change of semanticChanges) {
+    const changed = policy(change);
+    assert.notEqual(changed.authority.revision, baseline.authority.revision, JSON.stringify(change));
+  }
+});
+
+test('policy source and effective-window drift cannot retain the prior revision', () => {
+  const honest = policy();
+  for (const authorityChange of [
+    { sourceId: 'capital-policy-registry:hostile' },
+    { issuedAtMs: NOW - 2_001 },
+    { effectiveFromMs: NOW - 1_499 },
+    { effectiveUntilMs: NOW + 10_001 },
+  ]) {
+    const drifted = { ...honest, authority: { ...honest.authority, ...authorityChange } };
+    assert.ok(
+      validateApprovalPolicyBounds(drifted).some((issue) => issue.code === 'POLICY_DIGEST_CONTENT_MISMATCH'),
+      JSON.stringify(authorityChange),
+    );
+  }
+  const reissuedFromWrongSource = evaluate(
+    {},
+    {},
+    { authority: { sourceId: 'capital-policy-registry:hostile' } },
+    {},
+  );
+  assert.equal(reissuedFromWrongSource.ok, false);
+  assert.equal(reissuedFromWrongSource.failure.code, 'APPROVAL_POLICY_DIGEST_MISMATCH');
+});
+
+test('approval policy is enforced at the injected evaluation time', () => {
+  const notYet = evaluate({}, {}, { authority: { effectiveFromMs: NOW + 1, effectiveUntilMs: NOW + 10_000 } });
+  assert.equal(notYet.ok, false);
+  assert.equal(notYet.failure.code, 'APPROVAL_POLICY_NOT_YET_EFFECTIVE');
+
+  const expired = evaluate({}, {}, { authority: { effectiveUntilMs: NOW } });
+  assert.equal(expired.ok, false);
+  assert.equal(expired.failure.code, 'APPROVAL_POLICY_EXPIRED');
+});
+
+test('approval policy authority rejects missing source and impossible windows', () => {
+  const honest = policy();
+  assert.ok(validateApprovalPolicyBounds({ ...honest, authority: { ...honest.authority, sourceId: '' } })
+    .some((issue) => issue.code === 'POLICY_SOURCE_REQUIRED'));
+  assert.ok(validateApprovalPolicyBounds({ ...honest, authority: { ...honest.authority, issuedAtMs: NOW, effectiveFromMs: NOW - 1 } })
+    .some((issue) => issue.code === 'POLICY_ISSUED_AFTER_EFFECTIVE'));
+  assert.ok(validateApprovalPolicyBounds({ ...honest, authority: { ...honest.authority, effectiveFromMs: NOW, effectiveUntilMs: NOW } })
+    .some((issue) => issue.code === 'POLICY_EFFECTIVE_WINDOW_INVALID'));
 });
 
 test('approval cannot widen validated policy scope or exact limits', () => {
@@ -249,12 +376,36 @@ test('pause and kill block OPEN and ADD while preserving REDUCE HEDGE EXIT and R
 test('unknown or incomplete control truth fails closed only for risk increase', () => {
   const unknownTruth = truth({ requiredValuePresent: false });
   assert.equal(evaluate({ controlPosture: { posture: 'OPEN', truth: unknownTruth, revision: null, reasonCodes: ['UNKNOWN'] } }).failure.code, 'NEW_EXPOSURE_CONTROL_TRUTH_BLOCKED');
-  assert.equal(evaluate({ nowMs: NOW + 1 }).failure.code, 'NEW_EXPOSURE_CONTROL_TRUTH_BLOCKED', 'control truth must be evaluated at the decision clock');
+  assert.equal(evaluate({ nowMs: NOW + 1 }).ok, true, 'still-fresh source truth is re-aged at the decision clock');
   assert.equal(evaluate({ actionClass: 'EXIT', controlPosture: { posture: 'UNKNOWN', truth: unknownTruth, revision: null, reasonCodes: ['UNKNOWN'] } }).ok, true);
 });
 
+test('cached FRESH control labels are re-aged from source time before OPEN or ADD authority', () => {
+  const cachedFresh = truth();
+  const staleSourceWithCachedFreshLabel = {
+    ...cachedFresh,
+    source: {
+      ...cachedFresh.source,
+      sourceTimeMs: NOW - 10_000,
+      receivedAtMs: NOW - 9_000,
+      maxAgeMs: 1_000,
+    },
+  };
+  const result = evaluate({
+    controlPosture: {
+      posture: 'OPEN',
+      truth: staleSourceWithCachedFreshLabel,
+      revision: 'control-r-cached',
+      reasonCodes: [],
+    },
+  });
+  assert.equal(cachedFresh.freshness.state, 'FRESH', 'fixture proves the cached label was permissive');
+  assert.equal(result.ok, false);
+  assert.equal(result.failure.code, 'NEW_EXPOSURE_CONTROL_TRUTH_BLOCKED');
+});
+
 test('use reducer records exact bound context and identical replay is idempotent', () => {
-  const initial = createOperatorApprovalState(approval(), 'policy-digest-1');
+  const initial = createOperatorApprovalState(approval(), policy());
   const event = { kind: 'USE_RECORDED', expectedRevision: 1, idempotencyKey: 'use-1', context: context(), recordedAtMs: NOW, correlationId: 'cor-use-1' };
   const first = reduceOperatorApprovalState(initial, event);
   assert.equal(first.ok, true);
@@ -266,7 +417,7 @@ test('use reducer records exact bound context and identical replay is idempotent
 });
 
 test('use reducer rejects the same evaluated context under another key but permits a distinct stage context', () => {
-  const initial = createOperatorApprovalState(approval(), 'policy-digest-1');
+  const initial = createOperatorApprovalState(approval(), policy());
   const firstEvent = { kind: 'USE_RECORDED', expectedRevision: 1, idempotencyKey: 'use-1', context: context(), recordedAtMs: NOW, correlationId: 'cor-use-1' };
   const first = reduceOperatorApprovalState(initial, firstEvent).value;
 
@@ -290,7 +441,7 @@ test('use reducer rejects the same evaluated context under another key but permi
 });
 
 test('use reducer rejects conflicting idempotency, stale revision, unrelated scope, and over-limit use', () => {
-  const initial = createOperatorApprovalState(approval(), 'policy-digest-1');
+  const initial = createOperatorApprovalState(approval(), policy());
   const baseEvent = { kind: 'USE_RECORDED', expectedRevision: 1, idempotencyKey: 'use-1', context: context(), recordedAtMs: NOW, correlationId: 'cor-use-1' };
   const first = reduceOperatorApprovalState(initial, baseEvent).value;
   assert.equal(reduceOperatorApprovalState(first, { ...baseEvent, recordedAtMs: NOW + 1 }).failure.code, 'APPROVAL_USE_IDEMPOTENCY_CONFLICT');
@@ -300,7 +451,7 @@ test('use reducer rejects conflicting idempotency, stale revision, unrelated sco
 });
 
 test('revocation reducer is revisioned, idempotent, and blocks later use', () => {
-  const initial = createOperatorApprovalState(approval(), 'policy-digest-1');
+  const initial = createOperatorApprovalState(approval(), policy());
   const event = { kind: 'REVOKED', expectedRevision: 1, revokedAtMs: NOW, reasonReference: 'operator-pause', correlationId: 'cor-revoke' };
   const revoked = reduceOperatorApprovalState(initial, event);
   assert.equal(revoked.ok, true);
@@ -321,5 +472,5 @@ test('hostile malformed money, duplicate scope, bad times, and broken revocation
   }));
   const codes = issues.map((issue) => issue.code);
   for (const expected of ['EXACT_NON_NEGATIVE_DECIMAL_REQUIRED', 'UNIQUE_NON_EMPTY_SCOPE_REQUIRED', 'EXPIRY_MUST_FOLLOW_ISSUE', 'REVOCATION_PAIR_REQUIRED', 'DUPLICATE_STAGE']) assert.ok(codes.includes(expected), expected);
-  assert.ok(validateApprovalPolicyBounds(policy({ maximumNotional: '1e3' })).some((issue) => issue.code === 'EXACT_NON_NEGATIVE_DECIMAL_REQUIRED'));
+  assert.ok(validateApprovalPolicyBounds({ ...policy(), maximumNotional: '1e3' }).some((issue) => issue.code === 'EXACT_NON_NEGATIVE_DECIMAL_REQUIRED'));
 });

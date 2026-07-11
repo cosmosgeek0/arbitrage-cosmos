@@ -7,13 +7,13 @@ import type {
 } from './identity.js';
 import type { CapitalTruthState, TruthMetadata } from './truth.js';
 
-export const CAPITAL_CONSIDERATION_MODES = ['ADVISORY', 'VALIDATE_ONLY', 'MANUAL_ARMED'] as const;
+export const CAPITAL_CONSIDERATION_MODES = Object.freeze(['ADVISORY', 'VALIDATE_ONLY', 'MANUAL_ARMED'] as const);
 export type CapitalConsiderationMode = (typeof CAPITAL_CONSIDERATION_MODES)[number];
 
-export const ELIGIBILITY_STATUSES = ['ELIGIBLE', 'BLOCKED', 'ADVISORY'] as const;
+export const ELIGIBILITY_STATUSES = Object.freeze(['ELIGIBLE', 'BLOCKED', 'ADVISORY'] as const);
 export type EligibilityStatus = (typeof ELIGIBILITY_STATUSES)[number];
 
-export const ELIGIBILITY_REASON_CODES = [
+export const ELIGIBILITY_REASON_CODES = Object.freeze([
   'PROPOSAL_OPEN',
   'PROPOSAL_EXPIRED',
   'PROPOSAL_REJECTED',
@@ -31,7 +31,7 @@ export const ELIGIBILITY_REASON_CODES = [
   'VOLUME_CALIBRATION_BLOCKED',
   'EXECUTABLE_STRUCTURE_UNKNOWN',
   'CONSERVATIVE_ECONOMICS_INCOMPLETE',
-] as const;
+] as const);
 export type EligibilityReasonCode = (typeof ELIGIBILITY_REASON_CODES)[number];
 
 export interface StrategyProposalReference {

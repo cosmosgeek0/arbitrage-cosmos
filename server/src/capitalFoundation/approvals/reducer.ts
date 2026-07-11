@@ -11,8 +11,8 @@ import {
   ok,
   type ContractResult,
 } from '../../foundation/contracts/index.js';
-import type { OperatorApprovalState, OperatorApprovalStateEvent } from './types.js';
-import { validateOperatorApproval } from './validation.js';
+import type { ApprovalPolicyBounds, OperatorApprovalState, OperatorApprovalStateEvent } from './types.js';
+import { validateApprovalPolicyBounds, validateOperatorApproval } from './validation.js';
 
 const COMPONENT = 'capitalFoundation.approvals.reducer';
 
@@ -28,14 +28,19 @@ function freezeApproval(approval: Readonly<OperatorApproval>): Readonly<Operator
 
 export function createOperatorApprovalState(
   approval: Readonly<OperatorApproval>,
-  sourcePolicyDigest: string,
+  policy: Readonly<ApprovalPolicyBounds>,
 ): Readonly<OperatorApprovalState> {
-  const issues = validateOperatorApproval(approval);
+  const issues = [...validateOperatorApproval(approval), ...validateApprovalPolicyBounds(policy)];
   if (issues.length > 0) throw new TypeError(`createOperatorApprovalState: ${issues.map((issue) => `${issue.path}:${issue.code}`).join(', ')}`);
-  if (typeof sourcePolicyDigest !== 'string' || sourcePolicyDigest.trim() !== sourcePolicyDigest || sourcePolicyDigest.length === 0 || sourcePolicyDigest.length > 256) {
-    throw new TypeError('createOperatorApprovalState: source policy digest must be bounded and non-empty');
+  if (approval.configRevision !== policy.configRevision) {
+    throw new TypeError('createOperatorApprovalState: approval and policy configuration revisions must match');
   }
-  return Object.freeze({ approval: freezeApproval(approval), sourcePolicyDigest, revision: 1, uses: Object.freeze([]) });
+  return Object.freeze({
+    approval: freezeApproval(approval),
+    sourcePolicyDigest: policy.authority.revision,
+    revision: 1,
+    uses: Object.freeze([]),
+  });
 }
 
 function reject<T>(event: OperatorApprovalStateEvent, code: string, message: string): ContractResult<T> {

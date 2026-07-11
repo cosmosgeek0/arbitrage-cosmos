@@ -17,6 +17,7 @@ export type NonNegativeDecimal = ExactDecimal & {
 
 export const MAX_EXACT_DECIMAL_DIGITS = 96;
 export const MAX_DIVISION_SCALE = 24;
+const MAX_INTERNAL_POWER = MAX_EXACT_DECIMAL_DIGITS + MAX_DIVISION_SCALE;
 
 const DECIMAL_PATTERN = /^([+-]?)(\d+)(?:\.(\d+))?$/;
 
@@ -26,7 +27,7 @@ interface ParsedDecimal {
 }
 
 function powerOfTen(exponent: number): bigint {
-  if (!Number.isSafeInteger(exponent) || exponent < 0 || exponent > MAX_EXACT_DECIMAL_DIGITS) {
+  if (!Number.isSafeInteger(exponent) || exponent < 0 || exponent > MAX_INTERNAL_POWER) {
     throw new RangeError('decimal exponent is outside the supported bound');
   }
   return 10n ** BigInt(exponent);
@@ -42,11 +43,17 @@ function parseCanonical(value: ExactDecimal): ParsedDecimal {
 
 function formatDecimal(coefficient: bigint, scale: number): ExactDecimal {
   if (coefficient === 0n) return '0' as ExactDecimal;
-  const negative = coefficient < 0n;
-  let digits = (negative ? -coefficient : coefficient).toString();
-  if (scale > 0) {
-    digits = digits.padStart(scale + 1, '0');
-    const split = digits.length - scale;
+  let canonicalCoefficient = coefficient;
+  let canonicalScale = scale;
+  while (canonicalScale > 0 && canonicalCoefficient % 10n === 0n) {
+    canonicalCoefficient /= 10n;
+    canonicalScale -= 1;
+  }
+  const negative = canonicalCoefficient < 0n;
+  let digits = (negative ? -canonicalCoefficient : canonicalCoefficient).toString();
+  if (canonicalScale > 0) {
+    digits = digits.padStart(canonicalScale + 1, '0');
+    const split = digits.length - canonicalScale;
     digits = `${digits.slice(0, split)}.${digits.slice(split)}`;
   }
   return normalizeExactDecimal(`${negative ? '-' : ''}${digits}`);

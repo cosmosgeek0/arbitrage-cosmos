@@ -49,11 +49,11 @@ export interface OpportunityEligibilityCandidate {
   readonly conflictScope: Readonly<OpportunityConflictScope>;
 }
 
-export const OPPORTUNITY_CONFLICT_KINDS = [
+export const OPPORTUNITY_CONFLICT_KINDS = Object.freeze([
   'SAME_SYMBOL',
   'SHARED_INSTRUMENT',
   'SHARED_EXCLUSIVE_CAPITAL_CLAIM',
-] as const;
+] as const);
 export type OpportunityConflictKind = (typeof OPPORTUNITY_CONFLICT_KINDS)[number];
 
 export interface OpportunityConflict {

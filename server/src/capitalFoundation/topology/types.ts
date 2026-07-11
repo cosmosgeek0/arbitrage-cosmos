@@ -17,26 +17,26 @@ import type {
 } from '../contracts/index.js';
 import type { PositionEconomicsRecord } from '../checkpoint/index.js';
 
-export const CAPITAL_TOPOLOGY_NODE_KINDS = [
+export const CAPITAL_TOPOLOGY_NODE_KINDS = Object.freeze([
   'STRATEGY_PROPOSAL', 'EVIDENCE', 'OPPORTUNITY', 'CAPITAL_BUDGET',
   'RESERVATION', 'MANDATE', 'STAGED_PLAN', 'STAGE', 'APPROVAL',
   'FUTURE_RISK', 'FUTURE_EXECUTION', 'THESIS', 'POSITION', 'POSITION_LEG',
   'RECONCILIATION', 'SUPERVISION', 'ACTION_INTENT', 'ECONOMICS', 'CHECKPOINT',
-] as const;
+] as const);
 export type CapitalTopologyNodeKind = (typeof CAPITAL_TOPOLOGY_NODE_KINDS)[number];
 
-export const CAPITAL_TOPOLOGY_EDGE_KINDS = [
+export const CAPITAL_TOPOLOGY_EDGE_KINDS = Object.freeze([
   'DERIVES_FROM', 'EVIDENCES', 'ALLOCATES', 'RESERVES', 'PLANS', 'CONTAINS',
   'AUTHORIZES', 'GATES', 'COORDINATES', 'EXPOSES', 'RECONCILES', 'SUPERVISES',
   'RECOMMENDS', 'ATTRIBUTES', 'CHECKPOINTS',
-] as const;
+] as const);
 export type CapitalTopologyEdgeKind = (typeof CAPITAL_TOPOLOGY_EDGE_KINDS)[number];
 
-export const CAPITAL_BLOCK_CATEGORIES = [
+export const CAPITAL_BLOCK_CATEGORIES = Object.freeze([
   'NONE', 'STRATEGY_REJECTION', 'CAPITAL_BLOCK', 'APPROVAL_BLOCK', 'RISK_BLOCK',
   'EXECUTION_UNCERTAINTY', 'RECONCILIATION_DIVERGENCE', 'ECONOMIC_INVALIDATION',
   'TRUTH_DEGRADATION',
-] as const;
+] as const);
 export type CapitalBlockCategory = (typeof CAPITAL_BLOCK_CATEGORIES)[number];
 
 export type CapitalAuthorityOwner =
@@ -108,6 +108,8 @@ export interface CapitalTopologyEvidenceReference {
 export interface CapitalSupervisorDecisionReference {
   readonly id: string;
   readonly positionId: string;
+  readonly positionRevision: number;
+  readonly thesisRevision: number;
   readonly status: string;
   readonly truth: Readonly<TruthMetadata>;
   readonly lastTransitionAtMs: number;

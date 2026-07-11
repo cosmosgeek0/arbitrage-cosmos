@@ -9,6 +9,7 @@ import {
   absoluteExactDecimal,
   actionRiskEffect,
   addExactDecimals,
+  asStrategyProposalId,
   assessCapitalTruth,
   canTransitionCapitalLifecycle,
   canTransitionCapitalStage,
@@ -18,6 +19,7 @@ import {
   deriveActivePositionId,
   deriveAllocationDecisionId,
   deriveCapitalCheckpointId,
+  deriveCapitalCorrelation,
   deriveCapitalConfigRevision,
   deriveCapitalMandateId,
   deriveCapitalReservationId,
@@ -47,6 +49,7 @@ import {
   validatePositionActionIntent,
   weakestCapitalTruth,
 } from '../../../dist/capitalFoundation/contracts/index.js';
+import * as decimalSurface from '../../../dist/capitalFoundation/contracts/decimal.js';
 import {
   canonicalJson,
   deriveRiskVerdict,
@@ -112,6 +115,45 @@ test('exact decimal division has explicit conservative truncation', () => {
   assert.throws(() => divideExactDecimals('1', '0', 8), /division by zero/);
 });
 
+test('exact decimal division permits bounded internal scale beyond the public digit bound', () => {
+  const oneE74 = `0.${'0'.repeat(73)}1`;
+  const oneE95 = `0.${'0'.repeat(94)}1`;
+  assert.equal(divideExactDecimals('1', oneE74, 24), `1${'0'.repeat(74)}`);
+  assert.equal(divideExactDecimals('1', oneE95, 24), `1${'0'.repeat(95)}`);
+});
+
+test('exact decimal division still rejects a final result beyond 96 digits', () => {
+  assert.throws(
+    () => divideExactDecimals(`1${'0'.repeat(95)}`, '0.1', 24),
+    /exact decimal exceeds 96 digits/,
+  );
+});
+
+test('exact decimal runtime public surface and bounds remain frozen', () => {
+  assert.deepEqual(Object.keys(decimalSurface).sort(), [
+    'MAX_DIVISION_SCALE',
+    'MAX_EXACT_DECIMAL_DIGITS',
+    'absoluteExactDecimal',
+    'addExactDecimals',
+    'compareExactDecimals',
+    'divideExactDecimals',
+    'isExactDecimal',
+    'isExactNegative',
+    'isExactPositive',
+    'isExactZero',
+    'maximumExactDecimal',
+    'minimumExactDecimal',
+    'multiplyExactDecimals',
+    'negateExactDecimal',
+    'normalizeExactDecimal',
+    'normalizeNonNegativeExactDecimal',
+    'subtractExactDecimals',
+    'sumExactDecimals',
+  ]);
+  assert.equal(decimalSurface.MAX_EXACT_DECIMAL_DIGITS, 96);
+  assert.equal(decimalSurface.MAX_DIVISION_SCALE, 24);
+});
+
 test('exact decimal comparison is numeric rather than lexicographic', () => {
   assert.equal(compareExactDecimals('10', '9'), 1);
   assert.equal(compareExactDecimals('-10', '-9'), -1);
@@ -158,6 +200,27 @@ test('canonical identity and digest ignore object insertion order but preserve a
   assert.equal(capitalDigest({ b: 2, a: 1 }), capitalDigest({ a: 1, b: 2 }));
   assert.notEqual(capitalDigest({ a: [1, 2] }), capitalDigest({ a: [2, 1] }));
   assert.equal(deriveCapitalConfigRevision('budget', { max: '10', min: '1' }), deriveCapitalConfigRevision('budget', { min: '1', max: '10' }));
+});
+
+test('capital identity and transition correlation boundaries reject whitespace aliases', () => {
+  assert.equal(asStrategyProposalId('proposal:lowercase:1'), 'proposal:lowercase:1');
+  assert.throws(() => asStrategyProposalId(' proposal:lowercase:1'), /canonical non-empty/);
+  assert.equal(typeof deriveCapitalCorrelation('contracts', 'lowercase:key:1'), 'string');
+  assert.throws(() => deriveCapitalCorrelation(' contracts', 'lowercase:key:1'), /canonical non-empty/);
+  assert.throws(() => deriveCapitalCorrelation('contracts', 'lowercase:key:1 '), /canonical non-empty/);
+  assert.throws(() => transitionCapitalLifecycle('OBSERVED', 'ELIGIBLE', {
+    nowMs: NOW,
+    correlationId: ' lifecycle:alias',
+  }), /correlation ID/);
+  assert.throws(() => transitionCapitalStage('OBSERVE', 'PROBE', {
+    nowMs: NOW,
+    correlationId: 'stage:alias ',
+    adversePriceMoveIsSoleReason: false,
+    approvalValidated: false,
+    freshEvidence: true,
+    reservationAvailable: true,
+    futureRiskRecheckRequired: true,
+  }), /correlation ID/);
 });
 
 test('fresh complete source truth permits new exposure', () => {
@@ -214,31 +277,23 @@ test('typed lifecycle transition rejects approval bypass and validate-only execu
   const base = {
     nowMs: NOW,
     correlationId: 'cor-transition',
-    approvalValidated: false,
-    approvalMode: null,
-    boundRiskAllowed: false,
-    boundRiskCurrent: false,
   };
   const skip = transitionCapitalLifecycle('PLANNED', 'AWAITING_RISK', base);
   assert.equal(skip.ok, false);
   assert.equal(skip.failure.code, 'ILLEGAL_CAPITAL_LIFECYCLE_TRANSITION');
-  const validateOnly = transitionCapitalLifecycle('AWAITING_RISK', 'READY_FOR_EXECUTION', {
-    ...base,
-    approvalValidated: true,
-    approvalMode: 'VALIDATE_ONLY',
-    boundRiskAllowed: true,
-    boundRiskCurrent: true,
-  });
-  assert.equal(validateOnly.ok, false);
-  assert.equal(validateOnly.failure.code, 'MANUAL_ARMED_APPROVAL_REQUIRED');
-  const armed = transitionCapitalLifecycle('AWAITING_RISK', 'READY_FOR_EXECUTION', {
-    ...base,
-    approvalValidated: true,
-    approvalMode: 'MANUAL_ARMED',
-    boundRiskAllowed: true,
-    boundRiskCurrent: true,
-  });
-  assert.equal(armed.ok, true);
+  const awaitingRisk = transitionCapitalLifecycle('AWAITING_APPROVAL', 'AWAITING_RISK', base);
+  assert.equal(awaitingRisk.ok, false);
+  assert.equal(awaitingRisk.failure.code, 'APPROVAL_LANE_TRANSITION_REQUIRED');
+  const ready = transitionCapitalLifecycle('AWAITING_RISK', 'READY_FOR_EXECUTION', base);
+  assert.equal(ready.ok, false);
+  assert.equal(ready.failure.code, 'FOUNDATION_EXECUTION_TRANSITION_REQUIRED');
+  const local = transitionCapitalLifecycle('OBSERVED', 'ELIGIBLE', base);
+  assert.equal(local.ok, true);
+  assert.equal(local.value.authority, 'NONE');
+  assert.equal(local.value.executionReady, false);
+  assert.deepEqual(Object.keys(local.value).sort(), [
+    'authority', 'correlationId', 'executionReady', 'from', 'to', 'transitionedAtMs',
+  ]);
 });
 
 test('typed stage transition rejects averaging down and missing ADD authority', () => {
@@ -257,7 +312,13 @@ test('typed stage transition rejects averaging down and missing ADD authority', 
   const stale = transitionCapitalStage('CONFIRM', 'ADD', { ...base, freshEvidence: false });
   assert.equal(stale.ok, false);
   assert.equal(stale.failure.code, 'FRESH_EVIDENCE_REQUIRED');
-  assert.equal(transitionCapitalStage('CONFIRM', 'ADD', base).ok, true);
+  const callerAsserted = transitionCapitalStage('CONFIRM', 'ADD', base);
+  assert.equal(callerAsserted.ok, true);
+  assert.equal(callerAsserted.value.authority, 'NONE');
+  assert.equal(callerAsserted.value.executionReady, false);
+  assert.deepEqual(Object.keys(callerAsserted.value).sort(), [
+    'authority', 'correlationId', 'executionReady', 'from', 'to', 'transitionedAtMs',
+  ]);
   assert.equal(transitionCapitalStage('CONFIRM', 'REDUCE', { ...base, freshEvidence: false }).ok, true);
 });
 

@@ -304,6 +304,18 @@ function valueAmount(
   return positive(amount) ? null : ZERO;
 }
 
+function valueLiabilityAmount(
+  amount: NonNegativeDecimal,
+  valuation: AssetValuationProjection,
+  unknown: string[],
+): NonNegativeDecimal | null {
+  if (positive(amount) && valuation.conservativeUnitValue === ZERO) {
+    unknown.push(`ZERO_UNIT_VALUE_INVALID_FOR_POSITIVE_LIABILITY_${valuation.asset}`);
+    return null;
+  }
+  return valueAmount(amount, valuation, unknown);
+}
+
 function valueSignedAmount(
   amount: ExactDecimal,
   valuation: AssetValuationProjection,
@@ -444,7 +456,7 @@ function deriveLiabilities(
       accruedInterest: row.accruedInterest,
       fees: row.fees,
       total: row.total,
-      conservativeValue: valueAmount(row.total, valuation, unknown),
+      conservativeValue: valueLiabilityAmount(row.total, valuation, unknown),
       liabilityIds: sortedUnique(row.liabilityIds),
       valuation,
     };

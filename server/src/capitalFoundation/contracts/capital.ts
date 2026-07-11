@@ -14,7 +14,7 @@ import { capitalDigest } from './identity.js';
 import type { FutureGate } from './actions.js';
 import { truthAllowsNewExposure, type TruthMetadata } from './truth.js';
 
-export const CONTROL_POSTURES = ['OPEN', 'PAUSED_NEW_EXPOSURE', 'KILL_NEW_EXPOSURE', 'UNKNOWN'] as const;
+export const CONTROL_POSTURES = Object.freeze(['OPEN', 'PAUSED_NEW_EXPOSURE', 'KILL_NEW_EXPOSURE', 'UNKNOWN'] as const);
 export type ControlPosture = (typeof CONTROL_POSTURES)[number];
 
 export interface ControlPostureSnapshot {
@@ -61,7 +61,7 @@ export interface CapitalBudgetPolicy {
   readonly reservationTtlMs: Readonly<IntegerPolicyBound>;
 }
 
-export const ALLOCATION_STATUSES = ['GRANTED', 'CAPPED', 'BLOCKED'] as const;
+export const ALLOCATION_STATUSES = Object.freeze(['GRANTED', 'CAPPED', 'BLOCKED'] as const);
 export type AllocationStatus = (typeof ALLOCATION_STATUSES)[number];
 
 export interface AllocationAuditStep {
@@ -86,7 +86,7 @@ export interface AllocationDecision {
   readonly decidedAtMs: number;
 }
 
-export const RESERVATION_STATES = ['ACTIVE', 'RELEASED', 'EXPIRED'] as const;
+export const RESERVATION_STATES = Object.freeze(['ACTIVE', 'RELEASED', 'EXPIRED'] as const);
 export type ReservationState = (typeof RESERVATION_STATES)[number];
 
 export interface CapitalReservation {

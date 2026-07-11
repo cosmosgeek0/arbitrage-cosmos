@@ -63,6 +63,7 @@ function input(nextDecision, posture = 'OPEN', truthValue = truth()) {
       currentHedgeRatio: '1',
       completeness: 'COMPLETE',
       truthReasonCodes: [],
+      activeStageAuthority: stageBinding(),
     },
     decision: nextDecision,
     controlPosture: { posture, truth: truthValue, revision: 'control-2', reasonCodes: posture === 'OPEN' ? [] : [posture] },
@@ -72,9 +73,56 @@ function input(nextDecision, posture = 'OPEN', truthValue = truth()) {
   };
 }
 
+function stageBinding(overrides = {}) {
+  return {
+    activeStage: 'CONFIRM',
+    planId: 'staged-plan-actions-1',
+    planRevision: 4,
+    planDigest: 'staged-plan-actions-digest-4',
+    reservationId: 'reservation-actions-1',
+    reservationRevision: 3,
+    approvalId: 'approval-actions-1',
+    approvalRevision: 2,
+    ...overrides,
+  };
+}
+
+function stageAuthorization(overrides = {}) {
+  return {
+    from: 'CONFIRM',
+    to: 'ADD',
+    authorizedForExternalRiskEvaluation: true,
+    executionReady: false,
+    reservationConsumption: '25',
+    requiredFutureGates: ['OPERATOR_APPROVAL', 'MULTI_LEG_RISK', 'FRESH_ACCOUNT_TRUTH', 'FRESH_MARKET_EVIDENCE'],
+    evaluatedAtMs: NOW,
+    planId: 'staged-plan-actions-1',
+    planRevision: 4,
+    planDigest: 'staged-plan-actions-digest-4',
+    reservationId: 'reservation-actions-1',
+    reservationRevision: 3,
+    reservationAvailable: '30',
+    approvalId: 'approval-actions-1',
+    approvalRevision: 2,
+    ...overrides,
+  };
+}
+
 function unwrap(result) {
   assert.equal(result.ok, true, result.ok ? '' : `${result.failure.code}: ${result.failure.message}`);
   return result.value;
+}
+
+function assertDeterministicFrozenFailure(makeResult, expectedCode) {
+  const first = makeResult();
+  const replay = makeResult();
+  assert.equal(first.ok, false, `${expectedCode} must return a typed failure`);
+  assert.equal(first.failure.code, expectedCode);
+  assert.equal(first.failure.safeCurrentState, 'EXPOSURE_UNCHANGED');
+  assert.equal(Object.isFrozen(first), true);
+  assert.equal(Object.isFrozen(first.failure), true);
+  assert.equal(JSON.stringify(first), JSON.stringify(replay));
+  assert.equal('value' in first, false);
 }
 
 function addDecision(overrides = {}) {
@@ -82,18 +130,7 @@ function addDecision(overrides = {}) {
     targetTotalExposure: '125',
     targetBaseQuantity: '0.0025',
     targetHedgeRatio: '1',
-    authority: {
-      currentStageSequence: 2,
-      authorizedStageSequence: 3,
-      authorizedStage: 'ADD',
-      maximumAdditionalExposure: '30',
-      maximumTotalExposure: '130',
-      freshEvidence: true,
-      reservationAvailable: true,
-      approvalValidated: true,
-      futureRiskRecheckRequired: true,
-      adversePriceMoveIsSoleReason: false,
-    },
+    authority: stageAuthorization(),
     ...overrides,
   });
 }
@@ -116,6 +153,12 @@ test('ADD_STAGE emits only the next authorized exact total and every external ga
   assert.equal(intent.target.quoteNotional, '125');
   assert.equal(targetExposureChange(intent, '100'), '25');
   assert.equal(resultingExposure(intent, '100'), '125');
+  assert.equal(intent.stageTransitionAuthorization.planId, 'staged-plan-actions-1');
+  assert.equal(intent.stageTransitionAuthorization.planRevision, 4);
+  assert.equal(intent.stageTransitionAuthorization.planDigest, 'staged-plan-actions-digest-4');
+  assert.equal(intent.stageTransitionAuthorization.reservationId, 'reservation-actions-1');
+  assert.equal(intent.stageTransitionAuthorization.approvalId, 'approval-actions-1');
+  assert.equal(intent.directionalReductionGeometry, null);
   assert.deepEqual(intent.requiredFutureGates, [
     'EXECUTION_COORDINATOR',
     'FRESH_ACCOUNT_TRUTH',
@@ -126,18 +169,143 @@ test('ADD_STAGE emits only the next authorized exact total and every external ga
   ]);
 });
 
-test('ADD_STAGE rejects skips, excess, missing authority, and accidental averaging down', () => {
+test('position and thesis revisions must be positive safe integers before any action or freeze is emitted', () => {
+  for (const field of ['positionRevision', 'thesisRevision']) {
+    const expectedCode = field === 'positionRevision' ? 'POSITION_REVISION_INVALID' : 'THESIS_REVISION_INVALID';
+    for (const hostileRevision of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      const makeResult = () => {
+        const candidate = input(addDecision(), 'KILL_NEW_EXPOSURE');
+        candidate.position[field] = hostileRevision;
+        return planEconomicAction(candidate);
+      };
+      assertDeterministicFrozenFailure(makeResult, expectedCode);
+    }
+  }
+});
+
+test('every ADD authority revision is positive and safe on both the active binding and transition authorization', () => {
+  for (const field of ['planRevision', 'reservationRevision', 'approvalRevision']) {
+    for (const hostileRevision of [0, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      assertDeterministicFrozenFailure(() => {
+        const candidate = input(addDecision());
+        candidate.position.activeStageAuthority = stageBinding({ [field]: hostileRevision });
+        return planEconomicAction(candidate);
+      }, 'ACTIVE_STAGE_BINDING_INVALID');
+
+      assertDeterministicFrozenFailure(() => planEconomicAction(input(addDecision({
+        authority: stageAuthorization({ [field]: hostileRevision }),
+      }))), 'STAGE_AUTHORITY_REVISION_INVALID');
+    }
+  }
+});
+
+test('action identity boundaries reject blank or oversized IDs with typed frozen failures', () => {
   const cases = [
-    [addDecision({ authority: { ...addDecision().authority, authorizedStageSequence: 4 } }), 'NEXT_AUTHORIZED_STAGE_REQUIRED'],
-    [addDecision({ targetTotalExposure: '131' }), 'ADD_STAGE_LIMIT_EXCEEDED'],
-    [addDecision({ authority: { ...addDecision().authority, freshEvidence: false } }), 'FRESH_EVIDENCE_REQUIRED'],
-    [addDecision({ authority: { ...addDecision().authority, reservationAvailable: false } }), 'RESERVATION_REQUIRED'],
-    [addDecision({ authority: { ...addDecision().authority, approvalValidated: false } }), 'APPROVAL_REQUIRED'],
-    [addDecision({ authority: { ...addDecision().authority, futureRiskRecheckRequired: false } }), 'FUTURE_RISK_RECHECK_REQUIRED'],
-    [addDecision({ authority: { ...addDecision().authority, adversePriceMoveIsSoleReason: true } }), 'AVERAGING_DOWN_FORBIDDEN'],
+    [candidate => { candidate.position.positionId = ' '; }, 'POSITION_ID_INVALID'],
+    [candidate => { candidate.position.positionId = ' position-1'; }, 'POSITION_ID_INVALID'],
+    [candidate => { candidate.position.positionId = 'p'.repeat(257); }, 'POSITION_ID_INVALID'],
+    [candidate => { candidate.position.thesisId = ''; }, 'THESIS_ID_INVALID'],
+    [candidate => { candidate.position.thesisId = 'thesis-9 '; }, 'THESIS_ID_INVALID'],
+    [candidate => { candidate.position.thesisId = 't'.repeat(257); }, 'THESIS_ID_INVALID'],
+    [candidate => { candidate.idempotencyKey = ''; }, 'IDEMPOTENCY_KEY_REQUIRED'],
+    [candidate => { candidate.idempotencyKey = ' idem-key'; }, 'IDEMPOTENCY_KEY_REQUIRED'],
+    [candidate => { candidate.correlationKey = 'correlation-key '; }, 'CORRELATION_KEY_REQUIRED'],
+    [candidate => { candidate.correlationKey = 'c'.repeat(129); }, 'CORRELATION_KEY_REQUIRED'],
+    [candidate => { candidate.controlPosture.revision = ' '; }, 'CONTROL_POSTURE_REVISION_INVALID'],
+    [candidate => { candidate.controlPosture.revision = 'control-2 '; }, 'CONTROL_POSTURE_REVISION_INVALID'],
   ];
-  for (const [candidate, code] of cases) {
-    const result = planEconomicAction(input(candidate));
+  for (const [mutate, expectedCode] of cases) {
+    assertDeterministicFrozenFailure(() => {
+      const candidate = input(decision('HOLD'));
+      mutate(candidate);
+      return planEconomicAction(candidate);
+    }, expectedCode);
+  }
+
+  assertDeterministicFrozenFailure(() => {
+    const candidate = input(addDecision());
+    candidate.position.activeStageAuthority = stageBinding({ planId: ' staged-plan-actions-1' });
+    return planEconomicAction(candidate);
+  }, 'ACTIVE_STAGE_BINDING_INVALID');
+  assertDeterministicFrozenFailure(() => planEconomicAction(input(addDecision({
+    authority: stageAuthorization({ approvalId: 'approval-actions-1 ' }),
+  }))), 'STAGE_AUTHORITY_IDENTITY_INVALID');
+
+  assert.doesNotThrow(() => unwrap(planEconomicAction(input(decision('HOLD')))), 'legitimate lowercase and colon-delimited IDs remain valid');
+});
+
+test('action provenance and reason arrays reject padded or malformed entries instead of silently canonicalizing them', () => {
+  const cases = [
+    [candidate => { candidate.decision.why = [' supervisor selected economic response']; }, 'WHY_INVALID'],
+    [candidate => { candidate.decision.triggerCodes = ['THESIS_CHECK ']; }, 'TRIGGER_INVALID'],
+    [candidate => { candidate.decision.supportingEvidenceIds = ['venue:fill:1', ' venue:fill:1']; }, 'SUPPORTING_EVIDENCE_ID_INVALID'],
+    [candidate => { candidate.decision.conflictingEvidenceIds = ['venue:fill:2 ']; }, 'CONFLICTING_EVIDENCE_ID_INVALID'],
+    [candidate => { candidate.decision.blockingFacts = [' risk:blocked']; }, 'BLOCKING_FACT_INVALID'],
+    [candidate => { candidate.decision.invalidationConditions = ['position revision changes ']; }, 'INVALIDATION_CONDITION_INVALID'],
+    [candidate => { candidate.position.truthReasonCodes = [' position:truth']; }, 'POSITION_TRUTH_REASON_INVALID'],
+    [candidate => { candidate.controlPosture.reasonCodes = ['operator:pause ']; }, 'CONTROL_POSTURE_REASON_INVALID'],
+    [candidate => { candidate.controlPosture.truth = { ...candidate.controlPosture.truth, reasons: [' stale:control'] }; }, 'CONTROL_TRUTH_REASON_INVALID'],
+    [candidate => { candidate.controlPosture.truth = { ...candidate.controlPosture.truth, evidenceReferences: ['control:evidence ' ] }; }, 'CONTROL_TRUTH_EVIDENCE_INVALID'],
+    [candidate => { candidate.decision.supportingEvidenceIds = 'venue:fill:1'; }, 'SUPPORTING_EVIDENCE_ID_INVALID'],
+    [candidate => { candidate.decision.why = ['x'.repeat(257)]; }, 'WHY_INVALID'],
+  ];
+  for (const [mutate, expectedCode] of cases) {
+    assertDeterministicFrozenFailure(() => {
+      const candidate = input(decision('HOLD'));
+      mutate(candidate);
+      return planEconomicAction(candidate);
+    }, expectedCode);
+  }
+
+  assertDeterministicFrozenFailure(() => planEconomicAction(input(decision('NO_ACTION_UNKNOWN', {
+    unknownReasonCodes: [' reconciliation:unknown'],
+  }))), 'UNKNOWN_REASON_INVALID');
+
+  const canonical = unwrap(planEconomicAction(input(decision('NO_ACTION_UNKNOWN', {
+    why: ['supervisor:reason:lowercase'],
+    triggerCodes: ['thesis:check'],
+    supportingEvidenceIds: ['binance:fill:abc-123'],
+    conflictingEvidenceIds: ['market:evidence:def-456'],
+    blockingFacts: ['risk:fact'],
+    invalidationConditions: ['position:revision:changes'],
+    unknownReasonCodes: ['reconciliation:unknown'],
+  }))));
+  assert.deepEqual(canonical.supportingEvidenceIds, ['binance:fill:abc-123']);
+  assert.deepEqual(canonical.conflictingEvidenceIds, ['market:evidence:def-456']);
+  assert.deepEqual(canonical.target.reasonCodes, ['reconciliation:unknown']);
+  assert.ok(canonical.why.includes('supervisor:reason:lowercase'));
+});
+
+test('ADD_STAGE rejects self-asserted flags, stale authority, mismatched bindings, missing gates, and inexact targets', () => {
+  const cases = [
+    [input(addDecision({ authority: {
+      freshEvidence: true,
+      reservationAvailable: true,
+      approvalValidated: true,
+      futureRiskRecheckRequired: true,
+    } })), 'STAGE_TRANSITION_NOT_AUTHORIZED'],
+    [input(addDecision({ authority: stageAuthorization({ evaluatedAtMs: NOW - 1 }) })), 'STAGE_TRANSITION_AUTHORIZATION_STALE'],
+    [input(addDecision({ authority: stageAuthorization({ authorizedForExternalRiskEvaluation: false }) })), 'STAGE_TRANSITION_NOT_AUTHORIZED'],
+    [input(addDecision({ authority: stageAuthorization({ executionReady: true }) })), 'STAGE_TRANSITION_NOT_AUTHORIZED'],
+    [input(addDecision({ authority: stageAuthorization({ from: 'PROBE' }) })), 'STAGE_TRANSITION_NOT_AUTHORIZED'],
+    [input(addDecision({ authority: stageAuthorization({ to: 'HOLD' }) })), 'STAGE_TRANSITION_NOT_AUTHORIZED'],
+    [input(addDecision({ authority: stageAuthorization({ planId: 'other-plan' }) })), 'STAGE_PLAN_BINDING_MISMATCH'],
+    [input(addDecision({ authority: stageAuthorization({ planRevision: 5 }) })), 'STAGE_PLAN_BINDING_MISMATCH'],
+    [input(addDecision({ authority: stageAuthorization({ planDigest: 'forged-plan-digest' }) })), 'STAGE_PLAN_BINDING_MISMATCH'],
+    [input(addDecision({ authority: stageAuthorization({ reservationId: 'other-reservation' }) })), 'STAGE_AUTHORITY_REFERENCE_MISMATCH'],
+    [input(addDecision({ authority: stageAuthorization({ reservationRevision: 4 }) })), 'STAGE_AUTHORITY_REFERENCE_MISMATCH'],
+    [input(addDecision({ authority: stageAuthorization({ approvalId: 'other-approval' }) })), 'STAGE_AUTHORITY_REFERENCE_MISMATCH'],
+    [input(addDecision({ authority: stageAuthorization({ approvalRevision: 3 }) })), 'STAGE_AUTHORITY_REFERENCE_MISMATCH'],
+    [input(addDecision({ authority: stageAuthorization({ requiredFutureGates: ['OPERATOR_APPROVAL', 'MULTI_LEG_RISK', 'FRESH_ACCOUNT_TRUTH'] }) })), 'STAGE_AUTHORITY_FUTURE_GATES_INVALID'],
+    [input(addDecision({ authority: stageAuthorization({ requiredFutureGates: ['OPERATOR_APPROVAL', 'MULTI_LEG_RISK', 'FRESH_ACCOUNT_TRUTH', 'FRESH_MARKET_EVIDENCE', 'FRESH_MARKET_EVIDENCE'] }) })), 'STAGE_AUTHORITY_FUTURE_GATES_INVALID'],
+    [input(addDecision({ authority: stageAuthorization({ reservationAvailable: '24.999' }) })), 'STAGE_RESERVATION_AUTHORITY_INVALID'],
+    [input(addDecision({ targetTotalExposure: '124.999' })), 'ADD_STAGE_TARGET_NOT_AUTHORIZED'],
+  ];
+  const missingBinding = input(addDecision());
+  missingBinding.position.activeStageAuthority = null;
+  cases.push([missingBinding, 'ACTIVE_STAGE_BINDING_REQUIRED']);
+  for (const [candidateInput, code] of cases) {
+    const result = planEconomicAction(candidateInput);
     assert.equal(result.ok, false, `case ${code} must fail`);
     assert.equal(result.failure.code, code);
   }
@@ -172,6 +340,30 @@ test('pause, kill, stale, and unknown control truth freeze ADD without fabricati
     assert.equal(intent.target.quoteNotional, '100');
     assert.ok(intent.blockingFacts.includes('RISK_INCREASE_BLOCKED_BY_CONTROL'));
   }
+});
+
+test('ADD re-ages cached control truth at planning time and freezes authority that has since become stale', () => {
+  const cachedAtEarlierClock = assessCapitalTruth({
+    source: {
+      sourceTimeMs: NOW - 10,
+      receivedAtMs: NOW - 5,
+      maxAgeMs: 1_000,
+      authority: 'SYNTHETIC_TEST',
+      completeness: 'COMPLETE',
+      sourceId: 'cached-control-truth',
+    },
+    evaluatedAtMs: NOW,
+    requiredValuePresent: true,
+  });
+  assert.equal(cachedAtEarlierClock.freshness.state, 'FRESH');
+  const later = input(addDecision(), 'OPEN', cachedAtEarlierClock);
+  later.nowMs = NOW + 1_001;
+  later.decision.authority = stageAuthorization({ evaluatedAtMs: later.nowMs });
+  const intent = unwrap(planEconomicAction(later));
+  assert.equal(intent.kind, 'FREEZE_NEW_ACTIONS');
+  assert.equal(intent.target.quoteNotional, '100');
+  assert.ok(intent.blockingFacts.includes('CONTROL_TRUTH:STALE'));
+  assert.equal(intent.stageTransitionAuthorization, null);
 });
 
 test('pause and kill never suppress exact reduce, exit, hedge, or emergency targets', () => {
@@ -212,6 +404,34 @@ test('risk-reducing labels are derived from exposure geometry, never caller asse
   assert.equal(directionalReduction.failure.code, 'REDUCTION_INCREASES_DIRECTIONAL_RISK');
 });
 
+test('REDUCE emits exact signed target geometry and binds it into the deterministic intent identity', () => {
+  const first = unwrap(planEconomicAction(input(decision('REDUCE', {
+    targetTotalExposure: '40',
+    targetNetDirectionalExposure: '-5',
+    targetBaseQuantity: '0.0008',
+    targetHedgeRatio: '1',
+  }))));
+  assert.deepEqual(first.directionalReductionGeometry, {
+    currentTotalExposure: '100',
+    targetTotalExposure: '40',
+    currentNetDirectionalExposure: '20',
+    targetNetDirectionalExposure: '-5',
+    absoluteDirectionalExposureReduction: '15',
+  });
+  assert.equal(first.stageTransitionAuthorization, null);
+  assert.equal(Object.isFrozen(first.directionalReductionGeometry), true);
+
+  const changedSignedTarget = unwrap(planEconomicAction(input(decision('REDUCE', {
+    targetTotalExposure: '40',
+    targetNetDirectionalExposure: '5',
+    targetBaseQuantity: '0.0008',
+    targetHedgeRatio: '1',
+  }))));
+  assert.deepEqual(changedSignedTarget.target, first.target);
+  assert.notEqual(changedSignedTarget.id, first.id);
+  assert.equal(changedSignedTarget.directionalReductionGeometry.targetNetDirectionalExposure, '5');
+});
+
 test('NO_ACTION_UNKNOWN retains unknown exposure instead of representing it as zero', () => {
   const intent = unwrap(planEconomicAction(input(decision('NO_ACTION_UNKNOWN', { unknownReasonCodes: ['RECONCILIATION_DIVERGENT'] }))));
   assert.deepEqual(intent.target, { kind: 'UNKNOWN', valuationAsset: 'USDT', reasonCodes: ['RECONCILIATION_DIVERGENT'] });
@@ -235,6 +455,8 @@ test('replay is byte-equivalent and output is frozen', () => {
   const second = unwrap(planEconomicAction(input(addDecision())));
   assert.equal(JSON.stringify(first), JSON.stringify(second));
   assert.equal(Object.isFrozen(first), true);
+  assert.equal(Object.isFrozen(first.stageTransitionAuthorization), true);
+  assert.equal(Object.isFrozen(first.stageTransitionAuthorization.requiredFutureGates), true);
   assert.equal(first.id, second.id);
   assert.equal(normalizeExactDecimal(first.target.quoteNotional), first.target.quoteNotional);
 });

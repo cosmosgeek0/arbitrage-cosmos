@@ -1,24 +1,41 @@
 import {
   canonicalJson,
   createStructuredFailure,
+  evaluateFreshness,
   fail,
+  isLegLifecycle,
+  isPlanLifecycle,
   isReconciliationStatus,
   isValidUtcMillis,
   ok,
   stableHash128Hex,
+  validateSourcedTimestamp,
   type ContractResult,
 } from '../../foundation/contracts/index.js';
 import {
+  ACTION_URGENCIES,
+  CAPITAL_STAGES,
+  CAPITAL_TRUTH_STATES,
+  ECONOMIC_COMPONENT_KINDS,
+  FUTURE_GATES,
   POSITION_STATES,
+  absoluteExactDecimal,
+  actionRiskEffect,
+  addExactDecimals,
+  assessCapitalTruth,
   canTransitionCapitalLifecycle,
+  capitalDigest,
   compareExactDecimals,
   deriveCapitalCheckpointId,
   isCapitalLifecycleState,
   normalizeExactDecimal,
   normalizeNonNegativeExactDecimal,
+  subtractExactDecimals,
+  sumExactDecimals,
   truthAllowsNewExposure,
   validateEconomicAttribution,
   validatePositionActionIntent,
+  weakestCapitalTruth,
   type ActivePosition,
   type ActivePositionId,
   type CapitalEventId,
@@ -27,6 +44,8 @@ import {
   type ExternalReconciliationReference,
   type OperatorApprovalId,
 } from '../contracts/index.js';
+import { validateOperatorApproval } from '../approvals/index.js';
+import { projectActivePosition } from '../positions/index.js';
 import {
   decodeCapitalCheckpointEventRecord,
   validateCapitalCheckpointEvent,
@@ -50,7 +69,10 @@ import {
 } from './types.js';
 
 function nonEmpty(value: unknown, maximum = 256): value is string {
-  return typeof value === 'string' && value.trim().length > 0 && value.length <= maximum;
+  return typeof value === 'string'
+    && value.length > 0
+    && value.length <= maximum
+    && value.trim() === value;
 }
 
 function object(value: unknown): value is Record<string, unknown> {
@@ -143,10 +165,307 @@ function exact(value: unknown, nonNegative: boolean): boolean {
   }
 }
 
+function stringArray(value: unknown, requireNonEmpty = false): value is readonly string[] {
+  return Array.isArray(value)
+    && (!requireNonEmpty || value.length > 0)
+    && value.every((entry) => nonEmpty(entry));
+}
+
+function canonicalStringArray(value: unknown, requireNonEmpty = false): value is readonly string[] {
+  return stringArray(value, requireNonEmpty)
+    && new Set(value).size === value.length
+    && canonicalJson(value) === canonicalJson([...value].sort(compareText));
+}
+
+function validTruthMetadata(value: unknown): boolean {
+  if (!object(value) || !object(value.source) || !object(value.freshness)) return false;
+  if (validateSourcedTimestamp(value.source).length > 0 || !isValidUtcMillis(value.evaluatedAtMs)) return false;
+  if (!(CAPITAL_TRUTH_STATES as readonly unknown[]).includes(value.completeness)
+      || !canonicalStringArray(value.reasons) || !canonicalStringArray(value.evidenceReferences)
+      || (value.revision !== null && !nonEmpty(value.revision))) return false;
+  try {
+    const expectedFreshness = evaluateFreshness(value.source as never, value.evaluatedAtMs as number);
+    return canonicalJson(expectedFreshness) === canonicalJson(value.freshness);
+  } catch {
+    return false;
+  }
+}
+
+function semanticDigestMatches(value: Record<string, unknown>): boolean {
+  if (!nonEmpty(value.digest)) return false;
+  const { digest, ...semantic } = value;
+  return digest === capitalDigest(semantic);
+}
+
+function validateStagedPlanRecord(value: Record<string, unknown>): readonly string[] {
+  const reasons: string[] = [];
+  if (!nonEmpty(value.reservationId) || !nonEmpty(value.configRevision)
+      || !nonEmpty(value.proposalIntakeDigest) || !nonEmpty(value.valuationAsset)
+      || !nonEmpty(value.reservationConsiderationId)) reasons.push('STAGED_PLAN_BINDING_INVALID');
+  if (!validRevision(value.reservationRevision)) reasons.push('STAGED_PLAN_RESERVATION_REVISION_INVALID');
+  if (!Array.isArray(value.stages) || value.stages.length < 2) return Object.freeze([...reasons, 'STAGED_PLAN_STAGES_INCOMPLETE']);
+  const stages = value.stages as unknown[];
+  const names = stages.map((entry) => object(entry) ? entry.stage : null);
+  if (names[0] !== 'OBSERVE' || names.at(-1) !== 'EXIT' || new Set(names).size !== names.length
+      || !(CAPITAL_STAGES as readonly unknown[]).includes(value.activeStage) || !names.includes(value.activeStage)) {
+    reasons.push('STAGED_PLAN_STAGE_ENVELOPE_INVALID');
+  }
+  let cumulativeReservation: ExactDecimal = '0' as ExactDecimal;
+  stages.forEach((candidate, index) => {
+    if (!object(candidate)) {
+      reasons.push('STAGED_PLAN_STAGE_INVALID');
+      return;
+    }
+    if (!(CAPITAL_STAGES as readonly unknown[]).includes(candidate.stage) || candidate.sequence !== index
+        || !Number.isSafeInteger(candidate.sequence)) reasons.push('STAGED_PLAN_STAGE_SEQUENCE_INVALID');
+    for (const field of ['maximumAdditionalExposure', 'maximumTotalExposure', 'reservationConsumption', 'maximumNakedLegAmount'] as const) {
+      if (!exact(candidate[field], true)) reasons.push(`STAGED_PLAN_STAGE_${field.toUpperCase()}_INVALID`);
+    }
+    if (!Number.isSafeInteger(candidate.maximumTimeInStageMs) || (candidate.maximumTimeInStageMs as number) <= 0
+        || !Number.isSafeInteger(candidate.maximumNakedLegDurationMs) || (candidate.maximumNakedLegDurationMs as number) < 0
+        || typeof candidate.cancellableBeforeEntry !== 'boolean') reasons.push('STAGED_PLAN_STAGE_POLICY_INVALID');
+    if (!Array.isArray(candidate.prerequisites) || !canonicalStringArray(candidate.economicThesisConditions)
+        || !canonicalStringArray(candidate.invalidationConditions) || !canonicalStringArray(candidate.stopAddingConditions)
+        || !canonicalStringArray(candidate.reductionConditions) || !canonicalStringArray(candidate.allowedNextStages)
+        || !canonicalStringArray(candidate.requiredApprovalActions) || !canonicalStringArray(candidate.requiredFutureGates)) {
+      reasons.push('STAGED_PLAN_STAGE_COLLECTION_INVALID');
+    }
+    if (Array.isArray(candidate.allowedNextStages)
+        && candidate.allowedNextStages.some((stage) => !(CAPITAL_STAGES as readonly unknown[]).includes(stage))) {
+      reasons.push('STAGED_PLAN_NEXT_STAGE_INVALID');
+    }
+    if (exact(candidate.reservationConsumption, true)) {
+      cumulativeReservation = addExactDecimals(cumulativeReservation, candidate.reservationConsumption as ExactDecimal);
+      if (exact(candidate.maximumAdditionalExposure, true)
+          && compareExactDecimals(candidate.maximumAdditionalExposure as ExactDecimal, candidate.reservationConsumption as ExactDecimal) > 0) {
+        reasons.push('STAGED_PLAN_RESERVATION_UNDERCOVERS_ADDITIONAL');
+      }
+      if (exact(candidate.maximumTotalExposure, true)
+          && compareExactDecimals(candidate.maximumTotalExposure as ExactDecimal, cumulativeReservation) > 0) {
+        reasons.push('STAGED_PLAN_TOTAL_EXCEEDS_CUMULATIVE_RESERVATION');
+      }
+    }
+  });
+  if (!semanticDigestMatches(value)) reasons.push('STAGED_PLAN_DIGEST_INVALID');
+  return Object.freeze([...new Set(reasons)]);
+}
+
+function validateMandateRecord(value: Record<string, unknown>): readonly string[] {
+  const reasons: string[] = [];
+  for (const field of ['considerationId', 'allocationDecisionId', 'reservationId', 'stagedPlanId', 'stagedPlanDigest',
+    'proposalIntakeDigest', 'configRevision', 'valuationAsset'] as const) {
+    if (!nonEmpty(value[field])) reasons.push(`MANDATE_${field.toUpperCase()}_INVALID`);
+  }
+  if (!validRevision(value.stagedPlanRevision)) reasons.push('MANDATE_STAGED_PLAN_REVISION_INVALID');
+  if (value.approvalId !== null && !nonEmpty(value.approvalId)) reasons.push('MANDATE_APPROVAL_ID_INVALID');
+  if (!semanticDigestMatches(value)) reasons.push('MANDATE_DIGEST_INVALID');
+  return Object.freeze([...new Set(reasons)]);
+}
+
+function validateThesisRecord(value: Record<string, unknown>): readonly string[] {
+  const reasons: string[] = [];
+  if ((value.strategy !== 'BASIS' && value.strategy !== 'VOLUME') || !nonEmpty(value.proposalId)
+      || (value.intelligenceThesisPacketId !== null && !nonEmpty(value.intelligenceThesisPacketId))
+      || !nonEmpty(value.configRevision)) reasons.push('THESIS_BINDING_INVALID');
+  if (!Number.isSafeInteger(value.expectedHorizonMs) || (value.expectedHorizonMs as number) <= 0
+      || !Number.isSafeInteger(value.maximumHoldingHorizonMs) || (value.maximumHoldingHorizonMs as number) <= 0
+      || (value.maximumHoldingHorizonMs as number) < (value.expectedHorizonMs as number)) reasons.push('THESIS_HORIZON_INVALID');
+  if (!canonicalStringArray(value.originalEvidenceIds, true) || !canonicalStringArray(value.targetConditions, true)
+      || !canonicalStringArray(value.invalidationConditions, true) || !canonicalStringArray(value.stopAddingConditions, true)) {
+    reasons.push('THESIS_CONDITIONS_INVALID');
+  }
+  return Object.freeze(reasons);
+}
+
+function validateReconciliationRecord(value: Record<string, unknown>): readonly string[] {
+  const reasons: string[] = [];
+  if (!nonEmpty(value.externalPlanId) || !nonEmpty(value.correlationId)
+      || (value.sequence !== null && (!Number.isSafeInteger(value.sequence) || (value.sequence as number) < 0))
+      || (value.revision !== null && !nonEmpty(value.revision)) || !canonicalStringArray(value.reasonCodes)
+      || !validTruthMetadata(value.truth)) reasons.push('RECONCILIATION_BINDING_OR_TRUTH_INVALID');
+  return Object.freeze(reasons);
+}
+
+function validatePositionRecord(value: Record<string, unknown>): readonly string[] {
+  const reasons: string[] = [];
+  if (!nonEmpty(value.mandateId) || !object(value.thesis)) return Object.freeze(['POSITION_BINDING_INVALID']);
+  reasons.push(...validateThesisRecord(value.thesis).map((reason) => `POSITION_${reason}`));
+  if (!Array.isArray(value.legs) || !canonicalStringArray(value.outstandingActionIntentIds)
+      || !validTruthMetadata(value.truth)) return Object.freeze([...reasons, 'POSITION_COLLECTION_OR_TRUTH_INVALID']);
+  for (const leg of value.legs) {
+    if (!object(leg) || !nonEmpty(leg.id) || !nonEmpty(leg.instrumentId) || !nonEmpty(leg.symbol)
+        || !nonEmpty(leg.valuationAsset) || (leg.side !== 'LONG' && leg.side !== 'SHORT')
+        || (leg.externalLifecycle !== null && !isLegLifecycle(leg.externalLifecycle)) || !validTruthMetadata(leg.truth)) {
+      reasons.push('POSITION_LEG_INVALID');
+    }
+  }
+  const execution = value.executionReference;
+  if (execution !== null && (!object(execution) || !nonEmpty(execution.id) || !nonEmpty(execution.externalPlanId)
+      || !nonEmpty(execution.correlationId) || !isPlanLifecycle(execution.lifecycle)
+      || !isValidUtcMillis(execution.observedAtMs) || (execution.sequence !== null && !Number.isSafeInteger(execution.sequence))
+      || (execution.revision !== null && !nonEmpty(execution.revision)) || !validTruthMetadata(execution.truth))) {
+    reasons.push('POSITION_EXECUTION_REFERENCE_INVALID');
+  }
+  const reconciliation = value.reconciliationReference;
+  if (reconciliation !== null && (!object(reconciliation) || validateReconciliationRecord(reconciliation).length > 0)) {
+    reasons.push('POSITION_RECONCILIATION_REFERENCE_INVALID');
+  }
+  if (reasons.length > 0) return Object.freeze([...new Set(reasons)]);
+  const executionRecord = execution as Record<string, unknown> | null;
+  const reconciliationRecord = reconciliation as Record<string, unknown> | null;
+  try {
+    const projected = projectActivePosition({
+      id: value.id as never,
+      revision: value.revision as number,
+      mandateId: value.mandateId as never,
+      thesis: value.thesis as never,
+      sourceState: value.state as never,
+      sourceCapitalLifecycle: value.capitalLifecycle as never,
+      legs: value.legs as never,
+      oneLegSinceMs: value.oneLegSinceMs as number | null,
+      executionState: executionRecord === null ? null : {
+        externalPlanId: executionRecord.externalPlanId as string,
+        correlationId: executionRecord.correlationId as string,
+        lifecycle: executionRecord.lifecycle as never,
+        observedAtMs: executionRecord.observedAtMs as number,
+        sequence: executionRecord.sequence as number | null,
+        revision: executionRecord.revision as string | null,
+        truth: executionRecord.truth as never,
+      },
+      reconciliationState: reconciliationRecord === null ? null : {
+        externalPlanId: reconciliationRecord.externalPlanId as string,
+        correlationId: reconciliationRecord.correlationId as string,
+        status: reconciliationRecord.status as never,
+        observedAtMs: reconciliationRecord.observedAtMs as number,
+        sequence: reconciliationRecord.sequence as number | null,
+        revision: reconciliationRecord.revision as string | null,
+        reasonCodes: reconciliationRecord.reasonCodes as readonly string[],
+        truth: reconciliationRecord.truth as never,
+      },
+      outstandingActionIntentIds: value.outstandingActionIntentIds as readonly string[],
+      openedAtMs: value.openedAtMs as number,
+      lastTransitionAtMs: value.lastTransitionAtMs as number,
+      truth: value.truth as never,
+      projectedAtMs: (value.truth as Record<string, unknown>).evaluatedAtMs as number,
+    });
+    if (canonicalJson(projected.position) !== canonicalJson(value)) reasons.push('POSITION_PROJECTION_INVARIANT_INVALID');
+  } catch {
+    reasons.push('POSITION_PROJECTION_INVARIANT_INVALID');
+  }
+  return Object.freeze([...new Set(reasons)]);
+}
+
+function validateActionIntentRecord(value: Record<string, unknown>): readonly string[] {
+  const reasons = validatePositionActionIntent(value).map((reason) => `INTENT_${reason}`);
+  if (!nonEmpty(value.positionId) || !validRevision(value.sourcePositionRevision) || !nonEmpty(value.sourceThesisId)
+      || !validRevision(value.sourceThesisRevision) || !(ACTION_URGENCIES as readonly unknown[]).includes(value.urgency)
+      || !canonicalStringArray(value.why, true) || !canonicalStringArray(value.supportingEvidenceIds)
+      || !canonicalStringArray(value.conflictingEvidenceIds) || !canonicalStringArray(value.blockingFacts)
+      || !canonicalStringArray(value.invalidationConditions) || !canonicalStringArray(value.requiredFutureGates)
+      || (value.requiredFutureGates as unknown[]).some((gate) => !(FUTURE_GATES as readonly unknown[]).includes(gate))
+      || !(CAPITAL_TRUTH_STATES as readonly unknown[]).includes(value.completeness)
+      || !nonEmpty(value.idempotencyKey) || !nonEmpty(value.correlationKey) || !isValidUtcMillis(value.createdAtMs)
+      || (value.hardDeadlineMs !== null && (!isValidUtcMillis(value.hardDeadlineMs)
+        || (value.hardDeadlineMs as number) < (value.createdAtMs as number)))
+      || (value.economicCostOfWaiting !== null && !exact(value.economicCostOfWaiting, true))
+      || (value.expectedCostOfActing !== null && !exact(value.expectedCostOfActing, true))) {
+    reasons.push('INTENT_REQUIRED_FIELD_INVALID');
+  }
+  if (typeof value.kind === 'string' && value.riskEffect !== actionRiskEffect(value.kind as never)) reasons.push('INTENT_RISK_EFFECT_MISMATCH');
+  if (object(value.target) && !nonEmpty(value.target.valuationAsset)) reasons.push('INTENT_TARGET_VALUATION_INVALID');
+  const stageAuthorization = value.stageTransitionAuthorization;
+  if (value.kind === 'ADD_STAGE') {
+    if (!object(stageAuthorization) || stageAuthorization.authorizedForExternalRiskEvaluation !== true
+        || stageAuthorization.executionReady !== false || stageAuthorization.to !== 'ADD'
+        || !(CAPITAL_STAGES as readonly unknown[]).includes(stageAuthorization.from)
+        || !nonEmpty(stageAuthorization.planId) || !validRevision(stageAuthorization.planRevision)
+        || !nonEmpty(stageAuthorization.planDigest) || !nonEmpty(stageAuthorization.reservationId)
+        || !validRevision(stageAuthorization.reservationRevision) || !nonEmpty(stageAuthorization.approvalId)
+        || !validRevision(stageAuthorization.approvalRevision) || !isValidUtcMillis(stageAuthorization.evaluatedAtMs)
+        || stageAuthorization.evaluatedAtMs !== value.createdAtMs || !exact(stageAuthorization.reservationConsumption, true)
+        || !exact(stageAuthorization.reservationAvailable, true) || !canonicalStringArray(stageAuthorization.requiredFutureGates, true)
+        || (stageAuthorization.requiredFutureGates as unknown[]).some((gate) => !(FUTURE_GATES as readonly unknown[]).includes(gate))) {
+      reasons.push('INTENT_ADD_STAGE_AUTHORITY_INVALID');
+    }
+  } else if (stageAuthorization !== undefined && stageAuthorization !== null) {
+    reasons.push('INTENT_STAGE_AUTHORITY_UNEXPECTED');
+  }
+  const geometry = value.directionalReductionGeometry;
+  if (geometry !== undefined && geometry !== null) {
+    if (value.kind !== 'REDUCE' || !object(geometry) || !exact(geometry.currentTotalExposure, true)
+        || !exact(geometry.targetTotalExposure, true) || !exact(geometry.currentNetDirectionalExposure, false)
+        || !exact(geometry.targetNetDirectionalExposure, false) || !exact(geometry.absoluteDirectionalExposureReduction, true)) {
+      reasons.push('INTENT_DIRECTIONAL_REDUCTION_GEOMETRY_INVALID');
+    } else {
+      const reduction = subtractExactDecimals(
+        absoluteExactDecimal(geometry.currentNetDirectionalExposure as ExactDecimal),
+        absoluteExactDecimal(geometry.targetNetDirectionalExposure as ExactDecimal),
+      );
+      if (compareExactDecimals(reduction, '0' as ExactDecimal) < 0
+          || reduction !== geometry.absoluteDirectionalExposureReduction
+          || !object(value.target) || value.target.kind !== 'TOTAL'
+          || value.target.quoteNotional !== geometry.targetTotalExposure) {
+        reasons.push('INTENT_DIRECTIONAL_REDUCTION_GEOMETRY_INVALID');
+      }
+    }
+  }
+  return Object.freeze([...new Set(reasons)]);
+}
+
+function validateEconomicRecord(value: Record<string, unknown>): readonly string[] {
+  const reasons: string[] = [];
+  if (!object(value.attribution)) return Object.freeze(['ECONOMICS_ATTRIBUTION_INVALID']);
+  reasons.push(...validateEconomicAttribution(value.attribution as never).map((reason) => `ECONOMICS_${reason}`));
+  const attribution = value.attribution;
+  if (!isValidUtcMillis(attribution.evaluatedAtMs) || !Array.isArray(attribution.components)
+      || !canonicalStringArray(attribution.includedComponentIds) || !canonicalStringArray(attribution.divergentReasons)
+      || !canonicalStringArray(attribution.missingComponentKinds)
+      || (attribution.missingComponentKinds as unknown[]).some((kind) => !(ECONOMIC_COMPONENT_KINDS as readonly unknown[]).includes(kind))
+      || !(CAPITAL_TRUTH_STATES as readonly unknown[]).includes(attribution.completeness)
+      || typeof attribution.accountingIdentityProven !== 'boolean') {
+    reasons.push('ECONOMICS_ATTRIBUTION_REQUIRED_FIELD_INVALID');
+    return Object.freeze([...new Set(reasons)]);
+  }
+  const components = attribution.components as Record<string, unknown>[];
+  const ids = components.map((component) => component.id);
+  if (ids.some((id) => !nonEmpty(id)) || new Set(ids).size !== ids.length) reasons.push('ECONOMICS_COMPONENT_ID_INVALID');
+  const included = new Set(attribution.includedComponentIds as string[]);
+  if ([...included].some((id) => !ids.includes(id))) reasons.push('ECONOMICS_INCLUDED_COMPONENT_UNKNOWN');
+  const knownAmounts: ExactDecimal[] = [];
+  const estimatedRanges: Array<{ low: ExactDecimal; high: ExactDecimal }> = [];
+  for (const component of components) {
+    if (!included.has(component.id as string)) continue;
+    if (component.status === 'KNOWN' && exact(component.amount, false)) knownAmounts.push(component.amount as ExactDecimal);
+    else if (component.status === 'ESTIMATED' && object(component.estimateRange)
+      && exact(component.estimateRange.low, false) && exact(component.estimateRange.high, false)) {
+      estimatedRanges.push({ low: component.estimateRange.low as ExactDecimal, high: component.estimateRange.high as ExactDecimal });
+    } else reasons.push('ECONOMICS_INCLUDED_COMPONENT_NOT_ACCOUNTABLE');
+  }
+  const known = sumExactDecimals(knownAmounts);
+  if (attribution.netKnown !== known) reasons.push('ECONOMICS_NET_KNOWN_IDENTITY_INVALID');
+  const expectedRange = estimatedRanges.length === 0 ? null : {
+    low: sumExactDecimals([known, ...estimatedRanges.map((range) => range.low)]),
+    high: sumExactDecimals([known, ...estimatedRanges.map((range) => range.high)]),
+  };
+  if (canonicalJson(attribution.netEstimatedRange) !== canonicalJson(expectedRange)) reasons.push('ECONOMICS_ESTIMATE_IDENTITY_INVALID');
+  if (attribution.accountingIdentityProven === true
+      && (components.length === 0 || (attribution.missingComponentKinds as unknown[]).length > 0
+        || (attribution.divergentReasons as unknown[]).length > 0)) reasons.push('ECONOMICS_FALSE_IDENTITY_PROOF');
+  if (attribution.completeness === 'COMPLETE'
+      && (!attribution.accountingIdentityProven || estimatedRanges.length > 0
+        || (attribution.missingComponentKinds as unknown[]).length > 0 || (attribution.divergentReasons as unknown[]).length > 0)) {
+    reasons.push('ECONOMICS_FALSE_COMPLETE');
+  }
+  return Object.freeze([...new Set(reasons)]);
+}
+
 const NESTED_EXACT_DECIMAL_FIELDS: Readonly<Record<string, boolean>> = Object.freeze({
   amount: false,
+  absoluteDirectionalExposureReduction: true,
   baseQuantity: false,
   consumedAmount: true,
+  currentNetDirectionalExposure: false,
+  currentTotalExposure: true,
   economicCostOfWaiting: true,
   expectedCostOfActing: true,
   hedgeRatio: false,
@@ -167,6 +486,8 @@ const NESTED_EXACT_DECIMAL_FIELDS: Readonly<Record<string, boolean>> = Object.fr
   remainingReservedAmount: true,
   reservationConsumption: true,
   targetHedgeRatio: false,
+  targetNetDirectionalExposure: false,
+  targetTotalExposure: true,
   targetMaximumExposure: true,
   totalGrossExposure: true,
 });
@@ -202,6 +523,8 @@ function validateCheckpointRecord(kind: CapitalCheckpointEventKind, value: unkno
   switch (kind) {
     case 'RESERVATION_UPSERTED':
       if (!validRevision(value.revision)) reasons.push('RESERVATION_REVISION_INVALID');
+      if (!nonEmpty(value.allocationDecisionId) || !nonEmpty(value.considerationId)
+          || !nonEmpty(value.valuationAsset) || !nonEmpty(value.idempotencyKey)) reasons.push('RESERVATION_BINDING_INVALID');
       if (!exact(value.amount, true) || !exact(value.consumedAmount, true)) reasons.push('RESERVATION_DECIMAL_INVALID');
       if (!validTimes(value, ['createdAtMs', 'expiresAtMs'], ['releasedAtMs'])
         || (isValidUtcMillis(value.createdAtMs) && isValidUtcMillis(value.expiresAtMs) && value.expiresAtMs <= value.createdAtMs)) reasons.push('RESERVATION_TIME_INVALID');
@@ -215,18 +538,21 @@ function validateCheckpointRecord(kind: CapitalCheckpointEventKind, value: unkno
       if (!exact(value.targetMaximumExposure, true)) reasons.push('MANDATE_DECIMAL_INVALID');
       if (!validTimes(value, ['createdAtMs', 'expiresAtMs'])
         || (isValidUtcMillis(value.createdAtMs) && isValidUtcMillis(value.expiresAtMs) && value.expiresAtMs <= value.createdAtMs)) reasons.push('MANDATE_TIME_INVALID');
+      reasons.push(...validateMandateRecord(value));
       break;
     case 'STAGED_PLAN_UPSERTED':
       if (!validRevision(value.revision)) reasons.push('STAGED_PLAN_REVISION_INVALID');
       if (!exact(value.remainingReservedAmount, true)) reasons.push('STAGED_PLAN_DECIMAL_INVALID');
       if (!validTimes(value, ['createdAtMs', 'expiresAtMs'])
         || (isValidUtcMillis(value.createdAtMs) && isValidUtcMillis(value.expiresAtMs) && value.expiresAtMs <= value.createdAtMs)) reasons.push('STAGED_PLAN_TIME_INVALID');
+      reasons.push(...validateStagedPlanRecord(value));
       break;
     case 'APPROVAL_UPSERTED':
       if (!exact(value.maximumNotional, true)) reasons.push('APPROVAL_DECIMAL_INVALID');
       if (!validTimes(value, ['issuedAtMs', 'expiresAtMs'], ['revokedAtMs'])
         || (isValidUtcMillis(value.issuedAtMs) && isValidUtcMillis(value.expiresAtMs) && value.expiresAtMs <= value.issuedAtMs)) reasons.push('APPROVAL_TIME_INVALID');
       if (!['READ_ONLY', 'ADVISORY', 'VALIDATE_ONLY', 'MANUAL_ARMED'].includes(String(value.mode))) reasons.push('APPROVAL_MODE_INVALID');
+      reasons.push(...validateOperatorApproval(value).map((issue) => `APPROVAL_${issue.path}:${issue.code}`));
       break;
     case 'APPROVAL_REVOKED':
       if (!validRevision(value.revision)) reasons.push('REVOCATION_REVISION_INVALID');
@@ -234,6 +560,7 @@ function validateCheckpointRecord(kind: CapitalCheckpointEventKind, value: unkno
       break;
     case 'THESIS_UPSERTED':
       if (!validRevision(value.revision) || !isValidUtcMillis(value.openedAtMs)) reasons.push('THESIS_REVISION_OR_TIME_INVALID');
+      reasons.push(...validateThesisRecord(value));
       break;
     case 'POSITION_UPSERTED':
       if (!validRevision(value.revision)) reasons.push('POSITION_REVISION_INVALID');
@@ -241,16 +568,18 @@ function validateCheckpointRecord(kind: CapitalCheckpointEventKind, value: unkno
       if (!isCapitalLifecycleState(value.capitalLifecycle)) reasons.push('POSITION_LIFECYCLE_INVALID');
       if (!exact(value.totalGrossExposure, true) || !exact(value.netDirectionalExposure, false) || !exact(value.oneLegExposure, true)) reasons.push('POSITION_DECIMAL_INVALID');
       if (!validTimes(value, ['openedAtMs', 'lastTransitionAtMs'], ['oneLegSinceMs'])) reasons.push('POSITION_TIME_INVALID');
+      reasons.push(...validatePositionRecord(value));
       break;
     case 'RECONCILIATION_UPSERTED':
       if (!isReconciliationStatus(value.status) || !isValidUtcMillis(value.observedAtMs)) reasons.push('RECONCILIATION_INVALID');
+      reasons.push(...validateReconciliationRecord(value));
       break;
     case 'ACTION_INTENT_UPSERTED':
-      reasons.push(...validatePositionActionIntent(value).map((reason) => `INTENT_${reason}`));
+      reasons.push(...validateActionIntentRecord(value));
       break;
     case 'ECONOMICS_UPSERTED': {
       if (!validRevision(value.revision) || !nonEmpty(value.positionId) || !object(value.attribution)) reasons.push('ECONOMICS_RECORD_INVALID');
-      else reasons.push(...validateEconomicAttribution(value.attribution as never).map((reason) => `ECONOMICS_${reason}`));
+      else reasons.push(...validateEconomicRecord(value));
       break;
     }
     case 'LIFECYCLE_REVISED':
@@ -274,6 +603,115 @@ function revisionOf(value: unknown): number | null {
 
 function terminalReservation(value: CapitalReservation, nowMs: number): boolean {
   return value.state === 'RELEASED' || value.state === 'EXPIRED' || value.expiresAtMs <= nowMs;
+}
+
+function maximumPlanExposure(plan: Record<string, unknown>): ExactDecimal | null {
+  if (!Array.isArray(plan.stages) || plan.stages.length === 0) return null;
+  let maximum: ExactDecimal = '0' as ExactDecimal;
+  for (const step of plan.stages) {
+    if (!object(step) || !exact(step.maximumTotalExposure, true)) return null;
+    if (compareExactDecimals(step.maximumTotalExposure as ExactDecimal, maximum) > 0) {
+      maximum = step.maximumTotalExposure as ExactDecimal;
+    }
+  }
+  return maximum;
+}
+
+function planReservationConsumption(plan: Record<string, unknown>): ExactDecimal | null {
+  if (!Array.isArray(plan.stages)) return null;
+  const values: ExactDecimal[] = [];
+  for (const step of plan.stages) {
+    if (!object(step) || !exact(step.reservationConsumption, true)) return null;
+    values.push(step.reservationConsumption as ExactDecimal);
+  }
+  return sumExactDecimals(values);
+}
+
+function recordBindingIssues(
+  kind: CapitalCheckpointEventKind,
+  state: Readonly<CapitalCheckpointState>,
+  record: CapitalCheckpointRecord,
+): readonly string[] {
+  const value = record as unknown as Record<string, unknown>;
+  const reasons: string[] = [];
+  if (kind === 'STAGED_PLAN_UPSERTED') {
+    const reservation = state.reservations.find((entry) => entry.id === value.reservationId);
+    if (reservation === undefined) return Object.freeze(['STAGED_PLAN_RESERVATION_MISSING']);
+    const remaining = addExactDecimals(reservation.amount, normalizeExactDecimal(`-${reservation.consumedAmount}`));
+    const plannedConsumption = planReservationConsumption(value);
+    if (value.reservationRevision !== reservation.revision || value.reservationConsiderationId !== reservation.considerationId
+        || value.valuationAsset !== reservation.valuationAsset || value.remainingReservedAmount !== remaining
+        || plannedConsumption === null || compareExactDecimals(plannedConsumption, reservation.amount) > 0
+        || (value.createdAtMs as number) < reservation.createdAtMs || (value.expiresAtMs as number) > reservation.expiresAtMs) {
+      reasons.push('STAGED_PLAN_RESERVATION_BINDING_INVALID');
+    }
+  } else if (kind === 'MANDATE_UPSERTED') {
+    const reservation = state.reservations.find((entry) => entry.id === value.reservationId);
+    const plan = state.stagedPlans.find((entry) => entry.id === value.stagedPlanId) as unknown as Record<string, unknown> | undefined;
+    if (reservation === undefined || plan === undefined) return Object.freeze(['MANDATE_DEPENDENCY_MISSING']);
+    const maximum = maximumPlanExposure(plan);
+    if (value.allocationDecisionId !== reservation.allocationDecisionId || value.considerationId !== reservation.considerationId
+        || plan.reservationId !== reservation.id || value.stagedPlanRevision !== plan.revision
+        || value.stagedPlanDigest !== plan.digest || value.proposalIntakeDigest !== plan.proposalIntakeDigest
+        || value.configRevision !== plan.configRevision || value.valuationAsset !== reservation.valuationAsset
+        || value.valuationAsset !== plan.valuationAsset || maximum === null || value.targetMaximumExposure !== maximum
+        || (value.expiresAtMs as number) > (plan.expiresAtMs as number)
+        || (value.expiresAtMs as number) > reservation.expiresAtMs) reasons.push('MANDATE_DEPENDENCY_BINDING_INVALID');
+  } else if (kind === 'APPROVAL_UPSERTED') {
+    const mandate = state.mandates.find((entry) => entry.id === value.mandateId) as unknown as Record<string, unknown> | undefined;
+    const plan = state.stagedPlans.find((entry) => entry.id === value.stagedPlanId) as unknown as Record<string, unknown> | undefined;
+    const reservation = mandate === undefined ? undefined : state.reservations.find((entry) => entry.id === mandate.reservationId);
+    if (mandate === undefined && plan === undefined && reservation === undefined) return Object.freeze([]);
+    if (mandate === undefined || plan === undefined || reservation === undefined) return Object.freeze(['APPROVAL_DEPENDENCY_MISSING']);
+    if (value.mandateRevision !== mandate.revision || value.mandateDigest !== mandate.digest
+        || value.proposalIntakeDigest !== mandate.proposalIntakeDigest
+        || value.stagedPlanId !== mandate.stagedPlanId || value.stagedPlanRevision !== mandate.stagedPlanRevision
+        || value.stagedPlanDigest !== mandate.stagedPlanDigest || value.stagedPlanRevision !== plan.revision
+        || value.stagedPlanDigest !== plan.digest || value.configRevision !== mandate.configRevision
+        || value.valuationAsset !== mandate.valuationAsset || compareExactDecimals(value.maximumNotional as ExactDecimal, mandate.targetMaximumExposure as ExactDecimal) > 0
+        || (value.expiresAtMs as number) > (mandate.expiresAtMs as number)
+        || (value.expiresAtMs as number) > (plan.expiresAtMs as number)
+        || (value.expiresAtMs as number) > reservation.expiresAtMs) reasons.push('APPROVAL_DEPENDENCY_BINDING_INVALID');
+  } else if (kind === 'POSITION_UPSERTED') {
+    const mandate = state.mandates.find((entry) => entry.id === value.mandateId);
+    if (mandate === undefined || (value.openedAtMs as number) < mandate.createdAtMs) reasons.push('POSITION_MANDATE_BINDING_INVALID');
+  } else if (kind === 'ACTION_INTENT_UPSERTED') {
+    const position = state.positions.find((entry) => entry.id === value.positionId);
+    if (position === undefined || value.sourcePositionRevision !== position.revision
+        || value.sourceThesisId !== position.thesis.id || value.sourceThesisRevision !== position.thesis.revision) {
+      reasons.push('INTENT_POSITION_BINDING_INVALID');
+    } else if (value.kind === 'ADD_STAGE' && object(value.stageTransitionAuthorization) && object(value.target)) {
+      const authorization = value.stageTransitionAuthorization;
+      const plan = state.stagedPlans.find((entry) => entry.id === authorization.planId) as unknown as Record<string, unknown> | undefined;
+      const reservation = state.reservations.find((entry) => entry.id === authorization.reservationId);
+      const approval = state.approvals.find((entry) => entry.id === authorization.approvalId);
+      const increase = value.target.kind === 'TOTAL' && exact(value.target.quoteNotional, true)
+        ? subtractExactDecimals(value.target.quoteNotional as ExactDecimal, position.totalGrossExposure)
+        : null;
+      if (plan === undefined || reservation === undefined || approval === undefined
+          || plan.revision !== authorization.planRevision || plan.digest !== authorization.planDigest
+          || reservation.revision !== authorization.reservationRevision || reservation.state !== 'ACTIVE'
+          || approval.stagedPlanId !== plan.id || approval.stagedPlanRevision !== plan.revision
+          || approval.stagedPlanDigest !== plan.digest || approval.id !== authorization.approvalId
+          || value.target.valuationAsset !== reservation.valuationAsset || increase === null
+          || increase !== authorization.reservationConsumption) reasons.push('INTENT_ADD_AUTHORITY_BINDING_INVALID');
+    } else if (value.kind === 'REDUCE' && object(value.directionalReductionGeometry)) {
+      const geometry = value.directionalReductionGeometry;
+      if (geometry.currentTotalExposure !== position.totalGrossExposure
+          || geometry.currentNetDirectionalExposure !== position.netDirectionalExposure) {
+        reasons.push('INTENT_REDUCTION_POSITION_BINDING_INVALID');
+      }
+    }
+  } else if (kind === 'ECONOMICS_UPSERTED') {
+    if (!state.positions.some((entry) => entry.id === value.positionId)) reasons.push('ECONOMICS_POSITION_MISSING');
+  } else if (kind === 'LIFECYCLE_REVISED') {
+    const known = state.positions.some((entry) => entry.id === value.aggregateId)
+      || state.mandates.some((entry) => entry.id === value.aggregateId)
+      || state.stagedPlans.some((entry) => entry.id === value.aggregateId)
+      || state.reservations.some((entry) => entry.id === value.aggregateId);
+    if (!known) reasons.push('LIFECYCLE_AGGREGATE_MISSING');
+  }
+  return Object.freeze([...new Set(reasons)]);
 }
 
 function recordConflict(
@@ -367,6 +805,8 @@ export function applyCapitalCheckpointEvent(
   }
   const recordIssues = validateCheckpointRecord(event.kind, record);
   if (recordIssues.length > 0) return failure('CHECKPOINT_RECORD_INVALID', recordIssues.join(','), event.occurredAtMs, event.correlationId, `REVISION_${state.revision}`);
+  const bindingIssues = recordBindingIssues(event.kind, state, record);
+  if (bindingIssues.length > 0) return failure('CHECKPOINT_RECORD_BINDING_INVALID', bindingIssues.join(','), event.occurredAtMs, event.correlationId, `REVISION_${state.revision}`);
   if (event.kind === 'RESERVATION_UPSERTED') {
     const reservation = record as CapitalReservation;
     if (reservation.state === 'ACTIVE' && reservation.expiresAtMs <= event.occurredAtMs) {
@@ -450,6 +890,28 @@ function exposed(position: ActivePosition): boolean {
   return hasPositiveExposure(position);
 }
 
+function truthAllowsAt(truth: unknown, nowMs: number): boolean {
+  if (!validTruthMetadata(truth)) return false;
+  try {
+    const current = assessCapitalTruth({
+      source: (truth as Record<string, unknown>).source as never,
+      evaluatedAtMs: nowMs,
+      requiredValuePresent: (truth as Record<string, unknown>).completeness !== 'UNKNOWN',
+      divergent: (truth as Record<string, unknown>).completeness === 'DIVERGENT',
+      reasons: (truth as Record<string, unknown>).reasons as readonly string[],
+      evidenceReferences: (truth as Record<string, unknown>).evidenceReferences as readonly string[],
+      revision: (truth as Record<string, unknown>).revision as string | null,
+    });
+    const completeness = weakestCapitalTruth([
+      (truth as Record<string, unknown>).completeness as never,
+      current.completeness,
+    ]);
+    return completeness === 'COMPLETE' && truthAllowsNewExposure(current);
+  } catch {
+    return false;
+  }
+}
+
 function reconciliationConflict(
   checkpoint: ExternalReconciliationReference | null,
   current: ExternalReconciliationReference | null,
@@ -458,8 +920,18 @@ function reconciliationConflict(
   if (current?.status === 'DIVERGED' || current?.status === 'AMBIGUOUS') return true;
   if (checkpoint === null || current === null) return true;
   if (checkpoint.externalPlanId !== current.externalPlanId || checkpoint.correlationId !== current.correlationId) return true;
-  if (checkpoint.sequence !== null && current.sequence !== null && current.sequence < checkpoint.sequence) return true;
-  return checkpoint.sequence !== null && current.sequence === checkpoint.sequence && checkpoint.status !== current.status;
+  if (checkpoint.sequence !== null && current.sequence !== null) {
+    if (current.sequence < checkpoint.sequence) return true;
+    if (current.sequence > checkpoint.sequence) return false;
+    return checkpoint.status !== current.status
+      || checkpoint.revision !== current.revision
+      || current.observedAtMs < checkpoint.observedAtMs;
+  }
+  return checkpoint.sequence !== null || current.sequence !== null
+    || checkpoint.revision === null || current.revision === null
+    || checkpoint.revision !== current.revision
+    || current.observedAtMs < checkpoint.observedAtMs
+    || checkpoint.status !== current.status;
 }
 
 function usableApprovalIds(
@@ -477,14 +949,22 @@ function usableApprovalIds(
       : state.reservations.find((item) => item.id === mandate.reservationId);
     if (!mandate || !plan || !reservation || mandate.expiresAtMs <= nowMs || plan.expiresAtMs <= nowMs
       || reservation.state !== 'ACTIVE' || reservation.releasedAtMs !== null || reservation.expiresAtMs <= nowMs) return false;
-    return mandate.approvalId === approval.id
-      && mandate.revision === approval.mandateRevision
+    try {
+      if (compareExactDecimals(approval.maximumNotional, mandate.targetMaximumExposure) > 0) return false;
+    } catch {
+      return false;
+    }
+    return mandate.revision === approval.mandateRevision
       && mandate.digest === approval.mandateDigest
       && mandate.proposalIntakeDigest === approval.proposalIntakeDigest
       && mandate.stagedPlanId === approval.stagedPlanId
       && mandate.stagedPlanRevision === approval.stagedPlanRevision
       && mandate.stagedPlanDigest === approval.stagedPlanDigest
       && mandate.configRevision === approval.configRevision
+      && mandate.valuationAsset === approval.valuationAsset
+      && approval.expiresAtMs <= mandate.expiresAtMs
+      && approval.expiresAtMs <= plan.expiresAtMs
+      && approval.expiresAtMs <= reservation.expiresAtMs
       && plan.id === approval.stagedPlanId
       && plan.reservationId === mandate.reservationId
       && plan.revision === approval.stagedPlanRevision
@@ -497,12 +977,19 @@ export function projectRestartSafety(
   input: RestartTruthInput,
 ): Readonly<RestoredCapitalProjection> {
   if (!isValidUtcMillis(input.nowMs) || !nonEmpty(input.correlationId, 128)) throw new TypeError('restart projection requires injected UTC time and correlation ID');
+  let stateMatchesReplay = false;
+  try {
+    const replayed = replayCapitalCheckpointEvents(state.streamId, state.eventLog);
+    stateMatchesReplay = replayed.ok && canonicalJson(replayed.value) === canonicalJson(state);
+  } catch {
+    stateMatchesReplay = false;
+  }
   const effectiveReservations = state.reservations.map((reservation) => reservation.state === 'ACTIVE' && reservation.expiresAtMs <= input.nowMs
     ? deepFreeze({ ...reservation, state: 'EXPIRED' as const })
     : reservation);
   const recoveryIds: ActivePositionId[] = [];
   const recoveryReasons: string[] = [];
-  const effectivePositions = state.positions.map((position) => {
+  let effectivePositions = state.positions.map((position) => {
     if (position.state === 'CLOSED' && hasPositiveExposure(position)) {
       recoveryIds.push(position.id);
       recoveryReasons.push('CLOSED_POSITION_HAS_EXPOSURE');
@@ -525,18 +1012,29 @@ export function projectRestartSafety(
     }
     const current = matches[0];
     const conflicts = reconciliationConflict(checkpointRef, current);
-    if (current.status !== 'EXACT' || !truthAllowsNewExposure(current.truth) || conflicts) {
+    if (validateReconciliationRecord(current as unknown as Record<string, unknown>).length > 0
+        || current.status !== 'EXACT' || !truthAllowsAt(current.truth, input.nowMs) || conflicts) {
       recoveryIds.push(position.id);
       if (current.status !== 'EXACT') recoveryReasons.push('POSITION_RECONCILIATION_NOT_EXACT');
-      if (!truthAllowsNewExposure(current.truth)) recoveryReasons.push('POSITION_RECONCILIATION_TRUTH_NOT_FRESH');
+      if (!truthAllowsAt(current.truth, input.nowMs)) recoveryReasons.push('POSITION_RECONCILIATION_TRUTH_NOT_FRESH');
       if (conflicts) recoveryReasons.push('CHECKPOINT_RECONCILIATION_CONFLICT');
       return deepFreeze({ ...position, state: 'RECOVERY_REQUIRED' as const, capitalLifecycle: 'RECOVERY_REQUIRED' as const });
     }
     return position;
   });
+  if (!stateMatchesReplay) {
+    recoveryReasons.push('CHECKPOINT_STATE_REPLAY_INVALID');
+    effectivePositions = effectivePositions.map((position) => {
+      if (!exposed(position)) return position;
+      if (!recoveryIds.includes(position.id)) recoveryIds.push(position.id);
+      return position.state === 'RECOVERY_REQUIRED' && position.capitalLifecycle === 'RECOVERY_REQUIRED'
+        ? position
+        : deepFreeze({ ...position, state: 'RECOVERY_REQUIRED' as const, capitalLifecycle: 'RECOVERY_REQUIRED' as const });
+    });
+  }
   const visiblePositionIds = effectivePositions.filter(exposed).map((position) => position.id);
-  const accountFresh = input.accountTruth !== null && truthAllowsNewExposure(input.accountTruth);
-  const reconciliationFresh = input.reconciliationTruth !== null && truthAllowsNewExposure(input.reconciliationTruth);
+  const accountFresh = input.accountTruth !== null && truthAllowsAt(input.accountTruth, input.nowMs);
+  const reconciliationFresh = input.reconciliationTruth !== null && truthAllowsAt(input.reconciliationTruth, input.nowMs);
   const reasonCodes: string[] = [];
   if (!accountFresh) reasonCodes.push('RESTART_ACCOUNT_TRUTH_NOT_FRESH');
   if (!reconciliationFresh) reasonCodes.push('RESTART_RECONCILIATION_TRUTH_NOT_FRESH');
@@ -547,12 +1045,12 @@ export function projectRestartSafety(
   const allowedReduction = outstandingIntents.filter((intent) => intent.riskEffect !== 'RISK_INCREASING').map((intent) => intent.id);
   const safety: RestartSafetyProjection = {
     evaluatedAtMs: input.nowMs,
-    canOpenOrIncrease: accountFresh && reconciliationFresh && recoveryIds.length === 0,
+    canOpenOrIncrease: stateMatchesReplay && accountFresh && reconciliationFresh && recoveryIds.length === 0,
     supervisionContinues: visiblePositionIds.length > 0,
     reasonCodes: sortedUnique(reasonCodes),
     visiblePositionIds: Object.freeze([...visiblePositionIds].sort()),
     recoveryRequiredPositionIds: Object.freeze([...recoveryIds].sort()),
-    usableApprovalIds: usableApprovalIds(state, input.nowMs),
+    usableApprovalIds: stateMatchesReplay ? usableApprovalIds(state, input.nowMs) : Object.freeze([]),
     effectiveActiveReservationIds: Object.freeze(effectiveReservations.filter((item) => item.state === 'ACTIVE').map((item) => item.id).sort()),
     effectiveExpiredReservationIds: Object.freeze(effectiveReservations.filter((item) => item.state === 'EXPIRED').map((item) => item.id).sort()),
     blockedRiskIncreasingIntentIds: Object.freeze(blockedIncreasing.sort()),

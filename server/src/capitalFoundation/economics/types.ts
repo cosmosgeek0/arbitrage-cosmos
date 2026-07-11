@@ -1,5 +1,6 @@
 import type {
   CapitalTruthState,
+  ConfigurationAuthority,
   EconomicAttribution,
   EconomicComponent,
   EconomicComponentKind,
@@ -8,20 +9,20 @@ import type {
   ExactDecimal,
 } from '../contracts/index.js';
 
-export const ECONOMIC_SCOPE_KINDS = [
+export const ECONOMIC_SCOPE_KINDS = Object.freeze([
   'PROPOSAL',
   'MANDATE',
   'STAGE',
   'LEG',
   'POSITION',
   'CLOSED_OUTCOME',
-] as const;
+] as const);
 export type EconomicScopeKind = (typeof ECONOMIC_SCOPE_KINDS)[number];
 
-export const PRICE_PNL_BASES = ['LEG_PRICE', 'BASIS_AND_DIRECTIONAL'] as const;
+export const PRICE_PNL_BASES = Object.freeze(['LEG_PRICE', 'BASIS_AND_DIRECTIONAL'] as const);
 export type PricePnlBasis = (typeof PRICE_PNL_BASES)[number];
 
-export const EXECUTION_COST_BASES = ['DETAILED_SPREAD_SLIPPAGE', 'EXECUTION_SHORTFALL'] as const;
+export const EXECUTION_COST_BASES = Object.freeze(['DETAILED_SPREAD_SLIPPAGE', 'EXECUTION_SHORTFALL'] as const);
 export type ExecutionCostBasis = (typeof EXECUTION_COST_BASES)[number];
 
 export interface EconomicScopeReference {
@@ -37,11 +38,21 @@ export interface EconomicScopeReference {
 }
 
 export interface EconomicAccountingPolicy {
+  /**
+   * Content-addressed policy authority. Its revision covers the source,
+   * effective window, and every accounting choice. It is an integrity address,
+   * not a signature or an assertion that the source is trusted.
+   */
+  readonly authority: Readonly<ConfigurationAuthority>;
   readonly pricePnlBasis: PricePnlBasis;
   readonly executionCostBasis: ExecutionCostBasis;
   /** Expected kinds must appear as KNOWN, ESTIMATED, or explicit NOT_APPLICABLE. */
   readonly expectedComponentKinds: readonly EconomicComponentKind[];
 }
+
+export type EconomicAccountingPolicySemantics = Omit<EconomicAccountingPolicy, 'authority'> & {
+  readonly authority: Omit<ConfigurationAuthority, 'revision'>;
+};
 
 export interface ComposeEconomicReportInput {
   readonly scope: Readonly<EconomicScopeReference>;
@@ -82,7 +93,7 @@ export interface EconomicMeasures {
   readonly unexplainedResidual: Readonly<EconomicMeasure>;
 }
 
-export const ECONOMIC_DIMENSIONS = [
+export const ECONOMIC_DIMENSIONS = Object.freeze([
   'strategy',
   'opportunityId',
   'configRevision',
@@ -90,7 +101,7 @@ export const ECONOMIC_DIMENSIONS = [
   'symbol',
   'legId',
   'correlationId',
-] as const;
+] as const);
 export type EconomicDimension = (typeof ECONOMIC_DIMENSIONS)[number];
 
 export interface EconomicDimensionSummary {

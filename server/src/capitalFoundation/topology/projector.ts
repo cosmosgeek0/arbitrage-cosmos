@@ -1,10 +1,30 @@
-import { isValidUtcMillis } from '../../foundation/contracts/index.js';
 import {
+  isLegLifecycle,
+  isPlanLifecycle,
+  isReconciliationStatus,
+  isValidUtcMillis,
+} from '../../foundation/contracts/index.js';
+import {
+  ACTION_URGENCIES,
+  ALLOCATION_STATUSES,
+  APPROVAL_MODES,
+  CAPITAL_STAGES,
+  ELIGIBILITY_STATUSES,
+  POSITION_ACTION_INTENTS,
+  POSITION_STATES,
+  RESERVATION_STATES,
+  assessCapitalTruth,
   capitalDigest,
   compareExactDecimals,
+  isCapitalLifecycleState,
+  normalizeExactDecimal,
+  normalizeNonNegativeExactDecimal,
+  weakestCapitalTruth,
   type ActivePosition,
   type CapitalTruthState,
+  type CapitalMandate,
   type ExactDecimal,
+  type OperatorApproval,
   type TruthMetadata,
 } from '../contracts/index.js';
 import type {
@@ -42,7 +62,31 @@ function compareText(left: string, right: string): number {
 }
 
 function nonEmpty(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0 && value.length <= 256;
+  return typeof value === 'string' && value.trim() === value && value.length > 0 && value.length <= 256;
+}
+
+function positiveRevision(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1;
+}
+
+function nonNegativeSequence(value: unknown): value is number | null {
+  return value === null || (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0);
+}
+
+function nullableRevision(value: unknown): value is string | null {
+  return value === null || nonEmpty(value);
+}
+
+function validObservedTime(value: unknown, evaluatedAtMs: number): value is number {
+  return isValidUtcMillis(value) && value <= evaluatedAtMs;
+}
+
+function validWindow(start: unknown, end: unknown): boolean {
+  return isValidUtcMillis(start) && isValidUtcMillis(end) && end > start;
+}
+
+function integrityReasons(checks: readonly (readonly [boolean, string])[]): readonly string[] {
+  return Object.freeze(checks.filter(([valid]) => !valid).map(([, reason]) => reason));
 }
 
 function nodeId(kind: CapitalTopologyNodeKind, sourceId: string): string {
@@ -63,19 +107,43 @@ function owner(kind: CapitalTopologyNodeKind, strategy?: string): CapitalAuthori
   return 'CAPITAL_SUPERVISION';
 }
 
-function truthFields(truth: Readonly<TruthMetadata> | null): {
+function truthFields(truth: Readonly<TruthMetadata> | null, evaluatedAtMs: number): {
   freshness: CapitalTopologyFreshness;
   completeness: CapitalTruthState;
   degradedReasons: readonly string[];
 } {
   if (truth === null) return { freshness: 'UNKNOWN', completeness: 'UNKNOWN', degradedReasons: Object.freeze(['TRUTH_NOT_SUPPLIED']) };
+  const suppliedReasons = Array.isArray(truth.reasons)
+    ? truth.reasons.filter((reason): reason is string => typeof reason === 'string')
+    : [];
+  let freshness: CapitalTopologyFreshness;
+  let completeness: CapitalTruthState;
+  try {
+    const reassessed = assessCapitalTruth({
+      source: truth.source,
+      evaluatedAtMs,
+      requiredValuePresent: truth.completeness !== 'UNKNOWN',
+      divergent: truth.completeness === 'DIVERGENT',
+      reasons: suppliedReasons,
+      evidenceReferences: truth.evidenceReferences,
+      revision: truth.revision,
+    });
+    freshness = reassessed.freshness.state;
+    completeness = weakestCapitalTruth([truth.completeness, reassessed.completeness]);
+  } catch {
+    return {
+      freshness: 'UNKNOWN',
+      completeness: truth.completeness === 'DIVERGENT' ? 'DIVERGENT' : 'UNKNOWN',
+      degradedReasons: sortedUnique([...suppliedReasons, 'TRUTH_REEVALUATION_FAILED']),
+    };
+  }
   const degraded: string[] = [];
-  if (truth.freshness.state !== 'FRESH') degraded.push(`FRESHNESS_${truth.freshness.state}`);
-  if (truth.completeness !== 'COMPLETE') degraded.push(`COMPLETENESS_${truth.completeness}`);
-  degraded.push(...truth.reasons);
+  if (freshness !== 'FRESH') degraded.push(`FRESHNESS_${freshness}`);
+  if (completeness !== 'COMPLETE') degraded.push(`COMPLETENESS_${completeness}`);
+  degraded.push(...suppliedReasons);
   return {
-    freshness: truth.freshness.state,
-    completeness: truth.completeness,
+    freshness,
+    completeness,
     degradedReasons: sortedUnique(degraded),
   };
 }
@@ -92,11 +160,85 @@ function controls(kind: CapitalTopologyNodeKind): readonly string[] {
   return Object.freeze([...(byKind[kind] ?? [])]);
 }
 
+interface NonNegativeExactFact {
+  readonly valid: boolean;
+  readonly positive: boolean;
+}
+
+interface ExactFact {
+  readonly valid: boolean;
+  readonly nonZero: boolean;
+}
+
+function inspectNonNegativeExactFact(value: unknown): NonNegativeExactFact {
+  try {
+    const normalized = normalizeNonNegativeExactDecimal(value);
+    const valid = normalized === value;
+    return Object.freeze({ valid, positive: valid && normalized !== '0' });
+  } catch {
+    return Object.freeze({ valid: false, positive: false });
+  }
+}
+
+function inspectExactFact(value: unknown): ExactFact {
+  try {
+    const normalized = normalizeExactDecimal(value);
+    const valid = normalized === value;
+    return Object.freeze({ valid, nonZero: valid && normalized !== '0' });
+  } catch {
+    return Object.freeze({ valid: false, nonZero: false });
+  }
+}
+
+function canonicalExact(value: unknown): boolean {
+  return inspectExactFact(value).valid;
+}
+
+function exactAtMost(left: unknown, right: unknown): boolean {
+  const leftFact = inspectNonNegativeExactFact(left);
+  const rightFact = inspectNonNegativeExactFact(right);
+  return leftFact.valid && rightFact.valid
+    && compareExactDecimals(left as ExactDecimal, right as ExactDecimal) <= 0;
+}
+
+function exactOrderValidIfComparable(left: unknown, right: unknown): boolean {
+  const leftFact = inspectNonNegativeExactFact(left);
+  const rightFact = inspectNonNegativeExactFact(right);
+  return !leftFact.valid || !rightFact.valid || exactAtMost(left, right);
+}
+
 function isExposed(position: ActivePosition): boolean {
-  return compareExactDecimals(position.totalGrossExposure, '0' as ExactDecimal) > 0
-    || compareExactDecimals(position.oneLegExposure, '0' as ExactDecimal) > 0
-    || position.legs.some((leg) => compareExactDecimals(leg.quoteExposure, '0' as ExactDecimal) > 0)
-  ;
+  const facts = [
+    inspectNonNegativeExactFact(position.totalGrossExposure),
+    inspectNonNegativeExactFact(position.oneLegExposure),
+    ...position.legs.map((leg) => inspectNonNegativeExactFact(leg.quoteExposure)),
+    ...position.legs.map((leg) => inspectNonNegativeExactFact(leg.quantity)),
+  ];
+  const netDirectionalExposure = inspectExactFact(position.netDirectionalExposure);
+  const hedgeRatioInvalid = position.hedgeRatio !== null && !canonicalExact(position.hedgeRatio);
+  // Invalid exposure is conservatively treated as potentially exposed so a
+  // malformed public fact cannot erase an operator critical path.
+  return facts.some((fact) => !fact.valid || fact.positive)
+    || !netDirectionalExposure.valid
+    || netDirectionalExposure.nonZero
+    || hedgeRatioInvalid;
+}
+
+function approvalBindsMandate(
+  approval: Readonly<OperatorApproval>,
+  mandate: Readonly<CapitalMandate>,
+): boolean {
+  if (approval.mandateId !== mandate.id
+      || approval.mandateRevision !== mandate.revision
+      || approval.mandateDigest !== mandate.digest
+      || approval.proposalIntakeDigest !== mandate.proposalIntakeDigest
+      || approval.stagedPlanId !== mandate.stagedPlanId
+      || approval.stagedPlanRevision !== mandate.stagedPlanRevision
+      || approval.stagedPlanDigest !== mandate.stagedPlanDigest
+      || approval.configRevision !== mandate.configRevision
+      || approval.valuationAsset !== mandate.valuationAsset
+      || approval.expiresAtMs > mandate.expiresAtMs) return false;
+  return exactAtMost(approval.maximumNotional, mandate.targetMaximumExposure);
 }
 
 function categoryFor(kind: CapitalTopologyNodeKind, status: string, blocked = false): CapitalBlockCategory {
@@ -129,24 +271,40 @@ export function projectActiveCapitalTopology(input: CapitalTopologyInput): Reado
   const addNode = (args: {
     kind: CapitalTopologyNodeKind; sourceId: string; status: string; truth?: Readonly<TruthMetadata> | null;
     strategy?: string; blocked?: boolean; blockingReasons?: readonly string[]; degradedReasons?: readonly string[];
-    lastTransitionAtMs?: number | null; exposed?: boolean; attention?: boolean;
+    integrityReasons?: readonly string[]; lastTransitionAtMs?: number | null; exposed?: boolean; attention?: boolean;
   }): string => {
-    if (!nonEmpty(args.sourceId)) throw new TypeError(`topology ${args.kind} node requires a bounded source identity`);
-    const id = nodeId(args.kind, args.sourceId);
+    const sourceIdentityValid = nonEmpty(args.sourceId);
+    const rawSourceId = String(args.sourceId);
+    const sourceId = sourceIdentityValid
+      ? args.sourceId
+      : `invalid:${args.kind}:${capitalDigest({ rawSourceId })}`;
+    const statusValid = nonEmpty(args.status);
+    const status = statusValid ? args.status : 'INVALID';
+    const transitionTimeValid = args.lastTransitionAtMs === undefined || args.lastTransitionAtMs === null
+      || validObservedTime(args.lastTransitionAtMs, input.evaluatedAtMs);
+    const integrity = sortedUnique([
+      ...(args.integrityReasons ?? []),
+      ...(sourceIdentityValid ? [] : ['SOURCE_ID_INVALID']),
+      ...(statusValid ? [] : ['STATUS_INVALID']),
+      ...(transitionTimeValid ? [] : ['LAST_TRANSITION_TIME_INVALID']),
+    ]);
+    const forcedBlocked = (args.blocked ?? false) || integrity.length > 0;
+    const id = nodeId(args.kind, sourceId);
     const existing = drafts.get(id);
-    if (existing !== undefined) throw new TypeError(`duplicate topology node identity ${args.kind}:${args.sourceId}`);
-    const truth = truthFields(args.truth ?? truthMap.get(args.sourceId) ?? null);
-    const direct = categoryFor(args.kind, args.status, args.blocked ?? false);
+    if (existing !== undefined) throw new TypeError(`duplicate topology node identity ${args.kind}:${sourceId}`);
+    const truth = truthFields(args.truth ?? truthMap.get(rawSourceId) ?? null, input.evaluatedAtMs);
+    const direct = categoryFor(args.kind, status, forcedBlocked);
     const block = direct === 'NONE' && truth.degradedReasons.length > 0 ? 'TRUTH_DEGRADATION' : direct;
     drafts.set(id, {
-      id, sourceId: args.sourceId, kind: args.kind, authorityOwner: owner(args.kind, args.strategy),
-      status: args.status, freshness: truth.freshness, completeness: truth.completeness,
-      directBlockCategory: block, blockingReasons: sortedUnique(args.blockingReasons ?? []),
-      degradedReasons: sortedUnique([...truth.degradedReasons, ...(args.degradedReasons ?? [])]),
-      lastTransitionAtMs: args.lastTransitionAtMs ?? null, supportedFutureControls: controls(args.kind),
+      id, sourceId, kind: args.kind, authorityOwner: owner(args.kind, args.strategy),
+      status, freshness: truth.freshness, completeness: truth.completeness,
+      directBlockCategory: block, blockingReasons: sortedUnique([...(args.blockingReasons ?? []), ...integrity]),
+      degradedReasons: sortedUnique([...truth.degradedReasons, ...(args.degradedReasons ?? []), ...integrity]),
+      lastTransitionAtMs: transitionTimeValid ? args.lastTransitionAtMs ?? null : null, supportedFutureControls: controls(args.kind),
       capitalExposed: args.exposed ?? false, localAttention: args.attention ?? block !== 'NONE',
     });
-    sourceNodes.set(`${args.kind}|${args.sourceId}`, id);
+    sourceNodes.set(`${args.kind}|${rawSourceId}`, id);
+    sourceNodes.set(`${args.kind}|${sourceId}`, id);
     return id;
   };
   const findNode = (kind: CapitalTopologyNodeKind, sourceId: string): string | null => sourceNodes.get(`${kind}|${sourceId}`) ?? null;
@@ -172,12 +330,43 @@ export function projectActiveCapitalTopology(input: CapitalTopologyInput): Reado
       : { ...existing, reasonCodes: sortedUnique([...existing.reasonCodes, ...reasons]) });
   };
 
-  for (const proposal of input.proposals) addNode({ kind: 'STRATEGY_PROPOSAL', sourceId: proposal.sourceProposalId, status: proposal.sourceLifecycle, strategy: proposal.strategy, lastTransitionAtMs: proposal.updatedAtMs });
+  for (const proposal of input.proposals) addNode({
+    kind: 'STRATEGY_PROPOSAL', sourceId: proposal.sourceProposalId, status: proposal.sourceLifecycle,
+    strategy: proposal.strategy, lastTransitionAtMs: proposal.updatedAtMs,
+    integrityReasons: integrityReasons([
+      [proposal.createdAtMs !== null && isValidUtcMillis(proposal.createdAtMs), 'PROPOSAL_CREATED_AT_INVALID'],
+      [proposal.updatedAtMs !== null && validObservedTime(proposal.updatedAtMs, input.evaluatedAtMs), 'PROPOSAL_UPDATED_AT_INVALID'],
+      [proposal.createdAtMs !== null && proposal.updatedAtMs !== null
+        && isValidUtcMillis(proposal.createdAtMs) && isValidUtcMillis(proposal.updatedAtMs)
+        && proposal.updatedAtMs >= proposal.createdAtMs, 'PROPOSAL_TIME_ORDER_INVALID'],
+      [proposal.expiresAtMs === null || (isValidUtcMillis(proposal.expiresAtMs)
+        && proposal.createdAtMs !== null && proposal.expiresAtMs > proposal.createdAtMs), 'PROPOSAL_EXPIRY_INVALID'],
+    ]),
+  });
   for (const evidence of input.evidence) addNode({ kind: 'EVIDENCE', sourceId: evidence.id, status: evidence.status, truth: evidence.truth, blockingReasons: evidence.reasonCodes, lastTransitionAtMs: evidence.lastTransitionAtMs });
-  for (const item of input.considerations) addNode({ kind: 'OPPORTUNITY', sourceId: item.id, status: item.status, truth: item.truth, blocked: item.status === 'BLOCKED', blockingReasons: item.reasons, lastTransitionAtMs: item.evaluatedAtMs });
-  for (const item of input.allocationDecisions) addNode({ kind: 'CAPITAL_BUDGET', sourceId: item.id, status: item.status, blocked: item.status === 'BLOCKED', blockingReasons: item.blockingReasons, lastTransitionAtMs: item.decidedAtMs });
+  for (const item of input.considerations) addNode({
+    kind: 'OPPORTUNITY', sourceId: item.id, status: item.status, truth: item.truth,
+    blocked: item.status === 'BLOCKED', blockingReasons: item.reasons, lastTransitionAtMs: item.evaluatedAtMs,
+    integrityReasons: integrityReasons([
+      [(ELIGIBILITY_STATUSES as readonly unknown[]).includes(item.status), 'ELIGIBILITY_STATUS_INVALID'],
+      [validObservedTime(item.evaluatedAtMs, input.evaluatedAtMs), 'CONSIDERATION_EVALUATED_AT_INVALID'],
+    ]),
+  });
+  for (const item of input.allocationDecisions) addNode({
+    kind: 'CAPITAL_BUDGET', sourceId: item.id, status: item.status,
+    blocked: item.status === 'BLOCKED', blockingReasons: item.blockingReasons, lastTransitionAtMs: item.decidedAtMs,
+    integrityReasons: integrityReasons([
+      [(ALLOCATION_STATUSES as readonly unknown[]).includes(item.status), 'ALLOCATION_STATUS_INVALID'],
+      [inspectNonNegativeExactFact(item.requestedAmount).valid, 'ALLOCATION_REQUESTED_AMOUNT_INVALID'],
+      [inspectNonNegativeExactFact(item.grantedAmount).valid, 'ALLOCATION_GRANTED_AMOUNT_INVALID'],
+      [exactOrderValidIfComparable(item.grantedAmount, item.requestedAmount), 'ALLOCATION_GRANT_EXCEEDS_REQUEST'],
+      [validObservedTime(item.decidedAtMs, input.evaluatedAtMs), 'ALLOCATION_DECIDED_AT_INVALID'],
+    ]),
+  });
   for (const item of input.reservations) {
-    const expired = item.state === 'ACTIVE' && item.expiresAtMs <= input.evaluatedAtMs;
+    const stateValid = (RESERVATION_STATES as readonly unknown[]).includes(item.state);
+    const windowValid = validWindow(item.createdAtMs, item.expiresAtMs);
+    const expired = stateValid && windowValid && item.state === 'ACTIVE' && item.expiresAtMs <= input.evaluatedAtMs;
     addNode({
       kind: 'RESERVATION',
       sourceId: item.id,
@@ -185,19 +374,60 @@ export function projectActiveCapitalTopology(input: CapitalTopologyInput): Reado
       blocked: expired || item.state !== 'ACTIVE',
       blockingReasons: expired ? ['RESERVATION_EXPIRED'] : item.state === 'ACTIVE' ? [] : [`RESERVATION_${item.state}`],
       lastTransitionAtMs: item.releasedAtMs ?? item.createdAtMs,
+      integrityReasons: integrityReasons([
+        [stateValid, 'RESERVATION_STATE_INVALID'],
+        [positiveRevision(item.revision), 'RESERVATION_REVISION_INVALID'],
+        [inspectNonNegativeExactFact(item.amount).valid, 'RESERVATION_AMOUNT_INVALID'],
+        [inspectNonNegativeExactFact(item.consumedAmount).valid, 'RESERVATION_CONSUMED_AMOUNT_INVALID'],
+        [exactOrderValidIfComparable(item.consumedAmount, item.amount), 'RESERVATION_CONSUMED_AMOUNT_EXCEEDS_AMOUNT'],
+        [windowValid, 'RESERVATION_TIME_WINDOW_INVALID'],
+        [item.releasedAtMs === null || (validObservedTime(item.releasedAtMs, input.evaluatedAtMs)
+          && isValidUtcMillis(item.createdAtMs) && item.releasedAtMs >= item.createdAtMs), 'RESERVATION_RELEASE_TIME_INVALID'],
+      ]),
     });
   }
   for (const item of input.stagedPlans) {
-    const expired = item.expiresAtMs <= input.evaluatedAtMs;
-    const plan = addNode({ kind: 'STAGED_PLAN', sourceId: item.id, status: expired ? 'EXPIRED' : item.activeStage, blocked: expired, lastTransitionAtMs: item.createdAtMs });
+    const activeStageValid = (CAPITAL_STAGES as readonly unknown[]).includes(item.activeStage);
+    const windowValid = validWindow(item.createdAtMs, item.expiresAtMs);
+    const expired = windowValid && item.expiresAtMs <= input.evaluatedAtMs;
+    const plan = addNode({
+      kind: 'STAGED_PLAN', sourceId: item.id, status: expired ? 'EXPIRED' : item.activeStage,
+      blocked: expired, lastTransitionAtMs: item.createdAtMs,
+      integrityReasons: integrityReasons([
+        [activeStageValid, 'STAGED_PLAN_ACTIVE_STAGE_INVALID'],
+        [positiveRevision(item.revision), 'STAGED_PLAN_REVISION_INVALID'],
+        [inspectNonNegativeExactFact(item.remainingReservedAmount).valid, 'STAGED_PLAN_REMAINING_AMOUNT_INVALID'],
+        [windowValid, 'STAGED_PLAN_TIME_WINDOW_INVALID'],
+      ]),
+    });
     for (const stage of item.stages) {
-      const stageId = addNode({ kind: 'STAGE', sourceId: `${item.id}:${stage.sequence}`, status: stage.stage, lastTransitionAtMs: item.createdAtMs });
+      const stageId = addNode({
+        kind: 'STAGE', sourceId: `${item.id}:${stage.sequence}`, status: stage.stage, lastTransitionAtMs: item.createdAtMs,
+        integrityReasons: integrityReasons([
+          [(CAPITAL_STAGES as readonly unknown[]).includes(stage.stage), 'STAGE_ENUM_INVALID'],
+          [Number.isSafeInteger(stage.sequence) && stage.sequence >= 0, 'STAGE_SEQUENCE_INVALID'],
+        ]),
+      });
       addEdge('CONTAINS', plan, stageId);
     }
   }
-  for (const item of input.mandates) addNode({ kind: 'MANDATE', sourceId: item.id, status: item.expiresAtMs <= input.evaluatedAtMs ? 'EXPIRED' : 'CURRENT', blocked: item.expiresAtMs <= input.evaluatedAtMs, lastTransitionAtMs: item.createdAtMs });
+  for (const item of input.mandates) {
+    const windowValid = validWindow(item.createdAtMs, item.expiresAtMs);
+    const expired = windowValid && item.expiresAtMs <= input.evaluatedAtMs;
+    addNode({
+      kind: 'MANDATE', sourceId: item.id, status: expired ? 'EXPIRED' : windowValid ? 'CURRENT' : 'INVALID',
+      blocked: expired, lastTransitionAtMs: item.createdAtMs,
+      integrityReasons: integrityReasons([
+        [positiveRevision(item.revision), 'MANDATE_REVISION_INVALID'],
+        [inspectNonNegativeExactFact(item.targetMaximumExposure).valid, 'MANDATE_TARGET_EXPOSURE_INVALID'],
+        [windowValid, 'MANDATE_TIME_WINDOW_INVALID'],
+      ]),
+    });
+  }
   for (const item of input.approvals) {
-    const expired = item.expiresAtMs <= input.evaluatedAtMs;
+    const modeValid = (APPROVAL_MODES as readonly unknown[]).includes(item.mode);
+    const windowValid = validWindow(item.issuedAtMs, item.expiresAtMs);
+    const expired = windowValid && item.expiresAtMs <= input.evaluatedAtMs;
     const nonManual = item.mode !== 'MANUAL_ARMED';
     const blocked = item.revokedAtMs !== null || expired || nonManual;
     addNode({
@@ -211,9 +441,22 @@ export function projectActiveCapitalTopology(input: CapitalTopologyInput): Reado
         ...(nonManual ? ['APPROVAL_NOT_MANUAL_ARMED'] : []),
       ],
       lastTransitionAtMs: item.revokedAtMs ?? item.issuedAtMs,
+      integrityReasons: integrityReasons([
+        [modeValid, 'APPROVAL_MODE_INVALID'],
+        [positiveRevision(item.mandateRevision), 'APPROVAL_MANDATE_REVISION_INVALID'],
+        [positiveRevision(item.stagedPlanRevision), 'APPROVAL_PLAN_REVISION_INVALID'],
+        [inspectNonNegativeExactFact(item.maximumNotional).valid, 'APPROVAL_MAXIMUM_NOTIONAL_INVALID'],
+        [windowValid, 'APPROVAL_TIME_WINDOW_INVALID'],
+        [item.revokedAtMs === null || (validObservedTime(item.revokedAtMs, input.evaluatedAtMs)
+          && isValidUtcMillis(item.issuedAtMs) && item.revokedAtMs >= item.issuedAtMs), 'APPROVAL_REVOCATION_TIME_INVALID'],
+      ]),
     });
   }
   for (const item of input.riskDecisions) {
+    const decisionTimesValid = isValidUtcMillis(item.verdict.evaluatedAt)
+      && isValidUtcMillis(item.verdict.expiresAt)
+      && item.verdict.evaluatedAt <= input.evaluatedAtMs
+      && item.verdict.expiresAt > item.verdict.evaluatedAt;
     const expiryMissing = !isValidUtcMillis(item.verdict.expiresAt);
     const expired = !expiryMissing && item.verdict.expiresAt <= input.evaluatedAtMs;
     addNode({
@@ -227,10 +470,16 @@ export function projectActiveCapitalTopology(input: CapitalTopologyInput): Reado
         ...(expired ? ['RISK_DECISION_EXPIRED'] : []),
       ],
       lastTransitionAtMs: item.verdict.evaluatedAt,
+      integrityReasons: integrityReasons([
+        [nonEmpty(item.mandateId), 'RISK_MANDATE_ID_INVALID'],
+        [typeof item.verdict.allowed === 'boolean', 'RISK_VERDICT_ALLOWED_INVALID'],
+        [decisionTimesValid, 'RISK_DECISION_TIME_WINDOW_INVALID'],
+      ]),
     });
   }
   for (const item of input.executionReferences) {
-    const blocked = ['ONE_LEG_EXPOSED', 'RECOVERY_REQUIRED', 'FAILED', 'CANCELLED', 'EXPIRED'].includes(item.lifecycle);
+    const lifecycleValid = isPlanLifecycle(item.lifecycle);
+    const blocked = !lifecycleValid || ['ONE_LEG_EXPOSED', 'RECOVERY_REQUIRED', 'FAILED', 'CANCELLED', 'EXPIRED'].includes(item.lifecycle);
     addNode({
       kind: 'FUTURE_EXECUTION',
       sourceId: item.id,
@@ -239,15 +488,33 @@ export function projectActiveCapitalTopology(input: CapitalTopologyInput): Reado
       blocked,
       blockingReasons: blocked ? [`EXECUTION_${item.lifecycle}`] : [],
       lastTransitionAtMs: item.observedAtMs,
+      integrityReasons: integrityReasons([
+        [lifecycleValid, 'EXECUTION_LIFECYCLE_INVALID'],
+        [nonEmpty(item.externalPlanId) && nonEmpty(item.correlationId), 'EXECUTION_IDENTITY_INVALID'],
+        [validObservedTime(item.observedAtMs, input.evaluatedAtMs), 'EXECUTION_OBSERVED_AT_INVALID'],
+        [nonNegativeSequence(item.sequence), 'EXECUTION_SEQUENCE_INVALID'],
+        [nullableRevision(item.revision), 'EXECUTION_REVISION_INVALID'],
+      ]),
     });
   }
   for (const position of input.positions) {
+    const totalGrossExposure = inspectNonNegativeExactFact(position.totalGrossExposure);
+    const oneLegExposure = inspectNonNegativeExactFact(position.oneLegExposure);
     const exposed = isExposed(position);
-    const oneLeg = compareExactDecimals(position.oneLegExposure, '0' as ExactDecimal) > 0
+    const stateValid = (POSITION_STATES as readonly unknown[]).includes(position.state);
+    const lifecycleValid = isCapitalLifecycleState(position.capitalLifecycle);
+    const oneLeg = oneLegExposure.positive
       || position.state === 'PARTIALLY_EXPOSED';
     const closedWithExposure = position.state === 'CLOSED' && exposed;
-    const blocked = position.state === 'UNKNOWN' || position.state === 'RECOVERY_REQUIRED' || oneLeg || closedWithExposure;
-    const thesis = addNode({ kind: 'THESIS', sourceId: position.thesis.id, status: `REVISION_${position.thesis.revision}`, lastTransitionAtMs: position.thesis.openedAtMs, exposed });
+    const blocked = !stateValid || !lifecycleValid || position.state === 'UNKNOWN' || position.state === 'RECOVERY_REQUIRED' || oneLeg || closedWithExposure;
+    const thesis = addNode({
+      kind: 'THESIS', sourceId: position.thesis.id, status: `REVISION_${position.thesis.revision}`,
+      lastTransitionAtMs: position.thesis.openedAtMs, exposed,
+      integrityReasons: integrityReasons([
+        [positiveRevision(position.thesis.revision), 'THESIS_REVISION_INVALID'],
+        [validObservedTime(position.thesis.openedAtMs, input.evaluatedAtMs), 'THESIS_OPENED_AT_INVALID'],
+      ]),
+    });
     const positionNode = addNode({
       kind: 'POSITION',
       sourceId: position.id,
@@ -263,13 +530,28 @@ export function projectActiveCapitalTopology(input: CapitalTopologyInput): Reado
       lastTransitionAtMs: position.lastTransitionAtMs,
       exposed,
       attention: exposed && blocked,
+      integrityReasons: integrityReasons([
+        [stateValid, 'POSITION_STATE_INVALID'],
+        [lifecycleValid, 'POSITION_CAPITAL_LIFECYCLE_INVALID'],
+        [positiveRevision(position.revision), 'POSITION_REVISION_INVALID'],
+        [totalGrossExposure.valid, 'POSITION_TOTAL_GROSS_EXPOSURE_INVALID'],
+        [oneLegExposure.valid, 'POSITION_ONE_LEG_EXPOSURE_INVALID'],
+        [canonicalExact(position.netDirectionalExposure), 'POSITION_NET_DIRECTIONAL_EXPOSURE_INVALID'],
+        [position.hedgeRatio === null || canonicalExact(position.hedgeRatio), 'POSITION_HEDGE_RATIO_INVALID'],
+        [validObservedTime(position.openedAtMs, input.evaluatedAtMs), 'POSITION_OPENED_AT_INVALID'],
+        [validObservedTime(position.lastTransitionAtMs, input.evaluatedAtMs)
+          && isValidUtcMillis(position.openedAtMs) && position.lastTransitionAtMs >= position.openedAtMs, 'POSITION_TRANSITION_TIME_INVALID'],
+      ]),
     });
     addEdge('EXPOSES', thesis, positionNode);
     for (const leg of position.legs) {
-      const legExposed = exposed && compareExactDecimals(leg.quoteExposure, '0' as ExactDecimal) > 0;
+      const quantity = inspectNonNegativeExactFact(leg.quantity);
+      const quoteExposure = inspectNonNegativeExactFact(leg.quoteExposure);
+      const legExposed = !quoteExposure.valid || quoteExposure.positive;
       const uncertain = leg.externalLifecycle === null
         || ['SUBMITTING', 'ACKNOWLEDGED', 'PARTIALLY_FILLED', 'CANCEL_PENDING', 'AMBIGUOUS'].includes(leg.externalLifecycle);
-      const legBlocked = legExposed && (uncertain || oneLeg);
+      const legLifecycleValid = leg.externalLifecycle === null || isLegLifecycle(leg.externalLifecycle);
+      const legBlocked = !legLifecycleValid || (legExposed && (uncertain || oneLeg));
       const legNode = addNode({
         kind: 'POSITION_LEG',
         sourceId: leg.id,
@@ -284,12 +566,18 @@ export function projectActiveCapitalTopology(input: CapitalTopologyInput): Reado
         ],
         lastTransitionAtMs: position.lastTransitionAtMs,
         exposed: legExposed,
+        integrityReasons: integrityReasons([
+          [legLifecycleValid, 'LEG_LIFECYCLE_INVALID'],
+          [quantity.valid, 'LEG_QUANTITY_INVALID'],
+          [quoteExposure.valid, 'LEG_QUOTE_EXPOSURE_INVALID'],
+        ]),
       });
       addEdge('CONTAINS', positionNode, legNode);
     }
   }
   for (const item of input.reconciliationReferences) {
-    const blocked = item.status !== 'EXACT';
+    const statusValid = isReconciliationStatus(item.status);
+    const blocked = !statusValid || item.status !== 'EXACT';
     addNode({
       kind: 'RECONCILIATION',
       sourceId: item.id,
@@ -298,15 +586,59 @@ export function projectActiveCapitalTopology(input: CapitalTopologyInput): Reado
       blocked,
       blockingReasons: [...item.reasonCodes, ...(blocked ? [`RECONCILIATION_${item.status}`] : [])],
       lastTransitionAtMs: item.observedAtMs,
+      integrityReasons: integrityReasons([
+        [statusValid, 'RECONCILIATION_STATUS_INVALID'],
+        [nonEmpty(item.externalPlanId) && nonEmpty(item.correlationId), 'RECONCILIATION_IDENTITY_INVALID'],
+        [validObservedTime(item.observedAtMs, input.evaluatedAtMs), 'RECONCILIATION_OBSERVED_AT_INVALID'],
+        [nonNegativeSequence(item.sequence), 'RECONCILIATION_SEQUENCE_INVALID'],
+        [nullableRevision(item.revision), 'RECONCILIATION_REVISION_INVALID'],
+      ]),
     });
   }
-  for (const item of input.supervisionDecisions) addNode({ kind: 'SUPERVISION', sourceId: item.id, status: item.status, truth: item.truth, blockingReasons: item.reasonCodes, lastTransitionAtMs: item.lastTransitionAtMs });
-  for (const item of input.intents) addNode({ kind: 'ACTION_INTENT', sourceId: item.id, status: item.kind, blocked: item.kind === 'NO_ACTION_UNKNOWN', blockingReasons: item.blockingFacts, lastTransitionAtMs: item.createdAtMs, exposed: input.positions.some((position) => position.id === item.positionId && isExposed(position)), attention: item.urgency === 'URGENT' || item.urgency === 'EMERGENCY' });
+  for (const item of input.supervisionDecisions) addNode({
+    kind: 'SUPERVISION', sourceId: item.id, status: item.status, truth: item.truth,
+    blockingReasons: item.reasonCodes, lastTransitionAtMs: item.lastTransitionAtMs,
+    integrityReasons: integrityReasons([
+      [nonEmpty(item.positionId), 'SUPERVISION_POSITION_ID_INVALID'],
+      [positiveRevision(item.positionRevision), 'SUPERVISION_POSITION_REVISION_INVALID'],
+      [positiveRevision(item.thesisRevision), 'SUPERVISION_THESIS_REVISION_INVALID'],
+      [validObservedTime(item.lastTransitionAtMs, input.evaluatedAtMs), 'SUPERVISION_TRANSITION_TIME_INVALID'],
+    ]),
+  });
+  for (const item of input.intents) addNode({
+    kind: 'ACTION_INTENT', sourceId: item.id, status: item.kind,
+    blocked: item.kind === 'NO_ACTION_UNKNOWN', blockingReasons: item.blockingFacts, lastTransitionAtMs: item.createdAtMs,
+    exposed: input.positions.some((position) => position.id === item.positionId && isExposed(position)),
+    attention: item.urgency === 'URGENT' || item.urgency === 'EMERGENCY',
+    integrityReasons: integrityReasons([
+      [(POSITION_ACTION_INTENTS as readonly unknown[]).includes(item.kind), 'ACTION_INTENT_KIND_INVALID'],
+      [(ACTION_URGENCIES as readonly unknown[]).includes(item.urgency), 'ACTION_INTENT_URGENCY_INVALID'],
+      [validObservedTime(item.createdAtMs, input.evaluatedAtMs), 'ACTION_INTENT_CREATED_AT_INVALID'],
+      [item.hardDeadlineMs === null || isValidUtcMillis(item.hardDeadlineMs), 'ACTION_INTENT_DEADLINE_INVALID'],
+    ]),
+  });
   for (const item of input.economics) {
     const attribution = item.attribution;
-    addNode({ kind: 'ECONOMICS', sourceId: item.id, status: attribution.accountingIdentityProven ? attribution.completeness : 'IDENTITY_UNPROVEN', blocked: attribution.completeness === 'DIVERGENT' || !attribution.accountingIdentityProven, blockingReasons: [...attribution.divergentReasons, ...attribution.missingComponentKinds], lastTransitionAtMs: attribution.evaluatedAtMs });
+    addNode({
+      kind: 'ECONOMICS', sourceId: item.id,
+      status: attribution.accountingIdentityProven ? attribution.completeness : 'IDENTITY_UNPROVEN',
+      blocked: attribution.completeness === 'DIVERGENT' || !attribution.accountingIdentityProven,
+      blockingReasons: [...attribution.divergentReasons, ...attribution.missingComponentKinds],
+      lastTransitionAtMs: attribution.evaluatedAtMs,
+      integrityReasons: integrityReasons([
+        [positiveRevision(item.revision), 'ECONOMICS_REVISION_INVALID'],
+        [validObservedTime(attribution.evaluatedAtMs, input.evaluatedAtMs), 'ECONOMICS_EVALUATED_AT_INVALID'],
+      ]),
+    });
   }
-  if (input.checkpoint !== null) addNode({ kind: 'CHECKPOINT', sourceId: input.checkpoint.id, status: `REVISION_${input.checkpoint.revision}`, truth: input.checkpoint.truth, lastTransitionAtMs: input.checkpoint.createdAtMs });
+  if (input.checkpoint !== null) addNode({
+    kind: 'CHECKPOINT', sourceId: input.checkpoint.id, status: `REVISION_${input.checkpoint.revision}`,
+    truth: input.checkpoint.truth, lastTransitionAtMs: input.checkpoint.createdAtMs,
+    integrityReasons: integrityReasons([
+      [positiveRevision(input.checkpoint.revision), 'CHECKPOINT_REVISION_INVALID'],
+      [validObservedTime(input.checkpoint.createdAtMs, input.evaluatedAtMs), 'CHECKPOINT_CREATED_AT_INVALID'],
+    ]),
+  });
 
   for (const item of input.considerations) {
     const opportunity = findNode('OPPORTUNITY', item.id);
@@ -324,10 +656,15 @@ export function projectActiveCapitalTopology(input: CapitalTopologyInput): Reado
     addEdge('ALLOCATES', requireNode('CAPITAL_BUDGET', item.allocationDecisionId, `MANDATE:${item.id}`), mandate);
     addEdge('RESERVES', requireNode('RESERVATION', item.reservationId, `MANDATE:${item.id}`), mandate);
     addEdge('PLANS', requireNode('STAGED_PLAN', item.stagedPlanId, `MANDATE:${item.id}`), mandate);
-    if (item.approvalId === null) {
+    const boundApprovals = input.approvals
+      .filter((approval) => approvalBindsMandate(approval, item))
+      .sort((left, right) => compareText(left.id, right.id));
+    if (boundApprovals.length === 0) {
       addEdge('AUTHORIZES', requireNode('APPROVAL', `${item.id}:approval`, `MANDATE:${item.id}`), mandate);
     } else {
-      addEdge('AUTHORIZES', requireNode('APPROVAL', item.approvalId, `MANDATE:${item.id}`), mandate);
+      for (const approval of boundApprovals) {
+        addEdge('AUTHORIZES', requireNode('APPROVAL', approval.id, `MANDATE:${item.id}`), mandate);
+      }
     }
     const risk = input.riskDecisions.find((decision) => decision.mandateId === item.id);
     addEdge('GATES', risk === undefined
@@ -336,7 +673,12 @@ export function projectActiveCapitalTopology(input: CapitalTopologyInput): Reado
   }
   for (const item of input.approvals) {
     addEdge('AUTHORIZES', requireNode('STRATEGY_PROPOSAL', item.proposalId, `APPROVAL:${item.id}`), findNode('APPROVAL', item.id));
-    addEdge('AUTHORIZES', findNode('APPROVAL', item.id), requireNode('MANDATE', item.mandateId, `APPROVAL:${item.id}`));
+    const claimedMandate = input.mandates.find((mandate) => mandate.id === item.mandateId);
+    if (claimedMandate === undefined) {
+      addEdge('AUTHORIZES', findNode('APPROVAL', item.id), requireNode('MANDATE', item.mandateId, `APPROVAL:${item.id}`));
+    } else if (approvalBindsMandate(item, claimedMandate)) {
+      addEdge('AUTHORIZES', findNode('APPROVAL', item.id), findNode('MANDATE', claimedMandate.id));
+    }
   }
   for (const item of input.riskDecisions) addEdge('GATES', findNode('FUTURE_RISK', item.decisionId), requireNode('MANDATE', item.mandateId, `FUTURE_RISK:${item.decisionId}`), item.verdict.blockingCodes);
   for (const position of input.positions) {

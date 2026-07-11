@@ -6,15 +6,15 @@ import {
   type ExactDecimal,
 } from './decimal.js';
 
-export const ECONOMIC_COMPONENT_STATUSES = [
+export const ECONOMIC_COMPONENT_STATUSES = Object.freeze([
   'KNOWN',
   'ESTIMATED',
   'MISSING',
   'NOT_APPLICABLE',
-] as const;
+] as const);
 export type EconomicComponentStatus = (typeof ECONOMIC_COMPONENT_STATUSES)[number];
 
-export const ECONOMIC_COMPONENT_KINDS = [
+export const ECONOMIC_COMPONENT_KINDS = Object.freeze([
   'MARK_TO_MARKET_LEG_PNL',
   'REALIZED_LEG_PNL',
   'BASIS_CONVERGENCE_DIVERGENCE',
@@ -31,7 +31,7 @@ export const ECONOMIC_COMPONENT_KINDS = [
   'CONVERSION_VALUATION',
   'OPERATIONAL_RECOVERY_COST',
   'RESIDUAL_UNEXPLAINED',
-] as const;
+] as const);
 export type EconomicComponentKind = (typeof ECONOMIC_COMPONENT_KINDS)[number];
 
 export interface EconomicEstimateRange {

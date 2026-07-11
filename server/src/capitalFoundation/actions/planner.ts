@@ -1,8 +1,10 @@
 import {
   ACTION_URGENCIES,
+  CAPITAL_STAGES,
   FUTURE_GATES,
   actionRiskEffect,
   addExactDecimals,
+  assessCapitalTruth,
   absoluteExactDecimal,
   compareExactDecimals,
   deriveActionIntentId,
@@ -11,12 +13,14 @@ import {
   postureAllowsRiskIncrease,
   subtractExactDecimals,
   validatePositionActionIntent,
+  weakestCapitalTruth,
   type DeltaExposureTarget,
   type ExposureTarget,
   type FutureGate,
   type PositionActionIntent,
   type PositionActionIntentKind,
   type TotalExposureTarget,
+  type TruthMetadata,
 } from '../contracts/index.js';
 import {
   createStructuredFailure,
@@ -26,50 +30,155 @@ import {
   type ContractResult,
 } from '../../foundation/contracts/index.js';
 import type {
+  ActionIntentAuthorityProjection,
+  DirectionalReductionGeometry,
   EconomicActionDecision,
   EconomicActionDecisionBase,
+  NextStageIncreaseAuthority,
   PlanEconomicActionInput,
+  PlannedEconomicActionIntent,
 } from './types.js';
 
 const ZERO = normalizeExactDecimal('0');
+const MAX_ID_LENGTH = 256;
+const MAX_CORRELATION_ID_LENGTH = 128;
+const REQUIRED_STAGE_AUTHORITY_GATES = Object.freeze([
+  'OPERATOR_APPROVAL',
+  'MULTI_LEG_RISK',
+  'FRESH_ACCOUNT_TRUTH',
+  'FRESH_MARKET_EVIDENCE',
+] as const satisfies readonly FutureGate[]);
+const EMPTY_AUTHORITY_PROJECTION: Readonly<ActionIntentAuthorityProjection> = Object.freeze({
+  stageTransitionAuthorization: null,
+  directionalReductionGeometry: null,
+});
 
 function sortedUnique(values: readonly string[]): readonly string[] {
-  return Object.freeze([...new Set(values.map((value) => value.trim()).filter(Boolean))].sort());
+  return Object.freeze([...new Set(values)].sort());
 }
 
-function nonEmpty(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0;
+function boundedNonEmpty(value: unknown, maximumLength = MAX_ID_LENGTH): value is string {
+  return typeof value === 'string'
+    && value.length > 0
+    && value.length <= maximumLength
+    && value.trim() === value;
 }
 
-function failure(input: PlanEconomicActionInput, code: string, message: string): ContractResult<PositionActionIntent> {
+function canonicalStringArray(value: unknown): value is readonly string[] {
+  return Array.isArray(value) && value.every((entry) => boundedNonEmpty(entry));
+}
+
+function failure(input: PlanEconomicActionInput, code: string, message: string): ContractResult<PlannedEconomicActionIntent> {
+  const safeCorrelationId = boundedNonEmpty(input.correlationKey, MAX_CORRELATION_ID_LENGTH)
+    ? input.correlationKey
+    : 'capital-actions-invalid-correlation';
+  const safeOccurredAt = isValidUtcMillis(input.nowMs) ? input.nowMs : 0;
   return fail(createStructuredFailure({
     component: 'capitalFoundation.actions',
     stage: `plan:${input.decision.kind}`,
     code,
     message,
-    occurredAt: input.nowMs,
+    occurredAt: safeOccurredAt,
     retryable: false,
     safeCurrentState: 'EXPOSURE_UNCHANGED',
     recommendedOperatorAction: 'Correct the supervision input or satisfy the named authority gate.',
-    correlationId: input.correlationKey,
+    correlationId: safeCorrelationId,
   }));
+}
+
+function positiveSafeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+}
+
+function refreshTruth(truth: Readonly<TruthMetadata>, nowMs: number): Readonly<TruthMetadata> {
+  const assessed = assessCapitalTruth({
+    source: truth.source,
+    evaluatedAtMs: nowMs,
+    requiredValuePresent: truth.completeness !== 'UNKNOWN',
+    divergent: truth.completeness === 'DIVERGENT',
+    reasons: truth.reasons,
+    evidenceReferences: truth.evidenceReferences,
+    revision: truth.revision,
+  });
+  return Object.freeze({ ...assessed, completeness: weakestCapitalTruth([truth.completeness, assessed.completeness]) });
+}
+
+function stageAuthorityIssue(input: PlanEconomicActionInput, authority: Readonly<NextStageIncreaseAuthority>): string | null {
+  const binding = input.position.activeStageAuthority;
+  if (binding === null || typeof binding !== 'object') return 'ACTIVE_STAGE_BINDING_REQUIRED';
+  if (!boundedNonEmpty(binding.planId) || !positiveSafeInteger(binding.planRevision) || !boundedNonEmpty(binding.planDigest)
+    || !boundedNonEmpty(binding.reservationId) || !positiveSafeInteger(binding.reservationRevision)
+    || !boundedNonEmpty(binding.approvalId) || !positiveSafeInteger(binding.approvalRevision)
+    || !(CAPITAL_STAGES as readonly string[]).includes(binding.activeStage)) return 'ACTIVE_STAGE_BINDING_INVALID';
+  if (authority === null || typeof authority !== 'object') return 'STAGE_TRANSITION_AUTHORIZATION_REQUIRED';
+  if (authority.to !== 'ADD' || authority.from !== binding.activeStage
+    || authority.authorizedForExternalRiskEvaluation !== true || authority.executionReady !== false) {
+    return 'STAGE_TRANSITION_NOT_AUTHORIZED';
+  }
+  if (authority.evaluatedAtMs !== input.nowMs || !isValidUtcMillis(authority.evaluatedAtMs)) return 'STAGE_TRANSITION_AUTHORIZATION_STALE';
+  if (!boundedNonEmpty(authority.planId) || !boundedNonEmpty(authority.planDigest)
+    || !boundedNonEmpty(authority.reservationId) || !boundedNonEmpty(authority.approvalId)) {
+    return 'STAGE_AUTHORITY_IDENTITY_INVALID';
+  }
+  if (!positiveSafeInteger(authority.planRevision)
+    || !positiveSafeInteger(authority.reservationRevision)
+    || !positiveSafeInteger(authority.approvalRevision)) return 'STAGE_AUTHORITY_REVISION_INVALID';
+  if (authority.planId !== binding.planId || authority.planRevision !== binding.planRevision
+    || authority.planDigest !== binding.planDigest) return 'STAGE_PLAN_BINDING_MISMATCH';
+  if (authority.reservationId !== binding.reservationId || authority.reservationRevision !== binding.reservationRevision
+    || authority.approvalId !== binding.approvalId || authority.approvalRevision !== binding.approvalRevision) {
+    return 'STAGE_AUTHORITY_REFERENCE_MISMATCH';
+  }
+  if (!Array.isArray(authority.requiredFutureGates)
+    || new Set(authority.requiredFutureGates).size !== authority.requiredFutureGates.length
+    || authority.requiredFutureGates.some((gate) => !(FUTURE_GATES as readonly string[]).includes(gate))
+    || REQUIRED_STAGE_AUTHORITY_GATES.some((gate) => !authority.requiredFutureGates.includes(gate))) {
+    return 'STAGE_AUTHORITY_FUTURE_GATES_INVALID';
+  }
+  if (!isExactDecimal(authority.reservationConsumption)
+    || !isExactDecimal(authority.reservationAvailable)
+    || compareExactDecimals(authority.reservationConsumption, ZERO) <= 0
+    || compareExactDecimals(authority.reservationAvailable, authority.reservationConsumption) < 0) {
+    return 'STAGE_RESERVATION_AUTHORITY_INVALID';
+  }
+  return null;
+}
+
+function freezeStageAuthority(authority: Readonly<NextStageIncreaseAuthority>): Readonly<NextStageIncreaseAuthority> {
+  return Object.freeze({
+    ...authority,
+    requiredFutureGates: sortedUnique(authority.requiredFutureGates) as readonly FutureGate[],
+  });
 }
 
 function validateCommon(input: PlanEconomicActionInput): string | null {
   if (!isValidUtcMillis(input.nowMs)) return 'NOW_INVALID';
-  if (!Number.isSafeInteger(input.position.positionRevision) || input.position.positionRevision < 0) return 'POSITION_REVISION_INVALID';
-  if (!Number.isSafeInteger(input.position.thesisRevision) || input.position.thesisRevision < 0) return 'THESIS_REVISION_INVALID';
-  if (!nonEmpty(input.position.valuationAsset)) return 'VALUATION_ASSET_REQUIRED';
-  if (!nonEmpty(input.idempotencyKey)) return 'IDEMPOTENCY_KEY_REQUIRED';
-  if (!nonEmpty(input.correlationKey)) return 'CORRELATION_KEY_REQUIRED';
+  if (!boundedNonEmpty(input.position.positionId)) return 'POSITION_ID_INVALID';
+  if (!positiveSafeInteger(input.position.positionRevision)) return 'POSITION_REVISION_INVALID';
+  if (!boundedNonEmpty(input.position.thesisId)) return 'THESIS_ID_INVALID';
+  if (!positiveSafeInteger(input.position.thesisRevision)) return 'THESIS_REVISION_INVALID';
+  if (!boundedNonEmpty(input.position.valuationAsset)) return 'VALUATION_ASSET_REQUIRED';
+  if (!boundedNonEmpty(input.idempotencyKey)) return 'IDEMPOTENCY_KEY_REQUIRED';
+  if (!boundedNonEmpty(input.correlationKey, MAX_CORRELATION_ID_LENGTH)) return 'CORRELATION_KEY_REQUIRED';
+  if (input.controlPosture.revision !== null && !boundedNonEmpty(input.controlPosture.revision)) return 'CONTROL_POSTURE_REVISION_INVALID';
+  if (!canonicalStringArray(input.position.truthReasonCodes)) return 'POSITION_TRUTH_REASON_INVALID';
+  if (!canonicalStringArray(input.controlPosture.reasonCodes)) return 'CONTROL_POSTURE_REASON_INVALID';
+  if (!canonicalStringArray(input.controlPosture.truth.reasons)) return 'CONTROL_TRUTH_REASON_INVALID';
+  if (!canonicalStringArray(input.controlPosture.truth.evidenceReferences)) return 'CONTROL_TRUTH_EVIDENCE_INVALID';
   if (!isExactDecimal(input.position.currentTotalExposure)
     || compareExactDecimals(input.position.currentTotalExposure, ZERO) < 0) return 'CURRENT_EXPOSURE_INVALID';
   if (!isExactDecimal(input.position.currentNetDirectionalExposure)) return 'CURRENT_NET_DIRECTIONAL_EXPOSURE_INVALID';
   if (input.position.currentBaseQuantity !== null && !isExactDecimal(input.position.currentBaseQuantity)) return 'CURRENT_BASE_QUANTITY_INVALID';
   if (input.position.currentHedgeRatio !== null && !isExactDecimal(input.position.currentHedgeRatio)) return 'CURRENT_HEDGE_RATIO_INVALID';
   if (!(ACTION_URGENCIES as readonly string[]).includes(input.decision.urgency)) return 'URGENCY_INVALID';
+  if (!canonicalStringArray(input.decision.why)) return 'WHY_INVALID';
   if (input.decision.why.length === 0) return 'WHY_REQUIRED';
+  if (!canonicalStringArray(input.decision.triggerCodes)) return 'TRIGGER_INVALID';
   if (input.decision.triggerCodes.length === 0) return 'TRIGGER_REQUIRED';
+  if (!canonicalStringArray(input.decision.supportingEvidenceIds)) return 'SUPPORTING_EVIDENCE_ID_INVALID';
+  if (!canonicalStringArray(input.decision.conflictingEvidenceIds)) return 'CONFLICTING_EVIDENCE_ID_INVALID';
+  if (!canonicalStringArray(input.decision.blockingFacts)) return 'BLOCKING_FACT_INVALID';
+  if (!canonicalStringArray(input.decision.invalidationConditions)) return 'INVALIDATION_CONDITION_INVALID';
   if (input.decision.invalidationConditions.length === 0) return 'INVALIDATION_REQUIRED';
   if (input.decision.hardDeadlineMs !== null
     && (!isValidUtcMillis(input.decision.hardDeadlineMs) || input.decision.hardDeadlineMs < input.nowMs)) return 'DEADLINE_INVALID';
@@ -118,7 +227,8 @@ function buildIntent(
   target: Readonly<ExposureTarget>,
   addedWhy: readonly string[] = [],
   addedBlockingFacts: readonly string[] = [],
-): ContractResult<PositionActionIntent> {
+  authorityProjection: Readonly<ActionIntentAuthorityProjection> = EMPTY_AUTHORITY_PROJECTION,
+): ContractResult<PlannedEconomicActionIntent> {
   const why = sortedUnique([...decision.why, ...decision.triggerCodes.map((code) => `TRIGGER:${code}`), ...addedWhy]);
   const blockingFacts = sortedUnique([...decision.blockingFacts, ...addedBlockingFacts]);
   const semantic = {
@@ -128,6 +238,8 @@ function buildIntent(
     thesisRevision: input.position.thesisRevision,
     kind,
     target,
+    stageTransitionAuthorization: authorityProjection.stageTransitionAuthorization,
+    directionalReductionGeometry: authorityProjection.directionalReductionGeometry,
     idempotencyKey: input.idempotencyKey,
     correlationKey: input.correlationKey,
   };
@@ -152,60 +264,59 @@ function buildIntent(
     expectedCostOfActing: decision.expectedCostOfActing,
     invalidationConditions: sortedUnique(decision.invalidationConditions),
     createdAtMs: input.nowMs,
+    stageTransitionAuthorization: authorityProjection.stageTransitionAuthorization,
+    directionalReductionGeometry: authorityProjection.directionalReductionGeometry,
   };
   const riskEffect = actionRiskEffect(kind);
-  const intent = Object.freeze({ ...common, kind, riskEffect }) as PositionActionIntent;
+  const intent = Object.freeze({ ...common, kind, riskEffect }) as PlannedEconomicActionIntent;
   const issues = validatePositionActionIntent(intent);
   return issues.length === 0
     ? ok(intent)
     : failure(input, 'ACTION_INVARIANT_VIOLATION', issues.join(','));
 }
 
-function planAdd(input: PlanEconomicActionInput, decision: Extract<EconomicActionDecision, { kind: 'ADD_STAGE' }>): ContractResult<PositionActionIntent> {
-  if (!postureAllowsRiskIncrease(input.controlPosture)) {
+function planAdd(input: PlanEconomicActionInput, decision: Extract<EconomicActionDecision, { kind: 'ADD_STAGE' }>): ContractResult<PlannedEconomicActionIntent> {
+  const currentControlTruth = refreshTruth(input.controlPosture.truth, input.nowMs);
+  if (!postureAllowsRiskIncrease(Object.freeze({ ...input.controlPosture, truth: currentControlTruth }))) {
     return buildIntent(
       input,
       decision,
       'FREEZE_NEW_ACTIONS',
       totalTarget(input, input.position.currentTotalExposure, input.position.currentBaseQuantity, input.position.currentHedgeRatio),
       [`CONTROL_POSTURE:${input.controlPosture.posture}`],
-      ['RISK_INCREASE_BLOCKED_BY_CONTROL', ...input.controlPosture.reasonCodes],
+      ['RISK_INCREASE_BLOCKED_BY_CONTROL', `CONTROL_TRUTH:${currentControlTruth.completeness}`, ...input.controlPosture.reasonCodes],
     );
   }
   if (input.position.completeness !== 'COMPLETE') {
     return failure(input, 'COMPLETE_POSITION_TRUTH_REQUIRED', 'ADD_STAGE requires complete current position truth');
   }
   const authority = decision.authority;
-  if (!Number.isSafeInteger(authority.currentStageSequence)
-    || !Number.isSafeInteger(authority.authorizedStageSequence)
-    || authority.authorizedStageSequence !== authority.currentStageSequence + 1) {
-    return failure(input, 'NEXT_AUTHORIZED_STAGE_REQUIRED', 'ADD_STAGE may target only the immediately authorized next stage');
-  }
-  if (!authority.freshEvidence) return failure(input, 'FRESH_EVIDENCE_REQUIRED', 'ADD_STAGE requires fresh evidence');
-  if (!authority.reservationAvailable) return failure(input, 'RESERVATION_REQUIRED', 'ADD_STAGE requires available reservation');
-  if (!authority.approvalValidated) return failure(input, 'APPROVAL_REQUIRED', 'ADD_STAGE requires current scoped approval');
-  if (!authority.futureRiskRecheckRequired) return failure(input, 'FUTURE_RISK_RECHECK_REQUIRED', 'ADD_STAGE must remain gated by Foundation risk');
-  if (authority.adversePriceMoveIsSoleReason) return failure(input, 'AVERAGING_DOWN_FORBIDDEN', 'adverse price movement alone cannot authorize ADD_STAGE');
+  const authorityIssue = stageAuthorityIssue(input, authority);
+  if (authorityIssue !== null) return failure(input, authorityIssue, `ADD_STAGE requires a current bound stages-lane authorization: ${authorityIssue}`);
   if (!isExactDecimal(decision.targetTotalExposure)
-    || !isExactDecimal(authority.maximumAdditionalExposure)
-    || !isExactDecimal(authority.maximumTotalExposure)) return failure(input, 'ADD_TARGET_INVALID', 'ADD_STAGE exact exposure values are invalid');
+    || (decision.targetBaseQuantity !== null && !isExactDecimal(decision.targetBaseQuantity))
+    || (decision.targetHedgeRatio !== null && !isExactDecimal(decision.targetHedgeRatio))) {
+    return failure(input, 'ADD_TARGET_INVALID', 'ADD_STAGE exact exposure values are invalid');
+  }
   const change = subtractExactDecimals(decision.targetTotalExposure, input.position.currentTotalExposure);
   if (compareExactDecimals(change, ZERO) <= 0) return failure(input, 'ADD_MUST_INCREASE_EXPOSURE', 'ADD_STAGE target must exceed current exposure');
-  if (compareExactDecimals(change, authority.maximumAdditionalExposure) > 0
-    || compareExactDecimals(decision.targetTotalExposure, authority.maximumTotalExposure) > 0) {
-    return failure(input, 'ADD_STAGE_LIMIT_EXCEEDED', 'ADD_STAGE target exceeds the authorized next-stage bounds');
+  if (compareExactDecimals(change, authority.reservationConsumption) !== 0) {
+    return failure(input, 'ADD_STAGE_TARGET_NOT_AUTHORIZED', 'ADD_STAGE target change must exactly equal the bound transition authorization');
   }
+  const frozenAuthority = freezeStageAuthority(authority);
   return buildIntent(
     input,
     decision,
     'ADD_STAGE',
     totalTarget(input, decision.targetTotalExposure, decision.targetBaseQuantity, decision.targetHedgeRatio),
-    [`AUTHORIZED_STAGE:${authority.authorizedStage}`],
+    [`AUTHORIZED_STAGE:${authority.to}`, `STAGED_PLAN:${authority.planId}:r${authority.planRevision}`],
+    [],
+    Object.freeze({ stageTransitionAuthorization: frozenAuthority, directionalReductionGeometry: null }),
   );
 }
 
 /** Pure economic planner. It emits no order sequence and calls no authority owner. */
-export function planEconomicAction(input: PlanEconomicActionInput): ContractResult<PositionActionIntent> {
+export function planEconomicAction(input: PlanEconomicActionInput): ContractResult<PlannedEconomicActionIntent> {
   const commonIssue = validateCommon(input);
   if (commonIssue !== null) return failure(input, commonIssue, `invalid action planning input: ${commonIssue}`);
   const decision = input.decision;
@@ -229,7 +340,27 @@ export function planEconomicAction(input: PlanEconomicActionInput): ContractResu
       ) > 0) {
         return failure(input, 'REDUCTION_INCREASES_DIRECTIONAL_RISK', 'REDUCE cannot increase absolute net directional exposure');
       }
-      return buildIntent(input, decision, 'REDUCE', totalTarget(input, decision.targetTotalExposure, decision.targetBaseQuantity, decision.targetHedgeRatio));
+      {
+        const directionalReductionGeometry: Readonly<DirectionalReductionGeometry> = Object.freeze({
+          currentTotalExposure: normalizeExactDecimal(input.position.currentTotalExposure) as DirectionalReductionGeometry['currentTotalExposure'],
+          targetTotalExposure: normalizeExactDecimal(decision.targetTotalExposure) as DirectionalReductionGeometry['targetTotalExposure'],
+          currentNetDirectionalExposure: normalizeExactDecimal(input.position.currentNetDirectionalExposure),
+          targetNetDirectionalExposure: normalizeExactDecimal(decision.targetNetDirectionalExposure),
+          absoluteDirectionalExposureReduction: subtractExactDecimals(
+            absoluteExactDecimal(input.position.currentNetDirectionalExposure),
+            absoluteExactDecimal(decision.targetNetDirectionalExposure),
+          ) as DirectionalReductionGeometry['absoluteDirectionalExposureReduction'],
+        });
+        return buildIntent(
+          input,
+          decision,
+          'REDUCE',
+          totalTarget(input, decision.targetTotalExposure, decision.targetBaseQuantity, decision.targetHedgeRatio),
+          [],
+          [],
+          Object.freeze({ stageTransitionAuthorization: null, directionalReductionGeometry }),
+        );
+      }
     case 'REQUEST_HEDGE':
       if (!isExactDecimal(decision.targetQuoteDelta)
         || (decision.targetBaseQuantity !== null && !isExactDecimal(decision.targetBaseQuantity))
@@ -251,6 +382,9 @@ export function planEconomicAction(input: PlanEconomicActionInput): ContractResu
     case 'FREEZE_NEW_ACTIONS':
       return buildIntent(input, decision, 'FREEZE_NEW_ACTIONS', totalTarget(input, input.position.currentTotalExposure, input.position.currentBaseQuantity, input.position.currentHedgeRatio));
     case 'NO_ACTION_UNKNOWN':
+      if (!canonicalStringArray(decision.unknownReasonCodes)) {
+        return failure(input, 'UNKNOWN_REASON_INVALID', 'NO_ACTION_UNKNOWN reasons must be canonical non-empty strings');
+      }
       if (decision.unknownReasonCodes.length === 0) return failure(input, 'UNKNOWN_REASON_REQUIRED', 'NO_ACTION_UNKNOWN requires at least one reason');
       return buildIntent(input, decision, 'NO_ACTION_UNKNOWN', Object.freeze({
         kind: 'UNKNOWN',

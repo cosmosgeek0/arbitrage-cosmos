@@ -3,6 +3,7 @@ import {
   asEvidencePacketId,
   assessCapitalTruth,
   capitalDigest,
+  deriveCapitalConfigRevision,
   deriveOpportunityConsiderationId,
   isExactDecimal,
   normalizeExactDecimal,
@@ -39,6 +40,10 @@ function sortedUnique(values: readonly string[]): readonly string[] {
   return Object.freeze([...new Set(values)].sort());
 }
 
+function compareText(left: string, right: string): -1 | 0 | 1 {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function reasonOrder(reason: EligibilityReasonCode): number {
   return ELIGIBILITY_REASON_CODES.indexOf(reason);
 }
@@ -51,11 +56,20 @@ function nonEmpty(value: unknown): value is string {
   return typeof value === 'string' && value.trim() === value && value.length > 0 && value.length <= 256;
 }
 
-function validatePolicy(policy: OpportunityEligibilityPolicy, nowMs: number): void {
-  if (!isValidUtcMillis(nowMs)) throw new TypeError('opportunity eligibility requires injected UTC milliseconds');
+function canonicalPolicyRevisionList(value: unknown, path: string): readonly string[] {
+  if (!Array.isArray(value) || value.some((entry) => !nonEmpty(entry))) {
+    throw new TypeError(`${path} must be an array of non-empty revisions`);
+  }
+  if (new Set(value).size !== value.length) {
+    throw new TypeError(`${path} must not contain duplicate revisions`);
+  }
+  return Object.freeze([...value].sort(compareText));
+}
+
+function eligibilityPolicySemantics(policy: Readonly<OpportunityEligibilityPolicy>): unknown {
   const authority = policy?.authority;
   if (
-    !authority || !nonEmpty(authority.sourceId) || !nonEmpty(authority.revision)
+    !authority || !nonEmpty(authority.sourceId)
     || !isValidUtcMillis(authority.issuedAtMs) || !isValidUtcMillis(authority.effectiveFromMs)
     || (authority.effectiveUntilMs !== null && !isValidUtcMillis(authority.effectiveUntilMs))
     || authority.issuedAtMs > authority.effectiveFromMs
@@ -63,13 +77,27 @@ function validatePolicy(policy: OpportunityEligibilityPolicy, nowMs: number): vo
   ) {
     throw new TypeError('opportunity eligibility policy requires valid versioned authority');
   }
+  const acceptedProposalConfigRevisions = {
+    BASIS: canonicalPolicyRevisionList(
+      policy.acceptedProposalConfigRevisions?.BASIS,
+      'acceptedProposalConfigRevisions.BASIS',
+    ),
+    VOLUME: canonicalPolicyRevisionList(
+      policy.acceptedProposalConfigRevisions?.VOLUME,
+      'acceptedProposalConfigRevisions.VOLUME',
+    ),
+  } as const;
+  const acceptedEvidenceConfigRevisions = {
+    BASIS: canonicalPolicyRevisionList(
+      policy.acceptedEvidenceConfigRevisions?.BASIS,
+      'acceptedEvidenceConfigRevisions.BASIS',
+    ),
+    VOLUME: canonicalPolicyRevisionList(
+      policy.acceptedEvidenceConfigRevisions?.VOLUME,
+      'acceptedEvidenceConfigRevisions.VOLUME',
+    ),
+  } as const;
   for (const strategy of ['BASIS', 'VOLUME'] as const) {
-    for (const field of ['acceptedProposalConfigRevisions', 'acceptedEvidenceConfigRevisions'] as const) {
-      const values = policy[field]?.[strategy];
-      if (!Array.isArray(values) || values.some((value) => !nonEmpty(value))) {
-        throw new TypeError(`${field}.${strategy} must be an array of non-empty revisions`);
-      }
-    }
     if (policy.evidenceRequirement?.[strategy] !== 'OPTIONAL' && policy.evidenceRequirement?.[strategy] !== 'REQUIRED') {
       throw new TypeError(`evidenceRequirement.${strategy} is invalid`);
     }
@@ -79,6 +107,46 @@ function validatePolicy(policy: OpportunityEligibilityPolicy, nowMs: number): vo
   }
   if (policy.volumeMode !== 'ADVISORY' && policy.volumeMode !== 'VALIDATE_ONLY') {
     throw new TypeError('Volume mode cannot grant capital authority');
+  }
+  const { revision: _revision, ...authoritySemantics } = authority;
+  return Object.freeze({
+    authority: Object.freeze(authoritySemantics),
+    acceptedProposalConfigRevisions: Object.freeze(acceptedProposalConfigRevisions),
+    acceptedEvidenceConfigRevisions: Object.freeze(acceptedEvidenceConfigRevisions),
+    evidenceRequirement: Object.freeze({
+      BASIS: policy.evidenceRequirement.BASIS,
+      VOLUME: policy.evidenceRequirement.VOLUME,
+    }),
+    basisMode: policy.basisMode,
+    volumeMode: policy.volumeMode,
+  });
+}
+
+/**
+ * Derives the only valid revision from every eligibility-policy semantic except
+ * the revision field itself. Accepted configuration revisions are set-like, so
+ * their order is canonicalized while duplicates are rejected instead of being
+ * silently hidden. Authentic policy distribution remains a future adapter's
+ * responsibility; this helper establishes deterministic content integrity.
+ */
+export function deriveOpportunityEligibilityPolicyRevision(
+  policy: Readonly<OpportunityEligibilityPolicy>,
+): OpportunityEligibilityPolicy['authority']['revision'] {
+  return deriveCapitalConfigRevision(
+    'opportunity-eligibility-policy',
+    eligibilityPolicySemantics(policy),
+  );
+}
+
+function validatePolicy(policy: OpportunityEligibilityPolicy, nowMs: number): void {
+  if (!isValidUtcMillis(nowMs)) throw new TypeError('opportunity eligibility requires injected UTC milliseconds');
+  const semantics = eligibilityPolicySemantics(policy);
+  if (!nonEmpty(policy.authority.revision)) {
+    throw new TypeError('opportunity eligibility policy requires valid versioned authority');
+  }
+  const expectedRevision = deriveCapitalConfigRevision('opportunity-eligibility-policy', semantics);
+  if (policy.authority.revision !== expectedRevision) {
+    throw new TypeError('opportunity eligibility policy revision does not match policy content');
   }
 }
 
@@ -380,7 +448,7 @@ function consolidateProposalIdentities(rawDrafts: readonly Draft[]): readonly Dr
   const consolidated: Draft[] = [];
   for (const sourceProposalId of [...bySourceProposalId.keys()].sort()) {
     const variants = [...(bySourceProposalId.get(sourceProposalId) ?? [])]
-      .sort((left, right) => left.semanticDigest.localeCompare(right.semanticDigest) || left.id.localeCompare(right.id));
+      .sort((left, right) => compareText(left.semanticDigest, right.semanticDigest) || compareText(left.id, right.id));
     const representative = variants[0];
     const identityDivergent = new Set(variants.map((draft) => draft.semanticDigest)).size > 1;
     if (!identityDivergent) {
@@ -394,7 +462,7 @@ function consolidateProposalIdentities(rawDrafts: readonly Draft[]): readonly Dr
       identityDivergent: true,
     }));
   }
-  return Object.freeze(consolidated.sort((left, right) => left.id.localeCompare(right.id)));
+  return Object.freeze(consolidated.sort((left, right) => compareText(left.id, right.id)));
 }
 
 function discoverConflicts(drafts: readonly Draft[]): readonly OpportunityConflict[] {
@@ -430,7 +498,7 @@ function discoverConflicts(drafts: readonly Draft[]): readonly OpportunityConfli
       }
     }
   }
-  return Object.freeze(conflicts.sort((left, right) => left.considerationIds.join('|').localeCompare(right.considerationIds.join('|'))));
+  return Object.freeze(conflicts.sort((left, right) => compareText(left.considerationIds.join('|'), right.considerationIds.join('|'))));
 }
 
 /** Pure batch gate. It never reads clocks, engines, evidence stores, or account state. */

@@ -7,10 +7,10 @@ import type {
   StrategyProposalId,
 } from './identity.js';
 
-export const APPROVAL_MODES = ['READ_ONLY', 'ADVISORY', 'VALIDATE_ONLY', 'MANUAL_ARMED'] as const;
+export const APPROVAL_MODES = Object.freeze(['READ_ONLY', 'ADVISORY', 'VALIDATE_ONLY', 'MANUAL_ARMED'] as const);
 export type ApprovalMode = (typeof APPROVAL_MODES)[number];
 
-export const APPROVAL_ACTION_CLASSES = ['OPEN', 'ADD', 'REDUCE', 'HEDGE', 'EXIT', 'RECOVERY'] as const;
+export const APPROVAL_ACTION_CLASSES = Object.freeze(['OPEN', 'ADD', 'REDUCE', 'HEDGE', 'EXIT', 'RECOVERY'] as const);
 export type ApprovalActionClass = (typeof APPROVAL_ACTION_CLASSES)[number];
 
 export interface ApprovalStageLimit {

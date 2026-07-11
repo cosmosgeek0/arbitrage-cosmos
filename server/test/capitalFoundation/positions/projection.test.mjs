@@ -239,7 +239,127 @@ test('caller-supplied CLOSED cannot hide positive externally reported exposure',
   assert.equal(result.position.state, 'RECOVERY_REQUIRED');
   assert.equal(result.position.capitalLifecycle, 'RECOVERY_REQUIRED');
   assert.ok(result.issues.some((issue) => issue.code === 'SOURCE_STATE_OVERRIDDEN'));
+  assert.ok(result.issues.some((issue) => issue.code === 'EXECUTION_LIFECYCLE_EXPOSURE_CONFLICT'));
 });
+
+test('unknown leg side is rejected instead of being silently counted as SHORT', () => {
+  assert.throws(() => projectActivePosition(input({
+    legs: [leg('spot', 'SIDEWAYS'), leg('perp', 'SHORT')],
+  })), /side must be LONG or SHORT/);
+  assert.doesNotThrow(() => projectActivePosition(input()), 'control input remains valid');
+});
+
+test('unknown Foundation leg lifecycle is rejected at the runtime boundary', () => {
+  assert.throws(() => projectActivePosition(input({
+    legs: [leg('spot', 'LONG', '100', { externalLifecycle: 'MYSTERY_FILL' }), leg('perp', 'SHORT')],
+  })), /not a Foundation LegLifecycle/);
+});
+
+test('unknown Foundation plan lifecycle fails exposed capital into recovery', () => {
+  const result = projectActivePosition(input({
+    executionState: execution('MYSTERY_PLAN_STATE'),
+  }));
+  assert.equal(result.position.state, 'RECOVERY_REQUIRED');
+  assert.equal(result.position.capitalLifecycle, 'RECOVERY_REQUIRED');
+  assert.equal(result.executionReference, null);
+  assert.ok(result.issues.some((issue) => issue.code === 'EXECUTION_REFERENCE_INVALID'));
+});
+
+test('unknown Foundation reconciliation status cannot fall through as ACTIVE', () => {
+  const result = projectActivePosition(input({
+    reconciliationState: reconciliation('MYSTERY_RECONCILIATION'),
+  }));
+  assert.equal(result.position.state, 'RECOVERY_REQUIRED');
+  assert.equal(result.position.capitalLifecycle, 'RECOVERY_REQUIRED');
+  assert.equal(result.reconciliationReference, null);
+  assert.ok(result.issues.some((issue) => issue.code === 'RECONCILIATION_REFERENCE_INVALID'));
+});
+
+test('malformed external reference identities, times, sequences, revisions, reasons, and truth fail closed', () => {
+  const hostileExecutions = [
+    execution('HEDGED_OPEN', { externalPlanId: '' }),
+    execution('HEDGED_OPEN', { correlationId: ' padded ' }),
+    execution('HEDGED_OPEN', { observedAtMs: NOW + 1 }),
+    execution('HEDGED_OPEN', { sequence: -1 }),
+    execution('HEDGED_OPEN', { revision: '' }),
+    execution('HEDGED_OPEN', { truth: { completeness: 'COMPLETE' } }),
+  ];
+  for (const executionState of hostileExecutions) {
+    const result = projectActivePosition(input({ executionState }));
+    assert.equal(result.position.state, 'RECOVERY_REQUIRED', JSON.stringify(executionState));
+    assert.ok(result.issues.some((issue) => issue.code === 'EXECUTION_REFERENCE_INVALID'));
+  }
+
+  const hostileReconciliations = [
+    reconciliation('EXACT', { externalPlanId: '' }),
+    reconciliation('EXACT', { correlationId: ' padded ' }),
+    reconciliation('EXACT', { observedAtMs: NOW + 1 }),
+    reconciliation('EXACT', { sequence: 1.5 }),
+    reconciliation('EXACT', { revision: '' }),
+    reconciliation('EXACT', { reasonCodes: [''] }),
+    reconciliation('EXACT', { truth: { completeness: 'COMPLETE' } }),
+  ];
+  for (const reconciliationState of hostileReconciliations) {
+    const result = projectActivePosition(input({ reconciliationState }));
+    assert.equal(result.position.state, 'RECOVERY_REQUIRED', JSON.stringify(reconciliationState));
+    assert.ok(result.issues.some((issue) => issue.code === 'RECONCILIATION_REFERENCE_INVALID'));
+  }
+});
+
+test('stale or divergent external truth overrides optimistic ACTIVE source state', () => {
+  const stale = truth({ source: { sourceTimeMs: NOW - 10_000, receivedAtMs: NOW - 9_990, maxAgeMs: 100 } });
+  const staleResult = projectActivePosition(input({ reconciliationState: reconciliation('EXACT', { truth: stale }) }));
+  assert.equal(staleResult.position.state, 'UNKNOWN');
+  assert.equal(staleResult.position.capitalLifecycle, 'UNKNOWN');
+  const divergentResult = projectActivePosition(input({ executionState: execution('HEDGED_OPEN', { truth: truth({ divergent: true }) }) }));
+  assert.equal(divergentResult.position.state, 'RECOVERY_REQUIRED');
+  assert.equal(divergentResult.position.capitalLifecycle, 'RECOVERY_REQUIRED');
+});
+
+for (const incompatibleLifecycle of ['CREATED', 'AWAITING_APPROVAL', 'PREFLIGHTING', 'READY', 'FAILED', 'CANCELLED', 'EXPIRED']) {
+  test(`positive exposure under ${incompatibleLifecycle} Foundation execution requires recovery`, () => {
+    const result = projectActivePosition(input({
+      executionState: execution(incompatibleLifecycle),
+    }));
+    assert.equal(result.position.totalGrossExposure, '200');
+    assert.equal(result.position.state, 'RECOVERY_REQUIRED');
+    assert.equal(result.position.capitalLifecycle, 'RECOVERY_REQUIRED');
+    assert.equal(result.position.truth.completeness, 'DIVERGENT');
+    assert.ok(result.issues.some((issue) => issue.code === 'EXECUTION_LIFECYCLE_EXPOSURE_CONFLICT'));
+  });
+}
+
+for (const incompatibleLegLifecycle of ['PLANNED', 'VALIDATED', 'SUBMITTING', 'ACKNOWLEDGED', 'CANCELLED', 'REJECTED']) {
+  test(`two positively exposed ${incompatibleLegLifecycle} legs cannot masquerade as ACTIVE`, () => {
+    const result = projectActivePosition(input({
+      legs: [
+        leg('spot', 'LONG', '100', { externalLifecycle: incompatibleLegLifecycle }),
+        leg('perp', 'SHORT', '100', { externalLifecycle: incompatibleLegLifecycle }),
+      ],
+    }));
+    assert.equal(result.position.oneLegExposure, '0', 'hostile case must not be caught only by one-leg detection');
+    assert.equal(result.position.state, 'RECOVERY_REQUIRED');
+    assert.equal(result.position.capitalLifecycle, 'RECOVERY_REQUIRED');
+    assert.equal(result.position.truth.completeness, 'DIVERGENT');
+    assert.equal(result.issues.filter((issue) => issue.code === 'LEG_LIFECYCLE_EXPOSURE_CONFLICT').length, 2);
+  });
+}
+
+for (const uncertainLegLifecycle of [null, 'AMBIGUOUS', 'PARTIALLY_FILLED', 'CANCEL_PENDING']) {
+  test(`two positively exposed ${uncertainLegLifecycle ?? 'UNKNOWN'} legs force UNKNOWN instead of ACTIVE`, () => {
+    const result = projectActivePosition(input({
+      legs: [
+        leg('spot', 'LONG', '100', { externalLifecycle: uncertainLegLifecycle }),
+        leg('perp', 'SHORT', '100', { externalLifecycle: uncertainLegLifecycle }),
+      ],
+    }));
+    assert.equal(result.position.oneLegExposure, '0', 'hostile case must not be caught only by one-leg detection');
+    assert.equal(result.position.state, 'UNKNOWN');
+    assert.equal(result.position.capitalLifecycle, 'UNKNOWN');
+    assert.equal(result.position.truth.completeness, 'UNKNOWN');
+    assert.equal(result.issues.filter((issue) => issue.code === 'LEG_LIFECYCLE_EXPOSURE_UNCERTAIN').length, 2);
+  });
+}
 
 test('different leg valuation assets fail closed before incomparable exposure is summed', () => {
   assert.throws(() => projectActivePosition(input({
@@ -267,4 +387,62 @@ test('canonical ordering removes duplicate outstanding intent IDs', () => {
   }));
   assert.deepEqual(result.position.legs.map((item) => item.id), ['a-leg', 'z-leg']);
   assert.deepEqual(result.position.outstandingActionIntentIds, ['intent-a', 'intent-b']);
+});
+
+test('unknown or inconsistent source state vocabulary is rejected before projection', () => {
+  const hostile = [
+    input({ sourceState: 'FORGED_ACTIVE' }),
+    input({ sourceCapitalLifecycle: 'FORGED_ACTIVE' }),
+    input({ sourceState: 'ACTIVE', sourceCapitalLifecycle: 'READY_FOR_EXECUTION' }),
+  ];
+  for (const candidate of hostile) {
+    assert.throws(
+      () => projectActivePosition(candidate),
+      /source state|source capital lifecycle|state and capital lifecycle/,
+    );
+  }
+  assert.doesNotThrow(() => projectActivePosition(input({ sourceState: 'UNKNOWN', sourceCapitalLifecycle: 'UNKNOWN' })));
+});
+
+test('malformed position and thesis bindings cannot emit a noncanonical aggregate', () => {
+  const baseThesis = thesis();
+  const hostile = [
+    input({ id: ' padded-position' }),
+    input({ mandateId: 'mandate-1 ' }),
+    input({ revision: 0 }),
+    input({ revision: 1.5 }),
+    input({ thesis: { ...baseThesis, id: ' thesis-1' } }),
+    input({ thesis: { ...baseThesis, proposalId: '' } }),
+    input({ thesis: { ...baseThesis, configRevision: 'cfg-1 ' } }),
+    input({ thesis: { ...baseThesis, revision: 0 } }),
+    input({ thesis: { ...baseThesis, strategy: 'FORGED_STRATEGY' } }),
+    input({ thesis: { ...baseThesis, openedAtMs: NOW - 9_999 } }),
+    input({ thesis: { ...baseThesis, expectedHorizonMs: 0 } }),
+    input({ thesis: { ...baseThesis, maximumHoldingHorizonMs: 1 } }),
+    input({ thesis: { ...baseThesis, originalEvidenceIds: [] } }),
+    input({ outstandingActionIntentIds: [' padded-intent'] }),
+    input({ legs: [leg(' padded-leg', 'LONG'), leg('perp', 'SHORT')] }),
+    input({ lastTransitionAtMs: NOW - 20_000 }),
+    input({ oneLegSinceMs: NOW - 20_000 }),
+  ];
+  for (const candidate of hostile) {
+    assert.throws(() => projectActivePosition(candidate), TypeError);
+  }
+});
+
+test('thesis collections are canonical frozen sets in projector output', () => {
+  const result = projectActivePosition(input({
+    thesis: {
+      ...thesis(),
+      originalEvidenceIds: ['z-evidence', 'a-evidence', 'z-evidence'],
+      targetConditions: ['z-target', 'a-target'],
+      invalidationConditions: ['z-invalidation', 'a-invalidation'],
+      stopAddingConditions: ['z-stop', 'a-stop'],
+    },
+  }));
+  assert.deepEqual(result.position.thesis.originalEvidenceIds, ['a-evidence', 'z-evidence']);
+  assert.deepEqual(result.position.thesis.targetConditions, ['a-target', 'z-target']);
+  assert.deepEqual(result.position.thesis.invalidationConditions, ['a-invalidation', 'z-invalidation']);
+  assert.deepEqual(result.position.thesis.stopAddingConditions, ['a-stop', 'z-stop']);
+  assert.ok(Object.isFrozen(result.position.thesis.originalEvidenceIds));
 });

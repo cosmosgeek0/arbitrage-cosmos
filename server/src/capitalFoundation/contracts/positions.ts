@@ -15,7 +15,7 @@ import type {
 import type { CapitalLifecycleState } from './lifecycle.js';
 import type { TruthMetadata } from './truth.js';
 
-export const POSITION_STATES = [
+export const POSITION_STATES = Object.freeze([
   'ENTERING',
   'PARTIALLY_EXPOSED',
   'HEDGED',
@@ -25,7 +25,7 @@ export const POSITION_STATES = [
   'RECOVERY_REQUIRED',
   'CLOSED',
   'UNKNOWN',
-] as const;
+] as const);
 export type PositionState = (typeof POSITION_STATES)[number];
 
 export interface PositionLeg {

@@ -18,7 +18,10 @@ import {
 const INTEGER_TAG = '$capitalInteger';
 
 function nonEmpty(value: unknown, maximum = 256): value is string {
-  return typeof value === 'string' && value.trim().length > 0 && value.length <= maximum;
+  return typeof value === 'string'
+    && value.length > 0
+    && value.length <= maximum
+    && value.trim() === value;
 }
 
 function encodeRecord(value: unknown, path: string, seen: Set<object>): CapitalJsonValue {

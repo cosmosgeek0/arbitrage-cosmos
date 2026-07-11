@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { evaluateOpportunityEligibility } from '../../../dist/capitalFoundation/opportunities/index.js';
+import {
+  deriveOpportunityEligibilityPolicyRevision,
+  evaluateOpportunityEligibility,
+} from '../../../dist/capitalFoundation/opportunities/index.js';
 import { assessCapitalTruth } from '../../../dist/capitalFoundation/contracts/index.js';
 
 const NOW = 1_800_000_000_000;
@@ -134,9 +137,9 @@ function candidate(overrides = {}) {
 }
 
 function policy(overrides = {}) {
-  return {
+  const draft = {
     authority: {
-      revision: 'cfg_capital_eligibility_1',
+      revision: 'pending-content-address',
       sourceId: 'operator.capital-policy',
       issuedAtMs: NOW - 10_000,
       effectiveFromMs: NOW - 5_000,
@@ -148,6 +151,13 @@ function policy(overrides = {}) {
     basisMode: 'MANUAL_ARMED',
     volumeMode: 'ADVISORY',
     ...overrides,
+  };
+  return {
+    ...draft,
+    authority: {
+      ...draft.authority,
+      revision: deriveOpportunityEligibilityPolicyRevision(draft),
+    },
   };
 }
 
@@ -325,6 +335,163 @@ test('Volume VALIDATE_ONLY is explicit but still cannot become capital eligible'
 
 test('hostile policy cannot grant Volume MANUAL_ARMED authority', () => {
   assert.throws(() => one(candidate(), policy({ volumeMode: 'MANUAL_ARMED' })), /Volume mode cannot grant capital authority/);
+});
+
+test('eligibility policy revision content-addresses every policy semantic except its own value', () => {
+  const original = policy();
+  assert.equal(deriveOpportunityEligibilityPolicyRevision(original), original.authority.revision);
+  assert.equal(deriveOpportunityEligibilityPolicyRevision({
+    ...original,
+    authority: { ...original.authority, revision: 'ignored-by-derivation-only' },
+  }), original.authority.revision);
+
+  const sameRevisionMutations = [
+    ['basis mode', { ...original, basisMode: 'VALIDATE_ONLY' }],
+    ['volume mode', { ...original, volumeMode: 'VALIDATE_ONLY' }],
+    ['Basis proposal configs', {
+      ...original,
+      acceptedProposalConfigRevisions: {
+        ...original.acceptedProposalConfigRevisions,
+        BASIS: [...original.acceptedProposalConfigRevisions.BASIS, 'basis-cfg-2'],
+      },
+    }],
+    ['Volume proposal configs', {
+      ...original,
+      acceptedProposalConfigRevisions: {
+        ...original.acceptedProposalConfigRevisions,
+        VOLUME: [...original.acceptedProposalConfigRevisions.VOLUME, 'volume-cfg-2'],
+      },
+    }],
+    ['Basis evidence configs', {
+      ...original,
+      acceptedEvidenceConfigRevisions: {
+        ...original.acceptedEvidenceConfigRevisions,
+        BASIS: [...original.acceptedEvidenceConfigRevisions.BASIS, 'mi-cfg-2'],
+      },
+    }],
+    ['Volume evidence configs', {
+      ...original,
+      acceptedEvidenceConfigRevisions: {
+        ...original.acceptedEvidenceConfigRevisions,
+        VOLUME: [...original.acceptedEvidenceConfigRevisions.VOLUME, 'mi-cfg-2'],
+      },
+    }],
+    ['Basis evidence requirement', {
+      ...original,
+      evidenceRequirement: { ...original.evidenceRequirement, BASIS: 'OPTIONAL' },
+    }],
+    ['Volume evidence requirement', {
+      ...original,
+      evidenceRequirement: { ...original.evidenceRequirement, VOLUME: 'OPTIONAL' },
+    }],
+    ['authority source', {
+      ...original,
+      authority: { ...original.authority, sourceId: 'operator.widened-capital-policy' },
+    }],
+    ['authority issue time', {
+      ...original,
+      authority: { ...original.authority, issuedAtMs: original.authority.issuedAtMs - 1 },
+    }],
+    ['authority effective time', {
+      ...original,
+      authority: { ...original.authority, effectiveFromMs: original.authority.effectiveFromMs + 1 },
+    }],
+    ['authority expiry', {
+      ...original,
+      authority: { ...original.authority, effectiveUntilMs: original.authority.effectiveUntilMs + 1 },
+    }],
+  ];
+
+  for (const [label, changed] of sameRevisionMutations) {
+    assert.notEqual(deriveOpportunityEligibilityPolicyRevision(changed), original.authority.revision, label);
+    assert.throws(
+      () => evaluateOpportunityEligibility([candidate()], changed, NOW),
+      /policy revision does not match policy content/,
+      label,
+    );
+  }
+});
+
+test('a hostile full-bundle widening cannot retain a restrictive eligibility revision', () => {
+  const restrictive = policy({ basisMode: 'VALIDATE_ONLY', volumeMode: 'VALIDATE_ONLY' });
+  const widened = {
+    ...restrictive,
+    authority: {
+      ...restrictive.authority,
+      sourceId: 'operator.widened-policy',
+      effectiveUntilMs: restrictive.authority.effectiveUntilMs + 50_000,
+    },
+    acceptedProposalConfigRevisions: {
+      BASIS: [...restrictive.acceptedProposalConfigRevisions.BASIS, 'basis-cfg-any'],
+      VOLUME: [...restrictive.acceptedProposalConfigRevisions.VOLUME, 'volume-cfg-any'],
+    },
+    acceptedEvidenceConfigRevisions: {
+      BASIS: [...restrictive.acceptedEvidenceConfigRevisions.BASIS, 'mi-cfg-any'],
+      VOLUME: [...restrictive.acceptedEvidenceConfigRevisions.VOLUME, 'mi-cfg-any'],
+    },
+    evidenceRequirement: { BASIS: 'OPTIONAL', VOLUME: 'OPTIONAL' },
+    basisMode: 'MANUAL_ARMED',
+    volumeMode: 'ADVISORY',
+  };
+  assert.equal(widened.authority.revision, restrictive.authority.revision);
+  assert.notEqual(deriveOpportunityEligibilityPolicyRevision(widened), restrictive.authority.revision);
+  assert.throws(
+    () => evaluateOpportunityEligibility([candidate()], widened, NOW),
+    /policy revision does not match policy content/,
+  );
+});
+
+test('set-like policy lists are order-stable while duplicate revisions fail closed', () => {
+  const forward = policy({
+    acceptedProposalConfigRevisions: {
+      BASIS: ['basis-cfg-2', 'basis-cfg-1'],
+      VOLUME: ['volume-cfg-2', 'volume-cfg-1'],
+    },
+    acceptedEvidenceConfigRevisions: {
+      BASIS: ['mi-cfg-2', 'mi-cfg-1'],
+      VOLUME: ['mi-cfg-3', 'mi-cfg-1'],
+    },
+  });
+  const reversedDraft = {
+    ...forward,
+    authority: { ...forward.authority, revision: 'pending-reordered-address' },
+    acceptedProposalConfigRevisions: {
+      BASIS: [...forward.acceptedProposalConfigRevisions.BASIS].reverse(),
+      VOLUME: [...forward.acceptedProposalConfigRevisions.VOLUME].reverse(),
+    },
+    acceptedEvidenceConfigRevisions: {
+      BASIS: [...forward.acceptedEvidenceConfigRevisions.BASIS].reverse(),
+      VOLUME: [...forward.acceptedEvidenceConfigRevisions.VOLUME].reverse(),
+    },
+  };
+  const reversed = {
+    ...reversedDraft,
+    authority: {
+      ...reversedDraft.authority,
+      revision: deriveOpportunityEligibilityPolicyRevision(reversedDraft),
+    },
+  };
+  assert.equal(reversed.authority.revision, forward.authority.revision);
+  assert.equal(
+    JSON.stringify(evaluateOpportunityEligibility([candidate()], forward, NOW)),
+    JSON.stringify(evaluateOpportunityEligibility([candidate()], reversed, NOW)),
+  );
+
+  const duplicate = {
+    ...forward,
+    acceptedProposalConfigRevisions: {
+      ...forward.acceptedProposalConfigRevisions,
+      BASIS: ['basis-cfg-1', 'basis-cfg-1'],
+    },
+  };
+  assert.throws(
+    () => deriveOpportunityEligibilityPolicyRevision(duplicate),
+    /must not contain duplicate revisions/,
+  );
+  assert.throws(
+    () => evaluateOpportunityEligibility([candidate()], duplicate, NOW),
+    /must not contain duplicate revisions/,
+  );
 });
 
 test('advisory Volume intelligence cannot hard-veto an otherwise eligible Basis opportunity', () => {

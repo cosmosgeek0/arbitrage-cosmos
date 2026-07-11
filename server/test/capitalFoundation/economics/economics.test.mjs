@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 
 import {
   composeEconomicReport,
+  deriveEconomicAccountingPolicyRevision,
   rollUpEconomicReports,
+  validateEconomicAccountingPolicy,
 } from '../../../dist/capitalFoundation/economics/index.js';
 
 const NOW = 1_800_000_000_000;
@@ -46,17 +48,50 @@ function component(id, kind, amount, overrides = {}) {
   };
 }
 
+function policy(overrides = {}) {
+  const authorityOverrides = overrides.authority ?? {};
+  const semantics = {
+    authority: {
+      sourceId: 'capital-policy-registry:economics',
+      issuedAtMs: NOW - 2_000,
+      effectiveFromMs: NOW - 1_000,
+      effectiveUntilMs: NOW + 10_000,
+      ...authorityOverrides,
+    },
+    pricePnlBasis: 'LEG_PRICE',
+    executionCostBasis: 'DETAILED_SPREAD_SLIPPAGE',
+    expectedComponentKinds: [],
+    ...overrides,
+    authority: {
+      sourceId: 'capital-policy-registry:economics',
+      issuedAtMs: NOW - 2_000,
+      effectiveFromMs: NOW - 1_000,
+      effectiveUntilMs: NOW + 10_000,
+      ...authorityOverrides,
+    },
+  };
+  return {
+    ...semantics,
+    authority: {
+      ...semantics.authority,
+      revision: Object.prototype.hasOwnProperty.call(authorityOverrides, 'revision')
+        ? authorityOverrides.revision
+        : deriveEconomicAccountingPolicyRevision(semantics),
+    },
+  };
+}
+
 function compose(components, overrides = {}) {
   return composeEconomicReport({
     scope: scope(overrides.scope),
     valuationAsset: 'USDT',
     components,
-    policy: {
+    policy: policy({
       pricePnlBasis: 'LEG_PRICE',
       executionCostBasis: 'DETAILED_SPREAD_SLIPPAGE',
       expectedComponentKinds: [...new Set(components.map((entry) => entry.kind))],
       ...overrides.policy,
-    },
+    }),
     evaluatedAtMs: NOW,
   });
 }
@@ -289,12 +324,73 @@ test('child reports compose from components, and overlapping child evidence is c
     scope: scope({ kind: 'CLOSED_OUTCOME', id: 'closed-1' }),
     valuationAsset: 'USDT',
     childReports: [child, child],
-    policy: { pricePnlBasis: 'LEG_PRICE', executionCostBasis: 'DETAILED_SPREAD_SLIPPAGE', expectedComponentKinds: ['TRADING_COMMISSIONS'] },
+    policy: policy({ pricePnlBasis: 'LEG_PRICE', executionCostBasis: 'DETAILED_SPREAD_SLIPPAGE', expectedComponentKinds: ['TRADING_COMMISSIONS'] }),
     evaluatedAtMs: NOW,
   });
   assert.equal(rolled.attribution.netKnown, '0');
   assert.equal(rolled.accountingStatus, 'DIVERGENT');
   assert.ok(rolled.attribution.divergentReasons.includes('DUPLICATE_COMPONENT_ID:shared-fee'));
+});
+
+test('economic policy revision content-addresses every accounting and authority semantic', () => {
+  const baseline = policy({ expectedComponentKinds: ['FUNDING', 'TRADING_COMMISSIONS'] });
+  const changes = [
+    { authority: { sourceId: 'capital-policy-registry:other' } },
+    { authority: { issuedAtMs: NOW - 2_001 } },
+    { authority: { effectiveFromMs: NOW - 999 } },
+    { authority: { effectiveUntilMs: NOW + 10_001 } },
+    { pricePnlBasis: 'BASIS_AND_DIRECTIONAL' },
+    { executionCostBasis: 'EXECUTION_SHORTFALL' },
+    { expectedComponentKinds: ['FUNDING', 'BORROW_INTEREST_AND_FEES'] },
+  ];
+  for (const change of changes) {
+    const changed = policy({ expectedComponentKinds: baseline.expectedComponentKinds, ...change });
+    assert.notEqual(changed.authority.revision, baseline.authority.revision, JSON.stringify(change));
+  }
+  const reordered = policy({ expectedComponentKinds: [...baseline.expectedComponentKinds].reverse() });
+  assert.equal(reordered.authority.revision, baseline.authority.revision, 'set-like kind order is canonical');
+});
+
+test('economic policy rejects retained-revision semantic or source drift', () => {
+  const honest = policy({ expectedComponentKinds: ['TRADING_COMMISSIONS'] });
+  for (const drift of [
+    { authority: { ...honest.authority, sourceId: 'capital-policy-registry:hostile' } },
+    { authority: { ...honest.authority, issuedAtMs: NOW - 2_001 } },
+    { authority: { ...honest.authority, effectiveFromMs: NOW - 999 } },
+    { authority: { ...honest.authority, effectiveUntilMs: NOW + 10_001 } },
+    { pricePnlBasis: 'BASIS_AND_DIRECTIONAL' },
+    { executionCostBasis: 'EXECUTION_SHORTFALL' },
+    { expectedComponentKinds: ['FUNDING'] },
+  ]) {
+    const hostile = {
+      ...honest,
+      ...drift,
+      authority: drift.authority ?? honest.authority,
+    };
+    assert.ok(validateEconomicAccountingPolicy(hostile, NOW).includes('ECONOMIC_POLICY_REVISION_CONTENT_MISMATCH'));
+    assert.throws(
+      () => composeEconomicReport({ scope: scope(), valuationAsset: 'USDT', components: [], policy: hostile, evaluatedAtMs: NOW }),
+      /ECONOMIC_POLICY_REVISION_CONTENT_MISMATCH/,
+    );
+  }
+});
+
+test('economic policy is enforced at injected evaluation time and rejects impossible authority windows', () => {
+  const notYet = policy({ authority: { effectiveFromMs: NOW + 1, effectiveUntilMs: NOW + 10_000 } });
+  assert.ok(validateEconomicAccountingPolicy(notYet, NOW).includes('ECONOMIC_POLICY_NOT_YET_EFFECTIVE'));
+  assert.throws(() => compose([], { policy: notYet }), /ECONOMIC_POLICY_NOT_YET_EFFECTIVE/);
+
+  const expired = policy({ authority: { effectiveUntilMs: NOW } });
+  assert.ok(validateEconomicAccountingPolicy(expired, NOW).includes('ECONOMIC_POLICY_EXPIRED'));
+  assert.throws(() => compose([], { policy: expired }), /ECONOMIC_POLICY_EXPIRED/);
+
+  const honest = policy();
+  const missingSource = { ...honest, authority: { ...honest.authority, sourceId: '' } };
+  assert.ok(validateEconomicAccountingPolicy(missingSource, NOW).includes('ECONOMIC_POLICY_SOURCE_INVALID'));
+  const issuedAfterEffective = { ...honest, authority: { ...honest.authority, issuedAtMs: NOW, effectiveFromMs: NOW - 1 } };
+  assert.ok(validateEconomicAccountingPolicy(issuedAfterEffective, NOW).includes('ECONOMIC_POLICY_ISSUED_AFTER_EFFECTIVE'));
+  const inverted = { ...honest, authority: { ...honest.authority, effectiveFromMs: NOW, effectiveUntilMs: NOW } };
+  assert.ok(validateEconomicAccountingPolicy(inverted, NOW).includes('ECONOMIC_POLICY_EFFECTIVE_WINDOW_INVALID'));
 });
 
 test('very large exact values retain decimal identity without IEEE-754 conversion', () => {

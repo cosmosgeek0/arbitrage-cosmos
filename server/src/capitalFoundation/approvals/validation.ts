@@ -2,11 +2,15 @@ import {
   APPROVAL_ACTION_CLASSES,
   APPROVAL_MODES,
   CONTROL_POSTURES,
+  assessCapitalTruth,
   compareExactDecimals,
+  deriveCapitalConfigRevision,
   normalizeNonNegativeExactDecimal,
   postureAllowsRiskIncrease,
+  weakestCapitalTruth,
   type ApprovalActionClass,
   type ApprovalStageLimit,
+  type ConfigurationAuthority,
   type OperatorApproval,
 } from '../contracts/index.js';
 import {
@@ -20,6 +24,7 @@ import {
 import type {
   ApprovalAuthorityDecision,
   ApprovalPolicyBounds,
+  ApprovalPolicyBoundsSemantics,
   OperatorApprovalState,
   ScopedApprovalValidationContext,
 } from './types.js';
@@ -43,6 +48,41 @@ function canonicalNonNegative(value: unknown): boolean {
   } catch {
     return false;
   }
+}
+
+function validatePolicyAuthority(
+  value: unknown,
+  requireRevision: boolean,
+): ValidationIssue[] {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return [{ path: 'authority', code: 'POLICY_AUTHORITY_REQUIRED', message: 'policy authority must be an object' }];
+  }
+  const authority = value as Partial<ConfigurationAuthority>;
+  const issues: ValidationIssue[] = [];
+  if (requireRevision && !nonEmpty(authority.revision)) {
+    issues.push({ path: 'authority.revision', code: 'POLICY_REVISION_REQUIRED', message: 'content-addressed policy revision is required' });
+  }
+  if (!nonEmpty(authority.sourceId)) {
+    issues.push({ path: 'authority.sourceId', code: 'POLICY_SOURCE_REQUIRED', message: 'bounded policy source identity is required' });
+  }
+  if (!isValidUtcMillis(authority.issuedAtMs)) {
+    issues.push({ path: 'authority.issuedAtMs', code: 'POLICY_ISSUED_AT_INVALID', message: 'policy issue time must be injected UTC milliseconds' });
+  }
+  if (!isValidUtcMillis(authority.effectiveFromMs)) {
+    issues.push({ path: 'authority.effectiveFromMs', code: 'POLICY_EFFECTIVE_FROM_INVALID', message: 'policy effective time must be injected UTC milliseconds' });
+  }
+  if (authority.effectiveUntilMs !== null && !isValidUtcMillis(authority.effectiveUntilMs)) {
+    issues.push({ path: 'authority.effectiveUntilMs', code: 'POLICY_EFFECTIVE_UNTIL_INVALID', message: 'policy expiry must be null or injected UTC milliseconds' });
+  }
+  if (isValidUtcMillis(authority.issuedAtMs) && isValidUtcMillis(authority.effectiveFromMs)
+    && authority.issuedAtMs > authority.effectiveFromMs) {
+    issues.push({ path: 'authority.issuedAtMs', code: 'POLICY_ISSUED_AFTER_EFFECTIVE', message: 'policy cannot be issued after it becomes effective' });
+  }
+  if (authority.effectiveUntilMs !== null && isValidUtcMillis(authority.effectiveFromMs)
+    && isValidUtcMillis(authority.effectiveUntilMs) && authority.effectiveUntilMs <= authority.effectiveFromMs) {
+    issues.push({ path: 'authority.effectiveUntilMs', code: 'POLICY_EFFECTIVE_WINDOW_INVALID', message: 'policy expiry must follow its effective time' });
+  }
+  return issues;
 }
 
 function validateStageLimits(value: unknown, path: string): ValidationIssue[] {
@@ -126,9 +166,10 @@ export function validateApprovalPolicyBounds(value: unknown): readonly Validatio
   }
   const policy = value as Partial<ApprovalPolicyBounds>;
   const issues: ValidationIssue[] = [];
-  for (const [path, candidate] of [['configRevision', policy.configRevision], ['sourcePolicyDigest', policy.sourcePolicyDigest], ['valuationAsset', policy.valuationAsset]] as const) {
+  for (const [path, candidate] of [['configRevision', policy.configRevision], ['valuationAsset', policy.valuationAsset]] as const) {
     if (!nonEmpty(candidate)) issues.push({ path, code: 'NON_EMPTY_STRING_REQUIRED', message: `${path} is required` });
   }
+  issues.push(...validatePolicyAuthority(policy.authority, true));
   if (policy.strategy !== 'BASIS' && policy.strategy !== 'VOLUME') issues.push({ path: 'strategy', code: 'STRATEGY_INVALID', message: 'policy strategy is invalid' });
   if (!uniqueNonEmpty(policy.symbols)) issues.push({ path: 'symbols', code: 'UNIQUE_NON_EMPTY_SCOPE_REQUIRED', message: 'policy symbols must be unique and non-empty' });
   if (!uniqueNonEmpty(policy.instruments)) issues.push({ path: 'instruments', code: 'UNIQUE_NON_EMPTY_SCOPE_REQUIRED', message: 'policy instruments must be unique and non-empty' });
@@ -137,7 +178,83 @@ export function validateApprovalPolicyBounds(value: unknown): readonly Validatio
   }
   if (!canonicalNonNegative(policy.maximumNotional)) issues.push({ path: 'maximumNotional', code: 'EXACT_NON_NEGATIVE_DECIMAL_REQUIRED', message: 'policy maximum must be a canonical exact decimal string' });
   issues.push(...validateStageLimits(policy.stageLimits, 'stageLimits'));
+  if (issues.length === 0 && policy.authority?.revision !== deriveApprovalPolicyDigest(policy as ApprovalPolicyBounds)) {
+    issues.push({
+      path: 'authority.revision',
+      code: 'POLICY_DIGEST_CONTENT_MISMATCH',
+      message: 'policy revision must content-address every approval policy semantic',
+    });
+  }
   return Object.freeze(issues);
+}
+
+/**
+ * Derives the deterministic integrity address for an approval policy. Set-like
+ * scopes are sorted before hashing so equivalent policy projections have one
+ * address. This is deliberately not an authenticity proof or a persistence
+ * boundary; a future trusted policy adapter must own those concerns.
+ */
+export function deriveApprovalPolicyDigest(
+  value: Readonly<ApprovalPolicyBoundsSemantics> | Readonly<ApprovalPolicyBounds>,
+): string {
+  const policy = value as Partial<ApprovalPolicyBounds>;
+  const semanticIssues: ValidationIssue[] = [];
+  semanticIssues.push(...validatePolicyAuthority(policy.authority, false));
+  for (const [path, candidate] of [['configRevision', policy.configRevision], ['valuationAsset', policy.valuationAsset]] as const) {
+    if (!nonEmpty(candidate)) semanticIssues.push({ path, code: 'NON_EMPTY_STRING_REQUIRED', message: `${path} is required` });
+  }
+  if (policy.strategy !== 'BASIS' && policy.strategy !== 'VOLUME') semanticIssues.push({ path: 'strategy', code: 'STRATEGY_INVALID', message: 'policy strategy is invalid' });
+  if (!uniqueNonEmpty(policy.symbols)) semanticIssues.push({ path: 'symbols', code: 'UNIQUE_NON_EMPTY_SCOPE_REQUIRED', message: 'policy symbols must be unique and non-empty' });
+  if (!uniqueNonEmpty(policy.instruments)) semanticIssues.push({ path: 'instruments', code: 'UNIQUE_NON_EMPTY_SCOPE_REQUIRED', message: 'policy instruments must be unique and non-empty' });
+  if (!uniqueNonEmpty(policy.allowedActionClasses) || policy.allowedActionClasses.some((action) => !(APPROVAL_ACTION_CLASSES as readonly string[]).includes(action))) {
+    semanticIssues.push({ path: 'allowedActionClasses', code: 'APPROVAL_ACTION_SCOPE_INVALID', message: 'policy actions must be unique known actions' });
+  }
+  if (!canonicalNonNegative(policy.maximumNotional)) semanticIssues.push({ path: 'maximumNotional', code: 'EXACT_NON_NEGATIVE_DECIMAL_REQUIRED', message: 'policy maximum must be a canonical exact decimal string' });
+  semanticIssues.push(...validateStageLimits(policy.stageLimits, 'stageLimits'));
+  if (semanticIssues.length > 0) {
+    throw new TypeError(`deriveApprovalPolicyDigest: malformed policy semantics - ${semanticIssues.map((issue) => `${issue.path}:${issue.code}`).join(', ')}`);
+  }
+
+  const complete = policy as ApprovalPolicyBounds;
+  const authority = complete.authority;
+  const semantics = {
+    authority: {
+      sourceId: authority.sourceId,
+      issuedAtMs: authority.issuedAtMs,
+      effectiveFromMs: authority.effectiveFromMs,
+      effectiveUntilMs: authority.effectiveUntilMs,
+    },
+    configRevision: complete.configRevision,
+    strategy: complete.strategy,
+    symbols: [...complete.symbols].sort(),
+    instruments: [...complete.instruments].sort(),
+    allowedActionClasses: [...complete.allowedActionClasses].sort(),
+    maximumNotional: complete.maximumNotional,
+    valuationAsset: complete.valuationAsset,
+    stageLimits: complete.stageLimits
+      .map((limit) => ({ stage: limit.stage, maximumExposure: limit.maximumExposure }))
+      .sort((left, right) => left.stage < right.stage ? -1 : left.stage > right.stage ? 1 : 0),
+  } satisfies ApprovalPolicyBoundsSemantics;
+  return deriveCapitalConfigRevision('approval-policy-bounds', semantics);
+}
+
+function refreshControlTruth(
+  truth: Readonly<ScopedApprovalValidationContext['controlPosture']['truth']>,
+  nowMs: number,
+): Readonly<ScopedApprovalValidationContext['controlPosture']['truth']> {
+  const refreshed = assessCapitalTruth({
+    source: truth.source,
+    evaluatedAtMs: nowMs,
+    requiredValuePresent: truth.completeness !== 'UNKNOWN',
+    divergent: truth.completeness === 'DIVERGENT',
+    reasons: truth.reasons,
+    evidenceReferences: truth.evidenceReferences,
+    revision: truth.revision,
+  });
+  return Object.freeze({
+    ...refreshed,
+    completeness: weakestCapitalTruth([truth.completeness, refreshed.completeness]),
+  });
 }
 
 function assertEvaluationInput(state: OperatorApprovalState, context: ScopedApprovalValidationContext, policy: ApprovalPolicyBounds): void {
@@ -205,6 +322,12 @@ export function evaluateOperatorApproval(
   if (context.nowMs < approval.issuedAtMs) return rejection(context, 'APPROVAL_NOT_YET_EFFECTIVE', 'approval issue time is in the future');
   if (context.nowMs >= approval.expiresAtMs) return rejection(context, 'APPROVAL_EXPIRED', 'approval has expired');
   if (approval.revokedAtMs !== null) return rejection(context, 'APPROVAL_REVOKED', 'approval has been revoked');
+  if (context.nowMs < policy.authority.effectiveFromMs) {
+    return rejection(context, 'APPROVAL_POLICY_NOT_YET_EFFECTIVE', 'approval policy is not yet effective at the injected evaluation time');
+  }
+  if (policy.authority.effectiveUntilMs !== null && context.nowMs >= policy.authority.effectiveUntilMs) {
+    return rejection(context, 'APPROVAL_POLICY_EXPIRED', 'approval policy has expired at the injected evaluation time');
+  }
 
   if (approval.proposalId !== context.proposalId || approval.proposalRevision !== context.proposalRevision || approval.proposalIntakeDigest !== context.proposalIntakeDigest) {
     return rejection(context, 'APPROVAL_PROPOSAL_MISMATCH', 'proposal identity, revision, or intake digest changed');
@@ -218,7 +341,7 @@ export function evaluateOperatorApproval(
   if (approval.configRevision !== context.configRevision || policy.configRevision !== context.configRevision) {
     return rejection(context, 'APPROVAL_CONFIG_MISMATCH', 'configuration revision changed');
   }
-  if (state.sourcePolicyDigest !== policy.sourcePolicyDigest) {
+  if (state.sourcePolicyDigest !== policy.authority.revision) {
     return rejection(context, 'APPROVAL_POLICY_DIGEST_MISMATCH', 'validated policy content changed without a new approval');
   }
   if (approval.strategy !== context.strategy || policy.strategy !== context.strategy) return rejection(context, 'APPROVAL_STRATEGY_MISMATCH', 'strategy is outside approval or policy scope');
@@ -250,14 +373,19 @@ export function evaluateOperatorApproval(
     if (compareExactDecimals(context.requestedNotional, limit.maximumExposure) > 0) return rejection(context, 'APPROVAL_STAGE_LIMIT_EXCEEDED', 'requested notional exceeds exact stage limit');
   }
 
-  if ((context.actionClass === 'OPEN' || context.actionClass === 'ADD')
-    && (context.controlPosture.truth.evaluatedAtMs !== context.nowMs || !postureAllowsRiskIncrease(context.controlPosture))) {
-    const code = context.controlPosture.posture === 'PAUSED_NEW_EXPOSURE'
-      ? 'NEW_EXPOSURE_PAUSED'
-      : context.controlPosture.posture === 'KILL_NEW_EXPOSURE'
-        ? 'NEW_EXPOSURE_KILLED'
-        : 'NEW_EXPOSURE_CONTROL_TRUTH_BLOCKED';
-    return rejection(context, code, 'control posture or its truth blocks new or increasing exposure');
+  if (context.actionClass === 'OPEN' || context.actionClass === 'ADD') {
+    const refreshedControlPosture = Object.freeze({
+      ...context.controlPosture,
+      truth: refreshControlTruth(context.controlPosture.truth, context.nowMs),
+    });
+    if (!postureAllowsRiskIncrease(refreshedControlPosture)) {
+      const code = context.controlPosture.posture === 'PAUSED_NEW_EXPOSURE'
+        ? 'NEW_EXPOSURE_PAUSED'
+        : context.controlPosture.posture === 'KILL_NEW_EXPOSURE'
+          ? 'NEW_EXPOSURE_KILLED'
+          : 'NEW_EXPOSURE_CONTROL_TRUTH_BLOCKED';
+      return rejection(context, code, 'control posture or its re-aged truth blocks new or increasing exposure');
+    }
   }
 
   const mode = approval.mode;

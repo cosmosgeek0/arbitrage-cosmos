@@ -3,11 +3,13 @@ import {
   addExactDecimals,
   capitalDigest,
   compareExactDecimals,
+  deriveCapitalConfigRevision,
   isExactDecimal,
   normalizeExactDecimal,
   sumExactDecimals,
   validateEconomicComponent,
   type CapitalTruthState,
+  type ConfigurationAuthority,
   type EconomicComponent,
   type EconomicComponentKind,
   type EconomicEstimateRange,
@@ -22,6 +24,8 @@ import {
   type ComposeEconomicReportInput,
   type EconomicDimension,
   type EconomicDimensionSummary,
+  type EconomicAccountingPolicy,
+  type EconomicAccountingPolicySemantics,
   type EconomicMeasure,
   type EconomicReport,
   type RollUpEconomicReportsInput,
@@ -43,6 +47,108 @@ const INDEPENDENT_NET_KINDS = Object.freeze([
 
 function sortedUnique<T extends string>(values: readonly T[]): readonly T[] {
   return Object.freeze([...new Set(values)].sort()) as readonly T[];
+}
+
+function nonEmpty(value: unknown, maximum = 256): value is string {
+  return typeof value === 'string' && value.trim() === value && value.length > 0 && value.length <= maximum;
+}
+
+function economicPolicyPayload(
+  policy: Readonly<EconomicAccountingPolicy> | Readonly<EconomicAccountingPolicySemantics>,
+): Readonly<EconomicAccountingPolicySemantics> {
+  const authority = policy?.authority as Partial<ConfigurationAuthority> | undefined;
+  if (!authority || !nonEmpty(authority.sourceId)) throw new TypeError('economic policy source identity is invalid');
+  if (!isValidUtcMillis(authority.issuedAtMs) || !isValidUtcMillis(authority.effectiveFromMs)) {
+    throw new TypeError('economic policy issue and effective times must be UTC milliseconds');
+  }
+  if (authority.effectiveUntilMs !== null && !isValidUtcMillis(authority.effectiveUntilMs)) {
+    throw new TypeError('economic policy expiry must be null or UTC milliseconds');
+  }
+  if (authority.issuedAtMs > authority.effectiveFromMs) throw new TypeError('economic policy cannot be issued after it becomes effective');
+  if (authority.effectiveUntilMs !== null && authority.effectiveUntilMs <= authority.effectiveFromMs) {
+    throw new TypeError('economic policy effective window is invalid');
+  }
+  if (!(PRICE_PNL_BASES as readonly string[]).includes(policy.pricePnlBasis)) throw new TypeError('economic policy price PnL basis is invalid');
+  if (!(EXECUTION_COST_BASES as readonly string[]).includes(policy.executionCostBasis)) throw new TypeError('economic policy execution cost basis is invalid');
+  if (!Array.isArray(policy.expectedComponentKinds)) throw new TypeError('economic policy expected component kinds must be an array');
+  if (new Set(policy.expectedComponentKinds).size !== policy.expectedComponentKinds.length) {
+    throw new TypeError('economic policy expected component kinds must be unique');
+  }
+  for (const kind of policy.expectedComponentKinds) {
+    if (!(ECONOMIC_COMPONENT_KINDS as readonly string[]).includes(kind)) throw new TypeError(`expected economic component kind ${kind} is invalid`);
+  }
+  return Object.freeze({
+    authority: Object.freeze({
+      sourceId: authority.sourceId,
+      issuedAtMs: authority.issuedAtMs,
+      effectiveFromMs: authority.effectiveFromMs,
+      effectiveUntilMs: authority.effectiveUntilMs,
+    }),
+    pricePnlBasis: policy.pricePnlBasis,
+    executionCostBasis: policy.executionCostBasis,
+    expectedComponentKinds: sortedUnique(policy.expectedComponentKinds),
+  });
+}
+
+/**
+ * Deterministic integrity address for every economic-accounting policy
+ * semantic. This does not authenticate the named source; a future trusted
+ * configuration adapter must own distribution and source trust.
+ */
+export function deriveEconomicAccountingPolicyRevision(
+  policy: Readonly<EconomicAccountingPolicy> | Readonly<EconomicAccountingPolicySemantics>,
+): EconomicAccountingPolicy['authority']['revision'] {
+  return deriveCapitalConfigRevision('economic-accounting-policy', economicPolicyPayload(policy));
+}
+
+export function validateEconomicAccountingPolicy(
+  value: unknown,
+  evaluatedAtMs: number,
+): readonly string[] {
+  const policy = value as Partial<EconomicAccountingPolicy> | null;
+  const authority = policy?.authority as Partial<ConfigurationAuthority> | undefined;
+  const issues: string[] = [];
+  if (!isValidUtcMillis(evaluatedAtMs)) issues.push('EVALUATED_AT_INVALID');
+  if (!policy || typeof policy !== 'object' || Array.isArray(policy)) return Object.freeze([...issues, 'ECONOMIC_POLICY_REQUIRED']);
+  if (!authority || typeof authority !== 'object' || Array.isArray(authority)) {
+    issues.push('ECONOMIC_POLICY_AUTHORITY_REQUIRED');
+  } else {
+    if (!nonEmpty(authority.revision)) issues.push('ECONOMIC_POLICY_REVISION_REQUIRED');
+    if (!nonEmpty(authority.sourceId)) issues.push('ECONOMIC_POLICY_SOURCE_INVALID');
+    if (!isValidUtcMillis(authority.issuedAtMs)) issues.push('ECONOMIC_POLICY_ISSUED_AT_INVALID');
+    if (!isValidUtcMillis(authority.effectiveFromMs)) issues.push('ECONOMIC_POLICY_EFFECTIVE_FROM_INVALID');
+    if (authority.effectiveUntilMs !== null && !isValidUtcMillis(authority.effectiveUntilMs)) issues.push('ECONOMIC_POLICY_EFFECTIVE_UNTIL_INVALID');
+    if (isValidUtcMillis(authority.issuedAtMs) && isValidUtcMillis(authority.effectiveFromMs)
+      && authority.issuedAtMs > authority.effectiveFromMs) issues.push('ECONOMIC_POLICY_ISSUED_AFTER_EFFECTIVE');
+    if (authority.effectiveUntilMs !== null && isValidUtcMillis(authority.effectiveFromMs)
+      && isValidUtcMillis(authority.effectiveUntilMs) && authority.effectiveUntilMs <= authority.effectiveFromMs) {
+      issues.push('ECONOMIC_POLICY_EFFECTIVE_WINDOW_INVALID');
+    }
+    if (isValidUtcMillis(evaluatedAtMs) && isValidUtcMillis(authority.effectiveFromMs)
+      && evaluatedAtMs < authority.effectiveFromMs) issues.push('ECONOMIC_POLICY_NOT_YET_EFFECTIVE');
+    if (isValidUtcMillis(evaluatedAtMs) && authority.effectiveUntilMs !== null
+      && isValidUtcMillis(authority.effectiveUntilMs) && evaluatedAtMs >= authority.effectiveUntilMs) {
+      issues.push('ECONOMIC_POLICY_EXPIRED');
+    }
+  }
+  if (!(PRICE_PNL_BASES as readonly unknown[]).includes(policy.pricePnlBasis)) issues.push('ECONOMIC_POLICY_PRICE_PNL_BASIS_INVALID');
+  if (!(EXECUTION_COST_BASES as readonly unknown[]).includes(policy.executionCostBasis)) issues.push('ECONOMIC_POLICY_EXECUTION_COST_BASIS_INVALID');
+  if (!Array.isArray(policy.expectedComponentKinds)
+    || policy.expectedComponentKinds.some((kind) => !(ECONOMIC_COMPONENT_KINDS as readonly unknown[]).includes(kind))) {
+    issues.push('ECONOMIC_POLICY_EXPECTED_KINDS_INVALID');
+  } else if (new Set(policy.expectedComponentKinds).size !== policy.expectedComponentKinds.length) {
+    issues.push('ECONOMIC_POLICY_EXPECTED_KINDS_DUPLICATE');
+  }
+  if (issues.length === 0) {
+    try {
+      if (authority?.revision !== deriveEconomicAccountingPolicyRevision(policy as EconomicAccountingPolicy)) {
+        issues.push('ECONOMIC_POLICY_REVISION_CONTENT_MISMATCH');
+      }
+    } catch {
+      issues.push('ECONOMIC_POLICY_REVISION_CONTENT_MISMATCH');
+    }
+  }
+  return Object.freeze([...new Set(issues)].sort());
 }
 
 function frozenComponent(component: Readonly<EconomicComponent>): Readonly<EconomicComponent> {
@@ -67,11 +173,8 @@ function assertInput(input: ComposeEconomicReportInput): void {
   if (typeof input.scope.id !== 'string' || input.scope.id.trim().length === 0) throw new TypeError('economic scope ID is required');
   if (typeof input.valuationAsset !== 'string' || input.valuationAsset.trim().length === 0) throw new TypeError('valuation asset is required');
   if (!isValidUtcMillis(input.evaluatedAtMs)) throw new TypeError('evaluatedAtMs must be injected UTC milliseconds');
-  if (!(PRICE_PNL_BASES as readonly string[]).includes(input.policy.pricePnlBasis)) throw new TypeError('price PnL basis is invalid');
-  if (!(EXECUTION_COST_BASES as readonly string[]).includes(input.policy.executionCostBasis)) throw new TypeError('execution cost basis is invalid');
-  for (const kind of input.policy.expectedComponentKinds) {
-    if (!(ECONOMIC_COMPONENT_KINDS as readonly string[]).includes(kind)) throw new TypeError(`expected economic component kind ${kind} is invalid`);
-  }
+  const policyIssues = validateEconomicAccountingPolicy(input.policy, input.evaluatedAtMs);
+  if (policyIssues.length > 0) throw new TypeError(`economic accounting policy invalid: ${policyIssues.join(',')}`);
 }
 
 function slippageSlotKey(component: Readonly<EconomicComponent>): string {
@@ -401,7 +504,11 @@ export function composeEconomicReport(input: ComposeEconomicReportInput): Readon
   });
   return Object.freeze({
     scope: Object.freeze({ ...input.scope }),
-    policy: Object.freeze({ ...input.policy, expectedComponentKinds: effectiveExpectedKinds }),
+    policy: Object.freeze({
+      ...input.policy,
+      authority: Object.freeze({ ...input.policy.authority }),
+      expectedComponentKinds: Object.freeze([...input.policy.expectedComponentKinds]),
+    }),
     attribution,
     measures,
     dimensions: Object.freeze(dimensions),

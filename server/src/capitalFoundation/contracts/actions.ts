@@ -3,7 +3,7 @@ import type { ActionIntentId, ActivePositionId, PositionThesisId } from './ident
 import type { CapitalTruthState } from './truth.js';
 import { compareExactDecimals, isExactDecimal, type ExactDecimal, type NonNegativeDecimal } from './decimal.js';
 
-export const POSITION_ACTION_INTENTS = [
+export const POSITION_ACTION_INTENTS = Object.freeze([
   'HOLD',
   'ADD_STAGE',
   'REDUCE',
@@ -12,20 +12,20 @@ export const POSITION_ACTION_INTENTS = [
   'REQUEST_EMERGENCY_UNWIND',
   'FREEZE_NEW_ACTIONS',
   'NO_ACTION_UNKNOWN',
-] as const;
+] as const);
 export type PositionActionIntentKind = (typeof POSITION_ACTION_INTENTS)[number];
 
-export const ACTION_URGENCIES = ['ROUTINE', 'ELEVATED', 'URGENT', 'EMERGENCY'] as const;
+export const ACTION_URGENCIES = Object.freeze(['ROUTINE', 'ELEVATED', 'URGENT', 'EMERGENCY'] as const);
 export type ActionUrgency = (typeof ACTION_URGENCIES)[number];
 
-export const FUTURE_GATES = [
+export const FUTURE_GATES = Object.freeze([
   'OPERATOR_APPROVAL',
   'MULTI_LEG_RISK',
   'EXECUTION_COORDINATOR',
   'RECONCILIATION',
   'FRESH_ACCOUNT_TRUTH',
   'FRESH_MARKET_EVIDENCE',
-] as const;
+] as const);
 export type FutureGate = (typeof FUTURE_GATES)[number];
 
 export interface TotalExposureTarget {

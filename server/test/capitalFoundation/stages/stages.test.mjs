@@ -13,6 +13,10 @@ import {
   validateStagedPlanConfiguration,
 } from '../../../dist/capitalFoundation/stages/index.js';
 import { assessCapitalTruth, capitalDigest } from '../../../dist/capitalFoundation/contracts/index.js';
+import {
+  createOperatorApprovalState,
+  deriveApprovalPolicyDigest,
+} from '../../../dist/capitalFoundation/approvals/index.js';
 
 const NOW = 1_800_000_000_000;
 const GATES = ['OPERATOR_APPROVAL', 'MULTI_LEG_RISK', 'FRESH_ACCOUNT_TRUTH', 'FRESH_MARKET_EVIDENCE'];
@@ -128,30 +132,145 @@ function approvalUseScopeKey(plan, from = plan.activeStage, to = 'ADD') {
   return `stage:${plan.id}:${plan.revision}:${plan.digest}:${from}->${to}`;
 }
 
+function mandateFor(plan) {
+  const built = buildCapitalMandate({
+    consideration: consideration(),
+    allocationDecisionId: 'calloc-stage-test',
+    reservation: reservation(),
+    plan,
+    configuration: config(),
+    targetMaximumExposure: '100',
+    createdAtMs: NOW,
+    expiresAtMs: NOW + 250_000,
+    correlationId: 'cor-stage-mandate',
+  });
+  assert.equal(built.ok, true);
+  return built.value;
+}
+
 function approval(plan, overrides = {}) {
-  return {
-    validated: true,
-    approvalId: 'approval-stage-test',
-    approvalRevision: 1,
-    mode: 'MANUAL_ARMED',
-    validatedAtMs: NOW,
-    expiresAtMs: NOW + 10_000,
-    revokedAtMs: null,
-    useScopeKey: approvalUseScopeKey(plan),
-    actionClass: 'ADD',
-    stage: 'ADD',
+  const actionClass = overrides.actionClass ?? 'ADD';
+  const targetStage = overrides.stage ?? 'ADD';
+  const requestedNotional = overrides.maximumAdditionalExposure ?? (actionClass === 'OPEN' ? '40' : '60');
+  const useScopeKey = overrides.useScopeKey ?? approvalUseScopeKey(plan);
+  const mandate = overrides.mandate ?? mandateFor(plan);
+  const allowedActionClasses = overrides.allowedActionClasses ?? [actionClass];
+  const policySemantics = {
+    authority: {
+      sourceId: 'capital.approval-policy.stage-test',
+      issuedAtMs: NOW - 1_000,
+      effectiveFromMs: NOW - 500,
+      effectiveUntilMs: NOW + 10_000,
+    },
+    configRevision: plan.configRevision,
+    strategy: 'BASIS',
+    symbols: ['BTCUSDT'],
+    instruments: ['BINANCE:SPOT:BTCUSDT', 'BINANCE:PERP:BTCUSDT'],
+    allowedActionClasses,
+    maximumNotional: requestedNotional,
+    valuationAsset: 'USDT',
+    stageLimits: [{ stage: targetStage, maximumExposure: requestedNotional }],
+  };
+  const policy = {
+    ...policySemantics,
+    authority: {
+      ...policySemantics.authority,
+      revision: deriveApprovalPolicyDigest(policySemantics),
+    },
+  };
+  const validApproval = {
+    id: 'approval-stage-test',
+    operatorIdentityReference: 'operator-stage-test',
+    proposalId: 'proposal-stage-test',
+    proposalRevision: 'proposal-stage-r1',
+    proposalIntakeDigest: plan.proposalIntakeDigest,
+    mandateId: mandate.id,
+    mandateRevision: mandate.revision,
+    mandateDigest: mandate.digest,
     stagedPlanId: plan.id,
     stagedPlanRevision: plan.revision,
     stagedPlanDigest: plan.digest,
+    strategy: 'BASIS',
+    symbols: policy.symbols,
+    instruments: policy.instruments,
+    allowedActionClasses,
+    maximumNotional: requestedNotional,
+    valuationAsset: 'USDT',
+    mode: 'MANUAL_ARMED',
     configRevision: plan.configRevision,
-    allowedActionClasses: ['ADD'],
-    maximumAdditionalExposure: '60',
-    maximumTotalExposure: '100',
-    ...overrides,
+    issuedAtMs: NOW - 1_000,
+    expiresAtMs: NOW + 10_000,
+    revokedAtMs: null,
+    revocationReasonReference: null,
+    stageLimits: policy.stageLimits,
+    reasonReference: 'stage-authority-test',
+    useScopeKey,
+  };
+  const validState = createOperatorApprovalState(validApproval, policy);
+  const mutatedApproval = {
+    ...validState.approval,
+    id: overrides.approvalId ?? validState.approval.id,
+    mode: overrides.mode ?? validState.approval.mode,
+    expiresAtMs: overrides.expiresAtMs ?? validState.approval.expiresAtMs,
+    revokedAtMs: overrides.revokedAtMs ?? validState.approval.revokedAtMs,
+    revocationReasonReference: overrides.revokedAtMs === undefined
+      ? validState.approval.revocationReasonReference
+      : overrides.revokedAtMs === null ? null : 'hostile-revocation',
+    useScopeKey,
+    allowedActionClasses,
+  };
+  return {
+    state: {
+      ...validState,
+      approval: mutatedApproval,
+      revision: overrides.approvalRevision ?? validState.revision,
+    },
+    context: {
+      nowMs: overrides.validatedAtMs ?? NOW,
+      proposalId: validApproval.proposalId,
+      proposalRevision: validApproval.proposalRevision,
+      proposalIntakeDigest: plan.proposalIntakeDigest,
+      mandateId: mandate.id,
+      mandateRevision: mandate.revision,
+      mandateDigest: mandate.digest,
+      stagedPlanId: plan.id,
+      stagedPlanRevision: plan.revision,
+      stagedPlanDigest: plan.digest,
+      configRevision: plan.configRevision,
+      actionClass,
+      requestedNotional,
+      stage: targetStage,
+      useScopeKey,
+      strategy: 'BASIS',
+      symbols: policy.symbols,
+      instruments: policy.instruments,
+      controlPosture: {
+        posture: 'OPEN',
+        truth: assessCapitalTruth({
+          source: {
+            sourceTimeMs: NOW - 10,
+            receivedAtMs: NOW - 5,
+            maxAgeMs: 1_000,
+            authority: 'SYNTHETIC_TEST',
+            completeness: 'COMPLETE',
+            sourceId: 'capital.control.stage-test',
+          },
+          evaluatedAtMs: NOW,
+          requiredValuePresent: true,
+          revision: 'control-r1',
+        }),
+      },
+      correlationId: overrides.correlationId ?? 'cor-stage-transition',
+    },
+    policy,
+    mandate,
   };
 }
 
 function transition(plan, overrides = {}) {
+  const scopedApproval = Object.prototype.hasOwnProperty.call(overrides, 'approval')
+    ? overrides.approval
+    : approval(plan);
   return evaluateStageTransition({
     plan,
     configuration: config(),
@@ -171,7 +290,7 @@ function transition(plan, overrides = {}) {
     availableLiquidityDepth: '1000',
     proposedNakedLegAmount: '5',
     proposedNakedLegDurationMs: 5_000,
-    approval: approval(plan),
+    approval: scopedApproval,
     futureRiskRecheck: {
       required: true,
       owner: 'FOUNDATION_MULTI_LEG_RISK',
@@ -248,7 +367,46 @@ test('reservation overcommit and invalid plan/config effective windows fail clos
   assert.equal(late.failure.code, 'CONFIG_NOT_EFFECTIVE');
   const wrongValuation = makePlan({ valuationAsset: 'BTC' });
   assert.equal(wrongValuation.ok, false);
-  assert.equal(wrongValuation.failure.code, 'PLAN_BINDING_INVALID');
+  assert.equal(wrongValuation.failure.code, 'CONFIG_VALUATION_UNIT_MISMATCH');
+});
+
+test('one unit of reservation cannot authorize one thousand units of same-valuation exposure', () => {
+  const oversized = stages().map((item) => {
+    if (item.stage === 'CONFIRM') {
+      return { ...item, maximumAdditionalExposure: '1000', maximumTotalExposure: '1000', reservationConsumption: '1' };
+    }
+    if (item.stage === 'ADD') {
+      return { ...item, maximumAdditionalExposure: '0', maximumTotalExposure: '1000', reservationConsumption: '0' };
+    }
+    if (item.stage === 'HOLD' || item.stage === 'REDUCE') return { ...item, maximumTotalExposure: '1000' };
+    return item;
+  });
+  const largePolicy = config({ maximumPlanExposure: exactBound('1000', '1000') });
+  const issues = validateGovernedStages(oversized, largePolicy, '1');
+  assert.ok(issues.includes('STAGE_RESERVATION_UNDERCOVERS_ADDITIONAL'));
+  assert.ok(issues.includes('STAGE_TOTAL_EXCEEDS_CUMULATIVE_RESERVATION'));
+
+  const built = makePlan({
+    reservation: reservation({ amount: '1' }),
+    configuration: largePolicy,
+    stages: oversized,
+  });
+  assert.equal(built.ok, false);
+  assert.equal(built.failure.code, 'STAGE_RESERVATION_UNDERCOVERS_ADDITIONAL');
+});
+
+test('staged exact policy units must match each other and the reservation valuation asset', () => {
+  assert.throws(() => config({
+    maximumPlanExposure: { ...exactBound('100', '200'), unit: 'BTC' },
+  }), /CONFIG_EXACT_BOUND_UNITS_DIVERGENT/);
+
+  const btcPolicy = config({
+    maximumPlanExposure: { ...exactBound('100', '200'), unit: 'BTC' },
+    maximumNakedLegAmount: { ...exactBound('5', '10'), unit: 'BTC' },
+  });
+  const result = makePlan({ configuration: btcPolicy });
+  assert.equal(result.ok, false);
+  assert.equal(result.failure.code, 'CONFIG_VALUATION_UNIT_MISMATCH');
 });
 
 test('ADD rejects adverse price as sole reason and every missing current authority input', () => {
@@ -295,7 +453,7 @@ test('changed plan content cannot reuse an old digest, approval, or risk binding
   };
   const result = transition(forged, {
     requestedAdditionalExposure: '1000',
-    approval: approval(forged, { maximumAdditionalExposure: '1000', maximumTotalExposure: '1040' }),
+    approval: approval(built.value),
   });
   assert.equal(result.ok, false);
   assert.equal(result.failure.code, 'STAGED_PLAN_INTEGRITY_INVALID');
@@ -339,6 +497,16 @@ test('ADD requires a same-clock MANUAL_ARMED approval with current identity, rev
     assert.equal(result.ok, false, JSON.stringify(hostile));
     assert.equal(result.failure.code, 'SCOPED_APPROVAL_REQUIRED', JSON.stringify(hostile));
   }
+  const copiedValidatedFlag = transition(plan, {
+    approval: {
+      validated: true,
+      approvalId: 'caller-forged-approval',
+      maximumAdditionalExposure: '60',
+      maximumTotalExposure: '100',
+    },
+  });
+  assert.equal(copiedValidatedFlag.ok, false);
+  assert.equal(copiedValidatedFlag.failure.code, 'SCOPED_APPROVAL_REQUIRED');
 });
 
 test('ADD binds the current active reservation identity, consideration, unit, revision, state, expiry, and exact availability', () => {
@@ -390,6 +558,7 @@ test('explicit skip conditions must be satisfied before OBSERVE can skip PROBE f
       allowedActionClasses: ['OPEN'],
       maximumAdditionalExposure: '40',
       maximumTotalExposure: '40',
+      correlationId: 'cor-observe-confirm',
     }),
     futureRiskRecheck: {
       required: true,

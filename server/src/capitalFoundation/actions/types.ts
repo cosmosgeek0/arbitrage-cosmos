@@ -5,12 +5,30 @@ import type {
   ExactDecimal,
   FutureGate,
   NonNegativeDecimal,
+  PositionActionIntent,
   PositionActionIntentKind,
 } from '../contracts/index.js';
 import type {
   ActivePositionId,
   PositionThesisId,
 } from '../contracts/identity.js';
+import type { StageTransitionAuthorization } from '../stages/index.js';
+
+/**
+ * The staged-plan identity already attached to the supervised position.  This
+ * is intentionally separate from a transition authorization so a caller
+ * cannot make an ADD self-consistent merely by setting approval booleans.
+ */
+export interface ActiveStageAuthorityBinding {
+  readonly activeStage: StageTransitionAuthorization['from'];
+  readonly planId: StageTransitionAuthorization['planId'];
+  readonly planRevision: StageTransitionAuthorization['planRevision'];
+  readonly planDigest: StageTransitionAuthorization['planDigest'];
+  readonly reservationId: NonNullable<StageTransitionAuthorization['reservationId']>;
+  readonly reservationRevision: NonNullable<StageTransitionAuthorization['reservationRevision']>;
+  readonly approvalId: NonNullable<StageTransitionAuthorization['approvalId']>;
+  readonly approvalRevision: NonNullable<StageTransitionAuthorization['approvalRevision']>;
+}
 
 export interface ActionPositionProjection {
   readonly positionId: ActivePositionId;
@@ -25,20 +43,30 @@ export interface ActionPositionProjection {
   readonly currentHedgeRatio: ExactDecimal | null;
   readonly completeness: CapitalTruthState;
   readonly truthReasonCodes: readonly string[];
+  readonly activeStageAuthority: Readonly<ActiveStageAuthorityBinding> | null;
 }
 
-export interface NextStageIncreaseAuthority {
-  readonly currentStageSequence: number;
-  readonly authorizedStageSequence: number;
-  readonly authorizedStage: string;
-  readonly maximumAdditionalExposure: NonNegativeDecimal;
-  readonly maximumTotalExposure: NonNegativeDecimal;
-  readonly freshEvidence: boolean;
-  readonly reservationAvailable: boolean;
-  readonly approvalValidated: boolean;
-  readonly futureRiskRecheckRequired: boolean;
-  readonly adversePriceMoveIsSoleReason: boolean;
+/** Direct type-only consumption of the stages lane's public authority output. */
+export type NextStageIncreaseAuthority = StageTransitionAuthorization;
+
+export interface DirectionalReductionGeometry {
+  readonly currentTotalExposure: NonNegativeDecimal;
+  readonly targetTotalExposure: NonNegativeDecimal;
+  readonly currentNetDirectionalExposure: ExactDecimal;
+  readonly targetNetDirectionalExposure: ExactDecimal;
+  readonly absoluteDirectionalExposureReduction: NonNegativeDecimal;
 }
+
+/**
+ * Action-lane enrichment of the frozen cross-lane intent contract.  The
+ * external execution owner still receives an economic target, never orders.
+ */
+export interface ActionIntentAuthorityProjection {
+  readonly stageTransitionAuthorization: Readonly<StageTransitionAuthorization> | null;
+  readonly directionalReductionGeometry: Readonly<DirectionalReductionGeometry> | null;
+}
+
+export type PlannedEconomicActionIntent = PositionActionIntent & ActionIntentAuthorityProjection;
 
 export interface EconomicActionDecisionBase {
   readonly why: readonly string[];

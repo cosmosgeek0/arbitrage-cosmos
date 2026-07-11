@@ -1,4 +1,7 @@
-export { evaluateOpportunityEligibility } from './eligibility.js';
+export {
+  deriveOpportunityEligibilityPolicyRevision,
+  evaluateOpportunityEligibility,
+} from './eligibility.js';
 export type {
   BasisStructureReference,
   EvidenceRequirement,

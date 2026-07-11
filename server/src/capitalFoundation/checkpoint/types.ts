@@ -28,7 +28,7 @@ export const CAPITAL_CHECKPOINT_SCHEMA = 'cosmos.capital.supervision.checkpoint'
 export const CAPITAL_CHECKPOINT_VERSION = 1 as const;
 export const CAPITAL_CHECKPOINT_EVENT_SCHEMA_VERSION = 1 as const;
 
-export const CAPITAL_CHECKPOINT_EVENT_KINDS = [
+export const CAPITAL_CHECKPOINT_EVENT_KINDS = Object.freeze([
   'RESERVATION_UPSERTED',
   'MANDATE_UPSERTED',
   'STAGED_PLAN_UPSERTED',
@@ -40,7 +40,7 @@ export const CAPITAL_CHECKPOINT_EVENT_KINDS = [
   'ACTION_INTENT_UPSERTED',
   'ECONOMICS_UPSERTED',
   'LIFECYCLE_REVISED',
-] as const;
+] as const);
 export type CapitalCheckpointEventKind = (typeof CAPITAL_CHECKPOINT_EVENT_KINDS)[number];
 
 export interface ApprovalRevocationRecord {

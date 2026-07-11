@@ -1,10 +1,15 @@
-export { allocateCapital, validateAllocationCandidate } from './allocator.js';
+export {
+  allocateCapital,
+  deriveAllocationSizingAuthorityRevision,
+  validateAllocationCandidate,
+} from './allocator.js';
 export type {
   AllocationBatchInput,
   AllocationBatchResult,
+  AllocationAuthorityReceipt,
   AllocationBudgetRemainder,
   AllocationCandidate,
-  AllocationPriority,
+  AllocationSizingAuthority,
   EconomicDirection,
 } from './types.js';
 export { ECONOMIC_DIRECTIONS } from './types.js';
@@ -24,6 +29,7 @@ export type {
   ReservationBook,
   ReservationAuthorityInput,
   ReservationClosureEvidence,
+  ReservationClosureReconciliationReference,
   ReservationCommand,
   ReservationCommandKind,
   ReservationMutation,

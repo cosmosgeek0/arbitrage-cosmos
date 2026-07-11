@@ -7,7 +7,7 @@ import type {
   TruthMetadata,
 } from '../contracts/index.js';
 
-export const ACCOUNT_SNAPSHOT_KEYS = [
+export const ACCOUNT_SNAPSHOT_KEYS = Object.freeze([
   'spot',
   'futures',
   'liabilities',
@@ -16,7 +16,7 @@ export const ACCOUNT_SNAPSHOT_KEYS = [
   'reservations',
   'valuations',
   'hardReserves',
-] as const;
+] as const);
 export type AccountSnapshotKey = (typeof ACCOUNT_SNAPSHOT_KEYS)[number];
 
 /**
@@ -97,7 +97,11 @@ export interface CapitalCommitmentInput {
 export interface ConservativeValuationInput {
   readonly asset: string;
   readonly valuationAsset: string;
-  /** Caller-supplied conservative value of one unit of asset. */
+  /**
+   * Caller-supplied conservative value of one unit of asset. A zero lower
+   * bound can conservatively discount owned collateral, but cannot establish
+   * a zero upper bound for a positive liability.
+   */
   readonly conservativeUnitValue: NonNegativeDecimal | null;
   readonly reasonCodes: readonly string[];
 }

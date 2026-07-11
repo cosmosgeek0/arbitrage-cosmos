@@ -47,8 +47,8 @@ export const CAPITAL_ID_PREFIXES = Object.freeze({
 } as const);
 
 function validateSuppliedIdentity(value: unknown, label: string): string {
-  if (typeof value !== 'string' || value.trim().length === 0 || value.length > 256) {
-    throw new TypeError(`${label} must be a non-empty string (<=256 characters)`);
+  if (typeof value !== 'string' || value.length === 0 || value.length > 256 || value.trim() !== value) {
+    throw new TypeError(`${label} must be a canonical non-empty string (<=256 characters)`);
   }
   return value;
 }

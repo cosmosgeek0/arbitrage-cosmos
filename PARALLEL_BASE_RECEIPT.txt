@@ -1,0 +1,6 @@
+source=/Users/cosmosgeek/Desktop/Main
+source_branch=current-main
+base_sha=75c55ec2f9bb8f8a96fe6d788e877dd6fe4a8240
+source_dirty_count_at_clone=107
+target=/Users/cosmosgeek/Desktop/Main-backend-foundation-20260711-070056
+feature_branch=backend-foundation-parallel-20260711-070056

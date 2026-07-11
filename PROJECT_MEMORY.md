@@ -1,6 +1,6 @@
 # PROJECT_MEMORY.md — Arbitrage Capital Control Room
 
-Last updated: 2026-07-11
+Last updated: 2026-07-12
 Permanent role of this file: the durable living-state log for the project. The other three core docs are mostly static blueprints; this file records what is *true right now* — current source-of-truth folder, git/deploy state, active phase, outstanding decisions, and a dated changelog. A new Director should read this file to learn the present state without any old chat history.
 
 **UI WORK? Read `DESIGN_PLAYBOOK.md` FIRST** — the distilled, owner-calibrated design system, process, and gotcha catalog from the 2026-07-08 quality passes. The Account page is the owner's only approved "real quality" surface; the playbook is how to hit that bar without redoing five rounds.
@@ -20,6 +20,9 @@ The permanent root docs and entrypoints are:
 4. `DIRECTOR_RULEBOOK.md` — operating rules, safety laws, worker coordination, commit discipline.
 5. `BLUEPRINT.md` — product / UI / backend / deploy / reconstruction blueprint.
 6. `ENGINE.md` — engine / algorithm / risk / ledger blueprint.
+7. `SYSTEM_AUTHORITY_MAP.md` — canonical cross-organ ownership and directional adapter law.
+8. `SYSTEM_CONVERGENCE_COMPONENTS.md` — current component lineage, runtime truth, and remaining wiring.
+9. `SYSTEM_CONVERGENCE_RECEIPT.md` — measured convergence Git/test/runtime/browser evidence.
 
 `README.md` stays short and points to the docs. A new agent should start with
 `AGENTS.md`, then read `PROJECT_MEMORY.md` and `DESIGN_PLAYBOOK.md` before UI
@@ -45,7 +48,7 @@ Owner directive (2026-07-07):
 
 - Local Git: initialized in `Main` on 2026-07-07 (for bookkeeping + recoverability). Before init, a safety copy of the working tree was taken to `~/Desktop/Main-safety-<timestamp>` (excludes regenerable `node_modules/`).
 - Remote `origin`: `git@github.com:cosmosgeek0/arbitrage-cosmos.git`. SSH auth verified working as GitHub user `cosmosgeek0`.
-- History posture: the fresh local history is unrelated to the old GitHub `main`. Do **not** force-push over old `main`. The current tree is published to branch `current-main` instead of overwriting old history.
+- History posture: the fresh local history is unrelated to the old GitHub `main`. Do **not** force-push over old `main`. The latest landed audited baseline is published on `current-main` at `87af782`; the current convergence tip remains only on its local integration branch.
 - `.gitignore` excludes: `node_modules/`, `dist/`, `data/`, `.env`, `.env.*` (keeps `.env.example`), `.DS_Store`, `*.log`. Runtime DB (`data/cosmos.db*`) is intentionally not tracked; it is preserved on disk and in the safety copy.
 
 ---
@@ -55,10 +58,13 @@ Owner directive (2026-07-07):
 - Stack: Node 22 / npm 10 workspaces — `server/` is strict TypeScript on
   Express/SQLite and `web/` is strict TypeScript on React/Vite. Node is pinned
   by `.nvmrc`, `engines`, and `packageManager` metadata.
-- Root verification contract: `npm test` is the deterministic typecheck, clean
-  build, engine-proof, and focused-regression lane. `npm run test:integration`
-  boots an isolated built server and exercises the public Binance market path;
-  `npm run test:all` runs both.
+- Root verification contract: `npm test` preserves the 377-check deterministic
+  app/engine/security lane. `npm run test:app` is the separate 72-gate built
+  keyless/public-market app smoke. `npm run test:integration` is the 180-test
+  deterministic convergence corpus, including exact SC-01..SC-30 and a
+  zero-egress tripwire. `npm run test:all` builds once and runs every existing
+  lane plus Market Intelligence, Intelligence Runtime, Capital, all 2,860
+  Foundation checks, and convergence.
 - `data/cosmos.db` is the active SQLite ledger/state store. It is runtime data,
   intentionally ignored by Git, and must be preserved and backed up by the
   operator. Local `.env` state is also ignored; never inventory or publish its
@@ -70,6 +76,13 @@ Owner directive (2026-07-07):
   runtime snapshots with freshness/quality evidence. Account state uses signed
   REST plus the current signed WebSocket API private-stream protocol, with
   reconciliation and stale/partial truth surfaced to the UI.
+- `server/src/systemIntegration/**` is the keyless convergence boundary. One
+  outer root owns Market -> Basis -> Volume startup/restart/drain, the existing
+  SQLite checkpoint/trace adapter, authenticated supervisor/control routes,
+  and the internal VALIDATE_ONLY vertical slice. Public source/engine nodes can
+  be LIVE_PUBLIC; Intelligence Runtime, continuous MI, Capital/account truth,
+  and live reconciliation/execution stay visibly unavailable until real owner
+  ports exist.
 - Manual order/cancel and loan mutation paths exist, but are not autonomous.
   They are fail-closed behind account and key posture, control modes, kill/live
   state, risk limits, typed confirmation where applicable, and durable audit
@@ -79,24 +92,25 @@ Owner directive (2026-07-07):
 
 ## 5. Active phase and next actions
 
-**PHASE SNAPSHOT (2026-07-11): REPOSITORY-WIDE PRODUCTION HARDENING — COMPLETE
-AND PUSH-READY.**
+**PHASE SNAPSHOT (2026-07-12): SYSTEM CONVERGENCE + FIRST VALIDATE-ONLY
+VERTICAL SLICE — ACCEPTED ON THE INTEGRATION BRANCH, AWAITING DIRECTOR LAND.**
 
-- A full repository security and reliability review covered the HTTP/WebSocket
-  perimeter, Binance transports, account/order/loan money paths, storage,
-  engines, runtime lifecycle, and frontend truth/error handling. The initial
-  canonical scan contained 21 findings (2 high, 15 medium, 4 low); the working
-  tree contains the corresponding remediation and focused regressions.
-- The visual design contract was preserved: this pass changes operational
-  truth, failure handling, and backend safety rather than restyling the product.
-- The settled tree passed `npm test`, the 72/72 live-market integration gate,
-  a zero-vulnerability production dependency audit, SQLite integrity and
-  foreign-key checks, `git diff --check`, and the mandatory rendered-browser
-  page/topbar sweeps. Exact evidence is recorded in the newest run-log entry
-  and `PRODUCTION_AUDIT.md`.
-- The remaining handoff action is to commit intentionally on `current-main`
-  and push only that branch. Do not overwrite the unrelated historical `main`
-  branch.
+- Branch `system-convergence-vertical-slice-20260711` began at audited Main
+  `87af782`; it must not be merged or pushed by an agent without the owner's
+  separate direction. Source recovery branches/tags remain unchanged.
+- One canonical authority map, 13-node supervisor graph, dependency-managed
+  runtime root, existing-ledger persistence/replay, restart barrier, bounded
+  authenticated controls, and a sealed VALIDATE_ONLY dry-run path are complete.
+- Runtime truth is deliberately mixed: public Market/Basis/Volume can be live;
+  Intelligence Runtime, continuous Market Intelligence, production Capital and
+  account truth, signed validation, and live exchange reconciliation/execution
+  are not configured. The cockpit shows those blockers instead of green filler.
+- Final acceptance passed both `test:all` runs, the 72/72 keyless app gates,
+  30/30 deterministic scenarios, security/perimeter regression, 0 production
+  dependency vulnerabilities, SQLite integrity, authenticated API/control,
+  public no-key, restart, clean shutdown/checkpoint, and rendered light/dark
+  browser audits. Exact SHAs and counts are in
+  `SYSTEM_CONVERGENCE_RECEIPT.md`.
 
 ### Archived 2026-07-07 phase snapshot
 
@@ -133,6 +147,27 @@ orders.
 ---
 
 ## 7. Run log (newest first)
+
+### 2026-07-12 — System convergence and first VALIDATE_ONLY vertical slice
+
+- Verified the five already-integrated organ families at audited base
+  `87af782`; no branch was re-integrated, no worktree was created, and no
+  defunct clone was touched.
+- Added narrow authority adapters, one dependency-ordered application root,
+  fail-closed checkpoint/control/restart truth, authenticated supervisor APIs,
+  sealed dry-run Foundation risk/execution/reconciliation, and five minimal
+  cockpit insertions without redesigning the product.
+- Public keyless smoke observed 447 symbols and LIVE_PUBLIC Spot, USD-M,
+  Market, Basis, and Volume nodes. The 13-node snapshot stayed DEGRADED because
+  non-mounted owner capabilities were explicitly NOT_CONFIGURED/UNAVAILABLE.
+- Final verification: `npm test` 377, app gates 72, Basis 107, Volume 124, MI
+  152, Runtime 394, Capital 433, Foundation 2,860, convergence 180, exact
+  scenarios 30, security tripwire 5, and `test:all` twice. Browser audit covered
+  Calendar -> News -> Health -> Logs -> Risk -> Opportunities -> Volume ->
+  Basis -> Markets -> Token -> Borrow -> Account -> Dashboard plus all ten
+  398x486 topbar sheets in light/dark with zero console warnings/errors.
+- No push, merge, deployment, secret read, signed convergence call, test order,
+  or money-moving call occurred. The director owns final review/landing.
 
 ### 2026-07-11 — Production hardening audit and deterministic CI contract
 

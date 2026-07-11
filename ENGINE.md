@@ -1,13 +1,26 @@
 # ENGINE.md — Arbitrage Capital Control Room Engine
 
-Status (2026-07-11): basis and volume engines are implemented, wired to real
-public Binance feeds, exposed through runtime snapshots, and covered by
-deterministic proof suites. Signed account synchronization, guarded manual
-order/cancel, and guarded loan mutation services also exist. Autonomous
-strategy-to-order execution remains intentionally prohibited. The current work
-is production hardening and verification, not the Part 0 survey below.
+Status (2026-07-12): one convergence application root now owns the existing
+Market -> Basis -> Volume lifecycle, shell-first startup, reverse drain,
+checkpoint persistence, restart barriers, authenticated supervisor APIs, and
+safe READ_ONLY/ADVISORY/VALIDATE_ONLY controls. A keyless acceptance run proved
+447-symbol public coverage and live public Market/Basis/Volume truth. The whole
+machine remains truthfully DEGRADED because effectful Intelligence Runtime,
+continuous Market Intelligence, production Capital/account truth, signed
+validation, and live reconciliation/execution are not configured.
 
-Last updated: 2026-07-11
+The deterministic first vertical slice binds exact proposal/mandate/approval
+revisions through Capital, Foundation multi-leg risk, a two-leg VALIDATE_ONLY
+plan, sealed in-process dry-run ports, reconciliation fixtures, and the existing
+SQLite ledger. No signed, test-order, private, paper-submission, or money-moving
+port is reachable from `server/src/systemIntegration/**`; every live mode returns
+`LIVE_EXECUTION_NOT_IMPLEMENTED`. Existing audited manual account/order/loan
+services still exist outside this convergence authority and keep their own
+legacy safety gates. See `SYSTEM_AUTHORITY_MAP.md`,
+`SYSTEM_CONVERGENCE_COMPONENTS.md`, and `SYSTEM_CONVERGENCE_RECEIPT.md` for the
+accepted boundary and exact evidence.
+
+Last updated: 2026-07-12
 Permanent role of this file: engine/algorithm/brain blueprint for Fable, Opus, Claude Code, Codex, or any future agent.
 
 Read `DIRECTOR_RULEBOOK.md` and `BLUEPRINT.md` first. This file is only for the engine. The UI/cockpit exists to expose this engine’s state, not to replace it.
@@ -40,7 +53,7 @@ The engine is not an AI chat agent. It is not a gambling script. It is not a mar
 
 ## 2. Implementation language decision
 
-Default for the current `arbitrage-cosmos` repo: TypeScript inside the existing Node/Express server, unless a fresh repo inspection proves the stack has intentionally changed.
+Default for the current repository: TypeScript inside the existing Node/Express server, unless a fresh repo inspection proves the stack has intentionally changed.
 
 Reason: the existing architecture described `server/` as Node 22 + TypeScript, `web/` as React/Vite, with `server/src/engine/` already present as legacy/early engine feed. The safest path is to evolve the existing TS backend instead of creating a second language/process too early.
 

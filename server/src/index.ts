@@ -38,6 +38,10 @@ import { LoanService } from './services/loans.js';
 import { BookStreamHub } from './services/bookStream.js';
 import { BasisRuntime } from './services/basisRuntime.js';
 import { VolumeRuntime } from './services/volumeRuntime.js';
+import { createSystemIntegrationApplication } from './systemIntegration/application/index.js';
+import { createNodeRepeatingScheduler, createSystemUtcClock } from './systemIntegration/composition/index.js';
+import { createProductionSystemIntegrationPorts } from './systemIntegration/production/index.js';
+import { createSystemIntegrationRouter } from './systemIntegration/routes/index.js';
 import { AwsRunnerControl, AwsRunnerControlError } from './services/awsRunnerControl.js';
 import { getNewsContext, newsContextStatus, refreshNewsContextNow, scoreNewsImpact, subscribeNewsContext } from './services/newsContext.js';
 import { OperatorAccess } from './security/access.js';
@@ -91,37 +95,39 @@ const basisRuntime = new BasisRuntime(ledger, () => config, () => engine.allRows
 })));
 const volumeRuntime = new VolumeRuntime(ledger, () => config, () => engine.allRows());
 let shuttingDown = false;
-let basisStartTimer: NodeJS.Timeout | null = null;
-let volumeStartTimer: NodeJS.Timeout | null = null;
-
-// The control plane, News and Calendar must stay available when Binance is
-// temporarily unreachable. Market initialization retries in the background
-// instead of blocking the HTTP server and every non-market route.
-void (async () => {
-  while (!shuttingDown) {
-    try {
-      await engine.init();
-      if (shuttingDown) break;
-      engine.start();
-      basisStartTimer = setTimeout(() => {
-        if (!shuttingDown) void basisRuntime.start();
-      }, 3_000);
-      volumeStartTimer = setTimeout(() => {
-        if (!shuttingDown) void volumeRuntime.start();
-      }, 5_000);
-      break;
-    } catch (err) {
-      if (shuttingDown) break;
-      console.error('engine init failed, retrying in 15s:', err);
-      try {
-        ledger.logEvent('error_event', null, { source: 'engine.init', message: String(err) });
-      } catch {
-        // Retry remains available while persistence is degraded.
-      }
-      await new Promise((resolve) => setTimeout(resolve, 15_000));
-    }
-  }
-})();
+const systemIntegrationClock = createSystemUtcClock();
+const systemIntegrationScheduler = createNodeRepeatingScheduler();
+const systemIntegrationProduction = createProductionSystemIntegrationPorts({
+  clock: systemIntegrationClock,
+  market: engine,
+  basis: basisRuntime,
+  volume: volumeRuntime,
+});
+const systemIntegration = createSystemIntegrationApplication({
+  ledger,
+  clock: systemIntegrationClock,
+  scheduler: systemIntegrationScheduler,
+  runtimes: systemIntegrationProduction.runtimes,
+  components: systemIntegrationProduction.components,
+  summaries: systemIntegrationProduction.summaries,
+  // Convergence never treats ambient credentials as an execution capability.
+  // The audited application kill remains an independent, stricter outer gate.
+  readEnvironment: () => ({
+    privateKeysAvailable: false,
+    killSwitchEngaged: config.killSwitch,
+    borrowTruthPresent: false,
+  }),
+});
+const systemIntegrationStart = systemIntegration.start();
+if (!systemIntegrationStart.ok) {
+  console.error(
+    'system integration started fail-closed:',
+    systemIntegrationStart.persistenceFailureCode
+      ?? (systemIntegrationStart.compositionCommand?.ok === false
+        ? systemIntegrationStart.compositionCommand.failure.code
+        : 'APPLICATION_START_FAILED'),
+  );
+}
 
 const creds = credsFromEnv();
 const client = creds ? new BinanceClient(creds) : null;
@@ -250,12 +256,8 @@ if (client) {
   }, POLL_MS);
 }
 
-ledger.logEvent('engine.start', null, {
-  pairs: engine.pairCount,
-  keysPresent: account.keysPresent,
-});
 console.log(
-  `cosmos control room: ${engine.pairCount} pairs, Binance keys ${account.keysPresent ? 'PRESENT' : 'absent'}, booting ${HOST}:${PORT}`
+  `cosmos control room: managed market graph booting, Binance keys ${account.keysPresent ? 'PRESENT' : 'absent'}, listening ${HOST}:${PORT}`
 );
 
 const scannerTimer = setInterval(() => {
@@ -501,6 +503,11 @@ app.post('/api/notifications/ingest/aws', (req, res) => {
 // The notification intake has its own exact bearer-token contract. Every
 // other API route shares one operator admission boundary.
 app.use('/api', operatorAccess.middleware());
+app.use('/api/system-integration', createSystemIntegrationRouter({
+  read: systemIntegration.read,
+  controls: systemIntegration.controls,
+  clock: systemIntegrationClock,
+}));
 
 app.get('/api/notification-routing', (_req, res) => {
   res.json(notificationRoutingSnapshot());
@@ -2849,20 +2856,16 @@ app.post('/api/refresh', (req, res) => {
 
     try {
       if (target === 'all' || target === 'market') {
-        await runStep('market-streams', async () => {
-          basisRuntime.stop();
-          volumeRuntime.stop();
-          engine.stop();
-          engine.start();
-          await Promise.all([basisRuntime.start(), volumeRuntime.start()]);
-          return `${Object.keys(engine.feeds).length} core feeds restarted`;
+        await runStep('managed-runtime', () => {
+          const restarted = systemIntegration.restartManagedRuntime();
+          if (!restarted.ok) throw new Error(restarted.code);
+          return `Managed Market/Basis/Volume restart accepted at generation ${restarted.composition.supervisor.generation}`;
         });
       } else if (target === 'runtime') {
-        await runStep('strategy-runtimes', async () => {
-          basisRuntime.stop();
-          volumeRuntime.stop();
-          await Promise.all([basisRuntime.start(), volumeRuntime.start()]);
-          return 'Basis and volume runtimes restarted';
+        await runStep('managed-runtime', () => {
+          const restarted = systemIntegration.restartManagedRuntime();
+          if (!restarted.ok) throw new Error(restarted.code);
+          return `Dependency-root Market/Basis/Volume restart accepted at generation ${restarted.composition.supervisor.generation}`;
         });
       }
 
@@ -3659,8 +3662,6 @@ function gracefulShutdown(signal: NodeJS.Signals): Promise<void> {
     console.log(`received ${signal}; draining control-room services`);
 
     for (const timer of [
-      basisStartTimer,
-      volumeStartTimer,
       accountSyncTimer,
       orderSyncTimer,
       fillReconcileTimer,
@@ -3680,9 +3681,7 @@ function gracefulShutdown(signal: NodeJS.Signals): Promise<void> {
 
     userStream?.stop();
     bookHub.stop();
-    basisRuntime.stop();
-    volumeRuntime.stop();
-    engine.stop();
+    const systemIntegrationDrain = systemIntegration.drain();
     stopLiquidationCollector();
     for (const socket of pendingWsUpgradeSockets) {
       rejectUpgrade(socket, 503, 'WebSocket service is shutting down.');
@@ -3711,6 +3710,15 @@ function gracefulShutdown(signal: NodeJS.Signals): Promise<void> {
     deadline.unref();
     await Promise.all([httpClosed, websocketClosed]);
     clearTimeout(deadline);
+
+    try {
+      const drained = await systemIntegrationDrain;
+      if (!drained.ok) {
+        console.error('system integration drain failed:', drained.persistenceFailureCode ?? drained.composition.drainFailureCode ?? 'DRAIN_FAILED');
+      }
+    } catch (error) {
+      console.error('system integration drain failed:', error instanceof Error ? error.message : String(error));
+    }
 
     try {
       (ledger as Ledger & { close?: () => void }).close?.();

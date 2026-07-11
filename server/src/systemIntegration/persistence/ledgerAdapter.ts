@@ -10,6 +10,7 @@ import type {
   SystemControlState,
   SystemTraceEvent,
 } from '../contracts/types.js';
+import type { OperatorApprovalState } from '../../capitalFoundation/approvals/index.js';
 import {
   canonicalPersistenceJson,
   cloneCheckpointState,
@@ -138,6 +139,7 @@ function traceForCheckpoint(input: {
   readonly referenceIds?: readonly string[];
   readonly truthLabel?: SystemTraceEvent['truthLabel'];
   readonly domainLifecycle?: string | null;
+  readonly releaseStatuses?: SystemTraceEvent['releaseStatuses'];
 }): Readonly<SystemTraceEvent> {
   const id = `${input.idPrefix}:${input.sequence}:${input.correlationId}`.slice(0, 256);
   return Object.freeze({
@@ -149,7 +151,7 @@ function traceForCheckpoint(input: {
     occurredAtMs: input.occurredAtMs,
     persistedAtMs: null,
     truthLabel: input.truthLabel ?? 'RECORDED_REPLAY',
-    releaseStatuses: Object.freeze(['WIRED'] as const),
+    releaseStatuses: Object.freeze([...(input.releaseStatuses ?? ['WIRED'])]),
     ownerId: input.ownerId ?? null,
     canonicalProjectionId: null,
     revisionDigest: null,
@@ -279,7 +281,8 @@ const VALIDATE_ONLY_RECORD_FIELDS = Object.freeze([
   'liveExecutionPermitted', 'truthLabels', 'releaseStatuses', 'canonicalProposalId',
   'sourceProposalId', 'reservationId', 'stagedPlanId', 'mandateId', 'approvalId',
   'approvalDecision', 'approvalState', 'riskVerdict', 'boundRiskDecision',
-  'executionPlan', 'executionState', 'reconciliation', 'failure', 'ownerInvocations',
+  'riskPlanBinding', 'executionPlan', 'executionState', 'reconciliation', 'supervision',
+  'failure', 'ownerInvocations',
   'venueAudit',
 ] as const);
 
@@ -287,6 +290,181 @@ const VALIDATE_ONLY_DISPOSITIONS = new Set([
   'MODE_BLOCKED', 'INPUT_REJECTED', 'APPROVAL_REJECTED', 'RISK_REJECTED',
   'EXECUTION_PREFLIGHT_REJECTED', 'RECONCILIATION_BLOCKED', 'PERSISTENCE_FAILED', 'READY',
 ]);
+
+const PLAN_LIFECYCLES = new Set([
+  'CREATED', 'AWAITING_APPROVAL', 'PREFLIGHTING', 'READY', 'OPENING', 'ONE_LEG_EXPOSED',
+  'HEDGED_OPEN', 'CLOSE_REQUESTED', 'CLOSING', 'RECONCILING', 'CLOSED',
+  'RECOVERY_REQUIRED', 'FAILED', 'CANCELLED', 'EXPIRED',
+]);
+
+function hasExactKeys(value: Readonly<Record<string, unknown>>, expected: readonly string[]): boolean {
+  const keys = Object.keys(value).sort();
+  const wanted = [...expected].sort();
+  return keys.length === wanted.length && keys.every((key, index) => key === wanted[index]);
+}
+
+function validReconciliationProjection(value: unknown, planId: string): boolean {
+  return isRecord(value)
+    && BOUNDED_ID.test(String(value.planId))
+    && value.planId === planId
+    && CORRELATION_ID.test(String(value.correlationId))
+    && value.executionAuthority === 'NONE'
+    && ['EXACT', 'PENDING', 'PARTIAL', 'AMBIGUOUS', 'DIVERGED', 'STALE', 'UNAVAILABLE'].includes(String(value.status))
+    && validUtcMillis(value.evaluatedAtMs);
+}
+
+function validSupervisionProjection(
+  value: unknown,
+  currentRootCorrelationId: string,
+  evaluatedAtMs: number,
+): boolean {
+  if (!isRecord(value) || !hasExactKeys(value, [
+    'rootCorrelationId', 'executionCorrelationId', 'planId', 'truthLabel',
+    'executionAuthority', 'state', 'reconciliation',
+  ])) return false;
+  if (!CORRELATION_ID.test(String(value.rootCorrelationId))
+    || value.rootCorrelationId === currentRootCorrelationId
+    || !CORRELATION_ID.test(String(value.executionCorrelationId))
+    || !BOUNDED_ID.test(String(value.planId))
+    || value.truthLabel !== 'SYNTHETIC_ONLY'
+    || value.executionAuthority !== 'NONE'
+    || !isRecord(value.state)) return false;
+  const state = value.state;
+  if (!hasExactKeys(state, [
+    'plan', 'lifecycle', 'revision', 'stateRevisionId', 'lastSequence', 'createdAtMs',
+    'updatedAtMs', 'exposedSinceMs', 'approval', 'preflight', 'openingLegs',
+    'closingLegs', 'processedEventIds', 'eventLog', 'failures',
+  ])
+    || !isRecord(state.plan)
+    || !PLAN_LIFECYCLES.has(String(state.lifecycle))
+    || !Number.isSafeInteger(state.revision)
+    || (state.revision as number) < 0
+    || !Number.isSafeInteger(state.lastSequence)
+    || (state.lastSequence as number) < 0
+    || !BOUNDED_ID.test(String(state.stateRevisionId))
+    || !validUtcMillis(state.createdAtMs)
+    || !validUtcMillis(state.updatedAtMs)
+    || (state.createdAtMs as number) > (state.updatedAtMs as number)
+    || (state.updatedAtMs as number) > evaluatedAtMs
+    || (state.exposedSinceMs !== null && (!validUtcMillis(state.exposedSinceMs) || state.exposedSinceMs > evaluatedAtMs))
+    || !Array.isArray(state.processedEventIds)
+    || state.processedEventIds.length > SYSTEM_PERSISTENCE_LIMITS.maximumArrayLength
+    || state.processedEventIds.some((entry) => !BOUNDED_ID.test(String(entry)))
+    || !Array.isArray(state.eventLog)
+    || state.eventLog.length > SYSTEM_PERSISTENCE_LIMITS.maximumArrayLength
+    || !Array.isArray(state.failures)
+    || state.failures.length > SYSTEM_PERSISTENCE_LIMITS.maximumArrayLength) return false;
+  const plan = state.plan;
+  if (!hasExactKeys(plan, [
+    'planId', 'correlationId', 'termsFingerprint', 'strategy', 'direction', 'symbol',
+    'proposal', 'attempt', 'mode', 'requiresApproval', 'maxNakedDurationMs',
+    'openingOrder', 'openingLegs', 'closingLegs',
+  ])
+    || plan.planId !== value.planId
+    || plan.correlationId !== value.executionCorrelationId
+    || !['VALIDATE_ONLY', 'PAPER'].includes(String(plan.mode))) return false;
+  return value.reconciliation === null
+    || validReconciliationProjection(value.reconciliation, String(value.planId));
+}
+
+function validApprovalStateProjection(value: unknown, approvalId: string): value is Record<string, unknown> {
+  if (!isRecord(value)
+    || !hasExactKeys(value, ['approval', 'sourcePolicyDigest', 'revision', 'uses'])
+    || !isRecord(value.approval)
+    || value.approval.id !== approvalId
+    || !BOUNDED_ID.test(String(value.sourcePolicyDigest))
+    || !Number.isSafeInteger(value.revision)
+    || (value.revision as number) < 1
+    || !Array.isArray(value.uses)
+    || value.uses.length > SYSTEM_PERSISTENCE_LIMITS.maximumIdempotencyReceipts) return false;
+  const identities: string[] = [];
+  for (const use of value.uses) {
+    if (!isRecord(use) || !hasExactKeys(use, [
+      'idempotencyKey', 'useScopeKey', 'contextDigest', 'actionClass',
+      'requestedNotional', 'recordedAtMs',
+    ])
+      || !IDEMPOTENCY_KEY.test(String(use.idempotencyKey))
+      || !BOUNDED_ID.test(String(use.useScopeKey))
+      || !BOUNDED_ID.test(String(use.contextDigest))
+      || !/^[A-Z][A-Z0-9_]{0,63}$/.test(String(use.actionClass))
+      || typeof use.requestedNotional !== 'string'
+      || use.requestedNotional.length < 1
+      || use.requestedNotional.length > 128
+      || !/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(use.requestedNotional)
+      || !validUtcMillis(use.recordedAtMs)) return false;
+    identities.push(`${use.idempotencyKey}:${use.contextDigest}`);
+  }
+  return new Set(identities).size === identities.length;
+}
+
+function latestValidateOnlyApprovalState(
+  state: Readonly<SystemIntegrationCheckpointState>,
+  approvalId: string,
+): Readonly<OperatorApprovalState> | null {
+  const revisions = new Map<number, {
+    readonly state: Readonly<OperatorApprovalState>;
+    readonly bytes: string;
+  }>();
+  for (const persisted of state.idempotencyReceipts) {
+    if (!isRecord(persisted.receipt)
+      || persisted.receipt.kind !== 'VALIDATE_ONLY_RUN'
+      || !isRecord(persisted.receipt.record)
+      || persisted.receipt.record.approvalId !== approvalId
+      || !isRecord(persisted.receipt.record.ownerInvocations)
+      || persisted.receipt.record.ownerInvocations.approvalUseReductions !== 1) continue;
+    const candidate = persisted.receipt.record.approvalState;
+    if (!validApprovalStateProjection(candidate, approvalId)) {
+      throw new Error('persisted validate-only approval state is corrupt');
+    }
+    const bytes = canonicalPersistenceJson(candidate);
+    const typed = candidate as unknown as Readonly<OperatorApprovalState>;
+    const existing = revisions.get(typed.revision);
+    if (existing && existing.bytes !== bytes) {
+      throw new Error('persisted validate-only approval state has a same-revision history conflict');
+    }
+    revisions.set(typed.revision, { state: typed, bytes });
+  }
+  const ordered = [...revisions.values()].sort((left, right) => left.state.revision - right.state.revision);
+  for (let index = 1; index < ordered.length; index += 1) {
+    const previous = ordered[index - 1].state;
+    const current = ordered[index].state;
+    if (current.revision !== previous.revision + 1
+      || current.uses.length !== previous.uses.length + 1
+      || canonicalPersistenceJson(current.approval) !== canonicalPersistenceJson(previous.approval)
+      || current.sourcePolicyDigest !== previous.sourcePolicyDigest
+      || canonicalPersistenceJson(current.uses.slice(0, previous.uses.length)) !== canonicalPersistenceJson(previous.uses)) {
+      throw new Error('persisted validate-only approval state history is discontinuous');
+    }
+  }
+  return ordered.at(-1)?.state ?? null;
+}
+
+function assertApprovalStateCompareAndSet(
+  state: Readonly<SystemIntegrationCheckpointState>,
+  record: Readonly<Record<string, SystemJsonValue>>,
+): void {
+  if (!isRecord(record.ownerInvocations)
+    || record.ownerInvocations.approvalUseReductions !== 1) return;
+  const approvalId = String(record.approvalId);
+  if (!validApprovalStateProjection(record.approvalState, approvalId)) {
+    throw new Error('validate-only approval state is invalid');
+  }
+  const incoming = record.approvalState as unknown as Readonly<OperatorApprovalState>;
+  const latest = latestValidateOnlyApprovalState(state, approvalId);
+  if (latest === null) return;
+  const incomingBytes = canonicalPersistenceJson(incoming);
+  const latestBytes = canonicalPersistenceJson(latest);
+  if (incoming.revision < latest.revision) throw new Error('validate-only approval state is stale');
+  if (incoming.revision === latest.revision) {
+    if (incomingBytes !== latestBytes) throw new Error('validate-only approval state compare-and-set conflict');
+    return;
+  }
+  if (incoming.revision !== latest.revision + 1
+    || incoming.uses.length !== latest.uses.length + 1
+    || canonicalPersistenceJson(incoming.uses.slice(0, latest.uses.length)) !== canonicalPersistenceJson(latest.uses)) {
+    throw new Error('validate-only approval state history is not an exact one-step extension');
+  }
+}
 
 function validateOnlyRecord(record: unknown): PersistenceResult<Readonly<Record<string, SystemJsonValue>>> {
   if (!isRecord(record)) return failed('INVALID_PERSISTENCE_REQUEST', 'validate-only persistence record must be an object');
@@ -297,7 +475,7 @@ function validateOnlyRecord(record: unknown): PersistenceResult<Readonly<Record<
   }
   if (record.schema !== 'cosmos.system-integration.validate-only.v1'
     || record.operatorMode !== 'VALIDATE_ONLY'
-    || record.capitalReservationDialect !== 'OWNER_SUPPLIED_MANUAL_ARMED_ENVELOPE'
+    || !['OWNER_SUPPLIED_MANUAL_ARMED_ENVELOPE', 'UNAVAILABLE_OR_UNVALIDATED'].includes(String(record.capitalReservationDialect))
     || record.executionAuthority !== 'NONE'
     || record.liveExecutionPermitted !== false
     || !VALIDATE_ONLY_DISPOSITIONS.has(String(record.disposition))
@@ -309,14 +487,26 @@ function validateOnlyRecord(record: unknown): PersistenceResult<Readonly<Record<
   if (record.executionCorrelationId !== null && !CORRELATION_ID.test(String(record.executionCorrelationId))) {
     return failed('INVALID_PERSISTENCE_REQUEST', 'validate-only execution correlation is invalid');
   }
+  const riskVerdictHasUnknown = isRecord(record.riskVerdict)
+    && Array.isArray(record.riskVerdict.checks)
+    && record.riskVerdict.checks.some((check) => isRecord(check) && check.status === 'UNKNOWN');
+  const dryRunObserved = record.executionPlan !== null
+    || record.supervision !== null
+    || (record.riskVerdict !== null && !riskVerdictHasUnknown);
+  const expectedTruthLabels = dryRunObserved
+    ? ['DRY_RUN', 'SYNTHETIC_ONLY']
+    : ['UNAVAILABLE', 'SYNTHETIC_ONLY'];
+  const expectedReleaseStatuses = record.disposition === 'READY'
+    ? ['BUILT_AND_TESTED', 'SYNTHETIC_ONLY']
+    : ['BUILT_AND_TESTED', 'SYNTHETIC_ONLY', 'BLOCKED'];
   if (!Array.isArray(record.truthLabels)
-    || record.truthLabels.length !== 2
-    || record.truthLabels[0] !== 'DRY_RUN'
-    || record.truthLabels[1] !== 'SYNTHETIC_ONLY'
+    || !sameJson(record.truthLabels, expectedTruthLabels)
     || !Array.isArray(record.releaseStatuses)
-    || record.releaseStatuses.length < 1
-    || record.releaseStatuses.length > 8
-    || record.releaseStatuses.some((value) => !(SYSTEM_RELEASE_STATUSES as readonly unknown[]).includes(value))) {
+    || !sameJson(record.releaseStatuses, expectedReleaseStatuses)
+    || record.releaseStatuses.some((value) => !(SYSTEM_RELEASE_STATUSES as readonly unknown[]).includes(value))
+    || record.releaseStatuses.includes('WIRED')
+    || (record.disposition === 'MODE_BLOCKED' && record.capitalReservationDialect !== 'UNAVAILABLE_OR_UNVALIDATED')
+    || (dryRunObserved && record.capitalReservationDialect !== 'OWNER_SUPPLIED_MANUAL_ARMED_ENVELOPE')) {
     return failed('INVALID_PERSISTENCE_REQUEST', 'validate-only truth or release labels are invalid');
   }
   for (const field of [
@@ -350,18 +540,71 @@ function validateOnlyRecord(record: unknown): PersistenceResult<Readonly<Record<
   if (!isRecord(record.ownerInvocations)
     || Object.keys(record.ownerInvocations).sort().join('|') !== [
       'approvalEvaluations', 'approvalUseReductions', 'riskEvaluations', 'executionDefinitionsCreated',
-      'coordinatorsCreated', 'coordinatorPreflights', 'reconciliationEvaluations', 'persistenceWrites',
+      'coordinatorsCreated', 'coordinatorPreflights', 'reconciliationEvaluations',
+      'persistenceReads', 'persistenceWrites',
     ].sort().join('|')
-    || Object.values(record.ownerInvocations).some((value) => !Number.isSafeInteger(value) || (value as number) < 0 || (value as number) > 1_000)) {
+    || Object.values(record.ownerInvocations).some((value) => !Number.isSafeInteger(value) || (value as number) < 0 || (value as number) > 1_000)
+    || ![0, 1].includes(record.ownerInvocations.persistenceReads as number)
+    || ![0, 1].includes(record.ownerInvocations.approvalUseReductions as number)
+    || record.ownerInvocations.persistenceWrites !== 1) {
     return failed('INVALID_PERSISTENCE_REQUEST', 'validate-only owner invocation evidence is malformed or unbounded');
+  }
+  if (record.approvalState !== null
+    && !validApprovalStateProjection(record.approvalState, String(record.approvalId))) {
+    return failed('INVALID_PERSISTENCE_REQUEST', 'validate-only approval state projection is invalid');
+  }
+  if (record.ownerInvocations.approvalUseReductions === 1 && record.approvalState === null) {
+    return failed('INVALID_PERSISTENCE_REQUEST', 'validate-only approval reduction is missing its owner state');
+  }
+  if (record.supervision !== null) {
+    if (!validSupervisionProjection(record.supervision, String(record.rootCorrelationId), Number(record.evaluatedAtMs))
+      || record.disposition !== 'RISK_REJECTED'
+      || record.executionPlan !== null
+      || record.executionState !== null
+      || record.reconciliation !== null
+      || record.riskPlanBinding !== null
+      || !isRecord(record.riskVerdict)
+      || record.riskVerdict.allowed !== false) {
+      return failed('INVALID_PERSISTENCE_REQUEST', 'validate-only prior-plan supervision projection is invalid or cross-bound');
+    }
   }
   if (record.executionPlan !== null) {
     if (!isRecord(record.executionPlan)
       || record.executionPlan.mode !== 'VALIDATE_ONLY'
       || !BOUNDED_ID.test(String(record.executionPlan.planId))
-      || !CORRELATION_ID.test(String(record.executionPlan.correlationId))) {
+      || !CORRELATION_ID.test(String(record.executionPlan.correlationId))
+      || record.executionCorrelationId !== record.executionPlan.correlationId
+      || !isRecord(record.riskPlanBinding)
+      || !hasExactKeys(record.riskPlanBinding, [
+        'planId', 'executionCorrelationId', 'foundationTermsFingerprint', 'riskDecisionId',
+        'mandateDigest', 'riskIntentDigest', 'executionTermsDigest',
+      ])
+      || record.riskPlanBinding.planId !== record.executionPlan.planId
+      || record.riskPlanBinding.executionCorrelationId !== record.executionPlan.correlationId
+      || record.riskPlanBinding.foundationTermsFingerprint !== record.executionPlan.termsFingerprint
+      || !BOUNDED_ID.test(String(record.riskPlanBinding.riskDecisionId))
+      || !DIGEST.test(String(record.riskPlanBinding.mandateDigest))
+      || !/^riskint_[0-9a-f]{32}$/.test(String(record.riskPlanBinding.riskIntentDigest))
+      || !/^[0-9a-f]{32}$/.test(String(record.riskPlanBinding.executionTermsDigest))
+      || !isRecord(record.boundRiskDecision)
+      || record.boundRiskDecision.decisionId !== record.riskPlanBinding.riskDecisionId
+      || record.boundRiskDecision.mandateId !== record.mandateId
+      || record.boundRiskDecision.mandateDigest !== record.riskPlanBinding.mandateDigest
+      || record.boundRiskDecision.externalPlanId !== record.executionPlan.planId
+      || record.boundRiskDecision.correlationId !== record.executionPlan.correlationId
+      || !isRecord(record.riskVerdict)
+      || record.riskVerdict.allowed !== true) {
       return failed('INVALID_PERSISTENCE_REQUEST', 'validate-only execution plan is invalid');
     }
+    if (record.executionState !== null && (
+      !isRecord(record.executionState)
+      || !isRecord(record.executionState.plan)
+      || record.executionState.plan.planId !== record.executionPlan.planId
+      || record.executionState.plan.correlationId !== record.executionPlan.correlationId
+      || record.executionState.plan.termsFingerprint !== record.executionPlan.termsFingerprint
+    )) return failed('INVALID_PERSISTENCE_REQUEST', 'validate-only execution state is not bound to its plan');
+  } else if (record.riskPlanBinding !== null || record.executionCorrelationId !== null || record.executionState !== null) {
+    return failed('INVALID_PERSISTENCE_REQUEST', 'pre-plan validate-only record contains plan-only binding state');
   }
   if (record.reconciliation !== null) {
     if (!isRecord(record.reconciliation)
@@ -749,6 +992,15 @@ export class SystemLedgerPersistenceAdapter {
    * ValidateOnlyPersistencePort. The domain record is validated as bounded,
    * secret-free plain data and committed exactly once with its trace.
    */
+  async loadValidateOnlyApprovalState(
+    approvalId: string,
+  ): Promise<Readonly<OperatorApprovalState> | null> {
+    if (!BOUNDED_ID.test(approvalId)) throw new TypeError('validate-only approval ID is invalid');
+    const current = this.currentState();
+    if (!current.ok) throw new Error(`${current.code}: ${current.message}`);
+    return latestValidateOnlyApprovalState(current.value, approvalId);
+  }
+
   async persistValidateOnly(record: unknown): Promise<Readonly<{ persistenceId: string }>> {
     const validated = validateOnlyRecord(record);
     if (!validated.ok) throw new Error(`${validated.code}: ${validated.message}`);
@@ -769,7 +1021,8 @@ export class SystemLedgerPersistenceAdapter {
       occurredAtMs,
       kind: 'EXECUTION',
       machinePhase: disposition === 'READY' ? 'RUNNING' : 'BLOCKED',
-      truthLabel: 'DRY_RUN',
+      truthLabel: (value.truthLabels as readonly SystemJsonValue[])[0] as SystemTraceEvent['truthLabel'],
+      releaseStatuses: value.releaseStatuses as SystemTraceEvent['releaseStatuses'],
       domainLifecycle: disposition,
       referenceIds: [
         value.recordId,
@@ -777,6 +1030,8 @@ export class SystemLedgerPersistenceAdapter {
         value.reservationId,
         value.approvalId,
         isRecord(value.executionPlan) ? value.executionPlan.planId : null,
+        isRecord(value.supervision) ? value.supervision.planId : null,
+        isRecord(value.riskPlanBinding) ? value.riskPlanBinding.riskDecisionId : null,
       ].flatMap((entry) => typeof entry === 'string' && BOUNDED_ID.test(entry) ? [entry] : []),
     });
     const persisted = this.applyIdempotentTransition({
@@ -786,11 +1041,14 @@ export class SystemLedgerPersistenceAdapter {
       occurredAtMs,
       traceEvent: trace,
       transition: (state) => {
+        assertApprovalStateCompareAndSet(state, value);
         let dryRunExecutions = state.dryRunExecutions;
         let reconciliations = state.reconciliations;
         const executionPlan = isRecord(value.executionPlan) ? value.executionPlan : null;
         const executionState = isRecord(value.executionState) ? value.executionState : null;
         const reconciliation = isRecord(value.reconciliation) ? value.reconciliation : null;
+        const riskPlanBinding = isRecord(value.riskPlanBinding) ? value.riskPlanBinding : null;
+        const supervision = isRecord(value.supervision) ? value.supervision : null;
         if (executionPlan) {
           const planId = String(executionPlan.planId);
           const lifecycleCandidate = executionState?.lifecycle;
@@ -810,6 +1068,7 @@ export class SystemLedgerPersistenceAdapter {
             stateRevisionId: executionState?.stateRevisionId ?? null,
             lifecycle: domainLifecycle,
             reconciliationStatus: reconciliation?.status ?? null,
+            riskPlanBinding,
             executionAuthority: 'NONE',
             liveExecutionPermitted: false,
           });
@@ -853,6 +1112,75 @@ export class SystemLedgerPersistenceAdapter {
           };
           reconciliations = [
             ...state.reconciliations.filter((entry) => entry.planId !== reconciliationReference.planId),
+            reconciliationReference,
+          ].sort((left, right) => left.planId.localeCompare(right.planId, 'en'));
+        }
+        if (supervision && isRecord(supervision.state) && isRecord(supervision.state.plan)) {
+          const supervisedState = supervision.state as Record<string, SystemJsonValue>;
+          const supervisedPlan = supervisedState.plan as Record<string, SystemJsonValue>;
+          const supervisedPlanId = String(supervision.planId);
+          const supervisedReconciliation = isRecord(supervision.reconciliation)
+            ? supervision.reconciliation
+            : null;
+          if (supervisedPlan.mode === 'VALIDATE_ONLY') {
+            const serializedCheckpoint = canonicalPersistenceJson({
+              schema: 'cosmos.system-integration.supervision-checkpoint.v1',
+              recordId,
+              disposition,
+              rootCorrelationId: supervision.rootCorrelationId,
+              executionCorrelationId: supervision.executionCorrelationId,
+              planId: supervisedPlanId,
+              stateRevision: supervisedState.revision,
+              stateRevisionId: supervisedState.stateRevisionId,
+              lifecycle: supervisedState.lifecycle,
+              reconciliationStatus: supervisedReconciliation?.status ?? null,
+              executionAuthority: 'NONE',
+              truthLabel: 'SYNTHETIC_ONLY',
+            });
+            const executionReference = {
+              planId: supervisedPlanId,
+              checkpointDigest: persistenceDigest(supervision),
+              serializedCheckpoint,
+              domainLifecycle: String(supervisedState.lifecycle),
+              dryRun: true as const,
+              requiresReconciliation: supervisedReconciliation === null
+                || supervisedReconciliation.status !== 'EXACT'
+                || supervisedState.exposedSinceMs !== null,
+              correlationId: String(supervision.executionCorrelationId),
+              updatedAtMs: occurredAtMs,
+            };
+            dryRunExecutions = [
+              ...dryRunExecutions.filter((entry) => entry.planId !== supervisedPlanId),
+              executionReference,
+            ].sort((left, right) => left.planId.localeCompare(right.planId, 'en'));
+          }
+          const reasons = supervisedReconciliation && Array.isArray(supervisedReconciliation.reasons)
+            ? supervisedReconciliation.reasons
+            : [];
+          const reasonCodes = supervisedReconciliation === null
+            ? ['SUPERVISION_RECONCILIATION_REQUIRED']
+            : [...new Set(reasons.flatMap((reason) => (
+                isRecord(reason)
+                  && typeof reason.code === 'string'
+                  && /^[A-Z][A-Z0-9_.:-]{0,127}$/.test(reason.code)
+                  ? [reason.code]
+                  : []
+              )))].sort().slice(0, SYSTEM_PERSISTENCE_LIMITS.maximumReasonCodes);
+          const reconciliationReference = {
+            planId: supervisedPlanId,
+            ownerRevision: persistenceDigest(supervisedReconciliation ?? supervisedState),
+            domainStatus: supervisedReconciliation === null
+              ? 'UNAVAILABLE'
+              : String(supervisedReconciliation.status),
+            allowsNewExposure: false,
+            reasonCodes,
+            correlationId: String(supervision.executionCorrelationId),
+            observedAtMs: supervisedReconciliation === null
+              ? occurredAtMs
+              : Number(supervisedReconciliation.evaluatedAtMs),
+          };
+          reconciliations = [
+            ...reconciliations.filter((entry) => entry.planId !== supervisedPlanId),
             reconciliationReference,
           ].sort((left, right) => left.planId.localeCompare(right.planId, 'en'));
         }

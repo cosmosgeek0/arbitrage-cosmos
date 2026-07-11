@@ -78,7 +78,7 @@ export interface InstrumentIdentity {
   symbol: string;
   pair: string | null;
   baseAsset: string;
-  quoteAsset: string;
+  quoteAsset: string | null;
   contractType: string | null;
   sourceMarketType: 1 | 2 | null;
 }
@@ -98,7 +98,7 @@ export interface NormalizedTrade extends EvidenceBase {
   price: number;
   baseQuantity: number;
   quoteQuantity: number;
-  normalQuoteQuantityExcludingRpi: number | null;
+  normalBaseQuantityExcludingRpi: number | null;
   aggressorSide: 'BUY' | 'SELL' | 'UNKNOWN';
 }
 
@@ -154,7 +154,8 @@ export interface NormalizedOpenInterest extends EvidenceBase {
 
 export interface NormalizedLiquidation extends EvidenceBase {
   kind: 'LIQUIDATION';
-  side: 'BUY' | 'SELL';
+  orderSide: 'BUY' | 'SELL';
+  liquidatedPositionSide: 'LONG' | 'SHORT';
   orderType: string;
   timeInForce: string;
   originalQuantity: number;
@@ -195,7 +196,9 @@ export type NormalizedEvidence =
 
 export interface FeatureValue {
   id: string;
+  instrumentId: string;
   feature: string;
+  featureVersion: string;
   value: number | string | boolean | null;
   unit: string;
   windowMs: number | null;
@@ -318,16 +321,17 @@ export interface ForensicCheck {
 }
 
 export interface FrozenPreEventRecord {
-  id: string;
-  triggerTimeMs: number;
-  candidateDisposition: 'ACCEPTED' | 'REJECTED' | 'OBSERVED';
-  thesis: ThesisPacket;
-  forensics: ForensicCheck[];
-  evidence: NormalizedEvidence[];
-  features: FeatureValue[];
-  configurationVersion: string;
-  featureVersion: string;
-  truth: TruthMetadata;
+  readonly id: string;
+  readonly triggerTimeMs: number;
+  readonly evidenceCutoffTimeMs: number;
+  readonly candidateDisposition: 'ACCEPTED' | 'REJECTED' | 'OBSERVED';
+  readonly thesis: ThesisPacket;
+  readonly forensics: readonly ForensicCheck[];
+  readonly evidence: readonly NormalizedEvidence[];
+  readonly features: readonly FeatureValue[];
+  readonly configurationVersion: string;
+  readonly featureVersion: string;
+  readonly truth: TruthMetadata;
 }
 
 export interface OutcomeMetrics {
@@ -379,6 +383,7 @@ export interface ComponentDescriptor {
   metrics: ComponentMetric[];
   safeControlsSupportedLater: string[];
   uiSurface: string;
+  truth: TruthMetadata;
 }
 
 export interface TopologyEdge {
@@ -387,6 +392,14 @@ export interface TopologyEdge {
   to: string;
   type: TopologyEdgeType;
   label: string;
+  truth: TruthMetadata;
+}
+
+export interface TopologySnapshot {
+  id: string;
+  nodes: ComponentDescriptor[];
+  edges: TopologyEdge[];
+  truth: TruthMetadata;
 }
 
 export interface StableFailure {

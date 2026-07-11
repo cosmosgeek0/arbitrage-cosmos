@@ -10,8 +10,9 @@ import {
   SOURCE_AUTHORITIES,
   SOURCE_ENDPOINT_CLASSES,
 } from './constants.js';
-import { stableId } from './ids.js';
+import { sortedUnique, stableId } from './ids.js';
 import type {
+  FrozenPreEventRecord,
   InstrumentIdentity,
   NormalizedEvidence,
   StableFailure,
@@ -19,29 +20,44 @@ import type {
   ValidationResult,
 } from './types.js';
 
-const FORBIDDEN_SECRET_KEY = /^(?:api[_-]?(?:key|secret)|secret|signature|authorization|password|passphrase|private[_-]?key|cookie|credentials?|access[_-]?token|refresh[_-]?token|session[_-]?token|aws[_-]?(?:secret|access[_-]?key))$/i;
+const FORBIDDEN_SECRET_KEY = /(?:^|[_-])(?:api[_-]?(?:key|secret)|secret|signature|authorization|password|passphrase|private[_-]?key|cookie|credentials?|auth[_-]?token|access[_-]?token|refresh[_-]?token|session[_-]?token|aws[_-]?(?:secret|access[_-]?key))(?:$|[_-])/i;
+
+function isForbiddenSecretKey(key: string): boolean {
+  if (FORBIDDEN_SECRET_KEY.test(key)) return true;
+  const compact = key.replace(/[^a-z0-9]/gi, '').toLowerCase();
+  return [
+    'apikey', 'apisecret', 'authorization', 'authtoken', 'accesstoken', 'refreshtoken',
+    'sessiontoken', 'privatekey', 'password', 'passphrase', 'signature', 'credentials',
+    'awssecretaccesskey',
+  ].some((fragment) => compact.includes(fragment));
+}
 
 const has = <T extends readonly string[]>(values: T, value: unknown): value is T[number] =>
   typeof value === 'string' && (values as readonly string[]).includes(value);
 
-function failure(
+export function makeStableFailure(
   code: StableFailure['code'],
   component: string,
   message: string,
   field: string | null,
   evidenceIds: string[] = [],
 ): StableFailure {
-  const semantic = { code, component, message, field, evidenceIds: [...evidenceIds].sort() };
+  const boundedComponent = component.slice(0, 96);
+  const boundedMessage = message.slice(0, 256);
+  const boundedField = field === null ? null : field.slice(0, 256);
+  const semantic = { code, component: boundedComponent, message: boundedMessage, field: boundedField, evidenceIds: sortedUnique(evidenceIds).slice(0, 256) };
   return {
     id: stableId('failure', semantic),
     code,
-    component,
-    message,
+    component: boundedComponent,
+    message: boundedMessage,
     retryable: ['MISSING_SOURCE', 'STALE_SOURCE', 'WRONG_ENDPOINT_CLASS', 'SEQUENCE_GAP', 'BUDGET_EXHAUSTED', 'UNAVAILABLE'].includes(code),
-    field,
+    field: boundedField,
     evidenceIds: semantic.evidenceIds,
   };
 }
+
+const failure = makeStableFailure;
 
 function object(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -53,6 +69,10 @@ function finite(value: unknown): value is number {
 
 function nonNegativeTime(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 0;
+}
+
+function positiveSafeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) > 0;
 }
 
 function positive(value: unknown): value is number {
@@ -67,13 +87,17 @@ function stringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
 }
 
+function nonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
 export function findForbiddenSecretField(value: unknown): string | null {
   const seen = new Set<object>();
   let visited = 0;
   const walk = (entry: unknown, path: string, depth: number): string | null => {
-    if (depth > 32 || ++visited > 50_000) return `${path}.[structure_limit]`;
+    if (depth > 32 || ++visited > 50_000) return null;
     if (entry === null || typeof entry !== 'object') return null;
-    if (seen.has(entry)) return `${path}.[cycle]`;
+    if (seen.has(entry)) return null;
     seen.add(entry);
     if (Array.isArray(entry)) {
       for (let index = 0; index < entry.length; index += 1) {
@@ -84,7 +108,7 @@ export function findForbiddenSecretField(value: unknown): string | null {
     }
     for (const [key, child] of Object.entries(entry as Record<string, unknown>)) {
       const next = `${path}.${key}`;
-      if (FORBIDDEN_SECRET_KEY.test(key)) return next;
+      if (isForbiddenSecretKey(key)) return next;
       const found = walk(child, next, depth + 1);
       if (found) return found;
     }
@@ -111,18 +135,21 @@ export function validateTruthMetadata(value: unknown): ValidationResult<TruthMet
   const freshness = value.freshness;
   const completeness = value.completeness;
   if (
-    typeof value.schemaVersion !== 'string' ||
-    typeof value.producerVersion !== 'string' ||
-    typeof value.configurationVersion !== 'string' ||
-    !(value.featureVersion === null || typeof value.featureVersion === 'string') ||
+    !nonEmptyString(value.schemaVersion) ||
+    !nonEmptyString(value.producerVersion) ||
+    !nonEmptyString(value.configurationVersion) ||
+    !(value.featureVersion === null || nonEmptyString(value.featureVersion)) ||
     !object(authority) ||
     !has(SOURCE_AUTHORITIES, authority.kind) ||
-    typeof authority.sourceId !== 'string' ||
-    typeof authority.dataset !== 'string' ||
+    !nonEmptyString(authority.sourceId) ||
+    !nonEmptyString(authority.dataset) ||
     !has(SOURCE_ENDPOINT_CLASSES, authority.endpointClass)
   ) return { ok: false, failure: failure('INVALID_VALUE', 'truth_metadata', 'invalid authority or version metadata', 'authority') };
   if (!object(provenance) || !stringArray(provenance.sourceRecordIds) || !stringArray(provenance.sourceSet) || !stringArray(provenance.transforms)) {
     return { ok: false, failure: failure('INVALID_VALUE', 'truth_metadata', 'invalid provenance', 'provenance') };
+  }
+  if (provenance.sourceSet.length === 0 || [...provenance.sourceRecordIds, ...provenance.sourceSet, ...provenance.transforms].some((entry) => entry.trim().length === 0)) {
+    return { ok: false, failure: failure('INVALID_VALUE', 'truth_metadata', 'provenance values must be non-empty and sourceSet cannot be empty', 'provenance') };
   }
   if (!object(temporal) || !nonNegativeTime(temporal.receivedTimeMs)) {
     return { ok: false, failure: failure('INVALID_VALUE', 'truth_metadata', 'received time must be a non-negative safe integer', 'temporal.receivedTimeMs') };
@@ -143,17 +170,97 @@ export function validateTruthMetadata(value: unknown): ValidationResult<TruthMet
     if (sequence.previous !== null && !/^\d+$/.test(sequence.previous)) {
       return { ok: false, failure: failure('INVALID_VALUE', 'truth_metadata', 'previous sequence must be a decimal string', 'temporal.sequence.previous') };
     }
+    if (BigInt(sequence.first) > BigInt(sequence.last)) {
+      return { ok: false, failure: failure('INVALID_VALUE', 'truth_metadata', 'sequence first must not exceed last', 'temporal.sequence') };
+    }
   }
   if (
     !object(freshness) || !has(FRESHNESS_BASES, freshness.basis) || !has(FRESHNESS_STATES, freshness.state) ||
     !nonNegativeTime(freshness.evaluatedAtMs) || !(freshness.ageMs === null || finite(freshness.ageMs) && freshness.ageMs >= 0) ||
     !(freshness.maxAgeMs === null || finite(freshness.maxAgeMs) && freshness.maxAgeMs >= 0)
   ) return { ok: false, failure: failure('INVALID_VALUE', 'truth_metadata', 'invalid freshness metadata', 'freshness') };
+  if (freshness.evaluatedAtMs < temporal.receivedTimeMs) {
+    return { ok: false, failure: failure('INVALID_VALUE', 'truth_metadata', 'freshness evaluation cannot precede receipt', 'freshness.evaluatedAtMs') };
+  }
+  const sourceEventTimeMs = temporal.sourceEventTimeMs as number | null;
+  const sourceTransactionTimeMs = temporal.sourceTransactionTimeMs as number | null;
+  const receivedTimeMs = temporal.receivedTimeMs as number;
+  const basisTime = freshness.basis === 'SOURCE_EVENT_TIME'
+    ? sourceEventTimeMs
+    : freshness.basis === 'SOURCE_TRANSACTION_TIME'
+      ? sourceTransactionTimeMs
+      : freshness.basis === 'RECEIVE_TIME'
+        ? receivedTimeMs
+        : null;
+  if (freshness.state === 'FRESH' || freshness.state === 'STALE') {
+    if (basisTime === null || freshness.ageMs === null || freshness.maxAgeMs === null || freshness.basis === 'UNAVAILABLE') {
+      return { ok: false, failure: failure('INVALID_VALUE', 'truth_metadata', 'fresh or stale truth requires a timestamp basis and age threshold', 'freshness') };
+    }
+    if (freshness.ageMs !== freshness.evaluatedAtMs - basisTime) {
+      return { ok: false, failure: failure('INVALID_VALUE', 'truth_metadata', 'freshness age must match its declared time basis', 'freshness.ageMs') };
+    }
+    if (freshness.state === 'FRESH' && freshness.ageMs > freshness.maxAgeMs) {
+      return { ok: false, failure: failure('INVALID_VALUE', 'truth_metadata', 'fresh truth exceeds its maximum age', 'freshness.state') };
+    }
+    if (freshness.state === 'STALE' && freshness.ageMs <= freshness.maxAgeMs) {
+      return { ok: false, failure: failure('INVALID_VALUE', 'truth_metadata', 'stale truth has not exceeded its maximum age', 'freshness.state') };
+    }
+  }
+  if (freshness.state === 'UNAVAILABLE' && freshness.ageMs !== null) {
+    return { ok: false, failure: failure('INVALID_VALUE', 'truth_metadata', 'unavailable truth cannot claim an age', 'freshness.ageMs') };
+  }
   if (
     !object(completeness) || !has(COMPLETENESS_STATES, completeness.state) ||
     !stringArray(completeness.observedFields) || !stringArray(completeness.missingFields) || !stringArray(completeness.reasonCodes)
   ) return { ok: false, failure: failure('INVALID_VALUE', 'truth_metadata', 'invalid completeness metadata', 'completeness') };
-  return { ok: true, value: value as unknown as TruthMetadata };
+  if (completeness.state === 'COMPLETE' && completeness.missingFields.length > 0) {
+    return { ok: false, failure: failure('INVALID_VALUE', 'truth_metadata', 'complete truth cannot list missing fields', 'completeness.missingFields') };
+  }
+  if (completeness.state === 'MISSING' && completeness.missingFields.length === 0) {
+    return { ok: false, failure: failure('INVALID_VALUE', 'truth_metadata', 'missing truth must name missing fields', 'completeness.missingFields') };
+  }
+  const observedFields = sortedUnique(completeness.observedFields);
+  const missingFields = sortedUnique(completeness.missingFields);
+  if (observedFields.some((field) => missingFields.includes(field))) {
+    return { ok: false, failure: failure('INVALID_VALUE', 'truth_metadata', 'a field cannot be both observed and missing', 'completeness') };
+  }
+  const normalized: TruthMetadata = {
+    schemaVersion: value.schemaVersion,
+    producerVersion: value.producerVersion,
+    configurationVersion: value.configurationVersion,
+    featureVersion: value.featureVersion,
+    authority: {
+      kind: authority.kind,
+      sourceId: authority.sourceId,
+      dataset: authority.dataset,
+      endpointClass: authority.endpointClass,
+    },
+    provenance: {
+      sourceRecordIds: sortedUnique(provenance.sourceRecordIds),
+      sourceSet: sortedUnique(provenance.sourceSet),
+      transforms: sortedUnique(provenance.transforms),
+    },
+    temporal: {
+      sourceEventTimeMs,
+      sourceTransactionTimeMs,
+      receivedTimeMs,
+      sequence: temporal.sequence as TruthMetadata['temporal']['sequence'],
+    },
+    freshness: {
+      basis: freshness.basis,
+      evaluatedAtMs: freshness.evaluatedAtMs,
+      ageMs: freshness.ageMs as number | null,
+      maxAgeMs: freshness.maxAgeMs as number | null,
+      state: freshness.state,
+    },
+    completeness: {
+      state: completeness.state,
+      observedFields,
+      missingFields,
+      reasonCodes: sortedUnique(completeness.reasonCodes),
+    },
+  };
+  return { ok: true, value: normalized };
 }
 
 export function validateInstrumentIdentity(value: unknown): ValidationResult<InstrumentIdentity> {
@@ -161,17 +268,62 @@ export function validateInstrumentIdentity(value: unknown): ValidationResult<Ins
   if (!secret.ok) return secret as ValidationResult<InstrumentIdentity>;
   if (!object(value)) return { ok: false, failure: failure('INVALID_VALUE', 'instrument_identity', 'instrument identity must be an object', null) };
   if (
-    typeof value.instrumentId !== 'string' || !['BINANCE', 'OTHER', 'UNKNOWN'].includes(String(value.venue)) ||
-    !has(PRODUCT_FAMILIES, value.productFamily) || typeof value.symbol !== 'string' ||
-    !(value.pair === null || typeof value.pair === 'string') || typeof value.baseAsset !== 'string' ||
-    typeof value.quoteAsset !== 'string' || !(value.contractType === null || typeof value.contractType === 'string') ||
+    !nonEmptyString(value.instrumentId) || !['BINANCE', 'OTHER', 'UNKNOWN'].includes(String(value.venue)) ||
+    !has(PRODUCT_FAMILIES, value.productFamily) || !nonEmptyString(value.symbol) ||
+    !(value.pair === null || nonEmptyString(value.pair)) || !nonEmptyString(value.baseAsset) ||
+    !(value.quoteAsset === null || nonEmptyString(value.quoteAsset)) || !(value.contractType === null || nonEmptyString(value.contractType)) ||
     !(value.sourceMarketType === null || value.sourceMarketType === 1 || value.sourceMarketType === 2)
   ) return { ok: false, failure: failure('INVALID_VALUE', 'instrument_identity', 'invalid instrument identity', null) };
-  return { ok: true, value: value as unknown as InstrumentIdentity };
+  if (
+    (value.productFamily === 'USD_M_PERPETUAL' && value.sourceMarketType !== 1) ||
+    (value.productFamily === 'COIN_M_PERPETUAL' && value.sourceMarketType !== 2) ||
+    (!['USD_M_PERPETUAL', 'COIN_M_PERPETUAL'].includes(value.productFamily) && value.sourceMarketType !== null)
+  ) return { ok: false, failure: failure('INVALID_VALUE', 'instrument_identity', 'product family conflicts with source market type', 'sourceMarketType') };
+  if (value.productFamily !== 'BORROW' && value.quoteAsset === null) {
+    return { ok: false, failure: failure('INVALID_VALUE', 'instrument_identity', 'non-borrow instruments require a quote asset', 'quoteAsset') };
+  }
+  return {
+    ok: true,
+    value: {
+      instrumentId: value.instrumentId,
+      venue: value.venue as InstrumentIdentity['venue'],
+      productFamily: value.productFamily,
+      symbol: value.symbol,
+      pair: value.pair as string | null,
+      baseAsset: value.baseAsset,
+      quoteAsset: value.quoteAsset as string | null,
+      contractType: value.contractType as string | null,
+      sourceMarketType: value.sourceMarketType as 1 | 2 | null,
+    },
+  };
 }
 
-function validateLevels(value: unknown): boolean {
-  return Array.isArray(value) && value.every((level) => object(level) && positive(level.price) && finite(level.baseQuantity) && level.baseQuantity >= 0);
+function decimalStringOrNull(value: unknown): boolean {
+  return value === null || typeof value === 'string' && /^\d+$/.test(value);
+}
+
+function nullableFinite(value: unknown): boolean {
+  return value === null || finite(value);
+}
+
+function nullableNonNegative(value: unknown): boolean {
+  return value === null || finite(value) && value >= 0;
+}
+
+function validateLevels(value: unknown, allowZero: boolean, descending: boolean): boolean {
+  if (!Array.isArray(value)) return false;
+  let previous: number | null = null;
+  for (const level of value) {
+    if (!object(level) || !positive(level.price) || !finite(level.baseQuantity) || (allowZero ? level.baseQuantity < 0 : level.baseQuantity <= 0)) return false;
+    if (previous !== null && (descending ? level.price >= previous : level.price <= previous)) return false;
+    previous = level.price;
+  }
+  return true;
+}
+
+function contextValues(value: unknown): value is Record<string, string | number | boolean | null> {
+  return object(value) && Object.values(value).every((entry) =>
+    entry === null || typeof entry === 'string' || typeof entry === 'boolean' || finite(entry));
 }
 
 export function validateNormalizedEvidence(value: unknown): ValidationResult<NormalizedEvidence> {
@@ -180,65 +332,239 @@ export function validateNormalizedEvidence(value: unknown): ValidationResult<Nor
   if (!object(value) || !has(EVIDENCE_KINDS, value.kind)) {
     return { ok: false, failure: failure('INVALID_VARIANT', 'normalized_evidence', 'unknown evidence variant', 'kind') };
   }
-  if (typeof value.id !== 'string') return { ok: false, failure: failure('INVALID_VALUE', 'normalized_evidence', 'evidence id is required', 'id') };
+  if (!nonEmptyString(value.id)) return { ok: false, failure: failure('INVALID_VALUE', 'normalized_evidence', 'evidence id is required', 'id') };
   const instrument = validateInstrumentIdentity(value.instrument);
   if (!instrument.ok) return instrument as ValidationResult<NormalizedEvidence>;
   const truth = validateTruthMetadata(value.truth);
   if (!truth.ok) return truth as ValidationResult<NormalizedEvidence>;
+  const common = { id: value.id, instrument: instrument.value, truth: truth.value };
   switch (value.kind) {
-    case 'TRADE':
-      if (!positive(value.price) || !positive(value.baseQuantity) || !positive(value.quoteQuantity) || !nullablePositive(value.normalQuoteQuantityExcludingRpi) || !['BUY', 'SELL', 'UNKNOWN'].includes(String(value.aggressorSide))) {
+    case 'TRADE': {
+      if (
+        !decimalStringOrNull(value.aggregateTradeId) || !decimalStringOrNull(value.firstTradeId) || !decimalStringOrNull(value.lastTradeId) ||
+        !positive(value.price) || !positive(value.baseQuantity) || !positive(value.quoteQuantity) ||
+        !nullablePositive(value.normalBaseQuantityExcludingRpi) || !['BUY', 'SELL', 'UNKNOWN'].includes(String(value.aggressorSide))
+      ) {
         return { ok: false, failure: failure('INVALID_VALUE', 'normalized_evidence', 'invalid trade values', null) };
       }
-      break;
-    case 'BOOK_TICKER':
-      if (!positive(value.bidPrice) || !positive(value.askPrice) || !positive(value.bidQuantity) || !positive(value.askQuantity)) {
+      if (value.firstTradeId !== null && value.lastTradeId !== null && BigInt(value.firstTradeId as string) > BigInt(value.lastTradeId as string)) {
+        return { ok: false, failure: failure('INVALID_VALUE', 'normalized_evidence', 'trade ID range is reversed', 'firstTradeId') };
+      }
+      return { ok: true, value: { ...common, kind: 'TRADE', aggregateTradeId: value.aggregateTradeId as string | null, firstTradeId: value.firstTradeId as string | null, lastTradeId: value.lastTradeId as string | null, price: value.price, baseQuantity: value.baseQuantity, quoteQuantity: value.quoteQuantity, normalBaseQuantityExcludingRpi: value.normalBaseQuantityExcludingRpi as number | null, aggressorSide: value.aggressorSide as 'BUY' | 'SELL' | 'UNKNOWN' } };
+    }
+    case 'BOOK_TICKER': {
+      if (!decimalStringOrNull(value.updateId) || !positive(value.bidPrice) || !positive(value.askPrice) || !positive(value.bidQuantity) || !positive(value.askQuantity)) {
         return { ok: false, failure: failure('INVALID_VALUE', 'normalized_evidence', 'invalid book ticker values', null) };
       }
       if (value.bidPrice >= value.askPrice) return { ok: false, failure: failure('CROSSED_BOOK', 'normalized_evidence', 'best bid must be below best ask', null, [value.id]) };
-      break;
+      return { ok: true, value: { ...common, kind: 'BOOK_TICKER', updateId: value.updateId as string | null, bidPrice: value.bidPrice, bidQuantity: value.bidQuantity, askPrice: value.askPrice, askQuantity: value.askQuantity } };
+    }
     case 'DEPTH_SNAPSHOT':
-    case 'DEPTH_DELTA':
-      if (!validateLevels(value.bids) || !validateLevels(value.asks) || !['STANDARD_NO_RPI', 'RPI_INCLUDED', 'UNKNOWN'].includes(String(value.bookScope))) {
+    case 'DEPTH_DELTA': {
+      const allowZero = value.kind === 'DEPTH_DELTA';
+      if (
+        !validateLevels(value.bids, allowZero, true) || !validateLevels(value.asks, allowZero, false) ||
+        !['STANDARD_NO_RPI', 'RPI_INCLUDED', 'UNKNOWN'].includes(String(value.bookScope)) ||
+        !(value.maximumLevelsKnown === null || positiveSafeInteger(value.maximumLevelsKnown)) ||
+        truth.value.temporal.sequence === null
+      ) {
         return { ok: false, failure: failure('INVALID_VALUE', 'normalized_evidence', 'invalid depth values', null) };
       }
-      break;
-    case 'MARK_PRICE':
+      const bids = value.bids as { price: number; baseQuantity: number }[];
+      const asks = value.asks as { price: number; baseQuantity: number }[];
+      if (bids.length > 0 && asks.length > 0 && bids[0].price >= asks[0].price) {
+        return { ok: false, failure: failure('CROSSED_BOOK', 'normalized_evidence', 'depth best bid must be below best ask', null, [value.id]) };
+      }
+      return { ok: true, value: { ...common, kind: value.kind, bids: bids.map((level) => ({ ...level })), asks: asks.map((level) => ({ ...level })), bookScope: value.bookScope as 'STANDARD_NO_RPI' | 'RPI_INCLUDED' | 'UNKNOWN', maximumLevelsKnown: value.maximumLevelsKnown as number | null } };
+    }
+    case 'MARK_PRICE': {
       if (!positive(value.markPrice) || !nullablePositive(value.indexPrice) || !nullablePositive(value.estimatedSettlementPrice) || !nullablePositive(value.movingAverageMarkPrice)) {
         return { ok: false, failure: failure('INVALID_VALUE', 'normalized_evidence', 'invalid mark-price values', null) };
       }
-      break;
-    case 'FUNDING':
-      if (!finite(value.fundingRate) || !(value.fundingIntervalHours === null || positive(value.fundingIntervalHours)) || !(value.nextFundingTimeMs === null || nonNegativeTime(value.nextFundingTimeMs))) {
+      return { ok: true, value: { ...common, kind: 'MARK_PRICE', markPrice: value.markPrice, indexPrice: value.indexPrice as number | null, estimatedSettlementPrice: value.estimatedSettlementPrice as number | null, movingAverageMarkPrice: value.movingAverageMarkPrice as number | null } };
+    }
+    case 'FUNDING': {
+      if (
+        !finite(value.fundingRate) || !(value.fundingIntervalHours === null || positive(value.fundingIntervalHours)) ||
+        !(value.nextFundingTimeMs === null || nonNegativeTime(value.nextFundingTimeMs)) ||
+        !nullableFinite(value.adjustedRateCap) || !nullableFinite(value.adjustedRateFloor) ||
+        (finite(value.adjustedRateCap) && finite(value.adjustedRateFloor) && value.adjustedRateFloor > value.adjustedRateCap)
+      ) {
         return { ok: false, failure: failure('INVALID_VALUE', 'normalized_evidence', 'invalid funding values', null) };
       }
-      break;
-    case 'OPEN_INTEREST':
-      if (![value.openInterestBase, value.openInterestQuoteValue, value.changeBase, value.changeQuoteValue].every((entry) => entry === null || finite(entry))) {
+      return { ok: true, value: { ...common, kind: 'FUNDING', fundingRate: value.fundingRate, fundingIntervalHours: value.fundingIntervalHours as number | null, nextFundingTimeMs: value.nextFundingTimeMs as number | null, adjustedRateCap: value.adjustedRateCap as number | null, adjustedRateFloor: value.adjustedRateFloor as number | null } };
+    }
+    case 'OPEN_INTEREST': {
+      if (
+        !nullableNonNegative(value.openInterestBase) || !nullableNonNegative(value.openInterestQuoteValue) ||
+        !nullableFinite(value.changeBase) || !nullableFinite(value.changeQuoteValue) ||
+        !(value.comparisonWindowMs === null || positiveSafeInteger(value.comparisonWindowMs)) ||
+        value.openInterestBase === null && value.openInterestQuoteValue === null
+      ) {
         return { ok: false, failure: failure('INVALID_VALUE', 'normalized_evidence', 'invalid open-interest values', null) };
       }
-      break;
-    case 'LIQUIDATION':
-      if (!['BUY', 'SELL'].includes(String(value.side)) || !positive(value.originalQuantity) || !finite(value.filledQuantity) || value.filledQuantity < 0 || typeof value.sampledLatestPerWindow !== 'boolean') {
+      return { ok: true, value: { ...common, kind: 'OPEN_INTEREST', openInterestBase: value.openInterestBase as number | null, openInterestQuoteValue: value.openInterestQuoteValue as number | null, changeBase: value.changeBase as number | null, changeQuoteValue: value.changeQuoteValue as number | null, comparisonWindowMs: value.comparisonWindowMs as number | null } };
+    }
+    case 'LIQUIDATION': {
+      if (
+        !['BUY', 'SELL'].includes(String(value.orderSide)) || !['LONG', 'SHORT'].includes(String(value.liquidatedPositionSide)) ||
+        !nonEmptyString(value.orderType) || !nonEmptyString(value.timeInForce) || !positive(value.originalQuantity) ||
+        !finite(value.filledQuantity) || value.filledQuantity < 0 || value.filledQuantity > value.originalQuantity ||
+        !nullablePositive(value.averagePrice) || typeof value.sampledLatestPerWindow !== 'boolean' ||
+        !(value.sampleWindowMs === null || positiveSafeInteger(value.sampleWindowMs)) ||
+        (value.sampledLatestPerWindow && value.sampleWindowMs === null)
+      ) {
         return { ok: false, failure: failure('INVALID_VALUE', 'normalized_evidence', 'invalid liquidation values', null) };
       }
-      break;
-    case 'BORROW':
-      if (typeof value.asset !== 'string' || !['ELIGIBLE', 'INELIGIBLE', 'UNKNOWN'].includes(String(value.eligibility)) || !['AVAILABLE', 'UNAVAILABLE', 'UNKNOWN'].includes(String(value.availability))) {
+      return { ok: true, value: { ...common, kind: 'LIQUIDATION', orderSide: value.orderSide as 'BUY' | 'SELL', liquidatedPositionSide: value.liquidatedPositionSide as 'LONG' | 'SHORT', orderType: value.orderType, timeInForce: value.timeInForce, originalQuantity: value.originalQuantity, filledQuantity: value.filledQuantity, averagePrice: value.averagePrice as number | null, sampledLatestPerWindow: value.sampledLatestPerWindow, sampleWindowMs: value.sampleWindowMs as number | null } };
+    }
+    case 'BORROW': {
+      if (
+        !nonEmptyString(value.asset) || !['ELIGIBLE', 'INELIGIBLE', 'UNKNOWN'].includes(String(value.eligibility)) ||
+        !['AVAILABLE', 'UNAVAILABLE', 'UNKNOWN'].includes(String(value.availability)) ||
+        !nullableNonNegative(value.systemAvailableAmount) || !nullableNonNegative(value.accountBorrowLimit) ||
+        !nullableNonNegative(value.hourlyInterestRate) || !nullableNonNegative(value.inventoryAmount) ||
+        (value.availability === 'AVAILABLE' && !positive(value.systemAvailableAmount)) ||
+        (value.availability === 'UNKNOWN' && value.systemAvailableAmount !== null)
+      ) {
         return { ok: false, failure: failure('INVALID_VALUE', 'normalized_evidence', 'invalid borrow values', null) };
       }
-      break;
-    case 'CONTEXT':
-      if (typeof value.contextType !== 'string' || !['SYMBOL', 'SECTOR', 'MARKET', 'VENUE'].includes(String(value.scope)) || !object(value.values)) {
+      return { ok: true, value: { ...common, kind: 'BORROW', asset: value.asset, eligibility: value.eligibility as 'ELIGIBLE' | 'INELIGIBLE' | 'UNKNOWN', availability: value.availability as 'AVAILABLE' | 'UNAVAILABLE' | 'UNKNOWN', systemAvailableAmount: value.systemAvailableAmount as number | null, accountBorrowLimit: value.accountBorrowLimit as number | null, hourlyInterestRate: value.hourlyInterestRate as number | null, inventoryAmount: value.inventoryAmount as number | null } };
+    }
+    case 'CONTEXT': {
+      if (!nonEmptyString(value.contextType) || !['SYMBOL', 'SECTOR', 'MARKET', 'VENUE'].includes(String(value.scope)) || !contextValues(value.values)) {
         return { ok: false, failure: failure('INVALID_VALUE', 'normalized_evidence', 'invalid context values', null) };
       }
-      break;
+      return { ok: true, value: { ...common, kind: 'CONTEXT', contextType: value.contextType, scope: value.scope as 'SYMBOL' | 'SECTOR' | 'MARKET' | 'VENUE', values: { ...value.values } } };
+    }
     default: {
       const exhaustive: never = value.kind;
       return { ok: false, failure: failure('INVALID_VARIANT', 'normalized_evidence', `unknown evidence variant ${String(exhaustive)}`, 'kind') };
     }
   }
-  return { ok: true, value: value as unknown as NormalizedEvidence };
+}
+
+function truthCutoffFailure(value: unknown, cutoffTimeMs: number, field: string, evidenceId: string): StableFailure | null {
+  const validated = validateTruthMetadata(value);
+  if (!validated.ok) return validated.failure;
+  const temporal = validated.value.temporal;
+  const timestamps = [
+    ['receivedTimeMs', temporal.receivedTimeMs],
+    ['sourceEventTimeMs', temporal.sourceEventTimeMs],
+    ['sourceTransactionTimeMs', temporal.sourceTransactionTimeMs],
+    ['freshness.evaluatedAtMs', validated.value.freshness.evaluatedAtMs],
+  ] as const;
+  for (const [name, timestamp] of timestamps) {
+    if (timestamp !== null && timestamp > cutoffTimeMs) {
+      return failure('NO_LOOK_AHEAD_VIOLATION', 'frozen_pre_event', 'epistemic timestamp exceeds the frozen evidence cutoff', `${field}.${name}`, [evidenceId]);
+    }
+  }
+  return null;
+}
+
+export function validateFrozenPreEventRecord(value: unknown): ValidationResult<FrozenPreEventRecord> {
+  const secret = validateNoSecretFields(value, 'frozen_pre_event');
+  if (!secret.ok) return secret as ValidationResult<FrozenPreEventRecord>;
+  if (!object(value) || !nonEmptyString(value.id) || !nonNegativeTime(value.triggerTimeMs) || !nonNegativeTime(value.evidenceCutoffTimeMs)) {
+    return { ok: false, failure: failure('INVALID_VALUE', 'frozen_pre_event', 'invalid frozen-record identity or time', null) };
+  }
+  if (value.evidenceCutoffTimeMs > value.triggerTimeMs) {
+    return { ok: false, failure: failure('NO_LOOK_AHEAD_VIOLATION', 'frozen_pre_event', 'evidence cutoff cannot follow the trigger', 'evidenceCutoffTimeMs', [value.id]) };
+  }
+  if (!['ACCEPTED', 'REJECTED', 'OBSERVED'].includes(String(value.candidateDisposition)) || !nonEmptyString(value.configurationVersion) || !nonEmptyString(value.featureVersion)) {
+    return { ok: false, failure: failure('INVALID_VALUE', 'frozen_pre_event', 'invalid disposition or version', null, [value.id]) };
+  }
+  if (!Array.isArray(value.evidence) || !Array.isArray(value.features) || !Array.isArray(value.forensics) || !object(value.thesis)) {
+    return { ok: false, failure: failure('INVALID_VALUE', 'frozen_pre_event', 'frozen evidence, features, forensics, and thesis are required', null, [value.id]) };
+  }
+  const recordTruth = validateTruthMetadata(value.truth);
+  if (!recordTruth.ok) return recordTruth as ValidationResult<FrozenPreEventRecord>;
+  const topCutoff = truthCutoffFailure(value.truth, value.evidenceCutoffTimeMs, 'truth', value.id);
+  if (topCutoff) return { ok: false, failure: topCutoff };
+  if (recordTruth.value.configurationVersion !== value.configurationVersion || recordTruth.value.featureVersion !== value.featureVersion) {
+    return { ok: false, failure: failure('INVALID_VALUE', 'frozen_pre_event', 'record truth versions do not match the frozen record', 'truth', [value.id]) };
+  }
+
+  const thesis = value.thesis;
+  if (!nonEmptyString(thesis.id) || !nonEmptyString(thesis.instrumentId) || !(thesis.changedAtMs === null || nonNegativeTime(thesis.changedAtMs))) {
+    return { ok: false, failure: failure('INVALID_VALUE', 'frozen_pre_event', 'invalid thesis identity or change time', 'thesis', [value.id]) };
+  }
+  if (thesis.changedAtMs !== null && thesis.changedAtMs > value.evidenceCutoffTimeMs) {
+    return { ok: false, failure: failure('NO_LOOK_AHEAD_VIOLATION', 'frozen_pre_event', 'thesis change time exceeds the frozen evidence cutoff', 'thesis.changedAtMs', [thesis.id]) };
+  }
+  const thesisCutoff = truthCutoffFailure(thesis.truth, value.evidenceCutoffTimeMs, 'thesis.truth', thesis.id);
+  if (thesisCutoff) return { ok: false, failure: thesisCutoff };
+
+  const evidenceIds = new Set<string>();
+  for (let index = 0; index < value.evidence.length; index += 1) {
+    const validated = validateNormalizedEvidence(value.evidence[index]);
+    if (!validated.ok) return validated as ValidationResult<FrozenPreEventRecord>;
+    if (validated.value.instrument.instrumentId !== thesis.instrumentId) {
+      return { ok: false, failure: failure('INVALID_VALUE', 'frozen_pre_event', 'cross-instrument evidence is not allowed', `evidence[${index}].instrument`, [validated.value.id]) };
+    }
+    if (evidenceIds.has(validated.value.id)) return { ok: false, failure: failure('INVALID_VALUE', 'frozen_pre_event', 'duplicate evidence ID', `evidence[${index}].id`, [validated.value.id]) };
+    evidenceIds.add(validated.value.id);
+    const cutoff = truthCutoffFailure(validated.value.truth, value.evidenceCutoffTimeMs, `evidence[${index}].truth`, validated.value.id);
+    if (cutoff) return { ok: false, failure: cutoff };
+  }
+
+  const featureIds = new Set<string>();
+  for (let index = 0; index < value.features.length; index += 1) {
+    const feature = value.features[index];
+    if (
+      !object(feature) || !nonEmptyString(feature.id) || featureIds.has(feature.id) ||
+      feature.instrumentId !== thesis.instrumentId || !nonEmptyString(feature.feature) ||
+      feature.featureVersion !== value.featureVersion ||
+      !(feature.value === null || typeof feature.value === 'string' || typeof feature.value === 'boolean' || finite(feature.value)) ||
+      !(feature.windowMs === null || positiveSafeInteger(feature.windowMs)) ||
+      !(feature.observationStartMs === null || nonNegativeTime(feature.observationStartMs)) ||
+      !(feature.observationEndMs === null || nonNegativeTime(feature.observationEndMs)) ||
+      (feature.observationStartMs !== null && feature.observationEndMs !== null && feature.observationStartMs > feature.observationEndMs)
+    ) return { ok: false, failure: failure('INVALID_VALUE', 'frozen_pre_event', 'invalid or duplicate feature', `features[${index}]`, object(feature) && typeof feature.id === 'string' ? [feature.id] : []) };
+    featureIds.add(feature.id);
+    if (feature.observationEndMs !== null && feature.observationEndMs > value.evidenceCutoffTimeMs) {
+      return { ok: false, failure: failure('NO_LOOK_AHEAD_VIOLATION', 'frozen_pre_event', 'feature observation exceeds the frozen evidence cutoff', `features[${index}].observationEndMs`, [feature.id]) };
+    }
+    const featureTruth = validateTruthMetadata(feature.truth);
+    if (!featureTruth.ok) return featureTruth as ValidationResult<FrozenPreEventRecord>;
+    if (featureTruth.value.featureVersion !== value.featureVersion) {
+      return { ok: false, failure: failure('INVALID_VALUE', 'frozen_pre_event', 'feature truth version mismatch', `features[${index}].truth.featureVersion`, [feature.id]) };
+    }
+    const cutoff = truthCutoffFailure(feature.truth, value.evidenceCutoffTimeMs, `features[${index}].truth`, feature.id);
+    if (cutoff) return { ok: false, failure: cutoff };
+  }
+
+  const factGroups = ['supporting', 'conflicting', 'neutral', 'unavailable'] as const;
+  for (const group of factGroups) {
+    const facts = thesis[group];
+    if (!Array.isArray(facts)) return { ok: false, failure: failure('INVALID_VALUE', 'frozen_pre_event', 'thesis evidence group must be an array', `thesis.${group}`, [thesis.id]) };
+    for (let index = 0; index < facts.length; index += 1) {
+      const fact = facts[index];
+      if (!object(fact) || !nonEmptyString(fact.id) || !(fact.observationEndMs === null || nonNegativeTime(fact.observationEndMs))) {
+        return { ok: false, failure: failure('INVALID_VALUE', 'frozen_pre_event', 'invalid thesis evidence fact', `thesis.${group}[${index}]`, [thesis.id]) };
+      }
+      if (fact.observationEndMs !== null && fact.observationEndMs > value.evidenceCutoffTimeMs) {
+        return { ok: false, failure: failure('NO_LOOK_AHEAD_VIOLATION', 'frozen_pre_event', 'thesis evidence exceeds the frozen evidence cutoff', `thesis.${group}[${index}].observationEndMs`, [fact.id]) };
+      }
+      const cutoff = truthCutoffFailure(fact.truth, value.evidenceCutoffTimeMs, `thesis.${group}[${index}].truth`, fact.id);
+      if (cutoff) return { ok: false, failure: cutoff };
+    }
+  }
+
+  const forensicIds = new Set<string>();
+  for (let index = 0; index < value.forensics.length; index += 1) {
+    const check = value.forensics[index];
+    if (!object(check) || !nonEmptyString(check.id) || forensicIds.has(check.id) || !(check.observationEndMs === null || nonNegativeTime(check.observationEndMs))) {
+      return { ok: false, failure: failure('INVALID_VALUE', 'frozen_pre_event', 'invalid or duplicate forensic check', `forensics[${index}]`, object(check) && typeof check.id === 'string' ? [check.id] : []) };
+    }
+    forensicIds.add(check.id);
+    if (check.observationEndMs !== null && check.observationEndMs > value.evidenceCutoffTimeMs) {
+      return { ok: false, failure: failure('NO_LOOK_AHEAD_VIOLATION', 'frozen_pre_event', 'forensic observation exceeds the frozen evidence cutoff', `forensics[${index}].observationEndMs`, [check.id]) };
+    }
+    const cutoff = truthCutoffFailure(check.truth, value.evidenceCutoffTimeMs, `forensics[${index}].truth`, check.id);
+    if (cutoff) return { ok: false, failure: cutoff };
+  }
+  return { ok: true, value: value as unknown as FrozenPreEventRecord };
 }
 
 export function isMarketStage(value: unknown): boolean {

@@ -6,6 +6,8 @@ import {
   canonicalJson,
   isEvidencePolarity,
   stableId,
+  stableSetId,
+  validateFrozenPreEventRecord,
   validateNormalizedEvidence,
   validateTruthMetadata,
 } from '../../../dist/intelligenceFoundation/contracts/index.js';
@@ -65,6 +67,17 @@ test('stable IDs ignore property order and distinguish product family', () => {
   assert.notEqual(instrument('USD_M_PERPETUAL', 1).instrumentId, instrument('COIN_M_PERPETUAL', 2).instrumentId);
 });
 
+test('set-like stable IDs ignore member position while canonical JSON rejects exotic or cyclic objects', () => {
+  assert.equal(
+    stableSetId('packet', { instrument: 'BTCUSDT', ids: ['b', 'a'] }, ['ids']),
+    stableSetId('packet', { ids: ['a', 'b'], instrument: 'BTCUSDT' }, ['ids']),
+  );
+  assert.throws(() => canonicalJson(new Date(0)), /non-plain/);
+  const cyclic = {};
+  cyclic.self = cyclic;
+  assert.throws(() => canonicalJson(cyclic), /cyclic/);
+});
+
 test('truth metadata preserves source and receive time separately', () => {
   const result = validateTruthMetadata(truth({
     temporal: {
@@ -88,6 +101,15 @@ test('unsafe numeric sequence IDs are rejected while decimal strings survive', (
   assert.equal(result.failure.code, 'INVALID_VALUE');
 });
 
+test('contradictory freshness and completeness claims are rejected', () => {
+  const staleClaimedFresh = truth();
+  staleClaimedFresh.freshness = { ...staleClaimedFresh.freshness, ageMs: 2_000, maxAgeMs: 1_000 };
+  assert.equal(validateTruthMetadata(staleClaimedFresh).ok, false);
+  const missingClaimedComplete = truth();
+  missingClaimedComplete.completeness = { ...missingClaimedComplete.completeness, missingFields: ['depth'] };
+  assert.equal(validateTruthMetadata(missingClaimedComplete).ok, false);
+});
+
 test('invalid variants and crossed books produce stable structured failures', () => {
   const base = { id: 'e:1', instrument: instrument(), truth: truth() };
   const variant = validateNormalizedEvidence({ ...base, kind: 'PUMP_PROBABILITY' });
@@ -106,6 +128,34 @@ test('invalid variants and crossed books produce stable structured failures', ()
   assert.equal(crossed.failure.code, 'CROSSED_BOOK');
 });
 
+test('depth ordering and borrow numeric invariants fail closed', () => {
+  const depthTruth = truth({
+    temporal: {
+      sourceEventTimeMs: 1_720_000_000_000,
+      sourceTransactionTimeMs: 1_720_000_000_000,
+      receivedTimeMs: 1_720_000_000_125,
+      sequence: { first: '1', last: '2', previous: '0' },
+    },
+    freshness: {
+      basis: 'SOURCE_EVENT_TIME', evaluatedAtMs: 1_720_000_000_200, ageMs: 200,
+      maxAgeMs: 1_000, state: 'FRESH',
+    },
+  });
+  const unsorted = validateNormalizedEvidence({
+    id: 'depth:1', kind: 'DEPTH_SNAPSHOT', instrument: instrument(), truth: depthTruth,
+    bids: [{ price: 99, baseQuantity: 1 }, { price: 100, baseQuantity: 1 }],
+    asks: [{ price: 101, baseQuantity: 1 }], bookScope: 'STANDARD_NO_RPI', maximumLevelsKnown: 5_000,
+  });
+  assert.equal(unsorted.ok, false);
+  const borrowInstrument = { ...instrument(), productFamily: 'BORROW', quoteAsset: null, pair: null };
+  const invalidBorrow = validateNormalizedEvidence({
+    id: 'borrow:1', kind: 'BORROW', instrument: borrowInstrument, truth: truth(), asset: 'BTC',
+    eligibility: 'ELIGIBLE', availability: 'AVAILABLE', systemAvailableAmount: -1,
+    accountBorrowLimit: null, hourlyInterestRate: 0.001, inventoryAmount: null,
+  });
+  assert.equal(invalidBorrow.ok, false);
+});
+
 test('nested secret-bearing fields are rejected without retaining the value', () => {
   const contaminated = truth();
   contaminated.provenance.extra = { credentials: { apiKey: 'must-never-appear' } };
@@ -113,6 +163,41 @@ test('nested secret-bearing fields are rejected without retaining the value', ()
   assert.equal(result.ok, false);
   assert.equal(result.failure.code, 'SECRET_FIELD_REJECTED');
   assert.doesNotMatch(JSON.stringify(result.failure), /must-never-appear/);
+  const alias = truth();
+  alias.provenance.xApiKey = 'still-secret';
+  assert.equal(validateTruthMetadata(alias).ok, false);
+});
+
+test('frozen-record validation blocks epistemic future data but permits a known future funding time', () => {
+  const cutoff = 1_720_000_000_200;
+  const frozenTruth = truth({
+    configurationVersion: 'cfg-1',
+    featureVersion: 'features-1',
+    temporal: { sourceEventTimeMs: cutoff - 100, sourceTransactionTimeMs: cutoff - 90, receivedTimeMs: cutoff - 50, sequence: null },
+    freshness: { basis: 'SOURCE_EVENT_TIME', evaluatedAtMs: cutoff, ageMs: 100, maxAgeMs: 1_000, state: 'FRESH' },
+  });
+  const perp = instrument('USD_M_PERPETUAL', 1);
+  const thesis = {
+    id: 'thesis:1', instrumentId: perp.instrumentId, hypothesis: 'UNCLASSIFIED_ANOMALY', stage: 'EARLY_CHANGE',
+    changedFirst: 'activity', changedAtMs: cutoff - 100, leadMarket: 'UNKNOWN', supporting: [], conflicting: [],
+    neutral: [], unavailable: [], tradeability: { state: 'UNKNOWN', reasonCodes: ['EVIDENCE_ONLY'], requiredEvidenceIds: [], missingEvidenceKinds: [] },
+    analogueIds: [], reasonCodes: ['EVIDENCE_ONLY'], truth: frozenTruth,
+  };
+  const funding = {
+    id: 'funding:1', kind: 'FUNDING', instrument: perp, truth: frozenTruth, fundingRate: 0.0001,
+    fundingIntervalHours: 4, nextFundingTimeMs: cutoff + 60_000, adjustedRateCap: null, adjustedRateFloor: null,
+  };
+  const record = {
+    id: 'frozen:1', triggerTimeMs: cutoff, evidenceCutoffTimeMs: cutoff, candidateDisposition: 'OBSERVED',
+    thesis, forensics: [], evidence: [funding], features: [], configurationVersion: 'cfg-1', featureVersion: 'features-1', truth: frozenTruth,
+  };
+  assert.equal(validateFrozenPreEventRecord(record).ok, true);
+  const future = structuredClone(record);
+  future.truth.temporal.receivedTimeMs = cutoff + 1;
+  future.truth.freshness = { basis: 'RECEIVE_TIME', evaluatedAtMs: cutoff + 1, ageMs: 0, maxAgeMs: 1_000, state: 'FRESH' };
+  const result = validateFrozenPreEventRecord(future);
+  assert.equal(result.ok, false);
+  assert.equal(result.failure.code, 'NO_LOOK_AHEAD_VIOLATION');
 });
 
 test('required market stages and evidence polarities are frozen', () => {

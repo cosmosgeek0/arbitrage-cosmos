@@ -1,10 +1,11 @@
 import { BinanceStream, type FeedStatus } from '../binance/ws.js';
 import { fetchAllBookTickers, fetchKlineCandles } from '../binance/rest.js';
 import { mapAggTrade, type RawAggTrade } from '../engine/volume/adapters.js';
+import type { VolumeConfig } from '../engine/volume/config.js';
 import { VolumeEngine } from '../engine/volume/engine.js';
 import { systemClock } from '../engine/v0/clock.js';
 import { MAX_ENGINE_SYMBOLS, finite, isCanonicalSymbol, positive } from '../engine/volume/validation.js';
-import type { EngineEvent } from '../engine/v0/types.js';
+import type { Decision, EngineEvent, EngineProposal } from '../engine/v0/types.js';
 import type { AppConfig } from '../types.js';
 import type { Ledger } from '../ledger.js';
 
@@ -14,6 +15,15 @@ interface MarketUniverseRow {
   quoteVolume24h: number | null;
   hasSpot: boolean;
   hasPerp: boolean;
+}
+
+export interface VolumeRuntimeIntegrationSnapshot {
+  /** Capture time only. Never use this field as source-observation freshness. */
+  capturedAtMs: number;
+  lastTickTs: number | null;
+  config: VolumeConfig;
+  decisions: Decision[];
+  proposals: EngineProposal[];
 }
 
 const STREAM_CHUNK = 140;
@@ -180,6 +190,21 @@ export class VolumeRuntime {
       lastBookTs: this.lastBookTs,
       lastTradeTs: this.lastTradeTs,
     };
+  }
+
+  /**
+   * Bounded, defensive read seam for system integration. It preserves the
+   * engine's real proposal/correlation identity and raw tick time while
+   * reusing the runtime's existing public Binance producers.
+   */
+  integrationSnapshot(): VolumeRuntimeIntegrationSnapshot {
+    return structuredClone({
+      capturedAtMs: Date.now(),
+      lastTickTs: this.engine.lastTick(),
+      config: this.engine.cfg,
+      decisions: this.engine.decisions(2_000),
+      proposals: this.engine.proposalStore.all().slice(-2_000),
+    });
   }
 
   private async refreshUniverse(generation: number): Promise<void> {

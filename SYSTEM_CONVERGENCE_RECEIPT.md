@@ -105,6 +105,8 @@ minimal reason and expected behavior before the edit occurs.
 | Existing shared file | Reason | Expected behavior |
 | --- | --- | --- |
 | `server/src/index.ts` | Register the single managed composition root and authenticated integration router; replace only the existing direct public/Basis/Volume startup and shutdown seam | Dependency-ordered managed startup/reverse shutdown, read routes with no refresh side effect, no signed/private integration dependency |
+| `server/src/services/basisRuntime.ts` | Add one bounded defensive read-only integration capture because the cockpit snapshot omits proposal correlation/timestamps/evidence | Existing Basis engine remains sole owner; adapter receives full current decisions/open proposals/config without a second cache or mutation |
+| `server/src/services/volumeRuntime.ts` | Add the matching bounded defensive integration capture | Existing Volume engine remains sole owner; adapter receives current decisions/proposals/config without fabricating proposal identity from row state |
 | `package.json` | Add explicit organ, full-Foundation, integration, scenario, and unified scripts while preserving all existing script names | Existing 377 and 72 lanes remain; `test:all` runs every organ plus convergence once per build |
 | `web/src/lib/systemIntegration.ts` | Add one typed polling/mutation client for canonical supervisor truth | UI consumes server projection and sends bounded revisioned controls only |
 | `web/src/pages/Dashboard.tsx` | Replace integration posture inference with supervisor facts | Dashboard shows posture, chain, ages, attention, and first blocker truthfully |
@@ -142,6 +144,19 @@ The new vertical slice uses public observations already owned by the audited
 runtime and sealed dry-run venue ports only. Existing audited legacy manual
 account/order/loan capabilities are outside this new slice and remain unchanged;
 the final receipt will not mislabel those pre-existing capabilities as absent.
+
+## Authority conflicts discovered after the first checkpoint
+
+- Capital allocation intentionally rejects a `VALIDATE_ONLY` consideration
+  (`MODE_VALIDATE_ONLY_CANNOT_RESERVE`), while its approval lane does support a
+  scoped `VALIDATE_ONLY` external-risk disposition with
+  `executionReady=false`. Increasing stage transition separately requires a
+  `MANUAL_ARMED` approval. Integration will not weaken or forge either owner
+  guard. Production reports Capital reservation/staging unavailable unless the
+  owner supplies a valid staged mandate. The deterministic full-chain proof may
+  construct a clearly `SYNTHETIC_ONLY` Capital-local reservation fixture, then
+  uses an exact `VALIDATE_ONLY` approval and sealed dry-run execution. This
+  dialect loss is recorded in `SYSTEM_AUTHORITY_MAP.md` and in every trace.
 
 ## Final acceptance matrix
 

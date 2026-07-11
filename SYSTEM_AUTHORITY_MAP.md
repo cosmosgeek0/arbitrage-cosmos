@@ -151,13 +151,26 @@ VALIDATE_ONLY
 | --- | --- | --- | --- |
 | `READ_ONLY` | `INTELLIGENCE` | `READ_ONLY` | unavailable |
 | `ADVISORY` | `INTELLIGENCE` | `ADVISORY` | unavailable |
-| `VALIDATE_ONLY` | `INTELLIGENCE` for keyless managed lifecycle | `VALIDATE_ONLY` | internal Foundation dry-run/PAPER mechanics through sealed fake port only |
+| `VALIDATE_ONLY` | `INTELLIGENCE` for keyless managed lifecycle | observation/approval `VALIDATE_ONLY`; reservation `UNAVAILABLE` | internal Foundation dry-run/PAPER mechanics through sealed fake port only after an externally supplied staged mandate |
 
 Foundation Control's `EXECUTION_VALIDATE_ONLY` dialect expects private-key
 evidence; convergence must not claim keys exist. Managed lifecycle therefore
 remains `INTELLIGENCE`. The separate validate-only orchestrator gates an exact
 mandate through Foundation risk and sealed dry-run execution. This translation
 is intentionally named in the supervisor/trace.
+
+Capital has a second deliberate dialect boundary. Its allocator rejects a
+`VALIDATE_ONLY` consideration with `MODE_VALIDATE_ONLY_CANNOT_RESERVE`, and its
+increasing stage transition requires a `MANUAL_ARMED` approval. Integration
+must not cast or forge around those guards. Production convergence therefore
+observes/evaluates Capital in `VALIDATE_ONLY` but reports reservation/staging
+authority `UNAVAILABLE` unless the Capital owner supplies an already valid
+staged mandate. The deterministic full-chain harness may build that mandate
+inside an explicitly `SYNTHETIC_ONLY` Capital fixture using Capital's local
+`MANUAL_ARMED` eligibility dialect; the system/operator approval remains exact
+`VALIDATE_ONLY`, `executionReady=false`, and the local label is never exposed
+as system mode or execution authority. `evaluateStageTransition` is not called
+by this slice.
 
 Effective kill/intake posture is the most restrictive combination of existing
 audited `AppConfig` facts and convergence control state. Disengaging one gate

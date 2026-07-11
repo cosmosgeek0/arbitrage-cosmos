@@ -1,5 +1,7 @@
 import { fetchAllBookTickers } from '../binance/rest.js';
+import type { BasisConfig } from '../engine/basis/config.js';
 import { BasisEngine } from '../engine/basis/engine.js';
+import type { BasisProposal } from '../engine/basis/types.js';
 import { systemClock } from '../engine/v0/clock.js';
 import type { Decision, EngineEvent, EventSink } from '../engine/v0/types.js';
 import type { Ledger } from '../ledger.js';
@@ -15,6 +17,15 @@ interface MarketUniverseRow {
   fundingRate: number | null;
   nextFundingTime: number | null;
   markUpdatedAt?: number | null;
+}
+
+export interface BasisRuntimeIntegrationSnapshot {
+  /** Capture time only. Never use this field as source-observation freshness. */
+  capturedAtMs: number;
+  lastTickTs: number | null;
+  config: BasisConfig;
+  decisions: Decision[];
+  proposals: BasisProposal[];
 }
 
 // The basis quality gate intentionally decays inside the 5s stale window.
@@ -145,6 +156,22 @@ export class BasisRuntime {
       lastMarkTs: this.lastMarkTs,
       lastError: this.lastError,
     };
+  }
+
+  /**
+   * Bounded, defensive read seam for system integration. It preserves the
+   * engine's real proposal IDs, exact evidence, decision correlation IDs, and
+   * raw tick time without opening another market feed. Missing revisions stay
+   * missing for the directional adapter to report explicitly.
+   */
+  integrationSnapshot(): BasisRuntimeIntegrationSnapshot {
+    return structuredClone({
+      capturedAtMs: Date.now(),
+      lastTickTs: this.engine.lastTick(),
+      config: this.engine.cfg,
+      decisions: this.engine.decisions(2_000),
+      proposals: this.engine.openProposals(),
+    });
   }
 
   private onEngineEvent(event: EngineEvent): void {

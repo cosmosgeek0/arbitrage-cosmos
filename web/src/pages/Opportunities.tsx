@@ -30,7 +30,7 @@ const SIDE_SHORT: Record<Proposal['side'], string> = {
 };
 
 const VIEWS: { id: View; label: string }[] = [
-  { id: 'active', label: 'Proposals' },
+  { id: 'active', label: 'Legacy Queue' },
   { id: 'basis', label: 'Basis' },
   { id: 'funding', label: 'Funding' },
   { id: 'volume', label: 'Liquidity' },
@@ -210,7 +210,7 @@ export function Opportunities() {
             <h1>Opportunities</h1>
             <span className={'opportunityx-live ' + (proposals.length ? 'active' : 'idle')}>
               <i aria-hidden="true" />
-              {proposals.length ? String(proposals.length) + ' Active' : 'Queue Clear'}
+              {proposals.length ? String(proposals.length) + ' Legacy' : 'Legacy Queue Clear'}
             </span>
             <span className="opportunityx-updated">Updated {updatedLabel}</span>
           </div>
@@ -239,12 +239,12 @@ export function Opportunities() {
 
         <div className="opportunityx-summary" aria-label="Opportunity Summary">
           <div className="opportunityx-summary-cell">
-            <span>Active Proposals</span>
+            <span>Legacy Scanner Proposals</span>
             <strong>{proposals.length}</strong>
-            <small>Current engine proposal queue</small>
+            <small>Existing audited scanner queue · outside convergence authority</small>
           </div>
           <div className="opportunityx-summary-cell">
-            <span>Best Net Edge</span>
+            <span>Legacy Best Net Edge</span>
             <strong className={bestProposal && bestProposal.netEdgePct > 0 ? 'positive' : ''}>
               {bestProposal ? fmtPct(bestProposal.netEdgePct, 2) : '—'}
             </strong>
@@ -284,13 +284,13 @@ export function Opportunities() {
           </div>
           <span className="opportunityx-view-note">
             {view === 'active'
-              ? String(filteredProposals.length) + ' proposal' + (filteredProposals.length === 1 ? '' : 's')
+              ? String(filteredProposals.length) + ' legacy proposal' + (filteredProposals.length === 1 ? '' : 's')
               : String(radarRows.length) + ' market-context rows'}
           </span>
         </div>
 
         {view === 'active' ? (
-          <div className="opportunityx-table" role="table" aria-label="Active Proposals">
+          <div className="opportunityx-table" role="table" aria-label="Legacy Scanner Proposals">
             <div className="opportunityx-proposal-head" role="row">
               <span role="columnheader">State</span>
               <span role="columnheader">Proposal</span>
@@ -403,7 +403,7 @@ export function Opportunities() {
             }) : (
               <div className="opportunityx-empty">
                 <Radar size={18} />
-                <strong>{query ? 'No Proposal Matches Search' : 'No Active Proposals'}</strong>
+                <strong>{query ? 'No Legacy Proposal Matches Search' : 'Legacy Scanner Queue Clear'}</strong>
                 <span>The queue opens only after the scanner threshold and persistence checks pass.</span>
               </div>
             )}

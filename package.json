@@ -28,8 +28,20 @@
     "test:deterministic:built": "npm run test:engine:built && npm run test:focused:built",
     "test:server:built": "npm run test:deterministic:built",
     "test:server": "npm run build && npm run test:server:built",
-    "test:integration": "npm run test:app",
-    "test:all": "npm test && npm run test:integration",
+    "test:intelligence:built": "node --test --test-concurrency=1 --test-reporter=dot \"server/test/intelligenceFoundation/**/*.test.mjs\"",
+    "test:intelligence": "npm run build -w server && npm run test:intelligence:built",
+    "test:intelligence:runtime:built": "node --test --test-concurrency=1 --test-reporter=dot \"server/test/intelligenceRuntime/**/*.test.mjs\"",
+    "test:intelligence:runtime": "npm run build -w server && npm run test:intelligence:runtime:built",
+    "test:capital:built": "node --test --test-concurrency=1 --test-reporter=dot \"server/test/capitalFoundation/**/*.test.mjs\"",
+    "test:capital": "npm run build -w server && npm run test:capital:built",
+    "test:foundation:built": "LC_ALL=C find server/test/foundation -type f -name '*.mjs' | LC_ALL=C sort | while IFS= read -r f; do node \"$f\" || exit $?; done",
+    "test:foundation": "npm run build -w server && npm run test:foundation:built",
+    "test:integration:scenarios:built": "node --test --test-concurrency=1 --test-reporter=spec server/test/systemIntegration/scenarios/acceptance.scenarios.test.mjs",
+    "test:integration:scenarios": "npm run build -w server && npm run test:integration:scenarios:built",
+    "test:integration:built": "node --test --test-concurrency=1 --test-reporter=spec \"server/test/systemIntegration/**/*.test.mjs\"",
+    "test:integration": "npm run build -w server && npm run test:integration:built",
+    "test:all:built": "npm run test:deterministic:built && npm run test:app:built && npm run test:intelligence:built && npm run test:intelligence:runtime:built && npm run test:capital:built && npm run test:foundation:built && npm run test:integration:built",
+    "test:all": "npm run typecheck && npm run build && npm run test:all:built",
     "test": "npm run typecheck && npm run build && npm run test:deterministic:built"
   }
 }

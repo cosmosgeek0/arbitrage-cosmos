@@ -86,6 +86,18 @@ test('full mini-ticker array becomes explicit rolling-24h observations', () => {
   assert.equal(snapshot.observedState, 'LIVE');
   assert.equal(snapshot.tickerVolumeWindow, 'ROLLING_24H');
   assert.equal(snapshot.symbols.length, 3);
+  assert.equal(snapshot.sources[0].completeness, 'COMPLETE');
+  assert.deepEqual(snapshot.coverage, {
+    state: 'COMPLETE',
+    configuredSymbols: 3,
+    observedSymbols: 3,
+    freshSymbols: 3,
+    staleSymbols: 0,
+    unseenSymbols: 0,
+    established: true,
+    establishedAtMs: T0,
+    establishedGeneration: 1,
+  });
 });
 
 test('changed-symbol-only arrays retain dormant universe symbols and prior truth', () => {
@@ -108,6 +120,146 @@ test('changed-symbol-only arrays retain dormant universe symbols and prior truth
   assert.equal(snapshot.quietSymbolsRetained, true);
   assert.deepEqual(snapshot.symbols.map((entry) => entry.instrument.symbol), ['BTCUSDT', 'ETHUSDT', 'QUIETUSDT']);
   assert.equal(snapshot.symbols.find((entry) => entry.instrument.symbol === 'QUIETUSDT').ticker24h.lastPrice, 100);
+  assert.equal(snapshot.sources[0].completeness, 'COMPLETE');
+  assert.equal(snapshot.coverage.state, 'COMPLETE');
+});
+
+test('cold changed-only frames warm cumulatively, preserve established quiet coverage, and expose staleness', () => {
+  const clock = new ManualClock();
+  const universe = [instrument('BTCUSDT', 'BTC'), instrument('ETHUSDT', 'ETH')];
+  const value = new SpotBroadReducer({ clock, universe, policy: { tickerMaximumAgeMs: 5 } });
+  value.beginGeneration(1);
+
+  const btcOnly = value.ingestMiniTickerFrame({
+    generation: 1,
+    receiveTimeMs: T0,
+    payload: [ticker('BTCUSDT', T0)],
+  });
+  assert.equal(btcOnly.state, 'ACCEPTED');
+  assert.equal(btcOnly.fullUniverseFrame, false);
+  let snapshot = value.snapshot();
+  assert.equal(snapshot.observedState, 'LIVE');
+  assert.equal(snapshot.sources[0].completeness, 'PARTIAL');
+  assert.deepEqual(snapshot.coverage, {
+    state: 'WARMING',
+    configuredSymbols: 2,
+    observedSymbols: 1,
+    freshSymbols: 1,
+    staleSymbols: 0,
+    unseenSymbols: 1,
+    established: false,
+    establishedAtMs: null,
+    establishedGeneration: null,
+  });
+
+  clock.advance(1);
+  const ethOnly = value.ingestMiniTickerFrame({
+    generation: 1,
+    receiveTimeMs: clock.now,
+    payload: [ticker('ETHUSDT', clock.now)],
+  });
+  assert.equal(ethOnly.fullUniverseFrame, false);
+  snapshot = value.snapshot();
+  assert.equal(snapshot.sources[0].completeness, 'COMPLETE');
+  assert.deepEqual(snapshot.coverage, {
+    state: 'COMPLETE',
+    configuredSymbols: 2,
+    observedSymbols: 2,
+    freshSymbols: 2,
+    staleSymbols: 0,
+    unseenSymbols: 0,
+    established: true,
+    establishedAtMs: T0 + 1,
+    establishedGeneration: 1,
+  });
+
+  clock.advance(1);
+  value.ingestMiniTickerFrame({
+    generation: 1,
+    receiveTimeMs: clock.now,
+    payload: [ticker('BTCUSDT', clock.now, { c: '101' })],
+  });
+  snapshot = value.snapshot();
+  assert.equal(snapshot.sources[0].completeness, 'COMPLETE');
+  assert.equal(snapshot.coverage.state, 'COMPLETE');
+  assert.equal(snapshot.symbols.find((entry) => entry.instrument.symbol === 'ETHUSDT').ticker24h.connectionGeneration, 1);
+
+  clock.advance(10);
+  value.ingestMiniTickerFrame({
+    generation: 1,
+    receiveTimeMs: clock.now,
+    payload: [ticker('BTCUSDT', clock.now, { c: '102' })],
+  });
+  snapshot = value.snapshot();
+  assert.equal(snapshot.observedState, 'LIVE');
+  assert.equal(snapshot.sources[0].completeness, 'PARTIAL');
+  assert.deepEqual(snapshot.coverage, {
+    state: 'STALE',
+    configuredSymbols: 2,
+    observedSymbols: 2,
+    freshSymbols: 1,
+    staleSymbols: 1,
+    unseenSymbols: 0,
+    established: true,
+    establishedAtMs: T0 + 1,
+    establishedGeneration: 1,
+  });
+});
+
+test('warm reconnect retains established quiet coverage while a cold generation stays partial', () => {
+  const universe = [instrument('BTCUSDT', 'BTC'), instrument('ETHUSDT', 'ETH')];
+  const warmClock = new ManualClock();
+  const warm = new SpotBroadReducer({ clock: warmClock, universe });
+  warm.beginGeneration(1);
+  warm.ingestMiniTickerFrame({
+    generation: 1,
+    receiveTimeMs: T0,
+    payload: [ticker('BTCUSDT', T0), ticker('ETHUSDT', T0)],
+  });
+  warmClock.advance(1);
+  warm.beginGeneration(2);
+  let snapshot = warm.snapshot();
+  assert.equal(snapshot.sources[0].completeness, 'MISSING');
+  assert.equal(snapshot.coverage.state, 'COMPLETE');
+  warm.ingestMiniTickerFrame({
+    generation: 2,
+    receiveTimeMs: warmClock.now,
+    payload: [ticker('BTCUSDT', warmClock.now, { c: '101' })],
+  });
+  snapshot = warm.snapshot();
+  assert.equal(snapshot.sources[0].completeness, 'COMPLETE');
+  assert.equal(snapshot.coverage.state, 'COMPLETE');
+  assert.equal(snapshot.coverage.establishedGeneration, 1);
+  assert.equal(snapshot.symbols.find((entry) => entry.instrument.symbol === 'ETHUSDT').ticker24h.connectionGeneration, 1);
+
+  const coldClock = new ManualClock();
+  const cold = new SpotBroadReducer({ clock: coldClock, universe });
+  cold.beginGeneration(1);
+  cold.ingestMiniTickerFrame({
+    generation: 1,
+    receiveTimeMs: T0,
+    payload: [ticker('BTCUSDT', T0)],
+  });
+  coldClock.advance(1);
+  cold.beginGeneration(2);
+  cold.ingestMiniTickerFrame({
+    generation: 2,
+    receiveTimeMs: coldClock.now,
+    payload: [ticker('BTCUSDT', coldClock.now, { c: '101' })],
+  });
+  snapshot = cold.snapshot();
+  assert.equal(snapshot.sources[0].completeness, 'PARTIAL');
+  assert.deepEqual(snapshot.coverage, {
+    state: 'WARMING',
+    configuredSymbols: 2,
+    observedSymbols: 1,
+    freshSymbols: 1,
+    staleSymbols: 0,
+    unseenSymbols: 1,
+    established: false,
+    establishedAtMs: null,
+    establishedGeneration: null,
+  });
 });
 
 test('Spot bookTicker has receive-time freshness and no fabricated exchange time', () => {

@@ -33,6 +33,7 @@ import type {
   SpotRuntimeSnapshot,
   SpotSourceMetrics,
   SpotSymbolSnapshot,
+  SpotUniverseCoverageSnapshot,
 } from './types.js';
 
 const SOURCE_ID = 'binance-spot-market-stream' as const;
@@ -352,6 +353,8 @@ export class SpotBroadReducer {
   #lastUsefulReceiveTimeMs: number | null = null;
   #lastProcessedTimeMs: number | null = null;
   #lastFramePartial = false;
+  #coverageEstablishedAtMs: number | null = null;
+  #coverageEstablishedGeneration: number | null = null;
   readonly #metrics: SpotSourceMetrics = {
     generation: 0,
     reconnectCount: 0,
@@ -647,6 +650,18 @@ export class SpotBroadReducer {
       if (processingTimeMs - parsed.eventTimeMs > this.#policy.tickerMaximumAgeMs) staleRecords += 1;
     }
 
+    if (
+      this.#coverageEstablishedAtMs === null
+      && this.#symbols.size > 0
+      && [...this.#symbols.values()].every((symbol) => (
+        symbol.ticker24h !== null
+        && processingTimeMs - symbol.ticker24h.sourceEventTimeMs <= this.#policy.tickerMaximumAgeMs
+      ))
+    ) {
+      this.#coverageEstablishedAtMs = processingTimeMs;
+      this.#coverageEstablishedGeneration = input.generation;
+    }
+
     this.#metrics.invalidCount += invalidRecords;
     this.#metrics.unknownSymbolCount += unknownSymbols;
     this.#metrics.duplicateCount += duplicateRecords;
@@ -777,9 +792,6 @@ export class SpotBroadReducer {
 
   snapshot(atMs = this.#clock.nowMs()): SpotRuntimeSnapshot {
     safeInteger(atMs, 'snapshotTimeMs');
-    const sourceSnapshots = Object.freeze(SPOT_SOURCE_KINDS.map((kind) => this.#trackers[kind].snapshot(atMs)));
-    const miniTickerSource = sourceSnapshots[0];
-    if (!miniTickerSource) throw new TypeError('mini-ticker source snapshot is unavailable');
     const symbols: SpotSymbolSnapshot[] = [...this.#symbols.values()].map((state) => {
       const ticker = state.ticker24h;
       const book = state.bookTicker;
@@ -794,6 +806,43 @@ export class SpotBroadReducer {
         tradeFreshness: freshness(lastTrade?.truth.temporal.sourceTransactionTimeMs ?? null, this.#policy.tradeMaximumAgeMs, atMs),
       });
     });
+    const observedSymbols = symbols.reduce((count, symbol) => count + (symbol.ticker24h === null ? 0 : 1), 0);
+    const freshSymbols = symbols.reduce((count, symbol) => count + (symbol.tickerFreshness === 'FRESH' ? 1 : 0), 0);
+    const staleSymbols = symbols.reduce((count, symbol) => count + (symbol.tickerFreshness === 'STALE' ? 1 : 0), 0);
+    const unseenSymbols = this.#symbols.size - observedSymbols;
+    const coverageState: SpotUniverseCoverageSnapshot['state'] = observedSymbols === 0
+      ? 'COLD'
+      : unseenSymbols > 0
+        ? 'WARMING'
+        : staleSymbols > 0
+          ? 'STALE'
+          : 'COMPLETE';
+    const coverage: SpotUniverseCoverageSnapshot = Object.freeze({
+      state: coverageState,
+      configuredSymbols: this.#symbols.size,
+      observedSymbols,
+      freshSymbols,
+      staleSymbols,
+      unseenSymbols,
+      established: this.#coverageEstablishedAtMs !== null,
+      establishedAtMs: this.#coverageEstablishedAtMs,
+      establishedGeneration: this.#coverageEstablishedGeneration,
+    });
+    const trackedSources = SPOT_SOURCE_KINDS.map((kind) => this.#trackers[kind].snapshot(atMs));
+    const trackedMiniTickerSource = trackedSources[0];
+    if (!trackedMiniTickerSource) throw new TypeError('mini-ticker source snapshot is unavailable');
+    const miniTickerSource = Object.freeze({
+      ...trackedMiniTickerSource,
+      completeness: trackedMiniTickerSource.completeness === 'MISSING'
+        ? 'MISSING' as const
+        : coverageState === 'COMPLETE'
+          ? trackedMiniTickerSource.completeness
+          : 'PARTIAL' as const,
+    });
+    const sourceSnapshots = Object.freeze([
+      miniTickerSource,
+      ...trackedSources.slice(1),
+    ]);
     const messageAgeMs = this.#lastUsefulReceiveTimeMs === null ? null : Math.max(0, atMs - this.#lastUsefulReceiveTimeMs);
     const processingLagMs = this.#lastTransportReceiveTimeMs === null || this.#lastProcessedTimeMs === null
       ? null
@@ -811,6 +860,7 @@ export class SpotBroadReducer {
       changedOnlySemantics: true,
       quietSymbolsRetained: true,
       tickerVolumeWindow: 'ROLLING_24H',
+      coverage,
       sources: sourceSnapshots,
       symbols: Object.freeze(symbols),
       metrics: frozenMetrics(this.#metrics),

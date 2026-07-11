@@ -45,8 +45,8 @@ class FixtureTransport {
   }
 }
 
-function response(body, receiveTimeMs = T0, status = 200) {
-  return { status, headers: {}, body, receiveTimeMs };
+function response(body, receiveTimeMs = T0, status = 200, headers = {}) {
+  return { status, headers, body, receiveTimeMs };
 }
 
 function spotFilters(overrides = {}) {
@@ -444,6 +444,148 @@ test('partial responses and source failures merge valid rows into complete last-
   assert.equal(metadata(snapshot, 'SPOT', 'UPDATEUSDT').receivedTimeMs, T0 + 100);
 });
 
+test('HTTP 429 honors case-insensitive weight and Retry-After headers while the other leg keeps refreshing', async () => {
+  const { adapter, clock, transport } = adapterFixture({ sourceStaleAfterMs: 5 });
+  enqueuePair(transport, [spotRow('KEEPUSDT', 'KEEP')], [futuresRow('KEEPUSDT', 'KEEP')]);
+  await adapter.tick();
+
+  clock.set(T0 + 10);
+  transport.enqueue(SPOT_PATH, response(
+    { code: -1003, msg: 'rate limited fixture' },
+    T0 + 10,
+    429,
+    { 'x-MbX-uSeD-WeIgHt-1m': '123', 'rEtRy-AfTeR': '2' },
+  ));
+  transport.enqueue(USD_M_PATH, response(exchangeInfo([
+    futuresRow('KEEPUSDT', 'KEEP'),
+    futuresRow('INDEPENDENTUSDT', 'INDEPENDENT'),
+  ]), T0 + 10));
+  const limited = await adapter.tick();
+
+  assert.equal(limited.sources.SPOT.state, 'PARTIAL');
+  assert.equal(limited.sources.SPOT.refreshState, 'RATE_LIMITED');
+  assert.equal(limited.sources.SPOT.nextEligibleAtMs, T0 + 2_010);
+  assert.equal(limited.sources.SPOT.rateBudget.state, 'COOLDOWN');
+  assert.equal(limited.sources.SPOT.rateBudget.usedWeight, 123);
+  assert.equal(limited.sources.SPOT.rateBudget.retryAfterMs, 2_000);
+  assert.equal(limited.sources.SPOT.stale, true);
+  assert.equal(limited.sources.SPOT.truth.freshness.state, 'STALE');
+  assert.equal(limited.sources.SPOT.truth.completeness.state, 'PARTIAL');
+  assert.ok(limited.sources.SPOT.truth.completeness.reasonCodes.includes('BUDGET_EXHAUSTED'));
+  assert.equal(nodeByBase(limited, 'KEEP').spot.marketAvailability, 'UNKNOWN');
+  assert.ok(nodeByBase(limited, 'INDEPENDENT').usdMPerpetual);
+  assert.equal(limited.sources.USD_M_PERPETUAL.state, 'COMPLETE');
+  assert.equal(limited.sources.USD_M_PERPETUAL.refreshState, 'READY');
+
+  clock.set(T0 + 11);
+  transport.enqueue(USD_M_PATH, response(exchangeInfo([
+    futuresRow('KEEPUSDT', 'KEEP'),
+    futuresRow('INDEPENDENTUSDT', 'INDEPENDENT'),
+    futuresRow('SECONDUSDT', 'SECOND'),
+  ]), T0 + 11));
+  const skipped = await adapter.tick();
+  assert.equal(transport.calls.filter((call) => call.path === SPOT_PATH).length, 2);
+  assert.equal(transport.calls.filter((call) => call.path === USD_M_PATH).length, 3);
+  assert.equal(skipped.sources.SPOT.refreshState, 'RATE_LIMITED');
+  assert.equal(skipped.sources.SPOT.nextEligibleAtMs, T0 + 2_010);
+  assert.equal(skipped.sources.SPOT.state, 'PARTIAL');
+  assert.ok(nodeByBase(skipped, 'SECOND').usdMPerpetual);
+
+  clock.set(T0 + 2_010);
+  enqueuePair(
+    transport,
+    [spotRow('KEEPUSDT', 'KEEP'), spotRow('RECOVEREDUSDT', 'RECOVERED')],
+    [futuresRow('KEEPUSDT', 'KEEP')],
+    T0 + 2_010,
+  );
+  const recovered = await adapter.tick();
+  assert.equal(transport.calls.filter((call) => call.path === SPOT_PATH).length, 3);
+  assert.equal(recovered.sources.SPOT.refreshState, 'READY');
+  assert.equal(recovered.sources.SPOT.nextEligibleAtMs, null);
+  assert.equal(recovered.sources.SPOT.rateBudget.state, 'AVAILABLE');
+  assert.equal(recovered.sources.SPOT.state, 'COMPLETE');
+  assert.ok(nodeByBase(recovered, 'RECOVERED').spot);
+});
+
+test('HTTP 418 without Retry-After uses the bounded fallback cooldown and recovers exactly at its boundary', async () => {
+  const { adapter, clock, transport } = adapterFixture({
+    restBudgets: { SPOT: { defaultCooldownMs: 250 } },
+  });
+  enqueuePair(transport, [spotRow('BANUSDT', 'BAN')], [futuresRow('BANUSDT', 'BAN')]);
+  await adapter.tick();
+
+  clock.set(T0 + 1);
+  transport.enqueue(SPOT_PATH, response({ code: -1003 }, T0 + 1, 418));
+  transport.enqueue(USD_M_PATH, response(exchangeInfo([futuresRow('BANUSDT', 'BAN')]), T0 + 1));
+  const banned = await adapter.tick();
+  assert.equal(banned.sources.SPOT.refreshState, 'RATE_LIMITED');
+  assert.equal(banned.sources.SPOT.nextEligibleAtMs, T0 + 251);
+  assert.equal(banned.sources.SPOT.rateBudget.retryAfterMs, 250);
+  assert.equal(banned.sources.SPOT.state, 'PARTIAL');
+
+  clock.set(T0 + 250);
+  transport.enqueue(USD_M_PATH, response(exchangeInfo([futuresRow('BANUSDT', 'BAN')]), T0 + 250));
+  const stillBanned = await adapter.tick();
+  assert.equal(stillBanned.sources.SPOT.refreshState, 'RATE_LIMITED');
+  assert.equal(stillBanned.sources.SPOT.nextEligibleAtMs, T0 + 251);
+  assert.equal(transport.calls.filter((call) => call.path === SPOT_PATH).length, 2);
+
+  clock.set(T0 + 251);
+  enqueuePair(transport, [spotRow('BANUSDT', 'BAN')], [futuresRow('BANUSDT', 'BAN')], T0 + 251);
+  const recovered = await adapter.tick();
+  assert.equal(recovered.sources.SPOT.refreshState, 'READY');
+  assert.equal(recovered.sources.SPOT.nextEligibleAtMs, null);
+  assert.equal(recovered.sources.SPOT.state, 'COMPLETE');
+  assert.equal(transport.calls.filter((call) => call.path === SPOT_PATH).length, 3);
+});
+
+test('used-weight headers gate only the exhausted leg until the exact fixed-window reset', async () => {
+  const { adapter, clock, transport } = adapterFixture({
+    restBudgets: {
+      SPOT: {
+        requestWeight: 20,
+        limit: 40,
+        intervalMs: 1_000,
+        nearLimitRatio: 0.5,
+      },
+    },
+  });
+  transport.enqueue(SPOT_PATH, response(
+    exchangeInfo([spotRow('WEIGHTUSDT', 'WEIGHT')]),
+    T0,
+    200,
+    { 'X-MBX-USED-WEIGHT-1M': '39' },
+  ));
+  transport.enqueue(USD_M_PATH, response(exchangeInfo([futuresRow('WEIGHTUSDT', 'WEIGHT')]), T0));
+  const nearLimit = await adapter.tick();
+
+  assert.equal(nearLimit.sources.SPOT.state, 'COMPLETE');
+  assert.equal(nearLimit.sources.SPOT.rateBudget.state, 'NEAR_LIMIT');
+  assert.equal(nearLimit.sources.SPOT.rateBudget.usedWeight, 39);
+  assert.equal(nearLimit.sources.SPOT.refreshState, 'RATE_LIMITED');
+  assert.equal(nearLimit.sources.SPOT.nextEligibleAtMs, T0 + 1_000);
+
+  clock.set(T0 + 1);
+  transport.enqueue(USD_M_PATH, response(exchangeInfo([
+    futuresRow('WEIGHTUSDT', 'WEIGHT'),
+    futuresRow('FUTURESOKUSDT', 'FUTURESOK'),
+  ]), T0 + 1));
+  const blocked = await adapter.tick();
+  assert.equal(blocked.sources.SPOT.state, 'PARTIAL');
+  assert.equal(blocked.sources.SPOT.refreshState, 'RATE_LIMITED');
+  assert.equal(blocked.sources.SPOT.nextEligibleAtMs, T0 + 1_000);
+  assert.ok(nodeByBase(blocked, 'FUTURESOK').usdMPerpetual);
+  assert.equal(transport.calls.filter((call) => call.path === SPOT_PATH).length, 1);
+
+  clock.set(T0 + 1_000);
+  enqueuePair(transport, [spotRow('WEIGHTUSDT', 'WEIGHT')], [futuresRow('WEIGHTUSDT', 'WEIGHT')], T0 + 1_000);
+  const reset = await adapter.tick();
+  assert.equal(transport.calls.filter((call) => call.path === SPOT_PATH).length, 2);
+  assert.equal(reset.sources.SPOT.refreshState, 'READY');
+  assert.equal(reset.sources.SPOT.nextEligibleAtMs, null);
+  assert.equal(reset.sources.SPOT.state, 'COMPLETE');
+});
+
 test('stale source failures retain the last-known universe while making freshness, rules, and availability unknown', async () => {
   const { adapter, clock, transport } = adapterFixture({ sourceStaleAfterMs: 100 });
   enqueuePair(transport, [spotRow('STALEUSDT', 'STALE')], [futuresRow('STALEUSDT', 'STALE')]);
@@ -677,14 +819,23 @@ test('effective configuration fingerprints include policy, remain stable, and ev
   const left = adapterFixture(settings);
   const same = adapterFixture(settings);
   const changed = adapterFixture({ ...settings, sourceStaleAfterMs: 124 });
+  const budgetChanged = adapterFixture({
+    ...settings,
+    restBudgets: { SPOT: { limit: RUNTIME_UNIVERSE_DEFAULTS.restBudgets.SPOT.limit - 1 } },
+  });
   const config = left.adapter.config;
 
   assert.equal(config.configurationVersion, same.adapter.config.configurationVersion);
   assert.notEqual(config.configurationVersion, changed.adapter.config.configurationVersion);
+  assert.notEqual(config.configurationVersion, budgetChanged.adapter.config.configurationVersion);
   assert.ok(Object.isFrozen(RUNTIME_UNIVERSE_DEFAULTS));
   assert.ok(Object.isFrozen(RUNTIME_UNIVERSE_DEFAULTS.universePolicy));
+  assert.ok(Object.isFrozen(RUNTIME_UNIVERSE_DEFAULTS.restBudgets));
+  assert.ok(Object.isFrozen(RUNTIME_UNIVERSE_DEFAULTS.restBudgets.SPOT));
   assert.ok(Object.isFrozen(config));
   assert.ok(Object.isFrozen(config.universePolicy));
+  assert.ok(Object.isFrozen(config.restBudgets));
+  assert.ok(Object.isFrozen(config.restBudgets.SPOT));
   assert.ok(Object.isFrozen(config.universePolicy.activeSpotStatuses));
   assert.ok(Object.isFrozen(config.universePolicy.allowedQuoteAssetsForFocus));
   assert.deepEqual(config.universePolicy.activeSpotStatuses, ['BREAK', 'TRADING']);

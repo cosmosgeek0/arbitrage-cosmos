@@ -18,6 +18,7 @@ export const SPOT_BUFFERED_KINDS = Object.freeze([
 
 export type SpotBufferedKind = (typeof SPOT_BUFFERED_KINDS)[number];
 export type SpotFreshnessState = 'UNSEEN' | 'FRESH' | 'STALE';
+export type SpotUniverseCoverageState = 'COLD' | 'WARMING' | 'COMPLETE' | 'STALE';
 
 /**
  * Runtime-local observation for Binance's changed-only 24-hour mini-ticker
@@ -171,6 +172,27 @@ export interface SpotSymbolSnapshot {
   tradeFreshness: SpotFreshnessState;
 }
 
+/**
+ * Cumulative coverage truth for Binance's changed-only all-market array.
+ *
+ * A valid frame is not proof that every configured symbol was represented.
+ * Coverage becomes COMPLETE only after every symbol has been observed across
+ * one or more frames and every retained observation is still fresh. Once
+ * established, omission from a later changed-only frame does not erase quiet
+ * symbol coverage; actual age can still move the state to STALE.
+ */
+export interface SpotUniverseCoverageSnapshot {
+  state: SpotUniverseCoverageState;
+  configuredSymbols: number;
+  observedSymbols: number;
+  freshSymbols: number;
+  staleSymbols: number;
+  unseenSymbols: number;
+  established: boolean;
+  establishedAtMs: number | null;
+  establishedGeneration: number | null;
+}
+
 export interface SpotRuntimeSnapshot {
   sourceId: 'binance-spot-market-stream';
   observedState: RuntimeLifecycleState;
@@ -184,6 +206,7 @@ export interface SpotRuntimeSnapshot {
   changedOnlySemantics: true;
   quietSymbolsRetained: true;
   tickerVolumeWindow: 'ROLLING_24H';
+  coverage: SpotUniverseCoverageSnapshot;
   sources: readonly RuntimeSourceSnapshot[];
   symbols: readonly SpotSymbolSnapshot[];
   metrics: SpotSourceMetrics;

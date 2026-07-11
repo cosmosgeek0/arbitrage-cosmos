@@ -32,7 +32,7 @@ function book(overrides = {}) {
 
 function mark(overrides = {}) {
   return {
-    e: 'markPriceUpdate', E: EVENT, s: 'BTCUSDT', ps: 'BTCUSDT', st: 1,
+    e: 'markPriceUpdate', E: EVENT, s: 'BTCUSDT', st: 1,
     p: '60010', i: '60005', P: '60007', ap: '60008', r: '0.0001', T: EVENT + 28_800_000,
     ...overrides,
   };
@@ -40,7 +40,7 @@ function mark(overrides = {}) {
 
 function contract(overrides = {}) {
   return {
-    e: 'contractInfo', E: EVENT, s: 'BTCUSDT', ps: 'BTCUSDT', st: 1,
+    e: 'contractInfo', E: EVENT, s: 'BTCUSDT', st: 1,
     ct: 'PERPETUAL', dt: 4_133_404_800_000, ot: 1_666_594_800_000, cs: 'TRADING',
     ...overrides,
   };
@@ -155,6 +155,9 @@ test('combined envelopes must match the selected feed stream', () => {
 
 test('mark/funding decoder keeps mark, index, next funding, interval, and last roles separate', () => {
   const value = decodeUsdMMarkFunding(mark({ fundingIntervalHours: 8 }), RECEIVE).observations[0];
+  assert.equal(value.pair, 'BTCUSDT');
+  assert.equal(value.pairAuthority, 'SYMBOL_ONLY_REQUIRES_RESOLUTION');
+  assert.equal(Object.hasOwn(value.rawRecord, 'ps'), false, 'current official mark payload does not publish ps');
   assert.equal(value.markPrice, 60_010);
   assert.equal(value.indexPrice, 60_005);
   assert.equal(value.estimatedSettlementPrice, 60_007);
@@ -163,6 +166,31 @@ test('mark/funding decoder keeps mark, index, next funding, interval, and last r
   assert.equal(value.nextFundingTimeMs, EVENT + 28_800_000);
   assert.equal(value.sourceTransactionTimeMs, null, 'mark stream T is next funding time, not transaction time');
   assert.equal(value.lastPrice, null);
+});
+
+test('current official symbol-only mark and contract payloads require injected pair confirmation without fabricating ps', () => {
+  const decodedMark = decodeUsdMMarkFunding(mark(), RECEIVE);
+  const decodedContract = decodeUsdMContractInfo(contract(), RECEIVE);
+  assert.equal(decodedMark.issues.length, 0);
+  assert.equal(decodedContract.issues.length, 0);
+  assert.deepEqual(decodedMark.observations.map((entry) => entry.pairAuthority), ['SYMBOL_ONLY_REQUIRES_RESOLUTION']);
+  assert.deepEqual(decodedContract.observations.map((entry) => entry.pairAuthority), ['SYMBOL_ONLY_REQUIRES_RESOLUTION']);
+  assert.equal(Object.hasOwn(decodedMark.observations[0].rawRecord, 'ps'), false);
+  assert.equal(Object.hasOwn(decodedContract.observations[0].rawRecord, 'ps'), false);
+
+  const unresolved = new FuturesRuntimeAdapter(new ManualClock());
+  const unresolvedGeneration = unresolved.start('MARK_FUNDING');
+  unresolved.connected('MARK_FUNDING', unresolvedGeneration);
+  const rejected = unresolved.ingest('MARK_FUNDING', unresolvedGeneration, mark(), RECEIVE);
+  assert.equal(rejected.accepted, 0);
+  assert.equal(rejected.invalid, 1);
+  assert.ok(rejected.issues.some((entry) => entry.code === 'IDENTITY_CONFLICT'));
+
+  const { adapter, generation } = connectedAdapter('MARK_FUNDING');
+  const accepted = adapter.ingest('MARK_FUNDING', generation, mark(), RECEIVE);
+  assert.equal(accepted.accepted, 1);
+  assert.equal(accepted.normalized.every((entry) => entry.status === 'NORMALIZED'), true);
+  assert.equal(adapter.snapshot(RECEIVE).symbols[0].pairAuthority, 'INJECTED_RESOLVER');
 });
 
 test('delivery-style partial mark remains useful without manufacturing funding', () => {
@@ -336,10 +364,66 @@ test('stale symbol state and reconnect generation are explicit', () => {
   assert.equal(adapter.snapshot().symbols[0].book.freshness, 'PRIOR_GENERATION');
   adapter.connected('BOOK_TICKER', nextGeneration);
   clock.set(RECEIVE + 1);
-  adapter.ingest('BOOK_TICKER', nextGeneration, book({ E: EVENT + 1, T: EVENT + 11, u: '1' }), RECEIVE + 1);
+  adapter.ingest('BOOK_TICKER', nextGeneration, book({ E: EVENT + 1, T: EVENT + 11, u: '90071992547409936' }), RECEIVE + 1);
   assert.equal(adapter.snapshot().symbols[0].book.freshness, 'FRESH');
   clock.set(RECEIVE + 15_001);
   assert.equal(adapter.snapshot().symbols[0].book.freshness, 'STALE');
+});
+
+test('retained semantic and source cursors reject reconnect rollback across every Futures feed', () => {
+  const clock = new ManualClock();
+  const adapter = new FuturesRuntimeAdapter(clock, { instrumentResolver: resolver });
+  const first = adapter.startAll();
+  for (const feed of ['BOOK_TICKER', 'MARK_FUNDING', 'CONTRACT_INFO', 'LIQUIDATION']) {
+    adapter.connected(feed, first[feed]);
+  }
+  assert.equal(adapter.ingest('BOOK_TICKER', first.BOOK_TICKER, book({ u: '100' }), RECEIVE).accepted, 1);
+  assert.equal(adapter.ingest('MARK_FUNDING', first.MARK_FUNDING, mark(), RECEIVE).accepted, 1);
+  assert.equal(adapter.ingest('CONTRACT_INFO', first.CONTRACT_INFO, contract(), RECEIVE).accepted, 1);
+  assert.equal(adapter.ingest('LIQUIDATION', first.LIQUIDATION, liquidation(), RECEIVE).accepted, 1);
+
+  clock.set(RECEIVE + 100);
+  const second = {
+    BOOK_TICKER: adapter.reconnect('BOOK_TICKER'),
+    MARK_FUNDING: adapter.reconnect('MARK_FUNDING'),
+    CONTRACT_INFO: adapter.reconnect('CONTRACT_INFO'),
+    LIQUIDATION: adapter.reconnect('LIQUIDATION'),
+  };
+  for (const feed of ['BOOK_TICKER', 'MARK_FUNDING', 'CONTRACT_INFO', 'LIQUIDATION']) {
+    adapter.connected(feed, second[feed]);
+  }
+  assert.equal(adapter.ingest('BOOK_TICKER', second.BOOK_TICKER, book({ E: EVENT - 1, T: EVENT + 9, u: '99' }), clock.now).outOfOrder, 1);
+  assert.equal(adapter.ingest('MARK_FUNDING', second.MARK_FUNDING, mark({ E: EVENT - 1, p: '59999' }), clock.now).outOfOrder, 1);
+  assert.equal(adapter.ingest('CONTRACT_INFO', second.CONTRACT_INFO, contract({ E: EVENT - 1, cs: 'PRE_SETTLE' }), clock.now).outOfOrder, 1);
+  assert.equal(adapter.ingest('LIQUIDATION', second.LIQUIDATION, liquidation({
+    E: EVENT - 1,
+    o: { ...liquidation().o, S: 'BUY', T: EVENT + 9 },
+  }), clock.now).outOfOrder, 1);
+
+  const retained = adapter.snapshot();
+  assert.equal(retained.symbols[0].book.observation.updateId, '100');
+  assert.equal(retained.symbols[0].markFunding.observation.markPrice, 60_010);
+  assert.equal(retained.symbols[0].contract.observation.contractStatus, 'TRADING');
+  assert.equal(retained.liquidations.length, 1);
+  assert.equal(retained.liquidations[0].observation.orderSide, 'SELL');
+
+  clock.set(RECEIVE + 200);
+  const successors = [
+    adapter.ingest('BOOK_TICKER', second.BOOK_TICKER, book({ E: EVENT + 1, T: EVENT + 11, u: '101' }), clock.now),
+    adapter.ingest('MARK_FUNDING', second.MARK_FUNDING, mark({ E: EVENT + 1, p: '60011' }), clock.now),
+    adapter.ingest('CONTRACT_INFO', second.CONTRACT_INFO, contract({ E: EVENT + 1, cs: 'PRE_SETTLE' }), clock.now),
+    adapter.ingest('LIQUIDATION', second.LIQUIDATION, liquidation({
+      E: EVENT + 1,
+      o: { ...liquidation().o, S: 'BUY', T: EVENT + 11 },
+    }), clock.now),
+  ];
+  assert.deepEqual(successors.map((result) => result.accepted), [1, 1, 1, 1]);
+  const current = adapter.snapshot();
+  assert.equal(current.symbols[0].book.observation.updateId, '101');
+  assert.equal(current.symbols[0].markFunding.observation.markPrice, 60_011);
+  assert.equal(current.symbols[0].contract.observation.contractStatus, 'PRE_SETTLE');
+  assert.equal(current.liquidations.at(-1).observation.orderSide, 'BUY');
+  assert.equal(successors[0].events[0].sequence.previous, null, 'a new generation never claims delivery continuity');
 });
 
 test('regressed receive time is rejected before state or lifecycle mutation', () => {
@@ -432,6 +516,35 @@ test('bounded symbol and liquidation retention reports drops deterministically',
   }), RECEIVE);
   assert.equal(adapter.snapshot().liquidations.length, 1);
   assert.equal(adapter.snapshot().liquidations[0].observation.orderSide, 'BUY');
+});
+
+test('one transport frame advances lifecycle once and uses order-independent maximum accepted source time', () => {
+  function run(records) {
+    const now = RECEIVE + 10_000;
+    const clock = new ManualClock(now);
+    const adapter = new FuturesRuntimeAdapter(clock, { instrumentResolver: resolver });
+    const generation = adapter.start('MARK_FUNDING');
+    adapter.connected('MARK_FUNDING', generation, now);
+    const result = adapter.ingest('MARK_FUNDING', generation, records, now);
+    return { result, source: source(adapter.snapshot(now), adapter, 'MARK_FUNDING') };
+  }
+  const current = mark({ E: RECEIVE + 10_000, s: 'BTCUSDT', p: '60020' });
+  const old = mark({ E: EVENT, s: 'ETHUSDT', p: '3000', i: '2999', P: '2999.5', ap: '2999.8' });
+  const forward = run([current, old]);
+  const reverse = run([old, current]);
+  assert.deepEqual([forward.result.accepted, reverse.result.accepted], [2, 2]);
+  assert.deepEqual([forward.source.messageCount, reverse.source.messageCount], [1, 1]);
+  assert.deepEqual(
+    [forward.source.lastMessageSourceTimeMs, reverse.source.lastMessageSourceTimeMs],
+    [RECEIVE + 10_000, RECEIVE + 10_000],
+  );
+  assert.deepEqual([forward.source.observedState, reverse.source.observedState], ['LIVE', 'LIVE']);
+
+  const isolated = run([current, mark({ s: 'ETHUSDT', p: 'NaN' })]);
+  assert.equal(isolated.result.accepted, 1);
+  assert.equal(isolated.result.invalid, 1);
+  assert.equal(isolated.source.messageCount, 1);
+  assert.equal(isolated.source.observedState, 'DEGRADED');
 });
 
 test('normalization and snapshots are deterministic for repeated injected runs', () => {

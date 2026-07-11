@@ -71,8 +71,13 @@ export interface FuturesDecodeBatch<T> {
 
 export interface UsdMRuntimeIdentity {
   symbol: string;
-  /** Official `ps` pair/product identity. It is not reconstructed from `s`. */
+  /**
+   * Canonical pair candidate. Some current tiered streams publish official
+   * `ps`; mark-price and contract-info publish only `s`, so those candidates
+   * must be confirmed by the injected instrument resolver before retention.
+   */
   pair: string;
+  pairAuthority: 'OFFICIAL_PS' | 'SYMBOL_ONLY_REQUIRES_RESOLUTION' | 'INJECTED_RESOLVER';
   sourceMarketType: 1;
   marketSegment: 'USD_M';
   productFamily: 'USD_M_PERPETUAL';

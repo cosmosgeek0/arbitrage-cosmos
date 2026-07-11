@@ -213,11 +213,12 @@ export class SourceLifecycleTracker {
     this.#observedState = 'STOPPED';
     this.#connectedAtMs = null;
     this.#backoff = { ...ZERO_BACKOFF, ceiling: this.#definition.retryCeiling };
+    this.#completeness = 'MISSING';
   }
 
   snapshot(atMs = this.#clock.nowMs()): RuntimeSourceSnapshot {
     nonNegativeSafeInteger(atMs, 'snapshot time');
-    let observedState = this.#observedState;
+    let observedState = this.#desiredState === 'STOPPED' ? 'STOPPED' : this.#observedState;
     if (this.#desiredState === 'RUNNING' && this.#connectedAtMs !== null) {
       if (this.#lastMessageReceiveTimeMs === null && atMs - this.#connectedAtMs >= this.#definition.silentAfterMs) {
         observedState = 'SILENT';
@@ -228,10 +229,12 @@ export class SourceLifecycleTracker {
         observedState = 'STALE';
       }
     }
-    const messageAgeMs = this.#lastMessageReceiveTimeMs === null
+    const messageAgeMs = this.#desiredState === 'STOPPED' || this.#lastMessageReceiveTimeMs === null
       ? null
       : Math.max(0, atMs - this.#lastMessageReceiveTimeMs);
-    const processingLagMs = this.#lastMessageReceiveTimeMs === null || this.#lastProcessedTimeMs === null
+    const processingLagMs = this.#desiredState === 'STOPPED'
+      || this.#lastMessageReceiveTimeMs === null
+      || this.#lastProcessedTimeMs === null
       ? null
       : Math.max(0, this.#lastProcessedTimeMs - this.#lastMessageReceiveTimeMs);
     const recommendedAction = observedState === 'SILENT'
@@ -272,7 +275,11 @@ export class SourceLifecycleTracker {
       lastError: this.#lastError === null ? null : Object.freeze({ ...this.#lastError }),
       recommendedAction,
       authority: this.#definition.authority,
-      completeness: observedState === 'SILENT' || observedState === 'STALE' ? 'PARTIAL' : this.#completeness,
+      completeness: observedState === 'STOPPED'
+        ? 'MISSING'
+        : observedState === 'SILENT' || observedState === 'STALE'
+          ? 'PARTIAL'
+          : this.#completeness,
       snapshotTimeMs: atMs,
     });
   }

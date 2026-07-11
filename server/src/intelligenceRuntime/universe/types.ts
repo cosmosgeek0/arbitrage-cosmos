@@ -14,9 +14,20 @@ import type {
 import type {
   PublicRestTransport,
   RuntimeClock,
+  RuntimeRateBudgetState,
 } from '../contracts/index.js';
 
 export type RuntimeUniverseSource = 'SPOT' | 'USD_M_PERPETUAL';
+
+export interface RuntimeUniverseRestBudgetConfig {
+  /** Current official IP weight of one unfiltered exchangeInfo request. */
+  requestWeight: number;
+  limit: number;
+  intervalMs: number;
+  nearLimitRatio: number;
+  /** Defensive cooldown when a 418/429 response omits Retry-After. */
+  defaultCooldownMs: number;
+}
 
 export interface RuntimeUniverseConfig {
   /** Stable fingerprint of every effective adapter and universe-policy setting. */
@@ -29,14 +40,18 @@ export interface RuntimeUniverseConfig {
   maximumAliasesPerListing: number;
   sourceStaleAfterMs: number;
   maximumFutureSkewMs: number;
+  restBudgets: Readonly<Record<RuntimeUniverseSource, RuntimeUniverseRestBudgetConfig>>;
   universePolicy: UniversePolicy;
 }
 
 export interface RuntimeUniverseAdapterOptions {
   transport: PublicRestTransport;
   clock: RuntimeClock;
-  config?: Partial<Omit<RuntimeUniverseConfig, 'configurationVersion' | 'universePolicy'>> & {
+  config?: Partial<Omit<RuntimeUniverseConfig, 'configurationVersion' | 'universePolicy' | 'restBudgets'>> & {
     universePolicy?: Partial<UniversePolicy>;
+    restBudgets?: Partial<{
+      [Source in RuntimeUniverseSource]: Partial<RuntimeUniverseRestBudgetConfig>;
+    }>;
   };
 }
 
@@ -89,6 +104,10 @@ export interface RuntimeListingChange {
 export interface RuntimeUniverseSourceSnapshot {
   readonly source: RuntimeUniverseSource;
   readonly state: UniverseSourceState;
+  /** Whether another REST refresh is currently eligible for dispatch. */
+  readonly refreshState: 'READY' | 'RATE_LIMITED';
+  readonly nextEligibleAtMs: number | null;
+  readonly rateBudget: RuntimeRateBudgetState;
   readonly attemptedAtMs: number;
   readonly lastResponseTimeMs: number | null;
   readonly lastCompleteResponseTimeMs: number | null;

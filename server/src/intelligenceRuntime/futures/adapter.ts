@@ -36,6 +36,7 @@ import {
   type FuturesDecodeIssue,
   type FuturesFeed,
   type FuturesIngestResult,
+  type FuturesInstrumentSeed,
   type FuturesInstrumentResolver,
   type FuturesLiquidationObservation,
   type FuturesMarkFundingObservation,
@@ -110,6 +111,11 @@ interface InternalSymbol {
 }
 
 interface InternalLiquidationSlot extends InternalSlot<FuturesLiquidationObservation> {
+  eventId: string;
+}
+
+interface LiquidationCursor {
+  sourceTimeMs: number;
   eventId: string;
 }
 
@@ -249,7 +255,7 @@ export class FuturesRuntimeAdapter {
   readonly #symbols = new Map<string, InternalSymbol>();
   readonly #liquidations: InternalLiquidationSlot[] = [];
   readonly #liquidationIds = new Set<string>();
-  readonly #liquidationCursors = new Map<string, { generation: number; sourceTimeMs: number }>();
+  readonly #liquidationCursors = new Map<string, LiquidationCursor>();
 
   constructor(clock: RuntimeClock, options: FuturesRuntimeAdapterOptions = {}) {
     if (typeof clock?.nowMs !== 'function') throw new TypeError('runtime clock is required');
@@ -337,7 +343,7 @@ export class FuturesRuntimeAdapter {
     let outOfOrder = 0;
     let dropped = decoded.overflow.records + (decoded.overflow.contractBrackets > 0 ? 1 : 0);
     let trackedDropped = 0;
-    let processedMessage = false;
+    let frameSourceTimeMs: number | null = null;
 
     const clockNow = this.#clock.nowMs();
     if (!Number.isSafeInteger(clockNow) || clockNow < receiveTimeMs) {
@@ -387,15 +393,10 @@ export class FuturesRuntimeAdapter {
               if (applied.issue) issues.push(applied.issue);
               continue;
             }
-            const generationAccepted = tracker.message({
-              generation,
-              sourceTimeMs: observation.sourceTransactionTimeMs ?? observation.sourceEventTimeMs,
-              receiveTimeMs,
-            });
-            if (!generationAccepted) {
-              throw new Error('Futures lifecycle generation changed during synchronous accepted-record processing');
-            }
-            processedMessage = true;
+            const observationSourceTimeMs = observation.sourceTransactionTimeMs ?? observation.sourceEventTimeMs;
+            frameSourceTimeMs = frameSourceTimeMs === null
+              ? observationSourceTimeMs
+              : Math.max(frameSourceTimeMs, observationSourceTimeMs);
             const event = this.#event(feed, generation, observation, applied.previousSequence);
             events.push(event);
             normalized.push(...this.#normalize(event));
@@ -404,7 +405,13 @@ export class FuturesRuntimeAdapter {
       }
     }
 
-    if (processedMessage) tracker.processed(generation, clockNow);
+    if (frameSourceTimeMs !== null) {
+      const generationAccepted = tracker.message({ generation, sourceTimeMs: frameSourceTimeMs, receiveTimeMs });
+      if (!generationAccepted) {
+        throw new Error('Futures lifecycle generation changed during synchronous accepted-frame processing');
+      }
+      tracker.processed(generation, clockNow);
+    }
     let currentAfter = false;
     if (Number.isSafeInteger(clockNow) && clockNow >= 0) {
       const after = tracker.snapshot(clockNow);
@@ -501,6 +508,10 @@ export class FuturesRuntimeAdapter {
           issue: runtimeIssue('IDENTITY_CONFLICT', 'ps', 'Official ps identity changed for an existing Futures symbol'),
         };
       }
+      if (observation.pairAuthority === 'OFFICIAL_PS'
+        && existing.identity.pairAuthority !== 'OFFICIAL_PS') {
+        existing.identity = Object.freeze({ ...existing.identity, pairAuthority: 'OFFICIAL_PS' });
+      }
       return { state: existing, issue: null };
     }
     if (this.#symbols.size >= this.#maximumSymbols) {
@@ -509,10 +520,23 @@ export class FuturesRuntimeAdapter {
         issue: runtimeIssue('CAPACITY_EXCEEDED', 'symbol', 'Bounded Futures symbol capacity is exhausted'),
       };
     }
+    const requiresResolution = observation.pairAuthority !== 'OFFICIAL_PS'
+      || observation.symbol !== observation.pair;
+    if (requiresResolution && this.#resolveInstrument(observation) === null) {
+      return {
+        state: null,
+        issue: runtimeIssue(
+          'IDENTITY_CONFLICT',
+          observation.pairAuthority === 'OFFICIAL_PS' ? 'ps' : 's',
+          'Symbol-only or non-canonical USD-M identity requires confirmation from the injected Perpetual universe resolver',
+        ),
+      };
+    }
     const state: InternalSymbol = {
       identity: Object.freeze({
         symbol: observation.symbol,
         pair: observation.pair,
+        pairAuthority: requiresResolution ? 'INJECTED_RESOLVER' : 'OFFICIAL_PS',
         sourceMarketType: 1,
         marketSegment: 'USD_M',
         productFamily: 'USD_M_PERPETUAL',
@@ -548,14 +572,24 @@ export class FuturesRuntimeAdapter {
     if (observation.kind === 'USD_M_BOOK_TICKER') {
       const prior = state.book;
       const previousSequence = prior?.generation === generation ? prior.observation.updateId : null;
-      if (prior?.generation === generation) {
+      if (prior !== null) {
         const sourceTimeMs = observation.sourceTransactionTimeMs ?? observation.sourceEventTimeMs;
         const priorSourceTimeMs = prior.observation.sourceTransactionTimeMs ?? prior.observation.sourceEventTimeMs;
         if (sourceTimeMs < priorSourceTimeMs) {
           return { outcome: 'OUT_OF_ORDER', previousSequence, evicted: 0, issue: null };
         }
         const order = compareDecimalIds(observation.updateId, prior.observation.updateId);
-        if (order === 0) return { outcome: 'DUPLICATE', previousSequence, evicted: 0, issue: null };
+        if (order === 0) {
+          if (canonicalJson(observation.rawRecord) === canonicalJson(prior.observation.rawRecord)) {
+            return { outcome: 'DUPLICATE', previousSequence, evicted: 0, issue: null };
+          }
+          return {
+            outcome: 'INVALID',
+            previousSequence,
+            evicted: 0,
+            issue: runtimeIssue('IDENTITY_CONFLICT', 'u', 'A retained Futures book update ID was replayed with different content'),
+          };
+        }
         if (order < 0) return { outcome: 'OUT_OF_ORDER', previousSequence, evicted: 0, issue: null };
       }
       state.lastUsefulReceiveTimeMs = Math.max(state.lastUsefulReceiveTimeMs, observation.receiveTimeMs);
@@ -564,11 +598,21 @@ export class FuturesRuntimeAdapter {
     }
     if (observation.kind === 'USD_M_MARK_FUNDING') {
       const prior = state.markFunding;
-      if (prior?.generation === generation && observation.sourceEventTimeMs === prior.observation.sourceEventTimeMs) {
-        return { outcome: 'DUPLICATE', previousSequence: null, evicted: 0, issue: null };
-      }
-      if (prior?.generation === generation && observation.sourceEventTimeMs < prior.observation.sourceEventTimeMs) {
-        return { outcome: 'OUT_OF_ORDER', previousSequence: null, evicted: 0, issue: null };
+      if (prior !== null) {
+        if (observation.sourceEventTimeMs < prior.observation.sourceEventTimeMs) {
+          return { outcome: 'OUT_OF_ORDER', previousSequence: null, evicted: 0, issue: null };
+        }
+        if (observation.sourceEventTimeMs === prior.observation.sourceEventTimeMs) {
+          if (canonicalJson(observation.rawRecord) === canonicalJson(prior.observation.rawRecord)) {
+            return { outcome: 'DUPLICATE', previousSequence: null, evicted: 0, issue: null };
+          }
+          return {
+            outcome: 'INVALID',
+            previousSequence: null,
+            evicted: 0,
+            issue: runtimeIssue('IDENTITY_CONFLICT', 'E', 'A retained mark event time was replayed with different content'),
+          };
+        }
       }
       state.lastUsefulReceiveTimeMs = Math.max(state.lastUsefulReceiveTimeMs, observation.receiveTimeMs);
       state.markFunding = { observation, generation };
@@ -576,11 +620,21 @@ export class FuturesRuntimeAdapter {
     }
     if (observation.kind === 'USD_M_CONTRACT_INFO') {
       const prior = state.contract;
-      if (prior?.generation === generation && observation.sourceEventTimeMs === prior.observation.sourceEventTimeMs) {
-        return { outcome: 'DUPLICATE', previousSequence: null, evicted: 0, issue: null };
-      }
-      if (prior?.generation === generation && observation.sourceEventTimeMs < prior.observation.sourceEventTimeMs) {
-        return { outcome: 'OUT_OF_ORDER', previousSequence: null, evicted: 0, issue: null };
+      if (prior !== null) {
+        if (observation.sourceEventTimeMs < prior.observation.sourceEventTimeMs) {
+          return { outcome: 'OUT_OF_ORDER', previousSequence: null, evicted: 0, issue: null };
+        }
+        if (observation.sourceEventTimeMs === prior.observation.sourceEventTimeMs) {
+          if (canonicalJson(observation.rawRecord) === canonicalJson(prior.observation.rawRecord)) {
+            return { outcome: 'DUPLICATE', previousSequence: null, evicted: 0, issue: null };
+          }
+          return {
+            outcome: 'INVALID',
+            previousSequence: null,
+            evicted: 0,
+            issue: runtimeIssue('IDENTITY_CONFLICT', 'E', 'A retained contract event time was replayed with different content'),
+          };
+        }
       }
       state.lastUsefulReceiveTimeMs = Math.max(state.lastUsefulReceiveTimeMs, observation.receiveTimeMs);
       state.contract = { observation, generation };
@@ -600,8 +654,21 @@ export class FuturesRuntimeAdapter {
     }
     const cursor = this.#liquidationCursors.get(observation.symbol);
     const sourceTimeMs = observation.sourceTransactionTimeMs ?? observation.sourceEventTimeMs;
-    if (cursor?.generation === generation && sourceTimeMs < cursor.sourceTimeMs) {
-      return { outcome: 'OUT_OF_ORDER', previousSequence: null, evicted: 0, issue: null };
+    if (cursor !== undefined) {
+      if (sourceTimeMs < cursor.sourceTimeMs) {
+        return { outcome: 'OUT_OF_ORDER', previousSequence: null, evicted: 0, issue: null };
+      }
+      if (sourceTimeMs === cursor.sourceTimeMs) {
+        if (eventId === cursor.eventId) {
+          return { outcome: 'DUPLICATE', previousSequence: null, evicted: 0, issue: null };
+        }
+        return {
+          outcome: 'INVALID',
+          previousSequence: null,
+          evicted: 0,
+          issue: runtimeIssue('IDENTITY_CONFLICT', 'o.T', 'A retained liquidation source time was replayed with different content'),
+        };
+      }
     }
     let evicted = 0;
     if (this.#liquidations.length === this.#maximumLiquidations) {
@@ -611,7 +678,7 @@ export class FuturesRuntimeAdapter {
     }
     this.#liquidations.push({ observation, generation, eventId });
     this.#liquidationIds.add(eventId);
-    this.#liquidationCursors.set(observation.symbol, { generation, sourceTimeMs });
+    this.#liquidationCursors.set(observation.symbol, { sourceTimeMs, eventId });
     state.lastUsefulReceiveTimeMs = Math.max(state.lastUsefulReceiveTimeMs, observation.receiveTimeMs);
     return { outcome: 'ACCEPTED', previousSequence: null, evicted, issue: null };
   }
@@ -633,6 +700,7 @@ export class FuturesRuntimeAdapter {
       kind: observation.kind,
       symbol: observation.symbol,
       pair: observation.pair,
+      pairAuthority: observation.pairAuthority,
       sourceEventTimeMs: observation.sourceEventTimeMs,
       sourceTransactionTimeMs: observation.sourceTransactionTimeMs,
       updateId: observation.kind === 'USD_M_BOOK_TICKER' ? observation.updateId : null,
@@ -652,15 +720,18 @@ export class FuturesRuntimeAdapter {
     });
   }
 
-  #resolveInstrument(observation: FuturesObservation) {
+  #resolveInstrument(observation: FuturesObservation): FuturesInstrumentSeed | null {
     if (!this.#resolver) return null;
     try {
       const resolved = this.#resolver.resolve(observation);
       if (
         resolved === null
+        || (resolved.venue !== undefined && resolved.venue !== 'BINANCE')
         || resolved.productFamily !== 'USD_M_PERPETUAL'
         || resolved.symbol !== observation.symbol
         || resolved.pair !== observation.pair
+        || resolved.symbol !== resolved.pair
+        || resolved.contractType !== 'PERPETUAL'
       ) return null;
       return resolved;
     } catch {

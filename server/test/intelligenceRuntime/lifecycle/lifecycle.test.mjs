@@ -140,7 +140,16 @@ test('normal connect, useful arrival, bounded drain, and graceful stop are expli
   assert.equal(h.runner.snapshot().source.processingLagMs, 7);
   assert.equal(h.runner.snapshot().lag.global.lastLagMs, 7);
   h.runner.stop();
-  assert.equal(h.runner.snapshot().source.observedState, 'STOPPED');
+  h.clock.advance(1_000);
+  const stopped = h.runner.snapshot().source;
+  assert.equal(stopped.desiredState, 'STOPPED');
+  assert.equal(stopped.observedState, 'STOPPED');
+  assert.equal(stopped.completeness, 'MISSING');
+  assert.equal(stopped.messageAgeMs, null);
+  assert.equal(stopped.processingLagMs, null);
+  assert.equal(stopped.lastMessageReceiveTimeMs, null);
+  assert.equal(stopped.lastProcessedTimeMs, null);
+  assert.equal(stopped.messageCount, 1);
   assert.match(connection.closes.at(-1).reason, /stopped/);
 });
 
@@ -422,6 +431,56 @@ test('REST weight snapshots advance interval and cooldown recovery without a sep
   assert.equal(budget.snapshot().state, 'COOLDOWN');
   clock.advance(500);
   assert.equal(budget.snapshot().state, 'AVAILABLE');
+});
+
+test('REST weight budget stays on absolute Binance windows across headers and rate-limit cooldowns', () => {
+  const clock = new ManualClock(61_234);
+  const budget = new RestWeightBudget(clock, {
+    limit: 10,
+    intervalMs: 60_000,
+    nearLimitRatio: 0.8,
+    defaultCooldownMs: 5_000,
+  });
+
+  const constructed = budget.snapshot();
+  assert.equal(constructed.resetsAtMs, 120_000);
+  assert.equal(budget.reserve(8).budget.state, 'NEAR_LIMIT');
+
+  clock.set(119_999);
+  const headerObservation = budget.observeResponse({
+    status: 200,
+    headers: { 'X-MBX-USED-WEIGHT-1M': '9' },
+  });
+  assert.equal(headerObservation.usedWeight, 9);
+  assert.equal(headerObservation.resetsAtMs, 120_000);
+
+  clock.set(120_000);
+  const nextWindow = budget.snapshot();
+  assert.equal(nextWindow.usedWeight, 0);
+  assert.equal(nextWindow.resetsAtMs, 180_000);
+
+  clock.set(120_010);
+  const limited = budget.observeResponse({
+    status: 429,
+    headers: { 'X-MBX-USED-WEIGHT-1M': '10', 'Retry-After': '2' },
+  });
+  assert.equal(limited.state, 'COOLDOWN');
+  assert.equal(limited.resetsAtMs, 180_000);
+  assert.equal(limited.retryAfterMs, 2_000);
+
+  clock.set(122_010);
+  const cooldownReleased = budget.snapshot();
+  assert.equal(cooldownReleased.state, 'EXHAUSTED');
+  assert.equal(cooldownReleased.usedWeight, 10);
+  assert.equal(cooldownReleased.resetsAtMs, 180_000);
+  const blocked = budget.reserve(1);
+  assert.equal(blocked.reason, 'WEIGHT_EXHAUSTED');
+  assert.equal(blocked.retryAtMs, 180_000);
+
+  clock.set(180_000);
+  assert.equal(budget.snapshot().state, 'AVAILABLE');
+  assert.equal(budget.snapshot().usedWeight, 0);
+  assert.equal(budget.snapshot().resetsAtMs, 240_000);
 });
 
 test('processing lag metrics remain bounded and expose per-source plus global percentiles', () => {

@@ -22,7 +22,12 @@ import {
   createRuntimeSourceId,
   type PublicRestRequest,
   type PublicRestResponse,
+  type RuntimeRateBudgetState,
 } from '../contracts/index.js';
+import {
+  RestWeightBudget,
+  type WeightReservation,
+} from '../lifecycle/rateBudget.js';
 import { parseExchangeInformation, type ParsedRuntimeListing } from './parsers.js';
 import {
   reAgeRuntimeUniverseTruth,
@@ -35,6 +40,7 @@ import type {
   RuntimeUniverseAdapterOptions,
   RuntimeUniverseConfig,
   RuntimeUniverseNodeView,
+  RuntimeUniverseRestBudgetConfig,
   RuntimeUniverseSnapshot,
   RuntimeUniverseSource,
   RuntimeUniverseSourceSnapshot,
@@ -71,6 +77,22 @@ export const RUNTIME_UNIVERSE_DEFAULTS: Readonly<RuntimeUniverseDefaultConfig> =
   maximumAliasesPerListing: 64,
   sourceStaleAfterMs: 15 * 60_000,
   maximumFutureSkewMs: 2_000,
+  restBudgets: {
+    SPOT: {
+      requestWeight: 20,
+      limit: 6_000,
+      intervalMs: 60_000,
+      nearLimitRatio: 0.8,
+      defaultCooldownMs: 2 * 60_000,
+    },
+    USD_M_PERPETUAL: {
+      requestWeight: 1,
+      limit: 2_400,
+      intervalMs: 60_000,
+      nearLimitRatio: 0.8,
+      defaultCooldownMs: 2 * 60_000,
+    },
+  },
   universePolicy: {
     configurationVersion: 'live-intelligence-universe-policy-1',
     maxRecordsPerSource: 50_000,
@@ -92,12 +114,26 @@ interface SourceState {
   state: UniverseSourceState;
   failures: StableFailure[];
   truth: TruthMetadata | null;
+  refreshState: 'READY' | 'RATE_LIMITED';
+  nextEligibleAtMs: number | null;
+  rateBudget: RuntimeRateBudgetState | null;
 }
 
 interface SourceRefresh {
   source: RuntimeUniverseSource;
   state: SourceState;
   changes: RuntimeListingChange[];
+}
+
+interface SourceAttempt {
+  readonly reservation: Readonly<WeightReservation>;
+  readonly settled: PromiseSettledResult<PublicRestResponse<unknown>> | null;
+}
+
+interface SourceBudgetObservation {
+  readonly refreshState: 'READY' | 'RATE_LIMITED';
+  readonly nextEligibleAtMs: number | null;
+  readonly rateBudget: Readonly<RuntimeRateBudgetState>;
 }
 
 function codePointCompare(left: string, right: string): number {
@@ -111,13 +147,51 @@ function safeInteger(value: number, name: string, minimum: number, maximum: numb
   return value;
 }
 
+function validatedRestBudget(
+  source: RuntimeUniverseSource,
+  value: RuntimeUniverseRestBudgetConfig,
+): RuntimeUniverseRestBudgetConfig {
+  const requestWeight = safeInteger(value.requestWeight, `${source}.requestWeight`, 1, 1_000_000);
+  const limit = safeInteger(value.limit, `${source}.limit`, 1, 1_000_000_000);
+  const intervalMs = safeInteger(value.intervalMs, `${source}.intervalMs`, 1, 24 * 60 * 60_000);
+  const defaultCooldownMs = safeInteger(
+    value.defaultCooldownMs,
+    `${source}.defaultCooldownMs`,
+    1,
+    3 * 24 * 60 * 60_000,
+  );
+  if (requestWeight > limit) throw new RangeError(`${source}.requestWeight must not exceed its limit`);
+  if (typeof value.nearLimitRatio !== 'number' || !Number.isFinite(value.nearLimitRatio)
+    || value.nearLimitRatio <= 0 || value.nearLimitRatio >= 1) {
+    throw new RangeError(`${source}.nearLimitRatio must be finite and in (0, 1)`);
+  }
+  return {
+    requestWeight,
+    limit,
+    intervalMs,
+    nearLimitRatio: value.nearLimitRatio,
+    defaultCooldownMs,
+  };
+}
+
 function validatedConfig(options: RuntimeUniverseAdapterOptions): RuntimeUniverseConfig {
   if (typeof options?.transport?.request !== 'function') throw new TypeError('public REST transport is required');
   if (typeof options?.clock?.nowMs !== 'function') throw new TypeError('runtime clock is required');
   const supplied = options.config ?? {};
+  const restBudgets = {
+    SPOT: validatedRestBudget('SPOT', {
+      ...RUNTIME_UNIVERSE_DEFAULTS.restBudgets.SPOT,
+      ...(supplied.restBudgets?.SPOT ?? {}),
+    }),
+    USD_M_PERPETUAL: validatedRestBudget('USD_M_PERPETUAL', {
+      ...RUNTIME_UNIVERSE_DEFAULTS.restBudgets.USD_M_PERPETUAL,
+      ...(supplied.restBudgets?.USD_M_PERPETUAL ?? {}),
+    }),
+  };
   const rawConfig: RuntimeUniverseDefaultConfig = {
     ...RUNTIME_UNIVERSE_DEFAULTS,
     ...supplied,
+    restBudgets,
     universePolicy: {
       ...RUNTIME_UNIVERSE_DEFAULTS.universePolicy,
       ...(supplied.universePolicy ?? {}),
@@ -147,6 +221,7 @@ function validatedConfig(options: RuntimeUniverseAdapterOptions): RuntimeUnivers
     maximumAliasesPerListing: rawConfig.maximumAliasesPerListing,
     sourceStaleAfterMs: rawConfig.sourceStaleAfterMs,
     maximumFutureSkewMs: rawConfig.maximumFutureSkewMs,
+    restBudgets,
     universePolicy: {
       ...policy,
       declaredConfigurationVersion: policy.configurationVersion,
@@ -167,6 +242,9 @@ function emptySourceState(): SourceState {
     state: 'UNAVAILABLE',
     failures: [],
     truth: null,
+    refreshState: 'READY',
+    nextEligibleAtMs: null,
+    rateBudget: null,
   };
 }
 
@@ -204,6 +282,15 @@ function failureForTransport(source: RuntimeUniverseSource, status?: number): St
   );
 }
 
+function failureForBudget(source: RuntimeUniverseSource): StableFailure {
+  return makeStableFailure(
+    'BUDGET_EXHAUSTED',
+    'runtime_universe',
+    'public exchangeInfo refresh is paused until its REST weight budget is eligible',
+    `${source}.rateBudget`,
+  );
+}
+
 function sourceTruth(input: {
   source: RuntimeUniverseSource;
   state: UniverseSourceState;
@@ -227,7 +314,10 @@ function sourceTruth(input: {
       completeness: 'MISSING',
       observedFields: [],
       missingFields: ['exchangeInfo'],
-      reasonCodes: ['EXCHANGE_INFO_UNAVAILABLE'],
+      reasonCodes: sortedUnique([
+        'EXCHANGE_INFO_UNAVAILABLE',
+        ...input.failures.map((failure) => failure.code),
+      ]),
     });
   }
   const listingIds = [...input.rows.values()]
@@ -313,6 +403,78 @@ function requestFor(source: RuntimeUniverseSource, config: RuntimeUniverseConfig
   };
 }
 
+async function settleSourceRequest(
+  transport: RuntimeUniverseAdapterOptions['transport'],
+  request: PublicRestRequest,
+  reservation: Readonly<WeightReservation>,
+): Promise<PromiseSettledResult<PublicRestResponse<unknown>> | null> {
+  if (!reservation.allowed) return null;
+  try {
+    return { status: 'fulfilled', value: await transport.request(request) };
+  } catch (reason) {
+    return { status: 'rejected', reason };
+  }
+}
+
+function validHttpStatus(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 100 && (value as number) <= 599;
+}
+
+function responseHeaders(value: unknown): Readonly<Record<string, string>> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return {};
+  return value as Readonly<Record<string, string>>;
+}
+
+function observeSourceBudget(input: {
+  budget: RestWeightBudget;
+  attempt: SourceAttempt;
+  observedAtMs: number;
+  config: RuntimeUniverseRestBudgetConfig;
+}): SourceBudgetObservation {
+  let rateBudget: Readonly<RuntimeRateBudgetState>;
+  const response = input.attempt.settled?.status === 'fulfilled'
+    ? input.attempt.settled.value
+    : null;
+  if (response !== null && validHttpStatus(response.status)) {
+    rateBudget = input.budget.observeResponse({
+      status: response.status,
+      headers: responseHeaders(response.headers),
+      observedAtMs: input.observedAtMs,
+    });
+  } else {
+    rateBudget = input.budget.snapshot(input.observedAtMs);
+  }
+  const locallyExhausted = rateBudget.usedWeight !== null
+    && rateBudget.limit !== null
+    && rateBudget.usedWeight + input.config.requestWeight > rateBudget.limit;
+  const rateLimited = rateBudget.state === 'COOLDOWN'
+    || rateBudget.state === 'EXHAUSTED'
+    || locallyExhausted;
+  if (!rateLimited) {
+    return { refreshState: 'READY', nextEligibleAtMs: null, rateBudget };
+  }
+  const deniedCooldownBoundary = input.attempt.settled === null
+    && input.attempt.reservation.reason === 'COOLDOWN'
+    ? input.attempt.reservation.retryAtMs
+    : null;
+  const cooldownBoundary = rateBudget.state === 'COOLDOWN' && rateBudget.retryAfterMs !== null
+    ? deniedCooldownBoundary ?? input.observedAtMs + rateBudget.retryAfterMs
+    : null;
+  const reservedBoundary = input.attempt.settled === null
+    ? input.attempt.reservation.retryAtMs
+    : null;
+  const weightBoundary = rateBudget.state === 'EXHAUSTED' || locallyExhausted
+    ? rateBudget.resetsAtMs
+    : null;
+  const boundaries = [reservedBoundary, cooldownBoundary, weightBoundary]
+    .filter((value): value is number => value !== null);
+  const nextEligibleAtMs = boundaries.length === 0 ? null : Math.max(...boundaries);
+  if (nextEligibleAtMs === null || !Number.isSafeInteger(nextEligibleAtMs)) {
+    throw new TypeError('rate-limited universe source must expose a safe next eligible timestamp');
+  }
+  return { refreshState: 'RATE_LIMITED', nextEligibleAtMs, rateBudget };
+}
+
 function validatedResponseTime(
   response: PublicRestResponse<unknown>,
   attemptedAtMs: number,
@@ -366,7 +528,8 @@ function mergePartialRows(input: {
 function refreshSource(input: {
   source: RuntimeUniverseSource;
   previous: SourceState;
-  settled: PromiseSettledResult<PublicRestResponse<unknown>>;
+  settled: PromiseSettledResult<PublicRestResponse<unknown>> | null;
+  budget: SourceBudgetObservation;
   attemptedAtMs: number;
   evaluatedAtMs: number;
   config: RuntimeUniverseConfig;
@@ -379,7 +542,9 @@ function refreshSource(input: {
   let state: UniverseSourceState = rows.size > 0 ? 'PARTIAL' : 'UNAVAILABLE';
   let lastResponseTimeMs = input.previous.lastResponseTimeMs;
   let lastCompleteResponseTimeMs = input.previous.lastCompleteResponseTimeMs;
-  if (input.settled.status === 'rejected') {
+  if (input.settled === null) {
+    failures = [failureForBudget(input.source)];
+  } else if (input.settled.status === 'rejected') {
     failures = [failureForTransport(input.source)];
   } else if (input.settled.value.status !== 200) {
     failures = [failureForTransport(input.source, input.settled.value.status)];
@@ -440,6 +605,9 @@ function refreshSource(input: {
     state,
     failures,
     truth,
+    refreshState: input.budget.refreshState,
+    nextEligibleAtMs: input.budget.nextEligibleAtMs,
+    rateBudget: { ...input.budget.rateBudget },
   };
   return {
     source: input.source,
@@ -531,9 +699,13 @@ function sourceSnapshot(
   attemptedAtMs: number,
 ): RuntimeUniverseSourceSnapshot {
   if (state.truth === null) throw new TypeError(`${source} source truth is unavailable`);
+  if (state.rateBudget === null) throw new TypeError(`${source} rate budget is unavailable`);
   return {
     source,
     state: state.state,
+    refreshState: state.refreshState,
+    nextEligibleAtMs: state.nextEligibleAtMs,
+    rateBudget: { ...state.rateBudget },
     attemptedAtMs,
     lastResponseTimeMs: state.lastResponseTimeMs,
     lastCompleteResponseTimeMs: state.lastCompleteResponseTimeMs,
@@ -585,6 +757,9 @@ export class BinancePublicUniverseAdapter {
   readonly #transport: RuntimeUniverseAdapterOptions['transport'];
   readonly #clock: RuntimeUniverseAdapterOptions['clock'];
   readonly #config: RuntimeUniverseConfig;
+  #spotBudget: RestWeightBudget | null = null;
+  #futuresBudget: RestWeightBudget | null = null;
+  #lastBudgetTimeMs = 0;
   #spot = emptySourceState();
   #futures = emptySourceState();
   #graph: UniverseGraph | null = null;
@@ -617,18 +792,55 @@ export class BinancePublicUniverseAdapter {
   async #tick(): Promise<RuntimeUniverseSnapshot> {
     const attemptedAtMs = this.#clock.nowMs();
     safeInteger(attemptedAtMs, 'clock.nowMs', 0, Number.MAX_SAFE_INTEGER);
-    const [spotResult, futuresResult] = await Promise.allSettled([
-      this.#transport.request(requestFor('SPOT', this.#config)),
-      this.#transport.request(requestFor('USD_M_PERPETUAL', this.#config)),
+    const budgetAttemptedAtMs = Math.max(attemptedAtMs, this.#lastBudgetTimeMs);
+    const spotBudget = this.#budget('SPOT', budgetAttemptedAtMs);
+    const futuresBudget = this.#budget('USD_M_PERPETUAL', budgetAttemptedAtMs);
+    const spotReservation = spotBudget.reserve(
+      this.#config.restBudgets.SPOT.requestWeight,
+      budgetAttemptedAtMs,
+    );
+    const futuresReservation = futuresBudget.reserve(
+      this.#config.restBudgets.USD_M_PERPETUAL.requestWeight,
+      budgetAttemptedAtMs,
+    );
+    const [spotResult, futuresResult] = await Promise.all([
+      settleSourceRequest(
+        this.#transport,
+        requestFor('SPOT', this.#config),
+        spotReservation,
+      ),
+      settleSourceRequest(
+        this.#transport,
+        requestFor('USD_M_PERPETUAL', this.#config),
+        futuresReservation,
+      ),
     ]);
     const observedAtMs = this.#clock.nowMs();
     safeInteger(observedAtMs, 'clock.nowMs', attemptedAtMs, Number.MAX_SAFE_INTEGER);
+    const budgetObservedAtMs = Math.max(observedAtMs, budgetAttemptedAtMs);
+    this.#lastBudgetTimeMs = budgetObservedAtMs;
+    const spotAttempt = { reservation: spotReservation, settled: spotResult };
+    const futuresAttempt = { reservation: futuresReservation, settled: futuresResult };
+    const spotBudgetObservation = observeSourceBudget({
+      budget: spotBudget,
+      attempt: spotAttempt,
+      observedAtMs: budgetObservedAtMs,
+      config: this.#config.restBudgets.SPOT,
+    });
+    const futuresBudgetObservation = observeSourceBudget({
+      budget: futuresBudget,
+      attempt: futuresAttempt,
+      observedAtMs: budgetObservedAtMs,
+      config: this.#config.restBudgets.USD_M_PERPETUAL,
+    });
     const spot = refreshSource({
       source: 'SPOT', previous: this.#spot, settled: spotResult,
+      budget: spotBudgetObservation,
       attemptedAtMs, evaluatedAtMs: observedAtMs, config: this.#config,
     });
     const futures = refreshSource({
       source: 'USD_M_PERPETUAL', previous: this.#futures, settled: futuresResult,
+      budget: futuresBudgetObservation,
       attemptedAtMs, evaluatedAtMs: observedAtMs, config: this.#config,
     });
     this.#spot = spot.state;
@@ -662,8 +874,18 @@ export class BinancePublicUniverseAdapter {
       metadataFingerprints: metadata.map((entry) => entry.fingerprint),
       listingChangeIds: changes.map((entry) => entry.id),
       sourceStates: {
-        SPOT: sources.SPOT.state,
-        USD_M_PERPETUAL: sources.USD_M_PERPETUAL.state,
+        SPOT: {
+          state: sources.SPOT.state,
+          refreshState: sources.SPOT.refreshState,
+          nextEligibleAtMs: sources.SPOT.nextEligibleAtMs,
+          rateBudget: sources.SPOT.rateBudget,
+        },
+        USD_M_PERPETUAL: {
+          state: sources.USD_M_PERPETUAL.state,
+          refreshState: sources.USD_M_PERPETUAL.refreshState,
+          nextEligibleAtMs: sources.USD_M_PERPETUAL.nextEligibleAtMs,
+          rateBudget: sources.USD_M_PERPETUAL.rateBudget,
+        },
       },
       failureIds: failures.map((failure) => failure.id),
     };
@@ -680,5 +902,20 @@ export class BinancePublicUniverseAdapter {
     };
     this.#snapshot = deepFreeze(snapshot);
     return this.#snapshot;
+  }
+
+  #budget(source: RuntimeUniverseSource, atMs: number): RestWeightBudget {
+    if (source === 'SPOT') {
+      this.#spotBudget ??= new RestWeightBudget(
+        { nowMs: () => atMs },
+        this.#config.restBudgets.SPOT,
+      );
+      return this.#spotBudget;
+    }
+    this.#futuresBudget ??= new RestWeightBudget(
+      { nowMs: () => atMs },
+      this.#config.restBudgets.USD_M_PERPETUAL,
+    );
+    return this.#futuresBudget;
   }
 }

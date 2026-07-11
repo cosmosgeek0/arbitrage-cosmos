@@ -122,20 +122,35 @@ function requiredString(record: PlainRecord, field: string, index: number): Pars
   return success(value);
 }
 
-function identity(record: PlainRecord, index: number): ParseResult<UsdMRuntimeIdentity> {
+function identity(
+  record: PlainRecord,
+  index: number,
+  allowSymbolOnlyPair = false,
+): ParseResult<UsdMRuntimeIdentity> {
   const symbol = requiredString(record, 's', index);
   if (!symbol.ok) return symbol;
-  const pair = requiredString(record, 'ps', index);
-  if (!pair.ok) return pair;
   if (!SYMBOL.test(symbol.value)) {
     return failure(issue('INVALID_FIELD', index, 's', 's must be an uppercase Binance symbol'));
   }
-  if (!SYMBOL.test(pair.value)) {
-    return failure(issue('INVALID_FIELD', index, 'ps', 'ps must be an uppercase Binance pair identity'));
+  let pair: string;
+  let pairAuthority: UsdMRuntimeIdentity['pairAuthority'];
+  if (record.ps === undefined || record.ps === null) {
+    if (!allowSymbolOnlyPair) return failure(issue('MISSING_FIELD', index, 'ps', 'ps is required'));
+    pair = symbol.value;
+    pairAuthority = 'SYMBOL_ONLY_REQUIRES_RESOLUTION';
+  } else {
+    const parsedPair = requiredString(record, 'ps', index);
+    if (!parsedPair.ok) return parsedPair;
+    if (!SYMBOL.test(parsedPair.value)) {
+      return failure(issue('INVALID_FIELD', index, 'ps', 'ps must be an uppercase Binance pair identity'));
+    }
+    pair = parsedPair.value;
+    pairAuthority = 'OFFICIAL_PS';
   }
   return success(Object.freeze({
     symbol: symbol.value,
-    pair: pair.value,
+    pair,
+    pairAuthority,
     sourceMarketType: 1 as const,
     marketSegment: 'USD_M' as const,
     productFamily: 'USD_M_PERPETUAL' as const,
@@ -288,7 +303,7 @@ function parseMarkFunding(
 ): ParseResult<FuturesMarkFundingObservation> {
   const typeIssue = eventType(record, 'markPriceUpdate', index);
   if (typeIssue) return failure(typeIssue);
-  const id = identity(record, index);
+  const id = identity(record, index, true);
   if (!id.ok) return id;
   const eventTime = timestamp(record.E, index, 'E', receiveTimeMs, futureSkewMs);
   if (!eventTime.ok) return eventTime;
@@ -307,6 +322,7 @@ function parseMarkFunding(
   const interval = optionalDecimal(record.fundingIntervalHours, index, 'fundingIntervalHours', 'POSITIVE');
   if (!interval.ok) return interval;
   const missingFields = [
+    ...(id.value.pairAuthority === 'SYMBOL_ONLY_REQUIRES_RESOLUTION' ? ['pairSourceEvidence'] : []),
     ...(settlement.value === null ? ['estimatedSettlementPrice'] : []),
     ...(movingAverage.value === null ? ['movingAverageMarkPrice'] : []),
     ...(fundingRate.value === null ? ['fundingRate'] : []),
@@ -405,7 +421,7 @@ function parseContract(
 ): ParseResult<FuturesContractObservation> {
   const typeIssue = eventType(record, 'contractInfo', index);
   if (typeIssue) return failure(typeIssue);
-  const id = identity(record, index);
+  const id = identity(record, index, true);
   if (!id.ok) return id;
   const eventTime = timestamp(record.E, index, 'E', receiveTimeMs, futureSkewMs);
   if (!eventTime.ok) return eventTime;
@@ -422,6 +438,9 @@ function parseContract(
   if (!onboard.ok) return onboard;
   const brackets = parseBrackets(record.bks, index, maximumContractBrackets);
   if (!brackets.ok) return brackets;
+  const missingFields = id.value.pairAuthority === 'SYMBOL_ONLY_REQUIRES_RESOLUTION'
+    ? frozenMissing(['pairSourceEvidence'])
+    : frozenMissing([]);
   return success(Object.freeze({
     kind: 'USD_M_CONTRACT_INFO' as const,
     ...id.value,
@@ -436,8 +455,8 @@ function parseContract(
     sourceEventTimeMs: eventTime.value,
     sourceTransactionTimeMs: null,
     receiveTimeMs,
-    completeness: 'COMPLETE' as const,
-    missingFields: frozenMissing([]),
+    completeness: missingFields.length === 0 ? 'COMPLETE' as const : 'PARTIAL' as const,
+    missingFields,
     contractType: contractType.value,
     contractStatus: contractStatus.value,
     deliveryTimeMs: delivery.value,

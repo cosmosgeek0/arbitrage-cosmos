@@ -69,7 +69,44 @@ test('start, connect, useful message, process, and stop are explicit', () => {
   assert.equal(live.messageAgeMs, 2);
   assert.equal(live.processingLagMs, 2);
   tracker.stop();
-  assert.equal(tracker.snapshot().observedState, 'STOPPED');
+  clock.set(2_000);
+  const stopped = tracker.snapshot();
+  assert.equal(stopped.desiredState, 'STOPPED');
+  assert.equal(stopped.observedState, 'STOPPED');
+  assert.equal(stopped.completeness, 'MISSING');
+  assert.equal(stopped.messageAgeMs, null);
+  assert.equal(stopped.processingLagMs, null);
+  assert.equal(stopped.lastMessageReceiveTimeMs, 1_010);
+  assert.equal(stopped.lastProcessedTimeMs, 1_012);
+  assert.equal(stopped.messageCount, 1);
+  assert.match(stopped.recommendedAction, /start explicitly/i);
+});
+
+test('stopped truth remains missing while bounded failure and quality diagnostics remain inspectable', () => {
+  const clock = new ManualClock();
+  const tracker = new SourceLifecycleTracker(definition(), clock);
+  const generation = tracker.start();
+  tracker.connected(generation);
+  tracker.message({ generation, sourceTimeMs: 995, receiveTimeMs: 1_000 });
+  tracker.count('duplicate', 2);
+  tracker.fail({
+    code: 'TEST_DIAGNOSTIC',
+    message: 'retained for operator diagnosis',
+    retryable: false,
+    observedAtMs: 1_000,
+    recommendedAction: 'Inspect the retained diagnostic.',
+  });
+  tracker.stop();
+  tracker.count('invalid');
+  const stopped = tracker.snapshot();
+  assert.equal(stopped.observedState, 'STOPPED');
+  assert.equal(stopped.completeness, 'MISSING');
+  assert.equal(stopped.messageAgeMs, null);
+  assert.equal(stopped.processingLagMs, null);
+  assert.equal(stopped.messageCount, 1);
+  assert.equal(stopped.duplicateCount, 2);
+  assert.equal(stopped.invalidCount, 1);
+  assert.equal(stopped.lastError.code, 'TEST_DIAGNOSTIC');
 });
 
 test('socket open without a useful message becomes SILENT', () => {

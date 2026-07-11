@@ -41,6 +41,18 @@ function safeHeaderInteger(value: string | undefined): number | null {
   return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
+function fixedIntervalWindow(atMs: number, intervalMs: number): Readonly<{
+  startedAtMs: number;
+  resetsAtMs: number;
+}> {
+  const startedAtMs = Math.floor(atMs / intervalMs) * intervalMs;
+  const resetsAtMs = startedAtMs + intervalMs;
+  if (!Number.isSafeInteger(startedAtMs) || !Number.isSafeInteger(resetsAtMs)) {
+    throw new RangeError('weight reset timestamp overflow');
+  }
+  return Object.freeze({ startedAtMs, resetsAtMs });
+}
+
 export function parseRestRateHeaders(
   headers: Readonly<Record<string, string>> | null | undefined,
 ): Readonly<ParsedRestRateHeaders> {
@@ -62,7 +74,9 @@ export function parseRestRateHeaders(
 
 /**
  * Deterministic local REST-weight ledger. Venue headers replace local estimates;
- * missing headers preserve the explicitly reserved request cost.
+ * missing headers preserve the explicitly reserved request cost. Weight windows
+ * are fixed wall-clock intervals, matching Binance's interval counters, rather
+ * than rolling intervals anchored to process construction or response arrival.
  */
 export class RestWeightBudget {
   readonly #clock: RuntimeClock;
@@ -86,9 +100,9 @@ export class RestWeightBudget {
     this.#clock = clock;
     this.#config = Object.freeze({ limit, intervalMs, defaultCooldownMs, nearLimitRatio: config.nearLimitRatio });
     const now = safeInteger(clock.nowMs(), 'clock.nowMs');
-    this.#windowStartedAtMs = now;
-    this.#resetsAtMs = now + intervalMs;
-    if (!Number.isSafeInteger(this.#resetsAtMs)) throw new RangeError('weight reset timestamp overflow');
+    const window = fixedIntervalWindow(now, intervalMs);
+    this.#windowStartedAtMs = window.startedAtMs;
+    this.#resetsAtMs = window.resetsAtMs;
     this.#observedAtMs = now;
   }
 
@@ -160,12 +174,11 @@ export class RestWeightBudget {
 
   #advance(atMs: number): void {
     safeInteger(atMs, 'rate-budget observation time');
-    if (atMs < this.#windowStartedAtMs) throw new RangeError('rate-budget clock regressed');
+    if (atMs < this.#observedAtMs) throw new RangeError('rate-budget clock regressed');
     if (atMs >= this.#resetsAtMs) {
-      const elapsedWindows = Math.floor((atMs - this.#windowStartedAtMs) / this.#config.intervalMs);
-      this.#windowStartedAtMs += elapsedWindows * this.#config.intervalMs;
-      this.#resetsAtMs = this.#windowStartedAtMs + this.#config.intervalMs;
-      if (!Number.isSafeInteger(this.#resetsAtMs)) throw new RangeError('weight reset timestamp overflow');
+      const window = fixedIntervalWindow(atMs, this.#config.intervalMs);
+      this.#windowStartedAtMs = window.startedAtMs;
+      this.#resetsAtMs = window.resetsAtMs;
       this.#usedWeight = 0;
     }
     if (this.#cooldownUntilMs !== null && atMs >= this.#cooldownUntilMs) {

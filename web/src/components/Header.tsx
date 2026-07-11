@@ -6,6 +6,7 @@ import { eventSummary } from '../lib/eventText';
 import { calVal, flag, type CalItem } from '../lib/calendar';
 import { curateNotifications, groupNotifications, notificationEnabled } from '../lib/notifications';
 import { fireRefresh } from '../lib/refresh';
+import { mutateSystemControl, useSystemIntegration, type SystemControlMutation } from '../lib/systemIntegration';
 import { ACCENTS, CURRENCIES, DATA_CADENCE_DEFAULTS, MARKET_PING_CHOICES, MARKET_PING_KEYS, type AccentKey, type DataCadenceKey, type NotificationRuleKey } from '../lib/prefs';
 import { openOverlay, useOverlay } from '../lib/overlay';
 import { TokenIcon } from './TokenIcon';
@@ -1833,6 +1834,7 @@ function BinanceApiKeySheet({ keys }: { keys: ApiKeyInfo[] }) {
 
 function SharedTopBar() {
   const { state, connected, page, prefs, updatePref, setPage, setKill, setLive, saveConfig } = useStore();
+  const integration = useSystemIntegration();
   const theme = useResolvedTheme();
   const rowRef = useRef<HTMLDivElement>(null);
   const menuContentRef = useRef<HTMLDivElement>(null);
@@ -2223,6 +2225,21 @@ function SharedTopBar() {
   const modeLabel = killOn ? 'Bot Stopped' : liveBlocker ? 'Limited' : liveOrdersAllowed ? 'Armed' : 'Ready';
   const modeSub = controlMutationError ?? (killOn ? 'Emergency stop is holding every bot action.' : liveBlocker ?? (liveOrdersAllowed ? 'Live sends remain behind the risk gate.' : 'Prerequisites pass; live sends remain off.'));
   const modeNet = b?.connected ? 'Synced' : 'Offline';
+  const convergenceControl = integration.snapshot?.control ?? null;
+  const convergenceKillOn = convergenceControl?.killSwitchEngaged ?? true;
+  const convergenceModeLabel = convergenceControl?.safeMode ? convergenceControl.safeMode.replaceAll('_', ' ') : 'Unavailable';
+  const convergenceTone = !convergenceControl
+    ? 'warn'
+    : convergenceControl.killSwitchEngaged || convergenceControl.intakePaused
+      ? 'warn'
+      : integration.snapshot?.overallPosture === 'READY'
+        ? 'ok'
+        : 'warn';
+  const convergenceSub = controlMutationError
+    ?? integration.error
+    ?? (convergenceControl
+      ? `${convergenceControl.intakePaused ? 'New strategy intake is paused.' : 'New strategy intake is open.'} Live execution remains mechanically unavailable.`
+      : 'Canonical supervisor state is unavailable. Controls fail closed.');
   const liveTitle = liveBlocker ?? 'Allow live order sends after the risk gate';
   const runConfigMutation = async (patch: Partial<AppConfig>) => {
     if (controlBusy) return;
@@ -2259,6 +2276,18 @@ function SharedTopBar() {
       if (error) setControlMutationError(error.message);
     } catch (error) {
       setControlMutationError(error instanceof Error ? error.message : 'Live-control change failed.');
+    } finally {
+      setControlBusy(false);
+    }
+  };
+  const runConvergenceMutation = async (mutation: SystemControlMutation, reason: string) => {
+    if (controlBusy || !convergenceControl) return;
+    setControlBusy(true);
+    setControlMutationError(null);
+    try {
+      await mutateSystemControl(convergenceControl.revision, reason, mutation);
+    } catch (error) {
+      setControlMutationError(error instanceof Error ? error.message : 'Convergence control change failed.');
     } finally {
       setControlBusy(false);
     }
@@ -3261,33 +3290,69 @@ function SharedTopBar() {
 
       case 'power':
         return (
-          <div className={`ops-sheet ops-bot-sheet ${modeTone}`}>
+          <div className={`ops-sheet ops-bot-sheet ${convergenceTone}`}>
             <OpsSheetHeader
-              icon={<PopupSourceMark tone={killOn ? '#55c937' : '#ff493b'} brand><ExecutionPowerIdentityMark stopped={killOn} size={40} /></PopupSourceMark>}
+              icon={<PopupSourceMark tone={convergenceKillOn ? '#ff493b' : '#55c937'} brand><ExecutionPowerIdentityMark stopped={convergenceKillOn} size={40} /></PopupSourceMark>}
               title="Execution Control"
-              subtitle={modeSub}
-              tone={statusTone(modeTone)}
+              subtitle={convergenceSub}
+              status={convergenceModeLabel}
+              tone={statusTone(convergenceTone)}
               action={(
                 <button
-                  className={`ops-execution-action ${killOn ? 'resume' : 'stop'}`}
+                  className={`ops-execution-action ${convergenceKillOn ? 'resume' : 'stop'}`}
                   type="button"
                   onClick={() => {
-                    if (!killOn || window.confirm('Resume bot actions and return control to the configured risk gates?')) void runKillMutation(!killOn);
+                    if (!convergenceKillOn || window.confirm('Release the convergence kill switch? Strategy intake will remain paused.')) {
+                      void runConvergenceMutation(
+                        { command: 'SET_KILL_SWITCH', engaged: !convergenceKillOn },
+                        convergenceKillOn ? 'Operator released convergence kill switch; intake remains paused.' : 'Operator engaged convergence kill switch from the control rail.',
+                      );
+                    }
                   }}
-                  aria-label={killOn ? 'Resume configured bot controls' : 'Stop every bot action'}
-                  disabled={controlBusy}
+                  aria-label={convergenceKillOn ? 'Release convergence kill switch' : 'Engage convergence kill switch'}
+                  disabled={controlBusy || !convergenceControl}
                 >
-                  <ExecutionPowerIdentityMark stopped={killOn} size={15} />
-                  <span>{killOn ? 'Resume' : 'Stop Bot'}</span>
+                  <ExecutionPowerIdentityMark stopped={convergenceKillOn} size={15} />
+                  <span>{convergenceKillOn ? 'Release' : 'Halt Intake'}</span>
                 </button>
               )}
             />
-            <div className="ops-section-label"><span>Execution Modes</span><em>{modeNet}</em></div>
-            <div className="ops-list ops-control-list" aria-label="Bot execution modes">
-              {executionControlRow('funds', 'Funds Access')}
-              {executionControlRow('borrowing', 'Borrowing')}
-              {executionControlRow('automation', 'Strategy Automation')}
-              {executionControlRow('liveOrders', 'Live Orders')}
+            <div className="ops-section-label"><span>Safe Convergence Mode</span><em>{convergenceControl ? `Revision ${convergenceControl.revision}` : 'Unavailable'}</em></div>
+            <div className={`ops-control-row ops-tri-row state-${convergenceControl?.safeMode ?? 'READ_ONLY'}`} data-control="convergence-mode">
+              <span><b>Operator Authority</b><em>Read, advise, or validate through sealed dry-run ports.</em></span>
+              <span className="ops-tri-control" role="radiogroup" aria-label="Safe convergence mode">
+                {(['READ_ONLY', 'ADVISORY', 'VALIDATE_ONLY'] as const).map((safeMode) => (
+                  <label key={safeMode} className={safeMode === 'READ_ONLY' ? 'blocked' : safeMode === 'ADVISORY' ? 'paused' : 'allowed'} title={safeMode.replaceAll('_', ' ')}>
+                    <input
+                      type="radio"
+                      name="convergence-safe-mode"
+                      value={safeMode}
+                      checked={convergenceControl?.safeMode === safeMode}
+                      disabled={controlBusy || !convergenceControl}
+                      onChange={() => void runConvergenceMutation(
+                        { command: 'SET_SAFE_MODE', safeMode },
+                        `Operator selected ${safeMode} convergence authority from the control rail.`,
+                      )}
+                    />
+                    <span>{safeMode === 'READ_ONLY' ? 'Read' : safeMode === 'ADVISORY' ? 'Advise' : 'Validate'}</span>
+                  </label>
+                ))}
+              </span>
+            </div>
+            <div className="ops-list ops-control-list" aria-label="Convergence controls">
+              <OpsRow
+                title="Strategy Intake"
+                detail={convergenceControl?.intakePaused ? 'New and increasing activity remains paused.' : 'Canonical engines may publish new proposals.'}
+                value={convergenceControl?.intakePaused ? 'Paused' : 'Open'}
+                tone={convergenceControl?.intakePaused ? 'warn' : 'ok'}
+                disabled={controlBusy || !convergenceControl || (convergenceKillOn && convergenceControl?.intakePaused === true)}
+                onClick={() => void runConvergenceMutation(
+                  { command: 'SET_INTAKE_PAUSED', paused: !(convergenceControl?.intakePaused ?? false) },
+                  convergenceControl?.intakePaused ? 'Operator requested convergence intake resume.' : 'Operator paused convergence strategy intake.',
+                )}
+              />
+              <OpsRow title="Live Execution" detail="No signed, test-order, private, or money-moving port exists in this slice." value="Blocked" tone="bad" />
+              <OpsRow title="Runtime Generation" detail={integration.snapshot ? `${integration.snapshot.overallPosture} · ${integration.snapshot.truthLabel}` : 'Supervisor unavailable'} value={integration.snapshot ? String(integration.snapshot.runtimeGeneration) : '—'} tone={integration.snapshot?.overallPosture === 'READY' ? 'ok' : 'warn'} />
             </div>
           </div>
         );
@@ -3443,9 +3508,9 @@ function SharedTopBar() {
           {unread > 0 && <b className="ops-trigger-count">{unread > 99 ? '99+' : unread}</b>}
         </span>
       </>, { title: `Notifications — ${unread ? `${unread} unread` : 'no unread events'}` })}
-      {trig('power', `hdr-ic power-ghost power-premium-trigger ${modeClass}`, <>
-        <span className={`rail-icon-core execution-control-trigger-core ${modeTone}`}><ExecutionPowerIdentityMark stopped={killOn} size={24} /></span>
-      </>, { title: `Execution Control — ${modeLabel}` })}
+      {trig('power', `hdr-ic power-ghost power-premium-trigger ${convergenceKillOn ? 'm-halted' : 'm-manual'}`, <>
+        <span className={`rail-icon-core execution-control-trigger-core ${convergenceTone}`}><ExecutionPowerIdentityMark stopped={convergenceKillOn} size={24} /></span>
+      </>, { title: `Execution Control — ${convergenceModeLabel}` })}
       <span className="topbar-suite-divider" aria-hidden="true" />
       {trig('currency', `hdr-ic currency-ghost currency-premium-trigger ${curTone}`, <>
         <span className={`rail-icon-core currency-trigger-core ${curTone}`}><CurrencyDollarIdentityMark size={24} /></span>

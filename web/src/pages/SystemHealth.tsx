@@ -20,6 +20,7 @@ import {
   Wifi,
   type LucideIcon,
 } from 'lucide-react';
+import { SystemIntegrationSurface } from '../components/SystemIntegrationSurface';
 import { useRefreshSignal } from '../lib/refresh';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createSettledPoll, type SettledPoll } from '../lib/polling';
@@ -564,6 +565,8 @@ export function SystemHealth() {
             </button>
           </div>
         </header>
+
+        <SystemIntegrationSurface surface="health" />
 
         {info ? (
           <>

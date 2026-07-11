@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
-import { ConfirmModal } from '../components/Modal';
 import { IconBook } from '../components/Icons';
+import { SystemIntegrationSurface } from '../components/SystemIntegrationSurface';
 import { TokenIcon } from '../components/TokenIcon';
 import { Seg } from '../components/px';
 import { fmtDateTime, fmtMoney, fmtPrice, timeAgo } from '../format';
@@ -185,7 +185,7 @@ function RiskCheckTable({ checks }: { checks: RiskCheck[] }) {
 }
 
 export function Risk() {
-  const { state, saveConfig, setKill, setLive, preview, setPage } = useStore();
+  const { state, saveConfig, preview, setPage } = useStore();
   const [draft, setDraft] = useState<LimitDraft>({});
   const [allowInput, setAllowInput] = useState('');
   const [blockInput, setBlockInput] = useState('');
@@ -195,11 +195,9 @@ export function Risk() {
   const [probeResult, setProbeResult] = useState<PreviewResult | null>(null);
   const [probeBusy, setProbeBusy] = useState(false);
   const [probeError, setProbeError] = useState<string | null>(null);
-  const [modal, setModal] = useState<'resume' | 'arm' | null>(null);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [policyBusy, setPolicyBusy] = useState(false);
-  const [controlBusy, setControlBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const probeGeneration = useRef(0);
 
@@ -342,10 +340,12 @@ export function Risk() {
 
   const sortedConditions = [...gateConditions].sort((left, right) => Number(left.pass) - Number(right.pass));
   const failedConditions = gateConditions.filter((condition) => !condition.pass);
-  const armBlocker = failedConditions.find((condition) => condition.id !== 'live-arm');
-  const canArmLive = !config.liveTradingEnabled && !armBlocker;
   const posture = config.killSwitch ? 'halted' : config.liveTradingEnabled ? 'live' : 'paper';
-  const postureLabel = posture === 'halted' ? 'Halted' : posture === 'live' ? 'Live Armed' : 'Paper';
+  const postureLabel = posture === 'halted'
+    ? 'Legacy Halted'
+    : posture === 'live'
+      ? 'Legacy Live Armed'
+      : 'Legacy Live Off';
 
   const dirtyLimitKeys = LIMIT_FIELDS.filter((field) => draft[field.key] !== undefined);
   const invalidLimitKeys = LIMIT_FIELDS.filter((field) => {
@@ -402,25 +402,6 @@ export function Risk() {
     }
   };
 
-  const mutateControl = async (kind: 'kill' | 'live', on: boolean): Promise<boolean> => {
-    if (controlBusy) return false;
-    setControlBusy(true);
-    setSaveError(null);
-    try {
-      const error = kind === 'kill' ? await setKill(on) : await setLive(on);
-      if (error) {
-        setSaveError(error.message);
-        return false;
-      }
-      return true;
-    } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'The execution-control change failed.');
-      return false;
-    } finally {
-      setControlBusy(false);
-    }
-  };
-
   const runProbe = async () => {
     const symbol = sanitizeSymbol(probeSymbol);
     const amount = Number(probeNotional);
@@ -470,48 +451,9 @@ export function Risk() {
             </span>
           </div>
 
-          <div className="riskx-global-controls">
-            <div className="riskx-live-control">
-              <span>
-                <small>Execution</small>
-                <strong>{config.liveTradingEnabled ? 'Live Armed' : 'Paper / Manual'}</strong>
-              </span>
-              {config.liveTradingEnabled ? (
-                <button type="button" className="riskx-button" disabled={controlBusy} onClick={() => void mutateControl('live', false)}>
-                  {controlBusy ? 'Working…' : 'Disarm'}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="riskx-button primary"
-                  disabled={!canArmLive}
-                  title={armBlocker ? armBlocker.label + ': ' + armBlocker.detail : 'Ready to arm live trading'}
-                  onClick={() => setModal('arm')}
-                >
-                  Arm Live
-                </button>
-              )}
-            </div>
-
-            <div className="riskx-kill-control">
-              <span>
-                <small>Kill Switch</small>
-                <strong>{config.killSwitch ? 'Halted' : 'Off'}</strong>
-              </span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={config.killSwitch}
-                aria-label="Kill Switch"
-                className={'riskx-switch ' + (config.killSwitch ? 'on' : 'off')}
-                disabled={controlBusy}
-                onClick={() => (config.killSwitch ? setModal('resume') : void mutateControl('kill', true))}
-              >
-                <span aria-hidden="true" />
-              </button>
-            </div>
-          </div>
         </header>
+
+        <SystemIntegrationSurface surface="risk" />
 
         {saveError ? <div className="riskx-probe-error" role="alert">{saveError}</div> : null}
 
@@ -840,41 +782,6 @@ export function Risk() {
         </section>
       </section>
 
-      {modal === 'resume' ? (
-        <ConfirmModal
-          title="Resume Live Orders"
-          requireText="RESUME"
-          confirmLabel="Resume"
-          busy={controlBusy}
-          onConfirm={async () => {
-            if (await mutateControl('kill', false)) setModal(null);
-          }}
-          onClose={() => setModal(null)}
-        >
-          <p className="muted">
-            This turns the kill switch off. Live orders still require the live arm and every server-side risk check.
-          </p>
-        </ConfirmModal>
-      ) : null}
-
-      {modal === 'arm' ? (
-        <ConfirmModal
-          title="Arm Live Trading"
-          requireText="ARM"
-          confirmLabel="Arm Live"
-          danger
-          busy={controlBusy}
-          onConfirm={async () => {
-            if (await mutateControl('live', true)) setModal(null);
-          }}
-          onClose={() => setModal(null)}
-        >
-          <p className="muted">
-            Live submission becomes possible only after the server re-checks the kill switch, funds access, symbol policy,
-            notional, daily loss, open orders, and cooldown.
-          </p>
-        </ConfirmModal>
-      ) : null}
     </div>
   );
 }

@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { EquityChart, PerfChart, type PerfDay } from '../components/PerfChart';
+import { SystemIntegrationSurface } from '../components/SystemIntegrationSurface';
 import { TokenIcon } from '../components/TokenIcon';
 import { useRefreshSignal } from '../lib/refresh';
 import { apiErrorMessage, fetchJson } from '../lib/http';
@@ -430,10 +431,10 @@ export function Dashboard() {
   const usdtFees = sources.pnl.data?.feesByAsset.find((fee) => fee.asset === 'USDT')?.amount ?? 0;
 
   const controlState = state?.config.killSwitch
-    ? { label: 'Bot Stopped', detail: 'Kill Switch On', tone: 'ok' as Tone }
+    ? { label: 'Legacy Halted', detail: 'Existing App Kill Switch On', tone: 'ok' as Tone }
     : state?.config.liveTradingEnabled
-      ? { label: 'Live Armed', detail: 'Risk Gate Required', tone: 'warn' as Tone }
-      : { label: 'Manual Guarded', detail: 'Live Orders Off', tone: 'ok' as Tone };
+      ? { label: 'Legacy Live Configured', detail: 'Outside The Convergence Slice', tone: 'warn' as Tone }
+      : { label: 'Legacy Live Off', detail: 'Convergence Authority Is Shown Above', tone: 'ok' as Tone };
 
   const queueCount = (basis?.status.watching ?? 0) + (basis?.status.focused ?? 0) + (volume?.status.watching ?? 0) + (volume?.status.focused ?? 0);
   const latestUpdate = Math.max(basis?.updatedAt ?? 0, volume?.updatedAt ?? 0, state?.binance.lastSyncTs ?? 0);
@@ -469,6 +470,8 @@ export function Dashboard() {
           </div>
         </header>
 
+        <SystemIntegrationSurface surface="dashboard" />
+
         <div className="dcx-summary" aria-label="Executive Summary">
           <Metric
             label={account?.complete === false ? 'Partial Account Value' : 'Estimated Total Value'}
@@ -485,7 +488,7 @@ export function Dashboard() {
           <Metric label="Available USDT" value={account ? fmtPrice(account.availableUsdt) : '—'} detail="Free Spot Balance" />
           <Metric label="Active Exposure" value={fmtPrice(exposure)} detail={`${positions.length} Position${positions.length === 1 ? '' : 's'} · ${fmtMoney(heldNotional)} Held`} />
           <Metric label="Engine Queue" value={String(queueCount)} detail={`${(basis?.status.openProposals ?? 0) + (volume?.status.openProposals ?? 0)} Open Proposals`} tone={queueCount ? 'warn' : 'idle'} />
-          <Metric label="Control State" value={controlState.label} detail={controlState.detail} tone={controlState.tone} />
+          <Metric label="Legacy Order Route" value={controlState.label} detail={controlState.detail} tone={controlState.tone} />
         </div>
 
         <section className="dcx-section dcx-capital-section">

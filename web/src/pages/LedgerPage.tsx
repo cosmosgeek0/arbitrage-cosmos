@@ -9,6 +9,7 @@ import { TIME_ZONE_OPTIONS, addDays, dayBounds, dayKey, formatKey, resolvedZoneL
 import type { LedgerEvent } from '../types';
 import { TokenIcon } from '../components/TokenIcon';
 import { PillSelect } from '../components/PillSelect';
+import { SystemIntegrationSurface } from '../components/SystemIntegrationSurface';
 import {
   IconChart,
   IconDatabase,
@@ -540,6 +541,8 @@ export function LedgerPage() {
             {query && <button type="button" aria-label="Clear Search" onClick={() => setQuery('')}>×</button>}
           </label>
         </header>
+
+        <SystemIntegrationSurface surface="logs" />
 
         <section className="calx-navigation logx-navigation" aria-label="Logs Navigation">
           <div className="calx-range-controls">

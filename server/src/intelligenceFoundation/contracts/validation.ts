@@ -3,8 +3,10 @@ import {
   EVIDENCE_KINDS,
   EVIDENCE_POLARITIES,
   FAILURE_CODES,
+  FORENSIC_VERDICTS,
   FRESHNESS_BASES,
   FRESHNESS_STATES,
+  HYPOTHESIS_CLASSES,
   MARKET_STAGES,
   PRODUCT_FAMILIES,
   SOURCE_AUTHORITIES,
@@ -95,15 +97,16 @@ export function findForbiddenSecretField(value: unknown): string | null {
   const seen = new Set<object>();
   let visited = 0;
   const walk = (entry: unknown, path: string, depth: number): string | null => {
-    if (depth > 32 || ++visited > 50_000) return null;
+    if (depth > 32 || ++visited > 50_000) throw new TypeError(`contract structure exceeds validation limits at ${path}`);
     if (entry === null || typeof entry !== 'object') return null;
-    if (seen.has(entry)) return null;
+    if (seen.has(entry)) throw new TypeError(`cyclic contract structure at ${path}`);
     seen.add(entry);
     if (Array.isArray(entry)) {
       for (let index = 0; index < entry.length; index += 1) {
         const found = walk(entry[index], `${path}[${index}]`, depth + 1);
         if (found) return found;
       }
+      seen.delete(entry);
       return null;
     }
     for (const [key, child] of Object.entries(entry as Record<string, unknown>)) {
@@ -112,13 +115,19 @@ export function findForbiddenSecretField(value: unknown): string | null {
       const found = walk(child, next, depth + 1);
       if (found) return found;
     }
+    seen.delete(entry);
     return null;
   };
   return walk(value, '$', 0);
 }
 
 export function validateNoSecretFields(value: unknown, component = 'contracts'): ValidationResult<unknown> {
-  const field = findForbiddenSecretField(value);
+  let field: string | null;
+  try {
+    field = findForbiddenSecretField(value);
+  } catch {
+    return { ok: false, failure: failure('INVALID_VALUE', component, 'contract structure could not be completely inspected', null) };
+  }
   if (field) {
     return { ok: false, failure: failure('SECRET_FIELD_REJECTED', component, 'forbidden secret-bearing field rejected', field) };
   }
@@ -218,6 +227,9 @@ export function validateTruthMetadata(value: unknown): ValidationResult<TruthMet
   }
   if (completeness.state === 'MISSING' && completeness.missingFields.length === 0) {
     return { ok: false, failure: failure('INVALID_VALUE', 'truth_metadata', 'missing truth must name missing fields', 'completeness.missingFields') };
+  }
+  if ((completeness.state === 'PARTIAL' || completeness.state === 'MISSING') && (completeness.missingFields.length === 0 || completeness.reasonCodes.length === 0)) {
+    return { ok: false, failure: failure('INVALID_VALUE', 'truth_metadata', 'partial or missing truth must name missing fields and reasons', 'completeness') };
   }
   const observedFields = sortedUnique(completeness.observedFields);
   const missingFields = sortedUnique(completeness.missingFields);
@@ -350,7 +362,15 @@ export function validateNormalizedEvidence(value: unknown): ValidationResult<Nor
       if (value.firstTradeId !== null && value.lastTradeId !== null && BigInt(value.firstTradeId as string) > BigInt(value.lastTradeId as string)) {
         return { ok: false, failure: failure('INVALID_VALUE', 'normalized_evidence', 'trade ID range is reversed', 'firstTradeId') };
       }
-      return { ok: true, value: { ...common, kind: 'TRADE', aggregateTradeId: value.aggregateTradeId as string | null, firstTradeId: value.firstTradeId as string | null, lastTradeId: value.lastTradeId as string | null, price: value.price, baseQuantity: value.baseQuantity, quoteQuantity: value.quoteQuantity, normalBaseQuantityExcludingRpi: value.normalBaseQuantityExcludingRpi as number | null, aggressorSide: value.aggressorSide as 'BUY' | 'SELL' | 'UNKNOWN' } };
+      const expectedQuote = value.price * value.baseQuantity;
+      if (Math.abs(value.quoteQuantity - expectedQuote) > Math.max(1e-9, expectedQuote * 1e-9)) {
+        return { ok: false, failure: failure('INVALID_VALUE', 'normalized_evidence', 'quote quantity must equal price times base quantity', 'quoteQuantity') };
+      }
+      const normalBaseQuantityExcludingRpi = value.normalBaseQuantityExcludingRpi as number | null;
+      if (normalBaseQuantityExcludingRpi !== null && normalBaseQuantityExcludingRpi > value.baseQuantity) {
+        return { ok: false, failure: failure('INVALID_VALUE', 'normalized_evidence', 'normal base quantity cannot exceed total base quantity', 'normalBaseQuantityExcludingRpi') };
+      }
+      return { ok: true, value: { ...common, kind: 'TRADE', aggregateTradeId: value.aggregateTradeId as string | null, firstTradeId: value.firstTradeId as string | null, lastTradeId: value.lastTradeId as string | null, price: value.price, baseQuantity: value.baseQuantity, quoteQuantity: value.quoteQuantity, normalBaseQuantityExcludingRpi, aggressorSide: value.aggressorSide as 'BUY' | 'SELL' | 'UNKNOWN' } };
     }
     case 'BOOK_TICKER': {
       if (!decimalStringOrNull(value.updateId) || !positive(value.bidPrice) || !positive(value.askPrice) || !positive(value.bidQuantity) || !positive(value.askQuantity)) {
@@ -372,7 +392,7 @@ export function validateNormalizedEvidence(value: unknown): ValidationResult<Nor
       }
       const bids = value.bids as { price: number; baseQuantity: number }[];
       const asks = value.asks as { price: number; baseQuantity: number }[];
-      if (bids.length > 0 && asks.length > 0 && bids[0].price >= asks[0].price) {
+      if (value.kind === 'DEPTH_SNAPSHOT' && bids.length > 0 && asks.length > 0 && bids[0].price >= asks[0].price) {
         return { ok: false, failure: failure('CROSSED_BOOK', 'normalized_evidence', 'depth best bid must be below best ask', null, [value.id]) };
       }
       return { ok: true, value: { ...common, kind: value.kind, bids: bids.map((level) => ({ ...level })), asks: asks.map((level) => ({ ...level })), bookScope: value.bookScope as 'STANDARD_NO_RPI' | 'RPI_INCLUDED' | 'UNKNOWN', maximumLevelsKnown: value.maximumLevelsKnown as number | null } };
@@ -416,6 +436,9 @@ export function validateNormalizedEvidence(value: unknown): ValidationResult<Nor
       ) {
         return { ok: false, failure: failure('INVALID_VALUE', 'normalized_evidence', 'invalid liquidation values', null) };
       }
+      if ((value.orderSide === 'BUY' && value.liquidatedPositionSide !== 'SHORT') || (value.orderSide === 'SELL' && value.liquidatedPositionSide !== 'LONG')) {
+        return { ok: false, failure: failure('INVALID_VALUE', 'normalized_evidence', 'liquidation order side conflicts with liquidated position side', 'liquidatedPositionSide') };
+      }
       return { ok: true, value: { ...common, kind: 'LIQUIDATION', orderSide: value.orderSide as 'BUY' | 'SELL', liquidatedPositionSide: value.liquidatedPositionSide as 'LONG' | 'SHORT', orderType: value.orderType, timeInForce: value.timeInForce, originalQuantity: value.originalQuantity, filledQuantity: value.filledQuantity, averagePrice: value.averagePrice as number | null, sampledLatestPerWindow: value.sampledLatestPerWindow, sampleWindowMs: value.sampleWindowMs as number | null } };
     }
     case 'BORROW': {
@@ -425,7 +448,8 @@ export function validateNormalizedEvidence(value: unknown): ValidationResult<Nor
         !nullableNonNegative(value.systemAvailableAmount) || !nullableNonNegative(value.accountBorrowLimit) ||
         !nullableNonNegative(value.hourlyInterestRateDecimal) || !nullableNonNegative(value.inventoryAmount) ||
         (value.availability === 'AVAILABLE' && !positive(value.systemAvailableAmount)) ||
-        (value.availability === 'UNKNOWN' && value.systemAvailableAmount !== null)
+        (value.availability === 'UNKNOWN' && value.systemAvailableAmount !== null) ||
+        (value.eligibility === 'INELIGIBLE' && value.availability === 'AVAILABLE')
       ) {
         return { ok: false, failure: failure('INVALID_VALUE', 'normalized_evidence', 'invalid borrow values', null) };
       }
@@ -462,6 +486,13 @@ function truthCutoffFailure(value: unknown, cutoffTimeMs: number, field: string,
   return null;
 }
 
+function deepFreeze<T>(value: T, seen = new Set<object>()): T {
+  if (value === null || typeof value !== 'object' || seen.has(value)) return value;
+  seen.add(value);
+  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child, seen);
+  return Object.freeze(value);
+}
+
 export function validateFrozenPreEventRecord(value: unknown): ValidationResult<FrozenPreEventRecord> {
   const secret = validateNoSecretFields(value, 'frozen_pre_event');
   if (!secret.ok) return secret as ValidationResult<FrozenPreEventRecord>;
@@ -486,7 +517,17 @@ export function validateFrozenPreEventRecord(value: unknown): ValidationResult<F
   }
 
   const thesis = value.thesis;
-  if (!nonEmptyString(thesis.id) || !nonEmptyString(thesis.instrumentId) || !(thesis.changedAtMs === null || nonNegativeTime(thesis.changedAtMs))) {
+  if (
+    !nonEmptyString(thesis.id) || !nonEmptyString(thesis.instrumentId) ||
+    !has(HYPOTHESIS_CLASSES, thesis.hypothesis) || !has(MARKET_STAGES, thesis.stage) ||
+    !['SPOT', 'PERPETUAL', 'NEITHER', 'UNKNOWN'].includes(String(thesis.leadMarket)) ||
+    !(thesis.changedFirst === null || nonEmptyString(thesis.changedFirst)) ||
+    !(thesis.changedAtMs === null || nonNegativeTime(thesis.changedAtMs)) ||
+    !stringArray(thesis.analogueIds) || !stringArray(thesis.reasonCodes) || !object(thesis.tradeability) ||
+    !['SUPPORTED', 'BLOCKED', 'UNKNOWN'].includes(String(thesis.tradeability.state)) ||
+    !stringArray(thesis.tradeability.reasonCodes) || !stringArray(thesis.tradeability.requiredEvidenceIds) ||
+    !Array.isArray(thesis.tradeability.missingEvidenceKinds) || !thesis.tradeability.missingEvidenceKinds.every((kind) => has(EVIDENCE_KINDS, kind))
+  ) {
     return { ok: false, failure: failure('INVALID_VALUE', 'frozen_pre_event', 'invalid thesis identity or change time', 'thesis', [value.id]) };
   }
   if (thesis.changedAtMs !== null && thesis.changedAtMs > value.evidenceCutoffTimeMs) {
@@ -522,8 +563,8 @@ export function validateFrozenPreEventRecord(value: unknown): ValidationResult<F
       (feature.observationStartMs !== null && feature.observationEndMs !== null && feature.observationStartMs > feature.observationEndMs)
     ) return { ok: false, failure: failure('INVALID_VALUE', 'frozen_pre_event', 'invalid or duplicate feature', `features[${index}]`, object(feature) && typeof feature.id === 'string' ? [feature.id] : []) };
     featureIds.add(feature.id);
-    if (feature.observationEndMs !== null && feature.observationEndMs > value.evidenceCutoffTimeMs) {
-      return { ok: false, failure: failure('NO_LOOK_AHEAD_VIOLATION', 'frozen_pre_event', 'feature observation exceeds the frozen evidence cutoff', `features[${index}].observationEndMs`, [feature.id]) };
+    if ((feature.observationStartMs !== null && feature.observationStartMs > value.evidenceCutoffTimeMs) || (feature.observationEndMs !== null && feature.observationEndMs > value.evidenceCutoffTimeMs)) {
+      return { ok: false, failure: failure('NO_LOOK_AHEAD_VIOLATION', 'frozen_pre_event', 'feature observation exceeds the frozen evidence cutoff', `features[${index}].observationRange`, [feature.id]) };
     }
     const featureTruth = validateTruthMetadata(feature.truth);
     if (!featureTruth.ok) return featureTruth as ValidationResult<FrozenPreEventRecord>;
@@ -534,17 +575,32 @@ export function validateFrozenPreEventRecord(value: unknown): ValidationResult<F
     if (cutoff) return { ok: false, failure: cutoff };
   }
 
-  const factGroups = ['supporting', 'conflicting', 'neutral', 'unavailable'] as const;
-  for (const group of factGroups) {
+  const factGroups = [
+    ['supporting', 'SUPPORTING'],
+    ['conflicting', 'CONFLICTING'],
+    ['neutral', 'NEUTRAL'],
+    ['unavailable', 'UNAVAILABLE'],
+  ] as const;
+  for (const [group, expectedPolarity] of factGroups) {
     const facts = thesis[group];
     if (!Array.isArray(facts)) return { ok: false, failure: failure('INVALID_VALUE', 'frozen_pre_event', 'thesis evidence group must be an array', `thesis.${group}`, [thesis.id]) };
     for (let index = 0; index < facts.length; index += 1) {
       const fact = facts[index];
-      if (!object(fact) || !nonEmptyString(fact.id) || !(fact.observationEndMs === null || nonNegativeTime(fact.observationEndMs))) {
+      if (
+        !object(fact) || !nonEmptyString(fact.id) || fact.polarity !== expectedPolarity ||
+        !nonEmptyString(fact.fact) || !nonEmptyString(fact.reasonCode) ||
+        !stringArray(fact.featureIds) || !stringArray(fact.evidenceIds) ||
+        !(fact.observationStartMs === null || nonNegativeTime(fact.observationStartMs)) ||
+        !(fact.observationEndMs === null || nonNegativeTime(fact.observationEndMs)) ||
+        (fact.observationStartMs !== null && fact.observationEndMs !== null && fact.observationStartMs > fact.observationEndMs)
+      ) {
         return { ok: false, failure: failure('INVALID_VALUE', 'frozen_pre_event', 'invalid thesis evidence fact', `thesis.${group}[${index}]`, [thesis.id]) };
       }
-      if (fact.observationEndMs !== null && fact.observationEndMs > value.evidenceCutoffTimeMs) {
-        return { ok: false, failure: failure('NO_LOOK_AHEAD_VIOLATION', 'frozen_pre_event', 'thesis evidence exceeds the frozen evidence cutoff', `thesis.${group}[${index}].observationEndMs`, [fact.id]) };
+      if ((fact.observationStartMs !== null && fact.observationStartMs > value.evidenceCutoffTimeMs) || (fact.observationEndMs !== null && fact.observationEndMs > value.evidenceCutoffTimeMs)) {
+        return { ok: false, failure: failure('NO_LOOK_AHEAD_VIOLATION', 'frozen_pre_event', 'thesis evidence exceeds the frozen evidence cutoff', `thesis.${group}[${index}].observationRange`, [fact.id]) };
+      }
+      if (fact.featureIds.some((id) => !featureIds.has(id)) || fact.evidenceIds.some((id) => !evidenceIds.has(id))) {
+        return { ok: false, failure: failure('INVALID_VALUE', 'frozen_pre_event', 'thesis evidence references an unknown dependency', `thesis.${group}[${index}]`, [fact.id]) };
       }
       const cutoff = truthCutoffFailure(fact.truth, value.evidenceCutoffTimeMs, `thesis.${group}[${index}].truth`, fact.id);
       if (cutoff) return { ok: false, failure: cutoff };
@@ -554,17 +610,41 @@ export function validateFrozenPreEventRecord(value: unknown): ValidationResult<F
   const forensicIds = new Set<string>();
   for (let index = 0; index < value.forensics.length; index += 1) {
     const check = value.forensics[index];
-    if (!object(check) || !nonEmptyString(check.id) || forensicIds.has(check.id) || !(check.observationEndMs === null || nonNegativeTime(check.observationEndMs))) {
+    if (
+      !object(check) || !nonEmptyString(check.id) || forensicIds.has(check.id) || !nonEmptyString(check.check) ||
+      !has(FORENSIC_VERDICTS, check.verdict) || !['BLOCK', 'WARN'].includes(String(check.severity)) ||
+      !stringArray(check.reasonCodes) || !stringArray(check.evidenceIds) ||
+      !(check.observationStartMs === null || nonNegativeTime(check.observationStartMs)) ||
+      !(check.observationEndMs === null || nonNegativeTime(check.observationEndMs)) ||
+      (check.observationStartMs !== null && check.observationEndMs !== null && check.observationStartMs > check.observationEndMs) ||
+      check.evidenceIds.some((id) => !evidenceIds.has(id))
+    ) {
       return { ok: false, failure: failure('INVALID_VALUE', 'frozen_pre_event', 'invalid or duplicate forensic check', `forensics[${index}]`, object(check) && typeof check.id === 'string' ? [check.id] : []) };
     }
     forensicIds.add(check.id);
-    if (check.observationEndMs !== null && check.observationEndMs > value.evidenceCutoffTimeMs) {
-      return { ok: false, failure: failure('NO_LOOK_AHEAD_VIOLATION', 'frozen_pre_event', 'forensic observation exceeds the frozen evidence cutoff', `forensics[${index}].observationEndMs`, [check.id]) };
+    if ((check.observationStartMs !== null && check.observationStartMs > value.evidenceCutoffTimeMs) || (check.observationEndMs !== null && check.observationEndMs > value.evidenceCutoffTimeMs)) {
+      return { ok: false, failure: failure('NO_LOOK_AHEAD_VIOLATION', 'frozen_pre_event', 'forensic observation exceeds the frozen evidence cutoff', `forensics[${index}].observationRange`, [check.id]) };
     }
     const cutoff = truthCutoffFailure(check.truth, value.evidenceCutoffTimeMs, `forensics[${index}].truth`, check.id);
     if (cutoff) return { ok: false, failure: cutoff };
   }
-  return { ok: true, value: value as unknown as FrozenPreEventRecord };
+  if (thesis.tradeability.requiredEvidenceIds.some((id) => !evidenceIds.has(id))) {
+    return { ok: false, failure: failure('INVALID_VALUE', 'frozen_pre_event', 'tradeability references unknown evidence', 'thesis.tradeability.requiredEvidenceIds', [thesis.id]) };
+  }
+  const normalized = structuredClone({
+    id: value.id,
+    triggerTimeMs: value.triggerTimeMs,
+    evidenceCutoffTimeMs: value.evidenceCutoffTimeMs,
+    candidateDisposition: value.candidateDisposition,
+    thesis,
+    forensics: value.forensics,
+    evidence: value.evidence,
+    features: value.features,
+    configurationVersion: value.configurationVersion,
+    featureVersion: value.featureVersion,
+    truth: recordTruth.value,
+  }) as unknown as FrozenPreEventRecord;
+  return { ok: true, value: deepFreeze(normalized) };
 }
 
 export function isMarketStage(value: unknown): boolean {

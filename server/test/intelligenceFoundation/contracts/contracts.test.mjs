@@ -108,6 +108,9 @@ test('contradictory freshness and completeness claims are rejected', () => {
   const missingClaimedComplete = truth();
   missingClaimedComplete.completeness = { ...missingClaimedComplete.completeness, missingFields: ['depth'] };
   assert.equal(validateTruthMetadata(missingClaimedComplete).ok, false);
+  const unexplainedPartial = truth();
+  unexplainedPartial.completeness = { state: 'PARTIAL', observedFields: ['bid'], missingFields: ['ask'], reasonCodes: [] };
+  assert.equal(validateTruthMetadata(unexplainedPartial).ok, false);
 });
 
 test('invalid variants and crossed books produce stable structured failures', () => {
@@ -147,6 +150,12 @@ test('depth ordering and borrow numeric invariants fail closed', () => {
     asks: [{ price: 101, baseQuantity: 1 }], bookScope: 'STANDARD_NO_RPI', maximumLevelsKnown: 5_000,
   });
   assert.equal(unsorted.ok, false);
+  const validDeletionDelta = validateNormalizedEvidence({
+    id: 'depth:delta', kind: 'DEPTH_DELTA', instrument: instrument(), truth: depthTruth,
+    bids: [{ price: 110, baseQuantity: 0 }], asks: [{ price: 100, baseQuantity: 0 }],
+    bookScope: 'STANDARD_NO_RPI', maximumLevelsKnown: null,
+  });
+  assert.equal(validDeletionDelta.ok, true);
   const borrowInstrument = { ...instrument(), productFamily: 'BORROW', quoteAsset: null, pair: null };
   const invalidBorrow = validateNormalizedEvidence({
     id: 'borrow:1', kind: 'BORROW', instrument: borrowInstrument, truth: truth(), asset: 'BTC',
@@ -191,7 +200,22 @@ test('frozen-record validation blocks epistemic future data but permits a known 
     id: 'frozen:1', triggerTimeMs: cutoff, evidenceCutoffTimeMs: cutoff, candidateDisposition: 'OBSERVED',
     thesis, forensics: [], evidence: [funding], features: [], configurationVersion: 'cfg-1', featureVersion: 'features-1', truth: frozenTruth,
   };
-  assert.equal(validateFrozenPreEventRecord(record).ok, true);
+  const valid = validateFrozenPreEventRecord(record);
+  assert.equal(valid.ok, true, valid.ok ? '' : JSON.stringify(valid.failure));
+  assert.equal(Object.isFrozen(valid.value), true);
+  assert.equal(Object.isFrozen(valid.value.thesis), true);
+  assert.throws(() => { valid.value.thesis.stage = 'TOO_LATE'; }, TypeError);
+  const malformed = structuredClone(record);
+  malformed.thesis.hypothesis = 'PUMP_PROBABILITY';
+  assert.equal(validateFrozenPreEventRecord(malformed).ok, false);
+  const futureFeature = structuredClone(record);
+  futureFeature.features = [{
+    id: 'feature:future', instrumentId: perp.instrumentId, feature: 'trade_arrival', featureVersion: 'features-1',
+    value: 2, unit: 'ratio', windowMs: null, observationStartMs: cutoff + 1, observationEndMs: null, truth: frozenTruth,
+  }];
+  const futureFeatureResult = validateFrozenPreEventRecord(futureFeature);
+  assert.equal(futureFeatureResult.ok, false);
+  assert.equal(futureFeatureResult.failure.code, 'NO_LOOK_AHEAD_VIOLATION');
   const future = structuredClone(record);
   future.truth.temporal.receivedTimeMs = cutoff + 1;
   future.truth.freshness = { basis: 'RECEIVE_TIME', evaluatedAtMs: cutoff + 1, ageMs: 0, maxAgeMs: 1_000, state: 'FRESH' };

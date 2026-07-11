@@ -8,3 +8,7 @@ export * from './stages/index.js';
 export * from './approvals/index.js';
 export * from './positions/index.js';
 export * from './supervision/index.js';
+export * from './actions/index.js';
+export * from './economics/index.js';
+export * from './checkpoint/index.js';
+export * from './topology/index.js';

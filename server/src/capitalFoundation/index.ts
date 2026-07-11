@@ -5,3 +5,6 @@ export * from './opportunities/index.js';
 export * from './budgets/index.js';
 export * from './allocation/index.js';
 export * from './stages/index.js';
+export * from './approvals/index.js';
+export * from './positions/index.js';
+export * from './supervision/index.js';

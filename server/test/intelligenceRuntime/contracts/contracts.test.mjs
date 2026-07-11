@@ -5,6 +5,7 @@ import {
   RUNTIME_ENDPOINTS,
   RUNTIME_LIFECYCLE_STATES,
   SourceLifecycleTracker,
+  boundedJsonByteLength,
   createRuntimeSourceId,
   serializeRuntimeSourceSnapshot,
   sourceDefinition,
@@ -159,7 +160,11 @@ test('invalid and future timestamps are rejected with injected time', () => {
   );
   assert.throws(
     () => tracker.message({ generation, sourceTimeMs: 1_000, receiveTimeMs: 1_011 }),
-    /future skew/,
+    /receiveTimeMs cannot be ahead of the injected clock/,
+  );
+  assert.throws(
+    () => tracker.message({ generation, sourceTimeMs: 1_011, receiveTimeMs: 1_000 }),
+    /sourceTimeMs exceeds maximum future skew/,
   );
 });
 
@@ -238,4 +243,86 @@ test('snapshot values are defensively frozen', () => {
   assert.ok(Object.isFrozen(snapshot));
   assert.ok(Object.isFrozen(snapshot.backoff));
   assert.ok(Object.isFrozen(snapshot.rateBudget));
+});
+
+test('bounded JSON measures exact serialized UTF-8 bytes at the byte boundary', () => {
+  const value = {
+    ascii: 'quote " slash \\ controls \b\t\n\f\r',
+    unicode: 'EUR€ 🚀 \ud800',
+    number: -0,
+    nested: [true, false, null],
+  };
+  const expected = Buffer.byteLength(JSON.stringify(value), 'utf8');
+
+  assert.equal(boundedJsonByteLength(value, expected), expected);
+  assert.throws(
+    () => boundedJsonByteLength(value, expected - 1),
+    /exceeds maximumBytes/,
+  );
+});
+
+test('bounded JSON rejects accessors without executing them', () => {
+  let executions = 0;
+  const object = {};
+  Object.defineProperty(object, 'danger', {
+    enumerable: true,
+    get() {
+      executions += 1;
+      return 'escaped';
+    },
+  });
+  const array = [];
+  Object.defineProperty(array, '0', {
+    enumerable: true,
+    configurable: true,
+    get() {
+      executions += 1;
+      return 'escaped';
+    },
+  });
+  array.length = 1;
+
+  assert.throws(
+    () => boundedJsonByteLength(object, 1_024),
+    /enumerable data properties only/,
+  );
+  assert.throws(
+    () => boundedJsonByteLength(array, 1_024),
+    /dense data-only values/,
+  );
+  assert.equal(executions, 0);
+});
+
+test('bounded JSON rejects cycles, undefined, custom objects, custom arrays, and symbols', () => {
+  const cycle = {};
+  cycle.self = cycle;
+  class CustomValue {
+    constructor() { this.value = 1; }
+  }
+  const customArray = [1];
+  customArray.metadata = 'not JSON array data';
+  const symbolKeyed = { value: 1 };
+  symbolKeyed[Symbol('hidden')] = 2;
+
+  assert.throws(() => boundedJsonByteLength(cycle, 1_024), /contains a cycle/);
+  assert.throws(() => boundedJsonByteLength({ value: undefined }, 1_024), /unsupported undefined/);
+  assert.throws(() => boundedJsonByteLength(new CustomValue(), 1_024), /non-plain object/);
+  assert.throws(() => boundedJsonByteLength(customArray, 1_024), /custom properties/);
+  assert.throws(() => boundedJsonByteLength({ value: Symbol('value') }, 1_024), /unsupported symbol/);
+  assert.throws(() => boundedJsonByteLength(symbolKeyed, 1_024), /symbol keys/);
+});
+
+test('bounded JSON enforces depth and node bounds before traversing beyond them', () => {
+  assert.throws(
+    () => boundedJsonByteLength({ one: { two: 2 } }, 1_024, { maximumDepth: 1 }),
+    /exceeds maximumDepth/,
+  );
+  assert.equal(
+    boundedJsonByteLength({ one: 1 }, 1_024, { maximumDepth: 1, maximumNodes: 2 }),
+    Buffer.byteLength(JSON.stringify({ one: 1 }), 'utf8'),
+  );
+  assert.throws(
+    () => boundedJsonByteLength({ one: 1, two: 2 }, 1_024, { maximumNodes: 2 }),
+    /exceeds maximumNodes/,
+  );
 });

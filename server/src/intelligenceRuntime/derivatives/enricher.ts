@@ -1,5 +1,5 @@
 import { stableId } from '../../intelligenceFoundation/contracts/index.js';
-import type { PublicRestRequest, PublicRestResponse } from '../contracts/index.js';
+import { boundedJsonByteLength, type PublicRestRequest, type PublicRestResponse } from '../contracts/index.js';
 import {
   DERIVATIVES_FACT_KINDS,
   DERIVATIVES_PERIODS,
@@ -39,6 +39,28 @@ import {
 } from './parsers.js';
 
 const REQUIRED_PUBLIC_KINDS = DERIVATIVES_REFRESHABLE_KINDS;
+const MARKET_SYMBOL_PATTERN = /^[\p{L}\p{N}._-]{1,128}$/u;
+const RESPONSE_FIELDS = Object.freeze(['body', 'headers', 'receiveTimeMs', 'status'] as const);
+const MAXIMUM_RESPONSE_HEADER_COUNT = 64;
+const MAXIMUM_RESPONSE_HEADER_NAME_BYTES = 128;
+const MAXIMUM_RESPONSE_HEADER_VALUE_BYTES = 8 * 1024;
+const MAXIMUM_RESPONSE_HEADER_BYTES = 32 * 1024;
+const HEADER_NAME_PATTERN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+const CONFIG_FIELDS = Object.freeze([
+  'failureRetryMs',
+  'historyLimit',
+  'maximumFundingInfoRows',
+  'maximumFutureSkewMs',
+  'maximumResponseBytes',
+  'maximumRowsPerSeries',
+  'maximumSymbols',
+  'openInterestComparisonWindowMs',
+  'openInterestDisagreementRatio',
+  'period',
+  'requestTimeoutMs',
+  'ttlMs',
+] as const);
+const TTL_FIELDS = Object.freeze([...Object.keys(DERIVATIVES_DEFAULT_TTLS)].sort(codePointCompare));
 
 interface CacheEntry {
   fact: DerivativesFact;
@@ -70,26 +92,71 @@ function safeNow(value: unknown): number {
   return safeInteger(value, 'clock.nowMs', 0, Number.MAX_SAFE_INTEGER);
 }
 
+function optionalDataOnlyFields(
+  value: unknown,
+  allowed: readonly string[],
+  name: string,
+): Readonly<Record<string, unknown>> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError(`${name} must be a plain data-only object`);
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new TypeError(`${name} must be a plain data-only object`);
+  }
+  if (Object.getOwnPropertySymbols(value).length > 0) {
+    throw new TypeError(`${name} must not contain symbol fields`);
+  }
+  const allowedFields = new Set(allowed);
+  const projected: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+  for (const field of Object.getOwnPropertyNames(value)) {
+    if (!allowedFields.has(field)) throw new TypeError(`${name} contains unknown field ${field}`);
+    const descriptor = Object.getOwnPropertyDescriptor(value, field);
+    if (!descriptor || !descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) {
+      throw new TypeError(`${name}.${field} must be an enumerable data property`);
+    }
+    projected[field] = descriptor.value;
+  }
+  return projected;
+}
+
+function suppliedValue(fields: Readonly<Record<string, unknown>>, name: string, fallback: unknown): unknown {
+  return Object.hasOwn(fields, name) ? fields[name] : fallback;
+}
+
 function validateConfig(ports: DerivativesEnricherPorts): Readonly<DerivativesEnricherConfig> {
   if (typeof ports?.transport?.request !== 'function') throw new TypeError('public REST transport is required');
   if (typeof ports?.clock?.nowMs !== 'function') throw new TypeError('runtime clock is required');
   if (typeof ports?.rateBudget?.reserve !== 'function'
     || typeof ports.rateBudget.observeResponse !== 'function'
     || typeof ports.rateBudget.snapshot !== 'function') throw new TypeError('REST rate-budget port is required');
-  const supplied = ports.config ?? {};
+  const configDescriptor = Object.getOwnPropertyDescriptor(ports, 'config');
+  if (configDescriptor && !Object.hasOwn(configDescriptor, 'value')) {
+    throw new TypeError('ports.config must be a data property');
+  }
+  const supplied = configDescriptor?.value === undefined
+    ? Object.freeze(Object.create(null) as Record<string, unknown>)
+    : optionalDataOnlyFields(configDescriptor.value, CONFIG_FIELDS, 'ports.config');
+  const suppliedTtl = Object.hasOwn(supplied, 'ttlMs')
+    ? optionalDataOnlyFields(supplied.ttlMs, TTL_FIELDS, 'ports.config.ttlMs')
+    : Object.freeze(Object.create(null) as Record<string, unknown>);
+  const ttlMs = Object.fromEntries(TTL_FIELDS.map((kind) => [
+    kind,
+    suppliedValue(suppliedTtl, kind, DERIVATIVES_DEFAULT_TTLS[kind as keyof typeof DERIVATIVES_DEFAULT_TTLS]),
+  ])) as unknown as DerivativesEnricherConfig['ttlMs'];
   const config: DerivativesEnricherConfig = {
-    maximumSymbols: supplied.maximumSymbols ?? 512,
-    maximumRowsPerSeries: supplied.maximumRowsPerSeries ?? 500,
-    maximumFundingInfoRows: supplied.maximumFundingInfoRows ?? 10_000,
-    requestTimeoutMs: supplied.requestTimeoutMs ?? 8_000,
-    maximumResponseBytes: supplied.maximumResponseBytes ?? 4 * 1024 * 1024,
-    maximumFutureSkewMs: supplied.maximumFutureSkewMs ?? 2_000,
-    failureRetryMs: supplied.failureRetryMs ?? 5_000,
-    historyLimit: supplied.historyLimit ?? 30,
-    period: supplied.period ?? '5m',
-    openInterestDisagreementRatio: supplied.openInterestDisagreementRatio ?? 0.10,
-    openInterestComparisonWindowMs: supplied.openInterestComparisonWindowMs ?? 10 * 60_000,
-    ttlMs: { ...DERIVATIVES_DEFAULT_TTLS, ...(supplied.ttlMs ?? {}) },
+    maximumSymbols: suppliedValue(supplied, 'maximumSymbols', 512) as number,
+    maximumRowsPerSeries: suppliedValue(supplied, 'maximumRowsPerSeries', 500) as number,
+    maximumFundingInfoRows: suppliedValue(supplied, 'maximumFundingInfoRows', 10_000) as number,
+    requestTimeoutMs: suppliedValue(supplied, 'requestTimeoutMs', 8_000) as number,
+    maximumResponseBytes: suppliedValue(supplied, 'maximumResponseBytes', 4 * 1024 * 1024) as number,
+    maximumFutureSkewMs: suppliedValue(supplied, 'maximumFutureSkewMs', 2_000) as number,
+    failureRetryMs: suppliedValue(supplied, 'failureRetryMs', 5_000) as number,
+    historyLimit: suppliedValue(supplied, 'historyLimit', 30) as number,
+    period: suppliedValue(supplied, 'period', '5m') as DerivativesEnricherConfig['period'],
+    openInterestDisagreementRatio: suppliedValue(supplied, 'openInterestDisagreementRatio', 0.10) as number,
+    openInterestComparisonWindowMs: suppliedValue(supplied, 'openInterestComparisonWindowMs', 10 * 60_000) as number,
+    ttlMs,
   };
   safeInteger(config.maximumSymbols, 'maximumSymbols', 1, 10_000);
   safeInteger(config.maximumRowsPerSeries, 'maximumRowsPerSeries', 1, 500);
@@ -111,8 +178,48 @@ function validateConfig(ports: DerivativesEnricherPorts): Readonly<DerivativesEn
 
 function boundedError(input: DerivativesError): Readonly<DerivativesError> {
   return Object.freeze({
-    ...input,
+    code: input.code,
     message: input.message.replace(/[\r\n\t]+/g, ' ').slice(0, 300),
+    status: input.status,
+    retryable: input.retryable,
+    observedAtMs: input.observedAtMs,
+  });
+}
+
+function freezeRateBudget(value: unknown, atMs: number) {
+  boundedJsonByteLength(value, 64 * 1024);
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('rate-budget snapshot must be a bounded object');
+  }
+  const input = value as Record<string, unknown>;
+  if (!['AVAILABLE', 'NEAR_LIMIT', 'EXHAUSTED', 'COOLDOWN', 'UNKNOWN'].includes(String(input.state))) {
+    throw new TypeError('rate-budget snapshot state is invalid');
+  }
+  const nullableInteger = (field: string, minimum = 0): number | null => {
+    const candidate = input[field];
+    if (candidate === null) return null;
+    return safeInteger(candidate, `rate-budget ${field}`, minimum, Number.MAX_SAFE_INTEGER);
+  };
+  const observedAtMs = nullableInteger('observedAtMs');
+  const usedWeight = nullableInteger('usedWeight');
+  const limit = nullableInteger('limit');
+  const intervalMs = nullableInteger('intervalMs', 1);
+  const retryAfterMs = nullableInteger('retryAfterMs');
+  if (limit !== null && limit < 1) throw new TypeError('rate-budget limit must be positive when known');
+  if ((input.state === 'COOLDOWN') !== (retryAfterMs !== null)) {
+    throw new TypeError('rate-budget cooldown state and retryAfterMs must agree');
+  }
+  if (observedAtMs !== null && observedAtMs > atMs) {
+    throw new RangeError('rate-budget snapshot cannot be observed after snapshot time');
+  }
+  return Object.freeze({
+    state: input.state as 'AVAILABLE' | 'NEAR_LIMIT' | 'EXHAUSTED' | 'COOLDOWN' | 'UNKNOWN',
+    usedWeight,
+    limit,
+    intervalMs,
+    resetsAtMs: nullableInteger('resetsAtMs'),
+    retryAfterMs,
+    observedAtMs,
   });
 }
 
@@ -170,18 +277,103 @@ function responseTimeValid(
     && (previousReceiveTimeMs === null || response.receiveTimeMs >= previousReceiveTimeMs);
 }
 
-function responseEnvelopeValid(response: PublicRestResponse<unknown>): boolean {
-  return response !== null
-    && typeof response === 'object'
-    && Number.isSafeInteger(response.status)
-    && response.status >= 100
-    && response.status <= 599
-    && response.headers !== null
-    && typeof response.headers === 'object'
-    && !Array.isArray(response.headers)
-    && Object.entries(response.headers).every(([name, value]) => (
-      name.length > 0 && name.length <= 256 && typeof value === 'string' && value.length <= 4_096
-    ));
+function boundedHeaderValueBytes(value: string): number {
+  if (value.length > MAXIMUM_RESPONSE_HEADER_VALUE_BYTES) {
+    throw new RangeError('response header value exceeds its bounded length');
+  }
+  let bytes = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if ((code < 0x20 && code !== 0x09) || code === 0x7f) {
+      throw new TypeError('response header value contains a control character');
+    }
+    if (code < 0x80) bytes += 1;
+    else if (code < 0x800) bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff) {
+      const low = value.charCodeAt(index + 1);
+      if (low >= 0xdc00 && low <= 0xdfff) {
+        bytes += 4;
+        index += 1;
+      } else {
+        bytes += 3;
+      }
+    } else bytes += 3;
+    if (bytes > MAXIMUM_RESPONSE_HEADER_VALUE_BYTES) {
+      throw new RangeError('response header value exceeds its bounded byte length');
+    }
+  }
+  return bytes;
+}
+
+function dataOnlyFields(value: object, expected: readonly string[]): Readonly<Record<string, unknown>> | null {
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return null;
+  if (Object.getOwnPropertySymbols(value).length > 0) return null;
+  const names = Object.getOwnPropertyNames(value);
+  const sortedNames = [...names].sort(codePointCompare);
+  if (sortedNames.length !== expected.length || sortedNames.some((name, index) => name !== expected[index])) {
+    return null;
+  }
+  const fields: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+  for (const name of names) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, name);
+    if (!descriptor || !descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) return null;
+    fields[name] = descriptor.value;
+  }
+  return fields;
+}
+
+function boundedResponseHeaders(value: unknown): Readonly<Record<string, string>> | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return null;
+  if (Object.getOwnPropertySymbols(value).length > 0) return null;
+  const names = Object.getOwnPropertyNames(value);
+  if (names.length > MAXIMUM_RESPONSE_HEADER_COUNT) return null;
+  const normalizedNames = new Set<string>();
+  const headers: Record<string, string> = Object.create(null) as Record<string, string>;
+  let aggregateBytes = 0;
+  for (const name of names) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, name);
+    if (!descriptor || !descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) return null;
+    if (name.length === 0
+      || name.length > MAXIMUM_RESPONSE_HEADER_NAME_BYTES
+      || !HEADER_NAME_PATTERN.test(name)
+      || typeof descriptor.value !== 'string') return null;
+    const normalizedName = name.toLowerCase();
+    if (normalizedNames.has(normalizedName)) return null;
+    normalizedNames.add(normalizedName);
+    aggregateBytes += name.length + boundedHeaderValueBytes(descriptor.value) + 4;
+    if (aggregateBytes > MAXIMUM_RESPONSE_HEADER_BYTES) return null;
+    headers[name] = descriptor.value;
+  }
+  return Object.freeze(headers);
+}
+
+function validatedResponseEnvelope(
+  candidate: unknown,
+  maximumResponseBytes: number,
+): Readonly<PublicRestResponse<unknown>> | null {
+  try {
+    if (candidate === null || typeof candidate !== 'object' || Array.isArray(candidate)) return null;
+    const fields = dataOnlyFields(candidate, RESPONSE_FIELDS);
+    if (fields === null) return null;
+    const status = fields.status;
+    const receiveTimeMs = fields.receiveTimeMs;
+    if (!Number.isSafeInteger(status) || (status as number) < 100 || (status as number) > 599) return null;
+    if (!Number.isSafeInteger(receiveTimeMs) || (receiveTimeMs as number) < 0) return null;
+    const headers = boundedResponseHeaders(fields.headers);
+    if (headers === null) return null;
+    boundedJsonByteLength(fields.body, maximumResponseBytes);
+    return Object.freeze({
+      status: status as number,
+      headers,
+      body: fields.body,
+      receiveTimeMs: receiveTimeMs as number,
+    });
+  } catch {
+    return null;
+  }
 }
 
 export class BinancePublicDerivativesEnricher {
@@ -189,42 +381,48 @@ export class BinancePublicDerivativesEnricher {
   readonly #config: Readonly<DerivativesEnricherConfig>;
   readonly #cache = new Map<string, CacheEntry>();
   #liquidationGeneration = 0;
+  #clockWatermarkMs = 0;
+  #observationWatermarkMs = 0;
 
   constructor(ports: DerivativesEnricherPorts) {
     this.#config = validateConfig(ports);
     this.#ports = ports;
   }
 
-  planRefresh(symbols: readonly string[], atMs = this.#now()): Readonly<DerivativesRefreshPlan> {
-    safeNow(atMs);
+  planRefresh(symbols: readonly string[], atMs?: number): Readonly<DerivativesRefreshPlan> {
+    const currentTimeMs = this.#now();
+    const plannedAtMs = atMs ?? currentTimeMs;
+    this.#validateObservationTime(plannedAtMs, currentTimeMs, 'refresh plan time');
     const normalized = this.#normalizeSymbols(symbols);
     const tasks: DerivativesRefreshTask[] = [];
     for (const kind of DERIVATIVES_REFRESHABLE_KINDS) {
       const dueSymbols = normalized.included.filter((symbol) => {
         const entry = this.#cache.get(this.#key(kind, symbol));
-        return entry === undefined || atMs >= entry.nextRefreshAtMs;
+        return entry === undefined || plannedAtMs >= entry.nextRefreshAtMs;
       });
       if (kind === 'FUNDING_INFO') {
-        if (dueSymbols.length > 0) tasks.push(this.#task(kind, dueSymbols, atMs));
+        if (dueSymbols.length > 0) tasks.push(this.#task(kind, dueSymbols, plannedAtMs));
         continue;
       }
-      for (const symbol of dueSymbols) tasks.push(this.#task(kind, [symbol], atMs));
+      for (const symbol of dueSymbols) tasks.push(this.#task(kind, [symbol], plannedAtMs));
     }
     tasks.sort((left, right) => left.priority - right.priority
       || codePointCompare(left.symbols[0] ?? '', right.symbols[0] ?? '')
       || codePointCompare(left.id, right.id));
-    return Object.freeze({
-      plannedAtMs: atMs,
+    const plan = Object.freeze({
+      plannedAtMs,
       requestedSymbols: Object.freeze(normalized.requested),
       includedSymbols: Object.freeze(normalized.included),
       omittedSymbols: Object.freeze(normalized.omitted),
       tasks: Object.freeze(tasks),
       totalLocalBudgetUnits: tasks.reduce((sum, task) => sum + task.source.localBudgetUnits, 0),
     });
+    this.#observationWatermarkMs = Math.max(this.#observationWatermarkMs, plannedAtMs);
+    return plan;
   }
 
   async refresh(symbols: readonly string[]): Promise<Readonly<DerivativesRefreshReport>> {
-    const plan = this.planRefresh(symbols, this.#now());
+    const plan = this.planRefresh(symbols);
     const results: DerivativesTaskResult[] = [];
     for (const task of plan.tasks) {
       const executed = await this.#execute(task);
@@ -260,8 +458,8 @@ export class BinancePublicDerivativesEnricher {
       || observation.productFamily !== 'USD_M_PERPETUAL'
       || observation.marketSegment !== 'USD_M'
       || observation.sourceMarketType !== 1
-      || !/^[A-Z0-9_]{3,64}$/.test(observation.symbol)
-      || !/^[A-Z0-9_]{3,64}$/.test(observation.pair)
+      || !MARKET_SYMBOL_PATTERN.test(observation.symbol)
+      || !MARKET_SYMBOL_PATTERN.test(observation.pair)
       || observation.sampledPerWindow !== true
       || observation.samplingSelection !== 'LATEST_PER_SYMBOL'
       || observation.sampleWindowMs !== 1_000
@@ -356,12 +554,14 @@ export class BinancePublicDerivativesEnricher {
     return Object.freeze({ accepted: true, reason: 'ACCEPTED', fact });
   }
 
-  snapshot(symbols: readonly string[], atMs = this.#now()): Readonly<DerivativesSnapshot> {
-    safeNow(atMs);
+  snapshot(symbols: readonly string[], atMs?: number): Readonly<DerivativesSnapshot> {
+    const currentTimeMs = this.#now();
+    const snapshotTimeMs = atMs ?? currentTimeMs;
+    this.#validateObservationTime(snapshotTimeMs, currentTimeMs, 'derivatives snapshot time');
     const normalized = this.#normalizeSymbols(symbols);
     const facts: DerivativesFact[] = [];
     for (const symbol of normalized.included) {
-      for (const kind of DERIVATIVES_FACT_KINDS) facts.push(this.#factAt(kind, symbol, atMs));
+      for (const kind of DERIVATIVES_FACT_KINDS) facts.push(this.#factAt(kind, symbol, snapshotTimeMs));
     }
     const required = facts.filter((fact) => (REQUIRED_PUBLIC_KINDS as readonly string[]).includes(fact.kind));
     const availableFactCount = required.filter((fact) => fact.availability === 'AVAILABLE' && fact.value !== null).length;
@@ -376,8 +576,8 @@ export class BinancePublicDerivativesEnricher {
         ? 'PARTIAL'
         : 'UNAVAILABLE';
     const disagreements = normalized.included.map((symbol) => this.#openInterestDisagreement(symbol, facts));
-    return Object.freeze({
-      snapshotTimeMs: atMs,
+    const snapshot = Object.freeze({
+      snapshotTimeMs,
       requestedSymbols: Object.freeze(normalized.requested),
       includedSymbols: Object.freeze(normalized.included),
       omittedSymbols: Object.freeze(normalized.omitted),
@@ -390,8 +590,10 @@ export class BinancePublicDerivativesEnricher {
       }),
       facts: Object.freeze(facts),
       disagreements: Object.freeze(disagreements),
-      budget: Object.freeze({ ...this.#ports.rateBudget.snapshot(atMs) }),
+      budget: freezeRateBudget(this.#ports.rateBudget.snapshot(snapshotTimeMs), snapshotTimeMs),
     });
+    this.#observationWatermarkMs = Math.max(this.#observationWatermarkMs, snapshotTimeMs);
+    return snapshot;
   }
 
   #task(
@@ -445,9 +647,9 @@ export class BinancePublicDerivativesEnricher {
       timeoutMs: this.#config.requestTimeoutMs,
       maximumResponseBytes: this.#config.maximumResponseBytes,
     });
-    let response: PublicRestResponse<unknown>;
+    let rawResponse: unknown;
     try {
-      response = await this.#ports.transport.request(request);
+      rawResponse = await this.#ports.transport.request(request);
     } catch {
       const failure = boundedError({
         code: 'TRANSPORT_UNAVAILABLE', message: 'public derivatives REST transport was unavailable',
@@ -457,7 +659,8 @@ export class BinancePublicDerivativesEnricher {
       return { result: this.#taskResult(task, 'FAILED', true, failure.message) };
     }
     const completedAtMs = this.#now();
-    if (!responseEnvelopeValid(response)) {
+    const response = validatedResponseEnvelope(rawResponse, this.#config.maximumResponseBytes);
+    if (response === null) {
       const failure = boundedError({
         code: 'INVALID_RESPONSE', message: 'public REST transport returned an invalid response envelope',
         status: null, retryable: true, observedAtMs: completedAtMs,
@@ -475,7 +678,7 @@ export class BinancePublicDerivativesEnricher {
       return { result: this.#taskResult(task, 'FAILED', true, failure.message) };
     }
     try {
-      this.#ports.rateBudget.observeResponse({ status: response.status, headers: response.headers, observedAtMs: response.receiveTimeMs });
+      this.#ports.rateBudget.observeResponse({ status: response.status, headers: response.headers, observedAtMs: completedAtMs });
     } catch {
       // The fact still reflects the charged local reservation. A malformed budget port cannot fabricate source data.
     }
@@ -491,12 +694,12 @@ export class BinancePublicDerivativesEnricher {
             : `public derivatives endpoint returned HTTP ${response.status}`,
         status: response.status,
         retryable: rateLimited || response.status >= 500,
-        observedAtMs: response.receiveTimeMs,
+        observedAtMs: completedAtMs,
       });
       this.#recordFailure(task, failure, rateLimited ? 'RATE_LIMITED' : 'UNAVAILABLE', true, null);
       return { result: this.#taskResult(task, rateLimited ? 'RATE_LIMITED' : 'FAILED', true, failure.message) };
     }
-    if (task.kind === 'FUNDING_INFO') return this.#applyFundingInfo(task, response);
+    if (task.kind === 'FUNDING_INFO') return this.#applyFundingInfo(task, response, completedAtMs);
     const symbol = task.symbols[0];
     const parsed = parseDerivativesRestBody({
       kind: task.kind,
@@ -509,7 +712,7 @@ export class BinancePublicDerivativesEnricher {
     });
     if (!parsed.ok || parsed.value === null) {
       const failure = boundedError({
-        code: 'INVALID_RESPONSE', message: parsed.detail, status: 200, retryable: true, observedAtMs: response.receiveTimeMs,
+        code: 'INVALID_RESPONSE', message: parsed.detail, status: 200, retryable: true, observedAtMs: completedAtMs,
       });
       this.#recordFailure(task, failure, 'INVALID', true, null);
       return { result: this.#taskResult(task, 'FAILED', true, parsed.detail) };
@@ -518,32 +721,44 @@ export class BinancePublicDerivativesEnricher {
     if (parsed.sourceTimeMs !== null && priorSourceTimeMs !== null && parsed.sourceTimeMs < priorSourceTimeMs) {
       const failure = boundedError({
         code: 'TIMESTAMP_SKEW', message: 'public derivatives source time regressed behind the retained fact',
-        status: 200, retryable: true, observedAtMs: response.receiveTimeMs,
+        status: 200, retryable: true, observedAtMs: completedAtMs,
       });
       this.#recordFailure(task, failure, 'INVALID', true, null);
       return { result: this.#taskResult(task, 'FAILED', true, failure.message) };
     }
-    const fact = this.#recordSuccess(task.kind, symbol, response.receiveTimeMs, parsed, task.source);
+    const fact = this.#recordSuccess(
+      task.kind,
+      symbol,
+      response.receiveTimeMs,
+      completedAtMs,
+      parsed,
+      task.source,
+    );
     const successful = fact.availability === 'AVAILABLE' && fact.completeness === 'COMPLETE';
     return {
       result: this.#taskResult(task, successful ? 'SUCCESS' : 'PARTIAL', true, parsed.detail),
     };
   }
 
-  #applyFundingInfo(task: DerivativesRefreshTask, response: PublicRestResponse<unknown>): TaskExecution {
+  #applyFundingInfo(
+    task: DerivativesRefreshTask,
+    response: PublicRestResponse<unknown>,
+    completedAtMs: number,
+  ): TaskExecution {
     const parsed = parseFundingInfoBody(response.body, task.symbols, this.#config.maximumFundingInfoRows);
     if (parsed === null) {
       const failure = boundedError({
         code: 'INVALID_RESPONSE', message: 'funding-info response must be an array',
-        status: 200, retryable: true, observedAtMs: response.receiveTimeMs,
+        status: 200, retryable: true, observedAtMs: completedAtMs,
       });
       this.#recordFailure(task, failure, 'INVALID', true, null);
       return { result: this.#taskResult(task, 'FAILED', true, failure.message) };
     }
     let partial = false;
+    let current = true;
     for (const [index, entry] of parsed.entries()) {
       partial ||= entry.completeness === 'PARTIAL';
-      this.#recordSuccess('FUNDING_INFO', entry.symbol, response.receiveTimeMs, {
+      const fact = this.#recordSuccess('FUNDING_INFO', entry.symbol, response.receiveTimeMs, completedAtMs, {
         ok: true,
         value: entry.value,
         sourceTimeMs: null,
@@ -551,14 +766,28 @@ export class BinancePublicDerivativesEnricher {
         issueCount: entry.issueCount,
         detail: entry.detail,
       }, task.source, index === 0 ? task.source.localBudgetUnits : 0, ['SHARED_BATCH_REQUEST']);
+      current &&= fact.availability === 'AVAILABLE';
     }
-    return { result: this.#taskResult(task, partial ? 'PARTIAL' : 'SUCCESS', true, partial ? 'partial funding-info response retained' : 'complete funding-info response') };
+    const successful = current && !partial;
+    return {
+      result: this.#taskResult(
+        task,
+        successful ? 'SUCCESS' : 'PARTIAL',
+        true,
+        !current
+          ? 'funding-info response exceeded its TTL before request completion'
+          : partial
+            ? 'partial funding-info response retained'
+            : 'complete funding-info response',
+      ),
+    };
   }
 
   #recordSuccess(
     kind: RefreshableDerivativesFactKind,
     symbol: string,
     receiveTimeMs: number,
+    evaluatedAtMs: number,
     parsed: ParsedRestFact,
     source: DerivativesSourceDescriptor,
     chargedBudgetUnits = source.localBudgetUnits,
@@ -573,20 +802,20 @@ export class BinancePublicDerivativesEnricher {
     }
     const partialError = parsed.completeness === 'PARTIAL'
       ? boundedError({
-        code: 'INVALID_RESPONSE', message: parsed.detail, status: 200, retryable: true, observedAtMs: receiveTimeMs,
+        code: 'INVALID_RESPONSE', message: parsed.detail, status: 200, retryable: true, observedAtMs: evaluatedAtMs,
       })
       : null;
     const missingSourceTime = sourceTimeRequired && parsed.sourceTimeMs === null;
-    const staleSource = expiresAtMs !== null && receiveTimeMs >= expiresAtMs;
+    const staleSource = expiresAtMs !== null && evaluatedAtMs >= expiresAtMs;
     const freshnessError = missingSourceTime
       ? boundedError({
         code: 'TIMESTAMP_SKEW', message: 'public derivatives fact has no authoritative source time',
-        status: 200, retryable: true, observedAtMs: receiveTimeMs,
+        status: 200, retryable: true, observedAtMs: evaluatedAtMs,
       })
       : staleSource
         ? boundedError({
-          code: 'STALE_SOURCE', message: 'public derivatives source time exceeded the kind-specific TTL before receipt',
-          status: 200, retryable: true, observedAtMs: receiveTimeMs,
+          code: 'STALE_SOURCE', message: 'public derivatives fact exceeded the kind-specific TTL before request completion',
+          status: 200, retryable: true, observedAtMs: evaluatedAtMs,
         })
         : null;
     const availability: DerivativesAvailability = missingSourceTime
@@ -605,13 +834,13 @@ export class BinancePublicDerivativesEnricher {
       ...(partialError === null ? [] : ['PARTIAL_PUBLIC_RESPONSE']),
     ];
     const fact = freezeFact({
-      kind, symbol, source, sourceTimeMs: parsed.sourceTimeMs, receiveTimeMs, evaluatedAtMs: receiveTimeMs,
+      kind, symbol, source, sourceTimeMs: parsed.sourceTimeMs, receiveTimeMs, evaluatedAtMs,
       ttlMs, expiresAtMs, availability, completeness,
       requestCost: requestCost(source, chargedBudgetUnits), value: parsed.value,
       lastError: freshnessError ?? partialError,
       reasonCodes,
     });
-    const partialRetryAtMs = receiveTimeMs + this.#config.failureRetryMs;
+    const partialRetryAtMs = evaluatedAtMs + this.#config.failureRetryMs;
     if (!Number.isSafeInteger(partialRetryAtMs)) throw new RangeError('derivatives partial retry timestamp overflow');
     const normalRefreshAtMs = expiresAtMs ?? partialRetryAtMs;
     const nextRefreshAtMs = availability === 'AVAILABLE' && parsed.completeness === 'PARTIAL'
@@ -806,8 +1035,12 @@ export class BinancePublicDerivativesEnricher {
 
   #normalizeSymbols(symbols: readonly string[]): NormalizedSymbols {
     if (!Array.isArray(symbols)) throw new TypeError('symbols must be an array');
+    const maximumRequestedSymbols = Math.min(20_000, this.#config.maximumSymbols * 2);
+    if (symbols.length > maximumRequestedSymbols) {
+      throw new RangeError(`symbols exceeds the bounded request limit of ${maximumRequestedSymbols}`);
+    }
     const requested = [...new Set(symbols.map((symbol) => {
-      if (typeof symbol !== 'string' || !/^[A-Z0-9_]{3,64}$/.test(symbol)) throw new TypeError('derivatives symbol is invalid');
+      if (typeof symbol !== 'string' || !MARKET_SYMBOL_PATTERN.test(symbol)) throw new TypeError('derivatives symbol is invalid');
       return symbol;
     }))].sort(codePointCompare);
     return {
@@ -846,6 +1079,24 @@ export class BinancePublicDerivativesEnricher {
   }
 
   #now(): number {
-    return safeNow(this.#ports.clock.nowMs());
+    const now = safeNow(this.#ports.clock.nowMs());
+    if (now < this.#clockWatermarkMs) throw new RangeError('runtime clock cannot regress');
+    this.#clockWatermarkMs = now;
+    return now;
+  }
+
+  #validateObservationTime(atMs: number, currentTimeMs: number, name: string): void {
+    safeNow(atMs);
+    if (atMs > currentTimeMs) throw new RangeError(`${name} cannot be after the injected clock`);
+    let knowledgeFloorMs = this.#observationWatermarkMs;
+    for (const entry of this.#cache.values()) {
+      knowledgeFloorMs = Math.max(
+        knowledgeFloorMs,
+        entry.fact.evaluatedAtMs,
+        entry.fact.receiveTimeMs ?? 0,
+        entry.fact.lastError?.observedAtMs ?? 0,
+      );
+    }
+    if (atMs < knowledgeFloorMs) throw new RangeError(`${name} cannot be before retained runtime knowledge`);
   }
 }

@@ -548,6 +548,77 @@ test('backpressure rejects oversized or secret-bearing payloads before retention
   assert.equal(snapshot.invalidPayloadDropCount, 1);
 });
 
+test('backpressure constructor bounds and aggregate retained bytes are explicit and transactional', () => {
+  assert.throws(() => new SpotBackpressureBuffer(Number.MAX_SAFE_INTEGER), /capacity exceeds its hard limit/);
+  assert.throws(() => new SpotBackpressureBuffer(1, Number.MAX_SAFE_INTEGER), /maximumPayloadBytes exceeds its hard limit/);
+  assert.throws(() => new SpotBackpressureBuffer(1, 64, Number.MAX_SAFE_INTEGER), /maximumRetainedPayloadBytes exceeds its hard limit/);
+
+  const firstPayload = { value: 'a'.repeat(10) };
+  const secondPayload = { value: 'b'.repeat(10) };
+  const replacementPayload = { value: 'c'.repeat(40) };
+  const firstBytes = Buffer.byteLength(JSON.stringify(firstPayload));
+  const secondBytes = Buffer.byteLength(JSON.stringify(secondPayload));
+  const aggregateLimit = firstBytes + secondBytes + 5;
+  const buffer = new SpotBackpressureBuffer(3, 128, aggregateLimit);
+  assert.equal(buffer.offer({
+    kind: 'BOOK_TICKER', symbol: 'BTCUSDT', generation: 1, receiveTimeMs: T0,
+    payload: firstPayload, correlationId: 'aggregate.book.old',
+  }).state, 'ACCEPTED');
+  assert.equal(buffer.offer({
+    kind: 'AGG_TRADE', symbol: 'ETHUSDT', generation: 1, receiveTimeMs: T0 + 1,
+    payload: secondPayload, correlationId: 'aggregate.trade',
+  }).state, 'ACCEPTED');
+  const replacement = buffer.offer({
+    kind: 'BOOK_TICKER', symbol: 'BTCUSDT', generation: 1, receiveTimeMs: T0 + 2,
+    payload: replacementPayload, correlationId: 'aggregate.book.new',
+  });
+  assert.deepEqual([replacement.state, replacement.reason], ['DROPPED', 'AGGREGATE_PAYLOAD_BYTES']);
+  let snapshot = buffer.snapshot();
+  assert.equal(snapshot.maximumRetainedPayloadBytes, aggregateLimit);
+  assert.equal(snapshot.retainedPayloadBytes, firstBytes + secondBytes);
+  assert.equal(snapshot.highWaterPayloadBytes, firstBytes + secondBytes);
+  assert.equal(snapshot.aggregateByteDropCount, 1);
+  assert.equal(snapshot.coalescedCount, 0);
+  assert.deepEqual(buffer.drain().map((entry) => entry.correlationId), ['aggregate.book.old', 'aggregate.trade']);
+  snapshot = buffer.snapshot();
+  assert.equal(snapshot.retainedPayloadBytes, 0);
+  assert.equal(snapshot.highWaterPayloadBytes, firstBytes + secondBytes);
+});
+
+test('backpressure bounded measurement rejects accessors without executing or retaining them', () => {
+  let getterCalls = 0;
+  const payload = {};
+  Object.defineProperty(payload, 'value', {
+    enumerable: true,
+    get() { getterCalls += 1; return 'forbidden'; },
+  });
+  const buffer = new SpotBackpressureBuffer(1, 128);
+  const result = buffer.offer({
+    kind: 'MINI_TICKER', generation: 1, receiveTimeMs: T0, payload,
+  });
+  assert.deepEqual([result.state, result.reason], ['DROPPED', 'INVALID_PAYLOAD']);
+  assert.equal(getterCalls, 0);
+  assert.equal(buffer.snapshot().retainedPayloadBytes, 0);
+});
+
+test('backpressure validates the message envelope without executing accessors', () => {
+  let getterCalls = 0;
+  const envelope = {
+    kind: 'MINI_TICKER', generation: 1, receiveTimeMs: T0,
+  };
+  Object.defineProperty(envelope, 'payload', {
+    enumerable: true,
+    get() { getterCalls += 1; return [ticker('BTCUSDT', T0)]; },
+  });
+  const buffer = new SpotBackpressureBuffer(1);
+  assert.throws(() => buffer.offer(envelope), /enumerable data property/);
+  assert.equal(getterCalls, 0);
+  assert.equal(buffer.snapshot().depth, 0);
+  assert.throws(() => buffer.offer({
+    kind: 'MINI_TICKER', generation: 1, receiveTimeMs: T0, payload: [], extra: true,
+  }), /unknown field extra/);
+});
+
 test('reducer queue drains independent full mini-ticker frames without nesting or correlation loss', () => {
   const clock = new ManualClock(T0 + 1);
   const value = reducer(clock, { inboundCapacity: 2 });
@@ -608,6 +679,108 @@ test('reconnect generation rejects late frames and accepts only the current gene
   assert.equal(snapshot.connectionGeneration, 2);
   assert.equal(snapshot.metrics.reconnectCount, 1);
   assert.equal(snapshot.metrics.oldGenerationCount, 1);
+});
+
+test('ignored and stopped generations never inspect source payloads', () => {
+  const value = reducer();
+  let getterCalls = 0;
+  const frame = [];
+  Object.defineProperty(frame, '0', {
+    enumerable: true,
+    get() { getterCalls += 1; return ticker('BTCUSDT', T0); },
+  });
+  const evidencePayload = {};
+  Object.defineProperty(evidencePayload, 'e', {
+    enumerable: true,
+    get() { getterCalls += 1; return 'aggTrade'; },
+  });
+  value.stop();
+  const queued = value.enqueue({
+    kind: 'MINI_TICKER', generation: 1, receiveTimeMs: T0, payload: frame,
+  });
+  const mini = value.ingestMiniTickerFrame({ generation: 1, receiveTimeMs: T0, payload: frame });
+  const bookResult = value.ingestBookTicker({
+    generation: 1, receiveTimeMs: T0, symbol: 'BTCUSDT', payload: evidencePayload,
+  });
+  const tradeResult = value.ingestAggTrade({
+    generation: 1, receiveTimeMs: T0, symbol: 'BTCUSDT', payload: evidencePayload,
+  });
+  assert.deepEqual([mini.state, bookResult.state, tradeResult.state], [
+    'IGNORED_GENERATION', 'IGNORED_GENERATION', 'IGNORED_GENERATION',
+  ]);
+  assert.deepEqual([queued.state, queued.reason], ['DROPPED', 'IGNORED_GENERATION']);
+  assert.equal(getterCalls, 0);
+  assert.equal(mini.receivedRecords, 0);
+});
+
+test('mini-ticker direct ingress reads only a bounded prefix and identifies overflow by count', () => {
+  const makeHugeFrame = (overflowValue) => {
+    const frame = [ticker('BTCUSDT', T0)];
+    Object.defineProperty(frame, '1', {
+      enumerable: true,
+      get() { overflowValue.calls += 1; return ticker('ETHUSDT', T0); },
+    });
+    frame.length = 1_000_000_000;
+    return frame;
+  };
+  const leftOverflow = { calls: 0 };
+  const rightOverflow = { calls: 0 };
+  const left = reducer(new ManualClock(), { maximumFrameRecords: 1, maximumBufferedPayloadBytes: 512 });
+  const right = reducer(new ManualClock(), { maximumFrameRecords: 1, maximumBufferedPayloadBytes: 512 });
+  const leftResult = left.ingestMiniTickerFrame({
+    generation: 1, receiveTimeMs: T0, payload: makeHugeFrame(leftOverflow),
+  });
+  const rightResult = right.ingestMiniTickerFrame({
+    generation: 1, receiveTimeMs: T0, payload: makeHugeFrame(rightOverflow),
+  });
+  assert.equal(leftResult.state, 'PARTIAL');
+  assert.equal(leftResult.receivedRecords, 1_000_000_000);
+  assert.equal(leftResult.acceptedRecords, 1);
+  assert.equal(leftResult.droppedRecords, 999_999_999);
+  assert.equal(leftResult.correlationId, rightResult.correlationId);
+  assert.equal(leftOverflow.calls, 0);
+  assert.equal(rightOverflow.calls, 0);
+  assert.equal(left.snapshot().metrics.frameOverflowDropCount, 999_999_999);
+});
+
+test('direct ingress rejects accessor and oversized admitted payloads before normalization', () => {
+  let getterCalls = 0;
+  const accessorFrame = [];
+  Object.defineProperty(accessorFrame, '0', {
+    enumerable: true,
+    get() { getterCalls += 1; return ticker('BTCUSDT', T0); },
+  });
+  const frameReducer = reducer(new ManualClock(), {
+    maximumFrameRecords: 1,
+    maximumBufferedPayloadBytes: 256,
+  });
+  const accessorResult = frameReducer.ingestMiniTickerFrame({
+    generation: 1, receiveTimeMs: T0, payload: accessorFrame,
+  });
+  assert.equal(accessorResult.state, 'REJECTED');
+  assert.equal(getterCalls, 0);
+  assert.equal(frameReducer.snapshot().symbols[0].ticker24h, null);
+
+  const oversizedResult = frameReducer.ingestMiniTickerFrame({
+    generation: 1,
+    receiveTimeMs: T0,
+    payload: [ticker('BTCUSDT', T0, { q: '1'.repeat(1_000) })],
+  });
+  assert.equal(oversizedResult.state, 'REJECTED');
+  assert.match(oversizedResult.failures[0].message, /maximumBytes|maximumBufferedPayloadBytes/);
+
+  const accessorPayload = {};
+  Object.defineProperty(accessorPayload, 'e', {
+    enumerable: true,
+    get() { getterCalls += 1; return 'aggTrade'; },
+  });
+  const evidenceResult = frameReducer.ingestAggTrade({
+    generation: 1, receiveTimeMs: T0, symbol: 'BTCUSDT', payload: accessorPayload,
+  });
+  assert.equal(evidenceResult.state, 'REJECTED');
+  assert.equal(evidenceResult.failures[0].field, 'payload');
+  assert.equal(getterCalls, 0);
+  assert.equal(frameReducer.snapshot().symbols[0].recentTrades.length, 0);
 });
 
 test('generation progression is exact and rejects huge jumps without work or state mutation', () => {
@@ -795,6 +968,30 @@ test('invalid policy and noncanonical universe identities fail before retaining 
   assert.throws(() => new SpotBroadReducer({
     clock: new ManualClock(), universe: [{ ...UNIVERSE[0], instrumentId: 'wrong' }],
   }), /not canonical/);
+});
+
+test('policy overrides are exact plain enumerable data without accessor execution', () => {
+  assert.throws(() => new SpotBroadReducer({
+    clock: new ManualClock(), universe: UNIVERSE, policy: { unknownPolicy: 1 },
+  }), /unknown field unknownPolicy/);
+  assert.throws(() => new SpotBroadReducer({
+    clock: new ManualClock(), universe: UNIVERSE,
+    policy: Object.assign(Object.create({ inherited: true }), { maximumFrameRecords: 1 }),
+  }), /plain object/);
+  assert.throws(() => new SpotBroadReducer({
+    clock: new ManualClock(), universe: UNIVERSE,
+    policy: { maximumFrameRecords: 1, [Symbol('hidden')]: 2 },
+  }), /symbol keys/);
+  let getterCalls = 0;
+  const accessorPolicy = {};
+  Object.defineProperty(accessorPolicy, 'maximumFrameRecords', {
+    enumerable: true,
+    get() { getterCalls += 1; return 1; },
+  });
+  assert.throws(() => new SpotBroadReducer({
+    clock: new ManualClock(), universe: UNIVERSE, policy: accessorPolicy,
+  }), /enumerable data property/);
+  assert.equal(getterCalls, 0);
 });
 
 test('every policy knob has a hard upper bound rather than safe-integer-only allocation', () => {

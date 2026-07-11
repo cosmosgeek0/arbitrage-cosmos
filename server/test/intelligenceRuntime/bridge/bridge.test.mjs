@@ -5,7 +5,10 @@ import {
   canonicalJson,
   stableId,
 } from '../../../dist/intelligenceFoundation/contracts/index.js';
-import { buildUniverseGraph } from '../../../dist/intelligenceFoundation/universe/index.js';
+import {
+  buildUniverseGraph,
+  createUniversePolicy,
+} from '../../../dist/intelligenceFoundation/universe/index.js';
 
 const bridgeModule = process.env.INTELLIGENCE_RUNTIME_SOURCE_TEST === '1'
   ? '../../../src/intelligenceRuntime/bridge/index.ts'
@@ -14,6 +17,10 @@ const {
   IntelligenceRuntimeBridge,
   projectRequestedFeature,
 } = await import(bridgeModule);
+const runtimeUniverseModule = process.env.INTELLIGENCE_RUNTIME_SOURCE_TEST === '1'
+  ? '../../../src/intelligenceRuntime/universe/shardedGraph.ts'
+  : '../../../dist/intelligenceRuntime/universe/shardedGraph.js';
+const { buildRuntimeUniverseGraph } = await import(runtimeUniverseModule);
 
 const T0 = 1_800_000_000_000;
 
@@ -152,6 +159,33 @@ function universe(atMs = T0, options = {}) {
     configurationVersion: 'bridge-test-universe-1',
     requirePublicDataForFocus: false,
   });
+}
+
+function universeWithSymbolCount(count, atMs = T0) {
+  const spotRecords = [];
+  const perpetualRecords = [];
+  for (let index = 0; index < count; index += 1) {
+    const symbol = `ASSET${index}USDT`;
+    spotRecords.push(listing(instrument(symbol, 'SPOT'), atMs));
+    perpetualRecords.push(listing(instrument(symbol, 'USD_M_PERPETUAL'), atMs));
+  }
+  const input = {
+    observedAtMs: atMs,
+    spot: {
+      source: 'SPOT', state: 'COMPLETE', records: spotRecords, truth: truth(atMs, { sourceId: 'spot-listings' }),
+    },
+    usdMPerpetual: {
+      source: 'USD_M_PERPETUAL', state: 'COMPLETE', records: perpetualRecords, truth: truth(atMs, { sourceId: 'futures-listings' }),
+    },
+    margin: { source: 'MARGIN', state: 'UNAVAILABLE', records: [], truth: unavailableTruth(atMs, 'margin-listings') },
+    borrow: { source: 'BORROW', state: 'UNAVAILABLE', records: [], truth: unavailableTruth(atMs, 'borrow-public-forbidden') },
+    coverage: { source: 'COVERAGE', state: 'UNAVAILABLE', records: [], truth: unavailableTruth(atMs, 'coverage') },
+  };
+  const policy = createUniversePolicy({
+    configurationVersion: 'bridge-test-universe-many-1',
+    requirePublicDataForFocus: false,
+  });
+  return buildRuntimeUniverseGraph(input, policy, 60_000);
 }
 
 function trade(identity, atMs, sequence, options = {}) {
@@ -371,6 +405,75 @@ test('broad normalized public events feed the feature bank and stable snapshot w
   assert.equal(snapshot.createsProposal, false);
   assert.equal(snapshot.createsRiskVerdict, false);
   assert.equal(snapshot.executesAction, false);
+});
+
+test('the production-sized 452-symbol public universe graph is accepted without truncation', () => {
+  const clock = new ManualClock();
+  const bridge = new IntelligenceRuntimeBridge({ clock, config: bridgeConfig() });
+  const graph = universeWithSymbolCount(452, clock.nowMs());
+  assert.equal(graph.nodes.length, 452, canonicalJson(graph.failures.slice(0, 4)));
+  const receipt = bridge.updateUniverse(graph);
+  assert.deepEqual(receipt, {
+    accepted: true,
+    graphId: graph.id,
+    nodeCount: 452,
+    failure: null,
+  });
+  const snapshot = bridge.snapshot();
+  assert.equal(snapshot.universeGraphId, graph.id);
+  assert.equal(snapshot.universeNodeCount, 452);
+});
+
+test('oversized universe aliases and failures are rejected transactionally without replacing prior good truth', () => {
+  const clock = new ManualClock();
+  const good = universe(clock.nowMs());
+  const graphLimit = Math.max(64 * 1024, Buffer.byteLength(canonicalJson(good), 'utf8') + 1_024);
+  const bridge = new IntelligenceRuntimeBridge({
+    clock,
+    config: bridgeConfig({ maximumUniverseGraphBytes: graphLimit }),
+  });
+  assert.equal(bridge.updateUniverse(good).accepted, true);
+
+  const oversizedAlias = structuredClone(good);
+  oversizedAlias.id = 'oversized-alias-graph';
+  oversizedAlias.aliases[0].alias = 'A'.repeat(graphLimit);
+  const aliasReceipt = bridge.updateUniverse(oversizedAlias);
+  assert.equal(aliasReceipt.accepted, false);
+  assert.equal(aliasReceipt.failure.code, 'BUDGET_EXHAUSTED');
+  assert.equal(bridge.snapshot().universeGraphId, good.id);
+
+  const oversizedFailures = structuredClone(good);
+  oversizedFailures.id = 'oversized-failure-graph';
+  oversizedFailures.failures = [{
+    id: 'oversized-quality-failure',
+    code: 'INVALID_VALUE',
+    component: 'bridge-test',
+    message: 'F'.repeat(graphLimit),
+    retryable: false,
+    field: 'universe',
+    evidenceIds: [],
+  }];
+  const failureReceipt = bridge.updateUniverse(oversizedFailures);
+  assert.equal(failureReceipt.accepted, false);
+  assert.equal(failureReceipt.failure.code, 'BUDGET_EXHAUSTED');
+  assert.equal(bridge.snapshot().universeGraphId, good.id);
+  assert.equal(bridge.snapshot().universeNodeCount, good.nodes.length);
+});
+
+test('universe observation rollback is rejected and the newest accepted graph remains authoritative', () => {
+  const clock = new ManualClock();
+  const bridge = new IntelligenceRuntimeBridge({ clock, config: bridgeConfig() });
+  const first = universe(clock.nowMs());
+  assert.equal(bridge.updateUniverse(first).accepted, true);
+
+  clock.advance(10);
+  const latest = universe(clock.nowMs(), { symbol: 'ETHUSDT' });
+  assert.equal(bridge.updateUniverse(latest).accepted, true);
+  const rollback = bridge.updateUniverse(first);
+  assert.equal(rollback.accepted, false);
+  assert.equal(rollback.failure.code, 'OUT_OF_ORDER_EVENT');
+  assert.equal(bridge.snapshot().universeGraphId, latest.id);
+  assert.equal(bridge.snapshot().universeNodeCount, latest.nodes.length);
 });
 
 test('private borrow facts and future evidence are rejected before entering retained intelligence state', () => {
@@ -755,4 +858,67 @@ test('every raw evidence capacity guard rejects before FeatureBank ingestion or 
     assert.equal(snapshot.featureBank.evidenceCount, 0, scenario.name);
     assert.ok(!snapshot.correlationIndex.links.some((entry) => entry.id === evidence.id), scenario.name);
   }
+});
+
+test('oversized quality-failure evidence ids collapse to a bounded local failure without retention amplification', () => {
+  const { bridge, clock, identity } = prepare({ config: { maximumEvidenceBytes: 2_048 } });
+  const valid = trade(identity, clock.nowMs(), 1);
+  assert.equal(bridge.ingest({ correlationId: 'prior-good-root', scope: 'BROAD', evidence: [valid] }).accepted, 1);
+
+  const sentinel = 'QUALITY_FAILURE_SENTINEL_';
+  const receipt = bridge.ingest({
+    correlationId: 'oversized-quality-root',
+    scope: 'BROAD',
+    evidence: [],
+    qualityFailures: [{
+      id: 'oversized-input-failure',
+      code: 'INVALID_VALUE',
+      component: 'upstream-source',
+      message: 'source quality failed',
+      retryable: false,
+      field: 'source',
+      evidenceIds: [`${sentinel}${'X'.repeat(4_096)}`],
+    }],
+  });
+  assert.equal(receipt.accepted, 0);
+  assert.equal(receipt.failures.length, 1);
+  assert.equal(receipt.failures[0].code, 'INVALID_VALUE');
+  assert.equal(receipt.failures[0].field, 'qualityFailures');
+  assert.ok(Buffer.byteLength(canonicalJson(receipt), 'utf8') < 2_048);
+  assert.equal(canonicalJson(receipt).includes(sentinel), false);
+
+  const snapshot = bridge.snapshot();
+  assert.equal(snapshot.evidenceIndex.size, 1);
+  assert.equal(snapshot.featureBank.evidenceCount, 1);
+  assert.equal(canonicalJson(snapshot).includes(sentinel), false);
+  assert.ok(snapshot.failures.every((record) => Buffer.byteLength(canonicalJson(record), 'utf8') < 2_048));
+});
+
+test('direct oversized evidence is rejected at the raw boundary and cannot perturb prior indexed state', () => {
+  const { bridge, clock, identity } = prepare({
+    config: {
+      maximumEvidenceBytes: 2_048,
+      maximumEvidenceStringBytes: 128,
+    },
+  });
+  const valid = trade(identity, clock.nowMs(), 1);
+  assert.equal(bridge.ingest({ correlationId: 'direct-prior-good-root', scope: 'BROAD', evidence: [valid] }).accepted, 1);
+  const before = bridge.snapshot();
+
+  const huge = trade(identity, clock.nowMs(), 2);
+  huge.untrustedTransportMetadata = 'M'.repeat(16_384);
+  const receipt = bridge.ingest({
+    correlationId: 'direct-oversized-root',
+    scope: 'BROAD',
+    evidence: [huge],
+  });
+  assert.equal(receipt.accepted, 0);
+  assert.equal(receipt.rejected, 1);
+  assert.ok(receipt.failures.some((failure) => failure.code === 'BUDGET_EXHAUSTED'));
+  assert.ok(Buffer.byteLength(canonicalJson(receipt), 'utf8') < 2_048);
+
+  const after = bridge.snapshot();
+  assert.equal(after.evidenceIndex.size, before.evidenceIndex.size);
+  assert.equal(after.featureBank.evidenceCount, before.featureBank.evidenceCount);
+  assert.ok(!after.correlationIndex.links.some((entry) => entry.id === huge.id));
 });

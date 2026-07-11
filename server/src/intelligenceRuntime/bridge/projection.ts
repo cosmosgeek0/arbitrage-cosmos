@@ -32,6 +32,7 @@ const DAY_MS = 24 * 60 * 60_000;
 
 const DEFAULT_LIMITS = Object.freeze({
   maximumUniverseNodes: 640,
+  maximumUniverseGraphBytes: 16 * 1024 * 1024,
   maximumEvidenceBatch: 4_096,
   maximumEvidenceBytes: 2 * 1024 * 1024,
   maximumEvidenceNodes: 16_384,
@@ -83,6 +84,12 @@ function boundedVersion(value: string): string {
 export function intelligenceBridgeConfig(input: IntelligenceBridgeConfigInput = {}): IntelligenceBridgeConfig {
   const limits = {
     maximumUniverseNodes: boundedInteger(input.maximumUniverseNodes ?? DEFAULT_LIMITS.maximumUniverseNodes, 'maximumUniverseNodes', 1, 20_000),
+    maximumUniverseGraphBytes: boundedInteger(
+      input.maximumUniverseGraphBytes ?? DEFAULT_LIMITS.maximumUniverseGraphBytes,
+      'maximumUniverseGraphBytes',
+      1_024,
+      128 * 1024 * 1024,
+    ),
     maximumEvidenceBatch: boundedInteger(input.maximumEvidenceBatch ?? DEFAULT_LIMITS.maximumEvidenceBatch, 'maximumEvidenceBatch', 1, 100_000),
     maximumEvidenceBytes: boundedInteger(input.maximumEvidenceBytes ?? DEFAULT_LIMITS.maximumEvidenceBytes, 'maximumEvidenceBytes', 512, 32 * 1024 * 1024),
     maximumEvidenceNodes: boundedInteger(input.maximumEvidenceNodes ?? DEFAULT_LIMITS.maximumEvidenceNodes, 'maximumEvidenceNodes', 16, 1_000_000),

@@ -952,6 +952,75 @@ test('effective configuration fingerprints include policy, remain stable, and ev
   assert.equal(snapshot.graph.truth.configurationVersion, config.configurationVersion);
 });
 
+test('universe configuration is exact plain data with a truthful graph-safe symbol ceiling', () => {
+  assert.equal(adapterFixture({
+    maximumSymbolsPerSource: 12_000,
+    universePolicy: { maxRecordsPerSource: 12_000 },
+  }).adapter.config.maximumSymbolsPerSource, 12_000);
+  assert.throws(() => adapterFixture({
+    maximumSymbolsPerSource: 12_001,
+    universePolicy: { maxRecordsPerSource: 12_001 },
+  }), /maximumSymbolsPerSource/);
+  assert.throws(() => adapterFixture({ apiKey: 'no' }), /unknown field apiKey/);
+  assert.throws(() => adapterFixture({ restBudgets: { PRIVATE: {} } }), /unknown field PRIVATE/);
+  assert.throws(() => adapterFixture({ restBudgets: { SPOT: { secret: 'no' } } }), /unknown field secret/);
+  assert.throws(() => adapterFixture({ universePolicy: { secret: 'no' } }), /unknown field secret/);
+  const symbolConfig = {};
+  symbolConfig[Symbol('secret')] = 'no';
+  assert.throws(() => adapterFixture(symbolConfig), /symbol keys/);
+  let getterCalls = 0;
+  const accessor = {};
+  Object.defineProperty(accessor, 'maximumSymbolsPerSource', { enumerable: true, get() { getterCalls += 1; return 1; } });
+  assert.throws(() => adapterFixture(accessor), /data property/);
+  assert.equal(getterCalls, 0);
+  const base = adapterFixture().adapter.config.configurationVersion;
+  const changed = adapterFixture({ maximumFailureRecordsPerResponse: 511 }).adapter.config.configurationVersion;
+  assert.notEqual(base, changed);
+});
+
+test('failure fan-out is count- and byte-bounded with one deterministic truncation marker', () => {
+  const { adapter } = adapterFixture({
+    maximumFailureRecordsPerResponse: 4,
+    maximumFailureBytesPerResponse: 4_096,
+  });
+  const context = {
+    source: 'SPOT', sourceId: RUNTIME_UNIVERSE_SOURCE_IDS.SPOT, dataset: 'spot.exchange_info',
+    receivedTimeMs: T0, evaluatedAtMs: T0, config: adapter.config,
+  };
+  const rows = Array.from({ length: 20 }, (_, index) => spotRow(`FAIL${index}USDT`, `FAIL${index}`, { filters: [] }));
+  const left = parseExchangeInformation(exchangeInfo(rows), context);
+  const right = parseExchangeInformation(exchangeInfo(rows), context);
+  assert.equal(left.complete, false);
+  assert.equal(left.failures.length, 4);
+  assert.equal(canonicalJson(left.failures), canonicalJson(right.failures));
+  assert.ok(left.failures.some((failure) => failure.field === 'SPOT.failures' && /dropped 57 records/.test(failure.message)));
+  assert.ok(Buffer.byteLength(canonicalJson(left.failures), 'utf8') <= adapter.config.maximumFailureBytesPerResponse);
+
+  const byteBound = adapterFixture({
+    maximumFailureRecordsPerResponse: 100,
+    maximumFailureBytesPerResponse: 4_096,
+  }).adapter.config;
+  const byteResult = parseExchangeInformation(exchangeInfo(rows), { ...context, config: byteBound });
+  assert.ok(Buffer.byteLength(canonicalJson(byteResult.failures), 'utf8') <= 4_096);
+  assert.ok(byteResult.failures.some((failure) => failure.field === 'SPOT.failures'));
+});
+
+test('one exchange row retains at most 32 issues including its explicit overflow marker', () => {
+  const { adapter } = adapterFixture();
+  const context = {
+    source: 'SPOT', sourceId: RUNTIME_UNIVERSE_SOURCE_IDS.SPOT, dataset: 'spot.exchange_info',
+    receivedTimeMs: T0, evaluatedAtMs: T0, config: adapter.config,
+  };
+  const row = spotRow('ISSUESUSDT', 'ISSUES', {
+    underlyingSubType: Array.from({ length: 100 }, (_, index) => index),
+  });
+  const parsed = parseExchangeInformation(exchangeInfo([row]), context);
+  assert.equal(parsed.complete, false);
+  assert.equal(parsed.failures.length, 32);
+  assert.ok(parsed.failures.some((failure) => failure.field === 'SPOT.ISSUESUSDT.rowIssues'));
+  assert.ok(parsed.listings[0].metadata.truth.completeness.missingFields.includes('rowIssues'));
+});
+
 test('large bounded exchangeInfo bodies avoid whole-body validation traps while top-level, row, and filter secrets remain rejected', () => {
   const { adapter } = adapterFixture({
     maximumSymbolsPerSource: 1_200,

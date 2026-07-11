@@ -104,6 +104,7 @@ interface InternalSlot<T extends FuturesObservation> {
 
 interface InternalSymbol {
   identity: UsdMRuntimeIdentity;
+  instrument: Readonly<FuturesInstrumentSeed> | null;
   book: InternalSlot<FuturesBookTickerObservation> | null;
   markFunding: InternalSlot<FuturesMarkFundingObservation> | null;
   contract: InternalSlot<FuturesContractObservation> | null;
@@ -120,11 +121,16 @@ interface LiquidationCursor {
 }
 
 interface ApplyResult {
-  outcome: 'ACCEPTED' | 'DUPLICATE' | 'OUT_OF_ORDER' | 'INVALID' | 'DROPPED';
+  outcome: 'ACCEPTED' | 'DUPLICATE' | 'OUT_OF_ORDER' | 'INVALID' | 'DROPPED' | 'IGNORED';
   previousSequence: string | null;
   evicted: number;
   issue: FuturesDecodeIssue | null;
 }
+
+type InstrumentResolution =
+  | { state: 'RESOLVED'; instrument: FuturesInstrumentSeed }
+  | { state: 'OUT_OF_SCOPE'; instrument: null }
+  | { state: 'INVALID'; instrument: null };
 
 function boundedPositiveInteger(
   value: number | undefined,
@@ -194,6 +200,19 @@ function sameIdentity(left: UsdMRuntimeIdentity, right: UsdMRuntimeIdentity): bo
     && left.productFamily === right.productFamily;
 }
 
+function sameInstrument(
+  left: Readonly<FuturesInstrumentSeed>,
+  right: Readonly<FuturesInstrumentSeed>,
+): boolean {
+  return (left.venue ?? 'BINANCE') === (right.venue ?? 'BINANCE')
+    && left.productFamily === right.productFamily
+    && left.symbol === right.symbol
+    && left.pair === right.pair
+    && left.baseAsset === right.baseAsset
+    && left.quoteAsset === right.quoteAsset
+    && left.contractType === right.contractType;
+}
+
 function freezeFailures(failures: readonly StableFailure[]): readonly StableFailure[] {
   return Object.freeze(failures.map((failure) => Object.freeze({
     ...failure,
@@ -256,6 +275,7 @@ export class FuturesRuntimeAdapter {
   readonly #liquidations: InternalLiquidationSlot[] = [];
   readonly #liquidationIds = new Set<string>();
   readonly #liquidationCursors = new Map<string, LiquidationCursor>();
+  #ingestInProgress = false;
 
   constructor(clock: RuntimeClock, options: FuturesRuntimeAdapterOptions = {}) {
     if (typeof clock?.nowMs !== 'function') throw new TypeError('runtime clock is required');
@@ -304,6 +324,7 @@ export class FuturesRuntimeAdapter {
   }
 
   start(feed: FuturesFeed): number {
+    this.#rejectReentrantMutation('start');
     return this.#trackers[feed].start();
   }
 
@@ -316,15 +337,18 @@ export class FuturesRuntimeAdapter {
     });
   }
 
-  connected(feed: FuturesFeed, generation: number, connectedAtMs = this.#clock.nowMs()): boolean {
-    return this.#trackers[feed].connected(generation, connectedAtMs);
+  connected(feed: FuturesFeed, generation: number, connectedAtMs?: number): boolean {
+    this.#rejectReentrantMutation('connected');
+    return this.#trackers[feed].connected(generation, connectedAtMs ?? this.#clock.nowMs());
   }
 
   reconnect(feed: FuturesFeed): number {
+    this.#rejectReentrantMutation('reconnect');
     return this.#trackers[feed].reconnect();
   }
 
   stop(feed: FuturesFeed): void {
+    this.#rejectReentrantMutation('stop');
     this.#trackers[feed].stop();
   }
 
@@ -333,12 +357,23 @@ export class FuturesRuntimeAdapter {
   }
 
   ingest(feed: FuturesFeed, generation: number, raw: unknown, receiveTimeMs: number): FuturesIngestResult {
+    this.#rejectReentrantMutation('ingest');
+    this.#ingestInProgress = true;
+    try {
+      return this.#ingestFrame(feed, generation, raw, receiveTimeMs);
+    } finally {
+      this.#ingestInProgress = false;
+    }
+  }
+
+  #ingestFrame(feed: FuturesFeed, generation: number, raw: unknown, receiveTimeMs: number): FuturesIngestResult {
     const decoded = this.#decode(feed, raw, receiveTimeMs);
     const tracker = this.#trackers[feed];
     const issues = [...decoded.issues];
     const events: RuntimeSourceEvent<FuturesObservation>[] = [];
     const normalized: FuturesNormalizedEmission[] = [];
     let invalid = decoded.issues.filter((entry) => entry.code !== 'CAPACITY_EXCEEDED').length;
+    let ignored = decoded.ignored.length;
     let duplicate = 0;
     let outOfOrder = 0;
     let dropped = decoded.overflow.records + (decoded.overflow.contractBrackets > 0 ? 1 : 0);
@@ -371,7 +406,15 @@ export class FuturesRuntimeAdapter {
           ));
         } else {
           for (const observation of decoded.observations) {
-            const applied = this.#apply(observation, generation);
+            const resolution = this.#resolver === null ? null : this.#resolveInstrumentDetailed(observation);
+            const beforeApply = tracker.snapshot(clockNow);
+            if (beforeApply.desiredState !== 'RUNNING'
+              || beforeApply.connectedAtMs === null
+              || beforeApply.connectionGeneration !== generation) {
+              dropped += 1;
+              continue;
+            }
+            const applied = this.#apply(observation, generation, resolution);
             dropped += applied.evicted;
             trackedDropped += applied.evicted;
             if (applied.outcome === 'DUPLICATE') {
@@ -380,6 +423,10 @@ export class FuturesRuntimeAdapter {
             }
             if (applied.outcome === 'OUT_OF_ORDER') {
               outOfOrder += 1;
+              continue;
+            }
+            if (applied.outcome === 'IGNORED') {
+              ignored += 1;
               continue;
             }
             if (applied.outcome === 'DROPPED') {
@@ -399,7 +446,10 @@ export class FuturesRuntimeAdapter {
               : Math.max(frameSourceTimeMs, observationSourceTimeMs);
             const event = this.#event(feed, generation, observation, applied.previousSequence);
             events.push(event);
-            normalized.push(...this.#normalize(event));
+            normalized.push(...this.#normalize(
+              event,
+              this.#symbols.get(observation.symbol)?.instrument ?? null,
+            ));
           }
         }
       }
@@ -428,7 +478,7 @@ export class FuturesRuntimeAdapter {
       feed,
       generation,
       accepted: events.length,
-      ignored: decoded.ignored.length,
+      ignored,
       invalid,
       duplicate,
       outOfOrder,
@@ -443,6 +493,15 @@ export class FuturesRuntimeAdapter {
 
   snapshot(atMs = this.#clock.nowMs()): FuturesRuntimeSnapshot {
     if (!Number.isSafeInteger(atMs) || atMs < 0) throw new TypeError('snapshot time must be a non-negative safe integer');
+    const clockNow = this.#clock.nowMs();
+    if (!Number.isSafeInteger(clockNow) || clockNow < 0) throw new TypeError('injected clock must be a non-negative safe integer');
+    if (atMs > clockNow) throw new RangeError('snapshot time cannot be ahead of the injected clock');
+    const retainedKnowledgeTimeMs = Math.max(
+      0,
+      ...[...this.#symbols.values()].map((state) => state.lastUsefulReceiveTimeMs),
+      ...this.#liquidations.map((slot) => slot.observation.receiveTimeMs),
+    );
+    if (atMs < retainedKnowledgeTimeMs) throw new RangeError('snapshot time precedes retained Futures knowledge');
     const sourceSnapshots = Object.freeze(FUTURES_FEEDS.map((feed) => this.#sourceSnapshot(feed, atMs)));
     const generations: Record<FuturesFeed, number> = {
       BOOK_TICKER: sourceSnapshots[0]?.connectionGeneration ?? 0,
@@ -499,30 +558,56 @@ export class FuturesRuntimeAdapter {
     return decodeUsdMLiquidationContext(raw, receiveTimeMs, options);
   }
 
-  #ensureSymbol(observation: FuturesObservation): { state: InternalSymbol | null; issue: FuturesDecodeIssue | null } {
+  #ensureSymbol(observation: FuturesObservation, resolution: InstrumentResolution | null): {
+    state: InternalSymbol | null;
+    issue: FuturesDecodeIssue | null;
+    ignored: boolean;
+  } {
+    if (resolution?.state === 'OUT_OF_SCOPE') return { state: null, issue: null, ignored: true };
+    if (resolution?.state === 'INVALID') {
+      return {
+        state: null,
+        issue: runtimeIssue('IDENTITY_CONFLICT', 'instrument', 'Injected Perpetual universe resolver returned malformed or conflicting identity'),
+        ignored: false,
+      };
+    }
     const existing = this.#symbols.get(observation.symbol);
     if (existing) {
       if (!sameIdentity(existing.identity, observation)) {
         return {
           state: null,
           issue: runtimeIssue('IDENTITY_CONFLICT', 'ps', 'Official ps identity changed for an existing Futures symbol'),
+          ignored: false,
+        };
+      }
+      if (resolution?.state === 'RESOLVED'
+        && (existing.instrument === null || !sameInstrument(existing.instrument, resolution.instrument))) {
+        return {
+          state: null,
+          issue: runtimeIssue(
+            'IDENTITY_CONFLICT',
+            'instrument',
+            'Injected Perpetual universe resolver changed the pinned full instrument identity for an existing Futures symbol',
+          ),
+          ignored: false,
         };
       }
       if (observation.pairAuthority === 'OFFICIAL_PS'
         && existing.identity.pairAuthority !== 'OFFICIAL_PS') {
         existing.identity = Object.freeze({ ...existing.identity, pairAuthority: 'OFFICIAL_PS' });
       }
-      return { state: existing, issue: null };
+      return { state: existing, issue: null, ignored: false };
     }
     if (this.#symbols.size >= this.#maximumSymbols) {
       return {
         state: null,
         issue: runtimeIssue('CAPACITY_EXCEEDED', 'symbol', 'Bounded Futures symbol capacity is exhausted'),
+        ignored: false,
       };
     }
     const requiresResolution = observation.pairAuthority !== 'OFFICIAL_PS'
       || observation.symbol !== observation.pair;
-    if (requiresResolution && this.#resolveInstrument(observation) === null) {
+    if (requiresResolution && this.#resolver === null) {
       return {
         state: null,
         issue: runtimeIssue(
@@ -530,6 +615,7 @@ export class FuturesRuntimeAdapter {
           observation.pairAuthority === 'OFFICIAL_PS' ? 'ps' : 's',
           'Symbol-only or non-canonical USD-M identity requires confirmation from the injected Perpetual universe resolver',
         ),
+        ignored: false,
       };
     }
     const state: InternalSymbol = {
@@ -541,16 +627,21 @@ export class FuturesRuntimeAdapter {
         marketSegment: 'USD_M',
         productFamily: 'USD_M_PERPETUAL',
       }),
+      instrument: resolution?.state === 'RESOLVED' ? resolution.instrument : null,
       book: null,
       markFunding: null,
       contract: null,
       lastUsefulReceiveTimeMs: observation.receiveTimeMs,
     };
     this.#symbols.set(observation.symbol, state);
-    return { state, issue: null };
+    return { state, issue: null, ignored: false };
   }
 
-  #apply(observation: FuturesObservation, generation: number): ApplyResult {
+  #apply(
+    observation: FuturesObservation,
+    generation: number,
+    resolution: InstrumentResolution | null,
+  ): ApplyResult {
     if (observation.kind === 'USD_M_LIQUIDATION_CONTEXT' && this.#maximumLiquidations === 0) {
       return {
         outcome: 'DROPPED',
@@ -559,10 +650,12 @@ export class FuturesRuntimeAdapter {
         issue: runtimeIssue('CAPACITY_EXCEEDED', 'liquidations', 'Liquidation retention is disabled'),
       };
     }
-    const ensured = this.#ensureSymbol(observation);
+    const ensured = this.#ensureSymbol(observation, resolution);
     if (!ensured.state) {
       return {
-        outcome: ensured.issue?.code === 'CAPACITY_EXCEEDED' ? 'DROPPED' : 'INVALID',
+        outcome: ensured.ignored
+          ? 'IGNORED'
+          : ensured.issue?.code === 'CAPACITY_EXCEEDED' ? 'DROPPED' : 'INVALID',
         previousSequence: null,
         evicted: 0,
         issue: ensured.issue,
@@ -720,29 +813,66 @@ export class FuturesRuntimeAdapter {
     });
   }
 
-  #resolveInstrument(observation: FuturesObservation): FuturesInstrumentSeed | null {
-    if (!this.#resolver) return null;
+  #resolveInstrumentDetailed(observation: FuturesObservation): InstrumentResolution {
+    if (!this.#resolver) return { state: 'OUT_OF_SCOPE', instrument: null };
     try {
       const resolved = this.#resolver.resolve(observation);
+      if (resolved === null) return { state: 'OUT_OF_SCOPE', instrument: null };
+      if (typeof resolved !== 'object' || Array.isArray(resolved)) return { state: 'INVALID', instrument: null };
+      const prototype = Object.getPrototypeOf(resolved);
+      if (prototype !== Object.prototype && prototype !== null) return { state: 'INVALID', instrument: null };
+      const allowed = ['venue', 'productFamily', 'symbol', 'pair', 'baseAsset', 'quoteAsset', 'contractType'];
+      const required = ['productFamily', 'symbol', 'pair', 'baseAsset', 'quoteAsset'];
+      const descriptors = Object.getOwnPropertyDescriptors(resolved);
+      if (Object.getOwnPropertySymbols(resolved).length > 0
+        || Object.keys(descriptors).some((key) => !allowed.includes(key))
+        || required.some((key) => !descriptors[key])) return { state: 'INVALID', instrument: null };
+      for (const descriptor of Object.values(descriptors)) {
+        if (!descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) return { state: 'INVALID', instrument: null };
+      }
+      const marketToken = (value: unknown): value is string => (
+        typeof value === 'string' && /^[\p{L}\p{N}._-]{1,128}$/u.test(value)
+      );
+      const venue = descriptors.venue?.value;
+      const productFamily = descriptors.productFamily?.value;
+      const symbol = descriptors.symbol?.value;
+      const pair = descriptors.pair?.value;
+      const baseAsset = descriptors.baseAsset?.value;
+      const quoteAsset = descriptors.quoteAsset?.value;
+      const contractType = descriptors.contractType?.value;
       if (
-        resolved === null
-        || (resolved.venue !== undefined && resolved.venue !== 'BINANCE')
-        || resolved.productFamily !== 'USD_M_PERPETUAL'
-        || resolved.symbol !== observation.symbol
-        || resolved.pair !== observation.pair
-        || resolved.symbol !== resolved.pair
-        || resolved.contractType !== 'PERPETUAL'
-      ) return null;
-      return resolved;
+        (venue !== undefined && venue !== 'BINANCE')
+        || productFamily !== 'USD_M_PERPETUAL'
+        || symbol !== observation.symbol
+        || pair !== observation.pair
+        || symbol !== pair
+        || contractType !== 'PERPETUAL'
+        || !marketToken(baseAsset)
+        || !marketToken(quoteAsset)
+      ) return { state: 'INVALID', instrument: null };
+      return {
+        state: 'RESOLVED',
+        instrument: Object.freeze({
+          venue: 'BINANCE',
+          productFamily,
+          symbol,
+          pair,
+          baseAsset,
+          quoteAsset,
+          contractType,
+        }),
+      };
     } catch {
-      return null;
+      return { state: 'INVALID', instrument: null };
     }
   }
 
-  #normalize(event: RuntimeSourceEvent<FuturesObservation>): FuturesNormalizedEmission[] {
+  #normalize(
+    event: RuntimeSourceEvent<FuturesObservation>,
+    instrument: FuturesInstrumentSeed | null,
+  ): FuturesNormalizedEmission[] {
     const observation = event.payload;
     if (observation.kind !== 'USD_M_BOOK_TICKER' && observation.kind !== 'USD_M_MARK_FUNDING') return [];
-    const instrument = this.#resolveInstrument(observation);
     const evidenceKinds: FuturesNormalizedEmission['evidenceKind'][] = observation.kind === 'USD_M_BOOK_TICKER'
       ? ['BOOK_TICKER']
       : ['MARK_PRICE', 'FUNDING'];
@@ -824,6 +954,12 @@ export class FuturesRuntimeAdapter {
       contract,
       lastUsefulReceiveTimeMs: state.lastUsefulReceiveTimeMs,
     });
+  }
+
+  #rejectReentrantMutation(operation: string): void {
+    if (this.#ingestInProgress) {
+      throw new Error(`Futures adapter ${operation} cannot run reentrantly during ingest`);
+    }
   }
 }
 

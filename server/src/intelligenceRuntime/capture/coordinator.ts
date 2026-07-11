@@ -19,6 +19,8 @@ import {
   type AttributedOutcomeLabel,
   type OutcomePolicySnapshot,
 } from '../../intelligenceFoundation/outcomes/index.js';
+import { BINANCE_SOURCE_FACTS } from '../../intelligenceFoundation/evidence/index.js';
+import { boundedJsonByteLength } from '../contracts/index.js';
 import { captureCoordinatorConfig } from './config.js';
 import { checksumParts, checksumValue, validChecksum } from './checksum.js';
 import type {
@@ -113,6 +115,29 @@ interface RingEvictionOverflow {
 interface RestoreReservation {
   id: number;
   mutationVersion: number;
+}
+
+const PUBLIC_CAPTURE_FACTS = Object.freeze(Object.values(BINANCE_SOURCE_FACTS)
+  .filter((fact) => fact.productFamily === 'SPOT'
+    || fact.productFamily === 'USD_M_PERPETUAL'
+    || fact.productFamily === 'ANY')
+  .map((fact) => Object.freeze({
+    sourceId: fact.sourceId,
+    dataset: fact.dataset,
+    endpointClass: fact.endpointClass,
+    productFamily: fact.productFamily,
+    evidenceKinds: Object.freeze([...fact.evidenceKinds]),
+  })));
+
+function isPublicCaptureEvidence(evidence: NormalizedEvidence): boolean {
+  if (evidence.kind === 'BORROW' || evidence.instrument.productFamily === 'BORROW') return false;
+  const fact = PUBLIC_CAPTURE_FACTS.find((candidate) => candidate.sourceId === evidence.truth.authority.sourceId
+    && candidate.dataset === evidence.truth.authority.dataset
+    && candidate.endpointClass === evidence.truth.authority.endpointClass
+    && candidate.evidenceKinds.includes(evidence.kind as never)
+    && (candidate.productFamily === 'ANY' || candidate.productFamily === evidence.instrument.productFamily));
+  const expectedAuthority = fact?.productFamily === 'ANY' ? 'CONTEXTUAL' : 'EXCHANGE_PRIMARY';
+  return fact !== undefined && evidence.truth.authority.kind === expectedAuthority;
 }
 
 interface PreparedTrigger {
@@ -445,6 +470,15 @@ export class LiveOutcomeCaptureCoordinator {
     const validated = validateNormalizedEvidence(evidenceInput);
     if (!validated.ok) throw new TypeError(validated.failure.message);
     const evidence = validated.value;
+    if (!isPublicCaptureEvidence(evidence)) {
+      throw new StableCaptureError(makeStableFailure(
+        'WRONG_ENDPOINT_CLASS',
+        'runtime_capture',
+        'private, account-scoped, or non-allowlisted evidence is forbidden from public capture',
+        'evidence.truth.authority',
+        [evidence.id],
+      ));
+    }
     const truth = evidence.truth;
     const sourceEventTimeMs = truth.temporal.sourceEventTimeMs;
     if (sourceEventTimeMs === null) {
@@ -716,6 +750,7 @@ export class LiveOutcomeCaptureCoordinator {
     if (freezeInput.evidence.length > this.#config.maximumFreezeEvidence) {
       throw new RangeError('explicit freeze evidence exceeds the configured bound');
     }
+    this.#assertFrozenRecordBound(freezeInput, 'freezeInput');
     if (input.postWindowMs > Number.MAX_SAFE_INTEGER - freezeInput.triggerTimeMs) {
       throw new RangeError('post-trigger window exceeds safe time');
     }
@@ -724,7 +759,7 @@ export class LiveOutcomeCaptureCoordinator {
     for (const evidence of freezeInput.evidence) {
       const record = this.#evidenceRecord(evidence, correlationIds, freezeInput.triggerTimeMs);
       const evidenceSymbol = canonicalSymbol(record.evidence.instrument.symbol, 'freezeInput.evidence.instrument.symbol');
-      if (record.evidence.instrument.productFamily !== 'BORROW' && evidenceSymbol !== symbol) {
+      if (evidenceSymbol !== symbol) {
         throw new TypeError('freeze evidence symbol conflicts with the trigger symbol');
       }
       const existing = explicit.get(record.evidence.id);
@@ -742,6 +777,7 @@ export class LiveOutcomeCaptureCoordinator {
       evidence: [...explicit.values()].sort(recordCompare).map((record) => record.evidence),
     });
     if (!explicitFrozen.ok) throw new StableCaptureError(explicitFrozen.failure);
+    this.#assertFrozenRecordBound(explicitFrozen.value, 'explicitFrozenRecord');
     const requestFingerprint = checksumParts([{
       triggerRequestId,
       symbol,
@@ -934,13 +970,16 @@ export class LiveOutcomeCaptureCoordinator {
       const preEvidence = [...combined.values()].sort(recordCompare);
       const capturedSourceIds = new Set(preEvidence.map((record) => record.evidence.truth.authority.sourceId));
       const missingRequiredSourceIds = requiredSourceIds.filter((sourceId) => !capturedSourceIds.has(sourceId));
-      const frozenResult = freezePreEvent({
+      const enrichedFreezeInput = {
         ...freezeInput,
         evidenceCutoffTimeMs: now,
         evidence: preEvidence.map((record) => record.evidence),
-      });
+      };
+      this.#assertFrozenRecordBound(enrichedFreezeInput, 'enrichedFreezeInput');
+      const frozenResult = freezePreEvent(enrichedFreezeInput);
       if (!frozenResult.ok) throw new StableCaptureError(frozenResult.failure);
       const frozenRecord = frozenResult.value;
+      this.#assertFrozenRecordBound(frozenRecord, 'frozenRecord');
       const triggerFingerprint = checksumParts([{
         triggerRequestId,
         symbol,
@@ -1500,6 +1539,10 @@ export class LiveOutcomeCaptureCoordinator {
     }
     const frozen = validateFrozenPreEventRecord(value.frozenRecord);
     if (!frozen.ok) throw new TypeError(frozen.failure.message);
+    this.#assertFrozenRecordBound(frozen.value, 'checkpoint.capture.frozenRecord');
+    if (frozen.value.evidence.some((evidence) => !isPublicCaptureEvidence(evidence))) {
+      throw new TypeError('checkpoint capture contains private or non-allowlisted evidence');
+    }
     const symbol = canonicalSymbol(value.symbol, 'checkpoint.capture.symbol');
     const correlations = this.#correlations(value.correlationIds as string[], 'checkpoint.capture.correlationIds');
     const requiredSources = this.#sourceIds(value.requiredSourceIds as string[], 'checkpoint.capture.requiredSourceIds');
@@ -1594,6 +1637,17 @@ export class LiveOutcomeCaptureCoordinator {
       throw new TypeError('checkpoint capture checksum or identity mismatch');
     }
     return capture;
+  }
+
+  #assertFrozenRecordBound(value: unknown, field: string): void {
+    try {
+      boundedJsonByteLength(value, this.#config.maximumFrozenRecordBytes);
+    } catch (error) {
+      if (error instanceof RangeError) {
+        throw new RangeError(`${field} exceeds maximumFrozenRecordBytes`);
+      }
+      throw new TypeError(`${field} is not a strict bounded JSON contract`);
+    }
   }
 
   #parseRingEvictionTombstone(value: unknown, now: number): RingEvictionTombstone {

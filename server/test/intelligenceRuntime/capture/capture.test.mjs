@@ -6,13 +6,18 @@ import {
   stableId,
 } from '../../../dist/intelligenceFoundation/contracts/index.js';
 import {
+  captureCoordinatorConfig,
   LiveOutcomeCaptureCoordinator,
 } from '../../../dist/intelligenceRuntime/capture/index.js';
+import {
+  checksumParts,
+  checksumValue,
+} from '../../../dist/intelligenceRuntime/capture/checksum.js';
 
 const TRIGGER = 1_800_000_000_000;
 const CONFIGURATION_VERSION = 'capture-fixture-config-1';
 const FEATURE_VERSION = 'capture-fixture-features-1';
-const SPOT_SOURCE = 'binance-spot-aggregate-trade';
+const SPOT_SOURCE = 'binance-spot-market-stream';
 
 const instrument = {
   instrumentId: stableId('instrument', {
@@ -121,10 +126,10 @@ function truth(eventTimeMs, overrides = {}) {
     configurationVersion: overrides.configurationVersion ?? CONFIGURATION_VERSION,
     featureVersion: overrides.featureVersion ?? FEATURE_VERSION,
     authority: {
-      kind: 'EXCHANGE_PRIMARY',
+      kind: overrides.authorityKind ?? 'EXCHANGE_PRIMARY',
       sourceId: overrides.sourceId ?? SPOT_SOURCE,
-      dataset: overrides.dataset ?? 'aggregate-trade',
-      endpointClass: 'INJECTED',
+      dataset: overrides.dataset ?? 'spot.aggregate_trade',
+      endpointClass: overrides.endpointClass ?? 'PUBLIC',
     },
     provenance: {
       sourceRecordIds: [overrides.recordId ?? `raw:${eventTimeMs}`],
@@ -172,6 +177,111 @@ function tradeForInstrument(id, eventTimeMs, price, evidenceInstrument, override
     normalBaseQuantityExcludingRpi: 1,
     aggressorSide: 'BUY',
   };
+}
+
+function contextualEvidence(id, eventTimeMs, authorityKind = 'CONTEXTUAL') {
+  return {
+    id,
+    kind: 'CONTEXT',
+    instrument,
+    truth: truth(eventTimeMs, {
+      authorityKind,
+      sourceId: 'operator-context-injected',
+      dataset: 'market.context',
+      endpointClass: 'INJECTED',
+      recordId: id,
+      receivedTimeMs: eventTimeMs,
+      evaluatedAtMs: eventTimeMs,
+    }),
+    contextType: 'capture-fixture-market-context',
+    scope: 'MARKET',
+    values: { regime: 'NORMAL' },
+  };
+}
+
+function borrowEvidence(id, eventTimeMs) {
+  const borrowInstrument = {
+    ...instrument,
+    instrumentId: stableId('instrument', {
+      venue: 'BINANCE',
+      productFamily: 'BORROW',
+      symbol: 'TEST',
+      pair: null,
+      baseAsset: 'TEST',
+      quoteAsset: null,
+      contractType: null,
+      sourceMarketType: null,
+    }),
+    productFamily: 'BORROW',
+    symbol: 'TEST',
+    pair: null,
+    quoteAsset: null,
+  };
+  return {
+    id,
+    kind: 'BORROW',
+    instrument: borrowInstrument,
+    truth: truth(eventTimeMs, {
+      sourceId: 'binance-margin-rest',
+      dataset: 'margin.all_assets',
+      endpointClass: 'REST',
+      recordId: id,
+      receivedTimeMs: eventTimeMs,
+      evaluatedAtMs: eventTimeMs,
+    }),
+    asset: 'TEST',
+    eligibility: 'ELIGIBLE',
+    availability: 'AVAILABLE',
+    systemAvailableAmount: 100,
+    accountBorrowLimit: null,
+    hourlyInterestRateDecimal: null,
+    inventoryAmount: null,
+  };
+}
+
+function recordChecksum(record) {
+  return checksumParts([{
+    evidenceChecksum: record.checksum,
+    correlationIds: record.correlationIds,
+    ingestedAtMs: record.ingestedAtMs,
+  }]);
+}
+
+function ringChecksum(ring) {
+  return checksumParts([
+    {
+      key: ring.key,
+      symbol: ring.symbol,
+      sourceId: ring.sourceId,
+      capacityEvictedRecords: ring.capacityEvictedRecords,
+      capacityDroppedThroughEventTimeMs: ring.capacityDroppedThroughEventTimeMs,
+      lastIngestedAtMs: ring.lastIngestedAtMs,
+    },
+    ...ring.entries.map((entry) => ({ id: entry.evidence.id, checksum: recordChecksum(entry) })),
+  ]);
+}
+
+function checkpointChecksum(checkpoint) {
+  const { payload } = checkpoint;
+  return checksumParts([{
+    schemaVersion: checkpoint.schemaVersion,
+    checkpointId: checkpoint.checkpointId,
+    configurationVersion: checkpoint.configurationVersion,
+    producerVersion: checkpoint.producerVersion,
+    generation: checkpoint.generation,
+    savedAtMs: checkpoint.savedAtMs,
+    mutationVersion: payload.mutationVersion,
+    lastClockMs: payload.lastClockMs,
+    evictedRingCount: payload.evictedRingCount,
+    ringEvictionTombstones: payload.ringEvictionTombstones,
+    ringEvictionOverflow: payload.ringEvictionOverflow,
+    evictedCaptureCount: payload.evictedCaptureCount,
+    evictedTriggerTombstoneCount: payload.evictedTriggerTombstoneCount,
+    ringChecksums: payload.rings.map((ring) => ring.checksum),
+    captureChecksums: payload.captures.map((capture) => capture.checksum),
+    tombstones: payload.tombstones,
+    failures: payload.failures,
+  }]);
 }
 
 function freezeInput(triggerTimeMs = TRIGGER, prefix = 'case') {
@@ -257,6 +367,37 @@ function ingestAt(fixtureValue, evidence, atMs, correlationIds = ['source:correl
   fixtureValue.clock.set(atMs);
   return fixtureValue.coordinator.ingestEvidence({ evidence, correlationIds });
 }
+
+test('capture config is an exact plain-data schema and never executes accessors', () => {
+  assert.throws(() => captureCoordinatorConfig({ secret: 'no' }), /unknown field secret/);
+  assert.throws(() => captureCoordinatorConfig({ maximumPreRings: undefined }), /cannot be undefined/);
+  assert.throws(() => captureCoordinatorConfig([]), /plain object/);
+  assert.throws(() => captureCoordinatorConfig(Object.create({ maximumPreRings: 1 })), /plain object/);
+
+  const symbolConfig = {};
+  symbolConfig[Symbol('secret')] = 'no';
+  assert.throws(() => captureCoordinatorConfig(symbolConfig), /symbol keys/);
+
+  const hidden = {};
+  Object.defineProperty(hidden, 'maximumPreRings', { configurable: true, enumerable: false, value: 1 });
+  assert.throws(() => captureCoordinatorConfig(hidden), /enumerable data property/);
+
+  let getterCalls = 0;
+  const accessor = {};
+  Object.defineProperty(accessor, 'maximumPreRings', {
+    enumerable: true,
+    get() {
+      getterCalls += 1;
+      return 1;
+    },
+  });
+  assert.throws(() => captureCoordinatorConfig(accessor), /enumerable data property/);
+  assert.equal(getterCalls, 0);
+
+  const configured = captureCoordinatorConfig(Object.assign(Object.create(null), { maximumPreRings: 1 }));
+  assert.equal(configured.maximumPreRings, 1);
+  assert.equal(Object.isFrozen(configured), true);
+});
 
 test('captures bounded pre-trigger evidence, freezes exactly at trigger, collects post evidence, and attributes at the exact horizon', () => {
   const f = fixture();
@@ -353,7 +494,9 @@ test('outcome attribution excludes same-symbol evidence from a different frozen 
   const wrongLeg = tradeForInstrument(
     'instrument-filter:futures', TRIGGER + 1_000, 1_000, usdMInstrument,
     {
-      sourceId: 'binance-usdm-aggregate-trade',
+      sourceId: 'binance-futures-market-stream',
+      dataset: 'usd_m.aggregate_trade',
+      endpointClass: 'MARKET',
       receivedTimeMs: TRIGGER + 1_000,
       evaluatedAtMs: TRIGGER + 1_000,
     },
@@ -406,6 +549,86 @@ test('rejects future epistemic data, null source event time, and non-exact trigg
   assert.equal(f.coordinator.snapshot().captures.length, 0);
 });
 
+test('accepts only the exact authority kind declared by each allowlisted public source fact', () => {
+  const f = fixture({}, new MemoryCaptureStorage(), TRIGGER - 100);
+  const spoofedExchange = trade('authority:spoofed-exchange', TRIGGER - 100, 100, {
+    authorityKind: 'ENGINE_DERIVED',
+    receivedTimeMs: TRIGGER - 100,
+    evaluatedAtMs: TRIGGER - 100,
+  });
+  const spoofedReceipt = f.coordinator.ingestEvidence({ evidence: spoofedExchange });
+  assert.equal(spoofedReceipt.state, 'REJECTED');
+  assert.equal(spoofedReceipt.failure.code, 'WRONG_ENDPOINT_CLASS');
+  assert.equal(f.coordinator.snapshot().preRingCount, 0);
+
+  const exactContext = contextualEvidence('authority:contextual', TRIGGER - 100);
+  assert.equal(f.coordinator.ingestEvidence({ evidence: exactContext }).state, 'ACCEPTED');
+  const wrongContext = contextualEvidence('authority:wrong-context', TRIGGER - 100, 'EXCHANGE_PRIMARY');
+  const wrongContextReceipt = f.coordinator.ingestEvidence({ evidence: wrongContext });
+  assert.equal(wrongContextReceipt.state, 'REJECTED');
+  assert.equal(wrongContextReceipt.failure.code, 'WRONG_ENDPOINT_CLASS');
+
+  f.clock.set(TRIGGER);
+  const spoofedFreeze = triggerInput(TRIGGER, 'authority-freeze');
+  spoofedFreeze.freezeInput.evidence[0].truth.authority.kind = 'ENGINE_DERIVED';
+  const frozenReceipt = f.coordinator.trigger(spoofedFreeze);
+  assert.equal(frozenReceipt.state, 'REJECTED');
+  assert.equal(frozenReceipt.failure.code, 'WRONG_ENDPOINT_CLASS');
+  assert.equal(f.coordinator.snapshot().retainedCaptureCount, 0);
+});
+
+test('checkpoint restore revalidates public authority after all integrity checks are recomputed', async () => {
+  const storage = new MemoryCaptureStorage();
+  const first = fixture({}, storage, TRIGGER - 100);
+  const accepted = trade('authority:checkpoint', TRIGGER - 100, 100, {
+    receivedTimeMs: TRIGGER - 100,
+    evaluatedAtMs: TRIGGER - 100,
+  });
+  assert.equal(first.coordinator.ingestEvidence({ evidence: accepted }).state, 'ACCEPTED');
+  assert.equal((await first.coordinator.saveCheckpoint()).state, 'SAVED');
+
+  const ring = storage.value.payload.rings[0];
+  const record = ring.entries[0];
+  record.evidence.truth.authority.kind = 'ENGINE_DERIVED';
+  record.checksum = checksumValue(record.evidence);
+  ring.checksum = ringChecksum(ring);
+  storage.value.checksum = checkpointChecksum(storage.value);
+
+  const restarted = fixture({}, storage, TRIGGER - 100);
+  const restored = await restarted.coordinator.restore();
+  assert.equal(restored.state, 'FAILED');
+  assert.equal(restored.failure.code, 'INVALID_VALUE');
+  assert.match(restored.failure.message, /private|allowlisted/i);
+  assert.equal(restarted.coordinator.snapshot().preRingCount, 0);
+});
+
+test('rejects borrow or private evidence and oversized evidence or frozen metadata without retention', () => {
+  const f = fixture({ maximumEvidenceBytes: 2_048, maximumFrozenRecordBytes: 4_096 }, new MemoryCaptureStorage(), TRIGGER - 100);
+  const borrowReceipt = f.coordinator.ingestEvidence({
+    evidence: borrowEvidence('private:borrow', TRIGGER - 100),
+  });
+  assert.equal(borrowReceipt.state, 'REJECTED');
+  assert.equal(borrowReceipt.failure.code, 'WRONG_ENDPOINT_CLASS');
+
+  const oversizedEvidence = trade('oversized:evidence', TRIGGER - 100, 100, {
+    producerVersion: `capture-fixture-${'x'.repeat(4_096)}`,
+    receivedTimeMs: TRIGGER - 100,
+    evaluatedAtMs: TRIGGER - 100,
+  });
+  const evidenceReceipt = f.coordinator.ingestEvidence({ evidence: oversizedEvidence });
+  assert.equal(evidenceReceipt.state, 'REJECTED');
+  assert.equal(evidenceReceipt.failure.code, 'BUDGET_EXHAUSTED');
+  assert.equal(f.coordinator.snapshot().preRingCount, 0);
+
+  f.clock.set(TRIGGER);
+  const oversizedFreeze = triggerInput(TRIGGER, 'oversized-freeze');
+  oversizedFreeze.freezeInput.thesis.hypothesis = `oversized-${'x'.repeat(8_192)}`;
+  const freezeReceipt = f.coordinator.trigger(oversizedFreeze);
+  assert.equal(freezeReceipt.state, 'REJECTED');
+  assert.equal(freezeReceipt.failure.code, 'BUDGET_EXHAUSTED');
+  assert.equal(f.coordinator.snapshot().retainedCaptureCount, 0);
+});
+
 test('pre-trigger ring overflow is marked truncated and blocks misleading outcome attribution', () => {
   const f = fixture({ maximumPreEvidencePerRing: 2, maximumFreezeEvidence: 4 });
   for (const [offset, id] of [[-300, 'pre:one'], [-200, 'pre:two'], [-100, 'pre:three']]) {
@@ -442,7 +665,6 @@ test('ring-key capacity eviction persists a bounded truncation tombstone across 
   const otherSymbol = structuredClone(trade('ring-eviction:other', TRIGGER - 100, 20, {
     receivedTimeMs: TRIGGER - 100,
     evaluatedAtMs: TRIGGER - 100,
-    sourceId: 'other-public-source',
   }));
   const otherInstrument = { ...instrument, symbol: 'OTHERUSDT', pair: 'OTHERUSDT', baseAsset: 'OTHER' };
   otherInstrument.instrumentId = stableId('instrument', {

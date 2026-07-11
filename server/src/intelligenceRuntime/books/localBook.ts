@@ -52,6 +52,26 @@ const COMPONENT = 'runtime.local_book';
 const MAX_SAFE_BOUND = 100_000;
 const MAX_BUFFERED_UPDATES = 1_000_000;
 const MAX_TIME_POLICY_MS = 7 * 24 * 60 * 60_000;
+const CONFIG_FIELDS = Object.freeze([
+  'sourceId',
+  'snapshotSourceId',
+  'deltaSourceId',
+  'productFamily',
+  'instrumentId',
+  'symbol',
+  'bookScope',
+  'snapshotLimit',
+  'maximumLevelsPerSide',
+  'maximumBufferedEvents',
+  'maximumBufferedLevelUpdates',
+  'maximumRecentFingerprints',
+  'maximumFlowSamples',
+  'staleAfterMs',
+  'maximumSnapshotApplyAgeMs',
+  'maximumFutureSkewMs',
+  'depthBandsBps',
+  'flowWindowsMs',
+] as const);
 
 function integer(value: unknown, name: string, minimum = 0): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum) {
@@ -67,11 +87,52 @@ function boundedText(value: unknown, name: string, maximum = 256): string {
   return value;
 }
 
-function sortedPolicy(values: readonly number[], name: string, maximum: number): readonly number[] {
-  if (!Array.isArray(values) || values.length === 0 || values.length > 8) {
+function exactDataObject(value: unknown, allowed: readonly string[], name: string): Readonly<Record<string, unknown>> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError(`${name} must be a plain object`);
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) throw new TypeError(`${name} must be a plain object`);
+  if (Object.getOwnPropertySymbols(value).length > 0) throw new TypeError(`${name} cannot contain symbol keys`);
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const output: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (!allowed.includes(key)) throw new TypeError(`${name} contains unknown field ${key}`);
+    if (!descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) {
+      throw new TypeError(`${name}.${key} must be an enumerable data property`);
+    }
+    output[key] = descriptor.value;
+  }
+  return output;
+}
+
+function exactDataArray(value: unknown, name: string): readonly unknown[] {
+  if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) {
+    throw new TypeError(`${name} must be a plain array`);
+  }
+  if (Object.getOwnPropertySymbols(value).length > 0) throw new TypeError(`${name} cannot contain symbol keys`);
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const keys = Object.keys(descriptors);
+  if (keys.some((key) => key !== 'length' && !/^(?:0|[1-9]\d*)$/.test(key))) {
+    throw new TypeError(`${name} cannot contain custom properties`);
+  }
+  const output: unknown[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = descriptors[String(index)];
+    if (!descriptor || !descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) {
+      throw new TypeError(`${name} must contain dense enumerable data properties`);
+    }
+    output.push(descriptor.value);
+  }
+  return output;
+}
+
+function sortedPolicy(value: unknown, name: string, maximum: number): readonly number[] {
+  const values = exactDataArray(value, name);
+  if (values.length === 0 || values.length > 8) {
     throw new TypeError(`${name} must contain between one and eight values`);
   }
-  const normalized = [...new Set(values.map((value) => integer(value, name, 1)))].sort((left, right) => left - right);
+  const normalized = [...new Set(values.map((entry) => integer(entry, name, 1)))].sort((left, right) => left - right);
   if (normalized.length !== values.length || normalized.some((value) => value > maximum)) {
     throw new TypeError(`${name} values must be unique and within the supported bound`);
   }
@@ -79,48 +140,52 @@ function sortedPolicy(values: readonly number[], name: string, maximum: number):
 }
 
 function validateConfig(input: LocalBookConfig): Readonly<LocalBookConfig> {
-  const sourceId = boundedText(input.sourceId, 'sourceId');
-  const snapshotSourceId = boundedText(input.snapshotSourceId, 'snapshotSourceId');
-  const deltaSourceId = boundedText(input.deltaSourceId, 'deltaSourceId');
-  const instrumentId = boundedText(input.instrumentId, 'instrumentId', 512);
-  const symbol = boundedText(input.symbol, 'symbol', 128);
-  if (input.productFamily !== 'SPOT' && input.productFamily !== 'USD_M_PERPETUAL') {
+  const supplied = exactDataObject(input, CONFIG_FIELDS, 'local book config');
+  const sourceId = boundedText(supplied.sourceId, 'sourceId');
+  const snapshotSourceId = boundedText(supplied.snapshotSourceId, 'snapshotSourceId');
+  const deltaSourceId = boundedText(supplied.deltaSourceId, 'deltaSourceId');
+  const instrumentId = boundedText(supplied.instrumentId, 'instrumentId', 512);
+  const symbol = boundedText(supplied.symbol, 'symbol', 128);
+  if (supplied.productFamily !== 'SPOT' && supplied.productFamily !== 'USD_M_PERPETUAL') {
     throw new TypeError('local book productFamily must be SPOT or USD_M_PERPETUAL');
   }
-  if (input.productFamily === 'SPOT' && input.bookScope !== 'UNKNOWN') {
+  if (supplied.productFamily === 'SPOT' && supplied.bookScope !== 'UNKNOWN') {
     throw new TypeError('Spot local depth must preserve UNKNOWN book scope');
   }
-  if (input.productFamily === 'USD_M_PERPETUAL' && input.bookScope !== 'STANDARD_NO_RPI') {
+  if (supplied.productFamily === 'USD_M_PERPETUAL' && supplied.bookScope !== 'STANDARD_NO_RPI') {
     throw new TypeError('standard USD-M local depth must exclude RPI liquidity');
   }
-  const officialMaximum = input.productFamily === 'SPOT' ? 5_000 : 1_000;
-  const snapshotLimit = integer(input.snapshotLimit, 'snapshotLimit', 1);
-  const maximumLevelsPerSide = integer(input.maximumLevelsPerSide, 'maximumLevelsPerSide', 1);
+  const bookScope: LocalBookConfig['bookScope'] = supplied.productFamily === 'SPOT'
+    ? 'UNKNOWN' : 'STANDARD_NO_RPI';
+  const officialMaximum = supplied.productFamily === 'SPOT' ? 5_000 : 1_000;
+  const snapshotLimit = integer(supplied.snapshotLimit, 'snapshotLimit', 1);
+  const maximumLevelsPerSide = integer(supplied.maximumLevelsPerSide, 'maximumLevelsPerSide', 1);
   if (snapshotLimit > officialMaximum || maximumLevelsPerSide > snapshotLimit) {
     throw new RangeError('local book level policy exceeds the official snapshot bound');
   }
-  const maximumBufferedEvents = integer(input.maximumBufferedEvents, 'maximumBufferedEvents', 1);
-  const maximumBufferedLevelUpdates = integer(input.maximumBufferedLevelUpdates, 'maximumBufferedLevelUpdates', 1);
-  const maximumRecentFingerprints = integer(input.maximumRecentFingerprints, 'maximumRecentFingerprints', 1);
-  const maximumFlowSamples = integer(input.maximumFlowSamples, 'maximumFlowSamples', 1);
+  const maximumBufferedEvents = integer(supplied.maximumBufferedEvents, 'maximumBufferedEvents', 1);
+  const maximumBufferedLevelUpdates = integer(supplied.maximumBufferedLevelUpdates, 'maximumBufferedLevelUpdates', 1);
+  const maximumRecentFingerprints = integer(supplied.maximumRecentFingerprints, 'maximumRecentFingerprints', 1);
+  const maximumFlowSamples = integer(supplied.maximumFlowSamples, 'maximumFlowSamples', 1);
   if (maximumBufferedEvents > MAX_SAFE_BOUND || maximumBufferedLevelUpdates > MAX_BUFFERED_UPDATES
     || maximumRecentFingerprints > MAX_SAFE_BOUND || maximumFlowSamples > MAX_SAFE_BOUND) {
     throw new RangeError('local book retention policy exceeds the hard safety bound');
   }
-  const staleAfterMs = integer(input.staleAfterMs, 'staleAfterMs', 1);
-  const maximumSnapshotApplyAgeMs = integer(input.maximumSnapshotApplyAgeMs, 'maximumSnapshotApplyAgeMs', 1);
-  const maximumFutureSkewMs = integer(input.maximumFutureSkewMs, 'maximumFutureSkewMs');
+  const staleAfterMs = integer(supplied.staleAfterMs, 'staleAfterMs', 1);
+  const maximumSnapshotApplyAgeMs = integer(supplied.maximumSnapshotApplyAgeMs, 'maximumSnapshotApplyAgeMs', 1);
+  const maximumFutureSkewMs = integer(supplied.maximumFutureSkewMs, 'maximumFutureSkewMs');
   if (staleAfterMs > MAX_TIME_POLICY_MS || maximumSnapshotApplyAgeMs > MAX_TIME_POLICY_MS
     || maximumFutureSkewMs > 60_000) {
     throw new RangeError('local book time policy exceeds the hard safety bound');
   }
   return Object.freeze({
-    ...input,
     sourceId,
     snapshotSourceId,
     deltaSourceId,
+    productFamily: supplied.productFamily,
     instrumentId,
     symbol,
+    bookScope,
     snapshotLimit,
     maximumLevelsPerSide,
     maximumBufferedEvents,
@@ -130,8 +195,8 @@ function validateConfig(input: LocalBookConfig): Readonly<LocalBookConfig> {
     staleAfterMs,
     maximumSnapshotApplyAgeMs,
     maximumFutureSkewMs,
-    depthBandsBps: sortedPolicy(input.depthBandsBps, 'depthBandsBps', 10_000),
-    flowWindowsMs: sortedPolicy(input.flowWindowsMs, 'flowWindowsMs', 24 * 60 * 60_000),
+    depthBandsBps: sortedPolicy(supplied.depthBandsBps, 'depthBandsBps', 10_000),
+    flowWindowsMs: sortedPolicy(supplied.flowWindowsMs, 'flowWindowsMs', 24 * 60 * 60_000),
   });
 }
 
@@ -333,8 +398,9 @@ export class LocalOrderBookReducer {
     }
     const snapshot = prepared.value;
     const snapshotLast = snapshot.last;
+    const bootstrapTarget = this.#config.productFamily === 'SPOT' ? snapshotLast + 1n : snapshotLast;
     if (this.#config.productFamily === 'SPOT' && this.#buffer.length > 0
-      && snapshotLast < this.#buffer[0].first) {
+      && bootstrapTarget < this.#buffer[0].first) {
       const failure = makeStableFailure(
         'SEQUENCE_GAP', COMPONENT, 'Spot snapshot precedes the first buffered update range',
         'lastUpdateId', [snapshot.evidence.id, this.#buffer[0].evidence.id],
@@ -351,7 +417,7 @@ export class LocalOrderBookReducer {
       if (old) this.#counters.bootstrapDiscardedCount += 1;
       else kept.push(buffered);
     }
-    if (kept.length > 0 && !(kept[0].first <= snapshotLast && snapshotLast <= kept[0].last)) {
+    if (kept.length > 0 && !(kept[0].first <= bootstrapTarget && bootstrapTarget <= kept[0].last)) {
       const failure = makeStableFailure(
         'SEQUENCE_GAP', COMPONENT, 'first buffered depth event does not bridge the REST snapshot',
         'sequence', [snapshot.evidence.id, kept[0].evidence.id],
@@ -393,20 +459,24 @@ export class LocalOrderBookReducer {
     });
   }
 
-  snapshot(atMs = this.#now()): Readonly<LocalBookSnapshot> {
-    integer(atMs, 'snapshot time');
+  snapshot(atMs?: number): Readonly<LocalBookSnapshot> {
+    const now = this.#now();
+    const snapshotTimeMs = atMs ?? now;
+    integer(snapshotTimeMs, 'snapshot time');
+    if (snapshotTimeMs > now) throw new RangeError('snapshot time cannot exceed the injected clock');
     const latestKnowledgeTimeMs = this.#snapshotReceiveTimeMs === null && this.#lastDeltaReceiveTimeMs === null
       ? null
       : Math.max(this.#snapshotReceiveTimeMs ?? 0, this.#lastDeltaReceiveTimeMs ?? 0);
-    if (latestKnowledgeTimeMs !== null && atMs < latestKnowledgeTimeMs) {
+    if (latestKnowledgeTimeMs !== null && snapshotTimeMs < latestKnowledgeTimeMs) {
       throw new RangeError('snapshot time cannot precede current book knowledge');
     }
     const bids = this.#levels('BID');
     const asks = this.#levels('ASK');
     const metrics = calculateBookDepthMetrics(bids, asks, this.#config.depthBandsBps);
-    const receiveAgeMs = this.#lastDeltaReceiveTimeMs === null ? null : Math.max(0, atMs - this.#lastDeltaReceiveTimeMs);
+    const receiveAgeMs = this.#lastDeltaReceiveTimeMs === null
+      ? null : Math.max(0, snapshotTimeMs - this.#lastDeltaReceiveTimeMs);
     const sourceReference = this.#lastDeltaSourceTransactionTimeMs ?? this.#lastDeltaSourceEventTimeMs;
-    const sourceAgeMs = sourceReference === null ? null : Math.max(0, atMs - sourceReference);
+    const sourceAgeMs = sourceReference === null ? null : Math.max(0, snapshotTimeMs - sourceReference);
     const processingLagMs = this.#lastDeltaReceiveTimeMs === null || this.#lastProcessedTimeMs === null
       ? null
       : Math.max(0, this.#lastProcessedTimeMs - this.#lastDeltaReceiveTimeMs);
@@ -473,7 +543,7 @@ export class LocalOrderBookReducer {
       pendingResyncRequest: this.#pendingResyncRequest,
       latestCorrelationId: this.#latestCorrelationId,
       provenanceDigest: this.#provenanceDigest,
-      snapshotTimeMs: atMs,
+      snapshotTimeMs,
     });
   }
 
@@ -555,7 +625,7 @@ export class LocalOrderBookReducer {
     });
   }
 
-  querySlippage(query: SlippageQuery, atMs = this.#now()): Readonly<SlippageResult> {
+  querySlippage(query: SlippageQuery, atMs?: number): Readonly<SlippageResult> {
     // Validate the query even when the book is unavailable.
     calculateSlippage([], [], query);
     const snapshot = this.snapshot(atMs);

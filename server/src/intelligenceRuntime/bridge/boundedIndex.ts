@@ -10,6 +10,7 @@ import type {
   EvidenceIndexStats,
   IndexedEvidenceRecord,
 } from './types.js';
+import { boundedJsonByteLength } from '../contracts/index.js';
 
 function codePointCompare(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -29,6 +30,9 @@ export function boundedSortedUnique(values: Iterable<string>, maximum: number): 
   positiveInteger(maximum, 'bounded unique capacity');
   const retained: string[] = [];
   for (const value of values) {
+    if (typeof value !== 'string' || value.length === 0 || value.length > 256) {
+      throw new TypeError('bounded unique values must be non-empty strings no longer than 256 characters');
+    }
     let low = 0;
     let high = retained.length;
     while (low < high) {
@@ -178,6 +182,7 @@ export class BoundedEvidenceIndex {
   readonly #maximumPerSymbolKind: number;
   readonly #maximumTruncatedSymbols: number;
   readonly #maximumCorrelationRoots: number;
+  readonly #maximumEvidenceBytes: number;
   readonly #records = new Map<string, InternalEvidenceRecord>();
   readonly #bySymbol = new Map<string, string[]>();
   readonly #bySymbolKind = new Map<string, string[]>();
@@ -193,12 +198,15 @@ export class BoundedEvidenceIndex {
     maximumPerSymbolKind: number;
     maximumTruncatedSymbols: number;
     maximumCorrelationRoots: number;
+    maximumEvidenceBytes?: number;
   }) {
     this.#capacity = positiveInteger(input.capacity, 'evidence capacity');
     this.#maximumPerSymbol = positiveInteger(input.maximumPerSymbol, 'maximum evidence per symbol');
     this.#maximumPerSymbolKind = positiveInteger(input.maximumPerSymbolKind, 'maximum evidence per symbol kind');
     this.#maximumTruncatedSymbols = positiveInteger(input.maximumTruncatedSymbols, 'maximum truncated symbols');
     this.#maximumCorrelationRoots = positiveInteger(input.maximumCorrelationRoots, 'maximum evidence correlation roots');
+    this.#maximumEvidenceBytes = positiveInteger(input.maximumEvidenceBytes ?? 2 * 1024 * 1024, 'maximum evidence bytes');
+    if (this.#maximumEvidenceBytes > 32 * 1024 * 1024) throw new RangeError('maximum evidence bytes exceeds hard bound');
     if (this.#maximumPerSymbolKind > this.#maximumPerSymbol || this.#maximumPerSymbol > this.#capacity) {
       throw new RangeError('evidence bounds must satisfy per-kind <= per-symbol <= total');
     }
@@ -213,6 +221,8 @@ export class BoundedEvidenceIndex {
     scope: BridgeEvidenceScope,
     correlationIds: readonly string[],
   ): EvidenceAddResult {
+    if (scope !== 'BROAD' && scope !== 'FOCUSED') throw new TypeError('evidence scope is invalid');
+    boundedJsonByteLength(evidence, this.#maximumEvidenceBytes);
     const fingerprint = canonicalJson(evidence);
     const existing = this.#records.get(evidence.id);
     if (existing) {

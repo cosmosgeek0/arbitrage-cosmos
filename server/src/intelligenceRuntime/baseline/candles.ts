@@ -6,7 +6,7 @@ import type {
   BaselineCompletedCandle,
   HistoryFetchRequest,
 } from './types.js';
-import { isBaselineIntervalBoundary } from './config.js';
+import { intervalMilliseconds, isBaselineIntervalBoundary } from './config.js';
 
 const MAX_DECIMAL_CHARACTERS = 160;
 const DECIMAL_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d+)?$/;
@@ -137,8 +137,24 @@ export function parseCompletedKlinePage(
   rows: readonly unknown[],
   receiveTimeMs: number,
 ): Readonly<ParsedCompletedKlinePage> {
-  safeInteger(receiveTimeMs, 'receiveTimeMs');
-  if (!Array.isArray(rows) || rows.length > request.limit) {
+  const receivedAtMs = safeInteger(receiveTimeMs, 'receiveTimeMs');
+  const startTimeMs = safeInteger(request.startTimeMs, 'request.startTimeMs');
+  const endTimeMs = safeInteger(request.endTimeMs, 'request.endTimeMs');
+  const tickNowMs = safeInteger(request.tickNowMs, 'request.tickNowMs');
+  if (startTimeMs > endTimeMs || endTimeMs > tickNowMs) {
+    throw new BaselineHistoryPageError('INVALID_KLINE_REQUEST_TIME', 'history request time bounds are inconsistent');
+  }
+  if (receivedAtMs < tickNowMs) {
+    throw new BaselineHistoryPageError('INVALID_KLINE_RECEIVE_TIME', 'history receipt cannot precede request dispatch');
+  }
+  if (!Number.isSafeInteger(request.limit) || request.limit < 1 || request.limit > 1_000) {
+    throw new BaselineHistoryPageError('KLINE_PAGE_BOUND_EXCEEDED', 'history request limit must be in [1, 1000]');
+  }
+  const canonicalIntervalMs = intervalMilliseconds(request.interval);
+  if (request.intervalMs !== canonicalIntervalMs) {
+    throw new BaselineHistoryPageError('INVALID_KLINE_INTERVAL', 'history request intervalMs does not match its named fixed interval');
+  }
+  if (!Array.isArray(rows) || rows.length > request.limit || rows.length > 1_000) {
     throw new BaselineHistoryPageError('KLINE_PAGE_BOUND_EXCEEDED', 'history page exceeds the requested limit');
   }
   const records: BaselineCompletedCandle[] = [];

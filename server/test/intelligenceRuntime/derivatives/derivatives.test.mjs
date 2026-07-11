@@ -22,6 +22,7 @@ class FakeBudget {
     this.denied = false;
     this.used = 0;
     this.observations = [];
+    this.snapshotCalls = 0;
   }
   reserve(weight, atMs) {
     if (this.denied) {
@@ -35,6 +36,7 @@ class FakeBudget {
     return this.snapshot(input.observedAtMs);
   }
   snapshot(atMs = 1_000) {
+    this.snapshotCalls += 1;
     return {
       state: this.denied ? 'COOLDOWN' : 'AVAILABLE',
       usedWeight: this.used,
@@ -322,7 +324,9 @@ test('available partial facts become refresh-eligible at the earlier TTL boundar
   assert.equal(history.availability, 'AVAILABLE');
   assert.equal(history.completeness, 'PARTIAL');
   assert.equal(history.expiresAtMs, 1_100);
+  h.clock.set(1_099);
   assert.equal(h.enricher.planRefresh(['BTCUSDT'], 1_099).tasks.some((task) => task.kind === 'OPEN_INTEREST_HISTORY'), false);
+  h.clock.set(1_100);
   assert.equal(h.enricher.planRefresh(['BTCUSDT'], 1_100).tasks.some((task) => task.kind === 'OPEN_INTEREST_HISTORY'), true);
 });
 
@@ -414,7 +418,9 @@ test('source-time freshness prevents old REST observations from arriving green w
   assert.equal(current.availability, 'STALE');
   assert.equal(current.lastError.code, 'STALE_SOURCE');
   assert.ok(current.reasonCodes.includes('SOURCE_TIME_STALE'));
+  h.clock.set(14_999);
   assert.equal(h.enricher.planRefresh(['BTCUSDT'], 14_999).tasks.some((task) => task.kind === 'OPEN_INTEREST_CURRENT'), false);
+  h.clock.set(15_000);
   assert.equal(h.enricher.planRefresh(['BTCUSDT'], 15_000).tasks.some((task) => task.kind === 'OPEN_INTEREST_CURRENT'), true);
   const fundingInfo = fact(snapshot, 'BTCUSDT', 'FUNDING_INFO');
   assert.equal(fundingInfo.sourceTimeMs, null);
@@ -547,4 +553,240 @@ test('source catalog records current public URLs, costs, access, and the keyed g
   assert.equal(DERIVATIVES_SOURCES.LIQUIDATION_CONTEXT.pathOrStream, '!forceOrder@arr');
   assert.match(DERIVATIVES_SOURCES.LIQUIDATION_CONTEXT.documentationUrl, /api\/ws-streams\/market#all-market-liquidation-order-streams$/);
   assert.match(DERIVATIVES_SOURCES.LIQUIDATION_CONTEXT.notes.join(' '), /latest liquidation per symbol per 1000ms/i);
+});
+
+test('requested symbol output is bounded before materialization while preserving deterministic omissions', () => {
+  const h = harness({ config: { maximumSymbols: 2 } });
+  assert.deepEqual(h.enricher.planRefresh(['AAAUSDT', 'BBBUSDT', 'CCCUSDT', 'DDDUSDT']).omittedSymbols,
+    ['CCCUSDT', 'DDDUSDT']);
+  assert.throws(
+    () => h.enricher.planRefresh(['AAAUSDT', 'BBBUSDT', 'CCCUSDT', 'DDDUSDT', 'EEEUSDT']),
+    /bounded request limit/,
+  );
+  let getterCalls = 0;
+  const hostile = new Array(5);
+  Object.defineProperty(hostile, 0, { enumerable: true, get() { getterCalls += 1; return 'AAAUSDT'; } });
+  assert.throws(() => h.enricher.planRefresh(hostile), /bounded request limit/);
+  assert.equal(getterCalls, 0);
+});
+
+test('plans and snapshots reject future, backdated, and regressed injected time before budget observation', async () => {
+  const h = harness();
+  await h.enricher.refresh(['BTCUSDT']);
+  h.clock.set(1_100);
+  const current = h.enricher.snapshot(['BTCUSDT']);
+  assert.equal(current.snapshotTimeMs, 1_100);
+  const before = JSON.stringify(current);
+  const budgetCalls = h.budget.snapshotCalls;
+  assert.throws(() => h.enricher.snapshot(['BTCUSDT'], 1_099), /before retained runtime knowledge/);
+  assert.throws(() => h.enricher.planRefresh(['BTCUSDT'], 1_101), /after the injected clock/);
+  assert.equal(h.budget.snapshotCalls, budgetCalls);
+  assert.equal(JSON.stringify(h.enricher.snapshot(['BTCUSDT'])), before);
+  h.clock.set(1_099);
+  assert.throws(() => h.enricher.snapshot(['BTCUSDT']), /clock cannot regress/);
+});
+
+test('rate-budget output is exact, bounded, and cannot leak injected extra fields', () => {
+  const budget = new FakeBudget();
+  budget.snapshot = (atMs = 1_000) => ({
+    state: 'AVAILABLE', usedWeight: 0, limit: 1_000, intervalMs: 60_000,
+    resetsAtMs: atMs + 60_000, retryAfterMs: null, observedAtMs: atMs,
+    secret: 'must-not-escape',
+  });
+  const h = harness({ budget });
+  const snapshot = h.enricher.snapshot(['BTCUSDT']);
+  assert.equal(Object.hasOwn(snapshot.budget, 'secret'), false);
+  assert.deepEqual(Object.keys(snapshot.budget).sort(), [
+    'intervalMs', 'limit', 'observedAtMs', 'resetsAtMs', 'retryAfterMs', 'state', 'usedWeight',
+  ]);
+});
+
+test('default plan and snapshot calls tolerate a legitimately advancing injected clock', () => {
+  const clock = { now: 1_000, nowMs() { const value = this.now; this.now += 1; return value; } };
+  const h = harness({ clock });
+  assert.equal(h.enricher.planRefresh(['BTCUSDT']).plannedAtMs, 1_000);
+  assert.equal(h.enricher.snapshot(['BTCUSDT']).snapshotTimeMs, 1_001);
+});
+
+test('current Unicode Binance market symbols remain valid in public derivatives planning', () => {
+  const h = harness();
+  const plan = h.enricher.planRefresh(['1000PEPEUSDT', '币USDT']);
+  assert.deepEqual(plan.includedSymbols, ['1000PEPEUSDT', '币USDT']);
+});
+
+test('response headers are data-only and bounded by count, aggregate, name, and value before budget observation', async () => {
+  let getterCalls = 0;
+  const accessorHeaders = { 'X-MBX-USED-WEIGHT-1M': '1' };
+  Object.defineProperty(accessorHeaders, 'X-HOSTILE', {
+    enumerable: true,
+    get() { getterCalls += 1; return 'must-not-run'; },
+  });
+  const tooManyHeaders = Object.fromEntries(Array.from({ length: 65 }, (_, index) => [`X-H-${index}`, '1']));
+  const oversizedAggregate = Object.fromEntries(Array.from({ length: 5 }, (_, index) => [`X-LARGE-${index}`, 'x'.repeat(7_000)]));
+  const oversizedName = { [`X-${'N'.repeat(127)}`]: '1' };
+  const oversizedValue = { 'X-LARGE': 'x'.repeat(8_193) };
+
+  for (const [label, headers] of [
+    ['accessor', accessorHeaders],
+    ['count', tooManyHeaders],
+    ['aggregate', oversizedAggregate],
+    ['name', oversizedName],
+    ['value', oversizedValue],
+  ]) {
+    const h = harness({
+      responder: (request) => request.path === '/fapi/v1/openInterest'
+        ? { headers, body: completeBody(request) }
+        : { body: completeBody(request) },
+    });
+    const report = await h.enricher.refresh(['BTCUSDT']);
+    assert.equal(report.results.find((entry) => entry.kind === 'OPEN_INTEREST_CURRENT').status, 'FAILED', label);
+    assert.equal(h.budget.observations.length, 5, label);
+    assert.equal(fact(h.enricher.snapshot(['BTCUSDT']), 'BTCUSDT', 'OPEN_INTEREST_CURRENT').lastError.code,
+      'INVALID_RESPONSE', label);
+  }
+  assert.equal(getterCalls, 0);
+});
+
+test('response body accessors and oversized JSON fail closed before parsing or budget observation', async () => {
+  let nestedGetterCalls = 0;
+  const nestedAccessorBody = { symbol: 'BTCUSDT', openInterest: '100', time: 1_000 };
+  Object.defineProperty(nestedAccessorBody, 'ignoredPadding', {
+    enumerable: true,
+    get() { nestedGetterCalls += 1; return 'must-not-run'; },
+  });
+  const oversizedBody = {
+    symbol: 'BTCUSDT', openInterest: '100', time: 1_000, ignoredPadding: 'x'.repeat(2_000),
+  };
+  for (const [label, body] of [['nested accessor', nestedAccessorBody], ['oversized JSON', oversizedBody]]) {
+    const h = harness({
+      config: { maximumResponseBytes: 1_024 },
+      responder: (request) => request.path === '/fapi/v1/openInterest'
+        ? { body }
+        : { body: completeBody(request) },
+    });
+    const report = await h.enricher.refresh(['BTCUSDT']);
+    assert.equal(report.results.find((entry) => entry.kind === 'OPEN_INTEREST_CURRENT').status, 'FAILED', label);
+    assert.equal(h.budget.observations.length, 5, label);
+    assert.equal(fact(h.enricher.snapshot(['BTCUSDT']), 'BTCUSDT', 'OPEN_INTEREST_CURRENT').lastError.code,
+      'INVALID_RESPONSE', label);
+  }
+  assert.equal(nestedGetterCalls, 0);
+
+  let envelopeGetterCalls = 0;
+  const direct = harness({
+    transport: {
+      async request() {
+        const response = {
+          status: 200,
+          headers: { 'X-MBX-USED-WEIGHT-1M': '1' },
+          receiveTimeMs: 1_000,
+        };
+        Object.defineProperty(response, 'body', {
+          enumerable: true,
+          get() { envelopeGetterCalls += 1; return {}; },
+        });
+        return response;
+      },
+    },
+  });
+  const directReport = await direct.enricher.refresh(['BTCUSDT']);
+  assert.equal(directReport.failedCount, 6);
+  assert.equal(direct.budget.observations.length, 0);
+  assert.equal(envelopeGetterCalls, 0);
+});
+
+test('request completion time controls fact evaluation, TTL state, and task outcome', async () => {
+  const clock = new ManualClock(100);
+  const h = harness({
+    clock,
+    config: { ttlMs: { OPEN_INTEREST_CURRENT: 100 } },
+    responder: (request) => {
+      if (request.path === '/fapi/v1/openInterest') {
+        const body = completeBody(request, { time: 100 });
+        clock.set(201);
+        return { body, receiveTimeMs: 100 };
+      }
+      return { body: completeBody(request, { time: clock.nowMs() }), receiveTimeMs: clock.nowMs() };
+    },
+  });
+  const report = await h.enricher.refresh(['BTCUSDT']);
+  const result = report.results.find((entry) => entry.kind === 'OPEN_INTEREST_CURRENT');
+  const current = fact(h.enricher.snapshot(['BTCUSDT']), 'BTCUSDT', 'OPEN_INTEREST_CURRENT');
+  assert.equal(report.completedAtMs, 201);
+  assert.equal(result.status, 'PARTIAL');
+  assert.equal(current.receiveTimeMs, 100);
+  assert.equal(current.evaluatedAtMs, 201);
+  assert.equal(current.expiresAtMs, 200);
+  assert.equal(current.availability, 'STALE');
+  assert.equal(current.lastError.code, 'STALE_SOURCE');
+  assert.equal(h.budget.observations[0].observedAtMs, 201);
+});
+
+test('completion after the receive-time TTL keeps funding-info from reporting current success', async () => {
+  const clock = new ManualClock(100);
+  const h = harness({
+    clock,
+    config: { ttlMs: { FUNDING_INFO: 100 } },
+    responder: (request) => {
+      if (request.path === '/fapi/v1/fundingInfo') {
+        const body = completeBody(request, { time: 100 });
+        clock.set(201);
+        return { body, receiveTimeMs: 100 };
+      }
+      return { body: completeBody(request, { time: clock.nowMs() }), receiveTimeMs: clock.nowMs() };
+    },
+  });
+  const report = await h.enricher.refresh(['BTCUSDT']);
+  const result = report.results.find((entry) => entry.kind === 'FUNDING_INFO');
+  const fundingInfo = fact(h.enricher.snapshot(['BTCUSDT']), 'BTCUSDT', 'FUNDING_INFO');
+  assert.equal(result.status, 'PARTIAL');
+  assert.equal(fundingInfo.receiveTimeMs, 100);
+  assert.equal(fundingInfo.evaluatedAtMs, 201);
+  assert.equal(fundingInfo.expiresAtMs, 200);
+  assert.equal(fundingInfo.availability, 'STALE');
+  assert.equal(fundingInfo.lastError.code, 'STALE_SOURCE');
+});
+
+test('ports.config and nested ttlMs reject unknown, symbol, and accessor fields without executing getters', () => {
+  const base = harness();
+  const ports = { clock: base.clock, rateBudget: base.budget, transport: base.transport };
+  assert.throws(
+    () => new BinancePublicDerivativesEnricher({ ...ports, config: { unknown: true } }),
+    /unknown field unknown/,
+  );
+  assert.throws(
+    () => new BinancePublicDerivativesEnricher({
+      ...ports,
+      config: { [Symbol('hidden')]: 1 },
+    }),
+    /symbol fields/,
+  );
+  assert.throws(
+    () => new BinancePublicDerivativesEnricher({
+      ...ports,
+      config: { ttlMs: { UNKNOWN_KIND: 100 } },
+    }),
+    /unknown field UNKNOWN_KIND/,
+  );
+
+  let configGetterCalls = 0;
+  const accessorPorts = { ...ports };
+  Object.defineProperty(accessorPorts, 'config', {
+    enumerable: true,
+    get() { configGetterCalls += 1; return {}; },
+  });
+  assert.throws(() => new BinancePublicDerivativesEnricher(accessorPorts), /ports.config must be a data property/);
+  assert.equal(configGetterCalls, 0);
+
+  let ttlGetterCalls = 0;
+  const ttlMs = {};
+  Object.defineProperty(ttlMs, 'OPEN_INTEREST_CURRENT', {
+    enumerable: true,
+    get() { ttlGetterCalls += 1; return 100; },
+  });
+  assert.throws(
+    () => new BinancePublicDerivativesEnricher({ ...ports, config: { ttlMs } }),
+    /must be an enumerable data property/,
+  );
+  assert.equal(ttlGetterCalls, 0);
 });

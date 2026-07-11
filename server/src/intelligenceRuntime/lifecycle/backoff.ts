@@ -3,6 +3,7 @@ import type {
   RuntimeClock,
   RuntimeJitterSource,
 } from '../contracts/index.js';
+import { exactConfigRecord } from './configValidation.js';
 
 export interface DeterministicBackoffConfig {
   baseDelayMs: number;
@@ -41,16 +42,26 @@ function safeNow(clock: RuntimeClock): number {
 }
 
 function validateConfig(config: DeterministicBackoffConfig): Readonly<DeterministicBackoffConfig> {
-  const baseDelayMs = safeInteger(config.baseDelayMs, 'baseDelayMs', 1);
-  const maximumDelayMs = safeInteger(config.maximumDelayMs, 'maximumDelayMs', 1);
-  const retryCeiling = safeInteger(config.retryCeiling, 'retryCeiling');
-  const cooldownMs = safeInteger(config.cooldownMs, 'cooldownMs', 1);
+  const projected = exactConfigRecord(
+    config,
+    ['baseDelayMs', 'maximumDelayMs', 'retryCeiling', 'cooldownMs', 'jitterRatio'],
+    'backoff config',
+  );
+  const baseDelayMs = safeInteger(projected.baseDelayMs, 'baseDelayMs', 1);
+  const maximumDelayMs = safeInteger(projected.maximumDelayMs, 'maximumDelayMs', 1);
+  const retryCeiling = safeInteger(projected.retryCeiling, 'retryCeiling');
+  const cooldownMs = safeInteger(projected.cooldownMs, 'cooldownMs', 1);
   if (maximumDelayMs < baseDelayMs) throw new TypeError('maximumDelayMs must be at least baseDelayMs');
-  if (typeof config.jitterRatio !== 'number' || !Number.isFinite(config.jitterRatio)
-    || config.jitterRatio < 0 || config.jitterRatio > 1) {
+  if (baseDelayMs > 7 * 24 * 60 * 60_000 || maximumDelayMs > 7 * 24 * 60 * 60_000
+    || cooldownMs > 30 * 24 * 60 * 60_000 || retryCeiling > 1_000) {
+    throw new RangeError('backoff policy exceeds its hard safety bound');
+  }
+  const jitterRatio = projected.jitterRatio;
+  if (typeof jitterRatio !== 'number' || !Number.isFinite(jitterRatio)
+    || jitterRatio < 0 || jitterRatio > 1) {
     throw new TypeError('jitterRatio must be finite and in [0, 1]');
   }
-  return Object.freeze({ baseDelayMs, maximumDelayMs, retryCeiling, cooldownMs, jitterRatio: config.jitterRatio });
+  return Object.freeze({ baseDelayMs, maximumDelayMs, retryCeiling, cooldownMs, jitterRatio });
 }
 
 /**
@@ -65,6 +76,7 @@ export class DeterministicBackoff {
   #delayMs: number | null = null;
   #retryAtMs: number | null = null;
   #cooldownUntilMs: number | null = null;
+  #lastObservedAtMs: number;
 
   constructor(clock: RuntimeClock, jitter: RuntimeJitterSource, config: DeterministicBackoffConfig) {
     if (typeof clock?.nowMs !== 'function') throw new TypeError('runtime clock is required');
@@ -72,37 +84,41 @@ export class DeterministicBackoff {
     this.#clock = clock;
     this.#jitter = jitter;
     this.#config = validateConfig(config);
+    this.#lastObservedAtMs = safeNow(clock);
   }
 
-  fail(atMs = safeNow(this.#clock)): BackoffDecision {
-    safeInteger(atMs, 'backoff failure time');
-    if (this.#cooldownUntilMs !== null && atMs < this.#cooldownUntilMs) {
+  fail(atMs?: number): BackoffDecision {
+    const observedAtMs = this.#observeTime(atMs, 'backoff failure time');
+    if (this.#cooldownUntilMs !== null && observedAtMs < this.#cooldownUntilMs) {
       return Object.freeze({
         state: 'COOLDOWN',
         attempt: this.#attempt,
-        delayMs: this.#cooldownUntilMs - atMs,
+        delayMs: this.#cooldownUntilMs - observedAtMs,
         retryAtMs: this.#cooldownUntilMs,
         cooldownUntilMs: this.#cooldownUntilMs,
       });
     }
-    if (this.#cooldownUntilMs !== null) this.reset();
+    const expiredCooldown = this.#cooldownUntilMs !== null;
+    const currentAttempt = expiredCooldown ? 0 : this.#attempt;
 
-    if (this.#attempt >= this.#config.retryCeiling) {
+    if (currentAttempt >= this.#config.retryCeiling) {
+      const retryAtMs = observedAtMs + this.#config.cooldownMs;
+      if (!Number.isSafeInteger(retryAtMs)) throw new RangeError('backoff cooldown timestamp overflow');
+      this.#attempt = currentAttempt;
       this.#delayMs = this.#config.cooldownMs;
-      this.#retryAtMs = atMs + this.#config.cooldownMs;
-      if (!Number.isSafeInteger(this.#retryAtMs)) throw new RangeError('backoff cooldown timestamp overflow');
-      this.#cooldownUntilMs = this.#retryAtMs;
+      this.#retryAtMs = retryAtMs;
+      this.#cooldownUntilMs = retryAtMs;
       return Object.freeze({
         state: 'COOLDOWN',
-        attempt: this.#attempt,
-        delayMs: this.#delayMs,
-        retryAtMs: this.#retryAtMs,
-        cooldownUntilMs: this.#cooldownUntilMs,
+        attempt: currentAttempt,
+        delayMs: this.#config.cooldownMs,
+        retryAtMs,
+        cooldownUntilMs: retryAtMs,
       });
     }
 
-    this.#attempt += 1;
-    const exponent = Math.min(52, this.#attempt - 1);
+    const nextAttempt = currentAttempt + 1;
+    const exponent = Math.min(52, nextAttempt - 1);
     const unbounded = this.#config.baseDelayMs * (2 ** exponent);
     const base = Math.min(this.#config.maximumDelayMs, Number.isFinite(unbounded) ? unbounded : this.#config.maximumDelayMs);
     const sample = this.#jitter.next();
@@ -110,9 +126,12 @@ export class DeterministicBackoff {
       throw new TypeError('runtime jitter source must return a finite number in [0, 1]');
     }
     const factor = 1 - this.#config.jitterRatio + (2 * this.#config.jitterRatio * sample);
-    this.#delayMs = Math.max(1, Math.min(this.#config.maximumDelayMs, Math.round(base * factor)));
-    this.#retryAtMs = atMs + this.#delayMs;
-    if (!Number.isSafeInteger(this.#retryAtMs)) throw new RangeError('backoff retry timestamp overflow');
+    const delayMs = Math.max(1, Math.min(this.#config.maximumDelayMs, Math.round(base * factor)));
+    const retryAtMs = observedAtMs + delayMs;
+    if (!Number.isSafeInteger(retryAtMs)) throw new RangeError('backoff retry timestamp overflow');
+    this.#attempt = nextAttempt;
+    this.#delayMs = delayMs;
+    this.#retryAtMs = retryAtMs;
     this.#cooldownUntilMs = null;
     return Object.freeze({
       state: 'RETRY_SCHEDULED',
@@ -123,21 +142,22 @@ export class DeterministicBackoff {
     });
   }
 
-  retryDue(atMs = safeNow(this.#clock)): boolean {
-    safeInteger(atMs, 'backoff tick time');
-    return this.#retryAtMs !== null && atMs >= this.#retryAtMs;
+  retryDue(atMs?: number): boolean {
+    const observedAtMs = this.#observeTime(atMs, 'backoff tick time');
+    return this.#retryAtMs !== null && observedAtMs >= this.#retryAtMs;
   }
 
-  consumeRetry(atMs = safeNow(this.#clock)): boolean {
-    if (!this.retryDue(atMs) || this.#cooldownUntilMs !== null) return false;
+  consumeRetry(atMs?: number): boolean {
+    const observedAtMs = this.#observeTime(atMs, 'backoff consume time');
+    if (this.#retryAtMs === null || observedAtMs < this.#retryAtMs || this.#cooldownUntilMs !== null) return false;
     this.#delayMs = null;
     this.#retryAtMs = null;
     return true;
   }
 
-  releaseCooldown(atMs = safeNow(this.#clock)): boolean {
-    safeInteger(atMs, 'cooldown tick time');
-    if (this.#cooldownUntilMs === null || atMs < this.#cooldownUntilMs) return false;
+  releaseCooldown(atMs?: number): boolean {
+    const observedAtMs = this.#observeTime(atMs, 'cooldown tick time');
+    if (this.#cooldownUntilMs === null || observedAtMs < this.#cooldownUntilMs) return false;
     this.reset();
     return true;
   }
@@ -157,5 +177,14 @@ export class DeterministicBackoff {
       retryAtMs: this.#retryAtMs,
       cooldownUntilMs: this.#cooldownUntilMs,
     });
+  }
+
+  #observeTime(atMs: number | undefined, name: string): number {
+    const now = safeNow(this.#clock);
+    const observedAtMs = atMs === undefined ? now : safeInteger(atMs, name);
+    if (observedAtMs > now) throw new RangeError(`${name} cannot be ahead of the injected clock`);
+    if (observedAtMs < this.#lastObservedAtMs) throw new RangeError(`${name} cannot regress`);
+    this.#lastObservedAtMs = observedAtMs;
+    return observedAtMs;
   }
 }

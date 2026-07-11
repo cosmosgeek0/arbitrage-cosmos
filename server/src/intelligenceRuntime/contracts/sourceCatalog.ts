@@ -1,4 +1,8 @@
-import { stableId } from '../../intelligenceFoundation/contracts/index.js';
+import {
+  PRODUCT_FAMILIES,
+  SOURCE_ENDPOINT_CLASSES,
+  stableId,
+} from '../../intelligenceFoundation/contracts/index.js';
 import type { ProductFamily, SourceEndpointClass } from '../../intelligenceFoundation/contracts/index.js';
 import type { RuntimeSourceDefinition, RuntimeTransportKind } from './types.js';
 
@@ -19,6 +23,9 @@ export const RUNTIME_SOURCE_LIMITS = Object.freeze({
   maximumFutureSkewMs: 60_000,
   maximumRetryCeiling: 1_000,
 } as const);
+
+const RUNTIME_TRANSPORT_KINDS = new Set(['REST', 'WEBSOCKET', 'INJECTED']);
+const RUNTIME_AUTHORITIES = new Set(['COMPLETE', 'PARTIAL', 'SAMPLED', 'UNAVAILABLE', 'UNKNOWN']);
 
 export const RUNTIME_ENDPOINTS = Object.freeze({
   SPOT_WEBSOCKET: Object.freeze({
@@ -91,6 +98,13 @@ export function createRuntimeSourceId(input: {
   if (!/^[a-z][a-z0-9._-]{1,63}$/i.test(input.capability)) {
     throw new TypeError('invalid runtime source capability');
   }
+  if (!SOURCE_ENDPOINT_CLASSES.includes(input.endpointClass)) throw new TypeError('invalid runtime source endpointClass');
+  if (input.productFamily !== 'ANY' && !PRODUCT_FAMILIES.includes(input.productFamily)) {
+    throw new TypeError('invalid runtime source productFamily');
+  }
+  if (typeof input.streamOrPath !== 'string' || input.streamOrPath.length === 0 || input.streamOrPath.length > 2_048) {
+    throw new TypeError('invalid runtime source streamOrPath');
+  }
   return stableId('runtime-source', input);
 }
 
@@ -108,6 +122,8 @@ export function sourceDefinition(
   ] as const) {
     if (!Number.isSafeInteger(value) || value < 0) throw new TypeError(`${name} must be a non-negative safe integer`);
   }
+  if (!RUNTIME_TRANSPORT_KINDS.has(input.transportKind)) throw new TypeError('invalid runtime source transportKind');
+  if (!RUNTIME_AUTHORITIES.has(input.authority)) throw new TypeError('invalid runtime source authority');
   if (input.silentAfterMs === 0 || input.staleAfterMs < input.silentAfterMs) {
     throw new TypeError('source freshness thresholds are invalid');
   }

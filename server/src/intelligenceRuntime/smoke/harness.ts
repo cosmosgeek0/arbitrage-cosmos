@@ -44,6 +44,7 @@ interface InternalSource {
   lastReceiveTimeMs: number | null;
   receivedMessageCount: number;
   acceptedMessageCount: number;
+  ignoredMessageCount: number;
   droppedMessageCount: number;
   normalizedEvidenceCount: number;
   closedAtMs: number | null;
@@ -123,6 +124,7 @@ function sourceSnapshot(
     lastReceiveTimeMs: source.lastReceiveTimeMs,
     messageAgeMs,
     acceptedMessageCount: source.acceptedMessageCount,
+    ignoredMessageCount: source.ignoredMessageCount,
     droppedMessageCount: source.droppedMessageCount,
     normalizedEvidenceCount: source.normalizedEvidenceCount,
     closedAtMs: source.closedAtMs,
@@ -135,6 +137,21 @@ function sourceSnapshot(
     receivedMessageCount: source.receivedMessageCount,
     lastErrorCode: source.lastErrorCode,
     lastErrorMessage: source.lastErrorMessage,
+  });
+}
+
+function withShutdownReceipt(
+  observed: PublicSmokeSourceSnapshot,
+  source: InternalSource,
+): PublicSmokeSourceSnapshot {
+  const shutdownFailed = source.state === 'FAILED' && observed.state !== 'FAILED';
+  return Object.freeze({
+    ...observed,
+    state: source.state,
+    closedAtMs: source.closedAtMs,
+    closeObserved: source.closeObserved,
+    lastErrorCode: shutdownFailed ? source.lastErrorCode : observed.lastErrorCode,
+    lastErrorMessage: shutdownFailed ? source.lastErrorMessage : observed.lastErrorMessage,
   });
 }
 
@@ -431,6 +448,7 @@ export class PublicNoKeySmokeHarness {
       lastReceiveTimeMs: null,
       receivedMessageCount: 0,
       acceptedMessageCount: 0,
+      ignoredMessageCount: 0,
       droppedMessageCount: 0,
       normalizedEvidenceCount: 0,
       closedAtMs: null,
@@ -457,6 +475,7 @@ export class PublicNoKeySmokeHarness {
 
     let closeRequests = 0;
     let shutdownStarted = false;
+    let observationClosed = false;
     let lastFocusDepthUpdateId: number | null = null;
 
     const requestSourceClose = (source: InternalSource, reason: string): void => {
@@ -479,6 +498,7 @@ export class PublicNoKeySmokeHarness {
     };
 
     const handleMessage = (source: InternalSource, data: unknown, receiveTimeMs: number): void => {
+      if (observationClosed) return;
       if (source.receivedMessageCount >= this.#config.maximumMessagesPerSource) {
         source.droppedMessageCount = safeAdd(source.droppedMessageCount, 1, 'dropped message count');
         requestSourceClose(source, 'bounded smoke message cap reached');
@@ -497,12 +517,24 @@ export class PublicNoKeySmokeHarness {
           accepted = true;
         } else if (source.descriptor.key === 'USD_M_BOOK') {
           const result = futures.ingest('BOOK_TICKER', futuresBookGeneration, unwrapCombined(data).payload, receiveTimeMs);
-          if (result.accepted === 0) throw new TypeError('broad USD-M book frame contained no semantically accepted record');
+          if (result.accepted === 0) {
+            if (result.ignored > 0 && result.invalid === 0 && result.dropped === 0 && result.outOfOrder === 0) {
+              source.ignoredMessageCount = safeAdd(source.ignoredMessageCount, 1, 'ignored message count');
+              return;
+            }
+            throw new TypeError('broad USD-M book frame contained no semantically accepted record');
+          }
           for (const emission of result.normalized) if (emission.status === 'NORMALIZED') recordEvidence(source, emission.evidence);
           accepted = true;
         } else if (source.descriptor.key === 'USD_M_MARK_FUNDING') {
           const result = futures.ingest('MARK_FUNDING', futuresMarkGeneration, unwrapCombined(data).payload, receiveTimeMs);
-          if (result.accepted === 0) throw new TypeError('USD-M mark/funding frame contained no semantically accepted record');
+          if (result.accepted === 0) {
+            if (result.ignored > 0 && result.invalid === 0 && result.dropped === 0 && result.outOfOrder === 0) {
+              source.ignoredMessageCount = safeAdd(source.ignoredMessageCount, 1, 'ignored message count');
+              return;
+            }
+            throw new TypeError('USD-M mark/funding frame contained no semantically accepted record');
+          }
           for (const emission of result.normalized) if (emission.status === 'NORMALIZED') recordEvidence(source, emission.evidence);
           accepted = true;
         } else {
@@ -561,6 +593,7 @@ export class PublicNoKeySmokeHarness {
     };
 
     const handleEvent = (source: InternalSource, event: PublicWebSocketEvent): void => {
+      if (observationClosed && event.kind !== 'CLOSE') return;
       if (event.kind === 'OPEN') {
         if (source.terminalFailure) return;
         source.state = 'OPEN';
@@ -625,7 +658,14 @@ export class PublicNoKeySmokeHarness {
       fatalError = boundedError(error instanceof Error ? error.message : error, this.#config.maximumErrorLength, 'smoke wait failed');
     }
 
+    observationClosed = true;
+
     const observationTimeMs = this.#now();
+    const observedSources = sources.map((source) => sourceSnapshot(
+      source,
+      observationTimeMs,
+      this.#config.maximumAcceptedMessageAgeMs,
+    ));
     const spotBroad = sourceByKey(sources, 'SPOT_BROAD');
     const usdMBook = sourceByKey(sources, 'USD_M_BOOK');
     const usdMMark = sourceByKey(sources, 'USD_M_MARK_FUNDING');
@@ -746,11 +786,7 @@ export class PublicNoKeySmokeHarness {
     report('clean_shutdown', allConnectionsClosed ? 'PASS' : 'FAIL', `${observedCloses}/${createdConnections} created public transports emitted close`);
 
     const finishedAtMs = this.#now();
-    const finalSources = sources.map((source) => sourceSnapshot(
-      source,
-      finishedAtMs,
-      this.#config.maximumAcceptedMessageAgeMs,
-    ));
+    const finalSources = observedSources.map((observed, index) => withShutdownReceipt(observed, sources[index]!));
     const outcome = this.#outcome({
       universe: universeView,
       sources: finalSources,

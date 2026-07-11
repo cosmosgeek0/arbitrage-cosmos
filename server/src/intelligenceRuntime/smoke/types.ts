@@ -70,6 +70,7 @@ export interface PublicSmokeSourceSnapshot {
   readonly lastReceiveTimeMs: number | null;
   readonly messageAgeMs: number | null;
   readonly acceptedMessageCount: number;
+  readonly ignoredMessageCount: number;
   readonly droppedMessageCount: number;
   readonly normalizedEvidenceCount: number;
   readonly closedAtMs: number | null;

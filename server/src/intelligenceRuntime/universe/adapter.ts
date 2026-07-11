@@ -17,6 +17,7 @@ import {
   type UniverseSourceState,
 } from '../../intelligenceFoundation/universe/index.js';
 import {
+  boundedJsonByteLength,
   RUNTIME_ENDPOINTS,
   createRuntimeSourceId,
   type PublicRestRequest,
@@ -27,7 +28,7 @@ import {
   RestWeightBudget,
   type WeightReservation,
 } from '../lifecycle/rateBudget.js';
-import { parseExchangeInformation, type ParsedRuntimeListing } from './parsers.js';
+import { boundUniverseFailures, parseExchangeInformation, type ParsedRuntimeListing } from './parsers.js';
 import { buildRuntimeUniverseGraph } from './shardedGraph.js';
 import {
   reAgeRuntimeUniverseTruth,
@@ -48,6 +49,20 @@ import type {
 
 const SPOT_PATH = '/api/v3/exchangeInfo';
 const USD_M_PATH = '/fapi/v1/exchangeInfo';
+const CONFIG_FIELDS = Object.freeze([
+  'requestTimeoutMs', 'maximumResponseBytes', 'maximumSymbolsPerSource', 'maximumFiltersPerSymbol',
+  'maximumFilterBytes', 'maximumAliasesPerListing', 'maximumFailureRecordsPerResponse',
+  'maximumFailureBytesPerResponse', 'sourceStaleAfterMs', 'maximumFutureSkewMs', 'restBudgets', 'universePolicy',
+]);
+const REST_BUDGET_FIELDS = Object.freeze([
+  'requestWeight', 'limit', 'intervalMs', 'nearLimitRatio', 'defaultCooldownMs',
+]);
+const UNIVERSE_POLICY_FIELDS = Object.freeze([
+  'configurationVersion', 'activeSpotStatuses', 'activePerpetualStatuses', 'allowedQuoteAssetsForFocus',
+  'minimumQuoteVolume24hUsdForFocus', 'requireSpotForFocus', 'requirePerpetualForFocus',
+  'requireMarginForFocus', 'requireBorrowEligibilityForFocus', 'requireBorrowAvailabilityForFocus',
+  'requirePublicDataForFocus', 'requireFocusedDataForFocus', 'maxRecordsPerSource', 'maxAliasesPerInstrument',
+]);
 
 export const RUNTIME_UNIVERSE_SOURCE_IDS = Object.freeze({
   SPOT: createRuntimeSourceId({
@@ -71,10 +86,12 @@ type RuntimeUniverseDefaultConfig = Omit<RuntimeUniverseConfig, 'configurationVe
 export const RUNTIME_UNIVERSE_DEFAULTS: Readonly<RuntimeUniverseDefaultConfig> = deepFreeze({
   requestTimeoutMs: 8_000,
   maximumResponseBytes: 24 * 1024 * 1024,
-  maximumSymbolsPerSource: 50_000,
+  maximumSymbolsPerSource: 10_000,
   maximumFiltersPerSymbol: 128,
   maximumFilterBytes: 16 * 1024,
   maximumAliasesPerListing: 64,
+  maximumFailureRecordsPerResponse: 512,
+  maximumFailureBytesPerResponse: 256 * 1024,
   sourceStaleAfterMs: 15 * 60_000,
   maximumFutureSkewMs: 2_000,
   restBudgets: {
@@ -95,7 +112,7 @@ export const RUNTIME_UNIVERSE_DEFAULTS: Readonly<RuntimeUniverseDefaultConfig> =
   },
   universePolicy: {
     configurationVersion: 'live-intelligence-universe-policy-1',
-    maxRecordsPerSource: 50_000,
+    maxRecordsPerSource: 10_000,
     maxAliasesPerInstrument: 64,
     requireSpotForFocus: true,
     requirePerpetualForFocus: false,
@@ -147,6 +164,23 @@ function safeInteger(value: number, name: string, minimum: number, maximum: numb
   return value;
 }
 
+function exactDataObject(value: unknown, allowed: readonly string[], name: string): Readonly<Record<string, unknown>> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new TypeError(`${name} must be a plain object`);
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) throw new TypeError(`${name} must be a plain object`);
+  if (Object.getOwnPropertySymbols(value).length > 0) throw new TypeError(`${name} cannot contain symbol keys`);
+  const output: Record<string, unknown> = {};
+  for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(value))) {
+    if (!allowed.includes(key)) throw new TypeError(`${name} contains unknown field ${key}`);
+    if (!descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) {
+      throw new TypeError(`${name}.${key} must be an enumerable data property`);
+    }
+    if (descriptor.value === undefined) throw new TypeError(`${name}.${key} cannot be undefined`);
+    output[key] = descriptor.value;
+  }
+  return output;
+}
+
 function validatedRestBudget(
   source: RuntimeUniverseSource,
   value: RuntimeUniverseRestBudgetConfig,
@@ -177,32 +211,61 @@ function validatedRestBudget(
 function validatedConfig(options: RuntimeUniverseAdapterOptions): RuntimeUniverseConfig {
   if (typeof options?.transport?.request !== 'function') throw new TypeError('public REST transport is required');
   if (typeof options?.clock?.nowMs !== 'function') throw new TypeError('runtime clock is required');
-  const supplied = options.config ?? {};
+  const supplied = exactDataObject(options.config ?? {}, CONFIG_FIELDS, 'runtime universe config');
+  const suppliedBudgets = supplied.restBudgets === undefined
+    ? {}
+    : exactDataObject(supplied.restBudgets, ['SPOT', 'USD_M_PERPETUAL'], 'runtime universe config.restBudgets');
+  const spotBudget = suppliedBudgets.SPOT === undefined
+    ? {}
+    : exactDataObject(suppliedBudgets.SPOT, REST_BUDGET_FIELDS, 'runtime universe config.restBudgets.SPOT');
+  const futuresBudget = suppliedBudgets.USD_M_PERPETUAL === undefined
+    ? {}
+    : exactDataObject(suppliedBudgets.USD_M_PERPETUAL, REST_BUDGET_FIELDS, 'runtime universe config.restBudgets.USD_M_PERPETUAL');
   const restBudgets = {
     SPOT: validatedRestBudget('SPOT', {
-      ...RUNTIME_UNIVERSE_DEFAULTS.restBudgets.SPOT,
-      ...(supplied.restBudgets?.SPOT ?? {}),
+      requestWeight: (spotBudget.requestWeight ?? RUNTIME_UNIVERSE_DEFAULTS.restBudgets.SPOT.requestWeight) as number,
+      limit: (spotBudget.limit ?? RUNTIME_UNIVERSE_DEFAULTS.restBudgets.SPOT.limit) as number,
+      intervalMs: (spotBudget.intervalMs ?? RUNTIME_UNIVERSE_DEFAULTS.restBudgets.SPOT.intervalMs) as number,
+      nearLimitRatio: (spotBudget.nearLimitRatio ?? RUNTIME_UNIVERSE_DEFAULTS.restBudgets.SPOT.nearLimitRatio) as number,
+      defaultCooldownMs: (spotBudget.defaultCooldownMs ?? RUNTIME_UNIVERSE_DEFAULTS.restBudgets.SPOT.defaultCooldownMs) as number,
     }),
     USD_M_PERPETUAL: validatedRestBudget('USD_M_PERPETUAL', {
-      ...RUNTIME_UNIVERSE_DEFAULTS.restBudgets.USD_M_PERPETUAL,
-      ...(supplied.restBudgets?.USD_M_PERPETUAL ?? {}),
+      requestWeight: (futuresBudget.requestWeight ?? RUNTIME_UNIVERSE_DEFAULTS.restBudgets.USD_M_PERPETUAL.requestWeight) as number,
+      limit: (futuresBudget.limit ?? RUNTIME_UNIVERSE_DEFAULTS.restBudgets.USD_M_PERPETUAL.limit) as number,
+      intervalMs: (futuresBudget.intervalMs ?? RUNTIME_UNIVERSE_DEFAULTS.restBudgets.USD_M_PERPETUAL.intervalMs) as number,
+      nearLimitRatio: (futuresBudget.nearLimitRatio ?? RUNTIME_UNIVERSE_DEFAULTS.restBudgets.USD_M_PERPETUAL.nearLimitRatio) as number,
+      defaultCooldownMs: (futuresBudget.defaultCooldownMs ?? RUNTIME_UNIVERSE_DEFAULTS.restBudgets.USD_M_PERPETUAL.defaultCooldownMs) as number,
     }),
   };
+  const suppliedPolicy = supplied.universePolicy === undefined
+    ? {}
+    : exactDataObject(supplied.universePolicy, UNIVERSE_POLICY_FIELDS, 'runtime universe config.universePolicy');
+  boundedJsonByteLength(suppliedPolicy, 1024 * 1024);
   const rawConfig: RuntimeUniverseDefaultConfig = {
-    ...RUNTIME_UNIVERSE_DEFAULTS,
-    ...supplied,
+    requestTimeoutMs: (supplied.requestTimeoutMs ?? RUNTIME_UNIVERSE_DEFAULTS.requestTimeoutMs) as number,
+    maximumResponseBytes: (supplied.maximumResponseBytes ?? RUNTIME_UNIVERSE_DEFAULTS.maximumResponseBytes) as number,
+    maximumSymbolsPerSource: (supplied.maximumSymbolsPerSource ?? RUNTIME_UNIVERSE_DEFAULTS.maximumSymbolsPerSource) as number,
+    maximumFiltersPerSymbol: (supplied.maximumFiltersPerSymbol ?? RUNTIME_UNIVERSE_DEFAULTS.maximumFiltersPerSymbol) as number,
+    maximumFilterBytes: (supplied.maximumFilterBytes ?? RUNTIME_UNIVERSE_DEFAULTS.maximumFilterBytes) as number,
+    maximumAliasesPerListing: (supplied.maximumAliasesPerListing ?? RUNTIME_UNIVERSE_DEFAULTS.maximumAliasesPerListing) as number,
+    maximumFailureRecordsPerResponse: (supplied.maximumFailureRecordsPerResponse ?? RUNTIME_UNIVERSE_DEFAULTS.maximumFailureRecordsPerResponse) as number,
+    maximumFailureBytesPerResponse: (supplied.maximumFailureBytesPerResponse ?? RUNTIME_UNIVERSE_DEFAULTS.maximumFailureBytesPerResponse) as number,
+    sourceStaleAfterMs: (supplied.sourceStaleAfterMs ?? RUNTIME_UNIVERSE_DEFAULTS.sourceStaleAfterMs) as number,
+    maximumFutureSkewMs: (supplied.maximumFutureSkewMs ?? RUNTIME_UNIVERSE_DEFAULTS.maximumFutureSkewMs) as number,
     restBudgets,
-    universePolicy: {
-      ...RUNTIME_UNIVERSE_DEFAULTS.universePolicy,
-      ...(supplied.universePolicy ?? {}),
-    },
+    universePolicy: Object.fromEntries(UNIVERSE_POLICY_FIELDS.map((field) => [
+      field,
+      suppliedPolicy[field] ?? RUNTIME_UNIVERSE_DEFAULTS.universePolicy[field as keyof UniversePolicy],
+    ])) as unknown as Partial<UniversePolicy>,
   };
   safeInteger(rawConfig.requestTimeoutMs, 'requestTimeoutMs', 1, 120_000);
   safeInteger(rawConfig.maximumResponseBytes, 'maximumResponseBytes', 1_024, 128 * 1024 * 1024);
-  safeInteger(rawConfig.maximumSymbolsPerSource, 'maximumSymbolsPerSource', 1, 50_000);
+  safeInteger(rawConfig.maximumSymbolsPerSource, 'maximumSymbolsPerSource', 1, 12_000);
   safeInteger(rawConfig.maximumFiltersPerSymbol, 'maximumFiltersPerSymbol', 1, 1_024);
   safeInteger(rawConfig.maximumFilterBytes, 'maximumFilterBytes', 256, 1024 * 1024);
   safeInteger(rawConfig.maximumAliasesPerListing, 'maximumAliasesPerListing', 2, 512);
+  safeInteger(rawConfig.maximumFailureRecordsPerResponse, 'maximumFailureRecordsPerResponse', 1, 4_096);
+  safeInteger(rawConfig.maximumFailureBytesPerResponse, 'maximumFailureBytesPerResponse', 4_096, 16 * 1024 * 1024);
   safeInteger(rawConfig.sourceStaleAfterMs, 'sourceStaleAfterMs', 1, 7 * 24 * 60 * 60_000);
   safeInteger(rawConfig.maximumFutureSkewMs, 'maximumFutureSkewMs', 0, 60_000);
   const policy = createUniversePolicy(rawConfig.universePolicy);
@@ -219,6 +282,8 @@ function validatedConfig(options: RuntimeUniverseAdapterOptions): RuntimeUnivers
     maximumFiltersPerSymbol: rawConfig.maximumFiltersPerSymbol,
     maximumFilterBytes: rawConfig.maximumFilterBytes,
     maximumAliasesPerListing: rawConfig.maximumAliasesPerListing,
+    maximumFailureRecordsPerResponse: rawConfig.maximumFailureRecordsPerResponse,
+    maximumFailureBytesPerResponse: rawConfig.maximumFailureBytesPerResponse,
     sourceStaleAfterMs: rawConfig.sourceStaleAfterMs,
     maximumFutureSkewMs: rawConfig.maximumFutureSkewMs,
     restBudgets,
@@ -588,6 +653,7 @@ function refreshSource(input: {
       state = rows.size > 0 ? 'PARTIAL' : 'UNAVAILABLE';
     }
   }
+  failures = boundUniverseFailures(input.source, failures, input.config);
   const dataTimeMs = oldestDataTime(rows) ?? (state === 'UNAVAILABLE' ? null : lastResponseTimeMs);
   const truth = sourceTruth({
     source: input.source,
@@ -760,6 +826,7 @@ export class BinancePublicUniverseAdapter {
   #spotBudget: RestWeightBudget | null = null;
   #futuresBudget: RestWeightBudget | null = null;
   #lastBudgetTimeMs = 0;
+  #budgetClockMs = 0;
   #spot = emptySourceState();
   #futures = emptySourceState();
   #graph: UniverseGraph | null = null;
@@ -793,8 +860,9 @@ export class BinancePublicUniverseAdapter {
     const attemptedAtMs = this.#clock.nowMs();
     safeInteger(attemptedAtMs, 'clock.nowMs', 0, Number.MAX_SAFE_INTEGER);
     const budgetAttemptedAtMs = Math.max(attemptedAtMs, this.#lastBudgetTimeMs);
-    const spotBudget = this.#budget('SPOT', budgetAttemptedAtMs);
-    const futuresBudget = this.#budget('USD_M_PERPETUAL', budgetAttemptedAtMs);
+    this.#budgetClockMs = budgetAttemptedAtMs;
+    const spotBudget = this.#budget('SPOT');
+    const futuresBudget = this.#budget('USD_M_PERPETUAL');
     const spotReservation = spotBudget.reserve(
       this.#config.restBudgets.SPOT.requestWeight,
       budgetAttemptedAtMs,
@@ -818,6 +886,7 @@ export class BinancePublicUniverseAdapter {
     const observedAtMs = this.#clock.nowMs();
     safeInteger(observedAtMs, 'clock.nowMs', attemptedAtMs, Number.MAX_SAFE_INTEGER);
     const budgetObservedAtMs = Math.max(observedAtMs, budgetAttemptedAtMs);
+    this.#budgetClockMs = budgetObservedAtMs;
     this.#lastBudgetTimeMs = budgetObservedAtMs;
     const spotAttempt = { reservation: spotReservation, settled: spotResult };
     const futuresAttempt = { reservation: futuresReservation, settled: futuresResult };
@@ -859,11 +928,11 @@ export class BinancePublicUniverseAdapter {
       .sort((left, right) => codePointCompare(left.source, right.source) || codePointCompare(left.symbol, right.symbol));
     const changes = [...spot.changes, ...futures.changes]
       .sort((left, right) => codePointCompare(left.source, right.source) || codePointCompare(left.symbol, right.symbol));
-    const failures = [...new Map([
+    const failures = boundUniverseFailures('RUNTIME', [...new Map([
       ...this.#spot.failures,
       ...this.#futures.failures,
       ...graph.failures,
-    ].map((failure) => [failure.id, failure])).values()].sort((left, right) => codePointCompare(left.id, right.id));
+    ].map((failure) => [failure.id, failure])).values()], this.#config);
     const sources = {
       SPOT: sourceSnapshot('SPOT', this.#spot, attemptedAtMs),
       USD_M_PERPETUAL: sourceSnapshot('USD_M_PERPETUAL', this.#futures, attemptedAtMs),
@@ -905,17 +974,24 @@ export class BinancePublicUniverseAdapter {
     return this.#snapshot;
   }
 
-  #budget(source: RuntimeUniverseSource, atMs: number): RestWeightBudget {
+  #budget(source: RuntimeUniverseSource): RestWeightBudget {
+    const budgetConfig = this.#config.restBudgets[source];
+    const ledgerConfig = {
+      limit: budgetConfig.limit,
+      intervalMs: budgetConfig.intervalMs,
+      nearLimitRatio: budgetConfig.nearLimitRatio,
+      defaultCooldownMs: budgetConfig.defaultCooldownMs,
+    };
     if (source === 'SPOT') {
       this.#spotBudget ??= new RestWeightBudget(
-        { nowMs: () => atMs },
-        this.#config.restBudgets.SPOT,
+        { nowMs: () => this.#budgetClockMs },
+        ledgerConfig,
       );
       return this.#spotBudget;
     }
     this.#futuresBudget ??= new RestWeightBudget(
-      { nowMs: () => atMs },
-      this.#config.restBudgets.USD_M_PERPETUAL,
+      { nowMs: () => this.#budgetClockMs },
+      ledgerConfig,
     );
     return this.#futuresBudget;
   }

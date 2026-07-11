@@ -1,4 +1,5 @@
 import type { RuntimeClock, RuntimeRateBudgetState } from '../contracts/index.js';
+import { exactConfigRecord } from './configValidation.js';
 
 export interface RestWeightBudgetConfig {
   limit: number;
@@ -41,6 +42,38 @@ function safeHeaderInteger(value: string | undefined): number | null {
   return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
+function exactHeaderEntries(
+  headers: Readonly<Record<string, string>> | null | undefined,
+): readonly (readonly [string, string])[] {
+  if (headers === null || headers === undefined) return Object.freeze([]);
+  if (typeof headers !== 'object' || Array.isArray(headers)) {
+    throw new TypeError('REST rate headers must be a plain object');
+  }
+  const prototype = Object.getPrototypeOf(headers);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new TypeError('REST rate headers must be a plain object');
+  }
+  if (Object.getOwnPropertySymbols(headers).length > 0) {
+    throw new TypeError('REST rate headers cannot contain symbol keys');
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(headers);
+  const names = Object.keys(descriptors);
+  if (names.length > 256) throw new RangeError('REST rate headers exceed the header-count bound');
+  const entries: Array<readonly [string, string]> = [];
+  for (const name of names) {
+    const descriptor = descriptors[name];
+    if (!descriptor || !descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) {
+      throw new TypeError('REST rate headers must contain enumerable data properties only');
+    }
+    if (name.length === 0 || name.length > 256 || typeof descriptor.value !== 'string'
+      || descriptor.value.length > 8_192) {
+      throw new TypeError('REST rate header name or value exceeds its bounded string contract');
+    }
+    entries.push(Object.freeze([name, descriptor.value] as const));
+  }
+  return Object.freeze(entries);
+}
+
 function fixedIntervalWindow(atMs: number, intervalMs: number): Readonly<{
   startedAtMs: number;
   resetsAtMs: number;
@@ -57,8 +90,8 @@ export function parseRestRateHeaders(
   headers: Readonly<Record<string, string>> | null | undefined,
 ): Readonly<ParsedRestRateHeaders> {
   const lower: Record<string, string> = {};
-  for (const [name, value] of Object.entries(headers ?? {})) {
-    if (typeof value === 'string') lower[name.toLowerCase()] = value;
+  for (const [name, value] of exactHeaderEntries(headers)) {
+    lower[name.toLowerCase()] = value;
   }
   const weights = [
     safeHeaderInteger(lower['x-mbx-used-weight-1m']),
@@ -90,15 +123,24 @@ export class RestWeightBudget {
 
   constructor(clock: RuntimeClock, config: RestWeightBudgetConfig) {
     if (typeof clock?.nowMs !== 'function') throw new TypeError('runtime clock is required');
-    const limit = safeInteger(config.limit, 'weight limit', 1);
-    const intervalMs = safeInteger(config.intervalMs, 'weight interval', 1);
-    const defaultCooldownMs = safeInteger(config.defaultCooldownMs, 'defaultCooldownMs', 1);
-    if (typeof config.nearLimitRatio !== 'number' || !Number.isFinite(config.nearLimitRatio)
-      || config.nearLimitRatio <= 0 || config.nearLimitRatio >= 1) {
+    const projected = exactConfigRecord(
+      config,
+      ['limit', 'intervalMs', 'nearLimitRatio', 'defaultCooldownMs'],
+      'REST weight budget config',
+    );
+    const limit = safeInteger(projected.limit, 'weight limit', 1);
+    const intervalMs = safeInteger(projected.intervalMs, 'weight interval', 1);
+    const defaultCooldownMs = safeInteger(projected.defaultCooldownMs, 'defaultCooldownMs', 1);
+    if (limit > 1_000_000_000) throw new RangeError('weight limit exceeds hard bound');
+    if (intervalMs > 7 * 24 * 60 * 60_000) throw new RangeError('weight interval exceeds hard bound');
+    if (defaultCooldownMs > 3 * 24 * 60 * 60_000) throw new RangeError('defaultCooldownMs exceeds hard bound');
+    const nearLimitRatio = projected.nearLimitRatio;
+    if (typeof nearLimitRatio !== 'number' || !Number.isFinite(nearLimitRatio)
+      || nearLimitRatio <= 0 || nearLimitRatio >= 1) {
       throw new TypeError('nearLimitRatio must be finite and in (0, 1)');
     }
     this.#clock = clock;
-    this.#config = Object.freeze({ limit, intervalMs, defaultCooldownMs, nearLimitRatio: config.nearLimitRatio });
+    this.#config = Object.freeze({ limit, intervalMs, defaultCooldownMs, nearLimitRatio });
     const now = safeInteger(clock.nowMs(), 'clock.nowMs');
     const window = fixedIntervalWindow(now, intervalMs);
     this.#windowStartedAtMs = window.startedAtMs;
@@ -139,25 +181,59 @@ export class RestWeightBudget {
   }
 
   observeResponse(input: RestResponseBudgetObservation): Readonly<RuntimeRateBudgetState> {
-    const atMs = input.observedAtMs ?? this.#now();
+    if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+      throw new TypeError('REST response budget observation must be a plain object');
+    }
+    const prototype = Object.getPrototypeOf(input);
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new TypeError('REST response budget observation must be a plain object');
+    }
+    const allowed = new Set(['status', 'headers', 'unreservedRequestWeight', 'observedAtMs']);
+    const descriptors = Object.getOwnPropertyDescriptors(input);
+    if (Object.getOwnPropertySymbols(input).length > 0
+      || Object.keys(descriptors).some((key) => !allowed.has(key))) {
+      throw new TypeError('REST response budget observation contains unsupported fields');
+    }
+    for (const required of ['status', 'headers'] as const) {
+      const descriptor = descriptors[required];
+      if (!descriptor || !descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) {
+        throw new TypeError(`REST response budget observation ${required} must be an enumerable data property`);
+      }
+    }
+    for (const optional of ['unreservedRequestWeight', 'observedAtMs'] as const) {
+      const descriptor = descriptors[optional];
+      if (descriptor && (!descriptor.enumerable || !Object.hasOwn(descriptor, 'value'))) {
+        throw new TypeError(`REST response budget observation ${optional} must be an enumerable data property`);
+      }
+    }
+    const observedAtMs = descriptors.observedAtMs?.value as number | undefined;
+    const atMs = observedAtMs ?? this.#now();
     safeInteger(atMs, 'response observation time');
-    const status = safeInteger(input.status, 'HTTP status', 100);
+    const status = safeInteger(descriptors.status?.value, 'HTTP status', 100);
     if (status > 599) throw new TypeError('HTTP status must be in [100, 599]');
-    if (input.unreservedRequestWeight !== undefined) {
-      const weight = safeInteger(input.unreservedRequestWeight, 'unreserved request weight', 1);
+    const parsed = parseRestRateHeaders(descriptors.headers?.value as Readonly<Record<string, string>>);
+    const rawUnreservedWeight = descriptors.unreservedRequestWeight?.value as number | undefined;
+    const unreservedWeight = rawUnreservedWeight === undefined
+      ? null
+      : safeInteger(rawUnreservedWeight, 'unreserved request weight', 1);
+    const cooldown = status === 418 || status === 429
+      ? parsed.retryAfterMs ?? this.#config.defaultCooldownMs
+      : null;
+    const cooldownUntilMs = cooldown === null ? null : atMs + cooldown;
+    if (cooldownUntilMs !== null && !Number.isSafeInteger(cooldownUntilMs)) {
+      throw new RangeError('rate-limit cooldown timestamp overflow');
+    }
+    if (rawUnreservedWeight !== undefined) {
       this.tick(atMs);
-      this.#usedWeight = Math.min(Number.MAX_SAFE_INTEGER, this.#usedWeight + weight);
+      this.#usedWeight = Math.min(Number.MAX_SAFE_INTEGER, this.#usedWeight + (unreservedWeight as number));
     } else {
       this.tick(atMs);
     }
-    const parsed = parseRestRateHeaders(input.headers);
     if (parsed.usedWeight !== null) this.#usedWeight = parsed.usedWeight;
     this.#observedAtMs = atMs;
-    if (status === 418 || status === 429) {
-      const cooldown = parsed.retryAfterMs ?? this.#config.defaultCooldownMs;
+    if (cooldown !== null) {
       this.#retryAfterMs = cooldown;
-      this.#cooldownUntilMs = atMs + cooldown;
-      if (!Number.isSafeInteger(this.#cooldownUntilMs)) throw new RangeError('rate-limit cooldown timestamp overflow');
+      this.#cooldownUntilMs = cooldownUntilMs;
     }
     return this.snapshot(atMs);
   }
@@ -174,6 +250,7 @@ export class RestWeightBudget {
 
   #advance(atMs: number): void {
     safeInteger(atMs, 'rate-budget observation time');
+    if (atMs > this.#now()) throw new RangeError('rate-budget observation time cannot be ahead of the injected clock');
     if (atMs < this.#observedAtMs) throw new RangeError('rate-budget clock regressed');
     if (atMs >= this.#resetsAtMs) {
       const window = fixedIntervalWindow(atMs, this.#config.intervalMs);

@@ -32,6 +32,100 @@ interface RowIssue {
   message: string;
 }
 
+const MAXIMUM_ROW_ISSUES = 32;
+
+class BoundedRowIssues extends Array<RowIssue> {
+  #dropped = 0;
+
+  static get [Symbol.species](): ArrayConstructor {
+    return Array;
+  }
+
+  override push(...items: RowIssue[]): number {
+    for (const item of items) {
+      if (this.length < MAXIMUM_ROW_ISSUES - 1) super.push(item);
+      else this.#dropped += 1;
+    }
+    return this.length;
+  }
+
+  finish(): void {
+    if (this.#dropped === 0) return;
+    super.push({
+      field: 'rowIssues',
+      message: `row issue retention dropped ${this.#dropped} issues within the ${MAXIMUM_ROW_ISSUES}-record bound`,
+    });
+  }
+}
+
+class BoundedFailureCollector {
+  readonly #source: RuntimeUniverseSource | 'RUNTIME';
+  readonly #config: RuntimeUniverseConfig;
+  readonly #records: StableFailure[] = [];
+  readonly #recordBytes: number[] = [];
+  #retainedBytes = 2;
+  #observedCount = 0;
+  #droppedCount = 0;
+
+  constructor(source: RuntimeUniverseSource | 'RUNTIME', config: RuntimeUniverseConfig) {
+    this.#source = source;
+    this.#config = config;
+  }
+
+  get observedCount(): number {
+    return this.#observedCount;
+  }
+
+  add(failure: StableFailure): void {
+    this.#observedCount += 1;
+    const bytes = Buffer.byteLength(canonicalJson(failure), 'utf8');
+    const projectedBytes = this.#retainedBytes + bytes + (this.#records.length > 0 ? 1 : 0);
+    if (this.#records.length >= this.#config.maximumFailureRecordsPerResponse
+      || projectedBytes > this.#config.maximumFailureBytesPerResponse) {
+      this.#droppedCount += 1;
+      return;
+    }
+    this.#records.push(failure);
+    this.#recordBytes.push(bytes);
+    this.#retainedBytes = projectedBytes;
+  }
+
+  finish(): StableFailure[] {
+    if (this.#droppedCount === 0) return [...this.#records].sort((left, right) => codePointCompare(left.id, right.id));
+    while (true) {
+      const marker = makeStableFailure(
+        'BUDGET_EXHAUSTED',
+        'runtime_universe',
+        `failure retention dropped ${this.#droppedCount} records within configured count and byte bounds`,
+        `${this.#source}.failures`,
+      );
+      const markerBytes = Buffer.byteLength(canonicalJson(marker), 'utf8');
+      const candidateBytes = this.#retainedBytes + markerBytes + (this.#records.length > 0 ? 1 : 0);
+      const candidate = [...this.#records, marker];
+      if (candidate.length <= this.#config.maximumFailureRecordsPerResponse
+        && candidateBytes <= this.#config.maximumFailureBytesPerResponse) {
+        return candidate.sort((left, right) => codePointCompare(left.id, right.id));
+      }
+      if (this.#records.length === 0) throw new RangeError('universe failure byte bound cannot retain its truncation marker');
+      const previousLength = this.#records.length;
+      this.#records.pop();
+      const removedBytes = this.#recordBytes.pop() as number;
+      this.#retainedBytes -= removedBytes + (previousLength > 1 ? 1 : 0);
+      this.#droppedCount += 1;
+    }
+  }
+}
+
+export function boundUniverseFailures(
+  source: RuntimeUniverseSource | 'RUNTIME',
+  failures: readonly StableFailure[],
+  config: RuntimeUniverseConfig,
+): StableFailure[] {
+  const collector = new BoundedFailureCollector(source, config);
+  for (const failure of failures) collector.add(failure);
+  return collector.finish();
+}
+
 class StableParseError extends Error {
   readonly failure: StableFailure;
 
@@ -358,7 +452,7 @@ function parseRow(raw: unknown, index: number, context: ParseContext): {
   if (context.source === 'USD_M_PERPETUAL' && contractType === 'PERPETUAL' && symbol !== pair) {
     throw new TypeError(`symbols[${index}].symbol conflicts with its Perpetual pair`);
   }
-  const issues: RowIssue[] = [];
+  const issues = new BoundedRowIssues();
   const filters = filtersOf(raw.filters, context, issues);
   const rules = rulesOf(filters, issues);
   const tradingAllowed = context.source === 'SPOT'
@@ -401,6 +495,7 @@ function parseRow(raw: unknown, index: number, context: ParseContext): {
     includedInUniverse,
     exclusionReasonCodes,
   };
+  issues.finish();
   const fingerprint = stableId('runtime-listing-metadata', semanticMetadata);
   const metadataId = stableId('runtime-listing-record', { source: context.source, symbol });
   const sourceRecordId = stableId('runtime-exchange-info-row', { source: context.source, fingerprint });
@@ -487,20 +582,20 @@ export function parseExchangeInformation(body: unknown, context: ParseContext): 
     };
   }
   const listings: ParsedRuntimeListing[] = [];
-  const failures: StableFailure[] = [];
+  const failures = new BoundedFailureCollector(context.source, context.config);
   const seen = new Set<string>();
   for (let index = 0; index < body.symbols.length; index += 1) {
     try {
       const parsed = parseRow(body.symbols[index], index, context);
       if (seen.has(parsed.value.key)) {
-        failures.push(makeStableFailure('DUPLICATE_EVENT', 'runtime_universe', 'duplicate symbol row rejected', `${context.source}.symbols`, [parsed.value.metadata.id]));
+        failures.add(makeStableFailure('DUPLICATE_EVENT', 'runtime_universe', 'duplicate symbol row rejected', `${context.source}.symbols`, [parsed.value.metadata.id]));
         continue;
       }
       seen.add(parsed.value.key);
       listings.push(parsed.value);
-      failures.push(...parsed.failures);
+      for (const failure of parsed.failures) failures.add(failure);
     } catch (error) {
-      failures.push(error instanceof StableParseError
+      failures.add(error instanceof StableParseError
         ? error.failure
         : makeStableFailure(
           error instanceof RangeError ? 'BUDGET_EXHAUSTED' : 'INVALID_VALUE',
@@ -511,6 +606,5 @@ export function parseExchangeInformation(body: unknown, context: ParseContext): 
     }
   }
   listings.sort((left, right) => codePointCompare(left.key, right.key));
-  failures.sort((left, right) => codePointCompare(left.id, right.id));
-  return { complete: failures.length === 0, listings, failures };
+  return { complete: failures.observedCount === 0, listings, failures: failures.finish() };
 }

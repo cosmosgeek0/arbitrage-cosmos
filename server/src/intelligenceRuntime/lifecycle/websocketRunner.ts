@@ -23,6 +23,7 @@ import {
 } from './lagMetrics.js';
 import {
   BoundedInboundQueue,
+  cloneBoundedQueueValue,
   type BoundedQueueSnapshot,
   type InboundQueueMode,
 } from './queue.js';
@@ -32,6 +33,7 @@ import {
   type ControlThrottleDecision,
   type ControlThrottleSnapshot,
 } from './throttle.js';
+import { exactConfigRecord } from './configValidation.js';
 
 export interface DecodedRuntimeMessage<T> {
   payload: T;
@@ -109,6 +111,8 @@ export interface WebSocketRunnerSnapshot {
   };
 }
 
+const RUNTIME_EVENT_ENVELOPE_BYTES = 64 * 1024;
+
 function safeInteger(value: unknown, name: string, minimum = 0): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum) {
     throw new TypeError(`${name} must be a safe integer >= ${minimum}`);
@@ -116,23 +120,113 @@ function safeInteger(value: unknown, name: string, minimum = 0): number {
   return value;
 }
 
+function exactSequence(value: RuntimeSequence | null): Readonly<RuntimeSequence> | null {
+  if (value === null) return null;
+  if (typeof value !== 'object' || Array.isArray(value)) throw new TypeError('runtime sequence must be an object');
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) throw new TypeError('runtime sequence must be a plain object');
+  const allowed = ['first', 'last', 'previous'] as const;
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  if (Object.getOwnPropertySymbols(value).length > 0
+    || Object.keys(descriptors).length !== allowed.length
+    || Object.keys(descriptors).some((key) => !(allowed as readonly string[]).includes(key))) {
+    throw new TypeError('runtime sequence contains unsupported fields');
+  }
+  for (const key of allowed) {
+    const descriptor = descriptors[key];
+    if (!descriptor || !descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) {
+      throw new TypeError(`runtime sequence ${key} must be an enumerable data property`);
+    }
+  }
+  const validSequenceId = (candidate: unknown): candidate is string => (
+    typeof candidate === 'string' && candidate.length > 0 && candidate.length <= 64 && /^\d+$/.test(candidate)
+  );
+  const first = descriptors.first?.value;
+  const last = descriptors.last?.value;
+  const previous = descriptors.previous?.value;
+  if (!validSequenceId(first) || !validSequenceId(last)
+    || (previous !== null && !validSequenceId(previous))
+    || BigInt(first) > BigInt(last)) throw new TypeError('runtime sequence values are invalid');
+  return Object.freeze({ first, last, previous });
+}
+
 function validateConfig(config: WebSocketSourceRunnerConfig): Readonly<WebSocketSourceRunnerConfig> {
-  if (config.definition.transportKind !== 'WEBSOCKET') throw new TypeError('WebSocket runner requires a WEBSOCKET source definition');
-  if (typeof config.url !== 'string' || !config.url.startsWith('wss://') || config.url.length > 2_048) {
+  const projectedRoot = exactConfigRecord(
+    config,
+    [
+      'definition', 'url', 'maximumMessageBytes', 'queueCapacity', 'openTimeoutMs',
+      'rotationAfterMs', 'stableConnectionMs', 'backoff', 'controlThrottle',
+    ],
+    'WebSocket runner config',
+  );
+  const projectedDefinition = exactConfigRecord(
+    projectedRoot.definition,
+    [
+      'sourceId', 'transportKind', 'endpointClass', 'productFamily', 'silentAfterMs', 'staleAfterMs',
+      'maximumFutureSkewMs', 'retryCeiling', 'authority',
+    ],
+    'WebSocket runner source definition',
+  );
+  const projectedBackoff = exactConfigRecord(
+    projectedRoot.backoff,
+    ['baseDelayMs', 'maximumDelayMs', 'retryCeiling', 'cooldownMs', 'jitterRatio'],
+    'WebSocket runner backoff config',
+  );
+  const projectedThrottle = exactConfigRecord(
+    projectedRoot.controlThrottle,
+    ['maximumMessages', 'intervalMs'],
+    'WebSocket runner control throttle config',
+  );
+  const definition = Object.freeze({
+    sourceId: projectedDefinition.sourceId,
+    transportKind: projectedDefinition.transportKind,
+    endpointClass: projectedDefinition.endpointClass,
+    productFamily: projectedDefinition.productFamily,
+    silentAfterMs: projectedDefinition.silentAfterMs,
+    staleAfterMs: projectedDefinition.staleAfterMs,
+    maximumFutureSkewMs: projectedDefinition.maximumFutureSkewMs,
+    retryCeiling: projectedDefinition.retryCeiling,
+    authority: projectedDefinition.authority,
+  }) as unknown as RuntimeSourceDefinition;
+  const backoff = Object.freeze({
+    baseDelayMs: projectedBackoff.baseDelayMs,
+    maximumDelayMs: projectedBackoff.maximumDelayMs,
+    retryCeiling: projectedBackoff.retryCeiling,
+    cooldownMs: projectedBackoff.cooldownMs,
+    jitterRatio: projectedBackoff.jitterRatio,
+  }) as unknown as DeterministicBackoffConfig;
+  const controlThrottle = Object.freeze({
+    maximumMessages: projectedThrottle.maximumMessages,
+    intervalMs: projectedThrottle.intervalMs,
+  }) as unknown as ControlThrottleConfig;
+  const url = projectedRoot.url;
+  const maximumMessageBytes = safeInteger(projectedRoot.maximumMessageBytes, 'maximumMessageBytes', 1);
+  const queueCapacity = safeInteger(projectedRoot.queueCapacity, 'queueCapacity', 1);
+  const openTimeoutMs = safeInteger(projectedRoot.openTimeoutMs, 'openTimeoutMs', 1);
+  const rotationAfterMs = safeInteger(projectedRoot.rotationAfterMs, 'rotationAfterMs', 1);
+  const stableConnectionMs = safeInteger(projectedRoot.stableConnectionMs, 'stableConnectionMs', 1);
+  if (definition.transportKind !== 'WEBSOCKET') throw new TypeError('WebSocket runner requires a WEBSOCKET source definition');
+  if (typeof url !== 'string' || !url.startsWith('wss://') || url.length > 2_048) {
     throw new TypeError('WebSocket runner URL must be a bounded wss URL');
   }
-  safeInteger(config.maximumMessageBytes, 'maximumMessageBytes', 1);
-  safeInteger(config.queueCapacity, 'queueCapacity', 1);
-  safeInteger(config.openTimeoutMs, 'openTimeoutMs', 1);
-  safeInteger(config.rotationAfterMs, 'rotationAfterMs', 1);
-  safeInteger(config.stableConnectionMs, 'stableConnectionMs', 1);
-  if (config.maximumMessageBytes > 64 * 1024 * 1024) throw new RangeError('maximumMessageBytes exceeds the hard safety bound');
-  if (config.openTimeoutMs > 10 * 60_000) throw new RangeError('openTimeoutMs exceeds the hard safety bound');
-  if (config.rotationAfterMs > 7 * 24 * 60 * 60_000) throw new RangeError('rotationAfterMs exceeds the hard safety bound');
-  if (config.backoff.retryCeiling !== config.definition.retryCeiling) {
+  if (maximumMessageBytes > 64 * 1024 * 1024) throw new RangeError('maximumMessageBytes exceeds the hard safety bound');
+  if (openTimeoutMs > 10 * 60_000) throw new RangeError('openTimeoutMs exceeds the hard safety bound');
+  if (rotationAfterMs > 7 * 24 * 60 * 60_000) throw new RangeError('rotationAfterMs exceeds the hard safety bound');
+  if (stableConnectionMs > 7 * 24 * 60 * 60_000) throw new RangeError('stableConnectionMs exceeds the hard safety bound');
+  if (backoff.retryCeiling !== definition.retryCeiling) {
     throw new TypeError('runner and source definition retry ceilings must match');
   }
-  return Object.freeze({ ...config });
+  return Object.freeze({
+    definition,
+    url,
+    maximumMessageBytes,
+    queueCapacity,
+    openTimeoutMs,
+    rotationAfterMs,
+    stableConnectionMs,
+    backoff,
+    controlThrottle,
+  });
 }
 
 function error(
@@ -199,11 +293,14 @@ export class WebSocketSourceRunner<T> {
     this.#decoder = ports.decoder;
     this.#sink = ports.sink ?? null;
     this.#metricSink = ports.metricSink ?? null;
-    this.#tracker = new SourceLifecycleTracker(config.definition, ports.clock);
-    this.#backoff = new DeterministicBackoff(ports.clock, ports.jitter, config.backoff);
-    this.#queue = new BoundedInboundQueue(config.queueCapacity);
-    this.#throttle = new ControlMessageThrottle(ports.clock, config.controlThrottle);
-    this.#lagMetrics = ports.lagMetrics ?? new BoundedProcessingLagMetrics(1, Math.max(32, config.queueCapacity));
+    this.#tracker = new SourceLifecycleTracker(this.#config.definition, ports.clock);
+    this.#backoff = new DeterministicBackoff(ports.clock, ports.jitter, this.#config.backoff);
+    this.#queue = new BoundedInboundQueue(
+      this.#config.queueCapacity,
+      this.#config.maximumMessageBytes + RUNTIME_EVENT_ENVELOPE_BYTES,
+    );
+    this.#throttle = new ControlMessageThrottle(ports.clock, this.#config.controlThrottle);
+    this.#lagMetrics = ports.lagMetrics ?? new BoundedProcessingLagMetrics(1, Math.max(32, this.#config.queueCapacity));
   }
 
   start(): number {
@@ -249,7 +346,7 @@ export class WebSocketSourceRunner<T> {
   }
 
   tick(atMs = this.#now()): void {
-    safeInteger(atMs, 'runner tick time');
+    this.#validateLocalObservationTime(atMs, 'runner tick time');
     const source = this.#tracker.snapshot(atMs);
     if (source.desiredState === 'STOPPED') return;
 
@@ -316,7 +413,7 @@ export class WebSocketSourceRunner<T> {
   }
 
   sendControl(data: string, atMs = this.#now()): Readonly<ControlSendResult> {
-    safeInteger(atMs, 'control send time');
+    this.#validateLocalObservationTime(atMs, 'control send time');
     if (typeof data !== 'string' || data.length === 0 || data.length > 64 * 1024) {
       throw new TypeError('control message must be a bounded non-empty string');
     }
@@ -386,7 +483,7 @@ export class WebSocketSourceRunner<T> {
   }
 
   snapshot(atMs = this.#now()): Readonly<WebSocketRunnerSnapshot> {
-    safeInteger(atMs, 'runner snapshot time');
+    this.#validateLocalObservationTime(atMs, 'runner snapshot time');
     const tracked = this.#tracker.snapshot(atMs);
     const backoff = this.#backoff.snapshot();
     const queue = this.#queue.snapshot();
@@ -522,7 +619,7 @@ export class WebSocketSourceRunner<T> {
       this.#markInvalid();
       return;
     }
-    if (receiveTimeMs > this.#now() + this.#config.definition.maximumFutureSkewMs) {
+    if (receiveTimeMs > this.#now()) {
       this.#markInvalid();
       return;
     }
@@ -621,16 +718,17 @@ export class WebSocketSourceRunner<T> {
         return;
       }
     }
-    const validSequenceId = (value: unknown): value is string => (
-      typeof value === 'string' && value.length > 0 && value.length <= 64 && /^\d+$/.test(value)
-    );
-    if (decoded.sequence !== null && (
-      typeof decoded.sequence !== 'object'
-      || !validSequenceId(decoded.sequence.first)
-      || !validSequenceId(decoded.sequence.last)
-      || (decoded.sequence.previous !== null && !validSequenceId(decoded.sequence.previous))
-      || BigInt(decoded.sequence.first) > BigInt(decoded.sequence.last)
-    )) {
+    let sequence: Readonly<RuntimeSequence> | null;
+    try {
+      sequence = exactSequence(decoded.sequence);
+    } catch {
+      this.#markInvalid();
+      return;
+    }
+    let retainedPayload: T;
+    try {
+      retainedPayload = cloneBoundedQueueValue(decoded.payload, this.#config.maximumMessageBytes);
+    } catch {
       this.#markInvalid();
       return;
     }
@@ -647,7 +745,9 @@ export class WebSocketSourceRunner<T> {
       this.#healthySinceMs = receiveTimeMs;
     }
     this.#lastUsefulMessageAtMs = receiveTimeMs;
-    this.#lastUsefulSourceTimeMs = sourceTimeMs;
+    this.#lastUsefulSourceTimeMs = sourceTimeMs === null
+      ? this.#lastUsefulSourceTimeMs
+      : Math.max(this.#lastUsefulSourceTimeMs ?? 0, sourceTimeMs);
     const runtimeEvent: RuntimeSourceEvent<T> = Object.freeze({
       sourceId: this.#config.definition.sourceId,
       connectionGeneration: generation,
@@ -657,9 +757,9 @@ export class WebSocketSourceRunner<T> {
       sourceEventTimeMs: decoded.sourceEventTimeMs,
       sourceTransactionTimeMs: decoded.sourceTransactionTimeMs,
       receiveTimeMs,
-      sequence: decoded.sequence === null ? null : Object.freeze({ ...decoded.sequence }),
+      sequence,
       correlationId: decoded.correlationId,
-      payload: decoded.payload,
+      payload: retainedPayload,
     });
     let offered;
     try {
@@ -759,5 +859,20 @@ export class WebSocketSourceRunner<T> {
 
   #now(): number {
     return safeInteger(this.#clock.nowMs(), 'clock.nowMs');
+  }
+
+  #validateLocalObservationTime(atMs: number, name: string): number {
+    const observedAtMs = safeInteger(atMs, name);
+    const now = this.#now();
+    if (observedAtMs > now) throw new RangeError(`${name} cannot be ahead of the injected clock`);
+    const retainedKnowledgeTimeMs = Math.max(
+      this.#connectStartedAtMs ?? 0,
+      this.#connectedAtMs ?? 0,
+      this.#lastTransportEventReceiveTimeMs ?? 0,
+      this.#lastUsefulMessageAtMs ?? 0,
+      this.#lastProcessedAtMs ?? 0,
+    );
+    if (observedAtMs < retainedKnowledgeTimeMs) throw new RangeError(`${name} precedes retained runner knowledge`);
+    return observedAtMs;
   }
 }

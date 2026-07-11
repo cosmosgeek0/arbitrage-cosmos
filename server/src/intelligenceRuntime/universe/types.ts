@@ -38,6 +38,8 @@ export interface RuntimeUniverseConfig {
   maximumFiltersPerSymbol: number;
   maximumFilterBytes: number;
   maximumAliasesPerListing: number;
+  maximumFailureRecordsPerResponse: number;
+  maximumFailureBytesPerResponse: number;
   sourceStaleAfterMs: number;
   maximumFutureSkewMs: number;
   restBudgets: Readonly<Record<RuntimeUniverseSource, RuntimeUniverseRestBudgetConfig>>;

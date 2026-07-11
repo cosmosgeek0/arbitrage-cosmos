@@ -32,6 +32,7 @@ import type {
   UniverseGraph,
   UniverseMarketNode,
 } from '../../intelligenceFoundation/universe/index.js';
+import { boundedJsonByteLength } from '../contracts/index.js';
 import {
   BoundedCorrelationIndex,
   BoundedEvidenceIndex,
@@ -121,24 +122,36 @@ function rawEvidenceTime(value: unknown): number {
   return 0;
 }
 
-function normalizeFailure(value: unknown): StableFailure | null {
+function normalizeFailure(value: unknown, config: IntelligenceBridgeConfig): StableFailure | null {
   if (value === null || typeof value !== 'object') return null;
   const candidate = value as Partial<StableFailure>;
+  try {
+    boundedJsonByteLength(value, config.maximumEvidenceBytes, {
+      maximumDepth: Math.min(64, config.maximumEvidenceNestingDepth),
+      maximumNodes: Math.min(1_000_000, config.maximumEvidenceNodes),
+    });
+  } catch {
+    return null;
+  }
   if (
-    typeof candidate.code !== 'string'
+    Object.getOwnPropertySymbols(value).length > 0
+    || Object.keys(value).some((key) => !['id', 'code', 'component', 'message', 'retryable', 'field', 'evidenceIds'].includes(key))
+    || typeof candidate.code !== 'string'
     || !(FAILURE_CODES as readonly string[]).includes(candidate.code)
-    || typeof candidate.component !== 'string'
-    || typeof candidate.message !== 'string'
-    || !(candidate.field === null || typeof candidate.field === 'string')
+    || typeof candidate.component !== 'string' || candidate.component.length === 0 || candidate.component.length > 96
+    || typeof candidate.message !== 'string' || candidate.message.length === 0 || candidate.message.length > 256
+    || typeof candidate.retryable !== 'boolean'
+    || !(candidate.field === null || (typeof candidate.field === 'string' && candidate.field.length <= 256))
     || !Array.isArray(candidate.evidenceIds)
-    || candidate.evidenceIds.slice(0, 257).some((id) => typeof id !== 'string')
+    || candidate.evidenceIds.length > 256
+    || candidate.evidenceIds.some((id) => typeof id !== 'string' || id.length === 0 || id.length > 256)
   ) return null;
   return makeStableFailure(
     candidate.code as StableFailure['code'],
     candidate.component,
     candidate.message,
     candidate.field,
-    candidate.evidenceIds.slice(0, 257),
+    candidate.evidenceIds,
   );
 }
 
@@ -327,6 +340,7 @@ export class IntelligenceRuntimeBridge {
       maximumPerSymbolKind: this.#config.maximumEvidencePerSymbolKind,
       maximumTruncatedSymbols: this.#config.maximumUniverseNodes,
       maximumCorrelationRoots: this.#config.maximumCorrelationRootsPerEntry,
+      maximumEvidenceBytes: this.#config.maximumEvidenceBytes,
     });
     this.#correlations = new BoundedCorrelationIndex(
       this.#config.maximumLineageEntries,
@@ -414,7 +428,7 @@ export class IntelligenceRuntimeBridge {
     this.#correlations.link(batch.correlationId, 'SOURCE', [batch.correlationId], atMs);
     const failures: StableFailure[] = [];
     for (const rawFailure of batch.qualityFailures ?? []) {
-      const failure = normalizeFailure(rawFailure);
+      const failure = normalizeFailure(rawFailure, this.#config);
       failures.push(failure ?? makeStableFailure(
         'INVALID_VALUE', COMPONENT, 'invalid source quality failure record', 'qualityFailures',
       ));
@@ -824,10 +838,30 @@ export class IntelligenceRuntimeBridge {
     ) {
       return makeStableFailure('INVALID_VALUE', COMPONENT, 'invalid or oversized universe graph', 'universe');
     }
+    try {
+      boundedJsonByteLength(graph, this.#config.maximumUniverseGraphBytes);
+    } catch (error) {
+      return makeStableFailure(
+        error instanceof RangeError ? 'BUDGET_EXHAUSTED' : 'INVALID_VALUE',
+        COMPONENT,
+        error instanceof RangeError
+          ? 'universe graph exceeds the configured whole-graph byte or structure bound'
+          : 'universe graph is not a strict bounded JSON contract',
+        'universe',
+      );
+    }
     const truth = validateTruthMetadata(graph.truth);
     if (!truth.ok) return truth.failure;
     if (graph.observedAtMs > atMs || truthHasFutureTime(truth.value, atMs)) {
       return makeStableFailure('NO_LOOK_AHEAD_VIOLATION', COMPONENT, 'universe graph occurs after bridge clock', 'universe.observedAtMs');
+    }
+    if (this.#universe !== null) {
+      if (graph.observedAtMs < this.#universe.observedAtMs) {
+        return makeStableFailure('OUT_OF_ORDER_EVENT', COMPONENT, 'universe graph precedes retained universe truth', 'universe.observedAtMs');
+      }
+      if (graph.observedAtMs === this.#universe.observedAtMs && graph.id !== this.#universe.id) {
+        return makeStableFailure('INVALID_VALUE', COMPONENT, 'universe graph conflicts at the retained observation time', 'universe.id');
+      }
     }
     const nodeIds = new Set<string>();
     const instrumentIds = new Set<string>();
@@ -1016,7 +1050,11 @@ export class IntelligenceRuntimeBridge {
 
   #boundedFailures(failures: readonly StableFailure[]): readonly StableFailure[] {
     const unique = new Map<string, StableFailure>();
-    for (const failure of failures) unique.set(failure.id, failure);
+    for (const failure of failures) {
+      const normalized = normalizeFailure(failure, this.#config)
+        ?? makeStableFailure('INVALID_VALUE', COMPONENT, 'invalid failure record was rejected before output', 'failure');
+      unique.set(normalized.id, normalized);
+    }
     const ordered = [...unique.values()].sort(failureOrder);
     if (ordered.length <= this.#config.maximumFailureRecords) return Object.freeze(ordered.map((failure) => structuredClone(failure)));
     const marker = makeStableFailure('BUDGET_EXHAUSTED', COMPONENT, 'failure output truncated at configured capacity', 'maximumFailureRecords');
@@ -1027,7 +1065,9 @@ export class IntelligenceRuntimeBridge {
   }
 
   #recordFailures(failures: readonly StableFailure[], atMs: number): void {
-    for (const failure of failures) {
+    for (const candidate of failures) {
+      const failure = normalizeFailure(candidate, this.#config)
+        ?? makeStableFailure('INVALID_VALUE', COMPONENT, 'invalid failure record was rejected before retention', 'failure');
       const previous = this.#failureRecords.get(failure.id);
       this.#failureRecords.set(failure.id, {
         failure: deepFreeze(structuredClone(failure)),

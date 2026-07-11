@@ -90,12 +90,16 @@ export interface SpotSourceMetrics {
 export interface SpotBackpressureSnapshot {
   capacity: number;
   maximumPayloadBytes: number;
+  maximumRetainedPayloadBytes: number;
   depth: number;
+  retainedPayloadBytes: number;
+  highWaterPayloadBytes: number;
   acceptedCount: number;
   coalescedCount: number;
   droppedCount: number;
   capacityDropCount: number;
   oversizeDropCount: number;
+  aggregateByteDropCount: number;
   invalidPayloadDropCount: number;
   outOfOrderReplacementDropCount: number;
   oldGenerationDropCount: number;
@@ -125,7 +129,7 @@ export type SpotBufferedMessage = SpotBufferedMiniTickerFrame | SpotBufferedSymb
 
 export interface SpotBufferOfferResult {
   state: 'ACCEPTED' | 'COALESCED' | 'DROPPED';
-  reason: 'NONE' | 'REPLACED_STATE' | 'CAPACITY' | 'PAYLOAD_TOO_LARGE' | 'INVALID_PAYLOAD' | 'OUT_OF_ORDER_REPLACEMENT';
+  reason: 'NONE' | 'REPLACED_STATE' | 'CAPACITY' | 'PAYLOAD_TOO_LARGE' | 'AGGREGATE_PAYLOAD_BYTES' | 'INVALID_PAYLOAD' | 'OUT_OF_ORDER_REPLACEMENT' | 'IGNORED_GENERATION';
   depth: number;
 }
 

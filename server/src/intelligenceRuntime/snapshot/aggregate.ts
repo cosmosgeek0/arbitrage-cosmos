@@ -8,6 +8,8 @@ import type {
   RuntimeRateBudgetState,
   RuntimeSourceSnapshot,
 } from '../contracts/index.js';
+import { boundedJsonByteLength } from '../contracts/index.js';
+import type { BoundedQueueSnapshot } from '../lifecycle/index.js';
 import { buildRuntimeTopology, runtimeComponentId } from './topology.js';
 import {
   DEFAULT_RUNTIME_SNAPSHOT_BOUNDS,
@@ -285,6 +287,107 @@ function validatePastTime(value: number | null, snapshotTimeMs: number, name: st
   if (value > snapshotTimeMs) throw new RangeError(`${name} cannot be later than snapshotTimeMs`);
 }
 
+function nullableNonNegativeSafeInteger(value: unknown, name: string): number | null {
+  if (value === null) return null;
+  return nonNegativeSafeInteger(value, name);
+}
+
+function exactRateBudget(value: RuntimeRateBudgetState, cutMs: number, name: string): RuntimeRateBudgetState {
+  boundedJsonByteLength(value, 64 * 1024);
+  if (!object(value)) throw new TypeError(`${name} must be a bounded object`);
+  if (!['AVAILABLE', 'NEAR_LIMIT', 'EXHAUSTED', 'COOLDOWN', 'UNKNOWN'].includes(value.state)) {
+    throw new TypeError(`${name}.state is invalid`);
+  }
+  const usedWeight = nullableNonNegativeSafeInteger(value.usedWeight, `${name}.usedWeight`);
+  const limit = nullableNonNegativeSafeInteger(value.limit, `${name}.limit`);
+  const intervalMs = nullableNonNegativeSafeInteger(value.intervalMs, `${name}.intervalMs`);
+  const resetsAtMs = nullableNonNegativeSafeInteger(value.resetsAtMs, `${name}.resetsAtMs`);
+  const retryAfterMs = nullableNonNegativeSafeInteger(value.retryAfterMs, `${name}.retryAfterMs`);
+  const observedAtMs = nullableNonNegativeSafeInteger(value.observedAtMs, `${name}.observedAtMs`);
+  if (limit !== null && limit < 1) throw new TypeError(`${name}.limit must be positive when known`);
+  if (intervalMs !== null && intervalMs < 1) throw new TypeError(`${name}.intervalMs must be positive when known`);
+  validatePastTime(observedAtMs, cutMs, `${name}.observedAtMs`);
+  if ((value.state === 'COOLDOWN') !== (retryAfterMs !== null)) {
+    throw new TypeError(`${name} cooldown state and retryAfterMs must agree`);
+  }
+  return Object.freeze({
+    state: value.state,
+    usedWeight,
+    limit,
+    intervalMs,
+    resetsAtMs,
+    retryAfterMs,
+    observedAtMs,
+  });
+}
+
+function exactRuntimeError(
+  value: RuntimeSourceSnapshot['lastError'],
+  cutMs: number,
+  bounds: RuntimeSnapshotBounds,
+  name: string,
+): RuntimeSourceSnapshot['lastError'] {
+  if (value === null) return null;
+  boundedJsonByteLength(value, 64 * 1024);
+  if (!object(value)) throw new TypeError(`${name} must be a bounded object`);
+  if (typeof value.code !== 'string' || value.code.trim().length === 0) throw new TypeError(`${name}.code is invalid`);
+  if (typeof value.message !== 'string' || value.message.trim().length === 0) throw new TypeError(`${name}.message is invalid`);
+  if (typeof value.retryable !== 'boolean') throw new TypeError(`${name}.retryable must be boolean`);
+  if (typeof value.recommendedAction !== 'string' || value.recommendedAction.trim().length === 0) {
+    throw new TypeError(`${name}.recommendedAction is invalid`);
+  }
+  validatePastTime(value.observedAtMs, cutMs, `${name}.observedAtMs`);
+  return Object.freeze({
+    code: copyText(value.code, bounds.maximumStringLength),
+    message: copyText(value.message, bounds.maximumStringLength),
+    retryable: value.retryable,
+    observedAtMs: value.observedAtMs,
+    recommendedAction: copyText(value.recommendedAction, bounds.maximumStringLength),
+  });
+}
+
+function exactQueue(value: Readonly<BoundedQueueSnapshot>, name: string): Readonly<BoundedQueueSnapshot> {
+  boundedJsonByteLength(value, 64 * 1024);
+  const capacity = positiveSafeInteger(value.capacity, `${name}.capacity`, 1_000_000);
+  const maximumEntryBytes = positiveSafeInteger(value.maximumEntryBytes, `${name}.maximumEntryBytes`, 64 * 1024 * 1024 + 64 * 1024);
+  const maximumRetainedBytes = positiveSafeInteger(value.maximumRetainedBytes, `${name}.maximumRetainedBytes`, 512 * 1024 * 1024);
+  const retainedBytes = nonNegativeSafeInteger(value.retainedBytes, `${name}.retainedBytes`);
+  const highWatermarkRetainedBytes = nonNegativeSafeInteger(value.highWatermarkRetainedBytes, `${name}.highWatermarkRetainedBytes`);
+  const depth = nonNegativeSafeInteger(value.depth, `${name}.depth`);
+  const highWatermark = nonNegativeSafeInteger(value.highWatermark, `${name}.highWatermark`);
+  if (depth > capacity || highWatermark < depth || highWatermark > capacity) throw new RangeError(`${name} count geometry is invalid`);
+  if (retainedBytes > maximumRetainedBytes
+    || highWatermarkRetainedBytes < retainedBytes
+    || highWatermarkRetainedBytes > maximumRetainedBytes) throw new RangeError(`${name} byte geometry is invalid`);
+  if (typeof value.resyncRequired !== 'boolean') throw new TypeError(`${name}.resyncRequired must be boolean`);
+  return Object.freeze({
+    capacity,
+    maximumEntryBytes,
+    maximumRetainedBytes,
+    retainedBytes,
+    highWatermarkRetainedBytes,
+    depth,
+    highWatermark,
+    enqueuedCount: nonNegativeSafeInteger(value.enqueuedCount, `${name}.enqueuedCount`),
+    dequeuedCount: nonNegativeSafeInteger(value.dequeuedCount, `${name}.dequeuedCount`),
+    droppedCount: nonNegativeSafeInteger(value.droppedCount, `${name}.droppedCount`),
+    coalescedCount: nonNegativeSafeInteger(value.coalescedCount, `${name}.coalescedCount`),
+    overflowCount: nonNegativeSafeInteger(value.overflowCount, `${name}.overflowCount`),
+    oversizeDropCount: nonNegativeSafeInteger(value.oversizeDropCount, `${name}.oversizeDropCount`),
+    resyncRequired: value.resyncRequired,
+  });
+}
+
+function validateRuntimeSourceTimes(source: RuntimeSourceSnapshot, parentCutMs: number, name: string): void {
+  validatePastTime(source.snapshotTimeMs, parentCutMs, `${name}.snapshotTimeMs`);
+  const cutMs = source.snapshotTimeMs;
+  validatePastTime(source.connectedAtMs, cutMs, `${name}.connectedAtMs`);
+  validatePastTime(source.lastMessageReceiveTimeMs, cutMs, `${name}.lastMessageReceiveTimeMs`);
+  validatePastTime(source.lastProcessedTimeMs, cutMs, `${name}.lastProcessedTimeMs`);
+  validatePastTime(source.lastError?.observedAtMs ?? null, cutMs, `${name}.lastError.observedAtMs`);
+  validatePastTime(source.rateBudget.observedAtMs, cutMs, `${name}.rateBudget.observedAtMs`);
+}
+
 function normalizePolicy(input: RuntimeSnapshotInput): NormalizedPolicy {
   const suppliedBounds = input.policy?.bounds ?? {};
   const bounds: RuntimeSnapshotBounds = {
@@ -403,18 +506,99 @@ function validateInput(input: RuntimeSnapshotInput, policy: NormalizedPolicy): v
     for (const [sourceName, source] of Object.entries(input.universe.sources)) {
       validatePastTime(
         source.lastCompleteResponseTimeMs,
-        input.snapshotTimeMs,
+        input.universe.observedAtMs,
         `universe.sources.${sourceName}.lastCompleteResponseTimeMs`,
       );
+    }
+  }
+  if (input.spot !== null) {
+    for (const [name, value] of Object.entries({
+      connectedAtMs: input.spot.connectedAtMs,
+      lastTransportReceiveTimeMs: input.spot.lastTransportReceiveTimeMs,
+      lastUsefulReceiveTimeMs: input.spot.lastUsefulReceiveTimeMs,
+      lastProcessedTimeMs: input.spot.lastProcessedTimeMs,
+    })) validatePastTime(value, input.spot.snapshotTimeMs, `spot.${name}`);
+    for (const [index, source] of input.spot.sources.entries()) {
+      validateRuntimeSourceTimes(source, input.spot.snapshotTimeMs, `spot.sources[${index}]`);
+    }
+  }
+  if (input.futures !== null) {
+    for (const [index, source] of input.futures.sources.entries()) {
+      validateRuntimeSourceTimes(source, input.futures.snapshotTimeMs, `futures.sources[${index}]`);
+    }
+    for (const [index, symbol] of input.futures.symbols.entries()) {
+      validatePastTime(symbol.lastUsefulReceiveTimeMs, input.futures.snapshotTimeMs, `futures.symbols[${index}].lastUsefulReceiveTimeMs`);
+    }
+  }
+  if (input.baseline !== undefined && input.baseline !== null) {
+    const cutMs = snapshotObservedAt(input.baseline) as number;
+    validatePastTime(projectionLastSuccess(input.baseline), cutMs, 'baseline.lastSuccessTimeMs');
+    if ('items' in input.baseline) {
+      for (const [index, item] of input.baseline.items.entries()) {
+        validatePastTime(item.lastCompletedCloseTimeMs, cutMs, `baseline.items[${index}].lastCompletedCloseTimeMs`);
+      }
+    }
+  }
+  if (input.derivatives !== undefined && input.derivatives !== null) {
+    const cutMs = snapshotObservedAt(input.derivatives) as number;
+    validatePastTime(projectionLastSuccess(input.derivatives), cutMs, 'derivatives.lastSuccessTimeMs');
+    if ('coverage' in input.derivatives) {
+      for (const [index, fact] of input.derivatives.facts.entries()) {
+        validatePastTime(fact.receiveTimeMs, cutMs, `derivatives.facts[${index}].receiveTimeMs`);
+        validatePastTime(fact.evaluatedAtMs ?? null, cutMs, `derivatives.facts[${index}].evaluatedAtMs`);
+        validatePastTime(fact.lastError?.observedAtMs ?? null, cutMs, `derivatives.facts[${index}].lastError.observedAtMs`);
+      }
+      validatePastTime(input.derivatives.budget.observedAtMs, cutMs, 'derivatives.budget.observedAtMs');
+    } else {
+      for (const [index, entry] of input.derivatives.rateBudgets.entries()) {
+        validatePastTime(entry.budget.observedAtMs, cutMs, `derivatives.rateBudgets[${index}].observedAtMs`);
+      }
+    }
+  }
+  if (input.bridge !== undefined && input.bridge !== null) {
+    const cutMs = input.bridge.snapshotTimeMs;
+    validatePastTime(projectionLastSuccess(input.bridge), cutMs, 'bridge.lastSuccessTimeMs');
+    if ('artifacts' in input.bridge) {
+      validatePastTime(input.bridge.attentionPlan?.atMs ?? null, cutMs, 'bridge.attentionPlan.atMs');
+      validatePastTime(input.bridge.publicAttention?.atMs ?? null, cutMs, 'bridge.publicAttention.atMs');
+      for (const [index, artifact] of input.bridge.artifacts.entries()) {
+        validatePastTime(artifact.evaluatedAtMs, cutMs, `bridge.artifacts[${index}].evaluatedAtMs`);
+      }
+      for (const [index, link] of (input.bridge.correlationIndex.links ?? []).entries()) {
+        validatePastTime(link.observedAtMs, cutMs, `bridge.correlationIndex.links[${index}].observedAtMs`);
+      }
+      for (const [index, pending] of (input.bridge.pendingCandidateTriggers ?? []).entries()) {
+        validatePastTime(pending.transitionAtMs, cutMs, `bridge.pendingCandidateTriggers[${index}].transitionAtMs`);
+      }
+      for (const [index, failure] of input.bridge.failures.entries()) {
+        validatePastTime(failure.firstObservedAtMs, cutMs, `bridge.failures[${index}].firstObservedAtMs`);
+        validatePastTime(failure.lastObservedAtMs, cutMs, `bridge.failures[${index}].lastObservedAtMs`);
+      }
+    }
+  }
+  if (input.capture !== undefined && input.capture !== null) {
+    const cutMs = snapshotObservedAt(input.capture) as number;
+    validatePastTime(projectionLastSuccess(input.capture), cutMs, 'capture.lastSuccessTimeMs');
+    if ('captures' in input.capture) {
+      for (const [index, capture] of input.capture.captures.entries()) {
+        validatePastTime(capture.createdAtMs ?? null, cutMs, `capture.captures[${index}].createdAtMs`);
+        validatePastTime(capture.finishedAtMs, cutMs, `capture.captures[${index}].finishedAtMs`);
+        for (const [evidenceIndex, evidence] of [
+          ...(capture.preEvidence ?? []),
+          ...(capture.postEvidence ?? []),
+        ].entries()) {
+          validatePastTime(evidence.ingestedAtMs, cutMs, `capture.captures[${index}].evidence[${evidenceIndex}].ingestedAtMs`);
+        }
+      }
+      for (const [index, failure] of input.capture.failures.entries()) {
+        validatePastTime(failure.firstObservedAtMs, cutMs, `capture.failures[${index}].firstObservedAtMs`);
+        validatePastTime(failure.lastObservedAtMs, cutMs, `capture.failures[${index}].lastObservedAtMs`);
+      }
     }
   }
   for (const [index, book] of (input.books ?? []).entries()) {
     validatePastTime(book.snapshotTimeMs, input.snapshotTimeMs, `books[${index}].snapshotTimeMs`);
   }
-}
-
-function copyRateBudget(value: RuntimeRateBudgetState): RuntimeRateBudgetState {
-  return Object.freeze({ ...value });
 }
 
 function sourceView(
@@ -426,10 +610,7 @@ function sourceView(
   const source = input.source;
   boundedString(source.sourceId, 'source.sourceId', bounds.maximumStringLength);
   boundedString(input.capability, 'source.capability', bounds.maximumStringLength);
-  validatePastTime(source.snapshotTimeMs, snapshotTimeMs, `${source.sourceId}.snapshotTimeMs`);
-  validatePastTime(source.lastMessageReceiveTimeMs, snapshotTimeMs, `${source.sourceId}.lastMessageReceiveTimeMs`);
-  validatePastTime(source.lastProcessedTimeMs, snapshotTimeMs, `${source.sourceId}.lastProcessedTimeMs`);
-  validatePastTime(source.lastError?.observedAtMs ?? null, snapshotTimeMs, `${source.sourceId}.lastError.observedAtMs`);
+  validateRuntimeSourceTimes(source, snapshotTimeMs, source.sourceId);
   for (const [name, value] of Object.entries({
     connectionGeneration: source.connectionGeneration,
     invalidCount: source.invalidCount,
@@ -458,7 +639,7 @@ function sourceView(
     messageAgeMs: source.messageAgeMs,
     processingLagMs: source.processingLagMs,
     lastSuccessTimeMs,
-    lastError: source.lastError === null ? null : Object.freeze({ ...source.lastError }),
+    lastError: exactRuntimeError(source.lastError, source.snapshotTimeMs, bounds, `${source.sourceId}.lastError`),
     recommendedAction: copyText(source.recommendedAction, bounds.maximumStringLength),
     counters: Object.freeze({
       invalid: source.invalidCount,
@@ -469,8 +650,8 @@ function sourceView(
       coalesced: source.coalescedCount,
       reconnect: source.reconnectCount,
     }),
-    queue: input.queue === undefined || input.queue === null ? null : Object.freeze({ ...input.queue }),
-    rateBudget: copyRateBudget(source.rateBudget),
+    queue: input.queue === undefined || input.queue === null ? null : exactQueue(input.queue, `${source.sourceId}.queue`),
+    rateBudget: exactRateBudget(source.rateBudget, source.snapshotTimeMs, `${source.sourceId}.rateBudget`),
   });
 }
 
@@ -718,23 +899,40 @@ function emptyDerivativesFacts(): RuntimeDerivativesFactsSummary {
 function derivativesFacts(input: RuntimeSnapshotInput): RuntimeDerivativesFactsSummary {
   const derivatives = input.derivatives;
   if (derivatives === undefined || derivatives === null) return emptyDerivativesFacts();
-  if (!('coverage' in derivatives)) return Object.freeze({ ...derivatives.facts });
+  if (!('coverage' in derivatives)) {
+    const total = nonNegativeSafeInteger(derivatives.facts.total, 'derivatives.facts.total');
+    const fresh = nonNegativeSafeInteger(derivatives.facts.fresh, 'derivatives.facts.fresh');
+    const stale = nonNegativeSafeInteger(derivatives.facts.stale, 'derivatives.facts.stale');
+    const unavailable = nonNegativeSafeInteger(derivatives.facts.unavailable, 'derivatives.facts.unavailable');
+    const optionalUnavailable = nonNegativeSafeInteger(
+      derivatives.facts.optionalUnavailable,
+      'derivatives.facts.optionalUnavailable',
+    );
+    if (optionalUnavailable > unavailable || safeAdd(safeAdd(fresh, stale, 'derivatives fact count'), unavailable, 'derivatives fact count') > total) {
+      throw new RangeError('derivatives fact summary counts are inconsistent');
+    }
+    validatePastTime(derivatives.facts.lastSuccessTimeMs, derivatives.observedAtMs, 'derivatives.facts.lastSuccessTimeMs');
+    return Object.freeze({ total, fresh, stale, unavailable, optionalUnavailable, lastSuccessTimeMs: derivatives.facts.lastSuccessTimeMs });
+  }
   let fresh = 0;
   let stale = 0;
   let unavailable = 0;
   let optionalUnavailable = 0;
   let lastSuccessTimeMs: number | null = null;
   for (const fact of derivatives.facts) {
-    if (fact.availability === 'AVAILABLE' && fact.value !== null) {
+    const keyRequired = fact.source.access === 'API_KEY_REQUIRED'
+      || fact.kind === 'TOP_TRADER_ACCOUNT'
+      || fact.kind === 'TOP_TRADER_POSITION';
+    if (keyRequired) {
+      unavailable += 1;
+      optionalUnavailable += 1;
+    } else if (fact.availability === 'AVAILABLE' && fact.value !== null) {
       fresh += 1;
       lastSuccessTimeMs = maximumNullable(lastSuccessTimeMs, fact.receiveTimeMs);
     } else if (fact.availability === 'STALE' && fact.value !== null) {
       stale += 1;
     } else {
       unavailable += 1;
-      if (fact.source.access === 'API_KEY_REQUIRED' || fact.kind === 'TOP_TRADER_ACCOUNT' || fact.kind === 'TOP_TRADER_POSITION') {
-        optionalUnavailable += 1;
-      }
     }
   }
   return Object.freeze({
@@ -750,8 +948,15 @@ function derivativesFacts(input: RuntimeSnapshotInput): RuntimeDerivativesFactsS
 function derivativesRateBudgets(input: RuntimeSnapshotInput): readonly Readonly<{ sourceId: string; budget: RuntimeRateBudgetState }>[] {
   const derivatives = input.derivatives;
   if (derivatives === undefined || derivatives === null) return Object.freeze([]);
-  if ('rateBudgets' in derivatives) return derivatives.rateBudgets;
-  return Object.freeze([Object.freeze({ sourceId: 'binance-usdm-public-derivatives-rest', budget: derivatives.budget })]);
+  const cutMs = snapshotObservedAt(derivatives) as number;
+  if ('rateBudgets' in derivatives) return Object.freeze(derivatives.rateBudgets.map((entry, index) => Object.freeze({
+    sourceId: boundedString(entry.sourceId, `derivatives.rateBudgets[${index}].sourceId`, RUNTIME_SNAPSHOT_HARD_LIMITS.maximumStringLength),
+    budget: exactRateBudget(entry.budget, cutMs, `derivatives.rateBudgets[${index}].budget`),
+  })));
+  return Object.freeze([Object.freeze({
+    sourceId: 'binance-usdm-public-derivatives-rest',
+    budget: exactRateBudget(derivatives.budget, cutMs, 'derivatives.budget'),
+  })]);
 }
 
 function operationsSummary(
@@ -1185,6 +1390,20 @@ function aggregateReasons(
 
   if (input.derivatives !== undefined && input.derivatives !== null) {
     const facts = derivativesFacts(input);
+    const rejectedPrivateFact = 'coverage' in input.derivatives
+      && input.derivatives.facts.some((fact) => (
+        fact.source.access === 'API_KEY_REQUIRED'
+          || fact.kind === 'TOP_TRADER_ACCOUNT'
+          || fact.kind === 'TOP_TRADER_POSITION'
+      ) && (fact.availability === 'AVAILABLE' || fact.value !== null));
+    if (rejectedPrivateFact) {
+      add({
+        severity: 'WARNING', impact: 'DEGRADED', code: 'DERIVATIVES_PRIVATE_ACCESS_REJECTED',
+        component: 'DERIVATIVES', sourceId: null, observedAtMs: snapshotObservedAt(input.derivatives),
+        message: 'API-key-required derivatives input was rejected from fresh public runtime evidence.',
+        recommendedAction: 'Keep keyed datasets unavailable in the no-key runtime; do not substitute or promote their values.',
+      });
+    }
     if (facts.stale > 0 || facts.unavailable > facts.optionalUnavailable) {
       add({
         severity: 'WARNING', impact: 'DEGRADED', code: 'DERIVATIVES_CONTEXT_DEGRADED', component: 'DERIVATIVES', sourceId: null,
@@ -1291,47 +1510,65 @@ function addErrorCandidate(
   candidates: ErrorCandidate[],
   component: RuntimeComponentKey,
   sourceId: string | null,
-  failure: RuntimeSourceSnapshot['lastError'] | StableFailure | null,
+  failure: Pick<NonNullable<RuntimeSourceSnapshot['lastError']>, 'code' | 'message' | 'retryable'> | StableFailure | null,
   observedAtMs: number | null,
+  bounds: RuntimeSnapshotBounds,
 ): void {
   if (failure === null) return;
+  if (typeof failure.code !== 'string' || failure.code.trim().length === 0) throw new TypeError('last error code is invalid');
+  if (typeof failure.message !== 'string' || failure.message.trim().length === 0) throw new TypeError('last error message is invalid');
+  if (typeof failure.retryable !== 'boolean') throw new TypeError('last error retryable must be boolean');
   candidates.push({
     component,
     sourceId,
-    code: failure.code,
-    message: failure.message,
+    code: copyText(failure.code, bounds.maximumStringLength),
+    message: copyText(failure.message, bounds.maximumStringLength),
     retryable: failure.retryable,
-    observedAtMs: 'observedAtMs' in failure ? failure.observedAtMs : observedAtMs,
-    identity: 'id' in failure ? failure.id : stableId('runtime-error', { component, sourceId, code: failure.code, observedAtMs }),
+    observedAtMs,
+    identity: stableId('runtime-error', {
+      component,
+      sourceId,
+      code: copyText(failure.code, bounds.maximumStringLength),
+      message: copyText(failure.message, bounds.maximumStringLength),
+      observedAtMs,
+    }),
   });
 }
 
-function lastError(input: RuntimeSnapshotInput, sources: readonly RuntimeSourceView[]): RuntimeLastErrorView | null {
+function lastError(
+  input: RuntimeSnapshotInput,
+  sources: readonly RuntimeSourceView[],
+  bounds: RuntimeSnapshotBounds,
+): RuntimeLastErrorView | null {
   const candidates: ErrorCandidate[] = [];
-  for (const source of sources) addErrorCandidate(candidates, source.component, source.sourceId, source.lastError, null);
-  addErrorCandidate(candidates, 'BASELINE', null, projectionFailure(input.baseline), snapshotObservedAt(input.baseline));
-  addErrorCandidate(candidates, 'DERIVATIVES', null, projectionFailure(input.derivatives), snapshotObservedAt(input.derivatives));
-  addErrorCandidate(candidates, 'BRIDGE', null, projectionFailure(input.bridge), input.bridge?.snapshotTimeMs ?? null);
-  addErrorCandidate(candidates, 'CAPTURE', null, projectionFailure(input.capture), snapshotObservedAt(input.capture));
+  for (const source of sources) {
+    addErrorCandidate(candidates, source.component, source.sourceId, source.lastError, source.lastError?.observedAtMs ?? null, bounds);
+  }
+  addErrorCandidate(candidates, 'BASELINE', null, projectionFailure(input.baseline), snapshotObservedAt(input.baseline), bounds);
+  addErrorCandidate(candidates, 'DERIVATIVES', null, projectionFailure(input.derivatives), snapshotObservedAt(input.derivatives), bounds);
+  addErrorCandidate(candidates, 'BRIDGE', null, projectionFailure(input.bridge), input.bridge?.snapshotTimeMs ?? null, bounds);
+  addErrorCandidate(candidates, 'CAPTURE', null, projectionFailure(input.capture), snapshotObservedAt(input.capture), bounds);
   if (input.derivatives !== undefined && input.derivatives !== null && Array.isArray(input.derivatives.facts)) {
     for (const fact of input.derivatives.facts) {
       if (fact.lastError === null) continue;
-      candidates.push({
-        component: 'DERIVATIVES', sourceId: fact.source.sourceId, code: fact.lastError.code,
-        message: fact.lastError.message, retryable: fact.lastError.retryable,
-        observedAtMs: fact.lastError.observedAtMs,
-        identity: stableId('runtime-error', { component: 'DERIVATIVES', sourceId: fact.source.sourceId, factId: fact.id, code: fact.lastError.code }),
-      });
+      addErrorCandidate(
+        candidates,
+        'DERIVATIVES',
+        fact.source.sourceId,
+        fact.lastError,
+        fact.lastError.observedAtMs,
+        bounds,
+      );
     }
   }
   if (input.bridge !== undefined && input.bridge !== null && 'failures' in input.bridge) {
     for (const entry of input.bridge.failures) {
-      addErrorCandidate(candidates, 'BRIDGE', null, entry.failure, entry.lastObservedAtMs);
+      addErrorCandidate(candidates, 'BRIDGE', null, entry.failure, entry.lastObservedAtMs, bounds);
     }
   }
   if (input.capture !== undefined && input.capture !== null && 'failures' in input.capture) {
     for (const entry of input.capture.failures) {
-      addErrorCandidate(candidates, 'CAPTURE', null, entry.failure, entry.lastObservedAtMs);
+      addErrorCandidate(candidates, 'CAPTURE', null, entry.failure, entry.lastObservedAtMs, bounds);
     }
   }
   candidates.sort((left, right) => (right.observedAtMs ?? -1) - (left.observedAtMs ?? -1)
@@ -1582,7 +1819,7 @@ export function buildRuntimeIntelligenceSnapshot(input: RuntimeSnapshotInput): R
       bounds: policy.bounds,
     });
   }
-  const currentLastError = lastError(input, allSources);
+  const currentLastError = lastError(input, allSources, policy.bounds);
   const lastSuccessTimeMs = latestSuccess(input, allSources);
   const snapshotIdentity = {
     schemaVersion: '1',

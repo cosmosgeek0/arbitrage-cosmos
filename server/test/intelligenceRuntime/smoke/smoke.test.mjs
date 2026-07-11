@@ -5,6 +5,7 @@ import {
   NodePublicRestTransport,
   PUBLIC_SMOKE_MANUAL_COMMAND,
   PublicNoKeySmokeHarness,
+  createPublicSmokeConfig,
   isAllowedPublicSmokeWebSocketUrl,
 } from '../../../dist/intelligenceRuntime/smoke/index.js';
 
@@ -199,10 +200,13 @@ class ScriptedWait {
     this.clock = clock;
     this.sockets = sockets;
     this.calls = [];
+    this.emitDuringShutdownGrace = false;
   }
   async wait(delayMs) {
     this.calls.push(delayMs);
-    if (this.calls.length === 1) this.sockets.emitObservationWindow();
+    if (this.calls.length === 1 || (this.calls.length === 2 && this.emitDuringShutdownGrace)) {
+      this.sockets.emitObservationWindow();
+    }
     this.clock.advance(delayMs);
   }
 }
@@ -211,15 +215,16 @@ function fixture(blocked = false, config = {}) {
   const clock = new ManualClock();
   const sockets = new FixtureWebSockets(clock, blocked);
   const reporter = new CollectReporter();
+  const wait = new ScriptedWait(clock, sockets);
   const harness = new PublicNoKeySmokeHarness({
     clock,
-    wait: new ScriptedWait(clock, sockets),
+    wait,
     reporter,
     restTransport: new FixtureRest(clock, blocked),
     webSocketTransport: sockets,
     config: { defaultDurationMs: 1_000, maximumDurationMs: 5_000, shutdownGraceMs: 100, ...config },
   });
-  return { harness, clock, sockets, reporter };
+  return { harness, clock, sockets, reporter, wait };
 }
 
 test('deterministic keyless smoke proves public universe, broad/focus messages, normalization, health, and shutdown', async () => {
@@ -243,6 +248,63 @@ test('deterministic keyless smoke proves public universe, broad/focus messages, 
   assert.equal(result.shutdown.closeRequests, 4);
   assert.equal(f.sockets.closeCount, 4);
   assert.equal(Object.isFrozen(result), true);
+});
+
+test('smoke config is an exact data-only projection with stable fingerprints', () => {
+  const first = createPublicSmokeConfig({ shutdownGraceMs: 2_000, defaultDurationMs: 1_000 });
+  const reordered = createPublicSmokeConfig({ defaultDurationMs: 1_000, shutdownGraceMs: 2_000 });
+  assert.deepEqual(first, reordered);
+  assert.equal(first.configurationVersion, reordered.configurationVersion);
+  assert.equal(first.maximumDurationMs, 60_000);
+  assert.equal(Object.isFrozen(first), true);
+
+  assert.throws(
+    () => createPublicSmokeConfig({ unknownField: 1 }),
+    /unknown field unknownField/,
+  );
+  assert.throws(
+    () => createPublicSmokeConfig({ [Symbol('unknown')]: 1 }),
+    /symbol keys/,
+  );
+  assert.throws(
+    () => createPublicSmokeConfig(Object.create({ shutdownGraceMs: 1_000 })),
+    /plain object/,
+  );
+
+  let getterReads = 0;
+  const accessor = {};
+  Object.defineProperty(accessor, 'shutdownGraceMs', {
+    enumerable: true,
+    get() {
+      getterReads += 1;
+      return 1_000;
+    },
+  });
+  assert.throws(() => createPublicSmokeConfig(accessor), /enumerable data property/);
+  assert.equal(getterReads, 0);
+});
+
+test('shutdown grace cannot age an observation-window PASS into PARTIAL and late messages stay ignored', async () => {
+  const f = fixture(false, {
+    maximumAcceptedMessageAgeMs: 1_500,
+    shutdownGraceMs: 1_000,
+  });
+  f.wait.emitDuringShutdownGrace = true;
+
+  const result = await f.harness.run({ durationMs: 1_000, focusSymbol: 'BTCUSDT' });
+
+  assert.equal(result.outcome, 'PASS');
+  assert.equal(result.finishedAtMs - result.startedAtMs, 2_000);
+  for (const source of result.sources.filter((entry) => entry.required)) {
+    assert.equal(source.fresh, true);
+    assert.equal(source.messageAgeMs, 1_000);
+    assert.equal(result.finishedAtMs - source.lastReceiveTimeMs, 2_000);
+    assert.equal(source.receivedMessageCount, 1);
+    assert.equal(source.acceptedMessageCount, 1);
+    assert.equal(source.closeObserved, true);
+    assert.equal(source.state, 'CLOSED');
+  }
+  assert.equal(result.sources.find((source) => source.key === 'SPOT_FOCUS').receivedMessageCount, 3);
 });
 
 test('HTTP 451 and geolocation-restricted sockets are an honest BLOCKED result, not fake green or test failure', async () => {

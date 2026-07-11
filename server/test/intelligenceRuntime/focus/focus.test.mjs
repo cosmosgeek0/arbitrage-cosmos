@@ -214,6 +214,20 @@ test('acknowledgements and readiness observations are bounded by command time, i
   }), /cannot regress/);
 });
 
+test('forged acknowledgement booleans cannot consume pending control state', () => {
+  const h = harness({
+    allocations: [allocation('btc', 'BTCUSDT', ['TRADE'])],
+    capabilities: [capability('btc', 'BTCUSDT')],
+  });
+  activate(h, 'SPOT_MARKET');
+  const command = h.allocator.reconcile().commands[0];
+  assert.throws(
+    () => h.allocator.acknowledge({ ...command, accepted: 'false', observedAtMs: h.clock.nowMs() }),
+    /accepted must be boolean/,
+  );
+  assert.equal(h.allocator.acknowledge({ ...command, accepted: true, observedAtMs: h.clock.nowMs() }), true);
+});
+
 test('reconnect generation invalidates readiness and deterministically replays subscriptions', () => {
   const h = harness({
     allocations: [allocation('btc', 'BTCUSDT', ['TRADE'])],
@@ -235,6 +249,69 @@ test('reconnect generation invalidates readiness and deterministically replays s
   assert.equal(replay.commands[0].generation, 2);
   assert.deepEqual(replay.commands[0].params, ['btcusdt@aggTrade']);
   assert.equal(replay.snapshot.requirements[0].state, 'SUBSCRIBING');
+});
+
+test('an unavailable connection cannot reconnect under a reused generation', () => {
+  const h = harness();
+  const connectionId = activate(h, 'SPOT_MARKET', 1);
+  h.allocator.updateConnection({ route: 'SPOT_MARKET', connectionId, generation: 1, state: 'UNAVAILABLE' });
+  assert.throws(
+    () => h.allocator.updateConnection({ route: 'SPOT_MARKET', connectionId, generation: 1, state: 'AVAILABLE' }),
+    /requires a newer generation/,
+  );
+  h.allocator.updateConnection({ route: 'SPOT_MARKET', connectionId, generation: 2, state: 'AVAILABLE' });
+});
+
+test('attention plan time cannot roll back retained allocator knowledge', () => {
+  const h = harness({ allocations: [], capabilities: [] });
+  h.allocator.reconcile();
+  h.clock.advance(1);
+  h.state.plan = { ...plan([], 'older'), atMs: 999 };
+  assert.throws(() => h.allocator.reconcile(), /cannot move backwards/);
+  h.state.plan = { ...plan([], 'newer'), atMs: 1_001 };
+  assert.equal(h.allocator.reconcile().snapshot.lastAppliedPlanId, 'newer');
+});
+
+test('expired unprotected assignments on a dead route release capacity for a healthy fallback route', () => {
+  const request = allocation('btc', 'BTCUSDT', ['TRADE']);
+  const h = harness({
+    allocations: [request],
+    capabilities: [capability('btc', 'BTCUSDT', { spot: true, futures: false })],
+    config: { maximumTotalStreams: 1, minimumLeaseMs: 10 },
+  });
+  const spotConnection = activate(h, 'SPOT_MARKET', 1);
+  assert.equal(h.allocator.reconcile().commands[0].route, 'SPOT_MARKET');
+  h.allocator.updateConnection({ route: 'SPOT_MARKET', connectionId: spotConnection, generation: 1, state: 'UNAVAILABLE' });
+  h.state.capabilities = [capability('btc', 'BTCUSDT', { spot: false, futures: true })];
+  activate(h, 'USD_M_MARKET', 1);
+  h.clock.advance(11);
+  h.state.plan = { ...plan([request], 'futures-fallback'), atMs: 1_011 };
+  const fallback = h.allocator.reconcile();
+  assert.equal(fallback.commands.length, 1);
+  assert.equal(fallback.commands[0].route, 'USD_M_MARKET');
+  assert.deepEqual(fallback.commands[0].params, ['btcusdt@aggTrade']);
+});
+
+test('focus config is an exact plain-data schema and never executes accessors', () => {
+  assert.throws(() => focusAllocatorConfig({ secret: 'no' }), /unknown field secret/);
+  assert.throws(() => focusAllocatorConfig({ routes: { PRIVATE: {} } }), /unknown field PRIVATE/);
+  assert.throws(() => focusAllocatorConfig({ routes: { SPOT_MARKET: { secret: 'no' } } }), /unknown field secret/);
+  const symbolConfig = {};
+  symbolConfig[Symbol('secret')] = 'no';
+  assert.throws(() => focusAllocatorConfig(symbolConfig), /symbol keys/);
+  let getterCalls = 0;
+  const accessor = {};
+  Object.defineProperty(accessor, 'maximumTotalStreams', { enumerable: true, get() { getterCalls += 1; return 1; } });
+  assert.throws(() => focusAllocatorConfig(accessor), /data property/);
+  assert.equal(getterCalls, 0);
+});
+
+test('allocation protection is a strict boolean at both catalog and allocator boundaries', () => {
+  const forged = allocation('btc', 'BTCUSDT', ['TRADE'], { protected: 'false' });
+  assert.throws(() => buildFocusDemands(forged, capability('btc', 'BTCUSDT'), []), /protected must be boolean/);
+  const h = harness({ allocations: [forged], capabilities: [capability('btc', 'BTCUSDT')] });
+  activate(h, 'SPOT_MARKET');
+  assert.throws(() => h.allocator.reconcile(), /protected must be boolean/);
 });
 
 test('demotion honors a minimum lease and focus thrash does not churn controls', () => {

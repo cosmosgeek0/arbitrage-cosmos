@@ -93,7 +93,7 @@ function harness(overrides = {}) {
   const runner = new WebSocketSourceRunner({
     definition: source,
     url: 'wss://example.invalid/ws/test',
-    maximumMessageBytes: 64 * 1024,
+    maximumMessageBytes: overrides.maximumMessageBytes ?? 64 * 1024,
     queueCapacity: overrides.queueCapacity ?? 4,
     openTimeoutMs: overrides.openTimeoutMs ?? 100,
     rotationAfterMs: overrides.rotationAfterMs ?? 10_000,
@@ -124,6 +124,88 @@ function openAndMessage(h, receiveTimeMs = h.clock.nowMs(), data = {}) {
   connection.emit({ kind: 'MESSAGE', receiveTimeMs, data: { id: `event-${receiveTimeMs}`, ...data } });
   return connection;
 }
+
+test('lifecycle configs are exact data-only projections with no accessor execution', () => {
+  const clock = new ManualClock();
+  const jitter = new SequenceJitter();
+  const makeRunnerConfig = () => ({
+    definition: { ...definition() },
+    url: 'wss://example.invalid/ws/test',
+    maximumMessageBytes: 64 * 1024,
+    queueCapacity: 4,
+    openTimeoutMs: 100,
+    rotationAfterMs: 10_000,
+    stableConnectionMs: 100,
+    backoff: { baseDelayMs: 100, maximumDelayMs: 400, retryCeiling: 2, cooldownMs: 500, jitterRatio: 0 },
+    controlThrottle: { maximumMessages: 2, intervalMs: 1_000 },
+  });
+  const makePorts = (transport = new FakeTransport()) => ({ clock, jitter, transport, decoder: decode });
+  let reads = 0;
+  const withAccessor = (value, field) => {
+    const projected = { ...value };
+    Object.defineProperty(projected, field, {
+      enumerable: true,
+      get() { reads += 1; return value[field]; },
+    });
+    return projected;
+  };
+
+  assert.throws(
+    () => new WebSocketSourceRunner({ ...makeRunnerConfig(), extra: 'SECRET' }, makePorts()),
+    /unsupported or missing fields/,
+  );
+  const symbolConfig = makeRunnerConfig();
+  symbolConfig[Symbol('secret')] = true;
+  assert.throws(() => new WebSocketSourceRunner(symbolConfig, makePorts()), /symbol keys/);
+  assert.throws(
+    () => new WebSocketSourceRunner(withAccessor(makeRunnerConfig(), 'url'), makePorts()),
+    /enumerable data property/,
+  );
+  const definitionAccessor = makeRunnerConfig();
+  definitionAccessor.definition = withAccessor(definitionAccessor.definition, 'sourceId');
+  assert.throws(() => new WebSocketSourceRunner(definitionAccessor, makePorts()), /enumerable data property/);
+
+  const backoffConfig = { baseDelayMs: 100, maximumDelayMs: 400, retryCeiling: 2, cooldownMs: 500, jitterRatio: 0 };
+  assert.throws(
+    () => new DeterministicBackoff(clock, jitter, { ...backoffConfig, extra: true }),
+    /unsupported or missing fields/,
+  );
+  assert.throws(
+    () => new DeterministicBackoff(clock, jitter, withAccessor(backoffConfig, 'jitterRatio')),
+    /enumerable data property/,
+  );
+  const throttleConfig = { maximumMessages: 2, intervalMs: 1_000 };
+  assert.throws(
+    () => new ControlMessageThrottle(clock, { ...throttleConfig, extra: true }),
+    /unsupported or missing fields/,
+  );
+  assert.throws(
+    () => new ControlMessageThrottle(clock, withAccessor(throttleConfig, 'intervalMs')),
+    /enumerable data property/,
+  );
+  const budgetConfig = { limit: 10, intervalMs: 60_000, nearLimitRatio: 0.8, defaultCooldownMs: 1_000 };
+  assert.throws(
+    () => new RestWeightBudget(clock, { ...budgetConfig, extra: true }),
+    /unsupported or missing fields/,
+  );
+  assert.throws(
+    () => new RestWeightBudget(clock, withAccessor(budgetConfig, 'nearLimitRatio')),
+    /enumerable data property/,
+  );
+  assert.equal(reads, 0);
+
+  const retainedConfig = makeRunnerConfig();
+  const transport = new FakeTransport();
+  const runner = new WebSocketSourceRunner(retainedConfig, makePorts(transport));
+  const retainedSourceId = retainedConfig.definition.sourceId;
+  retainedConfig.url = 'wss://mutated.invalid/ws';
+  retainedConfig.definition.sourceId = 'mutated-source';
+  retainedConfig.controlThrottle.maximumMessages = 99;
+  runner.start();
+  assert.equal(transport.requests[0].url, 'wss://example.invalid/ws/test');
+  assert.equal(transport.requests[0].sourceId, retainedSourceId);
+  assert.equal(runner.snapshot().controlThrottle.maximumMessages, 2);
+});
 
 test('normal connect, useful arrival, bounded drain, and graceful stop are explicit', () => {
   const h = harness();
@@ -362,6 +444,100 @@ test('queue overflow sheds replaceable state before protected depth', () => {
   assert.equal(queue.shift().value, 'depth2');
 });
 
+test('queue detaches and freezes retained values while enforcing per-entry and aggregate byte bounds', () => {
+  const queue = new BoundedInboundQueue(2, 128, 160);
+  const original = { nested: { value: 1 } };
+  assert.equal(queue.offer({
+    id: 'detached', mode: 'REPLACEABLE', coalescingKey: 'BTC', receiveTimeMs: 1, value: original,
+  }).accepted, true);
+  original.nested.value = 2;
+  const retained = queue.peek().value;
+  assert.equal(retained.nested.value, 1);
+  assert.equal(Object.isFrozen(retained), true);
+  assert.equal(Object.isFrozen(retained.nested), true);
+  assert.throws(() => { retained.nested.value = 3; }, TypeError);
+  assert.ok(queue.snapshot().retainedBytes > 0);
+  assert.ok(queue.snapshot().highWatermarkRetainedBytes >= queue.snapshot().retainedBytes);
+
+  const oversized = queue.offer({
+    id: 'oversized', mode: 'SEQUENCE_SENSITIVE', coalescingKey: null, receiveTimeMs: 2,
+    value: { text: 'x'.repeat(256) },
+  });
+  assert.equal(oversized.accepted, false);
+  assert.equal(oversized.requiresResync, true);
+  assert.equal(queue.snapshot().oversizeDropCount, 1);
+  assert.equal(queue.snapshot().depth, 1);
+  queue.acknowledgeResync();
+
+  const protectedQueue = new BoundedInboundQueue(3, 256, 240);
+  protectedQueue.offer({ id: 'protected', mode: 'SEQUENCE_SENSITIVE', coalescingKey: null, receiveTimeMs: 1, value: { text: 'p'.repeat(60) } });
+  const blocked = protectedQueue.offer({ id: 'cannot-fit', mode: 'SEQUENCE_SENSITIVE', coalescingKey: null, receiveTimeMs: 2, value: { text: 'q'.repeat(60) } });
+  assert.equal(blocked.accepted, false);
+  assert.equal(blocked.requiresResync, true);
+  assert.equal(protectedQueue.snapshot().depth, 1);
+  const beforeShift = protectedQueue.snapshot().retainedBytes;
+  assert.ok(beforeShift > 0);
+  protectedQueue.shift();
+  assert.equal(protectedQueue.snapshot().retainedBytes, 0);
+});
+
+test('queue rejects accessors and unsupported retained graphs without executing caller code', () => {
+  const queue = new BoundedInboundQueue(2);
+  let reads = 0;
+  const accessor = {};
+  Object.defineProperty(accessor, 'unsafe', {
+    enumerable: true,
+    get() { reads += 1; return 'secret side effect'; },
+  });
+  assert.throws(() => queue.offer({
+    id: 'accessor', mode: 'REPLACEABLE', coalescingKey: 'A', receiveTimeMs: 1, value: accessor,
+  }), /data properties/);
+  assert.equal(reads, 0);
+  assert.throws(() => queue.offer({
+    id: 'symbol', mode: 'REPLACEABLE', coalescingKey: 'S', receiveTimeMs: 1,
+    value: { [Symbol('hidden')]: 'value' },
+  }), /symbol keys/);
+  assert.throws(() => queue.offer({
+    id: 'extra', mode: 'REPLACEABLE', coalescingKey: 'E', receiveTimeMs: 1,
+    value: { ok: true }, extra: 'x'.repeat(10_000),
+  }), /unsupported fields/);
+  const envelope = { mode: 'REPLACEABLE', coalescingKey: 'G', receiveTimeMs: 1, value: { ok: true } };
+  Object.defineProperty(envelope, 'id', {
+    enumerable: true,
+    get() { reads += 1; return 'getter-backed-id'; },
+  });
+  assert.throws(() => queue.offer(envelope), /enumerable data property/);
+  assert.equal(reads, 0);
+  assert.equal(queue.snapshot().depth, 0);
+});
+
+test('oversized decoded payloads cannot make a source live and queued payloads are producer-detached', () => {
+  const oversized = harness({ maximumMessageBytes: 128 });
+  oversized.runner.start();
+  const oversizedConnection = oversized.transport.connections[0];
+  oversizedConnection.emit({ kind: 'OPEN', receiveTimeMs: 1_000 });
+  oversizedConnection.emit({
+    kind: 'MESSAGE', receiveTimeMs: 1_000,
+    data: { id: 'oversized', payload: { text: 'x'.repeat(512) } },
+  });
+  const rejected = oversized.runner.snapshot();
+  assert.equal(rejected.source.messageCount, 0);
+  assert.equal(rejected.source.invalidCount, 1);
+  assert.equal(rejected.queue.depth, 0);
+  assert.notEqual(rejected.source.observedState, 'LIVE');
+
+  const detached = harness();
+  detached.runner.start();
+  const connection = detached.transport.connections[0];
+  connection.emit({ kind: 'OPEN', receiveTimeMs: 1_000 });
+  const payload = { nested: { value: 1 } };
+  connection.emit({ kind: 'MESSAGE', receiveTimeMs: 1_000, data: { id: 'bounded', payload } });
+  payload.nested.value = 9;
+  detached.runner.drain(1);
+  assert.equal(detached.accepted[0].payload.nested.value, 1);
+  assert.equal(Object.isFrozen(detached.accepted[0].payload.nested), true);
+});
+
 test('control-message throttle enforces a deterministic rolling window', () => {
   const clock = new ManualClock();
   const throttle = new ControlMessageThrottle(clock, { maximumMessages: 2, intervalMs: 1_000 });
@@ -374,6 +550,30 @@ test('control-message throttle enforces a deterministic rolling window', () => {
   assert.equal(throttle.acquire().allowed, false);
   clock.set(2_000);
   assert.equal(throttle.acquire().allowed, true);
+});
+
+test('control-message throttle rejects future and regressed observations without pruning its window', () => {
+  const clock = new ManualClock();
+  const throttle = new ControlMessageThrottle(clock, { maximumMessages: 1, intervalMs: 1_000 });
+  assert.equal(throttle.acquire().allowed, true);
+  assert.throws(() => throttle.snapshot(2_000), /ahead/);
+  assert.throws(() => throttle.acquire(1, 2_000), /ahead/);
+  assert.equal(throttle.acquire().allowed, false, 'rejected future reads cannot release the live window');
+  clock.set(2_000);
+  assert.equal(throttle.snapshot().used, 0);
+  assert.throws(() => throttle.snapshot(1_999), /regress/);
+  throttle.reset();
+  assert.throws(() => throttle.acquire(1, 1_999), /regress/);
+  assert.equal(throttle.acquire().allowed, true);
+
+  const nearLimitClock = new ManualClock(Number.MAX_SAFE_INTEGER - 10);
+  const nearLimit = new ControlMessageThrottle(nearLimitClock, { maximumMessages: 1, intervalMs: 100 });
+  assert.equal(nearLimit.acquire().allowed, true);
+  assert.throws(() => nearLimit.snapshot(), /safe timestamp range/);
+  assert.throws(
+    () => new ControlMessageThrottle(clock, { maximumMessages: 1, intervalMs: 7 * 24 * 60 * 60_000 + 1 }),
+    /interval exceeds/,
+  );
 });
 
 test('runner throttles control frames and a send failure enters bounded backoff', () => {
@@ -413,6 +613,40 @@ test('REST rate headers are case-insensitive and 418/429 create explicit cooldow
   assert.equal(budget.reserve(1).reason, 'COOLDOWN');
 });
 
+test('REST rate observations and headers are exact bounded data-only contracts', () => {
+  let reads = 0;
+  const headers = {};
+  Object.defineProperty(headers, 'retry-after', {
+    enumerable: true,
+    get() { reads += 1; return '1'; },
+  });
+  assert.throws(() => parseRestRateHeaders(headers), /data properties/);
+  assert.equal(reads, 0);
+  assert.throws(() => parseRestRateHeaders({ ['x'.repeat(257)]: '1' }), /bounded string contract/);
+  assert.throws(() => parseRestRateHeaders({ ok: 'x'.repeat(8_193) }), /bounded string contract/);
+  assert.throws(
+    () => parseRestRateHeaders(Object.fromEntries(Array.from({ length: 257 }, (_, index) => [`h${index}`, '1']))),
+    /header-count bound/,
+  );
+
+  const clock = new ManualClock();
+  const budget = new RestWeightBudget(clock, {
+    limit: 10, intervalMs: 60_000, nearLimitRatio: 0.8, defaultCooldownMs: 1_000,
+  });
+  const observation = { headers: {} };
+  Object.defineProperty(observation, 'status', {
+    enumerable: true,
+    get() { reads += 1; return 200; },
+  });
+  assert.throws(() => budget.observeResponse(observation), /enumerable data property/);
+  assert.equal(reads, 0);
+  assert.throws(
+    () => budget.observeResponse({ status: 200, headers: {}, unexpected: 'not retained' }),
+    /unsupported fields/,
+  );
+  assert.equal(budget.snapshot().usedWeight, 0);
+});
+
 test('REST weight snapshots advance interval and cooldown recovery without a separate tick', () => {
   const clock = new ManualClock();
   const budget = new RestWeightBudget(clock, {
@@ -431,6 +665,17 @@ test('REST weight snapshots advance interval and cooldown recovery without a sep
   assert.equal(budget.snapshot().state, 'COOLDOWN');
   clock.advance(500);
   assert.equal(budget.snapshot().state, 'AVAILABLE');
+});
+
+test('REST cooldown overflow rejects transactionally without poisoning retained budget state', () => {
+  const clock = new ManualClock(Number.MAX_SAFE_INTEGER - 1);
+  const budget = new RestWeightBudget(clock, {
+    limit: 10, intervalMs: 1, nearLimitRatio: 0.8, defaultCooldownMs: 10,
+  });
+  const before = budget.snapshot();
+  assert.throws(() => budget.observeResponse({ status: 429, headers: {} }), /cooldown timestamp overflow/);
+  assert.deepEqual(budget.snapshot(), before);
+  assert.equal(budget.reserve(1).allowed, true);
 });
 
 test('REST weight budget stays on absolute Binance windows across headers and rate-limit cooldowns', () => {
@@ -505,6 +750,7 @@ test('malformed frames and sink failures are explicit and do not silently lose q
   const connection = h.transport.connections[0];
   connection.emit({ kind: 'OPEN', receiveTimeMs: 1_000 });
   connection.emit({ kind: 'MESSAGE', receiveTimeMs: 1_000, data: { invalid: true } });
+  h.clock.set(1_001);
   connection.emit({ kind: 'MESSAGE', receiveTimeMs: 1_001, data: { id: 'valid' } });
   assert.equal(h.runner.snapshot().source.invalidCount, 1);
   const result = h.runner.drain(1);
@@ -519,6 +765,26 @@ test('malformed frames and sink failures are explicit and do not silently lose q
   assert.equal(h.runner.snapshot().source.observedState, 'LIVE');
   assert.equal(h.runner.snapshot().source.lastError, null);
   assert.equal(h.runner.snapshot().source.recommendedAction, 'No operator action required.');
+});
+
+test('decoded sequence metadata is an exact data-only contract with no secret-bearing extras', () => {
+  const h = harness();
+  h.runner.start();
+  const connection = h.transport.connections[0];
+  connection.emit({ kind: 'OPEN', receiveTimeMs: 1_000 });
+  connection.emit({
+    kind: 'MESSAGE', receiveTimeMs: 1_000,
+    data: { id: 'extra-sequence', sequence: { first: '1', last: '1', previous: null, apiKey: 'SECRET' } },
+  });
+  assert.equal(h.runner.snapshot().source.invalidCount, 1);
+  assert.equal(h.runner.snapshot().source.messageCount, 0);
+  let getterCalls = 0;
+  const sequence = { last: '2', previous: null };
+  Object.defineProperty(sequence, 'first', { enumerable: true, get() { getterCalls += 1; return '2'; } });
+  connection.emit({ kind: 'MESSAGE', receiveTimeMs: 1_000, data: { id: 'accessor-sequence', sequence } });
+  assert.equal(getterCalls, 0);
+  assert.equal(h.runner.snapshot().source.invalidCount, 2);
+  assert.equal(h.runner.snapshot().queue.depth, 0);
 });
 
 test('same injected event script yields byte-identical runtime snapshots', () => {
@@ -544,4 +810,14 @@ test('backoff rejects ambient or invalid jitter instead of hiding nondeterminism
     jitterRatio: 0.2,
   });
   assert.throws(() => policy.fail(), /jitter source/);
+});
+
+test('backoff cooldown overflow rejects transactionally without retaining an unsafe retry', () => {
+  const clock = new ManualClock(Number.MAX_SAFE_INTEGER - 1);
+  const backoff = new DeterministicBackoff(clock, { next: () => 0.5 }, {
+    baseDelayMs: 1, maximumDelayMs: 1, retryCeiling: 0, cooldownMs: 10, jitterRatio: 0,
+  });
+  const before = backoff.snapshot();
+  assert.throws(() => backoff.fail(), /cooldown timestamp overflow/);
+  assert.deepEqual(backoff.snapshot(), before);
 });

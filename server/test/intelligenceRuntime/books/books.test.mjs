@@ -206,6 +206,27 @@ test('Spot buffers in arrival order, discards u <= snapshot cursor, and applies 
   assert.deepEqual(snapshot.asks, [{ price: 101, baseQuantity: 10 }]);
 });
 
+test('Spot buffered bootstrap bridges against snapshot lastUpdateId plus one', () => {
+  const exactNext = harness('SPOT');
+  assert.equal(exactNext.reducer.ingestDelta(exactNext.delta(101, 101, null, [['100', '11']], [])).kind,
+    'BUFFERED');
+  const exactBoot = applyInitialSnapshot(exactNext, 100);
+  assert.equal(exactBoot.kind, 'BOOTSTRAPPED');
+  assert.equal(exactBoot.cursor, '101');
+  assert.equal(exactNext.reducer.snapshot().bids[0].baseQuantity, 11);
+
+  const afterDiscard = harness('SPOT');
+  assert.equal(afterDiscard.reducer.ingestDelta(afterDiscard.delta(99, 100, null, [['100', '999']], [])).kind,
+    'BUFFERED');
+  assert.equal(afterDiscard.reducer.ingestDelta(afterDiscard.delta(101, 101, null, [['100', '12']], [])).kind,
+    'BUFFERED');
+  const discardedBoot = applyInitialSnapshot(afterDiscard, 100);
+  assert.equal(discardedBoot.kind, 'BOOTSTRAPPED');
+  assert.equal(discardedBoot.cursor, '101');
+  assert.equal(afterDiscard.reducer.snapshot().counters.bootstrapDiscardedCount, 1);
+  assert.equal(afterDiscard.reducer.snapshot().bids[0].baseQuantity, 12);
+});
+
 test('Spot accepts a live range containing cursor + 1, ignores unseen old ranges, and resyncs on a forward gap', () => {
   const value = harness('SPOT');
   makeLive(value);
@@ -599,6 +620,18 @@ test('current-state snapshots and slippage cannot be backdated before retained k
   assert.throws(() => value.reducer.emitMetrics(T0 - 1), /cannot precede current book knowledge/);
 });
 
+test('current-state snapshots and slippage reject lookahead reads without changing retained truth', () => {
+  const value = harness('SPOT');
+  makeLive(value);
+  const before = serializeLocalBookSnapshot(value.reducer.snapshot());
+  const future = value.clock.nowMs() + 1;
+  assert.throws(() => value.reducer.snapshot(future), /cannot exceed the injected clock/);
+  assert.throws(() => value.reducer.querySlippage(
+    { side: 'BUY', size: { unit: 'BASE', value: 1 } }, future,
+  ), /cannot exceed the injected clock/);
+  assert.equal(serializeLocalBookSnapshot(value.reducer.snapshot()), before);
+});
+
 test('throwing metric sinks are contained and counted without corrupting book truth', () => {
   const clock = new ManualClock();
   const metricSink = { record() { throw new Error('sink unavailable'); } };
@@ -642,6 +675,43 @@ test('config rejects unbounded policies and any attempt to mix standard USD-M wi
   assert.throws(() => harness('SPOT', { maximumBufferedEvents: 100_001 }), /hard safety bound/);
   assert.throws(() => harness('USD_M_PERPETUAL', { bookScope: 'RPI_INCLUDED' }), /exclude RPI/);
   assert.throws(() => harness('SPOT', { snapshotLimit: 5_001 }), /official snapshot bound/);
+});
+
+test('config is an exact plain data-only contract and never executes accessors', () => {
+  const valid = harness('SPOT').config;
+  const ports = { clock: new ManualClock() };
+
+  assert.throws(() => new LocalOrderBookReducer({ ...valid, unexpected: true }, ports), /unknown field unexpected/);
+  assert.throws(() => new LocalOrderBookReducer({ ...valid, [Symbol('hidden')]: true }, ports), /symbol keys/);
+  assert.throws(() => new LocalOrderBookReducer(Object.assign(Object.create({ inherited: true }), valid), ports),
+    /plain object/);
+
+  let topLevelReads = 0;
+  const accessorConfig = { ...valid };
+  Object.defineProperty(accessorConfig, 'sourceId', {
+    enumerable: true,
+    get() {
+      topLevelReads += 1;
+      return valid.sourceId;
+    },
+  });
+  assert.throws(() => new LocalOrderBookReducer(accessorConfig, ports), /enumerable data property/);
+  assert.equal(topLevelReads, 0);
+
+  let nestedReads = 0;
+  const accessorPolicy = [];
+  Object.defineProperty(accessorPolicy, '0', {
+    enumerable: true,
+    configurable: true,
+    get() {
+      nestedReads += 1;
+      return 100;
+    },
+  });
+  accessorPolicy.length = 1;
+  const nestedAccessorConfig = { ...valid, depthBandsBps: accessorPolicy };
+  assert.throws(() => new LocalOrderBookReducer(nestedAccessorConfig, ports), /dense enumerable data properties/);
+  assert.equal(nestedReads, 0);
 });
 
 test('snapshot tokens reject a response produced with the wrong requested depth limit', () => {

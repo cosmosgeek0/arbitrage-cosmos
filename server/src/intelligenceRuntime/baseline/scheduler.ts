@@ -110,6 +110,7 @@ interface FetchOutcome {
   readonly dispatch: Dispatch;
   readonly result: Readonly<HistoryFetchResult> | null;
   readonly portThrew: boolean;
+  readonly completedAtMs: number;
 }
 
 interface CheckpointTotals {
@@ -155,6 +156,12 @@ function normalizeMessage(value: unknown, maximum: number, fallback: string): st
 
 function checkedAdd(left: number, right: number, name: string): number {
   const value = left + right;
+  if (!Number.isSafeInteger(value)) throw new RangeError(`${name} overflow`);
+  return value;
+}
+
+function checkedMultiply(left: number, right: number, name: string): number {
+  const value = left * right;
   if (!Number.isSafeInteger(value)) throw new RangeError(`${name} overflow`);
   return value;
 }
@@ -380,6 +387,7 @@ export class BaselineBootstrapScheduler {
   #snapshot: BaselineSchedulerSnapshot | null = null;
   #initialization: Promise<BaselineSchedulerSnapshot> | null = null;
   #tickPromise: Promise<BaselineSchedulerSnapshot> | null = null;
+  #tickFingerprint: string | null = null;
   #lastClockTimeMs: number | null = null;
   #restored = false;
   #activeFetchCount = 0;
@@ -419,10 +427,21 @@ export class BaselineBootstrapScheduler {
     if (this.#plan === null || this.#snapshot === null) {
       return Promise.reject(new Error('baseline scheduler must be initialized before tick'));
     }
-    if (this.#tickPromise !== null) return this.#tickPromise;
-    const promise = this.#runTick(input).finally(() => {
-      if (this.#tickPromise === promise) this.#tickPromise = null;
+    const focused = this.#focusedSymbols(input.focusedSymbols ?? []);
+    const fingerprint = stableId('baseline-tick-focus', { symbols: [...focused].sort(codePointCompare) });
+    if (this.#tickPromise !== null) {
+      if (fingerprint !== this.#tickFingerprint) {
+        return Promise.reject(new Error('a baseline tick with different focus input is already in flight'));
+      }
+      return this.#tickPromise;
+    }
+    const promise = this.#runTick(focused).finally(() => {
+      if (this.#tickPromise === promise) {
+        this.#tickPromise = null;
+        this.#tickFingerprint = null;
+      }
     });
+    this.#tickFingerprint = fingerprint;
     this.#tickPromise = promise;
     return promise;
   }
@@ -494,12 +513,11 @@ export class BaselineBootstrapScheduler {
     });
   }
 
-  async #runTick(input: BaselineTickInput): Promise<BaselineSchedulerSnapshot> {
+  async #runTick(focused: ReadonlySet<string>): Promise<BaselineSchedulerSnapshot> {
     const nowMs = this.#now();
     const focusedDispatchStreakBefore = this.#focusedDispatchStreak;
     const dispatchSequenceBefore = this.#dispatchSequence;
     const estimatedWeightBefore = this.#totals.estimatedWeight;
-    const focused = this.#focusedSymbols(input.focusedSymbols ?? []);
     let changed = this.#recoverOrPrepareItems(nowMs);
     const dispatches: Dispatch[] = [];
     const considered = new Set<string>();
@@ -625,22 +643,36 @@ export class BaselineBootstrapScheduler {
     const outcomes = await Promise.all(dispatches.map(async (dispatch): Promise<FetchOutcome> => {
       try {
         const result = await this.#options.history.fetch(dispatch.request);
-        return { dispatch, result, portThrew: false };
+        return { dispatch, result, portThrew: false, completedAtMs: this.#now() };
       } catch {
-        return { dispatch, result: null, portThrew: true };
+        return { dispatch, result: null, portThrew: true, completedAtMs: this.#now() };
       }
     }));
-    try {
-      for (const outcome of outcomes) {
-        await this.#applyOutcome(outcome, nowMs);
+    let firstOutcomeError: unknown = null;
+    let knowledgeTimeMs = nowMs;
+    for (const outcome of outcomes) {
+      // Promise.all preserves dispatch order, not completion order. Keep one
+      // monotonic knowledge watermark so a later-completing outcome cannot be
+      // followed by an earlier snapshot, checkpoint, freshness decision, or
+      // retry merely because its sibling occupied an earlier array position.
+      knowledgeTimeMs = Math.max(knowledgeTimeMs, outcome.completedAtMs);
+      try {
+        await this.#applyOutcome(outcome, knowledgeTimeMs);
+      } catch (error) {
+        firstOutcomeError ??= error;
+      } finally {
         this.#activeFetchCount -= 1;
-        this.#render(nowMs);
-        await this.#persist(nowMs);
+        this.#render(knowledgeTimeMs);
       }
-    } finally {
-      this.#activeFetchCount = 0;
-      this.#render(nowMs);
+      try {
+        await this.#persist(knowledgeTimeMs);
+      } catch (error) {
+        firstOutcomeError ??= error;
+      }
     }
+    this.#activeFetchCount = 0;
+    this.#render(knowledgeTimeMs);
+    if (firstOutcomeError !== null) throw firstOutcomeError;
     return this.#snapshot as BaselineSchedulerSnapshot;
   }
 
@@ -780,7 +812,7 @@ export class BaselineBootstrapScheduler {
     });
   }
 
-  async #applyOutcome(outcome: FetchOutcome, tickNowMs: number): Promise<void> {
+  async #applyOutcome(outcome: FetchOutcome, knowledgeTimeMs: number): Promise<void> {
     const { dispatch } = outcome;
     const rawResult = outcome.result;
     const validKinds = ['SUCCESS', 'RATE_LIMITED', 'TRANSIENT_FAILURE', 'UNAVAILABLE'] as const;
@@ -790,19 +822,27 @@ export class BaselineBootstrapScheduler {
       && (validKinds as readonly string[]).includes(rawResult.kind);
     let invalidAccounting = false;
     let actualWeight = 0;
-    let observedAtMs = tickNowMs;
+    let observedAtMs = knowledgeTimeMs;
     if (validResultShape) {
       try {
         actualWeight = safeInteger(rawResult.actualWeight, 'actualWeight', 0, 1_000_000);
-        if (rawResult.kind === 'SUCCESS') observedAtMs = safeInteger(rawResult.receiveTimeMs, 'receiveTimeMs');
-        else observedAtMs = safeInteger(rawResult.observedAtMs, 'observedAtMs');
+        const candidateObservedAtMs = rawResult.kind === 'SUCCESS'
+          ? safeInteger(rawResult.receiveTimeMs, 'receiveTimeMs')
+          : safeInteger(rawResult.observedAtMs, 'observedAtMs');
+        if (candidateObservedAtMs < dispatch.request.tickNowMs || candidateObservedAtMs > outcome.completedAtMs) {
+          throw new RangeError('history result observation time must fall between dispatch and completion');
+        }
+        observedAtMs = candidateObservedAtMs;
       } catch {
         invalidAccounting = true;
+        observedAtMs = knowledgeTimeMs;
       }
     }
     const settlementOutcome = outcome.portThrew || !validResultShape || invalidAccounting
       ? 'PORT_THROW'
       : rawResult.kind as HistoryFetchResult['kind'];
+    this.#totals.actualWeight = checkedAdd(this.#totals.actualWeight, actualWeight, 'actual weight total');
+    dispatch.item.actualWeight = checkedAdd(dispatch.item.actualWeight, actualWeight, 'item actual weight');
     try {
       await this.#options.weightBudget.settle({
         reservationId: dispatch.reservationId,
@@ -815,17 +855,15 @@ export class BaselineBootstrapScheduler {
         observedAtMs,
       });
     } catch {
-      this.#applyRetry(dispatch.item, tickNowMs, null, 'WEIGHT_SETTLEMENT_FAILURE', 'REST weight settlement failed after the history request');
+      this.#applyRetry(dispatch.item, knowledgeTimeMs, null, 'WEIGHT_SETTLEMENT_FAILURE', 'REST weight settlement failed after the history request');
       return;
     }
-    this.#totals.actualWeight = checkedAdd(this.#totals.actualWeight, actualWeight, 'actual weight total');
-    dispatch.item.actualWeight = checkedAdd(dispatch.item.actualWeight, actualWeight, 'item actual weight');
     if (outcome.portThrew || rawResult === null) {
-      this.#applyRetry(dispatch.item, tickNowMs, null, 'HISTORY_PORT_FAILURE', 'history port threw while fetching public completed candles');
+      this.#applyRetry(dispatch.item, knowledgeTimeMs, null, 'HISTORY_PORT_FAILURE', 'history port threw while fetching public completed candles');
       return;
     }
     if (!validResultShape || invalidAccounting) {
-      this.#applyRetry(dispatch.item, tickNowMs, null, 'INVALID_HISTORY_RESULT', 'history port returned an invalid result');
+      this.#applyRetry(dispatch.item, knowledgeTimeMs, null, 'INVALID_HISTORY_RESULT', 'history port returned an invalid result');
       return;
     }
     if (rawResult.kind === 'RATE_LIMITED') {
@@ -833,14 +871,14 @@ export class BaselineBootstrapScheduler {
       try {
         retryAtMs = safeInteger(rawResult.retryAtMs, 'history retryAtMs');
       } catch {
-        this.#applyRetry(dispatch.item, tickNowMs, null, 'INVALID_HISTORY_RESULT', 'rate-limited history result is missing a valid retry time');
+        this.#applyRetry(dispatch.item, knowledgeTimeMs, null, 'INVALID_HISTORY_RESULT', 'rate-limited history result is missing a valid retry time');
         return;
       }
       dispatch.item.state = 'RATE_LIMITED';
       dispatch.item.terminal = false;
-      dispatch.item.retryAtMs = retryAtMs > tickNowMs
+      dispatch.item.retryAtMs = retryAtMs > knowledgeTimeMs
         ? retryAtMs
-        : checkedAdd(tickNowMs, this.#config.retryBaseDelayMs, 'history rate-limit retry time');
+        : checkedAdd(knowledgeTimeMs, this.#config.retryBaseDelayMs, 'history rate-limit retry time');
       dispatch.item.lastReasonCode = 'HISTORY_SOURCE_RATE_LIMITED';
       dispatch.item.lastMessage = normalizeMessage(rawResult.message, this.#config.maximumMessageLength, 'history source rate limited');
       return;
@@ -850,12 +888,12 @@ export class BaselineBootstrapScheduler {
       try {
         requestedRetry = rawResult.retryAtMs === null ? null : safeInteger(rawResult.retryAtMs, 'history transient retryAtMs');
       } catch {
-        this.#applyRetry(dispatch.item, tickNowMs, null, 'INVALID_HISTORY_RESULT', 'transient history result has an invalid retry time');
+        this.#applyRetry(dispatch.item, knowledgeTimeMs, null, 'INVALID_HISTORY_RESULT', 'transient history result has an invalid retry time');
         return;
       }
       this.#applyRetry(
         dispatch.item,
-        tickNowMs,
+        knowledgeTimeMs,
         requestedRetry,
         'HISTORY_TRANSIENT_FAILURE',
         normalizeMessage(rawResult.message, this.#config.maximumMessageLength, 'transient public history failure'),
@@ -870,16 +908,16 @@ export class BaselineBootstrapScheduler {
       dispatch.item.lastMessage = normalizeMessage(rawResult.message, this.#config.maximumMessageLength, 'public history unavailable');
       return;
     }
-    await this.#applySuccess(dispatch, rawResult, tickNowMs);
+    await this.#applySuccess(dispatch, rawResult, knowledgeTimeMs);
   }
 
   async #applySuccess(
     dispatch: Dispatch,
     result: Extract<HistoryFetchResult, { kind: 'SUCCESS' }>,
-    tickNowMs: number,
+    knowledgeTimeMs: number,
   ): Promise<void> {
     if (typeof result.hasMore !== 'boolean' || !Array.isArray(result.rows)) {
-      this.#applyRetry(dispatch.item, tickNowMs, null, 'INVALID_HISTORY_RESULT', 'successful history result has an invalid page shape');
+      this.#applyRetry(dispatch.item, knowledgeTimeMs, null, 'INVALID_HISTORY_RESULT', 'successful history result has an invalid page shape');
       return;
     }
     let page;
@@ -887,12 +925,12 @@ export class BaselineBootstrapScheduler {
       page = parseCompletedKlinePage(dispatch.request, result.rows, result.receiveTimeMs);
     } catch (error) {
       const reasonCode = error instanceof BaselineHistoryPageError ? error.code : 'INVALID_HISTORY_PAGE';
-      this.#applyRetry(dispatch.item, tickNowMs, null, reasonCode, 'public history page failed strict kline validation');
+      this.#applyRetry(dispatch.item, knowledgeTimeMs, null, reasonCode, 'public history page failed strict kline validation');
       return;
     }
     const item = dispatch.item;
     if (result.hasMore && page.records.length === 0) {
-      if (page.excludedIncompleteCount > 0 && item.cursorTimeMs >= this.#availableEnd(item, tickNowMs)) {
+      if (page.excludedIncompleteCount > 0 && item.cursorTimeMs >= this.#availableEnd(item, knowledgeTimeMs)) {
         item.state = item.acceptedRecordCount > 0 ? 'PARTIAL' : 'PENDING';
         item.terminal = false;
         item.retryAtMs = checkedAdd(item.cursorTimeMs, item.intervalMs, 'next completed candle time');
@@ -901,7 +939,7 @@ export class BaselineBootstrapScheduler {
         item.lastMessage = 'the current kline was excluded until its close time passes the injected clock';
         return;
       }
-      this.#applyRetry(item, tickNowMs, null, 'HISTORY_PAGE_NO_PROGRESS', 'history source asserted more pages without a completed record');
+      this.#applyRetry(item, knowledgeTimeMs, null, 'HISTORY_PAGE_NO_PROGRESS', 'history source asserted more pages without a completed record');
       return;
     }
 
@@ -938,7 +976,7 @@ export class BaselineBootstrapScheduler {
       try {
         await this.#options.sink.write(batch);
       } catch {
-        this.#applyRetry(item, tickNowMs, null, 'BASELINE_SINK_FAILURE', 'idempotent baseline history sink rejected the completed-candle batch');
+        this.#applyRetry(item, knowledgeTimeMs, null, 'BASELINE_SINK_FAILURE', 'idempotent baseline history sink rejected the completed-candle batch');
         return;
       }
     }
@@ -959,7 +997,7 @@ export class BaselineBootstrapScheduler {
       item.lastCompletedCloseTimeMs = page.records[page.records.length - 1].closeTimeMs;
       item.cursorTimeMs = page.nextCursorTimeMs;
     }
-    const availableEndTimeMs = this.#availableEnd(item, tickNowMs);
+    const availableEndTimeMs = this.#availableEnd(item, knowledgeTimeMs);
     if (!result.hasMore) {
       if (item.cursorTimeMs < availableEndTimeMs) {
         const trailingGap = (availableEndTimeMs - item.cursorTimeMs) / item.intervalMs;
@@ -970,7 +1008,7 @@ export class BaselineBootstrapScheduler {
     }
     if (item.acceptedRecordCount >= this.#config.maximumRecordsPerItem
       || item.pageCount >= this.#config.maximumPagesPerItem) {
-      if (item.cursorTimeMs >= item.coverageEndTimeMs) this.#finalize(item, tickNowMs);
+      if (item.cursorTimeMs >= item.coverageEndTimeMs) this.#finalize(item, knowledgeTimeMs);
       else {
         item.state = 'PARTIAL';
         item.terminal = true;
@@ -981,11 +1019,11 @@ export class BaselineBootstrapScheduler {
       return;
     }
     if (item.cursorTimeMs >= item.coverageEndTimeMs) {
-      this.#finalize(item, tickNowMs);
+      this.#finalize(item, knowledgeTimeMs);
       return;
     }
     if (!result.hasMore && availableEndTimeMs >= item.coverageEndTimeMs) {
-      this.#finalize(item, tickNowMs);
+      this.#finalize(item, knowledgeTimeMs);
       return;
     }
     if (item.cursorTimeMs >= availableEndTimeMs) {
@@ -1192,7 +1230,12 @@ export class BaselineBootstrapScheduler {
       const gapCount = safeInteger(raw.gapCount, 'checkpoint gapCount', 0, item.maximumPossibleSamples);
       const pageCount = safeInteger(raw.pageCount, 'checkpoint pageCount', 0, this.#config.maximumPagesPerItem);
       const batchCount = safeInteger(raw.batchCount, 'checkpoint batchCount', 0, this.#config.maximumPagesPerItem);
-      const dispatchCount = safeInteger(raw.dispatchCount, 'checkpoint dispatchCount');
+      const maximumDispatchCount = checkedMultiply(
+        this.#config.maximumPagesPerItem,
+        checkedAdd(this.#config.retryCeiling, 1, 'checkpoint retry dispatch multiplier'),
+        'checkpoint maximum dispatch count',
+      );
+      const dispatchCount = safeInteger(raw.dispatchCount, 'checkpoint dispatchCount', 0, maximumDispatchCount);
       const estimatedWeight = safeInteger(raw.estimatedWeight, 'checkpoint item estimatedWeight');
       const actualWeight = safeInteger(raw.actualWeight, 'checkpoint item actualWeight');
       const retryCount = safeInteger(raw.retryCount, 'checkpoint retryCount', 0, this.#config.retryCeiling + 1);
@@ -1234,6 +1277,19 @@ export class BaselineBootstrapScheduler {
       if ((dispatchCount === 0) !== (estimatedWeight === 0) || (dispatchCount === 0 && actualWeight !== 0)) {
         throw new TypeError('checkpoint dispatch and request-weight accounting are inconsistent');
       }
+      const minimumEstimatedWeight = item.productFamily === 'SPOT'
+        ? checkedMultiply(dispatchCount, 2, 'checkpoint Spot estimated weight')
+        : dispatchCount;
+      const maximumEstimatedWeight = checkedMultiply(
+        dispatchCount,
+        estimateKlineRequestWeight(item.productFamily, this.#config.pageLimit),
+        'checkpoint maximum estimated weight',
+      );
+      const maximumActualWeight = checkedMultiply(dispatchCount, 1_000_000, 'checkpoint maximum actual weight');
+      if (estimatedWeight < minimumEstimatedWeight || estimatedWeight > maximumEstimatedWeight
+        || actualWeight > maximumActualWeight) {
+        throw new TypeError('checkpoint request-weight accounting exceeds dispatch-derived bounds');
+      }
       if ((acceptedRecordCount === 0) !== (lastCompletedCloseTimeMs === null)) {
         throw new TypeError('checkpoint accepted records and last completed close are inconsistent');
       }
@@ -1258,12 +1314,51 @@ export class BaselineBootstrapScheduler {
         if ((state === 'COMPLETE' && staleAtSave) || (state === 'STALE' && !staleAtSave)) {
           throw new TypeError(`${state} checkpoint freshness is inconsistent with its saved time`);
         }
-      } else if (state === 'INSUFFICIENT_HISTORY' && acceptedRecordCount >= item.minimumSamples) {
-        throw new TypeError('INSUFFICIENT_HISTORY checkpoint already satisfies its minimum sample count');
-      } else if (state === 'UNAVAILABLE' && acceptedRecordCount !== 0) {
-        throw new TypeError('UNAVAILABLE checkpoint cannot contain accepted history');
-      } else if (state === 'PARTIAL' && acceptedRecordCount === 0) {
-        throw new TypeError('PARTIAL checkpoint must contain accepted history');
+      } else if (state === 'INSUFFICIENT_HISTORY') {
+        if (acceptedRecordCount >= item.minimumSamples) {
+          throw new TypeError('INSUFFICIENT_HISTORY checkpoint already satisfies its minimum sample count');
+        }
+        const initialInsufficient = dispatchCount === 0
+          && pageCount === 0
+          && cursorTimeMs === item.effectiveStartTimeMs
+          && item.maximumPossibleSamples < item.minimumSamples
+          && lastReasonCode === 'LISTING_AGE_INSUFFICIENT';
+        const completedInsufficient = dispatchCount > 0
+          && cursorTimeMs === item.coverageEndTimeMs
+          && (lastReasonCode === 'COMPLETED_HISTORY_INSUFFICIENT' || lastReasonCode === 'NO_COMPLETED_HISTORY');
+        if (!initialInsufficient && !completedInsufficient) {
+          throw new TypeError('INSUFFICIENT_HISTORY checkpoint lacks a terminal justification');
+        }
+      } else if (state === 'UNAVAILABLE') {
+        if (acceptedRecordCount !== 0) throw new TypeError('UNAVAILABLE checkpoint cannot contain accepted history');
+        const initiallyUnavailable = dispatchCount === 0
+          && pageCount === 0
+          && cursorTimeMs === item.effectiveStartTimeMs
+          && (item.listingState === 'DELISTED' || item.listingState === 'UNAVAILABLE' || item.delistedAtMs !== null)
+          && (lastReasonCode === 'LISTING_DELISTED' || lastReasonCode === 'LISTING_UNAVAILABLE');
+        const fetchedUnavailable = dispatchCount > 0 && lastReasonCode === 'HISTORY_UNAVAILABLE';
+        const retryExhausted = dispatchCount > 0
+          && retryCount === this.#config.retryCeiling + 1
+          && lastReasonCode.endsWith('_RETRY_EXHAUSTED');
+        if (!initiallyUnavailable && !fetchedUnavailable && !retryExhausted) {
+          throw new TypeError('UNAVAILABLE checkpoint lacks a terminal justification');
+        }
+      } else if (state === 'PARTIAL') {
+        if (acceptedRecordCount === 0) throw new TypeError('PARTIAL checkpoint must contain accepted history');
+        if (terminal) {
+          const completedWithGaps = cursorTimeMs === item.coverageEndTimeMs
+            && gapCount > 0
+            && lastReasonCode === 'COMPLETED_HISTORY_HAS_GAPS';
+          const bounded = (pageCount >= this.#config.maximumPagesPerItem
+              || acceptedRecordCount >= this.#config.maximumRecordsPerItem)
+            && lastReasonCode === 'BASELINE_BOUND_REACHED';
+          const fetchedUnavailable = dispatchCount > 0 && lastReasonCode === 'HISTORY_UNAVAILABLE';
+          const retryExhausted = retryCount === this.#config.retryCeiling + 1
+            && lastReasonCode.endsWith('_RETRY_EXHAUSTED');
+          if (!completedWithGaps && !bounded && !fetchedUnavailable && !retryExhausted) {
+            throw new TypeError('terminal PARTIAL checkpoint lacks a terminal justification');
+          }
+        }
       }
       let restoredState = state;
       let restoredTerminal = terminal;

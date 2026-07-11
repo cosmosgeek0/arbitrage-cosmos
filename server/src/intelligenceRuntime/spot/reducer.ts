@@ -16,6 +16,7 @@ import {
 } from '../../intelligenceFoundation/evidence/index.js';
 import type { NormalizationContext } from '../../intelligenceFoundation/evidence/index.js';
 import {
+  boundedJsonByteLength,
   SourceLifecycleTracker,
   sourceDefinition,
   type RuntimeClock,
@@ -25,6 +26,7 @@ import {
 import { SpotBackpressureBuffer } from './backpressure.js';
 import type {
   SpotBufferedMessage,
+  SpotBufferOfferResult,
   SpotEvidenceIngestResult,
   SpotFrameIngestResult,
   SpotFreshnessState,
@@ -48,6 +50,27 @@ export const SPOT_SOURCE_STREAMS: Readonly<Record<SpotSourceKind, string>> = Obj
 const SYMBOL_PATTERN = /^[\p{L}\p{N}._-]{1,128}$/u;
 const DECIMAL_PATTERN = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 const CORRELATION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/;
+const MAXIMUM_INSTRUMENT_BYTES = 16 * 1024;
+const POLICY_KEYS = Object.freeze([
+  'configurationVersion',
+  'maximumSymbols',
+  'maximumFrameRecords',
+  'maximumRecentTradesPerSymbol',
+  'maximumFutureSkewMs',
+  'tickerMaximumAgeMs',
+  'bookMaximumAgeMs',
+  'tradeMaximumAgeMs',
+  'sourceSilentAfterMs',
+  'sourceStaleAfterMs',
+  'sourceGapAfterMs',
+  'bookSourceSilentAfterMs',
+  'bookSourceStaleAfterMs',
+  'tradeSourceSilentAfterMs',
+  'tradeSourceStaleAfterMs',
+  'inboundCapacity',
+  'maximumBufferedPayloadBytes',
+] as const satisfies readonly (keyof SpotReducerPolicy)[]);
+const POLICY_KEY_SET = new Set<string>(POLICY_KEYS);
 
 export const DEFAULT_SPOT_REDUCER_POLICY: Readonly<SpotReducerPolicy> = Object.freeze({
   configurationVersion: 'spot-runtime-1',
@@ -137,7 +160,22 @@ function strictDecimal(value: unknown, name: string, positive: boolean): number 
 }
 
 function validatePolicy(overrides: Partial<SpotReducerPolicy>): Readonly<SpotReducerPolicy> {
-  const policy = { ...DEFAULT_SPOT_REDUCER_POLICY, ...overrides };
+  if (!isRecord(overrides) || Object.getPrototypeOf(overrides) !== Object.prototype) {
+    throw new TypeError('Spot reducer policy overrides must be a plain object');
+  }
+  if (Object.getOwnPropertySymbols(overrides).length > 0) {
+    throw new TypeError('Spot reducer policy overrides must not contain symbol keys');
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(overrides);
+  const policy = { ...DEFAULT_SPOT_REDUCER_POLICY } as SpotReducerPolicy;
+  for (const name of Object.getOwnPropertyNames(overrides)) {
+    if (!POLICY_KEY_SET.has(name)) throw new TypeError(`Spot reducer policy contains unknown field ${name}`);
+    const descriptor = descriptors[name];
+    if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) {
+      throw new TypeError(`Spot reducer policy field ${name} must be an enumerable data property`);
+    }
+    (policy as unknown as Record<string, unknown>)[name] = descriptor.value;
+  }
   if (
     typeof policy.configurationVersion !== 'string'
     || policy.configurationVersion.trim().length === 0
@@ -189,6 +227,29 @@ function identityToken(value: unknown): string | number | boolean | null {
   return value === undefined ? null : typeof value;
 }
 
+function symbolIdentityToken(value: unknown): string {
+  if (typeof value === 'string' && SYMBOL_PATTERN.test(value)) return value;
+  return typeof value === 'string' ? `INVALID_STRING_LENGTH:${value.length}` : `INVALID_TYPE:${typeof value}`;
+}
+
+function bufferedMessageRoute(value: SpotBufferedMessage): { kind: SpotSourceKind; generation: number } {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('Spot buffered message must be an object');
+  }
+  const kindDescriptor = Object.getOwnPropertyDescriptor(value, 'kind');
+  const generationDescriptor = Object.getOwnPropertyDescriptor(value, 'generation');
+  if (!kindDescriptor?.enumerable || !Object.hasOwn(kindDescriptor, 'value')) {
+    throw new TypeError('Spot buffered message kind must be an enumerable data property');
+  }
+  if (!generationDescriptor?.enumerable || !Object.hasOwn(generationDescriptor, 'value')) {
+    throw new TypeError('Spot buffered message generation must be an enumerable data property');
+  }
+  if (!SPOT_SOURCE_KINDS.includes(kindDescriptor.value as SpotSourceKind)) {
+    throw new TypeError('unsupported Spot buffered message kind');
+  }
+  return { kind: kindDescriptor.value as SpotSourceKind, generation: generationDescriptor.value as number };
+}
+
 function sourceEventIdentity(payload: unknown): Record<string, string | number | boolean | null> {
   if (!isRecord(payload)) return { payloadType: Array.isArray(payload) ? 'array' : typeof payload };
   return {
@@ -211,21 +272,56 @@ function sourceEventIdentity(payload: unknown): Record<string, string | number |
  */
 function payloadDigest(payload: unknown): string {
   const hash = createHash('sha256');
-  const records = Array.isArray(payload) ? payload : [payload];
-  hash.update(Array.isArray(payload) ? 'array\0' : 'single\0');
-  hash.update(String(records.length));
+  hash.update('single\0');
+  hash.update(canonicalJson(payload));
+  return hash.digest('hex');
+}
+
+interface AdmittedMiniTickerFrame {
+  receivedRecords: number;
+  droppedRecords: number;
+  records: readonly unknown[];
+  prefixDigest: string;
+}
+
+/** Reads and authenticates only the configured prefix; overflow slots are never inspected. */
+function admitMiniTickerFrame(
+  payload: unknown,
+  maximumFrameRecords: number,
+  maximumPayloadBytes: number,
+): AdmittedMiniTickerFrame {
+  if (!Array.isArray(payload)) throw new TypeError('Spot mini-ticker payload must be an array');
+  const receivedRecords = payload.length;
+  const admittedRecords = Math.min(receivedRecords, maximumFrameRecords);
+  let measuredBytes = 2;
+  if (measuredBytes > maximumPayloadBytes) throw new RangeError('Spot mini-ticker prefix exceeds maximumBufferedPayloadBytes');
+  const hash = createHash('sha256');
+  hash.update('bounded-prefix\0');
+  hash.update(String(admittedRecords));
   hash.update('\0');
-  for (let index = 0; index < records.length; index += 1) {
+  const records: unknown[] = [];
+  for (let index = 0; index < admittedRecords; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(payload, String(index));
+    if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) {
+      throw new TypeError(`Spot mini-ticker payload[${index}] must be a dense data property`);
+    }
+    const delimiterBytes = index === 0 ? 0 : 1;
+    const remainingBytes = maximumPayloadBytes - measuredBytes - delimiterBytes - 1;
+    if (remainingBytes < 1) throw new RangeError('Spot mini-ticker prefix exceeds maximumBufferedPayloadBytes');
+    const recordBytes = boundedJsonByteLength(descriptor.value, remainingBytes);
+    measuredBytes += delimiterBytes + recordBytes;
+    records.push(descriptor.value);
     hash.update(String(index));
     hash.update('\0');
-    try {
-      hash.update(canonicalJson(records[index]));
-    } catch {
-      hash.update(canonicalJson(sourceEventIdentity(records[index])));
-    }
+    hash.update(canonicalJson(descriptor.value));
     hash.update('\0');
   }
-  return hash.digest('hex');
+  return Object.freeze({
+    receivedRecords,
+    droppedRecords: receivedRecords - admittedRecords,
+    records: Object.freeze(records),
+    prefixDigest: hash.digest('hex'),
+  });
 }
 
 function resolveCorrelationId(
@@ -233,7 +329,9 @@ function resolveCorrelationId(
   identity: Record<string, unknown>,
 ): string {
   if (provided !== undefined) {
-    if (!CORRELATION_PATTERN.test(provided)) throw new TypeError('correlationId must be a bounded stable token');
+    if (typeof provided !== 'string' || !CORRELATION_PATTERN.test(provided)) {
+      throw new TypeError('correlationId must be a bounded stable token');
+    }
     return provided;
   }
   return stableId('runtime-correlation', identity);
@@ -406,6 +504,7 @@ export class SpotBroadReducer {
       if (instrument.venue !== 'BINANCE' || instrument.productFamily !== 'SPOT' || !SYMBOL_PATTERN.test(instrument.symbol)) {
         throw new TypeError('Spot runtime universe requires canonical Binance Spot instruments');
       }
+      boundedJsonByteLength(instrument, MAXIMUM_INSTRUMENT_BYTES);
       const expectedInstrumentId = stableId('instrument', {
         venue: instrument.venue,
         productFamily: instrument.productFamily,
@@ -440,7 +539,7 @@ export class SpotBroadReducer {
     safeInteger(generation, 'generation', 1);
     safeInteger(connectedAtMs, 'connectedAtMs');
     const now = safeInteger(this.#clock.nowMs(), 'clock.nowMs');
-    if (connectedAtMs > now + this.#policy.maximumFutureSkewMs) throw new TypeError('connectedAtMs exceeds future skew');
+    if (connectedAtMs > now) throw new TypeError('connectedAtMs cannot be ahead of the injected clock');
     if (generation <= this.#generation) return false;
     if (generation !== this.#generation + 1) {
       throw new TypeError('generation must advance exactly once from the current generation');
@@ -480,9 +579,17 @@ export class SpotBroadReducer {
     return this.#definitions[kind];
   }
 
-  enqueue(message: SpotBufferedMessage) {
+  enqueue(message: SpotBufferedMessage): SpotBufferOfferResult {
+    const route = bufferedMessageRoute(message);
+    if (!this.#acceptGeneration(route.kind, route.generation)) {
+      return Object.freeze({
+        state: 'DROPPED',
+        reason: 'IGNORED_GENERATION',
+        depth: this.#buffer.snapshot().depth,
+      });
+    }
     const result = this.#buffer.offer(message);
-    const tracker = this.#trackers[message.kind];
+    const tracker = this.#trackers[route.kind];
     if (this.#running && result.state === 'COALESCED') tracker.count('coalesced');
     if (this.#running && result.state === 'DROPPED') {
       tracker.count('dropped');
@@ -519,13 +626,66 @@ export class SpotBroadReducer {
     payload: unknown;
     correlationId?: string;
   }): SpotFrameIngestResult {
+    const ignoredIdentity = {
+      sourceId: SOURCE_ID,
+      kind: 'MINI_TICKER_FRAME',
+      generation: identityToken(input.generation),
+      receiveTimeMs: identityToken(input.receiveTimeMs),
+      payloadInspection: 'SKIPPED_GENERATION',
+    };
+    if (!this.#acceptGeneration('MINI_TICKER', input.generation)) {
+      const correlationId = resolveCorrelationId(input.correlationId, ignoredIdentity);
+      return Object.freeze({
+        state: 'IGNORED_GENERATION', correlationId, changedOnlySemantics: true, fullUniverseFrame: false,
+        receivedRecords: 0, acceptedRecords: 0, invalidRecords: 0, unknownSymbols: 0,
+        duplicateRecords: 0, outOfOrderRecords: 0, staleRecords: 0, droppedRecords: 0,
+        observations: Object.freeze([]), events: Object.freeze([]), failures: Object.freeze([]),
+      });
+    }
+    let admitted: AdmittedMiniTickerFrame;
+    try {
+      admitted = admitMiniTickerFrame(
+        input.payload,
+        this.#policy.maximumFrameRecords,
+        this.#policy.maximumBufferedPayloadBytes,
+      );
+    } catch (error) {
+      const receivedRecords = Array.isArray(input.payload) ? input.payload.length : 0;
+      const correlationId = resolveCorrelationId(input.correlationId, {
+        sourceId: SOURCE_ID,
+        kind: 'MINI_TICKER_FRAME',
+        generation: identityToken(input.generation),
+        receiveTimeMs: identityToken(input.receiveTimeMs),
+        payloadAdmission: 'REJECTED',
+        receivedRecords,
+        admittedPrefixLimit: this.#policy.maximumFrameRecords,
+      });
+      this.#metrics.frameCount += 1;
+      this.#metrics.invalidCount += 1;
+      this.#metrics.rejectedFrameCount += 1;
+      this.#lastFramePartial = true;
+      this.#trackers.MINI_TICKER.count('invalid');
+      return Object.freeze({
+        state: 'REJECTED', correlationId, changedOnlySemantics: true, fullUniverseFrame: false,
+        receivedRecords, acceptedRecords: 0, invalidRecords: 1, unknownSymbols: 0,
+        duplicateRecords: 0, outOfOrderRecords: 0, staleRecords: 0, droppedRecords: 0,
+        observations: Object.freeze([]), events: Object.freeze([]),
+        failures: Object.freeze([failure(
+          'INVALID_VALUE',
+          error instanceof Error ? error.message : String(error),
+          'payload',
+        )]),
+      });
+    }
     const correlationId = resolveCorrelationId(input.correlationId, {
       sourceId: SOURCE_ID,
       kind: 'MINI_TICKER_FRAME',
       generation: input.generation,
       receiveTimeMs: input.receiveTimeMs,
-      recordCount: Array.isArray(input.payload) ? input.payload.length : null,
-      payloadDigest: payloadDigest(input.payload),
+      admittedRecordCount: admitted.records.length,
+      payloadPrefixDigest: admitted.prefixDigest,
+      overflowIdentity: admitted.droppedRecords === 0 ? 'NONE' : 'PREFIX_TRUNCATED',
+      overflowRecordCount: admitted.droppedRecords,
     });
     const empty = (state: SpotFrameIngestResult['state'], failures: StableFailure[] = []): SpotFrameIngestResult => Object.freeze({
       state,
@@ -545,7 +705,6 @@ export class SpotBroadReducer {
       failures: Object.freeze(failures),
     });
 
-    if (!this.#acceptGeneration('MINI_TICKER', input.generation)) return empty('IGNORED_GENERATION');
     this.#metrics.frameCount += 1;
     let processingTimeMs: number;
     try {
@@ -563,17 +722,9 @@ export class SpotBroadReducer {
       return empty('REJECTED', [failure('OUT_OF_ORDER_EVENT', 'mini-ticker frame receipt precedes the accepted frame', 'receiveTimeMs')]);
     }
     this.#recordTransportReceive(input.receiveTimeMs);
-    if (!Array.isArray(input.payload)) {
-      this.#metrics.invalidCount += 1;
-      this.#metrics.rejectedFrameCount += 1;
-      this.#lastFramePartial = true;
-      this.#trackers.MINI_TICKER.count('invalid');
-      return empty('REJECTED', [failure('INVALID_VALUE', 'Spot mini-ticker payload must be an array', 'payload')]);
-    }
-
-    const receivedRecords = input.payload.length;
-    const maximum = Math.min(receivedRecords, this.#policy.maximumFrameRecords);
-    const droppedRecords = Math.max(0, receivedRecords - maximum);
+    const receivedRecords = admitted.receivedRecords;
+    const maximum = admitted.records.length;
+    const droppedRecords = admitted.droppedRecords;
     const observations: SpotRolling24hObservation[] = [];
     const failures: StableFailure[] = [];
     let invalidRecords = 0;
@@ -586,7 +737,7 @@ export class SpotBroadReducer {
     for (let index = 0; index < maximum; index += 1) {
       let parsed: ParsedMiniTicker;
       try {
-        parsed = parseMiniTicker(input.payload[index]);
+        parsed = parseMiniTicker(admitted.records[index]);
       } catch (error) {
         invalidRecords += 1;
         failures.push(failure('INVALID_VALUE', error instanceof Error ? error.message : String(error), `payload[${index}]`));
@@ -733,16 +884,20 @@ export class SpotBroadReducer {
     payload: unknown;
     correlationId?: string;
   }): SpotEvidenceIngestResult<NormalizedBookTicker> {
-    const correlationId = resolveCorrelationId(input.correlationId, {
-      sourceId: SOURCE_ID,
-      kind: 'BOOK_TICKER',
-      generation: input.generation,
-      receiveTimeMs: input.receiveTimeMs,
-      symbol: input.symbol,
-      sourceEvent: sourceEventIdentity(input.payload),
-      payloadDigest: payloadDigest(input.payload),
-    });
-    if (!this.#acceptGeneration('BOOK_TICKER', input.generation)) return this.#ignoredEvidence<NormalizedBookTicker>(correlationId);
+    if (!this.#acceptGeneration('BOOK_TICKER', input.generation)) {
+      const correlationId = resolveCorrelationId(input.correlationId, {
+        sourceId: SOURCE_ID,
+        kind: 'BOOK_TICKER',
+        generation: identityToken(input.generation),
+        receiveTimeMs: identityToken(input.receiveTimeMs),
+        symbol: symbolIdentityToken(input.symbol),
+        payloadInspection: 'SKIPPED_GENERATION',
+      });
+      return this.#ignoredEvidence<NormalizedBookTicker>(correlationId);
+    }
+    const prepared = this.#prepareEvidenceIngress('BOOK_TICKER', input);
+    if (!prepared.ok) return this.#rejectedEvidence<NormalizedBookTicker>(prepared.correlationId, [prepared.failure]);
+    const correlationId = prepared.correlationId;
     return this.#ingestEvidence('BOOK_TICKER', input, correlationId, (state, context) => normalizeBookTicker(input.payload, context), (state, value) => {
       state.bookTicker = cloneBook(value);
       this.#metrics.bookObservationCount += 1;
@@ -756,16 +911,20 @@ export class SpotBroadReducer {
     payload: unknown;
     correlationId?: string;
   }): SpotEvidenceIngestResult<NormalizedTrade> {
-    const correlationId = resolveCorrelationId(input.correlationId, {
-      sourceId: SOURCE_ID,
-      kind: 'AGG_TRADE',
-      generation: input.generation,
-      receiveTimeMs: input.receiveTimeMs,
-      symbol: input.symbol,
-      sourceEvent: sourceEventIdentity(input.payload),
-      payloadDigest: payloadDigest(input.payload),
-    });
-    if (!this.#acceptGeneration('AGG_TRADE', input.generation)) return this.#ignoredEvidence<NormalizedTrade>(correlationId);
+    if (!this.#acceptGeneration('AGG_TRADE', input.generation)) {
+      const correlationId = resolveCorrelationId(input.correlationId, {
+        sourceId: SOURCE_ID,
+        kind: 'AGG_TRADE',
+        generation: identityToken(input.generation),
+        receiveTimeMs: identityToken(input.receiveTimeMs),
+        symbol: symbolIdentityToken(input.symbol),
+        payloadInspection: 'SKIPPED_GENERATION',
+      });
+      return this.#ignoredEvidence<NormalizedTrade>(correlationId);
+    }
+    const prepared = this.#prepareEvidenceIngress('AGG_TRADE', input);
+    if (!prepared.ok) return this.#rejectedEvidence<NormalizedTrade>(prepared.correlationId, [prepared.failure]);
+    const correlationId = prepared.correlationId;
     return this.#ingestEvidence('AGG_TRADE', input, correlationId, (state, context) => normalizeTrade(input.payload, context), (state, value) => {
       state.recentTrades.push(cloneTrade(value));
       if (state.recentTrades.length > this.#policy.maximumRecentTradesPerSymbol) {
@@ -792,6 +951,16 @@ export class SpotBroadReducer {
 
   snapshot(atMs = this.#clock.nowMs()): SpotRuntimeSnapshot {
     safeInteger(atMs, 'snapshotTimeMs');
+    const now = safeInteger(this.#clock.nowMs(), 'clock.nowMs');
+    if (atMs > now) throw new RangeError('snapshotTimeMs cannot be ahead of the injected clock');
+    const retainedKnowledgeTimeMs = Math.max(
+      this.#connectedAtMs ?? 0,
+      this.#lastTransportReceiveTimeMs ?? 0,
+      this.#lastUsefulReceiveTimeMs ?? 0,
+      this.#lastProcessedTimeMs ?? 0,
+      this.#coverageEstablishedAtMs ?? 0,
+    );
+    if (atMs < retainedKnowledgeTimeMs) throw new RangeError('snapshotTimeMs precedes retained Spot knowledge');
     const symbols: SpotSymbolSnapshot[] = [...this.#symbols.values()].map((state) => {
       const ticker = state.ticker24h;
       const book = state.bookTicker;
@@ -936,6 +1105,50 @@ export class SpotBroadReducer {
       previousSequence,
       producerVersion: 'spot-runtime-adapter-1',
       configurationVersion: this.#policy.configurationVersion,
+    };
+  }
+
+  #prepareEvidenceIngress(
+    kind: 'BOOK_TICKER' | 'AGG_TRADE',
+    input: { generation: number; receiveTimeMs: number; symbol: string; payload: unknown; correlationId?: string },
+  ): { ok: true; correlationId: string } | { ok: false; correlationId: string; failure: StableFailure } {
+    const reject = (message: string, field: 'symbol' | 'payload') => {
+      const correlationId = resolveCorrelationId(input.correlationId, {
+        sourceId: SOURCE_ID,
+        kind,
+        generation: identityToken(input.generation),
+        receiveTimeMs: identityToken(input.receiveTimeMs),
+        symbol: symbolIdentityToken(input.symbol),
+        payloadAdmission: field === 'payload' ? 'REJECTED' : 'NOT_INSPECTED',
+      });
+      this.#metrics.invalidCount += 1;
+      this.#trackers[kind].count('invalid');
+      return { ok: false as const, correlationId, failure: failure('INVALID_VALUE', message, field) };
+    };
+    if (typeof input.symbol !== 'string' || !SYMBOL_PATTERN.test(input.symbol)) {
+      return reject('Spot source symbol must be a bounded canonical market token', 'symbol');
+    }
+    try {
+      boundedJsonByteLength(input.payload, this.#policy.maximumBufferedPayloadBytes);
+    } catch (error) {
+      return reject(
+        error instanceof RangeError
+          ? 'Spot source payload exceeds maximumBufferedPayloadBytes or structural bounds'
+          : 'Spot source payload must be bounded plain data',
+        'payload',
+      );
+    }
+    return {
+      ok: true,
+      correlationId: resolveCorrelationId(input.correlationId, {
+        sourceId: SOURCE_ID,
+        kind,
+        generation: input.generation,
+        receiveTimeMs: input.receiveTimeMs,
+        symbol: input.symbol,
+        sourceEvent: sourceEventIdentity(input.payload),
+        payloadDigest: payloadDigest(input.payload),
+      }),
     };
   }
 

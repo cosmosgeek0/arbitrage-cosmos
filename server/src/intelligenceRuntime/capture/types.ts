@@ -34,6 +34,7 @@ export interface CaptureCoordinatorConfigInput {
   maximumTriggerTombstones?: number;
   maximumFailureRecords?: number;
   maximumEvidenceBytes?: number;
+  maximumFrozenRecordBytes?: number;
   maximumCheckpointBytes?: number;
 }
 
@@ -59,6 +60,7 @@ export interface CaptureCoordinatorConfig {
   readonly maximumTriggerTombstones: number;
   readonly maximumFailureRecords: number;
   readonly maximumEvidenceBytes: number;
+  readonly maximumFrozenRecordBytes: number;
   readonly maximumCheckpointBytes: number;
 }
 

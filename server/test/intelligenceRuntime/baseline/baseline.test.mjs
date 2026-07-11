@@ -6,6 +6,7 @@ import {
   BASELINE_HISTORY_INTEGRATION_GAP,
   BASELINE_HISTORY_SOURCES,
   BaselineBootstrapScheduler,
+  createBaselineBootstrapConfig,
   estimateKlineRequestWeight,
   parseCompletedKlinePage,
 } from '../../../dist/intelligenceRuntime/baseline/index.js';
@@ -36,6 +37,19 @@ class MemoryCheckpoint {
     const clone = structuredClone(value);
     this.values.set(id, clone);
     this.saves.push({ id, value: clone });
+  }
+}
+
+class FailOnSaveCheckpoint extends MemoryCheckpoint {
+  constructor(failOnSave) {
+    super();
+    this.failOnSave = failOnSave;
+    this.attempts = 0;
+  }
+  async save(id, value) {
+    this.attempts += 1;
+    if (this.attempts === this.failOnSave) throw new Error('fixture checkpoint save failure');
+    return super.save(id, value);
   }
 }
 
@@ -384,9 +398,10 @@ test('sink retries reuse the same request and batch identities for idempotent cr
   const sink = new CollectSink();
   sink.failuresRemaining = 1;
   const f = fixture({ sink, config: { retryBaseDelayMs: 1_000 } });
-  const page = success([kline(T0), kline(T0 + MINUTE), kline(T0 + 2 * MINUTE)]);
-  f.history.enqueue(page);
-  f.history.enqueue(page);
+  f.history.enqueue(success([kline(T0), kline(T0 + MINUTE), kline(T0 + 2 * MINUTE)]));
+  f.history.enqueue(success([kline(T0), kline(T0 + MINUTE), kline(T0 + 2 * MINUTE)], {
+    receiveTimeMs: NOW + 1_000,
+  }));
   await f.scheduler.initialize(plan());
   const retry = await f.scheduler.tick();
   assert.equal(retry.items[0].state, 'RETRY_WAIT');
@@ -524,6 +539,235 @@ test('parallelism is bounded and concurrent ticks coalesce to one in-flight oper
   assert.equal(f.scheduler.snapshot().activeFetchCount, 0);
 });
 
+test('concurrent ticks coalesce only for the same canonical focus input', async () => {
+  const history = new QueueHistory();
+  const pending = [];
+  history.handler = (request) => new Promise((resolve) => pending.push({ request, resolve }));
+  const f = fixture({ history, config: { maximumParallelism: 1 } });
+  await f.scheduler.initialize(plan([item('AAAUSDT'), item('BBBUSDT'), item('CCCUSDT')]));
+  const first = f.scheduler.tick({ focusedSymbols: ['BBBUSDT', 'AAAUSDT', 'AAAUSDT'] });
+  const equivalent = f.scheduler.tick({ focusedSymbols: ['AAAUSDT', 'BBBUSDT'] });
+  assert.strictEqual(first, equivalent);
+  await assert.rejects(
+    f.scheduler.tick({ focusedSymbols: ['CCCUSDT'] }),
+    /different focus input is already in flight/,
+  );
+  for (let index = 0; index < 6 && pending.length < 1; index += 1) await Promise.resolve();
+  pending[0].resolve(success([kline(T0), kline(T0 + MINUTE), kline(T0 + 2 * MINUTE)]));
+  await first;
+  assert.equal(history.calls.length, 1);
+});
+
+test('post-fetch checkpoint failure still settles and applies every completed parallel outcome', async () => {
+  const checkpoint = new FailOnSaveCheckpoint(2);
+  const f = fixture({ checkpoint, config: { maximumParallelism: 2 } });
+  f.history.handler = (request) => success([kline(request.startTimeMs)], { receiveTimeMs: NOW });
+  await f.scheduler.initialize(plan([
+    item('AAAUSDT', { targetEndTimeMs: T0 + MINUTE }),
+    item('BBBUSDT', { targetEndTimeMs: T0 + MINUTE }),
+  ]));
+  await assert.rejects(f.scheduler.tick(), /checkpoint save failure/);
+  const snapshot = f.scheduler.snapshot();
+  assert.equal(snapshot.activeFetchCount, 0);
+  assert.equal(snapshot.items.some((entry) => entry.state === 'FETCHING'), false);
+  assert.equal(snapshot.items.every((entry) => entry.state === 'COMPLETE'), true);
+  assert.equal(f.budget.settlements.length, 2);
+  assert.equal(snapshot.totals.actualWeight, 4);
+  assert.equal(checkpoint.attempts, 3);
+});
+
+test('known consumed weight remains accounted when the injected settlement port throws', async () => {
+  const budget = new FixtureBudget();
+  budget.settle = async (value) => {
+    budget.settlements.push(structuredClone(value));
+    throw new Error('fixture settlement failure');
+  };
+  const f = fixture({ budget });
+  f.history.enqueue(success([kline(T0)], { actualWeight: 7 }));
+  await f.scheduler.initialize(plan());
+  const snapshot = await f.scheduler.tick();
+  assert.equal(snapshot.items[0].state, 'RETRY_WAIT');
+  assert.equal(snapshot.items[0].lastReasonCode, 'WEIGHT_SETTLEMENT_FAILURE');
+  assert.equal(snapshot.items[0].actualWeight, 7);
+  assert.equal(snapshot.totals.actualWeight, 7);
+});
+
+test('successful history receive time must fall between dispatch and injected completion', async () => {
+  for (const receiveTimeMs of [NOW - 1, NOW + 1]) {
+    const f = fixture();
+    f.history.enqueue(success([kline(T0)], { receiveTimeMs }));
+    await f.scheduler.initialize(plan());
+    const snapshot = await f.scheduler.tick();
+    assert.equal(snapshot.items[0].state, 'RETRY_WAIT');
+    assert.equal(snapshot.items[0].lastReasonCode, 'INVALID_HISTORY_RESULT');
+    assert.deepEqual(f.sink.batches, []);
+  }
+});
+
+test('fetch completion time governs success freshness, snapshots, and checkpoints', async () => {
+  const completionTimeMs = NOW + 2_000;
+  const clock = new ManualClock();
+  const history = new QueueHistory();
+  history.handler = () => {
+    clock.set(completionTimeMs);
+    return success([kline(T0), kline(T0 + MINUTE), kline(T0 + 2 * MINUTE)], {
+      receiveTimeMs: completionTimeMs,
+    });
+  };
+  const f = fixture({ clock, history, config: { staleAfterMs: 1_000 } });
+  const initialized = await f.scheduler.initialize(plan());
+  const snapshot = await f.scheduler.tick();
+
+  assert.equal(snapshot.snapshotTimeMs, completionTimeMs);
+  assert.equal(snapshot.items[0].state, 'STALE');
+  assert.equal(f.checkpoint.saves.at(-1).value.savedAtMs, completionTimeMs);
+  assert.equal(f.checkpoint.values.get(initialized.planId).savedAtMs, completionTimeMs);
+});
+
+test('parallel outcomes retain dispatch order with a monotonic completion-time retry watermark', async () => {
+  const clock = new ManualClock();
+  const history = new QueueHistory();
+  const pending = new Map();
+  history.handler = (request) => new Promise((resolve) => pending.set(request.symbol, resolve));
+  const f = fixture({
+    clock,
+    history,
+    config: { maximumParallelism: 2, retryBaseDelayMs: 1_000, retryMaximumDelayMs: 8_000 },
+  });
+  await f.scheduler.initialize(plan([
+    item('AAAUSDT', { targetEndTimeMs: T0 + MINUTE }),
+    item('BBBUSDT', { targetEndTimeMs: T0 + MINUTE }),
+  ]));
+
+  const ticking = f.scheduler.tick();
+  for (let index = 0; index < 10 && history.calls.length < 2; index += 1) await Promise.resolve();
+  assert.equal(history.calls.length, 2);
+  const first = history.calls[0];
+  const second = history.calls[1];
+
+  const earlierCompletionMs = NOW + 2_000;
+  clock.set(earlierCompletionMs);
+  pending.get(second.symbol)({
+    kind: 'TRANSIENT_FAILURE',
+    observedAtMs: earlierCompletionMs,
+    retryAtMs: null,
+    actualWeight: 2,
+    message: 'fixture 503',
+  });
+  for (let index = 0; index < 4; index += 1) await Promise.resolve();
+
+  const laterCompletionMs = NOW + 5_000;
+  clock.set(laterCompletionMs);
+  pending.get(first.symbol)(success([kline(T0)], { receiveTimeMs: laterCompletionMs }));
+  const snapshot = await ticking;
+
+  assert.equal(snapshot.snapshotTimeMs, laterCompletionMs);
+  assert.equal(bySymbol(snapshot, first.symbol).state, 'COMPLETE');
+  assert.equal(bySymbol(snapshot, second.symbol).state, 'RETRY_WAIT');
+  assert.equal(bySymbol(snapshot, second.symbol).lastReasonCode, 'HISTORY_TRANSIENT_FAILURE');
+  assert.equal(bySymbol(snapshot, second.symbol).retryAtMs, laterCompletionMs + 1_000);
+  assert.deepEqual(
+    f.checkpoint.saves.map(({ value }) => value.savedAtMs),
+    [NOW, laterCompletionMs, laterCompletionMs],
+  );
+});
+
+test('baseline config is exact, accessor-safe, and its minimum bounds restore self-written checkpoints', async () => {
+  assert.throws(() => createBaselineBootstrapConfig({ secret: 'no' }), /unknown field secret/);
+  assert.throws(() => createBaselineBootstrapConfig({ maximumIdentityLength: 63 }), /maximumIdentityLength/);
+  assert.throws(() => createBaselineBootstrapConfig({ maximumMessageLength: 127 }), /maximumMessageLength/);
+  const symbolConfig = {};
+  symbolConfig[Symbol('secret')] = 'no';
+  assert.throws(() => createBaselineBootstrapConfig(symbolConfig), /symbol keys/);
+  let getterCalls = 0;
+  const accessor = {};
+  Object.defineProperty(accessor, 'pageLimit', { enumerable: true, get() { getterCalls += 1; return 1; } });
+  assert.throws(() => createBaselineBootstrapConfig(accessor), /data property/);
+  assert.equal(getterCalls, 0);
+
+  const checkpoint = new MemoryCheckpoint();
+  const config = { maximumIdentityLength: 64, maximumMessageLength: 128 };
+  const first = fixture({ checkpoint, config });
+  first.history.enqueue(success([kline(T0), kline(T0 + MINUTE), kline(T0 + 2 * MINUTE)]));
+  const initialized = await first.scheduler.initialize(plan());
+  await first.scheduler.tick();
+  assert.ok(checkpoint.values.has(initialized.planId));
+  const restored = fixture({ checkpoint, config });
+  assert.equal((await restored.scheduler.initialize(plan())).restored, true);
+});
+
+test('terminal checkpoint states require structural justification and weights remain dispatch-derived', async () => {
+  const checkpoint = new MemoryCheckpoint();
+  const config = { pageLimit: 1 };
+  const planInput = plan([item('FORGEUSDT', { minimumSamples: 2 })]);
+  const first = fixture({ checkpoint, config });
+  first.history.enqueue(success([kline(T0)], { hasMore: true }));
+  const initialized = await first.scheduler.initialize(planInput);
+  await first.scheduler.tick();
+  const base = checkpoint.values.get(initialized.planId);
+
+  async function rejectsMutation(mutator, pattern) {
+    const value = structuredClone(base);
+    mutator(value);
+    const forgedCheckpoint = new MemoryCheckpoint();
+    forgedCheckpoint.values.set(initialized.planId, value);
+    const restored = fixture({ checkpoint: forgedCheckpoint, config });
+    await assert.rejects(restored.scheduler.initialize(planInput), pattern);
+  }
+
+  await rejectsMutation((value) => {
+    value.items[0].state = 'INSUFFICIENT_HISTORY';
+    value.items[0].terminal = true;
+    value.items[0].retryAtMs = null;
+    value.items[0].lastReasonCode = 'COMPLETED_HISTORY_INSUFFICIENT';
+  }, /lacks a terminal justification/);
+  await rejectsMutation((value) => {
+    value.items[0].terminal = true;
+    value.items[0].retryAtMs = null;
+    value.items[0].lastReasonCode = 'HISTORY_PAGE_APPLIED';
+  }, /terminal PARTIAL checkpoint lacks/);
+  await rejectsMutation((value) => {
+    const itemValue = value.items[0];
+    itemValue.state = 'UNAVAILABLE';
+    itemValue.terminal = true;
+    itemValue.retryAtMs = null;
+    itemValue.cursorTimeMs = T0;
+    itemValue.acceptedRecordCount = 0;
+    itemValue.pageCount = 0;
+    itemValue.batchCount = 0;
+    itemValue.lastBatchId = null;
+    itemValue.lastCompletedCloseTimeMs = null;
+    itemValue.lastReasonCode = 'FORGED_UNAVAILABLE';
+    value.totals.batches = 0;
+  }, /lacks a terminal justification/);
+  await rejectsMutation((value) => {
+    value.items[0].estimatedWeight = 3;
+    value.totals.estimatedWeight = 3;
+  }, /dispatch-derived bounds/);
+  await rejectsMutation((value) => {
+    value.items[0].actualWeight = 1_000_001;
+    value.totals.actualWeight = 1_000_001;
+  }, /dispatch-derived bounds/);
+});
+
+test('legitimate initial terminal items remain restorable in a mixed checkpoint', async () => {
+  const checkpoint = new MemoryCheckpoint();
+  const planInput = plan([
+    item('ACTIVEUSDT'),
+    item('DELISTEDUSDT', { listingState: 'DELISTED', delistedAtMs: T0 + MINUTE }),
+    item('YOUNGUSDT', { listedAtMs: NOW - MINUTE, minimumSamples: 2 }),
+  ]);
+  const first = fixture({ checkpoint });
+  first.history.enqueue(success([kline(T0), kline(T0 + MINUTE), kline(T0 + 2 * MINUTE)]));
+  await first.scheduler.initialize(planInput);
+  await first.scheduler.tick();
+  const restored = fixture({ checkpoint });
+  const snapshot = await restored.scheduler.initialize(planInput);
+  assert.equal(snapshot.restored, true);
+  assert.equal(bySymbol(snapshot, 'DELISTEDUSDT').state, 'UNAVAILABLE');
+  assert.equal(bySymbol(snapshot, 'YOUNGUSDT').state, 'INSUFFICIENT_HISTORY');
+});
+
 test('all declared state counters are present even when zero', async () => {
   const f = fixture();
   const snapshot = await f.scheduler.initialize(plan());
@@ -560,4 +804,8 @@ test('the standalone parser preserves exact decimals and rejects conflicting dup
     kline(T0),
     kline(T0, { close: '10.50000000' }),
   ], NOW), /conflicting values/);
+  assert.throws(() => parseCompletedKlinePage({ ...request, limit: 0 }, [], NOW), /limit must be in/);
+  assert.throws(() => parseCompletedKlinePage({ ...request, limit: 1_001 }, [], NOW), /limit must be in/);
+  assert.throws(() => parseCompletedKlinePage({ ...request, interval: '2s' }, [], NOW), /unsupported fixed baseline interval/);
+  assert.throws(() => parseCompletedKlinePage({ ...request, intervalMs: MINUTE + 1 }, [], NOW), /does not match/);
 });

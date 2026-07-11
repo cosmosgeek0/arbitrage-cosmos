@@ -373,6 +373,153 @@ test('missing instrument metadata is explicit rather than guessed from symbol te
   assert.equal(result.normalized[0].qualityFailures[0].code, 'UNAVAILABLE');
 });
 
+test('resolver identities are exact bounded data and malformed seeds cannot make a source live', () => {
+  const validSeed = {
+    venue: 'BINANCE', productFamily: 'USD_M_PERPETUAL', symbol: 'BTCUSDT', pair: 'BTCUSDT',
+    baseAsset: 'BTC', quoteAsset: 'USDT', contractType: 'PERPETUAL',
+  };
+  const cases = [
+    { ...validSeed, baseAsset: 42 },
+    { ...validSeed, quoteAsset: { bad: true } },
+    { ...validSeed, apiKey: 'SECRET' },
+  ];
+  let getterCalls = 0;
+  const accessor = { ...validSeed };
+  Object.defineProperty(accessor, 'baseAsset', {
+    enumerable: true,
+    get() { getterCalls += 1; return 'BTC'; },
+  });
+  cases.push(accessor);
+  for (const seed of cases) {
+    const clock = new ManualClock();
+    const adapter = new FuturesRuntimeAdapter(clock, { instrumentResolver: { resolve: () => seed } });
+    const generation = adapter.start('BOOK_TICKER');
+    adapter.connected('BOOK_TICKER', generation);
+    const result = adapter.ingest('BOOK_TICKER', generation, book(), RECEIVE);
+    assert.equal(result.accepted, 0);
+    assert.equal(result.invalid, 1);
+    assert.equal(adapter.snapshot().symbols.length, 0);
+    assert.equal(source(adapter.snapshot(), adapter, 'BOOK_TICKER').messageCount, 0);
+  }
+  assert.equal(getterCalls, 0);
+});
+
+test('each observation resolves authoritative identity exactly once without resolver TOCTOU', () => {
+  let calls = 0;
+  const oneShot = {
+    resolve(identity) {
+      calls += 1;
+      if (calls > 1) return null;
+      return {
+        venue: 'BINANCE', productFamily: 'USD_M_PERPETUAL', symbol: identity.symbol, pair: identity.pair,
+        baseAsset: 'BTC', quoteAsset: 'USDT', contractType: 'PERPETUAL',
+      };
+    },
+  };
+  const clock = new ManualClock();
+  const adapter = new FuturesRuntimeAdapter(clock, { instrumentResolver: oneShot });
+  const generation = adapter.start('BOOK_TICKER');
+  adapter.connected('BOOK_TICKER', generation);
+  const result = adapter.ingest('BOOK_TICKER', generation, book(), RECEIVE);
+  assert.equal(calls, 1);
+  assert.equal(result.accepted, 1);
+  assert.equal(result.normalized[0].status, 'NORMALIZED');
+});
+
+test('resolver callbacks cannot reenter lifecycle or ingest mutations and leave stale generation state', () => {
+  const operations = [
+    ['start', (adapter) => adapter.start('BOOK_TICKER')],
+    ['connected', (adapter, generation) => adapter.connected('BOOK_TICKER', generation, RECEIVE)],
+    ['reconnect', (adapter) => adapter.reconnect('BOOK_TICKER')],
+    ['stop', (adapter) => adapter.stop('BOOK_TICKER')],
+    ['ingest', (adapter, generation) => adapter.ingest('BOOK_TICKER', generation, book(), RECEIVE)],
+  ];
+
+  for (const [name, reenter] of operations) {
+    const clock = new ManualClock();
+    let adapter;
+    let generation;
+    const reentrantResolver = {
+      resolve(identity) {
+        reenter(adapter, generation);
+        return {
+          venue: 'BINANCE', productFamily: 'USD_M_PERPETUAL', symbol: identity.symbol, pair: identity.pair,
+          baseAsset: 'BTC', quoteAsset: 'USDT', contractType: 'PERPETUAL',
+        };
+      },
+    };
+    adapter = new FuturesRuntimeAdapter(clock, { instrumentResolver: reentrantResolver });
+    generation = adapter.start('BOOK_TICKER');
+    adapter.connected('BOOK_TICKER', generation);
+    let result;
+    assert.doesNotThrow(() => {
+      result = adapter.ingest('BOOK_TICKER', generation, book(), RECEIVE);
+    }, `${name} reentrancy must be contained by the resolver boundary`);
+    assert.equal(result.accepted, 0, name);
+    assert.equal(result.invalid, 1, name);
+    assert.equal(result.issues[0].code, 'IDENTITY_CONFLICT', name);
+    const retained = adapter.snapshot();
+    const retainedSource = source(retained, adapter, 'BOOK_TICKER');
+    assert.equal(retainedSource.connectionGeneration, generation, name);
+    assert.equal(retainedSource.desiredState, 'RUNNING', name);
+    assert.equal(retainedSource.messageCount, 0, name);
+    assert.equal(retained.symbols.length, 0, name);
+  }
+});
+
+test('first full resolver identity is pinned and later identity drift is rejected before apply', () => {
+  const initial = {
+    venue: 'BINANCE', productFamily: 'USD_M_PERPETUAL', symbol: 'BTCUSDT', pair: 'BTCUSDT',
+    baseAsset: 'BTC', quoteAsset: 'USDT', contractType: 'PERPETUAL',
+  };
+  const driftCases = [
+    ['baseAsset', { baseAsset: 'ETH' }],
+    ['quoteAsset', { quoteAsset: 'USDC' }],
+    ['venue', { venue: 'OTHER' }],
+    ['productFamily', { productFamily: 'SPOT' }],
+    ['contractType', { contractType: null }],
+  ];
+
+  for (const [name, drift] of driftCases) {
+    const clock = new ManualClock();
+    let current = initial;
+    const changingResolver = { resolve: () => current };
+    const adapter = new FuturesRuntimeAdapter(clock, { instrumentResolver: changingResolver });
+    const generation = adapter.start('BOOK_TICKER');
+    adapter.connected('BOOK_TICKER', generation);
+    const first = adapter.ingest('BOOK_TICKER', generation, book({ u: '100' }), RECEIVE);
+    assert.equal(first.accepted, 1, name);
+    assert.equal(first.normalized[0].evidence.instrument.baseAsset, 'BTC', name);
+    assert.equal(first.normalized[0].evidence.instrument.quoteAsset, 'USDT', name);
+    const pinnedInstrumentId = first.normalized[0].evidence.instrument.instrumentId;
+
+    current = { ...initial, ...drift };
+    clock.set(RECEIVE + 1);
+    const rejected = adapter.ingest('BOOK_TICKER', generation, book({
+      E: EVENT + 1,
+      T: EVENT + 11,
+      u: '101',
+    }), RECEIVE + 1);
+    assert.equal(rejected.accepted, 0, name);
+    assert.equal(rejected.invalid, 1, name);
+    assert.equal(rejected.normalized.length, 0, name);
+    assert.equal(rejected.issues[0].code, 'IDENTITY_CONFLICT', name);
+    const retained = adapter.snapshot();
+    assert.equal(retained.symbols[0].book.observation.updateId, '100', name);
+    assert.equal(source(retained, adapter, 'BOOK_TICKER').messageCount, 1, name);
+
+    current = initial;
+    clock.set(RECEIVE + 2);
+    const recovered = adapter.ingest('BOOK_TICKER', generation, book({
+      E: EVENT + 2,
+      T: EVENT + 12,
+      u: '102',
+    }), RECEIVE + 2);
+    assert.equal(recovered.accepted, 1, name);
+    assert.equal(recovered.normalized[0].evidence.instrument.instrumentId, pinnedInstrumentId, name);
+  }
+});
+
 test('stale symbol state and reconnect generation are explicit', () => {
   const { adapter, clock, generation } = connectedAdapter('BOOK_TICKER');
   adapter.ingest('BOOK_TICKER', generation, book(), RECEIVE);

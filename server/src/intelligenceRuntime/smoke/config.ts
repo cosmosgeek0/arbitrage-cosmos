@@ -23,6 +23,21 @@ const DEFAULT_CONFIG = Object.freeze({
   maximumErrorLength: 512,
 });
 
+const CONFIG_FIELDS = Object.freeze([
+  'defaultDurationMs',
+  'maximumDurationMs',
+  'shutdownGraceMs',
+  'requestTimeoutMs',
+  'maximumRestResponseBytes',
+  'maximumWebSocketMessageBytes',
+  'maximumMessagesPerSource',
+  'maximumAcceptedMessageAgeMs',
+  'maximumUniverseInstruments',
+  'maximumNormalizedEvidenceIds',
+  'maximumSteps',
+  'maximumErrorLength',
+] as const);
+
 function boundedInteger(value: number, name: string, minimum: number, maximum: number): number {
   if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
     throw new RangeError(`${name} must be a safe integer in [${minimum}, ${maximum}]`);
@@ -30,10 +45,31 @@ function boundedInteger(value: number, name: string, minimum: number, maximum: n
   return value;
 }
 
+function exactDataObject(value: unknown, allowed: readonly string[], name: string): Readonly<Record<string, unknown>> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new TypeError(`${name} must be a plain object`);
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) throw new TypeError(`${name} must be a plain object`);
+  if (Object.getOwnPropertySymbols(value).length > 0) throw new TypeError(`${name} cannot contain symbol keys`);
+  const output: Record<string, unknown> = {};
+  for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(value))) {
+    if (!allowed.includes(key)) throw new TypeError(`${name} contains unknown field ${key}`);
+    if (!descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) {
+      throw new TypeError(`${name}.${key} must be an enumerable data property`);
+    }
+    if (descriptor.value === undefined) throw new TypeError(`${name}.${key} cannot be undefined`);
+    output[key] = descriptor.value;
+  }
+  return output;
+}
+
 export function createPublicSmokeConfig(
   supplied: Partial<Omit<PublicSmokeConfig, 'configurationVersion'>> = {},
 ): Readonly<PublicSmokeConfig> {
-  const raw = { ...DEFAULT_CONFIG, ...supplied };
+  const input = exactDataObject(supplied, CONFIG_FIELDS, 'public smoke config');
+  const raw = Object.fromEntries(CONFIG_FIELDS.map((field) => [
+    field,
+    input[field] ?? DEFAULT_CONFIG[field],
+  ])) as unknown as Omit<PublicSmokeConfig, 'configurationVersion'>;
   boundedInteger(raw.defaultDurationMs, 'defaultDurationMs', 100, 60_000);
   boundedInteger(raw.maximumDurationMs, 'maximumDurationMs', raw.defaultDurationMs, 5 * 60_000);
   boundedInteger(raw.shutdownGraceMs, 'shutdownGraceMs', 0, 30_000);

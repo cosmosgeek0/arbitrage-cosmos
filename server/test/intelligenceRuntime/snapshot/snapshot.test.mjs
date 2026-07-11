@@ -65,8 +65,10 @@ function source(sourceId, component, overrides = {}) {
 
 function queue(overrides = {}) {
   return {
-    capacity: 100, depth: 4, highWatermark: 20, enqueuedCount: 40, dequeuedCount: 36,
-    droppedCount: 0, coalescedCount: 2, overflowCount: 0, resyncRequired: false,
+    capacity: 100, maximumEntryBytes: 1_024, maximumRetainedBytes: 100_000,
+    retainedBytes: 4_000, highWatermarkRetainedBytes: 20_000,
+    depth: 4, highWatermark: 20, enqueuedCount: 40, dequeuedCount: 36,
+    droppedCount: 0, coalescedCount: 2, overflowCount: 0, oversizeDropCount: 0, resyncRequired: false,
     ...overrides,
   };
 }
@@ -257,7 +259,7 @@ test('silent and stale core streams can never be represented as green', () => {
 });
 
 test('public REST rate-limit state degrades without inventing a blocker', () => {
-  const budget = { ...AVAILABLE_BUDGET, state: 'EXHAUSTED', usedWeight: 1_200, retryAfterMs: 10_000 };
+  const budget = { ...AVAILABLE_BUDGET, state: 'EXHAUSTED', usedWeight: 1_200, retryAfterMs: null };
   const rest = source('spot-source', 'SPOT_BROAD', {
     transportKind: 'REST', rateBudget: budget,
   });
@@ -509,4 +511,114 @@ test('future snapshot times and duplicate source identities are rejected determi
     })),
     /duplicate runtime sourceId/,
   );
+});
+
+test('nested component knowledge cannot advance beyond its owning captured cutoff', () => {
+  const cases = [
+    ['source connection', () => healthyInput({
+      sources: [source('spot-source', 'SPOT_BROAD', { snapshotTimeMs: NOW - 100, connectedAtMs: NOW - 50 }), source('futures-source', 'FUTURES_BROAD')],
+    })],
+    ['source budget', () => healthyInput({
+      sources: [source('spot-source', 'SPOT_BROAD', {
+        snapshotTimeMs: NOW - 100,
+        rateBudget: { ...AVAILABLE_BUDGET, observedAtMs: NOW - 50 },
+      }), source('futures-source', 'FUTURES_BROAD')],
+    })],
+    ['Spot process', () => healthyInput({ spot: { ...spot(), snapshotTimeMs: NOW - 100, lastProcessedTimeMs: NOW - 50 } })],
+    ['baseline success', () => healthyInput({ baseline: {
+      planId: 'plan', observedAtMs: NOW - 100, stateCounts: {},
+      totals: { items: 0, batches: 0, estimatedWeight: 0, actualWeight: 0 },
+      restored: false, integrationGap: null, lastSuccessTimeMs: NOW - 50, lastError: null,
+    } })],
+    ['derivatives fact', () => healthyInput({ derivatives: {
+      snapshotTimeMs: NOW - 100, requestedSymbols: ['BTCUSDT'], includedSymbols: ['BTCUSDT'], omittedSymbols: [],
+      state: 'PARTIAL', coverage: { requiredFactCount: 1, availableFactCount: 1, staleFactCount: 0, missingFactCount: 0 },
+      facts: [{
+        id: 'fact', kind: 'OPEN_INTEREST_CURRENT', symbol: 'BTCUSDT',
+        source: { sourceId: 'oi', access: 'PUBLIC_NO_KEY' }, receiveTimeMs: NOW - 50,
+        evaluatedAtMs: NOW - 100, availability: 'AVAILABLE', value: {}, lastError: null,
+      }],
+      disagreements: [], budget: { ...AVAILABLE_BUDGET, observedAtMs: NOW - 100 },
+    } })],
+    ['bridge success', () => healthyInput({ bridge: {
+      snapshotTimeMs: NOW - 100, universeNodeCount: 0, publicAttention: null,
+      evidenceIndex: { size: 0, capacity: 1, duplicateCount: 0, evictedCount: 0 },
+      failureCount: 0, lastSuccessTimeMs: NOW - 50, lastError: null,
+    } })],
+    ['capture success', () => healthyInput({ capture: {
+      observedAtMs: NOW - 100, activeCaptures: 0, completedCaptures: 1, incompleteCaptures: 0,
+      truncatedCaptures: 0, evictedCaptures: 0, checkpointState: 'SAVED',
+      lastSuccessTimeMs: NOW - 50, lastError: null,
+    } })],
+  ];
+  for (const [name, makeInput] of cases) {
+    assert.throws(() => buildRuntimeIntelligenceSnapshot(makeInput()), /cannot be later/, name);
+  }
+});
+
+test('source operational projections are exact, bounded, detached, and deeply frozen', () => {
+  const withExtras = source('spot-source', 'SPOT_BROAD', {
+    lastError: {
+      code: 'TEST_ERROR', message: 'bounded error', retryable: true, observedAtMs: NOW - 1,
+      recommendedAction: 'repair injected source', secret: { token: 'no' },
+    },
+    rateBudget: { ...AVAILABLE_BUDGET, secret: { token: 'no' } },
+  });
+  withExtras.queue = queue({ secret: { token: 'no' } });
+  const snapshot = buildRuntimeIntelligenceSnapshot(healthyInput({
+    sources: [withExtras, source('futures-source', 'FUTURES_BROAD')],
+  }));
+  const projected = snapshot.sources.find((entry) => entry.sourceId === 'spot-source');
+  assert.equal(Object.hasOwn(projected.lastError, 'secret'), false);
+  assert.equal(Object.hasOwn(projected.rateBudget, 'secret'), false);
+  assert.equal(Object.hasOwn(projected.queue, 'secret'), false);
+  assert.equal(Object.isFrozen(projected.lastError), true);
+  assert.equal(Object.isFrozen(projected.rateBudget), true);
+  assert.equal(Object.isFrozen(projected.queue), true);
+});
+
+test('API-key-required derivatives values fail closed instead of becoming fresh public evidence', () => {
+  const derivatives = {
+    snapshotTimeMs: NOW, requestedSymbols: ['BTCUSDT'], includedSymbols: ['BTCUSDT'], omittedSymbols: [], state: 'PARTIAL',
+    coverage: { requiredFactCount: 0, availableFactCount: 0, staleFactCount: 0, missingFactCount: 0 },
+    facts: [{
+      id: 'forged-keyed', kind: 'TOP_TRADER_ACCOUNT', symbol: 'BTCUSDT',
+      source: { sourceId: 'top-trader', access: 'API_KEY_REQUIRED' },
+      receiveTimeMs: NOW, evaluatedAtMs: NOW, availability: 'AVAILABLE', value: { ratio: 1 }, lastError: null,
+    }],
+    disagreements: [], budget: AVAILABLE_BUDGET,
+  };
+  const snapshot = buildRuntimeIntelligenceSnapshot(healthyInput({ derivatives }));
+  assert.equal(snapshot.derivatives.fresh, 0);
+  assert.equal(snapshot.derivatives.unavailable, 1);
+  assert.equal(snapshot.derivatives.optionalUnavailable, 1);
+  assert.ok(snapshot.warnings.some((entry) => entry.code === 'DERIVATIVES_PRIVATE_ACCESS_REJECTED'));
+});
+
+test('stable failure extras cannot override the owning component observation time', () => {
+  const baseline = {
+    planId: 'plan', observedAtMs: NOW - 100, stateCounts: {},
+    totals: { items: 0, batches: 0, estimatedWeight: 0, actualWeight: 0 },
+    restored: false, integrationGap: null, lastSuccessTimeMs: null,
+    lastError: {
+      id: 'failure:one', code: 'UNAVAILABLE', component: 'baseline', message: 'offline', retryable: true,
+      field: null, evidenceIds: [], observedAtMs: NOW + 50, secret: 'no',
+    },
+  };
+  const snapshot = buildRuntimeIntelligenceSnapshot(healthyInput({ baseline }));
+  assert.equal(snapshot.lastError.observedAtMs, NOW - 100);
+  assert.equal(snapshot.lastError.message, 'offline');
+  assert.equal(Object.hasOwn(snapshot.lastError, 'secret'), false);
+});
+
+test('every emitted health and success timestamp stays within the outer runtime cutoff', () => {
+  const snapshot = buildRuntimeIntelligenceSnapshot(healthyInput());
+  assert.ok(snapshot.lastSuccessTimeMs === null || snapshot.lastSuccessTimeMs <= snapshot.snapshotTimeMs);
+  assert.ok(snapshot.lastError === null || snapshot.lastError.observedAtMs === null || snapshot.lastError.observedAtMs <= snapshot.snapshotTimeMs);
+  for (const entry of [...snapshot.blockers, ...snapshot.warnings]) {
+    assert.ok(entry.observedAtMs === null || entry.observedAtMs <= snapshot.snapshotTimeMs);
+  }
+  for (const entry of snapshot.components) {
+    assert.ok(entry.lastSuccessTimeMs === null || entry.lastSuccessTimeMs <= snapshot.snapshotTimeMs);
+  }
 });

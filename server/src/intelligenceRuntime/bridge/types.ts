@@ -44,6 +44,7 @@ export interface CorrelatedEvidenceBatch {
 
 export interface BridgeLimitsInput {
   maximumUniverseNodes: number;
+  maximumUniverseGraphBytes: number;
   maximumEvidenceBatch: number;
   maximumEvidenceBytes: number;
   maximumEvidenceNodes: number;

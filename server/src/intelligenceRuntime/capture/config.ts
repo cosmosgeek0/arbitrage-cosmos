@@ -23,8 +23,32 @@ const DEFAULTS = {
   maximumTriggerTombstones: 4_096,
   maximumFailureRecords: 256,
   maximumEvidenceBytes: 2 * 1024 * 1024,
+  maximumFrozenRecordBytes: 8 * 1024 * 1024,
   maximumCheckpointBytes: 128 * 1024 * 1024,
 } as const;
+
+const CONFIG_FIELDS = Object.freeze([
+  'checkpointId',
+  'declaredConfigurationVersion',
+  'preTriggerWindowMs',
+  'maximumPostWindowMs',
+  'captureRetentionMs',
+  'maximumPreRings',
+  'maximumRingEvictionTombstones',
+  'maximumPreEvidencePerRing',
+  'maximumFreezeEvidence',
+  'maximumPostEvidencePerCapture',
+  'maximumActiveCaptures',
+  'maximumRetainedCaptures',
+  'maximumPoliciesPerCapture',
+  'maximumRequiredSources',
+  'maximumCorrelationIds',
+  'maximumTriggerTombstones',
+  'maximumFailureRecords',
+  'maximumEvidenceBytes',
+  'maximumFrozenRecordBytes',
+  'maximumCheckpointBytes',
+] as const satisfies readonly (keyof CaptureCoordinatorConfigInput)[]);
 
 function deepFreeze<T>(value: T, seen = new Set<object>()): T {
   if (value === null || typeof value !== 'object' || seen.has(value)) return value;
@@ -47,10 +71,31 @@ function integer(value: unknown, field: string, minimum: number, maximum: number
   return value as number;
 }
 
+function exactDataObject(value: unknown, allowed: readonly string[], name: string): Readonly<Record<string, unknown>> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new TypeError(`${name} must be a plain object`);
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) throw new TypeError(`${name} must be a plain object`);
+  if (Object.getOwnPropertySymbols(value).length > 0) throw new TypeError(`${name} cannot contain symbol keys`);
+  const output: Record<string, unknown> = {};
+  for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(value))) {
+    if (!allowed.includes(key)) throw new TypeError(`${name} contains unknown field ${key}`);
+    if (!descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) {
+      throw new TypeError(`${name}.${key} must be an enumerable data property`);
+    }
+    if (descriptor.value === undefined) throw new TypeError(`${name}.${key} cannot be undefined`);
+    output[key] = descriptor.value;
+  }
+  return output;
+}
+
 export const DEFAULT_CAPTURE_COORDINATOR_CONFIG: Readonly<CaptureCoordinatorConfigInput> = deepFreeze({ ...DEFAULTS });
 
 export function captureCoordinatorConfig(input: CaptureCoordinatorConfigInput = {}): CaptureCoordinatorConfig {
-  const merged = { ...DEFAULTS, ...input };
+  const supplied = exactDataObject(input, CONFIG_FIELDS, 'capture coordinator config');
+  const projected = Object.fromEntries(CONFIG_FIELDS
+    .filter((field) => Object.hasOwn(supplied, field))
+    .map((field) => [field, supplied[field]])) as CaptureCoordinatorConfigInput;
+  const merged = { ...DEFAULTS, ...projected };
   const material = {
     checkpointId: text(merged.checkpointId, 'checkpointId'),
     declaredConfigurationVersion: text(merged.declaredConfigurationVersion, 'declaredConfigurationVersion'),
@@ -72,6 +117,12 @@ export function captureCoordinatorConfig(input: CaptureCoordinatorConfigInput = 
     maximumTriggerTombstones: integer(merged.maximumTriggerTombstones, 'maximumTriggerTombstones', 1, 100_000),
     maximumFailureRecords: integer(merged.maximumFailureRecords, 'maximumFailureRecords', 1, 10_000),
     maximumEvidenceBytes: integer(merged.maximumEvidenceBytes, 'maximumEvidenceBytes', 1_024, 32 * 1024 * 1024),
+    maximumFrozenRecordBytes: integer(
+      merged.maximumFrozenRecordBytes,
+      'maximumFrozenRecordBytes',
+      1_024,
+      64 * 1024 * 1024,
+    ),
     maximumCheckpointBytes: integer(merged.maximumCheckpointBytes, 'maximumCheckpointBytes', 16 * 1024, 512 * 1024 * 1024),
   };
   if (material.maximumActiveCaptures > material.maximumRetainedCaptures) {
@@ -79,6 +130,9 @@ export function captureCoordinatorConfig(input: CaptureCoordinatorConfigInput = 
   }
   if (material.maximumTriggerTombstones < material.maximumRetainedCaptures) {
     throw new RangeError('maximumTriggerTombstones cannot be smaller than maximumRetainedCaptures');
+  }
+  if (material.maximumFrozenRecordBytes > material.maximumCheckpointBytes) {
+    throw new RangeError('maximumFrozenRecordBytes cannot exceed maximumCheckpointBytes');
   }
   const configurationVersion = stableId('runtime-capture-config', material);
   return deepFreeze({

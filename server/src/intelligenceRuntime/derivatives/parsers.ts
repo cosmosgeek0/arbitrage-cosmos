@@ -32,7 +32,7 @@ function record(value: unknown): value is Record<string, unknown> {
 }
 
 function boundedSymbol(value: unknown): string | null {
-  return typeof value === 'string' && /^[A-Z0-9_]{3,64}$/.test(value) ? value : null;
+  return typeof value === 'string' && /^[\p{L}\p{N}._-]{1,128}$/u.test(value) ? value : null;
 }
 
 function decimal(value: unknown, nonNegative: boolean, positive = false): number | null {

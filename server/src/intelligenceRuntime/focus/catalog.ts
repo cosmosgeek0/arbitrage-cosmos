@@ -274,6 +274,7 @@ export function buildFocusDemands(
   capability: FocusInstrumentCapability,
   deliveries: readonly FocusDeliveredEvidence[],
 ): FocusDemand[] {
+  if (typeof allocation.protected !== 'boolean') throw new TypeError('attention allocation protected must be boolean');
   if (allocation.instrumentId !== capability.attentionInstrumentId) {
     throw new TypeError('focus capability does not match attention allocation');
   }

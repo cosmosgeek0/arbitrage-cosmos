@@ -10,6 +10,15 @@ const MAXIMUM_CONNECTIONS_PER_ROUTE = 32;
 const MAXIMUM_STREAMS_PER_CONNECTION = 1_024;
 const MAXIMUM_CONTROL_MESSAGES_PER_INTERVAL = 1_000;
 const MAXIMUM_DURATION_MS = 24 * 60 * 60_000;
+const CONFIG_FIELDS = Object.freeze([
+  'maximumAttentionAllocations', 'maximumCapabilities', 'maximumProtectedSymbols', 'maximumRequirements',
+  'maximumRequirementsPerAllocation', 'maximumTotalStreams', 'maximumPendingControlMessages',
+  'maximumStreamsPerControlMessage', 'controlIntervalMs', 'minimumLeaseMs', 'resubscribeCooldownMs',
+  'controlAcknowledgementTimeoutMs', 'maximumControlRetries', 'routes',
+]);
+const ROUTE_LIMIT_FIELDS = Object.freeze([
+  'maximumConnections', 'maximumStreamsPerConnection', 'maximumControlMessagesPerInterval',
+]);
 
 export const FOCUS_ALLOCATOR_DEFAULTS: FocusAllocatorConfig = Object.freeze({
   maximumAttentionAllocations: 5_000,
@@ -58,28 +67,61 @@ function nonNegativeDuration(name: string, value: number): number {
   return value;
 }
 
+function exactDataObject(value: unknown, allowed: readonly string[], name: string): Readonly<Record<string, unknown>> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new TypeError(`${name} must be a plain object`);
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) throw new TypeError(`${name} must be a plain object`);
+  if (Object.getOwnPropertySymbols(value).length > 0) throw new TypeError(`${name} cannot contain symbol keys`);
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const output: Record<string, unknown> = {};
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (!allowed.includes(key)) throw new TypeError(`${name} contains unknown field ${key}`);
+    if (!descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) {
+      throw new TypeError(`${name}.${key} must be an enumerable data property`);
+    }
+    output[key] = descriptor.value;
+  }
+  return output;
+}
+
 function routeLimits(route: FocusRoute, partial: Partial<FocusRouteLimits> | undefined): FocusRouteLimits {
-  const value = { ...FOCUS_ALLOCATOR_DEFAULTS.routes[route], ...(partial ?? {}) };
+  const value = partial === undefined ? {} : exactDataObject(partial, ROUTE_LIMIT_FIELDS, `routes.${route}`);
+  const defaults = FOCUS_ALLOCATOR_DEFAULTS.routes[route];
   return Object.freeze({
     maximumConnections: positiveBounded(
-      `routes.${route}.maximumConnections`, value.maximumConnections, MAXIMUM_CONNECTIONS_PER_ROUTE,
+      `routes.${route}.maximumConnections`, (value.maximumConnections ?? defaults.maximumConnections) as number, MAXIMUM_CONNECTIONS_PER_ROUTE,
     ),
     maximumStreamsPerConnection: positiveBounded(
-      `routes.${route}.maximumStreamsPerConnection`, value.maximumStreamsPerConnection, MAXIMUM_STREAMS_PER_CONNECTION,
+      `routes.${route}.maximumStreamsPerConnection`, (value.maximumStreamsPerConnection ?? defaults.maximumStreamsPerConnection) as number, MAXIMUM_STREAMS_PER_CONNECTION,
     ),
     maximumControlMessagesPerInterval: positiveBounded(
-      `routes.${route}.maximumControlMessagesPerInterval`, value.maximumControlMessagesPerInterval, MAXIMUM_CONTROL_MESSAGES_PER_INTERVAL,
+      `routes.${route}.maximumControlMessagesPerInterval`, (value.maximumControlMessagesPerInterval ?? defaults.maximumControlMessagesPerInterval) as number, MAXIMUM_CONTROL_MESSAGES_PER_INTERVAL,
     ),
   });
 }
 
 export function focusAllocatorConfig(partial: FocusAllocatorConfigInput = {}): FocusAllocatorConfig {
+  const supplied = exactDataObject(partial, CONFIG_FIELDS, 'focus allocator config');
+  const suppliedRoutes = supplied.routes === undefined
+    ? {}
+    : exactDataObject(supplied.routes, FOCUS_ROUTES, 'focus allocator config.routes');
   const config: FocusAllocatorConfig = {
-    ...FOCUS_ALLOCATOR_DEFAULTS,
-    ...partial,
+    maximumAttentionAllocations: (supplied.maximumAttentionAllocations ?? FOCUS_ALLOCATOR_DEFAULTS.maximumAttentionAllocations) as number,
+    maximumCapabilities: (supplied.maximumCapabilities ?? FOCUS_ALLOCATOR_DEFAULTS.maximumCapabilities) as number,
+    maximumProtectedSymbols: (supplied.maximumProtectedSymbols ?? FOCUS_ALLOCATOR_DEFAULTS.maximumProtectedSymbols) as number,
+    maximumRequirements: (supplied.maximumRequirements ?? FOCUS_ALLOCATOR_DEFAULTS.maximumRequirements) as number,
+    maximumRequirementsPerAllocation: (supplied.maximumRequirementsPerAllocation ?? FOCUS_ALLOCATOR_DEFAULTS.maximumRequirementsPerAllocation) as number,
+    maximumTotalStreams: (supplied.maximumTotalStreams ?? FOCUS_ALLOCATOR_DEFAULTS.maximumTotalStreams) as number,
+    maximumPendingControlMessages: (supplied.maximumPendingControlMessages ?? FOCUS_ALLOCATOR_DEFAULTS.maximumPendingControlMessages) as number,
+    maximumStreamsPerControlMessage: (supplied.maximumStreamsPerControlMessage ?? FOCUS_ALLOCATOR_DEFAULTS.maximumStreamsPerControlMessage) as number,
+    controlIntervalMs: (supplied.controlIntervalMs ?? FOCUS_ALLOCATOR_DEFAULTS.controlIntervalMs) as number,
+    minimumLeaseMs: (supplied.minimumLeaseMs ?? FOCUS_ALLOCATOR_DEFAULTS.minimumLeaseMs) as number,
+    resubscribeCooldownMs: (supplied.resubscribeCooldownMs ?? FOCUS_ALLOCATOR_DEFAULTS.resubscribeCooldownMs) as number,
+    controlAcknowledgementTimeoutMs: (supplied.controlAcknowledgementTimeoutMs ?? FOCUS_ALLOCATOR_DEFAULTS.controlAcknowledgementTimeoutMs) as number,
+    maximumControlRetries: (supplied.maximumControlRetries ?? FOCUS_ALLOCATOR_DEFAULTS.maximumControlRetries) as number,
     routes: Object.freeze(Object.fromEntries(FOCUS_ROUTES.map((route) => [
       route,
-      routeLimits(route, partial.routes?.[route]),
+      routeLimits(route, suppliedRoutes[route] as Partial<FocusRouteLimits> | undefined),
     ])) as Record<FocusRoute, FocusRouteLimits>),
   };
 

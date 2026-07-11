@@ -62,6 +62,7 @@ const DEFAULT_CONFIG = Object.freeze({
   maximumIdentityLength: 256,
   maximumMessageLength: 512,
 });
+const CONFIG_FIELDS = Object.freeze(Object.keys(DEFAULT_CONFIG));
 
 export interface BaselineHistorySourceDefinition {
   readonly sourceId: string;
@@ -107,10 +108,31 @@ function boundedInteger(
   return value;
 }
 
+function exactDataObject(value: unknown, allowed: readonly string[], name: string): Readonly<Record<string, unknown>> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new TypeError(`${name} must be a plain object`);
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) throw new TypeError(`${name} must be a plain object`);
+  if (Object.getOwnPropertySymbols(value).length > 0) throw new TypeError(`${name} cannot contain symbol keys`);
+  const output: Record<string, unknown> = {};
+  for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(value))) {
+    if (!allowed.includes(key)) throw new TypeError(`${name} contains unknown field ${key}`);
+    if (!descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) {
+      throw new TypeError(`${name}.${key} must be an enumerable data property`);
+    }
+    if (descriptor.value === undefined) throw new TypeError(`${name}.${key} cannot be undefined`);
+    output[key] = descriptor.value;
+  }
+  return output;
+}
+
 export function createBaselineBootstrapConfig(
   supplied: Partial<Omit<BaselineBootstrapConfig, 'configurationVersion'>> = {},
 ): Readonly<BaselineBootstrapConfig> {
-  const raw = { ...DEFAULT_CONFIG, ...supplied };
+  const input = exactDataObject(supplied, CONFIG_FIELDS, 'baseline bootstrap config');
+  const raw = Object.fromEntries(CONFIG_FIELDS.map((field) => [
+    field,
+    input[field] ?? DEFAULT_CONFIG[field as keyof typeof DEFAULT_CONFIG],
+  ])) as unknown as Omit<BaselineBootstrapConfig, 'configurationVersion'>;
   boundedInteger(raw.maximumPlanItems, 'maximumPlanItems', 1, 50_000);
   boundedInteger(raw.maximumParallelism, 'maximumParallelism', 1, 128);
   boundedInteger(raw.pageLimit, 'pageLimit', 1, 1_000);
@@ -122,8 +144,8 @@ export function createBaselineBootstrapConfig(
   boundedInteger(raw.retryMaximumDelayMs, 'retryMaximumDelayMs', 1, 7 * 24 * 60 * 60_000);
   boundedInteger(raw.staleAfterMs, 'staleAfterMs', 1, 365 * 24 * 60 * 60_000);
   boundedInteger(raw.maximumSymbolLength, 'maximumSymbolLength', 2, 256);
-  boundedInteger(raw.maximumIdentityLength, 'maximumIdentityLength', 16, 4_096);
-  boundedInteger(raw.maximumMessageLength, 'maximumMessageLength', 32, 4_096);
+  boundedInteger(raw.maximumIdentityLength, 'maximumIdentityLength', 64, 4_096);
+  boundedInteger(raw.maximumMessageLength, 'maximumMessageLength', 128, 4_096);
   if (raw.retryMaximumDelayMs < raw.retryBaseDelayMs) {
     throw new RangeError('retryMaximumDelayMs must be >= retryBaseDelayMs');
   }

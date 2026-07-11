@@ -205,6 +205,7 @@ export class FocusSubscriptionAllocator {
   readonly #releasedAtMs = new Map<string, number>();
   #nextControlId = 1;
   #lastPlanId: string | null = null;
+  #lastPlanAtMs: number | null = null;
   #lastDemands: FocusDemand[] = [];
 
   constructor(ports: FocusAllocatorPorts, configInput: FocusAllocatorConfigInput = {}) {
@@ -253,6 +254,10 @@ export class FocusSubscriptionAllocator {
       throw new RangeError('available focus connection requires a positive generation');
     }
     if (update.state !== 'AVAILABLE' && update.state !== 'UNAVAILABLE') throw new TypeError('invalid focus connection state');
+    if (connection.state === 'UNAVAILABLE' && connection.generation > 0
+      && update.state === 'AVAILABLE' && generation === connection.generation) {
+      throw new RangeError('reconnecting an unavailable focus connection requires a newer generation');
+    }
 
     const invalidated = generation !== connection.generation || update.state === 'UNAVAILABLE';
     connection.generation = generation;
@@ -268,6 +273,7 @@ export class FocusSubscriptionAllocator {
     const now = safeTime(this.#ports.clock.nowMs(), 'focus runtime clock');
     if (observedAtMs > now) throw new RangeError('control acknowledgement time cannot be in the future');
     safeGeneration(input.generation);
+    if (typeof input.accepted !== 'boolean') throw new TypeError('control acknowledgement accepted must be boolean');
     if (!Number.isSafeInteger(input.id) || input.id < 1) throw new TypeError('control acknowledgement id is invalid');
     const pending = this.#pending.get(input.id);
     if (
@@ -395,6 +401,9 @@ export class FocusSubscriptionAllocator {
     if (typeof plan.id !== 'string' || plan.id.length < 1 || plan.id.length > 160) throw new TypeError('invalid attention plan id');
     safeTime(plan.atMs, 'attention plan time');
     if (plan.atMs > observedAtMs) throw new RangeError('attention plan time cannot be in the future');
+    if (this.#lastPlanAtMs !== null && plan.atMs < this.#lastPlanAtMs) {
+      throw new RangeError('attention plan time cannot move backwards');
+    }
     if (plan.allocations.length > this.#config.maximumAttentionAllocations) {
       throw new RangeError('attention allocation input exceeds focus safety bound');
     }
@@ -444,6 +453,7 @@ export class FocusSubscriptionAllocator {
       }
       if (allocation.priority !== null && !Number.isFinite(allocation.priority)) throw new TypeError('allocation priority must be finite or null');
       if (!ATTENTION_TIERS.includes(allocation.tier)) throw new TypeError('allocation tier is invalid');
+      if (typeof allocation.protected !== 'boolean') throw new TypeError('allocation protected must be boolean');
       if (allocation.requestedEvidence.length > this.#config.maximumRequirementsPerAllocation) {
         throw new RangeError('allocation evidence profile exceeds focus safety bound');
       }
@@ -495,7 +505,7 @@ export class FocusSubscriptionAllocator {
     for (const assignment of [...this.#assignments.values()].sort((left, right) => compareString(left.resourceKey, right.resourceKey))) {
       const routeAvailable = this.#availableConnections(assignment.route).length > 0;
       const pinForLease = observedAtMs < assignment.leaseUntilMs;
-      if (assignment.protected || pinForLease || !routeAvailable) {
+      if (assignment.protected || pinForLease) {
         selected.add(assignment.resourceKey);
         routeSelected.set(assignment.route, (routeSelected.get(assignment.route) ?? 0) + 1);
         if (!physical.has(assignment.resourceKey) && pinForLease && !assignment.protected) retainedByHysteresis += 1;
@@ -647,6 +657,7 @@ export class FocusSubscriptionAllocator {
     }
 
     this.#lastPlanId = plan.id;
+    this.#lastPlanAtMs = plan.atMs;
     this.#lastDemands = [...demands].sort((left, right) => compareString(left.id, right.id));
     const protectedSnapshot = this.#protectedSnapshot(protectedSymbols, allocationSymbols, demands);
     const snapshot = this.#snapshot(

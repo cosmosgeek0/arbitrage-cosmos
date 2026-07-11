@@ -2,6 +2,7 @@ import {
   checkExecutionModePermitted,
   createStructuredFailure,
   isValidUtcMillis,
+  type PlanLifecycle,
   type StructuredFailure,
 } from '../contracts/index.js';
 import { restoreExecutionCheckpoint, serializeExecutionCheckpoint } from './checkpoint.js';
@@ -90,7 +91,15 @@ export class ExecutionCoordinator {
   }
 
   private failureResult(failure: StructuredFailure): CoordinatorResult {
-    return Object.freeze({ ok: false as const, state: this.stateValue, failure });
+    const finalized =
+      failure.component === 'foundation.execution.coordinator' &&
+      failure.safeCurrentState !== this.stateValue.lifecycle
+        ? createStructuredFailure({
+            ...failure,
+            safeCurrentState: this.stateValue.lifecycle,
+          })
+        : failure;
+    return Object.freeze({ ok: false as const, state: this.stateValue, failure: finalized });
   }
 
   private failure(
@@ -100,6 +109,7 @@ export class ExecutionCoordinator {
     nowMs: number,
     retryable: boolean,
     recommendedOperatorAction: string,
+    safeCurrentState = this.stateValue.lifecycle,
   ): Readonly<StructuredFailure> {
     return createStructuredFailure({
       component: 'foundation.execution.coordinator',
@@ -108,13 +118,18 @@ export class ExecutionCoordinator {
       message,
       occurredAt: nowMs,
       retryable,
-      safeCurrentState: this.stateValue.lifecycle,
+      safeCurrentState,
       recommendedOperatorAction,
       correlationId: this.stateValue.plan.correlationId,
     });
   }
 
-  private fromPortFailure(stage: string, failure: PortFailure, nowMs: number): Readonly<StructuredFailure> {
+  private fromPortFailure(
+    stage: string,
+    failure: PortFailure,
+    nowMs: number,
+    safeCurrentState = this.stateValue.lifecycle,
+  ): Readonly<StructuredFailure> {
     return this.failure(
       stage,
       failure.code,
@@ -122,10 +137,16 @@ export class ExecutionCoordinator {
       nowMs,
       failure.retryable,
       failure.recommendedOperatorAction,
+      safeCurrentState,
     );
   }
 
-  private portThrew(stage: string, nowMs: number, ambiguous: boolean): Readonly<StructuredFailure> {
+  private portThrew(
+    stage: string,
+    nowMs: number,
+    ambiguous: boolean,
+    safeCurrentState = this.stateValue.lifecycle,
+  ): Readonly<StructuredFailure> {
     return this.failure(
       stage,
       ambiguous ? 'SUBMISSION_RESPONSE_LOST' : 'INJECTED_PORT_THREW',
@@ -137,7 +158,13 @@ export class ExecutionCoordinator {
       ambiguous
         ? 'Query by deterministic client-order ID before retrying or changing exposure.'
         : 'Inspect the injected port and retry only after its state is understood.',
+      safeCurrentState,
     );
+  }
+
+  private rejectedLegSafeState(phase: ExecutionLegPhase): PlanLifecycle {
+    if (phase === 'CLOSE') return 'RECOVERY_REQUIRED';
+    return hasKnownOpenExposure(this.stateValue) ? 'ONE_LEG_EXPOSED' : 'FAILED';
   }
 
   private enforceEntryWindow(stage: string, nowMs: number): CoordinatorResult | null {
@@ -152,6 +179,14 @@ export class ExecutionCoordinator {
         nowMs >= this.stateValue.approval.expiresAtMs)
     ) code = this.stateValue.approval.status === 'APPROVED' ? 'APPROVAL_EXPIRED' : 'APPROVAL_REQUIRED';
     if (code === null) return null;
+    const safeCurrentState =
+      hasKnownOpenExposure(this.stateValue) ||
+      hasActiveWorkingLeg(this.stateValue) ||
+      hasAmbiguousLeg(this.stateValue)
+        ? 'RECOVERY_REQUIRED'
+        : this.stateValue.lifecycle === 'OPENING'
+          ? 'FAILED'
+          : 'EXPIRED';
     const failure = this.failure(
       stage,
       code,
@@ -159,6 +194,7 @@ export class ExecutionCoordinator {
       nowMs,
       false,
       'Do not submit new entry risk; reconcile any exposure and create a fresh approved plan.',
+      safeCurrentState,
     );
     const expired = this.emitAt(nowMs, 'ENTRY_WINDOW_EXPIRED', { failure });
     return expired.ok ? this.failureResult(failure) : expired;
@@ -292,12 +328,12 @@ export class ExecutionCoordinator {
     try {
       portResult = await this.ports.preflight(this.stateValue.plan);
     } catch {
-      const failure = this.portThrew('preflight', nowMs, false);
-      this.emitAt(nowMs, 'PREFLIGHT_FAILED', { failure });
-      return this.failureResult(failure);
+      const failure = this.portThrew('preflight', nowMs, false, 'FAILED');
+      const failed = this.emitAt(nowMs, 'PREFLIGHT_FAILED', { failure });
+      return failed.ok ? this.failureResult(failure) : failed;
     }
     if (!portResult.ok) {
-      const failure = this.fromPortFailure('preflight', portResult.failure, nowMs);
+      const failure = this.fromPortFailure('preflight', portResult.failure, nowMs, 'FAILED');
       const failed = this.emitAt(nowMs, 'PREFLIGHT_FAILED', { failure });
       return failed.ok ? this.failureResult(failure) : failed;
     }
@@ -316,7 +352,7 @@ export class ExecutionCoordinator {
         } };
       }
       if (!validation.ok) {
-        const failure = this.fromPortFailure(`preflight:${key}`, validation.failure, nowMs);
+        const failure = this.fromPortFailure(`preflight:${key}`, validation.failure, nowMs, 'FAILED');
         const rejected = this.emitAt(nowMs, 'LEG_REJECTED', { phase: 'OPEN', legKey: key, failure });
         if (!rejected.ok) return rejected;
         const failed = this.emitAt(nowMs, 'PREFLIGHT_FAILED', { failure });
@@ -501,7 +537,12 @@ export class ExecutionCoordinator {
   ): Promise<CoordinatorResult> {
     const details = { phase: request.phase, legKey: request.leg.key } as const;
     if (outcome.kind === 'REJECTED') {
-      const failure = this.fromPortFailure(`submit:${request.phase}:${request.leg.key}`, outcome.failure, nowMs);
+      const failure = this.fromPortFailure(
+        `submit:${request.phase}:${request.leg.key}`,
+        outcome.failure,
+        nowMs,
+        this.rejectedLegSafeState(request.phase),
+      );
       const rejected = this.emitAt(nowMs, 'LEG_REJECTED', { ...details, failure });
       return rejected.ok ? this.failureResult(failure) : rejected;
     }
@@ -529,6 +570,7 @@ export class ExecutionCoordinator {
         nowMs,
         false,
         'Reconcile order and fill evidence by deterministic client-order ID.',
+        'RECOVERY_REQUIRED',
       );
       const ambiguous = this.emitAt(nowMs, 'LEG_RESPONSE_AMBIGUOUS', { ...details, failure });
       if (!ambiguous.ok) return ambiguous;
@@ -564,12 +606,22 @@ export class ExecutionCoordinator {
     const nowMs = this.now();
     const details = { phase: request.phase, legKey: request.leg.key } as const;
     if (lookup.kind === 'UNRESOLVED') {
-      const failure = this.fromPortFailure(`lookup:${request.phase}:${request.leg.key}`, lookup.failure, nowMs);
+      const failure = this.fromPortFailure(
+        `lookup:${request.phase}:${request.leg.key}`,
+        lookup.failure,
+        nowMs,
+        'RECOVERY_REQUIRED',
+      );
       const unresolved = this.emitAt(nowMs, 'LEG_AMBIGUITY_UNRESOLVED', { ...details, failure });
       return unresolved.ok ? this.failureResult(failure) : unresolved;
     }
     if (lookup.kind === 'PROVEN_ABSENT') {
-      const failure = this.fromPortFailure(`lookup:${request.phase}:${request.leg.key}`, lookup.failure, nowMs);
+      const failure = this.fromPortFailure(
+        `lookup:${request.phase}:${request.leg.key}`,
+        lookup.failure,
+        nowMs,
+        this.rejectedLegSafeState(request.phase),
+      );
       const resolved = this.emitAt(nowMs, 'LEG_AMBIGUITY_RESOLVED', {
         ...details,
         ambiguityResolution: 'REJECTED',
@@ -584,7 +636,12 @@ export class ExecutionCoordinator {
         retryable: false,
         recommendedOperatorAction: 'Inspect rejection evidence before creating a new plan.',
       };
-      const failure = this.fromPortFailure(`lookup:${request.phase}:${request.leg.key}`, portFailure, nowMs);
+      const failure = this.fromPortFailure(
+        `lookup:${request.phase}:${request.leg.key}`,
+        portFailure,
+        nowMs,
+        this.rejectedLegSafeState(request.phase),
+      );
       const resolved = this.emitAt(nowMs, 'LEG_AMBIGUITY_RESOLVED', {
         ...details,
         ambiguityResolution: 'REJECTED',
@@ -655,7 +712,12 @@ export class ExecutionCoordinator {
             recommendedOperatorAction: 'Refresh order and fill history; do not resubmit.',
           }
         : lookup.failure;
-      const failure = this.fromPortFailure(`refresh:${phase}:${key}`, portFailure, nowMs);
+      const failure = this.fromPortFailure(
+        `refresh:${phase}:${key}`,
+        portFailure,
+        nowMs,
+        'RECOVERY_REQUIRED',
+      );
       const ambiguous = this.emitAt(nowMs, 'LEG_RESPONSE_AMBIGUOUS', { ...details, failure });
       if (!ambiguous.ok) return ambiguous;
       const unresolved = this.emitAt(nowMs, 'LEG_AMBIGUITY_UNRESOLVED', { ...details, failure });
@@ -730,7 +792,12 @@ export class ExecutionCoordinator {
         } };
       }
       if (!validation.ok) {
-        const failure = this.fromPortFailure(`close-validate:${key}`, validation.failure, nowMs);
+        const failure = this.fromPortFailure(
+          `close-validate:${key}`,
+          validation.failure,
+          nowMs,
+          'RECOVERY_REQUIRED',
+        );
         const rejected = this.emitAt(nowMs, 'LEG_REJECTED', { phase: 'CLOSE', legKey: key, failure });
         return rejected.ok ? this.failureResult(failure) : rejected;
       }
@@ -798,7 +865,7 @@ export class ExecutionCoordinator {
       };
     }
     if (outcome.kind === 'UNRESOLVED') {
-      const failure = this.fromPortFailure('reconcile', outcome.failure, nowMs);
+      const failure = this.fromPortFailure('reconcile', outcome.failure, nowMs, 'RECOVERY_REQUIRED');
       const resolved = this.emitAt(nowMs, 'RECONCILIATION_RESOLVED', {
         reconciliationOutcome: 'RECOVERY_REQUIRED',
         failure,

@@ -87,7 +87,11 @@ export class SourceLifecycleTracker {
     this.#observedState = 'CONNECTING';
     this.#connectionGeneration += 1;
     this.#connectedAtMs = null;
+    this.#lastMessageSourceTimeMs = null;
+    this.#lastMessageReceiveTimeMs = null;
+    this.#lastProcessedTimeMs = null;
     this.#lastError = null;
+    this.#completeness = 'MISSING';
     return this.#connectionGeneration;
   }
 
@@ -114,6 +118,9 @@ export class SourceLifecycleTracker {
       throw new TypeError('sourceTimeMs exceeds maximum future skew');
     }
     if (input.generation !== this.#connectionGeneration || this.#desiredState === 'STOPPED') return false;
+    if (this.#lastMessageReceiveTimeMs !== null && input.receiveTimeMs < this.#lastMessageReceiveTimeMs) {
+      throw new TypeError('receiveTimeMs regressed within the active connection generation');
+    }
     this.#lastMessageSourceTimeMs = input.sourceTimeMs;
     this.#lastMessageReceiveTimeMs = input.receiveTimeMs;
     this.#messageCount += 1;
@@ -193,7 +200,11 @@ export class SourceLifecycleTracker {
     this.#reconnectCount += 1;
     this.#connectionGeneration += 1;
     this.#connectedAtMs = null;
+    this.#lastMessageSourceTimeMs = null;
+    this.#lastMessageReceiveTimeMs = null;
+    this.#lastProcessedTimeMs = null;
     this.#observedState = 'CONNECTING';
+    this.#completeness = 'MISSING';
     return this.#connectionGeneration;
   }
 

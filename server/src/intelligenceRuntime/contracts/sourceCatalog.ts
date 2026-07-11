@@ -13,6 +13,13 @@ export interface RuntimeEndpointDefinition {
   notes: readonly string[];
 }
 
+export const RUNTIME_SOURCE_LIMITS = Object.freeze({
+  maximumSilentAfterMs: 7 * 24 * 60 * 60_000,
+  maximumStaleAfterMs: 30 * 24 * 60 * 60_000,
+  maximumFutureSkewMs: 60_000,
+  maximumRetryCeiling: 1_000,
+} as const);
+
 export const RUNTIME_ENDPOINTS = Object.freeze({
   SPOT_WEBSOCKET: Object.freeze({
     id: 'binance.spot.websocket.market',
@@ -103,6 +110,14 @@ export function sourceDefinition(
   }
   if (input.silentAfterMs === 0 || input.staleAfterMs < input.silentAfterMs) {
     throw new TypeError('source freshness thresholds are invalid');
+  }
+  if (
+    input.silentAfterMs > RUNTIME_SOURCE_LIMITS.maximumSilentAfterMs
+    || input.staleAfterMs > RUNTIME_SOURCE_LIMITS.maximumStaleAfterMs
+    || input.maximumFutureSkewMs > RUNTIME_SOURCE_LIMITS.maximumFutureSkewMs
+    || input.retryCeiling > RUNTIME_SOURCE_LIMITS.maximumRetryCeiling
+  ) {
+    throw new RangeError('source lifecycle policy exceeds its hard safety bound');
   }
   return Object.freeze({
     sourceId: createRuntimeSourceId({

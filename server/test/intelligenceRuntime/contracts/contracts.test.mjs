@@ -101,6 +101,10 @@ test('old connection generations cannot publish after reconnect', () => {
   tracker.connected(first);
   const second = tracker.reconnect();
   assert.equal(second, first + 1);
+  const reconnecting = tracker.snapshot();
+  assert.equal(reconnecting.observedState, 'CONNECTING');
+  assert.equal(reconnecting.lastMessageReceiveTimeMs, null);
+  assert.equal(reconnecting.lastProcessedTimeMs, null);
   assert.equal(tracker.message({ generation: first, sourceTimeMs: 1_000, receiveTimeMs: 1_000 }), false);
   tracker.connected(second);
   assert.equal(tracker.message({ generation: second, sourceTimeMs: 1_000, receiveTimeMs: 1_000 }), true);
@@ -120,6 +124,20 @@ test('invalid and future timestamps are rejected with injected time', () => {
     () => tracker.message({ generation, sourceTimeMs: 1_000, receiveTimeMs: 1_011 }),
     /future skew/,
   );
+});
+
+test('receive time cannot regress within an active connection generation', () => {
+  const clock = new ManualClock(1_100);
+  const tracker = new SourceLifecycleTracker(definition(), clock);
+  const generation = tracker.start();
+  tracker.connected(generation, 1_000);
+  tracker.message({ generation, sourceTimeMs: 1_040, receiveTimeMs: 1_050 });
+  assert.throws(
+    () => tracker.message({ generation, sourceTimeMs: 1_041, receiveTimeMs: 1_049 }),
+    /regressed/,
+  );
+  assert.equal(tracker.snapshot().messageCount, 1);
+  assert.equal(tracker.snapshot().lastMessageReceiveTimeMs, 1_050);
 });
 
 test('quality counters are explicit and never silently lost', () => {
@@ -172,6 +190,9 @@ test('definitions reject unbounded or contradictory freshness policy', () => {
     capability: 'x', streamOrPath: 'x', transportKind: 'REST', endpointClass: 'REST', productFamily: 'SPOT',
     silentAfterMs: 1, staleAfterMs: 2, maximumFutureSkewMs: 0, retryCeiling: 1, authority: 'COMPLETE',
   }), /capability/);
+  assert.throws(() => definition({ staleAfterMs: 31 * 24 * 60 * 60_000 }), /hard safety bound/);
+  assert.throws(() => definition({ maximumFutureSkewMs: 60_001 }), /hard safety bound/);
+  assert.throws(() => definition({ retryCeiling: 1_001 }), /hard safety bound/);
 });
 
 test('snapshot values are defensively frozen', () => {

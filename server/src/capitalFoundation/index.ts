@@ -12,3 +12,4 @@ export * from './actions/index.js';
 export * from './economics/index.js';
 export * from './checkpoint/index.js';
 export * from './topology/index.js';
+export * from './scenarios/index.js';

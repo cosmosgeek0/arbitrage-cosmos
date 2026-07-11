@@ -73,6 +73,14 @@ function canonicalToken(value: unknown, field: string, maximum = 256): string {
   return normalized;
 }
 
+function canonicalInstrumentToken(value: unknown, field: string, maximum = 256): string {
+  const normalized = boundedText(value, field, maximum).trim().normalize('NFC').toUpperCase();
+  if (!/^[\p{L}\p{N}._-]+$/u.test(normalized)) {
+    throw new TypeError(`${field} must be a bounded exchange instrument token`);
+  }
+  return normalized;
+}
+
 function optionalText(value: unknown, field: string, issues: RowIssue[]): string | null {
   if (value === undefined || value === null) return null;
   try {
@@ -118,20 +126,64 @@ function textArray(value: unknown, field: string, issues: RowIssue[], maximum = 
   return sortedUnique(output);
 }
 
-function permissionSets(value: unknown, legacy: unknown, issues: RowIssue[]): string[][] {
-  const selected = value ?? (legacy === undefined ? undefined : [legacy]);
+const MAXIMUM_PERMISSION_SETS = 128;
+const MAXIMUM_PERMISSIONS_PER_SET = 512;
+const MAXIMUM_TOTAL_PERMISSIONS = 4_096;
+
+function permissionSets(
+  source: RuntimeUniverseSource,
+  value: unknown,
+  legacy: unknown,
+  issues: RowIssue[],
+): string[][] {
+  const selected = value ?? legacy;
   if (selected === undefined || selected === null) return [];
-  if (!Array.isArray(selected) || selected.length > 128) {
+  if (!Array.isArray(selected)) {
     issues.push({ field: 'permissionSets', message: 'permissionSets must be a bounded array' });
     return [];
   }
+
+  // Current Spot exchangeInfo uses string[][] while current USD-M uses a flat
+  // string[]. The legacy Spot `permissions` field is also flat. Mixed shapes
+  // are ambiguous and must not be guessed into exchange capability truth.
+  const isFlat = selected.every((entry) => typeof entry === 'string');
+  const isNested = selected.every((entry) => Array.isArray(entry));
+  const selectedSets: unknown[] = isFlat
+    ? [selected]
+    : isNested
+      ? selected
+      : [];
+  if (selected.length > 0 && selectedSets.length === 0) {
+    issues.push({ field: 'permissionSets', message: 'permissionSets must use one homogeneous public exchange shape' });
+    return [];
+  }
+  if (source === 'SPOT' && selected.length > 0 && value !== undefined && value !== null && isFlat) {
+    issues.push({ field: 'permissionSets', message: 'Spot permissionSets must be a bounded array of string arrays' });
+    return [];
+  }
+  if (selectedSets.length > MAXIMUM_PERMISSION_SETS) {
+    issues.push({ field: 'permissionSets', message: 'permissionSets exceeds the bounded set count' });
+    return [];
+  }
+
   const output: string[][] = [];
-  for (let index = 0; index < selected.length; index += 1) {
-    const entry = textArray(selected[index], `permissionSets[${index}]`, issues);
+  let retainedPermissions = 0;
+  for (let index = 0; index < selectedSets.length; index += 1) {
+    const entry = textArray(
+      selectedSets[index],
+      `permissionSets[${index}]`,
+      issues,
+      MAXIMUM_PERMISSIONS_PER_SET,
+    );
+    if (retainedPermissions + entry.length > MAXIMUM_TOTAL_PERMISSIONS) {
+      issues.push({ field: `permissionSets[${index}]`, message: 'permissionSets exceeds the bounded total permission count' });
+      break;
+    }
+    retainedPermissions += entry.length;
     if (entry.length > 0) output.push(entry);
   }
   output.sort((left, right) => codePointCompare(canonicalJson(left), canonicalJson(right)));
-  return output;
+  return [...new Map(output.map((entry) => [canonicalJson(entry), entry])).values()];
 }
 
 function numericPrecisions(row: Record<string, unknown>, issues: RowIssue[]): Record<string, number> {
@@ -289,13 +341,13 @@ function parseRow(raw: unknown, index: number, context: ParseContext): {
   }
   const secret = validateNoSecretFields(raw, 'runtime_universe_exchange_info_row');
   if (!secret.ok) throw new StableParseError(secret.failure);
-  const symbol = canonicalToken(raw.symbol, `symbols[${index}].symbol`);
+  const symbol = canonicalInstrumentToken(raw.symbol, `symbols[${index}].symbol`);
   const status = canonicalToken(raw.status, `symbols[${index}].status`);
-  const baseAsset = canonicalToken(raw.baseAsset, `symbols[${index}].baseAsset`);
-  const quoteAsset = canonicalToken(raw.quoteAsset, `symbols[${index}].quoteAsset`);
+  const baseAsset = canonicalInstrumentToken(raw.baseAsset, `symbols[${index}].baseAsset`);
+  const quoteAsset = canonicalInstrumentToken(raw.quoteAsset, `symbols[${index}].quoteAsset`);
   const pair = context.source === 'SPOT'
     ? symbol
-    : canonicalToken(raw.pair, `symbols[${index}].pair`);
+    : canonicalInstrumentToken(raw.pair, `symbols[${index}].pair`);
   const contractType = context.source === 'SPOT'
     ? null
     : canonicalToken(raw.contractType, `symbols[${index}].contractType`);
@@ -343,7 +395,7 @@ function parseRow(raw: unknown, index: number, context: ParseContext): {
     underlyingSubType: textArray(raw.underlyingSubType, 'underlyingSubType', issues),
     orderTypes: textArray(raw.orderTypes, 'orderTypes', issues),
     timeInForce: textArray(raw.timeInForce, 'timeInForce', issues),
-    permissionSets: permissionSets(raw.permissionSets, raw.permissions, issues),
+    permissionSets: permissionSets(context.source, raw.permissionSets, raw.permissions, issues),
     precisions: numericPrecisions(raw, issues),
     filters,
     includedInUniverse,

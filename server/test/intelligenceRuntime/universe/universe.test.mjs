@@ -269,6 +269,107 @@ test('initial join preserves canonical identities, exact rules, all five slices,
   assert.ok(Object.isFrozen(snapshot.graph));
 });
 
+test('current Spot nested and USD-M flat permissionSets remain bounded evidence and permit a complete join', async () => {
+  const { adapter, transport } = adapterFixture();
+  const spotPermissions = [
+    'SPOT',
+    'MARGIN',
+    ...Array.from({ length: 300 }, (_, index) => `TRD_GRP_${String(index).padStart(3, '0')}`),
+  ];
+  enqueuePair(
+    transport,
+    [spotRow('BTCUSDT', 'BTC', { permissions: [], permissionSets: [spotPermissions] })],
+    [futuresRow('BTCUSDT', 'BTC', { permissionSets: ['GRID', 'COPY', 'DCA', 'PSB'] })],
+  );
+
+  const snapshot = await adapter.tick();
+  assert.equal(snapshot.sources.SPOT.state, 'COMPLETE');
+  assert.equal(snapshot.sources.USD_M_PERPETUAL.state, 'COMPLETE');
+  assert.ok(nodeByBase(snapshot, 'BTC'));
+  assert.equal(metadata(snapshot, 'SPOT', 'BTCUSDT').permissionSets[0].length, 302);
+  assert.deepEqual(metadata(snapshot, 'USD_M_PERPETUAL', 'BTCUSDT').permissionSets, [
+    ['COPY', 'DCA', 'GRID', 'PSB'],
+  ]);
+  assert.equal(snapshot.failures.length, 0);
+});
+
+test('current UTF-8 Binance instrument tokens remain canonical and join across Spot and USD-M', async () => {
+  const { adapter, transport } = adapterFixture();
+  enqueuePair(
+    transport,
+    [spotRow('币安人生USDT', '币安人生', { permissionSets: [['SPOT']] })],
+    [futuresRow('币安人生USDT', '币安人生', { permissionSets: ['GRID'] })],
+  );
+  const snapshot = await adapter.tick();
+  const node = nodeByBase(snapshot, '币安人生');
+  assert.ok(node);
+  assert.equal(node.canonicalMarket, 'BINANCE:币安人生/USDT');
+  assert.equal(node.spot.instrument.symbol, '币安人生USDT');
+  assert.equal(node.usdMPerpetual.instrument.pair, '币安人生USDT');
+  assert.equal(snapshot.sources.SPOT.state, 'COMPLETE');
+  assert.equal(snapshot.sources.USD_M_PERPETUAL.state, 'COMPLETE');
+});
+
+test('bounded Foundation shards preserve a deterministic 452-market paired universe', async () => {
+  const left = adapterFixture();
+  const right = adapterFixture();
+  const spotRows = Array.from({ length: 452 }, (_, index) => spotRow(`ASSET${index}USDT`, `ASSET${index}`));
+  const futuresRows = Array.from({ length: 452 }, (_, index) => futuresRow(`ASSET${index}USDT`, `ASSET${index}`, {
+    permissionSets: ['GRID'],
+  }));
+  enqueuePair(left.transport, spotRows, futuresRows);
+  enqueuePair(right.transport, [...spotRows].reverse(), [...futuresRows].reverse());
+
+  const [leftSnapshot, rightSnapshot] = await Promise.all([left.adapter.tick(), right.adapter.tick()]);
+  assert.equal(leftSnapshot.graph.nodes.length, 452);
+  assert.equal(leftSnapshot.metadata.length, 904);
+  assert.ok(nodeByBase(leftSnapshot, 'ASSET0'));
+  assert.ok(nodeByBase(leftSnapshot, 'ASSET451'));
+  assert.ok(leftSnapshot.graph.truth.completeness.reasonCodes.includes('BOUNDED_FOUNDATION_GRAPH_SHARDS'));
+  assert.equal(leftSnapshot.graph.id, rightSnapshot.graph.id);
+  assert.deepEqual(
+    leftSnapshot.graph.nodes.map((node) => node.id),
+    rightSnapshot.graph.nodes.map((node) => node.id),
+  );
+  assert.deepEqual(
+    leftSnapshot.graph.aliases.map((alias) => alias.id),
+    rightSnapshot.graph.aliases.map((alias) => alias.id),
+  );
+});
+
+test('mixed, wrong-product, and overbound permissionSets fail partial without capability guesses', () => {
+  const { adapter } = adapterFixture();
+  const context = (source) => ({
+    source,
+    sourceId: RUNTIME_UNIVERSE_SOURCE_IDS[source],
+    dataset: source === 'SPOT' ? 'spot.exchange_info' : 'usd_m.exchange_info',
+    receivedTimeMs: T0,
+    evaluatedAtMs: T0,
+    config: adapter.config,
+  });
+  const flatSpot = parseExchangeInformation(exchangeInfo([
+    spotRow('FLATUSDT', 'FLAT', { permissionSets: ['SPOT'] }),
+  ]), context('SPOT'));
+  assert.equal(flatSpot.complete, false);
+  assert.deepEqual(flatSpot.listings[0].metadata.permissionSets, []);
+  assert.ok(flatSpot.failures.some((failure) => failure.field === 'SPOT.FLATUSDT.permissionSets'));
+
+  const mixedFutures = parseExchangeInformation(exchangeInfo([
+    futuresRow('MIXEDUSDT', 'MIXED', { permissionSets: ['GRID', ['COPY']] }),
+  ]), context('USD_M_PERPETUAL'));
+  assert.equal(mixedFutures.complete, false);
+  assert.deepEqual(mixedFutures.listings[0].metadata.permissionSets, []);
+
+  const overboundSpot = parseExchangeInformation(exchangeInfo([
+    spotRow('BOUNDUSDT', 'BOUND', {
+      permissionSets: [Array.from({ length: 513 }, (_, index) => `PERMISSION_${index}`)],
+    }),
+  ]), context('SPOT'));
+  assert.equal(overboundSpot.complete, false);
+  assert.deepEqual(overboundSpot.listings[0].metadata.permissionSets, []);
+  assert.ok(overboundSpot.failures.some((failure) => failure.field === 'SPOT.BOUNDUSDT.permissionSets[0]'));
+});
+
 test('quiet and inactive symbols remain visible without fabricated dormant activity or tradeability', async () => {
   const { adapter, transport } = adapterFixture();
   enqueuePair(transport, [spotRow('SLEEPUSDT', 'SLEEP', {

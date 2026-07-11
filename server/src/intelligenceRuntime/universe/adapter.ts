@@ -7,7 +7,6 @@ import {
   type TruthMetadata,
 } from '../../intelligenceFoundation/contracts/index.js';
 import {
-  buildUniverseGraph,
   createUniversePolicy,
   diffUniverseGraphs,
   type ListingObservation,
@@ -29,6 +28,7 @@ import {
   type WeightReservation,
 } from '../lifecycle/rateBudget.js';
 import { parseExchangeInformation, type ParsedRuntimeListing } from './parsers.js';
+import { buildRuntimeUniverseGraph } from './shardedGraph.js';
 import {
   reAgeRuntimeUniverseTruth,
   runtimeUniverseTruth,
@@ -846,10 +846,11 @@ export class BinancePublicUniverseAdapter {
     this.#spot = spot.state;
     this.#futures = futures.state;
     const input = snapshotInput(this.#spot, this.#futures, observedAtMs, this.#config.configurationVersion);
-    const graph = buildUniverseGraph(input, this.#config.universePolicy);
-    const previousGraph = this.#graph ?? buildUniverseGraph(
+    const graph = buildRuntimeUniverseGraph(input, this.#config.universePolicy, this.#config.sourceStaleAfterMs);
+    const previousGraph = this.#graph ?? buildRuntimeUniverseGraph(
       emptySnapshotInput(observedAtMs, this.#config.configurationVersion),
       this.#config.universePolicy,
+      this.#config.sourceStaleAfterMs,
     );
     const diff = diffUniverseGraphs(previousGraph, graph);
     this.#graph = graph;

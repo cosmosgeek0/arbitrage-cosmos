@@ -161,7 +161,10 @@ export interface NormalizedLiquidation extends EvidenceBase {
   originalQuantity: number;
   filledQuantity: number;
   averagePrice: number | null;
-  sampledLatestPerWindow: boolean;
+  /** True when the source publishes a lossy per-window selection rather than every liquidation. */
+  sampledPerWindow: boolean;
+  /** Selection semantics declared by the authoritative source for each sampling window. */
+  samplingSelection: 'LARGEST_PER_SYMBOL' | 'LATEST_PER_SYMBOL' | 'UNKNOWN';
   sampleWindowMs: number | null;
 }
 

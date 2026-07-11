@@ -355,7 +355,7 @@ export function validateNormalizedEvidence(value: unknown): ValidationResult<Nor
       if (
         !decimalStringOrNull(value.aggregateTradeId) || !decimalStringOrNull(value.firstTradeId) || !decimalStringOrNull(value.lastTradeId) ||
         !positive(value.price) || !positive(value.baseQuantity) || !positive(value.quoteQuantity) ||
-        !nullablePositive(value.normalBaseQuantityExcludingRpi) || !['BUY', 'SELL', 'UNKNOWN'].includes(String(value.aggressorSide))
+        !nullableNonNegative(value.normalBaseQuantityExcludingRpi) || !['BUY', 'SELL', 'UNKNOWN'].includes(String(value.aggressorSide))
       ) {
         return { ok: false, failure: failure('INVALID_VALUE', 'normalized_evidence', 'invalid trade values', null) };
       }
@@ -430,16 +430,18 @@ export function validateNormalizedEvidence(value: unknown): ValidationResult<Nor
         !['BUY', 'SELL'].includes(String(value.orderSide)) || !['LONG', 'SHORT'].includes(String(value.liquidatedPositionSide)) ||
         !nonEmptyString(value.orderType) || !nonEmptyString(value.timeInForce) || !positive(value.originalQuantity) ||
         !finite(value.filledQuantity) || value.filledQuantity < 0 || value.filledQuantity > value.originalQuantity ||
-        !nullablePositive(value.averagePrice) || typeof value.sampledLatestPerWindow !== 'boolean' ||
+        !nullablePositive(value.averagePrice) || typeof value.sampledPerWindow !== 'boolean' ||
+        !['LARGEST_PER_SYMBOL', 'LATEST_PER_SYMBOL', 'UNKNOWN'].includes(String(value.samplingSelection)) ||
         !(value.sampleWindowMs === null || positiveSafeInteger(value.sampleWindowMs)) ||
-        (value.sampledLatestPerWindow && value.sampleWindowMs === null)
+        (value.sampledPerWindow && value.sampleWindowMs === null) ||
+        (!value.sampledPerWindow && value.samplingSelection !== 'UNKNOWN')
       ) {
         return { ok: false, failure: failure('INVALID_VALUE', 'normalized_evidence', 'invalid liquidation values', null) };
       }
       if ((value.orderSide === 'BUY' && value.liquidatedPositionSide !== 'SHORT') || (value.orderSide === 'SELL' && value.liquidatedPositionSide !== 'LONG')) {
         return { ok: false, failure: failure('INVALID_VALUE', 'normalized_evidence', 'liquidation order side conflicts with liquidated position side', 'liquidatedPositionSide') };
       }
-      return { ok: true, value: { ...common, kind: 'LIQUIDATION', orderSide: value.orderSide as 'BUY' | 'SELL', liquidatedPositionSide: value.liquidatedPositionSide as 'LONG' | 'SHORT', orderType: value.orderType, timeInForce: value.timeInForce, originalQuantity: value.originalQuantity, filledQuantity: value.filledQuantity, averagePrice: value.averagePrice as number | null, sampledLatestPerWindow: value.sampledLatestPerWindow, sampleWindowMs: value.sampleWindowMs as number | null } };
+      return { ok: true, value: { ...common, kind: 'LIQUIDATION', orderSide: value.orderSide as 'BUY' | 'SELL', liquidatedPositionSide: value.liquidatedPositionSide as 'LONG' | 'SHORT', orderType: value.orderType, timeInForce: value.timeInForce, originalQuantity: value.originalQuantity, filledQuantity: value.filledQuantity, averagePrice: value.averagePrice as number | null, sampledPerWindow: value.sampledPerWindow, samplingSelection: value.samplingSelection as 'LARGEST_PER_SYMBOL' | 'LATEST_PER_SYMBOL' | 'UNKNOWN', sampleWindowMs: value.sampleWindowMs as number | null } };
     }
     case 'BORROW': {
       if (
@@ -493,6 +495,15 @@ function deepFreeze<T>(value: T, seen = new Set<object>()): T {
   return Object.freeze(value);
 }
 
+function relatedFrozenInstrument(primary: InstrumentIdentity, candidate: InstrumentIdentity): boolean {
+  if (candidate.instrumentId === primary.instrumentId) return true;
+  if (candidate.venue !== primary.venue || candidate.baseAsset !== primary.baseAsset) return false;
+  if (candidate.productFamily === 'BORROW') return candidate.quoteAsset === null && candidate.pair === null;
+  return candidate.symbol === primary.symbol
+    && candidate.pair === primary.pair
+    && candidate.quoteAsset === primary.quoteAsset;
+}
+
 export function validateFrozenPreEventRecord(value: unknown): ValidationResult<FrozenPreEventRecord> {
   const secret = validateNoSecretFields(value, 'frozen_pre_event');
   if (!secret.ok) return secret as ValidationResult<FrozenPreEventRecord>;
@@ -537,16 +548,23 @@ export function validateFrozenPreEventRecord(value: unknown): ValidationResult<F
   if (thesisCutoff) return { ok: false, failure: thesisCutoff };
 
   const evidenceIds = new Set<string>();
+  const validatedEvidence: NormalizedEvidence[] = [];
   for (let index = 0; index < value.evidence.length; index += 1) {
     const validated = validateNormalizedEvidence(value.evidence[index]);
     if (!validated.ok) return validated as ValidationResult<FrozenPreEventRecord>;
-    if (validated.value.instrument.instrumentId !== thesis.instrumentId) {
-      return { ok: false, failure: failure('INVALID_VALUE', 'frozen_pre_event', 'cross-instrument evidence is not allowed', `evidence[${index}].instrument`, [validated.value.id]) };
-    }
     if (evidenceIds.has(validated.value.id)) return { ok: false, failure: failure('INVALID_VALUE', 'frozen_pre_event', 'duplicate evidence ID', `evidence[${index}].id`, [validated.value.id]) };
     evidenceIds.add(validated.value.id);
+    validatedEvidence.push(validated.value);
     const cutoff = truthCutoffFailure(validated.value.truth, value.evidenceCutoffTimeMs, `evidence[${index}].truth`, validated.value.id);
     if (cutoff) return { ok: false, failure: cutoff };
+  }
+  const primaryInstrument = validatedEvidence.find((evidence) => evidence.instrument.instrumentId === thesis.instrumentId)?.instrument ?? null;
+  for (let index = 0; index < validatedEvidence.length; index += 1) {
+    const evidence = validatedEvidence[index];
+    if (evidence.instrument.instrumentId === thesis.instrumentId) continue;
+    if (primaryInstrument === null || !relatedFrozenInstrument(primaryInstrument, evidence.instrument)) {
+      return { ok: false, failure: failure('INVALID_VALUE', 'frozen_pre_event', 'evidence is outside the frozen thesis market scope', `evidence[${index}].instrument`, [evidence.id]) };
+    }
   }
 
   const featureIds = new Set<string>();

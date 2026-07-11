@@ -229,7 +229,12 @@ function physicalComponent(
   if (!health.running && phase !== 'STOPPED') blockers.add('RUNTIME_NOT_RUNNING');
   if (health.timestamp === null) blockers.add('SOURCE_TIMESTAMP_UNAVAILABLE');
   if (truth.freshness !== null && truth.freshness.state !== 'FRESH') blockers.add(`SOURCE_${truth.freshness.state}`);
-  if (runtime?.lastError) blockers.add(runtime.lastError.code);
+  // Foundation intentionally retains the last failure after recovery. Keep it
+  // as historical evidence below, but only treat it as a current blocker while
+  // the owning runtime is still in a non-running failure posture.
+  if (runtime?.lastError && ['FAILED', 'DEGRADED', 'BLOCKED'].includes(phase)) {
+    blockers.add(runtime.lastError.code);
+  }
   if (health.fatal) blockers.add(health.fatal.code);
   return Object.freeze({
     componentId,

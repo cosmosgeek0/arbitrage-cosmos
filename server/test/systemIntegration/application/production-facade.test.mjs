@@ -100,10 +100,12 @@ function fixture(options = {}) {
     },
     health(ctx) {
       marketState.probes += 1;
+      const sourceReady = marketState.running
+        && marketState.probes > (options.marketUnavailableProbes ?? 0);
       return {
         running: marketState.running,
         heartbeatAt: marketState.running ? ctx.nowMs : null,
-        timestamp: marketState.running ? createSourcedTimestamp({
+        timestamp: sourceReady ? createSourcedTimestamp({
           sourceTimeMs: ctx.nowMs,
           receivedAtMs: ctx.nowMs,
           maxAgeMs: 1_000,
@@ -198,6 +200,18 @@ test('application shell persists startup before any data component and reads nev
   }
   assert.ok(supervisor.components.find((entry) => entry.componentId === 'engine-supervisor')
     .blockerCodes.includes('EFFECTIVE_KILL_SWITCH_ENGAGED'));
+});
+
+test('recovered runtime keeps its last failure as history without reporting it as a current blocker', async () => {
+  const f = fixture({ marketUnavailableProbes: 2 });
+  assert.equal(f.app.start().ok, true);
+  await drive(f, 10);
+  const supervisor = f.app.supervisor();
+  const market = supervisor.components.find((entry) => entry.componentId === 'market-universe');
+  assert.equal(market.phase, 'RUNNING');
+  assert.equal(market.readiness, 'READY');
+  assert.equal(market.lastFailure?.code, 'REQUIRED_SOURCE_STALE');
+  assert.equal(market.blockerCodes.includes('REQUIRED_SOURCE_STALE'), false);
 });
 
 test('effective external kill cannot be cleared and blocks validate-only before owner invocation', async () => {

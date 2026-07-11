@@ -45,7 +45,7 @@ export const SPOT_SOURCE_STREAMS: Readonly<Record<SpotSourceKind, string>> = Obj
   BOOK_TICKER: '<symbol>@bookTicker',
   AGG_TRADE: '<symbol>@aggTrade',
 });
-const SYMBOL_PATTERN = /^[A-Z0-9]{1,32}$/;
+const SYMBOL_PATTERN = /^[\p{L}\p{N}._-]{1,128}$/u;
 const DECIMAL_PATTERN = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 const CORRELATION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/;
 

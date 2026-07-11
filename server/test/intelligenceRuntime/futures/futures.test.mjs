@@ -134,6 +134,23 @@ test('merged all-symbol book payload accepts only numeric st=1 and preserves ps'
   assert.equal(decoded.observations[0].sourceMarketType, 1);
 });
 
+test('current UTF-8 USD-M symbols decode and resolve without losing identity', () => {
+  const symbol = '币安人生USDT';
+  const payload = book({ s: symbol, ps: symbol });
+  const decoded = decodeUsdMBookTicker(payload, RECEIVE);
+  assert.equal(decoded.issues.length, 0);
+  assert.equal(decoded.observations[0].symbol, symbol);
+
+  const { adapter, generation } = connectedAdapter('BOOK_TICKER');
+  const result = adapter.ingest('BOOK_TICKER', generation, payload, RECEIVE);
+  assert.equal(result.accepted, 1);
+  assert.equal(result.normalized[0].status, 'NORMALIZED');
+  assert.equal(
+    adapter.snapshot(RECEIVE).symbols.some((entry) => entry.symbol === symbol),
+    true,
+  );
+});
+
 test('book decoder preserves event, transaction, receive, bid/ask, and never invents last', () => {
   const value = decodeUsdMBookTicker(JSON.stringify({ stream: '!bookTicker', data: book() }), RECEIVE).observations[0];
   assert.equal(value.sourceEventTimeMs, EVENT);

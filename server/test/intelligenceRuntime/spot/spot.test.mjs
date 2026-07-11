@@ -100,6 +100,32 @@ test('full mini-ticker array becomes explicit rolling-24h observations', () => {
   });
 });
 
+test('current UTF-8 Binance Spot symbols remain valid through universe, broad ticker, and bounded focus ingress', () => {
+  const clock = new ManualClock();
+  const symbol = '币安人生USDT';
+  const value = new SpotBroadReducer({ clock, universe: [instrument(symbol, '币安人生')] });
+  value.beginGeneration(1);
+  const broad = value.ingestMiniTickerFrame({
+    generation: 1,
+    receiveTimeMs: T0,
+    payload: [ticker(symbol, T0)],
+  });
+  assert.equal(broad.acceptedRecords, 1);
+  assert.equal(value.ingestBookTicker({
+    generation: 1,
+    receiveTimeMs: T0,
+    symbol,
+    payload: book(symbol, 1),
+  }).state, 'ACCEPTED');
+  assert.equal(value.ingestAggTrade({
+    generation: 1,
+    receiveTimeMs: T0,
+    symbol,
+    payload: trade(symbol, 1, 1, 1, T0),
+  }).state, 'ACCEPTED');
+  assert.equal(value.snapshot().symbols[0].instrument.symbol, symbol);
+});
+
 test('changed-symbol-only arrays retain dormant universe symbols and prior truth', () => {
   const clock = new ManualClock();
   const value = reducer(clock);

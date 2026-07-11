@@ -9,7 +9,7 @@ import type {
   SpotGenerationDropResult,
 } from './types.js';
 
-const SYMBOL_PATTERN = /^[A-Z0-9]{1,32}$/;
+const SYMBOL_PATTERN = /^[\p{L}\p{N}._-]{1,128}$/u;
 const CORRELATION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/;
 
 function safeInteger(value: number, name: string, minimum = 0): number {

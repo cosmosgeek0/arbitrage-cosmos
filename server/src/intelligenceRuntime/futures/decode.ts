@@ -16,7 +16,7 @@ const DEFAULT_MAXIMUM_FUTURE_SKEW_MS = 2_000;
 const DEFAULT_MAXIMUM_RECORDS_PER_MESSAGE = 4_096;
 const DEFAULT_MAXIMUM_CONTRACT_BRACKETS = 128;
 const DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
-const SYMBOL = /^[A-Z0-9_]{3,64}$/;
+const SYMBOL = /^[\p{L}\p{N}._-]{1,128}$/u;
 
 type PlainRecord = Record<string, unknown>;
 

@@ -1,17 +1,17 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `15`
+State generation: `16`
 
-Updated: 2026-07-12T18:13:46+0530
+Updated: 2026-07-12T18:16:37+0530
 
-Status: `ACCEPTED`
+Status: `WORKING`
 Program: Q lane — deterministic research evidence, labels, models, calibration, drift and advisory inference.
 
 ## Frozen launch identity
 
 - Worktree: `/Users/cosmosgeek/Desktop/quant-edge-research-20260712`
 - Branch: `quant-edge-research-factory-20260712`
-- Current HEAD at generation-15 authoring: `668ab5d0548d1713c299e85972fcbc6433c59504`
+- Current HEAD at generation-16 authoring: `3455216249c2d7bcac67ef0d44a5567bcf93a26c`
 - Origin: `git@github.com:cosmosgeek0/arbitrage-cosmos.git`
 - Canonical base: `7010499170e24b31c9c0be2c9d73a536e680c6fe`
 - Protocol SHA / current parent: `73e1a1ff7daa48df8dac45713fc5f106842edafc`
@@ -25,11 +25,11 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 
 ## Phase position
 
-- Last accepted phase: `Q03`
+- Last accepted phase: `Q04`
 - Latest director acceptance: `D-LAUNCH-1` (`9ca01537f4edda06ee566cd261e612d5c315fb76`, authentic launch digest); standing order `D-LAUNCH-2` (`84d2ff65fd8d2b200821126dd17b4ba75f3c131c`, continuous self-accepted execution with full evidenced loops, director audits at LANE_READY); `D-LAUNCH-3` (`cf37df4af0ef3724f8f3a145c6be3cdcc84799c0`, Q lane transferred to the Fable lead builder).
-- Current phase: `Q04` (`WORKING`)
-- Current task: `quant/TASKS/Q04.md`
-- Current task SHA-256: `b75c17be4648da35bdab3966df6d05176fae714548ec4a14e52abb59b2083554`
+- Current phase: `Q05` (`WORKING`)
+- Current task: `quant/TASKS/Q05.md`
+- Current task SHA-256: `b2bb8c1404bf9fc655aefd11bc63e4c82598fb76036eeb28fd653a8a1adae232`
 - Checkpoint receipt: `quant/RECEIPTS/Q00.md`; blob `7ba41768ba747bbc3eddd1941f6f5d82985dc1ca`; SHA-256 `738dad4caac7cfac9ba8b7b84fb646ec1817c6f0eb34fc09daa60129ab1996c3`; immutable in checkpoint commit.
 - Acceptance receipt: `quant/RECEIPTS/Q00_ACCEPTANCE.md`; SHA-256 `c29c7646af5f284a88eca782beb7dbf636e6c6eb11dda25d1bccc03ea97385de`; immutable after this acceptance commit.
 - Q00 checkpoint implementation commit: `fa6fecd8295aaab6aa38d35bd34843b64af69e69`.
@@ -54,8 +54,9 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 - Q04 implementation receipt: `quant/RECEIPTS/Q04.md`; SHA-256 `95b87d68b781f6cdeca560249d848fb7512d94b844051ce360bcd882c4f03a47`; immutable in C4.
 - Q04 implementation commit C4: `668ab5d0548d1713c299e85972fcbc6433c59504`; exact parent `c7ff41c9f1a82aefd879f3f7ca56b29e5ea79b91`; tree `8611a1ac3c9f23fa61aa806ae5dcfc4e00e4f017`.
 - Q04 acceptance receipt: `quant/RECEIPTS/Q04_ACCEPTANCE.md`; SHA-256 `ad14fe33c852ea0be0ccd269d15f942557cd66c1080a28f7809d33eef11fd2ae`.
-- Q04 acceptance/state commit A4: the commit containing this generation-15 state and acceptance receipt; intentionally non-self-referential.
-- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `ACCEPTED`; Q03 `ACCEPTED`; Q04 `ACCEPTED`.
+- Q04 acceptance/state commit A4: `3455216249c2d7bcac67ef0d44a5567bcf93a26c`; exact parent C4.
+- Q05 activation/state commit: the commit containing this generation-16 state and task; intentionally non-self-referential.
+- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `ACCEPTED`; Q03 `ACCEPTED`; Q04 `ACCEPTED`; Q05 `WORKING`, with no implementation or receipt yet.
 
 ## Ownership and safety
 
@@ -230,12 +231,12 @@ Implementation C4 has 21 changed paths, all under `quant/**`. `TASKS/Q04.md` rem
 
 ## Exact next task
 
-After A4 exists, create only the bounded `quant/TASKS/Q05.md` for the Section 11 label and matched-control factory (point-in-time lineage, censoring, event grouping, leakage tests; launch Q-A atlas outcomes and Q-E owner-annotation channel included as bounded Q05 scope) and advance state in a Q05 activation commit. Verify all controlling and accepted identities first; do not implement Q05 in the activation commit and never rewrite accepted Q04 work.
+Execute `quant/TASKS/Q05.md`: record the label-factory design note, implement the `quant_edge.labels` package (§11 identity/outcomes/stages/Basis/disposition/controls plus Q-A/Q-E linkage), run the full evidenced loop (focused tests → §11.7 leakage law → accumulated Q suite → adversarial review → corrections), create implementation commit C5 with the immutable `quant/RECEIPTS/Q05.md`, independently verify C5, then create acceptance commit A5 with `quant/RECEIPTS/Q05_ACCEPTANCE.md` and a state update. Never rewrite accepted Q00–Q04 work.
 
-Next exact command after A4:
+Next exact command:
 
 ```bash
-git status --short && git log -1 --format='%H %P' && shasum -a 256 quant/RECEIPTS/Q04.md quant/RECEIPTS/Q04_ACCEPTANCE.md quant/QUANT_EDGE_BUILD_STATE.md
+git status --short && git log -1 --format='%H %P' && shasum -a 256 quant/TASKS/Q05.md quant/QUANT_EDGE_BUILD_STATE.md
 ```
 
 ## Fresh-session read order
@@ -243,7 +244,7 @@ git status --short && git log -1 --format='%H %P' && shasum -a 256 quant/RECEIPT
 1. `STATE.md`, `MISSION.md`, `ARCHITECTURE.md` Part II, `DIRECTOR.md`.
 2. `QUANT_EDGE_RESEARCH_FACTORY_12H.md` and only launch Section 6.
 3. `EDGE_PROTOCOL_V1.md`, frozen schema/fixtures, and `quant/DIRECTIVE_INPUTS.lock`.
-4. This state, `quant/TASKS/Q04.md`, the immutable `quant/RECEIPTS/Q04.md`, the Q04 decision/research notes and both immutable Q03 receipts (the pinned stream-contract research controls the Q04 book law).
+4. This state, `quant/TASKS/Q05.md`, both immutable Q04 receipts and the Q04 decision/research notes; the Q03 atlas/annotation contracts control Q05 linkage.
 5. Q00 reuse matrix and Q01 framework/security docs are inputs only; do not redo accepted work or regenerate accepted evidence unless exact code/input identity changed.
 
 ## Work not to repeat

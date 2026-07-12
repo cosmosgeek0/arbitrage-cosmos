@@ -1,10 +1,10 @@
 # Q13 shard — durable state
 
-State generation: `1`
+State generation: `2`
 
 Updated: 2026-07-13
 
-Status: `IMPLEMENTATION_COMPLETE_AWAITING_ACCEPTANCE`
+Status: `ACCEPTED`
 
 ## Frozen shard identity
 
@@ -21,10 +21,15 @@ Status: `IMPLEMENTATION_COMPLETE_AWAITING_ACCEPTANCE`
 - Data sufficiency: `FAIL_DATA_INSUFFICIENT`.
 - Implementation: interfaces/fixtures only; simple MLP, DeepLOB-style, and
   TLOB-style records are all `REFERENCE_ONLY` with one exact evidence gap.
-- Implementation commit C13: the commit that first contains the immutable
-  `quant/RECEIPTS/Q13.md`; intentionally non-self-referential in this generation.
-- Acceptance requires independent exact-C13 verification plus
-  `quant/RECEIPTS/Q13_ACCEPTANCE.md` and state generation 2.
+- Implementation commit C13: `d28131c7745dda884a8918aa8bf5279004615c05`;
+  tree `8f491ff65489e0c4740338f648c43d0aab1b1ebc`; exact parent/base `f756f3b`.
+- Immutable implementation receipt SHA-256:
+  `b3108cb60401999581174ab6c8ecd8d17219ac8d44d98574673faa34620235be`.
+- Independent clean-archive verification passed; archive SHA-256
+  `d9d049fb981f6fb46bfed448554531d3a565cfc7300b2b70cd77354c6e38d618`.
+- Acceptance commit A13: the commit that first contains
+  `quant/RECEIPTS/Q13_ACCEPTANCE.md` and this generation-2 state; intentionally
+  non-self-referential. Q13 is `ACCEPTED` at A13.
 
 ## Evidence and verification
 
@@ -51,7 +56,6 @@ Status: `IMPLEMENTATION_COMPLETE_AWAITING_ACCEPTANCE`
 
 ## Exact next step
 
-Stage only the 24 Q13 paths, run the Q13 allowlist and whitespace gates, create C13,
-then independently verify the exact commit from Git/archive. If all evidence remains
-green, add the immutable acceptance receipt, advance this state to generation 2
-`ACCEPTED`, create A13, record its SHA, and stop. Never push or merge.
+None for this shard. Q13 is `ACCEPTED`. Report C13 and the resulting A13 SHA to the
+director, preserve both immutable receipts, and stop. Never push or merge; later
+integration is director-owned.

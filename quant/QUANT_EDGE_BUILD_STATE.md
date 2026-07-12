@@ -1,17 +1,17 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `6`
+State generation: `7`
 
-Updated: 2026-07-12T11:42:57+0530
+Updated: 2026-07-12T11:47:33+0530
 
-Status: `ACCEPTED`
+Status: `WORKING`
 Program: Q lane — deterministic research evidence, labels, models, calibration, drift and advisory inference.
 
 ## Frozen launch identity
 
 - Worktree: `/Users/cosmosgeek/Desktop/quant-edge-research-20260712`
 - Branch: `quant-edge-research-factory-20260712`
-- Current HEAD at generation-6 authoring: `73330e281c7a91fa5fba2059570e9619f9ade34d`
+- Current HEAD at generation-7 authoring: `501eff34a7bcc354dfcd900d2d72ca263ade8b93`
 - Origin: `git@github.com:cosmosgeek0/arbitrage-cosmos.git`
 - Canonical base: `7010499170e24b31c9c0be2c9d73a536e680c6fe`
 - Protocol SHA / current parent: `73e1a1ff7daa48df8dac45713fc5f106842edafc`
@@ -27,9 +27,9 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 
 - Last accepted phase: `Q01`
 - Latest director acceptance: `D-LAUNCH-1`, commit `9ca01537f4edda06ee566cd261e612d5c315fb76`; authentic launch blob/digest binding independently verified.
-- Current phase: `Q01 ACCEPTED`; next phase `Q02 NOT_STARTED`.
-- Latest completed task: `quant/TASKS/Q01.md`
-- Latest completed task SHA-256: `8c830de5b97673dc6593bb29adcedaa26542d9c2060ceaa4d7ba8e4dde2c22ee`
+- Current phase: `Q02`
+- Current task: `quant/TASKS/Q02.md`
+- Current task SHA-256: `55cd8c2ea9e39601bf5f4214e398b7a2f2d45f4292dfd6c297221b3c3a3ca142`
 - Checkpoint receipt: `quant/RECEIPTS/Q00.md`; blob `7ba41768ba747bbc3eddd1941f6f5d82985dc1ca`; SHA-256 `738dad4caac7cfac9ba8b7b84fb646ec1817c6f0eb34fc09daa60129ab1996c3`; immutable in checkpoint commit.
 - Acceptance receipt: `quant/RECEIPTS/Q00_ACCEPTANCE.md`; SHA-256 `c29c7646af5f284a88eca782beb7dbf636e6c6eb11dda25d1bccc03ea97385de`; immutable after this acceptance commit.
 - Q00 checkpoint implementation commit: `fa6fecd8295aaab6aa38d35bd34843b64af69e69`.
@@ -39,8 +39,9 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 - Q01 implementation receipt: `quant/RECEIPTS/Q01.md`; SHA-256 `254b638eaa00b3f2ea06f12a3c5b460ac330c0ca5e48236042ea97ddb543114e`; immutable in C.
 - Q01 implementation commit C: `73330e281c7a91fa5fba2059570e9619f9ade34d`; exact parent `90e1ef89edd4cc449664ac05cb429448e0bac6f0`.
 - Q01 acceptance receipt: `quant/RECEIPTS/Q01_ACCEPTANCE.md`; SHA-256 `368daeccd6b43f28bfc41110f1dc85b8037f1c7eac81e3539a5e2bea893bd4b2`.
-- Q01 acceptance/state commit A: the commit containing this generation-6 state; intentionally non-self-referential.
-- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `NOT_STARTED` with no task file.
+- Q01 acceptance/state commit A: `501eff34a7bcc354dfcd900d2d72ca263ade8b93`.
+- Q02 activation/state commit: the commit containing this generation-7 state and task; intentionally non-self-referential.
+- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `WORKING`, with no implementation or receipt yet.
 
 ## Ownership and safety
 
@@ -76,6 +77,13 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 - Durable completion: `RECEIPTS/Q01.md`, `RECEIPTS/Q01_ACCEPTANCE.md` and this state.
 
 Implementation commit C therefore has 32 changed paths, all under `quant/**`. The two root directives remain preserved untracked owner inputs and are never staged.
+
+## Q02 activation inventory
+
+- `quant/TASKS/Q02.md`
+- this generation-7 state
+
+No Q02 implementation path exists yet.
 
 ## Q-lane posture map
 
@@ -146,15 +154,16 @@ Implementation commit C therefore has 32 changed paths, all under `quant/**`. Th
 
 ## Exact next task
 
-1. Verify the acceptance commit containing this generation is a direct child of C, changes only this state plus `quant/RECEIPTS/Q01_ACCEPTANCE.md`, and leaves frozen paths unchanged.
-2. For continued work, verify this state, C, A and both Q01 receipts; do not repeat Q00/Q01 research, implementation or tests except accumulated gates.
-3. Create one bounded `quant/TASKS/Q02.md` from directive Q02 only, record its hash in generation 7 and activate Q02 in a separate commit.
-4. Execute Q02 only after that activation; no Event Atlas or Q03 work during Q02.
+1. Verify this Q02 task hash and its activation commit; do not repeat accepted Q00/Q01 work.
+2. Refresh only current official PyArrow/Parquet and DuckDB implementation facts not already resolved in Q01; record a Q02 decision.
+3. Execute only Q02: exact immutable partitions/manifests/provenance/quality/numerics, hardened validated-Arrow query helper, source-card and separate owner-annotation contracts.
+4. Run focused/property/golden and accumulated tests, clean separate-process determinism proof, adversarial review and corrections.
+5. Scope-gate implementation commit C2 with immutable `quant/RECEIPTS/Q02.md`, independently verify it, then create acceptance commit A2.
 
 Next exact command:
 
 ```bash
-git rev-parse HEAD && git diff-tree --no-commit-id --name-status -r HEAD && shasum -a 256 quant/QUANT_EDGE_BUILD_STATE.md quant/RECEIPTS/Q01_ACCEPTANCE.md
+git rev-parse HEAD && shasum -a 256 quant/TASKS/Q02.md && git status --short
 ```
 
 ## Fresh-session read order
@@ -162,16 +171,16 @@ git rev-parse HEAD && git diff-tree --no-commit-id --name-status -r HEAD && shas
 1. `STATE.md`, `MISSION.md`, `ARCHITECTURE.md` Part II, `DIRECTOR.md`.
 2. `QUANT_EDGE_RESEARCH_FACTORY_12H.md` and only launch Section 6.
 3. `EDGE_PROTOCOL_V1.md`, frozen schema/fixtures, and `quant/DIRECTIVE_INPUTS.lock`.
-4. This state, `quant/TASKS/Q01.md`, both Q01 receipts, `quant/RECEIPTS/Q00_ACCEPTANCE.md`, and Q00-003.
-5. Q00 reuse matrix, benchmark profile and source research only as inputs; do not redo them. If C exists, verify the exact commit rather than rebuilding it.
+4. This state, `quant/TASKS/Q02.md`, both Q01 receipts and Q01 decision.
+5. Q00 reuse matrix/source research and Q01 framework/security docs only as inputs; do not redo accepted work.
 
 ## Work not to repeat
 
 - Do not redo the Q00 source/reuse audit while its recorded source hashes are unchanged.
 - Do not modify or replace either immutable Q00 receipt.
-- Do not recreate or edit `quant/TASKS/Q00.md`; Q01 is the only current phase.
+- Do not recreate or edit Q00/Q01 tasks; Q02 is the only current phase.
 - Do not recreate retired paths or old authority files.
-- Do not materialize the Event Atlas or create a production source during Q01.
+- Do not materialize the Event Atlas, download market data or create a production source during Q02.
 - Do not edit or normalize the two untracked owner directives.
 - Do not rewrite the immutable Q01 receipt after implementation commit C.
 - Do not rerun or rewrite accepted Q01; the next bounded phase is Q02.

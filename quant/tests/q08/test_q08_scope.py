@@ -63,7 +63,20 @@ def _in_shard_repository() -> bool:
         check=False,
         timeout=60,
     )
-    return probe.returncode == 0
+    if probe.returncode != 0:
+        return False
+    # After the director merges this shard onto the lane branch, history after
+    # SHARD_BASE_SHA legitimately contains other phases' commits; the per-commit
+    # scope law is only assertable while HEAD is the shard branch itself.
+    branch = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    )
+    return branch.stdout.strip() == "q08-derivatives-20260712"
 
 
 pytestmark = [

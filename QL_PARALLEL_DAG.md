@@ -4,11 +4,12 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 
 | Packet | Worktree | Branch | Base SHA | State |
 | --- | --- | --- | --- | --- |
-| Q spine Q00–Q06 | quant-edge-research-20260712 | quant-edge-research-factory-20260712 | 73e1a1f | ACCEPTED through Q09-merged — spine SPRINTING Q10+ (Q14 pending in shard) |
+| Q spine Q00–Q06 | quant-edge-research-20260712 | quant-edge-research-factory-20260712 | 73e1a1f | ACCEPTED through Q09-merged — spine SPRINTING Q10 ONLY, parks after (Q11 shard-owned; Q12+ after merges) |
 | Q07 microstructure | SPINE-OWNED (shard retired 2026-07-12; spine was already WORKING Q07 at d057373) | quant-edge-research-factory-20260712 | 24ccf58 | ACCEPTED on spine (f0d4448) |
 | Q08 derivatives | ~/Desktop/q08-derivatives | q08-derivatives-20260712 | 24ccf58 | ACCEPTED + MERGED onto lane (c00de40, 494d6ce; 1,649 pass) |
 | Q09 regime | ~/Desktop/q09-regime | q09-regime-20260712 | 24ccf58 | ACCEPTED + MERGED onto lane (1,842 pass) |
 | Q14 validation-infra | ~/Desktop/q14-validation-infra | q14-validation-infra-20260712 | 24ccf58 | WORKING |
+| Q11 survival | ~/Desktop/q11-survival | q11-survival-20260712 | 8a5dd09 | READY |
 | L spine L00–L08 | live-execution-proof-20260712 | live-execution-control-proof-20260712 | 73e1a1f | L04 ACCEPTED; L05 WORKING (ownership → Fable, D-LAUNCH-4) |
 | L09 normal-basis shard | (cut on L08 acceptance) | l09-normal-basis-20260712 | accepted-L08 SHA | WAITING on L08 |
 | L10 reverse-basis shard | (cut on L08 acceptance) | l10-reverse-basis-20260712 | accepted-L08 SHA | WAITING on L08 |

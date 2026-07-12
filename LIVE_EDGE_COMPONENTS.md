@@ -30,6 +30,19 @@ authority.
 | Closed matrix validator | `server/src/liveEdge/adapters/binanceContracts/validate.ts` | `BUILT_AND_TESTED` | local documentary guard | Rejects unregistered/cross-product/cross-environment/obsolete/conflicting contracts, hostile data and hash drift; performs no I/O and is not an exchange client |
 | Checked source fixtures | `server/test/liveEdge/sourceContracts/**` | `43/43` focused source checks | test-only | Hand-authored current tuples plus obsolete/wrong-route and adversarial failures; network-free |
 
+## L03 delta
+
+| Component | Path | Lane build proof | Integration state | Authority / limitation |
+| --- | --- | --- | --- | --- |
+| Exact signed-contract gate | `server/src/liveEdge/adapters/binanceSignedKernel/contract.ts` | `BUILT_AND_TESTED` | `LANE_READY_UNWIRED` | Resolves only hash-locked current Spot/USD-M production REST contracts and a selected HMAC profile; returns documentary identity with no action authority |
+| Canonical signed-request constructor | `server/src/liveEdge/adapters/binanceSignedKernel/request.ts` | `BUILT_AND_TESTED` | construction only | Separates inspectable unsigned construction from the raw-input signed gate, produces bounded query-only sensitive material through a call-scoped signer, and blocks identity-free broad cancels; owns no credential, endpoint, transport, retry, execution or persistence |
+| UTC/monotonic clock estimator | `server/src/liveEdge/adapters/binanceSignedKernel/clock.ts` | `BUILT_AND_TESTED` | caller-supplied evidence only | Bounded median, 250 ms outlier, 100 ms fresh-dispersion, RTT/freshness and small-`recvWindow` policy; no clock, timer, sync loop or source acquisition authority |
+| Deterministic transport identity adapter | `server/src/liveEdge/adapters/binanceSignedKernel/identity.ts` | `BUILT_AND_TESTED` | local construction utility | Reuses Foundation `deriveClientOrderId` and correlation format exactly; closed local request IDs are not commands, plans, tickets, events or durable identities |
+| Endpoint rate/cooldown reducer | `server/src/liveEdge/adapters/binanceSignedKernel/rateBudget.ts` | `BUILT_AND_TESTED` | caller-owned immutable state | Consumes exact L02 endpoint costs with V2 header-primed state, worst conditional costs and separately injected capacities/observations; no global budget, transport, scheduler or mutation-retry authority |
+| Mutation ambiguity reducer | `server/src/liveEdge/adapters/binanceSignedKernel/ambiguity.ts` | `BUILT_AND_TESTED` | documentary hand-off state only | Preserves submitted timeout/disconnect/5xx as `UNKNOWN`, binds closed ID forms and blocks duplicate send; terminal references never prove reconciliation or create an execution event, result or store |
+| Safe failure and diagnostic projection | `server/src/liveEdge/adapters/binanceSignedKernel/safety.ts` | `BUILT_AND_TESTED` | local boundary utility | Reuses Foundation structured failures and recursively drops signatures, payloads, credentials, URLs, account values, causes and stacks |
+| Offline signed-kernel proofs | `server/test/liveEdge/signedKernel/**` | `161/161` focused checks | test-only | Public illustrative vectors, hostile inputs, purity tripwires and exact failure/clock/rate/ambiguity boundaries; no network or real credential |
+
 ## Director-owned integration still required
 
 - owner-approved Basis/Volume advisory intake;
@@ -42,9 +55,11 @@ authority.
 Until those gates pass, L01 is never `WIRED`, `LIVE_PUBLIC` or
 `INTEGRATED_ACCEPTED`.
 
-L02 is likewise documentary and `UNWIRED`. Later L03-L05 adapters may consume
-the hash-locked matrix inside the lane; any production composition, package
-script or supervisor/API projection remains director-owned.
+L02 is likewise documentary and `UNWIRED`. L03 consumes the hash-locked matrix
+inside the lane and remains construction-only, `UNWIRED` and without a
+credential or transport owner. Later L04-L05 adapters may consume these
+lane-ready seams; any production composition, package script or supervisor/API
+projection remains director-owned.
 
 ## Explicitly absent
 
@@ -57,6 +72,9 @@ script or supervisor/API projection remains director-owned.
   the L01/L02 implementation;
 - a Binance client, signer, credential loader, private reader, socket, order
   builder, rate-budget runtime, filter registry or Margin action in L02.
+- a credential/key owner, exchange transport, private/account reader, signed
+  validation call, runtime scheduler, durable retry store, execution event,
+  reconciliation result or automatic mutation resubmission in L03.
 
 `LIVE_EXECUTION_NOT_IMPLEMENTED` remains mechanically enforced by the canonical
 Foundation execution barrier and the L01 regression proof.

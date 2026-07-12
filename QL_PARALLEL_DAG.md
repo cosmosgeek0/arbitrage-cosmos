@@ -11,7 +11,7 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 | Q14 validation-infra | ~/Desktop/q14-validation-infra | q14-validation-infra-20260712 | 24ccf58 | ACCEPTED + MERGED (2,182 pass) |
 | Dashboard shell satellite | ~/Desktop/dash-shell | dashboard-shell-20260712 | 0f2bb88 | ACCEPTED (6925015 + RECEIPT.md) — wire at integration |
 | Q13 deep-gate shard | ~/Desktop/q13-deep-gate | q13-deep-gate-20260712 | f756f3b | ACCEPTED (06f0a8f) — merge queued behind Q12 park |
-| Q15 registry shard | ~/Desktop/q15-registry | q15-registry-20260712 | f756f3b | READY |
+| Q15 registry shard | ~/Desktop/q15-registry | q15-registry-20260712 | f756f3b | ACCEPTED + MERGED (2,342 pass) |
 | L15 deploy-infra satellite | ~/Desktop/l15-infra | l15-deploy-infra-20260712 | 0f2bb88 | ACCEPTED (2cec412; 347 assertions) — merge at integration |
 | Q11 survival | ~/Desktop/q11-survival | q11-survival-20260712 | 8a5dd09 | ACCEPTED + MERGED (2,182 pass with Q14) |
 | L spine L00–L08 | live-execution-proof-20260712 | live-execution-control-proof-20260712 | 73e1a1f | L05 ACCEPTED (8e4b705); L06 takeover → Fable; Codex left auditable uncommitted L06 work; TWO director decisions DEFERRED to I00: ledger compare-and-set primitive + Foundation quantity-bridge contract (see live-edge-receipts/patches/) |

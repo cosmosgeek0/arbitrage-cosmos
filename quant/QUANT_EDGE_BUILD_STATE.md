@@ -1,17 +1,17 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `11`
+State generation: `12`
 
-Updated: 2026-07-12T15:11:47+0530
+Updated: 2026-07-12T15:20:07+0530
 
-Status: `READY_FOR_REVIEW`
+Status: `ACCEPTED`
 Program: Q lane — deterministic research evidence, labels, models, calibration, drift and advisory inference.
 
 ## Frozen launch identity
 
 - Worktree: `/Users/cosmosgeek/Desktop/quant-edge-research-20260712`
 - Branch: `quant-edge-research-factory-20260712`
-- Current HEAD at generation-11 authoring: `404645858830610677d0b6f6a75453b9a9bc531a`
+- Current HEAD at generation-12 authoring: `34b88ef7f022226acd8e294d3a023f71f3dfc397`
 - Origin: `git@github.com:cosmosgeek0/arbitrage-cosmos.git`
 - Canonical base: `7010499170e24b31c9c0be2c9d73a536e680c6fe`
 - Protocol SHA / current parent: `73e1a1ff7daa48df8dac45713fc5f106842edafc`
@@ -25,9 +25,9 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 
 ## Phase position
 
-- Last accepted phase: `Q02`
+- Last accepted phase: `Q03`
 - Latest director acceptance: `D-LAUNCH-1`, commit `9ca01537f4edda06ee566cd261e612d5c315fb76`; authentic launch blob/digest binding independently verified.
-- Current phase: `Q03`
+- Current phase: `Q03` (`ACCEPTED`; Q04 not activated)
 - Current task: `quant/TASKS/Q03.md`
 - Current task SHA-256: `878bff3af1bcace1b2b1c5b2d3483eef3f46721a1e62979e5176ad0c3ba149f3`
 - Checkpoint receipt: `quant/RECEIPTS/Q00.md`; blob `7ba41768ba747bbc3eddd1941f6f5d82985dc1ca`; SHA-256 `738dad4caac7cfac9ba8b7b84fb646ec1817c6f0eb34fc09daa60129ab1996c3`; immutable in checkpoint commit.
@@ -47,8 +47,10 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 - Q02 acceptance/state commit A2: `1db50828c8474b0f9fe70a70817ab20003107546`; exact parent C2.
 - Q03 activation/state commit: `404645858830610677d0b6f6a75453b9a9bc531a`; exact parent `1db50828c8474b0f9fe70a70817ab20003107546`.
 - Q03 implementation receipt: `quant/RECEIPTS/Q03.md`; SHA-256 `767c94f8680490a35b992da1a6abf349379508ba75bef670ac3de1071f5fe92a`; immutable in C3 after commit.
-- Q03 implementation commit C3: the commit containing this generation-11 state and receipt; intentionally non-self-referential.
-- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `ACCEPTED`; Q03 `COMPLETE/READY_FOR_INDEPENDENT_COMMIT_VERIFICATION`.
+- Q03 implementation commit C3: `34b88ef7f022226acd8e294d3a023f71f3dfc397`; exact parent `404645858830610677d0b6f6a75453b9a9bc531a`; tree `34ea865d2df4ecf98f79c83f65bb1d0f49a00636`.
+- Q03 acceptance receipt: `quant/RECEIPTS/Q03_ACCEPTANCE.md`; SHA-256 `31cf167aa6f7bcd209ebbb29254e9d0f6ccd65ec7093885dacd488ec49270486`.
+- Q03 acceptance/state commit A3: the commit containing this generation-12 state and acceptance receipt; intentionally non-self-referential.
+- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `ACCEPTED`; Q03 `ACCEPTED`.
 
 ## Ownership and safety
 
@@ -102,9 +104,10 @@ Implementation commit C2 therefore has 24 changed paths, all under `quant/**`. `
 - Package/script: nine `src/quant_edge/bootstrap/*.py` files and `scripts/q03_real_sample.py`.
 - Generated evidence: ten `generated/q03/*` hash/count/schema/Markdown artifacts; no raw external bytes or rows.
 - Tests: five contract, two property and seven unit test files.
-- Durable completion: `RECEIPTS/Q03.md` and this generation-11 state.
+- Durable completion: immutable `RECEIPTS/Q03.md` and generation-11 state in C3.
+- Durable acceptance: `RECEIPTS/Q03_ACCEPTANCE.md` and this generation-12 state in A3.
 
-Implementation C3 is prepared with 38 changed paths, all under `quant/**`. `TASKS/Q03.md` remains unchanged from activation. The two root directives remain preserved untracked owner inputs and are never staged.
+Implementation C3 has 38 changed paths, all under `quant/**`. `TASKS/Q03.md` remains unchanged from activation. The two root directives remain preserved untracked owner inputs and are never staged.
 
 ## Q-lane posture map
 
@@ -178,6 +181,8 @@ Implementation C3 is prepared with 38 changed paths, all under `quant/**`. `TASK
 - Q03 archive replay: 12,440-byte official ZIP, 49,263-byte CSV, 832 rows; exact official/archive `2de38a97…a893`, member `52058a46…1d7`, 0 internal discontinuities.
 - Q03 accumulated Q00 `6/6`, protocol `22/22`, `npm test` exit 0 with existing `377` checks, and `git diff --check` exit 0.
 - Q03 independent adversarial review: initial blockers reproduced and corrected; final `Q03 ADVERSARIAL SEAL`, no remaining blocker.
+- Independent exact C3 verifier: `VERIFIED`; exact parent/ancestry, 38-path scope, regular-file modes, frozen/accepted emptiness, task/receipt/state/generated/lineage hashes and tree `34ea865d2df4ecf98f79c83f65bb1d0f49a00636` pass.
+- Archive-derived C3 SHA-256 `87df0010a9b896891d1aa94fd6d5078249528829bd8d1a9d048e35659c8b6a2c`; Ruff, format, strict mypy, Q `1032` at `100.00%`, focused Q03 `430` at `100.00%`, generated/no-raw `6/6`, cross-process byte replay, Q00 `6/6` and protocol `22/22` all pass.
 - Independent verification of `fa6fecd`: exact 10-path `quant/**` history, empty frozen diff, range `git diff --check` exit 0, scope suite `6/6`, protocol `22/22`.
 - Host: Apple M4 Max, 16 cores, 48 GB; Node `v22.23.1`; npm `10.9.8`.
 - Current Q performance/inference measurements: none. Historical receipt and synthetic capacity facts remain separately labeled in `quant/docs/Q00_BENCHMARK_PROFILE.md`.
@@ -188,6 +193,7 @@ Implementation C3 is prepared with 38 changed paths, all under `quant/**`. `TASK
 - Resolved before Q01 seal: mandatory hypothesis numbering, substantive Markdown drift, arbitrary-runner protocol false green, unbounded/malformed Unicode input, compact framework-card gaps and ephemeral-only scanner detail.
 - Q01 exact-commit verification completed and acceptance conditions passed; no Q01 blocker remains.
 - Q02 exact-commit verification passed and Q02 is accepted; no Q02 blocker remains.
+- Q03 exact-commit verification passed and Q03 is accepted; no Q03 blocker remains.
 - No canonical forward runtime-to-Q append-only bridge exists; this is a later integration seam, not permission for a Q socket.
 - Resolved in Q03: separate nullable-source-time forward schema fingerprint `bd030e0a…8886`, explicit clock/order/payload posture and bounded `DROP_NEW` seam.
 - Free history cannot prove full L2, receive latency, borrow truth or causal intent.
@@ -198,15 +204,12 @@ Implementation C3 is prepared with 38 changed paths, all under `quant/**`. `TASK
 
 ## Exact next task
 
-1. Stage only the 38 recorded Q03 `quant/**` paths; keep both owner root directives unstaged.
-2. Run `bash quant/scripts/check-scope.sh` and `git diff --cached --check`; create C3 with exact parent `404645858...`.
-3. Independently verify the exact C3 object: parent/ancestry/tree/path modes/scope/frozen emptiness/task/receipt/artifact hashes and archive-derived deterministic tests.
-4. If and only if exact C3 verification passes, create immutable `quant/RECEIPTS/Q03_ACCEPTANCE.md`, advance state to generation 12 `ACCEPTED`, and create A3.
+After A3 exists, create only the bounded `quant/TASKS/Q04.md` for canonical Spot/USD-M book reconstruction and advance state in a Q04 activation commit. Verify all controlling and accepted identities first; do not implement Q04 in the activation commit and never rewrite accepted Q03 work.
 
-Next exact command:
+Next exact command after A3:
 
 ```bash
-git status --short && git diff --check && shasum -a 256 quant/RECEIPTS/Q03.md
+git status --short && git log -1 --format='%H %P' && shasum -a 256 quant/RECEIPTS/Q03.md quant/RECEIPTS/Q03_ACCEPTANCE.md quant/QUANT_EDGE_BUILD_STATE.md
 ```
 
 ## Fresh-session read order
@@ -214,7 +217,7 @@ git status --short && git diff --check && shasum -a 256 quant/RECEIPTS/Q03.md
 1. `STATE.md`, `MISSION.md`, `ARCHITECTURE.md` Part II, `DIRECTOR.md`.
 2. `QUANT_EDGE_RESEARCH_FACTORY_12H.md` and only launch Section 6.
 3. `EDGE_PROTOCOL_V1.md`, frozen schema/fixtures, and `quant/DIRECTIVE_INPUTS.lock`.
-4. This state, `quant/TASKS/Q03.md`, `quant/RECEIPTS/Q03.md`, both immutable Q02 receipts and Q03 decision/research note.
+4. This state, `quant/TASKS/Q03.md`, both immutable Q03 receipts, both immutable Q02 receipts and Q03 decision/research note.
 5. Q00 reuse matrix and Q01 framework/security docs are inputs only; do not redo accepted work or regenerate Q03 evidence unless exact code/input identity changed before C3.
 
 ## Work not to repeat
@@ -231,3 +234,4 @@ git status --short && git diff --check && shasum -a 256 quant/RECEIPTS/Q03.md
 - Do not rerun or rewrite accepted Q02; the activated Q03 task is the only current work.
 - Do not implement Q04 book reconstruction or Q05 labels/controls during Q03.
 - After C3, do not rewrite `quant/RECEIPTS/Q03.md`; verify the exact commit and create a separate acceptance receipt.
+- Do not rerun or rewrite accepted Q03; Q04 is not activated until a new bounded task and activation commit exist.

@@ -4,15 +4,15 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 
 | Packet | Worktree | Branch | Base SHA | State |
 | --- | --- | --- | --- | --- |
-| Q spine Q00–Q06 | quant-edge-research-20260712 | quant-edge-research-factory-20260712 | 73e1a1f | ACCEPTED through Q09-merged — spine SPRINTING Q10 ONLY, parks after (Q11 shard-owned; Q12+ after merges) |
+| Q spine Q00–Q06 | quant-edge-research-20260712 | quant-edge-research-factory-20260712 | 73e1a1f | ACCEPTED through Q09-merged — Q10 ACCEPTED; Q11+Q14 merged; spine SPRINTING Q12→Q13→Q15→Q16→Q17 to LANE_READY |
 | Q07 microstructure | SPINE-OWNED (shard retired 2026-07-12; spine was already WORKING Q07 at d057373) | quant-edge-research-factory-20260712 | 24ccf58 | ACCEPTED on spine (f0d4448) |
 | Q08 derivatives | ~/Desktop/q08-derivatives | q08-derivatives-20260712 | 24ccf58 | ACCEPTED + MERGED onto lane (c00de40, 494d6ce; 1,649 pass) |
 | Q09 regime | ~/Desktop/q09-regime | q09-regime-20260712 | 24ccf58 | ACCEPTED + MERGED onto lane (1,842 pass) |
-| Q14 validation-infra | ~/Desktop/q14-validation-infra | q14-validation-infra-20260712 | 24ccf58 | ACCEPTED (e266b42) — merge waits for Q10 park (one writer in spine worktree) |
-| Dashboard shell satellite | ~/Desktop/dash-shell | dashboard-shell-20260712 | 0f2bb88 | READY (fixtures-only vs frozen DASHBOARD_TRUTH.md; director wires at integration) |
-| L15 deploy-infra satellite | ~/Desktop/l15-infra | l15-deploy-infra-20260712 | 0f2bb88 | READY (testable artifacts only; zero AWS/Cloudflare mutation) |
-| Q11 survival | ~/Desktop/q11-survival | q11-survival-20260712 | 8a5dd09 | READY |
-| L spine L00–L08 | live-execution-proof-20260712 | live-execution-control-proof-20260712 | 73e1a1f | L04 ACCEPTED; L05 WORKING (ownership → Fable, D-LAUNCH-4) |
+| Q14 validation-infra | ~/Desktop/q14-validation-infra | q14-validation-infra-20260712 | 24ccf58 | ACCEPTED + MERGED (2,182 pass) |
+| Dashboard shell satellite | ~/Desktop/dash-shell | dashboard-shell-20260712 | 0f2bb88 | committed (6925015, items 1-10) — acceptance verify + wire at integration |
+| L15 deploy-infra satellite | ~/Desktop/l15-infra | l15-deploy-infra-20260712 | 0f2bb88 | ACCEPTED (2cec412; 347 assertions) — merge at integration |
+| Q11 survival | ~/Desktop/q11-survival | q11-survival-20260712 | 8a5dd09 | ACCEPTED + MERGED (2,182 pass with Q14) |
+| L spine L00–L08 | live-execution-proof-20260712 | live-execution-control-proof-20260712 | 73e1a1f | L05 ACCEPTED (8e4b705); L06 takeover → Fable; Codex left auditable uncommitted L06 work; TWO director decisions DEFERRED to I00: ledger compare-and-set primitive + Foundation quantity-bridge contract (see live-edge-receipts/patches/) |
 | L09 normal-basis shard | (cut on L08 acceptance) | l09-normal-basis-20260712 | accepted-L08 SHA | WAITING on L08 |
 | L10 reverse-basis shard | (cut on L08 acceptance) | l10-reverse-basis-20260712 | accepted-L08 SHA | WAITING on L08 |
 | L11 volume shard | (cut on L08 acceptance) | l11-volume-20260712 | accepted-L08 SHA | WAITING on L08 |

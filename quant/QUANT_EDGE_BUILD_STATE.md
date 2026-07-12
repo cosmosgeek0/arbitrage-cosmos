@@ -1,17 +1,17 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `7`
+State generation: `8`
 
-Updated: 2026-07-12T11:47:33+0530
+Updated: 2026-07-12T13:38:24+0530
 
-Status: `WORKING`
+Status: `READY_FOR_INDEPENDENT_COMMIT_VERIFICATION`
 Program: Q lane — deterministic research evidence, labels, models, calibration, drift and advisory inference.
 
 ## Frozen launch identity
 
 - Worktree: `/Users/cosmosgeek/Desktop/quant-edge-research-20260712`
 - Branch: `quant-edge-research-factory-20260712`
-- Current HEAD at generation-7 authoring: `501eff34a7bcc354dfcd900d2d72ca263ade8b93`
+- Current HEAD at generation-8 authoring: `9294b0f0ad5a73b7e746057ccf7a76eed677beb0`
 - Origin: `git@github.com:cosmosgeek0/arbitrage-cosmos.git`
 - Canonical base: `7010499170e24b31c9c0be2c9d73a536e680c6fe`
 - Protocol SHA / current parent: `73e1a1ff7daa48df8dac45713fc5f106842edafc`
@@ -40,8 +40,10 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 - Q01 implementation commit C: `73330e281c7a91fa5fba2059570e9619f9ade34d`; exact parent `90e1ef89edd4cc449664ac05cb429448e0bac6f0`.
 - Q01 acceptance receipt: `quant/RECEIPTS/Q01_ACCEPTANCE.md`; SHA-256 `368daeccd6b43f28bfc41110f1dc85b8037f1c7eac81e3539a5e2bea893bd4b2`.
 - Q01 acceptance/state commit A: `501eff34a7bcc354dfcd900d2d72ca263ade8b93`.
-- Q02 activation/state commit: the commit containing this generation-7 state and task; intentionally non-self-referential.
-- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `WORKING`, with no implementation or receipt yet.
+- Q02 activation/state commit: `9294b0f0ad5a73b7e746057ccf7a76eed677beb0`; exact parent `501eff34a7bcc354dfcd900d2d72ca263ade8b93`.
+- Q02 implementation receipt: `quant/RECEIPTS/Q02.md`; SHA-256 `978456a8e3bb5adfc8092fc7d647ef3cb8ade9ac6b548578a578c23c11bc9b97`; immutable in C2.
+- Q02 implementation commit C2: the commit containing this generation-8 state and receipt; intentionally non-self-referential.
+- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `COMPLETE_PENDING_EXACT_COMMIT_VERIFICATION`.
 
 ## Ownership and safety
 
@@ -78,20 +80,23 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 
 Implementation commit C therefore has 32 changed paths, all under `quant/**`. The two root directives remain preserved untracked owner inputs and are never staged.
 
-## Q02 activation inventory
+## Q02 implementation inventory
 
-- `quant/TASKS/Q02.md`
-- this generation-7 state
+- Decision/research: `DECISIONS/Q02-001-IMMUTABLE-LAKE.md`, `docs/Q02_STORAGE_RESEARCH.md`.
+- Golden contract: `fixtures/q02_partition_golden_v1.json`.
+- Lake package: eight `src/quant_edge/lake/*.py` modules.
+- Tests: five contract, five unit and one property test file.
+- Durable completion: `RECEIPTS/Q02.md` and this generation-8 state.
 
-No Q02 implementation path exists yet.
+Implementation commit C2 therefore has 24 changed paths, all under `quant/**`. `TASKS/Q02.md` remains unchanged from activation commit. The two root directives remain preserved untracked owner inputs and are never staged.
 
 ## Q-lane posture map
 
 - `LIVE`: none. Q has no production integration, listener, data producer, model or authority.
 - `SHADOW`: none. No Q assessment service or champion/challenger is running.
-- `SYNTHETIC`: frozen protocol fixtures, existing product fixtures and Q01 deterministic config/RNG fixtures only; contract evidence, never market claims.
+- `SYNTHETIC`: frozen protocol/product fixtures, Q01 deterministic config/RNG and the Q02 golden reference partition input/hash vector; contract evidence, never market claims.
 - `RESEARCH`: locked offline package and eight-family hypothesis falsification portfolio; this status is not edge evidence.
-- `UNAVAILABLE`: historical lake, point-in-time master, Event Atlas, owner annotations, feature/label/model registries, trained/calibrated models, drift service and inference.
+- `UNAVAILABLE`: external lake revisions, point-in-time master, Event Atlas, owner-annotation records, feature/label/model registries, trained/calibrated models, drift service and inference.
 - Money/order/capital/risk authority: `NONE` in every posture.
 
 ## Framework and source decisions
@@ -107,12 +112,13 @@ No Q02 implementation path exists yet.
 
 ## Dataset, registry and evidence state
 
-- Dataset versions: none. No external data entered the repository.
+- Dataset versions: none. Q02 provides an immutable local lake/manifest contract and synthetic golden hashes, but no partition bytes or external data entered the repository.
 - Coverage: no retained historical/Q dataset; no point-in-time master; no current Q event trace.
 - Event Atlas: absent; two-tier build routed to Q03–Q05.
 - Hypothesis registry: `edge-hypotheses-2026-07-12-v2`; 8 families (`DATA_INSUFFICIENT=5`, `RESEARCH=2`, `UNTESTED=1`), exact deterministic Markdown projection; no `SHADOW`.
 - Feature registry: none. Label registry: none. Model registry: none. Calibration: none.
-- Owner annotations: absent; separate immutable weak-supervision channel routed to Q02/Q05.
+- Source cards: versioned eight-gate contract exists; no source card is admitted and no producer exists.
+- Owner annotations: separate immutable weak-supervision/blinding/link contracts exist; no annotation or objective-outcome record exists.
 - Frozen protocol fixtures and product test fixtures are `SYNTHETIC_ONLY`, never research evidence.
 - Dependency evidence: 49-package durable vulnerability/license inventories; zero indexed vulnerabilities/unknown license fields observed on 2026-07-12, subject to time-varying scanner/legal limits.
 
@@ -138,6 +144,14 @@ No Q02 implementation path exists yet.
 - Independent C verification: exact parent/ancestry, 32 allowed paths, empty frozen diff, artifact/task/receipt hashes and `git diff-tree --check` all pass.
 - Archive-derived C environment: clean locked install, imports, Ruff, strict mypy, `88` tests, `96.71%` coverage, registry, seed and protocol `22/22` all pass; archive SHA-256 `c4e53bd84e1cb928791e23c5db600d2b008db03326ca2c767bb7de0578db42b0`.
 - `git diff --cached --check`: exit 0.
+- Q02 pinned `uv 0.11.28 lock --check`: exit 0, 51 resolved packages; no dependency change.
+- Q02 Ruff lint/format and strict mypy: exit 0, 36 files checked/formatted.
+- Q02 full Q suite: `602 passed`; statement and branch coverage `100.00%`.
+- Q02 focused independent suite: `514 passed`; six property tests carry explicit seed `20260712`; golden replay `2/2` across process/CWD/timezone/hash-seed changes.
+- Q02 golden partition/manifest/schema SHA-256: `b953a7d4…c914` / `92c0c447…9d51` / `3812d78c…9050`.
+- Q02 hostile store proofs include path/symlink/staged-name races, manifest-link indeterminacy, corrupt/incomplete state, full anchored parent lineage and sealed validator input.
+- Q02 independent final review: `SEAL`; independent phase audit: `ACCEPTANCE_READY`.
+- Q02 accumulated Q00 scope suite `6/6`, frozen protocol `22/22`, and `npm test` exit 0 with existing `377` deterministic checks.
 - Independent verification of `fa6fecd`: exact 10-path `quant/**` history, empty frozen diff, range `git diff --check` exit 0, scope suite `6/6`, protocol `22/22`.
 - Host: Apple M4 Max, 16 cores, 48 GB; Node `v22.23.1`; npm `10.9.8`.
 - Current Q performance/inference measurements: none. Historical receipt and synthetic capacity facts remain separately labeled in `quant/docs/Q00_BENCHMARK_PROFILE.md`.
@@ -147,23 +161,25 @@ No Q02 implementation path exists yet.
 - Resolved: D-LAUNCH-1 binds launch blob `587c1b83…` to SHA-256 `26b1d5ce…0f2c06`; the stale `0cc192e3…` measurement no longer blocks. The Q worktree's frozen lock remains byte-unchanged; see decisions Q00-002 and Q00-003.
 - Resolved before Q01 seal: mandatory hypothesis numbering, substantive Markdown drift, arbitrary-runner protocol false green, unbounded/malformed Unicode input, compact framework-card gaps and ephemeral-only scanner detail.
 - Q01 exact-commit verification completed and acceptance conditions passed; no Q01 blocker remains.
+- Q02 implementation and review conditions are complete; exact C2 commit-object verification and later A2 acceptance remain pending.
 - No canonical forward runtime-to-Q append-only bridge exists; this is a later integration seam, not permission for a Q socket.
+- The Q02 reference schema is event-timestamped-only. Q03 must add a separate nullable-source-time schema with explicit order/partition clock basis before book-ticker capture.
 - Free history cannot prove full L2, receive latency, borrow truth or causal intent.
 - Current official liquidation selection wording conflicts; preserve sampled/unknown semantics.
 - Numeric Q inference SLOs are unknown until measured on the Q01 lock; only provisional resource/queue budgets exist.
 
 ## Exact next task
 
-1. Verify this Q02 task hash and its activation commit; do not repeat accepted Q00/Q01 work.
-2. Refresh only current official PyArrow/Parquet and DuckDB implementation facts not already resolved in Q01; record a Q02 decision.
-3. Execute only Q02: exact immutable partitions/manifests/provenance/quality/numerics, hardened validated-Arrow query helper, source-card and separate owner-annotation contracts.
-4. Run focused/property/golden and accumulated tests, clean separate-process determinism proof, adversarial review and corrections.
-5. Scope-gate implementation commit C2 with immutable `quant/RECEIPTS/Q02.md`, independently verify it, then create acceptance commit A2.
+1. Stage exactly the 24 recorded Q02 implementation paths; preserve the two root directives unstaged.
+2. Run `bash quant/scripts/check-scope.sh` and `git diff --cached --check`, then create implementation commit C2.
+3. Independently verify C2's exact parent, ancestry, 24-path scope, frozen emptiness, task/receipt/artifact hashes, golden replay, Q tests/coverage, protocol and scope evidence.
+4. If and only if verification passes, create immutable `quant/RECEIPTS/Q02_ACCEPTANCE.md`, advance state to Q02 `ACCEPTED` and commit A2.
+5. Do not start or activate Q03 before A2 exists.
 
 Next exact command:
 
 ```bash
-git rev-parse HEAD && shasum -a 256 quant/TASKS/Q02.md && git status --short
+git rev-parse HEAD && shasum -a 256 quant/TASKS/Q02.md quant/RECEIPTS/Q02.md && git status --short
 ```
 
 ## Fresh-session read order
@@ -171,7 +187,7 @@ git rev-parse HEAD && shasum -a 256 quant/TASKS/Q02.md && git status --short
 1. `STATE.md`, `MISSION.md`, `ARCHITECTURE.md` Part II, `DIRECTOR.md`.
 2. `QUANT_EDGE_RESEARCH_FACTORY_12H.md` and only launch Section 6.
 3. `EDGE_PROTOCOL_V1.md`, frozen schema/fixtures, and `quant/DIRECTIVE_INPUTS.lock`.
-4. This state, `quant/TASKS/Q02.md`, both Q01 receipts and Q01 decision.
+4. This state, `quant/TASKS/Q02.md`, immutable `quant/RECEIPTS/Q02.md`, both Q01 receipts and Q01 decision.
 5. Q00 reuse matrix/source research and Q01 framework/security docs only as inputs; do not redo accepted work.
 
 ## Work not to repeat
@@ -184,3 +200,4 @@ git rev-parse HEAD && shasum -a 256 quant/TASKS/Q02.md && git status --short
 - Do not edit or normalize the two untracked owner directives.
 - Do not rewrite the immutable Q01 receipt after implementation commit C.
 - Do not rerun or rewrite accepted Q01; the next bounded phase is Q02.
+- After C2, do not rewrite `quant/RECEIPTS/Q02.md`; verify the exact commit and create a separate acceptance receipt.

@@ -1,10 +1,10 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `26`
+State generation: `27`
 
-Updated: 2026-07-12T21:43:46+0530
+Updated: 2026-07-12T22:37:15+0530
 
-Status: `Q10_ACTIVATED` (D-LAUNCH-2 self-accepted evidenced loop; director board `0f2bb884daf5b67981ea04f38298d89c1a980de7` limits the spine to Q10 only, then park)
+Status: `Q10_IMPLEMENTED` (immutable receipt in C10; independent exact-commit verification then acceptance A10 pending; director board `0f2bb884daf5b67981ea04f38298d89c1a980de7` limits the spine to Q10 only, then park)
 Program: Q lane — deterministic research evidence, labels, models, calibration, drift and advisory inference.
 
 ## Frozen launch identity
@@ -28,7 +28,9 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 - Last accepted phase: `Q07`
 - Latest director acceptance: `D-LAUNCH-1` (`9ca01537f4edda06ee566cd261e612d5c315fb76`, authentic launch digest); standing order `D-LAUNCH-2` (`84d2ff65fd8d2b200821126dd17b4ba75f3c131c`, continuous self-accepted execution with full evidenced loops, director audits at LANE_READY); `D-LAUNCH-3` (`cf37df4af0ef3724f8f3a145c6be3cdcc84799c0`, Q lane transferred to the Fable lead builder); `D-LAUNCH-5` amendment (`d0e34f0310ebb5ad67b9c7f1ed4785a49a4bb0f8`, director branch): the spine finishes and accepts Q07 only, then parks — Q08/Q09/Q14 are shard-owned in separate worktrees and Q10+ waits for the director's shard merge.
 - Current phase: `Q10` (transparent and boosted model battery) — activated at this generation. The director's serial shard merges for Q08 and Q09 landed on this branch and the board (`QL_PARALLEL_DAG.md` at director commit `0f2bb884daf5b67981ea04f38298d89c1a980de7`) sets the spine to Q10 ONLY, parking after. Q11 is shard-owned at base `8a5dd092…` in `~/Desktop/q11-survival`; Q14 is still `WORKING` in its shard, so any Q10 piece needing the Q14 validation factory is recorded `WAITING_Q14`, never reimplemented.
-- Q10 activation: generation-25 state commit `cc75e9bbde18f536297ea5f166c08ac4d266dcca` is the activation base; this generation-26 activation commit contains `quant/TASKS/Q10.md` SHA-256 `709e611ee4a8f6a62a13d659e90a0bed36375d7eb78af347a523ee0bfd2c20df`.
+- Q10 activation: generation-25 state commit `cc75e9bbde18f536297ea5f166c08ac4d266dcca` is the activation base; activation commit `79f6621985a5f38ae254ea45109a8e3f01f79e4d` contains `quant/TASKS/Q10.md` SHA-256 `709e611ee4a8f6a62a13d659e90a0bed36375d7eb78af347a523ee0bfd2c20df` (unchanged through C10).
+- Q10 implementation receipt: `quant/RECEIPTS/Q10.md`; immutable in C10 (the commit that first contains it, together with this generation-27 state).
+- Q10 dependency adoption: `quant/uv.lock` SHA-256 `716a9d0208f449bba51cde7fd67f9c90206ab0724aeac86ba862e119be859d29`, 68 packages (scikit-learn 1.9.0, xgboost 3.3.0, optuna 4.9.0 as the `models` extra per the Q01 deferred-ADOPT cards); dependency evidence in `quant/generated/q10/`.
 - Director shard merges recorded at this generation:
   - Q08 derivatives shard accepted at `4bac0892fd410d60edcf7b35f8ca59a5e0cf37c9` (build `4c9b02672aed7c02149fd7e37e9fd2ec5552107a`, scope-skip fix `6649749c700fbb6825f44e22bf551e82effea4d1`) and merged by the director in `c00de401b27f3d6cccc3f1e8968ad7578f3575ca`.
   - Scope-guard merge-law fix `494d6ceacd9438f370b27f17b45ff8368179c5ee`: the Q08 per-commit shard scope test skips honestly on the merged lane branch and retains full power inside the shard worktree.
@@ -180,14 +182,14 @@ Implementation C7 has 23 changed paths, all under `quant/**`. `TASKS/Q07.md` rem
 - `LIVE`: none. Q has no production integration, listener, data producer, model or authority.
 - `SHADOW`: none. No Q assessment service or champion/challenger is running.
 - `SYNTHETIC`: frozen protocol/product fixtures, Q01 deterministic config/RNG, Q02 golden vector, Q03 hash-only forward bridge fixtures and Q04 replay/golden book fixtures; never observed market evidence.
-- `RESEARCH`: locked offline package, eight-family hypothesis portfolio, one checksum-verified/disposable archive replay, a hash-only two-tier Event Atlas bootstrap, the Q04 fail-closed Spot/USD-M local-book reference model with deterministic replay, the Q07 sixteen-feature §13.1 microstructure library, the merged Q08 derivatives/Basis/cross-market library and the merged Q09 change/regime/anomaly/analog layer, all with honest dispositions; no edge claim.
+- `RESEARCH`: locked offline package, eight-family hypothesis portfolio, one checksum-verified/disposable archive replay, a hash-only two-tier Event Atlas bootstrap, the Q04 fail-closed Spot/USD-M local-book reference model with deterministic replay, the Q07 sixteen-feature §13.1 microstructure library, the merged Q08 derivatives/Basis/cross-market library, the merged Q09 change/regime/anomaly/analog layer, and the Q10 §14.1–14.3 transparent-and-boosted model battery (calibrated linear baselines, honest controls, XGBoost challengers, bounded fully-logged Optuna studies, synthetic planted-structure proofs, WAITING_Q14 validation seam), all with honest dispositions; no edge claim.
 - `UNAVAILABLE`: real forward Q delivery, point-in-time instrument master, owner-annotation records, feature/label/model registries, trained/calibrated models, drift service and inference.
 - Money/order/capital/risk authority: `NONE` in every posture.
 
 ## Framework and source decisions
 
-- Python/toolchain: CPython `3.13.14`, `uv/uv-build 0.11.28`; `uv.lock` SHA-256 `3449f6eb892e2e5dd27dd48a735f9fe30d1ddfb38f16d858bba60202f5f4ed81`, 51 entries.
-- Immediate runtime frameworks: Polars `1.42.1`, PyArrow `25.0.0`, DuckDB `1.5.4`; modeling/registry/sequence candidates remain deferred or reference/rejected exactly as `docs/Q01_FRAMEWORK_ADOPTION.md` records.
+- Python/toolchain: CPython `3.13.14`, `uv/uv-build 0.11.28`; `uv.lock` SHA-256 `716a9d0208f449bba51cde7fd67f9c90206ab0724aeac86ba862e119be859d29`, 68 entries (Q02–Q09 goldens were built under the 51-entry lock `3449f6eb…4ed81`; partition/manifest bytes measured identical across the change).
+- Immediate runtime frameworks: Polars `1.42.1`, PyArrow `25.0.0`, DuckDB `1.5.4`; Q10 activated the deferred-ADOPT modeling cards as the `models` extra: scikit-learn `1.9.0`, XGBoost `3.3.0`, Optuna `4.9.0` (bounded threads, no pickle/joblib persistence); LightGBM/CatBoost remain `REFERENCE_ONLY`, scikit-survival `REJECT`; remaining registry/sequence candidates stay deferred exactly as `docs/Q01_FRAMEWORK_ADOPTION.md` records. Host prerequisite: XGBoost needs `libomp.dylib`; the sklearn-vendored copy is symlinked into the managed toolchain `lib/` (see `DECISIONS/Q10-001`).
 - Framework/paper cards: 24 explicit framework cards plus all 15 required primary-paper implement/test/ablate decisions, with no measured economic claim.
 - Binance public archive: `ADAPT` for checksum/revision-manifested coarse history; raw-data redistribution permission unresolved.
 - Canonical runtime capture: `ADAPT` for forward high-fidelity atlas through a future append-only bridge; Q owns no production socket.
@@ -201,7 +203,7 @@ Implementation C7 has 23 changed paths, all under `quant/**`. `TASKS/Q07.md` rem
 - Coverage: observed BNBUSDT Spot `aggTrades` for 2017-11-06, 832 rows, 0 observed internal ID discontinuities/invalid/duplicates; boundary/upstream completeness and point-in-time identity remain unknown.
 - Event Atlas: `q03.event-atlas.v1`, as-of `1783846749003` ms; 832 rows, 20 candidates, 143 controls, 0 omitted; later outcomes `UNAVAILABLE`; forward tier real coverage `MISSING/BLOCKED`.
 - Hypothesis registry: `edge-hypotheses-2026-07-12-v2`; 8 families (`DATA_INSUFFICIENT=5`, `RESEARCH=2`, `UNTESTED=1`), exact deterministic Markdown projection; no `SHADOW`.
-- Feature registry: the Q06 §12 law (fixed-point/domains/baselines/cards/equivalence/quality) with four v1 primitives, synthetic proofs only. Label registry: the Q05 §11 machinery (identity/outcomes/stages/basis/disposition/controls/manifests) exists with synthetic proofs only; no populated real-label dataset. Model registry: none. Calibration: none.
+- Feature registry: the Q06 §12 law (fixed-point/domains/baselines/cards/equivalence/quality) with four v1 primitives, synthetic proofs only. Label registry: the Q05 §11 machinery (identity/outcomes/stages/basis/disposition/controls/manifests) exists with synthetic proofs only; no populated real-label dataset. Model registry: none (Q15). Models: the Q10 battery machinery exists with synthetic planted-structure proofs only — comparison reports, fully-logged bounded studies and per-model isotonic calibration with measured ECE; no model is trained on real evidence and none carries probability semantics without calibration evidence.
 - Source cards: Q03 archive/runtime/Tardis reviews all remain `INELIGIBLE`/`REVIEW_ONLY_NO_ADMISSION`; no source is admitted and no Q producer exists.
 - Owner annotations: separate immutable weak-supervision/blinding/link contracts exist; no annotation or objective-outcome record exists.
 - Frozen protocol fixtures and product test fixtures are `SYNTHETIC_ONLY`, never research evidence.
@@ -247,6 +249,14 @@ Implementation C7 has 23 changed paths, all under `quant/**`. `TASKS/Q07.md` rem
 - Archive-derived C5 SHA-256 `8628e338beb21274b473819bf0d32bc7d62c5a29829f71c1b373d170a796b0e9`; clean locked install, Ruff/format, strict mypy, Q `1298` at `100.00%` (6,744/2,406) and byte-identical artifact regeneration all pass.
 - Independent exact C4 verifier: exact parent/ancestry, 21-path `quant/**` scope, regular modes, frozen/accepted emptiness, task/receipt/state/artifact blob hashes and `git diff-tree --check` all pass; tree `8611a1ac3c9f23fa61aa806ae5dcfc4e00e4f017`.
 - Archive-derived C4 SHA-256 `b1680299466a2e903f9e5aad2a2bf8633539cf00ea2ba994d0dbe18e5f217918`; clean locked install, Ruff/format, strict mypy, Q `1172` at `100.00%` (5,223/1,864), golden/campaign byte regeneration and subprocess determinism all pass.
+- Q10 pinned `uv 0.11.28 lock --check`: exit 0 after the deferred-ADOPT activation, 68 resolved packages; dependency audit 64 distributions / 0 indexed vulnerabilities / 0 unknown licenses (2026-07-12).
+- Q10 Ruff lint/format-check and strict mypy: exit 0, 205 files (overrides only for untyped `sklearn.*`/`threadpoolctl`).
+- Q10 focused suite: `99 passed`; `quant_edge.models` 1,261 statements / 394 branches, `100.00%`.
+- Q10 accumulated Q suite: `1941 passed, 4 skipped` (honest Q08 shard scope skips); 13,819 statements / 4,642 branches, `100.00%`.
+- Q10 property campaigns: seed `20260712`; quantization nearest-grid/half-even law, brute-force exact-rational metric parity, comparison-winner law, split partition law; seeded planted-direction monotone laws for constrained classifier/ranker; study determinism, known-optimum, injected-failure and fail-closed logging laws.
+- Q10 golden fixture `874b2cd9…833e`; campaign JSON `ab1f8a60…541f`; Markdown `6c0489d7…255b`; byte-identical across CWD/TZ/hash-seed subprocesses and equal to in-test regeneration; measured winners: XGBoost on the planted-XOR binary and heteroscedastic quantile targets, `ols:v1` over both boosted challengers on the noise-dominated regression target (honest losses frozen), `xgb_ranker:v1` on ranking; 4 × 12/12 trials logged.
+- Q10 accumulated Q00 scope `6/6`, protocol `22/22`, `npm test` exit 0 unchanged.
+- Q10 adversarial review: multi-quantile monotone-constraint violation measured and the constraint honestly removed; Q02 golden live-lock pin amended for lawful lock evolution (partition/manifest bytes measured identical); dead helper/unreachable-guard cleanups with testable seams; sklearn deprecation removed at byte-identical battery digest; libomp host provisioning recorded.
 - Host: Apple M4 Max, 16 cores, 48 GB; Node `v22.23.1`; npm `10.9.8`.
 - Current Q performance/inference measurements: none. Historical receipt and synthetic capacity facts remain separately labeled in `quant/docs/Q00_BENCHMARK_PROFILE.md`.
 
@@ -268,7 +278,7 @@ Implementation C7 has 23 changed paths, all under `quant/**`. `TASKS/Q07.md` rem
 
 ## Exact next task
 
-Execute the activated `Q10` per `quant/TASKS/Q10.md` (SHA-256 `709e611e…2c20df`): implement → focused tests → accumulated lane tests → adversarial review → corrections → immutable receipt in C10 → independent exact-commit verification → acceptance receipt in A10 → state update → PARK. Acceptance: all trials logged; complex challengers may honestly lose. Do not start Q11 (shard-owned at `8a5dd092…`), Q12, Q13 or Q14 paths (`quant/src/quant_edge/survival/**`, `quant/tests|generated/q11/**`, Q14 validation paths); any Q10 need for the Q14 validation factory is recorded `WAITING_Q14`. Never rewrite accepted Q00–Q09 work; never push.
+Q10 implementation is COMPLETE in C10 (this generation travels with the immutable `quant/RECEIPTS/Q10.md`). Next: independent exact-commit verification of C10 (parent = activation `79f66219…`, 36 changed paths all under `quant/**`, task/receipt/artifact blob hashes, frozen/accepted-path emptiness, `git diff-tree --check`), then author `quant/RECEIPTS/Q10_ACCEPTANCE.md` with generation-28 state in acceptance commit A10, then PARK (spine executes nothing further; Q11 shard-owned at `8a5dd092…`; Q12+ resume only on director order after the Q11/Q14 merges). Never rewrite accepted Q00–Q09 work or this receipt; never push.
 
 Next exact command (on resume only):
 
@@ -305,6 +315,9 @@ git status --short && git log -3 --format='%H %P %s' && shasum -a 256 quant/QUAN
 - Do not rewrite either immutable Q07 receipt after A7; Q07 is accepted.
 - The Q08 and Q09 shard merges are landed and accepted: never rewrite, rebase or "clean up" the merged shard history, receipts or code; the Q08 shard scope tests legitimately skip on this branch (494d6ce).
 - Q11 (survival) is shard-owned at base `8a5dd092…`; Q14 (validation factory) is shard-owned and `WORKING`; Q12/Q13 wait for director order after the Q11/Q14 merges. Do not begin any of them here; the spine executes Q10 only, then parks.
+- After C10, do not rewrite `quant/RECEIPTS/Q10.md`; verify the exact commit and create a separate acceptance receipt.
+- Do not re-add monotone constraints to the multi-quantile challenger without new measured evidence that the objective honors them.
+- Do not "fix" the Q02 golden fixture's build-time lock binding: the fixture is frozen accepted evidence; only the explicit live-lock pin in `tests/contract/test_q02_golden.py` moves with lawful lock changes.
 - Do not rewrite either immutable Q04 receipt after A4.
 - After C5, do not rewrite `quant/RECEIPTS/Q05.md`; verify the exact commit and create a separate acceptance receipt.
 - Do not implement Q06 features or models during Q05.

@@ -17,6 +17,13 @@ dependencies = [
 [project.scripts]
 quant-edge = "quant_edge.cli:main"
 
+[project.optional-dependencies]
+models = [
+    "optuna==4.9.0",
+    "scikit-learn==1.9.0",
+    "xgboost==3.3.0",
+]
+
 [dependency-groups]
 dev = [
   "hypothesis==6.156.6",
@@ -57,6 +64,12 @@ strict = true
 warn_unreachable = true
 pretty = true
 show_error_codes = true
+
+[[tool.mypy.overrides]]
+# scikit-learn and threadpoolctl publish no type stubs (no py.typed);
+# xgboost/optuna are typed and stay strict.
+module = ["sklearn.*", "threadpoolctl"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 minversion = "9.1"

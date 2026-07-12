@@ -36,6 +36,14 @@ QUANT_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_PATH = QUANT_ROOT / "fixtures" / "q02_partition_golden_v1.json"
 LOCK_PATH = QUANT_ROOT / "uv.lock"
 
+# The golden fixture permanently binds the lock it was BUILT under (Q02, 51
+# packages); the live workspace lock lawfully evolved when Q10 activated the
+# Q01 deferred-ADOPT model frameworks. Both identities are pinned explicitly:
+# the fixture-internal manifest binding stays frozen, and the live lock is
+# asserted against the current accepted hash below. Partition/manifest bytes
+# are measured byte-identical across that lock change.
+CURRENT_LOCK_SHA256 = "716a9d0208f449bba51cde7fd67f9c90206ab0724aeac86ba862e119be859d29"
+
 
 def _object(value: object, *, field: str) -> dict[str, object]:
     if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
@@ -236,7 +244,7 @@ def test_golden_partition_bytes_and_exact_decode_match_frozen_contract() -> None
     assert bundle.manifest.partition.artifact_digest == DigestV1(expected_partition)
     assert bundle.manifest.schema_fingerprint == SCHEMA_FINGERPRINT == DigestV1(expected_schema)
     assert bundle.manifest.writer_profile_id == WRITER_PROFILE_ID == expected_writer
-    assert hashlib.sha256(LOCK_PATH.read_bytes()).hexdigest() == expected_lock
+    assert hashlib.sha256(LOCK_PATH.read_bytes()).hexdigest() == CURRENT_LOCK_SHA256
     assert bundle.manifest.dependency_lock_digest == DigestV1(expected_lock)
 
     validated = validate_partition_bundle(

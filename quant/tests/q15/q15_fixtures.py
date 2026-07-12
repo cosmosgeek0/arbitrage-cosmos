@@ -11,7 +11,7 @@ from quant_edge.registry_ops.contracts import ChampionSnapshotV1
 from quant_edge.registry_ops.store import ResearchRegistryStore
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-BASE_COMMIT = "f756f3b582f24857811e6ec4c0d08a3a61026b74"
+BASE_COMMIT = "6b18928c282f19128a033ed33910754cbdc2cbe0"
 FIXED_TIME_MS = 1_783_890_000_000
 
 

@@ -2,17 +2,17 @@
 
 Schema version: 1
 
-Generation: 4
+Generation: 5
 
 Program: `LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H`
 
-Current phase: `L02`
+Current phase: `L03`
 
 Phase status: `WORKING`
 
 Lane status: `WORKING`
 
-Accepted phases: `L00`, `L01`
+Accepted phases: `L00`, `L01`, `L02`
 
 ## Git identity
 
@@ -29,6 +29,10 @@ Accepted phases: `L00`, `L01`
 - L01 implementation tree: `ac1411b89775f8c4a38b3ad8e076d1f136d4fa0c`
 - L01 immutable receipt commit: `affae6f1a114b66e8d6f146070398f198b0c4c2c`
 - L01 receipt tree: `d6d30d632da5476675412449d6da289064708a0d`
+- L02 implementation commit: `14241ad40341f34fbc0e23929d17745317f3d232`
+- L02 implementation tree: `bd9eff3bc12e5b18b8bd8ca07a688a9951db0c43`
+- L02 immutable receipt commit: `f04d30bcf9ae55eb6fa0df7ad95c3e7a5a82a494`
+- L02 receipt tree: `f72877240240481e8771b3cb1ec032bb1739d60c`
 - Latest director phase acceptance authority: `D-LAUNCH-1` at `9ca01537f4edda06ee566cd261e612d5c315fb76`
 - Latest director launch-input acceptance: `D-LAUNCH-1` at `9ca01537f4edda06ee566cd261e612d5c315fb76` on `current-main`
 - Latest director launch/protocol commit on lane ancestry: `73e1a1ff7daa48df8dac45713fc5f106842edafc`
@@ -36,11 +40,11 @@ Accepted phases: `L00`, `L01`
 
 ## Exact current task
 
-- Path: `live-edge-receipts/TASKS/L02.md`
-- Git blob at phase start: `2d8b9b9ffddbaff229646b0960faa592c9f828e4`
-- SHA-256: `c239261535f158e744c6d4305caa4159b0f1644d3357c18899f08fca504ea084`
-- Latest accepted receipt: `live-edge-receipts/RECEIPTS/L01.md`
-- Latest accepted receipt SHA-256: `7da73b2048b553128d361c116169b1c877f2f437033cf0bb0b2c7edf3fd5d33f`
+- Path: `live-edge-receipts/TASKS/L03.md`
+- Git blob at phase start: `97a8ce4670c1a6b90c29242272d317ccb397506b`
+- SHA-256: `dd283fe36690a096920dd974346dee62f06ec3e1b5c7f0932a42866c87e91712`
+- Latest accepted receipt: `live-edge-receipts/RECEIPTS/L02.md`
+- Latest accepted receipt SHA-256: `a2be3488eeb26cd94222333ab714dfe9e53c0e06cb0c8b3584e60bba2de9c256`
 
 ## Frozen input hashes
 
@@ -72,7 +76,7 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 - Expected untracked preserved owner inputs: `DIRECTOR_Q_L_TWO_LANE_LAUNCH.md`, `LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md`.
 - Partial implementation files: none.
 - Active workers: none.
-- No L02 implementation file exists at phase start.
+- No L03 implementation file exists at phase start.
 
 ## Canonical reuse
 
@@ -90,6 +94,7 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 - Live public: accepted public acquisition, Basis/Volume engines, ledger, supervisor/control APIs and cockpit projections.
 - Wired: Intelligence Foundation/Runtime, Capital advisory, Foundation control/risk/dry-run execution/reconciliation and System Integration.
 - L01 lane-ready: frozen protocol consumer, bounded identity/queue, advisory-only assessment bridge, local transport policy, recording-health seam and sanitized outcome/feedback guard are `BUILT_AND_TESTED` but `UNWIRED`.
+- L02 lane-ready: hash-locked 34-source/112-contract Binance documentary matrix, exact current/unknown/conflict posture, checked fixtures and closed hostile-data validator are `BUILT_AND_TESTED` but `UNWIRED`.
 - Synthetic only: capital mandate and reconciliation/execution fixtures.
 - Unavailable in canonical convergence: coherent production private account truth, signed validation, exchange-observed fills/reconciliation, recovery mechanics and live execution.
 - Mechanically blocked: `LIVE_EXECUTION_NOT_IMPLEMENTED` remains enforced.
@@ -97,23 +102,27 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 
 ## Binance source state
 
-- Research revision: `L00-BINANCE-2026-07-12-PARTIAL`.
-- Artifact: `live-edge-receipts/L00_OFFICIAL_SOURCE_RESEARCH.md`.
-- Artifact SHA-256: `e8a7c806d3349bd06122c8721043694996f555bb984f2b4e596d2e5b57da8193`.
-- Official-only research performed; no private/account calls.
-- Spot current-route/signing drift, USD-M routed WebSocket migration and Margin official documentation conflicts are recorded.
-- L02 machine-readable source matrix and checked contract fixtures: active; implementation not started.
+- Accepted matrix revision: `L02-BINANCE-2026-07-12`.
+- Whole matrix SHA-256: `7302b7f5f90bb8f08791d07a2718adb1ca77a54d7e01f5a76079380c96cddbac`.
+- Source evidence: 34 official-only records, 0 evidence-hash mismatches; no private/account calls.
+- Contract evidence: 112 inert records with exact Spot/USD-M/Margin production/demo/testnet current, unknown, non-applicable, removed and conflict posture.
+- Spot signature/HMAC/JSON selection, USD-M routed private-stream selection, Margin risk-versus-account separation and permission/status/mode proof requirements are hash-locked.
+- L02 is accepted and must be consumed fail-closed by L03; the matrix remains documentary and `UNWIRED`.
 
 ## Measured tests
 
 - `node packages/edge-protocol-tests/protocol.test.mjs`: exit 0, 22/22, 0.02s real.
-- `node --test --test-concurrency=1 --test-reporter=spec "server/test/liveEdge/**/*.test.mjs"`: exit 0, 142/142.
+- `node --test --test-concurrency=1 --test-reporter=spec "server/test/liveEdge/**/*.test.mjs"`: exit 0, 186/186.
+- L02 focused source-contract subset: exit 0, 43/43.
 - `npm test`: exit 0, 377/377, 18.73s real.
 - `npm run test:all`: exit 0, 2,479 passed, 0 failed, 43.18s real.
 - Full battery: deterministic 377, gates 72, intelligence 152, runtime 394, capital 433, foundation 871, full integration 180.
 - L01 final uncontended reruns: `npm test` exit 0 in 16.72s; `npm run test:all` exit 0. One earlier overlapping `test:all` was invalidated by a worker cleaning `server/dist`, was not counted and passed on serial rerun.
 - L01 cached scope/frozen/diff/patch-applicability gates: pass.
 - L01 adversarial and acceptance audits: `NO_ACCEPTANCE_BLOCKERS`.
+- L02 final uncontended reruns: build exit 0; focused 186/186; protocol 22/22; `npm test` 377/377; `npm run test:all` 2,479/2,479.
+- L02 cached scope/frozen/diff gates: pass; source evidence mismatches: 0.
+- L02 final independent adversarial acceptance audit: `NO ACCEPTANCE BLOCKERS` for matrix SHA `7302b7f5f90bb8f08791d07a2718adb1ca77a54d7e01f5a76079380c96cddbac`.
 - Only existing Vite chunk-size warning observed.
 
 ## Runtime, deployment and secret boundary
@@ -138,18 +147,19 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 - Authority gaps requiring director resolution are listed in `L00_AUTHORITY_REUSE_MAP.md`; no new owner was selected.
 - L00 is accepted and must not be repeated.
 - L01 is accepted `LANE_READY` / `BUILT_AND_TESTED` / `UNWIRED` and must not be repeated.
+- L02 is accepted `LANE_READY` / `BUILT_AND_TESTED` / `UNWIRED` and must not be repeated.
 - Frozen protocol own-property/fixture/hash-coverage gaps remain unchanged; D0003 requests a future director revision while the L01 consumer hardens locally.
 - Production Basis/Volume assessment ingress, production component identity/policy binding, package scripts and supervisor/API projection remain director-owned.
-- L02 is active. L03-L17 are untouched.
+- L03 is active. L04-L17 are untouched.
 
 ## Exact next task
 
-Implement only `live-edge-receipts/TASKS/L02.md`: convert the accepted same-day official Binance research into a machine-readable Spot/USD-M/Margin contract matrix and checked current/obsolete/wrong-route fixtures without duplicating acquisition or performing private calls.
+Implement only `live-edge-receipts/TASKS/L03.md`: build the deterministic no-I/O signed-request construction, clock estimator, rate/cooldown budget, redaction, deterministic ID and ambiguity seams over exact validated L02 contracts, with no credentials, exchange transport or automatic mutation retry.
 
 Exact first command on resume:
 
 ```bash
-shasum -a 256 live-edge-receipts/TASKS/L02.md live-edge-receipts/L00_OFFICIAL_SOURCE_RESEARCH.md live-edge-receipts/RECEIPTS/L01.md && git diff --exit-code 73e1a1ff7daa48df8dac45713fc5f106842edafc -- EDGE_PROTOCOL_V1.md packages/edge-protocol packages/edge-protocol-tests
+shasum -a 256 live-edge-receipts/TASKS/L03.md live-edge-receipts/RECEIPTS/L02.md server/src/liveEdge/adapters/binanceContracts/matrix.ts && git diff --exit-code 73e1a1ff7daa48df8dac45713fc5f106842edafc -- EDGE_PROTOCOL_V1.md packages/edge-protocol packages/edge-protocol-tests
 ```
 
 ## Files to re-read on resume
@@ -157,18 +167,19 @@ shasum -a 256 live-edge-receipts/TASKS/L02.md live-edge-receipts/L00_OFFICIAL_SO
 - `MISSION.md`
 - `ARCHITECTURE.md` Part II
 - `LIVE_EXECUTION_BUILD_STATE.md`
-- `live-edge-receipts/TASKS/L02.md`
+- `live-edge-receipts/TASKS/L03.md`
 - `live-edge-receipts/DIRECTIVE_INPUTS.lock`
 - `live-edge-receipts/DECISIONS/D0002-director-launch-digest-acceptance.md`
-- `live-edge-receipts/RECEIPTS/L01.md`
-- `live-edge-receipts/L00_OFFICIAL_SOURCE_RESEARCH.md`
+- `live-edge-receipts/RECEIPTS/L02.md`
+- `live-edge-receipts/DECISIONS/D0005-l02-binance-contract-policy.md`
+- `server/src/liveEdge/adapters/binanceContracts/index.ts`
 - `EDGE_PROTOCOL_V1.md`
 - `LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md`
 - only Section 7 of the corrected/accepted launch file
 
 ## Work not to repeat unless inputs changed
 
-- Do not repeat accepted L00/L01 work, broad source discovery, canonical owner/code/test inventory or launch-hash investigation.
-- Reuse the accepted L00 official-source evidence and verify only the exact controlling official pages needed for L02's machine-readable contracts.
+- Do not repeat accepted L00/L01/L02 work, broad source discovery, canonical owner/code/test inventory or launch-hash investigation.
+- Reuse the accepted L02 hash-locked matrix and verify only exact current official signing/timing/rate pages needed for L03 construction.
 - Do not edit frozen protocol or shared production/package files.
-- Do not begin L03 before L02 implementation, tests, adversarial corrections, commits, immutable receipt and state transition are complete.
+- Do not begin L04 before L03 implementation, tests, adversarial corrections, commits, immutable receipt and state transition are complete.

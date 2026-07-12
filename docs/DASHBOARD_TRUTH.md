@@ -23,7 +23,7 @@ Within ten seconds of opening the Dashboard, the owner can answer: **what is run
 
 - One truth source: the supervisor snapshot API. The UI may format, never infer.
 - Unknown is rendered as UNKNOWN — never blank, never green, never zero.
-- Synthetic/dry-run data isALWAYS labeled as such — never visually confusable with live.
+- Synthetic/dry-run data is ALWAYS labeled as such — never visually confusable with live.
 - Errors and staleness must be *visible degradation* (color/badge/age), not hidden logs.
 - House visual system per DESIGN.md; no redesign, extend the existing pages (Dashboard, Health, Opportunities, Risk, Execution/Control, Logs).
 

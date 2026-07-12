@@ -34,7 +34,45 @@ FROZEN_PATHS = (
     "quant/uv.lock",
 )
 
-pytestmark = pytest.mark.contract
+
+def _in_shard_repository() -> bool:
+    """True only inside the real shard worktree with its history present.
+
+    An exported archive of the commit has no Git history to check, so the scope
+    law is verifiable only in the worktree; anywhere else these tests skip
+    honestly instead of failing on missing history.
+    """
+
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=60,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    if Path(result.stdout.strip()).resolve() != REPO_ROOT.resolve():
+        return False
+    probe = subprocess.run(
+        ["git", "cat-file", "-e", f"{SHARD_BASE_SHA}^{{commit}}"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        check=False,
+        timeout=60,
+    )
+    return probe.returncode == 0
+
+
+pytestmark = [
+    pytest.mark.contract,
+    pytest.mark.skipif(
+        not _in_shard_repository(),
+        reason="the shard scope law is verifiable only inside the shard git worktree",
+    ),
+]
 
 
 def _git(*args: str) -> str:

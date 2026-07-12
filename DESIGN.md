@@ -42,7 +42,7 @@ calls garbage and will redo the work five times.
 7. Monitor + kill-switches only — NO manual money-action UI ever (trading,
    borrow, repay, collateral). Action routes belong to the engine.
 8. Click every control in real Chrome; restore any state you flipped.
-9. Log the pass in PROJECT_MEMORY.md before moving on.
+9. Log the pass in STATE.md before moving on.
 
 ### 0.1 News And Calendar Are Daily Tape Surfaces (2026-07-10)
 
@@ -240,7 +240,7 @@ countermeasure column is the ONLY known fix — apply it mechanically.
 8. STORES LESSONS OUTSIDE THE PROJECT. Saves owner taste and product laws in
    assistant/Codex memory only; the next fresh agent loses five hours of
    calibration. → Countermeasure: durable lessons go into project files:
-   `AGENTS.md`, `PROJECT_MEMORY.md`, and this playbook. External memory may
+   `AGENTS.md`, `STATE.md`, and this playbook. External memory may
    summarize, but the repo is the source of truth.
 9. OVER-STRIPS WORDS. Interprets "less words, more style" as removing useful
    labels/context until panels become symbol soup. → Countermeasure: remove
@@ -542,7 +542,7 @@ theme-matched circular hole; do not restore rotated SVG dash arcs and seams.
 global search, clock, AWS CLI, API key, Trust Advisor,
 Notifications, Kill Switch / Trading Mode, Connection Watchman, Display Currency,
 Basis Display, Appearance, or Account Details profile, read
-`UI_SURFACE_BASELINE.md`. It records the measured current geometry, text sizes,
+Part II of this file. It records the measured current geometry, text sizes,
 motion timing, real endpoints, and old-code traps from the 2026-07-09 audit.
 
 ## 3. Product decisions (owner rulings — do not relitigate)
@@ -670,7 +670,7 @@ motion timing, real endpoints, and old-code traps from the 2026-07-09 audit.
    console errors, then run `npm test`. For a release or backend/network change,
    also run `npm run test:integration`; investigate external-feed failure rather
    than replacing it with fake data.
-6. Log the pass in PROJECT_MEMORY.md (what/why/gotchas) BEFORE moving on —
+6. Log the pass in STATE.md (what/why/gotchas) BEFORE moving on —
    update as you move, not at the end.
 
 ---
@@ -1309,7 +1309,7 @@ Before saying a topbar/sidebar/search/profile change is done:
 6. For account, verify `/api/apikey`, `/api/sessions`, and logout href.
 7. Verify no page scrollbar was introduced by a topbar popover.
 8. Verify the control is real or honestly disabled/planned.
-9. Compare against this file and `DESIGN_PLAYBOOK.md` before replying.
+9. Compare against this file and Part I of this file before replying.
 
 ## 13. Shared Topbar Popover Baseline (2026-07-10 16:44 IST)
 

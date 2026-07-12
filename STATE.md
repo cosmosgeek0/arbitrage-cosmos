@@ -12,7 +12,8 @@ A private Binance arbitrage/intelligence operating machine ("Cosmos Arbitrage Co
 - Remote: `git@github.com:cosmosgeek0/arbitrage-cosmos.git` · default branch `current-main` (pushed and current).
 - Milestone tags (all pushed): `sprint-foundation-final`, `sprint-intelligence-final`, `sprint-runtime-final`, `sprint-capital-final`, `sprint-convergence-final`.
 - Milestone commits on `current-main`: audited baseline `b272049` → organs round 1 `c4ae7a9` → organs round 2 `87af782` → convergence `b58e64e`.
-- Feature branches preserved on origin as recovery points (`market-intelligence-main-20260711`, `backend-foundation-parallel-20260711-070056`, `live-intelligence-runtime-main-20260711`, `capital-supervision-main-20260711`, `system-convergence-vertical-slice-20260711`).
+- Feature branches preserved on origin as recovery points (`market-intelligence-main-20260711`, `backend-foundation-parallel-20260711-070056`, `live-intelligence-runtime-main-20260711`, `capital-supervision-main-20260711`, `system-convergence-vertical-slice-20260711`, `engine-overdrive`, `engine-volume-overdrive`).
+- Workspace: the project lives solely at `/Users/cosmosgeek/Desktop/Main`. All satellite clones and worktrees were removed 2026-07-12 after their branches were verified on origin. Never create a second writer in this tree; parallel builds use fresh disposable clones per `DIRECTOR.md`.
 - `.env`, `data/`, `dist/`, `node_modules/` are never tracked. Keys are server-side only.
 
 ## Component status (release labels are cumulative; see ARCHITECTURE.md)

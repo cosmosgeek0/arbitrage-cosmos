@@ -2,17 +2,17 @@
 
 Schema version: 1
 
-Generation: 7
+Generation: 8
 
 Program: `LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H`
 
-Current phase: `L05`
+Current phase: `L06`
 
 Phase status: `WORKING`
 
 Lane status: `WORKING`
 
-Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`
+Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`
 
 ## Git identity
 
@@ -41,18 +41,22 @@ Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`
 - L04 implementation tree: `76a15f4187cbf9ac49a05075f25112ef16dde53f`
 - L04 immutable receipt commit: `0e6fd61e93bff71daa301097a924466b739af0a9`
 - L04 receipt tree: `d23e13ed5356ac5cdc61cbd9cba9cb10d6268419`
-- Latest director phase acceptance authority: `D-LAUNCH-1` at `9ca01537f4edda06ee566cd261e612d5c315fb76`
+- L05 implementation commit: `24f4e43eeca0f5d137edb95882c3a900871e2a70`
+- L05 implementation tree: `c9654f737514ff62ddcec64b394b3fdc6087a0f1`
+- L05 immutable receipt commit: `1896f0ff293acc89ffb71c9d4b12179bbb9d7a16`
+- L05 receipt tree: `8729803b76cdc09da41a733e74560ec864e0b6ff`
+- Latest director continuous-run/self-acceptance authority: `D-LAUNCH-2` at `84d2ff65fd8d2b200821126dd17b4ba75f3c131c`
 - Latest director launch-input acceptance: `D-LAUNCH-1` at `9ca01537f4edda06ee566cd261e612d5c315fb76` on `current-main`
 - Latest director launch/protocol commit on lane ancestry: `73e1a1ff7daa48df8dac45713fc5f106842edafc`
 - State authoring rule: the commit containing this mutable state is expected to descend directly from the recorded evidence checkpoint and change only allowed receipt/state paths; a state file cannot embed its own containing commit SHA.
 
 ## Exact current task
 
-- Path: `live-edge-receipts/TASKS/L05.md`
-- Git blob at phase start: `b93d399453daec3603bd549dd0fcef1d6d2faa19`
-- SHA-256: `cc9ea50eb90f6730225065d1db60bbf12414301bb35b1bedabe2ae3d72402adf`
-- Latest accepted receipt: `live-edge-receipts/RECEIPTS/L04.md`
-- Latest accepted receipt SHA-256: `9c4eff08a71fef7eb2bd877f95d8c35beb062128fdf9e295992501799c35a962`
+- Path: `live-edge-receipts/TASKS/L06.md`
+- Git blob at phase start: `9bb6193d3f500a7b80c2d38a25a94cdf30b734ac`
+- SHA-256: `5515f0bcf1ea70ae805af5898ccd767fef67df7c3a522b9e7f409f7e44835786`
+- Latest accepted receipt: `live-edge-receipts/RECEIPTS/L05.md`
+- Latest accepted receipt SHA-256: `273eb52b9470b889678ccd3e8a152913c79da065988a7915a191447c90e90f89`
 
 ## Frozen input hashes
 
@@ -84,7 +88,7 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 - Expected untracked preserved owner inputs: `DIRECTOR_Q_L_TWO_LANE_LAUNCH.md`, `LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md`.
 - Partial implementation files: none.
 - Active workers: none.
-- No L05 implementation file exists at phase start.
+- No L06 implementation file exists at phase start.
 
 ## Canonical reuse
 
@@ -105,8 +109,9 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 - L02 lane-ready: hash-locked 34-source/112-contract Binance documentary matrix, exact current/unknown/conflict posture, checked fixtures and closed hostile-data validator are `BUILT_AND_TESTED` but `UNWIRED`.
 - L03 lane-ready: exact signed-contract gate, independently testable unsigned construction, injected HMAC signer boundary, UTC/monotonic clock estimator, deterministic IDs, V2 rate/cooldown reducer, ambiguity blocker and safe failure projection are `BUILT_AND_TESTED` but `UNWIRED`.
 - L04 lane-ready: exact Runtime-owned instrument/filter normalization, closed product schemas, receipt-stable semantic plus time-bound evidence revisions, exact non-increasing USDT sizing and full waiting-evidence invalidation are `BUILT_AND_TESTED` but `UNWIRED` and always non-sendable.
+- L05 lane-ready: exact injected private-fact normalization, closed permissions/query coverage, independent Spot/USD-M/Margin completeness, product-specific lifecycle reducers, canonical comparison hand-off and waiting guards are `BUILT_AND_TESTED` but `UNWIRED`, evidence-only and always non-sendable.
 - Synthetic only: capital mandate and reconciliation/execution fixtures.
-- Unavailable in canonical convergence: coherent production private account truth, signed validation, exchange-observed fills/reconciliation, recovery mechanics and live execution.
+- Unavailable in canonical convergence: authenticated production private acquisition, signed validation, exchange-observed fills/reconciliation, durable mutation/recovery mechanics and live execution.
 - Mechanically blocked: `LIVE_EXECUTION_NOT_IMPLEMENTED` remains enforced.
 - Legacy repository code contains private/signed/mutation-capable services outside canonical convergence; it is not silently promoted.
 
@@ -117,7 +122,7 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 - Source evidence: 34 official-only records, 0 evidence-hash mismatches; no private/account calls.
 - Contract evidence: 112 inert records with exact Spot/USD-M/Margin production/demo/testnet current, unknown, non-applicable, removed and conflict posture.
 - Spot signature/HMAC/JSON selection, USD-M routed private-stream selection, Margin risk-versus-account separation and permission/status/mode proof requirements are hash-locked.
-- L02 is accepted and consumed fail-closed by accepted L03/L04; L05 must reuse the same exact matrix without widening documentary authority.
+- L02 is accepted and consumed fail-closed by accepted L03/L04/L05; L06 must reuse the same exact matrix without widening documentary authority.
 
 ## Measured tests
 
@@ -143,6 +148,11 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 - L04 cached scope/frozen/diff/ancestry gates: pass; exactly 19 implementation paths.
 - L04 final independent normalization, sizing, authority and whole-phase acceptance audits: `NO_ACCEPTANCE_BLOCKERS`; immutable receipt audit: `NO_RECEIPT_BLOCKERS`.
 - One overlapping L04 accumulated run invalidated by a worker cleaning `server/dist` is not counted; the final no-worker rerun passed.
+- L05 final uncontended reruns: build exit 0; focused private truth 384/384; accumulated live-edge 973/973; protocol 22/22; `npm test` 377/377; `npm run test:all` 2,479/2,479.
+- L05 source/test/full implementation aggregates: `ae52c11c7ca4e6c338f0df7c1b0c8b8e1d9f3e78a049766dbd4ab3e5706350fc`, `f38a63ead0f4a4f0953c022bf47fe201b0242ff3dc68a6daf6659df41309b2ab`, `3a0ccd6f1d3af95255570786af78f33ca4e1e776c7d693833e5dc1629abc3d04`.
+- L05 cached scope/frozen/diff/ancestry gates: pass; exactly 33 implementation paths.
+- L05 final independent product, lifecycle, state-integrity, waiting, secret/purity, documentation and whole-phase acceptance audits: `NO_ACCEPTANCE_BLOCKERS`.
+- Two overlapping L05 runs invalidated by worker build cleanup are not counted; every final acceptance gate was rerun with workers quiescent and passed.
 - Only existing Vite chunk-size warning observed.
 
 ## Runtime, deployment and secret boundary
@@ -170,18 +180,19 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 - L02 is accepted `LANE_READY` / `BUILT_AND_TESTED` / `UNWIRED` and must not be repeated.
 - L03 is accepted `LANE_READY` / `BUILT_AND_TESTED` / `UNWIRED` and must not be repeated.
 - L04 is accepted `LANE_READY` / `BUILT_AND_TESTED` / `UNWIRED` and must not be repeated.
+- L05 is accepted `LANE_READY` / `BUILT_AND_TESTED` / `UNWIRED` and must not be repeated.
 - Frozen protocol own-property/fixture/hash-coverage gaps remain unchanged; D0003 requests a future director revision while the L01 consumer hardens locally.
 - Production Basis/Volume assessment ingress, production component identity/policy binding, package scripts and supervisor/API projection remain director-owned.
-- L05 is active. L06-L17 are untouched.
+- L06 is active. L07-L17 are untouched.
 
 ## Exact next task
 
-Implement only `live-edge-receipts/TASKS/L05.md`: normalize only synthetic/injected Spot/USD-M/Margin private evidence into independently fresh, immutable account/permission/mode/commission truth and separate pure stream-lifecycle/reconciliation hand-off state, with no credential access, private call, socket, duplicate owner, order, Margin action or capital change.
+Implement only `live-edge-receipts/TASKS/L06.md`: build a pure canonical-Ledger adapter protocol and append-only mutation reducer proving persist-before-send, exact identity lineage, event/HTTP race convergence, idempotency and ambiguity hand-off over injected evidence, with no second store, actual persistence, exchange call, signed/test/live order, blind retry or duplicate Foundation/System Integration authority.
 
 Exact first command on resume:
 
 ```bash
-shasum -a 256 live-edge-receipts/TASKS/L05.md live-edge-receipts/RECEIPTS/L04.md server/src/liveEdge/adapters/binanceContracts/matrix.ts && git diff --exit-code 73e1a1ff7daa48df8dac45713fc5f106842edafc -- EDGE_PROTOCOL_V1.md packages/edge-protocol packages/edge-protocol-tests
+shasum -a 256 live-edge-receipts/TASKS/L06.md live-edge-receipts/RECEIPTS/L05.md server/src/liveEdge/adapters/binanceContracts/matrix.ts && git diff --exit-code 73e1a1ff7daa48df8dac45713fc5f106842edafc -- EDGE_PROTOCOL_V1.md packages/edge-protocol packages/edge-protocol-tests
 ```
 
 ## Files to re-read on resume
@@ -189,22 +200,24 @@ shasum -a 256 live-edge-receipts/TASKS/L05.md live-edge-receipts/RECEIPTS/L04.md
 - `MISSION.md`
 - `ARCHITECTURE.md` Part II
 - `LIVE_EXECUTION_BUILD_STATE.md`
-- `live-edge-receipts/TASKS/L05.md`
+- `live-edge-receipts/TASKS/L06.md`
 - `live-edge-receipts/DIRECTIVE_INPUTS.lock`
 - `live-edge-receipts/DECISIONS/D0002-director-launch-digest-acceptance.md`
-- `live-edge-receipts/RECEIPTS/L04.md`
-- `live-edge-receipts/DECISIONS/D0007-l04-instrument-filter-policy.md`
-- `server/src/liveEdge/adapters/binanceContracts/index.ts`
-- `server/src/capitalFoundation/accountTruth/project.ts`
+- `live-edge-receipts/RECEIPTS/L05.md`
+- `live-edge-receipts/DECISIONS/D0009-l05-private-truth-policy.md`
+- `server/src/liveEdge/adapters/binanceSignedKernel/ambiguity.ts`
+- `server/src/liveEdge/adapters/binancePrivateTruth/index.ts`
+- `server/src/ledger.ts`
+- `server/src/systemIntegration/persistence/ledgerAdapter.ts`
+- `server/src/foundation/execution/index.ts`
 - `server/src/foundation/contracts/reconciliation.ts`
-- `server/src/systemIntegration/adapters/accountTruth.ts`
 - `EDGE_PROTOCOL_V1.md`
 - `LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md`
 - only Section 7 of the corrected/accepted launch file
 
 ## Work not to repeat unless inputs changed
 
-- Do not repeat accepted L00/L01/L02/L03/L04 work, broad source discovery, canonical owner/code/test inventory or launch-hash investigation.
-- Reuse accepted L02/L03/L04 artifacts and verify only the exact current official private-account, permissions and user-stream pages needed for L05.
+- Do not repeat accepted L00/L01/L02/L03/L04/L05 work, broad source discovery, canonical owner/code/test inventory or launch-hash investigation.
+- Reuse accepted L02/L03/L04/L05 artifacts and verify only the exact current official order/client-order, status-query and user-event semantics needed for L06.
 - Do not edit frozen protocol or shared production/package files.
-- Do not begin L06 before L05 implementation, tests, adversarial corrections, commits, immutable receipt and state transition are complete.
+- Do not begin L07 before L06 implementation, tests, adversarial corrections, commits, immutable receipt and state transition are complete.

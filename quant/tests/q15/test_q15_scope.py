@@ -4,6 +4,31 @@ import hashlib
 import subprocess
 from pathlib import Path
 
+import pytest
+
+
+def _on_shard_branch() -> bool:
+    """The per-commit scope law is assertable only on the shard branch itself.
+
+    After the director merges this shard onto the lane branch, history after
+    the shard base legitimately contains other phases' commits (merge-law fix,
+    same pattern as Q08)."""
+    probe = subprocess.run(
+        ["git", "branch", "--show-current"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+        cwd=Path(__file__).resolve().parents[2].parent,
+    )
+    return probe.stdout.strip() == "q15-registry-20260712"
+
+
+pytestmark = pytest.mark.skipif(
+    not _on_shard_branch(),
+    reason="the shard scope law is verifiable only on the shard branch",
+)
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BASE = "f756f3b582f24857811e6ec4c0d08a3a61026b74"
 OWNER_INPUTS = {"DIRECTOR_Q_L_TWO_LANE_LAUNCH.md", "QUANT_EDGE_RESEARCH_FACTORY_12H.md"}

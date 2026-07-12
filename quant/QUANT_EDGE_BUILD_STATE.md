@@ -1,8 +1,8 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `29`
+State generation: `30`
 
-Updated: 2026-07-13T03:32:35+0530
+Updated: 2026-07-13T03:42:03+0530
 
 Status: `Q12 ACTIVE` (director-accepted Q11 and Q14 are merged on the spine; D-LAUNCH-2/5 authorizes exactly one self-accepted Q12 loop, then park)
 Program: Q lane — deterministic research evidence, labels, models, calibration, drift and advisory inference.
@@ -27,7 +27,7 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 
 - Last accepted sequential phase: `Q11`; validation factory Q14 is also `ACCEPTED+MERGED`.
 - Latest director acceptance: `D-LAUNCH-1` (`9ca01537f4edda06ee566cd261e612d5c315fb76`, authentic launch digest); standing order `D-LAUNCH-2` (`84d2ff65fd8d2b200821126dd17b4ba75f3c131c`, continuous self-accepted execution with full evidenced loops, director audits at LANE_READY); `D-LAUNCH-3` (`cf37df4af0ef3724f8f3a145c6be3cdcc84799c0`, Q lane transferred to the Fable lead builder); `D-LAUNCH-5` amendment (`d0e34f0310ebb5ad67b9c7f1ed4785a49a4bb0f8`, director branch): the spine finishes and accepts Q07 only, then parks — Q08/Q09/Q14 are shard-owned in separate worktrees and Q10+ waits for the director's shard merge.
-- Current phase: `Q12` (ensemble, calibration and abstention), activated at this generation under the director order in `QL_PARALLEL_DAG.md` at `72dee36`. Execute exactly Q12, including closure of the Q10 `WAITING_Q14` seams against the now-merged Q14 owner; do not begin Q13, Q15, Q16 or Q17.
+- Current phase: `Q12` (ensemble, calibration and abstention), activated in generation 29 and bound to `quant/TASKS/Q12.md` in generation 30 under the director order in `QL_PARALLEL_DAG.md` at `72dee36`. Execute exactly Q12, including closure of the Q10 `WAITING_Q14` seams against the now-merged Q14 owner; do not begin Q13, Q15, Q16 or Q17.
 - Resume merge record at generation 29:
   - Q11 survival/competing-risk shard acceptance `d04286d` was merged by the director at `ef15473`; Q10 acceptance remains its lane ancestor.
   - Q14 validation/falsification factory shard acceptance `e266b42` was merged by the director at `f756f3b`, the generation-29 activation parent and lane tip at resume.
@@ -43,7 +43,7 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
   - Scope-guard merge-law fix `494d6ceacd9438f370b27f17b45ff8368179c5ee`: the Q08 per-commit shard scope test skips honestly on the merged lane branch and retains full power inside the shard worktree.
   - Q09 regime shard accepted at `a3426e53731d65e8c1fd9b824f69b4e4644f398e` (build `8c5bf3486e3bab28fd8c1865cc607765b8877af3`) and merged by the director in `8a5dd092b73ba0069a67f3a3bead0561f3269370`.
   - Confirmed merged-lane baseline at `8a5dd092…` on 2026-07-12: `.venv/bin/python -m pytest -q` → `1842 passed, 4 skipped` (the four skips are the Q08 shard scope-law tests, verifiable only inside the shard worktree), exit 0.
-- Last spine task before this activation: `quant/TASKS/Q07.md`; SHA-256 `11da284da20e5fea637c3794a3cb328b4b2b3bbe65ba97df52005976b334338d`; unchanged through C7/A7. Active task: `quant/TASKS/Q10.md`; SHA-256 `709e611ee4a8f6a62a13d659e90a0bed36375d7eb78af347a523ee0bfd2c20df`.
+- Last accepted spine task: `quant/TASKS/Q10.md`; SHA-256 `709e611ee4a8f6a62a13d659e90a0bed36375d7eb78af347a523ee0bfd2c20df`; unchanged through C10/A10. Active task: `quant/TASKS/Q12.md`; SHA-256 `6356245d2c3d85f23faa6eef877073f09e7c0bdc5a25eb8ef4c186ae64130c01`.
 - Checkpoint receipt: `quant/RECEIPTS/Q00.md`; blob `7ba41768ba747bbc3eddd1941f6f5d82985dc1ca`; SHA-256 `738dad4caac7cfac9ba8b7b84fb646ec1817c6f0eb34fc09daa60129ab1996c3`; immutable in checkpoint commit.
 - Acceptance receipt: `quant/RECEIPTS/Q00_ACCEPTANCE.md`; SHA-256 `c29c7646af5f284a88eca782beb7dbf636e6c6eb11dda25d1bccc03ea97385de`; immutable after this acceptance commit.
 - Q00 checkpoint implementation commit: `fa6fecd8295aaab6aa38d35bd34843b64af69e69`.
@@ -290,13 +290,7 @@ Execute exactly Q12: close the Q10 `WAITING_Q14` seams against the merged valida
 Next exact command (on resume only):
 
 ```bash
-git status --short && git log -3 --format='%H %P %s' && shasum -a 256 quant/QUANT_EDGE_BUILD_STATE.md
-```
-
-Next exact command (on resume only):
-
-```bash
-git status --short && git log -3 --format='%H %P %s' && shasum -a 256 quant/QUANT_EDGE_BUILD_STATE.md
+git status --short && git log -4 --format='%H %P %s' && shasum -a 256 quant/QUANT_EDGE_BUILD_STATE.md quant/TASKS/Q12.md
 ```
 
 ## Fresh-session read order
@@ -304,14 +298,15 @@ git status --short && git log -3 --format='%H %P %s' && shasum -a 256 quant/QUAN
 1. `STATE.md`, `MISSION.md`, `ARCHITECTURE.md` Part II, `DIRECTOR.md`.
 2. `QUANT_EDGE_RESEARCH_FACTORY_12H.md` and only launch Section 6.
 3. `EDGE_PROTOCOL_V1.md`, frozen schema/fixtures, and `quant/DIRECTIVE_INPUTS.lock`.
-4. This state, the immutable `quant/RECEIPTS/Q07.md`–`Q09_ACCEPTANCE.md` and the Q07–Q09 decision/design notes; the Q06 card/equivalence law controls all feature-layer work.
-5. Q00 reuse matrix and Q01 framework/security docs are inputs only; do not redo accepted work or regenerate accepted evidence unless exact code/input identity changed.
+4. This state, `quant/TASKS/Q12.md`, immutable Q10/Q11/Q14 receipts and the Q10/Q11/Q14 decision/design records.
+5. Read Q09 quality/OOD, Q10 model contracts, Q11 survival contracts and Q14's public validation barrel directly; accepted artifacts are inputs only and must not be rewritten.
+6. Q00 reuse matrix and Q01 framework/security docs remain inputs only; do not redo accepted work or regenerate accepted evidence unless exact code/input identity changed.
 
 ## Work not to repeat
 
 - Do not redo the Q00 source/reuse audit while its recorded source hashes are unchanged.
 - Do not modify or replace either immutable Q00 receipt.
-- Do not recreate or edit Q00/Q01/Q02 tasks; Q03 is the only current phase.
+- Do not recreate or edit accepted phase tasks; Q12 is the only current phase.
 - Do not recreate retired paths or old authority files.
 - Do not materialize the Event Atlas, download market data or create a production source during Q02.
 - Do not edit or normalize the two untracked owner directives.

@@ -1,17 +1,17 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `2`
+State generation: `3`
 
-Updated: 2026-07-12T10:15:15+0530
+Updated: 2026-07-12T10:33:42+0530
 
-Status: `BLOCKED_EXTERNAL`
+Status: `ACCEPTED`
 Program: Q lane — deterministic research evidence, labels, models, calibration, drift and advisory inference.
 
 ## Frozen launch identity
 
 - Worktree: `/Users/cosmosgeek/Desktop/quant-edge-research-20260712`
 - Branch: `quant-edge-research-factory-20260712`
-- Current HEAD at generation-2 authoring: `fa6fecd8295aaab6aa38d35bd34843b64af69e69`
+- Current HEAD at generation-3 authoring: `1dca8ce3022472488117cc9eab0f2f5b37905aac`
 - Origin: `git@github.com:cosmosgeek0/arbitrage-cosmos.git`
 - Canonical base: `7010499170e24b31c9c0be2c9d73a536e680c6fe`
 - Protocol SHA / current parent: `73e1a1ff7daa48df8dac45713fc5f106842edafc`
@@ -20,19 +20,22 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 - Protocol document: blob `d0dd07ac9c46b81c4c87785e9ad60171543da249`; SHA-256 `951fdbb5f347f900c61e60055f90cf2e1e1e743b75b7dc733652acb8d43353a1`
 - Protocol schema: blob `a23c5796e73e142c83bbea98276bd237be300ef7`; SHA-256 `229af0ff13d600c7d305c6deb7f57b61bdb6f8a35f6f2349d91f5ab1b4972f1c`
 - Q directive: blob `eebe7b0c751c065e06d0bf817b86c144541adff3`; SHA-256 `198f131d4b04c1edab728b85ea6a5e5c5f7f80875866e407a3c93a24aafa5ab4`
+- Launch directive: blob `587c1b83e8f9d32b9097d88df7fea40d9829b68e`; SHA-256 `26b1d5ce118982b4b3ba64b44b7fb3e88b0b7ded26a818a775a65bffaa0f2c06`, bound by D-LAUNCH-1.
 - Frozen input lock: blob `cf414da3b46d46d1807f4c04939c7ee1121f5895`; SHA-256 `410010ef635a5e44b205e56c6b38f2d06e5b8e72312f5d63edcb24a5086355e1`
 
 ## Phase position
 
-- Last accepted phase: `NONE`
-- Latest director acceptance commit: `73e1a1f` is the protocol/launch commit; no Q phase acceptance exists.
-- Current phase: `Q00`
+- Last accepted phase: `Q00`
+- Latest director acceptance: `D-LAUNCH-1`, commit `9ca01537f4edda06ee566cd261e612d5c315fb76`; authentic launch blob/digest binding independently verified.
+- Current phase: `Q00` complete; `Q01` is next and has not started.
 - Current task: `quant/TASKS/Q00.md`
 - Current task SHA-256: `0643c54b81b93e57c5f9548a5968d670f7f31c7499bacc078fff87e38b323507`
-- Current receipt: `quant/RECEIPTS/Q00.md`; blob `7ba41768ba747bbc3eddd1941f6f5d82985dc1ca`; SHA-256 `738dad4caac7cfac9ba8b7b84fb646ec1817c6f0eb34fc09daa60129ab1996c3`; immutable in checkpoint commit.
+- Checkpoint receipt: `quant/RECEIPTS/Q00.md`; blob `7ba41768ba747bbc3eddd1941f6f5d82985dc1ca`; SHA-256 `738dad4caac7cfac9ba8b7b84fb646ec1817c6f0eb34fc09daa60129ab1996c3`; immutable in checkpoint commit.
+- Acceptance receipt: `quant/RECEIPTS/Q00_ACCEPTANCE.md`; SHA-256 `c29c7646af5f284a88eca782beb7dbf636e6c6eb11dda25d1bccc03ea97385de`; immutable after this acceptance commit.
 - Q00 checkpoint implementation commit: `fa6fecd8295aaab6aa38d35bd34843b64af69e69`.
-- State-pointer commit: the commit containing state generation 2; it is intentionally not self-referential and must not be mistaken for director acceptance.
-- Acceptance state: not ready; not accepted; Q01 must not start.
+- Q00 checkpoint-state commit: `1dca8ce3022472488117cc9eab0f2f5b37905aac`.
+- Q00 acceptance/state commit: the commit containing state generation 3; intentionally non-self-referential.
+- Acceptance state: `ACCEPTED`; implementation, focused/accumulated tests, adversarial review, corrections, checkpoint receipt and D-LAUNCH-1 are verified.
 
 ## Ownership and safety
 
@@ -49,6 +52,8 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 - `quant/RECEIPTS/Q00.md`
 - `quant/DECISIONS/Q00-001-DURABLE-PATHS.md`
 - `quant/DECISIONS/Q00-002-LAUNCH-HASH-GATE.md`
+- `quant/DECISIONS/Q00-003-D-LAUNCH-1.md`
+- `quant/RECEIPTS/Q00_ACCEPTANCE.md`
 - `quant/docs/Q00_ACTUAL_SOURCE_REUSE_MATRIX.md`
 - `quant/docs/Q00_BENCHMARK_PROFILE.md`
 - `quant/docs/Q00_SOURCE_RESEARCH.md`
@@ -91,7 +96,8 @@ No other path is authored or staged. The two root directives remain preserved un
 - `npm run test:all`: exit 0; full repository battery green.
 - Launch counters: existing 377; gates 72; intelligence 152; runtime 394; capital 433; foundation 871; integration scenarios 30; protocol 22.
 - `bash quant/tests/q00/scope_guard.test.sh`: exit 0, `6/6`, including reverted out-of-scope commit history.
-- Staged `bash quant/scripts/check-scope.sh`: exit 0, exact branch/protocol, `10` allowed paths.
+- Q00 checkpoint staged `bash quant/scripts/check-scope.sh`: exit 0, exact branch/protocol, `10` allowed paths.
+- Q00 acceptance staged `bash quant/scripts/check-scope.sh`: exit 0, exact branch/protocol, `3` allowed paths.
 - `git diff --cached --check`: exit 0.
 - Independent verification of `fa6fecd`: exact 10-path `quant/**` history, empty frozen diff, range `git diff --check` exit 0, scope suite `6/6`, protocol `22/22`.
 - Host: Apple M4 Max, 16 cores, 48 GB; Node `v22.23.1`; npm `10.9.8`.
@@ -99,7 +105,7 @@ No other path is authored or staged. The two root directives remain preserved un
 
 ## Known defects and blockers
 
-- External blocker: locked launch SHA-256 is `0cc192e3…`, but its exact locked Git blob/current bytes hash to `26b1d5ce…`. See decision `Q00-002` and receipt.
+- Resolved: D-LAUNCH-1 binds launch blob `587c1b83…` to SHA-256 `26b1d5ce…0f2c06`; the stale `0cc192e3…` measurement no longer blocks. The Q worktree's frozen lock remains byte-unchanged; see decisions Q00-002 and Q00-003.
 - No canonical forward runtime-to-Q append-only bridge exists; this is a later integration seam, not permission for a Q socket.
 - Free history cannot prove full L2, receive latency, borrow truth or causal intent.
 - Current official liquidation selection wording conflicts; preserve sampled/unknown semantics.
@@ -107,17 +113,16 @@ No other path is authored or staged. The two root directives remain preserved un
 
 ## Exact next task
 
-1. Director corrects or explicitly supersedes the launch-file SHA row in a director-owned commit/acceptance record without lane edits to the frozen lock.
-2. Verify the supplied director commit, ancestry, blob and SHA-256; stop on any new mismatch.
-3. Verify current task/source/receipt hashes and Q00 checkpoint commits.
-4. Rerun protocol 22/22, `npm test`, `npm run test:all`, scope test, staged scope gate and diff check.
-5. Create Q00 ready implementation receipt/commit only if the gate is exact, then obtain director acceptance commit and mark Q00 `ACCEPTED`.
-6. Only then create and execute the bounded Q01 task.
+1. Seal and independently verify the Q00 acceptance/state commit; do not repeat accepted Q00 work.
+2. Create the bounded `quant/TASKS/Q01.md` brief from Q01, launch Section 6 and durable state.
+3. Research current official framework/version/license/security facts before Q01 code.
+4. Execute only Q01: pinned deterministic Python workspace, minimal CLI and early honest hypothesis registry/map.
+5. Run focused Q01 tests, accumulated Q-lane tests, adversarial review, corrections, scope gate, implementation commit, immutable receipt and state update.
 
-Next exact command after director correction:
+Next exact command after the Q00 acceptance commit:
 
 ```bash
-shasum -a 256 DIRECTOR_Q_L_TWO_LANE_LAUNCH.md quant/DIRECTIVE_INPUTS.lock && git hash-object DIRECTOR_Q_L_TWO_LANE_LAUNCH.md && git log --oneline --decorate -5
+git show --stat --oneline HEAD && bash quant/scripts/check-scope.sh && git diff 73e1a1f..HEAD --name-only
 ```
 
 ## Fresh-session read order
@@ -125,12 +130,13 @@ shasum -a 256 DIRECTOR_Q_L_TWO_LANE_LAUNCH.md quant/DIRECTIVE_INPUTS.lock && git
 1. `STATE.md`, `MISSION.md`, `ARCHITECTURE.md` Part II, `DIRECTOR.md`.
 2. `QUANT_EDGE_RESEARCH_FACTORY_12H.md` and only launch Section 6.
 3. `EDGE_PROTOCOL_V1.md`, frozen schema/fixtures, and `quant/DIRECTIVE_INPUTS.lock`.
-4. This state, `quant/TASKS/Q00.md`, `quant/RECEIPTS/Q00.md`, and both Q00 decisions.
+4. This state, `quant/TASKS/Q00.md`, both Q00 receipts, and all three Q00 decisions.
 5. Q00 reuse matrix, benchmark profile and source research.
 
 ## Work not to repeat
 
 - Do not redo the Q00 source/reuse audit while its recorded source hashes are unchanged.
+- Do not modify or replace either immutable Q00 receipt.
 - Do not recreate retired paths or old authority files.
-- Do not start Q01, materialize the Event Atlas, add dependencies, or create a production source while Q00 is unaccepted.
+- Do not materialize the Event Atlas or create a production source during Q01.
 - Do not edit or normalize the two untracked owner directives.

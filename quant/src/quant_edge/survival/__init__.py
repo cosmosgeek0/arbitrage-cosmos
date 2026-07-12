@@ -1,0 +1,143 @@
+"""Deterministic §14.4 survival and competing-risk layer (Q11).
+
+Pure library: censored time-to-event contracts for the six declared targets,
+exact Kaplan-Meier / Nelson-Aalen / reverse-KM estimators, Aalen-Johansen
+cause-specific cumulative incidence with an exact conservation law, a
+stratified discrete-time cause-specific hazard model whose fitted state is
+integer sufficient statistics, and a time-dependent metrics harness (IPCW
+Brier score, integrated Brier score, concordance with a same-group exclusion
+law, censoring-aware calibration reports and fail-closed budgets). All
+executable proofs are honest SYNTHETIC fixtures; nothing here claims a model,
+curve or hazard is predictive, calibrated on market data or economically
+valuable.
+"""
+
+from quant_edge.survival.competing import (
+    AalenJohansenV1,
+    CauseIncidenceCurveV1,
+    IncidencePointV1,
+    estimate_aalen_johansen,
+)
+from quant_edge.survival.contracts import (
+    MAX_CAUSES,
+    MAX_DURATION_NS,
+    MAX_GRID_TIMES,
+    MAX_STRATA,
+    MAX_SUBJECTS,
+    CauseSetV1,
+    CohortBuildResultV1,
+    SubjectStatus,
+    SubjectV1,
+    SurvivalCohortV1,
+    SurvivalTarget,
+    TimeGridV1,
+    TimeTableRowV1,
+    build_cohort,
+    event_time_table,
+    fixed_point_to_fraction,
+    fraction_to_fixed_point,
+    require_probability,
+)
+from quant_edge.survival.hazard_model import (
+    DiscreteHazardModelV1,
+    HazardModelConfigV1,
+    PredictedBinV1,
+    PredictionStatus,
+    StratumBinV1,
+    StratumPredictionV1,
+    StratumTableV1,
+    fit_discrete_hazard,
+)
+from quant_edge.survival.km import (
+    CurveRole,
+    SurvivalCurvePointV1,
+    SurvivalCurveV1,
+    estimate_censoring_survival,
+    estimate_kaplan_meier,
+)
+from quant_edge.survival.metrics import (
+    ANY_CAUSE,
+    BinStatus,
+    BrierPointV1,
+    BrierReportV1,
+    CalibrationBinV1,
+    CalibrationReportV1,
+    ConcordanceReportV1,
+    MetricStatus,
+    PredictionSetV1,
+    RiskScoreSetV1,
+    SubjectPredictionV1,
+    SurvivalBudgetV1,
+    SurvivalVerdictV1,
+    Verdict,
+    evaluate_brier,
+    evaluate_calibration,
+    evaluate_concordance,
+    judge_survival,
+)
+from quant_edge.survival.targets import (
+    TARGET_SPEC_VERSION,
+    V1_TARGET_SPECS,
+    SurvivalTargetSpecV1,
+    v1_target_spec,
+)
+
+__all__ = [
+    "ANY_CAUSE",
+    "MAX_CAUSES",
+    "MAX_DURATION_NS",
+    "MAX_GRID_TIMES",
+    "MAX_STRATA",
+    "MAX_SUBJECTS",
+    "TARGET_SPEC_VERSION",
+    "V1_TARGET_SPECS",
+    "AalenJohansenV1",
+    "BinStatus",
+    "BrierPointV1",
+    "BrierReportV1",
+    "CalibrationBinV1",
+    "CalibrationReportV1",
+    "CauseIncidenceCurveV1",
+    "CauseSetV1",
+    "CohortBuildResultV1",
+    "ConcordanceReportV1",
+    "CurveRole",
+    "DiscreteHazardModelV1",
+    "HazardModelConfigV1",
+    "IncidencePointV1",
+    "MetricStatus",
+    "PredictedBinV1",
+    "PredictionSetV1",
+    "PredictionStatus",
+    "RiskScoreSetV1",
+    "StratumBinV1",
+    "StratumPredictionV1",
+    "StratumTableV1",
+    "SubjectPredictionV1",
+    "SubjectStatus",
+    "SubjectV1",
+    "SurvivalBudgetV1",
+    "SurvivalCohortV1",
+    "SurvivalCurvePointV1",
+    "SurvivalCurveV1",
+    "SurvivalTarget",
+    "SurvivalTargetSpecV1",
+    "SurvivalVerdictV1",
+    "TimeGridV1",
+    "TimeTableRowV1",
+    "Verdict",
+    "build_cohort",
+    "estimate_aalen_johansen",
+    "estimate_censoring_survival",
+    "estimate_kaplan_meier",
+    "evaluate_brier",
+    "evaluate_calibration",
+    "evaluate_concordance",
+    "event_time_table",
+    "fit_discrete_hazard",
+    "fixed_point_to_fraction",
+    "fraction_to_fixed_point",
+    "judge_survival",
+    "require_probability",
+    "v1_target_spec",
+]

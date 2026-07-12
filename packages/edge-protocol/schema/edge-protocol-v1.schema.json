@@ -1,0 +1,383 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "edge-protocol-v1",
+  "title": "EDGE_PROTOCOL_V1 — frozen Q/L interchange (see EDGE_PROTOCOL_V1.md)",
+  "$defs": {
+    "IdString": { "type": "string", "pattern": "^[A-Za-z0-9_.:\\-]{1,128}$" },
+    "ShortString": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "DecimalString": { "type": "string", "pattern": "^-?[0-9]{1,24}(\\.[0-9]{1,18})?$" },
+    "NullableDecimalString": { "anyOf": [ { "$ref": "#/$defs/DecimalString" }, { "type": "null" } ] },
+    "UtcMillis": { "type": "integer", "minimum": 1262304000000, "maximum": 4102444800000 },
+    "NullableUtcMillis": { "anyOf": [ { "$ref": "#/$defs/UtcMillis" }, { "type": "null" } ] },
+    "HashHex": { "type": "string", "pattern": "^[a-f0-9]{16,128}$" },
+    "TruthLabel": { "enum": ["LIVE", "REPLAY", "SYNTHETIC"] },
+    "Completeness": { "enum": ["COMPLETE", "PARTIAL", "SAMPLED", "UNAVAILABLE", "UNKNOWN"] },
+    "Freshness": { "enum": ["FRESH", "STALE", "UNKNOWN"] },
+    "ReconciliationState": { "enum": ["EXACT", "PENDING", "PARTIAL", "AMBIGUOUS", "DIVERGED", "STALE", "UNAVAILABLE"] },
+    "Product": { "enum": ["SPOT", "USDM_PERP", "MARGIN"] },
+    "UpperSnake": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,99}$" },
+    "StringArray": { "type": "array", "items": { "$ref": "#/$defs/ShortString" }, "maxItems": 256 },
+    "IdArray": { "type": "array", "items": { "$ref": "#/$defs/IdString" }, "maxItems": 1024 },
+    "InstrumentGraph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["venue", "product", "symbol", "canonicalAsset"],
+      "properties": {
+        "venue": { "$ref": "#/$defs/ShortString" },
+        "product": { "$ref": "#/$defs/Product" },
+        "symbol": { "$ref": "#/$defs/ShortString" },
+        "canonicalAsset": { "$ref": "#/$defs/ShortString" },
+        "spotSymbol": { "anyOf": [ { "$ref": "#/$defs/ShortString" }, { "type": "null" } ] },
+        "perpSymbol": { "anyOf": [ { "$ref": "#/$defs/ShortString" }, { "type": "null" } ] },
+        "borrowAsset": { "anyOf": [ { "$ref": "#/$defs/ShortString" }, { "type": "null" } ] },
+        "missingLegReason": { "anyOf": [ { "$ref": "#/$defs/ShortString" }, { "type": "null" } ] }
+      }
+    },
+    "SourceLineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceType", "streamClass", "connectionId"],
+      "properties": {
+        "sourceType": { "$ref": "#/$defs/ShortString" },
+        "streamClass": { "$ref": "#/$defs/ShortString" },
+        "connectionId": { "$ref": "#/$defs/IdString" },
+        "sessionId": { "anyOf": [ { "$ref": "#/$defs/IdString" }, { "type": "null" } ] },
+        "sequence": { "anyOf": [ { "type": "integer", "minimum": 0 }, { "type": "null" } ] },
+        "endpoint": { "anyOf": [ { "$ref": "#/$defs/ShortString" }, { "type": "null" } ] }
+      }
+    },
+    "QualityFlags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["freshness", "completeness", "gapCount", "duplicate", "reconstructed"],
+      "properties": {
+        "freshness": { "$ref": "#/$defs/Freshness" },
+        "completeness": { "$ref": "#/$defs/Completeness" },
+        "gapCount": { "type": "integer", "minimum": 0 },
+        "duplicate": { "type": "boolean" },
+        "reconstructed": { "type": "boolean" }
+      }
+    },
+    "EconomicAssumptionContextV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["asOfMs", "expiresAtMs", "state", "intendedSize", "quoteCurrency", "missingFields", "sourceSnapshotIds"],
+      "properties": {
+        "asOfMs": { "$ref": "#/$defs/UtcMillis" },
+        "expiresAtMs": { "$ref": "#/$defs/UtcMillis" },
+        "state": { "enum": ["LIVE", "HYPOTHETICAL"] },
+        "intendedSize": { "$ref": "#/$defs/DecimalString" },
+        "quoteCurrency": { "$ref": "#/$defs/ShortString" },
+        "feeTier": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "source": { "$ref": "#/$defs/ShortString" },
+            "makerBps": { "$ref": "#/$defs/NullableDecimalString" },
+            "takerBps": { "$ref": "#/$defs/NullableDecimalString" },
+            "uncertainty": { "anyOf": [ { "$ref": "#/$defs/ShortString" }, { "type": "null" } ] }
+          }
+        },
+        "spreadSlippageModel": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version"],
+          "properties": { "name": { "$ref": "#/$defs/ShortString" }, "version": { "$ref": "#/$defs/ShortString" } }
+        },
+        "funding": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "rate": { "$ref": "#/$defs/NullableDecimalString" },
+            "intervalHours": { "anyOf": [ { "type": "integer", "minimum": 1, "maximum": 24 }, { "type": "null" } ] },
+            "nextFundingTimeMs": { "$ref": "#/$defs/NullableUtcMillis" },
+            "source": { "anyOf": [ { "$ref": "#/$defs/ShortString" }, { "type": "null" } ] }
+          }
+        },
+        "borrow": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["availability"],
+          "properties": {
+            "availability": { "enum": ["AVAILABLE", "UNAVAILABLE", "UNKNOWN", "STALE"] },
+            "quantity": { "$ref": "#/$defs/NullableDecimalString" },
+            "rateHourly": { "$ref": "#/$defs/NullableDecimalString" },
+            "interestConvention": { "anyOf": [ { "$ref": "#/$defs/ShortString" }, { "type": "null" } ] },
+            "expiresAtMs": { "$ref": "#/$defs/NullableUtcMillis" }
+          }
+        },
+        "latencyScenarioMs": { "anyOf": [ { "type": "integer", "minimum": 0 }, { "type": "null" } ] },
+        "recoveryCostScenario": { "$ref": "#/$defs/NullableDecimalString" },
+        "missingFields": { "$ref": "#/$defs/StringArray" },
+        "sourceSnapshotIds": { "$ref": "#/$defs/IdArray" }
+      }
+    },
+    "MarketEvidenceEnvelopeV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "version", "revision", "evidenceId", "traceId", "instrumentGraph", "exchangeEventTimeMs", "localReceiveTimeMs", "normalizationTimeMs", "featureCutoffTimeMs", "source", "rawPayloadHash", "normalizedSchemaHash", "truthLabel", "quality", "payloadKind", "payload"],
+      "properties": {
+        "schema": { "const": "MarketEvidenceEnvelopeV1" },
+        "version": { "const": 1 },
+        "revision": { "type": "integer", "minimum": 0 },
+        "evidenceId": { "$ref": "#/$defs/IdString" },
+        "traceId": { "$ref": "#/$defs/IdString" },
+        "instrumentGraph": { "$ref": "#/$defs/InstrumentGraph" },
+        "exchangeEventTimeMs": { "$ref": "#/$defs/NullableUtcMillis" },
+        "localReceiveTimeMs": { "$ref": "#/$defs/UtcMillis" },
+        "normalizationTimeMs": { "$ref": "#/$defs/UtcMillis" },
+        "featureCutoffTimeMs": { "$ref": "#/$defs/NullableUtcMillis" },
+        "source": { "$ref": "#/$defs/SourceLineage" },
+        "rawPayloadHash": { "$ref": "#/$defs/HashHex" },
+        "normalizedSchemaHash": { "$ref": "#/$defs/HashHex" },
+        "truthLabel": { "$ref": "#/$defs/TruthLabel" },
+        "quality": { "$ref": "#/$defs/QualityFlags" },
+        "payloadKind": { "enum": ["TRADE", "BOOK_TICKER", "BOOK_SNAPSHOT", "BOOK_DELTA", "MARK", "INDEX", "FUNDING", "OPEN_INTEREST", "LIQUIDATION", "CONTEXT"] },
+        "payload": { "type": "object", "maxProperties": 128 }
+      }
+    },
+    "EdgeAssessmentEnvelopeV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "version", "revision", "assessmentId", "traceId", "parentEvidenceIds", "strategyFamily", "hypothesisId", "instrumentGraph", "eventTimeMs", "receiveTimeMs", "generationTimeMs", "expiryTimeMs", "predictions", "uncertainty", "oodState", "driftState", "netExpectedValue", "evidence", "lineage", "sourceQuality", "advisoryAction", "abstentionReasonCodes", "invalidationConditions", "economicAssumptionContext"],
+      "properties": {
+        "schema": { "const": "EdgeAssessmentEnvelopeV1" },
+        "version": { "const": 1 },
+        "revision": { "type": "integer", "minimum": 0 },
+        "assessmentId": { "$ref": "#/$defs/IdString" },
+        "traceId": { "$ref": "#/$defs/IdString" },
+        "parentEvidenceIds": { "$ref": "#/$defs/IdArray" },
+        "strategyFamily": { "$ref": "#/$defs/ShortString" },
+        "hypothesisId": { "$ref": "#/$defs/IdString" },
+        "instrumentGraph": { "$ref": "#/$defs/InstrumentGraph" },
+        "eventTimeMs": { "$ref": "#/$defs/NullableUtcMillis" },
+        "receiveTimeMs": { "$ref": "#/$defs/UtcMillis" },
+        "generationTimeMs": { "$ref": "#/$defs/UtcMillis" },
+        "expiryTimeMs": { "$ref": "#/$defs/UtcMillis" },
+        "marketStageProbabilities": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0, "maximum": 1 }, "maxProperties": 16 },
+        "regimeProbabilities": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0, "maximum": 1 }, "maxProperties": 16 },
+        "predictions": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["target", "horizonMs", "quantiles"],
+            "properties": {
+              "target": { "$ref": "#/$defs/ShortString" },
+              "horizonMs": { "type": "integer", "minimum": 1 },
+              "quantiles": { "type": "object", "additionalProperties": { "$ref": "#/$defs/DecimalString" }, "maxProperties": 16 }
+            }
+          }
+        },
+        "uncertainty": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["epistemic", "model", "data"],
+          "properties": {
+            "epistemic": { "enum": ["LOW", "MEDIUM", "HIGH", "UNKNOWN"] },
+            "model": { "enum": ["LOW", "MEDIUM", "HIGH", "UNKNOWN"] },
+            "data": { "enum": ["LOW", "MEDIUM", "HIGH", "UNKNOWN"] }
+          }
+        },
+        "oodState": { "enum": ["IN_DISTRIBUTION", "NEAR_BOUNDARY", "OUT_OF_DISTRIBUTION", "UNKNOWN"] },
+        "driftState": { "enum": ["STABLE", "DRIFTING", "BROKEN", "UNKNOWN"] },
+        "grossEstimate": { "$ref": "#/$defs/NullableDecimalString" },
+        "costEstimates": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "fee": { "$ref": "#/$defs/NullableDecimalString" },
+            "spread": { "$ref": "#/$defs/NullableDecimalString" },
+            "slippage": { "$ref": "#/$defs/NullableDecimalString" },
+            "funding": { "$ref": "#/$defs/NullableDecimalString" },
+            "borrow": { "$ref": "#/$defs/NullableDecimalString" },
+            "latency": { "$ref": "#/$defs/NullableDecimalString" },
+            "recovery": { "$ref": "#/$defs/NullableDecimalString" }
+          }
+        },
+        "netExpectedValue": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state"],
+          "properties": {
+            "state": { "enum": ["ESTIMATED", "UNKNOWN"] },
+            "quantiles": { "type": "object", "additionalProperties": { "$ref": "#/$defs/DecimalString" }, "maxProperties": 16 }
+          }
+        },
+        "capacityEvidence": { "anyOf": [ { "type": "object", "maxProperties": 32 }, { "type": "null" } ] },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["supporting", "conflicting", "missing"],
+          "properties": {
+            "supporting": { "$ref": "#/$defs/StringArray" },
+            "conflicting": { "$ref": "#/$defs/StringArray" },
+            "missing": { "$ref": "#/$defs/StringArray" }
+          }
+        },
+        "featureAttribution": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["feature", "contribution"],
+            "properties": { "feature": { "$ref": "#/$defs/ShortString" }, "contribution": { "$ref": "#/$defs/DecimalString" } }
+          }
+        },
+        "analogues": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["analogueId"],
+            "properties": {
+              "analogueId": { "$ref": "#/$defs/IdString" },
+              "laterOutcomeRef": { "anyOf": [ { "$ref": "#/$defs/IdString" }, { "type": "null" } ] }
+            }
+          }
+        },
+        "lineage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["datasetVersion", "featureVersion", "labelVersion", "modelVersion", "calibrationVersion"],
+          "properties": {
+            "datasetVersion": { "$ref": "#/$defs/ShortString" },
+            "featureVersion": { "$ref": "#/$defs/ShortString" },
+            "labelVersion": { "$ref": "#/$defs/ShortString" },
+            "modelVersion": { "$ref": "#/$defs/ShortString" },
+            "calibrationVersion": { "$ref": "#/$defs/ShortString" }
+          }
+        },
+        "sourceQuality": { "$ref": "#/$defs/QualityFlags" },
+        "advisoryAction": { "enum": ["IGNORE", "WATCH", "FOCUS", "PROPOSE_CONSIDERATION", "ABSTAIN_UNKNOWN"] },
+        "abstentionReasonCodes": { "type": "array", "items": { "$ref": "#/$defs/UpperSnake" }, "maxItems": 64 },
+        "invalidationConditions": { "$ref": "#/$defs/StringArray" },
+        "economicAssumptionContext": { "$ref": "#/$defs/EconomicAssumptionContextV1" }
+      }
+    },
+    "EdgeOutcomeEnvelopeV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "version", "revision", "outcomeId", "traceId", "assessmentId", "cohort", "labelKind", "sourceEventIds", "costs", "completeness", "reconciliationState", "contentHash"],
+      "properties": {
+        "schema": { "const": "EdgeOutcomeEnvelopeV1" },
+        "version": { "const": 1 },
+        "revision": { "type": "integer", "minimum": 0 },
+        "outcomeId": { "$ref": "#/$defs/IdString" },
+        "traceId": { "$ref": "#/$defs/IdString" },
+        "assessmentId": { "anyOf": [ { "$ref": "#/$defs/IdString" }, { "type": "null" } ] },
+        "cohort": { "enum": ["ACTED", "REJECTED", "EXPIRED", "MISSED", "CONTROL"] },
+        "labelKind": { "enum": ["REAL", "HYPOTHETICAL", "REPLAY"] },
+        "sourceEventIds": { "$ref": "#/$defs/IdArray" },
+        "sourceRevisions": { "$ref": "#/$defs/StringArray" },
+        "fills": {
+          "type": "array",
+          "maxItems": 512,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["price", "quantity", "timeMs"],
+            "properties": {
+              "price": { "$ref": "#/$defs/DecimalString" },
+              "quantity": { "$ref": "#/$defs/DecimalString" },
+              "timeMs": { "$ref": "#/$defs/UtcMillis" },
+              "fee": { "$ref": "#/$defs/NullableDecimalString" }
+            }
+          }
+        },
+        "costs": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "fees": { "$ref": "#/$defs/NullableDecimalString" },
+            "funding": { "$ref": "#/$defs/NullableDecimalString" },
+            "borrow": { "$ref": "#/$defs/NullableDecimalString" },
+            "interest": { "$ref": "#/$defs/NullableDecimalString" },
+            "slippage": { "$ref": "#/$defs/NullableDecimalString" },
+            "latencyMs": { "anyOf": [ { "type": "integer", "minimum": 0 }, { "type": "null" } ] },
+            "recovery": { "$ref": "#/$defs/NullableDecimalString" }
+          }
+        },
+        "excursion": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mfe": { "$ref": "#/$defs/NullableDecimalString" },
+            "mae": { "$ref": "#/$defs/NullableDecimalString" },
+            "timeToEventMs": { "anyOf": [ { "type": "integer", "minimum": 0 }, { "type": "null" } ] }
+          }
+        },
+        "pnlAttribution": { "anyOf": [ { "type": "object", "maxProperties": 32 }, { "type": "null" } ] },
+        "decisionLineage": { "anyOf": [ { "type": "object", "maxProperties": 32 }, { "type": "null" } ] },
+        "completeness": { "$ref": "#/$defs/Completeness" },
+        "reconciliationState": { "$ref": "#/$defs/ReconciliationState" },
+        "contentHash": { "$ref": "#/$defs/HashHex" }
+      }
+    },
+    "EdgeFeedbackEnvelopeV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "version", "revision", "feedbackId", "outcomeId", "assessmentId", "traceId", "deliveredAtMs", "dedupeKey", "payloadHash", "completeness", "reconciliationState"],
+      "properties": {
+        "schema": { "const": "EdgeFeedbackEnvelopeV1" },
+        "version": { "const": 1 },
+        "revision": { "type": "integer", "minimum": 0 },
+        "feedbackId": { "$ref": "#/$defs/IdString" },
+        "outcomeId": { "$ref": "#/$defs/IdString" },
+        "assessmentId": { "anyOf": [ { "$ref": "#/$defs/IdString" }, { "type": "null" } ] },
+        "traceId": { "$ref": "#/$defs/IdString" },
+        "deliveredAtMs": { "$ref": "#/$defs/UtcMillis" },
+        "dedupeKey": { "$ref": "#/$defs/IdString" },
+        "payloadHash": { "$ref": "#/$defs/HashHex" },
+        "projection": { "anyOf": [ { "type": "object", "maxProperties": 64 }, { "type": "null" } ] },
+        "completeness": { "$ref": "#/$defs/Completeness" },
+        "reconciliationState": { "$ref": "#/$defs/ReconciliationState" }
+      }
+    },
+    "EdgeBrainHealthV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "version", "revision", "componentId", "generatedAtMs", "state", "truthLabel", "blockingReasons"],
+      "properties": {
+        "schema": { "const": "EdgeBrainHealthV1" },
+        "version": { "const": 1 },
+        "revision": { "type": "integer", "minimum": 0 },
+        "componentId": { "$ref": "#/$defs/IdString" },
+        "generatedAtMs": { "$ref": "#/$defs/UtcMillis" },
+        "state": { "enum": ["OK", "DEGRADED", "STALE", "FAILED", "UNKNOWN"] },
+        "lastSuccessMs": { "$ref": "#/$defs/NullableUtcMillis" },
+        "lastErrorCode": { "anyOf": [ { "$ref": "#/$defs/UpperSnake" }, { "type": "null" } ] },
+        "queueDepth": { "anyOf": [ { "type": "integer", "minimum": 0 }, { "type": "null" } ] },
+        "modelVersions": { "type": "object", "additionalProperties": { "$ref": "#/$defs/ShortString" }, "maxProperties": 32 },
+        "driftState": { "enum": ["STABLE", "DRIFTING", "BROKEN", "UNKNOWN"] },
+        "truthLabel": { "$ref": "#/$defs/TruthLabel" },
+        "blockingReasons": { "$ref": "#/$defs/StringArray" }
+      }
+    },
+    "ProtocolErrorV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "version", "revision", "errorId", "code", "message", "occurredAtMs", "retryable", "component", "stage", "safeCurrentState", "recommendedOperatorAction", "correlationId"],
+      "properties": {
+        "schema": { "const": "ProtocolErrorV1" },
+        "version": { "const": 1 },
+        "revision": { "type": "integer", "minimum": 0 },
+        "errorId": { "$ref": "#/$defs/IdString" },
+        "code": { "$ref": "#/$defs/UpperSnake" },
+        "message": { "$ref": "#/$defs/ShortString" },
+        "occurredAtMs": { "$ref": "#/$defs/UtcMillis" },
+        "retryable": { "type": "boolean" },
+        "component": { "$ref": "#/$defs/ShortString" },
+        "stage": { "$ref": "#/$defs/ShortString" },
+        "safeCurrentState": { "$ref": "#/$defs/ShortString" },
+        "recommendedOperatorAction": { "$ref": "#/$defs/ShortString" },
+        "correlationId": { "anyOf": [ { "$ref": "#/$defs/IdString" }, { "type": "null" } ] },
+        "sourceEnvelopeSchema": { "anyOf": [ { "$ref": "#/$defs/ShortString" }, { "type": "null" } ] },
+        "sourceEnvelopeId": { "anyOf": [ { "$ref": "#/$defs/IdString" }, { "type": "null" } ] }
+      }
+    }
+  }
+}

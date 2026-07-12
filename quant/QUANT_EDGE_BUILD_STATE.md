@@ -1,17 +1,17 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `14`
+State generation: `15`
 
-Updated: 2026-07-12T18:08:54+0530
+Updated: 2026-07-12T18:13:46+0530
 
-Status: `READY_FOR_REVIEW`
+Status: `ACCEPTED`
 Program: Q lane — deterministic research evidence, labels, models, calibration, drift and advisory inference.
 
 ## Frozen launch identity
 
 - Worktree: `/Users/cosmosgeek/Desktop/quant-edge-research-20260712`
 - Branch: `quant-edge-research-factory-20260712`
-- Current HEAD at generation-14 authoring: `c7ff41c9f1a82aefd879f3f7ca56b29e5ea79b91`
+- Current HEAD at generation-15 authoring: `668ab5d0548d1713c299e85972fcbc6433c59504`
 - Origin: `git@github.com:cosmosgeek0/arbitrage-cosmos.git`
 - Canonical base: `7010499170e24b31c9c0be2c9d73a536e680c6fe`
 - Protocol SHA / current parent: `73e1a1ff7daa48df8dac45713fc5f106842edafc`
@@ -51,9 +51,11 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 - Q03 acceptance receipt: `quant/RECEIPTS/Q03_ACCEPTANCE.md`; SHA-256 `31cf167aa6f7bcd209ebbb29254e9d0f6ccd65ec7093885dacd488ec49270486`.
 - Q03 acceptance/state commit A3: `9e7d4aabae68a0e20479c389c0f08c33886bdeb4`; exact parent C3.
 - Q04 activation/state commit: `c7ff41c9f1a82aefd879f3f7ca56b29e5ea79b91`; exact parent A3.
-- Q04 implementation receipt: `quant/RECEIPTS/Q04.md`; SHA-256 `95b87d68b781f6cdeca560249d848fb7512d94b844051ce360bcd882c4f03a47`; immutable in C4 after commit.
-- Q04 implementation commit C4: the commit containing this generation-14 state and receipt; intentionally non-self-referential.
-- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `ACCEPTED`; Q03 `ACCEPTED`; Q04 `READY_FOR_REVIEW` pending independent exact-commit verification.
+- Q04 implementation receipt: `quant/RECEIPTS/Q04.md`; SHA-256 `95b87d68b781f6cdeca560249d848fb7512d94b844051ce360bcd882c4f03a47`; immutable in C4.
+- Q04 implementation commit C4: `668ab5d0548d1713c299e85972fcbc6433c59504`; exact parent `c7ff41c9f1a82aefd879f3f7ca56b29e5ea79b91`; tree `8611a1ac3c9f23fa61aa806ae5dcfc4e00e4f017`.
+- Q04 acceptance receipt: `quant/RECEIPTS/Q04_ACCEPTANCE.md`; SHA-256 `ad14fe33c852ea0be0ccd269d15f942557cd66c1080a28f7809d33eef11fd2ae`.
+- Q04 acceptance/state commit A4: the commit containing this generation-15 state and acceptance receipt; intentionally non-self-referential.
+- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `ACCEPTED`; Q03 `ACCEPTED`; Q04 `ACCEPTED`.
 
 ## Ownership and safety
 
@@ -205,6 +207,8 @@ Implementation C4 has 21 changed paths, all under `quant/**`. `TASKS/Q04.md` rem
 - Q04 golden fixture `32e13493…6aec`; campaign JSON `e9cd85c0…7334`; campaign Markdown `321cb6c2…14b9e`; byte-identical across separate processes with different CWD/TZ/hash seed and equal to in-test regeneration.
 - Q04 accumulated Q00 scope `6/6`, protocol `22/22`, `npm test` exit 0 with unchanged baseline subtotals.
 - Q04 adversarial review: replay-counter, stream-id and unbounded-intent-window findings corrected with regression tests; no remaining known blocker at receipt authoring.
+- Independent exact C4 verifier: exact parent/ancestry, 21-path `quant/**` scope, regular modes, frozen/accepted emptiness, task/receipt/state/artifact blob hashes and `git diff-tree --check` all pass; tree `8611a1ac3c9f23fa61aa806ae5dcfc4e00e4f017`.
+- Archive-derived C4 SHA-256 `b1680299466a2e903f9e5aad2a2bf8633539cf00ea2ba994d0dbe18e5f217918`; clean locked install, Ruff/format, strict mypy, Q `1172` at `100.00%` (5,223/1,864), golden/campaign byte regeneration and subprocess determinism all pass.
 - Host: Apple M4 Max, 16 cores, 48 GB; Node `v22.23.1`; npm `10.9.8`.
 - Current Q performance/inference measurements: none. Historical receipt and synthetic capacity facts remain separately labeled in `quant/docs/Q00_BENCHMARK_PROFILE.md`.
 
@@ -226,12 +230,12 @@ Implementation C4 has 21 changed paths, all under `quant/**`. `TASKS/Q04.md` rem
 
 ## Exact next task
 
-After C4 exists, independently verify the exact commit (parent/ancestry, 21-path scope, frozen emptiness, task/receipt/artifact hashes, archive-derived clean-environment re-run), then create `quant/RECEIPTS/Q04_ACCEPTANCE.md` and a generation-15 acceptance state in commit A4. Never rewrite `quant/RECEIPTS/Q04.md` after C4. After A4, activate Q05 (label and matched-control factory) with a bounded task and activation commit only.
+After A4 exists, create only the bounded `quant/TASKS/Q05.md` for the Section 11 label and matched-control factory (point-in-time lineage, censoring, event grouping, leakage tests; launch Q-A atlas outcomes and Q-E owner-annotation channel included as bounded Q05 scope) and advance state in a Q05 activation commit. Verify all controlling and accepted identities first; do not implement Q05 in the activation commit and never rewrite accepted Q04 work.
 
-Next exact command after C4:
+Next exact command after A4:
 
 ```bash
-git log -1 --format='%H %P %T' && bash quant/scripts/check-scope.sh || git show --stat HEAD
+git status --short && git log -1 --format='%H %P' && shasum -a 256 quant/RECEIPTS/Q04.md quant/RECEIPTS/Q04_ACCEPTANCE.md quant/QUANT_EDGE_BUILD_STATE.md
 ```
 
 ## Fresh-session read order
@@ -256,6 +260,6 @@ git log -1 --format='%H %P %T' && bash quant/scripts/check-scope.sh || git show 
 - Do not rerun or rewrite accepted Q02; the activated Q03 task is the only current work.
 - Do not implement Q04 book reconstruction or Q05 labels/controls during Q03.
 - After C3, do not rewrite `quant/RECEIPTS/Q03.md`; verify the exact commit and create a separate acceptance receipt.
-- Do not rerun or rewrite accepted Q03; Q04 is the only current phase.
-- Do not implement Q05 labels/controls, features or models during Q04.
-- After C4, do not rewrite `quant/RECEIPTS/Q04.md`; verify the exact commit and create a separate acceptance receipt.
+- Do not rerun or rewrite accepted Q03 or Q04; Q05 is not activated until a new bounded task and activation commit exist.
+- Do not rewrite either immutable Q04 receipt after A4.
+- Do not implement Q06 features or models during Q05.

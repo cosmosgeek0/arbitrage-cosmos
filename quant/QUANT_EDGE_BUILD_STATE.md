@@ -1,17 +1,17 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `21`
+State generation: `22`
 
-Updated: 2026-07-12T19:30:16+0530
+Updated: 2026-07-12T19:32:22+0530
 
-Status: `ACCEPTED`
+Status: `WORKING`
 Program: Q lane — deterministic research evidence, labels, models, calibration, drift and advisory inference.
 
 ## Frozen launch identity
 
 - Worktree: `/Users/cosmosgeek/Desktop/quant-edge-research-20260712`
 - Branch: `quant-edge-research-factory-20260712`
-- Current HEAD at generation-21 authoring: `3bf9e2a775c0aa91a29ab2f67c27544b9ddc6602`
+- Current HEAD at generation-22 authoring: `24ccf5880cbce8b1ee81ddd7d33f7c9c7271aacd`
 - Origin: `git@github.com:cosmosgeek0/arbitrage-cosmos.git`
 - Canonical base: `7010499170e24b31c9c0be2c9d73a536e680c6fe`
 - Protocol SHA / current parent: `73e1a1ff7daa48df8dac45713fc5f106842edafc`
@@ -27,9 +27,9 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 
 - Last accepted phase: `Q06`
 - Latest director acceptance: `D-LAUNCH-1` (`9ca01537f4edda06ee566cd261e612d5c315fb76`, authentic launch digest); standing order `D-LAUNCH-2` (`84d2ff65fd8d2b200821126dd17b4ba75f3c131c`, continuous self-accepted execution with full evidenced loops, director audits at LANE_READY); `D-LAUNCH-3` (`cf37df4af0ef3724f8f3a145c6be3cdcc84799c0`, Q lane transferred to the Fable lead builder).
-- Current phase: `Q06` (`ACCEPTED`; Q07 not activated)
-- Current task: `quant/TASKS/Q06.md`
-- Current task SHA-256: `c68962f1267c09e5fa88abf0c80418981d82d320ed1bdd936ab42e44f86cf59f`
+- Current phase: `Q07` (`WORKING`)
+- Current task: `quant/TASKS/Q07.md`
+- Current task SHA-256: `11da284da20e5fea637c3794a3cb328b4b2b3bbe65ba97df52005976b334338d`
 - Checkpoint receipt: `quant/RECEIPTS/Q00.md`; blob `7ba41768ba747bbc3eddd1941f6f5d82985dc1ca`; SHA-256 `738dad4caac7cfac9ba8b7b84fb646ec1817c6f0eb34fc09daa60129ab1996c3`; immutable in checkpoint commit.
 - Acceptance receipt: `quant/RECEIPTS/Q00_ACCEPTANCE.md`; SHA-256 `c29c7646af5f284a88eca782beb7dbf636e6c6eb11dda25d1bccc03ea97385de`; immutable after this acceptance commit.
 - Q00 checkpoint implementation commit: `fa6fecd8295aaab6aa38d35bd34843b64af69e69`.
@@ -64,8 +64,9 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 - Q06 implementation receipt: `quant/RECEIPTS/Q06.md`; SHA-256 `084836741fd74759b526760d6b2657deb7137d6d1f4ce227565dfb63ed26bddf`; immutable in C6 after commit.
 - Q06 implementation commit C6: `3bf9e2a775c0aa91a29ab2f67c27544b9ddc6602`; exact parent `8f0af66df40843c8ca0fabca065ebd1b38df5686`; tree `e183d53c1cc0d2866211824cde020e6149147a85`.
 - Q06 acceptance receipt: `quant/RECEIPTS/Q06_ACCEPTANCE.md`; SHA-256 `8b2d558b003e5eb9f17aabf80eb3d10efac8ff2478b29d032c2b3c4f5ec016d3`.
-- Q06 acceptance/state commit A6: the commit containing this generation-21 state and acceptance receipt; intentionally non-self-referential.
-- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `ACCEPTED`; Q03 `ACCEPTED`; Q04 `ACCEPTED`; Q05 `ACCEPTED`; Q06 `ACCEPTED`.
+- Q06 acceptance/state commit A6: `24ccf5880cbce8b1ee81ddd7d33f7c9c7271aacd`; exact parent C6.
+- Q07 activation/state commit: the commit containing this generation-22 state and task; intentionally non-self-referential.
+- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `ACCEPTED`; Q03 `ACCEPTED`; Q04 `ACCEPTED`; Q05 `ACCEPTED`; Q06 `ACCEPTED`; Q07 `WORKING`, with no implementation or receipt yet.
 
 ## Ownership and safety
 
@@ -250,12 +251,12 @@ Implementation C6 has 24 changed paths, all under `quant/**`. `TASKS/Q06.md` rem
 
 ## Exact next task
 
-After A6 exists, create only the bounded `quant/TASKS/Q07.md` for the microstructure and liquidity library (§13 families the current evidence contracts can honestly support, each with an AlgorithmCard, golden examples, failure cases and an incremental-update benchmark per §20 Q07) and advance state in a Q07 activation commit. Verify all controlling and accepted identities first; do not implement Q07 in the activation commit and never rewrite accepted Q06 work.
+Execute `quant/TASKS/Q07.md`: record the microstructure design note, implement the `quant_edge.micro` package (L1/book/flow families with cards, equivalence, failure cases, deterministic update-cost benchmarks and the honest §13.1 disposition table), run the full evidenced loop, create implementation commit C7 with the immutable `quant/RECEIPTS/Q07.md`, independently verify C7, then create acceptance commit A7 with `quant/RECEIPTS/Q07_ACCEPTANCE.md` and a state update. Never rewrite accepted Q00-Q06 work.
 
-Next exact command after A6:
+Next exact command:
 
 ```bash
-git status --short && git log -1 --format='%H %P' && shasum -a 256 quant/RECEIPTS/Q06.md quant/RECEIPTS/Q06_ACCEPTANCE.md quant/QUANT_EDGE_BUILD_STATE.md
+git status --short && git log -1 --format='%H %P' && shasum -a 256 quant/TASKS/Q07.md quant/QUANT_EDGE_BUILD_STATE.md
 ```
 
 ## Fresh-session read order
@@ -263,7 +264,7 @@ git status --short && git log -1 --format='%H %P' && shasum -a 256 quant/RECEIPT
 1. `STATE.md`, `MISSION.md`, `ARCHITECTURE.md` Part II, `DIRECTOR.md`.
 2. `QUANT_EDGE_RESEARCH_FACTORY_12H.md` and only launch Section 6.
 3. `EDGE_PROTOCOL_V1.md`, frozen schema/fixtures, and `quant/DIRECTIVE_INPUTS.lock`.
-4. This state, `quant/TASKS/Q06.md`, the immutable `quant/RECEIPTS/Q06.md`, the Q06 decision/design notes and both immutable Q05 receipts.
+4. This state, `quant/TASKS/Q07.md`, both immutable Q06 receipts and the Q06 decision/design notes (the card/equivalence law controls Q07 features).
 5. Q00 reuse matrix and Q01 framework/security docs are inputs only; do not redo accepted work or regenerate accepted evidence unless exact code/input identity changed.
 
 ## Work not to repeat
@@ -282,7 +283,8 @@ git status --short && git log -1 --format='%H %P' && shasum -a 256 quant/RECEIPT
 - After C3, do not rewrite `quant/RECEIPTS/Q03.md`; verify the exact commit and create a separate acceptance receipt.
 - Do not rerun or rewrite accepted Q03, Q04 or Q05; Q06 is the only current phase.
 - After C6, do not rewrite `quant/RECEIPTS/Q06.md`; verify the exact commit and create a separate acceptance receipt.
-- Do not implement Q07 microstructure families or models during Q06.
+- Do not rerun or rewrite accepted Q06; Q07 is the only current phase.
+- Do not implement Q08 derivatives features or models during Q07.
 - Do not rewrite either immutable Q04 receipt after A4.
 - After C5, do not rewrite `quant/RECEIPTS/Q05.md`; verify the exact commit and create a separate acceptance receipt.
 - Do not implement Q06 features or models during Q05.

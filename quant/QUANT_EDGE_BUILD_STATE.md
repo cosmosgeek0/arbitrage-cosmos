@@ -1,17 +1,17 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `10`
+State generation: `11`
 
-Updated: 2026-07-12T13:52:40+0530
+Updated: 2026-07-12T15:11:47+0530
 
-Status: `WORKING`
+Status: `READY_FOR_REVIEW`
 Program: Q lane — deterministic research evidence, labels, models, calibration, drift and advisory inference.
 
 ## Frozen launch identity
 
 - Worktree: `/Users/cosmosgeek/Desktop/quant-edge-research-20260712`
 - Branch: `quant-edge-research-factory-20260712`
-- Current HEAD at generation-10 authoring: `1db50828c8474b0f9fe70a70817ab20003107546`
+- Current HEAD at generation-11 authoring: `404645858830610677d0b6f6a75453b9a9bc531a`
 - Origin: `git@github.com:cosmosgeek0/arbitrage-cosmos.git`
 - Canonical base: `7010499170e24b31c9c0be2c9d73a536e680c6fe`
 - Protocol SHA / current parent: `73e1a1ff7daa48df8dac45713fc5f106842edafc`
@@ -45,8 +45,10 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 - Q02 implementation commit C2: `7edd275e98762f600c6168e405b26716ba9d7e0d`; exact parent `9294b0f0ad5a73b7e746057ccf7a76eed677beb0`.
 - Q02 acceptance receipt: `quant/RECEIPTS/Q02_ACCEPTANCE.md`; SHA-256 `5ffa157aa4d568916623add4e4b641498b27fb4ea6cef94e5e4f496e809409ab`.
 - Q02 acceptance/state commit A2: `1db50828c8474b0f9fe70a70817ab20003107546`; exact parent C2.
-- Q03 activation/state commit: the commit containing this generation-10 state and task; intentionally non-self-referential.
-- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `ACCEPTED`; Q03 `WORKING`, with no implementation or receipt yet.
+- Q03 activation/state commit: `404645858830610677d0b6f6a75453b9a9bc531a`; exact parent `1db50828c8474b0f9fe70a70817ab20003107546`.
+- Q03 implementation receipt: `quant/RECEIPTS/Q03.md`; SHA-256 `767c94f8680490a35b992da1a6abf349379508ba75bef670ac3de1071f5fe92a`; immutable in C3 after commit.
+- Q03 implementation commit C3: the commit containing this generation-11 state and receipt; intentionally non-self-referential.
+- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `ACCEPTED`; Q03 `COMPLETE/READY_FOR_INDEPENDENT_COMMIT_VERIFICATION`.
 
 ## Ownership and safety
 
@@ -94,20 +96,23 @@ Implementation commit C therefore has 32 changed paths, all under `quant/**`. Th
 
 Implementation commit C2 therefore has 24 changed paths, all under `quant/**`. `TASKS/Q02.md` remains unchanged from activation commit. The two root directives remain preserved untracked owner inputs and are never staged.
 
-## Q03 activation inventory
+## Q03 implementation inventory
 
-- `quant/TASKS/Q03.md`
-- this generation-10 state
+- Decision/research: `DECISIONS/Q03-001-HISTORICAL-BOOTSTRAP.md`, `docs/Q03_SOURCE_CONTRACT_REFRESH.md`.
+- Package/script: nine `src/quant_edge/bootstrap/*.py` files and `scripts/q03_real_sample.py`.
+- Generated evidence: ten `generated/q03/*` hash/count/schema/Markdown artifacts; no raw external bytes or rows.
+- Tests: five contract, two property and seven unit test files.
+- Durable completion: `RECEIPTS/Q03.md` and this generation-11 state.
 
-No Q03 implementation or receipt path exists yet.
+Implementation C3 is prepared with 38 changed paths, all under `quant/**`. `TASKS/Q03.md` remains unchanged from activation. The two root directives remain preserved untracked owner inputs and are never staged.
 
 ## Q-lane posture map
 
 - `LIVE`: none. Q has no production integration, listener, data producer, model or authority.
 - `SHADOW`: none. No Q assessment service or champion/challenger is running.
-- `SYNTHETIC`: frozen protocol/product fixtures, Q01 deterministic config/RNG and the Q02 golden reference partition input/hash vector; contract evidence, never market claims.
-- `RESEARCH`: locked offline package and eight-family hypothesis falsification portfolio; this status is not edge evidence.
-- `UNAVAILABLE`: external lake revisions, point-in-time master, Event Atlas, owner-annotation records, feature/label/model registries, trained/calibrated models, drift service and inference.
+- `SYNTHETIC`: frozen protocol/product fixtures, Q01 deterministic config/RNG, Q02 golden vector and Q03 hash-only forward bridge fixtures; never observed market evidence.
+- `RESEARCH`: locked offline package, eight-family hypothesis portfolio, one checksum-verified/disposable archive replay and a hash-only two-tier Event Atlas bootstrap; no edge claim.
+- `UNAVAILABLE`: real forward Q delivery, point-in-time instrument master, owner-annotation records, feature/label/model registries, trained/calibrated models, drift service and inference.
 - Money/order/capital/risk authority: `NONE` in every posture.
 
 ## Framework and source decisions
@@ -123,12 +128,12 @@ No Q03 implementation or receipt path exists yet.
 
 ## Dataset, registry and evidence state
 
-- Dataset versions: none. Q02 provides an immutable local lake/manifest contract and synthetic golden hashes, but no partition bytes or external data entered the repository.
-- Coverage: no retained historical/Q dataset; no point-in-time master; no current Q event trace.
-- Event Atlas: absent; two-tier build routed to Q03–Q05.
+- Dataset version evidence: temporary `binance_spot_aggtrades/r_2de38a97c23e86d2aafc`; partition `3420b1eb…baf8`, manifest `31b3a78e…5a35`; disposed after validation, with no external row bytes retained.
+- Coverage: observed BNBUSDT Spot `aggTrades` for 2017-11-06, 832 rows, 0 observed internal ID discontinuities/invalid/duplicates; boundary/upstream completeness and point-in-time identity remain unknown.
+- Event Atlas: `q03.event-atlas.v1`, as-of `1783846749003` ms; 832 rows, 20 candidates, 143 controls, 0 omitted; later outcomes `UNAVAILABLE`; forward tier real coverage `MISSING/BLOCKED`.
 - Hypothesis registry: `edge-hypotheses-2026-07-12-v2`; 8 families (`DATA_INSUFFICIENT=5`, `RESEARCH=2`, `UNTESTED=1`), exact deterministic Markdown projection; no `SHADOW`.
 - Feature registry: none. Label registry: none. Model registry: none. Calibration: none.
-- Source cards: versioned eight-gate contract exists; no source card is admitted and no producer exists.
+- Source cards: Q03 archive/runtime/Tardis reviews all remain `INELIGIBLE`/`REVIEW_ONLY_NO_ADMISSION`; no source is admitted and no Q producer exists.
 - Owner annotations: separate immutable weak-supervision/blinding/link contracts exist; no annotation or objective-outcome record exists.
 - Frozen protocol fixtures and product test fixtures are `SYNTHETIC_ONLY`, never research evidence.
 - Dependency evidence: 49-package durable vulnerability/license inventories; zero indexed vulnerabilities/unknown license fields observed on 2026-07-12, subject to time-varying scanner/legal limits.
@@ -165,6 +170,14 @@ No Q03 implementation or receipt path exists yet.
 - Q02 accumulated Q00 scope suite `6/6`, frozen protocol `22/22`, and `npm test` exit 0 with existing `377` deterministic checks.
 - Independent exact C2 verifier: `VERIFIED`; exact parent/ancestry, 24-path scope, frozen emptiness, task/receipt/artifact hashes and commit tree `3f258a10729deb4f80f918be058f1f1bb7946f8f` pass.
 - Archive-derived C2 SHA-256 `10409bc52f00d9b7db8a9a0d2c2e10b3e5455de30402bd61b274414b47a59480`; offline lock, Ruff, mypy, `602` tests, `100.00%` coverage, focused `514`, golden `2/2`, Q00 `6/6` and protocol `22/22` all pass.
+- Q03 pinned `uv 0.11.28 lock --check`: exit 0, 51 resolved packages; no dependency change.
+- Q03 Ruff lint/format: exit 0, 60 files compliant; strict mypy: 59 source/test files plus the campaign script.
+- Q03 focused suite: `430 passed`; bootstrap 2,095 statements / 828 branches, `100.00%`.
+- Q03 accumulated Q suite: `1032 passed`; 4,203 statements / 1,562 branches, `100.00%`.
+- Q03 real campaign: two fresh processes across different CWD/timezone/hash seed produced byte-identical artifacts; index `d01a4e29…9564`, campaign `553738c2…0529`, atlas `f8d59dea…b21c`, coverage `f2f23bbb…9104`.
+- Q03 archive replay: 12,440-byte official ZIP, 49,263-byte CSV, 832 rows; exact official/archive `2de38a97…a893`, member `52058a46…1d7`, 0 internal discontinuities.
+- Q03 accumulated Q00 `6/6`, protocol `22/22`, `npm test` exit 0 with existing `377` checks, and `git diff --check` exit 0.
+- Q03 independent adversarial review: initial blockers reproduced and corrected; final `Q03 ADVERSARIAL SEAL`, no remaining blocker.
 - Independent verification of `fa6fecd`: exact 10-path `quant/**` history, empty frozen diff, range `git diff --check` exit 0, scope suite `6/6`, protocol `22/22`.
 - Host: Apple M4 Max, 16 cores, 48 GB; Node `v22.23.1`; npm `10.9.8`.
 - Current Q performance/inference measurements: none. Historical receipt and synthetic capacity facts remain separately labeled in `quant/docs/Q00_BENCHMARK_PROFILE.md`.
@@ -176,23 +189,24 @@ No Q03 implementation or receipt path exists yet.
 - Q01 exact-commit verification completed and acceptance conditions passed; no Q01 blocker remains.
 - Q02 exact-commit verification passed and Q02 is accepted; no Q02 blocker remains.
 - No canonical forward runtime-to-Q append-only bridge exists; this is a later integration seam, not permission for a Q socket.
-- The Q02 reference schema is event-timestamped-only. Q03 must add a separate nullable-source-time schema with explicit order/partition clock basis before book-ticker capture.
+- Resolved in Q03: separate nullable-source-time forward schema fingerprint `bd030e0a…8886`, explicit clock/order/payload posture and bounded `DROP_NEW` seam.
 - Free history cannot prove full L2, receive latency, borrow truth or causal intent.
+- Archive data license/redistribution, point-in-time identity/filter economics and upstream/boundary completeness remain unresolved; only hash/count/derived registry evidence is retained.
+- Real canonical runtime-to-Q append-only delivery remains `MISSING/BLOCKED`; Q03 implements no socket or operational payload materialization.
 - Current official liquidation selection wording conflicts; preserve sampled/unknown semantics.
 - Numeric Q inference SLOs are unknown until measured on the Q01 lock; only provisional resource/queue budgets exist.
 
 ## Exact next task
 
-1. Verify this Q03 task hash and activation commit; do not rerun or rewrite accepted Q00–Q02.
-2. Refresh only current official archive/Spot/USD-M/Tardis facts required by Q03 and pin retrieval/revision/content identities before code.
-3. Execute only Q03: bounded checksum archive import, exact normalization, coverage/revision evidence, pure canonical bridge fixtures and two-tier EventAtlas bootstrap.
-4. Import one real bounded official sample into a temporary lake with no raw external bytes committed; record exact source/checksum/license/coverage evidence.
-5. Run deterministic/failure/accumulated tests and independent review, then create C3 receipt/implementation and later A3 acceptance commits.
+1. Stage only the 38 recorded Q03 `quant/**` paths; keep both owner root directives unstaged.
+2. Run `bash quant/scripts/check-scope.sh` and `git diff --cached --check`; create C3 with exact parent `404645858...`.
+3. Independently verify the exact C3 object: parent/ancestry/tree/path modes/scope/frozen emptiness/task/receipt/artifact hashes and archive-derived deterministic tests.
+4. If and only if exact C3 verification passes, create immutable `quant/RECEIPTS/Q03_ACCEPTANCE.md`, advance state to generation 12 `ACCEPTED`, and create A3.
 
 Next exact command:
 
 ```bash
-git rev-parse HEAD && shasum -a 256 quant/TASKS/Q03.md && git status --short
+git status --short && git diff --check && shasum -a 256 quant/RECEIPTS/Q03.md
 ```
 
 ## Fresh-session read order
@@ -200,8 +214,8 @@ git rev-parse HEAD && shasum -a 256 quant/TASKS/Q03.md && git status --short
 1. `STATE.md`, `MISSION.md`, `ARCHITECTURE.md` Part II, `DIRECTOR.md`.
 2. `QUANT_EDGE_RESEARCH_FACTORY_12H.md` and only launch Section 6.
 3. `EDGE_PROTOCOL_V1.md`, frozen schema/fixtures, and `quant/DIRECTIVE_INPUTS.lock`.
-4. This state, current `quant/TASKS/Q03.md`, both immutable Q02 receipts, accepted Q02 task and Q01 receipts/decision.
-5. Q00 reuse matrix/source research and Q01 framework/security docs only as inputs; do not redo accepted work.
+4. This state, `quant/TASKS/Q03.md`, `quant/RECEIPTS/Q03.md`, both immutable Q02 receipts and Q03 decision/research note.
+5. Q00 reuse matrix and Q01 framework/security docs are inputs only; do not redo accepted work or regenerate Q03 evidence unless exact code/input identity changed before C3.
 
 ## Work not to repeat
 
@@ -216,3 +230,4 @@ git rev-parse HEAD && shasum -a 256 quant/TASKS/Q03.md && git status --short
 - After C2, do not rewrite `quant/RECEIPTS/Q02.md`; verify the exact commit and create a separate acceptance receipt.
 - Do not rerun or rewrite accepted Q02; the activated Q03 task is the only current work.
 - Do not implement Q04 book reconstruction or Q05 labels/controls during Q03.
+- After C3, do not rewrite `quant/RECEIPTS/Q03.md`; verify the exact commit and create a separate acceptance receipt.

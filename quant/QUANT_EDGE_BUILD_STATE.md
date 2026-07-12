@@ -1,8 +1,8 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `1`
+State generation: `2`
 
-Updated: 2026-07-12T10:02:49+0530
+Updated: 2026-07-12T10:15:15+0530
 
 Status: `BLOCKED_EXTERNAL`
 Program: Q lane — deterministic research evidence, labels, models, calibration, drift and advisory inference.
@@ -11,7 +11,7 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 
 - Worktree: `/Users/cosmosgeek/Desktop/quant-edge-research-20260712`
 - Branch: `quant-edge-research-factory-20260712`
-- Current HEAD at generation-1 authoring: `73e1a1ff7daa48df8dac45713fc5f106842edafc`
+- Current HEAD at generation-2 authoring: `fa6fecd8295aaab6aa38d35bd34843b64af69e69`
 - Origin: `git@github.com:cosmosgeek0/arbitrage-cosmos.git`
 - Canonical base: `7010499170e24b31c9c0be2c9d73a536e680c6fe`
 - Protocol SHA / current parent: `73e1a1ff7daa48df8dac45713fc5f106842edafc`
@@ -29,8 +29,9 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 - Current phase: `Q00`
 - Current task: `quant/TASKS/Q00.md`
 - Current task SHA-256: `0643c54b81b93e57c5f9548a5968d670f7f31c7499bacc078fff87e38b323507`
-- Current receipt: `quant/RECEIPTS/Q00.md` (`BLOCKED_EXTERNAL_CHECKPOINT`; immutable after checkpoint seal)
-- Q00 checkpoint implementation commit: pending receipt-seal commit; the next state generation records it.
+- Current receipt: `quant/RECEIPTS/Q00.md`; blob `7ba41768ba747bbc3eddd1941f6f5d82985dc1ca`; SHA-256 `738dad4caac7cfac9ba8b7b84fb646ec1817c6f0eb34fc09daa60129ab1996c3`; immutable in checkpoint commit.
+- Q00 checkpoint implementation commit: `fa6fecd8295aaab6aa38d35bd34843b64af69e69`.
+- State-pointer commit: the commit containing state generation 2; it is intentionally not self-referential and must not be mistaken for director acceptance.
 - Acceptance state: not ready; not accepted; Q01 must not start.
 
 ## Ownership and safety
@@ -92,6 +93,7 @@ No other path is authored or staged. The two root directives remain preserved un
 - `bash quant/tests/q00/scope_guard.test.sh`: exit 0, `6/6`, including reverted out-of-scope commit history.
 - Staged `bash quant/scripts/check-scope.sh`: exit 0, exact branch/protocol, `10` allowed paths.
 - `git diff --cached --check`: exit 0.
+- Independent verification of `fa6fecd`: exact 10-path `quant/**` history, empty frozen diff, range `git diff --check` exit 0, scope suite `6/6`, protocol `22/22`.
 - Host: Apple M4 Max, 16 cores, 48 GB; Node `v22.23.1`; npm `10.9.8`.
 - Current Q performance/inference measurements: none. Historical receipt and synthetic capacity facts remain separately labeled in `quant/docs/Q00_BENCHMARK_PROFILE.md`.
 

@@ -50,6 +50,15 @@ Updated: 2026-07-12 (launch gate). This file is sprint state, not product truth;
 
 Both branches descend from PROTOCOL_SHA. Main stays director-owned; neither Codex writes here. Lane durable state: `quant/QUANT_EDGE_BUILD_STATE.md` (Q) and `LIVE_EXECUTION_BUILD_STATE.md` (L) per their directives.
 
+## Commander corrections — resolved 2026-07-12 (post-launch verification pass)
+
+1. **L SHA-256:** recorded value here and in the lock is already the corrected `40de1feb…961fdb25…9b037`; the transposed value exists only inside the owner's untracked launch file (preserved byte-for-byte, not edited). RESOLVED.
+2. **Path semantics:** Mission = root `MISSION.md`; SYSTEM_AUTHORITY_MAP concept = `ARCHITECTURE.md` Part II; LIVE_PRODUCT_AUTHORITY_MAP concept = `ARCHITECTURE.md` Part II **plus** current canonical source and the accepted receipts under `docs/archive/` (all five sprint receipts + convergence receipt); obsolete directives = `docs/archive/**` historical evidence only. Q00/L00 are NOT blocked by retired filenames. RESOLVED.
+3. **Repository identity:** the project is `/Users/cosmosgeek/Desktop/Main` → `git@github.com:cosmosgeek0/arbitrage-cosmos.git` branch `current-main`. "CG Signal Lab" was an informal chat label; verified absent from all state, lock, protocol, and prompts. RESOLVED.
+4. **DIRECTOR_VERDICT_GAP_AUDIT.md:** verified to no longer exist anywhere on this machine (Main, Desktop, Downloads searched 2026-07-12). Non-controlling per launch §0; its corrected additions already live in launch §6/§7; it was never supplied to any builder. Clean-tree gate carries only the three exempted directives. RESOLVED — nothing to archive.
+5. **Live-product consolidation:** verified from Git — convergence `b58e64e` and all organ work are ancestors of canonical base `7010499`; receipts present in `docs/archive/`. Q §3.3 "launch Q alone" contingency DOES NOT APPLY; Q and L launch concurrently from PROTOCOL_SHA `73e1a1f`. RESOLVED.
+6. **Setup inspection:** protocol commit `73e1a1f` descends from `7010499` (ancestry-verified); both lane branches point at `73e1a1f`; protocol content encodes no obsolete path or competing authority; conformance 22/22 re-verified in the L worktree. No patch to the frozen protocol needed; PROTOCOL_SHA unchanged.
+
 ## Director acceptance log
 
 - (append: phase, lane, accepted commit, receipt path, date)

@@ -1,10 +1,10 @@
 # Q14 shard — durable state
 
-State generation: `1`
+State generation: `2`
 
 Updated: 2026-07-12
 
-Status: `WORKING`
+Status: `IMPLEMENTATION_COMPLETE_AWAITING_ACCEPTANCE`
 
 ## Frozen shard identity
 
@@ -49,10 +49,27 @@ Status: `WORKING`
 - Baseline quant suite at `24ccf58`: `1372 passed` (PYTHONHASHSEED=0,
   hypothesis seed 20260712).
 
+## Phase position (generation 2)
+
+- Q14 activation commit: `24aeb1a819813feefccfcc0f38002264519487f4`
+  (parent `24ccf58`); task SHA-256
+  `f3942a301a8c3ded1b9e49e4c9fa5ac993ee484509918c7bf860eb0d28fb7342`, unchanged.
+- Implementation commit C14: the commit that first contains the immutable
+  `quant/RECEIPTS/Q14.md` and this generation-2 state; intentionally
+  non-self-referential.
+- Measured at C14 authoring: focused Q14 `111 passed` with `quant_edge.validation`
+  at 100.00% statements/branches (1,636/570); accumulated quant `1483 passed` with
+  total 100.00% (9,465/3,274); Ruff/format and strict mypy (138 files) clean;
+  protocol `22/22`; Q00 scope `6/6`; `npm test` exit 0; campaign artifacts
+  byte-deterministic across process/CWD/TZ/hash-seed changes.
+- §20 Q14 acceptance evidence: leaked model rejected on both detection paths
+  (temporal audit and implausible-skill bound), honest baselines accepted, 8/8
+  battery datasets; committed under `quant/generated/q14/`.
+
 ## Exact next step
 
-Implement the Q14 task brief (`quant/TASKS/Q14.md`, unchanged from this activation)
-through the full evidenced loop: implementation → focused tests → family + quant
-unit suites → adversarial review → corrections → implementation commit with the
-immutable `quant/RECEIPTS/Q14.md` → independent exact-commit verification →
-`quant/RECEIPTS/Q14_ACCEPTANCE.md` + state advance in an acceptance commit.
+After C14 exists: independently verify the exact commit (parent/ancestry, 32-path
+shard scope, task byte-identity, blob hashes, `git diff-tree --check`), then author
+`quant/RECEIPTS/Q14_ACCEPTANCE.md` and advance this state to generation 3 in a
+separate acceptance commit A14. Record the final SHA. Do not rewrite
+`quant/RECEIPTS/Q14.md` after C14.

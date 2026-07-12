@@ -1,17 +1,17 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `20`
+State generation: `21`
 
-Updated: 2026-07-12T19:28:00+0530
+Updated: 2026-07-12T19:30:16+0530
 
-Status: `READY_FOR_REVIEW`
+Status: `ACCEPTED`
 Program: Q lane — deterministic research evidence, labels, models, calibration, drift and advisory inference.
 
 ## Frozen launch identity
 
 - Worktree: `/Users/cosmosgeek/Desktop/quant-edge-research-20260712`
 - Branch: `quant-edge-research-factory-20260712`
-- Current HEAD at generation-20 authoring: `8f0af66df40843c8ca0fabca065ebd1b38df5686`
+- Current HEAD at generation-21 authoring: `3bf9e2a775c0aa91a29ab2f67c27544b9ddc6602`
 - Origin: `git@github.com:cosmosgeek0/arbitrage-cosmos.git`
 - Canonical base: `7010499170e24b31c9c0be2c9d73a536e680c6fe`
 - Protocol SHA / current parent: `73e1a1ff7daa48df8dac45713fc5f106842edafc`
@@ -25,9 +25,9 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 
 ## Phase position
 
-- Last accepted phase: `Q05`
+- Last accepted phase: `Q06`
 - Latest director acceptance: `D-LAUNCH-1` (`9ca01537f4edda06ee566cd261e612d5c315fb76`, authentic launch digest); standing order `D-LAUNCH-2` (`84d2ff65fd8d2b200821126dd17b4ba75f3c131c`, continuous self-accepted execution with full evidenced loops, director audits at LANE_READY); `D-LAUNCH-3` (`cf37df4af0ef3724f8f3a145c6be3cdcc84799c0`, Q lane transferred to the Fable lead builder).
-- Current phase: `Q06` (`WORKING`)
+- Current phase: `Q06` (`ACCEPTED`; Q07 not activated)
 - Current task: `quant/TASKS/Q06.md`
 - Current task SHA-256: `c68962f1267c09e5fa88abf0c80418981d82d320ed1bdd936ab42e44f86cf59f`
 - Checkpoint receipt: `quant/RECEIPTS/Q00.md`; blob `7ba41768ba747bbc3eddd1941f6f5d82985dc1ca`; SHA-256 `738dad4caac7cfac9ba8b7b84fb646ec1817c6f0eb34fc09daa60129ab1996c3`; immutable in checkpoint commit.
@@ -62,8 +62,10 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 - Q05 acceptance/state commit A5: `8986653b0bbe371d7b129d56742bec7ba158ebaf`; exact parent C5.
 - Q06 activation/state commit: `8f0af66df40843c8ca0fabca065ebd1b38df5686`; exact parent A5.
 - Q06 implementation receipt: `quant/RECEIPTS/Q06.md`; SHA-256 `084836741fd74759b526760d6b2657deb7137d6d1f4ce227565dfb63ed26bddf`; immutable in C6 after commit.
-- Q06 implementation commit C6: the commit containing this generation-20 state and receipt; intentionally non-self-referential.
-- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `ACCEPTED`; Q03 `ACCEPTED`; Q04 `ACCEPTED`; Q05 `ACCEPTED`; Q06 `READY_FOR_REVIEW` pending independent exact-commit verification.
+- Q06 implementation commit C6: `3bf9e2a775c0aa91a29ab2f67c27544b9ddc6602`; exact parent `8f0af66df40843c8ca0fabca065ebd1b38df5686`; tree `e183d53c1cc0d2866211824cde020e6149147a85`.
+- Q06 acceptance receipt: `quant/RECEIPTS/Q06_ACCEPTANCE.md`; SHA-256 `8b2d558b003e5eb9f17aabf80eb3d10efac8ff2478b29d032c2b3c4f5ec016d3`.
+- Q06 acceptance/state commit A6: the commit containing this generation-21 state and acceptance receipt; intentionally non-self-referential.
+- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `ACCEPTED`; Q03 `ACCEPTED`; Q04 `ACCEPTED`; Q05 `ACCEPTED`; Q06 `ACCEPTED`.
 
 ## Ownership and safety
 
@@ -193,40 +195,10 @@ Implementation C6 has 24 changed paths, all under `quant/**`. `TASKS/Q06.md` rem
 - `bash quant/tests/q00/scope_guard.test.sh`: exit 0, `6/6`, including reverted out-of-scope commit history.
 - Q00 checkpoint staged `bash quant/scripts/check-scope.sh`: exit 0, exact branch/protocol, `10` allowed paths.
 - Q00 acceptance staged `bash quant/scripts/check-scope.sh`: exit 0, exact branch/protocol, `3` allowed paths.
-- Q01 clean disposable environment: CPython `3.13.14`; 50 installed packages plus local project from locked 51-entry resolution; exact framework/package imports pass.
-- Q01 lint/format: Ruff exit 0, 17 files formatted. Strict mypy: exit 0, 17 source files.
-- Q01 focused suite: exit 0, `88 passed`; branch coverage `96.71%` against required `95%`.
-- Q01 seed fixture: separate `PYTHONHASHSEED=1/987654` processes byte-identical, SHA-256 `b01207e33339c44e15500091ea52a019a2983a69b3702da46f87f9a04804cd05`.
-- Q01 registry: exit 0, mandatory H1–H6 semantics preserved, all substantive Markdown drift fails.
-- Q01 frozen protocol verifier: artifact/output identities bound, public runner override absent, `22/22`, output SHA-256 `6591ec8e208d1c17f43c99522660d8d7f1d039347a3ea7b0aecd986e6b0c8d54`.
-- Q01 dependency audit/license: 49 packages, zero indexed vulnerabilities, zero unknown license fields; durable normalized evidence committed.
-- Accumulated Q00 scope suite: `6/6`; `npm test`: exit 0. Q00 accepted full `npm run test:all` remains broad baseline because Q01 changes no shared path.
-- Q01 adversarial review: initial no-seal findings corrected; final independent `SEAL`, no P0–P3 findings.
-- Q01 final implementation scope gate: `Q_SCOPE_OK`, exactly 32 staged paths; C `73330e281c7a91fa5fba2059570e9619f9ade34d` created.
-- Independent C verification: exact parent/ancestry, 32 allowed paths, empty frozen diff, artifact/task/receipt hashes and `git diff-tree --check` all pass.
-- Archive-derived C environment: clean locked install, imports, Ruff, strict mypy, `88` tests, `96.71%` coverage, registry, seed and protocol `22/22` all pass; archive SHA-256 `c4e53bd84e1cb928791e23c5db600d2b008db03326ca2c767bb7de0578db42b0`.
-- `git diff --cached --check`: exit 0.
-- Q02 pinned `uv 0.11.28 lock --check`: exit 0, 51 resolved packages; no dependency change.
-- Q02 Ruff lint/format and strict mypy: exit 0, 36 files checked/formatted.
-- Q02 full Q suite: `602 passed`; statement and branch coverage `100.00%`.
-- Q02 focused independent suite: `514 passed`; six property tests carry explicit seed `20260712`; golden replay `2/2` across process/CWD/timezone/hash-seed changes.
-- Q02 golden partition/manifest/schema SHA-256: `b953a7d4…c914` / `92c0c447…9d51` / `3812d78c…9050`.
-- Q02 hostile store proofs include path/symlink/staged-name races, manifest-link indeterminacy, corrupt/incomplete state, full anchored parent lineage and sealed validator input.
-- Q02 independent final review: `SEAL`; independent phase audit: `ACCEPTANCE_READY`.
-- Q02 accumulated Q00 scope suite `6/6`, frozen protocol `22/22`, and `npm test` exit 0 with existing `377` deterministic checks.
-- Independent exact C2 verifier: `VERIFIED`; exact parent/ancestry, 24-path scope, frozen emptiness, task/receipt/artifact hashes and commit tree `3f258a10729deb4f80f918be058f1f1bb7946f8f` pass.
-- Archive-derived C2 SHA-256 `10409bc52f00d9b7db8a9a0d2c2e10b3e5455de30402bd61b274414b47a59480`; offline lock, Ruff, mypy, `602` tests, `100.00%` coverage, focused `514`, golden `2/2`, Q00 `6/6` and protocol `22/22` all pass.
-- Q03 pinned `uv 0.11.28 lock --check`: exit 0, 51 resolved packages; no dependency change.
-- Q03 Ruff lint/format: exit 0, 60 files compliant; strict mypy: 59 source/test files plus the campaign script.
-- Q03 focused suite: `430 passed`; bootstrap 2,095 statements / 828 branches, `100.00%`.
-- Q03 accumulated Q suite: `1032 passed`; 4,203 statements / 1,562 branches, `100.00%`.
-- Q03 real campaign: two fresh processes across different CWD/timezone/hash seed produced byte-identical artifacts; index `d01a4e29…9564`, campaign `553738c2…0529`, atlas `f8d59dea…b21c`, coverage `f2f23bbb…9104`.
-- Q03 archive replay: 12,440-byte official ZIP, 49,263-byte CSV, 832 rows; exact official/archive `2de38a97…a893`, member `52058a46…1d7`, 0 internal discontinuities.
-- Q03 accumulated Q00 `6/6`, protocol `22/22`, `npm test` exit 0 with existing `377` checks, and `git diff --check` exit 0.
-- Q03 independent adversarial review: initial blockers reproduced and corrected; final `Q03 ADVERSARIAL SEAL`, no remaining blocker.
-- Independent exact C3 verifier: `VERIFIED`; exact parent/ancestry, 38-path scope, regular-file modes, frozen/accepted emptiness, task/receipt/state/generated/lineage hashes and tree `34ea865d2df4ecf98f79c83f65bb1d0f49a00636` pass.
-- Archive-derived C3 SHA-256 `87df0010a9b896891d1aa94fd6d5078249528829bd8d1a9d048e35659c8b6a2c`; Ruff, format, strict mypy, Q `1032` at `100.00%`, focused Q03 `430` at `100.00%`, generated/no-raw `6/6`, cross-process byte replay, Q00 `6/6` and protocol `22/22` all pass.
-- Independent verification of `fa6fecd`: exact 10-path `quant/**` history, empty frozen diff, range `git diff --check` exit 0, scope suite `6/6`, protocol `22/22`.
+- Q01–Q03 measurement detail is compacted here; the exact commands, counts and digests remain in the immutable receipts `quant/RECEIPTS/Q01.md`–`Q03_ACCEPTANCE.md`.
+- Q01: clean locked env (CPython 3.13.14, 51 entries), Ruff/mypy clean, focused `88 passed` at `96.71%` branch, deterministic seed fixture, registry semantics, protocol `22/22`, exact-C verification and archive re-run all passed.
+- Q02: `602 passed` at `100.00%`; golden partition/manifest replay `2/2`; hostile store proofs; independent `SEAL`; exact-C2 verification and archive re-run passed.
+- Q03: focused `430`/accumulated `1032` at `100.00%`; real BNBUSDT 2017-11-06 sample (832 rows) imported and disposed with hash-only evidence; byte-identical campaigns; adversarial seal; exact-C3 verification and archive re-run passed.
 - Q04 pinned `uv 0.11.28 lock --check`: exit 0, 51 resolved packages; no dependency change.
 - Q04 Ruff lint/format and strict mypy: exit 0, 74 files including the campaign script.
 - Q04 focused suite: `140 passed`; `quant_edge.book` 1,020 statements / 302 branches, `100.00%`.
@@ -251,6 +223,8 @@ Implementation C6 has 24 changed paths, all under `quant/**`. `TASKS/Q06.md` rem
 - Q06 golden fixture `06c81655…abb3`; campaign JSON `51b87e70…da0c`; Markdown `622d580f…3a42`; byte-identical across CWD/TZ/hash-seed changes and equal to in-test regeneration; measured EWMA drift 2 ulp against declared 64.
 - Q06 accumulated Q00 scope `6/6`, protocol `22/22`, `npm test` exit 0 unchanged.
 - Q06 adversarial review: batch-EWMA unit error, feature-id separator, slots-violating class and dead defensive branches corrected with regression tests; no remaining known blocker at receipt authoring.
+- Independent exact C6 verifier: exact parent/ancestry, 24-path scope, regular modes, frozen/accepted emptiness, task/receipt/state/artifact blob hashes and `git diff-tree --check` all pass; tree `e183d53c1cc0d2866211824cde020e6149147a85`.
+- Archive-derived C6 SHA-256 `50c15a2fad7f158228cfb0061525e547a2abb7c3ca0ce3fe199b55ac5c5f0f27`; clean locked install, Ruff, strict mypy, Q `1372` at `100.00%` (7,829/2,704) and byte-identical artifact regeneration all pass.
 - Independent exact C5 verifier: exact parent/ancestry, 28-path `quant/**` scope, regular modes, frozen/accepted emptiness, task/receipt/state/artifact blob hashes and `git diff-tree --check` all pass; tree `f59734a85329a55aa76d98432b76c090646c9206`.
 - Archive-derived C5 SHA-256 `8628e338beb21274b473819bf0d32bc7d62c5a29829f71c1b373d170a796b0e9`; clean locked install, Ruff/format, strict mypy, Q `1298` at `100.00%` (6,744/2,406) and byte-identical artifact regeneration all pass.
 - Independent exact C4 verifier: exact parent/ancestry, 21-path `quant/**` scope, regular modes, frozen/accepted emptiness, task/receipt/state/artifact blob hashes and `git diff-tree --check` all pass; tree `8611a1ac3c9f23fa61aa806ae5dcfc4e00e4f017`.
@@ -276,12 +250,12 @@ Implementation C6 has 24 changed paths, all under `quant/**`. `TASKS/Q06.md` rem
 
 ## Exact next task
 
-After C6 exists, independently verify the exact commit (parent/ancestry, 24-path scope, frozen/accepted emptiness, task/receipt/state/artifact blob hashes, archive-derived clean-environment re-run), then create `quant/RECEIPTS/Q06_ACCEPTANCE.md` and a generation-21 acceptance state in commit A6. Never rewrite `quant/RECEIPTS/Q06.md` after C6. After A6, activate Q07 (microstructure and liquidity library) with a bounded task and activation commit only.
+After A6 exists, create only the bounded `quant/TASKS/Q07.md` for the microstructure and liquidity library (§13 families the current evidence contracts can honestly support, each with an AlgorithmCard, golden examples, failure cases and an incremental-update benchmark per §20 Q07) and advance state in a Q07 activation commit. Verify all controlling and accepted identities first; do not implement Q07 in the activation commit and never rewrite accepted Q06 work.
 
-Next exact command after C6:
+Next exact command after A6:
 
 ```bash
-git log -1 --format='%H %P %T' && git show HEAD --format= --name-only | wc -l
+git status --short && git log -1 --format='%H %P' && shasum -a 256 quant/RECEIPTS/Q06.md quant/RECEIPTS/Q06_ACCEPTANCE.md quant/QUANT_EDGE_BUILD_STATE.md
 ```
 
 ## Fresh-session read order

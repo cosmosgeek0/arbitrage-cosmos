@@ -1,17 +1,17 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `23`
+State generation: `24`
 
-Updated: 2026-07-12T20:14:41+0530
+Updated: 2026-07-12T20:20:33+0530
 
-Status: `WORKING`
+Status: `PARKED` (D-LAUNCH-5: spine parked after Q07 acceptance; awaiting the director's shard merge)
 Program: Q lane — deterministic research evidence, labels, models, calibration, drift and advisory inference.
 
 ## Frozen launch identity
 
 - Worktree: `/Users/cosmosgeek/Desktop/quant-edge-research-20260712`
 - Branch: `quant-edge-research-factory-20260712`
-- Current HEAD at generation-23 authoring: `d0573734e2e2ab5576863ca5fe6875d770dfe68a`
+- Current HEAD at generation-24 authoring: `22ab5bc8db94bf92883fdeac2a397ebf8c132ca0` (C7)
 - Origin: `git@github.com:cosmosgeek0/arbitrage-cosmos.git`
 - Canonical base: `7010499170e24b31c9c0be2c9d73a536e680c6fe`
 - Protocol SHA / current parent: `73e1a1ff7daa48df8dac45713fc5f106842edafc`
@@ -25,11 +25,10 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 
 ## Phase position
 
-- Last accepted phase: `Q06`
+- Last accepted phase: `Q07`
 - Latest director acceptance: `D-LAUNCH-1` (`9ca01537f4edda06ee566cd261e612d5c315fb76`, authentic launch digest); standing order `D-LAUNCH-2` (`84d2ff65fd8d2b200821126dd17b4ba75f3c131c`, continuous self-accepted execution with full evidenced loops, director audits at LANE_READY); `D-LAUNCH-3` (`cf37df4af0ef3724f8f3a145c6be3cdcc84799c0`, Q lane transferred to the Fable lead builder); `D-LAUNCH-5` amendment (`d0e34f0310ebb5ad67b9c7f1ed4785a49a4bb0f8`, director branch): the spine finishes and accepts Q07 only, then parks — Q08/Q09/Q14 are shard-owned in separate worktrees and Q10+ waits for the director's shard merge.
-- Current phase: `Q07` (`WORKING`)
-- Current task: `quant/TASKS/Q07.md`
-- Current task SHA-256: `11da284da20e5fea637c3794a3cb328b4b2b3bbe65ba97df52005976b334338d`
+- Current phase: none — spine `PARKED` per D-LAUNCH-5. Q08/Q09/Q14 are shard-owned in separate worktrees; Q10+ waits for the director's shard merge onto this branch.
+- Last task: `quant/TASKS/Q07.md`; SHA-256 `11da284da20e5fea637c3794a3cb328b4b2b3bbe65ba97df52005976b334338d`; unchanged through C7/A7.
 - Checkpoint receipt: `quant/RECEIPTS/Q00.md`; blob `7ba41768ba747bbc3eddd1941f6f5d82985dc1ca`; SHA-256 `738dad4caac7cfac9ba8b7b84fb646ec1817c6f0eb34fc09daa60129ab1996c3`; immutable in checkpoint commit.
 - Acceptance receipt: `quant/RECEIPTS/Q00_ACCEPTANCE.md`; SHA-256 `c29c7646af5f284a88eca782beb7dbf636e6c6eb11dda25d1bccc03ea97385de`; immutable after this acceptance commit.
 - Q00 checkpoint implementation commit: `fa6fecd8295aaab6aa38d35bd34843b64af69e69`.
@@ -66,9 +65,11 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 - Q06 acceptance receipt: `quant/RECEIPTS/Q06_ACCEPTANCE.md`; SHA-256 `8b2d558b003e5eb9f17aabf80eb3d10efac8ff2478b29d032c2b3c4f5ec016d3`.
 - Q06 acceptance/state commit A6: `24ccf5880cbce8b1ee81ddd7d33f7c9c7271aacd`; exact parent C6.
 - Q07 activation/state commit: `d0573734e2e2ab5576863ca5fe6875d770dfe68a`; exact parent A6.
-- Q07 implementation receipt: `quant/RECEIPTS/Q07.md`; immutable in C7 after commit.
-- Q07 implementation commit C7: the commit that first contains this generation-23 state and the immutable Q07 receipt; intentionally non-self-referential.
-- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `ACCEPTED`; Q03 `ACCEPTED`; Q04 `ACCEPTED`; Q05 `ACCEPTED`; Q06 `ACCEPTED`; Q07 `COMPLETE`, receipt authored, awaiting independent C7 verification and acceptance A7.
+- Q07 implementation receipt: `quant/RECEIPTS/Q07.md`; SHA-256 `06bcc7ca89160d9d6351ca26f0125bde48b064dbc8a049cad8ea6bf1b2292162`; immutable in C7.
+- Q07 implementation commit C7: `22ab5bc8db94bf92883fdeac2a397ebf8c132ca0`; exact parent `d0573734e2e2ab5576863ca5fe6875d770dfe68a`; tree `919f86ce835dac86d9c534ff5734d4361c8198c4`.
+- Q07 acceptance receipt: `quant/RECEIPTS/Q07_ACCEPTANCE.md`; immutable in A7 after commit.
+- Q07 acceptance/state commit A7: the commit that first contains this generation-24 state and the acceptance receipt; exact parent C7; intentionally non-self-referential.
+- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `ACCEPTED`; Q03 `ACCEPTED`; Q04 `ACCEPTED`; Q05 `ACCEPTED`; Q06 `ACCEPTED`; Q07 `ACCEPTED`.
 
 ## Ownership and safety
 
@@ -163,7 +164,8 @@ Implementation C6 has 24 changed paths, all under `quant/**`. `TASKS/Q06.md` rem
 - Package/script: seven `src/quant_edge/micro/*.py` modules and `scripts/q07_micro_campaign.py`.
 - Fixture/evidence: `fixtures/q07_micro_golden_v1.json` and two `generated/q07/micro_campaign.v1.*` artifacts; all synthetic, deterministic and hash-bound.
 - Tests: five unit, one property and two contract test files (84 focused tests).
-- Durable completion: immutable `RECEIPTS/Q07.md` and this generation-23 state in C7.
+- Durable completion: immutable `RECEIPTS/Q07.md` and the generation-23 state in C7.
+- Durable acceptance: `RECEIPTS/Q07_ACCEPTANCE.md` and this generation-24 state in A7.
 
 Implementation C7 has 23 changed paths, all under `quant/**`. `TASKS/Q07.md` remains unchanged from activation (`11da284d…`). The two root directives remain preserved untracked owner inputs and are never staged.
 
@@ -230,7 +232,9 @@ Implementation C7 has 23 changed paths, all under `quant/**`. `TASKS/Q07.md` rem
 - Q07 property campaigns: seed `20260712`; 60-example suites prove exact (0-ulp) streaming/batch agreement for all 16 features over randomized quotes/ladders/trades/bars, boundedness laws, the signed-imbalance window law and the OFI pure-size-pressure sign law.
 - Q07 golden fixture `d8308437…4ce3`; campaign JSON `dbb303be…a950`; Markdown `d1ab9605…7032`; byte-identical across CWD/TZ/hash-seed changes and equal to in-test regeneration; measured drift 0 ulp everywhere; measured update costs within declared bounds; wall-time evidence is stdout-only.
 - Q07 accumulated Q00 scope `6/6`, protocol `22/22`, `npm test` exit 0 unchanged.
-- Q07 adversarial review: dead defensive branches under strict-ordering invariants, unsorted card failure modes, a streaming Kyle-slope missing-quote divergence and initially missing task deliverables (`trade_dispersion:v1`, stdout wall-time evidence) corrected with regression tests; no remaining known blocker at receipt authoring.
+- Q07 adversarial review: dead defensive branches under strict-ordering invariants, unsorted card failure modes, a streaming Kyle-slope missing-quote divergence and initially missing task deliverables (`trade_dispersion:v1`, stdout wall-time evidence) corrected with regression tests; a hand-expanded activation-SHA tail in the first C7 attempt was caught by the parent check and the commit re-created before verification.
+- Independent exact C7 verifier: exact parent/ancestry, 23-path scope, regular modes, frozen/accepted emptiness, task/receipt/state/artifact blob hashes and `git diff-tree --check` all pass; tree `919f86ce835dac86d9c534ff5734d4361c8198c4`.
+- Archive-derived C7 SHA-256 `6bdf3da023a1a333df89ac897f4edecc5ee7a61b7ac8140a612fb75c99e0a408`; clean locked install, Ruff, strict mypy, Q `1456` at `100.00%` (8,716/2,906) under hostile env and byte-identical artifact regeneration all pass.
 - Independent exact C6 verifier: exact parent/ancestry, 24-path scope, regular modes, frozen/accepted emptiness, task/receipt/state/artifact blob hashes and `git diff-tree --check` all pass; tree `e183d53c1cc0d2866211824cde020e6149147a85`.
 - Archive-derived C6 SHA-256 `50c15a2fad7f158228cfb0061525e547a2abb7c3ca0ce3fe199b55ac5c5f0f27`; clean locked install, Ruff, strict mypy, Q `1372` at `100.00%` (7,829/2,704) and byte-identical artifact regeneration all pass.
 - Independent exact C5 verifier: exact parent/ancestry, 28-path `quant/**` scope, regular modes, frozen/accepted emptiness, task/receipt/state/artifact blob hashes and `git diff-tree --check` all pass; tree `f59734a85329a55aa76d98432b76c090646c9206`.
@@ -258,12 +262,12 @@ Implementation C7 has 23 changed paths, all under `quant/**`. `TASKS/Q07.md` rem
 
 ## Exact next task
 
-C7 (the commit first containing this generation-23 state and the immutable `quant/RECEIPTS/Q07.md`) exists once committed. Independently verify C7 exactly (parent `d0573734e2…`, ancestry, 23-path `quant/**` scope, regular modes, frozen/accepted-path emptiness, blob hashes, archive-derived clean-environment re-run), then create acceptance commit A7 with `quant/RECEIPTS/Q07_ACCEPTANCE.md` and a generation-24 state. After A7: STOP CLEANLY and PARK per D-LAUNCH-5 — do not start Q08, Q09, Q10 or Q14 (shard-owned or waiting on the director's shard merge). Never rewrite accepted Q00-Q06 work.
+NONE — the spine is `PARKED` per D-LAUNCH-5 after Q07 acceptance A7. Do not start Q08, Q09, Q10 or Q14 here: Q08/Q09/Q14 belong to shard worktrees based on `24ccf58`, and Q10+ resumes only after the director serially merges accepted shards onto this branch (order Q07→Q08→Q09→Q14, full Q suite after each). On any future resume: read this state, the immutable receipts and the director's board, verify HEAD ancestry includes A7, and take the next activated task from the director. Never rewrite accepted Q00-Q07 work; never push.
 
-Next exact command:
+Next exact command (on resume only):
 
 ```bash
-git status --short && git log -1 --format='%H %P' && shasum -a 256 quant/TASKS/Q07.md quant/RECEIPTS/Q07.md quant/QUANT_EDGE_BUILD_STATE.md
+git status --short && git log -3 --format='%H %P %s' && shasum -a 256 quant/QUANT_EDGE_BUILD_STATE.md
 ```
 
 ## Fresh-session read order
@@ -271,7 +275,7 @@ git status --short && git log -1 --format='%H %P' && shasum -a 256 quant/TASKS/Q
 1. `STATE.md`, `MISSION.md`, `ARCHITECTURE.md` Part II, `DIRECTOR.md`.
 2. `QUANT_EDGE_RESEARCH_FACTORY_12H.md` and only launch Section 6.
 3. `EDGE_PROTOCOL_V1.md`, frozen schema/fixtures, and `quant/DIRECTIVE_INPUTS.lock`.
-4. This state, `quant/TASKS/Q07.md`, the immutable `quant/RECEIPTS/Q07.md` and the Q07 decision/design notes; the Q06 card/equivalence law controls the Q07 features.
+4. This state, the immutable `quant/RECEIPTS/Q07.md`/`Q07_ACCEPTANCE.md` and the Q07 decision/design notes; the Q06 card/equivalence law controls the Q07 features.
 5. Q00 reuse matrix and Q01 framework/security docs are inputs only; do not redo accepted work or regenerate accepted evidence unless exact code/input identity changed.
 
 ## Work not to repeat
@@ -292,8 +296,8 @@ git status --short && git log -1 --format='%H %P' && shasum -a 256 quant/TASKS/Q
 - After C6, do not rewrite `quant/RECEIPTS/Q06.md`; verify the exact commit and create a separate acceptance receipt.
 - Do not rerun or rewrite accepted Q06; Q07 is the only current phase.
 - Do not implement Q08 derivatives features or models during Q07.
-- After C7, do not rewrite `quant/RECEIPTS/Q07.md`; verify the exact commit and create a separate acceptance receipt.
-- After A7, the spine PARKS (D-LAUNCH-5): Q08/Q09/Q14 belong to shard worktrees and Q10+ waits for the director's shard merge; do not begin them here.
+- Do not rewrite either immutable Q07 receipt after A7; Q07 is accepted.
+- The spine is PARKED (D-LAUNCH-5): Q08/Q09/Q14 belong to shard worktrees and Q10+ waits for the director's shard merge; do not begin them here.
 - Do not rewrite either immutable Q04 receipt after A4.
 - After C5, do not rewrite `quant/RECEIPTS/Q05.md`; verify the exact commit and create a separate acceptance receipt.
 - Do not implement Q06 features or models during Q05.

@@ -20,6 +20,11 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 | L10 reverse-basis shard | (cut on L08 acceptance) | l10-reverse-basis-20260712 | accepted-L08 SHA | WAITING on L08 |
 | L11 volume shard | (cut on L08 acceptance) | l11-volume-20260712 | accepted-L08 SHA | WAITING on L08 |
 
+| IP-RUNTIME packet | ~/Desktop/ip-runtime | ip-runtime-20260713 | 420cc83 | READY (I00 program, D-LAUNCH-6) |
+| IP-CONTROL packet | ~/Desktop/ip-control | ip-control-20260713 | 420cc83 | READY (donor: accepted dash-shell 6925015) |
+| IP-OPS packet | ~/Desktop/ip-ops | ip-ops-20260713 | 420cc83 | READY (donor: accepted l15-infra 2cec412) |
+| IP-PROOF packet | ~/Desktop/ip-proof | ip-proof-20260713 | 420cc83 | READY |
+
 ## Frozen merge/integration order (mechanical)
 
 1. Director serially merges accepted Q shards (Q07→Q08→Q09→Q14) onto the Q lane branch, full Q suite after each.

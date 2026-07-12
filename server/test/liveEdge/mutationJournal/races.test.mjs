@@ -3,12 +3,14 @@ import test from 'node:test';
 
 import {
   evaluateSyntheticSubmissionBoundary,
+  MUTATION_JOURNAL_LIMITS,
   prepareMutationObservationAppend,
   prepareSyntheticSubmissionObservationAppend,
   reconstructPersistedMutationJournal,
 } from '../../../dist/liveEdge/adapters/durableMutationJournal/index.js';
 import {
   T0,
+  foundationReconciliationObservation,
   inputFixture,
   l03AttemptContentRevision,
   l03HttpAttempt,
@@ -110,9 +112,13 @@ function privateOrder(label = 'private-new', overrides = {}) {
 
 function privateFill(label = 'private-fill', overrides = {}) {
   const current = overrides.__current ?? submittingPersisted();
-  const { __current: _ignored, ...payloadOverrides } = overrides;
+  const {
+    __current: _ignored,
+    __receivedAtMs = null,
+    ...payloadOverrides
+  } = overrides;
   const exchangeEventTimeMs = overrides.exchangeEventTimeMs ?? T0 + 8;
-  const receivedAtMs = exchangeEventTimeMs + 1;
+  const receivedAtMs = __receivedAtMs ?? exchangeEventTimeMs + 1;
   const connectionGeneration = overrides.connectionGeneration ?? 1;
   const tradeId = overrides.tradeId ?? '5001';
   const fillQuantity = overrides.fillQuantity ?? '0.4';
@@ -181,6 +187,139 @@ test('acknowledgement never manufactures working or fill truth', () => {
   assert.equal(acknowledged.snapshot.projection.cumulativeFilledQuantity, '0');
   assert.equal(acknowledged.snapshot.projection.reconciled, false);
   assert.equal(acknowledged.snapshot.projection.recoveryRequired, true);
+});
+
+test('accepted PENDING_NEW remains non-working acknowledgement evidence', () => {
+  const pending = appendAll([privateOrder('pending-new', {
+    status: 'PENDING_NEW',
+    cumulativeFilledQuantity: '0',
+  })]);
+  assert.equal(pending.snapshot.projection.workingStatus, 'PENDING_NEW');
+  assert.equal(pending.snapshot.projection.lifecycle, 'ACKNOWLEDGED');
+  assert.equal(pending.snapshot.projection.cumulativeFilledQuantity, '0');
+  assert.equal(pending.snapshot.projection.recoveryRequired, true);
+  assert.throws(() => prepareMutationObservationAppend(pending, privateOrder('pending-filled', {
+    __current: pending,
+    status: 'PENDING_NEW',
+    cumulativeFilledQuantity: '0.1',
+  })));
+});
+
+test('PENDING_NEW after a terminal event is a named lifecycle regression', () => {
+  const canceled = privateOrder('pending-regression-canceled', {
+    status: 'CANCELED',
+    cumulativeFilledQuantity: '0',
+    exchangeEventTimeMs: T0 + 10,
+  });
+  const pending = privateOrder('pending-regression-pending', {
+    status: 'PENDING_NEW',
+    cumulativeFilledQuantity: '0',
+    exchangeEventTimeMs: T0 + 11,
+  });
+  const state = appendAll([canceled, pending]);
+  assert.equal(state.snapshot.projection.lifecycle, 'CONFLICT');
+  assert.ok(state.snapshot.projection.conflictCodes.includes('TERMINAL_TO_WORKING_REGRESSION'));
+});
+
+test('accepted private future skew uses local receipt for journal causality and replay', () => {
+  const input = inputFixture({
+    bindings: {
+      sourceExchangeEventAtMs: null,
+      sourceLocalReceiveAtMs: null,
+      exchangeClockCalibrationRevision: null,
+    },
+  });
+  const current = submissionObserved(input);
+  const skewed = privateOrder('future-skew', {
+    __current: current,
+    status: 'NEW',
+    cumulativeFilledQuantity: '0',
+    exchangeEventTimeMs: T0 + 20,
+    __receivedAtMs: T0 + 15,
+  });
+  const appended = append(current, skewed);
+  assert.equal(appended.snapshot.projection.lifecycle, 'NEW');
+  const replayed = reconstructPersistedMutationJournal(
+    appended.snapshot.entries,
+    appended.acknowledgement,
+  );
+  assert.ok(replayed);
+  assert.equal(replayed.snapshot.outcomeRevision, appended.snapshot.outcomeRevision);
+
+  assert.throws(() => prepareMutationObservationAppend(appended, privateOrder('too-far-future', {
+    __current: appended,
+    status: 'NEW',
+    cumulativeFilledQuantity: '0',
+    exchangeEventTimeMs: T0 + 3_000,
+    __receivedAtMs: T0 + 15,
+  })));
+});
+
+test('terminal private event before HTTP acknowledgement converges without false fill', () => {
+  const terminal = privateOrder('terminal-before-http', {
+    status: 'CANCELED',
+    cumulativeFilledQuantity: '0',
+  });
+  const http = httpObservation('late-http');
+  const eventFirst = appendAll([terminal, http]);
+  const httpFirst = appendAll([http, terminal]);
+  assert.equal(eventFirst.snapshot.outcomeRevision, httpFirst.snapshot.outcomeRevision);
+  assert.deepEqual(eventFirst.snapshot.projection, httpFirst.snapshot.projection);
+  assert.equal(eventFirst.snapshot.projection.lifecycle, 'CANCELED');
+  assert.equal(eventFirst.snapshot.projection.cumulativeFilledQuantity, '0');
+  assert.equal(eventFirst.snapshot.projection.reconciled, false);
+});
+
+test('fill-before-cancel exchange truth converges across delayed arrival permutations', () => {
+  const canceled = privateOrder('cancel-race', {
+    status: 'CANCELED',
+    cumulativeFilledQuantity: '1',
+    exchangeEventTimeMs: T0 + 9,
+    __receivedAtMs: T0 + 11,
+  });
+  const fill = privateFill('fill-race', {
+    tradeId: '5101',
+    fillQuantity: '1',
+    cumulativeFilledQuantity: '1',
+    exchangeEventTimeMs: T0 + 8,
+    __receivedAtMs: T0 + 11,
+  });
+  const cancelFirst = appendAll([canceled, fill]);
+  const fillFirst = appendAll([fill, canceled]);
+  assert.equal(cancelFirst.snapshot.outcomeRevision, fillFirst.snapshot.outcomeRevision);
+  assert.deepEqual(cancelFirst.snapshot.projection, fillFirst.snapshot.projection);
+  assert.equal(cancelFirst.snapshot.projection.cumulativeFilledQuantity, '1');
+  assert.equal(cancelFirst.snapshot.projection.terminalStatus, 'CANCELED');
+  assert.deepEqual(cancelFirst.snapshot.projection.tradeIds, ['5101']);
+  assert.equal(cancelFirst.snapshot.projection.recoveryRequired, true);
+});
+
+test('fill exchange truth after cancel/expiry/rejection is a named conflict in either arrival order', () => {
+  for (const status of ['CANCELED', 'EXPIRED', 'REJECTED']) {
+    const terminal = privateOrder(`terminal-before-fill-${status}`, {
+      status,
+      cumulativeFilledQuantity: status === 'REJECTED' ? '0' : '0.4',
+      exchangeEventTimeMs: T0 + 9,
+      __receivedAtMs: T0 + 11,
+    });
+    const fill = privateFill(`late-fill-${status}`, {
+      tradeId: status === 'CANCELED' ? '5201' : status === 'EXPIRED' ? '5202' : '5203',
+      fillQuantity: '0.6',
+      cumulativeFilledQuantity: '1',
+      exchangeEventTimeMs: T0 + 10,
+      __receivedAtMs: T0 + 11,
+    });
+    for (const observations of [[terminal, fill], [fill, terminal]]) {
+      const state = appendAll(observations);
+      assert.equal(state.snapshot.projection.lifecycle, 'CONFLICT', status);
+      assert.ok(
+        state.snapshot.projection.conflictCodes.includes('FILL_AFTER_TERMINAL_EFFECT_CONFLICT'),
+        status,
+      );
+      assert.equal(state.snapshot.projection.cumulativeFilledQuantity, '1');
+      assert.equal(state.snapshot.projection.recoveryRequired, true);
+    }
+  }
 });
 
 test('partial fill and later cancel retain actual fill and require reconciliation', () => {
@@ -352,7 +491,7 @@ test('forked L03 terminal observations and ACK plus rejection are durable confli
   assert.ok(state.snapshot.projection.conflictCodes.includes('HTTP_ACK_REJECTION_CONFLICT'));
 });
 
-test('timeout, disconnect, 408, 5xx including USD-M 503, and cancel-replace partial stay explicit', () => {
+test('timeout, disconnect, 408, and 5xx stay explicit while HTTP partial-mixed remains contract-gapped', () => {
   const tuples = [
     ['TRANSPORT_TIMEOUT', null],
     ['TRANSPORT_DISCONNECTED', null],
@@ -395,6 +534,114 @@ test('timeout, disconnect, 408, 5xx including USD-M 503, and cancel-replace part
     ambiguityCause: 'CANCEL_REPLACE_PARTIAL',
     venueOrderId: null,
   })));
+});
+
+test('ambiguous and rejected HTTP outcomes retain private axes but stay UNKNOWN until exact owner reconciliation', () => {
+  const responseCases = [
+    ['timeout', 'AMBIGUOUS', null, 'TRANSPORT_TIMEOUT'],
+    ['disconnect', 'AMBIGUOUS', null, 'TRANSPORT_DISCONNECTED'],
+    ['http-408', 'AMBIGUOUS', 408, 'HTTP_408'],
+    ['http-5xx', 'AMBIGUOUS', 500, 'HTTP_5XX'],
+    ['http-4xx', 'REJECTED_RESPONSE', 400, null],
+  ];
+  const privateCases = [
+    ['NEW', '0'],
+    ['FILLED', '1'],
+    ['CANCELED', '0'],
+  ];
+  for (const [label, classification, httpStatus, ambiguityCause] of responseCases) {
+    for (const [status, cumulativeFilledQuantity] of privateCases) {
+      const response = httpObservation(`${label}-${status}`, {
+        classification,
+        httpStatus,
+        ambiguityCause,
+        venueOrderId: null,
+      });
+      const ownerEvent = privateOrder(`${label}-${status}`, {
+        status,
+        cumulativeFilledQuantity,
+        exchangeEventTimeMs: T0 + 5,
+        __receivedAtMs: T0 + 7,
+      });
+      for (const observations of [[response, ownerEvent], [ownerEvent, response]]) {
+        const state = appendAll(observations);
+        assert.equal(state.snapshot.projection.lifecycle, 'UNKNOWN', `${label}/${status}`);
+        assert.equal(state.snapshot.projection.workingStatus, status, `${label}/${status}`);
+        assert.equal(state.snapshot.projection.cumulativeFilledQuantity, cumulativeFilledQuantity);
+        assert.equal(state.snapshot.projection.recoveryRequired, true);
+        assert.equal(state.snapshot.projection.reconciled, false);
+        if (ambiguityCause !== null) {
+          assert.ok(state.snapshot.projection.ambiguityCauses.includes(ambiguityCause));
+        }
+        if (classification === 'REJECTED_RESPONSE') {
+          assert.equal(state.snapshot.projection.httpRejectedResponseSeen, true);
+          assert.equal(state.snapshot.projection.conflictCodes.length, 0);
+        }
+      }
+    }
+  }
+});
+
+test('exact current Foundation owner truth is the only boundary that clears ambiguous or 4xx-plus-fill UNKNOWN', () => {
+  for (const [label, classification, httpStatus, ambiguityCause] of [
+    ['timeout', 'AMBIGUOUS', null, 'TRANSPORT_TIMEOUT'],
+    ['http-4xx', 'REJECTED_RESPONSE', 400, null],
+  ]) {
+    const response = httpObservation(`reconcile-${label}`, {
+      classification,
+      httpStatus,
+      ambiguityCause,
+      venueOrderId: null,
+    });
+    const filled = privateOrder(`reconcile-${label}-filled`, {
+      status: 'FILLED',
+      cumulativeFilledQuantity: '1',
+      exchangeEventTimeMs: T0 + 5,
+      __receivedAtMs: T0 + 7,
+    });
+    const unknown = appendAll([response, filled]);
+    assert.equal(unknown.snapshot.projection.lifecycle, 'UNKNOWN');
+    const owner = foundationReconciliationObservation(unknown, {
+      label: `reconcile-${label}`,
+      effect: 'FILLED',
+      cumulativeFilledQuantity: '1',
+      venueOrderId: '1001',
+      observedAtMs: T0 + 30,
+    });
+    const reconciled = append(unknown, owner);
+    assert.equal(reconciled.snapshot.projection.lifecycle, 'RECONCILED');
+    assert.equal(reconciled.snapshot.projection.reconciled, true);
+    assert.equal(reconciled.snapshot.projection.recoveryRequired, false);
+  }
+});
+
+test('private-order family capacity cannot consume reserved reconciliation capacity', () => {
+  let current = submissionObserved();
+  for (let index = 0; index < MUTATION_JOURNAL_LIMITS.maximumPrivateOrderEntries; index += 1) {
+    current = append(current, privateOrder(`bounded-${index}`, {
+      __current: current,
+      status: 'NEW',
+      cumulativeFilledQuantity: '0',
+      exchangeEventTimeMs: T0 + 20 + index,
+    }));
+  }
+  assert.throws(() => prepareMutationObservationAppend(current, privateOrder('over-capacity', {
+    __current: current,
+    status: 'NEW',
+    cumulativeFilledQuantity: '0',
+    exchangeEventTimeMs: T0 + 100,
+  })), RangeError);
+  const owner = foundationReconciliationObservation(current, {
+    label: 'capacity-reserved-reconciliation',
+    status: 'PENDING',
+    effect: 'UNKNOWN',
+    cumulativeFilledQuantity: null,
+    venueOrderId: '1001',
+    observedAtMs: T0 + 200,
+  });
+  const reconciledEvidence = append(current, owner);
+  assert.equal(reconciledEvidence.snapshot.projection.reconciliationStatus, 'PENDING');
+  assert.equal(reconciledEvidence.snapshot.projection.recoveryRequired, true);
 });
 
 test('fill evidence rejects null venue IDs, zero fills, overfills, and unsafe exact decimals', () => {

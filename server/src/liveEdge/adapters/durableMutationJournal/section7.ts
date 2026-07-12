@@ -315,6 +315,7 @@ export function buildFullChainLatencyEvidence(
   const intentTail = journalEntries.at(-1)?.kind === 'SUBMISSION_INTENT'
     ? journalEntries.at(-1)!
     : null;
+  const intent = firstCanonicalEntry(journalEntries, (entry) => entry.kind === 'SUBMISSION_INTENT');
   const submission = firstCanonicalEntry(journalEntries, (entry) => entry.kind === 'SUBMISSION_OBSERVED');
   const acknowledgement = firstCanonicalEntry(journalEntries, (entry) => (
     entry.kind === 'HTTP_OBSERVED'
@@ -355,6 +356,11 @@ export function buildFullChainLatencyEvidence(
   if (milestones.exchangeClockCalibration !== expectedCalibrationState
     || milestones.exchangeClockCalibrationRevision !== expectedCalibrationRevision) {
     throw new TypeError('exchange clock calibration does not bind the accepted L03 timing cut');
+  }
+  if (intent !== null && intentTail === null && submission === null) {
+    throw new TypeError(
+      'durable-intent commit time is unavailable after the acknowledgement tail advanced; historical append ACK evidence is required',
+    );
   }
   requireJournalMilestone(
     milestones.durableIntentAtMs,

@@ -146,6 +146,11 @@ test('ACKNOWLEDGED, NEW, PARTIALLY_FILLED, non-exact, and unknown results never 
     }));
     assert.equal(next.snapshot.projection.reconciled, false, `${status}/${effect}`);
     assert.equal(next.snapshot.projection.recoveryRequired, true, `${status}/${effect}`);
+    if (effect === 'PARTIAL_MIXED') {
+      assert.equal(next.snapshot.projection.partialMixed, false);
+      assert.equal(next.snapshot.projection.reconciliationEffect, 'UNKNOWN');
+      assert.equal(next.snapshot.projection.lifecycle, 'SUBMITTING');
+    }
   }
 });
 
@@ -165,7 +170,11 @@ test('not-found/absence-like owner evidence remains UNKNOWN because venue retent
 
 test('owner result must bind exact journal head/version/outcome, realm, client ID, and private cut', () => {
   const current = submitted();
-  const base = reconciliationObservation(current);
+  const base = reconciliationObservation(current, {
+    effect: 'REJECTED_NO_EFFECT_PROVEN',
+    cumulativeFilledQuantity: '0',
+    venueOrderId: null,
+  });
   const payloadAttacks = [
     { mutationId: `l06mut_${'0'.repeat(64)}` },
     { product: 'MARGIN' },
@@ -182,6 +191,40 @@ test('owner result must bind exact journal head/version/outcome, realm, client I
       payload: { ...base.payload, ...attack },
     }), undefined, JSON.stringify(attack));
   }
+});
+
+test('closed reconciliation projection commitment rejects component tampering', () => {
+  const current = submitted();
+  const base = reconciliationObservation(current, {
+    effect: 'REJECTED_NO_EFFECT_PROVEN',
+    cumulativeFilledQuantity: '0',
+    venueOrderId: null,
+  });
+  const componentAttacks = [
+    ['expectedSubmittedQuantityProjection', '0'],
+    ['expectedFilledQuantityProjection', '1'],
+    ['observedOrderFilledQuantityProjection', '1'],
+    ['observedTradeFilledQuantityProjection', '1'],
+    ['observedFilledQuantityProjection', '1'],
+    ['observedRemainderQuantityProjection', '0'],
+  ];
+  for (const [field, value] of componentAttacks) {
+    const attacked = {
+      ...base,
+      payload: {
+        ...base.payload,
+        matchingLeg: { ...base.payload.matchingLeg, [field]: value },
+      },
+    };
+    assert.throws(() => prepareMutationObservationAppend(current, attacked), TypeError, field);
+  }
+  assert.throws(() => prepareMutationObservationAppend(current, {
+    ...base,
+    payload: {
+      ...base.payload,
+      projectionContentRevision: `l06foundation_projection_${'0'.repeat(64)}`,
+    },
+  }), TypeError);
 });
 
 test('exact reconciliation duplicate replay stays idempotent after later telemetry advances the head', () => {
@@ -245,6 +288,37 @@ test('different exact complete reconciliation effects remain a durable named con
   }));
   assert.equal(conflicting.snapshot.projection.lifecycle, 'CONFLICT');
   assert.ok(conflicting.snapshot.projection.conflictCodes.includes('RECONCILIATION_EFFECT_CONFLICT'));
+});
+
+test('exact owner terminal effects cannot overwrite contradictory private terminal truth', () => {
+  const cases = [
+    ['CANCELED', 'FILLED', '1'],
+    ['EXPIRED', 'CANCELED', '0'],
+    ['REJECTED', 'EXPIRED', '0'],
+    ['FILLED', 'CANCELED', '1'],
+  ];
+  for (const [privateStatus, ownerEffect, quantity] of cases) {
+    let current = submitted();
+    current = append(current, orderObservation(
+      current,
+      privateStatus,
+      quantity,
+      T0 + 10,
+      `private-${privateStatus}-owner-${ownerEffect}`,
+    ));
+    const contradicted = append(current, reconciliationObservation(current, {
+      label: `private-${privateStatus}-owner-${ownerEffect}`,
+      effect: ownerEffect,
+      cumulativeFilledQuantity: quantity,
+      venueOrderId: '1001',
+      observedAtMs: T0 + 30,
+    }));
+    assert.equal(contradicted.snapshot.projection.lifecycle, 'CONFLICT');
+    assert.equal(contradicted.snapshot.projection.reconciled, false);
+    assert.ok(contradicted.snapshot.projection.conflictCodes.includes(
+      'RECONCILIATION_TERMINAL_STATUS_CONFLICT',
+    ));
+  }
 });
 
 test('no-effect owner posture cannot erase a fill and projects UNKNOWN when quantities disagree', () => {

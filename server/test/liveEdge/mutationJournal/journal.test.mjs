@@ -9,12 +9,14 @@ import {
   confirmMutationAppend,
   evaluateSyntheticSubmissionBoundary,
   isMutationTelemetryAppendCapacityAvailable,
+  maximumJournalQuantity,
   MUTATION_JOURNAL_LIMITS,
   prepareInitialMutationAppend,
   preparePreflightMutationAppend,
   prepareSubmissionIntentAppend,
   prepareSyntheticSubmissionObservationAppend,
   reconstructPersistedMutationJournal,
+  sumJournalQuantities,
   validateMutationJournalSnapshot,
   validateMutationAppendRequest,
   validatePersistedMutationJournal,
@@ -30,6 +32,15 @@ import {
   submittingPersisted,
 } from './fixtures.mjs';
 
+function assertDeeplyFrozen(value, seen = new Set()) {
+  if (value === null || typeof value !== 'object' || seen.has(value)) return;
+  seen.add(value);
+  assert.equal(Object.isFrozen(value), true);
+  for (const descriptor of Object.values(Object.getOwnPropertyDescriptors(value))) {
+    if (Object.hasOwn(descriptor, 'value')) assertDeeplyFrozen(descriptor.value, seen);
+  }
+}
+
 test('telemetry capacity preserves the exact final eight money-critical slots', () => {
   assert.equal(MUTATION_JOURNAL_LIMITS.maximumEntries, 256);
   assert.equal(MUTATION_JOURNAL_LIMITS.reservedMoneyCriticalEntries, 8);
@@ -40,6 +51,10 @@ test('telemetry capacity preserves the exact final eight money-critical slots', 
   assert.equal(isMutationTelemetryAppendCapacityAvailable(248, 0), false);
   assert.equal(isMutationTelemetryAppendCapacityAvailable(247, 3), false);
   assert.throws(() => isMutationTelemetryAppendCapacityAvailable(257, 0), TypeError);
+  assert.equal(maximumJournalQuantity(Array(256).fill('1')), '1');
+  assert.equal(sumJournalQuantities(Array(256).fill('0.001')), '0.256');
+  assert.throws(() => maximumJournalQuantity(Array(257).fill('1')), RangeError);
+  assert.throws(() => sumJournalQuantities(Array(257).fill('1')), RangeError);
 });
 
 test('standalone CAS validation applies one exact entry to one exact prior snapshot', () => {
@@ -56,6 +71,10 @@ test('standalone CAS validation applies one exact entry to one exact prior snaps
     preflightPrepared.nextSnapshot,
   );
   assert.equal(applyMutationAppendRequest(null, preflightPrepared.request), null);
+  assert.equal(
+    applyMutationAppendRequest(preflightPrepared.nextSnapshot, preflightPrepared.request),
+    null,
+  );
   assert.equal(applyMutationAppendRequest(initial.snapshot, {
     ...preflightPrepared.request,
     entryContentRevision: `l06content_${'0'.repeat(64)}`,
@@ -90,6 +109,7 @@ test('initial CREATED and PREFLIGHTED entries bind exact owner identities and st
   assert.equal(initial.snapshot.identity.clientOrderId.startsWith('cx-'), true);
   assert.equal(Object.isFrozen(initial), true);
   assert.equal(Object.isFrozen(initial.snapshot.entries), true);
+  assertDeeplyFrozen(initial);
 
   const preflight = persist(preparePreflightMutationAppend(initial, T0 + 1));
   assert.equal(preflight.snapshot.projection.lifecycle, 'PREFLIGHTED');
@@ -105,21 +125,61 @@ test('failed, malformed, stale, conflicting, and partially bound acknowledgement
     assert.equal(result.reasonCode, 'ACK_NOT_COMMITTED');
   }
   const mutations = [
-    { appendRequestDigest: `l06append_${'0'.repeat(64)}` },
-    { committedJournalVersion: 2 },
-    { committedHeadDigest: `l06head_${'0'.repeat(64)}` },
-    { committedOutcomeRevision: `l06outcome_${'0'.repeat(64)}` },
-    { ledgerEventId: 0 },
-    { committedAtMs: T0 - 1 },
-    { appendedCount: 0 },
+    [{ appendRequestDigest: `l06append_${'0'.repeat(64)}` }, 'ACK_BINDING_MISMATCH'],
+    [{ committedJournalVersion: 2 }, 'ACK_BINDING_MISMATCH'],
+    [{ committedHeadDigest: `l06head_${'0'.repeat(64)}` }, 'ACK_BINDING_MISMATCH'],
+    [{ committedOutcomeRevision: `l06outcome_${'0'.repeat(64)}` }, 'ACK_BINDING_MISMATCH'],
+    [{ ledgerEventId: 0 }, 'ACK_INVALID'],
+    [{ committedAtMs: T0 - 1 }, 'ACK_CAUSALITY_INVALID'],
+    [{ appendedCount: 0 }, 'ACK_INVALID'],
   ];
-  for (const override of mutations) {
+  for (const [override, expectedReason] of mutations) {
     const result = confirmMutationAppend(prepared, acknowledgement(prepared, { override }));
     assert.equal(result.ok, false, JSON.stringify(override));
+    assert.equal(result.reasonCode, expectedReason, JSON.stringify(override));
   }
   const extra = acknowledgement(prepared);
   extra.unexpected = true;
-  assert.equal(confirmMutationAppend(prepared, extra).ok, false);
+  assert.deepEqual(confirmMutationAppend(prepared, extra), {
+    ok: false,
+    reasonCode: 'ACK_INVALID',
+  });
+});
+
+test('risk-reducing cancel remains journalable after placement evidence expires', () => {
+  const expiredCancel = inputFixture({
+    identity: {
+      mutationKind: 'CANCEL_ORDER',
+      contractId: 'SPOT_ORDER_CANCEL',
+      contractState: 'CURRENT',
+    },
+    bindings: { validUntilMs: T0 - 1 },
+    createdAtMs: T0,
+  });
+  const created = initialPersisted(expiredCancel);
+  const preflight = persist(preparePreflightMutationAppend(created, T0 + 1));
+  const submitting = persist(prepareSubmissionIntentAppend(preflight, T0 + 2));
+  const decision = evaluateSyntheticSubmissionBoundary(submitting, T0 + 3);
+  assert.equal(decision.state, 'SYNTHETIC_OBSERVATION_ELIGIBLE');
+  assert.equal(decision.sendAuthorized, false);
+  const observed = persist(prepareSyntheticSubmissionObservationAppend(
+    submitting,
+    decision,
+    l03SubmittedAttempt(submitting),
+    T0 + 4,
+  ));
+  const reconstructed = reconstructPersistedMutationJournal(
+    observed.snapshot.entries,
+    observed.acknowledgement,
+  );
+  assert.ok(reconstructed);
+  assert.equal(reconstructed.snapshot.projection.submissionObserved, true);
+
+  const expiredPlacement = inputFixture({
+    bindings: { validUntilMs: T0 - 1 },
+    createdAtMs: T0,
+  });
+  assert.throws(() => prepareInitialMutationAppend(expiredPlacement), TypeError);
 });
 
 test('persisted SUBMISSION_INTENT opens only a synthetic evidence boundary and never send authority', () => {

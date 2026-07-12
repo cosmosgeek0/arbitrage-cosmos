@@ -294,6 +294,8 @@ export interface FoundationReconciliationObservedPayload extends Record<string, 
   readonly quantityDialect: 'BINARY64_ROUND_TRIP_PROJECTION';
   readonly resultRevision: string;
   readonly resultContentRevision: string;
+  /** Closed L06 projection commitment; independently reproducible from this payload. */
+  readonly projectionContentRevision: string;
   readonly foundationResult: FoundationReconciliationResultSummary & { readonly [key: string]: JournalJson };
   readonly matchingLeg: FoundationReconciledLegSummary & { readonly [key: string]: JournalJson };
   readonly privateReconciliationObservation:

@@ -65,8 +65,8 @@ function latencyInput(overrides = {}) {
   };
 }
 
-function submissionObserved() {
-  const intent = submittingPersisted();
+function submissionObserved(input) {
+  const intent = submittingPersisted(input);
   const decision = evaluateSyntheticSubmissionBoundary(intent, T0 + 3);
   assert.equal(decision.state, 'SYNTHETIC_OBSERVATION_ELIGIBLE');
   return persist(prepareSyntheticSubmissionObservationAppend(
@@ -231,6 +231,24 @@ test('durable intent time remains bound after later journal heads advance', () =
   })), TypeError);
 });
 
+test('telemetry after durable intent cannot erase or fabricate unavailable historical append ACK time', () => {
+  const intent = submittingPersisted();
+  const telemetry = append(intent, observation(
+    intent,
+    'TELEMETRY_DEGRADED',
+    { subsystem: 'TRACE', reasonCode: 'TRACE_DEGRADED_BEFORE_SUBMISSION' },
+    T0 + 4,
+    T0 + 4,
+    'trace-after-intent',
+  ));
+  assert.throws(() => buildFullChainLatencyEvidence(telemetry, latencyInput({
+    durableIntentAtMs: null,
+  })), /historical append ACK evidence is required/);
+  assert.throws(() => buildFullChainLatencyEvidence(telemetry, latencyInput({
+    durableIntentAtMs: intent.acknowledgement.committedAtMs,
+  })), /historical append ACK evidence is required/);
+});
+
 test('HTTP/private arrival permutations derive one exact partial latency evidence revision', () => {
   const httpFirst = convergedPermutation(true);
   const eventFirst = convergedPermutation(false);
@@ -336,6 +354,27 @@ test('known owner-side latency chronology cannot regress across omitted segments
     approvalAtMs: T0 + 2,
     syntheticSubmissionAtMs: T0 + 4,
   })), TypeError);
+});
+
+test('unavailable exchange-clock calibration never creates a cross-clock segment', () => {
+  const input = inputFixture({
+    bindings: {
+      sourceExchangeEventAtMs: null,
+      sourceLocalReceiveAtMs: null,
+      exchangeClockCalibrationRevision: null,
+    },
+  });
+  const submitted = submissionObserved(input);
+  const evidence = buildFullChainLatencyEvidence(submitted, latencyInput({
+    exchangeEventAtMs: null,
+    localReceiveAtMs: null,
+    exchangeClockCalibration: 'UNAVAILABLE',
+    exchangeClockCalibrationRevision: null,
+    syntheticSubmissionAtMs: T0 + 4,
+  }));
+  assert.equal(evidence.segmentsMs.exchangeEventToLocalReceive, null);
+  assert.equal(evidence.segmentsMs.localReceiveToFeatures, null);
+  assert.equal(evidence.completeness, 'PARTIAL_INJECTED');
 });
 
 test('canonical recording degradation changes lineage but never semantic outcome or recovery handoff availability', () => {

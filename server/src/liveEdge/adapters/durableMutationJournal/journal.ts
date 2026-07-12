@@ -21,8 +21,12 @@ import {
 import { validatePrivateLifecycleWitness } from '../binancePrivateTruth/lifecycleBinding.js';
 import { validatePrivateTruthProjection } from '../binancePrivateTruth/projection.js';
 import { createWaitingPrivateTruthBinding } from '../binancePrivateTruth/waiting.js';
-import { createSpotRealmBoundRevision } from '../binancePrivateTruth/spotLifecycle.js';
 import {
+  SPOT_PRIVATE_MAXIMUM_FUTURE_SKEW_MS,
+  createSpotRealmBoundRevision,
+} from '../binancePrivateTruth/spotLifecycle.js';
+import {
+  USDM_PRIVATE_MAXIMUM_FUTURE_SKEW_MS,
   createUsdmRealmBoundRevision,
   mapUsdmPrivateEventSemantics,
 } from '../binancePrivateTruth/usdmLifecycle.js';
@@ -95,6 +99,10 @@ import {
 } from './types.js';
 
 const MAX_UTC_MS = 4_102_444_800_000;
+const MAXIMUM_PRIVATE_EVENT_FUTURE_SKEW_MS = Math.max(
+  SPOT_PRIVATE_MAXIMUM_FUTURE_SKEW_MS,
+  USDM_PRIVATE_MAXIMUM_FUTURE_SKEW_MS,
+);
 const CORRELATION_ID = /^cor_[0-9a-f]{16}$/;
 const ASSESSMENT_ID = /^(?:assessment[:._-]|asm_)[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/;
 const DECISION_ID = /^cdec_[0-9a-f]{16}$/;
@@ -122,6 +130,7 @@ const APPEND_DIGEST = /^l06append_[0-9a-f]{64}$/;
 const BOUNDARY_ID = /^l06boundary_[0-9a-f]{64}$/;
 const FOUNDATION_RESULT_REVISION = /^foundation-reconciliation-result:[0-9a-f]{24,64}$/;
 const L06_FOUNDATION_RESULT_CONTENT_REVISION = /^l06foundation_[0-9a-f]{64}$/;
+const L06_FOUNDATION_PROJECTION_CONTENT_REVISION = /^l06foundation_projection_[0-9a-f]{64}$/;
 const PRIVATE_SOURCE_CUT_REVISION = /^l05pcut_[0-9a-f]{64}$/;
 const SPOT_REST_CUT_REVISION = /^spot_rest_[0-9a-f]{32}$/;
 const USDM_REST_CUT_REVISION = /^usdm_rest_[0-9a-f]{32}$/;
@@ -840,9 +849,15 @@ function normalizePrivateLineage(
   const privateReceiptTimeMs = privateInteger(
     record.privateReceiptTimeMs,
     'L05 private receipt time',
-    exchangeEventTimeMs,
+    0,
     MAX_UTC_MS,
   );
+  const maximumFutureSkewMs = identity.product === 'SPOT'
+    ? SPOT_PRIVATE_MAXIMUM_FUTURE_SKEW_MS
+    : USDM_PRIVATE_MAXIMUM_FUTURE_SKEW_MS;
+  if (exchangeEventTimeMs > privateReceiptTimeMs + maximumFutureSkewMs) {
+    throw new TypeError('private exchange event exceeds the accepted L05 future-skew bound');
+  }
   const privateEventKind = privateString(record.privateEventKind, 'L05 private event kind', 64);
   const privateContentRevision = revision(
     record.privateContentRevision,
@@ -897,9 +912,9 @@ function normalizePrivateLineage(
       || (observationKind === 'PRIVATE_ORDER_OBSERVED'
         && privateEventKind !== 'ORDER_TRADE_UPDATE')
       || (observationKind === 'PRIVATE_FILL_OBSERVED' && privateIsFill !== true)
-      || exchangeEventTimeMs > privateReceiptTimeMs + 2_000
+      || exchangeEventTimeMs > privateReceiptTimeMs + USDM_PRIVATE_MAXIMUM_FUTURE_SKEW_MS
       || (privateTransactionTimeMs !== null
-        && privateTransactionTimeMs > privateReceiptTimeMs + 2_000)) {
+        && privateTransactionTimeMs > privateReceiptTimeMs + USDM_PRIVATE_MAXIMUM_FUTURE_SKEW_MS)) {
       throw new TypeError('USD-M private observation does not carry exact L05 event semantics');
     }
     expectedEventRevision = createUsdmRealmBoundRevision('usdm_event', identity.accountRealmId, {
@@ -1235,6 +1250,10 @@ function derivedReconciliationEffect(
   return 'UNKNOWN';
 }
 
+function foundationProjectionContentRevision(value: unknown): string {
+  return digest('l06foundation_projection_', value);
+}
+
 function validateReconciliationPayload(
   value: unknown,
   identity: Readonly<MutationIdentityGraph>,
@@ -1245,6 +1264,7 @@ function validateReconciliationPayload(
     'owner', 'mutationId', 'product', 'accountRealmId', 'clientOrderId',
     'journalVersion', 'journalHeadDigest', 'status', 'effect', 'effectDialect',
     'quantityDialect', 'resultRevision', 'resultContentRevision',
+    'projectionContentRevision',
     'foundationResult', 'matchingLeg', 'privateReconciliationObservation',
     'privateProjectionRevision', 'privateLifecycleRevision',
     'privateSourceCutRevision', 'privateProductCutRevision',
@@ -1266,6 +1286,11 @@ function validateReconciliationPayload(
     identity.product,
   );
   const resultRevision = revision(record.resultRevision, 'Foundation result revision', FOUNDATION_RESULT_REVISION);
+  const resultContentRevision = revision(
+    record.resultContentRevision,
+    'L06 Foundation result content revision',
+    L06_FOUNDATION_RESULT_CONTENT_REVISION,
+  );
   const privateProjectionRevision = revision(
     record.privateProjectionRevision,
     'post-action private projection revision',
@@ -1279,9 +1304,54 @@ function validateReconciliationPayload(
   const observedAtMs = privateInteger(record.observedAtMs, 'reconciliation observation time', 0, MAX_UTC_MS);
   const quantity = normalizeJournalQuantity(record.cumulativeFilledQuantity, 'journal reconciliation quantity');
   const venueOrderId = optionalVenueOrderId(record.venueOrderId, 'reconciled venue order ID');
+  const mutationId = revision(record.mutationId, 'reconciliation mutation ID', MUTATION_ID);
+  const journalVersion = privateInteger(
+    record.journalVersion,
+    'reconciliation journal version',
+    1,
+    MUTATION_JOURNAL_LIMITS.maximumEntries,
+  );
+  const journalHeadDigest = revision(record.journalHeadDigest, 'reconciliation journal head', HEAD_DIGEST);
+  const journalOutcomeRevision = revision(
+    record.journalOutcomeRevision,
+    'journal outcome revision',
+    OUTCOME_REVISION,
+  );
   const expectedLegKey = identity.product === 'SPOT' ? 'SPOT' : 'PERP';
   const effect = derivedReconciliationEffect(result, leg, quantity, requestedQuantity);
   const refs = privateArray(record.externalTruthRefs, 'external truth references', 0);
+  const projectionMaterial = {
+    owner: 'FOUNDATION_RECONCILIATION' as const,
+    mutationId,
+    product: identity.product,
+    accountRealmId: identity.accountRealmId,
+    clientOrderId: identity.clientOrderId,
+    journalVersion,
+    journalHeadDigest,
+    status: result.status,
+    effect,
+    effectDialect: 'L06_JOURNAL_PROJECTION_V1' as const,
+    quantityDialect: 'BINARY64_ROUND_TRIP_PROJECTION' as const,
+    resultRevision,
+    resultContentRevision,
+    foundationResult: result,
+    matchingLeg: leg,
+    privateReconciliationObservation: privateTruth.summary,
+    privateProjectionRevision,
+    privateLifecycleRevision,
+    privateSourceCutRevision: privateTruth.summary.sourceCutRevision,
+    privateProductCutRevision: privateTruth.productCutRevision,
+    journalOutcomeRevision,
+    venueOrderId,
+    cumulativeFilledQuantity: quantity,
+    observedAtMs,
+    externalTruthRefs: Object.freeze([]),
+  };
+  const projectionContentRevision = revision(
+    record.projectionContentRevision,
+    'L06 Foundation projection content revision',
+    L06_FOUNDATION_PROJECTION_CONTENT_REVISION,
+  );
   if (refs.length !== 0
     || result.planId !== identity.ticketId || result.correlationId !== identity.globalCorrelationId
     || result.evaluatedAtMs !== observedAtMs || result.status !== record.status
@@ -1294,27 +1364,25 @@ function validateReconciliationPayload(
     || privateProjectionRevision === bindings.privateProjectionRevision
     || bindings.lifecycleRevisions.includes(privateLifecycleRevision)
     || leg.venueOrderId !== venueOrderId
-    || record.effect !== effect) {
+    || record.effect !== effect
+    || projectionContentRevision !== foundationProjectionContentRevision(projectionMaterial)) {
     throw new TypeError('Foundation reconciliation projection does not regenerate from owner inputs');
   }
   return deepFreezePrivate({
     owner: 'FOUNDATION_RECONCILIATION' as const,
-    mutationId: revision(record.mutationId, 'reconciliation mutation ID', MUTATION_ID),
+    mutationId,
     product: identity.product,
     accountRealmId: identity.accountRealmId,
     clientOrderId: identity.clientOrderId,
-    journalVersion: privateInteger(record.journalVersion, 'reconciliation journal version', 1, MUTATION_JOURNAL_LIMITS.maximumEntries),
-    journalHeadDigest: revision(record.journalHeadDigest, 'reconciliation journal head', HEAD_DIGEST),
+    journalVersion,
+    journalHeadDigest,
     status: result.status,
     effect,
     effectDialect: 'L06_JOURNAL_PROJECTION_V1' as const,
     quantityDialect: 'BINARY64_ROUND_TRIP_PROJECTION' as const,
     resultRevision,
-    resultContentRevision: revision(
-      record.resultContentRevision,
-      'L06 Foundation result content revision',
-      L06_FOUNDATION_RESULT_CONTENT_REVISION,
-    ),
+    resultContentRevision,
+    projectionContentRevision,
     foundationResult: result,
     matchingLeg: leg,
     privateReconciliationObservation: privateTruth.summary,
@@ -1322,7 +1390,7 @@ function validateReconciliationPayload(
     privateLifecycleRevision,
     privateSourceCutRevision: privateTruth.summary.sourceCutRevision,
     privateProductCutRevision: privateTruth.productCutRevision,
-    journalOutcomeRevision: revision(record.journalOutcomeRevision, 'journal outcome revision', OUTCOME_REVISION),
+    journalOutcomeRevision,
     venueOrderId,
     cumulativeFilledQuantity: quantity,
     observedAtMs,
@@ -1496,12 +1564,16 @@ function createEntry(input: {
   readonly sourceRevision: string;
   readonly payload: Readonly<MutationEntryPayload>;
 }): Readonly<MutationJournalEntry> {
+  const privateObservation = input.kind === 'PRIVATE_ORDER_OBSERVED'
+    || input.kind === 'PRIVATE_FILL_OBSERVED';
   if (!MUTATION_ID.test(input.mutationId)
     || !OBSERVATION_ID.test(input.observationId)
     || !includes(MUTATION_ENTRY_KINDS, input.kind)
     || !validTime(input.occurredAtMs)
     || !validTime(input.receivedAtMs)
-    || input.receivedAtMs < input.occurredAtMs
+    || (input.receivedAtMs < input.occurredAtMs
+      && (!privateObservation
+        || input.occurredAtMs - input.receivedAtMs > MAXIMUM_PRIVATE_EVENT_FUTURE_SKEW_MS))
     || input.journalVersion < 1
     || input.journalVersion > MUTATION_JOURNAL_LIMITS.maximumEntries
     || (input.previousHeadDigest !== null && !HEAD_DIGEST.test(input.previousHeadDigest))) {
@@ -1551,7 +1623,13 @@ function validateEntry(
   const observationId = revision(record.observationId, 'entry observation ID', OBSERVATION_ID);
   const occurredAtMs = privateInteger(record.occurredAtMs, 'entry occurrence time', 0, MAX_UTC_MS);
   const receivedAtMs = privateInteger(record.receivedAtMs, 'entry receipt time', 0, MAX_UTC_MS);
-  if (receivedAtMs < occurredAtMs) throw new TypeError('entry receipt predates occurrence');
+  const privateObservation = record.kind === 'PRIVATE_ORDER_OBSERVED'
+    || record.kind === 'PRIVATE_FILL_OBSERVED';
+  if (receivedAtMs < occurredAtMs
+    && (!privateObservation
+      || occurredAtMs - receivedAtMs > MAXIMUM_PRIVATE_EVENT_FUTURE_SKEW_MS)) {
+    throw new TypeError('entry receipt predates occurrence outside an accepted private-event skew');
+  }
   const payload = validatePayload(record.kind, record.payload, identity, bindings, requestedQuantity);
   const sourceRevision = revision(record.sourceRevision, 'entry source revision');
   if (record.kind === 'HTTP_OBSERVED'
@@ -1616,6 +1694,12 @@ function deriveProjection(
     content: string;
   }> = [];
   const cumulativeFacts: Array<{
+    quantity: string;
+    generation: number;
+    time: number;
+    content: string;
+  }> = [];
+  const fillFacts: Array<{
     quantity: string;
     generation: number;
     time: number;
@@ -1697,6 +1781,12 @@ function deriveProjection(
         time: payload.exchangeEventTimeMs,
         content: entry.contentRevision,
       });
+      fillFacts.push({
+        quantity: payload.cumulativeFilledQuantity,
+        generation: payload.connectionGeneration,
+        time: payload.exchangeEventTimeMs,
+        content: entry.contentRevision,
+      });
       const fingerprint = digest('fill_', {
         tradeId: payload.tradeId,
         fillQuantity: payload.fillQuantity,
@@ -1732,9 +1822,6 @@ function deriveProjection(
   if (compareJournalQuantities(summedTradeQuantity, cumulativeFilledQuantity) > 0) {
     conflicts.push('TRADE_FILL_SUM_EXCEEDS_CUMULATIVE');
   }
-  if (httpRejectedResponseSeen && compareJournalQuantities(cumulativeFilledQuantity, '0') > 0) {
-    conflicts.push('HTTP_REJECTION_CONTRADICTS_OBSERVED_FILL');
-  }
   if (httpAcknowledged && httpRejectedResponseSeen) {
     conflicts.push('HTTP_ACK_REJECTION_CONFLICT');
   }
@@ -1759,6 +1846,7 @@ function deriveProjection(
       || statuses[index - 1].status === 'EXPIRED'
       || statuses[index - 1].status === 'REJECTED';
     const currentWorking = statuses[index].status === 'NEW'
+      || statuses[index].status === 'PENDING_NEW'
       || statuses[index].status === 'PARTIALLY_FILLED';
     if (statuses[index].time > statuses[index - 1].time && priorTerminal && currentWorking) {
       conflicts.push('TERMINAL_TO_WORKING_REGRESSION');
@@ -1780,6 +1868,14 @@ function deriveProjection(
     )));
   if (terminalStatuses.size > 1) conflicts.push('TERMINAL_STATUS_CONFLICT');
   let terminalStatus = terminalStatuses.size === 1 ? [...terminalStatuses][0] : null;
+  const noLaterFillTerminals = statuses.filter((item) => (
+    item.status === 'CANCELED' || item.status === 'EXPIRED' || item.status === 'REJECTED'
+  ));
+  for (const terminal of noLaterFillTerminals) {
+    if (fillFacts.some((fill) => fill.time > terminal.time)) {
+      conflicts.push('FILL_AFTER_TERMINAL_EFFECT_CONFLICT');
+    }
+  }
 
   const reconciliationByRevision = new Map<string, string>();
   const reconciliationByCut = new Map<string, string>();
@@ -1851,6 +1947,17 @@ function deriveProjection(
       || latestReconciliation.effect === 'CANCELED'
       || latestReconciliation.effect === 'EXPIRED'
       || latestReconciliation.effect === 'REJECTED_NO_EFFECT_PROVEN';
+    const reconciledTerminal = latestReconciliation.effect === 'REJECTED_NO_EFFECT_PROVEN'
+      ? 'REJECTED'
+      : latestReconciliation.effect === 'FILLED'
+        || latestReconciliation.effect === 'CANCELED'
+        || latestReconciliation.effect === 'EXPIRED'
+        ? latestReconciliation.effect
+        : null;
+    if (terminalStatus !== null && reconciledTerminal !== null
+      && terminalStatus !== reconciledTerminal) {
+      conflicts.push('RECONCILIATION_TERMINAL_STATUS_CONFLICT');
+    }
     if ((latestReconciliation.effect === 'CANCELED' || latestReconciliation.effect === 'EXPIRED')
       && latestReconciliation.cumulativeFilledQuantity !== cumulativeFilledQuantity) {
       conflicts.push('RECONCILED_TERMINAL_QUANTITY_MISMATCH');
@@ -1879,6 +1986,7 @@ function deriveProjection(
   if (workingStatus === 'PARTIALLY_FILLED'
     || compareJournalQuantities(cumulativeFilledQuantity, '0') > 0) lifecycle = 'PARTIALLY_FILLED';
   if (terminalStatus !== null) lifecycle = terminalStatus;
+  if ((httpRejectedResponseSeen || ambiguityCauses.length > 0) && !reconciled) lifecycle = 'UNKNOWN';
   if (conflictCodes.length > 0) lifecycle = 'CONFLICT';
   if (reconciled && conflictCodes.length === 0) lifecycle = 'RECONCILED';
   const recoveryRequired = submissionIntentPresent && !reconciled;
@@ -2049,14 +2157,19 @@ function snapshotFromEntries(values: readonly unknown[]): Readonly<MutationJourn
         || payload.durableIntentCommittedAtMs < submissionIntent.receivedAtMs
         || entry.occurredAtMs < payload.durableIntentCommittedAtMs
         || payload.durableIntentAppendRequestDigest !== expectedIntentAppendDigest
-        || entry.occurredAtMs > bindings!.validUntilMs) {
+        || (identity!.mutationKind !== 'CANCEL_ORDER'
+          && entry.occurredAtMs > bindings!.validUntilMs)) {
         throw new TypeError('SUBMISSION_OBSERVED entry is duplicated, stale or causally invalid');
       }
       submissionSeen = true;
     }
     if (entry.kind === 'HTTP_OBSERVED' || entry.kind === 'PRIVATE_ORDER_OBSERVED'
       || entry.kind === 'PRIVATE_FILL_OBSERVED' || entry.kind === 'FOUNDATION_RECONCILIATION_OBSERVED') {
-      if (submissionIntent === null || entry.occurredAtMs < submissionIntent.occurredAtMs) {
+      const causalReceiptAtMs = entry.kind === 'PRIVATE_ORDER_OBSERVED'
+        || entry.kind === 'PRIVATE_FILL_OBSERVED'
+        ? entry.receivedAtMs
+        : entry.occurredAtMs;
+      if (submissionIntent === null || causalReceiptAtMs < submissionIntent.receivedAtMs) {
         throw new TypeError('money observation predates its durable submission intent');
       }
     }
@@ -2313,7 +2426,12 @@ function normalizeObservation(
   }
   const occurredAtMs = privateInteger(record.occurredAtMs, 'observation occurrence time', 0, MAX_UTC_MS);
   const receivedAtMs = privateInteger(record.receivedAtMs, 'observation receipt time', 0, MAX_UTC_MS);
-  if (receivedAtMs < occurredAtMs || receivedAtMs < current.snapshot.entries[0].receivedAtMs) {
+  const privateObservation = record.kind === 'PRIVATE_ORDER_OBSERVED'
+    || record.kind === 'PRIVATE_FILL_OBSERVED';
+  if ((receivedAtMs < occurredAtMs
+      && (!privateObservation
+        || occurredAtMs - receivedAtMs > MAXIMUM_PRIVATE_EVENT_FUTURE_SKEW_MS))
+    || receivedAtMs < current.snapshot.entries[0].receivedAtMs) {
     throw new TypeError('mutation observation causality is invalid');
   }
   const payload = validatePayload(
@@ -2429,17 +2547,18 @@ export function prepareMutationObservationAppend(
         persistedConflict: current,
       });
     }
+    const conflictObservedAtMs = Math.max(
+      observation.receivedAtMs,
+      current.snapshot.entries.at(-1)!.receivedAtMs,
+    );
     const conflictEntry = createEntry({
       mutationId: current.snapshot.mutationId,
       observationId: conflictObservationId,
       journalVersion: current.snapshot.journalVersion + 1,
       previousHeadDigest: current.snapshot.headDigest,
       kind: 'OBSERVATION_ID_CONFLICT',
-      occurredAtMs: observation.occurredAtMs,
-      receivedAtMs: Math.max(
-        observation.receivedAtMs,
-        current.snapshot.entries.at(-1)!.receivedAtMs,
-      ),
+      occurredAtMs: conflictObservedAtMs,
+      receivedAtMs: conflictObservedAtMs,
       sourceRevision: observation.sourceRevision,
       payload,
     });
@@ -2454,8 +2573,13 @@ export function prepareMutationObservationAppend(
     throw new TypeError('observation ID does not bind its exact mutation/content envelope');
   }
   const submissionIntent = current.snapshot.entries.find((entry) => entry.kind === 'SUBMISSION_INTENT');
+  const observationCausalReceiptAtMs = observation.kind === 'PRIVATE_ORDER_OBSERVED'
+    || observation.kind === 'PRIVATE_FILL_OBSERVED'
+    ? observation.receivedAtMs
+    : observation.occurredAtMs;
   if (observation.kind !== 'TELEMETRY_DEGRADED'
-    && (submissionIntent === undefined || observation.occurredAtMs < submissionIntent.occurredAtMs)) {
+    && (submissionIntent === undefined
+      || observationCausalReceiptAtMs < submissionIntent.receivedAtMs)) {
     throw new TypeError('money observation predates its durable submission intent');
   }
   if (observation.kind === 'FOUNDATION_RECONCILIATION_OBSERVED') {
@@ -2678,15 +2802,66 @@ function validateFoundationOwnerLeg(value: unknown, label: string): Readonly<Rec
     throw new TypeError(`${label} has an invalid canonical identity/status tuple`);
   }
   optionalVenueOrderId(leg.venueOrderId, `${label} venue order ID`);
-  foundationFiniteNumber(leg.expectedSubmittedQuantity, `${label} expected submitted quantity`, true);
-  foundationFiniteNumber(leg.expectedFilledQuantity, `${label} expected filled quantity`, true);
-  foundationNullableNumber(leg.observedOrderFilledQuantity, `${label} observed order fill`, true);
-  foundationNullableNumber(leg.observedTradeFilledQuantity, `${label} observed trade fill`, true);
-  foundationNullableNumber(leg.observedFilledQuantity, `${label} observed fill`, true);
-  foundationNullableNumber(leg.observedRemainderQuantity, `${label} observed remainder`, true);
+  const submitted = foundationFiniteNumber(
+    leg.expectedSubmittedQuantity,
+    `${label} expected submitted quantity`,
+    true,
+  );
+  const expectedFilled = foundationFiniteNumber(
+    leg.expectedFilledQuantity,
+    `${label} expected filled quantity`,
+    true,
+  );
+  const orderFilled = foundationNullableNumber(
+    leg.observedOrderFilledQuantity,
+    `${label} observed order fill`,
+    true,
+  );
+  const tradeFilled = foundationNullableNumber(
+    leg.observedTradeFilledQuantity,
+    `${label} observed trade fill`,
+    true,
+  );
+  const observedFilled = foundationNullableNumber(
+    leg.observedFilledQuantity,
+    `${label} observed fill`,
+    true,
+  );
+  const remainder = foundationNullableNumber(
+    leg.observedRemainderQuantity,
+    `${label} observed remainder`,
+    true,
+  );
+  if (expectedFilled > submitted
+    || (observedFilled === null) !== (remainder === null)
+    || (observedFilled !== null
+      && (observedFilled > submitted || remainder !== Math.max(0, submitted - observedFilled)))) {
+    throw new TypeError(`${label} quantity and remainder components are inconsistent`);
+  }
   const reasonCodes = foundationReasonCodes(leg.reasonCodes, `${label} reason codes`);
   if (leg.status === 'EXACT' && reasonCodes.length !== 0) {
     throw new TypeError(`${label} EXACT status cannot retain reason codes`);
+  }
+  if (leg.status === 'EXACT') {
+    const reproducedObserved = tradeFilled !== null && tradeFilled > 0
+      ? tradeFilled
+      : orderFilled ?? tradeFilled;
+    if (orderFilled !== null && tradeFilled !== null && orderFilled !== tradeFilled) {
+      throw new TypeError(`${label} EXACT order and trade fill components disagree`);
+    }
+    if (reproducedObserved !== observedFilled
+      || (leg.expectedLifecycle !== 'SUBMITTING'
+        && leg.expectedLifecycle !== 'AMBIGUOUS'
+        && observedFilled !== expectedFilled)) {
+      throw new TypeError(`${label} EXACT observed quantity does not reproduce from owner components`);
+    }
+    if ((leg.observedOrderStatus === 'FILLED' && observedFilled !== submitted)
+      || (leg.observedOrderStatus === 'NEW' && observedFilled !== 0)
+      || (leg.observedOrderStatus === 'REJECTED' && observedFilled !== 0)
+      || (leg.observedOrderStatus === 'PARTIALLY_FILLED'
+        && (observedFilled === null || observedFilled <= 0 || observedFilled >= submitted))) {
+      throw new TypeError(`${label} EXACT order status and quantity disagree`);
+    }
   }
   return leg;
 }
@@ -2988,7 +3163,7 @@ export function buildFoundationReconciliationObservation(
     && legSummary.venueOrderId !== current.snapshot.projection.venueOrderId) {
     throw new TypeError('Foundation leg venue identity conflicts with journal private truth');
   }
-  const payload = validateReconciliationPayload({
+  const projectionMaterial = {
     owner: 'FOUNDATION_RECONCILIATION',
     mutationId: current.snapshot.mutationId,
     product: current.snapshot.identity.product,
@@ -3014,6 +3189,10 @@ export function buildFoundationReconciliationObservation(
     cumulativeFilledQuantity: exactJournalQuantity,
     observedAtMs: evaluatedAtMs,
     externalTruthRefs: [],
+  };
+  const payload = validateReconciliationPayload({
+    ...projectionMaterial,
+    projectionContentRevision: foundationProjectionContentRevision(projectionMaterial),
   }, current.snapshot.identity, current.snapshot.bindings, current.snapshot.requestedQuantity);
   const identityMaterial = {
     kind: 'FOUNDATION_RECONCILIATION_OBSERVED' as const,

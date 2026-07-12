@@ -61,6 +61,8 @@ Both branches descend from PROTOCOL_SHA. Main stays director-owned; neither Code
 
 ## Director acceptance log
 
+- **D-LAUNCH-1 (2026-07-12): authentic launch-file digest bound.** Both lanes correctly blocked at the launch hash gate: prompts cited sha256 `0cc192e3…d3cc`, actual bytes hash to `26b1d5ce118982b4b3ba64b44b7fb3e88b0b7ded26a818a775a65bffaa0f2c06` (git blob `587c1b83e8f9d32b9097d88df7fea40d9829b68e`). Root cause: the owner re-saved DIRECTOR_Q_L_TWO_LANE_LAUNCH.md between the director's first shasum measurement and the blob/copy step; all three copies (Main, Q worktree, L worktree) verified byte-identical, blob matches the frozen lock throughout, and the file still contains the known (waived) L-directive SHA typo on line 18 — content unchanged in substance. DIRECTOR ACCEPTS blob `587c1b83` / sha256 `26b1d5ce…0f2c06` as THE authentic launch file. `0cc192e3…` is a stale measurement, superseded. Lanes: record this acceptance in your DECISIONS, treat the launch hash gate as PASSED with the corrected digest, complete Q00/L00 acceptance, and continue. Do not redo the already-verified reuse audits or research.
+- Lane checkpoints observed (pre-acceptance, not yet accepted phases): Q `fa6fecd` (Q00 impl/receipt) + `1dca8ce` (durable state, HEAD); L `1b97515e` (L00 authority/source evidence) + `310063c8` (blocked state + immutable receipt).
 - (append: phase, lane, accepted commit, receipt path, date)
 
 ## External-action boundary (launch §10)

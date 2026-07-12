@@ -1,0 +1,76 @@
+[build-system]
+requires = ["uv_build==0.11.28"]
+build-backend = "uv_build"
+
+[project]
+name = "quant-edge-research"
+version = "0.1.0"
+description = "Deterministic advisory research evidence lane"
+readme = "README.md"
+requires-python = "==3.13.*"
+dependencies = [
+  "duckdb==1.5.4",
+  "polars==1.42.1",
+  "pyarrow==25.0.0",
+]
+
+[project.scripts]
+quant-edge = "quant_edge.cli:main"
+
+[dependency-groups]
+dev = [
+  "hypothesis==6.156.6",
+  "mypy==2.2.0",
+  "pip-audit==2.10.1",
+  "pip-licenses==5.5.5",
+  "pytest==9.1.1",
+  "pytest-cov==7.1.0",
+  "ruff==0.15.21",
+  "uv-build==0.11.28",
+]
+
+[tool.uv]
+required-version = "==0.11.28"
+exclude-newer = "2026-07-12T00:00:00Z"
+python-preference = "managed"
+python-downloads = "manual"
+
+[tool.uv.build-backend]
+module-name = "quant_edge"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["B", "C4", "DTZ", "E", "F", "I", "PT", "RUF", "SIM", "UP"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_unreachable = true
+pretty = true
+show_error_codes = true
+
+[tool.pytest.ini_options]
+minversion = "9.1"
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-config", "--strict-markers"]
+markers = [
+  "contract: deterministic boundary and artifact contract tests",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["quant_edge"]
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
+skip_covered = false

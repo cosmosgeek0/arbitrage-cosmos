@@ -21,6 +21,15 @@ authority.
 | Local transport policy | `server/src/liveEdge/adapters/edgeProtocol/localTransport.ts` | `BUILT_AND_TESTED` | policy only | Validates literal loopback/Unix endpoints and observations; opens no socket and performs no I/O |
 | Recording-health seam | `CanonicalRecordingHealthPort` in `assessmentBridge.ts` | `BUILT_AND_TESTED` | `UNWIRED` | Read-only projection from canonical Intelligence Runtime; recording degradation has no recovery dependency edge |
 
+## L02 delta
+
+| Component | Path | Lane build proof | Integration state | Authority / limitation |
+| --- | --- | --- | --- | --- |
+| Dated Binance source manifest | `server/src/liveEdge/adapters/binanceContracts/manifest.ts` | `BUILT_AND_TESTED` | documentary input only | 34 official-source records with independently checked evidence/content hashes; no acquisition or permanent source authority |
+| Binance contract matrix | `server/src/liveEdge/adapters/binanceContracts/matrix.ts` | `BUILT_AND_TESTED` | `LANE_READY_UNWIRED` | 112 inert Spot/USD-M/Margin records across production/demo/testnet, exact selected private mechanisms, explicit account-status/mode gates and unknown/non-applicable/conflict posture; grants no external action |
+| Closed matrix validator | `server/src/liveEdge/adapters/binanceContracts/validate.ts` | `BUILT_AND_TESTED` | local documentary guard | Rejects unregistered/cross-product/cross-environment/obsolete/conflicting contracts, hostile data and hash drift; performs no I/O and is not an exchange client |
+| Checked source fixtures | `server/test/liveEdge/sourceContracts/**` | `43/43` focused source checks | test-only | Hand-authored current tuples plus obsolete/wrong-route and adversarial failures; network-free |
+
 ## Director-owned integration still required
 
 - owner-approved Basis/Volume advisory intake;
@@ -33,6 +42,10 @@ authority.
 Until those gates pass, L01 is never `WIRED`, `LIVE_PUBLIC` or
 `INTEGRATED_ACCEPTED`.
 
+L02 is likewise documentary and `UNWIRED`. Later L03-L05 adapters may consume
+the hash-locked matrix inside the lane; any production composition, package
+script or supervisor/API projection remains director-owned.
+
 ## Explicitly absent
 
 - private account reads, signed/test/live orders and exchange mutations;
@@ -41,7 +54,9 @@ Until those gates pass, L01 is never `WIRED`, `LIVE_PUBLIC` or
 - a second strategy, proposal, risk, control, ledger, reconciliation or
   outcome authority;
 - timers, background loops, filesystem/environment reads or network egress in
-  the L01 implementation.
+  the L01/L02 implementation;
+- a Binance client, signer, credential loader, private reader, socket, order
+  builder, rate-budget runtime, filter registry or Margin action in L02.
 
 `LIVE_EXECUTION_NOT_IMPLEMENTED` remains mechanically enforced by the canonical
 Foundation execution barrier and the L01 regression proof.

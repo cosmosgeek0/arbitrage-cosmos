@@ -14,6 +14,18 @@ import ts from 'typescript';
 const SOURCE_ROOT = path.resolve('server/src/liveEdge');
 const DIST_ROOT = path.resolve('server/dist/liveEdge');
 const CANONICAL_BARRIER_SOURCE = path.resolve('server/src/systemIntegration/contracts/constants.ts');
+const BINANCE_DOCUMENTARY_DATA_SOURCE = path.resolve(
+  'server/src/liveEdge/adapters/binanceContracts/manifest.ts',
+);
+const BINANCE_DOCUMENTARY_DATA_EXPORTS = new Set([
+  'BINANCE_ADDITIONAL_CONTRACT_SEEDS',
+  'BINANCE_APPROVED_PRODUCT_BASES',
+  'BINANCE_DOCUMENTED_CONTRACTS',
+  'BINANCE_OBSOLETE_ROUTE_FACTS',
+  'BINANCE_OFFICIAL_SOURCES',
+  'BINANCE_PROTECTED_LOCATORS',
+  'BINANCE_RATE_HEADER_TEMPLATES',
+]);
 
 const FORBIDDEN_NODE_MODULES = new Set([
   'child_process',
@@ -117,6 +129,20 @@ function moduleName(node) {
 function location(file, tree, node) {
   const point = tree.getLineAndCharacterOfPosition(node.getStart(tree));
   return `${path.relative(process.cwd(), file)}:${point.line + 1}:${point.character + 1}`;
+}
+
+function containingVariableName(node) {
+  let current = node;
+  while (current && !ts.isSourceFile(current)) {
+    if (ts.isVariableDeclaration(current)) return nodeName(current.name);
+    current = current.parent;
+  }
+  return null;
+}
+
+function isBinanceDocumentaryDataLiteral(file, node) {
+  return file === BINANCE_DOCUMENTARY_DATA_SOURCE
+    && BINANCE_DOCUMENTARY_DATA_EXPORTS.has(containingVariableName(node));
 }
 
 function normalizedModuleRoot(specifier) {
@@ -275,8 +301,9 @@ function staticViolations(files) {
       }
 
       if (ts.isStringLiteralLike(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
-        if (/^(?:https?|wss?):\/\//i.test(node.text)) report(node, 'embeds a network target');
-        if (/X-MBX|(?:^|[?&])signature=|\/(?:api|sapi|fapi|dapi|vapi)\/v\d+\/[^\s]*(?:order|loan|borrow|repay|withdraw|transfer)|\/(?:order\/test|test\/order)(?:$|[?/#])/i.test(node.text)) {
+        const documentaryData = isBinanceDocumentaryDataLiteral(file, node);
+        if (/^(?:https?|wss?):\/\//i.test(node.text) && !documentaryData) report(node, 'embeds a network target');
+        if (!documentaryData && /X-MBX|(?:^|[?&])signature=|\/(?:api|sapi|fapi|dapi|vapi)\/v\d+\/[^\s]*(?:order|loan|borrow|repay|withdraw|transfer)|\/(?:order\/test|test\/order)(?:$|[?/#])/i.test(node.text)) {
           report(node, 'embeds a signed/private/money endpoint');
         }
       }
@@ -397,6 +424,52 @@ function unwrapExpression(node) {
   return current;
 }
 
+function isClosedLiteralData(node) {
+  const current = unwrapExpression(node);
+  if (!current) return false;
+  if (ts.isStringLiteralLike(current) || ts.isNumericLiteral(current)) return true;
+  if ([ts.SyntaxKind.NullKeyword, ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword].includes(current.kind)) {
+    return true;
+  }
+  if (ts.isPrefixUnaryExpression(current)
+    && current.operator === ts.SyntaxKind.MinusToken
+    && ts.isNumericLiteral(current.operand)) return true;
+  if (ts.isArrayLiteralExpression(current)) {
+    return current.elements.every((element) => !ts.isSpreadElement(element) && isClosedLiteralData(element));
+  }
+  if (ts.isObjectLiteralExpression(current)) {
+    return current.properties.every((property) => (
+      ts.isPropertyAssignment(property)
+      && !ts.isComputedPropertyName(property.name)
+      && isClosedLiteralData(property.initializer)
+    ));
+  }
+  return false;
+}
+
+test('Binance endpoint and provenance literals are confined to inert closed documentary data', () => {
+  const tree = parse(BINANCE_DOCUMENTARY_DATA_SOURCE);
+  const exports = new Set();
+
+  for (const statement of tree.statements) {
+    if (ts.isImportDeclaration(statement)) {
+      assert.equal(statement.importClause?.isTypeOnly, true, 'documentary data may use type-only imports');
+      continue;
+    }
+    assert.equal(ts.isVariableStatement(statement), true, 'documentary data module may contain only type imports and const exports');
+    assert.ok(statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword));
+    assert.ok((statement.declarationList.flags & ts.NodeFlags.Const) !== 0, 'documentary data exports must be const');
+    assert.equal(statement.declarationList.declarations.length, 1, 'one documentary export per declaration');
+    const declaration = statement.declarationList.declarations[0];
+    const name = nodeName(declaration.name);
+    assert.ok(name && BINANCE_DOCUMENTARY_DATA_EXPORTS.has(name), `unexpected documentary data export ${name}`);
+    assert.equal(isClosedLiteralData(declaration.initializer), true, `${name} must be a closed literal data tree`);
+    exports.add(name);
+  }
+
+  assert.deepEqual(exports, BINANCE_DOCUMENTARY_DATA_EXPORTS);
+});
+
 test('live-edge source has no ambient, money-moving, or canonical-authority seam', () => {
   const files = filesUnder(SOURCE_ROOT, '.ts');
   assert.ok(files.length >= 10, 'expected the complete L01 live-edge source tree');
@@ -429,6 +502,8 @@ test('every built live-edge module imports inertly under clock, egress, filesyst
   assert.ok(rootIndex >= 0, 'live-edge root barrel must exist');
   assert.equal(typeof modules[rootIndex].EdgeProtocolV1Client, 'function');
   assert.equal(typeof modules[rootIndex].EdgeAssessmentBridge, 'function');
+  assert.equal(typeof modules[rootIndex].matchDocumentedBinanceContract, 'function');
+  assert.equal(modules[rootIndex].BINANCE_CONTRACT_MATRIX.documentaryAuthority, 'DOCUMENTARY_EVIDENCE_ONLY');
 });
 
 test('the canonical live-execution barrier is unchanged and still blocks LIVE mode', async () => {

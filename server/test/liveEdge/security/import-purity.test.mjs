@@ -13,19 +13,24 @@ import ts from 'typescript';
 
 const SOURCE_ROOT = path.resolve('server/src/liveEdge');
 const DIST_ROOT = path.resolve('server/dist/liveEdge');
-const CAPITAL_DECIMAL_CONSUMER = path.resolve(
-  'server/src/liveEdge/adapters/binanceInstrumentSpecs/exact.ts',
-);
 const CAPITAL_DECIMAL_LEAF_SUFFIX = '/capitalFoundation/contracts/decimal.js';
-const CAPITAL_DECIMAL_IMPORTS = new Set([
-  'ExactDecimal',
-  'addExactDecimals',
-  'compareExactDecimals',
-  'divideExactDecimals',
-  'minimumExactDecimal',
-  'multiplyExactDecimals',
-  'normalizeNonNegativeExactDecimal',
-  'subtractExactDecimals',
+const CAPITAL_DECIMAL_CONSUMERS = new Map([
+  [path.resolve('server/src/liveEdge/adapters/binanceInstrumentSpecs/exact.ts'), new Set([
+    'ExactDecimal',
+    'addExactDecimals',
+    'compareExactDecimals',
+    'divideExactDecimals',
+    'minimumExactDecimal',
+    'multiplyExactDecimals',
+    'normalizeNonNegativeExactDecimal',
+    'subtractExactDecimals',
+  ])],
+  [path.resolve('server/src/liveEdge/adapters/binancePrivateTruth/exact.ts'), new Set([
+    'ExactDecimal',
+    'NonNegativeDecimal',
+    'normalizeExactDecimal',
+    'normalizeNonNegativeExactDecimal',
+  ])],
 ]);
 const CANONICAL_BARRIER_SOURCE = path.resolve('server/src/systemIntegration/contracts/constants.ts');
 const BINANCE_DOCUMENTARY_DATA_SOURCE = path.resolve(
@@ -201,12 +206,13 @@ function isCapitalDecimalLeaf(specifier) {
 }
 
 function isAllowedCapitalDecimalImport(file, node, specifier) {
-  if (file !== CAPITAL_DECIMAL_CONSUMER || !ts.isImportDeclaration(node)
+  const allowedImports = CAPITAL_DECIMAL_CONSUMERS.get(file);
+  if (allowedImports === undefined || !ts.isImportDeclaration(node)
     || !isCapitalDecimalLeaf(specifier) || !node.importClause
     || node.importClause.name || !node.importClause.namedBindings
-    || !ts.isNamedImports(node.importClause.namedBindings)) return false;
+  || !ts.isNamedImports(node.importClause.namedBindings)) return false;
   return node.importClause.namedBindings.elements.every((element) => (
-    CAPITAL_DECIMAL_IMPORTS.has(element.propertyName?.text ?? element.name.text)
+    allowedImports.has(element.propertyName?.text ?? element.name.text)
   ));
 }
 

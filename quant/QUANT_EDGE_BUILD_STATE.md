@@ -1,17 +1,17 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `13`
+State generation: `14`
 
-Updated: 2026-07-12T17:09:28+0530
+Updated: 2026-07-12T18:08:54+0530
 
-Status: `WORKING`
+Status: `READY_FOR_REVIEW`
 Program: Q lane — deterministic research evidence, labels, models, calibration, drift and advisory inference.
 
 ## Frozen launch identity
 
 - Worktree: `/Users/cosmosgeek/Desktop/quant-edge-research-20260712`
 - Branch: `quant-edge-research-factory-20260712`
-- Current HEAD at generation-13 authoring: `9e7d4aabae68a0e20479c389c0f08c33886bdeb4`
+- Current HEAD at generation-14 authoring: `c7ff41c9f1a82aefd879f3f7ca56b29e5ea79b91`
 - Origin: `git@github.com:cosmosgeek0/arbitrage-cosmos.git`
 - Canonical base: `7010499170e24b31c9c0be2c9d73a536e680c6fe`
 - Protocol SHA / current parent: `73e1a1ff7daa48df8dac45713fc5f106842edafc`
@@ -50,8 +50,10 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 - Q03 implementation commit C3: `34b88ef7f022226acd8e294d3a023f71f3dfc397`; exact parent `404645858830610677d0b6f6a75453b9a9bc531a`; tree `34ea865d2df4ecf98f79c83f65bb1d0f49a00636`.
 - Q03 acceptance receipt: `quant/RECEIPTS/Q03_ACCEPTANCE.md`; SHA-256 `31cf167aa6f7bcd209ebbb29254e9d0f6ccd65ec7093885dacd488ec49270486`.
 - Q03 acceptance/state commit A3: `9e7d4aabae68a0e20479c389c0f08c33886bdeb4`; exact parent C3.
-- Q04 activation/state commit: the commit containing this generation-13 state and task; intentionally non-self-referential.
-- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `ACCEPTED`; Q03 `ACCEPTED`; Q04 `WORKING`, with no implementation or receipt yet.
+- Q04 activation/state commit: `c7ff41c9f1a82aefd879f3f7ca56b29e5ea79b91`; exact parent A3.
+- Q04 implementation receipt: `quant/RECEIPTS/Q04.md`; SHA-256 `95b87d68b781f6cdeca560249d848fb7512d94b844051ce360bcd882c4f03a47`; immutable in C4 after commit.
+- Q04 implementation commit C4: the commit containing this generation-14 state and receipt; intentionally non-self-referential.
+- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `ACCEPTED`; Q03 `ACCEPTED`; Q04 `READY_FOR_REVIEW` pending independent exact-commit verification.
 
 ## Ownership and safety
 
@@ -110,12 +112,22 @@ Implementation commit C2 therefore has 24 changed paths, all under `quant/**`. `
 
 Implementation C3 has 38 changed paths, all under `quant/**`. `TASKS/Q03.md` remains unchanged from activation. The two root directives remain preserved untracked owner inputs and are never staged.
 
+## Q04 implementation inventory
+
+- Decision/research: `DECISIONS/Q04-001-LOCAL-BOOK-TEMPORAL-TRUTH.md`, `docs/Q04_BOOK_CONTRACT_RESEARCH.md`.
+- Package/script: five `src/quant_edge/book/*.py` modules and `scripts/q04_replay_campaign.py`.
+- Fixture/evidence: `fixtures/q04_replay_golden_v1.json` and two `generated/q04/replay_campaign.v1.*` artifacts; all synthetic, deterministic and hash-bound.
+- Tests: five unit, one property and two contract test files (140 focused tests).
+- Durable completion: immutable `RECEIPTS/Q04.md` and this generation-14 state in C4.
+
+Implementation C4 has 21 changed paths, all under `quant/**`. `TASKS/Q04.md` remains unchanged from activation. The two root directives remain preserved untracked owner inputs and are never staged.
+
 ## Q-lane posture map
 
 - `LIVE`: none. Q has no production integration, listener, data producer, model or authority.
 - `SHADOW`: none. No Q assessment service or champion/challenger is running.
-- `SYNTHETIC`: frozen protocol/product fixtures, Q01 deterministic config/RNG, Q02 golden vector and Q03 hash-only forward bridge fixtures; never observed market evidence.
-- `RESEARCH`: locked offline package, eight-family hypothesis portfolio, one checksum-verified/disposable archive replay and a hash-only two-tier Event Atlas bootstrap; no edge claim.
+- `SYNTHETIC`: frozen protocol/product fixtures, Q01 deterministic config/RNG, Q02 golden vector, Q03 hash-only forward bridge fixtures and Q04 replay/golden book fixtures; never observed market evidence.
+- `RESEARCH`: locked offline package, eight-family hypothesis portfolio, one checksum-verified/disposable archive replay, a hash-only two-tier Event Atlas bootstrap and the Q04 fail-closed Spot/USD-M local-book reference model with deterministic replay; no edge claim.
 - `UNAVAILABLE`: real forward Q delivery, point-in-time instrument master, owner-annotation records, feature/label/model registries, trained/calibrated models, drift service and inference.
 - Money/order/capital/risk authority: `NONE` in every posture.
 
@@ -185,6 +197,14 @@ Implementation C3 has 38 changed paths, all under `quant/**`. `TASKS/Q03.md` rem
 - Independent exact C3 verifier: `VERIFIED`; exact parent/ancestry, 38-path scope, regular-file modes, frozen/accepted emptiness, task/receipt/state/generated/lineage hashes and tree `34ea865d2df4ecf98f79c83f65bb1d0f49a00636` pass.
 - Archive-derived C3 SHA-256 `87df0010a9b896891d1aa94fd6d5078249528829bd8d1a9d048e35659c8b6a2c`; Ruff, format, strict mypy, Q `1032` at `100.00%`, focused Q03 `430` at `100.00%`, generated/no-raw `6/6`, cross-process byte replay, Q00 `6/6` and protocol `22/22` all pass.
 - Independent verification of `fa6fecd`: exact 10-path `quant/**` history, empty frozen diff, range `git diff --check` exit 0, scope suite `6/6`, protocol `22/22`.
+- Q04 pinned `uv 0.11.28 lock --check`: exit 0, 51 resolved packages; no dependency change.
+- Q04 Ruff lint/format and strict mypy: exit 0, 74 files including the campaign script.
+- Q04 focused suite: `140 passed`; `quant_edge.book` 1,020 statements / 302 branches, `100.00%`.
+- Q04 accumulated Q suite: `1172 passed`; 5,223 statements / 1,864 branches, `100.00%`.
+- Q04 property campaigns: seed `20260712`; 60 Spot + 60 USD-M upstream-truth schedules prove eligibility only in `COMPLETE`, `SYNC_VALIDATED`-only completion and settled equality with exchange truth.
+- Q04 golden fixture `32e13493…6aec`; campaign JSON `e9cd85c0…7334`; campaign Markdown `321cb6c2…14b9e`; byte-identical across separate processes with different CWD/TZ/hash seed and equal to in-test regeneration.
+- Q04 accumulated Q00 scope `6/6`, protocol `22/22`, `npm test` exit 0 with unchanged baseline subtotals.
+- Q04 adversarial review: replay-counter, stream-id and unbounded-intent-window findings corrected with regression tests; no remaining known blocker at receipt authoring.
 - Host: Apple M4 Max, 16 cores, 48 GB; Node `v22.23.1`; npm `10.9.8`.
 - Current Q performance/inference measurements: none. Historical receipt and synthetic capacity facts remain separately labeled in `quant/docs/Q00_BENCHMARK_PROFILE.md`.
 
@@ -201,16 +221,17 @@ Implementation C3 has 38 changed paths, all under `quant/**`. `TASKS/Q03.md` rem
 - Archive data license/redistribution, point-in-time identity/filter economics and upstream/boundary completeness remain unresolved; only hash/count/derived registry evidence is retained.
 - Real canonical runtime-to-Q append-only delivery remains `MISSING/BLOCKED`; Q03 implements no socket or operational payload materialization.
 - Current official liquidation selection wording conflicts; preserve sampled/unknown semantics.
+- The official USD-M local-book text leaves the exact-boundary bridge (`U == lastUpdateId + 1`) unsatisfiable; Q04 follows the text, converges through its retained restart buffer, and records the residual boundary behavior as inherited for the integration owner.
 - Numeric Q inference SLOs are unknown until measured on the Q01 lock; only provisional resource/queue budgets exist.
 
 ## Exact next task
 
-Execute `quant/TASKS/Q04.md`: record the bounded book-contract research refresh, implement the `quant_edge.book` package (contracts, ladders, both product state machines, clock truth, deterministic replay), run the full evidenced loop (focused tests → accumulated Q suite → adversarial review → corrections), create implementation commit C4 with the immutable `quant/RECEIPTS/Q04.md`, independently verify C4, then create acceptance commit A4 with `quant/RECEIPTS/Q04_ACCEPTANCE.md` and a state update. Never rewrite accepted Q00–Q03 work.
+After C4 exists, independently verify the exact commit (parent/ancestry, 21-path scope, frozen emptiness, task/receipt/artifact hashes, archive-derived clean-environment re-run), then create `quant/RECEIPTS/Q04_ACCEPTANCE.md` and a generation-15 acceptance state in commit A4. Never rewrite `quant/RECEIPTS/Q04.md` after C4. After A4, activate Q05 (label and matched-control factory) with a bounded task and activation commit only.
 
-Next exact command:
+Next exact command after C4:
 
 ```bash
-git status --short && git log -1 --format='%H %P' && shasum -a 256 quant/TASKS/Q04.md quant/QUANT_EDGE_BUILD_STATE.md
+git log -1 --format='%H %P %T' && bash quant/scripts/check-scope.sh || git show --stat HEAD
 ```
 
 ## Fresh-session read order
@@ -218,7 +239,7 @@ git status --short && git log -1 --format='%H %P' && shasum -a 256 quant/TASKS/Q
 1. `STATE.md`, `MISSION.md`, `ARCHITECTURE.md` Part II, `DIRECTOR.md`.
 2. `QUANT_EDGE_RESEARCH_FACTORY_12H.md` and only launch Section 6.
 3. `EDGE_PROTOCOL_V1.md`, frozen schema/fixtures, and `quant/DIRECTIVE_INPUTS.lock`.
-4. This state, `quant/TASKS/Q04.md`, both immutable Q03 receipts and the Q03 decision/research notes (the pinned stream-contract research controls Q04 book law).
+4. This state, `quant/TASKS/Q04.md`, the immutable `quant/RECEIPTS/Q04.md`, the Q04 decision/research notes and both immutable Q03 receipts (the pinned stream-contract research controls the Q04 book law).
 5. Q00 reuse matrix and Q01 framework/security docs are inputs only; do not redo accepted work or regenerate accepted evidence unless exact code/input identity changed.
 
 ## Work not to repeat

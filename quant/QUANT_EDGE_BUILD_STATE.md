@@ -1,17 +1,17 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `5`
+State generation: `6`
 
-Updated: 2026-07-12T11:35:29+0530
+Updated: 2026-07-12T11:42:57+0530
 
-Status: `READY_FOR_INDEPENDENT_COMMIT_VERIFICATION`
+Status: `ACCEPTED`
 Program: Q lane — deterministic research evidence, labels, models, calibration, drift and advisory inference.
 
 ## Frozen launch identity
 
 - Worktree: `/Users/cosmosgeek/Desktop/quant-edge-research-20260712`
 - Branch: `quant-edge-research-factory-20260712`
-- Current HEAD at generation-5 authoring: `90e1ef89edd4cc449664ac05cb429448e0bac6f0`
+- Current HEAD at generation-6 authoring: `73330e281c7a91fa5fba2059570e9619f9ade34d`
 - Origin: `git@github.com:cosmosgeek0/arbitrage-cosmos.git`
 - Canonical base: `7010499170e24b31c9c0be2c9d73a536e680c6fe`
 - Protocol SHA / current parent: `73e1a1ff7daa48df8dac45713fc5f106842edafc`
@@ -25,20 +25,22 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 
 ## Phase position
 
-- Last accepted phase: `Q00`
+- Last accepted phase: `Q01`
 - Latest director acceptance: `D-LAUNCH-1`, commit `9ca01537f4edda06ee566cd261e612d5c315fb76`; authentic launch blob/digest binding independently verified.
-- Current phase: `Q01`
-- Current task: `quant/TASKS/Q01.md`
-- Current task SHA-256: `8c830de5b97673dc6593bb29adcedaa26542d9c2060ceaa4d7ba8e4dde2c22ee`
+- Current phase: `Q01 ACCEPTED`; next phase `Q02 NOT_STARTED`.
+- Latest completed task: `quant/TASKS/Q01.md`
+- Latest completed task SHA-256: `8c830de5b97673dc6593bb29adcedaa26542d9c2060ceaa4d7ba8e4dde2c22ee`
 - Checkpoint receipt: `quant/RECEIPTS/Q00.md`; blob `7ba41768ba747bbc3eddd1941f6f5d82985dc1ca`; SHA-256 `738dad4caac7cfac9ba8b7b84fb646ec1817c6f0eb34fc09daa60129ab1996c3`; immutable in checkpoint commit.
 - Acceptance receipt: `quant/RECEIPTS/Q00_ACCEPTANCE.md`; SHA-256 `c29c7646af5f284a88eca782beb7dbf636e6c6eb11dda25d1bccc03ea97385de`; immutable after this acceptance commit.
 - Q00 checkpoint implementation commit: `fa6fecd8295aaab6aa38d35bd34843b64af69e69`.
 - Q00 checkpoint-state commit: `1dca8ce3022472488117cc9eab0f2f5b37905aac`.
 - Q00 acceptance/state commit: `a7606b49d26cfc9aeec4e8a4166219885a0d19e5`.
 - Q01 activation/state commit: `90e1ef89edd4cc449664ac05cb429448e0bac6f0`.
-- Q01 implementation receipt: `quant/RECEIPTS/Q01.md`; SHA-256 `254b638eaa00b3f2ea06f12a3c5b460ac330c0ca5e48236042ea97ddb543114e`; immutable in implementation commit C.
-- Q01 implementation commit: the commit containing this generation-5 state and receipt; intentionally non-self-referential until independent verification.
-- Acceptance state: Q00 `ACCEPTED`; Q01 implementation `COMPLETE/SEALED`, acceptance pending exact-commit verification and commit A.
+- Q01 implementation receipt: `quant/RECEIPTS/Q01.md`; SHA-256 `254b638eaa00b3f2ea06f12a3c5b460ac330c0ca5e48236042ea97ddb543114e`; immutable in C.
+- Q01 implementation commit C: `73330e281c7a91fa5fba2059570e9619f9ade34d`; exact parent `90e1ef89edd4cc449664ac05cb429448e0bac6f0`.
+- Q01 acceptance receipt: `quant/RECEIPTS/Q01_ACCEPTANCE.md`; SHA-256 `368daeccd6b43f28bfc41110f1dc85b8037f1c7eac81e3539a5e2bea893bd4b2`.
+- Q01 acceptance/state commit A: the commit containing this generation-6 state; intentionally non-self-referential.
+- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `NOT_STARTED` with no task file.
 
 ## Ownership and safety
 
@@ -71,7 +73,7 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 - Portfolio/evidence: `EDGE_HYPOTHESIS_MAP.md`, `registry/edge_hypotheses.v1.json`, `fixtures/deterministic_seed_v1.json`, two `generated/q01/*.json` dependency evidence files.
 - Package: ten `src/quant_edge/*.py` modules.
 - Tests: three `tests/contract/*.py` and four `tests/unit/*.py` files.
-- Durable completion: `RECEIPTS/Q01.md` and this state.
+- Durable completion: `RECEIPTS/Q01.md`, `RECEIPTS/Q01_ACCEPTANCE.md` and this state.
 
 Implementation commit C therefore has 32 changed paths, all under `quant/**`. The two root directives remain preserved untracked owner inputs and are never staged.
 
@@ -124,7 +126,9 @@ Implementation commit C therefore has 32 changed paths, all under `quant/**`. Th
 - Q01 dependency audit/license: 49 packages, zero indexed vulnerabilities, zero unknown license fields; durable normalized evidence committed.
 - Accumulated Q00 scope suite: `6/6`; `npm test`: exit 0. Q00 accepted full `npm run test:all` remains broad baseline because Q01 changes no shared path.
 - Q01 adversarial review: initial no-seal findings corrected; final independent `SEAL`, no P0–P3 findings.
-- Q01 preliminary staged scope gate: `Q_SCOPE_OK`, 30 implementation paths; final 32-path gate required immediately before C.
+- Q01 final implementation scope gate: `Q_SCOPE_OK`, exactly 32 staged paths; C `73330e281c7a91fa5fba2059570e9619f9ade34d` created.
+- Independent C verification: exact parent/ancestry, 32 allowed paths, empty frozen diff, artifact/task/receipt hashes and `git diff-tree --check` all pass.
+- Archive-derived C environment: clean locked install, imports, Ruff, strict mypy, `88` tests, `96.71%` coverage, registry, seed and protocol `22/22` all pass; archive SHA-256 `c4e53bd84e1cb928791e23c5db600d2b008db03326ca2c767bb7de0578db42b0`.
 - `git diff --cached --check`: exit 0.
 - Independent verification of `fa6fecd`: exact 10-path `quant/**` history, empty frozen diff, range `git diff --check` exit 0, scope suite `6/6`, protocol `22/22`.
 - Host: Apple M4 Max, 16 cores, 48 GB; Node `v22.23.1`; npm `10.9.8`.
@@ -134,7 +138,7 @@ Implementation commit C therefore has 32 changed paths, all under `quant/**`. Th
 
 - Resolved: D-LAUNCH-1 binds launch blob `587c1b83…` to SHA-256 `26b1d5ce…0f2c06`; the stale `0cc192e3…` measurement no longer blocks. The Q worktree's frozen lock remains byte-unchanged; see decisions Q00-002 and Q00-003.
 - Resolved before Q01 seal: mandatory hypothesis numbering, substantive Markdown drift, arbitrary-runner protocol false green, unbounded/malformed Unicode input, compact framework-card gaps and ephemeral-only scanner detail.
-- Q01 acceptance is not blocked; it is pending the required mechanical exact-commit verification and separate acceptance commit.
+- Q01 exact-commit verification completed and acceptance conditions passed; no Q01 blocker remains.
 - No canonical forward runtime-to-Q append-only bridge exists; this is a later integration seam, not permission for a Q socket.
 - Free history cannot prove full L2, receive latency, borrow truth or causal intent.
 - Current official liquidation selection wording conflicts; preserve sampled/unknown semantics.
@@ -142,16 +146,15 @@ Implementation commit C therefore has 32 changed paths, all under `quant/**`. Th
 
 ## Exact next task
 
-1. Hash this generation-5 state and `quant/RECEIPTS/Q01.md`; stage exactly the 32 Q01 paths.
-2. Run `bash quant/scripts/check-scope.sh` and `git diff --cached --check`; create implementation commit C.
-3. Verify C ancestry, exact 32-path inventory, frozen-path emptiness, artifact/receipt hashes and tests from an archive-derived disposable environment.
-4. If and only if verification passes, write immutable `quant/RECEIPTS/Q01_ACCEPTANCE.md`, update state generation 6 to Q01 `ACCEPTED`, scope-gate and create acceptance commit A.
-5. Do not start Q02 or create `quant/TASKS/Q02.md` until Q01 acceptance commit A exists.
+1. Verify the acceptance commit containing this generation is a direct child of C, changes only this state plus `quant/RECEIPTS/Q01_ACCEPTANCE.md`, and leaves frozen paths unchanged.
+2. For continued work, verify this state, C, A and both Q01 receipts; do not repeat Q00/Q01 research, implementation or tests except accumulated gates.
+3. Create one bounded `quant/TASKS/Q02.md` from directive Q02 only, record its hash in generation 7 and activate Q02 in a separate commit.
+4. Execute Q02 only after that activation; no Event Atlas or Q03 work during Q02.
 
 Next exact command:
 
 ```bash
-shasum -a 256 quant/QUANT_EDGE_BUILD_STATE.md quant/RECEIPTS/Q01.md && git add quant/QUANT_EDGE_BUILD_STATE.md quant/RECEIPTS/Q01.md && bash quant/scripts/check-scope.sh && git diff --cached --check
+git rev-parse HEAD && git diff-tree --no-commit-id --name-status -r HEAD && shasum -a 256 quant/QUANT_EDGE_BUILD_STATE.md quant/RECEIPTS/Q01_ACCEPTANCE.md
 ```
 
 ## Fresh-session read order
@@ -159,7 +162,7 @@ shasum -a 256 quant/QUANT_EDGE_BUILD_STATE.md quant/RECEIPTS/Q01.md && git add q
 1. `STATE.md`, `MISSION.md`, `ARCHITECTURE.md` Part II, `DIRECTOR.md`.
 2. `QUANT_EDGE_RESEARCH_FACTORY_12H.md` and only launch Section 6.
 3. `EDGE_PROTOCOL_V1.md`, frozen schema/fixtures, and `quant/DIRECTIVE_INPUTS.lock`.
-4. This state, `quant/TASKS/Q01.md`, `quant/RECEIPTS/Q01.md`, `quant/RECEIPTS/Q00_ACCEPTANCE.md`, and Q00-003.
+4. This state, `quant/TASKS/Q01.md`, both Q01 receipts, `quant/RECEIPTS/Q00_ACCEPTANCE.md`, and Q00-003.
 5. Q00 reuse matrix, benchmark profile and source research only as inputs; do not redo them. If C exists, verify the exact commit rather than rebuilding it.
 
 ## Work not to repeat
@@ -171,3 +174,4 @@ shasum -a 256 quant/QUANT_EDGE_BUILD_STATE.md quant/RECEIPTS/Q01.md && git add q
 - Do not materialize the Event Atlas or create a production source during Q01.
 - Do not edit or normalize the two untracked owner directives.
 - Do not rewrite the immutable Q01 receipt after implementation commit C.
+- Do not rerun or rewrite accepted Q01; the next bounded phase is Q02.

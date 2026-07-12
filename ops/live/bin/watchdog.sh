@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+# ops/live/bin/watchdog.sh — external supervision, one bounded check pass.
+#
+# Fired by cosmos-watchdog.timer (see ops/live/systemd/). Deliberately
+# installed OUTSIDE the release path (/usr/local/lib/cosmos-ops) so a broken
+# release cannot take its own supervisor down with it.
+#
+# Policy (§23/§24):
+#   - /health/live failing LIVE_FAIL_THRESHOLD consecutive passes  -> restart
+#     the app unit, but never more than MAX_RESTARTS_PER_WINDOW per
+#     RESTART_WINDOW_SEC (a crash loop needs a human, not a hammer);
+#   - /health/ready failing while live is healthy -> ALERT ONLY. The process
+#     is alive but degraded (stale feeds, TRADE_UNSAFE, ...); restarting
+#     cannot fix inputs and may destroy in-memory recovery state;
+#   - the watchdog NEVER takes any trading/exchange action of any kind, and
+#     never auto-liquidates on infrastructure alarms (§23);
+#   - tunnel down -> alert (optional bounded restart via WATCHDOG_RESTART_TUNNEL);
+#   - deploy in progress (deploy lock held) -> skip entirely;
+#   - deploy-frozen marker present -> keep alerting until an operator acts;
+#   - newest backup stale/missing -> alert (§23 "backup stale").
+#
+# Usage: watchdog.sh [--env-file <file>]     Exit code is 0 unless misconfigured;
+# findings are reported via ALERT_CMD and $WATCHDOG_STATE_DIR/status.json.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+# shellcheck source=common.sh
+. "$SCRIPT_DIR/common.sh"
+OPS_LOG_TAG=cosmos-watchdog
+
+ENV_FILE=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --env-file) ENV_FILE="${2:?--env-file needs a value}"; shift 2 ;;
+    -h|--help) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) die_code 1 "unknown argument: $1" ;;
+  esac
+done
+
+load_env_file "$ENV_FILE"
+cosmos_layout_defaults
+: "${LIVE_PATH:=/health/live}"
+: "${READY_PATH:=/health/ready}"
+: "${LIVE_FAIL_THRESHOLD:=3}"
+: "${RESTART_WINDOW_SEC:=1800}"
+: "${MAX_RESTARTS_PER_WINDOW:=2}"
+: "${WATCHDOG_RESTART_TUNNEL:=0}"
+: "${WATCHDOG_STATE_DIR:=$OPS_STATE_DIR/watchdog}"
+: "${BACKUP_DIR:=}"
+: "${BACKUP_MAX_AGE_HOURS:=26}"
+require_cmd "$NODE"
+mkdir -p "$WATCHDOG_STATE_DIR"
+
+STREAK_FILE="$WATCHDOG_STATE_DIR/live-fail-streak"
+APP_RESTARTS="$WATCHDOG_STATE_DIR/app-restarts.log"
+TUNNEL_RESTARTS="$WATCHDOG_STATE_DIR/tunnel-restarts.log"
+ALERTS_LOG="$WATCHDOG_STATE_DIR/alerts.jsonl"
+
+wd_alert() { # severity code message
+  alert "$1" "$2" "$3"
+  jsonl_append "$ALERTS_LOG" "ts=$(now_utc)" "severity=$1" "code=$2" "message=$3"
+}
+
+count_recent() { # file window_sec
+  local cutoff n=0 line
+  cutoff=$(( $(now_epoch) - $2 ))
+  [ -f "$1" ] || { echo 0; return 0; }
+  while read -r line; do
+    case "$line" in (*[!0-9]*|"") continue ;; esac
+    [ "$line" -ge "$cutoff" ] && n=$((n + 1))
+  done < "$1"
+  echo "$n"
+}
+
+write_status() { # live ready tunnel skipped frozen backupFresh streak
+  json_write "$WATCHDOG_STATE_DIR/status.json" "ranAtUtc=$(now_utc)" \
+    "live=$1" "ready=$2" "tunnel=$3" "skipped=$4" "deployFrozen=$5" \
+    "backupFresh=$6" "liveFailStreak=$7"
+}
+
+# --- deploy in progress: hands off ------------------------------------------------
+if [ -d "$DEPLOY_LOCK" ]; then
+  ops_log "deploy lock held ($DEPLOY_LOCK); skipping this watchdog pass"
+  write_status unknown unknown unknown true false unknown "$(cat "$STREAK_FILE" 2>/dev/null || echo 0)"
+  exit 0
+fi
+
+# --- app liveness -------------------------------------------------------------------
+LIVE=false READY=false
+STREAK="$(cat "$STREAK_FILE" 2>/dev/null || echo 0)"
+case "$STREAK" in (*[!0-9]*|"") STREAK=0 ;; esac
+
+if http_ok "${HEALTH_BASE}${LIVE_PATH}"; then
+  LIVE=true
+  STREAK=0
+else
+  STREAK=$((STREAK + 1))
+  ops_log "live check failed (consecutive: $STREAK/$LIVE_FAIL_THRESHOLD)"
+  if [ "$STREAK" -ge "$LIVE_FAIL_THRESHOLD" ]; then
+    RECENT="$(count_recent "$APP_RESTARTS" "$RESTART_WINDOW_SEC")"
+    if [ "$RECENT" -lt "$MAX_RESTARTS_PER_WINDOW" ]; then
+      wd_alert critical APP_RESTARTED "live gate failed ${STREAK}x; restarting $APP_UNIT (restart $((RECENT + 1))/$MAX_RESTARTS_PER_WINDOW in window)"
+      "$SYSTEMCTL" restart "$APP_UNIT" || wd_alert critical APP_RESTART_FAILED "systemctl restart $APP_UNIT failed"
+      now_epoch >> "$APP_RESTARTS"
+      STREAK=0
+    else
+      wd_alert critical RESTART_BUDGET_EXHAUSTED "live gate still failing but $RECENT restarts already made in ${RESTART_WINDOW_SEC}s window; operator required"
+    fi
+  fi
+fi
+printf '%s\n' "$STREAK" > "$STREAK_FILE"
+
+# --- app readiness (alert-only by design) -------------------------------------------
+if [ "$LIVE" = true ]; then
+  if http_ok "${HEALTH_BASE}${READY_PATH}"; then
+    READY=true
+  else
+    wd_alert warning APP_NOT_READY "process alive but $READY_PATH failing; NOT restarting (restart cannot fix degraded inputs and may destroy recovery state)"
+  fi
+fi
+
+# --- tunnel ----------------------------------------------------------------------------
+TUNNEL=false
+if "$SYSTEMCTL" is-active "$TUNNEL_UNIT" >/dev/null 2>&1; then
+  TUNNEL=true
+else
+  wd_alert critical TUNNEL_DOWN "$TUNNEL_UNIT is not active; operator boundary is offline (shown, not hidden)"
+  if [ "$WATCHDOG_RESTART_TUNNEL" = 1 ]; then
+    RECENT="$(count_recent "$TUNNEL_RESTARTS" "$RESTART_WINDOW_SEC")"
+    if [ "$RECENT" -lt "$MAX_RESTARTS_PER_WINDOW" ]; then
+      wd_alert warning TUNNEL_RESTARTED "restarting $TUNNEL_UNIT (restart $((RECENT + 1))/$MAX_RESTARTS_PER_WINDOW in window)"
+      "$SYSTEMCTL" restart "$TUNNEL_UNIT" || wd_alert critical TUNNEL_RESTART_FAILED "systemctl restart $TUNNEL_UNIT failed"
+      now_epoch >> "$TUNNEL_RESTARTS"
+    else
+      wd_alert critical TUNNEL_RESTART_BUDGET_EXHAUSTED "$TUNNEL_UNIT still down; restart budget spent; operator required"
+    fi
+  fi
+fi
+
+# --- frozen deployment stays loud until an operator acts ------------------------------
+FROZEN=false
+if [ -e "$FROZEN_MARKER" ]; then
+  FROZEN=true
+  wd_alert critical DEPLOY_FROZEN "deploy-frozen marker present at $FROZEN_MARKER; deployment is halted pending incident handling"
+fi
+
+# --- backup freshness (§23 backup stale) ------------------------------------------------
+BACKUP_FRESH=unknown
+if [ -n "$BACKUP_DIR" ]; then
+  if BACKUP_MAX_AGE_HOURS="$BACKUP_MAX_AGE_HOURS" BACKUP_DIR="$BACKUP_DIR" \
+      "$SCRIPT_DIR/backup.sh" --verify-latest >/dev/null 2>&1; then
+    BACKUP_FRESH=true
+  else
+    BACKUP_FRESH=false
+    if [ -n "$(ls -1 "$BACKUP_DIR" 2>/dev/null | grep -E '^[0-9]{8}T[0-9]{6}Z' || true)" ]; then
+      wd_alert warning BACKUP_STALE "newest backup in $BACKUP_DIR is older than ${BACKUP_MAX_AGE_HOURS}h"
+    else
+      wd_alert warning BACKUP_MISSING "no completed backup exists in $BACKUP_DIR"
+    fi
+  fi
+fi
+
+write_status "$LIVE" "$READY" "$TUNNEL" false "$FROZEN" "$BACKUP_FRESH" "$STREAK"
+exit 0

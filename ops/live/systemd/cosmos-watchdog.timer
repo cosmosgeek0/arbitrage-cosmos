@@ -1,0 +1,12 @@
+# ops/live/systemd/cosmos-watchdog.timer — fires the external watchdog.
+
+[Unit]
+Description=Run the cosmos external watchdog every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

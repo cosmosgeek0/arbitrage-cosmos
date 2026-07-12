@@ -1,0 +1,60 @@
+# ops/live/systemd/cosmos-app.service — supervised loopback-only app service.
+#
+# §24.2: separate supervised app and cloudflared services; app binds loopback
+# only (HOST=127.0.0.1 comes from /etc/cosmos/cosmos-app.env); bounded,
+# journaled logs. Secrets never appear in this unit — runtime configuration
+# lives in the EnvironmentFile (root:cosmos, mode 0640), and real secret
+# material is delivered by the separately authorized Secrets Manager path
+# (see ops/live/aws/README.md).
+#
+# Install: copy to /etc/systemd/system/cosmos-app.service, then
+#   systemctl daemon-reload && systemctl enable --now cosmos-app.service
+# (Enabling/running units is an owner-authorized live step; never done from
+# this repository's tests.)
+
+[Unit]
+Description=Cosmos trading application (loopback origin behind Cloudflare Tunnel)
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=cosmos
+Group=cosmos
+WorkingDirectory=/opt/cosmos/current
+EnvironmentFile=/etc/cosmos/cosmos-app.env
+ExecStart=/usr/bin/node server/dist/index.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+
+# --- filesystem/privilege hardening ---
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/cosmos
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+UMask=0077
+LimitNOFILE=65536
+
+# --- bounded, journaled logs (§24.2) ---
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cosmos-app
+LogRateLimitIntervalSec=30
+LogRateLimitBurst=1000
+
+[Install]
+WantedBy=multi-user.target

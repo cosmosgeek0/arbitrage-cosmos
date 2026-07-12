@@ -1,0 +1,49 @@
+# ops/live/systemd/cloudflared.service — Cloudflare Tunnel connector.
+#
+# §24.2: separate supervised cloudflared service; the tunnel publishes the
+# private hostname while the app itself stays loopback-only. The tunnel
+# UUID and credentials file are placeholders filled at the separately
+# authorized activation step (see ops/live/cloudflare/README.md); the
+# credentials file lives outside this repository, mode 0600.
+
+[Unit]
+Description=Cloudflare Tunnel connector for the cosmos operator boundary
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=cloudflared
+Group=cloudflared
+ExecStart=/usr/local/bin/cloudflared --no-autoupdate --config /etc/cloudflared/config.yml tunnel run
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+# --- hardening ---
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+UMask=0077
+
+# --- bounded, journaled logs ---
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cloudflared
+LogRateLimitIntervalSec=30
+LogRateLimitBurst=500
+
+[Install]
+WantedBy=multi-user.target

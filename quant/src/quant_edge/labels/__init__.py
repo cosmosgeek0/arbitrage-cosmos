@@ -1,0 +1,153 @@
+"""Deterministic §11 label, outcome and matched-control factory (Q05).
+
+Pure library over injected evidence: point-in-time sample identity, multi-horizon
+outcomes with explicit censoring, versioned stage labels, Basis label contracts, event
+dispositions, matched non-event controls and reproducible manifests. All executable
+evidence is honestly SYNTHETIC; unknown stays unknown and gaps are DATA_INVALID.
+"""
+
+from quant_edge.labels.basis import (
+    BasisConstruction,
+    BasisCostAssumptionV1,
+    BasisDefinitionV1,
+    BasisLabelV1,
+    BorrowAssumptionV1,
+    BorrowKnownness,
+    ConstructionFeasibility,
+    FundingEventV1,
+    compute_basis_label,
+)
+from quant_edge.labels.controls import (
+    ControlMatchResultV1,
+    ControlMatchSpecV1,
+    ControlRejectionReason,
+    WindowFactsV1,
+    match_controls,
+)
+from quant_edge.labels.disposition import (
+    DispositionRecordV1,
+    DispositionSource,
+    EventDisposition,
+    WindowQualityFactsV1,
+    derive_disposition,
+)
+from quant_edge.labels.identity import (
+    SampleIdentityV1,
+    VersionSetV1,
+    derive_sample_id,
+    make_sample_identity,
+    with_cost_version,
+)
+from quant_edge.labels.manifest import (
+    GroupWindowV1,
+    LabelManifestV1,
+    ManifestMemberV1,
+    ObjectiveOutcomeReferenceV1,
+    assign_evaluation_groups,
+    build_label_manifest,
+    make_manifest_member,
+    outcome_reference,
+)
+from quant_edge.labels.outcomes import (
+    HORIZON_GRID_NS,
+    BarrierSpecV1,
+    CostedOutcomeV1,
+    CostScenarioV1,
+    ExcursionOutcomeV1,
+    FirstPassageOutcomeV1,
+    HorizonOutcomeV1,
+    OutcomeDefinitionV1,
+    OutcomeStatus,
+    PassageBarrier,
+    ResidualOutcomeV1,
+    SampleOutcomesV1,
+    SpreadOutcomeV1,
+    compute_sample_outcomes,
+)
+from quant_edge.labels.rational import (
+    ExactRatioV1,
+    make_ratio,
+    price_return,
+    ratio_add,
+    ratio_compare,
+    ratio_subtract,
+)
+from quant_edge.labels.series import (
+    EvidenceSeriesV1,
+    GapIntervalV1,
+    PricePointV1,
+    QuotePointV1,
+    SeriesKind,
+)
+from quant_edge.labels.stages import (
+    StageAssignmentV1,
+    StageDefinitionV1,
+    StageEvidenceV1,
+    StageLabel,
+    generate_stage,
+)
+
+__all__ = [
+    "HORIZON_GRID_NS",
+    "BarrierSpecV1",
+    "BasisConstruction",
+    "BasisCostAssumptionV1",
+    "BasisDefinitionV1",
+    "BasisLabelV1",
+    "BorrowAssumptionV1",
+    "BorrowKnownness",
+    "ConstructionFeasibility",
+    "ControlMatchResultV1",
+    "ControlMatchSpecV1",
+    "ControlRejectionReason",
+    "CostScenarioV1",
+    "CostedOutcomeV1",
+    "DispositionRecordV1",
+    "DispositionSource",
+    "EventDisposition",
+    "EvidenceSeriesV1",
+    "ExactRatioV1",
+    "ExcursionOutcomeV1",
+    "FirstPassageOutcomeV1",
+    "FundingEventV1",
+    "GapIntervalV1",
+    "GroupWindowV1",
+    "HorizonOutcomeV1",
+    "LabelManifestV1",
+    "ManifestMemberV1",
+    "ObjectiveOutcomeReferenceV1",
+    "OutcomeDefinitionV1",
+    "OutcomeStatus",
+    "PassageBarrier",
+    "PricePointV1",
+    "QuotePointV1",
+    "ResidualOutcomeV1",
+    "SampleIdentityV1",
+    "SampleOutcomesV1",
+    "SeriesKind",
+    "SpreadOutcomeV1",
+    "StageAssignmentV1",
+    "StageDefinitionV1",
+    "StageEvidenceV1",
+    "StageLabel",
+    "VersionSetV1",
+    "WindowFactsV1",
+    "WindowQualityFactsV1",
+    "assign_evaluation_groups",
+    "build_label_manifest",
+    "compute_basis_label",
+    "compute_sample_outcomes",
+    "derive_disposition",
+    "derive_sample_id",
+    "generate_stage",
+    "make_manifest_member",
+    "make_ratio",
+    "make_sample_identity",
+    "match_controls",
+    "outcome_reference",
+    "price_return",
+    "ratio_add",
+    "ratio_compare",
+    "ratio_subtract",
+    "with_cost_version",
+]

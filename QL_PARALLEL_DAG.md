@@ -4,12 +4,13 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 
 | Packet | Worktree | Branch | Base SHA | State |
 | --- | --- | --- | --- | --- |
-| Q spine Q00–Q06 | quant-edge-research-20260712 | quant-edge-research-factory-20260712 | 73e1a1f | ACCEPTED through Q09-merged — Q10 ACCEPTED; Q11+Q14 merged; spine SPRINTING Q12→Q13→Q15→Q16→Q17 to LANE_READY |
+| Q spine Q00–Q06 | quant-edge-research-20260712 | quant-edge-research-factory-20260712 | 73e1a1f | ACCEPTED through Q09-merged — Q10 ACCEPTED; Q11+Q14 merged; spine runs Q12→Q15→Q16 then PARKS (Q13 shard-owned; Q17 final proof after Q13 merge) |
 | Q07 microstructure | SPINE-OWNED (shard retired 2026-07-12; spine was already WORKING Q07 at d057373) | quant-edge-research-factory-20260712 | 24ccf58 | ACCEPTED on spine (f0d4448) |
 | Q08 derivatives | ~/Desktop/q08-derivatives | q08-derivatives-20260712 | 24ccf58 | ACCEPTED + MERGED onto lane (c00de40, 494d6ce; 1,649 pass) |
 | Q09 regime | ~/Desktop/q09-regime | q09-regime-20260712 | 24ccf58 | ACCEPTED + MERGED onto lane (1,842 pass) |
 | Q14 validation-infra | ~/Desktop/q14-validation-infra | q14-validation-infra-20260712 | 24ccf58 | ACCEPTED + MERGED (2,182 pass) |
-| Dashboard shell satellite | ~/Desktop/dash-shell | dashboard-shell-20260712 | 0f2bb88 | committed (6925015, items 1-10) — acceptance verify + wire at integration |
+| Dashboard shell satellite | ~/Desktop/dash-shell | dashboard-shell-20260712 | 0f2bb88 | ACCEPTED (6925015 + RECEIPT.md) — wire at integration |
+| Q13 deep-gate shard | ~/Desktop/q13-deep-gate | q13-deep-gate-20260712 | f756f3b | READY |
 | L15 deploy-infra satellite | ~/Desktop/l15-infra | l15-deploy-infra-20260712 | 0f2bb88 | ACCEPTED (2cec412; 347 assertions) — merge at integration |
 | Q11 survival | ~/Desktop/q11-survival | q11-survival-20260712 | 8a5dd09 | ACCEPTED + MERGED (2,182 pass with Q14) |
 | L spine L00–L08 | live-execution-proof-20260712 | live-execution-control-proof-20260712 | 73e1a1f | L05 ACCEPTED (8e4b705); L06 takeover → Fable; Codex left auditable uncommitted L06 work; TWO director decisions DEFERRED to I00: ledger compare-and-set primitive + Foundation quantity-bridge contract (see live-edge-receipts/patches/) |

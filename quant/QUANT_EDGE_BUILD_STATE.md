@@ -1,17 +1,17 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `17`
+State generation: `18`
 
-Updated: 2026-07-12T18:59:05+0530
+Updated: 2026-07-12T19:02:57+0530
 
-Status: `READY_FOR_REVIEW`
+Status: `ACCEPTED`
 Program: Q lane — deterministic research evidence, labels, models, calibration, drift and advisory inference.
 
 ## Frozen launch identity
 
 - Worktree: `/Users/cosmosgeek/Desktop/quant-edge-research-20260712`
 - Branch: `quant-edge-research-factory-20260712`
-- Current HEAD at generation-17 authoring: `a8e701e3d191561035753e5298bdf5c25dc3194f`
+- Current HEAD at generation-18 authoring: `a1baa003b2d9a1c746fe55956cad7b9633bcecdd`
 - Origin: `git@github.com:cosmosgeek0/arbitrage-cosmos.git`
 - Canonical base: `7010499170e24b31c9c0be2c9d73a536e680c6fe`
 - Protocol SHA / current parent: `73e1a1ff7daa48df8dac45713fc5f106842edafc`
@@ -25,9 +25,9 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 
 ## Phase position
 
-- Last accepted phase: `Q04`
+- Last accepted phase: `Q05`
 - Latest director acceptance: `D-LAUNCH-1` (`9ca01537f4edda06ee566cd261e612d5c315fb76`, authentic launch digest); standing order `D-LAUNCH-2` (`84d2ff65fd8d2b200821126dd17b4ba75f3c131c`, continuous self-accepted execution with full evidenced loops, director audits at LANE_READY); `D-LAUNCH-3` (`cf37df4af0ef3724f8f3a145c6be3cdcc84799c0`, Q lane transferred to the Fable lead builder).
-- Current phase: `Q05` (`WORKING`)
+- Current phase: `Q05` (`ACCEPTED`; Q06 not activated)
 - Current task: `quant/TASKS/Q05.md`
 - Current task SHA-256: `b2bb8c1404bf9fc655aefd11bc63e4c82598fb76036eeb28fd653a8a1adae232`
 - Checkpoint receipt: `quant/RECEIPTS/Q00.md`; blob `7ba41768ba747bbc3eddd1941f6f5d82985dc1ca`; SHA-256 `738dad4caac7cfac9ba8b7b84fb646ec1817c6f0eb34fc09daa60129ab1996c3`; immutable in checkpoint commit.
@@ -56,9 +56,11 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 - Q04 acceptance receipt: `quant/RECEIPTS/Q04_ACCEPTANCE.md`; SHA-256 `ad14fe33c852ea0be0ccd269d15f942557cd66c1080a28f7809d33eef11fd2ae`.
 - Q04 acceptance/state commit A4: `3455216249c2d7bcac67ef0d44a5567bcf93a26c`; exact parent C4.
 - Q05 activation/state commit: `a8e701e3d191561035753e5298bdf5c25dc3194f`; exact parent A4.
-- Q05 implementation receipt: `quant/RECEIPTS/Q05.md`; SHA-256 `36b34d000d3f02af8180f047b83a65a718cb713639987aebc90249bd171272b9`; immutable in C5 after commit.
-- Q05 implementation commit C5: the commit containing this generation-17 state and receipt; intentionally non-self-referential.
-- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `ACCEPTED`; Q03 `ACCEPTED`; Q04 `ACCEPTED`; Q05 `READY_FOR_REVIEW` pending independent exact-commit verification.
+- Q05 implementation receipt: `quant/RECEIPTS/Q05.md`; SHA-256 `36b34d000d3f02af8180f047b83a65a718cb713639987aebc90249bd171272b9`; immutable in C5.
+- Q05 implementation commit C5: `a1baa003b2d9a1c746fe55956cad7b9633bcecdd`; exact parent `a8e701e3d191561035753e5298bdf5c25dc3194f`; tree `f59734a85329a55aa76d98432b76c090646c9206`.
+- Q05 acceptance receipt: `quant/RECEIPTS/Q05_ACCEPTANCE.md`; SHA-256 `835865ec2f4fc40740b84ca94e0bc419ab8f0c7f8563622bab2d7701d1f596df`.
+- Q05 acceptance/state commit A5: the commit containing this generation-18 state and acceptance receipt; intentionally non-self-referential.
+- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `ACCEPTED`; Q03 `ACCEPTED`; Q04 `ACCEPTED`; Q05 `ACCEPTED`.
 
 ## Ownership and safety
 
@@ -228,6 +230,8 @@ Implementation C5 has 28 changed paths, all under `quant/**`. `TASKS/Q05.md` rem
 - Q05 golden fixture `f36a9b08…fe47`; campaign JSON `9a5e5dcc…0c7e`; campaign Markdown `e6daad17…d6b9`; byte-identical across separate processes with different CWD/TZ/hash seed and equal to in-test regeneration.
 - Q05 accumulated Q00 scope `6/6`, protocol `22/22`, `npm test` exit 0 with unchanged baseline.
 - Q05 adversarial review: pre-validation AttributeError, dead residual branches and control-pool duplicate-id findings corrected with regression tests; no remaining known blocker at receipt authoring.
+- Independent exact C5 verifier: exact parent/ancestry, 28-path `quant/**` scope, regular modes, frozen/accepted emptiness, task/receipt/state/artifact blob hashes and `git diff-tree --check` all pass; tree `f59734a85329a55aa76d98432b76c090646c9206`.
+- Archive-derived C5 SHA-256 `8628e338beb21274b473819bf0d32bc7d62c5a29829f71c1b373d170a796b0e9`; clean locked install, Ruff/format, strict mypy, Q `1298` at `100.00%` (6,744/2,406) and byte-identical artifact regeneration all pass.
 - Independent exact C4 verifier: exact parent/ancestry, 21-path `quant/**` scope, regular modes, frozen/accepted emptiness, task/receipt/state/artifact blob hashes and `git diff-tree --check` all pass; tree `8611a1ac3c9f23fa61aa806ae5dcfc4e00e4f017`.
 - Archive-derived C4 SHA-256 `b1680299466a2e903f9e5aad2a2bf8633539cf00ea2ba994d0dbe18e5f217918`; clean locked install, Ruff/format, strict mypy, Q `1172` at `100.00%` (5,223/1,864), golden/campaign byte regeneration and subprocess determinism all pass.
 - Host: Apple M4 Max, 16 cores, 48 GB; Node `v22.23.1`; npm `10.9.8`.
@@ -251,12 +255,12 @@ Implementation C5 has 28 changed paths, all under `quant/**`. `TASKS/Q05.md` rem
 
 ## Exact next task
 
-After C5 exists, independently verify the exact commit (parent/ancestry, 22-path scope, frozen/accepted emptiness, task/receipt/state/artifact blob hashes, archive-derived clean-environment re-run), then create `quant/RECEIPTS/Q05_ACCEPTANCE.md` and a generation-18 acceptance state in commit A5. Never rewrite `quant/RECEIPTS/Q05.md` after C5. After A5, activate Q06 (feature registry and robust baselines) with a bounded task and activation commit only.
+After A5 exists, create only the bounded `quant/TASKS/Q06.md` for the feature registry and robust baselines (registry law, streaming/batch equivalence harness, robust symbol-relative baselines, time-domain/window primitives, feature freshness and quality propagation per directive §12/§13 intake and §20 Q06) and advance state in a Q06 activation commit. Verify all controlling and accepted identities first; do not implement Q06 in the activation commit and never rewrite accepted Q05 work.
 
-Next exact command after C5:
+Next exact command after A5:
 
 ```bash
-git log -1 --format='%H %P %T' && git show HEAD --format= --name-only | wc -l
+git status --short && git log -1 --format='%H %P' && shasum -a 256 quant/RECEIPTS/Q05.md quant/RECEIPTS/Q05_ACCEPTANCE.md quant/QUANT_EDGE_BUILD_STATE.md
 ```
 
 ## Fresh-session read order

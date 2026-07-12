@@ -1,66 +1,36 @@
-# AGENTS.md - Project-Local Instructions For Future Agents
+# AGENTS.md — rules for any coding agent in this repository
 
-This repository is the durable source of truth. Do not depend on any external
-Codex memory, chat history, or hidden assistant state to understand the product.
+This repository is the durable source of truth. Do not depend on chat history, external agent memory, or hidden assistant state. Everything you need is in the root docs.
 
-## Read Order Before Work
+## Read order before any work
 
-1. `PROJECT_MEMORY.md` - current state, active decisions, latest run log.
-2. `DESIGN_PLAYBOOK.md` - mandatory UI quality bar, owner preferences, ship gates.
-3. `UI_SURFACE_BASELINE.md` - current sidebar/topbar/search/profile baseline from the five-hour polish pass.
-4. `BLUEPRINT.md` - product architecture and page responsibilities.
-5. `ENGINE.md` - engine, scanner, risk, and ledger architecture.
-6. `DIRECTOR_RULEBOOK.md` - operating discipline, merge/safety rules.
+1. `STATE.md` — what is true right now: components, verification counts, gaps, next steps.
+2. `MISSION.md` — why this exists and the two edge hypotheses. Do not relitigate it.
+3. `ARCHITECTURE.md` — code families, decision chain, and the canonical authority map (Part II is law).
+4. For UI work: `DESIGN.md` — mandatory before touching `web/src`. Part I is the method and ship gate; Part II is the locked baseline for shared surfaces.
+5. For directing/orchestrating: `DIRECTOR.md`.
+6. Historical evidence (receipts, superseded blueprints, sprint directives): `docs/archive/`.
 
-For UI work, read `DESIGN_PLAYBOOK.md` first, then inspect the actual rendered
-app in the browser before making claims. For left sidebar, topbar icons,
-global search, clock, notifications, kill switch, refresh, currency, basis,
-appearance, or account profile work, also read `UI_SURFACE_BASELINE.md`.
+## Non-negotiable operating rules
 
-## Non-Negotiable Operating Rules
+- **No money paths.** No live orders, test orders, borrow/repay, transfer, withdrawal, leverage/margin mutation, or signed/private exchange calls. `LIVE_EXECUTION_NOT_IMPLEMENTED` stays enforced and tested. No withdrawal/transfer-out code or UI, ever.
+- **No secrets** in code, fixtures, logs, screenshots, receipts, or prompts. Binance keys are server-side `.env` only; pure domain code never reads the environment.
+- **One concept, one owner.** Existing Basis/Volume engines own strategy; intelligenceFoundation owns evidence; intelligenceRuntime owns public source truth; capitalFoundation owns allocation/position policy; foundation owns control/risk/execution/reconciliation; the existing ledger owns durable history; systemIntegration only composes. Never create a duplicate scanner, cache, proposal queue, risk gate, store, or socket for an owned concept — write a narrow adapter (see ARCHITECTURE.md Part II).
+- **Determinism in domain code.** Injected clocks, no import-time side effects, no timers/sockets/fs/env/`Math.random()` in pure modules, bounded structures, unknown values stay `null`/`UNKNOWN`/`UNAVAILABLE` — never fabricated zeros, confidence, or "pump probability".
+- **Tests are network-free** and hostile to false green: meaningful failure cases, real exit codes, no fake-success returns. A module counts only when it compiles, behaves deterministically, and has success and failure proofs.
+- **No fake UI.** No decorative buttons, toggles, badges, or health. If it is not wired, label it honestly (`SYNTHETIC_ONLY`, `BLOCKED`, `NOT_CONFIGURED`, `MISSING`) or omit it. The cockpit renders canonical supervisor truth; it never recomputes engine/risk/capital/health truth.
+- **Git discipline.** Work on the assigned feature branch. Never commit to `current-main`, never merge/push unless you are the director, never reset/clean/revert work you did not make, and preserve unfamiliar untracked files.
+- **Inspect before you edit.** Search the current source for an existing owner before creating anything. For UI, open the real rendered app and measure; screenshots from the owner are evidence, not decoration.
 
-- Search current external references before coding or redesigning anything.
-  For UI, research relevant high-quality product references, then map the
-  reference into this product instead of inventing decoration.
-- Inspect the repo and the current browser state before editing. Screenshots
-  from the owner are reference material, not optional context.
-- Do not create fake buttons, fake toggles, fake guardrails, fake live badges,
-  or controls that do not do real work. If it is not wired, mark it Planned,
-  Disabled With Reason, or omit it.
-- This is a premium arbitrage/trading control room, not a retail demo app.
-  Optimize for observability, account truth, risk, health, real controls, and
-  crisp operator-grade UI.
-- Do not add manual money-action UI unless the owner explicitly asks. The app
-  monitors and controls the bot; Binance remains the place for direct manual
-  trading/borrowing actions.
-- Preserve unrelated dirty files. Never revert work you did not make.
+## Verification gate before claiming anything done
 
-## UI Quality Rules
+- Run the relevant focused suite AND `npm test`; for cross-family changes run `npm run test:all`.
+- For UI: reload the app, inspect computed styles, click what you touched, and run the DESIGN.md ship gate.
+- Report real numbers and real failures. Never report success from line counts or compilation alone.
 
-- Use project references, not vibes. The approved quality targets are Account,
-  Markets, Token, Binance/Coinbase-style account surfaces, and the Flow-style
-  sidebar typography lesson recorded in `DESIGN_PLAYBOOK.md`.
-- Typography must be crisp: restrained weights, exact line-height, no random
-  big/bold labels, no subpixel hover transforms on persistent text.
-- Prefer real rows, hairline dividers, borderless tables, and consistent card
-  chrome over random boxes. One page = one clear spacing system.
-- Topbar triggers should stay icon-first. Useful words live inside popovers,
-  not on every trigger.
-- Motion must be subtle, slow, and purposeful. No constant toy-like spinning,
-  no purple/blue glow mess, no decorative moving lines.
-- Account/profile popovers show real connected exchange/key posture, real
-  active/recent sessions/devices, and real logout. They are not generic nav
-  menus.
+## Documentation law (self-documenting project)
 
-## Verification Gate
-
-Before calling UI work done:
-
-- Run the relevant build/test command.
-- Reload the local app in the browser.
-- Inspect computed styles for the specific typography/spacing/motion issue.
-- Click the controls you touched and verify real behavior or honest disabled
-  state.
-- Capture or inspect screenshots at the current browser size.
-- Update `PROJECT_MEMORY.md` when a durable product lesson or state change is
-  learned.
+- Any change that alters project state (component status, wiring, counts, commands) updates `STATE.md` **in the same commit**.
+- Sprint receipts/manifests go to `docs/archive/`; `STATE.md` points at the newest.
+- One root doc per purpose; never add a root doc without retiring one. If ownership shifts, amend ARCHITECTURE.md Part II in the same change.
+- No chronological diaries. Record state, not story.

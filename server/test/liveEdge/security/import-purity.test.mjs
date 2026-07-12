@@ -13,6 +13,20 @@ import ts from 'typescript';
 
 const SOURCE_ROOT = path.resolve('server/src/liveEdge');
 const DIST_ROOT = path.resolve('server/dist/liveEdge');
+const CAPITAL_DECIMAL_CONSUMER = path.resolve(
+  'server/src/liveEdge/adapters/binanceInstrumentSpecs/exact.ts',
+);
+const CAPITAL_DECIMAL_LEAF_SUFFIX = '/capitalFoundation/contracts/decimal.js';
+const CAPITAL_DECIMAL_IMPORTS = new Set([
+  'ExactDecimal',
+  'addExactDecimals',
+  'compareExactDecimals',
+  'divideExactDecimals',
+  'minimumExactDecimal',
+  'multiplyExactDecimals',
+  'normalizeNonNegativeExactDecimal',
+  'subtractExactDecimals',
+]);
 const CANONICAL_BARRIER_SOURCE = path.resolve('server/src/systemIntegration/contracts/constants.ts');
 const BINANCE_DOCUMENTARY_DATA_SOURCE = path.resolve(
   'server/src/liveEdge/adapters/binanceContracts/manifest.ts',
@@ -182,6 +196,20 @@ function forbiddenImportReason(specifier) {
   return null;
 }
 
+function isCapitalDecimalLeaf(specifier) {
+  return specifier.replaceAll('\\', '/').endsWith(CAPITAL_DECIMAL_LEAF_SUFFIX);
+}
+
+function isAllowedCapitalDecimalImport(file, node, specifier) {
+  if (file !== CAPITAL_DECIMAL_CONSUMER || !ts.isImportDeclaration(node)
+    || !isCapitalDecimalLeaf(specifier) || !node.importClause
+    || node.importClause.name || !node.importClause.namedBindings
+    || !ts.isNamedImports(node.importClause.namedBindings)) return false;
+  return node.importClause.namedBindings.elements.every((element) => (
+    CAPITAL_DECIMAL_IMPORTS.has(element.propertyName?.text ?? element.name.text)
+  ));
+}
+
 function isEnvironmentAccess(node) {
   if (!ts.isPropertyAccessExpression(node) && !ts.isElementAccessExpression(node)) return false;
   if (nodeName(node) !== 'env') return false;
@@ -219,8 +247,13 @@ function staticViolations(files) {
       if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
         const specifier = moduleName(node.moduleSpecifier);
         if (specifier !== null) {
-          const reason = forbiddenImportReason(specifier);
+          const capitalLeaf = isCapitalDecimalLeaf(specifier);
+          const allowedCapitalLeaf = isAllowedCapitalDecimalImport(file, node, specifier);
+          const reason = allowedCapitalLeaf ? null : forbiddenImportReason(specifier);
           if (reason) report(node.moduleSpecifier, reason);
+          if (capitalLeaf && !allowedCapitalLeaf && reason === null) {
+            report(node.moduleSpecifier, 'imports Capital exact-decimal leaf outside the one approved consumer/import set');
+          }
         }
         if (ts.isImportDeclaration(node) && node.importClause) {
           const names = [];

@@ -43,6 +43,18 @@ authority.
 | Safe failure and diagnostic projection | `server/src/liveEdge/adapters/binanceSignedKernel/safety.ts` | `BUILT_AND_TESTED` | local boundary utility | Reuses Foundation structured failures and recursively drops signatures, payloads, credentials, URLs, account values, causes and stacks |
 | Offline signed-kernel proofs | `server/test/liveEdge/signedKernel/**` | `161/161` focused checks | test-only | Public illustrative vectors, hostile inputs, purity tripwires and exact failure/clock/rate/ambiguity boundaries; no network or real credential |
 
+## L04 delta
+
+| Component | Path | Lane build proof | Integration state | Authority / limitation |
+| --- | --- | --- | --- | --- |
+| Runtime instrument projection normalizer | `server/src/liveEdge/adapters/binanceInstrumentSpecs/normalize.ts` | `BUILT_AND_TESTED` | `LANE_READY_UNWIRED` | Consumes only injected, exact-owner-identity `RuntimeListingMetadata`; creates one immutable value snapshot and no acquisition, cache, registry service or persistence owner |
+| Current filter/capability schema | `server/src/liveEdge/adapters/binanceInstrumentSpecs/filterSchemas.ts`, `capabilities.ts` | `BUILT_AND_TESTED` | documentary validation only | Closed Spot/Margin and USD-M vocabularies, exact raw/canonical values, content digests, current route intersection and mandatory evidence losses; unknown/malformed/disabled/contradictory filters are non-actionable |
+| Immutable snapshot/revision guard | `server/src/liveEdge/adapters/binanceInstrumentSpecs/snapshot.ts` | `BUILT_AND_TESTED` | local value boundary | Validates frozen plain data, exact L02 contract/product/source posture, filter schemas and source/capability losses; semantic instrument/registry revisions stay receipt-stable while separate source-evidence/snapshot revisions bind temporal receipt truth; no store or refresh owner |
+| Exact static sizing preflight | `server/src/liveEdge/adapters/binanceInstrumentSpecs/exact.ts`, `sizing.ts` | `BUILT_AND_TESTED` | `LANE_READY_UNWIRED` | Reuses only Capital's exact-decimal leaf; price is never adjusted, quantity can only reduce, and approved/intended/official limits plus a literal USDT-denominated 10-USDT ceiling are rechecked; every result is non-sendable |
+| Revision-bound reference evidence | `BinanceFilterReferenceEvidence` and `deriveFilterReferenceEvidenceRevision` | `BUILT_AND_TESTED` | injected owner projection only | Requires exact product/symbol/instrument revision, reference kind/window, Runtime producer identity, a maximum 5-second validity interval and no action authority; does not acquire prices |
+| Waiting revision/expiry decision | `server/src/liveEdge/adapters/binanceInstrumentSpecs/waiting.ts` | `BUILT_AND_TESTED` | pure hand-off utility | Injected-time decision binds prior semantic/source/snapshot revisions, exact LIMIT/MARKET TIF, USDT denomination and full closed reference evidence; change/expiry invalidates and every result has `sendEligible=false`; creates no proposal queue or lifecycle owner |
+| Offline instrument/filter proofs | `server/test/liveEdge/instrumentSpecs/**` | focused deterministic suite | test-only | Official-shaped Runtime fixtures, product/filter boundaries, hostile data, exact/property invariants, coherent snapshot attacks, expiry and import-purity proofs; network-free |
+
 ## Director-owned integration still required
 
 - owner-approved Basis/Volume advisory intake;
@@ -61,6 +73,11 @@ credential or transport owner. Later L04-L05 adapters may consume these
 lane-ready seams; any production composition, package script or supervisor/API
 projection remains director-owned.
 
+L04 consumes the L02 contract matrix, Runtime owner evidence and the Capital
+exact-decimal leaf without taking their authority. It remains static,
+documentary, `UNWIRED` and non-sendable. L05 private truth and any later
+production composition remain separate phases and director-owned integration.
+
 ## Explicitly absent
 
 - private account reads, signed/test/live orders and exchange mutations;
@@ -75,6 +92,9 @@ projection remains director-owned.
 - a credential/key owner, exchange transport, private/account reader, signed
   validation call, runtime scheduler, durable retry store, execution event,
   reconciliation result or automatic mutation resubmission in L03.
+- an exchange-info/reference-price fetcher, mutable registry/cache, FX owner,
+  account/filter-count reader, proposal queue, Capital/Risk verdict, order
+  constructor, execution/reconciliation action or capital increase in L04.
 
 `LIVE_EXECUTION_NOT_IMPLEMENTED` remains mechanically enforced by the canonical
 Foundation execution barrier and the L01 regression proof.

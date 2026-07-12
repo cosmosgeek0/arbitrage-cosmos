@@ -1,17 +1,17 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `24`
+State generation: `25`
 
-Updated: 2026-07-12T20:20:33+0530
+Updated: 2026-07-12T21:40:35+0530
 
-Status: `PARKED` (D-LAUNCH-5: spine parked after Q07 acceptance; awaiting the director's shard merge)
+Status: `RESUMED_FOR_Q10` (D-LAUNCH-5 merge law satisfied for Q08/Q09; director board `0f2bb884daf5b67981ea04f38298d89c1a980de7` limits the spine to Q10 only, then park)
 Program: Q lane — deterministic research evidence, labels, models, calibration, drift and advisory inference.
 
 ## Frozen launch identity
 
 - Worktree: `/Users/cosmosgeek/Desktop/quant-edge-research-20260712`
 - Branch: `quant-edge-research-factory-20260712`
-- Current HEAD at generation-24 authoring: `22ab5bc8db94bf92883fdeac2a397ebf8c132ca0` (C7)
+- Current HEAD at generation-25 authoring: `8a5dd092b73ba0069a67f3a3bead0561f3269370` (director Q09 merge; descends from A7)
 - Origin: `git@github.com:cosmosgeek0/arbitrage-cosmos.git`
 - Canonical base: `7010499170e24b31c9c0be2c9d73a536e680c6fe`
 - Protocol SHA / current parent: `73e1a1ff7daa48df8dac45713fc5f106842edafc`
@@ -27,7 +27,12 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 
 - Last accepted phase: `Q07`
 - Latest director acceptance: `D-LAUNCH-1` (`9ca01537f4edda06ee566cd261e612d5c315fb76`, authentic launch digest); standing order `D-LAUNCH-2` (`84d2ff65fd8d2b200821126dd17b4ba75f3c131c`, continuous self-accepted execution with full evidenced loops, director audits at LANE_READY); `D-LAUNCH-3` (`cf37df4af0ef3724f8f3a145c6be3cdcc84799c0`, Q lane transferred to the Fable lead builder); `D-LAUNCH-5` amendment (`d0e34f0310ebb5ad67b9c7f1ed4785a49a4bb0f8`, director branch): the spine finishes and accepts Q07 only, then parks — Q08/Q09/Q14 are shard-owned in separate worktrees and Q10+ waits for the director's shard merge.
-- Current phase: none — spine `PARKED` per D-LAUNCH-5. Q08/Q09/Q14 are shard-owned in separate worktrees; Q10+ waits for the director's shard merge onto this branch.
+- Current phase: `Q10` resume authorized — the director's serial shard merges for Q08 and Q09 have landed on this branch and the board (`QL_PARALLEL_DAG.md` at director commit `0f2bb884daf5b67981ea04f38298d89c1a980de7`) sets the spine to Q10 ONLY, parking after. Q11 is shard-owned at base `8a5dd092…` in `~/Desktop/q11-survival`; Q14 is still `WORKING` in its shard, so any Q10 piece needing the Q14 validation factory is recorded `WAITING-Q14`, never reimplemented.
+- Director shard merges recorded at this generation:
+  - Q08 derivatives shard accepted at `4bac0892fd410d60edcf7b35f8ca59a5e0cf37c9` (build `4c9b02672aed7c02149fd7e37e9fd2ec5552107a`, scope-skip fix `6649749c700fbb6825f44e22bf551e82effea4d1`) and merged by the director in `c00de401b27f3d6cccc3f1e8968ad7578f3575ca`.
+  - Scope-guard merge-law fix `494d6ceacd9438f370b27f17b45ff8368179c5ee`: the Q08 per-commit shard scope test skips honestly on the merged lane branch and retains full power inside the shard worktree.
+  - Q09 regime shard accepted at `a3426e53731d65e8c1fd9b824f69b4e4644f398e` (build `8c5bf3486e3bab28fd8c1865cc607765b8877af3`) and merged by the director in `8a5dd092b73ba0069a67f3a3bead0561f3269370`.
+  - Confirmed merged-lane baseline at `8a5dd092…` on 2026-07-12: `.venv/bin/python -m pytest -q` → `1842 passed, 4 skipped` (the four skips are the Q08 shard scope-law tests, verifiable only inside the shard worktree), exit 0.
 - Last task: `quant/TASKS/Q07.md`; SHA-256 `11da284da20e5fea637c3794a3cb328b4b2b3bbe65ba97df52005976b334338d`; unchanged through C7/A7.
 - Checkpoint receipt: `quant/RECEIPTS/Q00.md`; blob `7ba41768ba747bbc3eddd1941f6f5d82985dc1ca`; SHA-256 `738dad4caac7cfac9ba8b7b84fb646ec1817c6f0eb34fc09daa60129ab1996c3`; immutable in checkpoint commit.
 - Acceptance receipt: `quant/RECEIPTS/Q00_ACCEPTANCE.md`; SHA-256 `c29c7646af5f284a88eca782beb7dbf636e6c6eb11dda25d1bccc03ea97385de`; immutable after this acceptance commit.
@@ -69,7 +74,7 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 - Q07 implementation commit C7: `22ab5bc8db94bf92883fdeac2a397ebf8c132ca0`; exact parent `d0573734e2e2ab5576863ca5fe6875d770dfe68a`; tree `919f86ce835dac86d9c534ff5734d4361c8198c4`.
 - Q07 acceptance receipt: `quant/RECEIPTS/Q07_ACCEPTANCE.md`; immutable in A7 after commit.
 - Q07 acceptance/state commit A7: the commit that first contains this generation-24 state and the acceptance receipt; exact parent C7; intentionally non-self-referential.
-- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `ACCEPTED`; Q03 `ACCEPTED`; Q04 `ACCEPTED`; Q05 `ACCEPTED`; Q06 `ACCEPTED`; Q07 `ACCEPTED`.
+- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `ACCEPTED`; Q03 `ACCEPTED`; Q04 `ACCEPTED`; Q05 `ACCEPTED`; Q06 `ACCEPTED`; Q07 `ACCEPTED`; Q08 `ACCEPTED+MERGED` (shard-owned receipts `quant/RECEIPTS/Q08.md`/`Q08_ACCEPTANCE.md`); Q09 `ACCEPTED+MERGED` (shard-owned receipts `quant/RECEIPTS/Q09.md`/`Q09_ACCEPTANCE.md`).
 
 ## Ownership and safety
 
@@ -174,7 +179,7 @@ Implementation C7 has 23 changed paths, all under `quant/**`. `TASKS/Q07.md` rem
 - `LIVE`: none. Q has no production integration, listener, data producer, model or authority.
 - `SHADOW`: none. No Q assessment service or champion/challenger is running.
 - `SYNTHETIC`: frozen protocol/product fixtures, Q01 deterministic config/RNG, Q02 golden vector, Q03 hash-only forward bridge fixtures and Q04 replay/golden book fixtures; never observed market evidence.
-- `RESEARCH`: locked offline package, eight-family hypothesis portfolio, one checksum-verified/disposable archive replay, a hash-only two-tier Event Atlas bootstrap, the Q04 fail-closed Spot/USD-M local-book reference model with deterministic replay, and the Q07 sixteen-feature §13.1 microstructure library with honest dispositions; no edge claim.
+- `RESEARCH`: locked offline package, eight-family hypothesis portfolio, one checksum-verified/disposable archive replay, a hash-only two-tier Event Atlas bootstrap, the Q04 fail-closed Spot/USD-M local-book reference model with deterministic replay, the Q07 sixteen-feature §13.1 microstructure library, the merged Q08 derivatives/Basis/cross-market library and the merged Q09 change/regime/anomaly/analog layer, all with honest dispositions; no edge claim.
 - `UNAVAILABLE`: real forward Q delivery, point-in-time instrument master, owner-annotation records, feature/label/model registries, trained/calibrated models, drift service and inference.
 - Money/order/capital/risk authority: `NONE` in every posture.
 
@@ -262,7 +267,7 @@ Implementation C7 has 23 changed paths, all under `quant/**`. `TASKS/Q07.md` rem
 
 ## Exact next task
 
-NONE — the spine is `PARKED` per D-LAUNCH-5 after Q07 acceptance A7. Do not start Q08, Q09, Q10 or Q14 here: Q08/Q09/Q14 belong to shard worktrees based on `24ccf58`, and Q10+ resumes only after the director serially merges accepted shards onto this branch (order Q07→Q08→Q09→Q14, full Q suite after each). On any future resume: read this state, the immutable receipts and the director's board, verify HEAD ancestry includes A7, and take the next activated task from the director. Never rewrite accepted Q00-Q07 work; never push.
+Activate and execute `Q10` — transparent and boosted model battery (factory §14/§20-Q10; launch Section 6 has no Q10-specific amendment beyond the Q-D challenger/probability-semantics discipline). Acceptance: all trials logged; complex challengers may honestly lose. Full evidenced self-accepted loop per D-LAUNCH-2: activation task → implement → focused tests → accumulated lane tests → adversarial review → corrections → immutable receipt in C10 → independent exact-commit verification → acceptance receipt in A10 → state update → PARK. Do not start Q11 (shard-owned at `8a5dd092…`), Q12, Q13 or Q14 paths (`quant/src/quant_edge/survival/**`, `quant/tests|generated/q11/**`, Q14 validation paths); any Q10 need for the Q14 validation factory is recorded `WAITING-Q14`. Never rewrite accepted Q00–Q09 work; never push.
 
 Next exact command (on resume only):
 
@@ -275,7 +280,7 @@ git status --short && git log -3 --format='%H %P %s' && shasum -a 256 quant/QUAN
 1. `STATE.md`, `MISSION.md`, `ARCHITECTURE.md` Part II, `DIRECTOR.md`.
 2. `QUANT_EDGE_RESEARCH_FACTORY_12H.md` and only launch Section 6.
 3. `EDGE_PROTOCOL_V1.md`, frozen schema/fixtures, and `quant/DIRECTIVE_INPUTS.lock`.
-4. This state, the immutable `quant/RECEIPTS/Q07.md`/`Q07_ACCEPTANCE.md` and the Q07 decision/design notes; the Q06 card/equivalence law controls the Q07 features.
+4. This state, the immutable `quant/RECEIPTS/Q07.md`–`Q09_ACCEPTANCE.md` and the Q07–Q09 decision/design notes; the Q06 card/equivalence law controls all feature-layer work.
 5. Q00 reuse matrix and Q01 framework/security docs are inputs only; do not redo accepted work or regenerate accepted evidence unless exact code/input identity changed.
 
 ## Work not to repeat
@@ -297,7 +302,8 @@ git status --short && git log -3 --format='%H %P %s' && shasum -a 256 quant/QUAN
 - Do not rerun or rewrite accepted Q06; Q07 is the only current phase.
 - Do not implement Q08 derivatives features or models during Q07.
 - Do not rewrite either immutable Q07 receipt after A7; Q07 is accepted.
-- The spine is PARKED (D-LAUNCH-5): Q08/Q09/Q14 belong to shard worktrees and Q10+ waits for the director's shard merge; do not begin them here.
+- The Q08 and Q09 shard merges are landed and accepted: never rewrite, rebase or "clean up" the merged shard history, receipts or code; the Q08 shard scope tests legitimately skip on this branch (494d6ce).
+- Q11 (survival) is shard-owned at base `8a5dd092…`; Q14 (validation factory) is shard-owned and `WORKING`; Q12/Q13 wait for director order after the Q11/Q14 merges. Do not begin any of them here; the spine executes Q10 only, then parks.
 - Do not rewrite either immutable Q04 receipt after A4.
 - After C5, do not rewrite `quant/RECEIPTS/Q05.md`; verify the exact commit and create a separate acceptance receipt.
 - Do not implement Q06 features or models during Q05.

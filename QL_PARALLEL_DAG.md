@@ -5,7 +5,7 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 | Packet | Worktree | Branch | Base SHA | State |
 | --- | --- | --- | --- | --- |
 | Q spine Q00–Q06 | quant-edge-research-20260712 | quant-edge-research-factory-20260712 | 73e1a1f | ACCEPTED (Q06 @ 24ccf58) — spine PARKED, do not resume |
-| Q07 microstructure | ~/Desktop/q07-microstructure | q07-microstructure-20260712 | 24ccf58 | READY |
+| Q07 microstructure | SPINE-OWNED (shard retired 2026-07-12; spine was already WORKING Q07 at d057373) | quant-edge-research-factory-20260712 | 24ccf58 | WORKING on spine; spine STOPS after Q07 acceptance |
 | Q08 derivatives | ~/Desktop/q08-derivatives | q08-derivatives-20260712 | 24ccf58 | READY |
 | Q09 regime | ~/Desktop/q09-regime | q09-regime-20260712 | 24ccf58 | READY |
 | Q14 validation-infra | ~/Desktop/q14-validation-infra | q14-validation-infra-20260712 | 24ccf58 | READY |

@@ -1,8 +1,8 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `22`
+State generation: `23`
 
-Updated: 2026-07-12T19:32:22+0530
+Updated: 2026-07-12T20:14:41+0530
 
 Status: `WORKING`
 Program: Q lane — deterministic research evidence, labels, models, calibration, drift and advisory inference.
@@ -11,7 +11,7 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 
 - Worktree: `/Users/cosmosgeek/Desktop/quant-edge-research-20260712`
 - Branch: `quant-edge-research-factory-20260712`
-- Current HEAD at generation-22 authoring: `24ccf5880cbce8b1ee81ddd7d33f7c9c7271aacd`
+- Current HEAD at generation-23 authoring: `d0573734e2e2ab5576863ca5fe6875d770dfe68a`
 - Origin: `git@github.com:cosmosgeek0/arbitrage-cosmos.git`
 - Canonical base: `7010499170e24b31c9c0be2c9d73a536e680c6fe`
 - Protocol SHA / current parent: `73e1a1ff7daa48df8dac45713fc5f106842edafc`
@@ -26,7 +26,7 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 ## Phase position
 
 - Last accepted phase: `Q06`
-- Latest director acceptance: `D-LAUNCH-1` (`9ca01537f4edda06ee566cd261e612d5c315fb76`, authentic launch digest); standing order `D-LAUNCH-2` (`84d2ff65fd8d2b200821126dd17b4ba75f3c131c`, continuous self-accepted execution with full evidenced loops, director audits at LANE_READY); `D-LAUNCH-3` (`cf37df4af0ef3724f8f3a145c6be3cdcc84799c0`, Q lane transferred to the Fable lead builder).
+- Latest director acceptance: `D-LAUNCH-1` (`9ca01537f4edda06ee566cd261e612d5c315fb76`, authentic launch digest); standing order `D-LAUNCH-2` (`84d2ff65fd8d2b200821126dd17b4ba75f3c131c`, continuous self-accepted execution with full evidenced loops, director audits at LANE_READY); `D-LAUNCH-3` (`cf37df4af0ef3724f8f3a145c6be3cdcc84799c0`, Q lane transferred to the Fable lead builder); `D-LAUNCH-5` amendment (`d0e34f0310ebb5ad67b9c7f1ed4785a49a4bb0f8`, director branch): the spine finishes and accepts Q07 only, then parks — Q08/Q09/Q14 are shard-owned in separate worktrees and Q10+ waits for the director's shard merge.
 - Current phase: `Q07` (`WORKING`)
 - Current task: `quant/TASKS/Q07.md`
 - Current task SHA-256: `11da284da20e5fea637c3794a3cb328b4b2b3bbe65ba97df52005976b334338d`
@@ -65,8 +65,10 @@ Program: Q lane — deterministic research evidence, labels, models, calibration
 - Q06 implementation commit C6: `3bf9e2a775c0aa91a29ab2f67c27544b9ddc6602`; exact parent `8f0af66df40843c8ca0fabca065ebd1b38df5686`; tree `e183d53c1cc0d2866211824cde020e6149147a85`.
 - Q06 acceptance receipt: `quant/RECEIPTS/Q06_ACCEPTANCE.md`; SHA-256 `8b2d558b003e5eb9f17aabf80eb3d10efac8ff2478b29d032c2b3c4f5ec016d3`.
 - Q06 acceptance/state commit A6: `24ccf5880cbce8b1ee81ddd7d33f7c9c7271aacd`; exact parent C6.
-- Q07 activation/state commit: the commit containing this generation-22 state and task; intentionally non-self-referential.
-- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `ACCEPTED`; Q03 `ACCEPTED`; Q04 `ACCEPTED`; Q05 `ACCEPTED`; Q06 `ACCEPTED`; Q07 `WORKING`, with no implementation or receipt yet.
+- Q07 activation/state commit: `d0573734e2e2ab5576863ca5fe6875d770dfe68a`; exact parent A6.
+- Q07 implementation receipt: `quant/RECEIPTS/Q07.md`; immutable in C7 after commit.
+- Q07 implementation commit C7: the commit that first contains this generation-23 state and the immutable Q07 receipt; intentionally non-self-referential.
+- Acceptance state: Q00 `ACCEPTED`; Q01 `ACCEPTED`; Q02 `ACCEPTED`; Q03 `ACCEPTED`; Q04 `ACCEPTED`; Q05 `ACCEPTED`; Q06 `ACCEPTED`; Q07 `COMPLETE`, receipt authored, awaiting independent C7 verification and acceptance A7.
 
 ## Ownership and safety
 
@@ -155,12 +157,22 @@ Implementation C5 has 28 changed paths, all under `quant/**`. `TASKS/Q05.md` rem
 
 Implementation C6 has 24 changed paths, all under `quant/**`. `TASKS/Q06.md` remains unchanged from activation. The two root directives remain preserved untracked owner inputs and are never staged.
 
+## Q07 implementation inventory
+
+- Decision/design: `DECISIONS/Q07-001-MICROSTRUCTURE-LIBRARY.md`, `docs/Q07_MICROSTRUCTURE_DESIGN.md`.
+- Package/script: seven `src/quant_edge/micro/*.py` modules and `scripts/q07_micro_campaign.py`.
+- Fixture/evidence: `fixtures/q07_micro_golden_v1.json` and two `generated/q07/micro_campaign.v1.*` artifacts; all synthetic, deterministic and hash-bound.
+- Tests: five unit, one property and two contract test files (84 focused tests).
+- Durable completion: immutable `RECEIPTS/Q07.md` and this generation-23 state in C7.
+
+Implementation C7 has 23 changed paths, all under `quant/**`. `TASKS/Q07.md` remains unchanged from activation (`11da284d…`). The two root directives remain preserved untracked owner inputs and are never staged.
+
 ## Q-lane posture map
 
 - `LIVE`: none. Q has no production integration, listener, data producer, model or authority.
 - `SHADOW`: none. No Q assessment service or champion/challenger is running.
 - `SYNTHETIC`: frozen protocol/product fixtures, Q01 deterministic config/RNG, Q02 golden vector, Q03 hash-only forward bridge fixtures and Q04 replay/golden book fixtures; never observed market evidence.
-- `RESEARCH`: locked offline package, eight-family hypothesis portfolio, one checksum-verified/disposable archive replay, a hash-only two-tier Event Atlas bootstrap and the Q04 fail-closed Spot/USD-M local-book reference model with deterministic replay; no edge claim.
+- `RESEARCH`: locked offline package, eight-family hypothesis portfolio, one checksum-verified/disposable archive replay, a hash-only two-tier Event Atlas bootstrap, the Q04 fail-closed Spot/USD-M local-book reference model with deterministic replay, and the Q07 sixteen-feature §13.1 microstructure library with honest dispositions; no edge claim.
 - `UNAVAILABLE`: real forward Q delivery, point-in-time instrument master, owner-annotation records, feature/label/model registries, trained/calibrated models, drift service and inference.
 - Money/order/capital/risk authority: `NONE` in every posture.
 
@@ -200,22 +212,9 @@ Implementation C6 has 24 changed paths, all under `quant/**`. `TASKS/Q06.md` rem
 - Q01: clean locked env (CPython 3.13.14, 51 entries), Ruff/mypy clean, focused `88 passed` at `96.71%` branch, deterministic seed fixture, registry semantics, protocol `22/22`, exact-C verification and archive re-run all passed.
 - Q02: `602 passed` at `100.00%`; golden partition/manifest replay `2/2`; hostile store proofs; independent `SEAL`; exact-C2 verification and archive re-run passed.
 - Q03: focused `430`/accumulated `1032` at `100.00%`; real BNBUSDT 2017-11-06 sample (832 rows) imported and disposed with hash-only evidence; byte-identical campaigns; adversarial seal; exact-C3 verification and archive re-run passed.
-- Q04 pinned `uv 0.11.28 lock --check`: exit 0, 51 resolved packages; no dependency change.
-- Q04 Ruff lint/format and strict mypy: exit 0, 74 files including the campaign script.
-- Q04 focused suite: `140 passed`; `quant_edge.book` 1,020 statements / 302 branches, `100.00%`.
-- Q04 accumulated Q suite: `1172 passed`; 5,223 statements / 1,864 branches, `100.00%`.
-- Q04 property campaigns: seed `20260712`; 60 Spot + 60 USD-M upstream-truth schedules prove eligibility only in `COMPLETE`, `SYNC_VALIDATED`-only completion and settled equality with exchange truth.
-- Q04 golden fixture `32e13493…6aec`; campaign JSON `e9cd85c0…7334`; campaign Markdown `321cb6c2…14b9e`; byte-identical across separate processes with different CWD/TZ/hash seed and equal to in-test regeneration.
-- Q04 accumulated Q00 scope `6/6`, protocol `22/22`, `npm test` exit 0 with unchanged baseline subtotals.
-- Q04 adversarial review: replay-counter, stream-id and unbounded-intent-window findings corrected with regression tests; no remaining known blocker at receipt authoring.
-- Q05 pinned `uv 0.11.28 lock --check`: exit 0, 51 resolved packages; no dependency change.
-- Q05 Ruff lint/format and strict mypy: exit 0, 95 files including both campaign scripts.
-- Q05 focused suite: `126 passed`; `quant_edge.labels` 1,521 statements / 542 branches, `100.00%`; the §11.7 seven-law matrix passes one-for-one.
-- Q05 accumulated Q suite: `1298 passed`; 6,744 statements / 2,406 branches, `100.00%`.
-- Q05 property campaigns: seed `20260712`; 60+60+60+80 examples over outcome determinism/censoring, post-cutoff invariance, control non-overlap/bucket law and stage totality.
-- Q05 golden fixture `f36a9b08…fe47`; campaign JSON `9a5e5dcc…0c7e`; campaign Markdown `e6daad17…d6b9`; byte-identical across separate processes with different CWD/TZ/hash seed and equal to in-test regeneration.
-- Q05 accumulated Q00 scope `6/6`, protocol `22/22`, `npm test` exit 0 with unchanged baseline.
-- Q05 adversarial review: pre-validation AttributeError, dead residual branches and control-pool duplicate-id findings corrected with regression tests; no remaining known blocker at receipt authoring.
+- Q04–Q05 measurement detail is compacted here; exact commands, counts and digests remain in the immutable receipts `quant/RECEIPTS/Q04.md`–`Q05_ACCEPTANCE.md`.
+- Q04: focused `140`/accumulated `1172` at `100.00%` (5,223/1,864); 74 files Ruff/mypy clean; seeded Spot/USD-M truth-schedule properties; fixture `32e13493…6aec` and campaign artifacts byte-identical across CWD/TZ/hash-seed; scope `6/6`, protocol `22/22`, npm unchanged; replay-counter/stream-id/intent-window findings corrected.
+- Q05: focused `126`/accumulated `1298` at `100.00%` (6,744/2,406); 95 files clean; §11.7 seven-law matrix one-for-one; fixture `f36a9b08…fe47` and campaign artifacts byte-identical across hostile env; scope `6/6`, protocol `22/22`, npm unchanged; pre-validation/dead-branch/duplicate-pool findings corrected.
 - Q06 pinned `uv 0.11.28 lock --check`: exit 0, 51 resolved packages; no dependency change.
 - Q06 Ruff lint/format and strict mypy: exit 0, 112 files including all campaign scripts.
 - Q06 focused suite: `74 passed`; `quant_edge.features` 1,085 statements / 298 branches, `100.00%`.
@@ -224,6 +223,14 @@ Implementation C6 has 24 changed paths, all under `quant/**`. `TASKS/Q06.md` rem
 - Q06 golden fixture `06c81655…abb3`; campaign JSON `51b87e70…da0c`; Markdown `622d580f…3a42`; byte-identical across CWD/TZ/hash-seed changes and equal to in-test regeneration; measured EWMA drift 2 ulp against declared 64.
 - Q06 accumulated Q00 scope `6/6`, protocol `22/22`, `npm test` exit 0 unchanged.
 - Q06 adversarial review: batch-EWMA unit error, feature-id separator, slots-violating class and dead defensive branches corrected with regression tests; no remaining known blocker at receipt authoring.
+- Q07 pinned `uv 0.11.28 lock --check`: exit 0, 51 resolved packages; no dependency change.
+- Q07 Ruff lint/format-check and strict mypy: exit 0, 128 files including all campaign scripts.
+- Q07 focused suite: `84 passed`; `quant_edge.micro` 887 statements / 202 branches, `100.00%`.
+- Q07 accumulated Q suite: `1456 passed`; 8,716 statements / 2,906 branches, `100.00%`.
+- Q07 property campaigns: seed `20260712`; 60-example suites prove exact (0-ulp) streaming/batch agreement for all 16 features over randomized quotes/ladders/trades/bars, boundedness laws, the signed-imbalance window law and the OFI pure-size-pressure sign law.
+- Q07 golden fixture `d8308437…4ce3`; campaign JSON `dbb303be…a950`; Markdown `d1ab9605…7032`; byte-identical across CWD/TZ/hash-seed changes and equal to in-test regeneration; measured drift 0 ulp everywhere; measured update costs within declared bounds; wall-time evidence is stdout-only.
+- Q07 accumulated Q00 scope `6/6`, protocol `22/22`, `npm test` exit 0 unchanged.
+- Q07 adversarial review: dead defensive branches under strict-ordering invariants, unsorted card failure modes, a streaming Kyle-slope missing-quote divergence and initially missing task deliverables (`trade_dispersion:v1`, stdout wall-time evidence) corrected with regression tests; no remaining known blocker at receipt authoring.
 - Independent exact C6 verifier: exact parent/ancestry, 24-path scope, regular modes, frozen/accepted emptiness, task/receipt/state/artifact blob hashes and `git diff-tree --check` all pass; tree `e183d53c1cc0d2866211824cde020e6149147a85`.
 - Archive-derived C6 SHA-256 `50c15a2fad7f158228cfb0061525e547a2abb7c3ca0ce3fe199b55ac5c5f0f27`; clean locked install, Ruff, strict mypy, Q `1372` at `100.00%` (7,829/2,704) and byte-identical artifact regeneration all pass.
 - Independent exact C5 verifier: exact parent/ancestry, 28-path `quant/**` scope, regular modes, frozen/accepted emptiness, task/receipt/state/artifact blob hashes and `git diff-tree --check` all pass; tree `f59734a85329a55aa76d98432b76c090646c9206`.
@@ -251,12 +258,12 @@ Implementation C6 has 24 changed paths, all under `quant/**`. `TASKS/Q06.md` rem
 
 ## Exact next task
 
-Execute `quant/TASKS/Q07.md`: record the microstructure design note, implement the `quant_edge.micro` package (L1/book/flow families with cards, equivalence, failure cases, deterministic update-cost benchmarks and the honest §13.1 disposition table), run the full evidenced loop, create implementation commit C7 with the immutable `quant/RECEIPTS/Q07.md`, independently verify C7, then create acceptance commit A7 with `quant/RECEIPTS/Q07_ACCEPTANCE.md` and a state update. Never rewrite accepted Q00-Q06 work.
+C7 (the commit first containing this generation-23 state and the immutable `quant/RECEIPTS/Q07.md`) exists once committed. Independently verify C7 exactly (parent `d0573734e2…`, ancestry, 23-path `quant/**` scope, regular modes, frozen/accepted-path emptiness, blob hashes, archive-derived clean-environment re-run), then create acceptance commit A7 with `quant/RECEIPTS/Q07_ACCEPTANCE.md` and a generation-24 state. After A7: STOP CLEANLY and PARK per D-LAUNCH-5 — do not start Q08, Q09, Q10 or Q14 (shard-owned or waiting on the director's shard merge). Never rewrite accepted Q00-Q06 work.
 
 Next exact command:
 
 ```bash
-git status --short && git log -1 --format='%H %P' && shasum -a 256 quant/TASKS/Q07.md quant/QUANT_EDGE_BUILD_STATE.md
+git status --short && git log -1 --format='%H %P' && shasum -a 256 quant/TASKS/Q07.md quant/RECEIPTS/Q07.md quant/QUANT_EDGE_BUILD_STATE.md
 ```
 
 ## Fresh-session read order
@@ -264,7 +271,7 @@ git status --short && git log -1 --format='%H %P' && shasum -a 256 quant/TASKS/Q
 1. `STATE.md`, `MISSION.md`, `ARCHITECTURE.md` Part II, `DIRECTOR.md`.
 2. `QUANT_EDGE_RESEARCH_FACTORY_12H.md` and only launch Section 6.
 3. `EDGE_PROTOCOL_V1.md`, frozen schema/fixtures, and `quant/DIRECTIVE_INPUTS.lock`.
-4. This state, `quant/TASKS/Q07.md`, both immutable Q06 receipts and the Q06 decision/design notes (the card/equivalence law controls Q07 features).
+4. This state, `quant/TASKS/Q07.md`, the immutable `quant/RECEIPTS/Q07.md` and the Q07 decision/design notes; the Q06 card/equivalence law controls the Q07 features.
 5. Q00 reuse matrix and Q01 framework/security docs are inputs only; do not redo accepted work or regenerate accepted evidence unless exact code/input identity changed.
 
 ## Work not to repeat
@@ -285,6 +292,8 @@ git status --short && git log -1 --format='%H %P' && shasum -a 256 quant/TASKS/Q
 - After C6, do not rewrite `quant/RECEIPTS/Q06.md`; verify the exact commit and create a separate acceptance receipt.
 - Do not rerun or rewrite accepted Q06; Q07 is the only current phase.
 - Do not implement Q08 derivatives features or models during Q07.
+- After C7, do not rewrite `quant/RECEIPTS/Q07.md`; verify the exact commit and create a separate acceptance receipt.
+- After A7, the spine PARKS (D-LAUNCH-5): Q08/Q09/Q14 belong to shard worktrees and Q10+ waits for the director's shard merge; do not begin them here.
 - Do not rewrite either immutable Q04 receipt after A4.
 - After C5, do not rewrite `quant/RECEIPTS/Q05.md`; verify the exact commit and create a separate acceptance receipt.
 - Do not implement Q06 features or models during Q05.

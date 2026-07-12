@@ -31,6 +31,12 @@ const CAPITAL_DECIMAL_CONSUMERS = new Map([
     'normalizeExactDecimal',
     'normalizeNonNegativeExactDecimal',
   ])],
+  [path.resolve('server/src/liveEdge/adapters/durableMutationJournal/exact.ts'), new Set([
+    'NonNegativeDecimal',
+    'addExactDecimals',
+    'compareExactDecimals',
+    'normalizeNonNegativeExactDecimal',
+  ])],
 ]);
 const CANONICAL_BARRIER_SOURCE = path.resolve('server/src/systemIntegration/contracts/constants.ts');
 const BINANCE_DOCUMENTARY_DATA_SOURCE = path.resolve(
@@ -57,11 +63,19 @@ const FORBIDDEN_NODE_MODULES = new Set([
   'https',
   'net',
   'process',
+  'sqlite',
   'tls',
   'timers',
   'worker_threads',
 ]);
 const FORBIDDEN_TRANSPORT_PACKAGES = new Set(['axios', 'undici', 'ws']);
+const FORBIDDEN_STORAGE_PACKAGES = new Set([
+  'better-sqlite3',
+  'level',
+  'leveldown',
+  'levelup',
+  'sqlite3',
+]);
 const FORBIDDEN_MUTATION_NAMES = new Set([
   'allocate',
   'allocateCapital',
@@ -178,6 +192,7 @@ function forbiddenImportReason(specifier) {
     || specifier.startsWith(`${moduleRoot}/`)
   )) return `imports ambient Node boundary ${specifier}`;
   if (FORBIDDEN_TRANSPORT_PACKAGES.has(moduleRoot)) return `imports network transport ${specifier}`;
+  if (FORBIDDEN_STORAGE_PACKAGES.has(moduleRoot)) return `imports duplicate persistence ${specifier}`;
   if (moduleRoot.startsWith('@aws-sdk/')) return `imports cloud transport ${specifier}`;
 
   const normalized = specifier.replaceAll('\\', '/');

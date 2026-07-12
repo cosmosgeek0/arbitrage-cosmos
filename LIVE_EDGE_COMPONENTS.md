@@ -72,6 +72,23 @@ authority.
 | Private waiting-evidence guard | `server/src/liveEdge/adapters/binancePrivateTruth/waiting.ts` | `BUILT_AND_TESTED` | pure hand-off utility | Canonically builds and rechecks exact-namespaced L04 symbol/instrument evidence against the target-bound private projection, full lifecycle witnesses, permissions and per-product reconciliation cuts on every decision; reconnect/expiry/change invalidates, `persistenceProven=false`, and every result remains non-sendable |
 | Offline private-truth proofs | `server/test/liveEdge/privateTruth/**` | focused deterministic suite | test-only | Synthetic official-shaped facts, independent freshness, product-specific lifecycles, hostile-data and static/dynamic purity proofs; network-free and secret-free |
 
+## L06 work-in-progress audit checkpoint
+
+| Component | Path | Lane build proof | Integration state | Authority / limitation |
+| --- | --- | --- | --- | --- |
+| Durable mutation journal value adapter | `server/src/liveEdge/adapters/durableMutationJournal/journal.ts`, `types.ts`, `exact.ts` | `WORKING_FOCUSED_VERIFIED` | `UNWIRED_NOT_ACCEPTED` | Constructs/replays only immutable injected journal values; owns no database, Ledger write, execution, retry or reconciliation verdict |
+| Canonical Ledger CAS protocol | `validateMutationAppendRequest`, `applyMutationAppendRequest`, request/ACK contracts | `WORKING_FOCUSED_VERIFIED` | injected ACK only; I00 CAS deferred | Exact expected-version append with injected acknowledgement validation; `persistenceProven=false`, no production persistence claim |
+| L03/L05 observation lineage | content-bound request-attempt and Spot/USD-M event-marker adapters | `WORKING_FOCUSED_VERIFIED` | comparison integrity only | Reuses accepted L03 attempts and L05 realm/generation/event/content/time revision helpers; unkeyed injected commitments are not signatures or source attestations |
+| Foundation reconciliation projection | `buildFoundationReconciliationObservation` | `WORKING_FOCUSED_VERIFIED` | `UNWIRED`; fractional bridge deferred to I00 | Consumes a bounded canonical Foundation result and exact L05 post-action result/product cuts, selects one matching leg and derives only an L06 projection; safe-integer intersection only, caller cannot author effect, no arbitrary external refs |
+| Section 7 capital/latency/regime/recording seams | `server/src/liveEdge/adapters/durableMutationJournal/section7.ts` | `WORKING_FOCUSED_VERIFIED` | injected evidence only | Fixed 10-USDT ceiling cannot rise; timing preserves clock-domain boundaries; empirical region benchmark remains not performed; regime advisory and Runtime recording owners stay canonical |
+| Offline journal/race/recovery proofs | `server/test/liveEdge/mutationJournal/**` | focused `65/65`; accumulated/full gates pending | test-only | Persist failures, CAS/replay, event/HTTP permutations, fill/reconciliation conflicts, provenance, Section 7 and static purity; network-free |
+
+The director resolved both requests in
+`live-edge-receipts/patches/L06-canonical-ledger-cas.request.md` and
+`live-edge-receipts/patches/L06-foundation-quantity-bridge.request.md` as
+`DEFERRED_TO_I00` in D0011. They do not block injected-port L06 acceptance;
+canonical persistence and fractional Foundation comparison remain unclaimed.
+
 ## Director-owned integration still required
 
 - owner-approved Basis/Volume advisory intake;
@@ -120,6 +137,10 @@ projection remain director-owned.
 - a credential loader, private REST reader, listen-key value, socket, stream
   scheduler, account cache, reconciliation verdict, Margin action, test/live
   order, capital change or generic cross-product readiness owner in L05.
+- a database, SQLite connection, Ledger writer, outbox daemon, exchange call,
+  private query, retry authority, dispatcher consume lease, Foundation verdict,
+  fractional quantity bridge, empirical region benchmark or production wiring
+  in L06.
 
 `LIVE_EXECUTION_NOT_IMPLEMENTED` remains mechanically enforced by the canonical
 Foundation execution barrier and the L01 regression proof.

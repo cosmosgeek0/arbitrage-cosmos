@@ -2,7 +2,7 @@
 
 Schema version: 1
 
-Generation: 8
+Generation: 9
 
 Program: `LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H`
 
@@ -84,11 +84,11 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 
 ## Working-tree checkpoint
 
-- Expected tracked modifications after this state-transition commit: none.
+- Expected tracked modifications after this WIP-base commit: none.
 - Expected untracked preserved owner inputs: `DIRECTOR_Q_L_TWO_LANE_LAUNCH.md`, `LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md`.
-- Partial implementation files: none.
+- Partial implementation: L06 adapter/tests/decision/manifest checkpoint; focused gate green, accumulated/full/receipt gates pending.
 - Active workers: none.
-- No L06 implementation file exists at phase start.
+- Interrupted L06 work was adversarially audited; `server/src/liveEdge/index.ts` composition export was dropped and stale reconciliation fixtures/owner bindings were corrected before this base.
 
 ## Canonical reuse
 
@@ -110,6 +110,7 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 - L03 lane-ready: exact signed-contract gate, independently testable unsigned construction, injected HMAC signer boundary, UTC/monotonic clock estimator, deterministic IDs, V2 rate/cooldown reducer, ambiguity blocker and safe failure projection are `BUILT_AND_TESTED` but `UNWIRED`.
 - L04 lane-ready: exact Runtime-owned instrument/filter normalization, closed product schemas, receipt-stable semantic plus time-bound evidence revisions, exact non-increasing USDT sizing and full waiting-evidence invalidation are `BUILT_AND_TESTED` but `UNWIRED` and always non-sendable.
 - L05 lane-ready: exact injected private-fact normalization, closed permissions/query coverage, independent Spot/USD-M/Margin completeness, product-specific lifecycle reducers, canonical comparison hand-off and waiting guards are `BUILT_AND_TESTED` but `UNWIRED`, evidence-only and always non-sendable.
+- L06 WIP: immutable injected journal values, exact append/CAS request validation, injected-ACK validation with `persistenceProven=false`, race/idempotency reduction, Foundation hand-off and Section 7 seams pass the focused `65/65` gate; accumulated/full/receipt acceptance remains pending.
 - Synthetic only: capital mandate and reconciliation/execution fixtures.
 - Unavailable in canonical convergence: authenticated production private acquisition, signed validation, exchange-observed fills/reconciliation, durable mutation/recovery mechanics and live execution.
 - Mechanically blocked: `LIVE_EXECUTION_NOT_IMPLEMENTED` remains enforced.
@@ -153,6 +154,8 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 - L05 cached scope/frozen/diff/ancestry gates: pass; exactly 33 implementation paths.
 - L05 final independent product, lifecycle, state-integrity, waiting, secret/purity, documentation and whole-phase acceptance audits: `NO_ACCEPTANCE_BLOCKERS`.
 - Two overlapping L05 runs invalidated by worker build cleanup are not counted; every final acceptance gate was rerun with workers quiescent and passed.
+- L06 takeover audit: initial interrupted run 52/65 with 13 real failures; stale owner-evidence fixture and identity-conflict test were corrected without weakening validators.
+- L06 WIP-base rerun: server build exit 0; focused mutation journal 65/65; import-purity 4/4. Accumulated lane, protocol, `npm test` and `npm run test:all` remain pending and are not claimed.
 - Only existing Vite chunk-size warning observed.
 
 ## Runtime, deployment and secret boundary
@@ -181,13 +184,14 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 - L03 is accepted `LANE_READY` / `BUILT_AND_TESTED` / `UNWIRED` and must not be repeated.
 - L04 is accepted `LANE_READY` / `BUILT_AND_TESTED` / `UNWIRED` and must not be repeated.
 - L05 is accepted `LANE_READY` / `BUILT_AND_TESTED` / `UNWIRED` and must not be repeated.
+- D0011 records both L06 shared-owner requests as director-resolved `DEFERRED_TO_I00`; they do not block injected-port L06 and authorize no shared edits.
 - Frozen protocol own-property/fixture/hash-coverage gaps remain unchanged; D0003 requests a future director revision while the L01 consumer hardens locally.
 - Production Basis/Volume assessment ingress, production component identity/policy binding, package scripts and supervisor/API projection remain director-owned.
-- L06 is active. L07-L17 are untouched.
+- L06 is active from an adversarially corrected WIP base. L07-L17 are untouched.
 
 ## Exact next task
 
-Implement only `live-edge-receipts/TASKS/L06.md`: build a pure canonical-Ledger adapter protocol and append-only mutation reducer proving persist-before-send, exact identity lineage, event/HTTP race convergence, idempotency and ambiguity hand-off over injected evidence, with no second store, actual persistence, exchange call, signed/test/live order, blind retry or duplicate Foundation/System Integration authority.
+Finish only `live-edge-receipts/TASKS/L06.md`: add the missing adversarial capacity, cancellation, PENDING_NEW, clock-domain, race and ACK-reason proofs; run the accumulated/protocol/standard/full gates; correct findings; create the implementation/receipt/state acceptance sequence before L07.
 
 Exact first command on resume:
 

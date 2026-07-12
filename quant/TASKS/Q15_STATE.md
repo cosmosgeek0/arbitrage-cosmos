@@ -1,10 +1,10 @@
 # Q15 shard — durable state
 
-State generation: `2`
+State generation: `3`
 
 Updated: 2026-07-13
 
-Status: `READY_FOR_INDEPENDENT_COMMIT_VERIFICATION`
+Status: `ACCEPTED`
 
 ## Frozen shard identity
 
@@ -16,7 +16,7 @@ Status: `READY_FOR_INDEPENDENT_COMMIT_VERIFICATION`
   `QL_PARALLEL_DAG.md`.
 - Owner directive copies remain untracked and byte-pinned; no push is permitted.
 
-## Accepted implementation candidate
+## Accepted implementation
 
 - C15: `6b18928c282f19128a033ed33910754cbdc2cbe0`
 - C15 tree: `04f78c5100f12979311cfb0c0608c2baab753863`
@@ -24,6 +24,14 @@ Status: `READY_FOR_INDEPENDENT_COMMIT_VERIFICATION`
 - C15 has 24 changed paths, all inside the Q15 exclusive write set.
 - Generated experiment evidence is pinned to C15 and all final gates are recorded
   in `quant/RECEIPTS/Q15.md`.
+- Receipt/evidence R15: `e1e1238b4af4be01b875a29667b76f1b8a81e565`
+- R15 tree: `693fc2b4f2c9a7f125258afc401fc6efb1bd9fb4`
+- R15 exact parent: C15
+- Immutable receipt SHA-256:
+  `baa20476a37867bb5d6fcef062918d50f80c5058d1be4a63ba6163ace24f346a`
+- Acceptance commit A15 is the commit that first contains
+  `quant/RECEIPTS/Q15_ACCEPTANCE.md` and this generation-3 state; intentionally
+  non-self-referential.
 
 ## Measured final candidate
 
@@ -36,7 +44,6 @@ Status: `READY_FOR_INDEPENDENT_COMMIT_VERIFICATION`
 
 ## Exact next step
 
-Commit this C15-pinned immutable receipt/state, independently verify its exact
-parent, scope, blobs, generated hashes and gates, then write
-`quant/RECEIPTS/Q15_ACCEPTANCE.md`, advance this state to generation 3 `ACCEPTED`,
-commit the acceptance record and stop. Never merge or push from this shard.
+None for this shard. Q15 is `ACCEPTED`; stop per D-LAUNCH-5. The director alone may
+merge the accepted commit. Never merge or push from this shard, and never rewrite
+the immutable Q15 receipts.

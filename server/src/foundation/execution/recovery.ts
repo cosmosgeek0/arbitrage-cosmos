@@ -46,9 +46,25 @@ export function recommendExecutionRecovery(
           ),
         );
       }
+      if (leg.lifecycle === 'SUBMITTING') {
+        output.push(
+          recommendation(
+            'VERIFY_AMBIGUOUS_ORDER',
+            'NEUTRAL',
+            'Submission started before the durable acknowledgement cut; cold recovery must look up this deterministic client-order ID before progression.',
+            phase,
+            key,
+            leg.definition.clientOrderId,
+          ),
+        );
+      }
       if (
         phase === 'OPEN' &&
-        (leg.lifecycle === 'ACKNOWLEDGED' || leg.lifecycle === 'PARTIALLY_FILLED')
+        (
+          leg.lifecycle === 'ACKNOWLEDGED' ||
+          leg.lifecycle === 'PARTIALLY_FILLED' ||
+          leg.lifecycle === 'CANCEL_PENDING'
+        )
       ) {
         output.push(
           recommendation(

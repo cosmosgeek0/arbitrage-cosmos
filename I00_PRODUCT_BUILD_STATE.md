@@ -104,3 +104,7 @@ Files a fresh director must read, in order:
 8. this state file and the five generated closure reports
 
 Work that must not be repeated: do not re-fan-in the four accepted IP packets; do not rewrite historical packet pins or receipts; do not weaken empty-scope failure; do not hand-edit generated reports; do not treat packet-local ops scope as a fan-in gate; do not mount production routes/startup/packages/UI in this worker; do not claim Q/L, private, signed, deployed, browser-visible, canary, or live truth from fixture or artifact evidence.
+
+## Director board sync (D-LAUNCH-10, 2026-07-13)
+
+Live board/worktrees/owners are maintained in Main QL_PARALLEL_DAG.md + QL_DIRECTOR_STATE.md (MERGE RUNBOOK + D-LAUNCH-1..10 log; current-main 55e008f). Q frozen 02b4ecc. L: L00-L08+L08.1/2+L10+L14 merged; L09 PARKED on F-BRIDGE (D-LAUNCH-9); L11 acceptance in flight. IP: 4 packets prestage-ready; assurance A-CORE + 5 satellites in flight with D-LAUNCH-10 ownership exclusions. Fan-in remains director-serial with changed-path ownership scans before every merge.

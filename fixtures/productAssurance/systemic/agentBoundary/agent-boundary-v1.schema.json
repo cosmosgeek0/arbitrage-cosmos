@@ -1,0 +1,459 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ip-assurance-agent-boundary-v1",
+  "title": "IP-ASSURANCE S6 narrow agent-boundary contracts",
+  "$defs": {
+    "Id": { "type": "string", "pattern": "^[A-Za-z0-9_.:/-]{1,160}$" },
+    "ShortText": { "type": "string", "minLength": 1, "maxLength": 512 },
+    "Hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "UtcMillis": { "type": "integer", "minimum": 1262304000000, "maximum": 4102444800000 },
+    "NullableUtcMillis": { "anyOf": [{ "$ref": "#/$defs/UtcMillis" }, { "type": "null" }] },
+    "NullableId": { "anyOf": [{ "$ref": "#/$defs/Id" }, { "type": "null" }] },
+    "IdList": { "type": "array", "maxItems": 128, "uniqueItems": true, "items": { "$ref": "#/$defs/Id" } },
+    "NonEmptyIdList": { "type": "array", "minItems": 1, "maxItems": 128, "uniqueItems": true, "items": { "$ref": "#/$defs/Id" } },
+    "HashList": { "type": "array", "maxItems": 256, "uniqueItems": true, "items": { "$ref": "#/$defs/Hash" } },
+    "ReasonList": { "type": "array", "maxItems": 128, "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,127}$" } },
+    "SandboxBudgetCeilingV1": {
+      "type": "object",
+      "$comment": "Narrow external-sandbox ceiling; the base diagnostic budget hierarchy remains owned by IP_ASSURANCE.md section 3.9.",
+      "additionalProperties": false,
+      "required": ["maxCalls", "maxTokens", "maxCostMicrounits", "maxLatencyMs", "maxConcurrent", "rateWindowMs", "cooldownMs"],
+      "properties": {
+        "maxCalls": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "maxTokens": { "type": "integer", "minimum": 0, "maximum": 10000000 },
+        "maxCostMicrounits": { "type": "integer", "minimum": 0, "maximum": 1000000000 },
+        "maxLatencyMs": { "type": "integer", "minimum": 0, "maximum": 3600000 },
+        "maxConcurrent": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "rateWindowMs": { "type": "integer", "minimum": 1, "maximum": 86400000 },
+        "cooldownMs": { "type": "integer", "minimum": 0, "maximum": 86400000 }
+      }
+    },
+    "WorkloadIdentityEventV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "version", "sequence", "type", "observedAtMs", "generation", "providerId",
+        "identityRef", "bindingId", "environment", "audience", "subjectDigest", "capabilityDigest", "notBeforeMs",
+        "rotationDueAtMs", "expiresAtMs", "evidenceHash"
+      ],
+      "properties": {
+        "schema": { "const": "WorkloadIdentityEventV1" },
+        "version": { "const": 1 },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "type": { "enum": ["PROVISION_REQUESTED", "ATTESTED", "ROTATION_DUE", "ROTATION_STARTED", "ROTATED", "REVOKED", "FAILED"] },
+        "observedAtMs": { "$ref": "#/$defs/UtcMillis" },
+        "generation": { "type": "integer", "minimum": 1 },
+        "providerId": { "$ref": "#/$defs/Id" },
+        "identityRef": { "$ref": "#/$defs/Id" },
+        "bindingId": { "$ref": "#/$defs/Id" },
+        "environment": { "$ref": "#/$defs/Id" },
+        "audience": { "$ref": "#/$defs/Id" },
+        "subjectDigest": { "$ref": "#/$defs/Hash" },
+        "capabilityDigest": { "$ref": "#/$defs/Hash" },
+        "notBeforeMs": { "$ref": "#/$defs/UtcMillis" },
+        "rotationDueAtMs": { "$ref": "#/$defs/UtcMillis" },
+        "expiresAtMs": { "$ref": "#/$defs/UtcMillis" },
+        "evidenceHash": { "$ref": "#/$defs/Hash" }
+      }
+    },
+    "ExternalSandboxBindingV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "version", "revision", "bindingId", "configurationState", "providerMode", "providerId", "modelId", "modelVersion",
+        "workloadIdentityRef", "workloadAudience", "workloadSubjectDigest", "workloadCapabilityDigest", "environment", "policyRevision", "permissionLevel", "allowedCapabilities",
+        "allowedToolIds", "toolCapabilityBindings", "allowedResourceDigests", "forbiddenCapabilities", "networkPolicy", "egressAllowlist",
+        "workspace", "budget", "issuedAtMs", "expiresAtMs", "privacyPolicyRevision", "retentionPolicyRevision",
+        "killControlId", "killControlRevision", "killReadbackMaxAgeMs", "approvalRef", "approvalEvidenceDigest"
+      ],
+      "properties": {
+        "schema": { "const": "ExternalSandboxBindingV1" },
+        "version": { "const": 1 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "bindingId": { "$ref": "#/$defs/Id" },
+        "configurationState": { "const": "SYNTHETIC_ONLY" },
+        "providerMode": { "const": "DETERMINISTIC_STUB" },
+        "providerId": { "$ref": "#/$defs/Id" },
+        "modelId": { "$ref": "#/$defs/Id" },
+        "modelVersion": { "$ref": "#/$defs/Id" },
+        "workloadIdentityRef": { "$ref": "#/$defs/Id" },
+        "workloadAudience": { "$ref": "#/$defs/Id" },
+        "workloadSubjectDigest": { "$ref": "#/$defs/Hash" },
+        "workloadCapabilityDigest": { "$ref": "#/$defs/Hash" },
+        "environment": { "$ref": "#/$defs/Id" },
+        "policyRevision": { "$ref": "#/$defs/Id" },
+        "permissionLevel": { "$ref": "#/$defs/Id" },
+        "allowedCapabilities": { "$ref": "#/$defs/IdList" },
+        "allowedToolIds": { "$ref": "#/$defs/IdList" },
+        "toolCapabilityBindings": { "type": "array", "maxItems": 128, "items": { "type": "object", "additionalProperties": false, "required": ["toolId", "capability", "minimumPermissionLevel"], "properties": { "toolId": { "$ref": "#/$defs/Id" }, "capability": { "$ref": "#/$defs/Id" }, "minimumPermissionLevel": { "$ref": "#/$defs/Id" } } } },
+        "allowedResourceDigests": { "$ref": "#/$defs/HashList" },
+        "forbiddenCapabilities": { "$ref": "#/$defs/IdList" },
+        "networkPolicy": { "const": "DENY_ALL" },
+        "egressAllowlist": { "type": "array", "maxItems": 0 },
+        "workspace": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "writableRoots", "readOnlyArtifactDigests"],
+          "properties": {
+            "mode": { "const": "EPHEMERAL_ISOLATED" },
+            "writableRoots": { "type": "array", "maxItems": 1, "items": { "const": "/isolated-workspace" } },
+            "readOnlyArtifactDigests": { "$ref": "#/$defs/HashList" }
+          }
+        },
+        "budget": { "$ref": "#/$defs/SandboxBudgetCeilingV1" },
+        "issuedAtMs": { "$ref": "#/$defs/UtcMillis" },
+        "expiresAtMs": { "$ref": "#/$defs/UtcMillis" },
+        "privacyPolicyRevision": { "$ref": "#/$defs/Id" },
+        "retentionPolicyRevision": { "$ref": "#/$defs/Id" },
+        "killControlId": { "$ref": "#/$defs/Id" },
+        "killControlRevision": { "type": "integer", "minimum": 1 },
+        "killReadbackMaxAgeMs": { "type": "integer", "minimum": 1, "maximum": 60000 },
+        "approvalRef": { "$ref": "#/$defs/Id" },
+        "approvalEvidenceDigest": { "$ref": "#/$defs/Hash" }
+      }
+    },
+    "ExternalSandboxNotConfiguredV1": {
+      "type": "object",
+      "$comment": "Complete fail-closed absence state; no provider, identity, approval, lifetime, capability, or budget facts are fabricated.",
+      "additionalProperties": false,
+      "required": ["schema", "version", "revision", "bindingId", "configurationState", "sourceState", "wiringState", "authorityCreated"],
+      "properties": {
+        "schema": { "const": "ExternalSandboxBindingV1" },
+        "version": { "const": 1 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "bindingId": { "$ref": "#/$defs/Id" },
+        "configurationState": { "const": "NOT_CONFIGURED" },
+        "sourceState": { "const": "NOT_CONFIGURED" },
+        "wiringState": { "type": "string", "pattern": "^PENDING_BACKEND:[A-Za-z0-9_.:-]{1,128}$" },
+        "authorityCreated": { "const": false }
+      }
+    },
+    "EvidenceReferenceV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidenceId", "ownerId", "digest", "trust", "rawIncludedInPrompt"],
+      "properties": {
+        "evidenceId": { "$ref": "#/$defs/Id" },
+        "ownerId": { "$ref": "#/$defs/Id" },
+        "digest": { "$ref": "#/$defs/Hash" },
+        "trust": { "const": "UNTRUSTED_DATA" },
+        "rawIncludedInPrompt": { "const": false }
+      }
+    },
+    "AppendRetentionReceiptV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "version", "operation", "sequence", "previousChainDigest", "payloadDigest", "chainDigest",
+        "retainedAtMs", "minimumRetainUntilMs", "policyRevision", "writerId", "verifierId", "readbackState"
+      ],
+      "properties": {
+        "schema": { "const": "AppendRetentionReceiptV1" },
+        "version": { "const": 1 },
+        "operation": { "enum": ["APPEND", "EDIT", "DELETE", "REORDER"] },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "previousChainDigest": { "anyOf": [{ "const": "GENESIS" }, { "$ref": "#/$defs/Hash" }] },
+        "payloadDigest": { "$ref": "#/$defs/Hash" },
+        "chainDigest": { "$ref": "#/$defs/Hash" },
+        "retainedAtMs": { "$ref": "#/$defs/UtcMillis" },
+        "minimumRetainUntilMs": { "$ref": "#/$defs/UtcMillis" },
+        "policyRevision": { "$ref": "#/$defs/Id" },
+        "writerId": { "$ref": "#/$defs/Id" },
+        "verifierId": { "$ref": "#/$defs/Id" },
+        "readbackState": { "enum": ["PASS", "FAIL", "UNKNOWN"] }
+      }
+    },
+    "DiagnosticTracePrivacyRetentionExtensionV1": {
+      "type": "object",
+      "$comment": "Narrow privacy and independent-retention envelope over the reused IP_ASSURANCE.md section 3.9 run trace; it is not a second run-trace schema.",
+      "additionalProperties": false,
+      "required": [
+        "schema", "version", "baseTraceRef", "traceId", "runId", "incidentId", "correlationId", "producerId", "providerId", "environment",
+        "evidenceRefs", "typedOutputDigest", "diffDigest", "disposition", "privacy", "retentionReceipts"
+      ],
+      "properties": {
+        "schema": { "const": "DiagnosticTracePrivacyRetentionExtensionV1" },
+        "version": { "const": 1 },
+        "baseTraceRef": { "type": "object", "additionalProperties": false, "required": ["ownerSection", "contractName", "reuseMode", "baseRecordDigest"], "properties": { "ownerSection": { "const": "IP_ASSURANCE.md#3.9" }, "contractName": { "const": "AgentRunTrace" }, "reuseMode": { "const": "BASE_REUSED" }, "baseRecordDigest": { "$ref": "#/$defs/Hash" } } },
+        "traceId": { "$ref": "#/$defs/Id" },
+        "runId": { "$ref": "#/$defs/Id" },
+        "incidentId": { "$ref": "#/$defs/Id" },
+        "correlationId": { "$ref": "#/$defs/Id" },
+        "producerId": { "$ref": "#/$defs/Id" },
+        "providerId": { "$ref": "#/$defs/Id" },
+        "environment": { "$ref": "#/$defs/Id" },
+        "evidenceRefs": { "type": "array", "minItems": 1, "maxItems": 128, "items": { "$ref": "#/$defs/EvidenceReferenceV1" } },
+        "typedOutputDigest": { "$ref": "#/$defs/Hash" },
+        "diffDigest": { "$ref": "#/$defs/Hash" },
+        "disposition": { "$ref": "#/$defs/Id" },
+        "privacy": { "type": "object", "additionalProperties": false, "required": ["policyRevision", "classification", "redactionState", "secretScanState", "instructionSeparation", "rawEvidencePlacement", "accessTier"], "properties": { "policyRevision": { "$ref": "#/$defs/Id" }, "classification": { "enum": ["INTERNAL", "SENSITIVE_REDACTED", "RESTRICTED_HASH_ONLY"] }, "redactionState": { "enum": ["PASS", "FAIL", "UNKNOWN"] }, "secretScanState": { "enum": ["PASS", "FAIL", "UNKNOWN"] }, "instructionSeparation": { "enum": ["PASS", "FAIL", "UNKNOWN"] }, "rawEvidencePlacement": { "const": "HASH_ONLY" }, "accessTier": { "$ref": "#/$defs/Id" } } },
+        "retentionReceipts": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/AppendRetentionReceiptV1" } }
+      }
+    },
+    "EvidenceCheckV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checkId", "status", "evidenceDigest"],
+      "properties": {
+        "checkId": { "$ref": "#/$defs/Id" },
+        "status": { "enum": ["PASS", "FAIL", "UNKNOWN"] },
+        "evidenceDigest": { "$ref": "#/$defs/Hash" },
+        "verifierId": { "$ref": "#/$defs/Id" }
+      }
+    },
+    "SelfCorrectionClassPolicyV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "version", "authorityId", "bindingLawRef", "canonicalOwnerRef", "basePolicyRef", "registrySnapshotDigest", "registrationReceiptDigest", "ownerPreauthorizationDigest", "policyId", "revision", "class", "registered", "mode", "route", "automaticEligibility", "environment", "allowedEffectFlags", "allowedCapabilities", "registeredCommandIds", "promotionDisposition", "requiresApproval", "requiresRepairEvidence", "requiresCorpusDecision", "requiresHoldout", "evidenceDigest"],
+      "properties": {
+        "schema": { "const": "SelfCorrectionClassPolicyV1" },
+        "version": { "const": 1 },
+        "authorityId": { "$ref": "#/$defs/Id" },
+        "bindingLawRef": { "const": "IP_ASSURANCE.md#7.5-7.6" },
+        "canonicalOwnerRef": { "$ref": "#/$defs/Id" },
+        "basePolicyRef": { "$ref": "#/$defs/Id" },
+        "registrySnapshotDigest": { "$ref": "#/$defs/Hash" },
+        "registrationReceiptDigest": { "$ref": "#/$defs/Hash" },
+        "ownerPreauthorizationDigest": { "$ref": "#/$defs/Hash" },
+        "policyId": { "$ref": "#/$defs/Id" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "class": { "enum": ["A", "B", "C", "D"] },
+        "registered": { "type": "boolean" },
+        "mode": { "enum": ["REGISTERED_LOCAL_COMMAND_ONLY", "CANONICAL_RECOVERY_ONLY", "OWNER_APPROVED_RELEASE_ONLY", "ABSTAIN_OR_DEMOTE_ONLY"] },
+        "route": { "enum": ["REGISTERED_LOCAL_NON_CAPITAL_CONTROL_COMMAND", "CANONICAL_RECONCILIATION_AND_RECOVERY", "EXISTING_HASH_BOUND_RELEASE_PIPELINE", "EXISTING_Q_RUNTIME_OWNER"] },
+        "automaticEligibility": { "enum": ["REGISTERED_ONLY", "NEVER"] },
+        "environment": { "$ref": "#/$defs/Id" },
+        "allowedEffectFlags": { "$ref": "#/$defs/IdList" },
+        "allowedCapabilities": { "$ref": "#/$defs/IdList" },
+        "registeredCommandIds": { "$ref": "#/$defs/IdList" },
+        "promotionDisposition": { "enum": ["REGISTERED_LOCAL_CONTROL_COMMAND_EVIDENCE_ELIGIBLE", "CANONICAL_RECONCILIATION_RECOVERY_REQUIRED", "OWNER_APPROVED_HASH_BOUND_RELEASE_REQUIRED", "ABSTAIN_OR_DEMOTE_REQUIRED"] },
+        "requiresApproval": { "type": "boolean" },
+        "requiresRepairEvidence": { "type": "boolean" },
+        "requiresCorpusDecision": { "type": "boolean" },
+        "requiresHoldout": { "type": "boolean" },
+        "evidenceDigest": { "$ref": "#/$defs/Hash" }
+      }
+    },
+    "SelfCorrectionCandidateV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "version", "candidateId", "revision", "declaredClass", "policyId", "policyRevision", "traceId", "hypothesis", "effectFlags", "capabilities", "registeredCommandId", "artifactDigest", "evidenceReportDigest", "tests", "independentVerifier", "expiresAtMs", "rollback", "holdout", "approval"],
+      "properties": {
+        "schema": { "const": "SelfCorrectionCandidateV1" },
+        "version": { "const": 1 },
+        "candidateId": { "$ref": "#/$defs/Id" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "declaredClass": { "enum": ["A", "B", "C", "D"] },
+        "policyId": { "$ref": "#/$defs/Id" },
+        "policyRevision": { "type": "integer", "minimum": 1 },
+        "traceId": { "$ref": "#/$defs/Id" },
+        "hypothesis": { "$ref": "#/$defs/ShortText" },
+        "effectFlags": { "$ref": "#/$defs/IdList" },
+        "capabilities": { "$ref": "#/$defs/IdList" },
+        "registeredCommandId": { "anyOf": [{ "$ref": "#/$defs/Id" }, { "type": "null" }] },
+        "artifactDigest": { "$ref": "#/$defs/Hash" },
+        "evidenceReportDigest": { "$ref": "#/$defs/Hash" },
+        "tests": { "type": "array", "minItems": 1, "maxItems": 128, "items": { "type": "object", "additionalProperties": false, "required": ["checkId", "status", "evidenceDigest", "verifierId"], "properties": { "checkId": { "$ref": "#/$defs/Id" }, "status": { "enum": ["PASS", "FAIL", "UNKNOWN"] }, "evidenceDigest": { "$ref": "#/$defs/Hash" }, "verifierId": { "$ref": "#/$defs/Id" } } } },
+        "independentVerifier": { "type": "object", "additionalProperties": false, "required": ["verifierId", "relationship", "status", "evidenceDigest"], "properties": { "verifierId": { "$ref": "#/$defs/Id" }, "relationship": { "enum": ["INDEPENDENT", "COMMON_MODE", "SELF"] }, "status": { "enum": ["PASS", "FAIL", "UNKNOWN"] }, "evidenceDigest": { "$ref": "#/$defs/Hash" } } },
+        "expiresAtMs": { "$ref": "#/$defs/UtcMillis" },
+        "rollback": { "type": "object", "additionalProperties": false, "required": ["available", "planDigest"], "properties": { "available": { "type": "boolean" }, "planDigest": { "$ref": "#/$defs/Hash" } } },
+        "holdout": { "type": "object", "additionalProperties": false, "required": ["status", "verifierId", "relationship", "candidateId", "candidateRevision", "artifactDigest", "environment", "policyRevision", "evidenceDigest"], "properties": { "status": { "enum": ["PASS", "FAIL", "UNKNOWN", "NOT_REQUIRED"] }, "verifierId": { "$ref": "#/$defs/Id" }, "relationship": { "enum": ["INDEPENDENT", "COMMON_MODE", "SELF"] }, "candidateId": { "$ref": "#/$defs/Id" }, "candidateRevision": { "type": "integer", "minimum": 1 }, "artifactDigest": { "$ref": "#/$defs/Hash" }, "environment": { "$ref": "#/$defs/Id" }, "policyRevision": { "type": "integer", "minimum": 1 }, "evidenceDigest": { "$ref": "#/$defs/Hash" } } },
+        "approval": { "type": "object", "additionalProperties": false, "required": ["status", "approvalRef", "approverId", "candidateId", "artifactDigest", "environment", "policyRevision", "capabilities", "effectFlags", "rollbackPlanDigest", "bindingDigest", "expiresAtMs"], "properties": { "status": { "enum": ["APPROVED", "REJECTED", "EXPIRED", "NOT_REQUIRED", "UNKNOWN"] }, "approvalRef": { "$ref": "#/$defs/Id" }, "approverId": { "$ref": "#/$defs/Id" }, "candidateId": { "$ref": "#/$defs/Id" }, "artifactDigest": { "$ref": "#/$defs/Hash" }, "environment": { "$ref": "#/$defs/Id" }, "policyRevision": { "type": "integer", "minimum": 1 }, "capabilities": { "$ref": "#/$defs/IdList" }, "effectFlags": { "$ref": "#/$defs/IdList" }, "rollbackPlanDigest": { "$ref": "#/$defs/Hash" }, "bindingDigest": { "$ref": "#/$defs/Hash" }, "expiresAtMs": { "$ref": "#/$defs/UtcMillis" } } }
+      }
+    },
+    "RepairEvidencePolicyFixtureV1": {
+      "type": "object",
+      "$comment": "Injected packet policy; it owns the quiet-period floor and exact repair evidence identities without creating repair execution authority.",
+      "additionalProperties": false,
+      "required": ["schema", "version", "authorityId", "bindingLawRef", "basePolicyRef", "registrySnapshotDigest", "ownerPreauthorizationDigest", "revision", "requiresRollback", "requiresCompensation", "minimumQuietPeriodMs", "allowedActionIds", "allowedExecutorIds", "allowedProducerIds", "requiredResourceIds", "requiredTestCheckIds", "requiredCounterexampleCheckIds", "requiredPostconditionCheckIds", "evidenceDigest"],
+      "properties": {
+        "schema": { "const": "RepairEvidencePolicyFixtureV1" },
+        "version": { "const": 1 },
+        "authorityId": { "const": "canonical-control-plane-command-registry" },
+        "bindingLawRef": { "const": "IP_ASSURANCE.md#7.6" },
+        "basePolicyRef": { "const": "IP_ASSURANCE.md#3.4:remediation-policy" },
+        "registrySnapshotDigest": { "$ref": "#/$defs/Hash" },
+        "ownerPreauthorizationDigest": { "$ref": "#/$defs/Hash" },
+        "revision": { "$ref": "#/$defs/Id" },
+        "requiresRollback": { "type": "boolean" },
+        "requiresCompensation": { "type": "boolean" },
+        "minimumQuietPeriodMs": { "type": "integer", "minimum": 1, "maximum": 31536000000 },
+        "allowedActionIds": { "$ref": "#/$defs/NonEmptyIdList" },
+        "allowedExecutorIds": { "$ref": "#/$defs/NonEmptyIdList" },
+        "allowedProducerIds": { "$ref": "#/$defs/NonEmptyIdList" },
+        "requiredResourceIds": { "$ref": "#/$defs/NonEmptyIdList" },
+        "requiredTestCheckIds": { "$ref": "#/$defs/NonEmptyIdList" },
+        "requiredCounterexampleCheckIds": { "$ref": "#/$defs/NonEmptyIdList" },
+        "requiredPostconditionCheckIds": { "$ref": "#/$defs/NonEmptyIdList" },
+        "evidenceDigest": { "$ref": "#/$defs/Hash" }
+      }
+    },
+    "RepairEvidenceBundleV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "version", "campaignId", "actionId", "fingerprint", "policyRevision", "artifactDigest", "producerId", "executorId", "actionState", "beforeStateDigest", "afterStateDigest", "lease", "producerReport", "verifier", "tests", "counterexamples", "postconditions", "quietPeriod", "rollback", "compensation", "traceId", "incidentId"],
+      "properties": {
+        "schema": { "const": "RepairEvidenceBundleV1" },
+        "version": { "const": 1 },
+        "campaignId": { "$ref": "#/$defs/Id" },
+        "actionId": { "$ref": "#/$defs/Id" },
+        "fingerprint": { "$ref": "#/$defs/Id" },
+        "policyRevision": { "$ref": "#/$defs/Id" },
+        "artifactDigest": { "$ref": "#/$defs/Hash" },
+        "producerId": { "$ref": "#/$defs/Id" },
+        "executorId": { "$ref": "#/$defs/Id" },
+        "actionState": { "const": "COMPLETED" },
+        "beforeStateDigest": { "$ref": "#/$defs/Hash" },
+        "afterStateDigest": { "$ref": "#/$defs/Hash" },
+        "lease": { "type": "object", "additionalProperties": false, "required": ["resourceIds", "ownerId", "completionOwnerId", "epoch", "acquiredAtMs", "expiresAtMs", "completedAtMs"], "properties": { "resourceIds": { "type": "array", "minItems": 1, "maxItems": 128, "uniqueItems": true, "items": { "$ref": "#/$defs/Id" } }, "ownerId": { "$ref": "#/$defs/Id" }, "completionOwnerId": { "$ref": "#/$defs/Id" }, "epoch": { "type": "integer", "minimum": 1 }, "acquiredAtMs": { "$ref": "#/$defs/UtcMillis" }, "expiresAtMs": { "$ref": "#/$defs/UtcMillis" }, "completedAtMs": { "$ref": "#/$defs/UtcMillis" } } },
+        "producerReport": { "type": "object", "additionalProperties": false, "required": ["state", "reportedAtMs"], "properties": { "state": { "enum": ["HEALTHY", "DEGRADED", "FAILED", "UNKNOWN"] }, "reportedAtMs": { "$ref": "#/$defs/UtcMillis" } } },
+        "verifier": { "type": "object", "additionalProperties": false, "required": ["verifierId", "relationship", "status", "observedAtMs", "evidenceDigest"], "properties": { "verifierId": { "$ref": "#/$defs/Id" }, "relationship": { "enum": ["INDEPENDENT", "COMMON_MODE", "SELF"] }, "status": { "enum": ["PASS", "FAIL", "UNKNOWN"] }, "observedAtMs": { "$ref": "#/$defs/UtcMillis" }, "evidenceDigest": { "$ref": "#/$defs/Hash" } } },
+        "tests": { "type": "array", "minItems": 1, "maxItems": 128, "items": { "$ref": "#/$defs/EvidenceCheckV1" } },
+        "counterexamples": { "type": "array", "minItems": 1, "maxItems": 128, "items": { "$ref": "#/$defs/EvidenceCheckV1" } },
+        "postconditions": { "type": "array", "minItems": 1, "maxItems": 128, "items": { "$ref": "#/$defs/EvidenceCheckV1" } },
+        "quietPeriod": { "type": "object", "additionalProperties": false, "required": ["requiredMs", "startedAtMs", "observedThroughMs", "breachCount"], "properties": { "requiredMs": { "type": "integer", "minimum": 1 }, "startedAtMs": { "$ref": "#/$defs/UtcMillis" }, "observedThroughMs": { "$ref": "#/$defs/UtcMillis" }, "breachCount": { "type": "integer", "minimum": 0 } } },
+        "rollback": { "type": "object", "additionalProperties": false, "required": ["required", "status", "evidenceDigest"], "properties": { "required": { "type": "boolean" }, "status": { "enum": ["PASS", "FAIL", "UNKNOWN", "NOT_REQUIRED"] }, "evidenceDigest": { "$ref": "#/$defs/Hash" } } },
+        "compensation": { "type": "object", "additionalProperties": false, "required": ["required", "status", "evidenceDigest"], "properties": { "required": { "type": "boolean" }, "status": { "enum": ["PASS", "FAIL", "UNKNOWN", "NOT_REQUIRED"] }, "evidenceDigest": { "$ref": "#/$defs/Hash" } } },
+        "traceId": { "$ref": "#/$defs/Id" },
+        "incidentId": { "$ref": "#/$defs/Id" }
+      }
+    },
+    "CorpusDedupRegistryFixtureV1": {
+      "type": "object",
+      "$comment": "Injected append-only corpus membership projection used only to prove UNIQUE or EXACT_MATCH claims; it is not a corpus store.",
+      "additionalProperties": false,
+      "required": ["schema", "version", "revision", "registered", "entries", "evidenceDigest"],
+      "properties": {
+        "schema": { "const": "CorpusDedupRegistryFixtureV1" },
+        "version": { "const": 1 },
+        "revision": { "$ref": "#/$defs/Id" },
+        "registered": { "const": true },
+        "entries": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["corpusItemId", "stableKey", "sourceProjectionDigest", "contentDigest"],
+            "properties": {
+              "corpusItemId": { "$ref": "#/$defs/Id" },
+              "stableKey": { "$ref": "#/$defs/Hash" },
+              "sourceProjectionDigest": { "$ref": "#/$defs/Hash" },
+              "contentDigest": { "$ref": "#/$defs/Hash" }
+            }
+          }
+        },
+        "evidenceDigest": { "$ref": "#/$defs/Hash" }
+      }
+    },
+    "CorpusItemV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "version", "corpusItemId", "fingerprint", "mutationIntent", "sourceEvidenceRefs", "retentionTraceId", "provenanceState", "privacyState", "secretScanState", "untrustedInstructionState", "rightsState", "poisonState", "validation", "independentOutcome", "partition", "dedup", "atlasProjection", "access", "retention", "governanceDisposition", "contentDigest"],
+      "properties": {
+        "schema": { "const": "CorpusItemV1" },
+        "version": { "const": 1 },
+        "corpusItemId": { "$ref": "#/$defs/Id" },
+        "fingerprint": { "$ref": "#/$defs/Id" },
+        "mutationIntent": { "enum": ["READ_PROJECTION_ONLY", "RETIRE_ELIGIBILITY_ONLY", "OVERWRITE_SOURCE", "DELETE_SOURCE"] },
+        "sourceEvidenceRefs": { "type": "array", "minItems": 1, "maxItems": 128, "items": { "type": "object", "additionalProperties": false, "required": ["kind", "evidenceId", "ownerId", "digest"], "properties": { "kind": { "enum": ["INCIDENT", "LEDGER_EVENT", "MATERIAL_EVENT", "TEST", "SOAK", "POSTMORTEM"] }, "evidenceId": { "$ref": "#/$defs/Id" }, "ownerId": { "$ref": "#/$defs/Id" }, "digest": { "$ref": "#/$defs/Hash" } } } },
+        "retentionTraceId": { "$ref": "#/$defs/Id" },
+        "provenanceState": { "enum": ["VERIFIED", "FAILED", "UNKNOWN"] },
+        "privacyState": { "enum": ["SANITIZED", "UNSANITIZED", "UNKNOWN"] },
+        "secretScanState": { "enum": ["PASS", "FAIL", "UNKNOWN"] },
+        "untrustedInstructionState": { "enum": ["REMOVED", "QUARANTINED", "PRESENT", "UNKNOWN"] },
+        "rightsState": { "enum": ["ALLOWED_INTERNAL", "PROHIBITED", "UNKNOWN"] },
+        "poisonState": { "enum": ["NONE", "SUSPECTED", "CONFIRMED", "UNKNOWN"] },
+        "validation": { "$ref": "#/$defs/EvidenceCheckV1" },
+        "independentOutcome": { "type": "object", "additionalProperties": false, "required": ["verifierId", "relationship", "status", "evidenceDigest"], "properties": { "verifierId": { "$ref": "#/$defs/Id" }, "relationship": { "enum": ["INDEPENDENT", "COMMON_MODE", "SELF"] }, "status": { "enum": ["PASS", "FAIL", "UNKNOWN"] }, "evidenceDigest": { "$ref": "#/$defs/Hash" } } },
+        "partition": { "type": "object", "additionalProperties": false, "required": ["name", "assignmentRevision", "locked"], "properties": { "name": { "enum": ["TRAIN", "VALIDATION", "HOLDOUT", "RETRIEVAL_ONLY"] }, "assignmentRevision": { "$ref": "#/$defs/Id" }, "locked": { "type": "boolean" } } },
+        "dedup": { "type": "object", "additionalProperties": false, "required": ["stableKey", "state", "existingItemId", "existingContentDigest"], "properties": { "stableKey": { "$ref": "#/$defs/Hash" }, "state": { "enum": ["UNIQUE", "EXACT_MATCH", "CONFLICT", "UNKNOWN"] }, "existingItemId": { "$ref": "#/$defs/NullableId" }, "existingContentDigest": { "anyOf": [{ "$ref": "#/$defs/Hash" }, { "type": "null" }] } } },
+        "atlasProjection": { "type": "object", "additionalProperties": false, "required": ["timelineEvidenceIds", "componentRevisions", "triggerCodes", "symptomCodes", "failedInvariantIds", "impactCodes", "repairAttemptIds", "independentPostconditionRefs", "causeCodes", "regressionFixtureIds", "faultSeedIds", "playbookRevisions", "modelRevisions", "reviewerId", "postmortemId", "actionIds", "recurrenceCount"], "properties": { "timelineEvidenceIds": { "$ref": "#/$defs/NonEmptyIdList" }, "componentRevisions": { "type": "array", "minItems": 1, "maxItems": 128, "items": { "type": "object", "additionalProperties": false, "required": ["componentId", "revision"], "properties": { "componentId": { "$ref": "#/$defs/Id" }, "revision": { "$ref": "#/$defs/Id" } } } }, "triggerCodes": { "$ref": "#/$defs/NonEmptyIdList" }, "symptomCodes": { "$ref": "#/$defs/NonEmptyIdList" }, "failedInvariantIds": { "$ref": "#/$defs/NonEmptyIdList" }, "impactCodes": { "$ref": "#/$defs/NonEmptyIdList" }, "repairAttemptIds": { "$ref": "#/$defs/NonEmptyIdList" }, "independentPostconditionRefs": { "$ref": "#/$defs/NonEmptyIdList" }, "causeCodes": { "$ref": "#/$defs/NonEmptyIdList" }, "regressionFixtureIds": { "$ref": "#/$defs/NonEmptyIdList" }, "faultSeedIds": { "$ref": "#/$defs/NonEmptyIdList" }, "playbookRevisions": { "$ref": "#/$defs/NonEmptyIdList" }, "modelRevisions": { "$ref": "#/$defs/NonEmptyIdList" }, "reviewerId": { "$ref": "#/$defs/Id" }, "postmortemId": { "$ref": "#/$defs/Id" }, "actionIds": { "$ref": "#/$defs/NonEmptyIdList" }, "recurrenceCount": { "type": "integer", "minimum": 0 } } },
+        "access": { "type": "object", "additionalProperties": false, "required": ["tier", "policyRevision"], "properties": { "tier": { "const": "ASSURANCE_RESTRICTED" }, "policyRevision": { "$ref": "#/$defs/Id" } } },
+        "retention": { "type": "object", "additionalProperties": false, "required": ["policyRevision", "decision", "minimumRetainUntilMs"], "properties": { "policyRevision": { "$ref": "#/$defs/Id" }, "decision": { "const": "RETAIN_APPEND_ONLY" }, "minimumRetainUntilMs": { "$ref": "#/$defs/UtcMillis" } } },
+        "governanceDisposition": { "type": "object", "additionalProperties": false, "required": ["inclusion", "exclusionReasonCodes"], "properties": { "inclusion": { "enum": ["INCLUDE", "EXCLUDE", "QUARANTINE", "RETIRE"] }, "exclusionReasonCodes": { "$ref": "#/$defs/ReasonList" } } },
+        "contentDigest": { "$ref": "#/$defs/Hash" }
+      }
+    },
+    "CorpusReleaseV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "version", "releaseId", "revision", "policyRevision", "partitions", "itemBindings", "holdoutLocked", "manifestDigest", "leakageScan", "reviewer"],
+      "properties": {
+        "schema": { "const": "CorpusReleaseV1" },
+        "version": { "const": 1 },
+        "releaseId": { "$ref": "#/$defs/Id" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "policyRevision": { "$ref": "#/$defs/Id" },
+        "partitions": { "type": "object", "additionalProperties": false, "required": ["train", "validation", "holdout", "retrievalOnly"], "properties": { "train": { "$ref": "#/$defs/IdList" }, "validation": { "$ref": "#/$defs/IdList" }, "holdout": { "$ref": "#/$defs/IdList" }, "retrievalOnly": { "$ref": "#/$defs/IdList" } } },
+        "itemBindings": { "type": "array", "maxItems": 1024, "items": { "type": "object", "additionalProperties": false, "required": ["corpusItemId", "stableKey", "contentDigest", "partition"], "properties": { "corpusItemId": { "$ref": "#/$defs/Id" }, "stableKey": { "$ref": "#/$defs/Hash" }, "contentDigest": { "$ref": "#/$defs/Hash" }, "partition": { "enum": ["TRAIN", "VALIDATION", "HOLDOUT", "RETRIEVAL_ONLY"] } } } },
+        "holdoutLocked": { "type": "boolean" },
+        "manifestDigest": { "$ref": "#/$defs/Hash" },
+        "leakageScan": { "$ref": "#/$defs/EvidenceCheckV1" },
+        "reviewer": { "type": "object", "additionalProperties": false, "required": ["reviewerId", "relationship", "status", "evidenceDigest"], "properties": { "reviewerId": { "$ref": "#/$defs/Id" }, "relationship": { "enum": ["INDEPENDENT", "COMMON_MODE", "SELF"] }, "status": { "enum": ["PASS", "FAIL", "UNKNOWN"] }, "evidenceDigest": { "$ref": "#/$defs/Hash" } } }
+      }
+    },
+    "InsertionRequestRowV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "version", "rowId", "status", "requestedOwner", "targetSeam", "reason", "contract", "tests", "expectedBehavior", "wiringState", "authorityCreated"],
+      "properties": {
+        "schema": { "const": "InsertionRequestRowV1" },
+        "version": { "const": 1 },
+        "rowId": { "$ref": "#/$defs/Id" },
+        "status": { "const": "DRAFT" },
+        "requestedOwner": { "$ref": "#/$defs/ShortText" },
+        "targetSeam": { "$ref": "#/$defs/ShortText" },
+        "reason": { "$ref": "#/$defs/ShortText" },
+        "contract": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "$ref": "#/$defs/ShortText" } },
+        "tests": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "$ref": "#/$defs/ShortText" } },
+        "expectedBehavior": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "$ref": "#/$defs/ShortText" } },
+        "controlDraft": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["controlId", "backendCommandId", "group", "label", "explanation", "backendOwner", "targetTypes", "payloadSchema", "safeBounds", "defaultValue", "desiredEffectiveSemantics", "effect", "requiredPosture", "requiredAuthority", "confirmationText", "expiryMs", "reversibility", "previewProvider", "invariants", "telemetry", "wiringState"],
+          "properties": {
+            "controlId": { "$ref": "#/$defs/Id" },
+            "backendCommandId": { "$ref": "#/$defs/Id" },
+            "group": { "$ref": "#/$defs/Id" },
+            "label": { "$ref": "#/$defs/ShortText" },
+            "explanation": { "$ref": "#/$defs/ShortText" },
+            "backendOwner": { "$ref": "#/$defs/ShortText" },
+            "targetTypes": { "$ref": "#/$defs/NonEmptyIdList" },
+            "payloadSchema": { "type": "object", "additionalProperties": false, "required": ["schema", "additionalProperties", "required", "properties"], "properties": { "schema": { "$ref": "#/$defs/Id" }, "additionalProperties": { "const": false }, "required": { "$ref": "#/$defs/NonEmptyIdList" }, "properties": { "type": "object" } } },
+            "safeBounds": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/ShortText" } },
+            "defaultValue": { "type": "object" },
+            "desiredEffectiveSemantics": { "$ref": "#/$defs/ShortText" },
+            "effect": { "$ref": "#/$defs/Id" },
+            "requiredPosture": { "$ref": "#/$defs/Id" },
+            "requiredAuthority": { "$ref": "#/$defs/Id" },
+            "confirmationText": { "$ref": "#/$defs/ShortText" },
+            "expiryMs": { "type": "integer", "minimum": 1, "maximum": 300000 },
+            "reversibility": { "$ref": "#/$defs/Id" },
+            "previewProvider": { "$ref": "#/$defs/Id" },
+            "invariants": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "$ref": "#/$defs/ShortText" } },
+            "telemetry": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "$ref": "#/$defs/ShortText" } },
+            "wiringState": { "type": "string", "pattern": "^PENDING_BACKEND:[A-Za-z0-9_.:-]{1,128}$" }
+          }
+        },
+        "wiringState": { "type": "string", "pattern": "^PENDING_BACKEND:[A-Za-z0-9_.:-]{1,128}$" },
+        "authorityCreated": { "const": false }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/WorkloadIdentityEventV1" },
+    { "$ref": "#/$defs/ExternalSandboxBindingV1" },
+    { "$ref": "#/$defs/ExternalSandboxNotConfiguredV1" },
+    { "$ref": "#/$defs/AppendRetentionReceiptV1" },
+    { "$ref": "#/$defs/DiagnosticTracePrivacyRetentionExtensionV1" },
+    { "$ref": "#/$defs/SelfCorrectionClassPolicyV1" },
+    { "$ref": "#/$defs/SelfCorrectionCandidateV1" },
+    { "$ref": "#/$defs/RepairEvidencePolicyFixtureV1" },
+    { "$ref": "#/$defs/RepairEvidenceBundleV1" },
+    { "$ref": "#/$defs/CorpusDedupRegistryFixtureV1" },
+    { "$ref": "#/$defs/CorpusItemV1" },
+    { "$ref": "#/$defs/CorpusReleaseV1" },
+    { "$ref": "#/$defs/InsertionRequestRowV1" }
+  ]
+}

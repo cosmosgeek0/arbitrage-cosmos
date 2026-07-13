@@ -1,0 +1,669 @@
+{
+  "schemaVersion": 1,
+  "fixtureTruthLabel": "SYNTHETIC_ONLY",
+  "fixtureAuthority": "SYNTHETIC_TEST",
+  "wiringState": "WIRED_FIXTURE",
+  "fixtureNote": "All LIVE_PUBLIC fields below are adversarial claimed-owner inputs used to test anti-false-green projection; this fixture is never live runtime evidence.",
+  "evaluatedAtMs": 1750000000000,
+  "baseLiveObservation": {
+    "schemaVersion": 1,
+    "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+    "requestedDisplayState": "GREEN",
+    "truthAxes": {
+      "discovered": true,
+      "instrumented": true,
+      "telemetrySilent": false,
+      "freshnessState": "FRESH",
+      "coherenceState": "COHERENT",
+      "safeMode": "READ_ONLY",
+      "releaseStatuses": [
+        "BUILT_AND_TESTED",
+        "IMPORTED",
+        "WIRED",
+        "LIVE_PUBLIC"
+      ],
+      "truthLabel": "LIVE_PUBLIC",
+      "readiness": "READY",
+      "authority": "DERIVED_LIVE",
+      "completeness": "COMPLETE",
+      "dataMode": "LIVE_PUBLIC",
+      "independentProbeRequired": true,
+      "independentProbePassing": true,
+      "supportState": "SUPPORTED",
+      "configurationState": "CONFIGURED"
+    },
+    "denominator": {
+      "expectedCount": 20,
+      "visibleCount": 19,
+      "filteredCount": 1,
+      "hiddenCount": 0,
+      "unknownCount": 0
+    },
+    "evidence": {
+      "observedCount": 20,
+      "observedAtMs": 1749999999000,
+      "lastIndependentProofAtMs": 1749999998000
+    },
+    "values": [
+      {
+        "key": "desiredState",
+        "value": "RUNNING",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "observedState",
+        "value": "RUNNING",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "readiness",
+        "value": "READY",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "liveness",
+        "value": "LIVE",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "heartbeatAgeMs",
+        "value": 1000,
+        "unit": "MILLISECONDS",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "restartCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "currentError",
+        "value": "FIXTURE_CURREN_RROR",
+        "unit": "REASON_CODE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "renderTruthLabel",
+        "value": "LIVE",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "mode",
+        "value": "READ_ONLY",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "desiredMode",
+        "value": "READ_ONLY",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "effectiveMode",
+        "value": "READ_ONLY",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "killSwitchState",
+        "value": "DISENGAGED",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "killSwitchEffect",
+        "value": "BLOCKS_ADVISORY_PROGRESSION_NO_MONEY_MUTATION",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "startupGeneration",
+        "value": 1,
+        "unit": "GENERATION",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "lastRestart",
+        "value": 1749999000000,
+        "unit": "UTC_MILLISECONDS",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "lastRestartResult",
+        "value": "SUCCESS",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "rootBlocker",
+        "value": "NONE",
+        "unit": "REASON_CODE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "overallPosture",
+        "value": "READY",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "activeExposureCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "newestCandidateDisposition",
+        "value": "ACCEPTED",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "newestCandidateDispositionReason",
+        "value": "CANONICAL_ACCEPTANCE_CRITERIA_MET",
+        "unit": "REASON_CODE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "degradedSourceCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "degradedSourceIdentities",
+        "value": "NONE",
+        "unit": "IDENTITY_SET",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "degradedSourceReasons",
+        "value": "NONE",
+        "unit": "REASON_CODE_SET",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "bootStartupTransactionState",
+        "value": "COMMITTED",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "deployedRevision",
+        "value": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "unit": "GIT_SHA",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "testedRevision",
+        "value": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "unit": "GIT_SHA",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "dataSourceHealthState",
+        "value": "READY",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "dataSourceConnectionStates",
+        "value": "CONNECTED",
+        "unit": "STATE_SET",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "oldestDataSourceMessageAgeMs",
+        "value": 1000,
+        "unit": "MILLISECONDS",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "dataSourceSequenceGapCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "dataSourceRateLimitBackoffState",
+        "value": "CLEAR",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "dataSourceCoverageExpectedCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "dataSourceCoverageCurrentCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "quietSymbolCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "basisLiveAgeMs",
+        "value": 1000,
+        "unit": "MILLISECONDS",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "basisUniverseCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "basisCandidateCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "basisFocusCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "basisProposalCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "basisLatestDecision",
+        "value": "NO_ACTION",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "basisLatestRejectReasonCode",
+        "value": "NONE",
+        "unit": "REASON_CODE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "volumeLiveAgeMs",
+        "value": 1000,
+        "unit": "MILLISECONDS",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "volumeUniverseCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "volumeCandidateCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "volumeFocusCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "volumeProposalCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "volumeLatestDecision",
+        "value": "NO_ACTION",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "volumeLatestRejectReasonCode",
+        "value": "NONE",
+        "unit": "REASON_CODE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "qHealthState",
+        "value": "READY",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "qModelVersion",
+        "value": "fixture-q-model-v1",
+        "unit": "VERSION",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "qDatasetVersion",
+        "value": "fixture-q-dataset-v1",
+        "unit": "VERSION",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "qDriftState",
+        "value": "WITHIN_BOUND",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "qLatestAssessment",
+        "value": "NO_ACTIONABLE_ASSESSMENT",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "qLatestAssessmentAction",
+        "value": "WATCH",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "qLatestAbstentionReason",
+        "value": "NONE",
+        "unit": "REASON_CODE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "allocatableTruthState",
+        "value": "AVAILABLE",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "reservationCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "stagedMandateCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "approvalState",
+        "value": "APPROVED",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "approvalExpiresAtMs",
+        "value": 1750000060000,
+        "unit": "UTC_MILLISECONDS",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "capitalCeiling",
+        "value": 0,
+        "unit": "USD",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "equity",
+        "value": 0,
+        "unit": "USD",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "availableCapital",
+        "value": 0,
+        "unit": "USD",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "realizedPnl",
+        "value": 0,
+        "unit": "USD",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "drawdown",
+        "value": 0,
+        "unit": "RATIO",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "universeCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "candidateCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "focusCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "opportunityCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "activeOrderCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "activePositionCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "activeLiabilityCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "activeRecoveryCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "latestRiskVerdict",
+        "value": "ALLOW",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "latestRiskBlockCodes",
+        "value": "NONE",
+        "unit": "REASON_CODE_SET",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "executionDryRunPlanState",
+        "value": "PLANNED",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "executionDryRunLegState",
+        "value": "READY",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "executionReconciliationState",
+        "value": "RECONCILED",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "liveExecutionBarrier",
+        "value": "LIVE_EXECUTION_NOT_IMPLEMENTED",
+        "unit": "BARRIER_CODE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "attentionQueueCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "attentionQueueRankedState",
+        "value": "EMPTY",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "topAttentionPriority",
+        "value": "NONE",
+        "unit": "PRIORITY",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "topAttentionReason",
+        "value": "NONE",
+        "unit": "REASON_CODE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "topAttentionResolvingControl",
+        "value": "NONE",
+        "unit": "CONTROL_ID",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "dashboardCorrelationChainId",
+        "value": "fixture:dashboard:correlation:001",
+        "unit": "CORRELATION_ID",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "strategyStatus",
+        "value": "READY",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "qStatus",
+        "value": "READY",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "recentMaterialDecisionCount",
+        "value": 0,
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "recentMaterialDecisionSummary",
+        "value": "NONE",
+        "unit": "STATE",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "executionOwner",
+        "value": "NO_LIVE_EXECUTION_OWNER",
+        "unit": "IDENTITY",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "executionFencingEpoch",
+        "value": 1,
+        "unit": "EPOCH",
+        "unknownReasonCode": null
+      }
+    ],
+    "reasonCodes": [],
+    "controlState": null,
+    "sourceProvenance": {
+      "canonicalOwner": "SYSTEM_INTEGRATION",
+      "sourceSchemaId": "SYSTEM_SUPERVISOR_READ_MODEL",
+      "sourceSchemaVersion": 1,
+      "supervisorSnapshotRevision": 42,
+      "manifestId": "manifest.release.fixture-001",
+      "manifestSha256": "68428c85723a7d955c4e7bdeb9001429ff0ec6cce5d6db0e33c73eb33fa3a80e",
+      "acceptedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+      "runningReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+      "manifestEvaluationResult": "MATCH",
+      "manifestRevision": 2,
+      "manifestItemId": "cockpit-projection:PANEL_DASHBOARD_TRUTH_V1"
+    },
+    "detectionEvidence": {
+      "registeredFailureId": "REGISTERED_SOURCE_STALE",
+      "detectorConnected": true,
+      "telemetryConnected": true,
+      "browserConnected": true,
+      "sloMatched": true,
+      "outOfBandProofPresent": null
+    }
+  },
+  "antiGreenCases": [
+    {
+      "caseId": "MANIFEST_MISMATCH",
+      "patchPath": "sourceProvenance.manifestEvaluationResult",
+      "patchValue": "MISMATCH",
+      "expectedDisplayState": "UNKNOWN",
+      "expectedReasonCode": "RELEASE_MANIFEST_NOT_MATCHED"
+    },
+    {
+      "caseId": "UNKNOWN_TRUTH",
+      "patchPath": "truthAxes.truthLabel",
+      "patchValue": "UNKNOWN",
+      "expectedDisplayState": "UNKNOWN",
+      "expectedReasonCode": "TRUTH_NOT_LIVE_PUBLIC"
+    },
+    {
+      "caseId": "STALE_EVIDENCE",
+      "patchPath": "truthAxes.freshnessState",
+      "patchValue": "STALE",
+      "expectedDisplayState": "STALE",
+      "expectedReasonCode": "EVIDENCE_STALE"
+    },
+    {
+      "caseId": "SILENT_TELEMETRY",
+      "patchPath": "truthAxes.telemetrySilent",
+      "patchValue": true,
+      "expectedDisplayState": "SILENT",
+      "expectedReasonCode": "TELEMETRY_SILENT"
+    },
+    {
+      "caseId": "MISSING_EXPECTED_ENTITY",
+      "patchPath": "truthAxes.discovered",
+      "patchValue": false,
+      "expectedDisplayState": "MISSING",
+      "expectedReasonCode": "EXPECTED_ENTITY_MISSING"
+    },
+    {
+      "caseId": "SYNTHETIC_DATA_MODE",
+      "patchPath": "truthAxes.dataMode",
+      "patchValue": "SYNTHETIC_ONLY",
+      "expectedDisplayState": "SYNTHETIC",
+      "expectedReasonCode": "SYNTHETIC_NOT_LIVE"
+    }
+  ]
+}

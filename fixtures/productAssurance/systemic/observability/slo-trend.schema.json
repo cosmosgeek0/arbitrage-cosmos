@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ip-assurance:s5:observability:slo-trend:v1",
+  "title": "Versioned safety and truth SLO trend evaluation input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "nowMs",
+    "releaseSha",
+    "catalogVerificationMaximumAgeMs",
+    "catalogDigestVerification",
+    "definitions",
+    "windows"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "slo-trend.v1" },
+    "nowMs": { "$ref": "#/$defs/utcMillis" },
+    "releaseSha": { "$ref": "#/$defs/releaseSha" },
+    "catalogVerificationMaximumAgeMs": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2592000000
+    },
+    "catalogDigestVerification": { "$ref": "#/$defs/catalogDigestVerification" },
+    "definitions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": { "$ref": "#/$defs/definition" }
+    },
+    "windows": {
+      "type": "array",
+      "maxItems": 512,
+      "items": { "$ref": "#/$defs/window" }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+    },
+    "releaseSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40,64}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "utcMillis": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "finiteNonNegative": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "effectPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authority",
+        "mayMutateCapital",
+        "mayMutateControls",
+        "mayExecuteRepair",
+        "riskReductionMustRemainAvailable"
+      ],
+      "properties": {
+        "authority": { "const": "EVIDENCE_ONLY" },
+        "mayMutateCapital": { "const": false },
+        "mayMutateControls": { "const": false },
+        "mayExecuteRepair": { "const": false },
+        "riskReductionMustRemainAvailable": { "const": true }
+      }
+    },
+    "catalogDigestVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result",
+        "verifiedCatalogSha256",
+        "verifiedCatalogId",
+        "verifiedCatalogRevision",
+        "verifiedReleaseSha",
+        "verifierOwnerId",
+        "verifierReferenceId",
+        "verifiedAtMs"
+      ],
+      "properties": {
+        "result": { "enum": ["PASS", "FAIL", "UNKNOWN"] },
+        "verifiedCatalogSha256": { "$ref": "#/$defs/sha256" },
+        "verifiedCatalogId": { "$ref": "#/$defs/identifier" },
+        "verifiedCatalogRevision": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "verifiedReleaseSha": { "$ref": "#/$defs/releaseSha" },
+        "verifierOwnerId": { "$ref": "#/$defs/identifier" },
+        "verifierReferenceId": { "$ref": "#/$defs/identifier" },
+        "verifiedAtMs": { "$ref": "#/$defs/utcMillis" }
+      }
+    },
+    "definition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sloId",
+        "version",
+        "ownerId",
+        "category",
+        "criticality",
+        "unit",
+        "windowDurationMs",
+        "maximumEvidenceAgeMs",
+        "minimumSampleCount",
+        "percentileMethod",
+        "evaluationStatistic",
+        "comparator",
+        "threshold",
+        "objectivePercent",
+        "dependentCapabilityIds",
+        "recommendedFailurePosture",
+        "effectPolicy"
+      ],
+      "properties": {
+        "sloId": { "$ref": "#/$defs/identifier" },
+        "version": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "ownerId": { "$ref": "#/$defs/identifier" },
+        "category": {
+          "enum": [
+            "SOURCE_COHERENCE_AGE",
+            "QUEUE_BACKPRESSURE",
+            "PROCESSING_COMMAND_LATENCY",
+            "AMBIGUITY_DURATION",
+            "RECONCILIATION_LAG",
+            "EVIDENCE_EXPIRY",
+            "TELEMETRY_COMPLETENESS",
+            "RECOVERY_VERIFICATION",
+            "SENTINEL_PAGING_DELIVERY",
+            "RESTART_RTO_RPO",
+            "RESOURCE_BUDGET"
+          ]
+        },
+        "criticality": { "enum": ["SAFETY_TRUTH", "AVAILABILITY"] },
+        "unit": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "windowDurationMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2592000000
+        },
+        "maximumEvidenceAgeMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2592000000
+        },
+        "minimumSampleCount": { "type": "integer", "minimum": 1, "maximum": 2048 },
+        "percentileMethod": { "const": "NEAREST_RANK" },
+        "evaluationStatistic": { "enum": ["P50", "P95", "P99", "GOOD_EVENT_PERCENTAGE"] },
+        "comparator": { "enum": ["LTE", "GTE"] },
+        "threshold": { "$ref": "#/$defs/finiteNonNegative" },
+        "objectivePercent": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 100
+        },
+        "dependentCapabilityIds": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/identifier" }
+        },
+        "recommendedFailurePosture": { "enum": ["DEGRADED", "BLOCKED"] },
+        "effectPolicy": { "$ref": "#/$defs/effectPolicy" }
+      }
+    },
+    "sample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sampleId", "observedAtMs", "value", "good"],
+      "properties": {
+        "sampleId": { "$ref": "#/$defs/identifier" },
+        "observedAtMs": { "$ref": "#/$defs/utcMillis" },
+        "value": { "$ref": "#/$defs/finiteNonNegative" },
+        "good": { "type": "boolean" }
+      }
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "windowId",
+        "sloId",
+        "sloVersion",
+        "releaseSha",
+        "startMs",
+        "endMs",
+        "evidenceObservedAtMs",
+        "sourceTruthLabel",
+        "canonicalEvidenceRefs",
+        "samples"
+      ],
+      "properties": {
+        "windowId": { "$ref": "#/$defs/identifier" },
+        "sloId": { "$ref": "#/$defs/identifier" },
+        "sloVersion": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "releaseSha": { "$ref": "#/$defs/releaseSha" },
+        "startMs": { "$ref": "#/$defs/utcMillis" },
+        "endMs": { "$ref": "#/$defs/utcMillis" },
+        "evidenceObservedAtMs": { "$ref": "#/$defs/utcMillis" },
+        "sourceTruthLabel": {
+          "enum": [
+            "LIVE_PUBLIC",
+            "DRY_RUN",
+            "SYNTHETIC_ONLY",
+            "RECORDED_REPLAY",
+            "UNAVAILABLE",
+            "UNKNOWN"
+          ]
+        },
+        "canonicalEvidenceRefs": { "$ref": "#/$defs/canonicalEvidenceRefs" },
+        "samples": {
+          "type": "array",
+          "maxItems": 2048,
+          "items": { "$ref": "#/$defs/sample" }
+        }
+      }
+    },
+    "canonicalEvidenceRefs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["invariantResultId", "materialEventId", "evidenceIds", "correlationId", "incidentId"],
+      "properties": {
+        "invariantResultId": { "$ref": "#/$defs/identifier" },
+        "materialEventId": { "$ref": "#/$defs/identifier" },
+        "evidenceIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/identifier" }
+        },
+        "correlationId": { "$ref": "#/$defs/identifier" },
+        "incidentId": {
+          "oneOf": [
+            { "$ref": "#/$defs/identifier" },
+            { "type": "null" }
+          ]
+        }
+      }
+    }
+  }
+}

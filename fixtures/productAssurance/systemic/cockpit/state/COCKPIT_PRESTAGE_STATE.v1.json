@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "stateId": "S5_COCKPIT_EMERGENCY_CHECKPOINT_V1",
+  "status": "WIP_EMERGENCY_CHECKPOINT",
+  "branch": "ip-assur-cockpit-20260713",
+  "baseCommit": "9785c93102b00389847b77c2f9348c06abc4344b",
+  "currentStep": "4/7",
+  "recordedAt": "2026-07-13T00:00:00+05:30",
+  "nextSubtask": "Finish the release-manifest 7-semantic-stream and 8-command exact denominator plus dependency dereferencing, then synchronize the cockpit 25-contract fixtures, schemas, tests, and cross-manifest wrapper to the four named source aggregations before rerunning any focused gate.",
+  "halfFinished": [
+    "Release manifest evaluator and fixture are mid-edit: source inventory is moving from four named aggregations to seven canonical SYSTEM_SEMANTIC_STREAMS, command inventory from six visible controls to all eight SYSTEM_CONTROL_COMMANDS, and dependency/optional/temporal/axis compatibility hostile laws are not yet closed.",
+    "Cockpit view-model evaluator has the closed fact-shape/valueState/decimal/owner-vocabulary direction, 25-contract and six-control constants, and collection validators, but panel fixtures, schemas, draft metadata, and tests are not synchronized to that evaluator.",
+    "Cross-manifest panel evaluator exists but its schema and tests are incomplete; source aggregation rows still need sourceAggregationId plus coveredExpectedManifestItemIds, and whole-machine versus dependent-panel gating is not closed.",
+    "Historical-series artifacts exist and had a passing focused checkpoint, but the boundary-gap coherence fix, removal of invalid instantaneous-resource BURN_RATE, and bound catalog updates were interrupted mid-pass.",
+    "SLO trend/catalog still need explicit category-correct definitions instead of cloned coverage, canonical owner bindings, and non-collapsible submetric denominators for paired/plural requirements.",
+    "Conservation accounting still needs exact reason-to-transition/disposition compatibility and exclusive export-recovery count laws.",
+    "The receipt is intentionally stale and must not be treated as immutable or ready; it must be regenerated only after a completed implementation commit and full gates."
+  ],
+  "verified": [
+    "Branch and base were verified before work: ip-assur-cockpit-20260713 at 9785c93102b00389847b77c2f9348c06abc4344b.",
+    "Binding inputs were read and hashed: IP_ASSURANCE.md 5f6d4b3b70e384f6123e9ccc01891faf04aef9da7f7cfd1e0c63be5c3ba68803; dedup matrix 22686d2cd1c54bbc39af56399298a0ed9563bbc8643ad4f0e498718de83cb2cd; DASHBOARD_TRUTH 9f44e9d9c6111ffcc176fe30ea27d02dced83006d8df9ceb218c2c1af8df07c7; DESIGN 7d8f739e7994edf684aa719277f94cb467169955c111f379297a98bc79430a54.",
+    "Protected untracked I00 input remained read-only with sha256 9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5.",
+    "Historical-series focused checkpoint previously passed 14/14 and its generic schema/purity enumeration passed before subsequent interrupted edits.",
+    "A prior pre-refinement combined focused checkpoint passed 106/106, npm test passed 377 tests, and npm run test:all passed; those results are stale and MUST be rerun after resumption.",
+    "No production evaluator, web UI, Q/L, shared generated, shared receipt, root document, network, secret, external-system, current-main, or push mutation was made."
+  ],
+  "verificationState": "STALE_AFTER_INTERRUPTED_EDITS_DO_NOT_CLAIM_PASS",
+  "authority": "PACKET_LOCAL_REFERENCE_ONLY",
+  "productionWiringState": "DIRECTOR_MOUNT_REQUIRED",
+  "commitState": "EMERGENCY_CHECKPOINT_COMMIT_REQUIRED",
+  "resumeInstruction": "Read this state, inspect the emergency checkpoint commit, re-read interrupted-agent messages captured in the task context, finish the exact listed next subtask, then run the focused and repository gates only after all artifacts are synchronized."
+}

@@ -1,0 +1,282 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ip-assurance:s5:observability:conservation-accounting:v1",
+  "title": "Per-event, stage, and window observability conservation input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "nowMs", "expectedTuples", "records"],
+  "properties": {
+    "schemaVersion": { "const": "conservation-accounting.v1" },
+    "nowMs": { "$ref": "#/$defs/utcMillis" },
+    "expectedTuples": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1024,
+      "items": { "$ref": "#/$defs/expectedTuple" }
+    },
+    "records": {
+      "type": "array",
+      "maxItems": 2048,
+      "items": { "$ref": "#/$defs/stageRecord" }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+    },
+    "nullableIdentifier": {
+      "oneOf": [
+        { "$ref": "#/$defs/identifier" },
+        { "type": "null" }
+      ]
+    },
+    "releaseSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40,64}$"
+    },
+    "utcMillis": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "nullableUtcMillis": {
+      "oneOf": [
+        { "$ref": "#/$defs/utcMillis" },
+        { "type": "null" }
+      ]
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["windowId", "startMs", "endMs"],
+      "properties": {
+        "windowId": { "$ref": "#/$defs/identifier" },
+        "startMs": { "$ref": "#/$defs/utcMillis" },
+        "endMs": { "$ref": "#/$defs/utcMillis" }
+      }
+    },
+    "expectedTuple": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stableLogicalEventId", "stageId", "window", "releaseSha", "evidenceClass"],
+      "properties": {
+        "stableLogicalEventId": { "$ref": "#/$defs/identifier" },
+        "stageId": { "$ref": "#/$defs/identifier" },
+        "window": { "$ref": "#/$defs/window" },
+        "releaseSha": { "$ref": "#/$defs/releaseSha" },
+        "evidenceClass": { "$ref": "#/$defs/evidenceClass" }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accepted", "refused", "queued", "processed", "exported", "dropped", "inFlight"],
+      "properties": {
+        "accepted": { "$ref": "#/$defs/count" },
+        "refused": { "$ref": "#/$defs/count" },
+        "queued": { "$ref": "#/$defs/count" },
+        "processed": { "$ref": "#/$defs/count" },
+        "exported": { "$ref": "#/$defs/count" },
+        "dropped": { "$ref": "#/$defs/count" },
+        "inFlight": { "$ref": "#/$defs/count" }
+      }
+    },
+    "queue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["depth", "ageMs", "capacity"],
+      "properties": {
+        "depth": { "$ref": "#/$defs/count" },
+        "ageMs": { "$ref": "#/$defs/count" },
+        "capacity": { "$ref": "#/$defs/count" }
+      }
+    },
+    "times": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eventAtMs",
+        "receiptAtMs",
+        "availableAtMs",
+        "processingStartedAtMs",
+        "processingEndedAtMs"
+      ],
+      "properties": {
+        "eventAtMs": { "$ref": "#/$defs/utcMillis" },
+        "receiptAtMs": { "$ref": "#/$defs/utcMillis" },
+        "availableAtMs": { "$ref": "#/$defs/utcMillis" },
+        "processingStartedAtMs": { "$ref": "#/$defs/nullableUtcMillis" },
+        "processingEndedAtMs": { "$ref": "#/$defs/nullableUtcMillis" }
+      }
+    },
+    "transition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sequence", "state", "atMs", "reasonCode"],
+      "properties": {
+        "sequence": { "type": "integer", "minimum": 1, "maximum": 1024 },
+        "state": {
+          "enum": [
+            "ACCEPTED",
+            "REFUSED",
+            "QUEUED",
+            "PROCESSING",
+            "EXPORTED",
+            "DROPPED",
+            "COALESCED",
+            "IN_FLIGHT",
+            "LATE",
+            "QUARANTINED",
+            "UNRESOLVED",
+            "REPLAYED",
+            "RECONCILED",
+            "COMPLETED"
+          ]
+        },
+        "atMs": { "$ref": "#/$defs/utcMillis" },
+        "reasonCode": { "$ref": "#/$defs/nullableIdentifier" }
+      }
+    },
+    "disposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "reasonCode", "incidentId"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "COMPLETED",
+            "REFUSED",
+            "DROPPED",
+            "COALESCED",
+            "IN_FLIGHT",
+            "LATE",
+            "QUARANTINED",
+            "UNRESOLVED_INCIDENT_BOUND",
+            "DUPLICATED_REPLAYED_RECONCILED"
+          ]
+        },
+        "reasonCode": { "$ref": "#/$defs/nullableIdentifier" },
+        "incidentId": { "$ref": "#/$defs/nullableIdentifier" }
+      }
+    },
+    "duplicateAccounting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seenCount", "replayCount", "reconciledDuplicateCount", "canonicalEventId"],
+      "properties": {
+        "seenCount": { "$ref": "#/$defs/count" },
+        "replayCount": { "$ref": "#/$defs/count" },
+        "reconciledDuplicateCount": { "$ref": "#/$defs/count" },
+        "canonicalEventId": { "$ref": "#/$defs/identifier" }
+      }
+    },
+    "sampling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "budgetId"],
+      "properties": {
+        "mode": { "enum": ["NONE", "BUDGETED_ROUTINE_PUBLIC"] },
+        "budgetId": { "$ref": "#/$defs/nullableIdentifier" }
+      }
+    },
+    "exportRecovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "budgetId",
+        "budgetExpiresAtMs",
+        "incidentId",
+        "bufferedCount",
+        "replayedCount"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "NOT_REQUIRED",
+            "BUFFERED_WITHIN_BUDGET",
+            "REPLAYED_WITHIN_BUDGET",
+            "EVIDENCE_GAP_INCIDENT_BOUND"
+          ]
+        },
+        "budgetId": { "$ref": "#/$defs/nullableIdentifier" },
+        "budgetExpiresAtMs": { "$ref": "#/$defs/nullableUtcMillis" },
+        "incidentId": { "$ref": "#/$defs/nullableIdentifier" },
+        "bufferedCount": { "$ref": "#/$defs/count" },
+        "replayedCount": { "$ref": "#/$defs/count" }
+      }
+    },
+    "evidenceClass": {
+      "enum": [
+        "ROUTINE_PUBLIC",
+        "LEDGER_AUDIT",
+        "MONEY_MUTATION",
+        "AMBIGUOUS_RESPONSE",
+        "RECONCILIATION",
+        "INVARIANT_FAILURE",
+        "OWNER_AUTHORIZATION",
+        "REPAIR",
+        "INCIDENT"
+      ]
+    },
+    "stageRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stableLogicalEventId",
+        "stageId",
+        "window",
+        "serviceId",
+        "componentId",
+        "instanceId",
+        "releaseSha",
+        "environment",
+        "authorityOwnerId",
+        "telemetrySchemaVersion",
+        "evidenceClass",
+        "counts",
+        "queue",
+        "times",
+        "transitions",
+        "disposition",
+        "duplicateAccounting",
+        "sampling",
+        "exportRecovery"
+      ],
+      "properties": {
+        "stableLogicalEventId": { "$ref": "#/$defs/identifier" },
+        "stageId": { "$ref": "#/$defs/identifier" },
+        "window": { "$ref": "#/$defs/window" },
+        "serviceId": { "$ref": "#/$defs/identifier" },
+        "componentId": { "$ref": "#/$defs/identifier" },
+        "instanceId": { "$ref": "#/$defs/identifier" },
+        "releaseSha": { "$ref": "#/$defs/releaseSha" },
+        "environment": { "enum": ["LOCAL_FIXTURE", "TEST", "SHADOW", "PRODUCTION"] },
+        "authorityOwnerId": { "$ref": "#/$defs/identifier" },
+        "telemetrySchemaVersion": { "$ref": "#/$defs/identifier" },
+        "evidenceClass": { "$ref": "#/$defs/evidenceClass" },
+        "counts": { "$ref": "#/$defs/counts" },
+        "queue": { "$ref": "#/$defs/queue" },
+        "times": { "$ref": "#/$defs/times" },
+        "transitions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1024,
+          "items": { "$ref": "#/$defs/transition" }
+        },
+        "disposition": { "$ref": "#/$defs/disposition" },
+        "duplicateAccounting": { "$ref": "#/$defs/duplicateAccounting" },
+        "sampling": { "$ref": "#/$defs/sampling" },
+        "exportRecovery": { "$ref": "#/$defs/exportRecovery" }
+      }
+    }
+  }
+}

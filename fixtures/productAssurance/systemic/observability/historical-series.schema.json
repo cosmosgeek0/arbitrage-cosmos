@@ -1,0 +1,330 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ip-assurance:s5:observability:historical-series:v1",
+  "title": "Release-bound historical metric series input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "nowMs",
+    "releaseSha",
+    "catalogVerificationMaximumAgeMs",
+    "catalogBinding",
+    "viewWindowPolicy",
+    "series"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "historical-series.v1" },
+    "nowMs": { "$ref": "#/$defs/utcMillis" },
+    "releaseSha": { "$ref": "#/$defs/releaseSha" },
+    "catalogVerificationMaximumAgeMs": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2592000000
+    },
+    "catalogBinding": { "$ref": "#/$defs/catalogBinding" },
+    "viewWindowPolicy": { "$ref": "#/$defs/viewWindowPolicy" },
+    "series": {
+      "type": "array",
+      "maxItems": 23,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/series" }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "releaseSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40,64}$"
+    },
+    "utcMillis": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "finiteSigned": {
+      "type": "number",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "exactDecimal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 99,
+      "pattern": "^(?:0|[1-9][0-9]*(?:\\.[0-9]*[1-9])?|0\\.[0-9]*[1-9]|-(?:[1-9][0-9]*(?:\\.[0-9]*[1-9])?|0\\.[0-9]*[1-9]))$"
+    },
+    "catalogBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result",
+        "catalogId",
+        "catalogRevision",
+        "catalogSha256",
+        "releaseSha",
+        "verifierOwnerId",
+        "evidenceRefId",
+        "verifiedAtMs"
+      ],
+      "properties": {
+        "result": { "enum": ["PASS", "FAIL", "UNKNOWN"] },
+        "catalogId": { "$ref": "#/$defs/identifier" },
+        "catalogRevision": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "catalogSha256": { "$ref": "#/$defs/sha256" },
+        "releaseSha": { "$ref": "#/$defs/releaseSha" },
+        "verifierOwnerId": { "$ref": "#/$defs/identifier" },
+        "evidenceRefId": { "$ref": "#/$defs/identifier" },
+        "verifiedAtMs": { "$ref": "#/$defs/utcMillis" }
+      }
+    },
+    "viewWindowPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policyId", "revision", "startMs", "endMs"],
+      "properties": {
+        "policyId": { "const": "s5-historical-view-window.v1" },
+        "revision": { "const": 1 },
+        "startMs": { "$ref": "#/$defs/utcMillis" },
+        "endMs": { "$ref": "#/$defs/utcMillis" }
+      }
+    },
+    "freshnessPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policyId", "revision", "maximumCurrentAgeMs"],
+      "properties": {
+        "policyId": { "const": "s5-historical-current.v1" },
+        "revision": { "const": 1 },
+        "maximumCurrentAgeMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2592000000
+        }
+      }
+    },
+    "coherencePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policyId", "revision", "maximumSampleGapMs"],
+      "properties": {
+        "policyId": { "const": "s5-historical-coherence.v1" },
+        "revision": { "const": 1 },
+        "maximumSampleGapMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2592000000
+        }
+      }
+    },
+    "optionalMetricValue": {
+      "oneOf": [
+        { "$ref": "#/$defs/finiteSigned" },
+        { "$ref": "#/$defs/exactDecimal" },
+        { "type": "null" }
+      ]
+    },
+    "statisticContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "countTotal",
+        "rateKind",
+        "rateNumeratorCount",
+        "rateDenominatorCount",
+        "rateDenominatorMs",
+        "capacity",
+        "budget"
+      ],
+      "properties": {
+        "countTotal": {
+          "oneOf": [
+            { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            { "type": "null" }
+          ]
+        },
+        "rateKind": {
+          "oneOf": [
+            { "enum": ["PER_TIME", "RATIO"] },
+            { "type": "null" }
+          ]
+        },
+        "rateNumeratorCount": {
+          "oneOf": [
+            { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            { "type": "null" }
+          ]
+        },
+        "rateDenominatorCount": {
+          "oneOf": [
+            { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            { "type": "null" }
+          ]
+        },
+        "rateDenominatorMs": {
+          "oneOf": [
+            { "type": "integer", "minimum": 1, "maximum": 2592000000 },
+            { "type": "null" }
+          ]
+        },
+        "capacity": { "$ref": "#/$defs/optionalMetricValue" },
+        "budget": { "$ref": "#/$defs/optionalMetricValue" }
+      }
+    },
+    "evidenceBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "catalogEvidenceRefId",
+        "seriesEvidenceId",
+        "materialEventId",
+        "correlationId",
+        "releaseSha",
+        "ownerId",
+        "observedAtMs",
+        "sampleEvidenceIds"
+      ],
+      "properties": {
+        "catalogEvidenceRefId": { "$ref": "#/$defs/identifier" },
+        "seriesEvidenceId": { "$ref": "#/$defs/identifier" },
+        "materialEventId": { "$ref": "#/$defs/identifier" },
+        "correlationId": { "$ref": "#/$defs/identifier" },
+        "releaseSha": { "$ref": "#/$defs/releaseSha" },
+        "ownerId": { "$ref": "#/$defs/identifier" },
+        "observedAtMs": { "$ref": "#/$defs/utcMillis" },
+        "sampleEvidenceIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1024,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/identifier" }
+        }
+      }
+    },
+    "sample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sampleId", "evidenceId", "observedAtMs", "value"],
+      "properties": {
+        "sampleId": { "$ref": "#/$defs/identifier" },
+        "evidenceId": { "$ref": "#/$defs/identifier" },
+        "observedAtMs": { "$ref": "#/$defs/utcMillis" },
+        "value": {
+          "oneOf": [
+            { "$ref": "#/$defs/finiteSigned" },
+            { "$ref": "#/$defs/exactDecimal" }
+          ]
+        }
+      }
+    },
+    "series": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seriesId",
+        "seriesSha256",
+        "metricId",
+        "family",
+        "catalogId",
+        "catalogRevision",
+        "catalogSha256",
+        "releaseSha",
+        "ownerId",
+        "unit",
+        "statistics",
+        "maximumSeriesPoints",
+        "retentionWindowMs",
+        "freshnessPolicy",
+        "coherencePolicy",
+        "coherenceState",
+        "statisticContext",
+        "sourceTruthLabel",
+        "windowId",
+        "startMs",
+        "endMs",
+        "evidenceBinding",
+        "samples"
+      ],
+      "properties": {
+        "seriesId": { "$ref": "#/$defs/identifier" },
+        "seriesSha256": { "$ref": "#/$defs/sha256" },
+        "metricId": { "$ref": "#/$defs/identifier" },
+        "family": {
+          "enum": [
+            "SOURCE_AGE_PERCENTILES",
+            "PROCESSING_AGE_PERCENTILES",
+            "CROSS_SOURCE_SKEW",
+            "QUEUE_DEPTH_BACKPRESSURE",
+            "DROPPED_COALESCED_EVENTS",
+            "RECONCILIATION_GAP",
+            "AMBIGUITY_DURATION",
+            "AUTOMATIC_RECOVERY_RESULT_RATE",
+            "EXECUTION_COST",
+            "SLIPPAGE",
+            "FUNDING",
+            "BORROW_INTEREST",
+            "MARKET_IMPACT",
+            "INCIDENT_FREQUENCY",
+            "RECURRING_FAILED_INVARIANTS",
+            "CPU_BUDGET",
+            "MEMORY_BUDGET",
+            "DISK_BUDGET",
+            "WAL_BUDGET",
+            "API_RATE_BUDGET",
+            "TELEMETRY_BUDGET",
+            "TOKEN_BUDGET",
+            "COST_BUDGET"
+          ]
+        },
+        "catalogId": { "$ref": "#/$defs/identifier" },
+        "catalogRevision": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "catalogSha256": { "$ref": "#/$defs/sha256" },
+        "releaseSha": { "$ref": "#/$defs/releaseSha" },
+        "ownerId": { "$ref": "#/$defs/identifier" },
+        "unit": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "statistics": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "enum": ["P50", "P95", "P99", "COUNT", "RATE", "SUM", "UTILIZATION", "BURN_RATE"] }
+        },
+        "maximumSeriesPoints": { "type": "integer", "minimum": 1, "maximum": 1024 },
+        "retentionWindowMs": { "type": "integer", "minimum": 1, "maximum": 31536000000 },
+        "freshnessPolicy": { "$ref": "#/$defs/freshnessPolicy" },
+        "coherencePolicy": { "$ref": "#/$defs/coherencePolicy" },
+        "coherenceState": { "enum": ["COHERENT", "INCOHERENT", "UNKNOWN"] },
+        "statisticContext": { "$ref": "#/$defs/statisticContext" },
+        "sourceTruthLabel": {
+          "enum": [
+            "LIVE_PUBLIC",
+            "DRY_RUN",
+            "SYNTHETIC_ONLY",
+            "RECORDED_REPLAY",
+            "UNAVAILABLE",
+            "UNKNOWN"
+          ]
+        },
+        "windowId": { "$ref": "#/$defs/identifier" },
+        "startMs": { "$ref": "#/$defs/utcMillis" },
+        "endMs": { "$ref": "#/$defs/utcMillis" },
+        "evidenceBinding": { "$ref": "#/$defs/evidenceBinding" },
+        "samples": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1024,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/sample" }
+        }
+      }
+    }
+  }
+}

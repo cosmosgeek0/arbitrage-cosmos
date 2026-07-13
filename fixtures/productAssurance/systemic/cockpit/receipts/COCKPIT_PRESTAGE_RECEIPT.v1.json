@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "S5_COCKPIT_PRESTAGE_RECEIPT_V1",
+  "status": "COCKPIT_PRESTAGE_READY",
+  "branch": "ip-assur-cockpit-20260713",
+  "baseCommit": "9785c93",
+  "evaluatedAtMs": 1750000000000,
+  "releaseManifest": {
+    "manifestId": "manifest.release.fixture-001",
+    "manifestRevision": 2,
+    "manifestSha256": "68428c85723a7d955c4e7bdeb9001429ff0ec6cce5d6db0e33c73eb33fa3a80e",
+    "acceptedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+    "cockpitProjectionCount": 20,
+    "commandPathCount": 1
+  },
+  "counts": {
+    "surfaces": 18,
+    "panelContracts": 20,
+    "dashboardRequiredFacts": 92,
+    "factSemantics": 255,
+    "informationLevels": 5,
+    "informationTopics": 28,
+    "focusedTestsPassed": 42,
+    "focusedTestsFailed": 0
+  },
+  "verification": {
+    "command": "node --test --test-concurrency=1 test/productAssurance/systemic/cockpit/*.test.mjs",
+    "networkUsed": false,
+    "ambientClockUsed": false,
+    "productionCodeTouched": false
+  },
+  "authority": "PACKET_LOCAL_REFERENCE_ONLY",
+  "productionWiringState": "DIRECTOR_MOUNT_REQUIRED",
+  "commitState": "DIRECTOR_COMMIT_REQUIRED",
+  "artifacts": [
+    {
+      "path": "fixtures/productAssurance/systemic/cockpit/drafts/INSERTION_REQUEST_ROWS_DRAFT.v1.json",
+      "sha256": "270d328b69479b0e3afcb5518e102a5581ae507681ca7f2e3706754230d37394"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/cockpit/drafts/RESOURCE_BACKPRESSURE_ROWS_DRAFT.v1.json",
+      "sha256": "a9d91c9141bf52297197b392f7d878c25defc778e1428b191a11eded311d5586"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/cockpit/drafts/TELEMETRY_COVERAGE_ROWS_DRAFT.v1.json",
+      "sha256": "f61b329b0cf4a5e3ddaa8912dc08f63669cb803dc3d1765e16e70f3e10aaf614"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json",
+      "sha256": "692fd871a69278d33464ca1ec5ef163d6f9f9027c20c42014f1daf2ba25979cd"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-observations.v1.json",
+      "sha256": "4001d152d1d7aad9906805ba3edfb23722372d4b093ddda03828319983189b87"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/cockpit/fixtures/surface-projection-matrix.v1.json",
+      "sha256": "cde6068979d5503bdcb557269ebe827ac91182e4de6c0aa8c26872b8f4c6dea7"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/cockpit/reference/cockpit-view-model.mjs",
+      "sha256": "f32ed8d2e35b5603cffae2698f84887b0c81057e7358c0cc8bb318720d67c1ed"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/cockpit/schemas/cockpit-contract-set.v1.schema.json",
+      "sha256": "e8235fd36a2ea875a5fbba8329ca753f9a75d1b0373cfb361ea5d8a68f47967c"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/cockpit/schemas/cockpit-view-model.v1.schema.json",
+      "sha256": "825c463179da7906d31ec760e14b4d4a5bb8748788c949a8ad04c5a1ec227626"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/cockpit/schemas/generated-row-drafts.v1.schema.json",
+      "sha256": "0c4b79f7b693f434bf78b3b6e6b542a68c780c3ebfaaa012dd99e98312f7cef9"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/cockpit/schemas/insertion-request-draft.v1.schema.json",
+      "sha256": "6a604a1bf8b635436948b34d35b241bb82f6d5260d8801764d90d5099e3b3ada"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/cockpit/schemas/surface-projection-matrix.v1.schema.json",
+      "sha256": "4399ed5f1eeac4b92371094a66efbfb565581a5f74a81153808ad5a0fc9125b6"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/cockpit/state/COCKPIT_PRESTAGE_STATE.v1.json",
+      "sha256": "3d19ce21038780d5fc67ced098bcec3af6f2470504af497734e76c16ebdeafa3"
+    },
+    {
+      "path": "test/productAssurance/systemic/cockpit/contract-and-projection.test.mjs",
+      "sha256": "4791ff41f0184afed9c5703bc120ff36ec87c9015d3e4c07127729a4ffdaa6eb"
+    },
+    {
+      "path": "test/productAssurance/systemic/cockpit/import-purity.test.mjs",
+      "sha256": "12d43424e7659a75824bc9921c207a0b88f5879383f57ed743e33a238b7bc73a"
+    },
+    {
+      "path": "test/productAssurance/systemic/cockpit/path-scope.test.mjs",
+      "sha256": "a32184012411eb10185bfeccf02f692df10969d5f19b14e4235bd2e1ea99f794"
+    },
+    {
+      "path": "test/productAssurance/systemic/cockpit/receipt-and-state.test.mjs",
+      "sha256": "c42d3fb8da0f118c63d4152fc4c4dd61af62e48d42b53f2b05cd8cba97acbf98"
+    },
+    {
+      "path": "test/productAssurance/systemic/cockpit/schema-and-drafts.test.mjs",
+      "sha256": "7c0240aa93abf0fb32978cae8c0afbacf80dfeba1bfebb1ccfb05cf2d89340a6"
+    },
+    {
+      "path": "test/productAssurance/systemic/cockpit/schema-conformance.test.mjs",
+      "sha256": "2404033e6d6dc84627f2d5640a962e6514d0129a955109c59fd58200ac3c1bea"
+    },
+    {
+      "path": "test/productAssurance/systemic/cockpit/support/json-schema-2020-12-subset.mjs",
+      "sha256": "a4191c95f602024259882432b1f7c71c1cd6e8f07ad3ad0ff8a91f4e9a07c5be"
+    }
+  ]
+}

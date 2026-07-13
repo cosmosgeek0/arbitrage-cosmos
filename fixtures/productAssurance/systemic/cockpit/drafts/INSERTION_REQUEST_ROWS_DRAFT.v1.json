@@ -1,0 +1,496 @@
+{
+  "schemaVersion": 1,
+  "artifactState": "DRAFT_ONLY",
+  "rows": [
+    {
+      "requestId": "S5_COCKPIT_TELEMETRY_COVERAGE",
+      "status": "DRAFT",
+      "requestedOwner": "I00_DIRECTOR",
+      "targetSeam": "TELEMETRY_COVERAGE_MATRIX.md",
+      "reason": "The final matrix needs a release-bound, machine-checkable denominator and panel proof columns before any green completeness claim.",
+      "contract": {
+        "kind": "TELEMETRY_COVERAGE_COLUMNS",
+        "columns": [
+          "Expected Item ID",
+          "Canonical Owner",
+          "Source Schema ID",
+          "Source Schema Version",
+          "Supervisor Snapshot Revision",
+          "Expected Manifest ID",
+          "Expected Manifest SHA-256",
+          "Accepted Release SHA",
+          "Running Release SHA",
+          "Manifest Evaluation Result",
+          "SurfaceId",
+          "Panel Contract ID",
+          "Aggregation Path",
+          "Support/Configuration",
+          "Discovery/Identity",
+          "Instrumentation/Telemetry",
+          "Freshness",
+          "Temporal Coherence",
+          "Lifecycle/Authority",
+          "Data Mode",
+          "Independent Probe",
+          "Expected Count",
+          "Visible Count",
+          "Filtered Count",
+          "Hidden Count",
+          "Unknown Count",
+          "Minimum Green Evidence",
+          "Evidence Maximum Age",
+          "Last Independent Proof",
+          "Independent Proof Maximum Age",
+          "Integration State",
+          "Remaining Blocker",
+          "Registered Failure ID",
+          "Detector Path",
+          "Telemetry Path",
+          "Browser Path",
+          "Detection SLO",
+          "Out-of-Band Proof Path"
+        ]
+      },
+      "tests": [
+        "closed panel contract schema",
+        "exact denominator partition rejection",
+        "unknown/stale/silent/missing/synthetic anti-green cases",
+        "expiry from injected evaluation time",
+        "5s registered detector/telemetry/browser/SLO claim validation",
+        "dead app/host/tunnel out-of-band proof enforcement"
+      ],
+      "expectedBehavior": "Rows remain UNKNOWN or DIRECTOR_MOUNT_REQUIRED until manifest binding, complete denominators, current evidence, and independent proof are mounted and measured.",
+      "integrationState": "DIRECTOR_MOUNT_REQUIRED"
+    },
+    {
+      "requestId": "S5_COCKPIT_RESOURCE_BACKPRESSURE",
+      "status": "DRAFT",
+      "requestedOwner": "I00_DIRECTOR",
+      "targetSeam": "RESOURCE_AND_BACKPRESSURE_REPORT.md",
+      "reason": "I00 section 21A requires every listed resource/backpressure category to be measured and bounded through accepted telemetry owners.",
+      "contract": {
+        "kind": "RESOURCE_BACKPRESSURE_CATEGORIES",
+        "categories": [
+          "CPU and event-loop pressure",
+          "memory and process growth",
+          "disk/WAL/evidence/log growth",
+          "public/private event rate",
+          "Q inference rate and latency",
+          "queue depth and processing lag",
+          "dropped, coalesced, or superseded events",
+          "database write latency",
+          "Binance request weight/rate-budget use",
+          "reconnects and resynchronization",
+          "focus-symbol capacity",
+          "active-ticket/position priority",
+          "API/browser stream pressure",
+          "degradation and load-shedding order"
+        ],
+        "shedFirst": [
+          "optional research",
+          "replay",
+          "news",
+          "chart detail",
+          "broad enrichment"
+        ],
+        "protectedSafetyOwners": [
+          "active-position supervision",
+          "reconciliation",
+          "recovery",
+          "private truth",
+          "ledger",
+          "operator control"
+        ]
+      },
+      "tests": [
+        "all 14 I00 section 21A categories present exactly once",
+        "Health and Control Room level-3 projection coverage",
+        "hidden/filtered denominator visibility",
+        "no packet telemetry collector or throttling authority"
+      ],
+      "expectedBehavior": "Accepted owners expose bounded measurements and trends; optional work sheds before safety owners, while this packet remains read-only and recommends no mutation.",
+      "integrationState": "DIRECTOR_MOUNT_REQUIRED"
+    },
+    {
+      "requestId": "S5_COCKPIT_I17_PAGE_MATRIX",
+      "status": "DRAFT",
+      "requestedOwner": "I00_DIRECTOR",
+      "targetSeam": "I17 final canary-ready receipt page matrix",
+      "reason": "I17 needs exact row-level proof for every accepted IP-CONTROL surface without inventing a page or upgrading fixture evidence.",
+      "contract": {
+        "kind": "I17_PAGE_MATRIX",
+        "columns": [
+          "Page",
+          "routeKind",
+          "canonicalRoute",
+          "pageOwner",
+          "Canonical APIs",
+          "Live/Synthetic/Unwired Status",
+          "Controls",
+          "Empty/Error Behavior",
+          "Acceptance Evidence",
+          "Remaining Blocker"
+        ],
+        "rows": [
+          {
+            "Page": "dashboard",
+            "Canonical APIs": "SystemSupervisorReadModel posture, control, summaries, attentionQueue, recentCorrelatedDecisions",
+            "Live/Synthetic/Unwired Status": "SYNTHETIC_ONLY | WIRED_FIXTURE | DIRECTOR_MOUNT_REQUIRED",
+            "Controls": "No packet control; existing dashboard drill-down only",
+            "Empty/Error Behavior": "UNKNOWN is explicit; stale, silent, missing, synthetic, and unsupported remain visible and cannot render green.",
+            "Acceptance Evidence": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json#PANEL_DASHBOARD_TRUTH_V1",
+            "Remaining Blocker": "I08 canonical condensation, IP-CONTROL mount, IP-PROOF rendered browser evidence, and I00 director acceptance.",
+            "routeKind": "CANONICAL_SURFACE",
+            "canonicalRoute": "dashboard",
+            "pageOwner": "dashboard"
+          },
+          {
+            "Page": "control-room",
+            "Canonical APIs": "SystemSupervisorReadModel components/edges plus existing System Control registry",
+            "Live/Synthetic/Unwired Status": "SYNTHETIC_ONLY | WIRED_FIXTURE | DIRECTOR_MOUNT_REQUIRED",
+            "Controls": "Existing tested backend registry; SET_KILL_SWITCH contract is explicitly bound",
+            "Empty/Error Behavior": "UNKNOWN is explicit; stale, silent, missing, synthetic, and unsupported remain visible and cannot render green.",
+            "Acceptance Evidence": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json#PANEL_CONTROL_ROOM_TRUTH_V1 + CONTROL_KILL_SWITCH_V1",
+            "Remaining Blocker": "I08 canonical condensation, IP-CONTROL mount, IP-PROOF rendered browser evidence, and I00 director acceptance.",
+            "routeKind": "CANONICAL_SURFACE",
+            "canonicalRoute": "control-room",
+            "pageOwner": "control-room"
+          },
+          {
+            "Page": "account",
+            "Canonical APIs": "Canonical Capital, Account Truth, reconciliation, and supervisor summary adapters",
+            "Live/Synthetic/Unwired Status": "SYNTHETIC_ONLY | WIRED_FIXTURE | DIRECTOR_MOUNT_REQUIRED",
+            "Controls": "Canonical account/control owners only; none created here",
+            "Empty/Error Behavior": "UNKNOWN is explicit; stale, silent, missing, synthetic, and unsupported remain visible and cannot render green.",
+            "Acceptance Evidence": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json#PANEL_ACCOUNT_TRUTH_V1",
+            "Remaining Blocker": "I08 canonical condensation, IP-CONTROL mount, IP-PROOF rendered browser evidence, and I00 director acceptance.",
+            "routeKind": "CANONICAL_SURFACE",
+            "canonicalRoute": "account",
+            "pageOwner": "account"
+          },
+          {
+            "Page": "markets",
+            "Canonical APIs": "Canonical universe, source coverage, ranking, and Q summary adapters",
+            "Live/Synthetic/Unwired Status": "SYNTHETIC_ONLY | WIRED_FIXTURE | DIRECTOR_MOUNT_REQUIRED",
+            "Controls": "Read-only projection; no browser scanner or packet control",
+            "Empty/Error Behavior": "UNKNOWN is explicit; stale, silent, missing, synthetic, and unsupported remain visible and cannot render green.",
+            "Acceptance Evidence": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json#PANEL_MARKETS_TRUTH_V1",
+            "Remaining Blocker": "I08 canonical condensation, IP-CONTROL mount, IP-PROOF rendered browser evidence, and I00 director acceptance.",
+            "routeKind": "CANONICAL_SURFACE",
+            "canonicalRoute": "markets",
+            "pageOwner": "markets"
+          },
+          {
+            "Page": "token",
+            "Canonical APIs": "Canonical correlation trace, decisions, evidence chronology, and outcome adapters",
+            "Live/Synthetic/Unwired Status": "SYNTHETIC_ONLY | WIRED_FIXTURE | DIRECTOR_MOUNT_REQUIRED",
+            "Controls": "Read-only drill-down; no packet control",
+            "Empty/Error Behavior": "UNKNOWN is explicit; stale, silent, missing, synthetic, and unsupported remain visible and cannot render green.",
+            "Acceptance Evidence": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json#PANEL_TOKEN_TRUTH_V1",
+            "Remaining Blocker": "I08 canonical condensation, IP-CONTROL mount, IP-PROOF rendered browser evidence, and I00 director acceptance.",
+            "routeKind": "CANONICAL_SURFACE",
+            "canonicalRoute": "token",
+            "pageOwner": "token"
+          },
+          {
+            "Page": "basis",
+            "Canonical APIs": "Canonical Basis engine decision/proposal and lifecycle adapters",
+            "Live/Synthetic/Unwired Status": "SYNTHETIC_ONLY | WIRED_FIXTURE | DIRECTOR_MOUNT_REQUIRED",
+            "Controls": "Canonical engine/control owners only",
+            "Empty/Error Behavior": "UNKNOWN is explicit; stale, silent, missing, synthetic, and unsupported remain visible and cannot render green.",
+            "Acceptance Evidence": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json#PANEL_BASIS_TRUTH_V1",
+            "Remaining Blocker": "I08 canonical condensation, IP-CONTROL mount, IP-PROOF rendered browser evidence, and I00 director acceptance.",
+            "routeKind": "CANONICAL_SURFACE",
+            "canonicalRoute": "basis",
+            "pageOwner": "basis"
+          },
+          {
+            "Page": "volume",
+            "Canonical APIs": "Canonical Volume engine decision/proposal and lifecycle adapters",
+            "Live/Synthetic/Unwired Status": "SYNTHETIC_ONLY | WIRED_FIXTURE | DIRECTOR_MOUNT_REQUIRED",
+            "Controls": "Canonical engine/control owners only",
+            "Empty/Error Behavior": "UNKNOWN is explicit; stale, silent, missing, synthetic, and unsupported remain visible and cannot render green.",
+            "Acceptance Evidence": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json#PANEL_VOLUME_TRUTH_V1",
+            "Remaining Blocker": "I08 canonical condensation, IP-CONTROL mount, IP-PROOF rendered browser evidence, and I00 director acceptance.",
+            "routeKind": "CANONICAL_SURFACE",
+            "canonicalRoute": "volume",
+            "pageOwner": "volume"
+          },
+          {
+            "Page": "opportunities",
+            "Canonical APIs": "Canonical intelligence, Capital, Risk, approval, expiry, and invalidation adapters",
+            "Live/Synthetic/Unwired Status": "SYNTHETIC_ONLY | WIRED_FIXTURE | DIRECTOR_MOUNT_REQUIRED",
+            "Controls": "Canonical approval/revoke owners only",
+            "Empty/Error Behavior": "UNKNOWN is explicit; stale, silent, missing, synthetic, and unsupported remain visible and cannot render green.",
+            "Acceptance Evidence": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json#PANEL_OPPORTUNITIES_TRUTH_V1",
+            "Remaining Blocker": "I08 canonical condensation, IP-CONTROL mount, IP-PROOF rendered browser evidence, and I00 director acceptance.",
+            "routeKind": "CANONICAL_SURFACE",
+            "canonicalRoute": "opportunities",
+            "pageOwner": "opportunities"
+          },
+          {
+            "Page": "borrow",
+            "Canonical APIs": "Canonical borrow/account truth, liability, interest, and ticket linkage adapters",
+            "Live/Synthetic/Unwired Status": "SYNTHETIC_ONLY | WIRED_FIXTURE | DIRECTOR_MOUNT_REQUIRED",
+            "Controls": "Read-only canonical truth only; no borrow, repay, transfer, withdrawal, leverage, or margin mutation UI.",
+            "Empty/Error Behavior": "UNKNOWN is explicit; stale, silent, missing, synthetic, and unsupported remain visible and cannot render green.",
+            "Acceptance Evidence": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json#PANEL_BORROW_TRUTH_V1",
+            "Remaining Blocker": "Account-owned read-only alias mount, IP-PROOF proof that no borrow/repay money-path UI exists, and I00 director acceptance.",
+            "routeKind": "CANONICAL_SURFACE",
+            "canonicalRoute": "borrow",
+            "pageOwner": "borrow"
+          },
+          {
+            "Page": "execution",
+            "Canonical APIs": "Account-owned execution surface alias over canonical account/supervisor truth; no independent page owner or duplicated lifecycle store.",
+            "Live/Synthetic/Unwired Status": "SYNTHETIC_ONLY | WIRED_FIXTURE | DIRECTOR_MOUNT_REQUIRED",
+            "Controls": "Account-owned read-only alias; no packet control and no live order, cancel, reduce, close, borrow, repay, transfer, or withdrawal mutation.",
+            "Empty/Error Behavior": "UNKNOWN is explicit; stale, silent, missing, synthetic, and unsupported remain visible and cannot render green.",
+            "Acceptance Evidence": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json#PANEL_EXECUTION_TRUTH_V1",
+            "Remaining Blocker": "Account-owned alias mount into this accepted SurfaceId, IP-PROOF rendered evidence, and I00 director acceptance.",
+            "routeKind": "ACCOUNT_ALIAS",
+            "canonicalRoute": "account",
+            "pageOwner": "account"
+          },
+          {
+            "Page": "orders",
+            "Canonical APIs": "Account-owned orders surface alias over canonical account/supervisor truth; no independent page owner or duplicated lifecycle store.",
+            "Live/Synthetic/Unwired Status": "SYNTHETIC_ONLY | WIRED_FIXTURE | DIRECTOR_MOUNT_REQUIRED",
+            "Controls": "Account-owned read-only alias; no packet control and no live order, cancel, reduce, close, borrow, repay, transfer, or withdrawal mutation.",
+            "Empty/Error Behavior": "UNKNOWN is explicit; stale, silent, missing, synthetic, and unsupported remain visible and cannot render green.",
+            "Acceptance Evidence": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json#PANEL_ORDERS_TRUTH_V1",
+            "Remaining Blocker": "Account-owned alias mount into this accepted SurfaceId, IP-PROOF rendered evidence, and I00 director acceptance.",
+            "routeKind": "ACCOUNT_ALIAS",
+            "canonicalRoute": "account",
+            "pageOwner": "account"
+          },
+          {
+            "Page": "positions",
+            "Canonical APIs": "Account-owned positions surface alias over canonical account/supervisor truth; no independent page owner or duplicated lifecycle store.",
+            "Live/Synthetic/Unwired Status": "SYNTHETIC_ONLY | WIRED_FIXTURE | DIRECTOR_MOUNT_REQUIRED",
+            "Controls": "Account-owned read-only alias; no packet control and no live order, cancel, reduce, close, borrow, repay, transfer, or withdrawal mutation.",
+            "Empty/Error Behavior": "UNKNOWN is explicit; stale, silent, missing, synthetic, and unsupported remain visible and cannot render green.",
+            "Acceptance Evidence": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json#PANEL_POSITIONS_TRUTH_V1",
+            "Remaining Blocker": "Account-owned alias mount into this accepted SurfaceId, IP-PROOF rendered evidence, and I00 director acceptance.",
+            "routeKind": "ACCOUNT_ALIAS",
+            "canonicalRoute": "account",
+            "pageOwner": "account"
+          },
+          {
+            "Page": "fills",
+            "Canonical APIs": "Account-owned fills surface alias over canonical account/supervisor truth; no independent page owner or duplicated lifecycle store.",
+            "Live/Synthetic/Unwired Status": "SYNTHETIC_ONLY | WIRED_FIXTURE | DIRECTOR_MOUNT_REQUIRED",
+            "Controls": "Account-owned read-only alias; no packet control and no live order, cancel, reduce, close, borrow, repay, transfer, or withdrawal mutation.",
+            "Empty/Error Behavior": "UNKNOWN is explicit; stale, silent, missing, synthetic, and unsupported remain visible and cannot render green.",
+            "Acceptance Evidence": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json#PANEL_FILLS_TRUTH_V1",
+            "Remaining Blocker": "Account-owned alias mount into this accepted SurfaceId, IP-PROOF rendered evidence, and I00 director acceptance.",
+            "routeKind": "ACCOUNT_ALIAS",
+            "canonicalRoute": "account",
+            "pageOwner": "account"
+          },
+          {
+            "Page": "pnl",
+            "Canonical APIs": "Account-owned pnl surface alias over canonical account/supervisor truth; no independent page owner or duplicated lifecycle store.",
+            "Live/Synthetic/Unwired Status": "SYNTHETIC_ONLY | WIRED_FIXTURE | DIRECTOR_MOUNT_REQUIRED",
+            "Controls": "Account-owned read-only alias; no packet control and no live order, cancel, reduce, close, borrow, repay, transfer, or withdrawal mutation.",
+            "Empty/Error Behavior": "UNKNOWN is explicit; stale, silent, missing, synthetic, and unsupported remain visible and cannot render green.",
+            "Acceptance Evidence": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json#PANEL_PNL_TRUTH_V1",
+            "Remaining Blocker": "Account-owned alias mount into this accepted SurfaceId, IP-PROOF rendered evidence, and I00 director acceptance.",
+            "routeKind": "ACCOUNT_ALIAS",
+            "canonicalRoute": "account",
+            "pageOwner": "account"
+          },
+          {
+            "Page": "risk",
+            "Canonical APIs": "Canonical Risk envelope, reservations, exposure, block, gate, and halt adapters",
+            "Live/Synthetic/Unwired Status": "SYNTHETIC_ONLY | WIRED_FIXTURE | DIRECTOR_MOUNT_REQUIRED",
+            "Controls": "Canonical Risk and Control owners only",
+            "Empty/Error Behavior": "UNKNOWN is explicit; stale, silent, missing, synthetic, and unsupported remain visible and cannot render green.",
+            "Acceptance Evidence": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json#PANEL_RISK_TRUTH_V1",
+            "Remaining Blocker": "I08 canonical condensation, IP-CONTROL mount, IP-PROOF rendered browser evidence, and I00 director acceptance.",
+            "routeKind": "CANONICAL_SURFACE",
+            "canonicalRoute": "risk",
+            "pageOwner": "risk"
+          },
+          {
+            "Page": "health",
+            "Canonical APIs": "Canonical component graph, freshness/coherence, queue, SLO, resource, release, and watchdog adapters",
+            "Live/Synthetic/Unwired Status": "SYNTHETIC_ONLY | WIRED_FIXTURE | DIRECTOR_MOUNT_REQUIRED",
+            "Controls": "Existing recovery/control owners only when supported",
+            "Empty/Error Behavior": "UNKNOWN is explicit; stale, silent, missing, synthetic, and unsupported remain visible and cannot render green.",
+            "Acceptance Evidence": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json#PANEL_HEALTH_TRUTH_V1 + PANEL_HEALTH_OUT_OF_BAND_LIVENESS_V1",
+            "Remaining Blocker": "I08 canonical condensation, IP-CONTROL mount, IP-PROOF rendered browser evidence, and I00 director acceptance.",
+            "routeKind": "CANONICAL_SURFACE",
+            "canonicalRoute": "health",
+            "pageOwner": "health"
+          },
+          {
+            "Page": "logs-ledger",
+            "Canonical APIs": "Canonical structured events, trace index, immutable ledger references, redaction, and retention adapters",
+            "Live/Synthetic/Unwired Status": "SYNTHETIC_ONLY | WIRED_FIXTURE | DIRECTOR_MOUNT_REQUIRED",
+            "Controls": "Bounded query/drill-down only; no packet mutation",
+            "Empty/Error Behavior": "UNKNOWN is explicit; stale, silent, missing, synthetic, and unsupported remain visible and cannot render green.",
+            "Acceptance Evidence": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json#PANEL_LOGS_LEDGER_TRUTH_V1",
+            "Remaining Blocker": "I08 canonical condensation, IP-CONTROL mount, IP-PROOF rendered browser evidence, and I00 director acceptance.",
+            "routeKind": "CANONICAL_SURFACE",
+            "canonicalRoute": "logs-ledger",
+            "pageOwner": "logs-ledger"
+          },
+          {
+            "Page": "notifications",
+            "Canonical APIs": "Canonical deduplicated incident/attention projection and recovery proof adapters",
+            "Live/Synthetic/Unwired Status": "SYNTHETIC_ONLY | WIRED_FIXTURE | DIRECTOR_MOUNT_REQUIRED",
+            "Controls": "Existing bounded acknowledge/silence controls only",
+            "Empty/Error Behavior": "UNKNOWN is explicit; stale, silent, missing, synthetic, and unsupported remain visible and cannot render green.",
+            "Acceptance Evidence": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json#PANEL_NOTIFICATIONS_TRUTH_V1",
+            "Remaining Blocker": "I08 canonical condensation, IP-CONTROL mount, IP-PROOF rendered browser evidence, and I00 director acceptance.",
+            "routeKind": "CANONICAL_SURFACE",
+            "canonicalRoute": "notifications",
+            "pageOwner": "notifications"
+          }
+        ]
+      },
+      "tests": [
+        "exact accepted SurfaceId order and count is 18",
+        "all five information levels are represented",
+        "every surface has at least one panel contract",
+        "fixture provenance remains SYNTHETIC_ONLY and WIRED_FIXTURE"
+      ],
+      "expectedBehavior": "Every row remains synthetic/unwired until its canonical API is mounted, controls are proven, empty/error states are rendered, and IP-PROOF supplies browser evidence.",
+      "integrationState": "DIRECTOR_MOUNT_REQUIRED"
+    },
+    {
+      "requestId": "S5_COCKPIT_IP_PROOF_SWEEP",
+      "status": "DRAFT",
+      "requestedOwner": "IP_PROOF",
+      "targetSeam": "IP-PROOF S5 composed browser sweep",
+      "reason": "Packet tests prove pure semantics only; browser truth, design preservation, drill-downs, and mounted controls require composed IP-PROOF evidence.",
+      "contract": {
+        "kind": "IP_PROOF_S5_BROWSER_SWEEP",
+        "cases": [
+          {
+            "caseId": "ALL_18_SURFACES",
+            "input": "Open every accepted SurfaceId in desktop and narrow layouts.",
+            "expected": "Route opens, no console/request loop, existing design preserved, and no new page exists."
+          },
+          {
+            "caseId": "UNKNOWN_NOT_GREEN",
+            "input": "Supply canonical UNKNOWN truth or missing manifest match.",
+            "expected": "UNKNOWN is printed; no blank, zero substitution, or green state."
+          },
+          {
+            "caseId": "STALE_NOT_GREEN",
+            "input": "Advance injected/runtime time beyond declared evidence maximum age.",
+            "expected": "STALE or UNKNOWN is visible without a page refresh trick; green is impossible."
+          },
+          {
+            "caseId": "SILENT_NOT_GREEN",
+            "input": "Keep component expected/instrumented while telemetry becomes silent.",
+            "expected": "SILENT remains visible in denominator and cannot render green."
+          },
+          {
+            "caseId": "MISSING_NOT_GREEN",
+            "input": "Remove discovery for an expected component.",
+            "expected": "MISSING remains in expected denominator and blocks only the canonical dependent posture."
+          },
+          {
+            "caseId": "SYNTHETIC_NOT_LIVE",
+            "input": "Mount synthetic fixture evidence containing adversarial LIVE_PUBLIC claimed-owner fields.",
+            "expected": "SYNTHETIC_ONLY and WIRED_FIXTURE labels persist; no fixture appears live or green."
+          },
+          {
+            "caseId": "DENOMINATOR_PARTITION",
+            "input": "Make visible + filtered + hidden differ from expected.",
+            "expected": "Panel is rejected or visibly UNKNOWN; hidden/filtered counts remain shown."
+          },
+          {
+            "caseId": "ORPHAN_GAUGE",
+            "input": "Attempt to mount a gauge without owner question, canonical source, denominator, or drill-down.",
+            "expected": "Contract validation rejects the visual; nothing decorative mounts."
+          },
+          {
+            "caseId": "FAKE_CONTROL",
+            "input": "Attempt to mount a control without tested backend mutation or before/after ledger proof.",
+            "expected": "Contract validation rejects the control; unavailable controls show an exact reason."
+          },
+          {
+            "caseId": "CONTROL_RESULT",
+            "input": "Exercise the accepted kill-switch control contract.",
+            "expected": "Preview/confirm/result, optimistic revision behavior, before/after state, and ledger evidence are visible."
+          },
+          {
+            "caseId": "DRILL_DOWN",
+            "input": "Open incident, trace, and evidence links from every panel family.",
+            "expected": "Bounded correlated evidence opens and the owner never needs terminal archaeology."
+          },
+          {
+            "caseId": "DESIGN_SWEEP",
+            "input": "Verify Light/Dark, computed type roles, geometry, overflow, and clicks under DESIGN.md ship gate.",
+            "expected": "Existing visual language remains intact and truth labels are textually unambiguous."
+          },
+          {
+            "caseId": "FIVE_SECOND_CONNECTED_PATH",
+            "input": "Claim 5s detection for a registered failure.",
+            "expected": "Claim is accepted only when detector, telemetry, browser path, and matching 5000ms SLO are all connected and proven."
+          },
+          {
+            "caseId": "DEAD_BROWSER_OUT_OF_BAND",
+            "input": "Kill the app, host, or tunnel so the browser path cannot report.",
+            "expected": "Independent out-of-band detector, telemetry, SLO, and proof receipt establish the condition; the dead browser is never treated as proof."
+          },
+          {
+            "caseId": "BORROW_READ_ONLY_NO_MONEY_UI",
+            "input": "Open Borrow and inspect every visible interaction and route target.",
+            "expected": "Borrow is read-only canonical truth; no borrow, repay, transfer, withdrawal, leverage, or margin mutation UI exists."
+          }
+        ]
+      },
+      "tests": [
+        "anti-green deterministic fixture suite",
+        "fake-control and orphan-gauge rejection suite",
+        "import purity and path-scope suite",
+        "IP-PROOF rendered browser harness to be supplied by requested owner",
+        "five-second connected-path and out-of-band dead-browser cases"
+      ],
+      "expectedBehavior": "Only composed mounted browser evidence may advance page rows beyond DIRECTOR_MOUNT_REQUIRED; packet-local fixtures never establish visibility or live truth.",
+      "integrationState": "DIRECTOR_MOUNT_REQUIRED"
+    },
+    {
+      "requestId": "S5_COCKPIT_ASSURANCE_FOLD",
+      "status": "DRAFT",
+      "requestedOwner": "I00_DIRECTOR",
+      "targetSeam": "ASSURANCE_INSERTION_REQUEST.md",
+      "reason": "The director must adjudicate packet artifacts and route shared mounting/proof to existing owners without creating a second supervisor or cockpit.",
+      "contract": {
+        "kind": "ASSURANCE_PACKET_FOLD",
+        "packetArtifacts": [
+          "cockpit-contract-set.v1.schema.json",
+          "cockpit-view-model.v1.schema.json",
+          "insertion-request-draft.v1.schema.json",
+          "cockpit-view-model.mjs",
+          "panel-contracts.v1.json",
+          "surface-projection-matrix.v1.json",
+          "panel-observations.v1.json",
+          "focused cockpit tests"
+        ],
+        "forbiddenClaims": [
+          "INTEGRATED",
+          "LIVE",
+          "DEPLOYED_PROVED",
+          "I00_ACCEPTED",
+          "production ownership",
+          "runtime wiring",
+          "browser proof"
+        ]
+      },
+      "tests": [
+        "closed schema suite",
+        "pure deterministic evaluator suite",
+        "exact 18-surface projection suite",
+        "packet path-scope suite"
+      ],
+      "expectedBehavior": "Director records prestaged S5 evidence, requests I08/IP-CONTROL/IP-PROOF work through existing owners, and preserves all claims as DRAFT until composed acceptance.",
+      "integrationState": "DIRECTOR_MOUNT_REQUIRED"
+    }
+  ]
+}

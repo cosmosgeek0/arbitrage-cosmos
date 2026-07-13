@@ -1,0 +1,267 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ip-assurance:systemic:cockpit:surface-projection-matrix:v1",
+  "title": "IP Assurance S5 Five-Level Surface Projection Matrix v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "matrixId",
+    "levelDefinitions",
+    "rows"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "matrixId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "rows": {
+      "type": "array",
+      "minItems": 18,
+      "maxItems": 18,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "surfaceId",
+          "informationLevels",
+          "projectionQuestion",
+          "routeKind",
+          "canonicalRoute",
+          "pageOwner",
+          "factBindings"
+        ],
+        "properties": {
+          "surfaceId": {
+            "enum": [
+              "dashboard",
+              "control-room",
+              "account",
+              "markets",
+              "token",
+              "basis",
+              "volume",
+              "opportunities",
+              "borrow",
+              "execution",
+              "orders",
+              "positions",
+              "fills",
+              "pnl",
+              "risk",
+              "health",
+              "logs-ledger",
+              "notifications"
+            ]
+          },
+          "informationLevels": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5,
+            "uniqueItems": true,
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            }
+          },
+          "projectionQuestion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "routeKind": {
+            "enum": [
+              "CANONICAL_SURFACE",
+              "ACCOUNT_ALIAS"
+            ]
+          },
+          "canonicalRoute": {
+            "enum": [
+              "dashboard",
+              "control-room",
+              "account",
+              "markets",
+              "token",
+              "basis",
+              "volume",
+              "opportunities",
+              "borrow",
+              "execution",
+              "orders",
+              "positions",
+              "fills",
+              "pnl",
+              "risk",
+              "health",
+              "logs-ledger",
+              "notifications"
+            ]
+          },
+          "pageOwner": {
+            "enum": [
+              "dashboard",
+              "control-room",
+              "account",
+              "markets",
+              "token",
+              "basis",
+              "volume",
+              "opportunities",
+              "borrow",
+              "execution",
+              "orders",
+              "positions",
+              "fills",
+              "pnl",
+              "risk",
+              "health",
+              "logs-ledger",
+              "notifications"
+            ]
+          },
+          "factBindings": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 256,
+            "items": {
+              "$ref": "#/$defs/factBinding"
+            }
+          }
+        }
+      }
+    },
+    "levelDefinitions": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "$ref": "#/$defs/levelDefinition"
+      }
+    }
+  },
+  "$defs": {
+    "levelDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "level",
+        "levelId",
+        "title",
+        "topics"
+      ],
+      "properties": {
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "levelId": {
+          "enum": [
+            "L1_IMMEDIATE_SAFETY_VIEW",
+            "L2_INVENTORY_DEPENDENCY_GRAPH",
+            "L3_AUTOMATION_RESILIENCE",
+            "L4_MONEY_DECISION_LIFECYCLE",
+            "L5_INCIDENT_FORENSIC_DRILLDOWN"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "topics": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/topicDefinition"
+          }
+        }
+      }
+    },
+    "factBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "level",
+        "topicId",
+        "contractId",
+        "valueKey"
+      ],
+      "properties": {
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "topicId": {
+          "enum": [
+            "L1_OVERALL_POSTURE_REASON",
+            "L1_TRUTH_MODE_LABEL",
+            "L1_EXPOSURE_UNRESOLVED_LIABILITY",
+            "L1_EXECUTION_OWNER_FENCING",
+            "L1_SOURCE_AGE_COHERENCE",
+            "L1_SCENARIO_BOUNDED_RECOVERABILITY",
+            "L1_CRITICAL_UNSUPPORTED_CLAIMS",
+            "L1_INCIDENT_PAGE_DRILLDOWN",
+            "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+            "L2_STARTUP_RUNTIME_DEPENDENCIES",
+            "L2_BLOCKED_DEGRADED_EDGES",
+            "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+            "L3_RETRY_CIRCUIT_QUARANTINE_REPAIR",
+            "L3_PROGRESS_CADENCE_COOLDOWN_ATTEMPTS",
+            "L3_DEADLINE_LEASE_CANCELLATION_LATE_RESULT",
+            "L3_ROLLBACK_FALLBACK_READINESS",
+            "L3_SLO_ERROR_BUDGET_TRENDS",
+            "L3_SENTINEL_PAGING_RECEIPTS",
+            "L4_EVIDENCE_TO_PNL_CHAIN",
+            "L4_PREDICTED_REALIZED_ECONOMICS",
+            "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+            "L5_TIMELINE_CORRELATION_TRACE",
+            "L5_ASSUMPTION_CLAIM_CAUSALITY",
+            "L5_BOUNDED_EVIDENCE_IMMUTABLE_REFS",
+            "L5_REPAIR_PROPOSALS_APPROVALS",
+            "L5_DEPLOYMENT_AGENT_PROVENANCE",
+            "L5_COUNTEREXAMPLE_FAILURE_ATLAS",
+            "L5_CORRECTIVE_ACTIONS"
+          ]
+        },
+        "contractId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "valueKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        }
+      }
+    },
+    "topicDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "topicId",
+        "definition"
+      ],
+      "properties": {
+        "topicId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "definition": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "schemaVersion": "slo-trend.v1",
+  "nowMs": 4000,
+  "releaseSha": "1111111111111111111111111111111111111111",
+  "catalogVerificationMaximumAgeMs": 2000,
+  "catalogDigestVerification": {
+    "result": "PASS",
+    "verifiedCatalogSha256": "64c577475797ca8abdcb21f668765005d6467ab78f75c0699c2e1067111fd617",
+    "verifiedCatalogId": "s5-observability-catalog-fixture",
+    "verifiedCatalogRevision": 1,
+    "verifiedReleaseSha": "1111111111111111111111111111111111111111",
+    "verifierOwnerId": "I00_OPERATIONS",
+    "verifierReferenceId": "catalog-verification-fixture-1",
+    "verifiedAtMs": 3900
+  },
+  "definitions": [
+    {
+      "sloId": "source-coherence-age",
+      "version": 1,
+      "ownerId": "INTELLIGENCE_RUNTIME",
+      "category": "SOURCE_COHERENCE_AGE",
+      "criticality": "SAFETY_TRUTH",
+      "unit": "milliseconds",
+      "windowDurationMs": 1000,
+      "maximumEvidenceAgeMs": 2000,
+      "minimumSampleCount": 4,
+      "percentileMethod": "NEAREST_RANK",
+      "evaluationStatistic": "P95",
+      "comparator": "LTE",
+      "threshold": 100,
+      "objectivePercent": 99,
+      "dependentCapabilityIds": ["market-truth"],
+      "recommendedFailurePosture": "BLOCKED",
+      "effectPolicy": {
+        "authority": "EVIDENCE_ONLY",
+        "mayMutateCapital": false,
+        "mayMutateControls": false,
+        "mayExecuteRepair": false,
+        "riskReductionMustRemainAvailable": true
+      }
+    },
+    {
+      "sloId": "resource-budget",
+      "version": 1,
+      "ownerId": "I08_SUPERVISOR",
+      "category": "RESOURCE_BUDGET",
+      "criticality": "AVAILABILITY",
+      "unit": "percent",
+      "windowDurationMs": 1000,
+      "maximumEvidenceAgeMs": 2000,
+      "minimumSampleCount": 4,
+      "percentileMethod": "NEAREST_RANK",
+      "evaluationStatistic": "P99",
+      "comparator": "LTE",
+      "threshold": 80,
+      "objectivePercent": 75,
+      "dependentCapabilityIds": ["optional-research"],
+      "recommendedFailurePosture": "DEGRADED",
+      "effectPolicy": {
+        "authority": "EVIDENCE_ONLY",
+        "mayMutateCapital": false,
+        "mayMutateControls": false,
+        "mayExecuteRepair": false,
+        "riskReductionMustRemainAvailable": true
+      }
+    }
+  ],
+  "windows": [
+    {
+      "windowId": "source-age-window-latest",
+      "sloId": "source-coherence-age",
+      "sloVersion": 1,
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "startMs": 2000,
+      "endMs": 3000,
+      "evidenceObservedAtMs": 3100,
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "canonicalEvidenceRefs": {
+        "invariantResultId": "invariant-source-coherence-age-latest",
+        "materialEventId": "material-event-source-coherence-age-latest",
+        "evidenceIds": ["evidence-source-coherence-age-latest"],
+        "correlationId": "correlation-source-coherence-age-latest",
+        "incidentId": null
+      },
+      "samples": [
+        { "sampleId": "source-age-01", "observedAtMs": 2100, "value": 20, "good": true },
+        { "sampleId": "source-age-02", "observedAtMs": 2300, "value": 40, "good": true },
+        { "sampleId": "source-age-03", "observedAtMs": 2500, "value": 60, "good": true },
+        { "sampleId": "source-age-04", "observedAtMs": 2700, "value": 80, "good": true }
+      ]
+    },
+    {
+      "windowId": "resource-window-old-breach",
+      "sloId": "resource-budget",
+      "sloVersion": 1,
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "startMs": 1000,
+      "endMs": 2000,
+      "evidenceObservedAtMs": 2100,
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "canonicalEvidenceRefs": {
+        "invariantResultId": "invariant-resource-budget-old",
+        "materialEventId": "material-event-resource-budget-old",
+        "evidenceIds": ["evidence-resource-budget-old"],
+        "correlationId": "correlation-resource-budget-old",
+        "incidentId": "incident-resource-budget-old-breach"
+      },
+      "samples": [
+        { "sampleId": "resource-old-01", "observedAtMs": 1100, "value": 90, "good": false },
+        { "sampleId": "resource-old-02", "observedAtMs": 1300, "value": 100, "good": false },
+        { "sampleId": "resource-old-03", "observedAtMs": 1500, "value": 110, "good": false },
+        { "sampleId": "resource-old-04", "observedAtMs": 1700, "value": 120, "good": false }
+      ]
+    },
+    {
+      "windowId": "resource-window-latest-pass",
+      "sloId": "resource-budget",
+      "sloVersion": 1,
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "startMs": 2000,
+      "endMs": 3000,
+      "evidenceObservedAtMs": 3100,
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "canonicalEvidenceRefs": {
+        "invariantResultId": "invariant-resource-budget-latest",
+        "materialEventId": "material-event-resource-budget-latest",
+        "evidenceIds": ["evidence-resource-budget-latest"],
+        "correlationId": "correlation-resource-budget-latest",
+        "incidentId": null
+      },
+      "samples": [
+        { "sampleId": "resource-latest-01", "observedAtMs": 2100, "value": 40, "good": true },
+        { "sampleId": "resource-latest-02", "observedAtMs": 2300, "value": 50, "good": true },
+        { "sampleId": "resource-latest-03", "observedAtMs": 2500, "value": 60, "good": true },
+        { "sampleId": "resource-latest-04", "observedAtMs": 2700, "value": 70, "good": true }
+      ]
+    }
+  ]
+}

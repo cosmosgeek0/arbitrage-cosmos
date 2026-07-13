@@ -1,0 +1,769 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ip-assurance:systemic:cockpit:contract-set:v1",
+  "title": "IP Assurance S5 Cockpit Contract Set v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "contractSetId",
+    "reasonCodeRegistryVersion",
+    "reasonCodeRegistry",
+    "stateRuleSets",
+    "contracts"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "contractSetId": {
+      "$ref": "#/$defs/id"
+    },
+    "reasonCodeRegistryVersion": {
+      "const": "S5_COCKPIT_REASON_CODES_V1"
+    },
+    "reasonCodeRegistry": {
+      "const": [
+        "BLOCKING_REASON_PRESENT",
+        "BORROW_READ_ONLY_NO_MONEY_UI",
+        "CONTROL_UNAVAILABLE",
+        "DEGRADED_REASON_PRESENT",
+        "EXPOSURE_UNAVAILABLE",
+        "FIXTURE_CONTROL_UNAVAILABLE",
+        "MISSING",
+        "OPERATOR_MUTATION_NOT_AUTOMATIC",
+        "READ_ONLY_PROJECTION_NO_AUTOMATIC_ACTION",
+        "ROOT_BLOCKER_UNAVAILABLE",
+        "SILENT",
+        "STALE",
+        "SYNTHETIC",
+        "UNKNOWN"
+      ]
+    },
+    "stateRuleSets": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "$ref": "#/$defs/stateRuleSet"
+      }
+    },
+    "contracts": {
+      "type": "array",
+      "minItems": 18,
+      "maxItems": 256,
+      "items": {
+        "$ref": "#/$defs/panelContract"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 180,
+      "pattern": "^[A-Z0-9][A-Z0-9._:-]*$"
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "reasonCodes": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/id"
+      }
+    },
+    "stateRuleSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ruleSetId",
+        "states"
+      ],
+      "properties": {
+        "ruleSetId": {
+          "$ref": "#/$defs/id"
+        },
+        "states": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/stateRule"
+          }
+        }
+      }
+    },
+    "stateRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "requiresAll",
+        "forbidsAny",
+        "reason"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "GREEN",
+            "YELLOW",
+            "RED",
+            "UNKNOWN",
+            "STALE",
+            "SILENT",
+            "MISSING",
+            "SYNTHETIC"
+          ]
+        },
+        "requiresAll": {
+          "$ref": "#/$defs/reasonCodes"
+        },
+        "forbidsAny": {
+          "$ref": "#/$defs/reasonCodes"
+        },
+        "reason": {
+          "$ref": "#/$defs/text"
+        }
+      }
+    },
+    "surfaceId": {
+      "enum": [
+        "dashboard",
+        "control-room",
+        "account",
+        "markets",
+        "token",
+        "basis",
+        "volume",
+        "opportunities",
+        "borrow",
+        "execution",
+        "orders",
+        "positions",
+        "fills",
+        "pnl",
+        "risk",
+        "health",
+        "logs-ledger",
+        "notifications"
+      ]
+    },
+    "panelContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractId",
+        "panelKind",
+        "surfaceId",
+        "informationLevels",
+        "ownerQuestion",
+        "sourceBinding",
+        "releaseBinding",
+        "subjectBinding",
+        "measurement",
+        "stateRuleSetId",
+        "detectionClaim",
+        "denominatorLaw",
+        "greenEvidence",
+        "requiredValueKeys",
+        "factSemantics",
+        "actionBinding",
+        "drilldowns",
+        "drilldownBounds",
+        "lastIndependentProofTimePath",
+        "controlBinding"
+      ],
+      "properties": {
+        "contractId": {
+          "$ref": "#/$defs/id"
+        },
+        "panelKind": {
+          "enum": [
+            "PANEL",
+            "GAUGE",
+            "GRAPH",
+            "TABLE",
+            "BADGE",
+            "CONTROL"
+          ]
+        },
+        "surfaceId": {
+          "$ref": "#/$defs/surfaceId"
+        },
+        "informationLevels": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          }
+        },
+        "ownerQuestion": {
+          "$ref": "#/$defs/text"
+        },
+        "sourceBinding": {
+          "$ref": "#/$defs/sourceBinding"
+        },
+        "subjectBinding": {
+          "$ref": "#/$defs/subjectBinding"
+        },
+        "measurement": {
+          "$ref": "#/$defs/measurement"
+        },
+        "stateRuleSetId": {
+          "$ref": "#/$defs/id"
+        },
+        "detectionClaim": {
+          "$ref": "#/$defs/detectionClaim"
+        },
+        "denominatorLaw": {
+          "$ref": "#/$defs/denominatorLaw"
+        },
+        "greenEvidence": {
+          "$ref": "#/$defs/greenEvidence"
+        },
+        "requiredValueKeys": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "actionBinding": {
+          "$ref": "#/$defs/actionBinding"
+        },
+        "drilldowns": {
+          "$ref": "#/$defs/drilldowns"
+        },
+        "drilldownBounds": {
+          "$ref": "#/$defs/drilldownBounds"
+        },
+        "lastIndependentProofTimePath": {
+          "$ref": "#/$defs/text"
+        },
+        "controlBinding": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/controlBinding"
+            }
+          ]
+        },
+        "releaseBinding": {
+          "$ref": "#/$defs/releaseBinding"
+        },
+        "factSemantics": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 128,
+          "items": {
+            "$ref": "#/$defs/factSemantic"
+          }
+        }
+      }
+    },
+    "sourceBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonicalOwner",
+        "schemaId",
+        "schemaVersion",
+        "aggregationPath"
+      ],
+      "properties": {
+        "canonicalOwner": {
+          "$ref": "#/$defs/id"
+        },
+        "schemaId": {
+          "$ref": "#/$defs/id"
+        },
+        "schemaVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "aggregationPath": {
+          "$ref": "#/$defs/text"
+        }
+      }
+    },
+    "subjectBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "COMPONENT",
+            "INVARIANT",
+            "SLO",
+            "CLAIM",
+            "MONEY_LIFECYCLE_STAGE"
+          ]
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        }
+      }
+    },
+    "measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unit",
+        "windowKind",
+        "windowMs",
+        "freshnessLawId",
+        "coherenceLawId"
+      ],
+      "properties": {
+        "unit": {
+          "$ref": "#/$defs/id"
+        },
+        "windowKind": {
+          "enum": [
+            "INSTANT",
+            "ROLLING",
+            "FIXED",
+            "LIFECYCLE"
+          ]
+        },
+        "windowMs": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "freshnessLawId": {
+          "$ref": "#/$defs/id"
+        },
+        "coherenceLawId": {
+          "$ref": "#/$defs/id"
+        }
+      }
+    },
+    "denominatorLaw": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expectedSource",
+        "expectedCount",
+        "requireExactPartition",
+        "requireHiddenFilteredCounts",
+        "requireUnknownCount"
+      ],
+      "properties": {
+        "expectedSource": {
+          "$ref": "#/$defs/text"
+        },
+        "expectedCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20
+        },
+        "requireExactPartition": {
+          "const": true
+        },
+        "requireHiddenFilteredCounts": {
+          "const": true
+        },
+        "requireUnknownCount": {
+          "const": true
+        }
+      }
+    },
+    "detectionClaim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "registeredFailureId",
+        "detectorPath",
+        "telemetryPath",
+        "browserPath",
+        "sloId",
+        "sloMaximumDetectionMs",
+        "outOfBandProofPath"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "NONE",
+            "FIVE_SECOND",
+            "OUT_OF_BAND_ONLY"
+          ]
+        },
+        "registeredFailureId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 180
+        },
+        "detectorPath": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 300
+        },
+        "telemetryPath": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 300
+        },
+        "browserPath": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 300
+        },
+        "sloId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 180
+        },
+        "sloMaximumDetectionMs": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 1000000000
+        },
+        "outOfBandProofPath": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 300
+        }
+      }
+    },
+    "greenEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimumCount",
+        "evidenceMaximumAgeMs",
+        "independentProofRequired",
+        "independentProofMaximumAgeMs"
+      ],
+      "properties": {
+        "minimumCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "evidenceMaximumAgeMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000000
+        },
+        "independentProofRequired": {
+          "type": "boolean"
+        },
+        "independentProofMaximumAgeMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000000
+        }
+      }
+    },
+    "actionBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "currentOwner",
+        "actionAuthority",
+        "automaticActionId",
+        "noAutomaticActionReasonCode",
+        "operatorResponse",
+        "runbookRef"
+      ],
+      "properties": {
+        "currentOwner": {
+          "$ref": "#/$defs/id"
+        },
+        "actionAuthority": {
+          "$ref": "#/$defs/id"
+        },
+        "automaticActionId": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/id"
+            }
+          ]
+        },
+        "noAutomaticActionReasonCode": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/inputReasonCode"
+            }
+          ]
+        },
+        "operatorResponse": {
+          "$ref": "#/$defs/text"
+        },
+        "runbookRef": {
+          "$ref": "#/$defs/text"
+        }
+      }
+    },
+    "drilldowns": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "incident",
+        "trace",
+        "evidence"
+      ],
+      "properties": {
+        "incident": {
+          "$ref": "#/$defs/text"
+        },
+        "trace": {
+          "$ref": "#/$defs/text"
+        },
+        "evidence": {
+          "$ref": "#/$defs/text"
+        }
+      }
+    },
+    "drilldownBounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "perComponentRequired",
+        "maximumRows",
+        "maximumTraceEvents"
+      ],
+      "properties": {
+        "perComponentRequired": {
+          "const": true
+        },
+        "maximumRows": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "maximumTraceEvents": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        }
+      }
+    },
+    "controlBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command",
+        "backendMutationId",
+        "testedContractRef",
+        "previewConfirmResultRequired",
+        "beforeAfterEvidenceRequired",
+        "ledgerEvidenceRequired",
+        "unavailableReasonCode"
+      ],
+      "properties": {
+        "command": {
+          "enum": [
+            "SET_COMPONENT_STATE",
+            "SET_INTAKE_PAUSED",
+            "SET_SAFE_MODE",
+            "SET_KILL_SWITCH",
+            "APPLY_CONFIGURATION",
+            "REVOKE_APPROVAL",
+            "REVOKE_RESERVATION",
+            "RESTART_COMPONENT"
+          ]
+        },
+        "backendMutationId": {
+          "$ref": "#/$defs/id"
+        },
+        "testedContractRef": {
+          "$ref": "#/$defs/text"
+        },
+        "previewConfirmResultRequired": {
+          "const": true
+        },
+        "beforeAfterEvidenceRequired": {
+          "const": true
+        },
+        "ledgerEvidenceRequired": {
+          "const": true
+        },
+        "unavailableReasonCode": {
+          "$ref": "#/$defs/inputReasonCode"
+        }
+      }
+    },
+    "releaseBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifestId",
+        "manifestRevision",
+        "manifestSha256",
+        "acceptedReleaseSha",
+        "expectedManifestItemId"
+      ],
+      "properties": {
+        "manifestId": {
+          "const": "manifest.release.fixture-001"
+        },
+        "manifestRevision": {
+          "const": 2
+        },
+        "manifestSha256": {
+          "const": "68428c85723a7d955c4e7bdeb9001429ff0ec6cce5d6db0e33c73eb33fa3a80e"
+        },
+        "acceptedReleaseSha": {
+          "const": "9785c93102b00389847b77c2f9348c06abc4344b"
+        },
+        "expectedManifestItemId": {
+          "type": "string",
+          "pattern": "^cockpit-projection:[A-Z0-9][A-Z0-9._:-]*$"
+        }
+      }
+    },
+    "factSemantic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "valueKey",
+        "level",
+        "topicId",
+        "valueKind",
+        "unit",
+        "enumValues"
+      ],
+      "properties": {
+        "valueKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "topicId": {
+          "enum": [
+            "L1_OVERALL_POSTURE_REASON",
+            "L1_TRUTH_MODE_LABEL",
+            "L1_EXPOSURE_UNRESOLVED_LIABILITY",
+            "L1_EXECUTION_OWNER_FENCING",
+            "L1_SOURCE_AGE_COHERENCE",
+            "L1_SCENARIO_BOUNDED_RECOVERABILITY",
+            "L1_CRITICAL_UNSUPPORTED_CLAIMS",
+            "L1_INCIDENT_PAGE_DRILLDOWN",
+            "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+            "L2_STARTUP_RUNTIME_DEPENDENCIES",
+            "L2_BLOCKED_DEGRADED_EDGES",
+            "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+            "L3_RETRY_CIRCUIT_QUARANTINE_REPAIR",
+            "L3_PROGRESS_CADENCE_COOLDOWN_ATTEMPTS",
+            "L3_DEADLINE_LEASE_CANCELLATION_LATE_RESULT",
+            "L3_ROLLBACK_FALLBACK_READINESS",
+            "L3_SLO_ERROR_BUDGET_TRENDS",
+            "L3_SENTINEL_PAGING_RECEIPTS",
+            "L4_EVIDENCE_TO_PNL_CHAIN",
+            "L4_PREDICTED_REALIZED_ECONOMICS",
+            "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+            "L5_TIMELINE_CORRELATION_TRACE",
+            "L5_ASSUMPTION_CLAIM_CAUSALITY",
+            "L5_BOUNDED_EVIDENCE_IMMUTABLE_REFS",
+            "L5_REPAIR_PROPOSALS_APPROVALS",
+            "L5_DEPLOYMENT_AGENT_PROVENANCE",
+            "L5_COUNTEREXAMPLE_FAILURE_ATLAS",
+            "L5_CORRECTIVE_ACTIONS"
+          ]
+        },
+        "valueKind": {
+          "enum": [
+            "ENUM",
+            "TEXT",
+            "BOOLEAN",
+            "NON_NEGATIVE_INTEGER",
+            "UTC_MILLISECONDS",
+            "FINITE_NUMBER"
+          ]
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "enumValues": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              }
+            }
+          ]
+        }
+      }
+    },
+    "inputReasonCode": {
+      "enum": [
+        "BLOCKING_REASON_PRESENT",
+        "BORROW_READ_ONLY_NO_MONEY_UI",
+        "CONTROL_UNAVAILABLE",
+        "DEGRADED_REASON_PRESENT",
+        "EXPOSURE_UNAVAILABLE",
+        "FIXTURE_CONTROL_UNAVAILABLE",
+        "MISSING",
+        "OPERATOR_MUTATION_NOT_AUTOMATIC",
+        "READ_ONLY_PROJECTION_NO_AUTOMATIC_ACTION",
+        "ROOT_BLOCKER_UNAVAILABLE",
+        "SILENT",
+        "STALE",
+        "SYNTHETIC",
+        "UNKNOWN"
+      ]
+    }
+  }
+}

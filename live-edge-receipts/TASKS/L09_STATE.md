@@ -1,6 +1,6 @@
 # L09 state — normal Basis lifecycle shard
 
-Generation: `4`
+Generation: `5`
 
 Status: `BLOCKED_SHARED_OWNER_DEPENDENCY`
 
@@ -107,8 +107,13 @@ or test correction was made.
 Git metadata is writable in the resumed environment. The immutable decision
 and receipt were committed at
 `6fb1b24aa8ba1b9bb83079a1d27fbf65ba388986`; the prior read-only annotation is
-retired. This generation prepares the blocked-state commit. A following
-state-only seal records that exact commit SHA.
+retired. The blocked-acceptance state commit and tree are:
+
+- commit: `6643635a23903a62c2aa98814017a5b460dfa8b2`
+- tree: `e221b0aa742d21d2739bb4c7ac81fe1a846d4546`
+
+This generation is the state-only seal recording that exact cut. It changes
+no implementation source, test, owner input, protocol or immutable receipt.
 
 ## Current posture and non-claims
 

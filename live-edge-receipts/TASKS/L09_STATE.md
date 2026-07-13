@@ -1,6 +1,6 @@
 # L09 state — normal Basis lifecycle shard
 
-Generation: `9`
+Generation: `10`
 
 Status: `BLOCKED_SHARED_L02_L05_OWNER_DEPENDENCY`
 
@@ -104,9 +104,15 @@ represented as green.
 - Blocked receipt SHA-256:
   `1cdaf3c21b7cdeca5ee197b91c62a77a3e41e00a2e4a366e0cb4045e732e7047`.
 
-The containing blocked-documentation commit is recorded by the following
-state-only generation. This generation does not stage or commit implementation
-source/tests.
+Blocked-documentation commit:
+`ea369e869a6ea3d8d7e0c1bfe2ebad4a206e6adc`.
+
+Blocked-documentation tree:
+`65305ed4b4a8d98f0e1cb7b5085ac5d28d092471`.
+
+That commit contains the immutable L09-006 decision/receipt and the
+generation-9 task/state bytes. This generation is the state-only seal. Neither
+commit stages or commits any implementation source/test path.
 
 ## Current posture and non-claims
 

@@ -3,12 +3,15 @@ import {
   stableHash128Hex,
 } from '../../../foundation/contracts/index.js';
 import {
+  addTwinDecimals,
   checkpointExchangeTwin,
   compareTwinDecimals,
   restoreExchangeTwin,
   runExchangeTwinScenario,
+  signedTwinResidual,
   subtractTwinDecimals,
   twinDecimal,
+  validateExchangeTwinRequestSemanticEvidence,
 } from '../exchangeTwin/index.js';
 import {
   validatePrivateTruthProjection,
@@ -135,10 +138,24 @@ function venueArrivalTime(input: RunNormalBasisTwinLegInput): number {
   return arrivals[0]!.occurredAtMs;
 }
 
+function enforceEntryExpiry(
+  binding: Readonly<NormalBasisFoundationBinding>,
+  stage: NormalBasisTwinStage,
+  arrivalAtMs: number,
+): void {
+  if (stage !== 'ENTRY_SPOT' && stage !== 'ENTRY_HEDGE') return;
+  if (arrivalAtMs >= binding.entry.plan.expiresAtMs
+    || arrivalAtMs >= binding.ownerPlan.proposal.expiresAtMs) {
+    throw new TypeError('normal-Basis entry venue arrival is at or after accepted policy/proposal expiry');
+  }
+}
+
 function validatePrivateTruthEvidence(
   evidence: Readonly<NormalBasisPositionModeEvidence> | null | undefined,
   binding: Readonly<NormalBasisFoundationBinding>,
   product: 'SPOT' | 'USD_M_PERPETUAL',
+  stage: NormalBasisTwinStage,
+  checkpoint: Readonly<HydratedNormalBasisOwnerCheckpoint>,
   atMs: number,
 ): Readonly<{
   projectionRevision: string;
@@ -177,10 +194,12 @@ function validatePrivateTruthEvidence(
     fact.product === 'USD_M_PERPETUAL' && fact.factKind === 'USDM_POSITION_MODE'
   ));
   const sideBearingKinds = new Set([
-    'USDM_ACCOUNT', 'USDM_POSITIONS', 'USDM_OPEN_ORDERS', 'USDM_TRADES',
+    'USDM_ACCOUNT', 'USDM_POSITIONS', 'USDM_OPEN_ORDERS',
+    'USDM_ALGO_OPEN_ORDERS', 'USDM_TRADES',
   ]);
   const positionRowsExact = projection.sourceFacts.every((fact) => {
     if (fact.product !== 'USD_M_PERPETUAL' || !sideBearingKinds.has(fact.factKind)) return true;
+    if (!fact.usableAsPrivateEvidence || fact.value === null) return true;
     const value = fact.value as Readonly<Record<string, unknown>> | readonly unknown[];
     const rows = fact.factKind === 'USDM_ACCOUNT'
       ? (value as Readonly<{ positions?: readonly Readonly<{ positionSide?: unknown }>[] }>).positions
@@ -203,6 +222,102 @@ function validatePrivateTruthEvidence(
     ))
     || !positionRowsExact) {
     throw new TypeError('validated L05 projection does not prove current one-way USD-M positionSide=BOTH');
+  }
+
+  const exactCurrentFact = (factKind: string, queryScope: 'ACCOUNT_WIDE' | 'ALL_SYMBOLS') => {
+    const matches = projection.sourceFacts.filter((fact) => (
+      fact.product === 'USD_M_PERPETUAL' && fact.factKind === factKind
+    ));
+    if (matches.length !== 1) {
+      throw new TypeError(`validated L05 projection requires exactly one ${factKind} fact`);
+    }
+    const fact = matches[0]!;
+    if (fact.readState !== 'OK'
+      || fact.completeness !== 'COMPLETE'
+      || fact.usableAsPrivateEvidence !== true
+      || fact.validUntilMs === null || atMs >= fact.validUntilMs
+      || fact.accountRealmId !== policyLeg.accountRealmId
+      || fact.queryScope !== queryScope
+      || fact.querySymbol !== null
+      || fact.queryCoverage.kind !== 'CURRENT_UNFILTERED') {
+      throw new TypeError(`validated L05 projection does not prove a current complete ${factKind} cut`);
+    }
+    return fact;
+  };
+
+  const accountFact = exactCurrentFact('USDM_ACCOUNT', 'ACCOUNT_WIDE');
+  const positionsFact = exactCurrentFact('USDM_POSITIONS', 'ACCOUNT_WIDE');
+  const standardOrdersFact = exactCurrentFact('USDM_OPEN_ORDERS', 'ALL_SYMBOLS');
+  const algoOrdersFact = exactCurrentFact('USDM_ALGO_OPEN_ORDERS', 'ALL_SYMBOLS');
+  const accountPositions = (accountFact.value as Readonly<{
+    positions?: readonly Readonly<{
+      symbol?: unknown;
+      positionSide?: unknown;
+      positionAmt?: unknown;
+    }>[];
+  }>).positions;
+  const positions = positionsFact.value as readonly Readonly<{
+    symbol?: unknown;
+    positionSide?: unknown;
+    positionAmt?: unknown;
+  }>[];
+  const standardOrders = standardOrdersFact.value as readonly Readonly<{
+    symbol?: unknown;
+  }>[];
+  const algoOrders = algoOrdersFact.value as readonly Readonly<{
+    symbol?: unknown;
+  }>[];
+  if (!Array.isArray(accountPositions) || !Array.isArray(positions)
+    || !Array.isArray(standardOrders) || !Array.isArray(algoOrders)) {
+    throw new TypeError('validated L05 USD-M isolation facts lost their normalized row arrays');
+  }
+  const targetSymbol = binding.ownerPlan.symbol;
+  const targetAccountPositions = accountPositions.filter((row) => row.symbol === targetSymbol);
+  const targetPositions = positions.filter((row) => row.symbol === targetSymbol);
+  const targetStandardOrders = standardOrders.filter((row) => row.symbol === targetSymbol);
+  const targetAlgoOrders = algoOrders.filter((row) => row.symbol === targetSymbol);
+  if (targetStandardOrders.length !== 0 || targetAlgoOrders.length !== 0) {
+    throw new TypeError('validated L05 projection contains a target-symbol USD-M open order');
+  }
+
+  let expectedPositionAmount: string;
+  let permitAbsentPosition: boolean;
+  if (stage === 'ENTRY_HEDGE') {
+    expectedPositionAmount = '0';
+    permitAbsentPosition = true;
+  } else if (stage === 'EXIT_PERP' || stage === 'RECOVERY_CLOSE_PERP') {
+    const opened = nonNegativeOwnerQuantity(
+      checkpoint.state.openingLegs.PERP.cumulativeFilledQuantity,
+      'Foundation PERP opening fill for private-truth isolation',
+    );
+    const closed = nonNegativeOwnerQuantity(
+      checkpoint.state.closingLegs.PERP.cumulativeFilledQuantity,
+      'Foundation PERP closing fill for private-truth isolation',
+    );
+    if (compareTwinDecimals(closed, opened) >= 0) {
+      throw new TypeError('Foundation PERP private-truth isolation residual is not an open short');
+    }
+    expectedPositionAmount = signedTwinResidual('0', subtractTwinDecimals(opened, closed));
+    permitAbsentPosition = false;
+  } else {
+    throw new TypeError('USD-M private-truth isolation received a non-USD-M stage');
+  }
+  const exactEndpointPosition = (
+    rows: readonly Readonly<{
+      positionSide?: unknown;
+      positionAmt?: unknown;
+    }>[],
+  ): boolean => (
+    (permitAbsentPosition && rows.length === 0)
+    || (rows.length === 1
+      && rows[0]!.positionSide === 'BOTH'
+      && rows[0]!.positionAmt === expectedPositionAmount)
+  );
+  if (!exactEndpointPosition(targetAccountPositions)
+    || !exactEndpointPosition(targetPositions)) {
+    throw new TypeError(
+      `validated L05 account and position cuts do not independently prove target position ${expectedPositionAmount}`,
+    );
   }
   return Object.freeze({
     projectionRevision: projection.projectionRevision,
@@ -276,6 +391,30 @@ function nonNegativeOwnerQuantity(value: number, label: string): string {
   return twinDecimal(projected, label);
 }
 
+/**
+ * Bridges Foundation's binary64 residual identity to L07 exact-decimal venue
+ * quantity without an epsilon. The submitted number must be Foundation's
+ * exact raw subtraction; only the downstream decimal representation changes.
+ */
+export function projectNormalBasisFoundationCloseResidual(
+  openedQuantity: number,
+  closedQuantity: number,
+  submittedQuantity: number,
+): string {
+  const opened = nonNegativeOwnerQuantity(openedQuantity, 'Foundation opening fill');
+  const closed = nonNegativeOwnerQuantity(closedQuantity, 'Foundation closing fill');
+  if (compareTwinDecimals(closed, opened) > 0) {
+    throw new TypeError('Foundation close fill exceeds its confirmed opening fill');
+  }
+  const rawResidual = Math.max(0, openedQuantity - closedQuantity);
+  if (submittedQuantity !== rawResidual) {
+    throw new TypeError('close/recovery quantity must equal confirmed residual owner truth');
+  }
+  const projected = subtractTwinDecimals(opened, closed);
+  if (projected === '0') throw new TypeError('Foundation residual is already flat');
+  return projected;
+}
+
 function ownerResidual(
   binding: Readonly<NormalBasisFoundationBinding>,
   request: Readonly<NormalBasisFoundationLegRequestView>,
@@ -305,17 +444,11 @@ function ownerResidual(
     }
   }
   const key = request.leg.key;
-  const opened = nonNegativeOwnerQuantity(
+  return projectNormalBasisFoundationCloseResidual(
     state.openingLegs[key].cumulativeFilledQuantity,
-    `Foundation ${key} opening fill`,
-  );
-  const closed = nonNegativeOwnerQuantity(
     state.closingLegs[key].cumulativeFilledQuantity,
-    `Foundation ${key} closing fill`,
+    request.leg.quantity,
   );
-  const quantity = subtractTwinDecimals(opened, closed);
-  if (quantity === '0') throw new TypeError('Foundation residual is already flat');
-  return quantity;
 }
 
 function validateSubmissionCheckpoint(
@@ -363,10 +496,7 @@ function expectedQuantity(
     return requestQuantity;
   }
   const residual = ownerResidual(input.binding, input.ownerRequest, checkpoint);
-  if (residual !== requestQuantity) {
-    throw new TypeError('close/recovery quantity must equal confirmed residual owner truth');
-  }
-  return requestQuantity;
+  return residual;
 }
 
 function validateScenario(
@@ -391,6 +521,36 @@ function validateScenario(
     || fixture.actionAuthority !== 'NONE_RECORD_ONLY'
     || fixture.externalActionAuthorization !== 'NONE') {
     throw new TypeError('normal-Basis twin fixture does not match the owner leg request');
+  }
+  const dispatches = input.scenario.events.filter((event) => (
+    event.kind === 'PLACE_DISPATCH'
+      && (event.payload as { fixtureId?: unknown }).fixtureId === fixture.fixtureId
+  ));
+  const dispatchPayload = dispatches[0]?.payload as Readonly<{
+    requestEvidence?: unknown;
+  }> | undefined;
+  if (dispatches.length !== 1 || dispatchPayload?.requestEvidence === undefined) {
+    throw new TypeError('normal-Basis requires one L07 request-semantic-bound dispatch');
+  }
+  const requestEvidence = validateExchangeTwinRequestSemanticEvidence(
+    dispatchPayload.requestEvidence,
+  );
+  if (requestEvidence.product !== terms.product
+    || requestEvidence.symbol !== input.binding.ownerPlan.symbol
+    || requestEvidence.side !== terms.side
+    || requestEvidence.orderType !== 'LIMIT'
+    || requestEvidence.timeInForce !== 'GTC'
+    || requestEvidence.price !== fixture.price
+    || requestEvidence.quantity !== quantity
+    || requestEvidence.positionSide !== (terms.product === 'USD_M_PERPETUAL' ? 'BOTH' : null)
+    || requestEvidence.reduceOnly !== terms.reduceOnly
+    || requestEvidence.clientOrderId !== input.ownerRequest.leg.clientOrderId
+    || requestEvidence.requestId !== fixture.l06Snapshot.identity.requestId
+    || requestEvidence.requestSequence !== fixture.l06Snapshot.identity.requestSequence
+    || requestEvidence.intentFingerprint !== fixture.l06Snapshot.identity.intentFingerprint
+    || requestEvidence.sanitizedRequestContentHash
+      !== fixture.l06Snapshot.bindings.sanitizedRequestContentHash) {
+    throw new TypeError('normal-Basis L07 request semantics do not bind the Foundation leg');
   }
   if ((input.stage === 'ENTRY_SPOT' || input.stage === 'ENTRY_HEDGE')
     && fixture.price !== policyAction.price) {
@@ -439,12 +599,66 @@ function classify(order: Readonly<TwinOrderState>, orderingAmbiguous: boolean): 
   if (order.localTruth !== 'OBSERVED' || order.localObservedVenueStatus !== order.venueStatus) {
     return 'ACKNOWLEDGED';
   }
+  if (order.venueStatus === 'REJECTED') return 'REJECTED';
   if (order.venueStatus === 'FILLED') return 'FILLED';
   if (order.venueStatus === 'PARTIALLY_FILLED') return 'PARTIALLY_FILLED';
-  if ((order.venueStatus === 'CANCELED' || order.venueStatus === 'EXPIRED')
-    && compareTwinDecimals(order.filledQuantity, '0') > 0) return 'PARTIALLY_FILLED';
-  if (order.venueStatus === 'CANCELED' || order.venueStatus === 'EXPIRED') return 'TERMINAL_NO_FILL';
+  if (['CANCELED', 'EXPIRED', 'EXPIRED_IN_MATCH'].includes(order.venueStatus)
+    && compareTwinDecimals(order.filledQuantity, '0') > 0) {
+    return 'TERMINAL_PARTIALLY_FILLED';
+  }
+  if (['CANCELED', 'EXPIRED', 'EXPIRED_IN_MATCH'].includes(order.venueStatus)) {
+    return 'TERMINAL_NO_FILL';
+  }
   return 'ACKNOWLEDGED';
+}
+
+function terminalStatus(order: Readonly<TwinOrderState>): NormalBasisTwinLegObservation['terminalStatus'] {
+  if (order.localTruth !== 'OBSERVED' || order.localObservedVenueStatus !== order.venueStatus) {
+    return null;
+  }
+  return ['CANCELED', 'EXPIRED', 'REJECTED', 'EXPIRED_IN_MATCH'].includes(order.venueStatus)
+    ? order.venueStatus as NormalBasisTwinLegObservation['terminalStatus']
+    : null;
+}
+
+function feeAdjustedConfirmedQuantity(
+  order: Readonly<TwinOrderState>,
+  locallyConfirmed: boolean,
+): Readonly<{
+  baseAssetCommissionQuantity: string | null;
+  feeAdjustedConfirmedQuantity: string | null;
+}> {
+  if (!locallyConfirmed || order.filledQuantity === '0') {
+    return Object.freeze({
+      baseAssetCommissionQuantity: '0',
+      feeAdjustedConfirmedQuantity: '0',
+    });
+  }
+  if (order.fixture.product === 'USD_M_PERPETUAL') {
+    return Object.freeze({
+      baseAssetCommissionQuantity: '0',
+      feeAdjustedConfirmedQuantity: order.filledQuantity,
+    });
+  }
+  if (order.fills.some((fill) => (
+    fill.feeEvidenceRevision === null || fill.feeAmount === null || fill.feeAsset === null
+  ))) {
+    return Object.freeze({
+      baseAssetCommissionQuantity: null,
+      feeAdjustedConfirmedQuantity: null,
+    });
+  }
+  const baseAssetCommissionQuantity = order.fills.reduce((sum, fill) => (
+    fill.feeAsset === order.fixture.baseAsset
+      ? addTwinDecimals(sum, fill.feeAmount!) : sum
+  ), '0');
+  const feeAdjusted = order.fixture.side === 'BUY'
+    ? subtractTwinDecimals(order.filledQuantity, baseAssetCommissionQuantity)
+    : addTwinDecimals(order.filledQuantity, baseAssetCommissionQuantity);
+  return Object.freeze({
+    baseAssetCommissionQuantity,
+    feeAdjustedConfirmedQuantity: feeAdjusted,
+  });
 }
 
 /** Revalidates the retained L07 state and every derived observation summary. */
@@ -478,10 +692,12 @@ export function validateNormalBasisTwinLegObservation(
   const policyLeg = expectedPolicyLeg(binding, terms.key);
   const ownerLeg = expectedOwnerLeg(binding, terms.phase, terms.key);
   const requestedQuantity = twinDecimal(value.requestedQuantity, 'observation requested quantity');
-  const requestedQuantityNumber = Number(requestedQuantity);
+  const foundationSubmittedQuantity = value.foundationSubmittedQuantity;
   if (requestedQuantity !== value.requestedQuantity
-    || exactNumber(requestedQuantityNumber) !== requestedQuantity) {
-    throw new TypeError('normal-Basis observation quantity is not an exact Foundation projection');
+    || typeof foundationSubmittedQuantity !== 'number'
+    || !Number.isFinite(foundationSubmittedQuantity)
+    || foundationSubmittedQuantity <= 0) {
+    throw new TypeError('normal-Basis observation quantity is not a valid Foundation/twin projection');
   }
   const ownerRequest = Object.freeze({
     planId: binding.ownerPlan.planId,
@@ -490,7 +706,7 @@ export function validateNormalBasisTwinLegObservation(
     direction: binding.ownerPlan.direction,
     mode: binding.ownerPlan.mode,
     phase: terms.phase,
-    leg: Object.freeze({ ...ownerLeg, quantity: requestedQuantityNumber }),
+    leg: Object.freeze({ ...ownerLeg, quantity: foundationSubmittedQuantity }),
   });
   validateOwnerRequest(binding, value.stage, ownerRequest);
   const retainedScenario = Object.freeze({
@@ -528,13 +744,17 @@ export function validateNormalBasisTwinLegObservation(
     throw new TypeError('retained Spot entry quantity changed after accepted policy');
   }
 
-  if (order.venueArrivalAtMs === null) {
+  const retainedArrivalAtMs = venueArrivalTime(retainedInput);
+  if (order.venueArrivalAtMs === null || retainedArrivalAtMs !== order.venueArrivalAtMs) {
     throw new TypeError('normal-Basis observation omitted its venue-arrival time');
   }
+  enforceEntryExpiry(binding, value.stage, retainedArrivalAtMs);
   const privateTruth = validatePrivateTruthEvidence(
     value.positionModeEvidence,
     binding,
     terms.product,
+    value.stage,
+    checkpoint,
     order.venueArrivalAtMs,
   );
   if (mutationLineage.privateProjectionRevision !== privateTruth.projectionRevision
@@ -548,8 +768,8 @@ export function validateNormalBasisTwinLegObservation(
     && order.localObservedVenueStatus === order.venueStatus
     && localDisposition !== 'AMBIGUOUS';
   const confirmedFilledQuantity = locallyConfirmed ? order.filledQuantity : '0';
-  const terminalStatus = order.venueStatus === 'CANCELED' || order.venueStatus === 'EXPIRED'
-    ? order.venueStatus : null;
+  const feeAdjusted = feeAdjustedConfirmedQuantity(order, locallyConfirmed);
+  const retainedTerminalStatus = terminalStatus(order);
   if (value.foundationBindingRevision !== binding.foundationBindingRevision
     || value.policyPlanId !== binding.entry.plan.planId
     || value.policyLegId !== policyLeg.legId
@@ -573,15 +793,18 @@ export function validateNormalBasisTwinLegObservation(
     || value.ownerStateRevision !== checkpoint.state.stateRevisionId
     || value.ownerStateLifecycle !== checkpoint.state.lifecycle
     || value.ownerStateLastSequence !== checkpoint.state.lastSequence
+    || value.foundationSubmittedQuantity !== foundationSubmittedQuantity
     || value.requestedQuantity !== order.fixture.quantity
     || value.venueFilledQuantity !== order.filledQuantity
     || value.confirmedFilledQuantity !== confirmedFilledQuantity
+    || value.baseAssetCommissionQuantity !== feeAdjusted.baseAssetCommissionQuantity
+    || value.feeAdjustedConfirmedQuantity !== feeAdjusted.feeAdjustedConfirmedQuantity
     || value.remainingQuantity !== order.remainingQuantity
     || value.expiredQuantity !== order.expiredQuantity
     || value.venueStatus !== order.venueStatus
     || value.localTruth !== order.localTruth
     || value.localDisposition !== localDisposition
-    || value.terminalStatus !== terminalStatus
+    || value.terminalStatus !== retainedTerminalStatus
     || value.ambiguityVisible !== (localDisposition === 'AMBIGUOUS')
     || value.recoveryRequired !== (order.recoveryRequired || localDisposition === 'AMBIGUOUS')
     || canonicalJson(value.blockedReasonCodes) !== canonicalJson(order.blockedReasonCodes)
@@ -616,10 +839,13 @@ export function runNormalBasisTwinLeg(
   );
   const quantity = expectedQuantity(input, checkpoint);
   const atMs = venueArrivalTime(input);
+  enforceEntryExpiry(binding, input.stage, atMs);
   const privateTruth = validatePrivateTruthEvidence(
     input.privateTruthEvidence,
     binding,
     terms.product,
+    input.stage,
+    checkpoint,
     atMs,
   );
   const fixture = input.scenario.fixtures[0];
@@ -645,6 +871,7 @@ export function runNormalBasisTwinLeg(
     && order.localObservedVenueStatus === order.venueStatus
     && localDisposition !== 'AMBIGUOUS';
   const confirmedFilledQuantity = locallyConfirmed ? order.filledQuantity : '0';
+  const feeAdjusted = feeAdjustedConfirmedQuantity(order, locallyConfirmed);
   const alias = binding.aliases.find((candidate) => candidate.product === terms.product);
   if (alias === undefined) throw new TypeError('normal-Basis alias is missing');
   const material = {
@@ -670,16 +897,18 @@ export function runNormalBasisTwinLeg(
     ownerStateRevision: checkpoint.state.stateRevisionId,
     ownerStateLifecycle: checkpoint.state.lifecycle,
     ownerStateLastSequence: checkpoint.state.lastSequence,
+    foundationSubmittedQuantity: input.ownerRequest.leg.quantity,
     requestedQuantity: quantity,
     venueFilledQuantity: order.filledQuantity,
     confirmedFilledQuantity,
+    baseAssetCommissionQuantity: feeAdjusted.baseAssetCommissionQuantity,
+    feeAdjustedConfirmedQuantity: feeAdjusted.feeAdjustedConfirmedQuantity,
     remainingQuantity: order.remainingQuantity,
     expiredQuantity: order.expiredQuantity,
     venueStatus: order.venueStatus,
     localTruth: order.localTruth,
     localDisposition,
-    terminalStatus: order.venueStatus === 'CANCELED' || order.venueStatus === 'EXPIRED'
-      ? order.venueStatus : null,
+    terminalStatus: terminalStatus(order),
     ambiguityVisible: localDisposition === 'AMBIGUOUS',
     recoveryRequired: order.recoveryRequired || localDisposition === 'AMBIGUOUS',
     blockedReasonCodes: order.blockedReasonCodes,

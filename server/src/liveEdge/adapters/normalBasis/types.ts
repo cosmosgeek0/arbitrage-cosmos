@@ -271,6 +271,7 @@ export interface NormalBasisMutationLineage {
 export type NormalBasisLocalDisposition =
   | 'ACKNOWLEDGED'
   | 'PARTIALLY_FILLED'
+  | 'TERMINAL_PARTIALLY_FILLED'
   | 'FILLED'
   | 'TERMINAL_NO_FILL'
   | 'REJECTED'
@@ -300,15 +301,20 @@ export interface NormalBasisTwinLegObservation {
   readonly ownerStateRevision: string;
   readonly ownerStateLifecycle: NormalBasisFoundationStateView['lifecycle'];
   readonly ownerStateLastSequence: number;
+  readonly foundationSubmittedQuantity: number;
   readonly requestedQuantity: string;
   readonly venueFilledQuantity: string;
   readonly confirmedFilledQuantity: string;
+  /** Exact base-asset commission visible to locally confirmed owner truth. */
+  readonly baseAssetCommissionQuantity: string | null;
+  /** Gross fill adjusted only for position-changing base-asset commission. */
+  readonly feeAdjustedConfirmedQuantity: string | null;
   readonly remainingQuantity: string;
   readonly expiredQuantity: string;
   readonly venueStatus: TwinVenueStatus;
   readonly localTruth: TwinOrderState['localTruth'];
   readonly localDisposition: NormalBasisLocalDisposition;
-  readonly terminalStatus: 'CANCELED' | 'EXPIRED' | null;
+  readonly terminalStatus: 'CANCELED' | 'EXPIRED' | 'REJECTED' | 'EXPIRED_IN_MATCH' | null;
   readonly ambiguityVisible: boolean;
   readonly recoveryRequired: boolean;
   readonly blockedReasonCodes: readonly string[];
@@ -342,7 +348,7 @@ export type NormalBasisOwnerLegOutcomeView =
       readonly venueOrderId: null;
     }
   | {
-      readonly kind: 'PARTIALLY_FILLED' | 'FILLED';
+      readonly kind: 'PARTIALLY_FILLED' | 'FILLED' | 'CANCELLED';
       readonly venueOrderId: null;
       readonly cumulativeFilledQuantity: number;
     }
@@ -360,7 +366,8 @@ export type NormalBasisCanonicalOutcome =
   | 'CLOSED'
   | 'HEDGED_OPEN'
   | 'ONE_LEG_EXPOSED'
-  | 'RECOVERY_REQUIRED';
+  | 'RECOVERY_REQUIRED'
+  | 'FAILED';
 
 export interface NormalBasisRecoveryRecommendationView {
   readonly planId: string;
@@ -518,8 +525,11 @@ export interface NormalBasisOwnerAgreement {
   readonly closingPerpQuantity: string;
   readonly residualSpotQuantity: string;
   readonly residualPerpQuantity: string;
-  readonly netBaseQuantity: string;
-  readonly unhedgedBaseQuantity: string;
+  readonly openingSpotBaseAssetCommissionQuantity: string | null;
+  readonly closingSpotBaseAssetCommissionQuantity: string | null;
+  readonly feeAdjustedSpotBaseQuantity: string | null;
+  readonly netBaseQuantity: string | null;
+  readonly unhedgedBaseQuantity: string | null;
   readonly ambiguityVisible: boolean;
   readonly workingRemainderVisible: boolean;
   readonly manualActionRequired: boolean;

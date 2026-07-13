@@ -185,6 +185,15 @@ const USDM_ORDER_FIELDS = Object.freeze([
   'priceRate', 'updateTime', 'workingType', 'priceProtect', 'priceMatch',
   'selfTradePreventionMode', 'goodTillDate',
 ] as const);
+const USDM_ALGO_OPEN_ORDER_FIELDS = Object.freeze([
+  'algoId', 'clientAlgoId', 'algoType', 'orderType', 'symbol', 'side',
+  'positionSide', 'timeInForce', 'quantity', 'algoStatus', 'actualOrderId',
+  'actualPrice', 'triggerPrice', 'price', 'icebergQuantity', 'tpTriggerPrice',
+  'tpPrice', 'slTriggerPrice', 'slPrice', 'tpOrderType',
+  'selfTradePreventionMode', 'workingType', 'priceMatch', 'closePosition',
+  'priceProtect', 'reduceOnly', 'createTime', 'updateTime', 'triggerTime',
+  'goodTillDate',
+] as const);
 const USDM_TRADE_FIELDS = Object.freeze([
   'symbol', 'id', 'orderId', 'price', 'qty', 'quoteQty', 'commission',
   'commissionAsset', 'realizedPnl', 'side', 'positionSide', 'buyer', 'maker', 'time',
@@ -346,6 +355,7 @@ function assertNormalizedQueryBinding(
       case 'SPOT_OPEN_ORDERS':
       case 'SPOT_TRADES':
       case 'USDM_OPEN_ORDERS':
+      case 'USDM_ALGO_OPEN_ORDERS':
       case 'USDM_TRADES':
       case 'MARGIN_OPEN_ORDERS':
       case 'MARGIN_TRADES':
@@ -1400,6 +1410,105 @@ function normalizeUsdmOrders(value: unknown): NormalizedValue {
   return Object.freeze({ value: rows.rows, warningCodes: rows.warningCodes, blockingCodes: Object.freeze([]) });
 }
 
+function parseUsdmAlgoOpenOrder(
+  value: unknown,
+  index: number,
+): Readonly<Record<string, unknown>> {
+  const label = `USD-M openAlgoOrders[${index}]`;
+  const row = privateRecord(value, USDM_ALGO_OPEN_ORDER_FIELDS, label);
+  const positionSide = enumText(
+    row.positionSide,
+    `${label}.positionSide`,
+    ['BOTH', 'LONG', 'SHORT'],
+  );
+  const reduceOnly = privateBoolean(row.reduceOnly, `${label}.reduceOnly`);
+  const closePosition = privateBoolean(row.closePosition, `${label}.closePosition`);
+  if ((positionSide !== 'BOTH' && reduceOnly) || (closePosition && reduceOnly)) {
+    throw new TypeError(`${label} carries incompatible position-side/close/reduce-only truth`);
+  }
+  const actualOrderId = row.actualOrderId === ''
+    ? null
+    : exchangeIntegerId(row.actualOrderId, `${label}.actualOrderId`);
+  const icebergQuantity = row.icebergQuantity === 'null'
+    ? null
+    : normalizePrivateNonNegativeDecimal(
+      row.icebergQuantity,
+      `${label}.icebergQuantity`,
+    );
+  return Object.freeze({
+    symbol: venueToken(row.symbol, `${label}.symbol`),
+    algoId: exchangeIntegerId(row.algoId, `${label}.algoId`),
+    clientAlgoId: binanceClientOrderId(row.clientAlgoId, `${label}.clientAlgoId`),
+    algoType: enumText(row.algoType, `${label}.algoType`, ['CONDITIONAL']),
+    orderType: enumText(row.orderType, `${label}.orderType`, [
+      'STOP', 'STOP_MARKET', 'TAKE_PROFIT', 'TAKE_PROFIT_MARKET',
+      'TRAILING_STOP_MARKET',
+    ]),
+    side: enumText(row.side, `${label}.side`, ['BUY', 'SELL']),
+    positionSide,
+    timeInForce: enumText(row.timeInForce, `${label}.timeInForce`, [
+      'GTC', 'IOC', 'FOK', 'GTX', 'GTD', 'RPI',
+    ]),
+    quantity: normalizePrivateNonNegativeDecimal(row.quantity, `${label}.quantity`),
+    algoStatus: enumText(row.algoStatus, `${label}.algoStatus`, ['NEW']),
+    actualOrderId,
+    actualPrice: normalizePrivateNonNegativeDecimal(row.actualPrice, `${label}.actualPrice`),
+    triggerPrice: normalizePrivateNonNegativeDecimal(row.triggerPrice, `${label}.triggerPrice`),
+    price: normalizePrivateNonNegativeDecimal(row.price, `${label}.price`),
+    icebergQuantity,
+    tpTriggerPrice: normalizePrivateNonNegativeDecimal(
+      row.tpTriggerPrice,
+      `${label}.tpTriggerPrice`,
+    ),
+    tpPrice: normalizePrivateNonNegativeDecimal(row.tpPrice, `${label}.tpPrice`),
+    slTriggerPrice: normalizePrivateNonNegativeDecimal(
+      row.slTriggerPrice,
+      `${label}.slTriggerPrice`,
+    ),
+    slPrice: normalizePrivateNonNegativeDecimal(row.slPrice, `${label}.slPrice`),
+    tpOrderType: nullableOrEmptyVenueToken(row.tpOrderType, `${label}.tpOrderType`),
+    selfTradePreventionMode: enumText(
+      row.selfTradePreventionMode,
+      `${label}.selfTradePreventionMode`,
+      ['NONE', 'EXPIRE_TAKER', 'EXPIRE_MAKER', 'EXPIRE_BOTH'],
+    ),
+    workingType: enumText(
+      row.workingType,
+      `${label}.workingType`,
+      ['MARK_PRICE', 'CONTRACT_PRICE'],
+    ),
+    priceMatch: enumText(row.priceMatch, `${label}.priceMatch`, [
+      'NONE',
+      'OPPONENT', 'OPPONENT_5', 'OPPONENT_10', 'OPPONENT_20',
+      'QUEUE', 'QUEUE_5', 'QUEUE_10', 'QUEUE_20',
+    ]),
+    closePosition,
+    priceProtect: privateBoolean(row.priceProtect, `${label}.priceProtect`),
+    reduceOnly,
+    createTime: utcMillis(row.createTime, `${label}.createTime`),
+    updateTime: utcMillis(row.updateTime, `${label}.updateTime`),
+    triggerTime: privateInteger(row.triggerTime, `${label}.triggerTime`),
+    goodTillDate: privateInteger(row.goodTillDate, `${label}.goodTillDate`),
+  });
+}
+
+function normalizeUsdmAlgoOpenOrders(value: unknown): NormalizedValue {
+  const rows = normalizeRows(
+    value,
+    'usd-m algo open orders',
+    PRIVATE_DATA_BOUNDS.maximumOrders,
+    parseUsdmAlgoOpenOrder,
+    (entry) => `${String((entry as PlainRecord).symbol)}:${String(
+      (entry as PlainRecord).algoId,
+    )}`,
+  );
+  return Object.freeze({
+    value: rows.rows,
+    warningCodes: rows.warningCodes,
+    blockingCodes: Object.freeze([]),
+  });
+}
+
 function parseUsdmTrade(value: unknown, index: number): Readonly<Record<string, unknown>> {
   const label = `USD-M trades[${index}]`;
   const row = privateRecord(value, USDM_TRADE_FIELDS, label);
@@ -1755,6 +1864,7 @@ function normalizeValue(kind: PrivateFactKind, value: unknown): NormalizedValue 
     case 'USDM_BALANCE': return normalizeUsdmBalances(value);
     case 'USDM_POSITIONS': return normalizeUsdmPositions(value);
     case 'USDM_OPEN_ORDERS': return normalizeUsdmOrders(value);
+    case 'USDM_ALGO_OPEN_ORDERS': return normalizeUsdmAlgoOpenOrders(value);
     case 'USDM_TRADES': return normalizeUsdmTrades(value);
     case 'USDM_POSITION_MODE': return normalizeUsdmMode(value, 'POSITION');
     case 'USDM_MULTI_ASSETS_MODE': return normalizeUsdmMode(value, 'MULTI_ASSETS');
@@ -1768,7 +1878,6 @@ function normalizeValue(kind: PrivateFactKind, value: unknown): NormalizedValue 
     case 'USDM_COMMISSIONS':
     case 'USDM_INCOME':
     case 'USDM_ADL':
-    case 'USDM_ALGO_OPEN_ORDERS':
     case 'USDM_ACCOUNT_CONFIGURATION':
     case 'USDM_SYMBOL_CONFIGURATION':
     case 'MARGIN_MAX_BORROWABLE':

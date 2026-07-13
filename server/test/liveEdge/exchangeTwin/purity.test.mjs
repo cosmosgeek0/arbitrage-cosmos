@@ -43,6 +43,7 @@ const EXACT_IMPORTS = new Map([
     'BinanceRateReservationDecision',
     'reserveRateBudget',
   ])],
+  ['../binanceSignedKernel/request.js', new Set(['constructUnsignedRequest'])],
   ['../durableMutationJournal/journal.js', new Set(['validateMutationJournalSnapshot'])],
 ]);
 const TYPE_ONLY_IMPORTS = new Map([
@@ -72,6 +73,7 @@ const EXACT_RUNTIME_BINDINGS = new Map([
     'validateSpotOrderTifCapability',
   ])],
   ['../binanceSignedKernel/rateBudget.js', new Set(['reserveRateBudget'])],
+  ['../binanceSignedKernel/request.js', new Set(['constructUnsignedRequest'])],
   ['../durableMutationJournal/journal.js', new Set(['validateMutationJournalSnapshot'])],
 ]);
 const FORBIDDEN_NODE_ROOTS = new Set([

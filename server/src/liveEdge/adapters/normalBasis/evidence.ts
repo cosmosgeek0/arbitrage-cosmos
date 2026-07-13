@@ -3,6 +3,7 @@ import {
   stableHash128Hex,
 } from '../../../foundation/contracts/index.js';
 import {
+  addTwinDecimals,
   compareTwinDecimals,
   signedTwinResidual,
   subtractTwinDecimals,
@@ -506,7 +507,8 @@ export function evaluateNormalBasisOwnerAgreement(
     input.ownerCheckpointHydrator,
   );
   const state = checkpoint.state;
-  if (!['CLOSED', 'HEDGED_OPEN', 'ONE_LEG_EXPOSED', 'RECOVERY_REQUIRED'].includes(state.lifecycle)) {
+  if (!['CLOSED', 'HEDGED_OPEN', 'ONE_LEG_EXPOSED', 'RECOVERY_REQUIRED', 'FAILED']
+    .includes(state.lifecycle)) {
     throw new TypeError('canonical Foundation agreement checkpoint is not at an agreement lifecycle');
   }
   if (!Number.isSafeInteger(input.ownerReconciliationEvaluatedAtMs)
@@ -593,22 +595,78 @@ export function evaluateNormalBasisOwnerAgreement(
     quantities.openingPerpQuantity,
     quantities.closingPerpQuantity,
   );
-  const netBaseQuantity = signedTwinResidual(residualSpotQuantity, residualPerpQuantity);
-  const unhedgedBaseQuantity = compareTwinDecimals(residualSpotQuantity, residualPerpQuantity) >= 0
-    ? subtractTwinDecimals(residualSpotQuantity, residualPerpQuantity)
-    : subtractTwinDecimals(residualPerpQuantity, residualSpotQuantity);
+  const spotFeeCut = (
+    phase: 'OPEN' | 'CLOSE',
+    grossQuantity: string,
+  ): Readonly<{
+    commissionQuantity: string;
+    adjustedQuantity: string;
+  }> | null => {
+    if (grossQuantity === '0') {
+      return Object.freeze({ commissionQuantity: '0', adjustedQuantity: '0' });
+    }
+    const observation = observations.find((candidate) => (
+      candidate.product === 'SPOT'
+        && (phase === 'OPEN'
+          ? candidate.stage === 'ENTRY_SPOT'
+          : candidate.stage === 'EXIT_SPOT' || candidate.stage === 'RECOVERY_CLOSE_SPOT')
+    ));
+    if (observation === undefined
+      || observation.confirmedFilledQuantity !== grossQuantity
+      || observation.baseAssetCommissionQuantity === null
+      || observation.feeAdjustedConfirmedQuantity === null) return null;
+    return Object.freeze({
+      commissionQuantity: observation.baseAssetCommissionQuantity,
+      adjustedQuantity: observation.feeAdjustedConfirmedQuantity,
+    });
+  };
+  const openingSpotFeeCut = spotFeeCut('OPEN', quantities.openingSpotQuantity);
+  const closingSpotFeeCut = spotFeeCut('CLOSE', quantities.closingSpotQuantity);
+  const feeTruthAvailable = openingSpotFeeCut !== null && closingSpotFeeCut !== null;
+  const openingSpotBaseAssetCommissionQuantity = openingSpotFeeCut?.commissionQuantity ?? null;
+  const closingSpotBaseAssetCommissionQuantity = closingSpotFeeCut?.commissionQuantity ?? null;
+  const feeAdjustedSpotBaseQuantity = feeTruthAvailable
+    ? signedTwinResidual(
+      openingSpotFeeCut.adjustedQuantity,
+      closingSpotFeeCut.adjustedQuantity,
+    )
+    : null;
+  const netBaseQuantity = !feeTruthAvailable
+    ? null
+    : compareTwinDecimals(
+      openingSpotFeeCut.adjustedQuantity,
+      closingSpotFeeCut.adjustedQuantity,
+    ) >= 0
+      ? signedTwinResidual(
+        subtractTwinDecimals(
+          openingSpotFeeCut.adjustedQuantity,
+          closingSpotFeeCut.adjustedQuantity,
+        ),
+        residualPerpQuantity,
+      )
+      : signedTwinResidual(
+        '0',
+        addTwinDecimals(
+          subtractTwinDecimals(
+            closingSpotFeeCut.adjustedQuantity,
+            openingSpotFeeCut.adjustedQuantity,
+          ),
+          residualPerpQuantity,
+        ),
+      );
+  const unhedgedBaseQuantity = netBaseQuantity === null
+    ? null : netBaseQuantity.startsWith('-') ? netBaseQuantity.slice(1) : netBaseQuantity;
   const allLegs = [
     ...Object.values(state.openingLegs),
     ...Object.values(state.closingLegs),
   ];
   const ambiguityVisible = allLegs.some((leg) => leg.lifecycle === 'AMBIGUOUS')
     || observations.some((observation) => observation.ambiguityVisible);
-  const workingRemainderVisible = state.openingLegs.SPOT.lifecycle === 'ACKNOWLEDGED'
-    || state.openingLegs.SPOT.lifecycle === 'PARTIALLY_FILLED'
-    || state.openingLegs.SPOT.lifecycle === 'CANCEL_PENDING'
-    || state.openingLegs.PERP.lifecycle === 'ACKNOWLEDGED'
-    || state.openingLegs.PERP.lifecycle === 'PARTIALLY_FILLED'
-    || state.openingLegs.PERP.lifecycle === 'CANCEL_PENDING';
+  const workingRemainderVisible = allLegs.some((leg) => (
+    leg.lifecycle === 'ACKNOWLEDGED'
+      || leg.lifecycle === 'PARTIALLY_FILLED'
+      || leg.lifecycle === 'CANCEL_PENDING'
+  ));
   const recommendations = recoveryLineage(
     input,
     state,
@@ -620,17 +678,19 @@ export function evaluateNormalBasisOwnerAgreement(
   const manualReviewRecommendation = recommendations.some((value) => value.action === 'MANUAL_REVIEW');
   const openedAny = quantities.openingSpotQuantity !== '0'
     || quantities.openingPerpQuantity !== '0';
-  const imbalanced = residualSpotQuantity !== residualPerpQuantity;
+  const imbalanced = netBaseQuantity === null || netBaseQuantity !== '0';
   const reasons: string[] = [];
   const canonicalOutcome = state.lifecycle as NormalBasisCanonicalOutcome;
   if (reconciliation.blocking) reasons.push('OWNER_RECONCILIATION_BLOCKED');
+  if (!feeTruthAvailable) reasons.push('SPOT_FEE_TRUTH_UNAVAILABLE');
   if (canonicalOutcome === 'CLOSED'
-    && (residualSpotQuantity !== '0' || residualPerpQuantity !== '0'
+    && (feeAdjustedSpotBaseQuantity !== '0' || residualPerpQuantity !== '0'
       || ambiguityVisible || workingRemainderVisible || !openedAny)) {
     reasons.push('OWNER_CLOSED_WITH_UNRESOLVED_TRUTH');
   }
   if (canonicalOutcome === 'HEDGED_OPEN'
-    && (residualSpotQuantity === '0' || imbalanced
+    && (feeAdjustedSpotBaseQuantity === null || feeAdjustedSpotBaseQuantity === '0'
+      || feeAdjustedSpotBaseQuantity.startsWith('-') || imbalanced
       || ambiguityVisible || workingRemainderVisible)) {
     reasons.push('OWNER_HEDGED_OPEN_WITH_UNRESOLVED_TRUTH');
   }
@@ -640,6 +700,11 @@ export function evaluateNormalBasisOwnerAgreement(
   if (canonicalOutcome === 'ONE_LEG_EXPOSED'
     && (!openedAny || (!imbalanced && !workingRemainderVisible) || ambiguityVisible)) {
     reasons.push('OWNER_ONE_LEG_EXPOSED_WITHOUT_EXPOSURE');
+  }
+  if (canonicalOutcome === 'FAILED'
+    && (feeAdjustedSpotBaseQuantity !== '0' || residualPerpQuantity !== '0'
+      || ambiguityVisible || workingRemainderVisible)) {
+    reasons.push('OWNER_FAILED_WITH_UNRESOLVED_TRUTH');
   }
   if ((canonicalOutcome === 'ONE_LEG_EXPOSED' || canonicalOutcome === 'RECOVERY_REQUIRED')
     && !meaningfulRecommendation) {
@@ -669,6 +734,9 @@ export function evaluateNormalBasisOwnerAgreement(
     ...quantities,
     residualSpotQuantity,
     residualPerpQuantity,
+    openingSpotBaseAssetCommissionQuantity,
+    closingSpotBaseAssetCommissionQuantity,
+    feeAdjustedSpotBaseQuantity,
     netBaseQuantity,
     unhedgedBaseQuantity,
     ambiguityVisible,

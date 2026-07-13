@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import test from 'node:test';
 
+import {
+  canonicalJson,
+} from '../../../dist/foundation/contracts/index.js';
 import {
   createExecutionCoordinator,
   restoreExecutionCheckpoint,
@@ -50,7 +54,9 @@ function ownerOrderStatus(observation) {
   if (observation.order.localTruth !== 'OBSERVED') return 'UNKNOWN';
   if (observation.order.venueStatus === 'BLOCKED') return 'REJECTED';
   if (observation.order.venueStatus === 'CANCELED') return 'CANCELED';
-  if (observation.order.venueStatus === 'EXPIRED') return 'EXPIRED';
+  if (observation.order.venueStatus === 'EXPIRED'
+    || observation.order.venueStatus === 'EXPIRED_IN_MATCH') return 'EXPIRED';
+  if (observation.order.venueStatus === 'REJECTED') return 'REJECTED';
   if (observation.order.venueStatus === 'FILLED') return 'FILLED';
   if (observation.order.venueStatus === 'PARTIALLY_FILLED') return 'PARTIALLY_FILLED';
   return 'NEW';
@@ -395,6 +401,29 @@ test('accepted L08.1 plan feeds the exact Spot BUY LIMIT/GTC owner seam into L07
   assert.equal(observation.externalActionAuthorization, 'NONE');
 });
 
+test('entry venue arrival at the accepted policy expiry is rejected before twin mutation', async () => {
+  const harness = await completeLifecycle({ suffix: 'entry-expiry-boundary' });
+  const artifact = harness.artifacts.find((candidate) => (
+    candidate.observation.stage === 'ENTRY_SPOT'
+  ));
+  const staleScenario = structuredClone(artifact.scenario);
+  const arrivalIndex = staleScenario.events.findIndex((candidate) => (
+    candidate.kind === 'VENUE_ARRIVAL'
+  ));
+  const prior = staleScenario.events[arrivalIndex];
+  staleScenario.events[arrivalIndex] = event(
+    'VENUE_ARRIVAL',
+    prior.sequence,
+    harness.binding.entry.plan.expiresAtMs,
+    prior.payload,
+    { sourceSequence: prior.sourceSequence },
+  );
+  assert.throws(
+    () => runRetainedScenario(harness, artifact, staleScenario),
+    /at or after accepted policy\/proposal expiry/,
+  );
+});
+
 test('all four semantic owner legs retain distinct exact mutation identities and real checkpoints', async () => {
   const harness = await completeLifecycle({ suffix: 'four-leg-lineage' });
   const observations = harness.observations;
@@ -527,6 +556,32 @@ test('owner-input, capability and every exact mutation-lineage substitution fail
     /capability revision differs|did not retain/,
   );
 
+  const requestSemanticTampered = structuredClone(scenario);
+  const dispatchIndex = requestSemanticTampered.events.findIndex((candidate) => (
+    candidate.kind === 'PLACE_DISPATCH'
+  ));
+  const dispatch = requestSemanticTampered.events[dispatchIndex];
+  const requestEvidence = structuredClone(dispatch.payload.requestEvidence);
+  requestEvidence.reduceOnly = true;
+  const {
+    schema: _requestSchema,
+    evidenceRevision: _requestRevision,
+    ...requestMaterial
+  } = requestEvidence;
+  requestEvidence.evidenceRevision = `l07request_${createHash('sha256')
+    .update(canonicalJson(requestMaterial)).digest('hex')}`;
+  requestSemanticTampered.events[dispatchIndex] = event(
+    dispatch.kind,
+    dispatch.sequence,
+    dispatch.occurredAtMs,
+    { ...dispatch.payload, requestEvidence },
+    { sourceSequence: dispatch.sourceSequence },
+  );
+  assert.throws(
+    () => runRetainedScenario(harness, artifact, requestSemanticTampered),
+    /request semantic evidence is not canonical|request semantics do not bind/,
+  );
+
   const duplicatedOwnerEvidence = structuredClone(scenario);
   const retainedOwnerEvidence = duplicatedOwnerEvidence.events.find((candidate) => (
     candidate.kind === 'SPOT_ORDER_TIF_PREFLIGHT_EVIDENCE'
@@ -571,7 +626,7 @@ test('owner-input, capability and every exact mutation-lineage substitution fail
   );
   assert.throws(
     () => runRetainedScenario(harness, artifact, coherentZeroSequence),
-    /L06 mutation identity\/evidence alias is not exact/,
+    /L06 mutation identity\/evidence alias is not exact|L07 request semantics do not bind/,
   );
 
   const lineageSubstitutions = {
@@ -596,7 +651,7 @@ test('owner-input, capability and every exact mutation-lineage substitution fail
     owner[field] = replacement;
     assert.throws(
       () => runRetainedScenario(harness, artifact, substitutedScenario),
-      /mutation|journal|owner cut|scenario fixture/,
+      /mutation|journal|owner cut|scenario fixture|request semantics/,
       `${field} substitution in the retained mutation evidence must fail`,
     );
   }

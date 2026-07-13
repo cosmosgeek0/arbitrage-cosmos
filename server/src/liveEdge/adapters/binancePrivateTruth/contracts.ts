@@ -1,11 +1,16 @@
 import {
   BINANCE_CONTRACT_MATRIX_CONTENT_SHA256,
+  BINANCE_PRIVATE_TRUTH_CONTRACT_EXTENSION_CONTENT_SHA256,
+  USDM_ALGO_OPEN_ORDERS_CONTRACT_ID,
   canonicalBinanceContractMatrix,
+  resolveBinancePrivateTruthContractExtension,
   type BinanceContractRecord,
 } from '../binanceContracts/index.js';
 import type { PrivateFactKind, PrivateProduct } from './types.js';
 
 export const L05_BINANCE_MATRIX_SHA256 = BINANCE_CONTRACT_MATRIX_CONTENT_SHA256;
+export const L05_PRIVATE_TRUTH_CONTRACT_EXTENSION_SHA256 =
+  BINANCE_PRIVATE_TRUTH_CONTRACT_EXTENSION_CONTENT_SHA256;
 
 export const L05_PRIVATE_TRADE_HISTORY_LIMIT = 1_000 as const;
 export const L05_PRIVATE_MARGIN_INTEREST_PAGE = 1 as const;
@@ -78,7 +83,7 @@ const POLICY: Readonly<Record<PrivateFactKind, Readonly<PrivateFactContractPolic
   USDM_BALANCE: Object.freeze({ factKind: 'USDM_BALANCE', product: 'USD_M_PERPETUAL', contractId: 'USDM_BALANCE_V3', gapReason: null }),
   USDM_POSITIONS: Object.freeze({ factKind: 'USDM_POSITIONS', product: 'USD_M_PERPETUAL', contractId: 'USDM_POSITION_RISK_V3', gapReason: null }),
   USDM_OPEN_ORDERS: Object.freeze({ factKind: 'USDM_OPEN_ORDERS', product: 'USD_M_PERPETUAL', contractId: 'USDM_OPEN_ORDERS_QUERY', gapReason: null }),
-  USDM_ALGO_OPEN_ORDERS: Object.freeze({ factKind: 'USDM_ALGO_OPEN_ORDERS', product: 'USD_M_PERPETUAL', contractId: null, gapReason: 'UNAVAILABLE_L02_CONTRACT_GAP_USDM_ALGO_OPEN_ORDERS' }),
+  USDM_ALGO_OPEN_ORDERS: Object.freeze({ factKind: 'USDM_ALGO_OPEN_ORDERS', product: 'USD_M_PERPETUAL', contractId: USDM_ALGO_OPEN_ORDERS_CONTRACT_ID, gapReason: null }),
   USDM_TRADES: Object.freeze({ factKind: 'USDM_TRADES', product: 'USD_M_PERPETUAL', contractId: 'USDM_USER_TRADES_QUERY', gapReason: null }),
   USDM_COMMISSIONS: Object.freeze({ factKind: 'USDM_COMMISSIONS', product: 'USD_M_PERPETUAL', contractId: null, gapReason: 'UNAVAILABLE_L02_CONTRACT_GAP_USDM_COMMISSION' }),
   USDM_INCOME: Object.freeze({ factKind: 'USDM_INCOME', product: 'USD_M_PERPETUAL', contractId: null, gapReason: 'UNAVAILABLE_L02_CONTRACT_GAP_USDM_INCOME' }),
@@ -125,7 +130,7 @@ export const PRIVATE_FACT_QUERY_POLICY: Readonly<
   USDM_BALANCE: queryPolicy('USDM_BALANCE', 'ACCOUNT_WIDE'),
   USDM_POSITIONS: queryPolicy('USDM_POSITIONS', 'ACCOUNT_WIDE'),
   USDM_OPEN_ORDERS: queryPolicy('USDM_OPEN_ORDERS', 'ALL_SYMBOLS_OPTIONAL'),
-  USDM_ALGO_OPEN_ORDERS: queryPolicy('USDM_ALGO_OPEN_ORDERS', 'ACCOUNT_WIDE'),
+  USDM_ALGO_OPEN_ORDERS: queryPolicy('USDM_ALGO_OPEN_ORDERS', 'ALL_SYMBOLS_OPTIONAL'),
   USDM_TRADES: queryPolicy('USDM_TRADES', 'SYMBOL_REQUIRED'),
   USDM_COMMISSIONS: queryPolicy('USDM_COMMISSIONS', 'ACCOUNT_WIDE'),
   USDM_INCOME: queryPolicy('USDM_INCOME', 'ACCOUNT_WIDE'),
@@ -167,6 +172,21 @@ function findContract(contractId: string): BinanceContractRecord {
   return contract;
 }
 
+function findPrivateFactContract(contractId: string): BinanceContractRecord {
+  if (contractId === USDM_ALGO_OPEN_ORDERS_CONTRACT_ID) {
+    const extensionContract = resolveBinancePrivateTruthContractExtension(
+      L05_BINANCE_MATRIX_SHA256,
+      L05_PRIVATE_TRUTH_CONTRACT_EXTENSION_SHA256,
+      contractId,
+    );
+    if (extensionContract === null) {
+      throw new Error('L05 required D14 private-truth contract extension is unavailable');
+    }
+    return extensionContract;
+  }
+  return findContract(contractId);
+}
+
 export function resolvePrivateFactContract(
   factKind: PrivateFactKind,
   matrixSha256: unknown,
@@ -180,7 +200,7 @@ export function resolvePrivateFactContract(
     return Object.freeze({ policy, contract: null });
   }
   if (candidateContractId !== policy.contractId) throw new TypeError('private fact contract identity mismatch');
-  const contract = findContract(policy.contractId);
+  const contract = findPrivateFactContract(policy.contractId);
   if (contract.product !== policy.product || contract.environment !== 'PRODUCTION'
     || contract.lifecycle !== 'CURRENT' || !contract.realm.startsWith('PRIVATE')) {
     throw new Error('L05 required private fact contract posture changed');

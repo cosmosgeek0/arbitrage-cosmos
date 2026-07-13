@@ -115,7 +115,9 @@ export type PrivateHistoryCoverageFactKind =
 export const L05_PRIVATE_FACT_SCHEMA_REVISIONS: Readonly<
   Record<PrivateFactKind, string>
 > = Object.freeze(Object.fromEntries(PRIVATE_FACT_KINDS.map((factKind) => (
-  [factKind, `L05_BINANCE_PRIVATE_${factKind}_V1`]
+  [factKind, factKind === 'USDM_ALGO_OPEN_ORDERS'
+    ? 'L05_BINANCE_PRIVATE_USDM_ALGO_OPEN_ORDERS_V2'
+    : `L05_BINANCE_PRIVATE_${factKind}_V1`]
 ))) as Record<PrivateFactKind, string>);
 
 export const PRIVATE_TRUTH_POSTURES = Object.freeze([

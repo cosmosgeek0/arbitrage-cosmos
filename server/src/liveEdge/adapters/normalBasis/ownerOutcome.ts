@@ -32,7 +32,8 @@ function failure(
     ? 'TWIN_OUTCOME_AMBIGUOUS'
     : observation.localDisposition === 'TERMINAL_NO_FILL'
       ? 'TWIN_TERMINAL_NO_FILL'
-      : 'TWIN_PREFLIGHT_REJECTED';
+      : observation.venueStatus === 'REJECTED'
+        ? 'TWIN_VENUE_REJECTED' : 'TWIN_PREFLIGHT_REJECTED';
   return Object.freeze({
     kind,
     failure: Object.freeze({
@@ -86,7 +87,9 @@ export function projectNormalBasisOwnerLegOutcome(
   }
   return Object.freeze({
     kind: observation.localDisposition === 'FILLED'
-      ? ('FILLED' as const) : ('PARTIALLY_FILLED' as const),
+      ? ('FILLED' as const)
+      : observation.localDisposition === 'TERMINAL_PARTIALLY_FILLED'
+        ? ('CANCELLED' as const) : ('PARTIALLY_FILLED' as const),
     venueOrderId: null,
     cumulativeFilledQuantity,
   });

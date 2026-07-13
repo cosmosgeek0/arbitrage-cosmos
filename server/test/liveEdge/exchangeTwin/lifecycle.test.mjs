@@ -36,6 +36,26 @@ function runThroughVenue(fixture, options = {}) {
   return { events, state, order: orderByFixtureId(state, fixture.fixtureId) };
 }
 
+function runObservedVenue(fixture, options = {}) {
+  const venue = runThroughVenue(fixture, options);
+  const privateDelivery = event(
+    'PRIVATE_DELIVERY',
+    7,
+    venue.order.venueArrivalAtMs + fixture.latency.venueToPrivateMs,
+    { fixtureId: fixture.fixtureId, venueRevision: venue.order.venueRevision },
+  );
+  const httpDelivery = event(
+    'HTTP_DELIVERY',
+    8,
+    venue.order.venueArrivalAtMs + fixture.latency.venueToHttpMs,
+    { fixtureId: fixture.fixtureId, outcome: 'ACK' },
+  );
+  return runExchangeTwinScenario(scenarioInput({
+    fixture,
+    events: [...venue.events, privateDelivery, httpDelivery],
+  }));
+}
+
 test('status, preflight and L03 rate evidence block synthetic arrival fail-closed', () => {
   for (const status of ['CANCEL_ONLY', 'HALT', 'BREAK', 'END_OF_DAY', 'UNKNOWN']) {
     const fixture = orderFixture();
@@ -81,6 +101,66 @@ test('status, preflight and L03 rate evidence block synthetic arrival fail-close
     assert.equal(order.localObservedVenueStatus, 'BLOCKED', reason);
     assert.equal(state.rateDecisions[0].decision.reason, reason);
   }
+});
+
+test('explicit venue REJECTED and partial EXPIRED_IN_MATCH survive canonical replay', () => {
+  const rejectedFixture = orderFixture({
+    fixtureId: 'fixture-venue-rejected-0001',
+    quantity: '0.1',
+    price: '100',
+  });
+  const rejectedState = runObservedVenue(rejectedFixture, {
+    terminalStatus: 'REJECTED',
+  });
+  const rejected = orderByFixtureId(rejectedState, rejectedFixture.fixtureId);
+  assert.equal(rejected.venueStatus, 'REJECTED');
+  assert.equal(rejected.localObservedVenueStatus, 'REJECTED');
+  assert.equal(rejected.filledQuantity, '0');
+  assert.equal(rejected.remainingQuantity, '0.1');
+  assert.equal(rejected.expiredQuantity, '0');
+  assert.deepEqual(
+    restoreExchangeTwin(checkpointExchangeTwin(rejectedState)),
+    rejectedState,
+  );
+
+  const expiredFixture = orderFixture({
+    fixtureId: 'fixture-expired-in-match-0001',
+    quantity: '0.1',
+    price: '100',
+  });
+  const expiredState = runObservedVenue(expiredFixture, {
+    asks: [{ price: '100', quantity: '0.04' }],
+    terminalStatus: 'EXPIRED_IN_MATCH',
+  });
+  const expired = orderByFixtureId(expiredState, expiredFixture.fixtureId);
+  assert.equal(expired.venueStatus, 'EXPIRED_IN_MATCH');
+  assert.equal(expired.localObservedVenueStatus, 'EXPIRED_IN_MATCH');
+  assert.equal(expired.filledQuantity, '0.04');
+  assert.equal(expired.remainingQuantity, '0');
+  assert.equal(expired.expiredQuantity, '0.06');
+  assert.equal(expired.fills.length, 1);
+  assert.deepEqual(
+    restoreExchangeTwin(checkpointExchangeTwin(expiredState)),
+    expiredState,
+  );
+
+  assert.throws(
+    () => runThroughVenue(orderFixture({
+      fixtureId: 'fixture-invalid-terminal-status-0001',
+    }), { terminalStatus: 'CANCELED' }),
+    /injected venue terminal status is invalid/,
+  );
+  assert.throws(
+    () => runThroughVenue(orderFixture({
+      fixtureId: 'fixture-filled-expired-in-match-0001',
+      quantity: '0.1',
+      price: '100',
+    }), {
+      asks: [{ price: '100', quantity: '0.1' }],
+      terminalStatus: 'EXPIRED_IN_MATCH',
+    }),
+    /expired-in-match evidence requires an exact unfilled remainder/,
+  );
 });
 
 test('fixture assets cannot diverge from the L04 registry instrument identity', () => {
@@ -533,6 +613,76 @@ test('dropped cancel delivery remains UNKNOWN and requires reconciliation', () =
   assert.equal(order.venueStatus, 'CANCELED');
   assert.equal(order.localTruth, 'UNKNOWN');
   assert.equal(order.recoveryRequired, true);
+});
+
+test('cancel ACK supersedes a privately observed partial status and replays the terminal partial exactly', () => {
+  const fixture = orderFixture({
+    fixtureId: 'fixture-observed-partial-cancel-0001',
+    price: '99',
+    quantity: '0.02',
+    queueTruth: 'ESTIMATED',
+    queueAheadQuantity: '0',
+  });
+  const { state: venueState, order: venueOrder } = runThroughVenue(fixture, {
+    bids: [{ price: '99', quantity: '0.1' }],
+    asks: [{ price: '100', quantity: '0.1' }],
+  });
+  const partiallyFilled = reduceExchangeTwinEvent(venueState, event(
+    'TRADE_EVIDENCE', 9, T0 + 21,
+    {
+      product: fixture.product,
+      symbol: fixture.symbol,
+      tradeRevision: `trade-observed-partial-cancel:${'1'.repeat(24)}`,
+      price: '99',
+      quantity: '0.01',
+      aggressorSide: 'SELL',
+      feeEvidence: feeEvidence(),
+    },
+    { sourceSequence: 301 },
+  ));
+  const partialOrder = orderByFixtureId(partiallyFilled, fixture.fixtureId);
+  assert.equal(partialOrder.venueStatus, 'PARTIALLY_FILLED');
+  const privatelyObserved = reduceExchangeTwinEvent(partiallyFilled, event(
+    'PRIVATE_DELIVERY', 10,
+    venueOrder.venueArrivalAtMs + fixture.latency.venueToPrivateMs,
+    { fixtureId: fixture.fixtureId, venueRevision: partialOrder.venueRevision },
+  ));
+  assert.equal(orderByFixtureId(privatelyObserved, fixture.fixtureId).localObservedVenueStatus,
+    'PARTIALLY_FILLED');
+
+  const cancel = cancelFixture(fixture, {
+    cancelFixtureId: 'cancel-observed-partial-0001',
+    rateAtMs: T0 + 40,
+    dispatchToVenueMs: 4,
+    venueToLocalMs: 1,
+  });
+  const dispatched = reduceExchangeTwinEvent(privatelyObserved, event(
+    'CANCEL_DISPATCH', 11, T0 + 36,
+    { fixtureId: fixture.fixtureId, cancelFixture: cancel },
+  ));
+  const canceled = reduceExchangeTwinEvent(dispatched, event(
+    'CANCEL_ARRIVAL', 12, T0 + 40,
+    cancelArrivalEvidence(cancel, fixture.fixtureId, T0 + 40),
+  ));
+  const acknowledged = reduceExchangeTwinEvent(canceled, event(
+    'CANCEL_DELIVERY', 13, T0 + 41,
+    {
+      fixtureId: fixture.fixtureId,
+      cancelFixtureId: cancel.cancelFixtureId,
+      outcome: 'ACK',
+    },
+  ));
+  const terminal = orderByFixtureId(acknowledged, fixture.fixtureId);
+  assert.equal(terminal.venueStatus, 'CANCELED');
+  assert.equal(terminal.localTruth, 'OBSERVED');
+  assert.equal(terminal.localObservedVenueStatus, 'CANCELED');
+  assert.equal(terminal.filledQuantity, '0.01');
+  assert.equal(terminal.remainingQuantity, '0.01');
+  assert.equal(terminal.recoveryRequired, false);
+  assert.deepEqual(
+    restoreExchangeTwin(checkpointExchangeTwin(acknowledged)),
+    acknowledged,
+  );
 });
 
 test('CANCEL_ONLY blocks new placement but admits an exact synthetic cancel fixture', () => {

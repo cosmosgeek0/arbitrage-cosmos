@@ -42,13 +42,17 @@ import {
   EXECUTION_POLICY_OWNER_BINDINGS_SCHEMA,
 } from '../../../dist/liveEdge/adapters/executionPolicy/index.js';
 import {
+  bindExchangeTwinRequestSemanticEvidence,
   multiplyTwinDecimals,
   runExchangeTwinScenario,
+  signedTwinResidual,
 } from '../../../dist/liveEdge/adapters/exchangeTwin/index.js';
 import {
   NORMAL_BASIS_POSITION_MODE_EVIDENCE_SCHEMA,
   bindNormalBasisFoundationPlan,
   evaluateNormalBasisEntryBinding,
+  hydrateNormalBasisOwnerCheckpoint,
+  projectNormalBasisFoundationCloseResidual,
   runNormalBasisTwinLeg,
 } from '../../../dist/liveEdge/adapters/normalBasis/index.js';
 import {
@@ -61,6 +65,7 @@ import {
   T0 as TWIN_T0,
   baselineEvents,
   event,
+  feeEvidence,
   orderByFixtureId,
   orderFixture,
   passingPreflight,
@@ -689,7 +694,14 @@ function l03ClockSamples(product) {
   });
 }
 
-function buildPrivateTruthEvidence(binding, product) {
+function buildPrivateTruthEvidence(
+  binding,
+  product,
+  stage,
+  ownerRequest,
+  ownerCheckpoint,
+  ownerCheckpointHydrator,
+) {
   const policyLeg = product === 'SPOT' ? binding.entry.spotLeg : binding.entry.perpLeg;
   if (product === 'SPOT') {
     const seed = buildL05SpotOwnerEvidence({
@@ -710,10 +722,27 @@ function buildPrivateTruthEvidence(binding, product) {
       lifecycleRevisions: [owned.witness.lifecycleRevision],
     };
   }
+  let targetPositionAmount = '0';
+  if (stage === 'EXIT_PERP' || stage === 'RECOVERY_CLOSE_PERP') {
+    const checkpoint = hydrateNormalBasisOwnerCheckpoint(
+      binding,
+      ownerCheckpoint,
+      ownerCheckpointHydrator,
+    );
+    const opened = checkpoint.state.openingLegs.PERP.cumulativeFilledQuantity;
+    const closed = checkpoint.state.closingLegs.PERP.cumulativeFilledQuantity;
+    const residual = projectNormalBasisFoundationCloseResidual(
+      opened,
+      closed,
+      ownerRequest.leg.quantity,
+    );
+    targetPositionAmount = signedTwinResidual('0', residual);
+  }
   const projection = buildNormalBasisL05Projection({
     accountRealmId: policyLeg.accountRealmId,
     targetSymbol: binding.ownerPlan.symbol,
     evaluatedAtMs: PRIVATE_EVIDENCE_AT_MS,
+    targetPositionAmount,
   });
   return {
     evidence: positionModeEvidence(projection),
@@ -742,7 +771,7 @@ function attachAliasedL06(fixture, binding, ownerRequest, privateTruth) {
     parameters.push(['positionSide', 'BOTH']);
     parameters.push(['reduceOnly', String(ownerRequest.leg.reduceOnly)]);
   }
-  const l03 = constructUnsignedRequest({
+  const unsignedRequestInput = {
     contractId: fixture.product === 'SPOT' ? 'SPOT_ORDER_POST' : 'USDM_ORDER_POST',
     expectedProduct: fixture.product,
     expectedEnvironment: 'PRODUCTION',
@@ -756,9 +785,12 @@ function attachAliasedL06(fixture, binding, ownerRequest, privateTruth) {
       legId: ownerRequest.leg.legId,
       attempt: 0,
     },
-  });
+  };
+  const l03 = constructUnsignedRequest(unsignedRequestInput);
   assert.equal(l03.ok, true, JSON.stringify(l03));
   assert.equal(l03.request.clientOrderId, ownerRequest.leg.clientOrderId);
+  const requestBinding = bindExchangeTwinRequestSemanticEvidence(unsignedRequestInput);
+  assert.equal(requestBinding.ok, true, JSON.stringify(requestBinding));
   const projection = privateTruth.evidence.projection;
   const reconciliation = projection.reconciliationObservation;
   assert.equal(reconciliation?.owner, 'FOUNDATION_RECONCILIATION');
@@ -819,9 +851,12 @@ function attachAliasedL06(fixture, binding, ownerRequest, privateTruth) {
   });
   const persisted = submittingPersisted(input);
   return {
-    ...fixture,
-    l06Snapshot: persisted.snapshot,
-    l06Boundary: evaluateSyntheticSubmissionBoundary(persisted, L06_T0 + 4),
+    fixture: {
+      ...fixture,
+      l06Snapshot: persisted.snapshot,
+      l06Boundary: evaluateSyntheticSubmissionBoundary(persisted, L06_T0 + 4),
+    },
+    requestEvidence: requestBinding.evidence,
   };
 }
 
@@ -865,6 +900,7 @@ export function makeTwinLegObservation({
   privateTruthEvidence = null,
   localMode = 'OBSERVED',
   fillQuantity,
+  fee = feeEvidence(),
   fixtureId,
 } = {}) {
   fixtureCounter += 1;
@@ -880,27 +916,40 @@ export function makeTwinLegObservation({
     price: terms.price,
     quantity,
   });
-  const ownerPrivateTruth = buildPrivateTruthEvidence(binding, terms.product);
+  const ownerPrivateTruth = buildPrivateTruthEvidence(
+    binding,
+    terms.product,
+    stage,
+    ownerRequest,
+    ownerCheckpoint,
+    ownerCheckpointHydrator,
+  );
   const selectedPrivateTruth = privateTruthEvidence === null
     ? ownerPrivateTruth
     : { ...ownerPrivateTruth, evidence: privateTruthEvidence };
-  fixture = attachAliasedL06(fixture, binding, ownerRequest, selectedPrivateTruth);
+  const aliased = attachAliasedL06(fixture, binding, ownerRequest, selectedPrivateTruth);
+  fixture = aliased.fixture;
   const book = bookFor(terms.side, terms.price, quantity, fillQuantity);
   let events = baselineEvents(fixture, {
     ...book,
+    fee,
+    terminalStatus: localMode === 'REJECTED' || localMode === 'UNOBSERVED_REJECTED' ? 'REJECTED'
+      : localMode === 'EXPIRED_IN_MATCH' ? 'EXPIRED_IN_MATCH' : null,
     includePrivate: false,
     httpOutcome: localMode === 'AMBIGUOUS' ? 'TIMEOUT' : 'ACK',
   });
+  events = events.map((candidate) => candidate.kind !== 'PLACE_DISPATCH'
+    ? candidate
+    : event(
+      'PLACE_DISPATCH',
+      candidate.sequence,
+      candidate.occurredAtMs,
+      { fixtureId: fixture.fixtureId, requestEvidence: aliased.requestEvidence },
+      { sourceSequence: candidate.sourceSequence },
+    ));
   if (terms.product === 'SPOT') events = bridgeSpotEvents(events, fixture, binding, stage);
-  if (localMode === 'REJECTED') {
-    events = events.map((candidate) => candidate.kind !== 'SYMBOL_STATUS'
-      ? candidate
-      : event('SYMBOL_STATUS', candidate.sequence, candidate.occurredAtMs, {
-        ...candidate.payload,
-        status: 'HALT',
-        evidenceRevision: `normal-basis-halt:${'1'.repeat(24)}`,
-      }, { sourceSequence: candidate.sourceSequence }));
-  } else if (localMode === 'OBSERVED') {
+  if (localMode === 'OBSERVED' || localMode === 'REJECTED'
+    || localMode === 'EXPIRED_IN_MATCH') {
     const venueEvents = events.filter((candidate) => (
       candidate.kind !== 'HTTP_DELIVERY' && candidate.kind !== 'PRIVATE_DELIVERY'
     ));

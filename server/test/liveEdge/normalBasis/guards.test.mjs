@@ -22,6 +22,7 @@ import {
 } from '../../../dist/liveEdge/adapters/exchangeTwin/index.js';
 import {
   evaluateNormalBasisOwnerAgreement,
+  projectNormalBasisFoundationCloseResidual,
   projectNormalBasisOwnerLegOutcome,
   validateNormalBasisTwinLegObservation,
 } from '../../../dist/liveEdge/adapters/normalBasis/index.js';
@@ -34,6 +35,10 @@ import {
 } from '../mutationJournal/l05-owner-fixture.mjs';
 import {
   buildNormalBasisL05Projection,
+  normalBasisUsdmAccountPosition,
+  normalBasisUsdmAlgoOpenOrder,
+  normalBasisUsdmOpenOrder,
+  normalBasisUsdmPosition,
 } from './l05-fixture.mjs';
 import {
   ManualClock,
@@ -68,11 +73,12 @@ function ownerRequest(binding, leg) {
   };
 }
 
-function modeProjection(binding, evaluatedAtMs = OWNER_EVIDENCE_AT_MS) {
+function modeProjection(binding, evaluatedAtMs = OWNER_EVIDENCE_AT_MS, overrides = {}) {
   return buildNormalBasisL05Projection({
     accountRealmId: binding.entry.perpLeg.accountRealmId,
     targetSymbol: binding.ownerPlan.symbol,
     evaluatedAtMs,
+    ...overrides,
   });
 }
 
@@ -508,6 +514,17 @@ test('owner preflight and leg validation require exact current Foundation risk t
 });
 
 test('close sizing requires a replayed Foundation checkpoint and the exact reduce-only leg definition', async () => {
+  const rawFoundationResidual = 0.1 - 0.04;
+  assert.equal(rawFoundationResidual, 0.060000000000000005);
+  assert.equal(
+    projectNormalBasisFoundationCloseResidual(0.1, 0.04, rawFoundationResidual),
+    '0.06',
+  );
+  assert.throws(
+    () => projectNormalBasisFoundationCloseResidual(0.1, 0.04, 0.061),
+    /must equal confirmed residual owner truth/,
+  );
+
   const { binding, coordinator, ports } = await ownerHarness('residual-guard');
   assert.equal((await coordinator.open()).ok, true);
   ports.queueReconciliation('CLOSED');
@@ -633,6 +650,140 @@ test('current private truth and exact mutation identity bind both owner submissi
     checkpoint: submissionCheckpoint(ports, 'OPEN:PERP'),
     evidence: altered,
   }), /projection validation|not reproducible|not revision-coherent|does not prove/);
+
+});
+
+test('venue rejection without private or reconciliation observation remains acknowledged owner truth', async () => {
+  const { binding, coordinator, ports } = await ownerHarness('unobserved-rejection-guard');
+  assert.equal(coordinator.beginOpen().ok, true);
+  assert.equal((await coordinator.submitNextOpeningLeg()).ok, true);
+  const artifact = observe({
+    binding,
+    request: submittedRequest(ports, 'OPEN:SPOT'),
+    stage: 'ENTRY_SPOT',
+    checkpoint: submissionCheckpoint(ports, 'OPEN:SPOT'),
+    evidence: spotPrivateTruth(binding),
+    localMode: 'UNOBSERVED_REJECTED',
+  });
+  assert.equal(artifact.observation.venueStatus, 'REJECTED');
+  assert.equal(artifact.observation.localTruth, 'ACKNOWLEDGED');
+  assert.equal(artifact.observation.localDisposition, 'ACKNOWLEDGED');
+  assert.equal(artifact.observation.terminalStatus, null);
+  assert.equal(artifact.observation.confirmedFilledQuantity, '0');
+  assert.deepEqual(
+    projectNormalBasisOwnerLegOutcome(
+      artifact.observation,
+      binding,
+      CHECKPOINT_HYDRATOR,
+    ),
+    { kind: 'ACKNOWLEDGED', venueOrderId: null },
+  );
+});
+
+test('USD-M account isolation requires independent position, standard-order, and algo-order truth at every stage', async () => {
+  const { binding, coordinator, ports } = await ownerHarness('account-isolation-guard');
+  assert.equal((await coordinator.open()).ok, true);
+  const symbol = binding.ownerPlan.symbol;
+  const entryRequest = submittedRequest(ports, 'OPEN:PERP');
+  const entryCheckpoint = submissionCheckpoint(ports, 'OPEN:PERP');
+
+  const evidenceFor = ({
+    targetPositionAmount = '0',
+    accountPositions,
+    positions,
+    standardOrders,
+    algoOrders,
+    unavailableFactKinds = [],
+  } = {}) => {
+    const seed = modeProjection(binding, OWNER_EVIDENCE_AT_MS, {
+      targetPositionAmount,
+    });
+    const factValueOverrides = {};
+    if (accountPositions !== undefined) {
+      const account = structuredClone(seed.sourceFacts.find((fact) => (
+        fact.factKind === 'USDM_ACCOUNT'
+      )).injectedValue);
+      account.positions = accountPositions;
+      factValueOverrides.USDM_ACCOUNT = account;
+    }
+    if (positions !== undefined) factValueOverrides.USDM_POSITIONS = positions;
+    if (standardOrders !== undefined) factValueOverrides.USDM_OPEN_ORDERS = standardOrders;
+    if (algoOrders !== undefined) factValueOverrides.USDM_ALGO_OPEN_ORDERS = algoOrders;
+    return positionModeEvidence(modeProjection(binding, OWNER_EVIDENCE_AT_MS, {
+      targetPositionAmount,
+      factValueOverrides,
+      unavailableFactKinds,
+    }));
+  };
+  const observeEntry = (evidence) => observe({
+    binding,
+    request: entryRequest,
+    stage: 'ENTRY_HEDGE',
+    checkpoint: entryCheckpoint,
+    evidence,
+  });
+
+  const unrelatedEvidence = evidenceFor({
+    accountPositions: [
+      normalBasisUsdmAccountPosition(symbol, OWNER_EVIDENCE_AT_MS, '0'),
+      normalBasisUsdmAccountPosition('ETHUSDT', OWNER_EVIDENCE_AT_MS, '2'),
+    ],
+    positions: [
+      normalBasisUsdmPosition(symbol, OWNER_EVIDENCE_AT_MS, '0'),
+      normalBasisUsdmPosition('ETHUSDT', OWNER_EVIDENCE_AT_MS, '2'),
+    ],
+    standardOrders: [normalBasisUsdmOpenOrder('ETHUSDT', OWNER_EVIDENCE_AT_MS)],
+    algoOrders: [normalBasisUsdmAlgoOpenOrder('ETHUSDT', OWNER_EVIDENCE_AT_MS)],
+  });
+  assert.equal(observeEntry(unrelatedEvidence).observation.stage, 'ENTRY_HEDGE');
+
+  assert.throws(() => observeEntry(evidenceFor({
+    accountPositions: [normalBasisUsdmAccountPosition(
+      symbol,
+      OWNER_EVIDENCE_AT_MS,
+      '0.01',
+    )],
+  })), /account and position cuts.*target position/);
+  assert.throws(() => observeEntry(evidenceFor({
+    positions: [normalBasisUsdmPosition(symbol, OWNER_EVIDENCE_AT_MS, '-0.01')],
+  })), /account and position cuts.*target position/);
+  assert.throws(() => observeEntry(evidenceFor({
+    standardOrders: [normalBasisUsdmOpenOrder(symbol, OWNER_EVIDENCE_AT_MS)],
+  })), /target-symbol USD-M open order/);
+  assert.throws(() => observeEntry(evidenceFor({
+    algoOrders: [normalBasisUsdmAlgoOpenOrder(symbol, OWNER_EVIDENCE_AT_MS)],
+  })), /target-symbol USD-M open order/);
+  assert.throws(() => observeEntry(evidenceFor({
+    unavailableFactKinds: ['USDM_ALGO_OPEN_ORDERS'],
+  })), /current complete USDM_ALGO_OPEN_ORDERS cut/);
+
+  ports.queueReconciliation('CLOSED');
+  assert.equal((await coordinator.close()).ok, true);
+  const closeRequest = submittedRequest(ports, 'CLOSE:PERP');
+  const closeCheckpoint = submissionCheckpoint(ports, 'CLOSE:PERP');
+  const signedResidual = `-${String(closeRequest.leg.quantity)}`;
+  const observeClose = (evidence) => observe({
+    binding,
+    request: closeRequest,
+    stage: 'EXIT_PERP',
+    checkpoint: closeCheckpoint,
+    evidence,
+  });
+  assert.equal(
+    observeClose(evidenceFor({ targetPositionAmount: signedResidual })).observation.stage,
+    'EXIT_PERP',
+  );
+  assert.throws(() => observeClose(evidenceFor({
+    targetPositionAmount: signedResidual,
+    accountPositions: [],
+  })), /account and position cuts.*target position/);
+  assert.throws(() => observeClose(evidenceFor({
+    targetPositionAmount: signedResidual,
+    positions: [],
+  })), /account and position cuts.*target position/);
+  assert.throws(() => observeClose(evidenceFor({
+    targetPositionAmount: '0.1',
+  })), /account and position cuts.*target position/);
 });
 
 test('agreement replays owner state, consumes full reconciliation, and retains recovery lineage', async () => {
@@ -791,6 +942,16 @@ test('a recomputed observation checksum cannot relabel the accepted owner chain 
       CHECKPOINT_HYDRATOR,
     ), /summary diverges from retained twin truth/, field);
   }
+
+  const alteredFee = structuredClone(filled);
+  alteredFee.baseAssetCommissionQuantity = '0.0001';
+  alteredFee.feeAdjustedConfirmedQuantity = '0.0999';
+  rehashObservation(alteredFee);
+  assert.throws(() => validateNormalBasisTwinLegObservation(
+    alteredFee,
+    binding,
+    CHECKPOINT_HYDRATOR,
+  ), /summary diverges from retained twin truth/);
 });
 
 test('recomputed L07 fill evidence cannot bypass retained entry admission', async () => {

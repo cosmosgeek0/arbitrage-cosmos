@@ -20,8 +20,11 @@ const EXACT_IMPORTS = new Map([
   ['node:util', new Set(['types'])],
   ['../binanceContracts/index.js', new Set([
     'BINANCE_CONTRACT_MATRIX_CONTENT_SHA256',
+    'BINANCE_PRIVATE_TRUTH_CONTRACT_EXTENSION_CONTENT_SHA256',
     'BinanceContractRecord',
+    'USDM_ALGO_OPEN_ORDERS_CONTRACT_ID',
     'canonicalBinanceContractMatrix',
+    'resolveBinancePrivateTruthContractExtension',
   ])],
   ['../binanceContracts/matrix.js', new Set([
     'BINANCE_CONTRACT_MATRIX_CONTENT_SHA256',

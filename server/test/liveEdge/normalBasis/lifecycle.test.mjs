@@ -18,6 +18,7 @@ import {
 } from '../../../dist/liveEdge/adapters/normalBasis/index.js';
 import {
   event,
+  feeEvidence,
 } from '../exchangeTwin/fixtures.mjs';
 import {
   ManualClock,
@@ -43,11 +44,27 @@ const OWNER_RECOVERY_PROVIDER = Object.freeze({
   },
 });
 
+function deferred() {
+  let resolve;
+  const promise = new Promise((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+async function waitForLifecycle(coordinator, lifecycle) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (coordinator.snapshot().lifecycle === lifecycle) return;
+    await Promise.resolve();
+  }
+  assert.fail(`coordinator did not reach ${lifecycle}`);
+}
+
 function ownerOrderStatus(observation) {
   if (observation.venueStatus === 'BLOCKED') return 'REJECTED';
   if (observation.localTruth !== 'OBSERVED') return 'UNKNOWN';
   if (observation.venueStatus === 'CANCELED') return 'CANCELED';
-  if (observation.venueStatus === 'EXPIRED') return 'EXPIRED';
+  if (observation.venueStatus === 'EXPIRED'
+    || observation.venueStatus === 'EXPIRED_IN_MATCH') return 'EXPIRED';
+  if (observation.venueStatus === 'REJECTED') return 'REJECTED';
   if (observation.venueStatus === 'FILLED') return 'FILLED';
   if (observation.venueStatus === 'PARTIALLY_FILLED') return 'PARTIALLY_FILLED';
   return 'NEW';
@@ -75,6 +92,7 @@ class TwinBackedFoundationPorts {
     this.lastReconciliationOutcome = null;
     this.coordinator = null;
     this.recoveryMode = false;
+    this.reconcileBarrier = null;
   }
 
   attach(coordinator) { this.coordinator = coordinator; }
@@ -152,6 +170,7 @@ class TwinBackedFoundationPorts {
       ownerCheckpointHydrator: OWNER_CHECKPOINT_HYDRATOR,
       localMode: mode.localMode ?? 'OBSERVED',
       fillQuantity: mode.fillQuantity,
+      fee: mode.fee,
     });
     const { observation } = artifact;
     this.artifacts.set(request.leg.clientOrderId, {
@@ -385,6 +404,7 @@ class TwinBackedFoundationPorts {
 
   async reconcile(state) {
     this.calls.push({ method: 'reconcile', planId: state.plan.planId });
+    if (this.reconcileBarrier !== null) await this.reconcileBarrier.promise;
     const result = this.canonicalReconciliation(state);
     const outcome = this.reconciliationOutcome(result, state);
     this.lastReconciliationOutcome = outcome;
@@ -492,6 +512,79 @@ test('full staged open hedges the confirmed Spot fill, then both canonical close
   assert.equal(agreement.residualSpotQuantity, '0');
   assert.equal(agreement.residualPerpQuantity, '0');
   assert.equal(agreement.netBaseQuantity, '0');
+});
+
+test('base-asset Spot commission remains separate from gross fill and blocks false hedge agreement', async () => {
+  const baseFee = feeEvidence({
+    chargeBasis: 'BASE_QUANTITY',
+    feeAsset: 'BTC',
+    takerRate: '0.001',
+    quoteConversionRate: null,
+  });
+  const { binding, clock, coordinator, ports } = harness('base-fee-exposure', {
+    'OPEN:SPOT': { fee: baseFee },
+  });
+  assert.equal((await coordinator.preflight()).ok, true);
+  assert.equal((await coordinator.open()).ok, true);
+  const spot = ports.observations.find((item) => item.stage === 'ENTRY_SPOT');
+  const perp = ports.observations.find((item) => item.stage === 'ENTRY_HEDGE');
+  assert.equal(spot.confirmedFilledQuantity, '0.1');
+  assert.equal(spot.baseAssetCommissionQuantity, '0.0001');
+  assert.equal(spot.feeAdjustedConfirmedQuantity, '0.0999');
+  assert.equal(perp.confirmedFilledQuantity, '0.1');
+  const agreement = ownerAgreement(binding, coordinator, ports, clock);
+  assert.equal(agreement.canonicalOutcome, 'HEDGED_OPEN');
+  assert.equal(agreement.openingSpotQuantity, '0.1');
+  assert.equal(agreement.openingSpotBaseAssetCommissionQuantity, '0.0001');
+  assert.equal(agreement.feeAdjustedSpotBaseQuantity, '0.0999');
+  assert.equal(agreement.netBaseQuantity, '-0.0001');
+  assert.equal(agreement.unhedgedBaseQuantity, '0.0001');
+  assert.equal(agreement.state, 'BLOCKED');
+  assert.ok(agreement.reasonCodes.includes('OWNER_HEDGED_OPEN_WITH_UNRESOLVED_TRUTH'));
+});
+
+test('base-asset Spot commission on SELL close increases disposed quantity and preserves residual exposure', async () => {
+  const baseFee = feeEvidence({
+    chargeBasis: 'BASE_QUANTITY',
+    feeAsset: 'BTC',
+    takerRate: '0.001',
+    quoteConversionRate: null,
+  });
+  const { binding, clock, coordinator, ports } = harness('base-fee-close-exposure', {
+    'CLOSE:SPOT': { fee: baseFee },
+  });
+  assert.equal((await coordinator.preflight()).ok, true);
+  assert.equal((await coordinator.open()).ok, true);
+  assert.equal((await coordinator.close()).ok, true);
+  const spotClose = ports.observations.find((item) => item.stage === 'EXIT_SPOT');
+  assert.equal(spotClose.confirmedFilledQuantity, '0.1');
+  assert.equal(spotClose.baseAssetCommissionQuantity, '0.0001');
+  assert.equal(spotClose.feeAdjustedConfirmedQuantity, '0.1001');
+  const agreement = ownerAgreement(binding, coordinator, ports, clock);
+  assert.equal(agreement.canonicalOutcome, 'CLOSED');
+  assert.equal(agreement.closingSpotBaseAssetCommissionQuantity, '0.0001');
+  assert.equal(agreement.feeAdjustedSpotBaseQuantity, '-0.0001');
+  assert.equal(agreement.netBaseQuantity, '-0.0001');
+  assert.equal(agreement.unhedgedBaseQuantity, '0.0001');
+  assert.equal(agreement.state, 'BLOCKED');
+  assert.ok(agreement.reasonCodes.includes('OWNER_CLOSED_WITH_UNRESOLVED_TRUTH'));
+});
+
+test('missing Spot fee evidence is unavailable and cannot produce a passing agreement', async () => {
+  const { binding, clock, coordinator, ports } = harness('missing-fee-evidence', {
+    'OPEN:SPOT': { fee: null },
+  });
+  assert.equal((await coordinator.preflight()).ok, true);
+  assert.equal((await coordinator.open()).ok, true);
+  const spot = ports.observations.find((item) => item.stage === 'ENTRY_SPOT');
+  assert.equal(spot.confirmedFilledQuantity, '0.1');
+  assert.equal(spot.baseAssetCommissionQuantity, null);
+  assert.equal(spot.feeAdjustedConfirmedQuantity, null);
+  const agreement = ownerAgreement(binding, coordinator, ports, clock);
+  assert.equal(agreement.netBaseQuantity, null);
+  assert.equal(agreement.unhedgedBaseQuantity, null);
+  assert.equal(agreement.state, 'BLOCKED');
+  assert.ok(agreement.reasonCodes.includes('SPOT_FEE_TRUTH_UNAVAILABLE'));
 });
 
 test('partial first fill waits for canonical terminal lookup before hedging the final fill', async () => {
@@ -774,7 +867,7 @@ test('cold Foundation restore verifies owner truth before hedging and never reus
 });
 
 test('first-leg rejection has no exposure, reaches FAILED and never admits a hedge', async () => {
-  const { coordinator, ports } = harness('spot-reject', {
+  const { binding, clock, coordinator, ports } = harness('spot-reject', {
     'OPEN:SPOT': { localMode: 'REJECTED' },
   });
   assert.equal((await coordinator.preflight()).ok, true);
@@ -787,6 +880,17 @@ test('first-leg rejection has no exposure, reaches FAILED and never admits a hed
   assert.equal(ports.calls.some((item) => (
     item.method === 'submitPaper' && item.request.leg.key === 'PERP'
   )), false);
+  const agreement = ownerAgreement(binding, coordinator, ports, clock);
+  assert.equal(agreement.canonicalOutcome, 'FAILED');
+  assert.equal(agreement.state, 'PASS', agreement.reasonCodes.join(','));
+  assert.equal(agreement.reconciliationStatus, 'EXACT');
+  assert.equal(agreement.residualSpotQuantity, '0');
+  assert.equal(agreement.residualPerpQuantity, '0');
+  assert.equal(agreement.netBaseQuantity, '0');
+  assert.equal(agreement.manualActionRequired, false);
+  assert.deepEqual(agreement.reasonCodes, []);
+  assert.deepEqual(agreement.observationRevisions, [ports.observations[0].observationRevision]);
+  assert.ok(agreement.ownerRecommendationsRetained.every((item) => item.action === 'NO_ACTION'));
 });
 
 test('ambiguous hedge retains Spot exposure and cannot claim HEDGED_OPEN', async () => {
@@ -901,4 +1005,268 @@ test('ambiguous close stays RECOVERY_REQUIRED and never advances to the Perp clo
   assert.equal(finalAgreement.state, 'PASS', finalAgreement.reasonCodes.join(','));
   assert.equal(finalAgreement.residualSpotQuantity, '0');
   assert.equal(finalAgreement.residualPerpQuantity, '0');
+});
+
+test('working partial close stays visible and repeated close performs same-ID lookup only', async () => {
+  const { binding, clock, coordinator, ports } = harness('working-partial-close');
+  assert.equal((await coordinator.preflight()).ok, true);
+  assert.equal((await coordinator.open()).ok, true);
+  ports.modes.set('CLOSE:SPOT', { fillQuantity: '0.04' });
+  const closed = await coordinator.close();
+  assert.equal(closed.ok, false);
+  assert.equal(closed.failure.code, 'CLOSE_INCOMPLETE');
+  assert.equal(coordinator.snapshot().lifecycle, 'ONE_LEG_EXPOSED');
+  assert.equal(coordinator.snapshot().closingLegs.SPOT.lifecycle, 'PARTIALLY_FILLED');
+  assert.equal(coordinator.snapshot().closingLegs.SPOT.cumulativeFilledQuantity, 0.04);
+  assert.equal(coordinator.snapshot().closingLegs.PERP.lifecycle, 'FILLED');
+  const spotClose = ports.observations.find((item) => item.stage === 'EXIT_SPOT');
+  assert.equal(spotClose.localDisposition, 'PARTIALLY_FILLED');
+  assert.equal(spotClose.terminalStatus, null);
+  const agreement = ownerAgreement(binding, coordinator, ports, clock);
+  assert.equal(agreement.state, 'MANUAL_ACTION_REQUIRED', agreement.reasonCodes.join(','));
+  assert.equal(agreement.residualSpotQuantity, '0.06');
+  assert.equal(agreement.residualPerpQuantity, '0');
+  assert.equal(agreement.workingRemainderVisible, true);
+
+  ports.queueLookup('CLOSE:SPOT', {
+    kind: 'FOUND',
+    status: 'PARTIALLY_FILLED',
+    venueOrderId: null,
+    cumulativeFilledQuantity: 0.04,
+  });
+  const retried = await coordinator.close();
+  assert.equal(retried.ok, false);
+  assert.equal(retried.failure.code, 'CLOSE_INCOMPLETE');
+  assert.ok(ports.calls.some((item) => (
+    item.method === 'lookupByClientOrderId' && item.request.phase === 'CLOSE'
+      && item.request.leg.key === 'SPOT'
+  )));
+  assert.equal(ports.calls.filter((item) => (
+    item.method === 'submitPaper' && item.request.phase === 'CLOSE'
+      && item.request.leg.key === 'SPOT'
+  )).length, 1);
+});
+
+test('venue-rejected close enters recovery without submitting the second close leg', async () => {
+  const { binding, clock, coordinator, ports } = harness('venue-rejected-close');
+  assert.equal((await coordinator.preflight()).ok, true);
+  assert.equal((await coordinator.open()).ok, true);
+  ports.modes.set('CLOSE:SPOT', { localMode: 'REJECTED' });
+  const closed = await coordinator.close();
+  assert.equal(closed.ok, false);
+  assert.equal(coordinator.snapshot().lifecycle, 'RECOVERY_REQUIRED');
+  assert.equal(coordinator.snapshot().closingLegs.SPOT.lifecycle, 'REJECTED');
+  const spotClose = ports.observations.find((item) => item.stage === 'EXIT_SPOT');
+  assert.equal(spotClose.venueStatus, 'REJECTED');
+  assert.equal(spotClose.localDisposition, 'REJECTED');
+  assert.equal(spotClose.terminalStatus, 'REJECTED');
+  assert.equal(ports.observations.some((item) => item.stage === 'EXIT_PERP'), false);
+  const agreement = ownerAgreement(binding, coordinator, ports, clock);
+  assert.equal(agreement.state, 'MANUAL_ACTION_REQUIRED', agreement.reasonCodes.join(','));
+  assert.equal(agreement.residualSpotQuantity, '0.1');
+  assert.equal(agreement.residualPerpQuantity, '0.1');
+  assert.equal(agreement.workingRemainderVisible, false);
+  assert.ok(agreement.ownerRecommendationsRetained.some((item) => (
+    item.action === 'MANUAL_REVIEW'
+  )));
+});
+
+test('terminal-partial close becomes canonical CANCELLED and retains exact residual', async () => {
+  const { binding, clock, coordinator, ports } = harness('terminal-partial-close');
+  assert.equal((await coordinator.preflight()).ok, true);
+  assert.equal((await coordinator.open()).ok, true);
+  ports.modes.set('CLOSE:SPOT', {
+    localMode: 'EXPIRED_IN_MATCH',
+    fillQuantity: '0.04',
+  });
+  const closed = await coordinator.close();
+  assert.equal(closed.ok, false);
+  assert.equal(closed.failure.code, 'CLOSE_INCOMPLETE');
+  const state = coordinator.snapshot();
+  assert.equal(state.lifecycle, 'ONE_LEG_EXPOSED');
+  assert.equal(state.closingLegs.SPOT.lifecycle, 'CANCELLED');
+  assert.equal(state.closingLegs.SPOT.cumulativeFilledQuantity, 0.04);
+  assert.equal(state.closingLegs.PERP.lifecycle, 'FILLED');
+  assert.equal(
+    String(state.openingLegs.SPOT.cumulativeFilledQuantity
+      - state.closingLegs.SPOT.cumulativeFilledQuantity),
+    '0.060000000000000005',
+  );
+  const spotClose = ports.observations.find((item) => item.stage === 'EXIT_SPOT');
+  assert.equal(spotClose.venueStatus, 'EXPIRED_IN_MATCH');
+  assert.equal(spotClose.localDisposition, 'TERMINAL_PARTIALLY_FILLED');
+  assert.equal(spotClose.terminalStatus, 'EXPIRED_IN_MATCH');
+  assert.equal(projectNormalBasisOwnerLegOutcome(
+    spotClose,
+    binding,
+    OWNER_CHECKPOINT_HYDRATOR,
+  ).kind, 'CANCELLED');
+  const agreement = ownerAgreement(binding, coordinator, ports, clock);
+  assert.equal(agreement.state, 'MANUAL_ACTION_REQUIRED', agreement.reasonCodes.join(','));
+  assert.equal(agreement.residualSpotQuantity, '0.06');
+  assert.equal(agreement.residualPerpQuantity, '0');
+  assert.equal(agreement.feeAdjustedSpotBaseQuantity, '0.06');
+  assert.equal(agreement.unhedgedBaseQuantity, '0.06');
+  assert.equal(agreement.workingRemainderVisible, false);
+  assert.equal(ports.calls.filter((item) => (
+    item.method === 'submitPaper' && item.request.phase === 'CLOSE'
+      && item.request.leg.key === 'SPOT'
+  )).length, 1);
+});
+
+test('full-close cold restart verifies all four terminal IDs before reconciling CLOSED', async () => {
+  const {
+    binding, clock, coordinator, ports, riskInput, riskVerdict,
+  } = harness('full-close-cold-restart');
+  assert.equal((await coordinator.preflight()).ok, true);
+  assert.equal((await coordinator.open()).ok, true);
+  const barrier = deferred();
+  ports.reconcileBarrier = barrier;
+  const pendingClose = coordinator.close();
+  await waitForLifecycle(coordinator, 'RECONCILING');
+  const checkpoint = coordinator.checkpoint();
+  const durableObservations = structuredClone(ports.observations);
+
+  const coldPorts = new TwinBackedFoundationPorts(binding, clock, { riskInput, riskVerdict });
+  for (const [phase, key, status, quantity] of [
+    ['OPEN', 'SPOT', 'FILLED', 0.1],
+    ['OPEN', 'PERP', 'FILLED', 0.1],
+    ['CLOSE', 'SPOT', 'FILLED', 0.1],
+    ['CLOSE', 'PERP', 'FILLED', 0.1],
+  ]) {
+    coldPorts.queueLookup(`${phase}:${key}`, {
+      kind: 'FOUND', status, venueOrderId: null, cumulativeFilledQuantity: quantity,
+    });
+  }
+  const restoredResult = restoreExecutionCoordinator(checkpoint, clock, coldPorts);
+  assert.equal(restoredResult.ok, true);
+  const restored = restoredResult.coordinator;
+  coldPorts.attach(restored);
+  const recovered = await restored.recoverAfterRestart();
+  assert.equal(recovered.ok, true, JSON.stringify(recovered));
+  assert.equal(restored.snapshot().lifecycle, 'CLOSED');
+  assert.equal(coldPorts.calls.filter((item) => item.method === 'lookupByClientOrderId').length, 4);
+  assert.equal(coldPorts.calls.some((item) => item.method === 'submitPaper'), false);
+  const lookupLast = coldPorts.calls.reduce((last, item, index) => (
+    item.method === 'lookupByClientOrderId' ? index : last
+  ), -1);
+  const reconcileIndex = coldPorts.calls.findIndex((item) => item.method === 'reconcile');
+  assert.ok(reconcileIndex > lookupLast);
+  const agreement = ownerAgreement(
+    binding,
+    restored,
+    coldPorts,
+    clock,
+    durableObservations,
+  );
+  assert.equal(agreement.state, 'PASS', agreement.reasonCodes.join(','));
+  assert.equal(agreement.residualSpotQuantity, '0');
+  assert.equal(agreement.residualPerpQuantity, '0');
+
+  barrier.resolve();
+  assert.equal((await pendingClose).ok, true);
+});
+
+test('emergency-recovery cold restart verifies three terminal IDs and preserves recovery close', async () => {
+  const {
+    binding, clock, coordinator, ports, riskInput, riskVerdict,
+  } = harness('recovery-close-cold-restart', {
+    'OPEN:PERP': { localMode: 'REJECTED' },
+  });
+  assert.equal((await coordinator.preflight()).ok, true);
+  assert.equal((await coordinator.open()).ok, false);
+  ports.recoveryMode = true;
+  const barrier = deferred();
+  ports.reconcileBarrier = barrier;
+  const pendingRecovery = coordinator.close(true);
+  await waitForLifecycle(coordinator, 'RECONCILING');
+  const checkpoint = coordinator.checkpoint();
+  const durableObservations = structuredClone(ports.observations);
+  assert.ok(coordinator.snapshot().eventLog.some((item) => (
+    item.type === 'CLOSE_REQUESTED' && item.emergency === true
+  )));
+  assert.ok(durableObservations.some((item) => item.stage === 'RECOVERY_CLOSE_SPOT'));
+
+  const coldPorts = new TwinBackedFoundationPorts(binding, clock, { riskInput, riskVerdict });
+  coldPorts.queueLookup('OPEN:SPOT', {
+    kind: 'FOUND', status: 'FILLED', venueOrderId: null, cumulativeFilledQuantity: 0.1,
+  });
+  coldPorts.queueLookup('OPEN:PERP', {
+    kind: 'FOUND', status: 'REJECTED', venueOrderId: null, cumulativeFilledQuantity: 0,
+    failure: failure('TWIN_VENUE_REJECTED'),
+  });
+  coldPorts.queueLookup('CLOSE:SPOT', {
+    kind: 'FOUND', status: 'FILLED', venueOrderId: null, cumulativeFilledQuantity: 0.1,
+  });
+  const restoredResult = restoreExecutionCoordinator(checkpoint, clock, coldPorts);
+  assert.equal(restoredResult.ok, true);
+  const restored = restoredResult.coordinator;
+  coldPorts.attach(restored);
+  assert.equal((await restored.recoverAfterRestart()).ok, true);
+  assert.equal(restored.snapshot().lifecycle, 'CLOSED');
+  assert.equal(coldPorts.calls.filter((item) => item.method === 'lookupByClientOrderId').length, 3);
+  assert.equal(coldPorts.calls.some((item) => item.method === 'submitPaper'), false);
+  const agreement = ownerAgreement(
+    binding,
+    restored,
+    coldPorts,
+    clock,
+    durableObservations,
+  );
+  assert.equal(agreement.state, 'PASS', agreement.reasonCodes.join(','));
+  assert.equal(agreement.residualSpotQuantity, '0');
+  assert.equal(agreement.residualPerpQuantity, '0');
+
+  barrier.resolve();
+  assert.equal((await pendingRecovery).ok, true);
+});
+
+test('terminal-partial cold restart preserves CANCELLED residual and never resubmits', async () => {
+  const {
+    binding, clock, coordinator, ports, riskInput, riskVerdict,
+  } = harness('terminal-partial-cold-restart');
+  assert.equal((await coordinator.preflight()).ok, true);
+  assert.equal((await coordinator.open()).ok, true);
+  ports.modes.set('CLOSE:SPOT', {
+    localMode: 'EXPIRED_IN_MATCH',
+    fillQuantity: '0.04',
+  });
+  assert.equal((await coordinator.close()).ok, false);
+  const checkpoint = coordinator.checkpoint();
+  const durableObservations = structuredClone(ports.observations);
+
+  const coldPorts = new TwinBackedFoundationPorts(binding, clock, { riskInput, riskVerdict });
+  for (const [phase, key, status, quantity] of [
+    ['OPEN', 'SPOT', 'FILLED', 0.1],
+    ['OPEN', 'PERP', 'FILLED', 0.1],
+    ['CLOSE', 'SPOT', 'CANCELLED', 0.04],
+    ['CLOSE', 'PERP', 'FILLED', 0.1],
+  ]) {
+    coldPorts.queueLookup(`${phase}:${key}`, {
+      kind: 'FOUND', status, venueOrderId: null, cumulativeFilledQuantity: quantity,
+    });
+  }
+  const restoredResult = restoreExecutionCoordinator(checkpoint, clock, coldPorts);
+  assert.equal(restoredResult.ok, true);
+  const restored = restoredResult.coordinator;
+  coldPorts.attach(restored);
+  const terminalRecovered = await restored.recoverAfterRestart();
+  assert.equal(terminalRecovered.ok, false);
+  assert.equal(terminalRecovered.failure.code, 'FOUNDATION_RECONCILIATION_PARTIAL');
+  assert.equal(restored.snapshot().lifecycle, 'RECOVERY_REQUIRED');
+  assert.equal(restored.snapshot().closingLegs.SPOT.lifecycle, 'CANCELLED');
+  assert.equal(restored.snapshot().closingLegs.SPOT.cumulativeFilledQuantity, 0.04);
+  assert.equal(coldPorts.calls.filter((item) => item.method === 'lookupByClientOrderId').length, 4);
+  assert.equal(coldPorts.calls.some((item) => item.method === 'submitPaper'), false);
+  const agreement = ownerAgreement(
+    binding,
+    restored,
+    coldPorts,
+    clock,
+    durableObservations,
+  );
+  assert.equal(agreement.state, 'MANUAL_ACTION_REQUIRED', agreement.reasonCodes.join(','));
+  assert.equal(agreement.residualSpotQuantity, '0.06');
+  assert.equal(agreement.residualPerpQuantity, '0');
+  assert.equal(agreement.workingRemainderVisible, false);
 });

@@ -18,6 +18,7 @@ import {
   evaluateExchangeTwinMutationSnapshot,
   evaluateExchangeTwinRateReservation,
   evaluateExchangeTwinSpotOrderTifPreflight,
+  validateExchangeTwinRequestSemanticEvidence,
 } from './ownerEvidence.js';
 import {
   EXCHANGE_TWIN_CHECKPOINT_SCHEMA,
@@ -113,6 +114,19 @@ const EVENT_PAYLOAD_FIELDS: Readonly<Record<TwinEvent['kind'], readonly string[]
   RECONCILIATION_OBSERVATION: Object.freeze(['fixtureId', 'ownerObservationRevision', 'observedVenueRevision', 'observedStatus', 'observedFilledQuantity']),
 });
 
+function eventPayloadFields(kind: TwinEvent['kind'], payload: unknown): readonly string[] {
+  const hasField = (field: string): boolean => (
+    typeof payload === 'object' && payload !== null && Object.hasOwn(payload, field)
+  );
+  if (kind === 'PLACE_DISPATCH' && hasField('requestEvidence')) {
+    return Object.freeze(['fixtureId', 'requestEvidence']);
+  }
+  if (kind === 'VENUE_ARRIVAL' && hasField('terminalStatus')) {
+    return Object.freeze(['fixtureId', 'feeEvidence', 'terminalStatus']);
+  }
+  return EVENT_PAYLOAD_FIELDS[kind];
+}
+
 const FEE_EVIDENCE_FIELDS = Object.freeze([
   'schema', 'evidenceRevision', 'makerRate', 'takerRate', 'feeAsset', 'chargeBasis', 'rateUnit',
   'quoteConversionRate', 'quoteConversionEvidenceRevision', 'quoteConversionBaseAsset',
@@ -202,13 +216,15 @@ function snapshot(
     if (prototype !== Array.prototype || keys.length !== value.length + 1 || value.length > MAX_EVENTS) {
       throw new RangeError('exchange-twin array is sparse, decorated or overbound');
     }
-    return value.map((_, index) => {
+    const result: unknown[] = [];
+    for (let index = 0; index < value.length; index += 1) {
       const descriptor = descriptors[String(index)];
       if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) {
         throw new TypeError('exchange-twin array must contain enumerable data');
       }
-      return snapshot(descriptor.value, seen, depth + 1, budget);
-    });
+      result.push(snapshot(descriptor.value, seen, depth + 1, budget));
+    }
+    return result;
   }
   if (prototype !== Object.prototype && prototype !== null) {
     throw new TypeError('exchange-twin records must be plain');
@@ -482,7 +498,11 @@ export function deriveTwinEventId(value: unknown): string {
     || !Object.hasOwn(EVENT_PRIORITY, projection.kind)) {
     throw new TypeError('twin event identity schema/kind is invalid');
   }
-  record(projection.payload, EVENT_PAYLOAD_FIELDS[projection.kind as TwinEvent['kind']], 'twin event payload');
+  record(
+    projection.payload,
+    eventPayloadFields(projection.kind as TwinEvent['kind'], projection.payload),
+    'twin event payload',
+  );
   return digest('l07event_', projection);
 }
 
@@ -496,7 +516,11 @@ function validateEvent(value: unknown, state: Readonly<TwinScenarioState>): Read
   const sourceSequence = event.sourceSequence === null
     ? null
     : safeInteger(event.sourceSequence, 'event source sequence', 1, Number.MAX_SAFE_INTEGER);
-  const payload = record(event.payload, EVENT_PAYLOAD_FIELDS[event.kind as TwinEvent['kind']], 'twin event payload');
+  const payload = record(
+    event.payload,
+    eventPayloadFields(event.kind as TwinEvent['kind'], event.payload),
+    'twin event payload',
+  );
   const normalized = deepFreeze({
     schema: 'TWIN_EVENT_V1' as const,
     eventId: identifier(event.eventId, 'event ID'),
@@ -743,10 +767,16 @@ function validateCommittedState(value: unknown, label: string): Readonly<TwinSce
     if (fixture === undefined || canonicalJson(fixture) !== canonicalJson(order.fixture)) {
       throw new TypeError('committed twin fixture is invalid');
     }
-    if (!['NOT_ARRIVED', 'BLOCKED', 'NEW', 'PARTIALLY_FILLED', 'FILLED', 'CANCELED', 'EXPIRED'].includes(order.venueStatus)
+    if (![
+      'NOT_ARRIVED', 'BLOCKED', 'NEW', 'PARTIALLY_FILLED', 'FILLED',
+      'CANCELED', 'EXPIRED', 'REJECTED', 'EXPIRED_IN_MATCH',
+    ].includes(order.venueStatus)
       || !['NOT_DISPATCHED', 'DISPATCHED', 'ACKNOWLEDGED', 'UNKNOWN', 'OBSERVED', 'RECOVERY_REQUIRED'].includes(order.localTruth)
       || (order.localObservedVenueStatus !== null
-        && !['NOT_ARRIVED', 'BLOCKED', 'NEW', 'PARTIALLY_FILLED', 'FILLED', 'CANCELED', 'EXPIRED'].includes(order.localObservedVenueStatus))) {
+        && ![
+          'NOT_ARRIVED', 'BLOCKED', 'NEW', 'PARTIALLY_FILLED', 'FILLED',
+          'CANCELED', 'EXPIRED', 'REJECTED', 'EXPIRED_IN_MATCH',
+        ].includes(order.localObservedVenueStatus))) {
       throw new TypeError('committed twin order vocabulary is invalid');
     }
     const filledQuantity = twinDecimal(order.filledQuantity, 'committed filled quantity');
@@ -862,6 +892,16 @@ function validateCommittedState(value: unknown, label: string): Readonly<TwinSce
     if (order.venueStatus === 'EXPIRED'
       && (order.venueArrivalAtMs === null || remainingQuantity !== '0' || expiredQuantity === '0')) {
       throw new TypeError('expired order lifecycle quantities are inconsistent');
+    }
+    if (order.venueStatus === 'REJECTED'
+      && (order.venueArrivalAtMs === null || filledQuantity !== '0'
+        || remainingQuantity !== fixture.quantity || expiredQuantity !== '0')) {
+      throw new TypeError('rejected order lifecycle quantities are inconsistent');
+    }
+    if (order.venueStatus === 'EXPIRED_IN_MATCH'
+      && (order.venueArrivalAtMs === null || remainingQuantity !== '0'
+        || expiredQuantity === '0')) {
+      throw new TypeError('expired-in-match lifecycle quantities are inconsistent');
     }
     if (order.venueStatus === 'CANCELED'
       && (cancelFixture === null || order.cancelArrivalAtMs === null || expiredQuantity !== '0')) {
@@ -1476,6 +1516,30 @@ function executeAggressive(
     });
     return { order: blocked, book: state.book };
   }
+  const injectedTerminalStatus = Object.hasOwn(event.payload, 'terminalStatus')
+    ? (event.payload as { terminalStatus: unknown }).terminalStatus
+    : null;
+  if (injectedTerminalStatus !== null
+    && injectedTerminalStatus !== 'REJECTED'
+    && injectedTerminalStatus !== 'EXPIRED_IN_MATCH') {
+    throw new TypeError('injected venue terminal status is invalid');
+  }
+  if (injectedTerminalStatus === 'REJECTED') {
+    return {
+      order: deepFreeze({
+        ...order,
+        venueStatus: 'REJECTED' as const,
+        venueArrivalAtMs: event.occurredAtMs,
+        lastVenueEffectAtMs: event.occurredAtMs,
+        venueRevision: digest('l07venue_', {
+          prior: order.venueRevision,
+          eventId: event.eventId,
+          status: 'REJECTED',
+        }),
+      }),
+      book: state.book,
+    };
+  }
   const levels = fixture.side === 'BUY' ? state.book.asks : state.book.bids;
   const eligible = levels.filter((level) => fixture.price === null
     || (fixture.side === 'BUY'
@@ -1560,7 +1624,12 @@ function executeAggressive(
   const filledQuantity = subtractTwinDecimals(fixture.quantity, remaining);
   const terminalOnRemainder = fixture.timeInForce === 'IOC' || fixture.timeInForce === 'FOK'
     || fixture.orderType === 'MARKET';
-  const venueStatus: TwinVenueStatus = remaining === '0' ? 'FILLED'
+  if (injectedTerminalStatus === 'EXPIRED_IN_MATCH' && remaining === '0') {
+    throw new TypeError('expired-in-match evidence requires an exact unfilled remainder');
+  }
+  const venueStatus: TwinVenueStatus = injectedTerminalStatus === 'EXPIRED_IN_MATCH'
+    ? 'EXPIRED_IN_MATCH'
+    : remaining === '0' ? 'FILLED'
     : terminalOnRemainder ? 'EXPIRED'
       : filledQuantity === '0' ? 'NEW' : 'PARTIALLY_FILLED';
   const totalNotional = fills.reduce((sum, fill) => addTwinDecimals(sum, fill.quoteNotional), '0');
@@ -1579,8 +1648,10 @@ function executeAggressive(
     ...order,
     venueStatus,
     filledQuantity,
-    remainingQuantity: terminalOnRemainder ? '0' : remaining,
-    expiredQuantity: terminalOnRemainder ? remaining : '0',
+    remainingQuantity: terminalOnRemainder || injectedTerminalStatus === 'EXPIRED_IN_MATCH'
+      ? '0' : remaining,
+    expiredQuantity: terminalOnRemainder || injectedTerminalStatus === 'EXPIRED_IN_MATCH'
+      ? remaining : '0',
     vwap,
     spreadDepthImpactQuote,
     fills,
@@ -1855,6 +1926,28 @@ function reduceCanonical(
   } else if (event.kind === 'PLACE_DISPATCH') {
     const index = orderIndex(state, payload.fixtureId);
     const order = state.orders[index];
+    if (Object.hasOwn(payload, 'requestEvidence')) {
+      const evidence = validateExchangeTwinRequestSemanticEvidence(payload.requestEvidence);
+      const fixture = order.fixture;
+      const identity = fixture.l06Snapshot.identity;
+      if (evidence.contractId !== (fixture.product === 'SPOT'
+        ? 'SPOT_ORDER_POST' : 'USDM_ORDER_POST')
+        || evidence.product !== fixture.product
+        || evidence.symbol !== fixture.symbol
+        || evidence.side !== fixture.side
+        || evidence.orderType !== fixture.orderType
+        || evidence.timeInForce !== fixture.timeInForce
+        || evidence.price !== fixture.price
+        || evidence.quantity !== fixture.quantity
+        || evidence.clientOrderId !== identity.clientOrderId
+        || evidence.requestId !== identity.requestId
+        || evidence.requestSequence !== identity.requestSequence
+        || evidence.intentFingerprint !== identity.intentFingerprint
+        || evidence.sanitizedRequestContentHash
+          !== fixture.l06Snapshot.bindings.sanitizedRequestContentHash) {
+        throw new TypeError('placement request semantics do not bind L06/fixture owner truth');
+      }
+    }
     if (!(state.crashed && state.dropPendingCommands)) {
       if (order.dispatchAtMs !== null) throw new TypeError('fixture dispatch is duplicated');
       if (event.occurredAtMs < order.fixture.l06Boundary.evaluatedAtMs) {
@@ -2283,11 +2376,12 @@ function reduceCanonical(
         localTruth: eventAmbiguous ? 'UNKNOWN'
           : previouslyObserved || provesCanceled ? 'OBSERVED' : 'UNKNOWN',
         localObservedVenueStatus: eventAmbiguous ? null
-          : previouslyObserved ? order.localObservedVenueStatus
-            : provesCanceled ? 'CANCELED' : null,
+          : provesCanceled ? 'CANCELED'
+            : previouslyObserved ? order.localObservedVenueStatus : null,
         lastLocalObservationAtMs: event.occurredAtMs,
         recoveryRequired: eventAmbiguous ? true
-          : previouslyObserved ? order.recoveryRequired : !provesCanceled,
+          : provesCanceled ? false
+            : previouslyObserved ? order.recoveryRequired : true,
       }));
     }
   } else if (event.kind === 'CRASH') {
@@ -2329,7 +2423,10 @@ function reduceCanonical(
     const order = state.orders[index];
     identifier(payload.ownerObservationRevision, 'owner reconciliation revision');
     identifier(payload.observedVenueRevision, 'observed venue revision');
-    if (!['NOT_ARRIVED', 'BLOCKED', 'NEW', 'PARTIALLY_FILLED', 'FILLED', 'CANCELED', 'EXPIRED']
+    if (![
+      'NOT_ARRIVED', 'BLOCKED', 'NEW', 'PARTIALLY_FILLED', 'FILLED',
+      'CANCELED', 'EXPIRED', 'REJECTED', 'EXPIRED_IN_MATCH',
+    ]
       .includes(payload.observedStatus as string)) {
       throw new TypeError('owner reconciliation status is invalid');
     }

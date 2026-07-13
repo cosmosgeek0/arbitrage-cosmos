@@ -44,7 +44,7 @@ const CONTRACT_IDS = Object.freeze({
   USDM_BALANCE: 'USDM_BALANCE_V3',
   USDM_POSITIONS: 'USDM_POSITION_RISK_V3',
   USDM_OPEN_ORDERS: 'USDM_OPEN_ORDERS_QUERY',
-  USDM_ALGO_OPEN_ORDERS: null,
+  USDM_ALGO_OPEN_ORDERS: 'USDM_ALGO_OPEN_ORDERS_QUERY',
   USDM_TRADES: 'USDM_USER_TRADES_QUERY',
   USDM_COMMISSIONS: null,
   USDM_INCOME: null,
@@ -58,7 +58,6 @@ const CONTRACT_IDS = Object.freeze({
 });
 
 const GAP_REASONS = Object.freeze({
-  USDM_ALGO_OPEN_ORDERS: 'UNAVAILABLE_L02_CONTRACT_GAP_USDM_ALGO_OPEN_ORDERS',
   USDM_COMMISSIONS: 'UNAVAILABLE_L02_CONTRACT_GAP_USDM_COMMISSION',
   USDM_INCOME: 'UNAVAILABLE_L02_CONTRACT_GAP_USDM_INCOME',
   USDM_ADL: 'UNAVAILABLE_L02_CONTRACT_GAP_USDM_ADL',
@@ -153,91 +152,164 @@ function tradingStatus(evaluatedAtMs) {
   };
 }
 
-function valueFor(kind, profileId, targetSymbol, evaluatedAtMs) {
+export function normalBasisUsdmAccountPosition(
+  targetSymbol,
+  evaluatedAtMs,
+  positionAmt = '0',
+) {
+  return {
+    symbol: targetSymbol,
+    positionSide: 'BOTH',
+    positionAmt,
+    unrealizedProfit: '0',
+    isolatedMargin: '0',
+    notional: positionAmt,
+    isolatedWallet: '0',
+    initialMargin: '0',
+    maintMargin: '0',
+    updateTime: evaluatedAtMs - 100,
+  };
+}
+
+export function normalBasisUsdmPosition(
+  targetSymbol,
+  evaluatedAtMs,
+  positionAmt = '0',
+) {
+  return {
+    symbol: targetSymbol,
+    positionSide: 'BOTH',
+    positionAmt,
+    entryPrice: '1',
+    breakEvenPrice: '1',
+    markPrice: '1',
+    unRealizedProfit: '0',
+    liquidationPrice: '0',
+    isolatedMargin: '0',
+    notional: positionAmt,
+    marginAsset: 'USDT',
+    isolatedWallet: '0',
+    initialMargin: '0',
+    maintMargin: '0',
+    positionInitialMargin: '0',
+    openOrderInitialMargin: '0',
+    adl: 0,
+    bidNotional: '0',
+    askNotional: '0',
+    updateTime: evaluatedAtMs - 100,
+  };
+}
+
+export function normalBasisUsdmOpenOrder(targetSymbol, evaluatedAtMs) {
+  return {
+    avgPrice: '0',
+    clientOrderId: 'normal-basis-l09-usdm-order-1',
+    cumQuote: '0',
+    executedQty: '0',
+    orderId: 101,
+    origQty: '0.01',
+    origType: 'LIMIT',
+    price: '59000',
+    reduceOnly: false,
+    side: 'BUY',
+    positionSide: 'BOTH',
+    status: 'NEW',
+    stopPrice: '0',
+    closePosition: false,
+    symbol: targetSymbol,
+    time: evaluatedAtMs - 200,
+    timeInForce: 'GTC',
+    type: 'LIMIT',
+    activatePrice: '0',
+    priceRate: '0',
+    updateTime: evaluatedAtMs - 100,
+    workingType: 'CONTRACT_PRICE',
+    priceProtect: false,
+    priceMatch: 'NONE',
+    selfTradePreventionMode: 'NONE',
+    goodTillDate: 0,
+  };
+}
+
+export function normalBasisUsdmAlgoOpenOrder(targetSymbol, evaluatedAtMs) {
+  return {
+    algoId: 301,
+    clientAlgoId: 'normal-basis-l09-usdm-algo-1',
+    algoType: 'CONDITIONAL',
+    orderType: 'TAKE_PROFIT',
+    symbol: targetSymbol,
+    side: 'SELL',
+    positionSide: 'BOTH',
+    timeInForce: 'GTC',
+    quantity: '0.01',
+    algoStatus: 'NEW',
+    actualOrderId: '',
+    actualPrice: '0.00000',
+    triggerPrice: '61000',
+    price: '61000',
+    icebergQuantity: 'null',
+    tpTriggerPrice: '0',
+    tpPrice: '0',
+    slTriggerPrice: '0',
+    slPrice: '0',
+    tpOrderType: '',
+    selfTradePreventionMode: 'EXPIRE_MAKER',
+    workingType: 'CONTRACT_PRICE',
+    priceMatch: 'NONE',
+    closePosition: false,
+    priceProtect: false,
+    reduceOnly: false,
+    createTime: evaluatedAtMs - 200,
+    updateTime: evaluatedAtMs - 100,
+    triggerTime: 0,
+    goodTillDate: 0,
+  };
+}
+
+function defaultUsdmAccount(targetSymbol, evaluatedAtMs, targetPositionAmount) {
+  return {
+    totalInitialMargin: '0',
+    totalMaintMargin: '0',
+    totalWalletBalance: '10',
+    totalUnrealizedProfit: '0',
+    totalMarginBalance: '10',
+    totalPositionInitialMargin: '0',
+    totalOpenOrderInitialMargin: '0',
+    totalCrossWalletBalance: '10',
+    totalCrossUnPnl: '0',
+    availableBalance: '10',
+    maxWithdrawAmount: '10',
+    assets: [],
+    positions: [normalBasisUsdmAccountPosition(
+      targetSymbol,
+      evaluatedAtMs,
+      targetPositionAmount,
+    )],
+  };
+}
+
+function valueFor(
+  kind,
+  profileId,
+  targetSymbol,
+  evaluatedAtMs,
+  targetPositionAmount,
+  factValueOverrides,
+) {
+  if (Object.hasOwn(factValueOverrides, kind)) return factValueOverrides[kind];
   switch (kind) {
     case 'USDM_PERMISSIONS':
       return permissions(profileId, evaluatedAtMs);
     case 'USDM_ACCOUNT':
-      return {
-        totalInitialMargin: '60',
-        totalMaintMargin: '3',
-        totalWalletBalance: '10',
-        totalUnrealizedProfit: '0.1',
-        totalMarginBalance: '10.1',
-        totalPositionInitialMargin: '60',
-        totalOpenOrderInitialMargin: '0',
-        totalCrossWalletBalance: '10',
-        totalCrossUnPnl: '0.1',
-        availableBalance: '9',
-        maxWithdrawAmount: '9',
-        assets: [],
-        positions: [{
-          symbol: targetSymbol,
-          positionSide: 'BOTH',
-          positionAmt: '0.01',
-          unrealizedProfit: '0.1',
-          isolatedMargin: '0',
-          notional: '600.1',
-          isolatedWallet: '0',
-          initialMargin: '60',
-          maintMargin: '3',
-          updateTime: evaluatedAtMs - 100,
-        }],
-      };
+      return defaultUsdmAccount(targetSymbol, evaluatedAtMs, targetPositionAmount);
     case 'USDM_BALANCE':
       return [];
     case 'USDM_POSITIONS':
-      return [{
-        symbol: targetSymbol,
-        positionSide: 'BOTH',
-        positionAmt: '0.01',
-        entryPrice: '60000',
-        breakEvenPrice: '60000',
-        markPrice: '60010',
-        unRealizedProfit: '0.1',
-        liquidationPrice: '0',
-        isolatedMargin: '0',
-        notional: '600.1',
-        marginAsset: 'USDT',
-        isolatedWallet: '0',
-        initialMargin: '60',
-        maintMargin: '3',
-        positionInitialMargin: '60',
-        openOrderInitialMargin: '0',
-        adl: 0,
-        bidNotional: '0',
-        askNotional: '0',
-        updateTime: evaluatedAtMs - 100,
-      }];
+      return [normalBasisUsdmPosition(targetSymbol, evaluatedAtMs, targetPositionAmount)];
     case 'USDM_OPEN_ORDERS':
-      return [{
-        avgPrice: '0',
-        clientOrderId: 'normal-basis-l09-usdm-order-1',
-        cumQuote: '0',
-        executedQty: '0',
-        orderId: 101,
-        origQty: '0.01',
-        origType: 'LIMIT',
-        price: '59000',
-        reduceOnly: false,
-        side: 'BUY',
-        positionSide: 'BOTH',
-        status: 'NEW',
-        stopPrice: '0',
-        closePosition: false,
-        symbol: targetSymbol,
-        time: evaluatedAtMs - 200,
-        timeInForce: 'GTC',
-        type: 'LIMIT',
-        activatePrice: '0',
-        priceRate: '0',
-        updateTime: evaluatedAtMs - 100,
-        workingType: 'CONTRACT_PRICE',
-        priceProtect: false,
-        priceMatch: 'NONE',
-        selfTradePreventionMode: 'NONE',
-        goodTillDate: 0,
-      }];
+      return [];
+    case 'USDM_ALGO_OPEN_ORDERS':
+      return [];
     case 'USDM_TRADES':
       return [{
         symbol: targetSymbol,
@@ -263,7 +335,6 @@ function valueFor(kind, profileId, targetSymbol, evaluatedAtMs) {
       return { multiAssetsMargin: false };
     case 'USDM_POSITION_MODE':
       return { dualSidePosition: false };
-    case 'USDM_ALGO_OPEN_ORDERS':
     case 'USDM_COMMISSIONS':
     case 'USDM_INCOME':
     case 'USDM_ADL':
@@ -285,7 +356,7 @@ function queryMetadata(kind, targetSymbol, gap) {
       marginMode: null,
     };
   }
-  if (kind === 'USDM_OPEN_ORDERS') {
+  if (kind === 'USDM_OPEN_ORDERS' || kind === 'USDM_ALGO_OPEN_ORDERS') {
     return {
       queryScope: 'ALL_SYMBOLS',
       querySymbol: null,
@@ -333,6 +404,9 @@ function normalizedFact({
   accountRealmId,
   targetSymbol,
   evaluatedAtMs,
+  targetPositionAmount,
+  factValueOverrides,
+  unavailableFactKinds,
 }) {
   const gapReason = GAP_REASONS[kind] ?? null;
   const gap = gapReason !== null;
@@ -342,7 +416,8 @@ function normalizedFact({
     CONTRACT_IDS[kind],
   );
   assert.equal(resolution.policy.gapReason, gapReason);
-  const sourceTimeMs = gap ? null : evaluatedAtMs - 100;
+  const unavailable = unavailableFactKinds.includes(kind);
+  const sourceTimeMs = gap || unavailable ? null : evaluatedAtMs - 100;
   return normalizePrivateFactEvidence({
     schema: L05_PRIVATE_FACT_SCHEMA,
     matrixSha256: L05_BINANCE_MATRIX_SHA256,
@@ -358,17 +433,33 @@ function normalizedFact({
     sourceId: resolution.contract?.sourceIds[0] ?? L05_PRIVATE_GAP_SOURCE_ID,
     schemaRevision: L05_PRIVATE_FACT_SCHEMA_REVISIONS[kind],
     receiptId: `private-receipt:${index.toString(16).padStart(24, '0')}`,
-    readState: gap ? 'UNAVAILABLE' : 'OK',
-    authority: gap ? 'UNAVAILABLE' : 'SYNTHETIC_TEST',
-    completeness: gap ? 'UNAVAILABLE' : 'COMPLETE',
+    readState: gap || unavailable ? 'UNAVAILABLE' : 'OK',
+    authority: gap || unavailable ? 'UNAVAILABLE' : 'SYNTHETIC_TEST',
+    completeness: gap || unavailable ? 'UNAVAILABLE' : 'COMPLETE',
     sourceTimeMs,
     receivedAtMs: evaluatedAtMs - 50,
     maxAgeMs: 1_000,
-    value: valueFor(kind, profileId, targetSymbol, evaluatedAtMs),
+    value: unavailable
+      ? null
+      : valueFor(
+        kind,
+        profileId,
+        targetSymbol,
+        evaluatedAtMs,
+        targetPositionAmount,
+        factValueOverrides,
+      ),
   }, evaluatedAtMs);
 }
 
-function sourceFacts(accountRealmId, targetSymbol, evaluatedAtMs) {
+function sourceFacts(
+  accountRealmId,
+  targetSymbol,
+  evaluatedAtMs,
+  targetPositionAmount,
+  factValueOverrides,
+  unavailableFactKinds,
+) {
   const facts = [];
   let index = 1;
   for (const kind of REQUIRED_USDM_FACTS) {
@@ -380,6 +471,9 @@ function sourceFacts(accountRealmId, targetSymbol, evaluatedAtMs) {
         accountRealmId,
         targetSymbol,
         evaluatedAtMs,
+        targetPositionAmount,
+        factValueOverrides,
+        unavailableFactKinds,
       }));
       index += 1;
       facts.push(normalizedFact({
@@ -389,6 +483,9 @@ function sourceFacts(accountRealmId, targetSymbol, evaluatedAtMs) {
         accountRealmId,
         targetSymbol,
         evaluatedAtMs,
+        targetPositionAmount,
+        factValueOverrides,
+        unavailableFactKinds,
       }));
     } else {
       facts.push(normalizedFact({
@@ -398,6 +495,9 @@ function sourceFacts(accountRealmId, targetSymbol, evaluatedAtMs) {
         accountRealmId,
         targetSymbol,
         evaluatedAtMs,
+        targetPositionAmount,
+        factValueOverrides,
+        unavailableFactKinds,
       }));
     }
     index += 1;
@@ -406,8 +506,10 @@ function sourceFacts(accountRealmId, targetSymbol, evaluatedAtMs) {
 }
 
 function sideBearingRows(fact) {
+  if (fact.value === null) return [];
   if (fact.factKind === 'USDM_ACCOUNT') return fact.value.positions;
-  if (['USDM_POSITIONS', 'USDM_OPEN_ORDERS', 'USDM_TRADES'].includes(fact.factKind)) {
+  if (['USDM_POSITIONS', 'USDM_OPEN_ORDERS', 'USDM_ALGO_OPEN_ORDERS', 'USDM_TRADES']
+    .includes(fact.factKind)) {
     return fact.value;
   }
   return [];
@@ -417,8 +519,18 @@ export function buildNormalBasisL05Projection({
   accountRealmId,
   targetSymbol,
   evaluatedAtMs,
+  targetPositionAmount = '0',
+  factValueOverrides = {},
+  unavailableFactKinds = [],
 }) {
-  const facts = sourceFacts(accountRealmId, targetSymbol, evaluatedAtMs);
+  const facts = sourceFacts(
+    accountRealmId,
+    targetSymbol,
+    evaluatedAtMs,
+    targetPositionAmount,
+    factValueOverrides,
+    unavailableFactKinds,
+  );
   const decisions = permissionDecisions(accountRealmId);
   const cutInput = {
     matrixSha256: L05_BINANCE_MATRIX_SHA256,

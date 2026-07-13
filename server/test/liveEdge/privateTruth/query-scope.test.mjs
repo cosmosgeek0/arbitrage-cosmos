@@ -46,7 +46,7 @@ function assertFrozen(value, seen = new Set()) {
 
 function selectors(kind, isGap = false) {
   if (isGap) return { queryScope: 'ACCOUNT_WIDE', querySymbol: null, queryAsset: null, queryType: null, marginMode: null };
-  if (['SPOT_OPEN_ORDERS', 'USDM_OPEN_ORDERS'].includes(kind)) {
+  if (['SPOT_OPEN_ORDERS', 'USDM_OPEN_ORDERS', 'USDM_ALGO_OPEN_ORDERS'].includes(kind)) {
     return { queryScope: 'ALL_SYMBOLS', querySymbol: null, queryAsset: null, queryType: null, marginMode: null };
   }
   if (kind === 'MARGIN_OPEN_ORDERS') {
@@ -204,6 +204,41 @@ function usdmOrder(symbol = 'BTCUSDT', orderId = 1) {
     closePosition: false, symbol, time: T0 - 1, timeInForce: 'GTC', type: 'LIMIT',
     activatePrice: '0', priceRate: '0', updateTime: T0, workingType: 'CONTRACT_PRICE',
     priceProtect: false, priceMatch: 'NONE', selfTradePreventionMode: 'NONE', goodTillDate: 0,
+  };
+}
+
+function usdmAlgoOrder(symbol = 'BTCUSDT', algoId = 1) {
+  return {
+    algoId,
+    clientAlgoId: `usdm-algo-scope-${algoId}`,
+    algoType: 'CONDITIONAL',
+    orderType: 'TAKE_PROFIT',
+    symbol,
+    side: 'SELL',
+    positionSide: 'BOTH',
+    timeInForce: 'GTC',
+    quantity: '0.01',
+    algoStatus: 'NEW',
+    actualOrderId: '',
+    actualPrice: '0',
+    triggerPrice: '61000',
+    price: '61000',
+    icebergQuantity: 'null',
+    tpTriggerPrice: '0',
+    tpPrice: '0',
+    slTriggerPrice: '0',
+    slPrice: '0',
+    tpOrderType: '',
+    selfTradePreventionMode: 'EXPIRE_MAKER',
+    workingType: 'CONTRACT_PRICE',
+    priceMatch: 'NONE',
+    closePosition: false,
+    priceProtect: false,
+    reduceOnly: false,
+    createTime: T0 - 1,
+    updateTime: T0,
+    triggerTime: 0,
+    goodTillDate: 0,
   };
 }
 
@@ -612,6 +647,7 @@ test('optional all-symbol and targeted forms remain distinct and exact', () => {
   const vectors = [
     ['SPOT_OPEN_ORDERS', (symbol, id) => spotOrder(symbol, id), null],
     ['USDM_OPEN_ORDERS', (symbol, id) => usdmOrder(symbol, id), null],
+    ['USDM_ALGO_OPEN_ORDERS', (symbol, id) => usdmAlgoOrder(symbol, id), null],
     ['MARGIN_OPEN_ORDERS', (symbol, id) => marginOrder(symbol, id, false), 'CROSS'],
   ];
   for (const [kind, row, marginMode] of vectors) {
@@ -691,7 +727,7 @@ test('target, source-cut, content, evidence, and projection revisions bind exact
 
 test('L02 gaps remain selector-free, including USD-M symbol configuration', () => {
   for (const kind of [
-    'USDM_COMMISSIONS', 'USDM_ALGO_OPEN_ORDERS', 'USDM_SYMBOL_CONFIGURATION',
+    'USDM_COMMISSIONS', 'USDM_SYMBOL_CONFIGURATION',
     'MARGIN_MAX_BORROWABLE', 'MARGIN_BORROW_REPAY_HISTORY',
   ]) {
     const gap = normalizeInput(gapInput(kind));

@@ -15,6 +15,8 @@ import type {
 
 export const EXCHANGE_TWIN_SCHEMA = 'LIVE_EDGE_EXCHANGE_TWIN_V1' as const;
 export const EXCHANGE_TWIN_CHECKPOINT_SCHEMA = 'LIVE_EDGE_EXCHANGE_TWIN_CHECKPOINT_V1' as const;
+export const TWIN_REQUEST_SEMANTIC_EVIDENCE_SCHEMA =
+  'LIVE_EDGE_TWIN_REQUEST_SEMANTIC_EVIDENCE_V1' as const;
 
 export type TwinProduct = 'SPOT' | 'USD_M_PERPETUAL';
 export type TwinSide = 'BUY' | 'SELL';
@@ -38,7 +40,42 @@ export type TwinVenueStatus =
   | 'PARTIALLY_FILLED'
   | 'FILLED'
   | 'CANCELED'
-  | 'EXPIRED';
+  | 'EXPIRED'
+  | 'REJECTED'
+  | 'EXPIRED_IN_MATCH';
+
+/**
+ * Safe, data-only projection of L03's unsigned request owner result. The
+ * sensitive canonical query is never retained by L07; its SHA-256 is.
+ */
+export interface TwinRequestSemanticEvidence {
+  readonly schema: typeof TWIN_REQUEST_SEMANTIC_EVIDENCE_SCHEMA;
+  readonly contractId: 'SPOT_ORDER_POST' | 'USDM_ORDER_POST';
+  readonly product: TwinProduct;
+  readonly symbol: string;
+  readonly side: TwinSide;
+  readonly orderType: TwinOrderType;
+  readonly timeInForce: TwinTimeInForce;
+  readonly price: string | null;
+  readonly quantity: string;
+  readonly positionSide: 'BOTH' | null;
+  readonly reduceOnly: boolean;
+  readonly clientOrderId: string;
+  readonly requestId: string;
+  readonly requestSequence: number;
+  readonly intentFingerprint: string;
+  readonly sanitizedRequestContentHash: string;
+  /** Bounded, secret-free L03 input retained so the owner can be rerun. */
+  readonly requestOwnerInput: Readonly<Record<string, unknown>>;
+  readonly evidenceRevision: string;
+  readonly documentaryAuthority: 'DOCUMENTARY_EVIDENCE_ONLY';
+  readonly externalActionAuthorization: 'NONE';
+  readonly actionAuthority: 'NONE_RECORD_ONLY';
+}
+
+export type BindTwinRequestSemanticEvidenceResult =
+  | { readonly ok: true; readonly evidence: Readonly<TwinRequestSemanticEvidence> }
+  | { readonly ok: false; readonly code: string };
 
 export interface TwinLatencyProfile {
   readonly dispatchToVenueMs: number;
@@ -197,14 +234,23 @@ export type TwinRateDecisionEvent = TwinEventEnvelope<'RATE_DECISION', {
   readonly ownerEvidenceSha256: string;
 }>;
 
-export type TwinPlaceDispatchEvent = TwinEventEnvelope<'PLACE_DISPATCH', {
-  readonly fixtureId: string;
-}>;
+export type TwinPlaceDispatchEvent = TwinEventEnvelope<'PLACE_DISPATCH',
+  | { readonly fixtureId: string }
+  | {
+      readonly fixtureId: string;
+      readonly requestEvidence: Readonly<TwinRequestSemanticEvidence>;
+    }>;
 
-export type TwinVenueArrivalEvent = TwinEventEnvelope<'VENUE_ARRIVAL', {
-  readonly fixtureId: string;
-  readonly feeEvidence: TwinFeeEvidence | null;
-}>;
+export type TwinVenueArrivalEvent = TwinEventEnvelope<'VENUE_ARRIVAL',
+  | {
+      readonly fixtureId: string;
+      readonly feeEvidence: TwinFeeEvidence | null;
+    }
+  | {
+      readonly fixtureId: string;
+      readonly feeEvidence: TwinFeeEvidence | null;
+      readonly terminalStatus: 'REJECTED' | 'EXPIRED_IN_MATCH';
+    }>;
 
 export type TwinHttpDeliveryEvent = TwinEventEnvelope<'HTTP_DELIVERY', {
   readonly fixtureId: string;

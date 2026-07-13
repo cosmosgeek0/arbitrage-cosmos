@@ -483,6 +483,7 @@ export function baselineEvents(fixture, {
     { price: '102', quantity: '0.05' },
   ],
   fee = feeEvidence(),
+  terminalStatus = null,
   httpOutcome = 'ACK',
   includePrivate = false,
 } = {}) {
@@ -517,6 +518,7 @@ export function baselineEvents(fixture, {
     event('VENUE_ARRIVAL', 6, T0 + 20, {
       fixtureId: fixture.fixtureId,
       feeEvidence: fee,
+      ...(terminalStatus === null ? {} : { terminalStatus }),
     }, { sourceSequence: 201 }),
     event('HTTP_DELIVERY', 8, T0 + 40, {
       fixtureId: fixture.fixtureId,

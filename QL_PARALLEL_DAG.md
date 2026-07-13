@@ -15,7 +15,7 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 | L15 deploy-infra satellite | ~/Desktop/l15-infra | l15-deploy-infra-20260712 | 0f2bb88 | ACCEPTED (2cec412; 347 assertions) — merge at integration |
 | Q11 survival | ~/Desktop/q11-survival | q11-survival-20260712 | 8a5dd09 | ACCEPTED + MERGED (2,182 pass with Q14) |
 | L spine L00–L08 | live-execution-proof-20260712 | live-execution-control-proof-20260712 | 73e1a1f | L05 ACCEPTED (8e4b705); L06 takeover → Fable; Codex left auditable uncommitted L06 work; TWO director decisions DEFERRED to I00: ledger compare-and-set primitive + Foundation quantity-bridge contract (see live-edge-receipts/patches/) |
-| L14 controls shard | ~/Desktop/l14-controls | l14-controls-20260712 | 39ebd98 (accepted L06) | READY |
+| L14 controls shard | ~/Desktop/l14-controls | l14-controls-20260712 | 39ebd98 | ACCEPTED — merge queued behind L08 park (active writer in L spine) |
 | L09 normal-basis shard | (cut on L08 acceptance) | l09-normal-basis-20260712 | accepted-L08 SHA | WAITING on L08 |
 | L10 reverse-basis shard | (cut on L08 acceptance) | l10-reverse-basis-20260712 | accepted-L08 SHA | WAITING on L08 |
 | L11 volume shard | (cut on L08 acceptance) | l11-volume-20260712 | accepted-L08 SHA | WAITING on L08 |

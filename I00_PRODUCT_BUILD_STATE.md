@@ -2,7 +2,7 @@
 
 Schema version: `I00_PRODUCT_BUILD_STATE_V1`
 
-Updated: `2026-07-13T03:19:53Z`
+Updated: `2026-07-13T03:40:06Z`
 
 ## Identity
 
@@ -10,11 +10,11 @@ Updated: `2026-07-13T03:19:53Z`
 | --- | --- |
 | Canonical Main base SHA | `1fec867fa3f62d17829543b3776dc768506ae8ac` for this I00 fan-in verification assignment; `STATE.md` still records the older canonical convergence baseline and was not rewritten by this worker |
 | Integration branch/worktree | `i00-product-assembly-20260713` at `/Users/cosmosgeek/Desktop/i00-assembly` |
-| Verified integration HEAD | `1d9b1a3a5e859501c4c0c47e6b2c8d0d82bc4698` before this state/receipt checkpoint |
-| Phase | `I00-VERIFY / TASK-1` |
-| Status | `BLOCKED_SCOPE_INVOCATION` |
-| Active writer | `I00-VERIFY`; exclusive paths for Task 1: `I00_PRODUCT_BUILD_STATE.md`, `I00_VERIFY_RECEIPT.md` |
-| Dirty or partial paths | None before Task 1 authoring; Task 2 closure-evidence drafts are a separate checkpoint |
+| Verified integration HEAD | `14fdcb0860eb753e6eb2c269ad2a28da00f4d9f6` (Task 1 receipt checkpoint) before this Task 2 seal |
+| Phase | `I00-VERIFY / TASK-2 CLOSURE PRESTAGE` |
+| Status | `BLOCKED_FROZEN_INPUT_DRIFT`; five closure drafts are pre-populated and locally verified |
+| Active writer | `I00-VERIFY`; exclusive paths are the five root closure drafts, `fixtures/i00/**`, `integration/reports/i00-proof-evidence.json`, `server/test/i00Acceptance/**`, `test/i00/**`, and I00 state/receipt files |
+| Dirty or partial paths | None expected after the Task 2 checkpoint; no production, Q/L, startup, route, package, lockfile, database, or web mount path changed |
 
 ## Accepted inputs
 
@@ -44,7 +44,7 @@ Updated: `2026-07-13T03:19:53Z`
 | Product Integration | No new live claim | 76 deterministic contract/adapter/lifecycle/supervisor tests pass | No production barrel, composition, routes, persistence, startup, or Q/L final adapters |
 | Product Control Room | No new live or visible claim | 18 contract/fixture/binding tests pass; accepted donor retained | No App/Header/store/page mount; Control Room real route remains missing |
 | Operations | No deployment claim | Template/schema suite passes 50 assertions | AWS, EC2, Cloudflare, DNS, Secrets Manager, systemd, target SQLite, capacity/soak, watchdog, and release readback not configured/proved |
-| Closure proof | No real-adapter claim | Protocol 22/22 and accepted IP-PROOF path inventory 24/24 | Bare required scope invocation has no inventory; Q/L final tips and empirical/runtime proof absent |
+| Closure proof | No real-adapter claim | Protocol 22/22; report-source checks 7/7; scope CLI resolves staged or HEAD inventory without weakening empty-input failure | Historical IP-PROOF frozen inputs fail on two absent protected directives and two intentionally advanced QL snapshots; Q/L final tips and empirical/runtime proof absent |
 | Money authority | None | Validate-only and fixture evidence only | Private/signed/canary/live paths remain absent or owner-gated; `LIVE_EXECUTION_NOT_IMPLEMENTED` enforced |
 
 ## Verification
@@ -56,11 +56,15 @@ Updated: `2026-07-13T03:19:53Z`
 | Product Integration suite | Exit 0; `76/76` |
 | Product Control Room suite | Exit 0; `18/18` |
 | Ops template/schema suite | Exit 0; 50 assertions |
-| Bare IP-PROOF scope command | Exit 1; 0 checked, intentionally fail-closed |
+| Bare IP-PROOF scope command before scaffolding fix | Exit 1; 0 checked, intentionally fail-closed |
+| Bare IP-PROOF scope command after scaffolding fix | Exit 0; resolves a concrete staged inventory or current HEAD first-parent inventory; pure `verifyScopePaths([])` still fails |
 | Explicit accepted IP-PROOF inventory | Exit 0; `24/24` |
 | Edge protocol | Exit 0; `22/22` |
 | `npm run typecheck` | Exit 0 |
 | `npm run build` | Exit 0; existing Vite chunk warning only |
+| Closure draft/source checks | Exit 0; `7/7` selected report, provenance, inventory, interface, resource, page, and byte-identity checks |
+| Full IP-PROOF focused harness | Exit 1; `30/32` pass; both failures are the same four frozen-input mismatches |
+| Post-Task-2 `npm test` | Exit 0; deterministic `377/377`, typecheck and build passed |
 
 ## Runtime and authorization measurements
 
@@ -73,14 +77,14 @@ Updated: `2026-07-13T03:19:53Z`
 
 ## Current blocker and resume
 
-Current blocker: the literal required `node test/i00/verify-scope.mjs` command exits 1 because it receives no concrete paths. Empty input is intentionally rejected by `test/i00/verify-scope.mjs` and its accepted security test. This cannot be changed merely to manufacture green.
+Current blocker: the historical IP-PROOF frozen-input gate is not valid on the assembled tree. `IP_PROOF.md` and `I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md` are absent; current `QL_DIRECTOR_STATE.md` SHA-256 is `6deab33ac445f92a4f7db29ad7be13e7307e185597b692db4886967e9a6f6e4a` instead of the packet snapshot `dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278`; current `QL_PARALLEL_DAG.md` SHA-256 is `469370d904484e450f17da301991d07b9d87ef39ee5b693048e14e997000338b` instead of `275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546`. The scan now reports these facts as `MISSING/false` rather than crashing.
 
-Next exact task: pre-populate the five IP-PROOF-derived closure drafts from accepted fan-in receipts, retaining `UNKNOWN`, `DESIGNED`, `BUILT`, `OWNER_GATED`, and `BLOCKED_EXTERNAL` truth where runtime evidence is absent.
+Next exact task: the director must supply the two protected owner inputs with their accepted SHA-256 values and create a new I00-level frozen-input acceptance for the current QL snapshots. Do not overwrite the historical IP-PROOF hashes merely to create green.
 
 Next exact command after Task 2 draft generation:
 
 ```bash
-node test/i00/render-reports.mjs --check
+node test/i00/render-reports.mjs --write && node test/i00/run.mjs
 ```
 
 Files a fresh director must read, in order:
@@ -92,6 +96,6 @@ Files a fresh director must read, in order:
 5. `QL_DIRECTOR_STATE.md` and `QL_PARALLEL_DAG.md`
 6. `IP_RUNTIME_RECEIPT.md`, `IP_CONTROL_RECEIPT.md`, `IP_OPS_RECEIPT.md`, `IP_PROOF_RECEIPT.md`
 7. `I00_VERIFY_RECEIPT.md` and this state file
-8. the five root closure drafts
+8. `I00_CLOSURE_PRESTAGE_RECEIPT.md` and the five root closure drafts
 
-Work that must not be repeated: do not re-fan-in the four accepted IP packets; do not rewrite their historical receipts; do not change empty-scope fail-closed semantics; do not mount production routes/startup/packages in this worker; do not claim Q/L, private, signed, deployed, browser-visible, canary, or live truth from fixture or artifact evidence.
+Work that must not be repeated: do not re-fan-in the four accepted IP packets; do not rewrite their historical receipts; do not change pure empty-scope fail-closed semantics; do not hand-edit the five generated reports; do not mount production routes/startup/packages in this worker; do not claim Q/L, private, signed, deployed, browser-visible, canary, or live truth from fixture or artifact evidence.

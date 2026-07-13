@@ -142,7 +142,7 @@ test('page capability and control matrices stay machine-checkable and synthetic'
     surface: 'Control Room',
     source: 'I00#15',
     state: 'MISSING',
-    blocker: 'AWAITING_IP_CONTROL_BINDING',
+    blocker: 'DIRECTOR_MOUNT_REQUIRED; FINAL_RUNTIME_ENDPOINTS_REQUIRED; CANONICAL_COMMAND_PERSISTENCE_REQUIRED',
     requiredEvidence: 'real machine graph, registry search, preview-confirm-result, before/after receipt readback',
   });
 });

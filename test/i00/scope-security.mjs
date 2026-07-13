@@ -13,6 +13,9 @@ export const ALLOWED_ROOT_FILES = new Set([
   'RESOURCE_AND_BACKPRESSURE_REPORT.md',
   'OFFICIAL_INTERFACE_MATRIX.md',
   'IP_PROOF_SHARED_INSERTION_REQUEST.md',
+  'I00_PRODUCT_BUILD_STATE.md',
+  'I00_VERIFY_RECEIPT.md',
+  'I00_CLOSURE_PRESTAGE_RECEIPT.md',
 ]);
 
 export const ALLOWED_PREFIXES = Object.freeze([
@@ -101,7 +104,7 @@ export function scanOwnedFiles() {
     if (/\.(?:js|mjs|cjs|ts|tsx)$/.test(file) && !mutationFixtures.has(file)) {
       for (const code of scanExecutableSnippet(content)) {
         if (file === 'test/i00/render-reports.mjs' && code === 'ENVIRONMENT_READ') continue;
-        if (file === 'test/i00/git-provenance.mjs' && code === 'CHILD_PROCESS') continue;
+        if ((file === 'test/i00/git-provenance.mjs' || file === 'test/i00/verify-scope.mjs') && code === 'CHILD_PROCESS') continue;
         executableFindings.push({ code, file });
       }
     }

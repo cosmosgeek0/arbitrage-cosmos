@@ -27,22 +27,22 @@
     "authorityConcepts": 13,
     "semanticStreams": 6,
     "transportCandidates": 38,
-    "provenanceItems": 7
+    "provenanceItems": 11
   },
   "frozenInputs": [
     {
       "path": "IP_PROOF.md",
       "sha256": "e59d516ba9acb9a7bb1ce63ca149ce662f308a0fd0900b72db3d2fe2e8bb93b6",
       "anchoredSha256": "e59d516ba9acb9a7bb1ce63ca149ce662f308a0fd0900b72db3d2fe2e8bb93b6",
-      "observedSha256": "e59d516ba9acb9a7bb1ce63ca149ce662f308a0fd0900b72db3d2fe2e8bb93b6",
-      "passed": true
+      "observedSha256": null,
+      "passed": false
     },
     {
       "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
       "sha256": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5",
       "anchoredSha256": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5",
-      "observedSha256": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5",
-      "passed": true
+      "observedSha256": null,
+      "passed": false
     },
     {
       "path": "MISSION.md",
@@ -62,15 +62,15 @@
       "path": "QL_DIRECTOR_STATE.md",
       "sha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
       "anchoredSha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
-      "observedSha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
-      "passed": true
+      "observedSha256": "6deab33ac445f92a4f7db29ad7be13e7307e185597b692db4886967e9a6f6e4a",
+      "passed": false
     },
     {
       "path": "QL_PARALLEL_DAG.md",
       "sha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546",
       "anchoredSha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546",
-      "observedSha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546",
-      "passed": true
+      "observedSha256": "469370d904484e450f17da301991d07b9d87ef39ee5b693048e14e997000338b",
+      "passed": false
     },
     {
       "path": "quant/DIRECTIVE_INPUTS.lock",
@@ -3156,6 +3156,366 @@
         "line": 146
       },
       {
+        "concept": "capital-authority",
+        "declaration": "function projectCapitalRiskReference",
+        "file": "server/src/productIntegration/adapters/canonicalReferences.ts",
+        "line": 35
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function projectCapitalRiskReference",
+        "file": "server/src/productIntegration/adapters/canonicalReferences.ts",
+        "line": 35
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "interface CapitalRiskVerdictConsumerPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 51
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface CapitalRiskVerdictConsumerPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 51
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface ProductLedgerPersistencePort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 73
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type L14DurableControlActionType",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 96
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type L14ControlReasonCode",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 101
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface L14RiskBoundDeclarationPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 130
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type L14DurableControlActionPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 138
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface L14PreviewRiskWitnessPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 157
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface L14ControlPreviewRequestPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 165
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface L14DurableControlPreviewPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 173
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface L14ControlSubmissionRequestPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 190
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface L14ControlCommandReceiptPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 195
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface L14ControlCommandRejectionReceiptPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 212
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type L14ControlCommandLookupPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 227
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface L14ControlEventBasePort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 232
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface L14ControlIntentCommittedEventPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 246
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface L14ControlAppliedEventPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 253
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface L14ControlAwarenessRecordedEventPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 259
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface L14ControlRejectedEventPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 266
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type L14ControlEventPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 273
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface L14ControlEventAppendRequestPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 274
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface L14ControlEventAppendAcknowledgementPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 284
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface L14DurableControlPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 305
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface L14CanonicalControlPersistencePort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 309
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface ProductSupervisorProjectionPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 315
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface ProductOperatorEventStreamPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 319
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface L06MutationJournalEntryPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 329
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface ProductMutationJournalCasPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 387
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface DashboardDonorControlStatePort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 409
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface DashboardDonorSupervisorSummariesPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 465
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface DashboardDonorSupervisorSnapshotPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 475
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type DashboardDonorControlMutationPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 494
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface DashboardDonorControlReceiptPort",
+        "file": "server/src/productIntegration/contracts/ports.ts",
+        "line": 499
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface ProductSupervisorProjection",
+        "file": "server/src/productIntegration/contracts/types.ts",
+        "line": 185
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "interface ProductCapitalRiskReference",
+        "file": "server/src/productIntegration/contracts/types.ts",
+        "line": 255
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface ProductCapitalRiskReference",
+        "file": "server/src/productIntegration/contracts/types.ts",
+        "line": 255
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ProductSupervisorProjection",
+        "file": "server/src/productIntegration/contracts/validation.ts",
+        "line": 22
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function validateProductSupervisorProjection",
+        "file": "server/src/productIntegration/contracts/validation.ts",
+        "line": 222
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function assertProductSupervisorProjection",
+        "file": "server/src/productIntegration/contracts/validation.ts",
+        "line": 332
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function validL14RiskBound",
+        "file": "server/src/productIntegration/fixtures/ports.ts",
+        "line": 129
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function validL14RiskWitness",
+        "file": "server/src/productIntegration/fixtures/ports.ts",
+        "line": 170
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function validLedgerEventPair",
+        "file": "server/src/productIntegration/fixtures/ports.ts",
+        "line": 195
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function validDashboardControlState",
+        "file": "server/src/productIntegration/fixtures/ports.ts",
+        "line": 260
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "type FixtureJournalAcknowledgement",
+        "file": "server/src/productIntegration/fixtures/ports.ts",
+        "line": 360
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function createL14DurableControlFixture",
+        "file": "server/src/productIntegration/fixtures/ports.ts",
+        "line": 404
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function createL14ControlPersistenceFixture",
+        "file": "server/src/productIntegration/fixtures/ports.ts",
+        "line": 468
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function createMemoryMutationJournalCasFixture",
+        "file": "server/src/productIntegration/fixtures/ports.ts",
+        "line": 533
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function createMemoryLedgerPersistenceFixture",
+        "file": "server/src/productIntegration/fixtures/ports.ts",
+        "line": 679
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "function createCapitalRiskVerdictFixture",
+        "file": "server/src/productIntegration/fixtures/ports.ts",
+        "line": 762
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function createCapitalRiskVerdictFixture",
+        "file": "server/src/productIntegration/fixtures/ports.ts",
+        "line": 762
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function createSupervisorProjectionFixture",
+        "file": "server/src/productIntegration/fixtures/ports.ts",
+        "line": 869
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function createOperatorEventStreamFixture",
+        "file": "server/src/productIntegration/fixtures/ports.ts",
+        "line": 885
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ProductSupervisorProjection",
+        "file": "server/src/productIntegration/supervisor/project.ts",
+        "line": 14
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface BuildProductSupervisorInput",
+        "file": "server/src/productIntegration/supervisor/project.ts",
+        "line": 199
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function buildProductSupervisorProjection",
+        "file": "server/src/productIntegration/supervisor/project.ts",
+        "line": 209
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ProductSupervisorProjection",
+        "file": "server/src/productIntegration/supervisor/serialization.ts",
+        "line": 7
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function serializeProductSupervisorProjection",
+        "file": "server/src/productIntegration/supervisor/serialization.ts",
+        "line": 11
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function deserializeProductSupervisorProjection",
+        "file": "server/src/productIntegration/supervisor/serialization.ts",
+        "line": 26
+      },
+      {
         "concept": "control-authority",
         "declaration": "class AwsRunnerControlError",
         "file": "server/src/services/awsRunnerControl.ts",
@@ -6076,15 +6436,35 @@
         "name": "system-convergence",
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "receipt": "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md"
+      },
+      {
+        "name": "ip-runtime-closure",
+        "sha": "8058ab8febb639839333d4e2c604068a0c7390ea",
+        "receipt": "IP_RUNTIME_RECEIPT.md"
+      },
+      {
+        "name": "ip-control-closure",
+        "sha": "56c47dad398c485b6653036c8b90c53f11061b1e",
+        "receipt": "IP_CONTROL_RECEIPT.md"
+      },
+      {
+        "name": "ip-ops-closure",
+        "sha": "6bfd543afb693ea18f4baf08e962e6d698f140fb",
+        "receipt": "IP_OPS_RECEIPT.md"
+      },
+      {
+        "name": "ip-proof-closure",
+        "sha": "23e985c17b9b860fee26be397fa05b26f3daf8f2",
+        "receipt": "IP_PROOF_RECEIPT.md"
       }
     ],
     "requirements": [
       {
         "id": "OWNER-01",
-        "source": "docs/archive/What-i-want.txt",
+        "source": "docs/archive/What-i-want.txt; IP_RUNTIME_RECEIPT.md@8058ab8febb639839333d4e2c604068a0c7390ea; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e; IP_OPS_RECEIPT.md@6bfd543afb693ea18f4baf08e962e6d698f140fb; IP_PROOF_RECEIPT.md@23e985c17b9b860fee26be397fa05b26f3daf8f2",
         "requirement": "Preserve the owner hierarchy from broad universe monitoring to specialist attention guarded execution complete control and no routine CLI dependence",
         "owner": "MISSION.md plus I00 director",
-        "code": "canonical domain owners only",
+        "code": "canonical domain owners plus fanned-in prestage artifacts; no shared composition",
         "runtime": "final shared composition pending",
         "persistence": "existing Ledger",
         "api": "canonical supervisor and controls",
@@ -6094,8 +6474,8 @@
         "scenario": "I00-01 through I00-22",
         "sha": "8069f9bde596524ba74bb3778c9cde6ad3efb385",
         "status": "DESIGNED",
-        "blocker": "AWAITING_REAL_ADAPTERS",
-        "replacement": "director fan-in across IP-RUNTIME/IP-CONTROL/IP-OPS"
+        "blocker": "AWAITING_REAL_ADAPTERS; AWAITING_DIRECTOR_SHARED_COMPOSITION; DIRECTOR_MOUNT_REQUIRED",
+        "replacement": "director shared composition, canonical persistence/routes, real runtime and browser readback"
       },
       {
         "id": "Q-CLOSURE-01",
@@ -6531,57 +6911,57 @@
       },
       {
         "id": "L-CONTROLS",
-        "source": "L blob 53fea2b7#21-22",
+        "source": "L blob 53fea2b7#21-22; IP_RUNTIME_RECEIPT.md@8058ab8febb639839333d4e2c604068a0c7390ea; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Durable commands and machine graph expose exact state revision idempotency before/after and owner truth",
         "owner": "foundation-control and systemIntegration",
-        "code": "backend subset exists",
-        "runtime": "cockpit binding incomplete",
-        "persistence": "control receipts",
-        "api": "/api/system-integration/controls",
-        "cockpit": "Dashboard Control Room",
-        "control": "registry",
-        "test": "control suites plus I00-18/I00-19",
+        "code": "product command projection and Control Room binding artifacts built without canonical owner mutation",
+        "runtime": "unmounted; current legacy endpoints do not satisfy final cursor and registry contracts",
+        "persistence": "canonical product and L14 command persistence pending",
+        "api": "final preview submit result and material-cursor routes pending",
+        "cockpit": "Dashboard Control Room package built but not mounted",
+        "control": "bounded fixture registry only",
+        "test": "server/test/productIntegration/commands/commands-events.test.mjs; web/test/productControlRoom/contracts.test.mjs",
         "scenario": "I00-18,I00-19",
-        "sha": null,
+        "sha": "56c47dad398c485b6653036c8b90c53f11061b1e",
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; AWAITING_IP_CONTROL_BINDING",
-        "replacement": "accepted L13/L14 adapters"
+        "blocker": "AWAITING_ACCEPTED_L_TIP; AWAITING_DIRECTOR_RUNTIME_COMPOSITION; DIRECTOR_MOUNT_REQUIRED; CANONICAL_PERSISTENCE_REQUIRED",
+        "replacement": "accepted L13/L14 adapters plus director-owned persistence, routes, and mount"
       },
       {
         "id": "L-OBSERVABILITY",
-        "source": "L blob 53fea2b7#23",
+        "source": "L blob 53fea2b7#23; IP_RUNTIME_RECEIPT.md@8058ab8febb639839333d4e2c604068a0c7390ea; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e; IP_OPS_RECEIPT.md@6bfd543afb693ea18f4baf08e962e6d698f140fb",
         "requirement": "Metrics logs ledger and incidents preserve material events root cause redaction and bounded attention",
         "owner": "systemIntegration plus IP-OPS",
-        "code": "fixture incident grouper only",
-        "runtime": "real projections incomplete",
-        "persistence": "existing Ledger",
-        "api": "events/incidents pending",
-        "cockpit": "Health Logs Notifications",
-        "control": "ack disabled",
-        "test": "incident fixture",
+        "code": "bounded cursor and incident presentation plus ops readback validators built",
+        "runtime": "unmounted artifacts; real projections incomplete",
+        "persistence": "existing Ledger; dedicated material cursor and incident persistence pending",
+        "api": "final events incidents and readback routes pending",
+        "cockpit": "Health Logs Notifications adapters built but not mounted",
+        "control": "incident acknowledgement backend absent",
+        "test": "server/test/productIntegration/commands/commands-events.test.mjs; web/test/productControlRoom/contracts.test.mjs; ops/tests/i00/test-probes-and-readback.sh",
         "scenario": "I00-20",
-        "sha": null,
-        "status": "DESIGNED",
-        "blocker": "AWAITING_IP_CONTROL_BINDING; AWAITING_IP_OPS_BUNDLE",
-        "replacement": "accepted observability adapters"
+        "sha": "56c47dad398c485b6653036c8b90c53f11061b1e",
+        "status": "BUILT",
+        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; DIRECTOR_MOUNT_REQUIRED; REAL_RUNTIME_READBACK_REQUIRED",
+        "replacement": "director-owned event persistence, routes, mount, and real readback"
       },
       {
         "id": "L-OPS",
-        "source": "L blob 53fea2b7#24",
+        "source": "L blob 53fea2b7#24; IP_OPS_RECEIPT.md@6bfd543afb693ea18f4baf08e962e6d698f140fb",
         "requirement": "AWS Cloudflare deployment alarms secrets backup restore rollback and health separation require local artifacts then external authorization",
         "owner": "IP-OPS",
-        "code": "fixture mismatch/restore only",
-        "runtime": "no deployment action",
-        "persistence": "receipt pending",
-        "api": "deployment health pending",
-        "cockpit": "Health",
-        "control": "owner-gated",
-        "test": "fixture campaigns",
+        "code": "ops/i00, ops/templates/i00, ops/tests/i00, and ops/docs/i00 artifacts built",
+        "runtime": "no deployment or vendor action",
+        "persistence": "receipt schemas and validators built; no production receipt",
+        "api": "readback validators built; real deployment health absent",
+        "cockpit": "Health mount pending",
+        "control": "owner-gated external actions",
+        "test": "bash ops/tests/i00/run-all.sh: 651 combined assertions in IP_OPS_RECEIPT.md",
         "scenario": "I00-21,I00-22",
-        "sha": null,
-        "status": "DESIGNED",
-        "blocker": "AWAITING_IP_OPS_BUNDLE; DEPLOYMENT_AUTHORIZATION_REQUIRED",
-        "replacement": "accepted L15/IP-OPS bundle"
+        "sha": "6bfd543afb693ea18f4baf08e962e6d698f140fb",
+        "status": "BUILT",
+        "blocker": "DEPLOYMENT_AUTHORIZATION_REQUIRED; REAL_TARGET_READBACK_REQUIRED; PRODUCTION_RESTORE_DONOR_AMENDMENT_REQUIRED; CAPACITY_SOAK_RECEIPT_REQUIRED",
+        "replacement": "owner-authorized activation with target readbacks; separately accepted production-restore amendment"
       },
       {
         "id": "L-CANARY",
@@ -6693,57 +7073,57 @@
       },
       {
         "id": "I15-COCKPIT",
-        "source": "I00#I15",
+        "source": "I00#I15; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Private and signed validation truth is visibly separated and browser-proven",
         "owner": "IP-CONTROL",
-        "code": "not mounted",
-        "runtime": "no browser readback",
-        "persistence": "read-only",
-        "api": "canonical supervisor pending private fields",
-        "cockpit": "Account Execution Health",
+        "code": "BINDING_READY cockpit artifact with fail-closed private and signed truth labels",
+        "runtime": "fixture preview browser proof only; application mount and real readback absent",
+        "persistence": "read-only artifact; canonical command persistence pending",
+        "api": "canonical supervisor pending private fields and final endpoints",
+        "cockpit": "Account Execution Health adapters built but not mounted",
         "control": "owner-gated",
-        "test": "REAL_BROWSER_READBACK_REQUIRED",
-        "scenario": "not run",
-        "sha": null,
-        "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; PRIVATE_READ_AUTHORIZATION_REQUIRED; SIGNED_VALIDATION_AUTHORIZATION_REQUIRED; AWAITING_IP_CONTROL_BINDING; REAL_BROWSER_READBACK_REQUIRED",
-        "replacement": "director browser acceptance"
+        "test": "web/test/productControlRoom/contracts.test.mjs 18/18 plus fixture-browser evidence in IP_CONTROL_RECEIPT.md",
+        "scenario": "fixture preview only",
+        "sha": "56c47dad398c485b6653036c8b90c53f11061b1e",
+        "status": "BUILT",
+        "blocker": "AWAITING_ACCEPTED_L_TIP; PRIVATE_READ_AUTHORIZATION_REQUIRED; SIGNED_VALIDATION_AUTHORIZATION_REQUIRED; DIRECTOR_MOUNT_REQUIRED; REAL_RUNTIME_BROWSER_READBACK_REQUIRED",
+        "replacement": "director mount followed by authorized private/signed evidence and real browser acceptance"
       },
       {
         "id": "I00-PAGES",
-        "source": "I00#15 and #27",
+        "source": "I00#15 and #27; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Every App-routed operational page has a machine-checkable canonical API honest state controls and blocker row and required absent surfaces stay named",
         "owner": "IP-CONTROL plus domain adapters",
-        "code": "source-derived page catalog plus required-absent registry",
+        "code": "source-derived page catalog plus BINDING_READY mount-row artifacts",
         "runtime": "all real bindings pending or blocked",
         "persistence": "owner-specific",
-        "api": "per-page catalog",
-        "cockpit": "19 App-routed page states; Control Room missing",
+        "api": "per-page catalog; final runtime endpoints pending",
+        "cockpit": "19 App-routed page states; Control Room code present but route still missing",
         "control": "per-page catalog",
-        "test": "discoverOperationalPageIds exact-set and absent-surface tests",
+        "test": "discoverOperationalPageIds exact-set and absent-surface tests; web/test/productControlRoom/contracts.test.mjs",
         "scenario": "all",
-        "sha": null,
+        "sha": "56c47dad398c485b6653036c8b90c53f11061b1e",
         "status": "DESIGNED",
-        "blocker": "AWAITING_REAL_ADAPTERS; AWAITING_IP_CONTROL_BINDING",
-        "replacement": "director real page bindings and required Control Room surface"
+        "blocker": "AWAITING_REAL_ADAPTERS; DIRECTOR_MOUNT_REQUIRED; FINAL_RUNTIME_ENDPOINTS_REQUIRED",
+        "replacement": "director real page bindings and required Control Room route"
       },
       {
         "id": "I00-CONTROL-SEED",
-        "source": "I00#14",
+        "source": "I00#14; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Required control families and superseded 172-item seed are classified without decorative controls",
         "owner": "IP-CONTROL director",
-        "code": "14 capability-backed rows; 172-item source absent",
-        "runtime": "backend/cockpit gaps named",
-        "persistence": "control receipts",
-        "api": "control registry",
-        "cockpit": "Control Room",
-        "control": "registry",
-        "test": "control matrix contract test",
+        "code": "14 proof-catalog rows plus six BINDING_READY fixture controls; 172-item source absent",
+        "runtime": "backend and cockpit gaps named; no mounted live registry",
+        "persistence": "canonical control receipts pending",
+        "api": "control registry contract built",
+        "cockpit": "Control Room package unmounted",
+        "control": "bounded fixture registry",
+        "test": "control matrix contract test; web/test/productControlRoom/contracts.test.mjs",
         "scenario": "I00-18,I00-19",
-        "sha": null,
+        "sha": "56c47dad398c485b6653036c8b90c53f11061b1e",
         "status": "DESIGNED",
-        "blocker": "CONTROL_SEED_SOURCE_NOT_PRESENT; AWAITING_IP_CONTROL_BINDING",
-        "replacement": "director imports seed and accepted control registry"
+        "blocker": "CONTROL_SEED_SOURCE_NOT_PRESENT; DIRECTOR_MOUNT_REQUIRED; CANONICAL_BACKEND_REGISTRY_REQUIRED",
+        "replacement": "director imports the missing seed, binds canonical backend controls, and mounts the accepted registry"
       },
       {
         "id": "CORE-01",
@@ -6837,39 +7217,39 @@
       },
       {
         "id": "ATTN-02",
-        "source": "MISSION.md#candidate-ranking",
+        "source": "MISSION.md#candidate-ranking; IP_RUNTIME_RECEIPT.md@8058ab8febb639839333d4e2c604068a0c7390ea",
         "requirement": "Rank candidates without treating rank as strategy authority",
         "owner": "intelligenceFoundation attention",
-        "code": "server/src/intelligenceFoundation/attention",
-        "runtime": "adapter pending",
+        "code": "server/src/intelligenceFoundation/attention plus product adapter contracts",
+        "runtime": "prestage adapter artifact present; real owner binding pending",
         "persistence": "bounded evidence references",
         "api": "candidate counts",
         "cockpit": "Markets",
         "control": "CTRL-FOCUS",
-        "test": "server/test/intelligenceFoundation/attention/attention.test.mjs",
+        "test": "server/test/intelligenceFoundation/attention/attention.test.mjs; server/test/productIntegration/adapters/adapters.test.mjs",
         "scenario": "I00-07",
         "sha": "3340f75270049de96846d153672b91f065844eef",
         "status": "BUILT",
-        "blocker": "AWAITING_IP_RUNTIME_ADAPTER",
-        "replacement": "IP-RUNTIME evidence adapter"
+        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; REAL_OWNER_ADAPTER_BINDING_REQUIRED",
+        "replacement": "director binds accepted owner evidence through the prestaged runtime contract"
       },
       {
         "id": "ATTN-03",
-        "source": "MISSION.md#focus-analysis",
+        "source": "MISSION.md#focus-analysis; IP_RUNTIME_RECEIPT.md@8058ab8febb639839333d4e2c604068a0c7390ea",
         "requirement": "Bound focused enrichment with explicit capacity and comparability",
         "owner": "intelligenceRuntime focus",
-        "code": "server/src/intelligenceRuntime/focus",
-        "runtime": "adapter pending",
-        "persistence": "capture adapter",
+        "code": "server/src/intelligenceRuntime/focus plus product adapter contracts",
+        "runtime": "prestage adapter artifact present; real focus binding pending",
+        "persistence": "capture adapter pending",
         "api": "focus budget/queue",
         "cockpit": "Markets, Token",
         "control": "CTRL-FOCUS",
-        "test": "server/test/intelligenceRuntime/focus/focus.test.mjs",
+        "test": "server/test/intelligenceRuntime/focus/focus.test.mjs; server/test/productIntegration/adapters/adapters.test.mjs",
         "scenario": "I00-07",
         "sha": "e28b4c13c2f57f181cc6ea61508089719c7ff59c",
         "status": "BUILT",
-        "blocker": "AWAITING_IP_RUNTIME_ADAPTER",
-        "replacement": "IP-RUNTIME focus adapter"
+        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; REAL_FOCUS_ADAPTER_BINDING_REQUIRED",
+        "replacement": "director binds accepted focus owner through the prestaged runtime contract"
       },
       {
         "id": "OPP-01",
@@ -7089,21 +7469,21 @@
       },
       {
         "id": "REL-01",
-        "source": "MISSION.md#reliability-is-part-of-the-edge",
+        "source": "MISSION.md#reliability-is-part-of-the-edge; IP_RUNTIME_RECEIPT.md@8058ab8febb639839333d4e2c604068a0c7390ea",
         "requirement": "Lifecycle heartbeat freshness backoff checkpoints and degraded truth stay visible",
         "owner": "foundation-control plus supervisor",
-        "code": "server/src/systemIntegration/supervisor",
-        "runtime": "current convergence subset",
-        "persistence": "ledger checkpoints",
-        "api": "/api/system-integration/graph",
+        "code": "server/src/systemIntegration/supervisor plus unmounted product supervisor projector",
+        "runtime": "current convergence subset plus prestaged pure projection; no final composition",
+        "persistence": "ledger checkpoints; product lifecycle persistence pending",
+        "api": "/api/system-integration/graph; final product endpoints pending",
         "cockpit": "Health",
         "control": "CTRL-COMPONENT",
-        "test": "server/test/systemIntegration/supervisor/truth.scenarios.test.mjs",
+        "test": "server/test/systemIntegration/supervisor/truth.scenarios.test.mjs; server/test/productIntegration/supervisor/supervisor.test.mjs",
         "scenario": "I00-09,I00-11",
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "status": "BUILT",
-        "blocker": "AWAITING_IP_RUNTIME_ADAPTER",
-        "replacement": "combined Q/L component graph"
+        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; REAL_RUNTIME_READBACK_REQUIRED",
+        "replacement": "director composes accepted Q/L/ops owner evidence into the canonical supervisor"
       },
       {
         "id": "REL-02",
@@ -7215,39 +7595,39 @@
       },
       {
         "id": "COCKPIT-01",
-        "source": "docs/DASHBOARD_TRUTH.md#hard-laws",
+        "source": "docs/DASHBOARD_TRUTH.md#hard-laws; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Cockpit formats one supervisor source and never recomputes domain truth",
         "owner": "systemIntegration supervisor",
-        "code": "web/src/lib/systemIntegration.ts",
-        "runtime": "current subset; final shell binding pending",
+        "code": "web/src/lib/systemIntegration.ts plus BINDING_READY product Control Room adapters",
+        "runtime": "current subset; final endpoints and application mount pending",
         "persistence": "read-only",
-        "api": "/api/system-integration/supervisor",
-        "cockpit": "all operational pages",
-        "control": "catalog only",
-        "test": "server/test/systemIntegration/application/production-facade.test.mjs",
+        "api": "/api/system-integration/supervisor is insufficient for final product contract",
+        "cockpit": "all operational page adapters built but unmounted",
+        "control": "catalog artifact only",
+        "test": "server/test/systemIntegration/application/production-facade.test.mjs; web/test/productControlRoom/contracts.test.mjs",
         "scenario": "all",
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "status": "BUILT",
-        "blocker": "AWAITING_IP_CONTROL_BINDING",
-        "replacement": "IP-CONTROL final shell adapter"
+        "blocker": "DIRECTOR_MOUNT_REQUIRED; FINAL_RUNTIME_ENDPOINTS_REQUIRED; REAL_RUNTIME_BROWSER_READBACK_REQUIRED",
+        "replacement": "director mounts the accepted Control Room adapters against final canonical endpoints"
       },
       {
         "id": "CTRL-01",
-        "source": "MISSION.md#control-must-be-designed-into-engine",
+        "source": "MISSION.md#control-must-be-designed-into-engine; IP_RUNTIME_RECEIPT.md@8058ab8febb639839333d4e2c604068a0c7390ea; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Controls are authenticated bounded revisioned idempotent durable and never decorative",
         "owner": "foundation-control",
-        "code": "server/src/systemIntegration/controls",
-        "runtime": "current safe subset",
-        "persistence": "ledger control receipts",
-        "api": "/api/system-integration/controls",
-        "cockpit": "Control Room",
-        "control": "fixture registry",
-        "test": "server/test/systemIntegration/routes/control-routes.test.mjs",
+        "code": "existing systemIntegration controls plus prestaged projection and cockpit artifacts",
+        "runtime": "current safe subset; final preview submit result lifecycle unmounted",
+        "persistence": "existing ledger receipts; final canonical product command persistence pending",
+        "api": "/api/system-integration/controls is insufficient for the final registry lifecycle",
+        "cockpit": "Control Room package unmounted",
+        "control": "bounded fixture registry only",
+        "test": "server/test/systemIntegration/routes/control-routes.test.mjs; server/test/productIntegration/commands/commands-events.test.mjs; web/test/productControlRoom/contracts.test.mjs",
         "scenario": "I00-18,I00-19",
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "status": "BUILT",
-        "blocker": "AWAITING_IP_CONTROL_BINDING",
-        "replacement": "IP-CONTROL command catalog"
+        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; DIRECTOR_MOUNT_REQUIRED; CANONICAL_COMMAND_PERSISTENCE_REQUIRED",
+        "replacement": "director binds the accepted projection/catalog to canonical owner commands and durable receipts"
       },
       {
         "id": "OPS-01",
@@ -7269,21 +7649,21 @@
       },
       {
         "id": "OPS-02",
-        "source": "MISSION.md#reliability-is-part-of-edge",
+        "source": "MISSION.md#reliability-is-part-of-edge; IP_OPS_RECEIPT.md@6bfd543afb693ea18f4baf08e962e6d698f140fb",
         "requirement": "Deployment watchdog backup restore and rollback expose readback truth",
         "owner": "accepted IP-OPS bundle",
-        "code": "ops/i00 pending",
-        "runtime": "no external mutation authorized",
-        "persistence": "isolated restore only",
-        "api": "deployment supervisor fields pending",
-        "cockpit": "Health",
-        "control": "owner-gated operations",
-        "test": "server/test/i00Acceptance/combined-fixture-chain.test.mjs",
+        "code": "ops/i00 and its templates tests schemas and runbooks built",
+        "runtime": "artifact-only; no external mutation authorized or performed",
+        "persistence": "isolated restore artifact proven; production restore blocked",
+        "api": "readback validators built; deployment supervisor fields and target evidence pending",
+        "cockpit": "Health mount pending",
+        "control": "owner-gated external operations",
+        "test": "bash ops/tests/i00/run-all.sh: 651 combined assertions in IP_OPS_RECEIPT.md",
         "scenario": "I00-21,I00-22",
-        "sha": null,
-        "status": "DESIGNED",
-        "blocker": "AWAITING_IP_OPS_BUNDLE; donor 2cec412 receipt must be imported by director",
-        "replacement": "IP-OPS preflight evidence"
+        "sha": "6bfd543afb693ea18f4baf08e962e6d698f140fb",
+        "status": "BUILT",
+        "blocker": "DEPLOYMENT_AUTHORIZATION_REQUIRED; REAL_TARGET_READBACK_REQUIRED; WATCHDOG_OWNER_NOT_MOUNTED; PRODUCTION_RESTORE_DONOR_AMENDMENT_REQUIRED; CAPACITY_SOAK_RECEIPT_REQUIRED",
+        "replacement": "owner-authorized activation and readback; accepted watchdog and production-restore owners"
       },
       {
         "id": "ETHICS-01",
@@ -7305,39 +7685,39 @@
       },
       {
         "id": "DASH-01",
-        "source": "docs/DASHBOARD_TRUTH.md#1",
+        "source": "docs/DASHBOARD_TRUTH.md#1; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Whole-machine posture mode kill startup restart and first root blocker",
         "owner": "systemIntegration supervisor",
-        "code": "server/src/systemIntegration/supervisor",
-        "runtime": "final component graph pending",
-        "persistence": "control/startup checkpoints",
-        "api": "supervisor",
-        "cockpit": "Dashboard",
-        "control": "CTRL-KILL, CTRL-MODE",
-        "test": "server/test/systemIntegration/supervisor/projection.test.mjs",
+        "code": "server/src/systemIntegration/supervisor plus unmounted ProductSurfaceAdapter dashboard artifact",
+        "runtime": "final component graph and application mount pending",
+        "persistence": "control/startup checkpoints; final command receipt binding pending",
+        "api": "supervisor plus final product endpoint pending",
+        "cockpit": "Dashboard adapter built but unmounted",
+        "control": "CTRL-KILL, CTRL-MODE fixture registry",
+        "test": "server/test/systemIntegration/supervisor/projection.test.mjs; web/test/productControlRoom/contracts.test.mjs",
         "scenario": "I00-15",
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "status": "BUILT",
-        "blocker": "AWAITING_IP_CONTROL_BINDING",
-        "replacement": "IP-CONTROL Dashboard binding"
+        "blocker": "DIRECTOR_MOUNT_REQUIRED; FINAL_RUNTIME_ENDPOINTS_REQUIRED; REAL_RUNTIME_BROWSER_READBACK_REQUIRED",
+        "replacement": "director mounts accepted Dashboard adapter against final canonical supervisor"
       },
       {
         "id": "DASH-02",
-        "source": "docs/DASHBOARD_TRUTH.md#2",
+        "source": "docs/DASHBOARD_TRUTH.md#2; IP_RUNTIME_RECEIPT.md@8058ab8febb639839333d4e2c604068a0c7390ea; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Machine graph shows desired observed readiness liveness ages restarts errors and truth label",
         "owner": "systemIntegration supervisor",
-        "code": "server/src/systemIntegration/supervisor",
-        "runtime": "final Q/L/ops nodes pending",
-        "persistence": "component checkpoints",
-        "api": "graph",
-        "cockpit": "Dashboard, Health",
-        "control": "CTRL-COMPONENT",
-        "test": "server/test/systemIntegration/supervisor/truth.scenarios.test.mjs",
+        "code": "server/src/systemIntegration/supervisor plus prestaged product graph and cockpit artifacts",
+        "runtime": "final Q/L/ops nodes and director composition pending",
+        "persistence": "component checkpoints; product lifecycle persistence pending",
+        "api": "graph plus final product endpoint pending",
+        "cockpit": "Dashboard, Health adapters built but unmounted",
+        "control": "CTRL-COMPONENT fixture registry",
+        "test": "server/test/systemIntegration/supervisor/truth.scenarios.test.mjs; server/test/productIntegration/supervisor/supervisor.test.mjs; web/test/productControlRoom/contracts.test.mjs",
         "scenario": "I00-09,I00-11",
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "status": "BUILT",
-        "blocker": "AWAITING_IP_RUNTIME_ADAPTER",
-        "replacement": "combined component graph"
+        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; DIRECTOR_MOUNT_REQUIRED; REAL_RUNTIME_READBACK_REQUIRED",
+        "replacement": "director composes final owner graph and mounts accepted cockpit adapters"
       },
       {
         "id": "DASH-03",
@@ -7359,21 +7739,21 @@
       },
       {
         "id": "DASH-04",
-        "source": "docs/DASHBOARD_TRUTH.md#4",
+        "source": "docs/DASHBOARD_TRUTH.md#4; IP_RUNTIME_RECEIPT.md@8058ab8febb639839333d4e2c604068a0c7390ea",
         "requirement": "Basis and Volume ages counts decisions and exact rejects",
         "owner": "existing engines",
-        "code": "server/src/engine",
-        "runtime": "engine adapters pending",
+        "code": "server/src/engine plus prestaged owner-preserving product adapters",
+        "runtime": "adapter artifact present; real engine binding pending",
         "persistence": "ledger",
-        "api": "engine projections",
-        "cockpit": "Dashboard",
-        "control": "engine intake controls pending",
-        "test": "server/test/engine-basis.mjs; server/test/engine-volume.mjs",
+        "api": "engine projections pending final endpoint",
+        "cockpit": "Dashboard adapter unmounted",
+        "control": "engine intake control binding pending",
+        "test": "server/test/engine-basis.mjs; server/test/engine-volume.mjs; server/test/productIntegration/adapters/adapters.test.mjs",
         "scenario": "I00-03,I00-07,I00-08",
         "sha": "b272049b1e482ff75de27fbdaece7be5a7bbcc5d",
         "status": "BUILT",
-        "blocker": "AWAITING_IP_RUNTIME_ADAPTER",
-        "replacement": "IP-RUNTIME engine projections"
+        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; REAL_ENGINE_ADAPTER_BINDING_REQUIRED; DIRECTOR_MOUNT_REQUIRED",
+        "replacement": "director binds existing engines through accepted product adapters"
       },
       {
         "id": "DASH-05",
@@ -7431,21 +7811,21 @@
       },
       {
         "id": "DASH-08",
-        "source": "docs/DASHBOARD_TRUTH.md#8",
+        "source": "docs/DASHBOARD_TRUTH.md#8; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Attention queue ranks exposed capital first and names resolving control",
         "owner": "systemIntegration supervisor",
-        "code": "server/src/systemIntegration/supervisor",
+        "code": "server/src/systemIntegration/supervisor plus unmounted canonical attention renderer",
         "runtime": "final graph pending",
-        "persistence": "incident/control refs",
-        "api": "attention queue",
-        "cockpit": "Dashboard",
-        "control": "catalog",
-        "test": "server/test/i00Acceptance/combined-fixture-chain.test.mjs",
+        "persistence": "incident/control refs; final incident persistence pending",
+        "api": "attention queue endpoint pending",
+        "cockpit": "Dashboard adapter built but unmounted",
+        "control": "fixture catalog",
+        "test": "server/test/i00Acceptance/combined-fixture-chain.test.mjs; web/test/productControlRoom/contracts.test.mjs",
         "scenario": "I00-13,I00-20",
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "status": "BUILT",
-        "blocker": "AWAITING_IP_CONTROL_BINDING",
-        "replacement": "IP-CONTROL queue binding"
+        "blocker": "DIRECTOR_MOUNT_REQUIRED; FINAL_RUNTIME_ENDPOINTS_REQUIRED; REAL_RUNTIME_READBACK_REQUIRED",
+        "replacement": "director mounts accepted attention renderer against final supervisor"
       },
       {
         "id": "DASH-09",
@@ -7467,39 +7847,39 @@
       },
       {
         "id": "DASH-10",
-        "source": "docs/DASHBOARD_TRUTH.md#10",
+        "source": "docs/DASHBOARD_TRUTH.md#10; IP_RUNTIME_RECEIPT.md@8058ab8febb639839333d4e2c604068a0c7390ea; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Each control maps to one tested backend mutation with before/after ledger evidence",
         "owner": "foundation-control",
-        "code": "server/src/systemIntegration/controls",
-        "runtime": "safe subset only",
-        "persistence": "ledger control receipt",
-        "api": "/api/system-integration/controls",
-        "cockpit": "Dashboard, Control Room",
-        "control": "catalog",
-        "test": "server/test/systemIntegration/controls/mutations.test.mjs",
+        "code": "server/src/systemIntegration/controls plus prestaged product command and cockpit artifacts",
+        "runtime": "safe legacy subset only; final product command lifecycle unmounted",
+        "persistence": "legacy ledger control receipt; canonical product command persistence pending",
+        "api": "/api/system-integration/controls is insufficient for final preview/result contracts",
+        "cockpit": "Dashboard, Control Room adapters built but unmounted",
+        "control": "fixture catalog",
+        "test": "server/test/systemIntegration/controls/mutations.test.mjs; server/test/productIntegration/commands/commands-events.test.mjs; web/test/productControlRoom/contracts.test.mjs",
         "scenario": "I00-18,I00-19",
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "status": "BUILT",
-        "blocker": "AWAITING_IP_CONTROL_BINDING",
-        "replacement": "IP-CONTROL control renderer"
+        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; DIRECTOR_MOUNT_REQUIRED; CANONICAL_COMMAND_PERSISTENCE_REQUIRED",
+        "replacement": "director binds canonical commands, receipts, endpoints, and accepted renderer"
       },
       {
         "id": "DASH-LAW-01",
-        "source": "docs/DASHBOARD_TRUTH.md#hard-laws",
+        "source": "docs/DASHBOARD_TRUTH.md#hard-laws; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "One supervisor snapshot is the cockpit truth source and the browser does not infer",
         "owner": "systemIntegration supervisor",
-        "code": "web/src/lib/systemIntegration.ts",
-        "runtime": "final binding pending",
-        "persistence": "read-only",
-        "api": "/api/system-integration/supervisor",
-        "cockpit": "all operational pages",
+        "code": "web/src/lib/systemIntegration.ts plus accepted ProductControlRoomProvider artifact",
+        "runtime": "final binding and application mount pending",
+        "persistence": "read-only plus durable cursor pending",
+        "api": "/api/system-integration/supervisor is insufficient for final product envelope",
+        "cockpit": "all operational adapters built but unmounted",
         "control": "none",
-        "test": "server/test/systemIntegration/application/production-facade.test.mjs",
+        "test": "server/test/systemIntegration/application/production-facade.test.mjs; web/test/productControlRoom/contracts.test.mjs",
         "scenario": "all",
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "status": "BUILT",
-        "blocker": "AWAITING_IP_CONTROL_BINDING",
-        "replacement": "IP-CONTROL canonical binding"
+        "blocker": "DIRECTOR_MOUNT_REQUIRED; FINAL_RUNTIME_ENDPOINTS_REQUIRED; DURABLE_CURSOR_REQUIRED; REAL_RUNTIME_BROWSER_READBACK_REQUIRED",
+        "replacement": "director mounts one accepted provider against final canonical product endpoints"
       },
       {
         "id": "DASH-LAW-02",
@@ -7557,21 +7937,21 @@
       },
       {
         "id": "DASH-LAW-05",
-        "source": "docs/DASHBOARD_TRUTH.md#acceptance",
+        "source": "docs/DASHBOARD_TRUTH.md#acceptance; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Cold-open ten-second owner test answers state blocker exposure kill and degraded sources without terminal archaeology",
         "owner": "IP-CONTROL plus director browser acceptance",
-        "code": "dashboard donor receipt not present in this root",
-        "runtime": "not mounted in this packet",
-        "persistence": "not applicable",
-        "api": "canonical supervisor",
-        "cockpit": "Dashboard",
-        "control": "real bounded controls",
-        "test": "REAL_BROWSER_READBACK_REQUIRED",
+        "code": "accepted dashboard donor and BINDING_READY fixture shell present",
+        "runtime": "fixture browser proof only; application mount and real readback absent",
+        "persistence": "fixture receipt only",
+        "api": "final canonical supervisor endpoint pending",
+        "cockpit": "Dashboard adapter built but unmounted",
+        "control": "bounded fixture controls",
+        "test": "fixture browser evidence in IP_CONTROL_RECEIPT.md; REAL_RUNTIME_BROWSER_READBACK_REQUIRED",
         "scenario": "fixture descriptions only",
-        "sha": null,
-        "status": "DESIGNED",
-        "blocker": "REAL_BROWSER_READBACK_REQUIRED; donor 6925015 receipt must be imported by director",
-        "replacement": "director-mounted IP-CONTROL shell and browser ship gate"
+        "sha": "56c47dad398c485b6653036c8b90c53f11061b1e",
+        "status": "BUILT",
+        "blocker": "DIRECTOR_MOUNT_REQUIRED; FINAL_RUNTIME_ENDPOINTS_REQUIRED; REAL_RUNTIME_BROWSER_READBACK_REQUIRED",
+        "replacement": "director-mounted accepted shell followed by real browser ship gate"
       }
     ],
     "autonomy": [
@@ -7587,20 +7967,20 @@
       {
         "layer": "evidence",
         "authority": "intelligenceFoundation",
-        "limit": "no strategy decision",
+        "limit": "no strategy decision; prestaged adapter artifact only",
         "failurePosture": "UNKNOWN",
         "ownerOverride": "none",
         "status": "BUILT",
-        "blocker": "AWAITING_IP_RUNTIME_ADAPTER"
+        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; REAL_OWNER_ADAPTER_BINDING_REQUIRED"
       },
       {
         "layer": "attention",
         "authority": "intelligenceFoundation",
-        "limit": "bounded focus",
+        "limit": "bounded focus; prestaged adapter artifact only",
         "failurePosture": "NO_PROMOTION",
         "ownerOverride": "pin focus",
         "status": "BUILT",
-        "blocker": "AWAITING_IP_RUNTIME_ADAPTER"
+        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; REAL_OWNER_ADAPTER_BINDING_REQUIRED"
       },
       {
         "layer": "q-assessment",
@@ -7623,11 +8003,11 @@
       {
         "layer": "opportunity-formation",
         "authority": "CanonicalOpportunity",
-        "limit": "read projection",
+        "limit": "read projection; prestaged adapter artifact only",
         "failurePosture": "reject malformed",
         "ownerOverride": "none",
         "status": "BUILT",
-        "blocker": "AWAITING_IP_RUNTIME_ADAPTER"
+        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; REAL_OWNER_ADAPTER_BINDING_REQUIRED"
       },
       {
         "layer": "capital",
@@ -7708,34 +8088,34 @@
         "failurePosture": "PENDING",
         "ownerOverride": "freeze promotion",
         "status": "DESIGNED",
-        "blocker": "EMPIRICAL_OUTCOME_EVIDENCE_REQUIRED"
+        "blocker": "AWAITING_ACCEPTED_Q_TIP; EMPIRICAL_OUTCOME_EVIDENCE_REQUIRED"
       },
       {
         "layer": "operator-control",
         "authority": "foundation-control",
-        "limit": "safe subset",
+        "limit": "safe legacy subset plus unmounted IP-CONTROL artifact",
         "failurePosture": "REJECTED",
         "ownerOverride": "authenticated command",
         "status": "BUILT",
-        "blocker": "AWAITING_IP_CONTROL_BINDING"
+        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; DIRECTOR_MOUNT_REQUIRED; CANONICAL_COMMAND_PERSISTENCE_REQUIRED"
       },
       {
         "layer": "deployment",
-        "authority": "IP-OPS/deployment tooling",
-        "limit": "preflight only",
+        "authority": "IP-OPS artifact",
+        "limit": "preflight and authorization validators only",
         "failurePosture": "CURRENT_RELEASE_PRESERVED",
         "ownerOverride": "external authorization",
-        "status": "DESIGNED",
-        "blocker": "AWAITING_IP_OPS_BUNDLE; DEPLOYMENT_AUTHORIZATION_REQUIRED"
+        "status": "BUILT",
+        "blocker": "DEPLOYMENT_AUTHORIZATION_REQUIRED; REAL_TARGET_READBACK_REQUIRED; CAPACITY_SOAK_RECEIPT_REQUIRED"
       },
       {
         "layer": "watchdog",
-        "authority": "IP-OPS",
+        "authority": "future target watchdog owner; IP-OPS validators only",
         "limit": "artifact only",
         "failurePosture": "NOT_CONFIGURED",
         "ownerOverride": "owner runbook",
         "status": "DESIGNED",
-        "blocker": "AWAITING_IP_OPS_BUNDLE"
+        "blocker": "WATCHDOG_OWNER_NOT_MOUNTED; REAL_TARGET_READBACK_REQUIRED"
       },
       {
         "layer": "restart",
@@ -7748,12 +8128,12 @@
       },
       {
         "layer": "rollback",
-        "authority": "IP-OPS",
-        "limit": "preflight only",
+        "authority": "IP-OPS artifact",
+        "limit": "validated artifact only; no target mutation",
         "failurePosture": "CURRENT_RELEASE_PRESERVED",
         "ownerOverride": "owner-authorized rollback",
-        "status": "DESIGNED",
-        "blocker": "AWAITING_IP_OPS_BUNDLE; DEPLOYMENT_AUTHORIZATION_REQUIRED"
+        "status": "BUILT",
+        "blocker": "DEPLOYMENT_AUTHORIZATION_REQUIRED; REAL_TARGET_READBACK_REQUIRED"
       }
     ],
     "terminalOperations": [
@@ -7829,38 +8209,38 @@
       },
       {
         "operation": "BACKUP",
-        "classification": "DEFECT",
-        "mechanism": "IP-OPS runbook pending",
-        "command": null,
-        "blocker": "AWAITING_IP_OPS_BUNDLE"
+        "classification": "INTENTIONALLY_OWNER_RUNBOOK",
+        "mechanism": "IP-OPS backup validator artifact; no target run performed",
+        "command": "ops/i00/bin/backup-verify.sh",
+        "blocker": "OWNER_AUTHORIZATION_REQUIRED; REAL_TARGET_READBACK_REQUIRED"
       },
       {
         "operation": "RESTORE",
-        "classification": "DEFECT",
-        "mechanism": "isolated restore runbook pending",
-        "command": null,
-        "blocker": "AWAITING_IP_OPS_BUNDLE"
+        "classification": "INTENTIONALLY_OWNER_RUNBOOK",
+        "mechanism": "isolated restore drill artifact; production restore still blocked",
+        "command": "ops/i00/bin/restore-drill-verify.sh",
+        "blocker": "OWNER_AUTHORIZATION_REQUIRED; PRODUCTION_RESTORE_DONOR_AMENDMENT_REQUIRED; REAL_TARGET_READBACK_REQUIRED"
       },
       {
         "operation": "RELEASE_VALIDATE",
-        "classification": "DEFECT",
-        "mechanism": "IP-OPS preflight pending",
-        "command": null,
-        "blocker": "AWAITING_IP_OPS_BUNDLE"
+        "classification": "INTENTIONALLY_OWNER_RUNBOOK",
+        "mechanism": "IP-OPS release and preflight validators",
+        "command": "ops/i00/bin/validate-release.mjs; ops/i00/bin/preflight.mjs",
+        "blocker": "TRUSTED_BUILD_ATTESTATION_REQUIRED; REAL_TARGET_READBACK_REQUIRED"
       },
       {
         "operation": "ROLLBACK",
-        "classification": "DEFECT",
-        "mechanism": "IP-OPS rollback artifact absent before later authorization",
-        "command": null,
-        "blocker": "AWAITING_IP_OPS_BUNDLE; DEPLOYMENT_AUTHORIZATION_REQUIRED"
+        "classification": "EXTERNAL_OWNER_ACTION",
+        "mechanism": "IP-OPS rollback-switch artifact; no target mutation performed",
+        "command": "ops/i00/bin/rollback-switch.sh",
+        "blocker": "DEPLOYMENT_AUTHORIZATION_REQUIRED; REAL_TARGET_READBACK_REQUIRED"
       },
       {
         "operation": "INCIDENT_ACK",
         "classification": "DEFECT",
-        "mechanism": "incident command pending",
+        "mechanism": "incident command and application mount absent",
         "command": null,
-        "blocker": "AWAITING_IP_CONTROL_BINDING"
+        "blocker": "CANONICAL_INCIDENT_ACK_COMMAND_ABSENT; DIRECTOR_MOUNT_REQUIRED"
       },
       {
         "operation": "MODE_CHANGE",
@@ -7872,37 +8252,37 @@
       {
         "operation": "COMPONENT_DESIRED_STATE",
         "classification": "DEFECT",
-        "mechanism": "backend command exists but no cockpit lifecycle",
+        "mechanism": "legacy backend command exists; final product lifecycle and cockpit mount absent",
         "command": "SET_COMPONENT_STATE",
-        "blocker": "AWAITING_IP_CONTROL_BINDING"
+        "blocker": "CANONICAL_PRODUCT_COMMAND_BINDING_REQUIRED; DIRECTOR_MOUNT_REQUIRED"
       },
       {
         "operation": "CONFIG_REVISION",
         "classification": "DEFECT",
-        "mechanism": "backend command exists but no cockpit lifecycle",
+        "mechanism": "legacy backend command exists; final registry and cockpit mount absent",
         "command": "APPLY_CONFIGURATION",
-        "blocker": "AWAITING_IP_CONTROL_BINDING"
+        "blocker": "CANONICAL_PRODUCT_COMMAND_BINDING_REQUIRED; DIRECTOR_MOUNT_REQUIRED"
       },
       {
         "operation": "APPROVAL_REVOKE",
         "classification": "DEFECT",
-        "mechanism": "backend command exists but no cockpit lifecycle",
+        "mechanism": "legacy backend command exists; final registry and cockpit mount absent",
         "command": "REVOKE_APPROVAL",
-        "blocker": "AWAITING_IP_CONTROL_BINDING"
+        "blocker": "CANONICAL_PRODUCT_COMMAND_BINDING_REQUIRED; DIRECTOR_MOUNT_REQUIRED"
       },
       {
         "operation": "SOURCE_ISOLATE",
         "classification": "DEFECT",
-        "mechanism": "IP-RUNTIME command pending",
+        "mechanism": "no canonical source-isolation command exists in the fanned-in runtime artifact",
         "command": null,
-        "blocker": "AWAITING_IP_RUNTIME_ADAPTER"
+        "blocker": "CANONICAL_SOURCE_ISOLATION_COMMAND_ABSENT"
       },
       {
         "operation": "DEPLOY_ACTIVATE",
-        "classification": "DEFECT",
-        "mechanism": "IP-OPS activation artifact absent before later authorization",
-        "command": null,
-        "blocker": "AWAITING_IP_OPS_BUNDLE; DEPLOYMENT_AUTHORIZATION_REQUIRED"
+        "classification": "EXTERNAL_OWNER_ACTION",
+        "mechanism": "IP-OPS release-switch artifact; no target mutation performed",
+        "command": "ops/i00/bin/release-switch.sh",
+        "blocker": "DEPLOYMENT_AUTHORIZATION_REQUIRED; REAL_TARGET_READBACK_REQUIRED"
       }
     ],
     "resourcePriority": [
@@ -8420,14 +8800,14 @@
         "checkedAtUtc": "2026-07-13T00:00:00Z",
         "hostRoute": "AWS SDK/CLI GetSecretValue for exact secret ARN",
         "authSignature": "EC2 instance role IAM",
-        "schemaFixtureHash": "NOT_APPLICABLE",
-        "lifetimeKeepaliveReconnect": "cache per AWS guidance; never log values",
-        "limitsWeights": "least-privilege IAM",
-        "selectedImplementation": "IP-OPS reference only",
-        "rejectedAlternatives": "static AWS credentials",
+        "schemaFixtureHash": "provider 4702c4b0a7d21809dbe28550eb6c53ebbb621cde5cff9ae9be54b701d83fdf23; IAM 0923c6dbf5c0559d8b8ed439989d831c0b56ae8d75e099982a775c8bdbbf9476",
+        "lifetimeKeepaliveReconnect": "AWSCURRENT one-shot retrieval under bounded authorization; never log values",
+        "limitsWeights": "one exact fully suffixed ARN; one response capped at 1 MiB",
+        "selectedImplementation": "IP-OPS exact-ARN provider and validator artifacts; not activated",
+        "rejectedAlternatives": "static AWS credentials or wildcard secret policy",
         "changelogRisk": "medium",
-        "contractTest": "PENDING_IP_OPS",
-        "disposition": "REFERENCE_INPUT"
+        "contractTest": "ops/tests/i00/test-secrets-provider.sh; ops/tests/i00/test-templates-and-schemas.sh",
+        "disposition": "ARTIFACT_BUILT_OWNER_GATED"
       },
       {
         "id": "IF-CLOUDWATCH",
@@ -8437,14 +8817,14 @@
         "checkedAtUtc": "2026-07-13T00:00:00Z",
         "hostRoute": "CloudWatch agent via IAM role/Systems Manager",
         "authSignature": "instance role",
-        "schemaFixtureHash": "PENDING_IP_OPS",
-        "lifetimeKeepaliveReconnect": "supervised agent",
-        "limitsWeights": "configuration dependent",
-        "selectedImplementation": "IP-OPS bundle pending",
-        "rejectedAlternatives": "unbounded local logs only",
+        "schemaFixtureHash": "agent 32424c3a4cf9f865fcff40d62646b5fd451fab7cb59fe6cedc4d15d08f1ee926; alarms 017eb188a37d053dbd68561afda3ddb8b9312794953c2fa039a6cc29713715ea",
+        "lifetimeKeepaliveReconnect": "60-second collection and supervised target agent",
+        "limitsWeights": "finite metric set; 30-day log retention in template",
+        "selectedImplementation": "IP-OPS agent alarm and readback-validator artifacts; not activated",
+        "rejectedAlternatives": "unbounded local logs or synthesized readiness",
         "changelogRisk": "medium",
-        "contractTest": "PENDING_IP_OPS",
-        "disposition": "REFERENCE_INPUT"
+        "contractTest": "ops/tests/i00/test-templates-and-schemas.sh; ops/tests/i00/test-probes-and-readback.sh",
+        "disposition": "ARTIFACT_BUILT_OWNER_GATED"
       },
       {
         "id": "IF-CF-ACCESS",
@@ -8454,14 +8834,14 @@
         "checkedAtUtc": "2026-07-13T00:00:00Z",
         "hostRoute": "Cf-Access-Jwt-Assertion; team-domain /cdn-cgi/access/certs",
         "authSignature": "RS256 JWT issuer and audience validation",
-        "schemaFixtureHash": "NOT_APPLICABLE",
-        "lifetimeKeepaliveReconnect": "remote JWKS; default key rotation six weeks with previous key seven days",
+        "schemaFixtureHash": "overlay 35524166849b1ef110f27dfc6573bb44b4dfff8e547e665a03a829fd3f2f9c3c; boundary 800dd4ba7bf77cd49488565cc7fa5a7d43c88c7f6728359ecc8263fc702deb76",
+        "lifetimeKeepaliveReconnect": "remote JWKS with key rotation; exact deployed session policy UNKNOWN",
         "limitsWeights": "application policy/session dependent",
-        "selectedImplementation": "origin validates header signature issuer and audience",
+        "selectedImplementation": "existing origin validator plus IP-OPS overlay and readback-validator artifacts; not deployed",
         "rejectedAlternatives": "trust header or cookie without verification",
         "changelogRisk": "medium",
-        "contractTest": "server/test/access.mjs",
-        "disposition": "SELECTED_EXISTING_OWNER"
+        "contractTest": "server/test/access.mjs; ops/tests/i00/test-templates-and-schemas.sh; ops/tests/i00/test-probes-and-readback.sh",
+        "disposition": "ARTIFACT_BUILT_OWNER_GATED"
       },
       {
         "id": "IF-SPOT-SBE",
@@ -8527,16 +8907,16 @@
         "blocker": "NO_MONEY_PATHS"
       },
       "IF-AWS-SECRETS": {
-        "status": "FACTS_PINNED_OPS_BLOCKED",
-        "blocker": "AWAITING_IP_OPS_BUNDLE"
+        "status": "ARTIFACT_BUILT_OWNER_GATED",
+        "blocker": "EXACT_SECRET_ARN_ROLE_REGION_AND_AUTHORIZATION_REQUIRED; REAL_TARGET_READBACK_REQUIRED"
       },
       "IF-CLOUDWATCH": {
-        "status": "FACTS_PINNED_OPS_BLOCKED",
-        "blocker": "AWAITING_IP_OPS_BUNDLE"
+        "status": "ARTIFACT_BUILT_OWNER_GATED",
+        "blocker": "EXACT_NAMESPACE_LOG_GROUP_ROLE_AND_AUTHORIZATION_REQUIRED; REAL_TARGET_READBACK_REQUIRED"
       },
       "IF-CF-ACCESS": {
-        "status": "FACTS_PINNED_EXISTING_OWNER",
-        "blocker": "REAL_DEPLOYED_READBACK_REQUIRED"
+        "status": "ARTIFACT_BUILT_OWNER_GATED",
+        "blocker": "EXACT_TEAM_AUD_POLICY_AND_AUTHORIZATION_REQUIRED; REAL_DEPLOYED_READBACK_REQUIRED"
       },
       "IF-SPOT-SBE": {
         "status": "FACTS_PINNED_BENCHMARK_BLOCKED",
@@ -8549,14 +8929,14 @@
       {
         "pageId": "dashboard",
         "page": "Dashboard",
-        "canonicalApi": "/api/system-integration/supervisor",
+        "canonicalApi": "/api/system-integration/supervisor plus FINAL_PRODUCT_ENDPOINT_PENDING",
         "fixtureState": "SYNTHETIC_ONLY",
         "controls": [
           "CTRL-KILL",
           "CTRL-MODE"
         ],
         "errorBehavior": "UNKNOWN_NOT_GREEN",
-        "blocker": "AWAITING_IP_CONTROL_BINDING"
+        "blocker": "DIRECTOR_MOUNT_REQUIRED; FINAL_RUNTIME_ENDPOINTS_REQUIRED; REAL_RUNTIME_BROWSER_READBACK_REQUIRED"
       },
       {
         "pageId": "account",
@@ -8585,7 +8965,7 @@
           "CTRL-FOCUS"
         ],
         "errorBehavior": "QUIET_SYMBOLS_RETAINED",
-        "blocker": "AWAITING_IP_RUNTIME_ADAPTER"
+        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; REAL_OWNER_ADAPTER_BINDING_REQUIRED; DIRECTOR_MOUNT_REQUIRED"
       },
       {
         "pageId": "detail",
@@ -8594,7 +8974,7 @@
         "fixtureState": "SYNTHETIC_ONLY",
         "controls": [],
         "errorBehavior": "MISSING_EVIDENCE_NAMED",
-        "blocker": "AWAITING_IP_RUNTIME_ADAPTER; AWAITING_DIRECTOR_SHARED_COMPOSITION"
+        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; REAL_OWNER_ADAPTER_BINDING_REQUIRED; AWAITING_DIRECTOR_SHARED_COMPOSITION; DIRECTOR_MOUNT_REQUIRED"
       },
       {
         "pageId": "loans",
@@ -8652,7 +9032,7 @@
           "CTRL-BASIS-INTAKE"
         ],
         "errorBehavior": "BORROW_UNKNOWN_BLOCKS_REVERSE",
-        "blocker": "AWAITING_IP_RUNTIME_ADAPTER; AWAITING_ACCEPTED_L_TIP"
+        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; REAL_ENGINE_ADAPTER_BINDING_REQUIRED; AWAITING_ACCEPTED_L_TIP; DIRECTOR_MOUNT_REQUIRED"
       },
       {
         "pageId": "volume",
@@ -8663,7 +9043,7 @@
           "CTRL-VOLUME-INTAKE"
         ],
         "errorBehavior": "FALSE_BURST_REJECT_VISIBLE",
-        "blocker": "AWAITING_IP_RUNTIME_ADAPTER; AWAITING_ACCEPTED_L_TIP"
+        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; REAL_ENGINE_ADAPTER_BINDING_REQUIRED; AWAITING_ACCEPTED_L_TIP; DIRECTOR_MOUNT_REQUIRED"
       },
       {
         "pageId": "opportunities",
@@ -8683,7 +9063,7 @@
           "CTRL-KILL"
         ],
         "errorBehavior": "STALE_TRUTH_BLOCKS",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; AWAITING_IP_CONTROL_BINDING"
+        "blocker": "AWAITING_ACCEPTED_L_TIP; DIRECTOR_MOUNT_REQUIRED; FINAL_RUNTIME_ENDPOINTS_REQUIRED"
       },
       {
         "pageId": "ledger",
@@ -8697,13 +9077,13 @@
       {
         "pageId": "system",
         "page": "System Health",
-        "canonicalApi": "/api/system-integration/graph",
+        "canonicalApi": "/api/system-integration/graph plus FINAL_PRODUCT_ENDPOINT_PENDING",
         "fixtureState": "SYNTHETIC_ONLY",
         "controls": [
           "CTRL-COMPONENT"
         ],
         "errorBehavior": "SILENT_OR_STALE_NOT_GREEN",
-        "blocker": "AWAITING_IP_RUNTIME_ADAPTER; AWAITING_IP_OPS_BUNDLE"
+        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; DIRECTOR_MOUNT_REQUIRED; REAL_RUNTIME_AND_TARGET_READBACK_REQUIRED"
       },
       {
         "pageId": "notifications",
@@ -8714,7 +9094,7 @@
           "CTRL-ACK"
         ],
         "errorBehavior": "FINGERPRINT_GROUPED",
-        "blocker": "AWAITING_IP_CONTROL_BINDING"
+        "blocker": "CANONICAL_INCIDENT_ACK_COMMAND_ABSENT; DIRECTOR_MOUNT_REQUIRED"
       },
       {
         "pageId": "news",
@@ -8740,7 +9120,7 @@
         "surface": "Control Room",
         "source": "I00#15",
         "state": "MISSING",
-        "blocker": "AWAITING_IP_CONTROL_BINDING",
+        "blocker": "DIRECTOR_MOUNT_REQUIRED; FINAL_RUNTIME_ENDPOINTS_REQUIRED; CANONICAL_COMMAND_PERSISTENCE_REQUIRED",
         "requiredEvidence": "real machine graph, registry search, preview-confirm-result, before/after receipt readback"
       }
     ],
@@ -9522,7 +9902,7 @@
   ],
   "receiptProvenance": {
     "schemaVersion": 1,
-    "verificationBase": "420cc83e5512d54ca1b1c064c1041d89b23914a0",
+    "verificationBase": "14fdcb0860eb753e6eb2c269ad2a28da00f4d9f6",
     "items": [
       {
         "sha": "b272049b1e482ff75de27fbdaece7be5a7bbcc5d",
@@ -9580,11 +9960,47 @@
         "receiptSha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162",
         "expectedNeedle": "# System Convergence Receipt",
         "ancestorRequired": true
+      },
+      {
+        "sha": "8058ab8febb639839333d4e2c604068a0c7390ea",
+        "claimType": "COMMIT_CONTAINING_RECEIPT",
+        "receiptPath": "IP_RUNTIME_RECEIPT.md",
+        "receiptPathAtCommit": "IP_RUNTIME_RECEIPT.md",
+        "receiptSha256": "8a16a2e5a869b9356b9b2cbbfd1de68406e64a253479fc6be600e953cd613dcb",
+        "expectedNeedle": "# IP-RUNTIME immutable receipt",
+        "ancestorRequired": true
+      },
+      {
+        "sha": "56c47dad398c485b6653036c8b90c53f11061b1e",
+        "claimType": "COMMIT_CONTAINING_RECEIPT",
+        "receiptPath": "IP_CONTROL_RECEIPT.md",
+        "receiptPathAtCommit": "IP_CONTROL_RECEIPT.md",
+        "receiptSha256": "4864f9a7de2a640b5e643e7817b33a0114cd988b29ac20cb2b6f0f77f6bf43f7",
+        "expectedNeedle": "# IP-CONTROL Receipt",
+        "ancestorRequired": true
+      },
+      {
+        "sha": "6bfd543afb693ea18f4baf08e962e6d698f140fb",
+        "claimType": "COMMIT_CONTAINING_RECEIPT",
+        "receiptPath": "IP_OPS_RECEIPT.md",
+        "receiptPathAtCommit": "IP_OPS_RECEIPT.md",
+        "receiptSha256": "57bc6fd9a6847dde70b1ac2cd81e0116db8e0f34c8e4003fee55b3f09f5bd922",
+        "expectedNeedle": "# IP-OPS receipt",
+        "ancestorRequired": true
+      },
+      {
+        "sha": "23e985c17b9b860fee26be397fa05b26f3daf8f2",
+        "claimType": "COMMIT_CONTAINING_RECEIPT",
+        "receiptPath": "IP_PROOF_RECEIPT.md",
+        "receiptPathAtCommit": "IP_PROOF_RECEIPT.md",
+        "receiptSha256": "569f09af842f527ca19269a8e66dbdc367145a03ff31aba839defe252d14ad7b",
+        "expectedNeedle": "# IP_PROOF_RECEIPT.md",
+        "ancestorRequired": true
       }
     ]
   },
   "receiptProvenanceVerification": {
-    "verificationBase": "420cc83e5512d54ca1b1c064c1041d89b23914a0",
+    "verificationBase": "14fdcb0860eb753e6eb2c269ad2a28da00f4d9f6",
     "baseExists": true,
     "results": [
       {
@@ -9643,6 +10059,42 @@
       },
       {
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
+        "claimType": "COMMIT_CONTAINING_RECEIPT",
+        "commitExists": true,
+        "ancestorVerified": true,
+        "currentReceiptHashVerified": true,
+        "receiptClaimVerified": true,
+        "passed": true
+      },
+      {
+        "sha": "8058ab8febb639839333d4e2c604068a0c7390ea",
+        "claimType": "COMMIT_CONTAINING_RECEIPT",
+        "commitExists": true,
+        "ancestorVerified": true,
+        "currentReceiptHashVerified": true,
+        "receiptClaimVerified": true,
+        "passed": true
+      },
+      {
+        "sha": "56c47dad398c485b6653036c8b90c53f11061b1e",
+        "claimType": "COMMIT_CONTAINING_RECEIPT",
+        "commitExists": true,
+        "ancestorVerified": true,
+        "currentReceiptHashVerified": true,
+        "receiptClaimVerified": true,
+        "passed": true
+      },
+      {
+        "sha": "6bfd543afb693ea18f4baf08e962e6d698f140fb",
+        "claimType": "COMMIT_CONTAINING_RECEIPT",
+        "commitExists": true,
+        "ancestorVerified": true,
+        "currentReceiptHashVerified": true,
+        "receiptClaimVerified": true,
+        "passed": true
+      },
+      {
+        "sha": "23e985c17b9b860fee26be397fa05b26f3daf8f2",
         "claimType": "COMMIT_CONTAINING_RECEIPT",
         "commitExists": true,
         "ancestorVerified": true,
@@ -10092,18 +10544,18 @@
       "question": "Can the owner operate it without routine terminal work?",
       "evidenceRowCompleteness": "COMPLETE",
       "productVerdict": "PARTIAL",
-      "answer": "Current safe controls exist but several routine operations remain defects or runbooks.",
-      "primaryBlocker": "AWAITING_IP_CONTROL_BINDING",
-      "safeNextAction": "bind real command registry and rerun browser owner test"
+      "answer": "Safe legacy controls and an IP-CONTROL artifact exist, but the final registry, canonical persistence, application mount, and several routine controls remain absent or owner-runbook-only.",
+      "primaryBlocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; DIRECTOR_MOUNT_REQUIRED",
+      "safeNextAction": "bind canonical command persistence and mount the accepted control package before the real browser owner test"
     },
     {
       "id": "NS-07",
       "question": "Can it run continuously and roll back?",
       "evidenceRowCompleteness": "COMPLETE",
       "productVerdict": "PARTIAL",
-      "answer": "Deployment/restore scenarios are fixture-only; the local IP-OPS bundle is not accepted and external activation remains later owner-gated.",
-      "primaryBlocker": "AWAITING_IP_OPS_BUNDLE",
-      "safeNextAction": "accept IP-OPS locally, then request exact external authorization"
+      "answer": "The accepted IP-OPS artifact includes guarded release, backup, isolated restore, rollback, and readback validators; no deployment, watchdog, target capacity proof, or production restore exists.",
+      "primaryBlocker": "DEPLOYMENT_AUTHORIZATION_REQUIRED; REAL_TARGET_READBACK_REQUIRED; WATCHDOG_OWNER_NOT_MOUNTED; PRODUCTION_RESTORE_DONOR_AMENDMENT_REQUIRED",
+      "safeNextAction": "resolve owner and target prerequisites, then request exact external authorization"
     },
     {
       "id": "NS-08",
@@ -10119,9 +10571,9 @@
       "question": "Is any heavyweight requirement absent?",
       "evidenceRowCompleteness": "COMPLETE",
       "productVerdict": "PARTIAL",
-      "answer": "No binding source is silently omitted; Q/L final directives and receipts, adapters, composition, control binding, ops, runtime and browser readback remain named blockers.",
-      "primaryBlocker": "AWAITING_REAL_ADAPTERS",
-      "safeNextAction": "execute IP_PROOF_SHARED_INSERTION_REQUEST.md in director fan-in order"
+      "answer": "No binding source is silently omitted: IP packet artifacts are present, while Q/L final tips, real adapters, shared composition, persistence, mounts, target activation, runtime measurements, and browser readback remain named blockers.",
+      "primaryBlocker": "AWAITING_ACCEPTED_Q_TIP; AWAITING_ACCEPTED_L_TIP; AWAITING_DIRECTOR_SHARED_COMPOSITION",
+      "safeNextAction": "execute IP_PROOF_SHARED_INSERTION_REQUEST.md from the accepted packet tips without upgrading artifact evidence to runtime truth"
     }
   ],
   "adapterInsertionPoints": [
@@ -10166,5 +10618,5 @@
       "gate": "IP-OPS accepted; no external mutation"
     }
   ],
-  "evidenceSha256": "83f730e10b73e1c7a0ab098b9f0d32a97d90424c14625359acc7d344c4889ab2"
+  "evidenceSha256": "64fd75e5b7a43eb4e9a0bd7bba5cf3d5862ea2a3ac2bd83d859786a4ed7fc1fd"
 }

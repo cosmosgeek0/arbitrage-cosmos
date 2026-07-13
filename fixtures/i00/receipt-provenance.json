@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "verificationBase": "420cc83e5512d54ca1b1c064c1041d89b23914a0",
+  "verificationBase": "14fdcb0860eb753e6eb2c269ad2a28da00f4d9f6",
   "items": [
     { "sha": "b272049b1e482ff75de27fbdaece7be5a7bbcc5d", "claimType": "NAMED_IN_RECEIPT", "receiptPath": "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md", "receiptSha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162", "expectedNeedle": "b272049b1e482ff75de27fbdaece7be5a7bbcc5d", "ancestorRequired": true },
     { "sha": "3340f75270049de96846d153672b91f065844eef", "claimType": "NAMED_IN_RECEIPT", "receiptPath": "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md", "receiptSha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162", "expectedNeedle": "3340f75270049de96846d153672b91f065844eef", "ancestorRequired": true },
@@ -8,6 +8,10 @@
     { "sha": "e28b4c13c2f57f181cc6ea61508089719c7ff59c", "claimType": "NAMED_IN_RECEIPT", "receiptPath": "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md", "receiptSha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162", "expectedNeedle": "e28b4c13c2f57f181cc6ea61508089719c7ff59c", "ancestorRequired": true },
     { "sha": "963538d3cc9da74b51b70347a70a017b6eab2910", "claimType": "NAMED_IN_RECEIPT", "receiptPath": "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md", "receiptSha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162", "expectedNeedle": "963538d3cc9da74b51b70347a70a017b6eab2910", "ancestorRequired": true },
     { "sha": "87af78285a4b11bc8ca98c4cc9b3bb4a551d2537", "claimType": "NAMED_ACCEPTED_INTEGRATION_BASE", "receiptPath": "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md", "receiptSha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162", "expectedNeedle": "87af78285a4b11bc8ca98c4cc9b3bb4a551d2537", "ancestorRequired": true },
-    { "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c", "claimType": "COMMIT_CONTAINING_RECEIPT", "receiptPath": "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md", "receiptPathAtCommit": "SYSTEM_CONVERGENCE_RECEIPT.md", "receiptSha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162", "expectedNeedle": "# System Convergence Receipt", "ancestorRequired": true }
+    { "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c", "claimType": "COMMIT_CONTAINING_RECEIPT", "receiptPath": "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md", "receiptPathAtCommit": "SYSTEM_CONVERGENCE_RECEIPT.md", "receiptSha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162", "expectedNeedle": "# System Convergence Receipt", "ancestorRequired": true },
+    { "sha": "8058ab8febb639839333d4e2c604068a0c7390ea", "claimType": "COMMIT_CONTAINING_RECEIPT", "receiptPath": "IP_RUNTIME_RECEIPT.md", "receiptPathAtCommit": "IP_RUNTIME_RECEIPT.md", "receiptSha256": "8a16a2e5a869b9356b9b2cbbfd1de68406e64a253479fc6be600e953cd613dcb", "expectedNeedle": "# IP-RUNTIME immutable receipt", "ancestorRequired": true },
+    { "sha": "56c47dad398c485b6653036c8b90c53f11061b1e", "claimType": "COMMIT_CONTAINING_RECEIPT", "receiptPath": "IP_CONTROL_RECEIPT.md", "receiptPathAtCommit": "IP_CONTROL_RECEIPT.md", "receiptSha256": "4864f9a7de2a640b5e643e7817b33a0114cd988b29ac20cb2b6f0f77f6bf43f7", "expectedNeedle": "# IP-CONTROL Receipt", "ancestorRequired": true },
+    { "sha": "6bfd543afb693ea18f4baf08e962e6d698f140fb", "claimType": "COMMIT_CONTAINING_RECEIPT", "receiptPath": "IP_OPS_RECEIPT.md", "receiptPathAtCommit": "IP_OPS_RECEIPT.md", "receiptSha256": "57bc6fd9a6847dde70b1ac2cd81e0116db8e0f34c8e4003fee55b3f09f5bd922", "expectedNeedle": "# IP-OPS receipt", "ancestorRequired": true },
+    { "sha": "23e985c17b9b860fee26be397fa05b26f3daf8f2", "claimType": "COMMIT_CONTAINING_RECEIPT", "receiptPath": "IP_PROOF_RECEIPT.md", "receiptPathAtCommit": "IP_PROOF_RECEIPT.md", "receiptSha256": "569f09af842f527ca19269a8e66dbdc367145a03ff31aba839defe252d14ad7b", "expectedNeedle": "# IP_PROOF_RECEIPT.md", "ancestorRequired": true }
   ]
 }

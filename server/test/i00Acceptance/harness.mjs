@@ -835,7 +835,8 @@ export function discoverOperationalPageIds() {
 export function frozenInputScan(catalog) {
   return catalog.frozenInputs.map((input) => {
     const anchoredSha256 = FROZEN_SHA256[input.path] ?? null;
-    const observedSha256 = sha256(input.path);
+    const inputPath = path.join(ROOT, input.path);
+    const observedSha256 = statSync(inputPath, { throwIfNoEntry: false })?.isFile() ? sha256(input.path) : null;
     return {
       ...input,
       anchoredSha256,

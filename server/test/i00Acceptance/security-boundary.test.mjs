@@ -7,12 +7,13 @@ import {
   scanOwnedFiles,
   scanSecretText,
 } from '../../../test/i00/scope-security.mjs';
-import { verifyScopePaths } from '../../../test/i00/verify-scope.mjs';
+import { resolveScopePaths, verifyScopePaths } from '../../../test/i00/verify-scope.mjs';
 
 test('§2 path allowlist rejects production shared package lane and protected directive paths', () => {
   for (const accepted of [
     'server/test/i00Acceptance/proof.test.mjs', 'test/i00/run.mjs', 'fixtures/i00/a.json',
     'integration/reports/a.json', 'IP_PROOF_STATE.md', 'IP_PROOF_RECEIPT.md',
+    'I00_PRODUCT_BUILD_STATE.md', 'I00_VERIFY_RECEIPT.md', 'I00_CLOSURE_PRESTAGE_RECEIPT.md',
   ]) assert.equal(isAllowedChangePath(accepted), true, accepted);
   for (const rejected of [
     'server/src/index.ts', 'web/src/App.tsx', 'packages/edge-protocol/schema/edge-protocol-v1.schema.json',
@@ -34,6 +35,22 @@ test('staged-scope verifier evaluates concrete path inventories and fails empty 
   });
   assert.equal(verifyScopePaths([]).passed, false);
   assert.deepEqual(verifyScopePaths(['test/i00/run.mjs', 'server/src/index.ts']).rejected, ['server/src/index.ts']);
+});
+
+test('CLI scope resolution uses explicit paths, then staged paths, then the current HEAD inventory', () => {
+  const calls = [];
+  const readInventory = (mode) => {
+    calls.push(mode);
+    return mode === 'staged' ? [] : ['I00_PRODUCT_BUILD_STATE.md', 'I00_VERIFY_RECEIPT.md'];
+  };
+  assert.deepEqual(resolveScopePaths(['fixtures/i00/scenarios.json'], () => {
+    throw new Error('explicit paths must not invoke Git');
+  }), ['fixtures/i00/scenarios.json']);
+  assert.deepEqual(resolveScopePaths([], readInventory), ['I00_PRODUCT_BUILD_STATE.md', 'I00_VERIFY_RECEIPT.md']);
+  assert.deepEqual(calls, ['staged', 'head']);
+  assert.deepEqual(resolveScopePaths([], (mode) => mode === 'staged' ? ['MISSION_COVERAGE_MATRIX.md'] : []), ['MISSION_COVERAGE_MATRIX.md']);
+  assert.equal(resolveScopePaths([], () => []).length, 0);
+  assert.equal(verifyScopePaths(resolveScopePaths([], () => [])).passed, false);
 });
 
 test('scanner accepts required domain prose and synthetic fixture vocabulary', () => {

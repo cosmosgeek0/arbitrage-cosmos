@@ -11,11 +11,27 @@ This state is packet-local. It grants no runtime, Risk, Capital, execution, Cont
 | Branch | `ip-assur-hazard-20260713` |
 | Required base | `9785c93102b00389847b77c2f9348c06abc4344b` |
 | Implementation commit | `5de362639638fafcd9563787647200bcbf175df5` |
+| Original prestage seal commit | `b557b0bf64cf31afe11f0c974a9167e5afacfad0` |
+| D-LAUNCH-10 audit result | `COMPLIANT_NO_PRUNING_REQUIRED` |
 | Fixture subtree tree | `a093a82a195d8c038f55936ad23322b287871ff2` |
 | Test subtree tree | `5e2023274d45e983ec5a8b0228e4b9e21c1568ba` |
 | Seal date | `2026-07-13` (`Asia/Kolkata`) |
 
-The documentation-seal commit contains this file and the immutable receipt. It cannot embed its own commit ID; Git history is the authority for that final ID.
+The original prestage receipt remains byte-identical and sealed by `b557b0bf64cf31afe11f0c974a9167e5afacfad0`. The latest documentation-only audit seal contains this updated state and `receipts/HAZARD_D_LAUNCH_10_AUDIT_RECEIPT.md`; it cannot embed its own commit ID, so Git history is the authority for that final ID.
+
+## D-LAUNCH-10 compliance audit
+
+The complete diff from required base `9785c93102b00389847b77c2f9348c06abc4344b` through pre-audit seal `b557b0bf64cf31afe11f0c974a9167e5afacfad0` was reviewed against the director amendment. No implementation violation was found, so no evaluator, schema, fixture, view model, test, or DRAFT row was removed.
+
+| Classification boundary | Observed disposition | Audit result |
+| --- | --- | --- |
+| Assigned S1 `EXTENDED` fold | Packet-local STPA hazard/unacceptable-loss records, finite direct assumption projection, and Expected Failure Atlas expected-family denominator check only | `RETAINED` |
+| Existing §3.3 invariant, §3.8 Atlas, I08/cockpit, domain, and §11 owners (`REUSED`) | Canonical owner/path references and packet-local DRAFT insertion evidence only; no production implementation, store, mount, supervisor, or authority | `PASS` |
+| Duplicate sixth-plane/autonomic authority (`REJECTED`) | Absent | `PASS` |
+| I00/external host, deployment, sandbox, fallback, watchdog, service, secret, or provider configuration (`EXTERNAL_CONFIGURATION`) | Hash/state/proof-gap reporting and DRAFT owner requests only; no external mutation | `PASS` |
+| Adjacent S2–S8, §10, and handoff capabilities | Hazard contexts may name their canonical owners, but no adjacent evaluator, runtime, composed proof, analytics seeding, or controller was built | `PASS` |
+
+Audit reversions required: **0**. The `server/src/productAssurance/**` string in the finite owner fixture is a canonical-worker reference only; there is no production import or write.
 
 ## Packet truth
 
@@ -46,6 +62,10 @@ The documentation-seal commit contains this file and the immutable receipt. It c
 
 ## Verification state
 
+- D-LAUNCH-10 focused audit rerun: `69/69` passed, exit `0`.
+- D-LAUNCH-10 syntax rerun: all 17 packet/test `.mjs` files passed `node --check`.
+- Base-to-pre-audit-seal scope: 23 files and 4,477 inserted lines; every path is below the two exclusive write prefixes.
+- The audit seal changes documentation only: this state plus one new packet-local audit receipt. No implementation artifact changed.
 - Focused S1 suite: `69/69` passed, exit `0`.
 - Exact implementation commit in a disposable, lock-identical local dependency mirror: `npm test` exit `0`.
 - Exact implementation commit in the same mirror: `npm run test:all` exit `0`.
@@ -67,4 +87,4 @@ The actual accepted-release `OPERATIONAL_FAILURE_ATLAS.md`, production evaluator
 
 ## Handoff
 
-The canonical director/owners may consume the nine DRAFT insertion requests. No shared file was edited, no production evaluator was added, no network/private/signed/money path ran, and no push was performed.
+The canonical director/owners may consume the nine DRAFT insertion requests and the D-LAUNCH-10 audit receipt. No shared file was edited, no production evaluator was added, no network/private/signed/money path ran, and no push was performed.

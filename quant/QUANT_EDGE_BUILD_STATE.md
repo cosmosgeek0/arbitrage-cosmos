@@ -1,11 +1,11 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `31`
+State generation: `32`
 
-Updated: 2026-07-13T08:06:13+0530
+Updated: 2026-07-13T08:12:36+0530
 
-Status: `Q12 READY_FOR_REVIEW` — implementation and receipt are prepared; exact-C12
-verification and the separate A12 acceptance/state commit remain.
+Status: `Q12 ACCEPTED — PARKED` — exact C12 verification passed; A12 contains this
+generation and the separate acceptance receipt. No phase is active.
 
 Program: Q lane — deterministic research evidence, labels, models, calibration,
 uncertainty and advisory-only inference.
@@ -14,7 +14,9 @@ uncertainty and advisory-only inference.
 
 - Worktree: `/Users/cosmosgeek/Desktop/quant-edge-research-20260712`
 - Branch: `quant-edge-research-factory-20260712`
-- C12 exact parent: `c070fdaf7dc568448212067dde5e1fb2ecc21356`
+- Accepted C12: `7e403d2c24290deda81cae93f58308818144e017`; tree
+  `2c8cef3458e4953cd279d7c11ec2939685eda1a4`; exact parent
+  `c070fdaf7dc568448212067dde5e1fb2ecc21356`.
 - Canonical base: `7010499170e24b31c9c0be2c9d73a536e680c6fe`
 - Protocol commit: `73e1a1ff7daa48df8dac45713fc5f106842edafc`
 - Mission: `MISSION.md`; SHA-256
@@ -41,15 +43,19 @@ uncertainty and advisory-only inference.
   `c070fdaf7dc568448212067dde5e1fb2ecc21356`.
 - Q13 acceptance exists at `06f0a8f0c722ece6c46f56c62156aec291a77317`
   but is not an ancestor of this branch; its director merge remains pending until Q12 parks.
-- Q00–Q10 are accepted; Q11 and Q14 are accepted and director-merged; Q15 is
-  accepted and director-merged. Exact historical evidence remains in immutable
+- Q00–Q12 are accepted; Q11 and Q14 are accepted and director-merged; Q15 is accepted
+  and director-merged. Exact historical evidence remains in immutable
   `quant/RECEIPTS/Q*.md` and `quant/RECEIPTS/Q*_ACCEPTANCE.md` files.
-- Q12 is the only active phase. Q13/Q15/deep/registry-owned paths were not edited.
+- No phase is active. Q13/Q15/deep/registry-owned paths were not edited.
 
 ## Q12 current truth
 
-- Ready receipt: `quant/RECEIPTS/Q12.md`; C12 is defined as the first commit containing
-  that immutable receipt.
+- Immutable implementation receipt: `quant/RECEIPTS/Q12.md`; SHA-256
+  `2062adbc0840d2be42a192ef0f470a9508fe53165b98f5eb849e67ffbc6f06bc`;
+  first contained by C12.
+- Acceptance receipt: `quant/RECEIPTS/Q12_ACCEPTANCE.md`; first contained by A12 with
+  this generation-32 state; A12 has exact parent C12 and is intentionally
+  non-self-referential.
 - Exact chronological chain: meta stack folds 01–02; calibrator fit fold 03;
   calibration evaluation and conformal fit fold 04; full coverage fold 05; assessment
   fold 06.
@@ -90,6 +96,10 @@ uncertainty and advisory-only inference.
   `26e9565e8c28f932f19630f1611ad97733d90e315fb9f2274b078070afcaeb38`.
 - Q00 scope law: `6/6`; frozen protocol: `22/22`; `npm test`: exit 0,
   377 underlying checks.
+- Archive-derived exact-C12 tar SHA-256:
+  `eb0968d3d4761e8dda099c91cf8fa26dfe700c52b9ad847c8702620735ba0ee4`;
+  clean locked install, static gates, focused 100%, accumulated suite, regeneration and
+  protocol verification all passed.
 - Measured synthetic stack: grid-8 `5/8 + 3/8`, Brier
   `1501607/12288000`; grid-16 `9/16 + 7/16`, Brier
   `749353027/6144000000`.
@@ -101,7 +111,8 @@ uncertainty and advisory-only inference.
 ## Ownership and safety
 
 - C12 scope is exactly 22 paths under `quant/**`: 20 Q12 implementation/evidence paths,
-  this state, and `quant/RECEIPTS/Q12.md`.
+  generation-31 state, and `quant/RECEIPTS/Q12.md`. A12 changes only this state and
+  `quant/RECEIPTS/Q12_ACCEPTANCE.md`.
 - No task, accepted receipt, protocol, dependency lock, Q13, Q15, `deep`,
   `registry_ops`, production owner, UI, route, private client, socket or money path is
   changed.
@@ -114,20 +125,15 @@ uncertainty and advisory-only inference.
 
 ## Exact next task
 
-1. Stage exactly the 22 C12 paths; run the staged scope gate and
-   `git diff --cached --check`; commit C12 with exact parent `c070fdaf...`.
-2. Independently verify the exact C12 commit/tree from an archive-derived clean locked
-   environment, including deterministic artifact regeneration and the full required
-   gate.
-3. Create `quant/RECEIPTS/Q12_ACCEPTANCE.md`, update this file to generation 32
-   `Q12 ACCEPTED — PARKED`, and commit A12 with exact parent C12.
-4. Stop. Q13 remains pending director merge. Do not begin Q16 or Q17; do not push.
+None. The spine is parked. Q13 acceptance `06f0a8f0c722ece6c46f56c62156aec291a77317`
+remains pending director merge. Await a new director instruction after that merge. Do
+not begin Q16 or Q17, do not merge Q13 locally, and do not push.
 
 ## Resume read order
 
 1. Root `STATE.md`, `MISSION.md`, `ARCHITECTURE.md` Part II and `DIRECTOR.md`.
 2. The two launch directives, frozen protocol inputs and `quant/DIRECTIVE_INPUTS.lock`.
-3. This state, `quant/TASKS/Q12.md`, `quant/RECEIPTS/Q12.md`, and the exact current Git
+3. This state, `quant/TASKS/Q12.md`, both Q12 receipts, and the exact current Git
    ancestry.
-4. If C12 exists, verify it exactly and complete only A12; never rewrite the immutable
-   C12 receipt.
+4. Confirm Q12 is accepted and parked. Never rewrite C12 or either Q12 receipt; wait for
+   director-owned Q13 merge posture before any later phase.

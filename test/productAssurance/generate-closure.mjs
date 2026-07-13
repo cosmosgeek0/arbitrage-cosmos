@@ -1201,6 +1201,7 @@ async function main() {
     [faultReport.verdict, faultReport.declaredScenarioCount, faultReport.observedScenarioCount, faultReport.passedScenarioIds.length, faultReport.truthLabel, faultReport.realSoakState, faultReport.authorityGranted],
     ['PASS', 103, 103, 103, 'SYNTHETIC_ONLY', 'NOT_RUN', false],
   );
+  const syntheticAtlas = buildSyntheticFailureAtlas(pa, observations, options);
 
   const insertionRows = buildInsertionRows(pa.ASSURANCE_COCKPIT_SECTION_IDS);
   const changedPaths = gitChangedPaths(options.implementationCommit);
@@ -1276,6 +1277,7 @@ async function main() {
     unexpectedObservationScenarioIds: faultReport.unexpectedObservationScenarioIds,
     duplicateObservationScenarioIds: faultReport.duplicateObservationScenarioIds,
     reasonCodes: faultReport.reasonCodes,
+    failureAtlas: syntheticAtlas,
     runs: observations.map((run) => ({
       scenarioId: run.scenarioId,
       runId: run.runId,
@@ -1298,7 +1300,7 @@ async function main() {
     [GENERATED_DOCUMENT_PATHS[2], renderCoverageMatrix(pa, structuralCoverage, scannerReport, options)],
     [GENERATED_DOCUMENT_PATHS[3], renderRecoveryReport(pa, options)],
     [GENERATED_DOCUMENT_PATHS[4], renderFaultReport(pa, faultReport, observations, options)],
-    [GENERATED_DOCUMENT_PATHS[5], renderFailureAtlas(pa, options)],
+    [GENERATED_DOCUMENT_PATHS[5], renderFailureAtlas(pa, syntheticAtlas, options)],
     [GENERATED_DOCUMENT_PATHS[6], renderDiagnosticBoundary(pa, options)],
     [GENERATED_DOCUMENT_PATHS[7], renderInsertionRequest(insertionRows, options)],
     [GENERATED_DOCUMENT_PATHS[8], renderQMatrix(pa, options)],

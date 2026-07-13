@@ -51,6 +51,16 @@ test('schemas reuse the exact base operation classes and tri-state assurance res
   assert.deepEqual(ASSURANCE_RESULTS, ['PASS', 'FAIL', 'UNKNOWN']);
 });
 
+test('cancellation evidence accepts every canonical base operation class', () => {
+  for (const operationClass of OPERATION_CLASSES) {
+    assert.deepEqual(
+      validateCancellationEvidence(makeCancellationEvidence({ operationClass })),
+      [],
+      operationClass,
+    );
+  }
+});
+
 test('S8 does not invent cancellation, oscillation, or durable-unresolved lifecycle states', () => {
   assert.deepEqual(REMEDIATION_CONTAINMENT_LIFECYCLES, [
     'QUARANTINED',
@@ -127,7 +137,8 @@ test('repair attempts record campaign identity, before/action/after, circuit, tr
     'attemptId', 'cause', 'policyRevision', 'beforeStateRef', 'actionRef',
     'afterStateRef', 'result', 'nextRetryAtMs', 'circuitState',
     'materialEventOrLedgerRef', 'cockpitTraceRef', 'producerEvidenceRef',
-    'verifierEvidenceRef', 'verifierIndependence',
+    'producerFailureDomain', 'verifierEvidenceRef', 'verifierIndependence', 'actuationGateEvidence',
+    'circuitEvidence',
   ]) assert.ok(Object.hasOwn(attempt, field), field);
   assert.notEqual(attempt.producerEvidenceRef, attempt.verifierEvidenceRef);
   assert.notEqual(attempt.producerOwner, attempt.verifierOwner);
@@ -137,6 +148,23 @@ test('common-mode producer/verifier policy evidence fails closed', () => {
   const policy = structuredClone(makeRepairPolicy());
   policy.observedSignals[1].sourceOwner = policy.observedSignals[0].sourceOwner;
   assert.ok(validateRepairPolicy(policy).some((issue) => issue.code === 'COMMON_MODE_VERIFIER_FORBIDDEN'));
+});
+
+test('automatic local repair is restricted to the idempotent command operation class', () => {
+  const policy = structuredClone(makeRepairPolicy());
+  policy.operationClass = 'PURE_READ';
+  assert.ok(validateRepairPolicy(policy).some((issue) => issue.code === 'AUTOMATIC_LOCAL_OPERATION_CLASS_REQUIRED'));
+});
+
+test('registered fencing-owner binding rejects paired policy and lease-owner forgery', () => {
+  const policy = structuredClone(makeRepairPolicy());
+  const evidence = structuredClone(makeRepairEvidence());
+  policy.fencingOwner = 'controller.forged';
+  evidence.lease.ownerId = 'controller.forged';
+  for (const attempt of evidence.attempts) attempt.controllerId = 'controller.forged';
+
+  assert.deepEqual(validateRepairEvidence(evidence), []);
+  assert.ok(validateRepairPolicy(policy).some((issue) => issue.code === 'FENCING_OWNER_REGISTRATION_MISMATCH'));
 });
 
 test('malformed controlled resource sets and optional verifier signals fail closed without throwing', () => {
@@ -158,6 +186,149 @@ test('attempt identity and ordinal resets fail the strict campaign contract', ()
   const codes = validateRepairEvidence(evidence).map((issue) => issue.code);
   assert.ok(codes.includes('DUPLICATE_ATTEMPT_ID'));
   assert.ok(codes.includes('LOCAL_ATTEMPT_SEQUENCE_INVALID'));
+});
+
+test('per-attempt gate and circuit evidence use strict exact contracts', () => {
+  const missingGate = structuredClone(makeRepairEvidence());
+  delete missingGate.attempts[0].actuationGateEvidence;
+  assert.ok(validateRepairEvidence(missingGate).some((issue) => issue.code === 'EXACT_KEYS_REQUIRED'));
+
+  const extraGateKey = structuredClone(makeRepairEvidence());
+  extraGateKey.attempts[0].actuationGateEvidence.unregisteredTruth = 'PASS';
+  assert.ok(validateRepairEvidence(extraGateKey).some((issue) => (
+    issue.path === '$.attempts[0].actuationGateEvidence' && issue.code === 'EXACT_KEYS_REQUIRED'
+  )));
+
+  const extraCircuitKey = structuredClone(makeRepairEvidence());
+  extraCircuitKey.attempts[0].circuitEvidence.syntheticCloseAuthority = true;
+  assert.ok(validateRepairEvidence(extraCircuitKey).some((issue) => (
+    issue.path === '$.attempts[0].circuitEvidence' && issue.code === 'EXACT_KEYS_REQUIRED'
+  )));
+});
+
+test('each attempt requires gate evidence that is present and fresh at its own start', () => {
+  const staleReadiness = structuredClone(makeRepairEvidence());
+  const staleAttempt = staleReadiness.attempts[0];
+  staleAttempt.actuationGateEvidence.readinessObservedAtMs = staleAttempt.startedAtMs
+    - staleAttempt.actuationGateEvidence.readinessMaxAgeMs - 1;
+  assert.ok(validateRepairEvidence(staleReadiness).some((issue) => issue.code === 'ATTEMPT_READINESS_EVIDENCE_STALE'));
+
+  const futureConflictGraph = structuredClone(makeRepairEvidence());
+  const futureAttempt = futureConflictGraph.attempts[0];
+  futureAttempt.actuationGateEvidence.conflictGraphObservedAtMs = futureAttempt.startedAtMs + 1;
+  assert.ok(validateRepairEvidence(futureConflictGraph).some((issue) => issue.code === 'ATTEMPT_CONFLICT_GRAPH_EVIDENCE_FROM_FUTURE'));
+});
+
+test('per-attempt gate references and observations bind the canonical campaign evidence', () => {
+  const forgedReadiness = structuredClone(makeRepairEvidence());
+  Object.assign(forgedReadiness.attempts[0].actuationGateEvidence, {
+    readinessEvidenceRef: 'synthetic.fresh-but-unrelated-readiness',
+    readinessObservedAtMs: forgedReadiness.attempts[0].startedAtMs - 1,
+    readinessMaxAgeMs: 5_000,
+  });
+  assert.ok(validateRepairEvidence(forgedReadiness).some((issue) => (
+    issue.code === 'ATTEMPT_READINESS_EVIDENCE_BINDING_MISMATCH'
+  )));
+
+  const forgedConflictGraph = structuredClone(makeRepairEvidence());
+  Object.assign(forgedConflictGraph.attempts[0].actuationGateEvidence, {
+    conflictGraphEvidenceRef: 'synthetic.fresh-but-unrelated-conflict-graph',
+    conflictGraphObservedAtMs: forgedConflictGraph.attempts[0].startedAtMs - 1,
+    conflictGraphMaxAgeMs: 5_000,
+  });
+  assert.ok(validateRepairEvidence(forgedConflictGraph).some((issue) => (
+    issue.code === 'ATTEMPT_CONFLICT_GRAPH_EVIDENCE_BINDING_MISMATCH'
+  )));
+});
+
+test('attempt circuit evidence matches state, chronology, and immediate prior owner evidence', () => {
+  const mismatchedState = structuredClone(makeRepairEvidence());
+  mismatchedState.attempts[0].circuitEvidence.state = 'OPEN';
+  assert.ok(validateRepairEvidence(mismatchedState).some((issue) => issue.code === 'ATTEMPT_CIRCUIT_STATE_EVIDENCE_MISMATCH'));
+
+  const stalePrior = structuredClone(makeRepairEvidence());
+  stalePrior.attempts[1].circuitEvidence.priorEvidenceRef = 'synthetic.unrelated-circuit-evidence';
+  assert.ok(validateRepairEvidence(stalePrior).some((issue) => issue.code === 'REPAIR_CIRCUIT_PRIOR_EVIDENCE_CHAIN_INVALID'));
+
+  const missingPrior = structuredClone(makeRepairEvidence());
+  missingPrior.attempts[0].circuitEvidence.priorEvidenceRef = null;
+  assert.ok(validateRepairEvidence(missingPrior).some((issue) => issue.code === 'REPAIR_CIRCUIT_PRIOR_EVIDENCE_CHAIN_INVALID'));
+
+  const beforeCompletion = structuredClone(makeRepairEvidence());
+  beforeCompletion.attempts[0].circuitEvidence.observedAtMs = beforeCompletion.attempts[0].completedAtMs - 1;
+  assert.ok(validateRepairEvidence(beforeCompletion).some((issue) => issue.code === 'CIRCUIT_EVIDENCE_BEFORE_ATTEMPT_COMPLETION'));
+
+  const transitionAfterObservation = structuredClone(makeRepairEvidence());
+  transitionAfterObservation.attempts[0].circuitEvidence.halfOpenAtMs
+    = transitionAfterObservation.attempts[0].circuitEvidence.observedAtMs + 1;
+  assert.ok(validateRepairEvidence(transitionAfterObservation).some((issue) => issue.code === 'CIRCUIT_TRANSITION_AFTER_OBSERVATION'));
+});
+
+test('linked circuit evidence preserves owner, failure domain, and carried transition history', () => {
+  for (const [field, forgedValue, expectedCode] of [
+    ['canonicalOwner', 'synthetic.forged-circuit-owner', 'REPAIR_CIRCUIT_OWNER_CHAIN_MISMATCH'],
+    ['ownerFailureDomain', 'synthetic.forged-circuit-owner-domain', 'REPAIR_CIRCUIT_OWNER_FAILURE_DOMAIN_CHAIN_MISMATCH'],
+    ['openedAtMs', FIXTURE_NOW_MS - 19_000, 'REPAIR_CIRCUIT_TRANSITION_HISTORY_CHAIN_INVALID'],
+  ]) {
+    const evidence = structuredClone(makeRepairEvidence());
+    evidence.attempts[1].circuitEvidence[field] = forgedValue;
+    const issues = validateRepairEvidence(evidence);
+    assert.ok(issues.some((issue) => issue.code === expectedCode), `${field}: ${JSON.stringify(issues)}`);
+  }
+});
+
+test('CLOSED attempt circuit evidence accepts independent baseline or transition proof and rejects common mode', () => {
+  const baseline = structuredClone(makeRepairEvidence());
+  baseline.attempts = [baseline.attempts[0]];
+  baseline.attempts[0].circuitState = 'CLOSED';
+  Object.assign(baseline.attempts[0].circuitEvidence, {
+    state: 'CLOSED',
+    priorEvidenceRef: null,
+    baselineNeverOpenedEvidenceRef: 'synthetic.independent-baseline.never-opened',
+    baselineEvidenceOwner: 'synthetic.independent-baseline-owner',
+    baselineEvidenceFailureDomain: 'synthetic.independent-baseline-domain',
+    openedAtMs: null,
+    halfOpenAtMs: null,
+    resetEligibleAtMs: null,
+    closedAtMs: null,
+    independentCloseEvidenceRef: null,
+    independentCloseOwner: null,
+    independentCloseFailureDomain: null,
+  });
+  assert.deepEqual(validateRepairEvidence(baseline), []);
+
+  const transitioned = structuredClone(makeRepairEvidence());
+  assert.deepEqual(validateRepairEvidence(transitioned), []);
+
+  const incompleteBaseline = structuredClone(baseline);
+  incompleteBaseline.attempts[0].circuitEvidence.baselineEvidenceFailureDomain = null;
+  assert.ok(validateRepairEvidence(incompleteBaseline).some((issue) => issue.code === 'INDEPENDENT_CIRCUIT_BASELINE_EVIDENCE_REQUIRED'));
+
+  const commonModeClose = structuredClone(makeRepairEvidence());
+  commonModeClose.attempts[1].circuitEvidence.independentCloseOwner
+    = commonModeClose.attempts[1].circuitEvidence.canonicalOwner;
+  assert.ok(validateRepairEvidence(commonModeClose).some((issue) => issue.code === 'COMMON_MODE_REPAIR_CIRCUIT_CLOSE_FORBIDDEN'));
+
+  const producerOwnedClose = structuredClone(makeRepairEvidence());
+  producerOwnedClose.attempts[1].circuitEvidence.independentCloseOwner
+    = producerOwnedClose.attempts[1].producerOwner;
+  assert.ok(validateRepairEvidence(producerOwnedClose).some((issue) => (
+    issue.code === 'COMMON_MODE_REPAIR_CIRCUIT_CLOSE_PRODUCER_OWNER_FORBIDDEN'
+  )));
+
+  const producerDomainClose = structuredClone(makeRepairEvidence());
+  producerDomainClose.attempts[1].circuitEvidence.independentCloseFailureDomain
+    = producerDomainClose.attempts[1].producerFailureDomain;
+  assert.ok(validateRepairEvidence(producerDomainClose).some((issue) => (
+    issue.code === 'COMMON_MODE_REPAIR_CIRCUIT_CLOSE_PRODUCER_FAILURE_DOMAIN_FORBIDDEN'
+  )));
+
+  const producerOwnedBaseline = structuredClone(baseline);
+  producerOwnedBaseline.attempts[0].circuitEvidence.baselineEvidenceOwner
+    = producerOwnedBaseline.attempts[0].producerOwner;
+  assert.ok(validateRepairEvidence(producerOwnedBaseline).some((issue) => (
+    issue.code === 'COMMON_MODE_REPAIR_CIRCUIT_CLOSE_PRODUCER_OWNER_FORBIDDEN'
+  )));
 });
 
 test('resource denominator is exactly the eight accepted S8 families', () => {
@@ -227,6 +398,66 @@ test('all variable-size contract structures have explicit deterministic caps', (
   assert.ok(validateResourceEvidenceBundle(consumers).some((issue) => issue.code === 'TOO_MANY_TOP_CONSUMERS'));
 });
 
+test('over-cap structures short-circuit before adversarial entries are inspected', () => {
+  function overCapWithThrowingEntry(limit) {
+    const values = new Array(limit + 1);
+    Object.defineProperty(values, 0, {
+      configurable: true,
+      get() { throw new Error('over-cap entry must not be inspected'); },
+    });
+    return values;
+  }
+
+  const cases = [
+    {
+      code: 'TOO_MANY_OBSERVED_SIGNALS',
+      value: (() => {
+        const policy = structuredClone(makeRepairPolicy());
+        policy.observedSignals = overCapWithThrowingEntry(STABILITY_STRUCTURE_LIMITS.observedSignals);
+        return () => validateRepairPolicy(policy);
+      })(),
+    },
+    {
+      code: 'TOO_MANY_BACKOFF_ENTRIES',
+      value: (() => {
+        const policy = structuredClone(makeRepairPolicy());
+        policy.budgets.backoffScheduleMs = overCapWithThrowingEntry(STABILITY_STRUCTURE_LIMITS.repairAttempts);
+        return () => validateRepairPolicy(policy);
+      })(),
+    },
+    {
+      code: 'TOO_MANY_REPAIR_ATTEMPTS',
+      value: (() => {
+        const evidence = structuredClone(makeRepairEvidence());
+        evidence.attempts = overCapWithThrowingEntry(STABILITY_STRUCTURE_LIMITS.repairAttempts);
+        return () => validateRepairEvidence(evidence);
+      })(),
+    },
+    {
+      code: 'TOO_MANY_CONFLICT_CAMPAIGNS',
+      value: (() => {
+        const evidence = structuredClone(makeRepairEvidence());
+        evidence.conflictGraphEvidence.observedCampaigns = overCapWithThrowingEntry(STABILITY_STRUCTURE_LIMITS.conflictCampaigns);
+        return () => validateRepairEvidence(evidence);
+      })(),
+    },
+    {
+      code: 'TOO_MANY_TOP_CONSUMERS',
+      value: (() => {
+        const bundle = structuredClone(makeResourceEvidenceBundle());
+        bundle.rows[0].topConsumers = overCapWithThrowingEntry(STABILITY_STRUCTURE_LIMITS.topConsumersPerResource);
+        return () => validateResourceEvidenceBundle(bundle);
+      })(),
+    },
+  ];
+
+  for (const scenario of cases) {
+    let issues;
+    assert.doesNotThrow(() => { issues = scenario.value(); }, scenario.code);
+    assert.ok(issues.some((issue) => issue.code === scenario.code), scenario.code);
+  }
+});
+
 test('unknown numeric resource truth must be wholly null with an exact blocker', () => {
   const partial = structuredClone(makeResourceEvidenceBundle());
   partial.rows[0].budget.remaining = null;
@@ -235,6 +466,25 @@ test('unknown numeric resource truth must be wholly null with an exact blocker',
   const fabricated = structuredClone(makeResourceEvidenceBundle());
   fabricated.rows[0].burn = { value: 0, unknownReason: 'measurement absent' };
   assert.ok(validateResourceEvidenceBundle(fabricated).some((issue) => issue.code === 'UNKNOWN_REASON_CONFLICT'));
+});
+
+test('derived top-consumer attribution fails closed before bounded numeric overflow', () => {
+  const bundle = structuredClone(makeResourceEvidenceBundle());
+  bundle.rows[0].topConsumers = [
+    {
+      consumerId: 'synthetic.consumer.maximum',
+      amount: Number.MAX_SAFE_INTEGER,
+      unknownReason: null,
+      evidenceRef: 'synthetic.consumer.maximum.evidence',
+    },
+    {
+      consumerId: 'synthetic.consumer.one-more',
+      amount: 1,
+      unknownReason: null,
+      evidenceRef: 'synthetic.consumer.one-more.evidence',
+    },
+  ];
+  assert.ok(validateResourceEvidenceBundle(bundle).some((issue) => issue.code === 'TOP_CONSUMER_TOTAL_OVERFLOW'));
 });
 
 test('resource truth conditionally requires consumer, throttle, response, and circuit evidence', () => {

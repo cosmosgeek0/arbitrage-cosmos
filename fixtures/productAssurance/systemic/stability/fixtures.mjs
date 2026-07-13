@@ -12,6 +12,13 @@ import {
 
 export const FIXTURE_NOW_MS = 1_800_000_000_000;
 
+const REPAIR_GATE_OBSERVED_AT_MS = FIXTURE_NOW_MS - 20_000;
+const REPAIR_GATE_MAX_AGE_MS = 60_000;
+const REPAIR_READINESS_EVIDENCE_REF = 'synthetic.readiness.sequence-gap.001';
+const REPAIR_CONFLICT_GRAPH_EVIDENCE_REF = 'synthetic.conflict-graph-observation.001';
+const REPAIR_CIRCUIT_OPENED_AT_MS = FIXTURE_NOW_MS - 20_000;
+const REPAIR_CIRCUIT_HALF_OPEN_AT_MS = FIXTURE_NOW_MS - 16_000;
+
 function plain(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -361,6 +368,8 @@ export function makeRepairPolicy(override = {}) {
       state: 'CONFIRMED_IN_SYNTHETIC_FIXTURE',
       registryRef: 'synthetic.registry-mapping.RESNAPSHOT_SEQUENCE_GAP',
       implementationRef: 'synthetic.reference-evaluator.evaluateRepairLoop',
+      registeredFencingOwner: 'controller.alpha',
+      fencingOwnerEvidenceRef: 'synthetic.registry-mapping.RESNAPSHOT_SEQUENCE_GAP.fencing-owner',
     },
     controlledState: {
       resourceIds: ['component.public-source'],
@@ -471,7 +480,7 @@ export function makeRepairPolicy(override = {}) {
   return deepFreeze(merge(base, override));
 }
 
-function repairCircuitEvidence(attemptRecord, index) {
+export function makeRepairCircuitEvidence(attemptRecord, index) {
   const state = attemptRecord.circuitState;
   const common = {
     state,
@@ -494,20 +503,26 @@ function repairCircuitEvidence(attemptRecord, index) {
     independentCloseFailureDomain: null,
     mayCloseOrReset: false,
   };
-  if (state === 'OPEN') common.openedAtMs = attemptRecord.startedAtMs;
+  if (state === 'OPEN') {
+    common.priorEvidenceRef = index === 0
+      ? 'synthetic.repair-circuit.pre-campaign-closed'
+      : `synthetic.repair-circuit.attempt.${index}`;
+    common.openedAtMs = REPAIR_CIRCUIT_OPENED_AT_MS;
+    if (index > 0) common.halfOpenAtMs = REPAIR_CIRCUIT_HALF_OPEN_AT_MS;
+  }
   if (state === 'HALF_OPEN') {
     common.priorEvidenceRef = index === 0
       ? 'synthetic.repair-circuit.pre-campaign-open'
       : `synthetic.repair-circuit.attempt.${index}`;
-    common.openedAtMs = Math.max(0, attemptRecord.startedAtMs - 3_000);
-    common.halfOpenAtMs = attemptRecord.completedAtMs;
+    common.openedAtMs = REPAIR_CIRCUIT_OPENED_AT_MS;
+    common.halfOpenAtMs = REPAIR_CIRCUIT_HALF_OPEN_AT_MS;
   }
   if (state === 'CLOSED') {
     common.priorEvidenceRef = index === 0
       ? 'synthetic.repair-circuit.pre-campaign-transition'
       : `synthetic.repair-circuit.attempt.${index}`;
-    common.openedAtMs = Math.max(0, attemptRecord.startedAtMs - 3_000);
-    common.halfOpenAtMs = Math.max(common.openedAtMs, attemptRecord.startedAtMs - 1_000);
+    common.openedAtMs = REPAIR_CIRCUIT_OPENED_AT_MS;
+    common.halfOpenAtMs = REPAIR_CIRCUIT_HALF_OPEN_AT_MS;
     common.resetEligibleAtMs = attemptRecord.startedAtMs;
     common.closedAtMs = attemptRecord.completedAtMs;
     common.independentCloseEvidenceRef = `synthetic.independent-repair-circuit-close.${index + 1}`;
@@ -549,6 +564,7 @@ function attempt(index, override = {}) {
     producerPredicate: 'FAIL',
     independentVerifier: 'FAIL',
     producerOwner: 'canonical public-source owner',
+    producerFailureDomain: 'producer.public-source',
     verifierOwner: 'independent sentinel owner',
     producerEvidenceRef: `synthetic.producer-evidence.${index + 1}`,
     verifierEvidenceRef: `synthetic.verifier-evidence.${index + 1}`,
@@ -567,15 +583,15 @@ function attempt(index, override = {}) {
   }, override);
   if (!Object.hasOwn(override, 'actuationGateEvidence')) {
     record.actuationGateEvidence = {
-      readinessEvidenceRef: `synthetic.attempt-readiness.${index + 1}`,
-      readinessObservedAtMs: Math.max(0, record.startedAtMs - 100),
-      readinessMaxAgeMs: 5_000,
-      conflictGraphEvidenceRef: `synthetic.attempt-conflict-graph.${index + 1}`,
-      conflictGraphObservedAtMs: Math.max(0, record.startedAtMs - 100),
-      conflictGraphMaxAgeMs: 5_000,
+      readinessEvidenceRef: REPAIR_READINESS_EVIDENCE_REF,
+      readinessObservedAtMs: REPAIR_GATE_OBSERVED_AT_MS,
+      readinessMaxAgeMs: REPAIR_GATE_MAX_AGE_MS,
+      conflictGraphEvidenceRef: REPAIR_CONFLICT_GRAPH_EVIDENCE_REF,
+      conflictGraphObservedAtMs: REPAIR_GATE_OBSERVED_AT_MS,
+      conflictGraphMaxAgeMs: REPAIR_GATE_MAX_AGE_MS,
     };
   }
-  if (!Object.hasOwn(override, 'circuitEvidence')) record.circuitEvidence = repairCircuitEvidence(record, index);
+  if (!Object.hasOwn(override, 'circuitEvidence')) record.circuitEvidence = makeRepairCircuitEvidence(record, index);
   return record;
 }
 
@@ -597,15 +613,15 @@ export function makeRepairEvidence(override = {}) {
       capitalPostureSafe: 'PASS',
       reserveCapacityProtected: 'PASS',
       circuitAllowsAction: 'PASS',
-      observedAtMs: FIXTURE_NOW_MS - 100,
-      maxAgeMs: 5_000,
-      evidenceRef: 'synthetic.readiness.sequence-gap.001',
+      observedAtMs: REPAIR_GATE_OBSERVED_AT_MS,
+      maxAgeMs: REPAIR_GATE_MAX_AGE_MS,
+      evidenceRef: REPAIR_READINESS_EVIDENCE_REF,
     },
     conflictGraphEvidence: {
       graphRef: 'synthetic.conflict-graph.sequence-gap',
-      observedAtMs: FIXTURE_NOW_MS - 100,
-      maxAgeMs: 5_000,
-      evidenceRef: 'synthetic.conflict-graph-observation.001',
+      observedAtMs: REPAIR_GATE_OBSERVED_AT_MS,
+      maxAgeMs: REPAIR_GATE_MAX_AGE_MS,
+      evidenceRef: REPAIR_CONFLICT_GRAPH_EVIDENCE_REF,
       observedCampaigns: [{
         campaignId: 'campaign.resnapshot.001',
         failureFingerprint: 'fingerprint.sequence-gap.component-public-source',
@@ -683,14 +699,14 @@ export function makeRepairEvidence(override = {}) {
 }
 
 const noProgressAttempts = [
-  attempt(0, { progressValue: 1, nextRetryAtMs: FIXTURE_NOW_MS - 14_000 }),
-  attempt(1, { progressValue: 1.2, nextRetryAtMs: FIXTURE_NOW_MS - 10_000 }),
+  attempt(0, { progressValue: 1, circuitState: 'HALF_OPEN', nextRetryAtMs: FIXTURE_NOW_MS - 14_000 }),
+  attempt(1, { progressValue: 1.2, circuitState: 'HALF_OPEN', nextRetryAtMs: FIXTURE_NOW_MS - 10_000 }),
   attempt(2, { progressValue: 1.3 }),
 ];
 const oscillatingAttempts = [
-  attempt(0, { progressValue: 1, actionDirection: 'INCREASE', controllerId: 'controller.alpha', nextRetryAtMs: FIXTURE_NOW_MS - 14_000 }),
-  attempt(1, { progressValue: 2, actionDirection: 'DECREASE', controllerId: 'controller.alpha', nextRetryAtMs: FIXTURE_NOW_MS - 10_000 }),
-  attempt(2, { progressValue: 1, actionDirection: 'INCREASE', controllerId: 'controller.alpha', nextRetryAtMs: FIXTURE_NOW_MS - 4_000 }),
+  attempt(0, { progressValue: 1, circuitState: 'HALF_OPEN', actionDirection: 'INCREASE', controllerId: 'controller.alpha', nextRetryAtMs: FIXTURE_NOW_MS - 14_000 }),
+  attempt(1, { progressValue: 2, circuitState: 'HALF_OPEN', actionDirection: 'DECREASE', controllerId: 'controller.alpha', nextRetryAtMs: FIXTURE_NOW_MS - 10_000 }),
+  attempt(2, { progressValue: 1, circuitState: 'HALF_OPEN', actionDirection: 'INCREASE', controllerId: 'controller.alpha', nextRetryAtMs: FIXTURE_NOW_MS - 4_000 }),
   attempt(3, { progressValue: 1.5, actionDirection: 'DECREASE', controllerId: 'controller.beta', completionApplied: false }),
 ];
 const unavailablePostconditionWindow = {
@@ -824,7 +840,7 @@ export const REPAIR_FIXTURES = deepFreeze([
     policy: makeRepairPolicy(),
     evidence: makeRepairEvidence({
       attempts: [
-        attempt(0, { nextRetryAtMs: FIXTURE_NOW_MS - 14_000 }),
+        attempt(0, { circuitState: 'HALF_OPEN', nextRetryAtMs: FIXTURE_NOW_MS - 14_000 }),
         attempt(1, { afterRestart: true }),
       ],
       restartEvidence: {

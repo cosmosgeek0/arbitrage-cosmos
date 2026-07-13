@@ -260,6 +260,265 @@ function finish(issues) {
   return deepFreeze(issues);
 }
 
+const ATTEMPT_ACTUATION_GATE_KEYS = Object.freeze([
+  'readinessEvidenceRef', 'readinessObservedAtMs', 'readinessMaxAgeMs',
+  'conflictGraphEvidenceRef', 'conflictGraphObservedAtMs', 'conflictGraphMaxAgeMs',
+]);
+
+const ATTEMPT_CIRCUIT_EVIDENCE_KEYS = Object.freeze([
+  'state', 'canonicalOwner', 'ownerFailureDomain', 'observedAtMs', 'maxAgeMs',
+  'evidenceRef', 'unknownReason', 'priorEvidenceRef',
+  'baselineNeverOpenedEvidenceRef', 'baselineEvidenceOwner',
+  'baselineEvidenceFailureDomain', 'openedAtMs', 'halfOpenAtMs',
+  'resetEligibleAtMs', 'closedAtMs', 'independentCloseEvidenceRef',
+  'independentCloseOwner', 'independentCloseFailureDomain', 'mayCloseOrReset',
+]);
+
+function isSafeTime(value) {
+  return Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateAttemptGateFreshness(issues, observedAtMs, maxAgeMs, startedAtMs, path, prefix) {
+  if (!isSafeTime(observedAtMs) || !isSafeTime(startedAtMs)
+    || !Number.isSafeInteger(maxAgeMs) || maxAgeMs <= 0) return;
+  if (observedAtMs > startedAtMs) {
+    add(issues, path, `${prefix}_EVIDENCE_FROM_FUTURE`, 'actuation-gate evidence must exist no later than the attempt start');
+  } else if (startedAtMs - observedAtMs > maxAgeMs) {
+    add(issues, path, `${prefix}_EVIDENCE_STALE`, 'actuation-gate evidence must be fresh at the attempt start');
+  }
+}
+
+function validateAttemptActuationGateEvidence(
+  issues,
+  value,
+  path,
+  startedAtMs,
+  readinessEvidence,
+  conflictGraphEvidence,
+) {
+  if (!exactKeys(issues, value, path, ATTEMPT_ACTUATION_GATE_KEYS)) return;
+  label(issues, value.readinessEvidenceRef, `${path}.readinessEvidenceRef`);
+  safeTime(issues, value.readinessObservedAtMs, `${path}.readinessObservedAtMs`);
+  positiveInteger(issues, value.readinessMaxAgeMs, `${path}.readinessMaxAgeMs`);
+  label(issues, value.conflictGraphEvidenceRef, `${path}.conflictGraphEvidenceRef`);
+  safeTime(issues, value.conflictGraphObservedAtMs, `${path}.conflictGraphObservedAtMs`);
+  positiveInteger(issues, value.conflictGraphMaxAgeMs, `${path}.conflictGraphMaxAgeMs`);
+  validateAttemptGateFreshness(
+    issues,
+    value.readinessObservedAtMs,
+    value.readinessMaxAgeMs,
+    startedAtMs,
+    `${path}.readinessObservedAtMs`,
+    'ATTEMPT_READINESS',
+  );
+  validateAttemptGateFreshness(
+    issues,
+    value.conflictGraphObservedAtMs,
+    value.conflictGraphMaxAgeMs,
+    startedAtMs,
+    `${path}.conflictGraphObservedAtMs`,
+    'ATTEMPT_CONFLICT_GRAPH',
+  );
+  if (isPlainRecord(readinessEvidence)
+    && (value.readinessEvidenceRef !== readinessEvidence.evidenceRef
+      || value.readinessObservedAtMs !== readinessEvidence.observedAtMs
+      || value.readinessMaxAgeMs !== readinessEvidence.maxAgeMs)) {
+    add(
+      issues,
+      path,
+      'ATTEMPT_READINESS_EVIDENCE_BINDING_MISMATCH',
+      'per-attempt readiness evidence must exactly bind the campaign readiness reference, observation, and freshness window',
+    );
+  }
+  if (isPlainRecord(conflictGraphEvidence)
+    && (value.conflictGraphEvidenceRef !== conflictGraphEvidence.evidenceRef
+      || value.conflictGraphObservedAtMs !== conflictGraphEvidence.observedAtMs
+      || value.conflictGraphMaxAgeMs !== conflictGraphEvidence.maxAgeMs)) {
+    add(
+      issues,
+      path,
+      'ATTEMPT_CONFLICT_GRAPH_EVIDENCE_BINDING_MISMATCH',
+      'per-attempt conflict evidence must exactly bind the campaign conflict-graph reference, observation, and freshness window',
+    );
+  }
+}
+
+function validateAttemptCircuitEvidence(issues, value, path, attempt, priorAttempt) {
+  if (!exactKeys(issues, value, path, ATTEMPT_CIRCUIT_EVIDENCE_KEYS)) return;
+  enumValue(issues, value.state, `${path}.state`, ['OPEN', 'HALF_OPEN', 'CLOSED', 'UNKNOWN']);
+  label(issues, value.canonicalOwner, `${path}.canonicalOwner`);
+  label(issues, value.ownerFailureDomain, `${path}.ownerFailureDomain`, { nullable: true });
+  safeTime(issues, value.observedAtMs, `${path}.observedAtMs`, { nullable: true });
+  positiveInteger(issues, value.maxAgeMs, `${path}.maxAgeMs`);
+  for (const field of [
+    'evidenceRef', 'unknownReason', 'priorEvidenceRef',
+    'baselineNeverOpenedEvidenceRef', 'baselineEvidenceOwner',
+    'baselineEvidenceFailureDomain', 'independentCloseEvidenceRef',
+    'independentCloseOwner', 'independentCloseFailureDomain',
+  ]) label(issues, value[field], `${path}.${field}`, { nullable: true });
+  for (const field of ['openedAtMs', 'halfOpenAtMs', 'resetEligibleAtMs', 'closedAtMs']) {
+    safeTime(issues, value[field], `${path}.${field}`, { nullable: true });
+  }
+  if (value.mayCloseOrReset !== false) {
+    add(issues, `${path}.mayCloseOrReset`, 'CIRCUIT_AUTHORITY_FORBIDDEN', 'packet evidence cannot close or reset a circuit');
+  }
+  if (value.state !== attempt.circuitState) {
+    add(issues, `${path}.state`, 'ATTEMPT_CIRCUIT_STATE_EVIDENCE_MISMATCH', 'attempt circuitState must exactly match owner circuit evidence');
+  }
+
+  const baselineFields = [
+    value.baselineNeverOpenedEvidenceRef,
+    value.baselineEvidenceOwner,
+    value.baselineEvidenceFailureDomain,
+  ];
+  const independentCloseFields = [
+    value.independentCloseEvidenceRef,
+    value.independentCloseOwner,
+    value.independentCloseFailureDomain,
+  ];
+  const baselinePresent = baselineFields.some((entry) => entry !== null);
+  const baselineComplete = baselineFields.every((entry) => entry !== null);
+  const transitionFields = [
+    value.priorEvidenceRef, value.openedAtMs, value.halfOpenAtMs,
+    value.resetEligibleAtMs, value.closedAtMs, ...independentCloseFields,
+  ];
+  const transitionPresent = transitionFields.some((entry) => entry !== null);
+  const transitionComplete = transitionFields.every((entry) => entry !== null);
+
+  if (value.priorEvidenceRef !== null && value.priorEvidenceRef === value.evidenceRef) {
+    add(issues, `${path}.priorEvidenceRef`, 'REPAIR_CIRCUIT_PRIOR_EVIDENCE_CHAIN_INVALID', 'circuit transition evidence cannot refer to itself as prior state');
+  }
+  const requiresPriorLink = value.state === 'OPEN'
+    || value.state === 'HALF_OPEN'
+    || (value.state === 'CLOSED' && transitionPresent && !baselinePresent);
+  if (requiresPriorLink && value.priorEvidenceRef === null) {
+    add(issues, `${path}.priorEvidenceRef`, 'REPAIR_CIRCUIT_PRIOR_EVIDENCE_CHAIN_INVALID', 'state transition evidence requires a prior owner evidence reference');
+  }
+  if (requiresPriorLink && priorAttempt !== null && value.priorEvidenceRef !== null) {
+    const priorCircuit = priorAttempt?.circuitEvidence;
+    const expectedPriorRef = priorCircuit?.evidenceRef;
+    if (typeof expectedPriorRef === 'string' && expectedPriorRef.length > 0
+      && value.priorEvidenceRef !== expectedPriorRef) {
+      add(issues, `${path}.priorEvidenceRef`, 'REPAIR_CIRCUIT_PRIOR_EVIDENCE_CHAIN_INVALID', 'later attempt circuit evidence must link to the immediately prior attempt owner evidence');
+    }
+    if (isPlainRecord(priorCircuit) && value.priorEvidenceRef === expectedPriorRef) {
+      if (value.canonicalOwner !== priorCircuit.canonicalOwner) {
+        add(issues, `${path}.canonicalOwner`, 'REPAIR_CIRCUIT_OWNER_CHAIN_MISMATCH', 'linked circuit evidence cannot change canonical owner without explicit handoff evidence');
+      }
+      if (value.ownerFailureDomain !== priorCircuit.ownerFailureDomain) {
+        add(issues, `${path}.ownerFailureDomain`, 'REPAIR_CIRCUIT_OWNER_FAILURE_DOMAIN_CHAIN_MISMATCH', 'linked circuit evidence cannot change owner failure domain without explicit handoff evidence');
+      }
+      const carriedTransitionFields = ['openedAtMs', 'halfOpenAtMs', 'resetEligibleAtMs', 'closedAtMs'];
+      if (carriedTransitionFields.some((field) => (
+        priorCircuit[field] !== null && value[field] !== priorCircuit[field]
+      ))) {
+        add(issues, path, 'REPAIR_CIRCUIT_TRANSITION_HISTORY_CHAIN_INVALID', 'linked circuit evidence must preserve every previously observed transition timestamp');
+      }
+    }
+  }
+
+  const transitionTimes = [value.openedAtMs, value.halfOpenAtMs, value.resetEligibleAtMs, value.closedAtMs];
+  if (isSafeTime(value.observedAtMs) && isSafeTime(attempt.completedAtMs)
+    && value.observedAtMs < attempt.completedAtMs) {
+    add(issues, `${path}.observedAtMs`, 'CIRCUIT_EVIDENCE_BEFORE_ATTEMPT_COMPLETION', 'per-attempt circuit result evidence cannot precede attempt completion');
+  }
+  if (isSafeTime(value.observedAtMs)
+    && transitionTimes.some((time) => isSafeTime(time) && time > value.observedAtMs)) {
+    add(issues, path, 'CIRCUIT_TRANSITION_AFTER_OBSERVATION', 'circuit transitions cannot follow the owner observation');
+  }
+
+  if (value.state === 'UNKNOWN') {
+    if (value.unknownReason === null) {
+      add(issues, `${path}.unknownReason`, 'UNKNOWN_REASON_REQUIRED', 'unknown circuit state requires an exact blocker');
+    }
+    if (value.ownerFailureDomain !== null || value.observedAtMs !== null || value.evidenceRef !== null
+      || baselinePresent || transitionPresent) {
+      add(issues, path, 'UNKNOWN_EVIDENCE_CONFLICT', 'unknown circuit state cannot carry affirmative owner, baseline, or transition evidence');
+    }
+    return;
+  }
+
+  if (['OPEN', 'HALF_OPEN', 'CLOSED'].includes(value.state)
+    && (value.ownerFailureDomain === null || value.observedAtMs === null
+      || value.evidenceRef === null || value.unknownReason !== null)) {
+    add(issues, path, 'CIRCUIT_EVIDENCE_REQUIRED', 'known circuit state requires owner failure domain, observation time, evidence reference, and no unknown reason');
+  }
+  if (value.state !== 'CLOSED' && baselinePresent) {
+    add(issues, path, 'BASELINE_CLOSED_EVIDENCE_CONFLICT', 'baseline-never-open evidence is valid only for a CLOSED circuit');
+  }
+
+  if (value.state === 'OPEN') {
+    if (value.openedAtMs === null) {
+      add(issues, `${path}.openedAtMs`, 'OPEN_TRANSITION_EVIDENCE_REQUIRED', 'OPEN circuit requires its observed open transition time');
+    }
+    if (value.resetEligibleAtMs !== null || value.closedAtMs !== null
+      || independentCloseFields.some((entry) => entry !== null)) {
+      add(issues, path, 'OPEN_STATE_TRANSITION_CONFLICT', 'OPEN circuit cannot carry reset-eligible or close evidence');
+    }
+    if (isSafeTime(value.halfOpenAtMs) && isSafeTime(value.openedAtMs)
+      && value.halfOpenAtMs < value.openedAtMs) {
+      add(issues, `${path}.halfOpenAtMs`, 'OPEN_TRANSITION_HISTORY_INVALID', 'carried HALF_OPEN history cannot precede the OPEN transition');
+    }
+  }
+
+  if (value.state === 'HALF_OPEN') {
+    if (value.openedAtMs === null || value.halfOpenAtMs === null
+      || (isSafeTime(value.openedAtMs) && isSafeTime(value.halfOpenAtMs)
+        && value.halfOpenAtMs < value.openedAtMs)) {
+      add(issues, path, 'HALF_OPEN_SEQUENCE_INVALID', 'HALF_OPEN evidence requires an ordered prior OPEN transition');
+    }
+    if (value.closedAtMs !== null || independentCloseFields.some((entry) => entry !== null)) {
+      add(issues, path, 'HALF_OPEN_CLOSE_CONFLICT', 'HALF_OPEN circuit cannot carry close evidence');
+    }
+    if (isSafeTime(value.resetEligibleAtMs) && isSafeTime(value.halfOpenAtMs)
+      && value.resetEligibleAtMs < value.halfOpenAtMs) {
+      add(issues, `${path}.resetEligibleAtMs`, 'RESET_ELIGIBILITY_SEQUENCE_INVALID', 'reset eligibility cannot precede HALF_OPEN');
+    }
+  }
+
+  if (value.state === 'CLOSED') {
+    if (baselinePresent && transitionPresent) {
+      add(issues, path, 'BASELINE_AND_TRANSITION_PROOF_CONFLICT', 'CLOSED circuit uses either baseline-never-open proof or a full close transition, never both');
+    } else if (baselinePresent) {
+      if (!baselineComplete
+        || value.baselineNeverOpenedEvidenceRef === value.evidenceRef
+        || value.baselineEvidenceOwner === value.canonicalOwner
+        || value.baselineEvidenceFailureDomain === value.ownerFailureDomain) {
+        add(issues, path, 'INDEPENDENT_CIRCUIT_BASELINE_EVIDENCE_REQUIRED', 'never-open CLOSED baseline requires complete structurally independent reference, owner, and failure-domain evidence');
+      }
+    } else if (!transitionPresent) {
+      add(issues, path, 'CIRCUIT_CLOSED_PROOF_REQUIRED', 'CLOSED circuit requires either independent baseline-never-open proof or a full close transition');
+    } else {
+      if (!transitionComplete
+        || (isSafeTime(value.openedAtMs) && isSafeTime(value.halfOpenAtMs)
+          && value.halfOpenAtMs < value.openedAtMs)
+        || (isSafeTime(value.halfOpenAtMs) && isSafeTime(value.resetEligibleAtMs)
+          && value.resetEligibleAtMs < value.halfOpenAtMs)
+        || (isSafeTime(value.resetEligibleAtMs) && isSafeTime(value.closedAtMs)
+          && value.closedAtMs < value.resetEligibleAtMs)) {
+        add(issues, path, 'INDEPENDENT_CIRCUIT_CLOSE_EVIDENCE_REQUIRED', 'closing a previously open circuit requires fully ordered OPEN, HALF_OPEN, reset-eligible, CLOSED, and independent evidence');
+      }
+      if (value.independentCloseEvidenceRef === value.evidenceRef
+        || value.independentCloseOwner === value.canonicalOwner
+        || value.independentCloseFailureDomain === value.ownerFailureDomain) {
+        add(issues, `${path}.independentCloseEvidenceRef`, 'COMMON_MODE_REPAIR_CIRCUIT_CLOSE_FORBIDDEN', 'circuit-close evidence must differ by reference, owner, and failure domain from owner state evidence');
+      }
+      if (value.independentCloseOwner === attempt.producerOwner) {
+        add(issues, `${path}.independentCloseOwner`, 'COMMON_MODE_REPAIR_CIRCUIT_CLOSE_PRODUCER_OWNER_FORBIDDEN', 'circuit-close evidence owner must be independent from the repaired attempt producer owner');
+      }
+      if (value.independentCloseFailureDomain === attempt.producerFailureDomain) {
+        add(issues, `${path}.independentCloseFailureDomain`, 'COMMON_MODE_REPAIR_CIRCUIT_CLOSE_PRODUCER_FAILURE_DOMAIN_FORBIDDEN', 'circuit-close evidence failure domain must be independent from the repaired attempt producer failure domain');
+      }
+    }
+    if (baselinePresent && value.baselineEvidenceOwner === attempt.producerOwner) {
+      add(issues, `${path}.baselineEvidenceOwner`, 'COMMON_MODE_REPAIR_CIRCUIT_CLOSE_PRODUCER_OWNER_FORBIDDEN', 'CLOSED baseline evidence owner must be independent from the repaired attempt producer owner');
+    }
+    if (baselinePresent && value.baselineEvidenceFailureDomain === attempt.producerFailureDomain) {
+      add(issues, `${path}.baselineEvidenceFailureDomain`, 'COMMON_MODE_REPAIR_CIRCUIT_CLOSE_PRODUCER_FAILURE_DOMAIN_FORBIDDEN', 'CLOSED baseline evidence failure domain must be independent from the repaired attempt producer failure domain');
+    }
+  }
+}
+
 export function validateCancellationEvidence(value) {
   const issues = [];
   if (!exactKeys(issues, value, '$', STABILITY_SCHEMAS.cancellationEvidence.required)) return finish(issues);
@@ -268,7 +527,6 @@ export function validateCancellationEvidence(value) {
   if (value.lateResultLaw !== CANCELLATION_LATE_RESULT_LAW) add(issues, '$.lateResultLaw', 'LATE_RESULT_LAW_INVALID', 'cancellation evidence must use the exact retained-truth and stale-authority law identity');
   label(issues, value.parentRequestId, '$.parentRequestId', { nullable: true });
   enumValue(issues, value.operationClass, '$.operationClass', OPERATION_CLASSES);
-  if (value.operationClass !== 'IDEMPOTENT_COMMAND') add(issues, '$.operationClass', 'AUTOMATIC_LOCAL_OPERATION_CLASS_REQUIRED', 'automatic local repair is limited to the explicitly idempotent command operation class');
   enumValue(issues, value.requestKind, '$.requestKind', REQUEST_KINDS);
   if (value.clockDomain !== 'INJECTED_MONOTONIC_MS') add(issues, '$.clockDomain', 'INJECTED_CLOCK_DOMAIN_REQUIRED', 'packet fixtures use only an injected monotonic clock');
   safeTime(issues, value.startedAtMs, '$.startedAtMs');
@@ -468,6 +726,9 @@ export function validateRepairPolicy(value) {
     'promotionLaw', 'reserveCapacityLaw', 'circuitLaw',
   ]) label(issues, value[field], `$.${field}`);
   enumValue(issues, value.operationClass, '$.operationClass', OPERATION_CLASSES);
+  if (value.automaticRemediationAllowed === true && value.operationClass !== 'IDEMPOTENT_COMMAND') {
+    add(issues, '$.operationClass', 'AUTOMATIC_LOCAL_OPERATION_CLASS_REQUIRED', 'automatic local repair is limited to the explicitly idempotent command operation class');
+  }
   nonNegativeNumber(issues, value.minimumDiagnosticConfidence, '$.minimumDiagnosticConfidence');
   if (typeof value.minimumDiagnosticConfidence === 'number' && (value.minimumDiagnosticConfidence <= 0 || value.minimumDiagnosticConfidence > 1)) add(issues, '$.minimumDiagnosticConfidence', 'CONFIDENCE_THRESHOLD_OUT_OF_RANGE', 'minimum diagnostic confidence must be in (0,1]');
   for (const field of ['evaluationCadenceMs', 'observationHorizonMs', 'actuationDelayMs', 'cooldownMs']) positiveInteger(issues, value[field], `$.${field}`);
@@ -481,17 +742,32 @@ export function validateRepairPolicy(value) {
   if (value.dataAuthority !== 'SYNTHETIC_TEST') add(issues, '$.dataAuthority', 'DATA_AUTHORITY_INVALID', 'packet fixture evidence is SYNTHETIC_TEST only');
   if (value.effectAuthority !== 'NONE') add(issues, '$.effectAuthority', 'EFFECT_AUTHORITY_FORBIDDEN', 'IP-ASSURANCE has no effect authority');
 
-  if (exactKeys(issues, value.commandRegistration, '$.commandRegistration', ['state', 'registryRef', 'implementationRef'])) {
+  if (exactKeys(issues, value.commandRegistration, '$.commandRegistration', [
+    'state', 'registryRef', 'implementationRef',
+    'registeredFencingOwner', 'fencingOwnerEvidenceRef',
+  ])) {
     enumValue(issues, value.commandRegistration.state, '$.commandRegistration.state', ['OWNER_CONFIRMATION_REQUIRED', 'CONFIRMED_IN_SYNTHETIC_FIXTURE']);
     label(issues, value.commandRegistration.registryRef, '$.commandRegistration.registryRef', { nullable: true });
     label(issues, value.commandRegistration.implementationRef, '$.commandRegistration.implementationRef', { nullable: true });
+    label(issues, value.commandRegistration.registeredFencingOwner, '$.commandRegistration.registeredFencingOwner', { nullable: true });
+    label(issues, value.commandRegistration.fencingOwnerEvidenceRef, '$.commandRegistration.fencingOwnerEvidenceRef', { nullable: true });
     if (value.commandRegistration.state === 'OWNER_CONFIRMATION_REQUIRED'
-      && (value.commandRegistration.registryRef !== null || value.commandRegistration.implementationRef !== null)) {
+      && (value.commandRegistration.registryRef !== null
+        || value.commandRegistration.implementationRef !== null
+        || value.commandRegistration.registeredFencingOwner !== null
+        || value.commandRegistration.fencingOwnerEvidenceRef !== null)) {
       add(issues, '$.commandRegistration', 'UNCONFIRMED_MAPPING_CANNOT_CARRY_REFS', 'owner-confirmation-required mapping keeps production references null');
     }
     if (value.commandRegistration.state === 'CONFIRMED_IN_SYNTHETIC_FIXTURE'
-      && (value.commandRegistration.registryRef === null || value.commandRegistration.implementationRef === null)) {
-      add(issues, '$.commandRegistration', 'SYNTHETIC_MAPPING_REFS_REQUIRED', 'confirmed synthetic mapping requires fixture registry and implementation references');
+      && (value.commandRegistration.registryRef === null
+        || value.commandRegistration.implementationRef === null
+        || value.commandRegistration.registeredFencingOwner === null
+        || value.commandRegistration.fencingOwnerEvidenceRef === null)) {
+      add(issues, '$.commandRegistration', 'SYNTHETIC_MAPPING_REFS_REQUIRED', 'confirmed synthetic mapping requires fixture registry, implementation, and fencing-owner references');
+    }
+    if (value.commandRegistration.registeredFencingOwner !== null
+      && value.commandRegistration.registeredFencingOwner !== value.fencingOwner) {
+      add(issues, '$.commandRegistration.registeredFencingOwner', 'FENCING_OWNER_REGISTRATION_MISMATCH', 'top-level fencing owner must match the independently registered command owner binding');
     }
   }
 
@@ -722,10 +998,10 @@ export function validateRepairEvidence(value) {
         'beforeStateRef', 'actionRef', 'afterStateRef', 'result', 'nextRetryAtMs',
         'circuitState', 'materialEventOrLedgerRef', 'cockpitTraceRef',
         'actionDirection', 'controlErrorBefore', 'stepMagnitude', 'progressValue',
-        'producerPredicate', 'independentVerifier', 'producerOwner', 'verifierOwner',
+        'producerPredicate', 'independentVerifier', 'producerOwner', 'producerFailureDomain', 'verifierOwner',
         'producerEvidenceRef', 'verifierEvidenceRef', 'producerObservedAtMs',
         'verifierObservedAtMs', 'verifierIndependence', 'rollback', 'compensation',
-        'compensationEvidenceRef', 'rateUnits',
+        'compensationEvidenceRef', 'actuationGateEvidence', 'circuitEvidence', 'rateUnits',
         'resourceUnits', 'costUnits', 'fenceEpoch', 'completionApplied', 'afterRestart',
       ];
       if (!exactKeys(issues, attempt, path, keys)) return;
@@ -733,7 +1009,7 @@ export function validateRepairEvidence(value) {
         'attemptId', 'controllerId', 'cause', 'policyRevision', 'commandIdentity',
         'commandRegistryRef', 'failureFingerprint', 'beforeStateRef', 'actionRef',
         'afterStateRef', 'materialEventOrLedgerRef', 'cockpitTraceRef',
-        'producerOwner', 'verifierOwner', 'producerEvidenceRef', 'verifierEvidenceRef',
+        'producerOwner', 'producerFailureDomain', 'verifierOwner', 'producerEvidenceRef', 'verifierEvidenceRef',
       ]) label(issues, attempt[field], `${path}.${field}`);
       stringArray(issues, attempt.resourceIds, `${path}.resourceIds`, { nonEmpty: true });
       for (const field of ['localAttempt', 'globalAttempt', 'fenceEpoch']) positiveInteger(issues, attempt[field], `${path}.${field}`);
@@ -770,6 +1046,15 @@ export function validateRepairEvidence(value) {
       if (seenIds.has(attempt.attemptId)) add(issues, `${path}.attemptId`, 'DUPLICATE_ATTEMPT_ID', 'attempt IDs must be stable and unique across the campaign');
       seenIds.add(attempt.attemptId);
       const prior = index === 0 ? null : value.attempts[index - 1];
+      validateAttemptActuationGateEvidence(
+        issues,
+        attempt.actuationGateEvidence,
+        `${path}.actuationGateEvidence`,
+        attempt.startedAtMs,
+        value.readinessEvidence,
+        value.conflictGraphEvidence,
+      );
+      validateAttemptCircuitEvidence(issues, attempt.circuitEvidence, `${path}.circuitEvidence`, attempt, prior);
       if (attempt.localAttempt !== index + 1) add(issues, `${path}.localAttempt`, 'LOCAL_ATTEMPT_SEQUENCE_INVALID', 'local attempt ordinals must be strictly contiguous');
       if (isPlainRecord(prior)) {
         if (attempt.globalAttempt <= prior.globalAttempt) add(issues, `${path}.globalAttempt`, 'GLOBAL_ATTEMPT_SEQUENCE_INVALID', 'global attempt ordinal must strictly increase');
@@ -940,6 +1225,7 @@ export function validateResourceEvidenceBundle(value) {
     else {
       const consumerIds = new Set();
       let knownConsumerTotal = 0;
+      let consumerTotalOverflow = false;
       row.topConsumers.forEach((consumer, consumerIndex) => {
       const consumerPath = `${path}.topConsumers[${consumerIndex}]`;
       if (exactKeys(issues, consumer, consumerPath, ['consumerId', 'amount', 'unknownReason', 'evidenceRef'])) {
@@ -952,10 +1238,19 @@ export function validateResourceEvidenceBundle(value) {
         if (consumer.amount === null && consumer.unknownReason === null) add(issues, `${consumerPath}.unknownReason`, 'UNKNOWN_REASON_REQUIRED', 'unknown consumer amount requires an exact blocker');
         if (consumer.amount === null && consumer.evidenceRef !== null) add(issues, `${consumerPath}.evidenceRef`, 'UNKNOWN_EVIDENCE_CONFLICT', 'unknown amount cannot carry affirmative evidence');
         if (consumer.amount !== null && (consumer.unknownReason !== null || consumer.evidenceRef === null)) add(issues, consumerPath, 'TOP_CONSUMER_EVIDENCE_REQUIRED', 'known consumer amount requires an evidence reference and no unknown reason');
-        if (typeof consumer.amount === 'number' && Number.isFinite(consumer.amount)) knownConsumerTotal += consumer.amount;
+        if (typeof consumer.amount === 'number' && Number.isFinite(consumer.amount)
+          && consumer.amount >= 0 && consumer.amount <= Number.MAX_SAFE_INTEGER) {
+          if (knownConsumerTotal > Number.MAX_SAFE_INTEGER - consumer.amount) {
+            consumerTotalOverflow = true;
+          } else {
+            knownConsumerTotal += consumer.amount;
+          }
+        }
       }
     });
-      if (typeof row.burn?.value === 'number' && Number.isFinite(row.burn.value)
+      if (consumerTotalOverflow) {
+        add(issues, `${path}.topConsumers`, 'TOP_CONSUMER_TOTAL_OVERFLOW', 'derived known top-consumer attribution must remain within the bounded numeric domain');
+      } else if (typeof row.burn?.value === 'number' && Number.isFinite(row.burn.value)
         && knownConsumerTotal - row.burn.value > Number.EPSILON) add(issues, `${path}.topConsumers`, 'TOP_CONSUMER_ATTRIBUTION_EXCEEDS_BURN', 'known top-consumer attribution cannot exceed known current burn');
     }
     if (exactKeys(issues, row.throttling, `${path}.throttling`, ['observed', 'observedAtMs', 'maxAgeMs', 'evidenceRef', 'unknownReason', 'canonicalOwner'])) {
@@ -1048,8 +1343,12 @@ export function validateResourceEvidenceBundle(value) {
         || row.budget?.remaining === 0
         || (typeof row.forecast?.value === 'number' && typeof row.budget?.remaining === 'number'
           && row.forecast.value >= row.budget.remaining);
-      const consumerAttention = Array.isArray(row.topConsumers)
-        && (row.topConsumers.length === 0 || row.topConsumers.some((consumer) => consumer?.amount === null));
+      const boundedConsumers = Array.isArray(row.topConsumers)
+        && row.topConsumers.length <= STABILITY_STRUCTURE_LIMITS.topConsumersPerResource
+        && !hasSparseEntries(row.topConsumers);
+      const consumerAttention = !boundedConsumers
+        || row.topConsumers.length === 0
+        || row.topConsumers.some((consumer) => consumer?.amount === null);
       const protectionAttention = isPlainRecord(row.protections)
         && Object.values(row.protections).some((result) => result !== 'PASS');
       const staticAttention = row.truthLabel === 'UNAVAILABLE'

@@ -23,6 +23,46 @@ function sortedUnique(values) {
   return [...new Set(values)].sort();
 }
 
+function boundedSum(left, right) {
+  if (left === null || right === null) return null;
+  const sum = left + right;
+  return Number.isFinite(sum) && Math.abs(sum) <= Number.MAX_SAFE_INTEGER ? sum : null;
+}
+
+function freshAt(observedAtMs, maxAgeMs, asOfMs) {
+  return observedAtMs !== null
+    && observedAtMs <= asOfMs
+    && asOfMs - observedAtMs <= maxAgeMs;
+}
+
+function independentCircuitCloseProven(circuitEvidence, attempt) {
+  if (circuitEvidence?.state !== 'CLOSED') return false;
+  const baselineProven = circuitEvidence.baselineNeverOpenedEvidenceRef !== null
+    && circuitEvidence.baselineEvidenceOwner !== null
+    && circuitEvidence.baselineEvidenceFailureDomain !== null
+    && circuitEvidence.baselineNeverOpenedEvidenceRef !== circuitEvidence.evidenceRef
+    && circuitEvidence.baselineEvidenceOwner !== circuitEvidence.canonicalOwner
+    && circuitEvidence.baselineEvidenceFailureDomain !== circuitEvidence.ownerFailureDomain
+    && circuitEvidence.baselineEvidenceOwner !== attempt?.producerOwner
+    && circuitEvidence.baselineEvidenceFailureDomain !== attempt?.producerFailureDomain;
+  const transitionProven = circuitEvidence.openedAtMs !== null
+    && circuitEvidence.halfOpenAtMs !== null
+    && circuitEvidence.resetEligibleAtMs !== null
+    && circuitEvidence.closedAtMs !== null
+    && circuitEvidence.independentCloseEvidenceRef !== null
+    && circuitEvidence.independentCloseOwner !== null
+    && circuitEvidence.independentCloseFailureDomain !== null
+    && circuitEvidence.openedAtMs <= circuitEvidence.halfOpenAtMs
+    && circuitEvidence.halfOpenAtMs <= circuitEvidence.resetEligibleAtMs
+    && circuitEvidence.resetEligibleAtMs <= circuitEvidence.closedAtMs
+    && circuitEvidence.independentCloseEvidenceRef !== circuitEvidence.evidenceRef
+    && circuitEvidence.independentCloseOwner !== circuitEvidence.canonicalOwner
+    && circuitEvidence.independentCloseFailureDomain !== circuitEvidence.ownerFailureDomain
+    && circuitEvidence.independentCloseOwner !== attempt?.producerOwner
+    && circuitEvidence.independentCloseFailureDomain !== attempt?.producerFailureDomain;
+  return baselineProven !== transitionProven && circuitEvidence.mayCloseOrReset === false;
+}
+
 function invalidAssessment(kind, nowMs, issues) {
   return deepFreeze({
     schemaVersion: STABILITY_SCHEMA_VERSION,
@@ -234,7 +274,8 @@ export function evaluateCancellationEvidence(record, nowMs) {
 }
 
 function progressDelta(direction, previous, current) {
-  return direction === 'INCREASE_IS_PROGRESS' ? current - previous : previous - current;
+  const delta = direction === 'INCREASE_IS_PROGRESS' ? current - previous : previous - current;
+  return Number.isFinite(delta) && Math.abs(delta) <= Number.MAX_SAFE_INTEGER ? delta : null;
 }
 
 function containmentSufficient(containment, durableEvidenceRequired, expectedEscalationOwner) {
@@ -275,8 +316,11 @@ function oscillationEvidence(policy, attempts) {
       ? progressDelta(policy.progressLaw.direction, groupProgress[0], groupProgress.at(-1))
       : 0;
     alternations = Math.max(alternations, groupAlternations);
-    netProgress = netProgress === null ? groupNetProgress : Math.min(netProgress, groupNetProgress);
-    if (groupAlternations >= policy.oscillationLaw.minimumAlternations
+    if (groupNetProgress !== null) {
+      netProgress = netProgress === null ? groupNetProgress : Math.min(netProgress, groupNetProgress);
+    }
+    if (groupNetProgress !== null
+      && groupAlternations >= policy.oscillationLaw.minimumAlternations
       && groupNetProgress < policy.oscillationLaw.minimumNetProgress) detected = true;
   }
   const conflictingControllersPresent = new Set(attempts.map((attempt) => attempt.controllerId)).size > 1
@@ -300,6 +344,11 @@ function progressEvidenceAt(policy, attempts, asOfMs) {
     }
     if (previousProgress !== null) {
       const delta = progressDelta(policy.progressLaw.direction, previousProgress, attempt.progressValue);
+      if (delta === null) {
+        missingProgress = true;
+        previousProgress = attempt.progressValue;
+        continue;
+      }
       if (delta >= policy.progressLaw.minimumDelta) trailingNoProgress = 0;
       else {
         trailingNoProgress += 1;
@@ -414,11 +463,27 @@ export function evaluateRepairLoop(policy, evidence, nowMs) {
   }
 
   const attempts = evidence.attempts;
+  const policyProducerSignal = policy.observedSignals
+    .find((signal) => signal.signalId === policy.successPredicate.producerSignalId);
+  const policyVerifierSignal = policy.observedSignals
+    .find((signal) => signal.signalId === policy.successPredicate.verifierSignalId);
   let retryExecutionTimeMs = 0;
   let rateUnits = 0;
   let resourceUnits = 0;
   let costUnits = 0;
+  const actuationAvailableAtMs = boundedSum(evidence.campaignStartedAtMs, policy.actuationDelayMs);
+  const convergenceDeadlineAtMs = boundedSum(evidence.campaignStartedAtMs, policy.budgets.convergenceWindowMs);
+  if (actuationAvailableAtMs === null) violations.push('ACTUATION_DELAY_ARITHMETIC_OVERFLOW');
+  if (convergenceDeadlineAtMs === null) violations.push('CONVERGENCE_DEADLINE_ARITHMETIC_OVERFLOW');
   const currentProgress = progressEvidenceAt(policy, attempts, nowMs);
+  for (let index = 1; index < attempts.length; index += 1) {
+    const previous = attempts[index - 1].progressValue;
+    const current = attempts[index].progressValue;
+    if (previous !== null && current !== null
+      && progressDelta(policy.progressLaw.direction, previous, current) === null) {
+      violations.push('PROGRESS_ARITHMETIC_OVERFLOW');
+    }
+  }
   const {
     windowStartMs: noProgressWindowStartMs,
     trailingNoProgress,
@@ -427,14 +492,30 @@ export function evaluateRepairLoop(policy, evidence, nowMs) {
   } = currentProgress;
 
   attempts.forEach((attempt, index) => {
-    retryExecutionTimeMs += attempt.completedAtMs - attempt.startedAtMs;
-    rateUnits += attempt.rateUnits;
-    resourceUnits += attempt.resourceUnits;
-    costUnits += attempt.costUnits;
+    const executionTimeMs = attempt.completedAtMs - attempt.startedAtMs;
+    const nextRetryExecutionTimeMs = boundedSum(retryExecutionTimeMs, executionTimeMs);
+    const nextRateUnits = boundedSum(rateUnits, attempt.rateUnits);
+    const nextResourceUnits = boundedSum(resourceUnits, attempt.resourceUnits);
+    const nextCostUnits = boundedSum(costUnits, attempt.costUnits);
+    if (nextRetryExecutionTimeMs === null && retryExecutionTimeMs !== null) violations.push('RETRY_EXECUTION_TIME_ARITHMETIC_OVERFLOW');
+    if (nextRateUnits === null && rateUnits !== null) violations.push('RATE_BUDGET_ARITHMETIC_OVERFLOW');
+    if (nextResourceUnits === null && resourceUnits !== null) violations.push('RESOURCE_BUDGET_ARITHMETIC_OVERFLOW');
+    if (nextCostUnits === null && costUnits !== null) violations.push('COST_BUDGET_ARITHMETIC_OVERFLOW');
+    retryExecutionTimeMs = nextRetryExecutionTimeMs;
+    rateUnits = nextRateUnits;
+    resourceUnits = nextResourceUnits;
+    costUnits = nextCostUnits;
     if (attempt.commandIdentity !== policy.commandIdentity) violations.push('UNREGISTERED_COMMAND_IDENTITY');
     if (attempt.commandRegistryRef !== policy.commandRegistration.registryRef) violations.push('COMMAND_REGISTRY_REF_MISMATCH');
     if (attempt.policyRevision !== policy.policyRevision) violations.push('ATTEMPT_POLICY_REVISION_MISMATCH');
     if (attempt.failureFingerprint !== evidence.failureFingerprint) violations.push('ATTEMPT_FAILURE_FINGERPRINT_MISMATCH');
+    if (attempt.producerOwner !== policyProducerSignal.sourceOwner
+      || attempt.producerFailureDomain !== policyProducerSignal.failureDomain) {
+      violations.push('ATTEMPT_PRODUCER_EVIDENCE_BINDING_MISMATCH');
+    }
+    if (attempt.verifierOwner !== policyVerifierSignal.sourceOwner) {
+      violations.push('ATTEMPT_VERIFIER_EVIDENCE_BINDING_MISMATCH');
+    }
     if (attempt.diagnosticConfidence < policy.minimumDiagnosticConfidence) unknowns.push('ATTEMPT_DIAGNOSTIC_CONFIDENCE_BELOW_POLICY');
     if (attempt.startedAtMs > nowMs || attempt.completedAtMs > nowMs
       || attempt.producerObservedAtMs > nowMs || attempt.verifierObservedAtMs > nowMs) {
@@ -450,9 +531,71 @@ export function evaluateRepairLoop(policy, evidence, nowMs) {
       if (attempt.completedAtMs >= evidence.lease.expiresAtMs) violations.push('COMPLETION_APPLIED_AT_OR_AFTER_LEASE_EXPIRY');
       if (attempt.resourceIds.join('|') !== evidence.lease.resourceIds.join('|')) violations.push('ATTEMPT_RESOURCE_SET_NOT_LEASED');
     }
-    if (attempt.startedAtMs < evidence.campaignStartedAtMs + policy.actuationDelayMs) violations.push('ACTUATION_BEFORE_DELAY');
-    if (attempt.startedAtMs >= evidence.campaignStartedAtMs + policy.budgets.convergenceWindowMs) violations.push('ACTUATION_AT_OR_AFTER_CONVERGENCE_DEADLINE');
-    if (attempt.nextRetryAtMs !== null && attempt.nextRetryAtMs >= evidence.campaignStartedAtMs + policy.budgets.convergenceWindowMs) violations.push('RETRY_AT_OR_AFTER_CONVERGENCE_DEADLINE');
+    if (actuationAvailableAtMs !== null && attempt.startedAtMs < actuationAvailableAtMs) violations.push('ACTUATION_BEFORE_DELAY');
+    if (convergenceDeadlineAtMs !== null && attempt.startedAtMs >= convergenceDeadlineAtMs) violations.push('ACTUATION_AT_OR_AFTER_CONVERGENCE_DEADLINE');
+    if (convergenceDeadlineAtMs !== null && attempt.nextRetryAtMs !== null && attempt.nextRetryAtMs >= convergenceDeadlineAtMs) violations.push('RETRY_AT_OR_AFTER_CONVERGENCE_DEADLINE');
+
+    const gate = attempt.actuationGateEvidence;
+    if (gate.readinessEvidenceRef !== evidence.readinessEvidence.evidenceRef
+      || gate.readinessObservedAtMs !== evidence.readinessEvidence.observedAtMs
+      || gate.readinessMaxAgeMs !== evidence.readinessEvidence.maxAgeMs) {
+      violations.push('ATTEMPT_READINESS_EVIDENCE_BINDING_MISMATCH');
+    }
+    if (gate.readinessObservedAtMs > attempt.startedAtMs) violations.push('ATTEMPT_READINESS_EVIDENCE_FROM_FUTURE');
+    else if (attempt.startedAtMs - gate.readinessObservedAtMs > gate.readinessMaxAgeMs) violations.push('ATTEMPT_READINESS_EVIDENCE_STALE');
+    if (gate.readinessObservedAtMs < evidence.campaignStartedAtMs) violations.push('ATTEMPT_READINESS_EVIDENCE_PRECEDES_CAMPAIGN');
+    if (gate.conflictGraphObservedAtMs > attempt.startedAtMs) violations.push('ATTEMPT_CONFLICT_GRAPH_EVIDENCE_FROM_FUTURE');
+    else if (attempt.startedAtMs - gate.conflictGraphObservedAtMs > gate.conflictGraphMaxAgeMs) violations.push('ATTEMPT_CONFLICT_GRAPH_EVIDENCE_STALE');
+    if (gate.conflictGraphObservedAtMs < evidence.campaignStartedAtMs) violations.push('ATTEMPT_CONFLICT_GRAPH_EVIDENCE_PRECEDES_CAMPAIGN');
+    if (gate.conflictGraphEvidenceRef !== evidence.conflictGraphEvidence.evidenceRef
+      || gate.conflictGraphObservedAtMs !== evidence.conflictGraphEvidence.observedAtMs
+      || gate.conflictGraphMaxAgeMs !== evidence.conflictGraphEvidence.maxAgeMs) {
+      violations.push('ATTEMPT_CONFLICT_GRAPH_EVIDENCE_BINDING_MISMATCH');
+    }
+
+    const circuit = attempt.circuitEvidence;
+    if (circuit.state !== attempt.circuitState) violations.push('ATTEMPT_CIRCUIT_STATE_EVIDENCE_MISMATCH');
+    if (circuit.observedAtMs !== null) {
+      if (circuit.observedAtMs > nowMs) violations.push('REPAIR_CIRCUIT_EVIDENCE_FROM_FUTURE');
+      if (circuit.observedAtMs < attempt.completedAtMs) violations.push('REPAIR_CIRCUIT_EVIDENCE_PRECEDES_COMPLETION');
+    }
+    if (index > 0) {
+      const priorCircuit = attempts[index - 1].circuitEvidence;
+      if (circuit.state !== 'UNKNOWN' && circuit.priorEvidenceRef !== priorCircuit.evidenceRef) {
+        violations.push('REPAIR_CIRCUIT_PRIOR_EVIDENCE_CHAIN_INVALID');
+      }
+      if (circuit.priorEvidenceRef === priorCircuit.evidenceRef) {
+        if (circuit.canonicalOwner !== priorCircuit.canonicalOwner) {
+          violations.push('REPAIR_CIRCUIT_OWNER_CHAIN_MISMATCH');
+        }
+        if (circuit.ownerFailureDomain !== priorCircuit.ownerFailureDomain) {
+          violations.push('REPAIR_CIRCUIT_OWNER_FAILURE_DOMAIN_CHAIN_MISMATCH');
+        }
+        if (['openedAtMs', 'halfOpenAtMs', 'resetEligibleAtMs', 'closedAtMs']
+          .some((field) => priorCircuit[field] !== null && circuit[field] !== priorCircuit[field])) {
+          violations.push('REPAIR_CIRCUIT_TRANSITION_HISTORY_CHAIN_INVALID');
+        }
+      }
+      if (priorCircuit.state === 'UNKNOWN') violations.push('NEXT_ATTEMPT_WITH_UNKNOWN_CIRCUIT');
+      else {
+        if (priorCircuit.observedAtMs > attempt.startedAtMs) violations.push('PRIOR_REPAIR_CIRCUIT_EVIDENCE_FROM_FUTURE');
+        else if (!freshAt(priorCircuit.observedAtMs, priorCircuit.maxAgeMs, attempt.startedAtMs)) violations.push('PRIOR_REPAIR_CIRCUIT_EVIDENCE_STALE');
+        if (priorCircuit.state === 'OPEN') violations.push('NEXT_ATTEMPT_WHILE_CIRCUIT_OPEN');
+      }
+    }
+    if (circuit.state === 'CLOSED') {
+      const usesBaseline = circuit.baselineNeverOpenedEvidenceRef !== null;
+      const closeOwner = usesBaseline ? circuit.baselineEvidenceOwner : circuit.independentCloseOwner;
+      const closeFailureDomain = usesBaseline
+        ? circuit.baselineEvidenceFailureDomain
+        : circuit.independentCloseFailureDomain;
+      if (closeOwner === attempt.producerOwner) {
+        violations.push('COMMON_MODE_REPAIR_CIRCUIT_CLOSE_PRODUCER_OWNER_FORBIDDEN');
+      }
+      if (closeFailureDomain === attempt.producerFailureDomain) {
+        violations.push('COMMON_MODE_REPAIR_CIRCUIT_CLOSE_PRODUCER_FAILURE_DOMAIN_FORBIDDEN');
+      }
+    }
     if (attempt.actionDirection !== 'HOLD'
       && attempt.controlErrorBefore >= policy.deadband.lowerInclusive
       && attempt.controlErrorBefore <= policy.deadband.upperInclusive) {
@@ -567,21 +710,38 @@ export function evaluateRepairLoop(policy, evidence, nowMs) {
         attemptsBeforeRestart.at(-1).producerObservedAtMs,
         attemptsBeforeRestart.at(-1).verifierObservedAtMs,
       ) - attemptsBeforeRestart[0].startedAtMs;
-    const rateBeforeRestart = attemptsBeforeRestart.reduce((total, attempt) => total + attempt.rateUnits, 0);
-    const resourceBeforeRestart = attemptsBeforeRestart.reduce((total, attempt) => total + attempt.resourceUnits, 0);
-    const costBeforeRestart = attemptsBeforeRestart.reduce((total, attempt) => total + attempt.costUnits, 0);
+    const boundedAttemptTotal = (field, overflowCode) => {
+      let total = 0;
+      for (const attempt of attemptsBeforeRestart) {
+        const next = boundedSum(total, attempt[field]);
+        if (next === null) {
+          violations.push(overflowCode);
+          return null;
+        }
+        total = next;
+      }
+      return total;
+    };
+    const rateBeforeRestart = boundedAttemptTotal('rateUnits', 'RESTART_RATE_ARITHMETIC_OVERFLOW');
+    const resourceBeforeRestart = boundedAttemptTotal('resourceUnits', 'RESTART_RESOURCE_ARITHMETIC_OVERFLOW');
+    const costBeforeRestart = boundedAttemptTotal('costUnits', 'RESTART_COST_ARITHMETIC_OVERFLOW');
     const priorAttempt = attemptsBeforeRestart.at(-1) ?? null;
+    const restartCooldownUntilMs = priorAttempt === null
+      ? evidence.campaignStartedAtMs
+      : boundedSum(
+        Math.max(priorAttempt.completedAtMs, priorAttempt.producerObservedAtMs, priorAttempt.verifierObservedAtMs),
+        policy.cooldownMs,
+      );
+    if (priorAttempt !== null && restartCooldownUntilMs === null) violations.push('RESTART_COOLDOWN_ARITHMETIC_OVERFLOW');
     const expectedState = {
       localAttempts: attemptsBeforeRestart.length,
       globalAttempts: priorAttempt?.globalAttempt ?? 0,
       remainingRetryTimeMs: Math.max(0, policy.budgets.maximumRetryTimeMs - retryWallTimeBeforeRestart),
-      remainingRateUnits: Math.max(0, policy.budgets.rateUnits - rateBeforeRestart),
-      remainingResourceUnits: Math.max(0, policy.budgets.resourceUnits - resourceBeforeRestart),
-      remainingCostUnits: Math.max(0, policy.budgets.costUnits - costBeforeRestart),
-      cooldownUntilMs: priorAttempt === null
-        ? evidence.campaignStartedAtMs
-        : Math.max(priorAttempt.completedAtMs, priorAttempt.producerObservedAtMs, priorAttempt.verifierObservedAtMs) + policy.cooldownMs,
-      convergenceDeadlineAtMs: evidence.campaignStartedAtMs + policy.budgets.convergenceWindowMs,
+      remainingRateUnits: rateBeforeRestart === null ? null : Math.max(0, policy.budgets.rateUnits - rateBeforeRestart),
+      remainingResourceUnits: resourceBeforeRestart === null ? null : Math.max(0, policy.budgets.resourceUnits - resourceBeforeRestart),
+      remainingCostUnits: costBeforeRestart === null ? null : Math.max(0, policy.budgets.costUnits - costBeforeRestart),
+      cooldownUntilMs: restartCooldownUntilMs,
+      convergenceDeadlineAtMs,
       leaseId: evidence.lease?.leaseId ?? 'LEASE_UNAVAILABLE',
       fenceEpoch: evidence.currentFenceEpoch,
       lateResultLaw: policy.lateResultLaw,
@@ -608,13 +768,24 @@ export function evaluateRepairLoop(policy, evidence, nowMs) {
   }
 
   const latest = attempts.at(-1) ?? null;
+  const latestCircuit = latest?.circuitEvidence ?? null;
+  const latestCircuitFresh = latestCircuit?.observedAtMs === null || latestCircuit === null
+    ? false
+    : freshAt(latestCircuit.observedAtMs, latestCircuit.maxAgeMs, nowMs);
+  const latestIndependentCloseProven = independentCircuitCloseProven(latestCircuit, latest);
   const terminalContainmentDeclared = evidence.containment.lifecycle !== null
     || evidence.containment.durableUnresolvedEvidenceRef !== null;
   const repairFailureBlocksPromotion = attempts.some((attempt) => attempt.rollback === 'FAILED'
     || ['FAILED', 'UNKNOWN'].includes(attempt.compensation));
-  if (latest?.circuitState === 'OPEN') triggerCodes.push('REPAIR_CIRCUIT_OPEN');
-  if (['HALF_OPEN', 'UNKNOWN'].includes(latest?.circuitState)) {
-    unknowns.push(`REPAIR_CIRCUIT_${latest.circuitState}`);
+  if (latestCircuit?.state === 'OPEN') triggerCodes.push('REPAIR_CIRCUIT_OPEN');
+  if (latestCircuit !== null && latestCircuit.state !== 'UNKNOWN' && latestCircuit.observedAtMs > nowMs) {
+    violations.push('REPAIR_CIRCUIT_EVIDENCE_FROM_FUTURE');
+  } else if (latestCircuit !== null && latestCircuit.state !== 'UNKNOWN' && !latestCircuitFresh) {
+    unknowns.push('REPAIR_CIRCUIT_EVIDENCE_STALE');
+    if (evidence.nextActuationRequested) violations.push('ACTUATION_REQUESTED_WITH_STALE_REPAIR_CIRCUIT');
+  }
+  if (['HALF_OPEN', 'UNKNOWN'].includes(latestCircuit?.state)) {
+    unknowns.push(`REPAIR_CIRCUIT_${latestCircuit.state}`);
     if (evidence.nextActuationRequested) violations.push('ACTUATION_REQUESTED_WITH_UNPROVED_CIRCUIT_STATE');
   }
   const postcondition = evidence.postconditionWindow;
@@ -637,8 +808,8 @@ export function evaluateRepairLoop(policy, evidence, nowMs) {
     && !postconditionChronologyValid) {
     violations.push('POSTCONDITION_WINDOW_PRECEDES_LATEST_REPAIR_EVIDENCE');
   }
-  const policyProducer = policy.observedSignals.find((signal) => signal.signalId === policy.successPredicate.producerSignalId);
-  const policyVerifier = policy.observedSignals.find((signal) => signal.signalId === policy.successPredicate.verifierSignalId);
+  const policyProducer = policyProducerSignal;
+  const policyVerifier = policyVerifierSignal;
   const evidenceIndependent = latest !== null
     && latest.verifierIndependence === 'PASS'
     && postcondition.commonModeIndependence === 'PASS'
@@ -656,7 +827,10 @@ export function evaluateRepairLoop(policy, evidence, nowMs) {
     && quietPeriodObservedMs >= policy.hysteresis.minimumDwellMs;
   const successWithinConvergenceWindow = postcondition.lastIndependentPassAtMs !== null
     && postcondition.lastIndependentPassAtMs <= evidence.campaignStartedAtMs + policy.budgets.convergenceWindowMs;
-  const withinHardBudgets = attempts.length <= policy.budgets.maximumLocalAttempts
+  const budgetArithmeticKnown = [retryExecutionTimeMs, rateUnits, resourceUnits, costUnits]
+    .every((value) => value !== null);
+  const withinHardBudgets = budgetArithmeticKnown
+    && attempts.length <= policy.budgets.maximumLocalAttempts
     && attempts.every((attempt) => attempt.globalAttempt <= policy.budgets.maximumGlobalAttempts)
     && retryTimeMs <= policy.budgets.maximumRetryTimeMs
     && rateUnits <= policy.budgets.rateUnits
@@ -671,7 +845,9 @@ export function evaluateRepairLoop(policy, evidence, nowMs) {
     && hysteresisSatisfied
     && quietPeriodObservedMs >= policy.successPredicate.quietPeriodMs
     && successWithinConvergenceWindow
-    && latest.circuitState === 'CLOSED'
+    && latestCircuit.state === 'CLOSED'
+    && latestCircuitFresh
+    && latestIndependentCloseProven
     && latest.result === 'SUCCEEDED'
     && latest.completionApplied === true
     && latest.fenceEpoch === evidence.currentFenceEpoch
@@ -754,7 +930,7 @@ export function evaluateRepairLoop(policy, evidence, nowMs) {
   const terminationWithinDeclaredBudget = assumptionFailures.length > 0
     ? null
     : terminationTriggered || terminalContainmentDeclared
-      ? contained && budgetOverrunCodes.length === 0
+      ? contained && budgetOverrunCodes.length === 0 && budgetArithmeticKnown
       : independentSuccess
         ? true
         : null;
@@ -791,6 +967,28 @@ export function evaluateRepairLoop(policy, evidence, nowMs) {
       costUnits,
       observedConcurrentActuations: evidence.observedConcurrentActuations,
     }),
+    actuationGateBinding: deepFreeze({
+      readinessEvidenceRef: evidence.readinessEvidence.evidenceRef,
+      readinessObservedAtMs: evidence.readinessEvidence.observedAtMs,
+      readinessMaxAgeMs: evidence.readinessEvidence.maxAgeMs,
+      conflictGraphEvidenceRef: evidence.conflictGraphEvidence.evidenceRef,
+      conflictGraphObservedAtMs: evidence.conflictGraphEvidence.observedAtMs,
+      conflictGraphMaxAgeMs: evidence.conflictGraphEvidence.maxAgeMs,
+    }),
+    attemptEvidence: deepFreeze(attempts.map((attempt) => ({
+      attemptId: attempt.attemptId,
+      startedAtMs: attempt.startedAtMs,
+      completedAtMs: attempt.completedAtMs,
+      producerOwner: attempt.producerOwner,
+      producerFailureDomain: attempt.producerFailureDomain,
+      actuationGateEvidence: { ...attempt.actuationGateEvidence },
+      circuitEvidence: { ...attempt.circuitEvidence },
+    }))),
+    circuitPosture: deepFreeze({
+      state: latestCircuit?.state ?? 'UNKNOWN',
+      evidenceFresh: latestCircuit === null ? null : latestCircuitFresh,
+      independentCloseProven: latestCircuit === null ? null : latestIndependentCloseProven,
+    }),
     containmentEvidenceSufficient: contained,
     containmentLifecycle: evidence.containment.lifecycle,
     durableUnresolvedEvidenceRef: evidence.containment.durableUnresolvedEvidenceRef,
@@ -814,11 +1012,6 @@ export function evaluateRepairLoop(policy, evidence, nowMs) {
   });
 }
 
-function numericTruthUnknown(row) {
-  return row.burn.value === null || row.budget.limit === null || row.budget.remaining === null
-    || row.forecast.value === null || row.forecast.horizonMs === null;
-}
-
 export function evaluateResourceEvidence(bundle, nowMs) {
   if (!validNow(nowMs)) throw new TypeError('nowMs must be a non-negative safe integer from an injected clock');
   const issues = validateResourceEvidenceBundle(bundle);
@@ -834,18 +1027,27 @@ export function evaluateResourceEvidence(bundle, nowMs) {
       results.push('UNKNOWN');
       reasons.push('MEASUREMENT_STALE');
     }
-    if (numericTruthUnknown(row)) {
+    const burnBudgetUnknown = row.burn.value === null
+      || row.budget.limit === null
+      || row.budget.remaining === null;
+    const forecastUnknown = row.forecast.value === null
+      || row.forecast.horizonMs === null
+      || row.budget.remaining === null;
+    if (burnBudgetUnknown || forecastUnknown) {
       results.push('UNKNOWN');
       reasons.push('BURN_BUDGET_OR_FORECAST_UNKNOWN');
-    } else {
+    }
+    if (!burnBudgetUnknown) {
       if (row.burn.value >= row.budget.limit || row.budget.remaining === 0) {
         results.push('FAIL');
         reasons.push('RESOURCE_BUDGET_EXHAUSTED');
       } else results.push('PASS');
+    }
+    if (!forecastUnknown) {
       if (row.forecast.value >= row.budget.remaining) {
         results.push('FAIL');
         reasons.push('PROJECTED_RESOURCE_EXHAUSTION');
-      }
+      } else results.push('PASS');
     }
     if (row.topConsumers.length === 0 || row.topConsumers.some((consumer) => consumer.amount === null)) {
       results.push('UNKNOWN');
@@ -911,6 +1113,10 @@ export function evaluateResourceEvidence(bundle, nowMs) {
     return deepFreeze({
       rowId: row.rowId,
       resourceFamily: row.resourceFamily,
+      canonicalOwner: row.canonicalOwner,
+      observedAtMs: row.observedAtMs,
+      maxAgeMs: row.maxAgeMs,
+      provenance: row.provenance,
       assuranceResult: precedence(results),
       reasonCodes: sortedUnique(reasons),
       currentBurn: row.burn.value,

@@ -78,6 +78,8 @@ test('automatic repair row points to the strict fixture contract while productio
     operationPolicyId: null,
     operationClass: null,
     registeredCommandIdentity: null,
+    registeredFencingOwner: null,
+    fencingOwnerEvidenceRef: null,
     canonicalOwner: null,
     implementationPath: null,
     confirmationStatus: 'OWNER_CONFIRMATION_REQUIRED',
@@ -96,6 +98,9 @@ test('resource drafts cover exactly eight families with read-only circuit placeh
     assert.equal(row.circuitEvidenceDraft.state, 'UNKNOWN');
     assert.equal(row.circuitEvidenceDraft.canonicalOwner, null);
     assert.equal(row.circuitEvidenceDraft.observedAtMs, null);
+    assert.equal(row.circuitEvidenceDraft.baselineNeverOpenedEvidenceRef, null);
+    assert.equal(row.circuitEvidenceDraft.baselineEvidenceOwner, null);
+    assert.equal(row.circuitEvidenceDraft.baselineEvidenceFailureDomain, null);
     assert.equal(row.circuitEvidenceDraft.independentCloseEvidenceRef, null);
     assert.equal(row.circuitEvidenceDraft.independentCloseOwner, null);
     assert.equal(row.circuitEvidenceDraft.independentCloseFailureDomain, null);

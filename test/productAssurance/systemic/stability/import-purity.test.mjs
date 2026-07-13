@@ -184,8 +184,27 @@ test('packet-local modules import and evaluate without ambient work', async () =
     const cancellation = evaluators.evaluateCancellationEvidence(fixtures.makeCancellationEvidence(), fixtures.FIXTURE_NOW_MS);
     const repair = evaluators.evaluateRepairLoop(fixtures.makeRepairPolicy(), fixtures.makeRepairEvidence(), fixtures.FIXTURE_NOW_MS);
     const resources = evaluators.evaluateResourceEvidence(fixtures.makeResourceEvidenceBundle(), fixtures.FIXTURE_NOW_MS);
-    viewModel.projectStabilityViewModel({ cancellationAssessments: [cancellation], repairAssessments: [repair], resourceAssessment: resources }, fixtures.FIXTURE_NOW_MS);
+    const projected = viewModel.projectStabilityViewModel({ cancellationAssessments: [cancellation], repairAssessments: [repair], resourceAssessment: resources }, fixtures.FIXTURE_NOW_MS);
     assert.equal(contracts.STABILITY_SCHEMA_VERSION, 'ip-assurance.systemic.stability.v1');
+    for (const [label, assessment] of [['cancellation', cancellation], ['repair', repair], ['resources', resources]]) {
+      assert.equal(assessment.assuranceResult, 'PASS', `${label} canonical evaluation must pass`);
+      assert.deepEqual(assessment.contractIssues, [], `${label} canonical evaluation must have no contract issues`);
+      assert.ok(!assessment.reasonCodes?.includes('CONTRACT_INVALID'), `${label} canonical evaluation must not be contract-invalid`);
+      assert.equal(assessment.dataAuthority, 'SYNTHETIC_TEST');
+      assert.equal(assessment.effectAuthority, 'NONE');
+    }
+    assert.equal(repair.automaticActionIssued, false);
+    assert.equal(resources.mayThrottle, false);
+    assert.equal(resources.mayExecute, false);
+    assert.equal(resources.mayCloseOrResetCircuit, false);
+    assert.equal(resources.controllerOwner, null);
+    assert.equal(resources.throttleDecision, null);
+    assert.deepEqual(resources.commands, []);
+    assert.equal(projected.overallAssuranceResult, 'PASS');
+    assert.equal(projected.effectAuthority, 'NONE');
+    assert.deepEqual(projected.controls, []);
+    assert.equal(projected.throttleDecision, null);
+    assert.deepEqual(projected.runtimeClaims, []);
     assert.deepEqual(calls, {
       date: 0,
       dateNow: 0,

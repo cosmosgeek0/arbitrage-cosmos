@@ -43,7 +43,8 @@ These identifiers prevent prose substitutions from silently weakening retained t
 stale-completion rejection, or restart continuity.
 
 These rows intentionally do not preselect a production operation class or command identity.
-The canonical owner must bind those details, reconciliation lookup, retry/circuit budgets,
+The canonical owner must bind those details, the registered fencing owner and its independent
+registry evidence, reconciliation lookup, retry/circuit budgets,
 observability evidence, and runtime paths before insertion. Until then, the rows remain
 `NOT_CONFIGURED` and cannot be treated as runtime policy.
 

@@ -8,6 +8,44 @@ import {
 } from '../../../../fixtures/productAssurance/systemic/stability/fixtures.mjs';
 import { evaluateResourceEvidence } from '../../../../fixtures/productAssurance/systemic/stability/reference-evaluator.mjs';
 
+function clearClosedBaseline(circuit) {
+  Object.assign(circuit, {
+    baselineNeverOpenedEvidenceRef: null,
+    baselineEvidenceOwner: null,
+    baselineEvidenceFailureDomain: null,
+  });
+}
+
+function moveCircuitToOpen(circuit, openedAtMs = FIXTURE_NOW_MS - 1_000) {
+  clearClosedBaseline(circuit);
+  Object.assign(circuit, {
+    state: 'OPEN',
+    unknownReason: null,
+    openedAtMs,
+    halfOpenAtMs: null,
+    resetEligibleAtMs: null,
+    closedAtMs: null,
+    independentCloseEvidenceRef: null,
+    independentCloseOwner: null,
+    independentCloseFailureDomain: null,
+  });
+}
+
+function moveCircuitToHalfOpen(circuit) {
+  clearClosedBaseline(circuit);
+  Object.assign(circuit, {
+    state: 'HALF_OPEN',
+    unknownReason: null,
+    openedAtMs: FIXTURE_NOW_MS - 2_000,
+    halfOpenAtMs: FIXTURE_NOW_MS - 1_000,
+    resetEligibleAtMs: null,
+    closedAtMs: null,
+    independentCloseEvidenceRef: null,
+    independentCloseOwner: null,
+    independentCloseFailureDomain: null,
+  });
+}
+
 for (const fixture of RESOURCE_FIXTURES) {
   test(`${fixture.id} evaluates deterministically`, () => {
     const first = evaluateResourceEvidence(fixture.input, FIXTURE_NOW_MS);
@@ -16,11 +54,14 @@ for (const fixture of RESOURCE_FIXTURES) {
     assert.equal(first.assuranceResult, fixture.expectedResult);
     assert.equal(first.dataAuthority, 'SYNTHETIC_TEST');
     assert.equal(first.effectAuthority, 'NONE');
-    assert.equal(first.mayThrottle ?? false, false);
-    assert.equal(first.mayExecute ?? false, false);
-    assert.equal(first.mayCloseOrResetCircuit ?? false, false);
-    assert.equal(first.throttleDecision ?? null, null);
-    assert.deepEqual(first.commands ?? [], []);
+    if (!first.reasonCodes?.includes('CONTRACT_INVALID')) {
+      assert.equal(first.mayThrottle, false);
+      assert.equal(first.mayExecute, false);
+      assert.equal(first.mayCloseOrResetCircuit, false);
+      assert.equal(first.controllerOwner, null);
+      assert.equal(first.throttleDecision, null);
+      assert.deepEqual(first.commands, []);
+    }
     if (fixture.expectedContractCode) {
       assert.ok(first.contractIssues.some((issue) => issue.code === fixture.expectedContractCode), first.contractIssues.map((issue) => issue.code).join(','));
     }
@@ -84,6 +125,34 @@ test('forecast equality is exhaustion at the declared horizon boundary', () => {
   assert.ok(row.reasonCodes.includes('PROJECTED_RESOURCE_EXHAUSTION'));
 });
 
+test('known exhaustion remains FAIL when an unrelated numeric dimension is UNKNOWN', () => {
+  const exhaustedBudget = structuredClone(makeResourceEvidenceBundle());
+  exhaustedBudget.rows[0].burn.value = exhaustedBudget.rows[0].budget.limit;
+  exhaustedBudget.rows[0].budget.remaining = 0;
+  exhaustedBudget.rows[0].forecast = {
+    value: null,
+    horizonMs: null,
+    unknownReason: 'forecast owner has not supplied a bounded projection',
+  };
+  let assessment = evaluateResourceEvidence(exhaustedBudget, FIXTURE_NOW_MS);
+  let row = assessment.rows[0];
+  assert.equal(row.assuranceResult, 'FAIL');
+  assert.ok(row.reasonCodes.includes('RESOURCE_BUDGET_EXHAUSTED'));
+  assert.ok(row.reasonCodes.includes('BURN_BUDGET_OR_FORECAST_UNKNOWN'));
+
+  const exhaustedForecast = structuredClone(makeResourceEvidenceBundle());
+  exhaustedForecast.rows[0].burn = {
+    value: null,
+    unknownReason: 'burn owner has not supplied a bounded measurement',
+  };
+  exhaustedForecast.rows[0].forecast.value = exhaustedForecast.rows[0].budget.remaining;
+  assessment = evaluateResourceEvidence(exhaustedForecast, FIXTURE_NOW_MS);
+  row = assessment.rows[0];
+  assert.equal(row.assuranceResult, 'FAIL');
+  assert.ok(row.reasonCodes.includes('PROJECTED_RESOURCE_EXHAUSTION'));
+  assert.ok(row.reasonCodes.includes('BURN_BUDGET_OR_FORECAST_UNKNOWN'));
+});
+
 test('every statically visible attention state requires an exact response or unavailable blocker', () => {
   const mutations = [
     (row) => {
@@ -92,8 +161,7 @@ test('every statically visible attention state requires an exact response or una
     },
     (row) => { row.protections.auditEvidencePreserved = 'FAIL'; },
     (row) => {
-      row.circuit.state = 'OPEN';
-      row.circuit.openedAtMs = FIXTURE_NOW_MS - 1_000;
+      moveCircuitToOpen(row.circuit);
     },
   ];
   for (const mutate of mutations) {
@@ -152,6 +220,9 @@ test('unknown top-consumer and circuit evidence remains UNKNOWN with exact block
     maxAgeMs: 5_000,
     evidenceRef: null,
     unknownReason: 'accepted owner did not supply circuit state',
+    baselineNeverOpenedEvidenceRef: null,
+    baselineEvidenceOwner: null,
+    baselineEvidenceFailureDomain: null,
     openedAtMs: null,
     halfOpenAtMs: null,
     closedAtMs: null,
@@ -225,10 +296,37 @@ test('circuit transition claims are fully ordered, conditionally present, and in
   ];
   for (const [code, mutate] of cases) {
     const bundle = structuredClone(makeResourceEvidenceBundle());
+    clearClosedBaseline(bundle.rows[0].circuit);
     mutate(bundle.rows[0].circuit);
     const assessment = evaluateResourceEvidence(bundle, FIXTURE_NOW_MS);
     assert.equal(assessment.assuranceResult, 'FAIL');
     assert.ok(assessment.contractIssues.some((issue) => issue.code === code), assessment.contractIssues.map((issue) => issue.code).join(','));
+  }
+});
+
+test('CLOSED baseline proof is complete and structurally independent', () => {
+  const valid = evaluateResourceEvidence(makeResourceEvidenceBundle(), FIXTURE_NOW_MS);
+  assert.equal(valid.assuranceResult, 'PASS');
+  assert.deepEqual(valid.contractIssues, []);
+
+  const cases = [
+    (circuit) => clearClosedBaseline(circuit),
+    (circuit) => {
+      clearClosedBaseline(circuit);
+      circuit.baselineNeverOpenedEvidenceRef = 'synthetic.partial-baseline-proof';
+    },
+    (circuit) => { circuit.baselineEvidenceOwner = circuit.canonicalOwner; },
+    (circuit) => { circuit.baselineEvidenceFailureDomain = circuit.ownerFailureDomain; },
+  ];
+  for (const mutate of cases) {
+    const bundle = structuredClone(makeResourceEvidenceBundle());
+    mutate(bundle.rows[0].circuit);
+    const assessment = evaluateResourceEvidence(bundle, FIXTURE_NOW_MS);
+    assert.equal(assessment.assuranceResult, 'FAIL');
+    assert.ok(
+      assessment.contractIssues.some((issue) => issue.code === 'INDEPENDENT_CIRCUIT_BASELINE_EVIDENCE_REQUIRED'),
+      assessment.contractIssues.map((issue) => issue.code).join(','),
+    );
   }
 });
 
@@ -283,21 +381,20 @@ test('future circuit evidence fails and cannot close or reset owner state', () =
 
 test('OPEN, HALF_OPEN, and stale circuit evidence remain visible without circuit authority', () => {
   const open = structuredClone(makeResourceEvidenceBundle());
-  open.rows[0].circuit.state = 'OPEN';
-  open.rows[0].circuit.openedAtMs = FIXTURE_NOW_MS - 1_000;
+  moveCircuitToOpen(open.rows[0].circuit);
   let assessment = evaluateResourceEvidence(open, FIXTURE_NOW_MS);
   let row = assessment.rows[0];
   assert.equal(row.assuranceResult, 'FAIL');
   assert.ok(row.reasonCodes.includes('RESOURCE_CIRCUIT_OPEN'));
+  assert.equal(row.circuitEvidence.mayCloseOrReset, false);
 
   const halfOpen = structuredClone(makeResourceEvidenceBundle());
-  halfOpen.rows[0].circuit.state = 'HALF_OPEN';
-  halfOpen.rows[0].circuit.openedAtMs = FIXTURE_NOW_MS - 2_000;
-  halfOpen.rows[0].circuit.halfOpenAtMs = FIXTURE_NOW_MS - 1_000;
+  moveCircuitToHalfOpen(halfOpen.rows[0].circuit);
   assessment = evaluateResourceEvidence(halfOpen, FIXTURE_NOW_MS);
   row = assessment.rows[0];
   assert.equal(row.assuranceResult, 'UNKNOWN');
   assert.ok(row.reasonCodes.includes('RESOURCE_CIRCUIT_HALF_OPEN'));
+  assert.equal(row.circuitEvidence.mayCloseOrReset, false);
 
   const stale = structuredClone(makeResourceEvidenceBundle());
   stale.rows[0].circuit.observedAtMs = FIXTURE_NOW_MS - 10_000;

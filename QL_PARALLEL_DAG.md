@@ -16,7 +16,7 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 | Q11 survival | ~/Desktop/q11-survival | q11-survival-20260712 | 8a5dd09 | ACCEPTED + MERGED (2,182 pass with Q14) |
 | L spine L00–L08 | live-execution-proof-20260712 | live-execution-control-proof-20260712 | 73e1a1f | L00–L08 + L08.1 bridge (f79247a) + L14 ACCEPTED; spine PARKED until L09/L10/L11 merge, then L12→L13→L16→L17; Codex left auditable uncommitted L06 work; TWO director decisions DEFERRED to I00: ledger compare-and-set primitive + Foundation quantity-bridge contract (see live-edge-receipts/patches/) |
 | L14 controls shard | ~/Desktop/l14-controls | l14-controls-20260712 | 39ebd98 | ACCEPTED + MERGED (51/51 liveEdge suites) |
-| L09 normal-basis shard | ~/Desktop/l09-normal-basis | l09-normal-basis-20260712 | f79247a (re-based on L08.1) | READY — resume block 8 |
+| L09 normal-basis shard | ~/Desktop/l09-normal-basis | l09-normal-basis-20260712 | f79247a | BLOCKED (L09-002: L07 twin lacks Spot preflight seam) — waits on L08.2 |
 | L10 reverse-basis shard | ~/Desktop/l10-reverse-basis | l10-reverse-basis-20260712 | 4ae270a | READY |
 | L11 volume shard | ~/Desktop/l11-volume | l11-volume-20260712 | 4ae270a | READY |
 

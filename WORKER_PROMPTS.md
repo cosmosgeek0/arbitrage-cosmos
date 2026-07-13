@@ -2,7 +2,14 @@
 
 Rule: one block = one chat = one folder. Director appends/replaces blocks at every event; check the top entry's date. Board truth: QL_PARALLEL_DAG.md.
 
-## ACTIVE WAVE 3 (2026-07-13, post L08.1) — running: Q spine, L10, L11. NEW: block 8.
+## ACTIVE WAVE 4 (2026-07-13, post L09-002) — running: Q spine, L10, L11. NEW: block 9 (L08.2 twin Spot seam). L09 BLOCKED until it lands.
+
+### 9. L08.2 twin Spot seam — folder /Users/cosmosgeek/Desktop/live-execution-proof-20260712
+```text
+You are the L-spine bridge builder, ONE bounded phase L08.2 (D-LAUNCH-7 authority; verify `git -C /Users/cosmosgeek/Desktop/Main log -1 --format=%H -- QL_DIRECTOR_STATE.md`). The L spine is PARKED at f79247a (through L08.1 + L14). FIRST read live-edge-receipts/DECISIONS/L09-002-*.md (in the l09-normal-basis worktree history, branch l09-normal-basis-20260712, commit a560b8a) for the exact gap: the accepted L07 exchange twin has no seam to preflight/consume the L08.1 Spot order/TIF capability, so an exact Spot BUY LIMIT GTC leg is rejected PREFLIGHT_NOT_EXACT while USD-M fills. TASK: additively extend the accepted L07 twin so it exactly preflights and simulates Spot LIMIT/GTC (and the other L08.1-emitted Spot order types/TIFs) with the same rigor it already applies to USD-M — no send capability, deterministic, network-free, no new authority. Stay in lane exclusive paths (§3.3; shared files → patch requests). Full evidenced loop → accept as L08.2 with immutable receipt → record accepted SHA prominently in LIVE_EXECUTION_BUILD_STATE.md → PARK. Director then re-bases L09/L10/L11. Standing laws + hard external boundary unchanged; never push. Stop only at L08.2 ACCEPTED or BLOCKED.
+```
+
+## HISTORICAL WAVE 3 (2026-07-13, post L08.1) — running: Q spine, L10, L11. NEW: block 8.
 
 ### 8. L09 resume — folder /Users/cosmosgeek/Desktop/l09-normal-basis
 ```text

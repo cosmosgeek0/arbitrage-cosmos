@@ -16,6 +16,7 @@ export const ALLOWED_ROOT_FILES = new Set([
   'I00_PRODUCT_BUILD_STATE.md',
   'I00_VERIFY_RECEIPT.md',
   'I00_CLOSURE_PRESTAGE_RECEIPT.md',
+  'I00_PRESTAGE_VERIFICATION_RECEIPT.md',
 ]);
 
 export const ALLOWED_PREFIXES = Object.freeze([

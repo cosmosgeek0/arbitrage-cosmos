@@ -14,6 +14,7 @@ test('§2 path allowlist rejects production shared package lane and protected di
     'server/test/i00Acceptance/proof.test.mjs', 'test/i00/run.mjs', 'fixtures/i00/a.json',
     'integration/reports/a.json', 'IP_PROOF_STATE.md', 'IP_PROOF_RECEIPT.md',
     'I00_PRODUCT_BUILD_STATE.md', 'I00_VERIFY_RECEIPT.md', 'I00_CLOSURE_PRESTAGE_RECEIPT.md',
+    'I00_PRESTAGE_VERIFICATION_RECEIPT.md',
   ]) assert.equal(isAllowedChangePath(accepted), true, accepted);
   for (const rejected of [
     'server/src/index.ts', 'web/src/App.tsx', 'packages/edge-protocol/schema/edge-protocol-v1.schema.json',

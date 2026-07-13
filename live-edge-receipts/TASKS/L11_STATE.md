@@ -1,6 +1,6 @@
 # L11 state
 
-Status: `L11_ACCEPTED_PENDING_ACCEPTANCE_SHA_SEAL`
+Status: `L11_ACCEPTED`
 
 - Branch: `l11-volume-20260712`
 - Accepted base: `4ae270ac70fb819a706f94e85dfc2b6805edda9b`
@@ -20,6 +20,11 @@ Status: `L11_ACCEPTED_PENDING_ACCEPTANCE_SHA_SEAL`
 - Acceptance record: `live-edge-receipts/RECEIPTS/L11_ACCEPTANCE.md`
 - Acceptance record SHA-256:
   `e1cd90b3013621858dc068413ded4d5e14043313930e9613950dd5d79304bf6f`
+- Acceptance commit:
+  `a4f8c03d59200c70d864ef115fa839157faccf8a`
+- Acceptance tree:
+  `b9984582533a9a223e4492b41676fbeccfb9484b`
+- Accepted-SHA seal: `COMPLETE`
 - Frozen six-file source aggregate SHA-256:
   `210c0d167a9831f0420363bb93d7331d17d05c33e6149ee65f0844d0926238bd`
 - Frozen six-file test aggregate SHA-256:
@@ -44,5 +49,5 @@ Status: `L11_ACCEPTED_PENDING_ACCEPTANCE_SHA_SEAL`
 - External action authorization: `NONE`
 - Merge/push: not performed
 
-Next exact task: commit this state together with the acceptance record, then
-record that containing commit's exact SHA and tree in a state-only seal.
+Terminal lane state: `L11_ACCEPTED`. Production integration remains a separate
+director-owned task. Do not merge or push from this lane.

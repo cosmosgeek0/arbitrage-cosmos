@@ -1,0 +1,30 @@
+# FORMAL_PACKET_STATE
+
+```text
+schema: ip-assurance.formal-packet-state.v1
+status: FORMAL_PRESTAGE_PENDING_IMMUTABLE_RECEIPT
+branch: ip-assur-formal-20260713
+base_commit: 9785c93102b00389847b77c2f9348c06abc4344b
+binding_ip_assurance_sha256: 5f6d4b3b70e384f6123e9ccc01891faf04aef9da7f7cfd1e0c63be5c3ba68803
+binding_amendment_sha256: 0f42ded02e9f751b9f6c077579378d83131faa8ef23fc4f3286616008259f86e
+dedup_matrix_sha256: 22686d2cd1c54bbc39af56399298a0ed9563bbc8643ad4f0e498718de83cb2cd
+dedup_disposition: S3_MISSING_NARROW_FOLD
+write_scope:
+  - fixtures/productAssurance/systemic/formal/**
+  - test/productAssurance/systemic/formal/**
+protected_untracked_input:
+  - I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md@9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5
+formal_tooling_status: TLA_TOOLING_NOT_CONFIGURED
+executable_checker: NODE_DETERMINISTIC_EXPLICIT_STATE
+bounded_models: PASS_7_OF_7_EXHAUSTIVE_1323_STATES_1631_TRANSITIONS
+amendment_properties: COVERED_16_OF_16_ACROSS_43_CHECKS
+negative_controls: DETECTED_7_OF_7
+focused_tests: PASS_43_FAIL_0_SKIP_0
+root_npm_test: BLOCKED_EXIT_127_TSC_NOT_FOUND
+implementation_conformance: MISMATCH_2_UNKNOWN_5
+runtime_corpus_eligible: 0
+external_mutation: NONE
+money_authority: NONE
+next_gate: SEAL_PACKET_LOCAL_IMMUTABLE_RECEIPT_AFTER_IMPLEMENTATION_COMMIT
+terminal_label_on_success: FORMAL_PRESTAGE_READY
+```

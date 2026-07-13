@@ -19,6 +19,8 @@ import {
 } from '../../../dist/liveEdge/adapters/binanceSignedKernel/index.js';
 import {
   deriveTwinEventId,
+  deriveTwinFeeConversionRevision,
+  deriveTwinFeeEvidenceRevision,
   exchangeTwinOwnerEvidenceSha256,
 } from '../../../dist/liveEdge/adapters/exchangeTwin/index.js';
 import {
@@ -231,6 +233,8 @@ function l06PlacementEvidence(base, validUntilMs) {
   const input = mutationInputFixture({
     identity: {
       globalCorrelationId: `cor_${correlation}`,
+      ticketId: `plan_${correlation}`,
+      legId: `leg_${correlation}`,
       product: base.product,
       contractId: base.product === 'SPOT' ? 'SPOT_ORDER_POST' : 'USDM_ORDER_POST',
       signerProfile: base.product === 'SPOT' ? 'SPOT_HMAC_SHA256' : 'USDM_HMAC_SHA256',
@@ -302,6 +306,7 @@ export function cancelFixture(target, overrides = {}) {
       preflightResultQuantity: target.quantity,
       preflightResultNotional: resultNotional,
       preflightCanaryMaximumNotional: '10',
+      ...(overrides.validUntilMs === undefined ? {} : { validUntilMs: overrides.validUntilMs }),
     },
   });
   const persisted = submittingPersisted(input);
@@ -413,20 +418,48 @@ export function allowedRateDecision(fixture, overrides = {}) {
 
 export function feeEvidence(overrides = {}) {
   const chargeBasis = overrides.chargeBasis ?? 'QUOTE_NOTIONAL';
-  return {
-    schema: 'TWIN_FEE_EVIDENCE_V1',
-    evidenceRevision: `fee-evidence:${'a'.repeat(24)}`,
+  const feeAsset = overrides.feeAsset ?? 'USDT';
+  const quoteConversionRate = Object.hasOwn(overrides, 'quoteConversionRate')
+    ? overrides.quoteConversionRate
+    : null;
+  const conversion = quoteConversionRate === null ? {
+    quoteConversionEvidenceRevision: null,
+    quoteConversionBaseAsset: null,
+    quoteConversionQuoteAsset: null,
+    quoteConversionUnit: null,
+  } : {
+    quoteConversionBaseAsset: overrides.quoteConversionBaseAsset ?? feeAsset,
+    quoteConversionQuoteAsset: overrides.quoteConversionQuoteAsset ?? 'USDT',
+    quoteConversionUnit: overrides.quoteConversionUnit ?? 'QUOTE_ASSET_PER_FEE_ASSET',
+  };
+  if (quoteConversionRate !== null) {
+    conversion.quoteConversionEvidenceRevision = overrides.quoteConversionEvidenceRevision
+      ?? deriveTwinFeeConversionRevision({
+        baseAsset: conversion.quoteConversionBaseAsset,
+        quoteAsset: conversion.quoteConversionQuoteAsset,
+        unit: conversion.quoteConversionUnit,
+        rate: quoteConversionRate,
+      });
+  }
+  const projection = {
     makerRate: '0.0002',
     takerRate: '0.001',
-    feeAsset: 'USDT',
+    feeAsset,
     chargeBasis,
     rateUnit: chargeBasis === 'QUOTE_NOTIONAL'
       ? 'FEE_ASSET_PER_QUOTE_NOTIONAL'
       : 'FEE_ASSET_PER_BASE_QUANTITY',
-    quoteConversionRate: '1',
+    quoteConversionRate,
+    ...conversion,
     observedAtMs: T0,
     validUntilMs: T0 + 10_000,
     ...overrides,
+  };
+  delete projection.evidenceRevision;
+  return {
+    schema: 'TWIN_FEE_EVIDENCE_V1',
+    evidenceRevision: overrides.evidenceRevision ?? deriveTwinFeeEvidenceRevision(projection),
+    ...projection,
   };
 }
 
@@ -475,7 +508,7 @@ export function baselineEvents(fixture, {
     event('PREFLIGHT_EVIDENCE', 3, T0 + 20, {
       fixtureId: fixture.fixtureId,
       ...passingPreflight(fixture),
-    }),
+    }, { sourceSequence: 200 }),
     event('RATE_DECISION', 4, T0 + 3, {
       fixtureId: fixture.fixtureId,
       ...allowedRateDecision(fixture),
@@ -484,7 +517,7 @@ export function baselineEvents(fixture, {
     event('VENUE_ARRIVAL', 6, T0 + 20, {
       fixtureId: fixture.fixtureId,
       feeEvidence: fee,
-    }),
+    }, { sourceSequence: 201 }),
     event('HTTP_DELIVERY', 8, T0 + 40, {
       fixtureId: fixture.fixtureId,
       outcome: httpOutcome,

@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { runExchangeTwinScenario } from '../../../dist/liveEdge/adapters/exchangeTwin/index.js';
 import {
+  T0,
   baselineEvents,
   event,
   orderByFixtureId,
@@ -97,6 +98,24 @@ test('IOC expires its exact unfilled remainder while GTC rests it', () => {
     assert.equal(order.expiredQuantity, expectedExpired, timeInForce);
     assert.equal(order.remainingQuantity, expectedRemaining, timeInForce);
   }
+
+  const zeroFixture = orderFixture({ timeInForce: 'IOC', price: '99', quantity: '0.01' });
+  const zero = orderByFixtureId(runExchangeTwinScenario(scenarioInput({
+    fixture: zeroFixture,
+    events: baselineEvents(zeroFixture, { asks: [{ price: '100', quantity: '0.1' }] }),
+  })));
+  assert.equal(zero.venueStatus, 'EXPIRED');
+  assert.equal(zero.filledQuantity, '0');
+  assert.equal(zero.expiredQuantity, '0.01');
+
+  const fullFixture = orderFixture({ timeInForce: 'IOC', price: '100', quantity: '0.01' });
+  const full = orderByFixtureId(runExchangeTwinScenario(scenarioInput({
+    fixture: fullFixture,
+    events: baselineEvents(fullFixture, { asks: [{ price: '100', quantity: '0.01' }] }),
+  })));
+  assert.equal(full.venueStatus, 'FILLED');
+  assert.equal(full.filledQuantity, '0.01');
+  assert.equal(full.expiredQuantity, '0');
 });
 
 test('MARKET consumes only explicit depth and expires when depth is insufficient', () => {
@@ -135,6 +154,44 @@ test('canonical event ordering is permutation-stable and outputs are deeply froz
   assert.equal(forward.simulationAuthority, 'SYNTHETIC_FIXTURE');
   assert.equal(forward.actionAuthority, 'NONE_RECORD_ONLY');
   assert.equal(forward.externalActionAuthorization, 'NONE');
+});
+
+test('mixed present and absent source sequences remain transitively permutation-stable', () => {
+  const fixture = orderFixture();
+  const prefix = baselineEvents(fixture).filter((candidate) => candidate.kind !== 'HTTP_DELIVERY');
+  const simultaneous = [
+    event('HTTP_DELIVERY', 20, T0 + 40, {
+      fixtureId: fixture.fixtureId,
+      outcome: 'ACK',
+    }, { sourceSequence: 300 }),
+    event('SYMBOL_STATUS', 21, T0 + 40, {
+      product: fixture.product,
+      symbol: fixture.symbol,
+      status: 'HALT',
+      evidenceRevision: `mixed-order-status:${'a'.repeat(24)}`,
+      observedAtMs: T0 + 40,
+      validUntilMs: T0 + 10_000,
+    }, { sourceSequence: 301 }),
+    event('COST_OBSERVATION', 22, T0 + 40, {
+      fixtureId: fixture.fixtureId,
+      evidenceRevision: `mixed-order-cost:${'b'.repeat(24)}`,
+      kind: 'LATENCY_MOVEMENT_QUOTE',
+      amount: '0.01',
+    }),
+  ];
+  const permutations = [
+    simultaneous,
+    [simultaneous[0], simultaneous[2], simultaneous[1]],
+    [simultaneous[1], simultaneous[0], simultaneous[2]],
+    [simultaneous[1], simultaneous[2], simultaneous[0]],
+    [simultaneous[2], simultaneous[0], simultaneous[1]],
+    [simultaneous[2], simultaneous[1], simultaneous[0]],
+  ];
+  const outcomes = permutations.map((suffix) => runExchangeTwinScenario(
+    scenarioInput({ fixture, events: [...prefix, ...suffix] }),
+  ));
+  for (const outcome of outcomes.slice(1)) assert.deepEqual(outcome, outcomes[0]);
+  assert.equal(outcomes[0].orderingTruth, 'AMBIGUOUS');
 });
 
 test('equal-time evidence without source ordering remains explicitly AMBIGUOUS', () => {

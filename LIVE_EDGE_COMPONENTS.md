@@ -89,6 +89,15 @@ The director resolved both requests in
 `DEFERRED_TO_I00` in D0011. They do not block injected-port L06 acceptance;
 canonical persistence and fractional Foundation comparison remain unclaimed.
 
+## L07 delta
+
+| Component | Path | Lane build proof | Integration state | Authority / limitation |
+| --- | --- | --- | --- | --- |
+| Deterministic exchange-twin reducer | `server/src/liveEdge/adapters/exchangeTwin/twin.ts`, `types.ts`, `exact.ts` | `BUILT_AND_TESTED` | `LANE_READY_UNWIRED` | Reduces only closed injected synthetic fixtures with exact-decimal books, TIF, latency, status, cancel, crash and local-versus-venue truth; no connector, transport, retry, canonical fill or action authority |
+| Canonical owner-evidence adapters | `server/src/liveEdge/adapters/exchangeTwin/ownerEvidence.ts` | `BUILT_AND_TESTED` | injected comparison only | Reuses the L03 rate owner, L04 static sizing owner and L06 journal validator; retained owner inputs and results are reproduced on every committed-state validation without creating a second limiter, registry or journal |
+| Replay/checkpoint and calibration evidence | `checkpointExchangeTwin`, `restoreExchangeTwin`, `compareExchangeTwinOutcome` | `BUILT_AND_TESTED` | value-only evidence | Retains exact canonical events, reconstructs state before reuse, bounds aggregate fills and preserves fee/cost/calibration missing values; hashes are commitments rather than persistence or model-promotion authority |
+| Offline exchange-twin proofs | `server/test/liveEdge/exchangeTwin/**` | focused `69/69`; accumulated live-edge `1121/1121` | test-only | Conservative depth/queue allocation, TIF, ambiguity, fee units/conversion, owner lineage, crash/restart, every durable state, exact resource boundaries and hard external-boundary proofs; network-free |
+
 ## Director-owned integration still required
 
 - owner-approved Basis/Volume advisory intake;
@@ -117,6 +126,11 @@ does not perform a private read, establish a stream, reconcile an account or
 create readiness. Production acquisition, owner composition and supervisor/API
 projection remain director-owned.
 
+L07 consumes only injected synthetic fixtures and accepted L03/L04/L06 owner
+evidence. It remains `UNWIRED`, non-sendable and non-authoritative; Foundation
+still owns canonical execution/reconciliation truth, and production order
+policy/composition begins no earlier than director-controlled later phases.
+
 ## Explicitly absent
 
 - private account reads, signed/test/live orders and exchange mutations;
@@ -141,6 +155,9 @@ projection remain director-owned.
   private query, retry authority, dispatcher consume lease, Foundation verdict,
   fractional quantity bridge, empirical region benchmark or production wiring
   in L06.
+- an exchange client, private/account read, signer, socket, retry scheduler,
+  canonical fill/position/reconciliation verdict, model trainer, persistence
+  owner or production execution-policy binding in L07.
 
 `LIVE_EXECUTION_NOT_IMPLEMENTED` remains mechanically enforced by the canonical
 Foundation execution barrier and the L01 regression proof.

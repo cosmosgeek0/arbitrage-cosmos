@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  addTwinDecimals,
   checkpointExchangeTwin,
+  compareTwinDecimals,
   reduceExchangeTwinEvent,
   runExchangeTwinScenario,
 } from '../../../dist/liveEdge/adapters/exchangeTwin/index.js';
@@ -16,6 +18,7 @@ import {
   orderByFixtureId,
   orderFixture,
   passingPreflight,
+  rateOwnerEvidence,
   scenarioInput,
 } from './fixtures.mjs';
 
@@ -73,8 +76,55 @@ test('one passive trade quantity cannot be reused across multiple twin orders', 
     events,
     overrides: { fixtures: [first, second] },
   }));
-  const totalFilled = state.orders.reduce((sum, order) => sum + Number(order.filledQuantity), 0);
-  assert.ok(totalFilled <= 0.01, `one trade unit was reused into ${totalFilled} fill units`);
+  const totalFilled = state.orders.reduce(
+    (sum, order) => addTwinDecimals(sum, order.filledQuantity),
+    '0',
+  );
+  assert.ok(compareTwinDecimals(totalFilled, '0.01') <= 0,
+    `one trade unit was reused into ${totalFilled} fill units`);
+});
+
+test('aggressive depth stays consumed until an explicit fresh revision replenishes it', () => {
+  const first = orderFixture({
+    fixtureId: 'fixture-depth-revision-0001', quantity: '0.02', price: '100', timeInForce: 'IOC',
+  });
+  const second = orderFixture({
+    fixtureId: 'fixture-depth-revision-0002', quantity: '0.02', price: '100', timeInForce: 'IOC',
+    latency: { dispatchToVenueMs: 12, venueToHttpMs: 20, venueToPrivateMs: 15 },
+  });
+  const common = baselineEvents(first, {
+    asks: [{ price: '100', quantity: '0.02' }], includePrivate: false,
+  }).filter((candidate) => candidate.kind !== 'HTTP_DELIVERY');
+  common.push(
+    event('PREFLIGHT_EVIDENCE', 10, T0 + 22, {
+      fixtureId: second.fixtureId,
+      ...passingPreflight(second, { evaluatedAtMs: T0 + 22 }),
+    }, { sourceSequence: 300 }),
+    event('RATE_DECISION', 11, T0 + 3, {
+      fixtureId: second.fixtureId, ...allowedRateDecision(second),
+    }),
+    event('PLACE_DISPATCH', 12, T0 + 10, { fixtureId: second.fixtureId }),
+    event('VENUE_ARRIVAL', 13, T0 + 22, {
+      fixtureId: second.fixtureId, feeEvidence: feeEvidence(),
+    }, { sourceSequence: 301 }),
+  );
+  const run = (events) => runExchangeTwinScenario(scenarioInput({
+    fixture: first, events, overrides: { fixtures: [first, second] },
+  }));
+  const depleted = run(common);
+  assert.equal(orderByFixtureId(depleted, first.fixtureId).filledQuantity, '0.02');
+  assert.equal(orderByFixtureId(depleted, second.fixtureId).filledQuantity, '0');
+
+  const replenishment = event('BOOK_SNAPSHOT', 14, T0 + 21, {
+    product: first.product, symbol: first.symbol,
+    bookRevision: `book-replenished:${'6'.repeat(24)}`,
+    sourceSequence: 101, observedAtMs: T0 + 21, validUntilMs: T0 + 10_000,
+    bids: [{ price: '99', quantity: '0.1' }], asks: [{ price: '100', quantity: '0.02' }],
+  }, { sourceSequence: 101 });
+  const replenished = run([...common, replenishment]);
+  assert.equal(orderByFixtureId(replenished, first.fixtureId).filledQuantity, '0.02');
+  assert.equal(orderByFixtureId(replenished, second.fixtureId).filledQuantity, '0.02');
+  assert.equal(replenished.book.asks.length, 0);
 });
 
 test('a second venue-arrival event cannot execute one fixture twice', () => {
@@ -181,8 +231,17 @@ test('fee evidence is exact, bounded and cannot use stale or missing conversion 
   assert.equal(converted.fills[0].quoteEquivalentFee, '0.002');
 
   for (const fee of [
-    feeEvidence({ takerRate: '-0.001' }),
+    { ...feeEvidence(), takerRate: '-0.001' },
     feeEvidence({ validUntilMs: T0 + 20 }),
+    { ...feeEvidence(), chargeBasis: 'BASE_QUANTITY' },
+    { ...feeEvidence(), makerRate: '0.9' },
+    {
+      ...feeEvidence({
+        chargeBasis: 'BASE_QUANTITY', feeAsset: fixture.baseAsset,
+        quoteConversionRate: '200',
+      }),
+      quoteConversionBaseAsset: 'ETH',
+    },
   ]) {
     assert.throws(
       () => runExchangeTwinScenario(scenarioInput({
@@ -191,7 +250,7 @@ test('fee evidence is exact, bounded and cannot use stale or missing conversion 
           asks: [{ price: '100', quantity: '0.01' }], fee,
         }),
       })),
-      /non-negative|invalid or expired/i,
+      /non-negative|invalid or expired|basis\/rate unit|conversion revision/i,
     );
   }
 });
@@ -208,7 +267,7 @@ test('outcome and checkpoint commitments are sensitive to seed and fee evidence'
 
   const changedFeeEvents = baselineEvents(fixture, {
     asks: [{ price: '100', quantity: '0.01' }],
-    fee: feeEvidence({ takerRate: '0.002', evidenceRevision: `fee-evidence:${'5'.repeat(24)}` }),
+    fee: feeEvidence({ takerRate: '0.002' }),
   });
   const changedFee = runExchangeTwinScenario(scenarioInput({ fixture, events: changedFeeEvents }));
   assert.notEqual(changedFee.outcomeRevision, original.outcomeRevision);
@@ -236,16 +295,99 @@ test('bounded integer depth property: fill never exceeds order or explicit liqui
         overrides: { scenarioId: `scenario-property-${requested}-${firstLevel}` },
       }));
       const order = orderByFixtureId(state, fixture.fixtureId);
-      const filled = Number(order.filledQuantity);
-      const explicit = (firstLevel + secondLevel) / 100;
-      assert.ok(filled <= requested / 100, `${requested}/${firstLevel}: exceeds order`);
-      assert.ok(filled <= explicit, `${requested}/${firstLevel}: exceeds depth`);
+      const filled = order.filledQuantity;
+      const explicit = `0.${String(firstLevel + secondLevel).padStart(2, '0')}`;
+      const requestedExact = `0.0${requested}`;
+      assert.ok(compareTwinDecimals(filled, requestedExact) <= 0,
+        `${requested}/${firstLevel}: exceeds order`);
+      assert.ok(compareTwinDecimals(filled, explicit) <= 0,
+        `${requested}/${firstLevel}: exceeds depth`);
       assert.equal(
-        order.fills.reduce((sum, fill) => sum + Number(fill.quantity), 0),
+        order.fills.reduce((sum, fill) => addTwinDecimals(sum, fill.quantity), '0'),
         filled,
       );
     }
   }
+});
+
+test('aggregate fill boundary accepts exactly 1024 and rejects the 1025th fill during reduction', () => {
+  const priceFromCents = (cents) => {
+    const fraction = String(cents % 100).padStart(2, '0').replace(/0+$/, '');
+    return fraction.length === 0 ? String(Math.floor(cents / 100))
+      : `${Math.floor(cents / 100)}.${fraction}`;
+  };
+  const asks = Array.from({ length: 512 }, (_, index) => ({
+    price: priceFromCents(100 + index), quantity: '0.001',
+  }));
+  const fixture = (fixtureId, quantity = '0.512', rateAtMs = T0 + 3) => orderFixture({
+    fixtureId, quantity, price: quantity === '0.512' ? '6.11' : '1', timeInForce: 'GTC',
+    rateEvidence: rateOwnerEvidence({ product: 'USD_M_PERPETUAL', atMs: rateAtMs }),
+  });
+  const first = fixture('fixture-aggregate-bound-0001');
+  const second = fixture('fixture-aggregate-bound-0002', '0.512', T0 + 23);
+  const third = fixture('fixture-aggregate-bound-0003', '0.001', T0 + 43);
+  const firstEvents = baselineEvents(first, {
+    bids: [{ price: '0.5', quantity: '1' }], asks, includePrivate: false,
+  }).filter((candidate) => candidate.kind !== 'HTTP_DELIVERY');
+  const extraEvents = (order, {
+    sequenceBase, rateAtMs, dispatchAtMs, bookAtMs, arrivalAtMs,
+    bookRevision, bookSequence, sourceBase, levels,
+  }) => [
+    event('RATE_DECISION', sequenceBase, rateAtMs, {
+      fixtureId: order.fixtureId, ...allowedRateDecision(order, { atMs: rateAtMs }),
+    }),
+    event('PLACE_DISPATCH', sequenceBase + 1, dispatchAtMs, { fixtureId: order.fixtureId }),
+    event('BOOK_SNAPSHOT', sequenceBase + 2, bookAtMs, {
+      product: order.product, symbol: order.symbol, bookRevision,
+      sourceSequence: bookSequence, observedAtMs: bookAtMs, validUntilMs: T0 + 10_000,
+      bids: [{ price: '0.5', quantity: '1' }],
+      asks: levels.map((level) => ({ ...level })),
+    }, { sourceSequence: bookSequence }),
+    event('PREFLIGHT_EVIDENCE', sequenceBase + 3, arrivalAtMs, {
+      fixtureId: order.fixtureId,
+      ...passingPreflight(order, { evaluatedAtMs: arrivalAtMs }),
+    }, { sourceSequence: sourceBase }),
+    event('VENUE_ARRIVAL', sequenceBase + 4, arrivalAtMs, {
+      fixtureId: order.fixtureId, feeEvidence: feeEvidence(),
+    }, { sourceSequence: sourceBase + 1 }),
+  ];
+  const secondEvents = extraEvents(second, {
+    sequenceBase: 20, rateAtMs: T0 + 23, dispatchAtMs: T0 + 30,
+    bookAtMs: T0 + 35, arrivalAtMs: T0 + 40,
+    bookRevision: `aggregate-book:${'2'.repeat(24)}`, bookSequence: 101,
+    sourceBase: 300, levels: asks,
+  });
+  const exactState = runExchangeTwinScenario(scenarioInput({
+    fixture: first,
+    events: [...firstEvents, ...secondEvents],
+    overrides: { fixtures: [first, second] },
+  }));
+  assert.equal(
+    exactState.orders.reduce((sum, order) => sum + order.fills.length, 0),
+    1_024,
+    JSON.stringify(exactState.orders.map((order) => ({
+      fixtureId: order.fixture.fixtureId,
+      status: order.venueStatus,
+      reasons: order.blockedReasonCodes,
+      fills: order.fills.length,
+    }))),
+  );
+  assert.doesNotThrow(() => checkpointExchangeTwin(exactState));
+
+  const thirdEvents = extraEvents(third, {
+    sequenceBase: 30, rateAtMs: T0 + 43, dispatchAtMs: T0 + 50,
+    bookAtMs: T0 + 55, arrivalAtMs: T0 + 60,
+    bookRevision: `aggregate-book:${'3'.repeat(24)}`, bookSequence: 102,
+    sourceBase: 400, levels: [{ price: '1', quantity: '0.001' }],
+  });
+  assert.throws(
+    () => runExchangeTwinScenario(scenarioInput({
+      fixture: first,
+      events: [...firstEvents, ...secondEvents, ...thirdEvents],
+      overrides: { fixtures: [first, second, third] },
+    })),
+    /aggregate twin fill bound exceeded/,
+  );
 });
 
 test('maximum legal structural snapshot remains serialization-bounded', () => {

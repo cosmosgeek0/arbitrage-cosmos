@@ -98,6 +98,10 @@ export interface TwinFeeEvidence {
   readonly chargeBasis: 'QUOTE_NOTIONAL' | 'BASE_QUANTITY';
   readonly rateUnit: 'FEE_ASSET_PER_QUOTE_NOTIONAL' | 'FEE_ASSET_PER_BASE_QUANTITY';
   readonly quoteConversionRate: string | null;
+  readonly quoteConversionEvidenceRevision: string | null;
+  readonly quoteConversionBaseAsset: string | null;
+  readonly quoteConversionQuoteAsset: string | null;
+  readonly quoteConversionUnit: 'QUOTE_ASSET_PER_FEE_ASSET' | null;
   readonly observedAtMs: number;
   readonly validUntilMs: number;
 }
@@ -298,6 +302,7 @@ export interface TwinOrderState {
   readonly fills: readonly TwinFill[];
   readonly dispatchAtMs: number | null;
   readonly venueArrivalAtMs: number | null;
+  readonly venueArrivalSequence: number | null;
   readonly lastVenueEffectAtMs: number | null;
   readonly lastLocalObservationAtMs: number | null;
   readonly cancelFixture: TwinCancelFixture | null;
@@ -332,6 +337,7 @@ export interface TwinScenarioState {
   readonly symbolStatusObservedAtMs: number | null;
   readonly symbolStatusValidUntilMs: number | null;
   readonly book: TwinBookState;
+  readonly bookRevisions: readonly string[];
   readonly orders: readonly TwinOrderState[];
   readonly preflights: readonly {
     readonly fixtureId: string;
@@ -342,17 +348,26 @@ export interface TwinScenarioState {
   readonly rateDecisions: readonly {
     readonly fixtureId: string;
     readonly ownerEvidenceSha256: string;
+    readonly rateState: BinanceRateBudgetState;
+    readonly reservationInput: unknown;
     readonly decision: BinanceRateReservationDecision;
   }[];
   readonly processedEvents: readonly {
+    readonly event: TwinEvent;
     readonly eventId: string;
     readonly sequence: number;
     readonly occurredAtMs: number;
+    readonly kind: TwinEvent['kind'];
     readonly eventPriority: number;
     readonly orderingDomain: string;
     readonly sourceSequence: number | null;
     readonly contentRevision: string;
   }[];
+  readonly tradeEvidence: readonly {
+    readonly tradeRevision: string;
+    readonly contentRevision: string;
+  }[];
+  readonly feeEvidence: readonly TwinFeeEvidence[];
   readonly crashed: boolean;
   readonly activeCrashId: string | null;
   readonly dropLocalDeliveries: boolean;
@@ -391,6 +406,9 @@ export interface TwinCalibrationEvidence {
   readonly calibrationRevision: string;
   readonly modelRevision: string;
   readonly predictedOutcomeRevision: string;
+  readonly product: TwinProduct;
+  readonly symbol: string;
+  readonly quantityAsset: string;
   readonly recordedOutcomeRevision: string;
   readonly recordedContentRevision: string;
   readonly predictedFilledQuantity: string;

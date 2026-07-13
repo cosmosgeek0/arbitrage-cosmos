@@ -83,9 +83,14 @@ reference does not become a production dependency or authority.
 - The twin consumes only closed injected fixtures with exact timestamps,
   sequences, event IDs, model revision and seed. Ambient clock, timers,
   sockets, network, filesystem, environment and randomness are forbidden.
-- Canonical event ordering uses occurrence time, conservative event priority
-  and stable sequence/ID. Equivalent accepted event sets must yield identical
-  state and outcome hashes regardless of insertion order.
+- Canonical event ordering uses occurrence time, optional proved source
+  sequence with absent values ordered last, conservative event priority and
+  stable sequence/ID. Conflicting equal-time events without two distinct
+  source sequences remain ambiguous. Equivalent accepted event sets must
+  yield identical state and outcome hashes regardless of insertion order.
+- Committed state retains each exact canonical event and reproduces the full
+  result from those events before checkpoint, restore or incremental reuse.
+  State hashes are commitments, not a substitute for replay validation.
 - Venue-oracle state and locally observable state remain separate. An injected
   venue effect may exist while local truth remains `UNKNOWN`; oracle truth is
   never promoted to canonical Foundation or cockpit truth.

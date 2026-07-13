@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import test from 'node:test';
+
+import { canonicalJson } from '../../../dist/foundation/contracts/index.js';
 
 import {
   checkpointExchangeTwin,
@@ -15,6 +18,37 @@ import {
   orderFixture,
   scenarioInput,
 } from './fixtures.mjs';
+
+function revision(prefix, value) {
+  return `${prefix}${createHash('sha256').update(canonicalJson(value)).digest('hex')}`;
+}
+
+function rehashState(value) {
+  const { outcomeRevision: _outcome, stateRevision: _state, ...material } = value;
+  const semantic = {
+    scenarioId: material.scenarioId,
+    modelRevision: material.modelRevision,
+    seed: material.seed,
+    product: material.product,
+    symbol: material.symbol,
+    symbolStatus: material.symbolStatus,
+    symbolStatusRevision: material.symbolStatusRevision,
+    symbolStatusObservedAtMs: material.symbolStatusObservedAtMs,
+    symbolStatusValidUntilMs: material.symbolStatusValidUntilMs,
+    book: material.book,
+    orders: material.orders,
+    crashed: material.crashed,
+    activeCrashId: material.activeCrashId,
+    orderingTruth: material.orderingTruth,
+    ambiguousDomains: material.ambiguousDomains,
+  };
+  const outcomeRevision = revision('l07outcome_', semantic);
+  return {
+    ...material,
+    outcomeRevision,
+    stateRevision: revision('l07state_', { ...material, outcomeRevision }),
+  };
+}
 
 test('event IDs are exact content commitments and replays are idempotent', () => {
   const fixture = orderFixture();
@@ -133,6 +167,71 @@ test('a gapped delta names book truth unavailable until a fresh snapshot', () =>
   const restored = reduceExchangeTwinEvent(unavailable, fresh);
   assert.equal(restored.book.truth, 'AVAILABLE');
   assert.equal(restored.book.bookRevision, fresh.payload.bookRevision);
+
+  const historicalReplay = event('BOOK_SNAPSHOT', 11, T0 + 4, {
+    ...snapshotEvent.payload,
+    sourceSequence: 600,
+    observedAtMs: T0 + 4,
+  }, { sourceSequence: 600 });
+  assert.throws(
+    () => reduceExchangeTwinEvent(restored, historicalReplay),
+    /replayed|regressed/i,
+  );
+});
+
+test('ambiguous book evidence remains checkpointable with no false freshness', () => {
+  const fixture = orderFixture();
+  const status = (sequence, occurredAtMs, suffix) => event('SYMBOL_STATUS', sequence, occurredAtMs, {
+    product: fixture.product,
+    symbol: fixture.symbol,
+    status: 'HALT',
+    evidenceRevision: `ambiguous-book-status:${suffix.repeat(24)}`,
+    observedAtMs: occurredAtMs,
+    validUntilMs: occurredAtMs + 10_000,
+  });
+  const snapshot = event('BOOK_SNAPSHOT', 2, T0, {
+    product: fixture.product,
+    symbol: fixture.symbol,
+    bookRevision: `ambiguous-book-snapshot:${'b'.repeat(24)}`,
+    sourceSequence: 100,
+    observedAtMs: T0,
+    validUntilMs: T0 + 10_000,
+    bids: [{ price: '99', quantity: '0.1' }],
+    asks: [{ price: '100', quantity: '0.1' }],
+  }, { sourceSequence: 100 });
+  const ambiguousSnapshot = runExchangeTwinScenario(scenarioInput({
+    fixture,
+    events: [status(1, T0, 'a'), snapshot],
+  }));
+  assert.equal(ambiguousSnapshot.book.truth, 'GAPPED');
+  assert.equal(ambiguousSnapshot.book.validUntilMs, null);
+  assert.deepEqual(
+    restoreExchangeTwin(checkpointExchangeTwin(ambiguousSnapshot)),
+    ambiguousSnapshot,
+  );
+
+  const deltaAtMs = T0 + 1;
+  const delta = event('BOOK_DELTA', 4, deltaAtMs, {
+    product: fixture.product,
+    symbol: fixture.symbol,
+    bookRevision: `ambiguous-book-delta:${'d'.repeat(24)}`,
+    previousBookRevision: snapshot.payload.bookRevision,
+    sourceSequence: 101,
+    observedAtMs: deltaAtMs,
+    validUntilMs: deltaAtMs + 10_000,
+    bidUpdates: [{ price: '99', quantity: '0.09' }],
+    askUpdates: [],
+  }, { sourceSequence: 101 });
+  const ambiguousDelta = runExchangeTwinScenario(scenarioInput({
+    fixture,
+    events: [snapshot, status(3, deltaAtMs, 'c'), delta],
+  }));
+  assert.equal(ambiguousDelta.book.truth, 'GAPPED');
+  assert.equal(ambiguousDelta.book.validUntilMs, null);
+  assert.deepEqual(
+    restoreExchangeTwin(checkpointExchangeTwin(ambiguousDelta)),
+    ambiguousDelta,
+  );
 });
 
 test('hostile graphs fail without invoking accessors or proxy traps', () => {
@@ -227,6 +326,57 @@ test('checkpoint and reducer reject tampered state and authority', () => {
   assert.throws(
     () => reduceExchangeTwinEvent({ ...state, actionAuthority: 'EXECUTE' }, next),
     /invalid or authoritative/,
+  );
+
+  const forgedState = rehashState({
+    ...state,
+    orders: [{
+      ...state.orders[0],
+      fills: [{ ...state.orders[0].fills[0], quantity: '0.02' }],
+    }],
+  });
+  const forgedCheckpoint = {
+    ...checkpoint,
+    state: forgedState,
+    checkpointRevision: revision('l07checkpoint_', forgedState),
+  };
+  assert.throws(
+    () => restoreExchangeTwin(forgedCheckpoint),
+    /fill economics|fill sum|quantity conservation/i,
+  );
+
+  const overboundFills = Array.from({ length: 1_025 }, (_, index) => ({
+    ...state.orders[0].fills[0],
+    fillId: `l07fill_${index.toString(16).padStart(64, '0')}`,
+  }));
+  const overboundState = rehashState({
+    ...state,
+    orders: [{ ...state.orders[0], fills: overboundFills }],
+  });
+  assert.throws(
+    () => restoreExchangeTwin({
+      ...checkpoint,
+      state: overboundState,
+      checkpointRevision: revision('l07checkpoint_', overboundState),
+    }),
+    /fills are overbound|fill bound/i,
+  );
+});
+
+test('one canonical L06 placement identity cannot be cloned into two fixtures', () => {
+  const first = orderFixture({ fixtureId: 'fixture-owner-identity-0001' });
+  const independent = orderFixture({ fixtureId: 'fixture-owner-identity-0002' });
+  const cloned = {
+    ...independent,
+    l06Snapshot: structuredClone(first.l06Snapshot),
+    l06Boundary: structuredClone(first.l06Boundary),
+  };
+  assert.throws(
+    () => createExchangeTwinState({
+      ...scenarioInput({ fixture: first, events: [] }),
+      fixtures: [first, cloned],
+    }),
+    /L06 .* identities are duplicated/i,
   );
 });
 

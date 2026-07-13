@@ -46,7 +46,9 @@ const MAX_LEVELS = 512;
 const MAX_FILLS = 1_024;
 const MAX_TEXT = 160;
 const MAX_GRAPH_NODES = 100_000;
+const MAX_GRAPH_DEPTH = 24;
 const MAX_SERIALIZED_BYTES = 4_000_000;
+export const EXCHANGE_TWIN_MINIMUM_CALIBRATION_SAMPLES = 2 as const;
 const ID = /^[A-Za-z][A-Za-z0-9._:-]{7,159}$/;
 const SYMBOL = /^(?=.{2,40}$)[A-Z0-9._-]+$/;
 const ASSET = /^(?=.{2,20}$)[A-Z0-9._-]+$/;
@@ -71,6 +73,7 @@ const STATE_FIELDS = Object.freeze([
   'schema', 'scenarioId', 'modelRevision', 'seed', 'product', 'symbol', 'symbolStatus',
   'symbolStatusRevision', 'symbolStatusObservedAtMs', 'symbolStatusValidUntilMs',
   'book', 'orders', 'preflights', 'rateDecisions', 'processedEvents',
+  'bookRevisions', 'tradeEvidence', 'feeEvidence',
   'crashed', 'activeCrashId', 'dropLocalDeliveries', 'dropPendingCommands', 'orderingTruth',
   'ambiguousDomains',
   'outcomeRevision', 'stateRevision', 'simulationAuthority', 'actionAuthority',
@@ -103,6 +106,18 @@ const EVENT_PAYLOAD_FIELDS: Readonly<Record<TwinEvent['kind'], readonly string[]
   RESTART: Object.freeze(['crashId']),
   RECONCILIATION_OBSERVATION: Object.freeze(['fixtureId', 'ownerObservationRevision', 'observedVenueRevision', 'observedStatus', 'observedFilledQuantity']),
 });
+
+const FEE_EVIDENCE_FIELDS = Object.freeze([
+  'schema', 'evidenceRevision', 'makerRate', 'takerRate', 'feeAsset', 'chargeBasis', 'rateUnit',
+  'quoteConversionRate', 'quoteConversionEvidenceRevision', 'quoteConversionBaseAsset',
+  'quoteConversionQuoteAsset', 'quoteConversionUnit', 'observedAtMs', 'validUntilMs',
+] as const);
+
+const FEE_REVISION_FIELDS = Object.freeze([
+  'makerRate', 'takerRate', 'feeAsset', 'chargeBasis', 'rateUnit',
+  'quoteConversionRate', 'quoteConversionEvidenceRevision', 'quoteConversionBaseAsset',
+  'quoteConversionQuoteAsset', 'quoteConversionUnit', 'observedAtMs', 'validUntilMs',
+] as const);
 
 const EVENT_PRIORITY: Readonly<Record<TwinEvent['kind'], number>> = Object.freeze({
   SYMBOL_STATUS: 10,
@@ -156,7 +171,7 @@ function snapshot(
 ): unknown {
   budget.count += 1;
   if (budget.count > MAX_GRAPH_NODES) throw new RangeError('exchange-twin graph node bound exceeded');
-  if (depth > 12) throw new RangeError('exchange-twin graph depth exceeded');
+  if (depth > MAX_GRAPH_DEPTH) throw new RangeError('exchange-twin graph depth exceeded');
   if (value === null || typeof value === 'boolean') return value;
   if (typeof value === 'number') {
     if (!Number.isSafeInteger(value)) throw new TypeError('exchange-twin numbers must be safe integers');
@@ -506,25 +521,48 @@ function orderIndex(state: Readonly<TwinScenarioState>, fixtureId: unknown): num
   return index;
 }
 
-function eventOrderingDomain(
+function eventOrderingDomains(
   event: Readonly<TwinEvent>,
   state: Readonly<TwinScenarioState>,
-): string {
+): readonly string[] {
   const payload = event.payload as Record<string, unknown>;
+  const market = `MARKET:${state.product}:${state.symbol}`;
+  const fixture = payload.fixtureId === undefined ? null : `FIXTURE:${String(payload.fixtureId)}`;
   if (event.kind === 'SYMBOL_STATUS'
     || event.kind === 'BOOK_SNAPSHOT'
     || event.kind === 'BOOK_DELTA'
     || event.kind === 'BOOK_UNAVAILABLE'
     || event.kind === 'TRADE_EVIDENCE') {
-    return `MARKET:${String(payload.product)}:${String(payload.symbol)}`;
+    return [market];
   }
-  if (event.kind === 'VENUE_ARRIVAL') return `VENUE:${state.product}:${state.symbol}`;
-  if (event.kind === 'CRASH' || event.kind === 'RESTART') return 'SCENARIO';
-  return `FIXTURE:${String(payload.fixtureId)}`;
+  if (event.kind === 'VENUE_ARRIVAL' || event.kind === 'CANCEL_ARRIVAL') {
+    return fixture === null ? [market] : [market, fixture];
+  }
+  if (event.kind === 'CRASH' || event.kind === 'RESTART') return ['SCENARIO'];
+  return fixture === null ? ['SCENARIO'] : [fixture];
+}
+
+function eventOrderingDomain(event: Readonly<TwinEvent>, state: Readonly<TwinScenarioState>): string {
+  return [...eventOrderingDomains(event, state)].sort().join('|');
+}
+
+function orderingDomainsConflict(left: readonly string[], right: readonly string[]): boolean {
+  return left.includes('SCENARIO') || right.includes('SCENARIO')
+    || left.some((domain) => right.includes(domain));
+}
+
+function sourceOrderIsProved(
+  left: { sourceSequence: number | null },
+  right: { sourceSequence: number | null },
+): boolean {
+  return left.sourceSequence !== null && right.sourceSequence !== null
+    && left.sourceSequence !== right.sourceSequence;
 }
 
 function replaceOrder(state: Readonly<TwinScenarioState>, index: number, order: Readonly<TwinOrderState>): TwinScenarioState {
   const orders = state.orders.map((item, current) => current === index ? order : item);
+  const aggregateFillCount = orders.reduce((sum, item) => sum + item.fills.length, 0);
+  if (aggregateFillCount > MAX_FILLS) throw new RangeError('aggregate twin fill bound exceeded');
   return { ...state, orders } as TwinScenarioState;
 }
 
@@ -547,6 +585,7 @@ function initialOrder(fixture: Readonly<TwinOrderFixture>): Readonly<TwinOrderSt
     fills: Object.freeze([]),
     dispatchAtMs: null,
     venueArrivalAtMs: null,
+    venueArrivalSequence: null,
     lastVenueEffectAtMs: null,
     lastLocalObservationAtMs: null,
     cancelFixture: null,
@@ -588,6 +627,437 @@ function finalizeState(
   return deepFreeze({ ...material, outcomeRevision, stateRevision });
 }
 
+const BOOK_STATE_FIELDS = Object.freeze([
+  'truth', 'product', 'symbol', 'bookRevision', 'sourceSequence', 'observedAtMs',
+  'validUntilMs', 'bids', 'asks',
+] as const);
+const ORDER_STATE_FIELDS = Object.freeze([
+  'fixture', 'venueStatus', 'localTruth', 'localObservedVenueStatus', 'filledQuantity',
+  'remainingQuantity', 'expiredQuantity', 'vwap', 'spreadDepthImpactQuote',
+  'latencyMovementQuote', 'latencyMovementEvidenceRevision', 'adverseSelectionQuote',
+  'adverseSelectionEvidenceRevision', 'queueAheadRemaining', 'fills', 'dispatchAtMs',
+  'venueArrivalAtMs', 'venueArrivalSequence', 'lastVenueEffectAtMs', 'lastLocalObservationAtMs', 'cancelFixture',
+  'cancelDispatchAtMs', 'cancelArrivalAtMs', 'recoveryRequired', 'blockedReasonCodes',
+  'venueRevision',
+] as const);
+const FILL_FIELDS = Object.freeze([
+  'fillId', 'fixtureId', 'eventId', 'bookRevision', 'price', 'quantity', 'quoteNotional',
+  'liquidityRole', 'feeEvidenceRevision', 'feeAmount', 'feeAsset', 'quoteEquivalentFee',
+  'occurredAtMs',
+] as const);
+
+function nullableTime(value: unknown, label: string): number | null {
+  return value === null ? null : safeInteger(value, label);
+}
+
+function validateCommittedState(value: unknown, label: string): Readonly<TwinScenarioState> {
+  const state = record(value, STATE_FIELDS, label) as unknown as TwinScenarioState;
+  if (state.schema !== EXCHANGE_TWIN_SCHEMA
+    || state.simulationAuthority !== 'SYNTHETIC_FIXTURE'
+    || state.actionAuthority !== 'NONE_RECORD_ONLY'
+    || state.externalActionAuthorization !== 'NONE'
+    || (state.product !== 'SPOT' && state.product !== 'USD_M_PERPETUAL')
+    || typeof state.symbol !== 'string' || !SYMBOL.test(state.symbol)) {
+    throw new TypeError('exchange-twin state is invalid or authoritative');
+  }
+  identifier(state.scenarioId, 'state scenario ID');
+  identifier(state.modelRevision, 'state model revision');
+  identifier(state.seed, 'state seed');
+  if (!['TRADING', 'CANCEL_ONLY', 'HALT', 'BREAK', 'END_OF_DAY', 'UNKNOWN'].includes(state.symbolStatus)
+    || !['PROVED', 'AMBIGUOUS'].includes(state.orderingTruth)
+    || typeof state.crashed !== 'boolean'
+    || typeof state.dropLocalDeliveries !== 'boolean'
+    || typeof state.dropPendingCommands !== 'boolean') {
+    throw new TypeError('exchange-twin state vocabulary is invalid');
+  }
+  if ((state.activeCrashId === null) !== !state.crashed) {
+    throw new TypeError('exchange-twin crash identity/state is inconsistent');
+  }
+  if (state.activeCrashId !== null) identifier(state.activeCrashId, 'active crash ID');
+  const statusTimes = [state.symbolStatusObservedAtMs, state.symbolStatusValidUntilMs];
+  if ((state.symbolStatusRevision === null) !== statusTimes.every((item) => item === null)) {
+    throw new TypeError('symbol-status revision/time state is inconsistent');
+  }
+  if (state.symbolStatusRevision !== null) {
+    identifier(state.symbolStatusRevision, 'symbol-status revision');
+    const observed = safeInteger(state.symbolStatusObservedAtMs, 'symbol-status observation time');
+    const validUntil = safeInteger(state.symbolStatusValidUntilMs, 'symbol-status validity time');
+    if (validUntil <= observed) throw new TypeError('symbol-status validity interval is invalid');
+  }
+
+  const bookValue = record(state.book, BOOK_STATE_FIELDS, 'committed twin book') as unknown as TwinBookState;
+  if (bookValue.product !== state.product || bookValue.symbol !== state.symbol
+    || !['AVAILABLE', 'UNAVAILABLE', 'GAPPED'].includes(bookValue.truth)) {
+    throw new TypeError('committed twin book identity/truth is invalid');
+  }
+  let canonicalBookValue: TwinBookState;
+  if (bookValue.truth === 'AVAILABLE') {
+    canonicalBookValue = canonicalBook(state.product, state.symbol, bookValue as unknown as Record<string, unknown>);
+  } else {
+    if (bookValue.bids.length !== 0 || bookValue.asks.length !== 0) {
+      throw new TypeError('unavailable/gapped book cannot retain liquidity');
+    }
+    if (bookValue.bookRevision !== null) identifier(bookValue.bookRevision, 'unavailable book revision');
+    if (bookValue.sourceSequence !== null) safeInteger(bookValue.sourceSequence, 'unavailable book sequence', 1, Number.MAX_SAFE_INTEGER);
+    nullableTime(bookValue.observedAtMs, 'unavailable book observation time');
+    if (bookValue.validUntilMs !== null) throw new TypeError('unavailable/gapped book cannot be fresh');
+    canonicalBookValue = deepFreeze(bookValue);
+  }
+  if (!Array.isArray(state.bookRevisions) || state.bookRevisions.length > MAX_EVENTS) {
+    throw new RangeError('book revision history is overbound');
+  }
+  const bookRevisions = state.bookRevisions.map((revision) => identifier(revision, 'book history revision'));
+  if (new Set(bookRevisions).size !== bookRevisions.length
+    || (canonicalBookValue.bookRevision !== null && !bookRevisions.includes(canonicalBookValue.bookRevision))) {
+    throw new TypeError('book revision history is inconsistent');
+  }
+
+  if (!Array.isArray(state.orders) || state.orders.length > MAX_FIXTURES) {
+    throw new RangeError('committed twin orders are overbound');
+  }
+  const fixtureValidator = createExchangeTwinState({
+    schema: 'TWIN_SCENARIO_INPUT_V1',
+    scenarioId: state.scenarioId,
+    modelRevision: state.modelRevision,
+    seed: state.seed,
+    product: state.product,
+    symbol: state.symbol,
+    fixtures: state.orders.map((order) => (order as TwinOrderState).fixture),
+    events: [],
+  });
+  const canonicalFixtures = new Map(
+    fixtureValidator.orders.map((order) => [order.fixture.fixtureId, order.fixture]),
+  );
+  const fillIds = new Set<string>();
+  let aggregateFillCount = 0;
+  const orders = state.orders.map((orderValue) => {
+    const order = record(orderValue, ORDER_STATE_FIELDS, 'committed twin order') as unknown as TwinOrderState;
+    const fixture = canonicalFixtures.get(order.fixture.fixtureId);
+    if (fixture === undefined || canonicalJson(fixture) !== canonicalJson(order.fixture)) {
+      throw new TypeError('committed twin fixture is invalid');
+    }
+    if (!['NOT_ARRIVED', 'BLOCKED', 'NEW', 'PARTIALLY_FILLED', 'FILLED', 'CANCELED', 'EXPIRED'].includes(order.venueStatus)
+      || !['NOT_DISPATCHED', 'DISPATCHED', 'ACKNOWLEDGED', 'UNKNOWN', 'OBSERVED', 'RECOVERY_REQUIRED'].includes(order.localTruth)
+      || (order.localObservedVenueStatus !== null
+        && !['NOT_ARRIVED', 'BLOCKED', 'NEW', 'PARTIALLY_FILLED', 'FILLED', 'CANCELED', 'EXPIRED'].includes(order.localObservedVenueStatus))) {
+      throw new TypeError('committed twin order vocabulary is invalid');
+    }
+    const filledQuantity = twinDecimal(order.filledQuantity, 'committed filled quantity');
+    const remainingQuantity = twinDecimal(order.remainingQuantity, 'committed remaining quantity');
+    const expiredQuantity = twinDecimal(order.expiredQuantity, 'committed expired quantity');
+    if (addTwinDecimals(addTwinDecimals(filledQuantity, remainingQuantity), expiredQuantity) !== fixture.quantity) {
+      throw new TypeError('committed twin order quantity conservation failed');
+    }
+    if (!Array.isArray(order.fills) || order.fills.length > MAX_FILLS) {
+      throw new RangeError('committed twin fills are overbound');
+    }
+    aggregateFillCount += order.fills.length;
+    const fills = order.fills.map((fillValue) => {
+      const fill = record(fillValue, FILL_FIELDS, 'committed twin fill') as unknown as TwinFill;
+      identifier(fill.fillId, 'fill ID');
+      if (fillIds.has(fill.fillId)) throw new TypeError('fill identity is duplicated');
+      fillIds.add(fill.fillId);
+      if (fill.fixtureId !== fixture.fixtureId) throw new TypeError('fill crosses fixture identity');
+      identifier(fill.eventId, 'fill event ID');
+      if (fill.bookRevision !== null) identifier(fill.bookRevision, 'fill book revision');
+      const quantity = twinPositiveDecimal(fill.quantity, 'fill quantity');
+      const price = twinPositiveDecimal(fill.price, 'fill price');
+      const notional = twinDecimal(fill.quoteNotional, 'fill quote notional');
+      if (notional !== multiplyTwinDecimals(quantity, price)
+        || (fill.liquidityRole !== 'MAKER' && fill.liquidityRole !== 'TAKER')) {
+        throw new TypeError('fill economics/role is invalid');
+      }
+      if (fill.feeEvidenceRevision === null) {
+        if (fill.feeAmount !== null || fill.feeAsset !== null || fill.quoteEquivalentFee !== null) {
+          throw new TypeError('fill fee absence is inconsistent');
+        }
+      } else {
+        identifier(fill.feeEvidenceRevision, 'fill fee revision');
+        twinDecimal(fill.feeAmount, 'fill fee amount');
+        asset(fill.feeAsset, 'fill fee asset');
+        if (fill.quoteEquivalentFee !== null) twinDecimal(fill.quoteEquivalentFee, 'fill quote-equivalent fee');
+      }
+      safeInteger(fill.occurredAtMs, 'fill occurrence time');
+      return deepFreeze(fill);
+    });
+    if (fills.reduce((sum, fill) => addTwinDecimals(sum, fill.quantity), '0') !== filledQuantity) {
+      throw new TypeError('fill sum does not equal committed filled quantity');
+    }
+    const totalNotional = fills.reduce((sum, fill) => addTwinDecimals(sum, fill.quoteNotional), '0');
+    if (filledQuantity === '0') {
+      if (order.vwap !== null) throw new TypeError('zero-fill order cannot carry VWAP');
+    } else {
+      const vwap = record(order.vwap, [
+        'numeratorQuoteNotional', 'denominatorBaseQuantity', 'decimalScale24', 'decimalPolicy',
+      ], 'committed twin VWAP');
+      if (vwap.numeratorQuoteNotional !== totalNotional
+        || vwap.denominatorBaseQuantity !== filledQuantity
+        || vwap.decimalScale24 !== divideTwinDecimals(totalNotional, filledQuantity)
+        || vwap.decimalPolicy !== 'TRUNCATED_SCALE_24') {
+        throw new TypeError('committed twin VWAP is inconsistent');
+      }
+    }
+    for (const [amount, revision, axis] of [
+      [order.latencyMovementQuote, order.latencyMovementEvidenceRevision, 'latency'],
+      [order.adverseSelectionQuote, order.adverseSelectionEvidenceRevision, 'adverse-selection'],
+    ] as const) {
+      if (amount !== null && revision === null) throw new TypeError(`${axis} cost lineage is inconsistent`);
+      if (amount !== null) twinDecimal(amount, `${axis} cost`);
+      if (revision !== null) identifier(revision, `${axis} cost revision`);
+    }
+    if (order.spreadDepthImpactQuote !== null) twinDecimal(order.spreadDepthImpactQuote, 'spread/depth impact');
+    if (order.queueAheadRemaining !== null) {
+      const queue = twinDecimal(order.queueAheadRemaining, 'queue ahead remaining');
+      if (fixture.queueAheadQuantity === null || compareTwinDecimals(queue, fixture.queueAheadQuantity) > 0) {
+        throw new TypeError('queue-ahead state is inconsistent');
+      }
+    }
+    const cancelFixture = order.cancelFixture === null ? null : validateCancelFixture(order.cancelFixture, fixture);
+    for (const [time, timeLabel] of [
+      [order.dispatchAtMs, 'dispatch'], [order.venueArrivalAtMs, 'venue arrival'],
+      [order.lastVenueEffectAtMs, 'last venue effect'], [order.lastLocalObservationAtMs, 'last local observation'],
+      [order.cancelDispatchAtMs, 'cancel dispatch'], [order.cancelArrivalAtMs, 'cancel arrival'],
+    ] as const) nullableTime(time, `${timeLabel} time`);
+    if (order.venueArrivalSequence !== null) {
+      safeInteger(order.venueArrivalSequence, 'venue arrival source sequence', 1, Number.MAX_SAFE_INTEGER);
+    }
+    if (order.venueArrivalAtMs === null && order.venueArrivalSequence !== null) {
+      throw new TypeError('venue arrival time/source sequence state is inconsistent');
+    }
+    if (order.dispatchAtMs === null && order.venueArrivalAtMs !== null) throw new TypeError('venue arrival lacks dispatch');
+    if (order.dispatchAtMs !== null && order.venueArrivalAtMs !== null
+      && order.venueArrivalAtMs < order.dispatchAtMs) throw new TypeError('venue arrival precedes dispatch');
+    if ((cancelFixture === null) !== (order.cancelDispatchAtMs === null)) {
+      throw new TypeError('cancel fixture/dispatch state is inconsistent');
+    }
+    if (order.venueStatus === 'NOT_ARRIVED'
+      && (order.venueArrivalAtMs !== null || filledQuantity !== '0' || expiredQuantity !== '0')) {
+      throw new TypeError('not-arrived order carries venue effects');
+    }
+    if (order.venueStatus === 'BLOCKED'
+      && (filledQuantity !== '0' || expiredQuantity !== '0' || remainingQuantity !== fixture.quantity)) {
+      throw new TypeError('blocked order carries economic effects');
+    }
+    if (order.venueStatus === 'NEW'
+      && (order.venueArrivalAtMs === null || filledQuantity !== '0'
+        || remainingQuantity !== fixture.quantity || expiredQuantity !== '0')) {
+      throw new TypeError('new order lifecycle quantities are inconsistent');
+    }
+    if (order.venueStatus === 'PARTIALLY_FILLED'
+      && (order.venueArrivalAtMs === null || filledQuantity === '0'
+        || remainingQuantity === '0' || expiredQuantity !== '0')) {
+      throw new TypeError('partially-filled order lifecycle quantities are inconsistent');
+    }
+    if (order.venueStatus === 'FILLED'
+      && (filledQuantity !== fixture.quantity || remainingQuantity !== '0' || expiredQuantity !== '0')) {
+      throw new TypeError('filled order lifecycle quantities are inconsistent');
+    }
+    if (order.venueStatus === 'EXPIRED'
+      && (order.venueArrivalAtMs === null || remainingQuantity !== '0' || expiredQuantity === '0')) {
+      throw new TypeError('expired order lifecycle quantities are inconsistent');
+    }
+    if (order.venueStatus === 'CANCELED'
+      && (cancelFixture === null || order.cancelArrivalAtMs === null || expiredQuantity !== '0')) {
+      throw new TypeError('canceled order lifecycle state is inconsistent');
+    }
+    if (typeof order.recoveryRequired !== 'boolean' || !Array.isArray(order.blockedReasonCodes)
+      || order.blockedReasonCodes.length > 64) throw new TypeError('order recovery/reason state is invalid');
+    const reasons = order.blockedReasonCodes.map((reason) => identifier(reason, 'blocked reason'));
+    if (new Set(reasons).size !== reasons.length) throw new TypeError('blocked reasons are duplicated');
+    identifier(order.venueRevision, 'venue revision');
+    return deepFreeze({ ...order, fixture, fills, cancelFixture, blockedReasonCodes: reasons });
+  });
+  if (aggregateFillCount > MAX_FILLS) throw new RangeError('aggregate twin fill bound exceeded');
+
+  if (!Array.isArray(state.processedEvents) || state.processedEvents.length > MAX_EVENTS) {
+    throw new RangeError('processed-event history is overbound');
+  }
+  const eventIds = new Set<string>();
+  const sequences = new Set<number>();
+  const processedEvents = state.processedEvents.map((entryValue) => {
+    const entry = record(entryValue, [
+      'event', 'eventId', 'sequence', 'occurredAtMs', 'kind', 'eventPriority', 'orderingDomain',
+      'sourceSequence', 'contentRevision',
+    ], 'processed twin event');
+    const retainedEvent = validateEvent(entry.event, fixtureValidator);
+    const eventId = identifier(entry.eventId, 'processed event ID');
+    const sequence = safeInteger(entry.sequence, 'processed event sequence', 1, Number.MAX_SAFE_INTEGER);
+    if (eventIds.has(eventId) || sequences.has(sequence)) throw new TypeError('processed event identity/sequence is duplicated');
+    eventIds.add(eventId); sequences.add(sequence);
+    if (retainedEvent.eventId !== eventId
+      || retainedEvent.sequence !== sequence
+      || retainedEvent.occurredAtMs !== entry.occurredAtMs
+      || retainedEvent.kind !== entry.kind
+      || retainedEvent.sourceSequence !== entry.sourceSequence
+      || eventContent(retainedEvent) !== entry.contentRevision
+      || typeof entry.kind !== 'string' || !Object.hasOwn(EVENT_PRIORITY, entry.kind)
+      || entry.eventPriority !== EVENT_PRIORITY[entry.kind as TwinEvent['kind']]) {
+      throw new TypeError('processed event retention/kind/priority is invalid');
+    }
+    safeInteger(entry.occurredAtMs, 'processed event occurrence time');
+    if (entry.sourceSequence !== null) safeInteger(entry.sourceSequence, 'processed source sequence', 1, Number.MAX_SAFE_INTEGER);
+    if (typeof entry.orderingDomain !== 'string' || entry.orderingDomain.length > 400) throw new TypeError('processed ordering domain is invalid');
+    identifier(entry.contentRevision, 'processed content revision');
+    return deepFreeze({ ...entry, event: retainedEvent }) as unknown as TwinScenarioState['processedEvents'][number];
+  });
+  const sortedProcessed = [...processedEvents].sort((left, right) =>
+    (left.sequence as number) - (right.sequence as number)
+      || stableTextCompare(left.eventId as string, right.eventId as string));
+  if (canonicalJson(processedEvents) !== canonicalJson(sortedProcessed)) {
+    throw new TypeError('processed event history is not canonically ordered');
+  }
+  if (!Array.isArray(state.tradeEvidence) || state.tradeEvidence.length > MAX_EVENTS) {
+    throw new RangeError('trade evidence history is overbound');
+  }
+  const tradeRevisions = new Set<string>();
+  const tradeEvidence = state.tradeEvidence.map((entryValue) => {
+    const entry = record(entryValue, ['tradeRevision', 'contentRevision'], 'trade evidence history');
+    const tradeRevision = identifier(entry.tradeRevision, 'trade evidence revision');
+    if (tradeRevisions.has(tradeRevision)) throw new TypeError('trade evidence revision is duplicated');
+    tradeRevisions.add(tradeRevision);
+    return deepFreeze({
+      tradeRevision,
+      contentRevision: identifier(entry.contentRevision, 'trade content revision'),
+    });
+  });
+  if (!Array.isArray(state.feeEvidence) || state.feeEvidence.length > MAX_EVENTS) {
+    throw new RangeError('fee evidence history is overbound');
+  }
+  const scenarioFixture = orders[0]?.fixture;
+  const feeRevisions = new Set<string>();
+  const feeEvidence = state.feeEvidence.map((evidenceValue) => {
+    if (scenarioFixture === undefined) {
+      throw new TypeError('fee evidence requires a scenario asset identity');
+    }
+    const evidence = validateFeeEvidenceForAssets(
+      evidenceValue,
+      (evidenceValue as TwinFeeEvidence).observedAtMs,
+      scenarioFixture.baseAsset,
+      scenarioFixture.quoteAsset,
+    );
+    if (evidence === null || feeRevisions.has(evidence.evidenceRevision)) {
+      throw new TypeError('fee evidence revision is absent or duplicated');
+    }
+    feeRevisions.add(evidence.evidenceRevision);
+    return evidence;
+  });
+  if (!Array.isArray(state.ambiguousDomains) || state.ambiguousDomains.length > 128
+    || state.ambiguousDomains.some((domain) => typeof domain !== 'string' || domain.length > 400)
+    || new Set(state.ambiguousDomains).size !== state.ambiguousDomains.length) {
+    throw new TypeError('ambiguous ordering domains are invalid');
+  }
+  if (!Array.isArray(state.preflights) || state.preflights.length > MAX_EVENTS
+    || !Array.isArray(state.rateDecisions) || state.rateDecisions.length > MAX_EVENTS) {
+    throw new RangeError('owner-evidence histories are overbound');
+  }
+  for (const preflightValue of state.preflights) {
+    const preflight = record(preflightValue, ['fixtureId', 'registrySnapshot', 'sizingRequest', 'result'], 'preflight history');
+    const fixture = canonicalFixtures.get(identifier(preflight.fixtureId, 'preflight fixture ID'));
+    if (fixture === undefined) {
+      throw new TypeError('preflight history crosses fixture identity');
+    }
+    const registrySnapshot = deepFreeze(snapshot(preflight.registrySnapshot));
+    const sizingRequest = deepFreeze(snapshot(preflight.sizingRequest)) as { evaluatedAtMs?: unknown };
+    const result = snapshot(preflight.result);
+    const recomputed = evaluateExchangeTwinInstrumentPreflight(
+      registrySnapshot,
+      sizingRequest,
+      sizingRequest.evaluatedAtMs,
+    );
+    if (canonicalJson(result) !== canonicalJson(recomputed)) {
+      throw new TypeError('preflight history does not reproduce owner result');
+    }
+  }
+  for (const rateValue of state.rateDecisions) {
+    const rate = record(rateValue, [
+      'fixtureId', 'ownerEvidenceSha256', 'rateState', 'reservationInput', 'decision',
+    ], 'rate-decision history');
+    const fixture = canonicalFixtures.get(identifier(rate.fixtureId, 'rate fixture ID'));
+    const rateState = deepFreeze(snapshot(rate.rateState));
+    const reservationInput = deepFreeze(snapshot(rate.reservationInput)) as { atMs?: unknown };
+    if (fixture === undefined
+      || typeof rate.ownerEvidenceSha256 !== 'string' || !SHA256.test(rate.ownerEvidenceSha256)
+      || rate.ownerEvidenceSha256 !== exchangeTwinOwnerEvidenceSha256({ rateState, reservationInput })) {
+      throw new TypeError('rate-decision history identity is invalid');
+    }
+    const decision = snapshot(rate.decision) as { allowed?: unknown; reason?: unknown; quote?: Record<string, unknown> };
+    const recomputed = evaluateExchangeTwinRateReservation(
+      rateState,
+      reservationInput,
+      reservationInput.atMs,
+    );
+    const expectedContractId = fixture.product === 'SPOT' ? 'SPOT_ORDER_POST' : 'USDM_ORDER_POST';
+    if (typeof decision.allowed !== 'boolean' || typeof decision.reason !== 'string'
+      || canonicalJson(decision) !== canonicalJson(recomputed)
+      || decision.quote?.contractId !== expectedContractId
+      || decision.quote?.product !== fixture.product
+      || decision.quote?.environment !== 'PRODUCTION'
+      || decision.quote?.matrixContentSha256 !== '7302b7f5f90bb8f08791d07a2718adb1ca77a54d7e01f5a76079380c96cddbac') {
+      throw new TypeError('rate-decision history is invalid');
+    }
+  }
+  const processedById = new Map(processedEvents.map((entry) => [entry.eventId, entry]));
+  for (const order of orders) {
+    for (const fill of order.fills) {
+      const event = processedById.get(fill.eventId);
+      if (event === undefined
+        || event.occurredAtMs !== fill.occurredAtMs
+        || (fill.liquidityRole === 'TAKER' && event.kind !== 'VENUE_ARRIVAL')
+        || (fill.liquidityRole === 'MAKER' && event.kind !== 'TRADE_EVIDENCE')
+        || (fill.bookRevision !== null && !bookRevisions.includes(fill.bookRevision))) {
+        throw new TypeError('fill does not bind retained event/book evidence');
+      }
+      if (fill.feeEvidenceRevision === null) continue;
+      const evidence = feeEvidence.find((item) => item.evidenceRevision === fill.feeEvidenceRevision);
+      if (evidence === undefined) throw new TypeError('fill fee evidence revision is not retained');
+      const recomputedFee = feeFor(
+        evidence,
+        fill.quantity,
+        fill.quoteNotional,
+        fill.liquidityRole,
+        fill.occurredAtMs,
+        order.fixture.baseAsset,
+        order.fixture.quoteAsset,
+      );
+      if (canonicalJson(recomputedFee) !== canonicalJson({
+        feeEvidenceRevision: fill.feeEvidenceRevision,
+        feeAmount: fill.feeAmount,
+        feeAsset: fill.feeAsset,
+        quoteEquivalentFee: fill.quoteEquivalentFee,
+      })) {
+        throw new TypeError('fill fee economics do not reproduce retained evidence');
+      }
+    }
+  }
+  const { outcomeRevision, stateRevision, ...material } = state;
+  const rebuilt = finalizeState({
+    ...material,
+    book: canonicalBookValue,
+    bookRevisions,
+    orders,
+    processedEvents,
+    tradeEvidence,
+    feeEvidence,
+  });
+  if (rebuilt.outcomeRevision !== outcomeRevision || rebuilt.stateRevision !== stateRevision) {
+    throw new TypeError('exchange-twin state revision mismatch');
+  }
+  const replayed = runExchangeTwinScenario({
+    schema: 'TWIN_SCENARIO_INPUT_V1',
+    scenarioId: state.scenarioId,
+    modelRevision: state.modelRevision,
+    seed: state.seed,
+    product: state.product,
+    symbol: state.symbol,
+    fixtures: orders.map((order) => order.fixture),
+    events: processedEvents.map((entry) => entry.event),
+  });
+  if (canonicalJson(replayed) !== canonicalJson(rebuilt)) {
+    throw new TypeError('exchange-twin state does not reproduce retained event history');
+  }
+  return rebuilt;
+}
+
 export function createExchangeTwinState(inputValue: unknown): Readonly<TwinScenarioState> {
   const input = record(inputValue, [
     'schema', 'scenarioId', 'modelRevision', 'seed', 'product', 'symbol', 'fixtures', 'events',
@@ -605,6 +1075,16 @@ export function createExchangeTwinState(inputValue: unknown): Readonly<TwinScena
     .sort((left, right) => stableTextCompare(left.fixtureId, right.fixtureId));
   if (new Set(fixtures.map((fixture) => fixture.fixtureId)).size !== fixtures.length) {
     throw new TypeError('twin fixture identities are duplicated');
+  }
+  for (const [label, values] of [
+    ['L06 mutation', fixtures.map((fixture) => fixture.l06Snapshot.mutationId)],
+    ['L06 boundary', fixtures.map((fixture) => fixture.l06Boundary.boundaryId)],
+    ['L06 request', fixtures.map((fixture) => fixture.l06Snapshot.identity.requestId)],
+    ['L06 client-order', fixtures.map((fixture) => fixture.l06Snapshot.identity.clientOrderId)],
+  ] as const) {
+    if (new Set(values).size !== values.length) {
+      throw new TypeError(`${label} identities are duplicated across twin fixtures`);
+    }
   }
   if (fixtures.some((fixture) => fixture.product !== input.product || fixture.symbol !== input.symbol)) {
     throw new TypeError('twin fixture crosses scenario scope');
@@ -630,10 +1110,13 @@ export function createExchangeTwinState(inputValue: unknown): Readonly<TwinScena
       bookRevision: null, sourceSequence: null, observedAtMs: null, validUntilMs: null,
       bids: [], asks: [],
     }),
+    bookRevisions: [],
     orders: fixtures.map(initialOrder),
     preflights: [],
     rateDecisions: [],
     processedEvents: [],
+    tradeEvidence: [],
+    feeEvidence: [],
     crashed: false,
     activeCrashId: null,
     dropLocalDeliveries: false,
@@ -712,31 +1195,87 @@ function ratePass(state: Readonly<TwinScenarioState>, fixture: TwinOrderFixture)
     && evidence.decision.reason === 'RESERVED';
 }
 
+function rateReason(state: Readonly<TwinScenarioState>, fixture: TwinOrderFixture): string {
+  const evidence = [...state.rateDecisions].reverse()
+    .find((entry) => entry.fixtureId === fixture.fixtureId);
+  return evidence === undefined ? 'MISSING' : evidence.decision.reason;
+}
+
+export function deriveTwinFeeConversionRevision(value: unknown): string {
+  const projection = record(value, [
+    'baseAsset', 'quoteAsset', 'unit', 'rate',
+  ], 'fee conversion revision projection');
+  const baseAsset = asset(projection.baseAsset, 'fee conversion base asset');
+  const quoteAsset = asset(projection.quoteAsset, 'fee conversion quote asset');
+  if (baseAsset === quoteAsset || projection.unit !== 'QUOTE_ASSET_PER_FEE_ASSET') {
+    throw new TypeError('fee conversion pair/unit is invalid');
+  }
+  const rate = twinPositiveDecimal(projection.rate, 'fee quote conversion rate');
+  return digest('l07conversion_', {
+    baseAsset, quoteAsset, unit: projection.unit, rate,
+  });
+}
+
+export function deriveTwinFeeEvidenceRevision(value: unknown): string {
+  const projection = record(value, FEE_REVISION_FIELDS, 'fee evidence revision projection');
+  const normalized = {
+    makerRate: twinDecimal(projection.makerRate, 'maker rate'),
+    takerRate: twinDecimal(projection.takerRate, 'taker rate'),
+    feeAsset: asset(projection.feeAsset, 'fee asset'),
+    chargeBasis: projection.chargeBasis,
+    rateUnit: projection.rateUnit,
+    quoteConversionRate: projection.quoteConversionRate === null
+      ? null : twinPositiveDecimal(projection.quoteConversionRate, 'fee quote conversion rate'),
+    quoteConversionEvidenceRevision: projection.quoteConversionEvidenceRevision,
+    quoteConversionBaseAsset: projection.quoteConversionBaseAsset,
+    quoteConversionQuoteAsset: projection.quoteConversionQuoteAsset,
+    quoteConversionUnit: projection.quoteConversionUnit,
+    observedAtMs: safeInteger(projection.observedAtMs, 'fee observation time'),
+    validUntilMs: safeInteger(projection.validUntilMs, 'fee validity time'),
+  };
+  if ((normalized.chargeBasis !== 'QUOTE_NOTIONAL' && normalized.chargeBasis !== 'BASE_QUANTITY')
+    || (normalized.chargeBasis === 'QUOTE_NOTIONAL'
+      && normalized.rateUnit !== 'FEE_ASSET_PER_QUOTE_NOTIONAL')
+    || (normalized.chargeBasis === 'BASE_QUANTITY'
+      && normalized.rateUnit !== 'FEE_ASSET_PER_BASE_QUANTITY')) {
+    throw new TypeError('fee basis/rate unit is invalid');
+  }
+  const conversionParts = [
+    normalized.quoteConversionRate,
+    normalized.quoteConversionEvidenceRevision,
+    normalized.quoteConversionBaseAsset,
+    normalized.quoteConversionQuoteAsset,
+    normalized.quoteConversionUnit,
+  ];
+  if (conversionParts.some((part) => part === null) && conversionParts.some((part) => part !== null)) {
+    throw new TypeError('fee conversion evidence must be wholly present or absent');
+  }
+  if (normalized.quoteConversionRate !== null) {
+    const expected = deriveTwinFeeConversionRevision({
+      baseAsset: normalized.quoteConversionBaseAsset,
+      quoteAsset: normalized.quoteConversionQuoteAsset,
+      unit: normalized.quoteConversionUnit,
+      rate: normalized.quoteConversionRate,
+    });
+    if (normalized.quoteConversionEvidenceRevision !== expected) {
+      throw new TypeError('fee conversion revision is not an exact content commitment');
+    }
+  }
+  return digest('l07fee_', normalized);
+}
+
 function validateFeeEvidence(value: unknown, nowMs: number): Readonly<TwinFeeEvidence> | null {
   if (value === null) return null;
-  const fee = record(value, [
-    'schema', 'evidenceRevision', 'makerRate', 'takerRate', 'feeAsset', 'chargeBasis', 'rateUnit',
-    'quoteConversionRate', 'observedAtMs', 'validUntilMs',
-  ], 'fee evidence') as unknown as TwinFeeEvidence;
+  const fee = record(value, FEE_EVIDENCE_FIELDS, 'fee evidence') as unknown as TwinFeeEvidence;
   const observedAtMs = safeInteger(fee.observedAtMs, 'fee observation time');
   const validUntilMs = safeInteger(fee.validUntilMs, 'fee validity time');
+  const { schema: _schema, evidenceRevision: _revision, ...feeRevisionProjection } = fee;
   if (fee.schema !== 'TWIN_FEE_EVIDENCE_V1'
     || nowMs < observedAtMs
     || nowMs >= validUntilMs
     || validUntilMs <= observedAtMs
-    || (fee.chargeBasis !== 'QUOTE_NOTIONAL' && fee.chargeBasis !== 'BASE_QUANTITY')
-    || (fee.chargeBasis === 'QUOTE_NOTIONAL'
-      && fee.rateUnit !== 'FEE_ASSET_PER_QUOTE_NOTIONAL')
-    || (fee.chargeBasis === 'BASE_QUANTITY'
-      && fee.rateUnit !== 'FEE_ASSET_PER_BASE_QUANTITY')) {
+    || fee.evidenceRevision !== deriveTwinFeeEvidenceRevision(feeRevisionProjection)) {
     throw new TypeError('fee evidence is invalid or expired');
-  }
-  identifier(fee.evidenceRevision, 'fee evidence revision');
-  asset(fee.feeAsset, 'fee asset');
-  twinDecimal(fee.makerRate, 'maker rate');
-  twinDecimal(fee.takerRate, 'taker rate');
-  if (fee.quoteConversionRate !== null) {
-    twinPositiveDecimal(fee.quoteConversionRate, 'fee quote conversion rate');
   }
   return deepFreeze(fee);
 }
@@ -750,7 +1289,17 @@ function validateFeeEvidenceForAssets(
   const fee = validateFeeEvidence(value, nowMs);
   if (fee === null) return null;
   asset(baseAsset, 'fee basis base asset');
-  asset(quoteAsset, 'fee basis quote asset');
+  const normalizedQuote = asset(quoteAsset, 'fee basis quote asset');
+  if (fee.feeAsset === normalizedQuote) {
+    if (fee.quoteConversionRate !== null) {
+      throw new TypeError('quote-denominated fee must not carry conversion evidence');
+    }
+  } else if (fee.quoteConversionRate !== null
+    && (fee.quoteConversionBaseAsset !== fee.feeAsset
+      || fee.quoteConversionQuoteAsset !== normalizedQuote
+      || fee.quoteConversionUnit !== 'QUOTE_ASSET_PER_FEE_ASSET')) {
+    throw new TypeError('fee conversion evidence does not bind the scenario assets');
+  }
   return fee;
 }
 
@@ -782,6 +1331,26 @@ function feeFor(
   };
 }
 
+function retainFeeEvidence(
+  state: Readonly<TwinScenarioState>,
+  value: unknown,
+  nowMs: number,
+  baseAsset: string,
+  quoteAsset: string,
+): TwinScenarioState {
+  const evidence = validateFeeEvidenceForAssets(value, nowMs, baseAsset, quoteAsset);
+  if (evidence === null) return state as TwinScenarioState;
+  const prior = state.feeEvidence.find((item) => item.evidenceRevision === evidence.evidenceRevision);
+  if (prior !== undefined) {
+    if (canonicalJson(prior) !== canonicalJson(evidence)) {
+      throw new TypeError('fee evidence revision content conflict');
+    }
+    return state as TwinScenarioState;
+  }
+  if (state.feeEvidence.length >= MAX_EVENTS) throw new RangeError('fee evidence history is overbound');
+  return { ...state, feeEvidence: [...state.feeEvidence, evidence] } as TwinScenarioState;
+}
+
 function executeAggressive(
   state: Readonly<TwinScenarioState>,
   order: Readonly<TwinOrderState>,
@@ -810,7 +1379,7 @@ function executeAggressive(
       ...(!bookFresh ? ['BOOK_STALE'] : []),
       ...(orderingBlocked ? ['EVENT_ORDER_AMBIGUOUS'] : []),
       ...(!preflightPass(state, fixture, event.occurredAtMs) ? ['PREFLIGHT_NOT_EXACT'] : []),
-      ...(!ratePass(state, fixture) ? ['RATE_NOT_RESERVED'] : []),
+      ...(!ratePass(state, fixture) ? [`RATE_${rateReason(state, fixture)}`] : []),
     ].sort();
     const blocked = deepFreeze({
       ...order, venueStatus: 'BLOCKED' as const, venueArrivalAtMs: event.occurredAtMs,
@@ -826,6 +1395,29 @@ function executeAggressive(
       ? compareTwinDecimals(level.price, fixture.price) <= 0
       : compareTwinDecimals(level.price, fixture.price) >= 0));
   const available = eligible.reduce((sum, level) => addTwinDecimals(sum, level.quantity), '0');
+  if (fixture.timeInForce === 'GTC'
+    && compareTwinDecimals(available, fixture.quantity) < 0
+    && fixture.queueTruth === 'ESTIMATED'
+    && fixture.queueAheadQuantity !== null
+    && fixture.queueAheadQuantity !== '0') {
+    const ownLevels = fixture.side === 'BUY' ? state.book.bids : state.book.asks;
+    const samePrice = ownLevels.find((level) => level.price === fixture.price);
+    if (samePrice === undefined
+      || compareTwinDecimals(fixture.queueAheadQuantity, samePrice.quantity) > 0) {
+      const reasons = ['QUEUE_EVIDENCE_CONTRADICTS_BOOK'];
+      return {
+        order: deepFreeze({
+          ...order,
+          venueStatus: 'BLOCKED' as const,
+          venueArrivalAtMs: event.occurredAtMs,
+          lastVenueEffectAtMs: event.occurredAtMs,
+          blockedReasonCodes: reasons,
+          venueRevision: digest('l07venue_', { prior: order.venueRevision, eventId: event.eventId, reasons }),
+        }),
+        book: state.book,
+      };
+    }
+  }
   if (fixture.timeInForce === 'FOK' && compareTwinDecimals(available, fixture.quantity) < 0) {
     const expired = deepFreeze({
       ...order, venueStatus: 'EXPIRED' as const, venueArrivalAtMs: event.occurredAtMs,
@@ -932,7 +1524,7 @@ function updateBookWithDelta(state: Readonly<TwinScenarioState>, payload: Record
       truth: 'GAPPED',
       sourceSequence: Math.max(state.book.sourceSequence ?? 0, sourceSequence),
       observedAtMs,
-      validUntilMs,
+      validUntilMs: null,
       bids: [],
       asks: [],
     });
@@ -976,6 +1568,20 @@ function reduceCanonical(
   if (stateValue.processedEvents.some((item) => item.sequence === event.sequence)) {
     throw new TypeError('event sequence is duplicated');
   }
+  let tradeContentRevision: string | null = null;
+  if (event.kind === 'TRADE_EVIDENCE') {
+    const tradePayload = event.payload as Record<string, unknown>;
+    const tradeRevision = identifier(tradePayload.tradeRevision, 'trade revision');
+    const { tradeRevision: _tradeRevision, ...tradeContent } = tradePayload;
+    tradeContentRevision = digest('l07tradecontent_', tradeContent);
+    const priorTrade = stateValue.tradeEvidence.find((item) => item.tradeRevision === tradeRevision);
+    if (priorTrade !== undefined) {
+      if (priorTrade.contentRevision !== tradeContentRevision) {
+        throw new TypeError('trade revision content conflict');
+      }
+      return stateValue;
+    }
+  }
   if (stateValue.processedEvents.length >= MAX_EVENTS) {
     throw new RangeError('exchange-twin processed event bound exceeded');
   }
@@ -986,8 +1592,8 @@ function reduceCanonical(
     occurredAtMs: number; eventPriority: number; sourceSequence: number | null;
     sequence: number; eventId: string;
   }): number => left.occurredAtMs - right.occurredAtMs
-    || left.eventPriority - right.eventPriority
     || (left.sourceSequence ?? Number.MAX_SAFE_INTEGER) - (right.sourceSequence ?? Number.MAX_SAFE_INTEGER)
+    || left.eventPriority - right.eventPriority
     || left.sequence - right.sequence
     || stableTextCompare(left.eventId, right.eventId);
   const candidateOrder = {
@@ -998,17 +1604,20 @@ function reduceCanonical(
     sequence: event.sequence,
     eventId: event.eventId,
   };
-  const lastApplied = [...stateValue.processedEvents].sort(orderingCompare).at(-1);
+  const orderedApplied = [...stateValue.processedEvents].sort(orderingCompare);
+  const lastApplied = orderedApplied.at(-1);
   if (lastApplied !== undefined && orderingCompare(candidateOrder, lastApplied) < 0) {
     throw new TypeError('event time/order regression is forbidden');
   }
-  if (lastApplied !== undefined
-    && candidateOrder.occurredAtMs === lastApplied.occurredAtMs
-    && candidateOrder.eventPriority === lastApplied.eventPriority
-    && candidateOrder.orderingDomain === lastApplied.orderingDomain
-    && candidateOrder.sourceSequence === null
-    && lastApplied.sourceSequence === null
-    && !allowClosedSetAmbiguity) {
+  const ambiguousPrior = orderedApplied.find((prior) => (
+    candidateOrder.occurredAtMs === prior.occurredAtMs
+    && orderingDomainsConflict(
+      candidateOrder.orderingDomain.split('|'),
+      prior.orderingDomain.split('|'),
+    )
+    && !sourceOrderIsProved(candidateOrder, prior)
+  ));
+  if (ambiguousPrior !== undefined && !allowClosedSetAmbiguity) {
     throw new TypeError('incremental equal-time event ordering is ambiguous; use a closed scenario set');
   }
   let state: TwinScenarioState = { ...stateValue };
@@ -1038,16 +1647,21 @@ function reduceCanonical(
       || (state.book.sourceSequence !== null
         && safeInteger(payload.sourceSequence, 'book source sequence', 1, Number.MAX_SAFE_INTEGER)
           <= state.book.sourceSequence)
-      || payload.bookRevision === state.book.bookRevision) {
+      || payload.bookRevision === state.book.bookRevision
+      || state.bookRevisions.includes(String(payload.bookRevision))) {
       throw new TypeError('book snapshot is regressed, replayed or envelope-unbound');
     }
     if (event.occurredAtMs !== payload.observedAtMs) {
       throw new TypeError('book snapshot time is envelope-unbound');
     }
     const nextBook = canonicalBook(state.product, state.symbol, payload);
-    state = { ...state, book: eventAmbiguous
-      ? deepFreeze({ ...nextBook, truth: 'GAPPED' as const, bids: [], asks: [] })
-      : nextBook };
+    state = {
+      ...state,
+      book: eventAmbiguous
+        ? deepFreeze({ ...nextBook, truth: 'GAPPED' as const, validUntilMs: null, bids: [], asks: [] })
+        : nextBook,
+      bookRevisions: [...state.bookRevisions, identifier(payload.bookRevision, 'book revision')],
+    };
   } else if (event.kind === 'BOOK_DELTA') {
     if (event.sourceSequence !== payload.sourceSequence) {
       throw new TypeError('book delta source sequence is envelope-unbound');
@@ -1055,10 +1669,17 @@ function reduceCanonical(
     if (event.occurredAtMs !== payload.observedAtMs) {
       throw new TypeError('book delta time is envelope-unbound');
     }
+    if (state.bookRevisions.includes(String(payload.bookRevision))) {
+      throw new TypeError('book delta revision is replayed');
+    }
     const nextBook = updateBookWithDelta(state, payload);
-    state = { ...state, book: eventAmbiguous
-      ? deepFreeze({ ...nextBook, truth: 'GAPPED' as const, bids: [], asks: [] })
-      : nextBook };
+    state = {
+      ...state,
+      book: eventAmbiguous
+        ? deepFreeze({ ...nextBook, truth: 'GAPPED' as const, validUntilMs: null, bids: [], asks: [] })
+        : nextBook,
+      bookRevisions: [...state.bookRevisions, identifier(payload.bookRevision, 'book revision')],
+    };
   } else if (event.kind === 'BOOK_UNAVAILABLE') {
     if (payload.state !== 'UNAVAILABLE' && payload.state !== 'GAPPED') throw new TypeError('book unavailability is invalid');
     identifier(payload.evidenceRevision, 'book unavailability revision');
@@ -1084,7 +1705,8 @@ function reduceCanonical(
     }] };
   } else if (event.kind === 'RATE_DECISION') {
     const index = orderIndex(state, payload.fixtureId);
-    const rateState = deepFreeze(snapshot(payload.rateState));
+    const rateState = deepFreeze(snapshot(payload.rateState)) as
+      TwinScenarioState['rateDecisions'][number]['rateState'];
     const reservationInput = deepFreeze(snapshot(payload.reservationInput));
     const ownerEvidenceSha256 = payload.ownerEvidenceSha256;
     if (typeof ownerEvidenceSha256 !== 'string' || !SHA256.test(ownerEvidenceSha256)
@@ -1107,7 +1729,9 @@ function reduceCanonical(
     state = { ...state, rateDecisions: [...state.rateDecisions, {
       fixtureId: state.orders[index].fixture.fixtureId,
       ownerEvidenceSha256,
-      decision: deepFreeze(decision),
+      rateState,
+      reservationInput,
+      decision: deepFreeze(snapshot(decision)) as TwinScenarioState['rateDecisions'][number]['decision'],
     }] };
   } else if (event.kind === 'PLACE_DISPATCH') {
     const index = orderIndex(state, payload.fixtureId);
@@ -1135,7 +1759,8 @@ function reduceCanonical(
       throw new TypeError('venue arrival uses expired L06 owner evidence');
     }
     if (order.venueArrivalAtMs !== null) throw new TypeError('venue arrival is duplicated');
-    validateFeeEvidenceForAssets(
+    state = retainFeeEvidence(
+      state,
       payload.feeEvidence,
       event.occurredAtMs,
       order.fixture.baseAsset,
@@ -1160,7 +1785,13 @@ function reduceCanonical(
         };
       }
       const executed = executeAggressive(state, order, event);
-      state = { ...replaceOrder(state, index, executed.order), book: executed.book };
+      state = {
+        ...replaceOrder(state, index, deepFreeze({
+          ...executed.order,
+          venueArrivalSequence: event.sourceSequence,
+        })),
+        book: executed.book,
+      };
     }
   } else if (event.kind === 'HTTP_DELIVERY') {
     const index = orderIndex(state, payload.fixtureId);
@@ -1171,6 +1802,15 @@ function reduceCanonical(
       throw new TypeError('HTTP delivery does not bind venue latency/outcome');
     }
     if (!(state.crashed && state.dropLocalDeliveries)) {
+      if (order.venueStatus === 'BLOCKED' || order.venueStatus === 'NOT_ARRIVED') {
+        state = replaceOrder(state, index, deepFreeze({
+          ...order,
+          localTruth: 'OBSERVED' as const,
+          localObservedVenueStatus: order.venueStatus,
+          lastLocalObservationAtMs: event.occurredAtMs,
+          recoveryRequired: false,
+        }));
+      } else {
       const unknown = payload.outcome !== 'ACK';
       const privatelyObserved = order.localTruth === 'OBSERVED';
       state = replaceOrder(state, index, deepFreeze({
@@ -1182,20 +1822,28 @@ function reduceCanonical(
           ? event.occurredAtMs : order.lastLocalObservationAtMs,
         recoveryRequired: eventAmbiguous ? true : privatelyObserved ? order.recoveryRequired : unknown,
       }));
+      }
     }
   } else if (event.kind === 'PRIVATE_DELIVERY') {
     const index = orderIndex(state, payload.fixtureId);
     const order = state.orders[index];
     identifier(payload.venueRevision, 'private venue revision');
     if (order.venueArrivalAtMs === null
-      || event.occurredAtMs !== order.venueArrivalAtMs + order.fixture.latency.venueToPrivateMs
-      || payload.venueRevision !== order.venueRevision) {
-      throw new TypeError('private delivery does not bind venue revision/latency');
+      || event.occurredAtMs !== order.venueArrivalAtMs + order.fixture.latency.venueToPrivateMs) {
+      throw new TypeError('private delivery does not bind venue latency');
     }
     if (!(state.crashed && state.dropLocalDeliveries)) {
-      state = replaceOrder(state, index, deepFreeze({
+      const staleRevision = payload.venueRevision !== order.venueRevision;
+      state = replaceOrder(state, index, deepFreeze(staleRevision ? {
         ...order,
-        localTruth: eventAmbiguous ? 'UNKNOWN' : 'OBSERVED',
+        localTruth: 'RECOVERY_REQUIRED' as const,
+        localObservedVenueStatus: null,
+        lastLocalObservationAtMs: event.occurredAtMs,
+        recoveryRequired: true,
+        blockedReasonCodes: [...new Set([...order.blockedReasonCodes, 'STALE_PRIVATE_OBSERVATION'])].sort(),
+      } : {
+        ...order,
+        localTruth: eventAmbiguous ? 'UNKNOWN' as const : 'OBSERVED' as const,
         localObservedVenueStatus: eventAmbiguous ? null : order.venueStatus,
         lastLocalObservationAtMs: event.occurredAtMs,
         recoveryRequired: eventAmbiguous
@@ -1213,77 +1861,159 @@ function reduceCanonical(
     if (scenarioFixture === undefined && payload.feeEvidence !== null) {
       throw new TypeError('fee evidence requires a scenario asset identity');
     }
-    if (scenarioFixture !== undefined) validateFeeEvidenceForAssets(
-      payload.feeEvidence,
-      event.occurredAtMs,
-      scenarioFixture.baseAsset,
-      scenarioFixture.quoteAsset,
-    );
-    let tradeRemaining: string = eventAmbiguous ? '0' : tradeQuantity;
-    for (let index = 0; index < state.orders.length; index += 1) {
-      if (tradeRemaining === '0') break;
-      const order = state.orders[index];
-      if ((order.venueStatus !== 'NEW' && order.venueStatus !== 'PARTIALLY_FILLED')
-        || order.fixture.timeInForce !== 'GTC' || order.fixture.price === null
-        || payload.aggressorSide === order.fixture.side) continue;
-      const crosses = order.fixture.side === 'BUY'
-        ? compareTwinDecimals(tradePrice, order.fixture.price) <= 0
-        : compareTwinDecimals(tradePrice, order.fixture.price) >= 0;
-      if (!crosses) continue;
-      if (order.fixture.queueTruth !== 'ESTIMATED' || order.queueAheadRemaining === null) continue;
-      let available: string = tradeRemaining;
-      let queue: string | null = order.queueAheadRemaining;
-      let queueConsumption = '0';
-      if (queue !== null) {
-        queueConsumption = minimumTwinDecimal(queue, available);
-        queue = subtractTwinDecimals(queue, queueConsumption);
-        available = subtractTwinDecimals(available, queueConsumption);
-      }
-      const quantity = minimumTwinDecimal(order.remainingQuantity, available);
-      tradeRemaining = subtractTwinDecimals(
-        tradeRemaining,
-        addTwinDecimals(queueConsumption, quantity),
+    if (scenarioFixture !== undefined) {
+      state = retainFeeEvidence(
+        state,
+        payload.feeEvidence,
+        event.occurredAtMs,
+        scenarioFixture.baseAsset,
+        scenarioFixture.quoteAsset,
       );
-      if (quantity === '0') {
-        state = replaceOrder(state, index, deepFreeze({ ...order, queueAheadRemaining: queue }));
+    }
+    let tradeRemaining: string = eventAmbiguous ? '0' : tradeQuantity;
+    const passiveIndexes = state.orders
+      .map((order, index) => ({ order, index }))
+      .filter(({ order }) => (
+        (order.venueStatus === 'NEW' || order.venueStatus === 'PARTIALLY_FILLED')
+        && order.fixture.timeInForce === 'GTC'
+        && order.fixture.price !== null
+        && payload.aggressorSide !== order.fixture.side
+      ))
+      .sort((left, right) => {
+        const priceOrder = left.order.fixture.side === 'BUY'
+          ? -compareTwinDecimals(left.order.fixture.price!, right.order.fixture.price!)
+          : compareTwinDecimals(left.order.fixture.price!, right.order.fixture.price!);
+        return priceOrder
+          || (left.order.venueArrivalAtMs ?? Number.MAX_SAFE_INTEGER)
+            - (right.order.venueArrivalAtMs ?? Number.MAX_SAFE_INTEGER)
+          || (left.order.venueArrivalSequence ?? Number.MAX_SAFE_INTEGER)
+            - (right.order.venueArrivalSequence ?? Number.MAX_SAFE_INTEGER)
+          || stableTextCompare(left.order.fixture.fixtureId, right.order.fixture.fixtureId);
+      })
+      .map(({ index }) => index);
+    for (let cursor = 0; cursor < passiveIndexes.length;) {
+      if (tradeRemaining === '0') break;
+      const firstOrder = state.orders[passiveIndexes[cursor]];
+      const groupPrice = firstOrder.fixture.price;
+      if (groupPrice === null) { cursor += 1; continue; }
+      const group: number[] = [];
+      while (cursor < passiveIndexes.length
+        && state.orders[passiveIndexes[cursor]].fixture.price === groupPrice) {
+        group.push(passiveIndexes[cursor]);
+        cursor += 1;
+      }
+      const crosses = firstOrder.fixture.side === 'BUY'
+        ? compareTwinDecimals(tradePrice, groupPrice) <= 0
+        : compareTwinDecimals(tradePrice, groupPrice) >= 0;
+      if (!crosses) continue;
+      const eligibleGroup = group.filter((index) => {
+        const order = state.orders[index];
+        return order.fixture.queueTruth === 'ESTIMATED' && order.queueAheadRemaining !== null;
+      });
+      let priorEnd: string | null = null;
+      let positionsOverlap = false;
+      for (const index of eligibleGroup) {
+        const order = state.orders[index];
+        const queue = order.queueAheadRemaining!;
+        if (priorEnd !== null && compareTwinDecimals(queue, priorEnd) < 0) {
+          positionsOverlap = true;
+          break;
+        }
+        priorEnd = addTwinDecimals(queue, order.remainingQuantity);
+      }
+      if (positionsOverlap) {
+        for (const index of eligibleGroup) {
+          const order = state.orders[index];
+          state = replaceOrder(state, index, deepFreeze({
+            ...order,
+            localTruth: 'RECOVERY_REQUIRED' as const,
+            localObservedVenueStatus: null,
+            recoveryRequired: true,
+            blockedReasonCodes: [...new Set([
+              ...order.blockedReasonCodes, 'QUEUE_POSITION_OVERLAP',
+            ])].sort(),
+          }));
+        }
         continue;
       }
-      const passiveFillPrice = order.fixture.price;
-      const quoteNotional = multiplyTwinDecimals(quantity, passiveFillPrice);
-      const fee = feeFor(
-        payload.feeEvidence,
-        quantity,
-        quoteNotional,
-        'MAKER',
-        event.occurredAtMs,
-        order.fixture.baseAsset,
-        order.fixture.quoteAsset,
-      );
-      const fill: TwinFill = deepFreeze({
-        fillId: digest('l07fill_', { fixtureId: order.fixture.fixtureId, eventId: event.eventId }),
-        fixtureId: order.fixture.fixtureId, eventId: event.eventId, bookRevision: state.book.bookRevision,
-        price: passiveFillPrice, quantity, quoteNotional, liquidityRole: 'MAKER', ...fee,
-        occurredAtMs: event.occurredAtMs,
-      });
-      const remainingQuantity = subtractTwinDecimals(order.remainingQuantity, quantity);
-      const filledQuantity = addTwinDecimals(order.filledQuantity, quantity);
-      const fills = [...order.fills, fill];
-      if (fills.length > MAX_FILLS) throw new RangeError('exchange-twin fill bound exceeded');
-      const totalNotional = fills.reduce((sum, item) => addTwinDecimals(sum, item.quoteNotional), '0');
-      state = replaceOrder(state, index, deepFreeze({
-        ...order, filledQuantity, remainingQuantity, queueAheadRemaining: queue,
-        fills,
-        vwap: {
-          numeratorQuoteNotional: totalNotional,
-          denominatorBaseQuantity: filledQuantity,
-          decimalScale24: divideTwinDecimals(totalNotional, filledQuantity),
-          decimalPolicy: 'TRUNCATED_SCALE_24' as const,
-        },
-        venueStatus: remainingQuantity === '0' ? 'FILLED' : 'PARTIALLY_FILLED',
-        lastVenueEffectAtMs: event.occurredAtMs,
-        venueRevision: digest('l07venue_', { prior: order.venueRevision, eventId: event.eventId, fill }),
-      }));
+      const groupBudget = tradeRemaining;
+      let groupConsumed = '0';
+      for (const index of eligibleGroup) {
+        const order = state.orders[index];
+        const originalQueue = order.queueAheadRemaining!;
+        const queue = compareTwinDecimals(groupBudget, originalQueue) >= 0
+          ? '0' : subtractTwinDecimals(originalQueue, groupBudget);
+        const afterQueue = compareTwinDecimals(groupBudget, originalQueue) > 0
+          ? subtractTwinDecimals(groupBudget, originalQueue) : '0';
+        const quantity = minimumTwinDecimal(order.remainingQuantity, afterQueue);
+        const consumedPosition = minimumTwinDecimal(
+          groupBudget,
+          addTwinDecimals(originalQueue, order.remainingQuantity),
+        );
+        if (compareTwinDecimals(consumedPosition, groupConsumed) > 0) groupConsumed = consumedPosition;
+        if (quantity === '0') {
+          state = replaceOrder(state, index, deepFreeze({ ...order, queueAheadRemaining: queue }));
+          continue;
+        }
+        const passiveFillPrice = order.fixture.price!;
+        const quoteNotional = multiplyTwinDecimals(quantity, passiveFillPrice);
+        const fee = feeFor(
+          payload.feeEvidence,
+          quantity,
+          quoteNotional,
+          'MAKER',
+          event.occurredAtMs,
+          order.fixture.baseAsset,
+          order.fixture.quoteAsset,
+        );
+        const fill: TwinFill = deepFreeze({
+          fillId: digest('l07fill_', { fixtureId: order.fixture.fixtureId, eventId: event.eventId }),
+          fixtureId: order.fixture.fixtureId, eventId: event.eventId, bookRevision: state.book.bookRevision,
+          price: passiveFillPrice, quantity, quoteNotional, liquidityRole: 'MAKER', ...fee,
+          occurredAtMs: event.occurredAtMs,
+        });
+        const remainingQuantity = subtractTwinDecimals(order.remainingQuantity, quantity);
+        const filledQuantity = addTwinDecimals(order.filledQuantity, quantity);
+        const fills = [...order.fills, fill];
+        if (fills.length > MAX_FILLS) throw new RangeError('exchange-twin fill bound exceeded');
+        const totalNotional = fills.reduce((sum, item) => addTwinDecimals(sum, item.quoteNotional), '0');
+        state = replaceOrder(state, index, deepFreeze({
+          ...order, filledQuantity, remainingQuantity, queueAheadRemaining: queue,
+          fills,
+          vwap: {
+            numeratorQuoteNotional: totalNotional,
+            denominatorBaseQuantity: filledQuantity,
+            decimalScale24: divideTwinDecimals(totalNotional, filledQuantity),
+            decimalPolicy: 'TRUNCATED_SCALE_24' as const,
+          },
+          venueStatus: remainingQuantity === '0' ? 'FILLED' : 'PARTIALLY_FILLED',
+          lastVenueEffectAtMs: event.occurredAtMs,
+          venueRevision: digest('l07venue_', { prior: order.venueRevision, eventId: event.eventId, fill }),
+        }));
+      }
+      tradeRemaining = subtractTwinDecimals(tradeRemaining, groupConsumed);
     }
+    if (!eventAmbiguous) {
+      const side = payload.aggressorSide === 'SELL' ? 'bids' : 'asks';
+      let bookTradeRemaining: string = tradeQuantity;
+      const levels = state.book[side].map((level) => {
+        const tradedThrough = payload.aggressorSide === 'SELL'
+          ? compareTwinDecimals(level.price, tradePrice) >= 0
+          : compareTwinDecimals(level.price, tradePrice) <= 0;
+        if (!tradedThrough || bookTradeRemaining === '0') return level;
+        const consumed = minimumTwinDecimal(level.quantity, bookTradeRemaining);
+        bookTradeRemaining = subtractTwinDecimals(bookTradeRemaining, consumed);
+        return { ...level, quantity: subtractTwinDecimals(level.quantity, consumed) };
+      }).filter((level) => level.quantity !== '0');
+      state = { ...state, book: deepFreeze({ ...state.book, [side]: levels }) };
+    }
+    state = {
+      ...state,
+      tradeEvidence: [...state.tradeEvidence, {
+        tradeRevision: identifier(payload.tradeRevision, 'trade revision'),
+        contentRevision: tradeContentRevision!,
+      }],
+    };
   } else if (event.kind === 'COST_OBSERVATION') {
     const index = orderIndex(state, payload.fixtureId);
     const order = state.orders[index];
@@ -1324,6 +2054,9 @@ function reduceCanonical(
       if (event.occurredAtMs < cancelFixture.l06Boundary.evaluatedAtMs) {
         throw new TypeError('cancel dispatch precedes L06 synthetic boundary');
       }
+      if (event.occurredAtMs >= cancelFixture.l06Snapshot.bindings.validUntilMs) {
+        throw new TypeError('cancel dispatch uses expired L06 owner evidence');
+      }
       state = replaceOrder(state, index, deepFreeze({
         ...order, cancelFixture, cancelDispatchAtMs: event.occurredAtMs, recoveryRequired: true,
       }));
@@ -1357,6 +2090,11 @@ function reduceCanonical(
       || decision.quote.matrixContentSha256 !== '7302b7f5f90bb8f08791d07a2718adb1ca77a54d7e01f5a76079380c96cddbac') {
       throw new TypeError('L03 cancel reservation does not bind the fixture/accepted matrix');
     }
+    const cancelStatusFresh = state.symbolStatusObservedAtMs !== null
+      && state.symbolStatusValidUntilMs !== null
+      && state.symbolStatusObservedAtMs <= event.occurredAtMs
+      && event.occurredAtMs < state.symbolStatusValidUntilMs;
+    const cancelOwnerFresh = event.occurredAtMs < order.cancelFixture.l06Snapshot.bindings.validUntilMs;
     if (eventAmbiguous) {
       state = replaceOrder(state, index, deepFreeze({
         ...order,
@@ -1369,14 +2107,17 @@ function reduceCanonical(
     } else if (order.blockedReasonCodes.includes('CRASH_DROPPED_PENDING_CANCEL')) {
       // The injected crash dropped the command before venue arrival. The
       // arrival event is retained for replay identity but has no venue effect.
-    } else if ((state.symbolStatus !== 'TRADING' && state.symbolStatus !== 'CANCEL_ONLY')
+    } else if (!cancelOwnerFresh || !cancelStatusFresh
+      || (state.symbolStatus !== 'TRADING' && state.symbolStatus !== 'CANCEL_ONLY')
       || decision.allowed !== true || decision.reason !== 'RESERVED'
     ) {
       state = replaceOrder(state, index, deepFreeze({
         ...order, cancelArrivalAtMs: event.occurredAtMs, recoveryRequired: true,
-        blockedReasonCodes: state.symbolStatus !== 'TRADING' && state.symbolStatus !== 'CANCEL_ONLY'
-          ? [`CANCEL_SYMBOL_${state.symbolStatus}`]
-          : ['CANCEL_RATE_NOT_RESERVED'],
+        blockedReasonCodes: !cancelOwnerFresh ? ['CANCEL_L06_EVIDENCE_EXPIRED']
+          : !cancelStatusFresh ? ['CANCEL_SYMBOL_STATUS_STALE']
+            : state.symbolStatus !== 'TRADING' && state.symbolStatus !== 'CANCEL_ONLY'
+              ? [`CANCEL_SYMBOL_${state.symbolStatus}`]
+              : [`CANCEL_RATE_${decision.reason}`],
       }));
     } else if (order.venueStatus === 'NEW' || order.venueStatus === 'PARTIALLY_FILLED') {
       state = replaceOrder(state, index, deepFreeze({
@@ -1401,14 +2142,19 @@ function reduceCanonical(
       throw new TypeError('cancel delivery outcome is invalid');
     }
     if (!(state.crashed && state.dropLocalDeliveries)) {
-      const known = payload.outcome === 'ACK';
+      const previouslyObserved = order.localTruth === 'OBSERVED'
+        && order.localObservedVenueStatus !== null;
+      const provesCanceled = payload.outcome === 'ACK' && order.venueStatus === 'CANCELED';
       state = replaceOrder(state, index, deepFreeze({
         ...order,
-        localTruth: eventAmbiguous ? 'UNKNOWN' : known ? 'OBSERVED' : 'UNKNOWN',
+        localTruth: eventAmbiguous ? 'UNKNOWN'
+          : previouslyObserved || provesCanceled ? 'OBSERVED' : 'UNKNOWN',
         localObservedVenueStatus: eventAmbiguous ? null
-          : known ? order.venueStatus : order.localObservedVenueStatus,
+          : previouslyObserved ? order.localObservedVenueStatus
+            : provesCanceled ? 'CANCELED' : null,
         lastLocalObservationAtMs: event.occurredAtMs,
-        recoveryRequired: eventAmbiguous || !known,
+        recoveryRequired: eventAmbiguous ? true
+          : previouslyObserved ? order.recoveryRequired : !provesCanceled,
       }));
     }
   } else if (event.kind === 'CRASH') {
@@ -1482,9 +2228,11 @@ function reduceCanonical(
     }
   }
   const processedEvents = [...state.processedEvents, {
+    event,
     eventId: event.eventId,
     sequence: event.sequence,
     occurredAtMs: event.occurredAtMs,
+    kind: event.kind,
     eventPriority: EVENT_PRIORITY[event.kind],
     orderingDomain: eventOrderingDomain(event, state),
     sourceSequence: event.sourceSequence,
@@ -1494,19 +2242,11 @@ function reduceCanonical(
 }
 
 export function reduceExchangeTwinEvent(stateValue: unknown, eventValue: unknown): Readonly<TwinScenarioState> {
-  const state = record(stateValue, STATE_FIELDS, 'exchange-twin state') as unknown as TwinScenarioState;
-  if (typeof state !== 'object' || state === null || state.schema !== EXCHANGE_TWIN_SCHEMA
-    || state.simulationAuthority !== 'SYNTHETIC_FIXTURE'
-    || state.actionAuthority !== 'NONE_RECORD_ONLY'
-    || state.externalActionAuthorization !== 'NONE') {
-    throw new TypeError('exchange-twin state is invalid or authoritative');
-  }
-  const { outcomeRevision, stateRevision, ...material } = state;
-  const rebuilt = finalizeState(material);
-  if (rebuilt.outcomeRevision !== outcomeRevision || rebuilt.stateRevision !== stateRevision) {
-    throw new TypeError('exchange-twin state revision mismatch');
-  }
-  return reduceCanonical(stateValue as Readonly<TwinScenarioState>, eventValue);
+  const state = validateCommittedState(stateValue, 'exchange-twin state');
+  const sourceState = typeof stateValue === 'object' && stateValue !== null && Object.isFrozen(stateValue)
+    ? stateValue as Readonly<TwinScenarioState>
+    : state;
+  return reduceCanonical(sourceState, eventValue);
 }
 
 export function runExchangeTwinScenario(inputValue: unknown): Readonly<TwinScenarioState> {
@@ -1521,27 +2261,30 @@ export function runExchangeTwinScenario(inputValue: unknown): Readonly<TwinScena
     sequences.add(event.sequence);
   }
   events.sort((left, right) => left.occurredAtMs - right.occurredAtMs
-    || EVENT_PRIORITY[left.kind] - EVENT_PRIORITY[right.kind]
     || (left.sourceSequence ?? Number.MAX_SAFE_INTEGER) - (right.sourceSequence ?? Number.MAX_SAFE_INTEGER)
+    || EVENT_PRIORITY[left.kind] - EVENT_PRIORITY[right.kind]
     || left.sequence - right.sequence
     || (left.eventId < right.eventId ? -1 : left.eventId > right.eventId ? 1 : 0));
   const ambiguousIndexes = new Set<number>();
-  for (let index = 1; index < events.length; index += 1) {
-    if (events[index].occurredAtMs === events[index - 1].occurredAtMs
-      && events[index].sourceSequence === null && events[index - 1].sourceSequence === null
-      && EVENT_PRIORITY[events[index].kind] === EVENT_PRIORITY[events[index - 1].kind]
-      && eventOrderingDomain(events[index], state) === eventOrderingDomain(events[index - 1], state)) {
-      ambiguousIndexes.add(index - 1);
-      ambiguousIndexes.add(index);
+  for (let left = 0; left < events.length; left += 1) {
+    for (let right = left + 1; right < events.length; right += 1) {
+      if (events[right].occurredAtMs !== events[left].occurredAtMs) break;
+      if (orderingDomainsConflict(
+        eventOrderingDomains(events[left], state),
+        eventOrderingDomains(events[right], state),
+      ) && !sourceOrderIsProved(events[left], events[right])) {
+        ambiguousIndexes.add(left);
+        ambiguousIndexes.add(right);
+      }
     }
   }
   for (let index = 0; index < events.length; index += 1) {
     if (ambiguousIndexes.has(index)) {
-      const domain = eventOrderingDomain(events[index], state);
+      const domains = eventOrderingDomains(events[index], state);
       state = finalizeState({
         ...state,
         orderingTruth: 'AMBIGUOUS',
-        ambiguousDomains: [...new Set([...state.ambiguousDomains, domain])].sort(),
+        ambiguousDomains: [...new Set([...state.ambiguousDomains, ...domains])].sort(),
       });
     }
     state = reduceCanonical(state, events[index], true, ambiguousIndexes.has(index));
@@ -1550,18 +2293,7 @@ export function runExchangeTwinScenario(inputValue: unknown): Readonly<TwinScena
 }
 
 export function checkpointExchangeTwin(stateValue: unknown): Readonly<TwinCheckpoint> {
-  const state = record(stateValue, STATE_FIELDS, 'exchange-twin checkpoint state') as unknown as TwinScenarioState;
-  if (state.schema !== EXCHANGE_TWIN_SCHEMA
-    || state.simulationAuthority !== 'SYNTHETIC_FIXTURE'
-    || state.actionAuthority !== 'NONE_RECORD_ONLY'
-    || state.externalActionAuthorization !== 'NONE') {
-    throw new TypeError('cannot checkpoint invalid twin state');
-  }
-  const { outcomeRevision, stateRevision, ...material } = state;
-  const rebuilt = finalizeState(material);
-  if (rebuilt.outcomeRevision !== outcomeRevision || rebuilt.stateRevision !== stateRevision) {
-    throw new TypeError('exchange-twin state revision mismatch');
-  }
+  const state = validateCommittedState(stateValue, 'exchange-twin checkpoint state');
   const stateSnapshot = snapshot(state) as TwinScenarioState;
   return deepFreeze({
     schema: EXCHANGE_TWIN_CHECKPOINT_SCHEMA,
@@ -1589,38 +2321,51 @@ export function restoreExchangeTwin(value: unknown): Readonly<TwinScenarioState>
     || checkpoint.checkpointRevision !== digest('l07checkpoint_', state)) {
     throw new TypeError('exchange-twin checkpoint content mismatch');
   }
-  const { outcomeRevision: _outcome, stateRevision: _stateRevision, ...material } = state;
-  const rebuilt = finalizeState(material);
-  if (rebuilt.outcomeRevision !== state.outcomeRevision || rebuilt.stateRevision !== state.stateRevision) {
-    throw new TypeError('exchange-twin state revision mismatch');
-  }
-  return rebuilt;
+  return validateCommittedState(state, 'restored exchange-twin state');
 }
 
 export function deriveTwinRecordedOutcomeContentRevision(value: unknown): string {
   const recordValue = record(
     value,
-    ['recordedOutcomeRevision', 'recordedFilledQuantity'],
+    ['recordedOutcomeRevision', 'product', 'symbol', 'quantityAsset', 'recordedFilledQuantity'],
     'recorded calibration content',
   );
   identifier(recordValue.recordedOutcomeRevision, 'recorded outcome revision');
+  if (recordValue.product !== 'SPOT' && recordValue.product !== 'USD_M_PERPETUAL') {
+    throw new TypeError('recorded calibration product is invalid');
+  }
+  if (typeof recordValue.symbol !== 'string' || !SYMBOL.test(recordValue.symbol)) {
+    throw new TypeError('recorded calibration symbol is invalid');
+  }
+  const quantityAsset = asset(recordValue.quantityAsset, 'recorded quantity asset');
   const recordedFilledQuantity = twinDecimal(
     recordValue.recordedFilledQuantity,
     'recorded filled quantity',
   );
   return digest('l07recorded_', {
     recordedOutcomeRevision: recordValue.recordedOutcomeRevision,
+    product: recordValue.product,
+    symbol: recordValue.symbol,
+    quantityAsset,
     recordedFilledQuantity,
   });
 }
 
 export function deriveTwinCalibrationRevision(value: unknown): string {
   const projection = record(value, [
-    'modelRevision', 'predictedOutcomeRevision', 'recordedContentRevision',
+    'modelRevision', 'predictedOutcomeRevision', 'product', 'symbol', 'quantityAsset',
+    'recordedContentRevision',
     'sampleCount', 'observedAtMs', 'validUntilMs',
   ], 'calibration revision projection');
   identifier(projection.modelRevision, 'calibration model revision');
   identifier(projection.predictedOutcomeRevision, 'predicted outcome revision');
+  if (projection.product !== 'SPOT' && projection.product !== 'USD_M_PERPETUAL') {
+    throw new TypeError('calibration product is invalid');
+  }
+  if (typeof projection.symbol !== 'string' || !SYMBOL.test(projection.symbol)) {
+    throw new TypeError('calibration symbol is invalid');
+  }
+  asset(projection.quantityAsset, 'calibration quantity asset');
   identifier(projection.recordedContentRevision, 'recorded content revision');
   safeInteger(projection.sampleCount, 'calibration sample count', 1, 1_000_000);
   safeInteger(projection.observedAtMs, 'calibration observation time');
@@ -1633,23 +2378,14 @@ export function compareExchangeTwinOutcome(
   evidenceValue: unknown,
   evaluatedAtMsValue: unknown,
 ): Readonly<TwinCalibrationComparison> {
-  const predictedState = record(
+  const predictedState = validateCommittedState(
     predictedStateValue,
-    STATE_FIELDS,
     'predicted exchange-twin state',
-  ) as unknown as TwinScenarioState;
-  const {
-    outcomeRevision: predictedOutcomeRevision,
-    stateRevision,
-    ...predictedMaterial
-  } = predictedState;
-  const rebuilt = finalizeState(predictedMaterial);
-  if (rebuilt.outcomeRevision !== predictedOutcomeRevision
-    || rebuilt.stateRevision !== stateRevision
-    || predictedState.simulationAuthority !== 'SYNTHETIC_FIXTURE') {
-    throw new TypeError('predicted exchange-twin state commitment is invalid');
-  }
+  );
+  const predictedOutcomeRevision = predictedState.outcomeRevision;
   const modelRevision = predictedState.modelRevision;
+  const quantityAsset = predictedState.orders[0]?.fixture.baseAsset;
+  if (quantityAsset === undefined) throw new TypeError('calibration requires a fixture quantity asset');
   const evaluatedAtMs = safeInteger(evaluatedAtMsValue, 'calibration evaluation time');
   if (evidenceValue === null) return deepFreeze({
     schema: 'TWIN_CALIBRATION_COMPARISON_V1' as const,
@@ -1668,6 +2404,7 @@ export function compareExchangeTwinOutcome(
   });
   const evidence = record(evidenceValue, [
     'schema', 'calibrationRevision', 'modelRevision', 'predictedOutcomeRevision',
+    'product', 'symbol', 'quantityAsset',
     'recordedOutcomeRevision', 'recordedContentRevision',
     'predictedFilledQuantity', 'recordedFilledQuantity',
     'sampleCount', 'observedAtMs', 'validUntilMs',
@@ -1678,13 +2415,16 @@ export function compareExchangeTwinOutcome(
   if (evidence.predictedOutcomeRevision !== predictedOutcomeRevision) {
     reasons.push('PREDICTED_OUTCOME_REVISION_MISMATCH');
   }
+  if (evidence.product !== predictedState.product) reasons.push('PRODUCT_MISMATCH');
+  if (evidence.symbol !== predictedState.symbol) reasons.push('SYMBOL_MISMATCH');
+  if (evidence.quantityAsset !== quantityAsset) reasons.push('QUANTITY_ASSET_MISMATCH');
   identifier(evidence.calibrationRevision, 'calibration revision');
   identifier(evidence.modelRevision, 'calibration model revision');
   identifier(evidence.predictedOutcomeRevision, 'predicted outcome revision');
   identifier(evidence.recordedOutcomeRevision, 'recorded outcome revision');
   identifier(evidence.recordedContentRevision, 'recorded content revision');
   if (!Number.isSafeInteger(evidence.sampleCount)
-    || evidence.sampleCount < 1
+    || evidence.sampleCount < EXCHANGE_TWIN_MINIMUM_CALIBRATION_SAMPLES
     || evidence.sampleCount > 1_000_000) reasons.push('SAMPLE_INSUFFICIENT');
   const observedAtMs = safeInteger(evidence.observedAtMs, 'calibration observation time');
   const validUntilMs = safeInteger(evidence.validUntilMs, 'calibration validity time');
@@ -1700,6 +2440,9 @@ export function compareExchangeTwinOutcome(
   if (predicted !== statePredicted) reasons.push('PREDICTED_QUANTITY_MISMATCH');
   const expectedRecordedContentRevision = deriveTwinRecordedOutcomeContentRevision({
     recordedOutcomeRevision: evidence.recordedOutcomeRevision,
+    product: evidence.product,
+    symbol: evidence.symbol,
+    quantityAsset: evidence.quantityAsset,
     recordedFilledQuantity: recorded,
   });
   if (evidence.recordedContentRevision !== expectedRecordedContentRevision) {
@@ -1711,6 +2454,9 @@ export function compareExchangeTwinOutcome(
     const expectedCalibrationRevision = deriveTwinCalibrationRevision({
       modelRevision: evidence.modelRevision,
       predictedOutcomeRevision: evidence.predictedOutcomeRevision,
+      product: evidence.product,
+      symbol: evidence.symbol,
+      quantityAsset: evidence.quantityAsset,
       recordedContentRevision: evidence.recordedContentRevision,
       sampleCount: evidence.sampleCount,
       observedAtMs,

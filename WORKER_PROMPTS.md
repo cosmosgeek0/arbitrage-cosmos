@@ -2,7 +2,14 @@
 
 Rule: one block = one chat = one folder. Director appends/replaces blocks at every event; check the top entry's date. Board truth: QL_PARALLEL_DAG.md.
 
-## ACTIVE WAVE 2 (2026-07-13, post D-LAUNCH-7) — currently running: Q spine (Q16), L10, L11. NEW blocks below: 6 + 7. L09 stays BLOCKED until the bridge lands. Old wave blocks 1-5 are historical.
+## ACTIVE WAVE 3 (2026-07-13, post L08.1) — running: Q spine, L10, L11. NEW: block 8.
+
+### 8. L09 resume — folder /Users/cosmosgeek/Desktop/l09-normal-basis
+```text
+L09 shard resuming (D-LAUNCH-7; bridge landed). Verify: branch l09-normal-basis-20260712; `git log --oneline -2` shows the director re-base merge of L08.1 (f79247a — Spot order/TIF bridge accepted). Your blocker is CLEARED per your own resume condition: first prove the accepted L08.1 evaluator emits a non-sendable ordered normal-Basis plan; then implement ONLY server/src/liveEdge/adapters/normalBasis/** and matching server/test/liveEdge/normalBasis/** proofs — the NORMAL-BASIS two-leg lifecycle of §17 (staged entry, hedge, partial-fill/one-leg exposure, close, recovery) through the L07 twin, network-free. All prior L09 laws unchanged (exclusive paths, no shared files, no other worktrees, no push, hard external boundary). Full loop → acceptance → record SHA. Stop only at L09 ACCEPTED or BLOCKED.
+```
+
+## HISTORICAL WAVE 2 (2026-07-13, post D-LAUNCH-7) — currently running: Q spine (Q16), L10, L11. NEW blocks below: 6 + 7. L09 stays BLOCKED until the bridge lands. Old wave blocks 1-5 are historical.
 
 ### 6. L-BRIDGE (L08.1) — folder /Users/cosmosgeek/Desktop/live-execution-proof-20260712
 ```text

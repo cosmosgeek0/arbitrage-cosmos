@@ -87,6 +87,8 @@ export interface ExecutionLegState {
   venueOrderId: string | null;
   lastEventAtMs: number | null;
   lastFailure: StructuredFailure | null;
+  /** Present after ambiguity is resolved so current-state readers need not infer from event history. */
+  lastAmbiguityResolution?: AmbiguityResolution;
 }
 
 export interface ApprovalState {
@@ -129,6 +131,7 @@ export const EXECUTION_EVENT_TYPES = [
   'CLOSING_STARTED',
   'RECONCILIATION_STARTED',
   'RECONCILIATION_RESOLVED',
+  'RESTART_RECOVERY_BLOCKED',
   'NAKED_DURATION_EXPIRED',
   'PLAN_CANCELLED',
   'PLAN_FAILED',
@@ -140,7 +143,9 @@ export type AmbiguityResolution =
   | 'PARTIALLY_FILLED'
   | 'FILLED'
   | 'CANCELLED'
-  | 'REJECTED';
+  | 'REJECTED'
+  /** Deterministic client-order lookup proved no venue order exists. */
+  | 'PROVEN_ABSENT';
 
 /**
  * One serializable event envelope. Optional fields are validated according

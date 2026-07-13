@@ -44,6 +44,8 @@ class FakePorts {
     this.submissions = new Map();
     this.lookups = new Map();
     this.claims = new Map();
+    this.submissionCalls = [];
+    this.lookupCalls = [];
   }
   queueSubmission(key, ...values) { this.submissions.set(key, [...values]); return this; }
   queueLookup(key, ...values) { this.lookups.set(key, [...values]); return this; }
@@ -56,6 +58,7 @@ class FakePorts {
   async validateLeg() { return { ok: true }; }
   key(request) { return `${request.phase}:${request.leg.key}`; }
   async submitPaper(request) {
+    this.submissionCalls.push(this.key(request));
     const queue = this.submissions.get(this.key(request));
     if (queue?.length) return queue.shift();
     return {
@@ -65,6 +68,7 @@ class FakePorts {
     };
   }
   async lookupByClientOrderId(request) {
+    this.lookupCalls.push(this.key(request));
     const queue = this.lookups.get(this.key(request));
     if (queue?.length) return queue.shift();
     return { kind: 'UNRESOLVED', failure: portFailure('LOOKUP_UNRESOLVED') };
@@ -112,8 +116,13 @@ async function partiallyOpenState() {
     cumulativeFilledQuantity: 0.4,
   });
   const coordinator = await coordinatorWith(ports);
-  await coordinator.open();
-  return coordinator.snapshot();
+  assert.equal(coordinator.beginOpen().ok, true);
+  assert.equal((await coordinator.submitNextOpeningLeg()).ok, true);
+  const intermediate = coordinator.snapshot();
+  const blocked = await coordinator.submitNextOpeningLeg();
+  check('working opening partial is refreshed through owner lookup before dependent progression', ports.lookupCalls.join('|') === 'OPEN:SPOT');
+  check('dependent hedge remains unsubmitted when working-partial owner truth is unresolved', !blocked.ok && ports.submissionCalls.join('|') === 'OPEN:SPOT');
+  return intermediate;
 }
 
 async function ambiguousState() {
@@ -131,8 +140,13 @@ async function acknowledgedState() {
     venueOrderId: 'paper-OPEN-SPOT',
   });
   const coordinator = await coordinatorWith(ports);
-  await coordinator.open();
-  return coordinator.snapshot();
+  assert.equal(coordinator.beginOpen().ok, true);
+  assert.equal((await coordinator.submitNextOpeningLeg()).ok, true);
+  const intermediate = coordinator.snapshot();
+  const blocked = await coordinator.submitNextOpeningLeg();
+  check('acknowledged opening leg is refreshed through owner lookup before dependent progression', ports.lookupCalls.join('|') === 'OPEN:SPOT');
+  check('unresolved acknowledged-leg lookup blocks progression without a dependent submission', !blocked.ok && blocked.failure.code === 'LOOKUP_UNRESOLVED' && ports.submissionCalls.join('|') === 'OPEN:SPOT');
+  return intermediate;
 }
 
 async function partiallyClosingState() {

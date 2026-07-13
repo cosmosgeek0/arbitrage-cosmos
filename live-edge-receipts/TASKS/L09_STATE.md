@@ -1,6 +1,6 @@
 # L09 state — normal Basis lifecycle shard
 
-Generation: `7`
+Generation: `8`
 
 Status: `BLOCKED_UNRESOLVED_ACCEPTANCE_GAPS`
 
@@ -30,6 +30,10 @@ Surviving correction: `BUILT_AND_TESTED_NOT_PHASE_ACCEPTED`
   `27c688759a74026a15ea63c3300545c191c10cc2`.
 - Rejected emergency acceptance checkpoint:
   `2fdb6806e35da404134dbc537695f2860a369078`.
+- Blocked checkpoint-audit commit:
+  `11fec5cb6e3ca39cf738da393ee27a7ae14e6302`.
+- Blocked checkpoint-audit tree:
+  `827fab39d3c718eb03acc6a966a8f39df262e57d`.
 - Frozen protocol SHA:
   `73e1a1ff7daa48df8dac45713fc5f106842edafc`.
 
@@ -106,10 +110,16 @@ from `ecd8006`; it is not an L09 regression and is not represented as green.
   `live-edge-receipts/DECISIONS/L09-005-EMERGENCY-CHECKPOINT-AUDIT-BLOCKERS.md`.
 - Receipt:
   `live-edge-receipts/RECEIPTS/L09_BLOCKED_EMERGENCY_CHECKPOINT_AUDIT.md`.
+- L09-005 decision SHA-256:
+  `5ce9e928645daafd740d6bfa7817ee7fd482fbe8721c9cb53d9d223ba9f30285`.
+- Blocked receipt SHA-256:
+  `96b2eabca36fa05f07e64103b1c56b4f013f16a12235f93cf9781763dc985b4e`.
+- Two-file code-unit-ordered manifest SHA-256:
+  `92b643b275400754c7054a4129c58197b576999c19399928fb303428e728ab96`.
 
-This generation cannot record the SHA of its own containing blocked-audit
-commit. A following state-only seal records that commit, tree and both content
-hashes without changing implementation, decision or receipt.
+Commit `11fec5c` contains the immutable blocked decision/receipt bytes and this
+state's generation-7 audit record. This generation is the state-only seal; it
+does not change implementation, decision or receipt.
 
 ## Current posture and non-claims
 
@@ -128,10 +138,7 @@ enforced.
 
 ## Exact resume
 
-- Current step: `6/7` — emergency checkpoint audit and blocked documentation
-  complete in the containing commit.
-- Exact next task: record that commit SHA/tree plus the L09-005 decision and
-  blocked-receipt SHA-256 values in this state file only, commit the state-only
-  seal, then stop `BLOCKED`.
-- Do not modify implementation. Resume implementation only after the explicit
-  director ruling or bounded authorization required by L09-005.
+- Current step: `7/7` — immutable blocked audit and state-only seal complete.
+- Exact next task: stop `BLOCKED`. Do not modify implementation.
+- Resume only after the explicit director ruling or owner-scoped authorization
+  with exact path ownership required by L09-005.

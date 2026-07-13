@@ -6,8 +6,14 @@
  * or widen any production lifecycle vocabulary.
  */
 
+import {
+  cancellationRestartDigest,
+  captureCanonicalEvidence,
+  repairRestartDigest,
+} from './integrity.mjs';
+
 export const STABILITY_SCHEMA_VERSION = 'ip-assurance.systemic.stability.v1';
-export const STABILITY_PACKET_STATE = 'DRAFT_PRESTAGE_IN_PROGRESS';
+export const STABILITY_PACKET_STATE = 'STABILITY_PRESTAGE_READY';
 
 export const CANCELLATION_LATE_RESULT_LAW = 'LATE_EXTERNAL_FACTS_DURABLY_RETAINED_STALE_EPOCH_CANNOT_AUTHORIZE_NEW_WORK_V1';
 export const REPAIR_LATE_RESULT_LAW = 'REPAIR_TRUTH_RETAINED_STALE_LEASE_OR_FENCE_COMPLETION_REJECTED_V1';
@@ -77,11 +83,150 @@ export const PROTECTED_WORK_CLASSES = Object.freeze([
   'OPERATOR_CONTROL',
   'SAFE_RISK_REDUCTION',
 ]);
+export const SYNTHETIC_RESOURCE_OWNER = 'OWNER_CONFIRMATION_REQUIRED:I00/I03 accepted resource owner';
+export const SYNTHETIC_RESOURCE_TRUST_BINDING = deepFreeze({
+  canonicalOwner: SYNTHETIC_RESOURCE_OWNER,
+  circuitOwner: 'SYNTHETIC_ONLY:resource circuit owner',
+  circuitOwnerFailureDomain: 'synthetic.resource-circuit-owner',
+  independentCircuitOwner: 'SYNTHETIC_ONLY:independent resource circuit baseline verifier',
+  independentCircuitFailureDomain: 'synthetic.resource-circuit-baseline-verifier',
+});
+export const SYNTHETIC_CANCELLATION_TRUST_BINDINGS = deepFreeze({
+  CURRENT_LEASE: {
+    recordId: 's8-lease-current',
+    requestId: 'controller.public-source.001',
+    operationId: 'operation.local.diagnostic-child',
+    canonicalOwner: 'canonical.runtime.owner',
+    lease: {
+      resourceId: 'source.spot.public',
+      ownerId: 'canonical.runtime.owner',
+      processId: 'process.runtime.synthetic-007',
+      releaseId: 'release.synthetic-007',
+      leaseId: 'lease.source.spot.007',
+      fenceEpoch: 7,
+      activeFenceEpoch: 7,
+      acquiredAtMs: 1_799_999_990_000,
+      renewalSequence: 2,
+      lastRenewedAtMs: 1_799_999_999_000,
+      lastHeartbeatAtMs: 1_799_999_999_900,
+      heartbeatMaxAgeMs: 1_000,
+      expiresAtMs: 1_800_000_010_000,
+    },
+  },
+  DETACHED_RECOVERY: {
+    recordId: 's8-detached-recovery-valid',
+    requestId: 'request-parent.001.child.001',
+    operationId: 'operation.reconcile.external-truth',
+    operationClass: 'RISK_REDUCING_RECOVERY',
+    canonicalOwner: 'canonical.control-plane.owner',
+    detachedRecovery: {
+      reason: 'DURABLE_RECONCILIATION',
+      operationRegistered: true,
+      operationRegistryRef: 'synthetic.registry.reconcile-external-truth',
+      priorAuthorizationRef: null,
+      operationClass: 'RISK_REDUCING_RECOVERY',
+      canonicalOwner: 'canonical.control-plane.owner',
+      fencedRecoveryContextId: 'recovery-context.009',
+      leaseId: 'synthetic.detached-lease.009',
+      leaseOwner: 'canonical.control-plane.owner',
+      fenceEpoch: 9,
+      activeFenceEpoch: 9,
+      leaseExpiresAtMs: 1_800_000_010_000,
+      fenceObservedAtMs: 1_799_999_999_900,
+      fenceMaxAgeMs: 5_000,
+      fenceEvidenceRef: 'synthetic.detached-fence-evidence.009',
+    },
+    reconciliationEvidence: {
+      operationLookupRef: 'synthetic.operation-lookup.recovery-009',
+      durableEvidenceRef: 'synthetic.reconciliation.recovery-009',
+    },
+  },
+  RESTART: {
+    recordId: 's8-restart-loss',
+    requestId: 'request-parent.001.child.001',
+    operationId: 'operation.local.diagnostic-child',
+    operationClass: 'PURE_READ',
+    canonicalOwner: 'canonical.control-plane.owner',
+    cancellationContextId: 'cancel-context.001',
+    restartEvidence: {
+      preservedRequestId: true,
+      preservedLateResultLaw: true,
+      checkpointRef: 'synthetic.checkpoint.cancel-011',
+      stateDigestBeforeRestart: 'sha256:97cc1568826bc5e6f2b89cdee05ab1b45079f7c67821c4e6c6392b9deba1b6f1',
+      stateDigestAfterRestart: 'sha256:97cc1568826bc5e6f2b89cdee05ab1b45079f7c67821c4e6c6392b9deba1b6f1',
+      restoredRequestId: 'request-parent.001.child.001',
+      restoredCancellationContextId: 'cancel-context.001',
+      restoredLateResultLaw: CANCELLATION_LATE_RESULT_LAW,
+    },
+  },
+});
 
-export function deepFreeze(value) {
-  if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
+/**
+ * Packet-local trust anchor for the one confirmed synthetic repair mapping.
+ * This is not a runtime registry and grants no authority. It prevents two
+ * caller-controlled copies of an identity from "confirming" each other after
+ * both have been rewritten.
+ */
+export const SYNTHETIC_REPAIR_TRUST_BINDING = deepFreeze({
+  policyId: 'repair.local.resnapshot-sequence-gap.v1',
+  policyRevision: 'synthetic.policy-revision.001',
+  canonicalOwner: 'synthetic.canonical-control-plane-owner',
+  commandIdentity: 'RESNAPSHOT_SEQUENCE_GAP',
+  registryRef: 'synthetic.registry-mapping.RESNAPSHOT_SEQUENCE_GAP',
+  implementationRef: 'synthetic.reference-evaluator.evaluateRepairLoop',
+  fencingOwner: 'controller.alpha',
+  fencingOwnerEvidenceRef: 'synthetic.registry-mapping.RESNAPSHOT_SEQUENCE_GAP.fencing-owner',
+  controlledResourceIds: ['component.public-source'],
+  producerSignal: {
+    signalId: 'signal.sequence-continuity',
+    sourceOwner: 'canonical public-source owner',
+    evidencePath: 'synthetic.producer.continuity',
+    failureDomain: 'producer.public-source',
+  },
+  verifierSignal: {
+    signalId: 'signal.independent-book-proof',
+    sourceOwner: 'independent sentinel owner',
+    evidencePath: 'synthetic.verifier.book-proof',
+    failureDomain: 'verifier.independent-sentinel',
+  },
+  readinessEvidenceRef: 'synthetic.readiness.sequence-gap.001',
+  conflictGraphRef: 'synthetic.conflict-graph.sequence-gap',
+  conflictGraphEvidenceRef: 'synthetic.conflict-graph-observation.001',
+  circuitOwner: 'synthetic.repair-circuit-owner',
+  circuitOwnerFailureDomain: 'synthetic.repair-circuit-owner-domain',
+  circuitEvidenceRefPrefix: 'synthetic.repair-circuit.attempt.',
+  independentCircuitOwner: 'synthetic.independent-repair-circuit-verifier',
+  independentCircuitFailureDomain: 'synthetic.independent-repair-circuit-verifier-domain',
+  independentCircuitEvidenceRefPrefix: 'synthetic.independent-repair-circuit-close.',
+  independentCircuitBaselineEvidenceRefPrefix: 'synthetic.independent-circuit-baseline.',
+  initialCircuitPriorEvidenceRefs: {
+    OPEN: 'synthetic.repair-circuit.pre-campaign-closed',
+    HALF_OPEN: 'synthetic.repair-circuit.pre-campaign-open',
+    CLOSED: 'synthetic.repair-circuit.pre-campaign-transition',
+  },
+});
+
+export const SYNTHETIC_REPAIR_RESTART_CHECKPOINT_BINDINGS = deepFreeze({
+  'synthetic.checkpoint.restore-before-next-attempt': {
+    stateDigestBeforeRestart: 'sha256:3d5cb9fe0e3d72148f9c647d91d6a8e1f6eaa328cad26610ef80ba64111c38f9',
+    stateDigestAfterRestart: 'sha256:3d5cb9fe0e3d72148f9c647d91d6a8e1f6eaa328cad26610ef80ba64111c38f9',
+  },
+  'synthetic.checkpoint.campaign-resnapshot-010': {
+    stateDigestBeforeRestart: 'sha256:398674341fac1c8b87ae7e047507a869acceb5a6d352a569f103cd0239bfbf46',
+    stateDigestAfterRestart: 'sha256:795668561a555fc7dd098de2624671e6994651f370c6e293c0640e82c0d221cf',
+  },
+});
+
+export function deepFreeze(value, seen = new WeakSet()) {
+  if (value === null || typeof value !== 'object' || seen.has(value)) return value;
+  seen.add(value);
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+    if (descriptor !== undefined && Object.hasOwn(descriptor, 'value')) {
+      deepFreeze(descriptor.value, seen);
+    }
+  }
+  return Object.isFrozen(value) ? value : Object.freeze(value);
 }
 
 function schema(id, required, enums, laws) {
@@ -189,10 +334,73 @@ function exactKeys(issues, value, path, expected) {
   }
   const actual = Object.keys(value).sort();
   const wanted = [...expected].sort();
-  if (actual.join('|') !== wanted.join('|')) {
+  if (actual.length !== wanted.length
+    || actual.some((entry, index) => entry !== wanted[index])) {
     add(issues, path, 'EXACT_KEYS_REQUIRED', `expected [${wanted.join(', ')}], received [${actual.join(', ')}]`);
   }
   return true;
+}
+
+function arraysEqual(left, right) {
+  return Array.isArray(left)
+    && Array.isArray(right)
+    && left.length === right.length
+    && left.every((entry, index) => entry === right[index]);
+}
+
+function sameStructuredValue(candidate, expected, seen = new WeakMap()) {
+  if (expected === null || typeof expected !== 'object') return candidate === expected;
+  if (candidate === null || typeof candidate !== 'object') return false;
+  if (seen.get(candidate) === expected) return true;
+  seen.set(candidate, expected);
+  if (Array.isArray(expected)) {
+    if (!Array.isArray(candidate) || candidate.length !== expected.length) return false;
+    for (let index = 0; index < expected.length; index += 1) {
+      if (!Object.hasOwn(candidate, index) || !Object.hasOwn(expected, index)
+        || !sameStructuredValue(candidate[index], expected[index], seen)) return false;
+    }
+    return true;
+  }
+  if (!isPlainRecord(expected) || !isPlainRecord(candidate)) return false;
+  const candidateKeys = Object.keys(candidate).sort();
+  const expectedKeys = Object.keys(expected).sort();
+  return candidateKeys.length === expectedKeys.length
+    && candidateKeys.every((key, index) => key === expectedKeys[index]
+      && sameStructuredValue(candidate[key], expected[key], seen));
+}
+
+function cancellationRestartState(value) {
+  return {
+    recordId: value.recordId,
+    operationId: value.operationId,
+    operationClass: value.operationClass,
+    canonicalOwner: value.canonicalOwner,
+    requestId: value.requestId,
+    parentRequestId: value.parentRequestId,
+    requestKind: value.requestKind,
+    startedAtMs: value.startedAtMs,
+    inheritedDeadlineAtMs: value.inheritedDeadlineAtMs,
+    childBudgetMs: value.childBudgetMs,
+    localDeadlineAtMs: value.localDeadlineAtMs,
+    cancellationContextId: value.cancellationContextId,
+    lateResultLaw: value.lateResultLaw,
+    cancelRequestedAtMs: value.cancelRequestedAtMs,
+    cancelObservedAtMs: value.cancelObservedAtMs,
+    cancellationSupported: value.cancellationSupported,
+    cancellationUnknownReason: value.cancellationUnknownReason,
+    effect: value.effect,
+    lease: value.lease,
+    detachedRecovery: value.detachedRecovery,
+    lateFact: value.lateFact,
+    reconciliationEvidence: value.reconciliationEvidence,
+  };
+}
+
+function nonNegativeSafeInteger(issues, value, path, { nullable = false } = {}) {
+  if (nullable && value === null) return;
+  if (!Number.isSafeInteger(value) || value < 0) {
+    add(issues, path, 'NON_NEGATIVE_SAFE_INTEGER_REQUIRED', 'non-negative safe integer required');
+  }
 }
 
 function label(issues, value, path, { nullable = false } = {}) {
@@ -519,7 +727,7 @@ function validateAttemptCircuitEvidence(issues, value, path, attempt, priorAttem
   }
 }
 
-export function validateCancellationEvidence(value) {
+function validateCancellationEvidenceSnapshot(value) {
   const issues = [];
   if (!exactKeys(issues, value, '$', STABILITY_SCHEMAS.cancellationEvidence.required)) return finish(issues);
   if (value.schemaVersion !== STABILITY_SCHEMA_VERSION) add(issues, '$.schemaVersion', 'SCHEMA_UNSUPPORTED', 'unsupported schema version');
@@ -653,6 +861,7 @@ export function validateCancellationEvidence(value) {
     'checkpointRef', 'stateDigestBeforeRestart', 'stateDigestAfterRestart',
     'restoredRequestId', 'restoredCancellationContextId',
     'restoredReconciliationIdentityRef', 'restoredLateResultLaw', 'preservedFields',
+    'stateBeforeRestart', 'stateAfterRestart',
   ])) {
     for (const field of ['restoredFromCheckpoint', 'preservedRequestId', 'preservedLateResultLaw']) {
       if (typeof value.restartEvidence[field] !== 'boolean') add(issues, `$.restartEvidence.${field}`, 'BOOLEAN_REQUIRED', 'boolean required');
@@ -674,6 +883,33 @@ export function validateCancellationEvidence(value) {
         || value.restartEvidence.preservedFields.length > STABILITY_STRUCTURE_LIMITS.stringArrayEntries
         || requiredFields.some((field) => !value.restartEvidence.preservedFields.includes(field))) add(issues, '$.restartEvidence.preservedFields', 'RESTART_STATE_FIELDS_MISSING', 'request identity, cancel context, deadline, effect, reconciliation, lease/fence, and late-result law must survive restart');
       if (value.restartEvidence.restoredLateResultLaw !== CANCELLATION_LATE_RESULT_LAW) add(issues, '$.restartEvidence.restoredLateResultLaw', 'RESTORED_LATE_RESULT_LAW_INVALID', 'restart must restore the exact cancellation late-result law identity');
+      if (value.restartEvidence.stateBeforeRestart === null
+        || value.restartEvidence.stateAfterRestart === null) {
+        add(issues, '$.restartEvidence', 'RESTART_STATE_SNAPSHOT_REQUIRED', 'restored request requires explicit before and after protected-state snapshots');
+      } else {
+        const expectedState = cancellationRestartState(value);
+        if (!sameStructuredValue(value.restartEvidence.stateBeforeRestart, expectedState)
+          || !sameStructuredValue(value.restartEvidence.stateAfterRestart, expectedState)
+          || !sameStructuredValue(value.restartEvidence.stateBeforeRestart, value.restartEvidence.stateAfterRestart)) {
+          add(issues, '$.restartEvidence', 'RESTART_STATE_SNAPSHOT_MISMATCH', 'before, after, and current protected cancellation state must match exactly');
+        }
+        try {
+          const beforeDigest = cancellationRestartDigest(
+            value.restartEvidence.checkpointRef,
+            value.restartEvidence.stateBeforeRestart,
+          );
+          const afterDigest = cancellationRestartDigest(
+            value.restartEvidence.checkpointRef,
+            value.restartEvidence.stateAfterRestart,
+          );
+          if (value.restartEvidence.stateDigestBeforeRestart !== beforeDigest
+            || value.restartEvidence.stateDigestAfterRestart !== afterDigest) {
+            add(issues, '$.restartEvidence', 'RESTART_CHECKPOINT_DIGEST_MISMATCH', 'before and after cancellation digests must be canonical SHA-256 bindings of their protected checkpoint state');
+          }
+        } catch {
+          add(issues, '$.restartEvidence', 'RESTART_CHECKPOINT_DIGEST_MISMATCH', 'cancellation checkpoint state must be canonical, bounded, and digestible');
+        }
+      }
     } else if (value.restartEvidence.checkpointRef !== null
       || value.restartEvidence.stateDigestBeforeRestart !== null
       || value.restartEvidence.stateDigestAfterRestart !== null
@@ -681,6 +917,8 @@ export function validateCancellationEvidence(value) {
       || value.restartEvidence.restoredCancellationContextId !== null
       || value.restartEvidence.restoredReconciliationIdentityRef !== null
       || value.restartEvidence.restoredLateResultLaw !== null
+      || value.restartEvidence.stateBeforeRestart !== null
+      || value.restartEvidence.stateAfterRestart !== null
       || (Array.isArray(value.restartEvidence.preservedFields) && value.restartEvidence.preservedFields.length > 0)) {
       add(issues, '$.restartEvidence', 'UNEXPECTED_RESTART_EVIDENCE', 'non-restored request cannot claim checkpoint restoration');
     }
@@ -714,7 +952,7 @@ export function validateCancellationEvidence(value) {
   return finish(issues);
 }
 
-export function validateRepairPolicy(value) {
+function validateRepairPolicySnapshot(value) {
   const issues = [];
   if (!exactKeys(issues, value, '$', STABILITY_SCHEMAS.repairPolicyExtension.required)) return finish(issues);
   if (value.schemaVersion !== STABILITY_SCHEMA_VERSION) add(issues, '$.schemaVersion', 'SCHEMA_UNSUPPORTED', 'unsupported schema version');
@@ -769,6 +1007,21 @@ export function validateRepairPolicy(value) {
       && value.commandRegistration.registeredFencingOwner !== value.fencingOwner) {
       add(issues, '$.commandRegistration.registeredFencingOwner', 'FENCING_OWNER_REGISTRATION_MISMATCH', 'top-level fencing owner must match the independently registered command owner binding');
     }
+    if (value.commandRegistration.state === 'CONFIRMED_IN_SYNTHETIC_FIXTURE') {
+      const trust = SYNTHETIC_REPAIR_TRUST_BINDING;
+      const mappingMatches = value.policyId === trust.policyId
+        && value.policyRevision === trust.policyRevision
+        && value.canonicalOwner === trust.canonicalOwner
+        && value.commandIdentity === trust.commandIdentity
+        && value.fencingOwner === trust.fencingOwner
+        && value.commandRegistration.registryRef === trust.registryRef
+        && value.commandRegistration.implementationRef === trust.implementationRef
+        && value.commandRegistration.registeredFencingOwner === trust.fencingOwner
+        && value.commandRegistration.fencingOwnerEvidenceRef === trust.fencingOwnerEvidenceRef;
+      if (!mappingMatches) {
+        add(issues, '$.commandRegistration', 'SYNTHETIC_REPAIR_TRUST_BINDING_MISMATCH', 'confirmed synthetic mapping must match the packet-local immutable trust anchor exactly');
+      }
+    }
   }
 
   if (exactKeys(issues, value.controlledState, '$.controlledState', ['resourceIds', 'desired', 'observedSignalIds', 'lastKnownGood', 'allowedDegraded'])) {
@@ -778,7 +1031,7 @@ export function validateRepairPolicy(value) {
     if (Array.isArray(value.controlledState.resourceIds)
       && value.controlledState.resourceIds.length <= STABILITY_STRUCTURE_LIMITS.stringArrayEntries) {
       const sorted = [...value.controlledState.resourceIds].sort();
-      if (sorted.join('|') !== value.controlledState.resourceIds.join('|')) add(issues, '$.controlledState.resourceIds', 'ORDERED_RESOURCE_SET_REQUIRED', 'resource IDs must be sorted for ordered atomic acquisition');
+      if (!arraysEqual(sorted, value.controlledState.resourceIds)) add(issues, '$.controlledState.resourceIds', 'ORDERED_RESOURCE_SET_REQUIRED', 'resource IDs must be sorted for ordered atomic acquisition');
     }
   }
   if (!Array.isArray(value.observedSignals) || value.observedSignals.length === 0) {
@@ -805,6 +1058,21 @@ export function validateRepairPolicy(value) {
       && (signalIds.length !== value.controlledState.observedSignalIds.length
         || signalIds.some((signalId) => !value.controlledState.observedSignalIds.includes(signalId)))) {
       add(issues, '$.controlledState.observedSignalIds', 'OBSERVED_SIGNAL_COVERAGE_MISMATCH', 'controlled-state signal IDs must exactly cover the uniquely declared observed signals');
+    }
+    if (value.commandRegistration?.state === 'CONFIRMED_IN_SYNTHETIC_FIXTURE') {
+      const trust = SYNTHETIC_REPAIR_TRUST_BINDING;
+      const producer = value.observedSignals.find((signal) => signal?.signalId === trust.producerSignal.signalId);
+      const verifier = value.observedSignals.find((signal) => signal?.signalId === trust.verifierSignal.signalId);
+      const signalMatches = [
+        [producer, trust.producerSignal],
+        [verifier, trust.verifierSignal],
+      ].every(([actual, expected]) => isPlainRecord(actual)
+        && ['signalId', 'sourceOwner', 'evidencePath', 'failureDomain']
+          .every((field) => actual[field] === expected[field]));
+      if (!signalMatches
+        || !arraysEqual(value.controlledState?.resourceIds, trust.controlledResourceIds)) {
+        add(issues, '$.observedSignals', 'SYNTHETIC_REPAIR_SIGNAL_BINDING_MISMATCH', 'confirmed synthetic producer, verifier, and controlled-resource identities must match the immutable trust anchor');
+      }
     }
   }
   if (exactKeys(issues, value.deadband, '$.deadband', ['metricId', 'lowerInclusive', 'upperInclusive'])) {
@@ -917,7 +1185,7 @@ export function validateRepairPolicy(value) {
   return finish(issues);
 }
 
-export function validateRepairEvidence(value) {
+function validateRepairEvidenceSnapshot(value) {
   const issues = [];
   if (!exactKeys(issues, value, '$', STABILITY_SCHEMAS.repairEvidence.required)) return finish(issues);
   if (value.schemaVersion !== STABILITY_SCHEMA_VERSION) add(issues, '$.schemaVersion', 'SCHEMA_UNSUPPORTED', 'unsupported schema version');
@@ -1032,7 +1300,10 @@ export function validateRepairEvidence(value) {
       enumValue(issues, attempt.result, `${path}.result`, ['SUCCEEDED', 'FAILED', 'UNKNOWN']);
       enumValue(issues, attempt.circuitState, `${path}.circuitState`, ['OPEN', 'HALF_OPEN', 'CLOSED', 'UNKNOWN']);
       boundedFiniteNumber(issues, attempt.controlErrorBefore, `${path}.controlErrorBefore`);
-      for (const field of ['stepMagnitude', 'rateUnits', 'resourceUnits', 'costUnits']) nonNegativeNumber(issues, attempt[field], `${path}.${field}`);
+      nonNegativeNumber(issues, attempt.stepMagnitude, `${path}.stepMagnitude`);
+      for (const field of ['rateUnits', 'resourceUnits', 'costUnits']) {
+        nonNegativeSafeInteger(issues, attempt[field], `${path}.${field}`);
+      }
       boundedFiniteNumber(issues, attempt.progressValue, `${path}.progressValue`, { nullable: true });
       enumValue(issues, attempt.producerPredicate, `${path}.producerPredicate`, ASSURANCE_RESULTS);
       enumValue(issues, attempt.independentVerifier, `${path}.independentVerifier`, ASSURANCE_RESULTS);
@@ -1064,6 +1335,40 @@ export function validateRepairEvidence(value) {
         }
       }
     });
+    const producerRefs = value.attempts
+      .map((attempt) => attempt?.producerEvidenceRef)
+      .filter((entry) => typeof entry === 'string');
+    const verifierRefs = value.attempts
+      .map((attempt) => attempt?.verifierEvidenceRef)
+      .filter((entry) => typeof entry === 'string');
+    if (new Set(producerRefs).size !== producerRefs.length
+      || new Set(verifierRefs).size !== verifierRefs.length
+      || producerRefs.some((entry) => verifierRefs.includes(entry))) {
+      add(issues, '$.attempts', 'CAMPAIGN_EVIDENCE_REFERENCE_REUSE_FORBIDDEN', 'producer and verifier evidence references must be unique and disjoint across the whole campaign');
+    }
+    const circuitRefs = value.attempts
+      .map((attempt) => attempt?.circuitEvidence?.evidenceRef)
+      .filter((entry) => typeof entry === 'string');
+    if (new Set(circuitRefs).size !== circuitRefs.length) {
+      add(issues, '$.attempts', 'REPAIR_CIRCUIT_EVIDENCE_REFERENCE_REUSE_FORBIDDEN', 'circuit owner evidence references must be unique across the campaign');
+    }
+    const firstPriorRef = value.attempts[0]?.circuitEvidence?.priorEvidenceRef;
+    if (typeof firstPriorRef === 'string' && circuitRefs.includes(firstPriorRef)) {
+      add(issues, '$.attempts[0].circuitEvidence.priorEvidenceRef', 'REPAIR_CIRCUIT_PRIOR_EVIDENCE_CYCLE', 'the pre-campaign circuit anchor cannot refer to any in-campaign evidence node');
+    }
+    const signalRefs = [...producerRefs, ...verifierRefs];
+    const circuitRoleRefs = value.attempts.flatMap((attempt) => [
+      attempt?.circuitEvidence?.evidenceRef,
+      attempt?.circuitEvidence?.priorEvidenceRef,
+      attempt?.circuitEvidence?.baselineNeverOpenedEvidenceRef,
+      attempt?.circuitEvidence?.independentCloseEvidenceRef,
+    ]).filter((entry) => typeof entry === 'string');
+    const gateRefs = [value.readinessEvidence?.evidenceRef, value.conflictGraphEvidence?.evidenceRef]
+      .filter((entry) => typeof entry === 'string');
+    if (signalRefs.some((entry) => circuitRoleRefs.includes(entry) || gateRefs.includes(entry))
+      || gateRefs.some((entry) => circuitRoleRefs.includes(entry))) {
+      add(issues, '$.attempts', 'CROSS_ROLE_EVIDENCE_REFERENCE_REUSE_FORBIDDEN', 'signal, gate, circuit-owner, baseline, and independent-close proof references must be role-disjoint');
+    }
   }
   if (exactKeys(issues, value.containment, '$.containment', ['lifecycle', 'durableUnresolvedEvidenceRef', 'escalationOwner', 'furtherAutomaticActuation'])) {
     if (value.containment.lifecycle !== null) enumValue(issues, value.containment.lifecycle, '$.containment.lifecycle', REMEDIATION_CONTAINMENT_LIFECYCLES);
@@ -1099,6 +1404,7 @@ export function validateRepairEvidence(value) {
   if (exactKeys(issues, value.restartEvidence, '$.restartEvidence', [
     'restored', 'preservedCampaignId', 'checkpointRef', 'stateDigestBeforeRestart',
     'stateDigestAfterRestart', 'restoredCampaignId', 'stateBeforeRestart', 'stateAfterRestart',
+    'attemptsBeforeRestart', 'attemptsAfterRestart',
     'preservedFields', 'attemptCountBeforeRestart',
     'restoredAttemptCount', 'remainingCostUnitsBeforeRestart',
     'remainingCostUnitsAfterRestart',
@@ -1140,6 +1446,56 @@ export function validateRepairEvidence(value) {
       if (value.restartEvidence.stateBeforeRestart === null || value.restartEvidence.stateAfterRestart === null) {
         add(issues, '$.restartEvidence', 'RESTART_STATE_SNAPSHOT_REQUIRED', 'restored campaign requires before and after bounded-state snapshots');
       }
+      const firstAfterRestart = Array.isArray(value.attempts)
+        ? value.attempts.findIndex((attempt) => attempt?.afterRestart === true)
+        : -1;
+      const restartBoundary = firstAfterRestart < 0 ? value.attempts?.length ?? 0 : firstAfterRestart;
+      const expectedAttempts = Array.isArray(value.attempts)
+        ? value.attempts.slice(0, restartBoundary)
+        : [];
+      if (!Array.isArray(value.restartEvidence.attemptsBeforeRestart)
+        || !Array.isArray(value.restartEvidence.attemptsAfterRestart)
+        || value.restartEvidence.attemptsBeforeRestart.length > STABILITY_STRUCTURE_LIMITS.repairAttempts
+        || value.restartEvidence.attemptsAfterRestart.length > STABILITY_STRUCTURE_LIMITS.repairAttempts
+        || !sameStructuredValue(value.restartEvidence.attemptsBeforeRestart, expectedAttempts)
+      || !sameStructuredValue(value.restartEvidence.attemptsAfterRestart, expectedAttempts)) {
+        add(issues, '$.restartEvidence', 'RESTART_ATTEMPT_HISTORY_MISMATCH', 'before, after, and current pre-restart attempt history must match exactly');
+      }
+      if (value.restartEvidence.stateBeforeRestart !== null
+        && value.restartEvidence.stateAfterRestart !== null
+        && Array.isArray(value.restartEvidence.attemptsBeforeRestart)
+        && Array.isArray(value.restartEvidence.attemptsAfterRestart)) {
+        try {
+          const digestEnvelope = (state, attempts) => repairRestartDigest({
+            checkpointRef: value.restartEvidence.checkpointRef,
+            campaignId: value.campaignId,
+            policyId: value.policyId,
+            policyRevision: value.policyRevision,
+            state,
+            attempts,
+          });
+          const beforeDigest = digestEnvelope(
+            value.restartEvidence.stateBeforeRestart,
+            value.restartEvidence.attemptsBeforeRestart,
+          );
+          const afterDigest = digestEnvelope(
+            value.restartEvidence.stateAfterRestart,
+            value.restartEvidence.attemptsAfterRestart,
+          );
+          if (value.restartEvidence.stateDigestBeforeRestart !== beforeDigest
+            || value.restartEvidence.stateDigestAfterRestart !== afterDigest) {
+            add(issues, '$.restartEvidence', 'RESTART_CHECKPOINT_DIGEST_MISMATCH', 'before and after repair digests must be canonical SHA-256 bindings of checkpoint identity, policy, state, and attempt history');
+          }
+        } catch {
+          add(issues, '$.restartEvidence', 'RESTART_CHECKPOINT_DIGEST_MISMATCH', 'repair checkpoint state and attempt history must be canonical, bounded, and digestible');
+        }
+        const anchor = SYNTHETIC_REPAIR_RESTART_CHECKPOINT_BINDINGS[value.restartEvidence.checkpointRef];
+        if (anchor === undefined
+          || value.restartEvidence.stateDigestBeforeRestart !== anchor.stateDigestBeforeRestart
+          || value.restartEvidence.stateDigestAfterRestart !== anchor.stateDigestAfterRestart) {
+          add(issues, '$.restartEvidence', 'SYNTHETIC_RESTART_CHECKPOINT_TRUST_BINDING_MISMATCH', 'restored synthetic checkpoint digests must match the immutable packet-local checkpoint anchor');
+        }
+      }
       if (!Array.isArray(value.restartEvidence.preservedFields)
         || value.restartEvidence.preservedFields.length > STABILITY_STRUCTURE_LIMITS.stringArrayEntries
         || requiredPreservedFields.some((field) => !value.restartEvidence.preservedFields.includes(field))) {
@@ -1152,6 +1508,10 @@ export function validateRepairEvidence(value) {
       || value.restartEvidence.restoredCampaignId !== null
       || value.restartEvidence.stateBeforeRestart !== null
       || value.restartEvidence.stateAfterRestart !== null
+      || !Array.isArray(value.restartEvidence.attemptsBeforeRestart)
+      || !Array.isArray(value.restartEvidence.attemptsAfterRestart)
+      || value.restartEvidence.attemptsBeforeRestart.length !== 0
+      || value.restartEvidence.attemptsAfterRestart.length !== 0
       || (Array.isArray(value.restartEvidence.preservedFields) && value.restartEvidence.preservedFields.length !== 0)
       || value.restartEvidence.attemptCountBeforeRestart !== 0
       || value.restartEvidence.restoredAttemptCount !== 0
@@ -1170,7 +1530,9 @@ export function validateRepairEvidence(value) {
 function validateNullableMeasurement(issues, value, path, fields) {
   if (!exactKeys(issues, value, path, fields)) return;
   const numericFields = fields.filter((field) => field !== 'unknownReason');
-  for (const field of numericFields) nonNegativeNumber(issues, value[field], `${path}.${field}`, { nullable: true });
+  for (const field of numericFields) {
+    nonNegativeSafeInteger(issues, value[field], `${path}.${field}`, { nullable: true });
+  }
   label(issues, value.unknownReason, `${path}.unknownReason`, { nullable: true });
   const numbers = numericFields.map((field) => value[field]);
   const allKnown = numbers.every((entry) => entry !== null);
@@ -1180,7 +1542,7 @@ function validateNullableMeasurement(issues, value, path, fields) {
   if (allKnown && value.unknownReason !== null) add(issues, `${path}.unknownReason`, 'UNKNOWN_REASON_CONFLICT', 'known numeric truth cannot carry unknown reason');
 }
 
-export function validateResourceEvidenceBundle(value) {
+function validateResourceEvidenceBundleSnapshot(value) {
   const issues = [];
   if (!exactKeys(issues, value, '$', STABILITY_SCHEMAS.resourceEvidenceBundle.required)) return finish(issues);
   if (value.schemaVersion !== STABILITY_SCHEMA_VERSION) add(issues, '$.schemaVersion', 'SCHEMA_UNSUPPORTED', 'unsupported schema version');
@@ -1195,6 +1557,9 @@ export function validateResourceEvidenceBundle(value) {
     const keys = ['rowId', 'resourceFamily', 'canonicalOwner', 'unit', 'windowMs', 'observedAtMs', 'maxAgeMs', 'provenance', 'truthLabel', 'burn', 'budget', 'forecast', 'topConsumers', 'throttling', 'circuit', 'canonicalResponse', 'protections'];
     if (!exactKeys(issues, row, path, keys)) return;
     for (const field of ['rowId', 'canonicalOwner', 'unit', 'provenance']) label(issues, row[field], `${path}.${field}`);
+    if (row.canonicalOwner !== SYNTHETIC_RESOURCE_TRUST_BINDING.canonicalOwner) {
+      add(issues, `${path}.canonicalOwner`, 'SYNTHETIC_RESOURCE_OWNER_TRUST_BINDING_MISMATCH', 'synthetic resource rows remain bound to the immutable owner-confirmation placeholder until I00/I03 fan-in');
+    }
     if (seenRowIds.has(row.rowId)) add(issues, `${path}.rowId`, 'DUPLICATE_RESOURCE_ROW_ID', 'resource row IDs must be unique');
     seenRowIds.add(row.rowId);
     enumValue(issues, row.resourceFamily, `${path}.resourceFamily`, RESOURCE_FAMILIES);
@@ -1232,7 +1597,7 @@ export function validateResourceEvidenceBundle(value) {
         label(issues, consumer.consumerId, `${consumerPath}.consumerId`);
         if (consumerIds.has(consumer.consumerId)) add(issues, `${consumerPath}.consumerId`, 'DUPLICATE_CONSUMER_ID', 'top-consumer IDs must be unique within a resource row');
         consumerIds.add(consumer.consumerId);
-        nonNegativeNumber(issues, consumer.amount, `${consumerPath}.amount`, { nullable: true });
+        nonNegativeSafeInteger(issues, consumer.amount, `${consumerPath}.amount`, { nullable: true });
         label(issues, consumer.unknownReason, `${consumerPath}.unknownReason`, { nullable: true });
         label(issues, consumer.evidenceRef, `${consumerPath}.evidenceRef`, { nullable: true });
         if (consumer.amount === null && consumer.unknownReason === null) add(issues, `${consumerPath}.unknownReason`, 'UNKNOWN_REASON_REQUIRED', 'unknown consumer amount requires an exact blocker');
@@ -1260,6 +1625,9 @@ export function validateResourceEvidenceBundle(value) {
       label(issues, row.throttling.evidenceRef, `${path}.throttling.evidenceRef`, { nullable: true });
       label(issues, row.throttling.unknownReason, `${path}.throttling.unknownReason`, { nullable: true });
       label(issues, row.throttling.canonicalOwner, `${path}.throttling.canonicalOwner`);
+      if (row.throttling.canonicalOwner !== SYNTHETIC_RESOURCE_TRUST_BINDING.canonicalOwner) {
+        add(issues, `${path}.throttling.canonicalOwner`, 'SYNTHETIC_RESOURCE_OWNER_TRUST_BINDING_MISMATCH', 'synthetic throttling evidence owner must match the immutable owner-confirmation placeholder');
+      }
       if (row.throttling.observed === 'UNKNOWN' && row.throttling.unknownReason === null) add(issues, `${path}.throttling.unknownReason`, 'UNKNOWN_REASON_REQUIRED', 'unknown throttling requires an exact blocker');
       if (row.throttling.observed === 'UNKNOWN' && (row.throttling.observedAtMs !== null || row.throttling.evidenceRef !== null)) add(issues, `${path}.throttling`, 'UNKNOWN_EVIDENCE_CONFLICT', 'unknown throttling cannot carry affirmative observation evidence');
       if (row.throttling.observed !== 'UNKNOWN' && (row.throttling.observedAtMs === null || row.throttling.evidenceRef === null || row.throttling.unknownReason !== null)) add(issues, `${path}.throttling`, 'THROTTLING_EVIDENCE_REQUIRED', 'known throttling state requires owner observation time, evidence reference, and no unknown reason');
@@ -1278,6 +1646,19 @@ export function validateResourceEvidenceBundle(value) {
       label(issues, row.circuit.independentCloseEvidenceRef, `${path}.circuit.independentCloseEvidenceRef`, { nullable: true });
       label(issues, row.circuit.independentCloseOwner, `${path}.circuit.independentCloseOwner`, { nullable: true });
       label(issues, row.circuit.independentCloseFailureDomain, `${path}.circuit.independentCloseFailureDomain`, { nullable: true });
+      if (row.circuit.canonicalOwner !== SYNTHETIC_RESOURCE_TRUST_BINDING.circuitOwner
+        || (row.circuit.state !== 'UNKNOWN'
+          && row.circuit.ownerFailureDomain !== SYNTHETIC_RESOURCE_TRUST_BINDING.circuitOwnerFailureDomain)
+        || (row.circuit.baselineEvidenceOwner !== null
+          && row.circuit.baselineEvidenceOwner !== SYNTHETIC_RESOURCE_TRUST_BINDING.independentCircuitOwner)
+        || (row.circuit.baselineEvidenceFailureDomain !== null
+          && row.circuit.baselineEvidenceFailureDomain !== SYNTHETIC_RESOURCE_TRUST_BINDING.independentCircuitFailureDomain)
+        || (row.circuit.independentCloseOwner !== null
+          && row.circuit.independentCloseOwner !== SYNTHETIC_RESOURCE_TRUST_BINDING.independentCircuitOwner)
+        || (row.circuit.independentCloseFailureDomain !== null
+          && row.circuit.independentCloseFailureDomain !== SYNTHETIC_RESOURCE_TRUST_BINDING.independentCircuitFailureDomain)) {
+        add(issues, `${path}.circuit`, 'SYNTHETIC_RESOURCE_CIRCUIT_TRUST_BINDING_MISMATCH', 'synthetic circuit owner and independent proof identities must match the immutable packet-local trust binding');
+      }
       if (row.circuit.mayCloseOrReset !== false) add(issues, `${path}.circuit.mayCloseOrReset`, 'CIRCUIT_AUTHORITY_FORBIDDEN', 'packet evidence cannot close or reset a circuit');
       if (row.circuit.canonicalOwner === row.canonicalOwner || row.circuit.ownerFailureDomain === row.canonicalOwner) add(issues, `${path}.circuit`, 'CIRCUIT_OWNER_INDEPENDENCE_REQUIRED', 'resource producer and circuit evidence must come from structurally distinct owners and failure domains');
       const baselineFields = [row.circuit.baselineNeverOpenedEvidenceRef, row.circuit.baselineEvidenceOwner, row.circuit.baselineEvidenceFailureDomain];
@@ -1334,6 +1715,9 @@ export function validateResourceEvidenceBundle(value) {
       if (row.canonicalResponse.kind === 'NONE' && (row.canonicalResponse.referenceId !== null || row.canonicalResponse.unknownReason !== null)) add(issues, `${path}.canonicalResponse`, 'NONE_RESPONSE_EVIDENCE_CONFLICT', 'NONE response carries neither an action reference nor an unknown reason');
       if (row.canonicalResponse.wiringState === 'UNAVAILABLE' && row.canonicalResponse.kind !== 'UNKNOWN') add(issues, `${path}.canonicalResponse`, 'UNAVAILABLE_RESPONSE_MUST_BE_UNKNOWN', 'UNAVAILABLE response wiring cannot carry an affirmative action or recommendation');
       if (row.canonicalResponse.kind === 'UNKNOWN' && row.canonicalResponse.wiringState !== 'UNAVAILABLE') add(issues, `${path}.canonicalResponse`, 'UNKNOWN_RESPONSE_WIRING_CONFLICT', 'UNKNOWN response must expose UNAVAILABLE wiring');
+      if (row.canonicalResponse.owner !== row.canonicalOwner) {
+        add(issues, `${path}.canonicalResponse.owner`, 'CANONICAL_RESPONSE_OWNER_MISMATCH', 'resource response must bind the exact canonical resource owner');
+      }
       const numericAttention = row.burn?.value === null
         || row.budget?.limit === null
         || row.budget?.remaining === null
@@ -1398,4 +1782,43 @@ export function validateResourceEvidenceBundle(value) {
     }
   }
   return finish(issues);
+}
+
+function snapshotForValidation(value) {
+  try {
+    return { value: captureCanonicalEvidence(value), issues: null };
+  } catch (error) {
+    const sparseArray = error instanceof TypeError
+      && error.message === 'canonical evidence arrays must be dense and property-free';
+    return {
+      value: null,
+      issues: finish([{
+        path: '$',
+        code: sparseArray ? 'SPARSE_ARRAY_FORBIDDEN' : 'PLAIN_DATA_SNAPSHOT_REQUIRED',
+        detail: sparseArray
+          ? 'array entries must be dense and explicitly present'
+          : 'bounded acyclic JSON-plain data properties are required; accessors and unstable exotic reads are forbidden',
+      }]),
+    };
+  }
+}
+
+export function validateCancellationEvidence(value) {
+  const captured = snapshotForValidation(value);
+  return captured.issues ?? validateCancellationEvidenceSnapshot(captured.value);
+}
+
+export function validateRepairPolicy(value) {
+  const captured = snapshotForValidation(value);
+  return captured.issues ?? validateRepairPolicySnapshot(captured.value);
+}
+
+export function validateRepairEvidence(value) {
+  const captured = snapshotForValidation(value);
+  return captured.issues ?? validateRepairEvidenceSnapshot(captured.value);
+}
+
+export function validateResourceEvidenceBundle(value) {
+  const captured = snapshotForValidation(value);
+  return captured.issues ?? validateResourceEvidenceBundleSnapshot(captured.value);
 }

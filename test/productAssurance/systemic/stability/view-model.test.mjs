@@ -2,16 +2,16 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-  CANCELLATION_LATE_RESULT_LAW,
-  OPTIONAL_SHEDDING_CLASSES,
-  PROTECTED_WORK_CLASSES,
-  RESOURCE_FAMILIES,
+  SYNTHETIC_REPAIR_TRUST_BINDING,
 } from '../../../../fixtures/productAssurance/systemic/stability/contracts.mjs';
 import {
   CANCELLATION_FIXTURES,
   FIXTURE_NOW_MS as EVALUATOR_NOW_MS,
   REPAIR_FIXTURES,
   RESOURCE_FIXTURES,
+  makeCancellationEvidence,
+  makeRepairEvidence,
+  makeRepairPolicy,
 } from '../../../../fixtures/productAssurance/systemic/stability/fixtures.mjs';
 import {
   evaluateCancellationEvidence,
@@ -25,260 +25,57 @@ import {
 
 const FIXTURE_NOW_MS = 1_800_000_000_000;
 
-function authority() {
-  return { dataAuthority: 'SYNTHETIC_TEST', effectAuthority: 'NONE' };
-}
-
 function cancellationAssessment(recordId, assuranceResult, override = {}) {
-  return {
-    schemaVersion: 'ip-assurance.systemic.stability.v1',
-    assessmentKind: 'CANCELLATION_DEADLINE_LEASE',
+  const source = makeCancellationEvidence({
     recordId,
     requestId: `request.${recordId}`,
     operationId: `operation.${recordId}`,
     canonicalOwner: 'fixture.owner',
-    lateResultLaw: CANCELLATION_LATE_RESULT_LAW,
-    evaluatedAtMs: FIXTURE_NOW_MS,
-    assuranceResult,
-    deadlineEvidence: 'ACTIVE',
-    effectiveDeadlineAtMs: FIXTURE_NOW_MS + 1_000,
-    leaseEvidence: 'NOT_APPLICABLE',
-    cancelIntentObserved: false,
-    cancellationSupported: true,
-    cancellationProvesMutationAbsence: false,
-    mayInitiateNewLocalEffects: true,
-    authoritativeReconciliationRequired: false,
-    detachedRecoveryContinuationRequired: false,
-    lateFactDisposition: 'NOT_APPLICABLE',
-    staleAuthorityRejected: false,
-    reasonCodes: [],
-    violationCodes: assuranceResult === 'FAIL' ? ['SYNTHETIC_FIXTURE_FAILURE'] : [],
-    unknownCodes: assuranceResult === 'UNKNOWN' ? ['SYNTHETIC_FIXTURE_UNKNOWN'] : [],
-    contractIssues: [],
-    ...authority(),
-    ...override,
-  };
-}
-
-function repairAttemptEvidence(attemptId = 'attempt.fixture.1') {
-  const startedAtMs = FIXTURE_NOW_MS - 2_000;
-  const completedAtMs = FIXTURE_NOW_MS - 1_000;
-  return {
-    attemptId,
-    startedAtMs,
-    completedAtMs,
-    producerOwner: 'fixture.repair-producer.owner',
-    producerFailureDomain: 'fixture.repair-producer.failure-domain',
-    actuationGateEvidence: {
-      readinessEvidenceRef: `synthetic.readiness.${attemptId}`,
-      readinessObservedAtMs: startedAtMs - 100,
-      readinessMaxAgeMs: 5_000,
-      conflictGraphEvidenceRef: `synthetic.conflict-graph.${attemptId}`,
-      conflictGraphObservedAtMs: startedAtMs - 100,
-      conflictGraphMaxAgeMs: 5_000,
-    },
-    circuitEvidence: {
-      state: 'CLOSED',
-      canonicalOwner: 'fixture.repair-circuit.owner',
-      ownerFailureDomain: 'fixture.repair-circuit.owner-domain',
-      observedAtMs: FIXTURE_NOW_MS - 500,
-      maxAgeMs: 60_000,
-      evidenceRef: `synthetic.repair-circuit.${attemptId}`,
-      unknownReason: null,
-      priorEvidenceRef: `synthetic.repair-circuit.prior.${attemptId}`,
-      baselineNeverOpenedEvidenceRef: null,
-      baselineEvidenceOwner: null,
-      baselineEvidenceFailureDomain: null,
-      openedAtMs: startedAtMs - 1_000,
-      halfOpenAtMs: startedAtMs - 500,
-      resetEligibleAtMs: startedAtMs,
-      closedAtMs: completedAtMs,
-      independentCloseEvidenceRef: `synthetic.independent-close.${attemptId}`,
-      independentCloseOwner: 'fixture.independent-repair-circuit.owner',
-      independentCloseFailureDomain: 'fixture.independent-repair-circuit.owner-domain',
-      mayCloseOrReset: false,
-    },
-  };
+    cancellationContextId: `cancel-context.${recordId}`,
+  });
+  const assessment = structuredClone(evaluateCancellationEvidence(source, FIXTURE_NOW_MS));
+  assessment.assuranceResult = assuranceResult;
+  return Object.assign(assessment, override);
 }
 
 function repairAssessment(campaignId, assuranceResult, override = {}) {
-  const attemptEvidence = [repairAttemptEvidence()];
-  return {
-    schemaVersion: 'ip-assurance.systemic.stability.v1',
-    assessmentKind: 'REPAIR_CONTROL_LOOP',
-    campaignId,
-    policyId: `policy.${campaignId}`,
-    canonicalOwner: 'fixture.owner',
-    evaluatedAtMs: FIXTURE_NOW_MS,
-    assuranceResult,
-    reasonCodes: [],
-    violationCodes: [],
-    unknownCodes: [],
-    triggerCodes: [],
-    progressEvidence: {
-      trailingNoProgress: 0,
-      contradictoryCount: 0,
-      rollbackCount: 0,
-      alternations: 0,
-      netProgress: 1,
-      noProgressWindowStartMs: FIXTURE_NOW_MS - 20_000,
-      missingProgress: false,
-      conflictingControllersPresent: false,
-      historicalTerminationTriggerDetected: false,
-      firstHistoricalTriggerAtMs: null,
-    },
-    budgetEvidence: {
-      attempts: 1,
-      retryTimeMs: 1_000,
-      retryExecutionTimeMs: 1_000,
-      rateUnits: 1,
-      resourceUnits: 1,
-      costUnits: 1,
-      observedConcurrentActuations: 1,
-    },
-    actuationGateBinding: { ...attemptEvidence[0].actuationGateEvidence },
-    attemptEvidence,
-    circuitPosture: {
-      state: 'CLOSED',
-      evidenceFresh: true,
-      independentCloseProven: true,
-    },
-    terminationClaim: 'BOUNDED_BY_DECLARED_EVIDENCE',
-    terminationWithinDeclaredBudget: true,
-    containmentEvidenceSufficient: false,
-    containmentLifecycle: null,
-    durableUnresolvedEvidenceRef: null,
-    escalationOwner: null,
-    promotionEvidence: 'INDEPENDENT_POSTCONDITION_AND_QUIET_PERIOD_PROVEN_FOR_OWNER_REVIEW',
-    requiredCanonicalResponse: 'NONE',
-    automaticActionIssued: false,
-    contractIssues: [],
-    ...authority(),
-    ...override,
-  };
-}
-
-function resourceRow(resourceFamily, assuranceResult = 'PASS', override = {}) {
-  return {
-    rowId: `resource.${resourceFamily.toLowerCase()}`,
-    resourceFamily,
-    canonicalOwner: 'fixture.resource.owner',
-    provenance: `synthetic.fixture.${resourceFamily.toLowerCase()}`,
-    observedAtMs: FIXTURE_NOW_MS - 100,
-    maxAgeMs: 5_000,
-    assuranceResult,
-    reasonCodes: [],
-    currentBurn: 40,
-    budgetLimit: 100,
-    budgetRemaining: 60,
-    forecast: 50,
-    forecastHorizonMs: 60_000,
-    unknownReason: null,
-    unknownReasons: { burn: null, budget: null, forecast: null },
-    topConsumers: [{
-      consumerId: `consumer.${resourceFamily.toLowerCase()}`,
-      amount: 20,
-      unknownReason: null,
-      evidenceRef: `synthetic.consumer-evidence.${resourceFamily.toLowerCase()}`,
-    }],
-    throttlingEvidence: {
-      observed: 'INACTIVE',
-      observedAtMs: FIXTURE_NOW_MS - 100,
-      maxAgeMs: 5_000,
-      evidenceRef: `synthetic.throttle-evidence.${resourceFamily.toLowerCase()}`,
-      unknownReason: null,
-      canonicalOwner: 'fixture.resource.owner',
-    },
-    circuitEvidence: {
-      state: 'CLOSED',
-      canonicalOwner: 'fixture.circuit.owner',
-      ownerFailureDomain: 'fixture.circuit-owner',
-      observedAtMs: FIXTURE_NOW_MS - 100,
-      maxAgeMs: 5_000,
-      evidenceRef: `synthetic.circuit-evidence.${resourceFamily.toLowerCase()}`,
-      unknownReason: null,
-      baselineNeverOpenedEvidenceRef: `synthetic.circuit-baseline.${resourceFamily.toLowerCase()}`,
-      baselineEvidenceOwner: 'fixture.independent-circuit-baseline.owner',
-      baselineEvidenceFailureDomain: 'fixture.independent-circuit-baseline-domain',
-      openedAtMs: null,
-      halfOpenAtMs: null,
-      closedAtMs: null,
-      resetEligibleAtMs: null,
-      independentCloseEvidenceRef: null,
-      independentCloseOwner: null,
-      independentCloseFailureDomain: null,
-      mayCloseOrReset: false,
-    },
-    canonicalResponse: {
-      kind: 'RECOMMENDATION',
-      referenceId: `synthetic.recommendation.${resourceFamily.toLowerCase()}`,
-      owner: 'fixture.resource.owner',
-      wiringState: 'DRAFT_INSERTION_REQUEST',
-      unknownReason: null,
-    },
-    protections: {
-      materialMoneyEvidencePreserved: 'PASS',
-      auditEvidencePreserved: 'PASS',
-      safeRiskReductionUnblocked: 'PASS',
-    },
-    throttleDecision: null,
-    commands: [],
-    ...override,
-  };
-}
-
-function resourceAssessment(assuranceResult, rows, override = {}) {
-  return {
-    schemaVersion: 'ip-assurance.systemic.stability.v1',
-    assessmentKind: 'RESOURCE_COST_CIRCUIT_EVIDENCE',
-    bundleId: 'resource.bundle.fixture',
-    evaluatedAtMs: FIXTURE_NOW_MS,
-    assuranceResult,
-    rows,
-    loadSheddingOrder: [...OPTIONAL_SHEDDING_CLASSES, ...PROTECTED_WORK_CLASSES],
-    mayThrottle: false,
-    mayExecute: false,
-    mayCloseOrResetCircuit: false,
-    controllerOwner: null,
-    throttleDecision: null,
-    commands: [],
-    contractIssues: [],
-    ...authority(),
-    ...override,
-  };
+  const evidence = structuredClone(makeRepairEvidence());
+  evidence.campaignId = campaignId;
+  evidence.conflictGraphEvidence.observedCampaigns[0].campaignId = campaignId;
+  const assessment = structuredClone(evaluateRepairLoop(makeRepairPolicy(), evidence, FIXTURE_NOW_MS));
+  assessment.assuranceResult = assuranceResult;
+  return Object.assign(assessment, override);
 }
 
 function assessmentInput() {
+  const reconciliationFixture = CANCELLATION_FIXTURES
+    .find((entry) => entry.id === 'C03_EXTERNAL_CANCEL_INTENT_REQUIRES_RECONCILIATION');
+  const cancellationObservedFixture = CANCELLATION_FIXTURES
+    .find((entry) => entry.id === 'C01_PARENT_CANCEL_STOPS_NEW_LOCAL_EFFECT');
   const cancellationAssessments = [
-    cancellationAssessment('cancel-observed', 'PASS', {
-      cancelIntentObserved: true,
-      mayInitiateNewLocalEffects: false,
-      reasonCodes: ['CANCELLATION_INTENT_OBSERVED'],
-    }),
-    cancellationAssessment('reconciliation-required', 'FAIL', {
-      authoritativeReconciliationRequired: true,
-      reasonCodes: ['CANCELLATION_INTENT_DOES_NOT_PROVE_MUTATION_ABSENCE'],
-    }),
+    evaluateCancellationEvidence(cancellationObservedFixture.input, FIXTURE_NOW_MS),
+    evaluateCancellationEvidence(reconciliationFixture.input, FIXTURE_NOW_MS),
   ];
-  const repairAssessments = [repairAssessment('campaign.fixture', 'PASS')];
-  const rows = RESOURCE_FAMILIES.map((family) => family === 'TELEMETRY_STORAGE'
-    ? resourceRow(family, 'UNKNOWN', {
-      forecast: null,
-      forecastHorizonMs: null,
-      unknownReason: 'forecast unavailable in fixture',
-      unknownReasons: { burn: null, budget: null, forecast: 'forecast unavailable in fixture' },
-      reasonCodes: ['BURN_BUDGET_OR_FORECAST_UNKNOWN'],
-    })
-    : resourceRow(family));
-  return {
+  const repairFixture = REPAIR_FIXTURES
+    .find((entry) => entry.id === 'R01_INDEPENDENT_POSTCONDITION_AND_QUIET_PERIOD');
+  const repairAssessments = [evaluateRepairLoop(repairFixture.policy, repairFixture.evidence, FIXTURE_NOW_MS)];
+  const resourceFixture = RESOURCE_FIXTURES
+    .find((entry) => entry.id === 'E02_UNKNOWN_FORECAST_REMAINS_NULL');
+  return structuredClone({
     cancellationAssessments,
     repairAssessments,
-    resourceAssessment: resourceAssessment('UNKNOWN', rows),
-  };
+    resourceAssessment: evaluateResourceEvidence(resourceFixture.input, FIXTURE_NOW_MS),
+  });
 }
 
 function passingResourceAssessment() {
-  return resourceAssessment('PASS', RESOURCE_FAMILIES.map((family) => resourceRow(family)));
+  return structuredClone(evaluateResourceEvidence(RESOURCE_FIXTURES[0].input, FIXTURE_NOW_MS));
+}
+
+function markResourceRowPass(assessment, index = 0) {
+  assessment.rows[index].assuranceResult = 'PASS';
+  assessment.rows[index].reasonCodes = [];
+  return assessment;
 }
 
 test('view model is deterministic, frozen, render-neutral, and honestly synthetic', () => {
@@ -287,12 +84,48 @@ test('view model is deterministic, frozen, render-neutral, and honestly syntheti
   const second = projectStabilityViewModel(input, FIXTURE_NOW_MS);
   assert.deepEqual(first, second);
   assert.equal(Object.isFrozen(first), true);
-  assert.equal(first.integrationStatus, 'DESIGNED');
+  assert.equal(first.integrationStatus, 'SYNTHETIC_ONLY');
   assert.equal(first.dataAuthority, 'SYNTHETIC_TEST');
   assert.equal(first.effectAuthority, 'NONE');
   assert.equal('authority' in first, false);
   assert.equal('wiringState' in first, false);
-  assert.equal(first.overallAssuranceResult, 'FAIL');
+  assert.equal(first.overallAssuranceResult, 'UNKNOWN');
+});
+
+test('view projection captures one descriptor image and rejects accessors without invoking them', () => {
+  const nonRecord = projectStabilityViewModel(null, FIXTURE_NOW_MS);
+  assert.equal(nonRecord.overallAssuranceResult, 'FAIL');
+  assert.ok(nonRecord.annunciators.some((entry) => entry.id === 'view:input-snapshot'));
+
+  const accessorInput = assessmentInput();
+  let getterCalls = 0;
+  Object.defineProperty(accessorInput, 'cancellationAssessments', {
+    enumerable: true,
+    configurable: true,
+    get() {
+      getterCalls += 1;
+      return getterCalls === 1 ? [] : accessorInput.repairAssessments;
+    },
+  });
+  const rejected = projectStabilityViewModel(accessorInput, FIXTURE_NOW_MS);
+  assert.equal(rejected.overallAssuranceResult, 'FAIL');
+  assert.ok(rejected.annunciators.some((entry) => (
+    entry.id === 'view:input-snapshot'
+      && entry.reasonCodes.includes('VIEW_INPUT_SNAPSHOT_INVALID')
+  )));
+  assert.equal(getterCalls, 0);
+
+  const target = assessmentInput();
+  const expected = projectStabilityViewModel(target, FIXTURE_NOW_MS);
+  let proxyGetCalls = 0;
+  const proxy = new Proxy(target, {
+    get(source, key, receiver) {
+      proxyGetCalls += 1;
+      return key === 'cancellationAssessments' ? [] : Reflect.get(source, key, receiver);
+    },
+  });
+  assert.deepEqual(projectStabilityViewModel(proxy, FIXTURE_NOW_MS), expected);
+  assert.equal(proxyGetCalls, 0);
 });
 
 test('view model exposes intent, reconciliation, leases, progress, budgets, unknown forecasts, and bundle posture', () => {
@@ -333,7 +166,8 @@ test('contract-invalid resource bundle remains a top-level failure when rows are
     assuranceResult: 'FAIL',
     reasonCodes: ['CONTRACT_INVALID'],
     contractIssues: [{ path: '$.rows', code: 'RESOURCE_DENOMINATOR_MISMATCH', detail: 'exact resource denominator required' }],
-    ...authority(),
+    dataAuthority: 'SYNTHETIC_TEST',
+    effectAuthority: 'NONE',
   };
   assert.equal(invalidResourceAssessment.assuranceResult, 'FAIL');
   assert.equal(invalidResourceAssessment.rows, undefined);
@@ -363,7 +197,7 @@ test('empty assessment denominators remain unknown instead of becoming green', (
   assert.ok(view.annunciators.some((entry) => entry.family === 'ASSURANCE_REMEDIATION_CONTROL_LOOP'
     && entry.reasonCodes.includes('ASSESSMENT_DENOMINATOR_EMPTY')));
   assert.ok(view.annunciators.some((entry) => entry.family === 'ASSURANCE_RESOURCE_COST_CIRCUIT_BUNDLE'
-    && entry.assuranceResult === 'PASS'));
+    && entry.assuranceResult === 'UNKNOWN'));
 });
 
 test('malformed assessments and forbidden effect-authority claims render as failures with no effects', () => {
@@ -444,10 +278,10 @@ test('row-level circuit authority and bundle result contradictions cannot reach 
     repairAssessments: [],
     resourceAssessment: unsafeCircuit,
   }, FIXTURE_NOW_MS);
-  const unsafeRow = view.resources.find((row) => row.resourceFamily === 'LLM_TOKENS');
   assert.equal(view.overallAssuranceResult, 'FAIL');
-  assert.equal(unsafeRow.circuitEvidence, null);
-  assert.ok(unsafeRow.reasonCodes.includes('RESOURCE_CIRCUIT_AUTHORITY_FORBIDDEN'));
+  assert.deepEqual(view.resources, []);
+  assert.ok(view.annunciators.some((entry) => entry.reasonCodes
+    .includes('ASSESSMENT_SOURCE_REPLAY_MISMATCH')));
 
   const mismatched = passingResourceAssessment();
   mismatched.rows[0].assuranceResult = 'UNKNOWN';
@@ -459,20 +293,35 @@ test('row-level circuit authority and bundle result contradictions cannot reach 
   }, FIXTURE_NOW_MS);
   const bundle = view.annunciators.find((entry) => entry.family === 'ASSURANCE_RESOURCE_COST_CIRCUIT_BUNDLE');
   assert.equal(bundle.assuranceResult, 'FAIL');
-  assert.ok(bundle.reasonCodes.includes('RESOURCE_BUNDLE_RESULT_MISMATCH'));
+  assert.ok(bundle.reasonCodes.includes('ASSESSMENT_SOURCE_REPLAY_MISMATCH'));
+});
+
+test('resource projection rejects missing or substituted source evidence', () => {
+  const exhaustedFixture = RESOURCE_FIXTURES
+    .find((entry) => entry.id === 'E07_RESOURCE_BUDGET_EXHAUSTION_IS_VISIBLE_EVIDENCE_ONLY');
+  for (const replacement of [null, exhaustedFixture.input]) {
+    const forged = passingResourceAssessment();
+    forged.sourceEvidence = structuredClone(replacement);
+    const view = projectStabilityViewModel({
+      cancellationAssessments: [],
+      repairAssessments: [],
+      resourceAssessment: forged,
+    }, FIXTURE_NOW_MS);
+    assert.equal(view.overallAssuranceResult, 'FAIL');
+    assert.deepEqual(view.resources, []);
+    assert.ok(view.annunciators.some((entry) => entry.reasonCodes
+      .includes('ASSESSMENT_SOURCE_REPLAY_MISMATCH')));
+  }
 });
 
 test('terminal repair containment remains visible after its original trigger ages out', () => {
-  const terminal = repairAssessment('campaign.terminal', 'PASS', {
-    containmentEvidenceSufficient: true,
-    containmentLifecycle: 'QUARANTINED',
-    durableUnresolvedEvidenceRef: 'synthetic.unresolved.terminal',
-    requiredCanonicalResponse: 'QUARANTINE_OR_ESCALATE_OR_DURABLY_RECORD_UNRESOLVED',
-    terminationWithinDeclaredBudget: true,
-    terminationClaim: 'BOUNDED_BY_DECLARED_EVIDENCE',
-    promotionEvidence: 'NOT_PROVEN',
-    reasonCodes: ['DURABLE_TERMINAL_CONTAINMENT_ACTIVE'],
-  });
+  const terminalFixture = REPAIR_FIXTURES
+    .find((entry) => entry.id === 'R04_NO_PROGRESS_TERMINATES_IN_DURABLE_QUARANTINE');
+  const terminal = structuredClone(evaluateRepairLoop(
+    terminalFixture.policy,
+    terminalFixture.evidence,
+    FIXTURE_NOW_MS,
+  ));
   const view = projectStabilityViewModel({
     cancellationAssessments: [cancellationAssessment('baseline', 'PASS')],
     repairAssessments: [terminal],
@@ -480,7 +329,7 @@ test('terminal repair containment remains visible after its original trigger age
   }, FIXTURE_NOW_MS);
   const row = view.repairLoops[0];
   assert.equal(row.containmentLifecycle, 'QUARANTINED');
-  assert.equal(row.durableUnresolvedEvidenceRef, 'synthetic.unresolved.terminal');
+  assert.equal(row.durableUnresolvedEvidenceRef, terminal.durableUnresolvedEvidenceRef);
   assert.equal(row.requiredCanonicalResponse, 'QUARANTINE_OR_ESCALATE_OR_DURABLY_RECORD_UNRESOLVED');
   assert.equal(row.promotionEvidence, 'NOT_PROVEN');
 
@@ -527,6 +376,135 @@ test('cancellation projection validates exact state semantics and preserves fenc
   assert.ok(view.deadlineLease[0].reasonCodes.includes('CANCELLATION_ASSESSMENT_FIELDS_INVALID'));
 });
 
+test('cancellation projection recomputes inclusive lease and detached-fence expiry from carried proof', () => {
+  const currentLeaseFixture = CANCELLATION_FIXTURES
+    .find((entry) => entry.id === 'C07_LONG_LIVED_CONTROLLER_USES_CURRENT_LEASE');
+  const currentLease = structuredClone(evaluateCancellationEvidence(currentLeaseFixture.input, FIXTURE_NOW_MS));
+  const leaseExpiry = currentLease.authorityEvidence.lease.expiresAtMs;
+  currentLease.evaluatedAtMs = leaseExpiry;
+  let view = projectStabilityViewModel({
+    cancellationAssessments: [currentLease],
+    repairAssessments: [],
+    resourceAssessment: passingResourceAssessment(),
+  }, leaseExpiry);
+  assert.equal(view.deadlineLease[0].assuranceResult, 'FAIL');
+  assert.equal(view.deadlineLease[0].leaseEvidence, 'EXPIRED');
+  assert.equal(view.deadlineLease[0].mayInitiateNewLocalEffects, null);
+  assert.ok(view.deadlineLease[0].reasonCodes.includes('CANCELLATION_LEASE_PROOF_POSTURE_MISMATCH'));
+
+  const detachedFixture = CANCELLATION_FIXTURES
+    .find((entry) => entry.id === 'C09_REGISTERED_FENCED_RECOVERY_SURVIVES_PARENT_TIMEOUT');
+  const detached = structuredClone(evaluateCancellationEvidence(detachedFixture.input, FIXTURE_NOW_MS));
+  const detachedExpiry = detached.authorityEvidence.detachedRecovery.leaseExpiresAtMs;
+  detached.evaluatedAtMs = detachedExpiry;
+  view = projectStabilityViewModel({
+    cancellationAssessments: [detached],
+    repairAssessments: [],
+    resourceAssessment: passingResourceAssessment(),
+  }, detachedExpiry);
+  assert.equal(view.deadlineLease[0].assuranceResult, 'FAIL');
+  assert.equal(view.deadlineLease[0].detachedRecoveryContinuationRequired, false);
+  assert.ok(view.deadlineLease[0].reasonCodes.includes('CANCELLATION_DETACHED_VALIDITY_PROOF_MISMATCH'));
+});
+
+test('cancellation authority proof rejects paired owner and fence relabeling', () => {
+  const fixture = CANCELLATION_FIXTURES
+    .find((entry) => entry.id === 'C07_LONG_LIVED_CONTROLLER_USES_CURRENT_LEASE');
+  for (const mutate of [
+    (assessment) => {
+      assessment.canonicalOwner = 'forged.owner';
+      assessment.authorityEvidence.lease.ownerId = 'forged.owner';
+    },
+    (assessment) => {
+      assessment.authorityEvidence.lease.fenceEpoch = 8;
+      assessment.authorityEvidence.lease.activeFenceEpoch = 8;
+    },
+  ]) {
+    const assessment = structuredClone(evaluateCancellationEvidence(fixture.input, FIXTURE_NOW_MS));
+    mutate(assessment);
+    const row = projectStabilityViewModel({
+      cancellationAssessments: [assessment],
+      repairAssessments: [],
+      resourceAssessment: passingResourceAssessment(),
+    }, FIXTURE_NOW_MS).deadlineLease[0];
+    assert.equal(row.assuranceResult, 'FAIL');
+    assert.ok(row.reasonCodes.includes('CANCELLATION_CURRENT_LEASE_TRUST_PROOF_MISMATCH'));
+  }
+});
+
+test('cancellation projection binds unknown support to the canonical UNKNOWN evidence code', () => {
+  const canonicalFixture = CANCELLATION_FIXTURES.find((entry) => entry.id === 'C01_PARENT_CANCEL_STOPS_NEW_LOCAL_EFFECT');
+  const canonical = evaluateCancellationEvidence(canonicalFixture.input, FIXTURE_NOW_MS);
+  assert.equal(canonical.assuranceResult, 'PASS');
+
+  const forged = structuredClone(canonical);
+  forged.cancellationSupported = null;
+  const forgedView = projectStabilityViewModel({
+    cancellationAssessments: [forged],
+    repairAssessments: [],
+    resourceAssessment: passingResourceAssessment(),
+  }, FIXTURE_NOW_MS);
+  assert.equal(forgedView.overallAssuranceResult, 'FAIL');
+  assert.ok(forgedView.deadlineLease[0].reasonCodes
+    .includes('CANCELLATION_SUPPORT_UNKNOWN_EVIDENCE_MISMATCH'));
+
+  const unknownFixture = CANCELLATION_FIXTURES
+    .find((entry) => entry.id === 'C04_UNKNOWN_CANCELLATION_SUPPORT_STAYS_UNKNOWN');
+  const unknown = evaluateCancellationEvidence(unknownFixture.input, FIXTURE_NOW_MS);
+  const unknownView = projectStabilityViewModel({
+    cancellationAssessments: [unknown],
+    repairAssessments: [],
+    resourceAssessment: passingResourceAssessment(),
+  }, FIXTURE_NOW_MS);
+  assert.equal(unknownView.deadlineLease[0].assuranceResult, 'UNKNOWN');
+  assert.equal(unknownView.deadlineLease[0].cancellationSupported, null);
+  assert.ok(unknownView.deadlineLease[0].reasonCodes.includes('CANCELLATION_SUPPORT_UNKNOWN'));
+});
+
+test('cancellation projection cannot relabel source-bound deadline, late-fact, restart, or effect failures', () => {
+  for (const fixtureId of [
+    'C02_CHILD_DEADLINE_CANNOT_ESCAPE_PARENT',
+    'C06_STALE_EPOCH_FACT_CANNOT_AUTHORIZE_NEW_WORK',
+    'C11_RESTART_CANNOT_LOSE_LATE_RESULT_LAW',
+    'C12_CANCEL_OBSERVED_LOCAL_CHILD_CANNOT_START_EFFECT',
+  ]) {
+    const fixture = CANCELLATION_FIXTURES.find((entry) => entry.id === fixtureId);
+    const forged = structuredClone(evaluateCancellationEvidence(fixture.input, FIXTURE_NOW_MS));
+    assert.equal(forged.assuranceResult, 'FAIL', fixtureId);
+    forged.assuranceResult = 'PASS';
+    forged.reasonCodes = [];
+    forged.violationCodes = [];
+    forged.unknownCodes = [];
+    const row = projectStabilityViewModel({
+      cancellationAssessments: [forged],
+      repairAssessments: [],
+      resourceAssessment: passingResourceAssessment(),
+    }, FIXTURE_NOW_MS).deadlineLease[0];
+    assert.equal(row.assuranceResult, 'FAIL', fixtureId);
+    assert.ok(row.reasonCodes.includes('ASSESSMENT_SOURCE_REPLAY_MISMATCH'), fixtureId);
+  }
+});
+
+test('cancellation projection rejects paired restart-proof rewrites even when derived labels are coordinated', () => {
+  const fixture = CANCELLATION_FIXTURES
+    .find((entry) => entry.id === 'C11_RESTART_CANNOT_LOSE_LATE_RESULT_LAW');
+  const validInput = structuredClone(fixture.input);
+  validInput.restartEvidence.preservedLateResultLaw = true;
+  const canonical = evaluateCancellationEvidence(validInput, FIXTURE_NOW_MS);
+  assert.equal(canonical.assuranceResult, 'PASS');
+
+  const forged = structuredClone(canonical);
+  forged.authorityEvidence.restartEvidence.stateBeforeRestart.localDeadlineAtMs += 1_000;
+  forged.authorityEvidence.restartEvidence.stateAfterRestart.localDeadlineAtMs += 1_000;
+  const row = projectStabilityViewModel({
+    cancellationAssessments: [forged],
+    repairAssessments: [],
+    resourceAssessment: passingResourceAssessment(),
+  }, FIXTURE_NOW_MS).deadlineLease[0];
+  assert.equal(row.assuranceResult, 'FAIL');
+  assert.ok(row.reasonCodes.includes('ASSESSMENT_SOURCE_REPLAY_MISMATCH'));
+});
+
 test('repair projection rejects invented lifecycle, promotion, termination, and response labels', () => {
   const forged = repairAssessment('campaign.forged-repair-labels', 'PASS');
   Object.assign(forged, {
@@ -550,7 +528,72 @@ test('repair projection rejects invented lifecycle, promotion, termination, and 
   assert.ok(row.reasonCodes.includes('REPAIR_ASSESSMENT_FIELDS_INVALID'));
 });
 
-test('resource assessment enforces row identity, circuit freshness, and empty contract issues', () => {
+test('repair projection cannot relabel a source-bound concurrency-budget failure', () => {
+  const fixture = REPAIR_FIXTURES
+    .find((entry) => entry.id === 'R01_INDEPENDENT_POSTCONDITION_AND_QUIET_PERIOD');
+  const evidence = structuredClone(fixture.evidence);
+  evidence.observedConcurrentActuations = 2;
+  const forged = structuredClone(evaluateRepairLoop(fixture.policy, evidence, FIXTURE_NOW_MS));
+  assert.equal(forged.assuranceResult, 'FAIL');
+  forged.assuranceResult = 'PASS';
+  forged.reasonCodes = [];
+  forged.violationCodes = [];
+  forged.unknownCodes = [];
+  forged.terminationWithinDeclaredBudget = true;
+  forged.terminationClaim = 'BOUNDED_BY_DECLARED_EVIDENCE';
+  forged.promotionEvidence = 'INDEPENDENT_POSTCONDITION_AND_QUIET_PERIOD_PROVEN_FOR_OWNER_REVIEW';
+  forged.requiredCanonicalResponse = 'NONE';
+  const row = projectStabilityViewModel({
+    cancellationAssessments: [],
+    repairAssessments: [forged],
+    resourceAssessment: passingResourceAssessment(),
+  }, FIXTURE_NOW_MS).repairLoops[0];
+  assert.equal(row.assuranceResult, 'FAIL');
+  assert.ok(row.reasonCodes.includes('ASSESSMENT_SOURCE_REPLAY_MISMATCH'));
+});
+
+test('repair projection binds historical, controller-conflict, and missing-progress evidence to codes', () => {
+  const canonicalFixture = REPAIR_FIXTURES.find((entry) => entry.id === 'R01_INDEPENDENT_POSTCONDITION_AND_QUIET_PERIOD');
+  const canonical = evaluateRepairLoop(canonicalFixture.policy, canonicalFixture.evidence, FIXTURE_NOW_MS);
+  const mutations = [
+    ['REPAIR_HISTORICAL_TRIGGER_EVIDENCE_MISMATCH', (assessment) => {
+      assessment.progressEvidence.historicalTerminationTriggerDetected = true;
+      assessment.progressEvidence.firstHistoricalTriggerAtMs = assessment.attemptEvidence[0].completedAtMs;
+    }],
+    ['REPAIR_CONTROLLER_CONFLICT_EVIDENCE_MISMATCH', (assessment) => {
+      assessment.progressEvidence.conflictingControllersPresent = true;
+    }],
+    ['REPAIR_MISSING_PROGRESS_EVIDENCE_MISMATCH', (assessment) => {
+      assessment.progressEvidence.missingProgress = true;
+    }],
+  ];
+  for (const [code, mutate] of mutations) {
+    const forged = structuredClone(canonical);
+    mutate(forged);
+    const view = projectStabilityViewModel({
+      cancellationAssessments: [],
+      repairAssessments: [forged],
+      resourceAssessment: passingResourceAssessment(),
+    }, FIXTURE_NOW_MS);
+    assert.equal(view.overallAssuranceResult, 'FAIL', code);
+    assert.ok(view.repairLoops[0].reasonCodes.includes(code), code);
+  }
+
+  const containedFixture = REPAIR_FIXTURES
+    .find((entry) => entry.id === 'R06_ALTERNATING_CONTROLLERS_QUARANTINE_AND_ESCALATE');
+  const contained = evaluateRepairLoop(containedFixture.policy, containedFixture.evidence, FIXTURE_NOW_MS);
+  const containedView = projectStabilityViewModel({
+    cancellationAssessments: [],
+    repairAssessments: [contained],
+    resourceAssessment: passingResourceAssessment(),
+  }, FIXTURE_NOW_MS);
+  assert.equal(containedView.repairLoops[0].assuranceResult, 'PASS');
+  assert.equal(containedView.repairLoops[0].progressEvidence.historicalTerminationTriggerDetected, true);
+  assert.equal(containedView.repairLoops[0].progressEvidence.conflictingControllersPresent, true);
+  assert.equal(containedView.repairLoops[0].attentionRequired, true);
+});
+
+test('resource source replay rejects forged row identity, circuit freshness, and contract issues', () => {
   const cases = [
     ['RESOURCE_ROW_ID_DUPLICATE', (assessment) => { assessment.rows[1].rowId = assessment.rows[0].rowId; }],
     ['RESOURCE_PASS_WITH_STALE_CIRCUIT_EVIDENCE', (assessment) => { assessment.rows[0].circuitEvidence.observedAtMs = FIXTURE_NOW_MS - 10_000; }],
@@ -560,6 +603,7 @@ test('resource assessment enforces row identity, circuit freshness, and empty co
   ];
   for (const [code, mutate] of cases) {
     const assessment = passingResourceAssessment();
+    if (code === 'RESOURCE_PASS_WITH_STALE_CIRCUIT_EVIDENCE') markResourceRowPass(assessment);
     mutate(assessment);
     const view = projectStabilityViewModel({
       cancellationAssessments: [],
@@ -567,11 +611,13 @@ test('resource assessment enforces row identity, circuit freshness, and empty co
       resourceAssessment: assessment,
     }, FIXTURE_NOW_MS);
     assert.equal(view.overallAssuranceResult, 'FAIL', code);
-    assert.ok(view.annunciators.some((entry) => entry.reasonCodes.includes(code)), code);
+    assert.deepEqual(view.resources, [], code);
+    assert.ok(view.annunciators.some((entry) => entry.reasonCodes
+      .includes('ASSESSMENT_SOURCE_REPLAY_MISMATCH')), code);
   }
 });
 
-test('resource projection rejects inverted shedding and every nested authority or PASS contradiction', () => {
+test('resource source replay rejects inverted shedding and every nested authority or PASS contradiction', () => {
   const mutations = [
     ['RESOURCE_SHEDDING_PRIORITY_INVERTED', (assessment) => { assessment.loadSheddingOrder.reverse(); }, null],
     ['RESOURCE_PASS_WITH_UNPROVED_PROTECTIONS', (assessment) => { assessment.rows[0].protections.safeRiskReductionUnblocked = 'FAIL'; }, 'LLM_TOKENS'],
@@ -590,6 +636,7 @@ test('resource projection rejects inverted shedding and every nested authority o
   ];
   for (const [expectedCode, mutate, family] of mutations) {
     const unsafe = passingResourceAssessment();
+    if (expectedCode.startsWith('RESOURCE_PASS_')) markResourceRowPass(unsafe);
     mutate(unsafe);
     const view = projectStabilityViewModel({
       cancellationAssessments: [],
@@ -597,17 +644,10 @@ test('resource projection rejects inverted shedding and every nested authority o
       resourceAssessment: unsafe,
     }, FIXTURE_NOW_MS);
     assert.equal(view.overallAssuranceResult, 'FAIL', expectedCode);
-    assert.ok(view.annunciators.some((entry) => entry.reasonCodes.includes(expectedCode)), expectedCode);
-    if (family !== null) {
-      const row = view.resources.find((entry) => entry.resourceFamily === family);
-      assert.ok(row);
-      assert.equal(row.throttleDecision, null);
-      assert.deepEqual(row.commands, []);
-      assert.equal(row.throttlingEvidence, null);
-      assert.equal(row.circuitEvidence, null);
-    } else {
-      assert.deepEqual(view.loadSheddingOrder, []);
-    }
+    assert.ok(view.annunciators.some((entry) => entry.reasonCodes
+      .includes('ASSESSMENT_SOURCE_REPLAY_MISMATCH')), expectedCode);
+    assert.deepEqual(view.resources, [], family ?? expectedCode);
+    assert.deepEqual(view.loadSheddingOrder, []);
   }
 });
 
@@ -625,7 +665,8 @@ test('missing or null resource reason codes fail closed without throwing', () =>
       resourceAssessment: assessment,
     }, FIXTURE_NOW_MS); });
     assert.equal(view.overallAssuranceResult, 'FAIL');
-    assert.ok(view.annunciators.some((entry) => entry.reasonCodes.includes('RESOURCE_REASON_CODES_INVALID')));
+    assert.ok(view.annunciators.some((entry) => entry.reasonCodes
+      .includes('ASSESSMENT_SOURCE_REPLAY_MISMATCH')));
   }
 });
 
@@ -676,7 +717,7 @@ test('canonical evaluator outputs retain source time, bounded attempt evidence, 
     resourceAssessment: resource,
   }, FIXTURE_NOW_MS);
 
-  assert.equal(view.overallAssuranceResult, 'PASS');
+  assert.equal(view.overallAssuranceResult, 'UNKNOWN');
   assert.equal(view.deadlineLease[0].evaluatedAtMs, FIXTURE_NOW_MS);
   assert.equal(view.deadlineLease[0].assessmentFreshness, 'CURRENT');
   assert.equal(view.repairLoops[0].evaluatedAtMs, FIXTURE_NOW_MS);
@@ -882,14 +923,16 @@ test('repair close proof rejects producer-common-mode transition and baseline ev
 
   assert.equal(projectRepair(canonical).assuranceResult, 'PASS');
 
-  const baseline = structuredClone(canonical);
-  baseline.attemptEvidence = [structuredClone(canonical.attemptEvidence.at(-1))];
-  baseline.budgetEvidence.attempts = 1;
-  Object.assign(baseline.attemptEvidence[0].circuitEvidence, {
+  const baselineEvidence = structuredClone(fixture.evidence);
+  const baselineAttempt = structuredClone(baselineEvidence.attempts.at(-1));
+  baselineAttempt.localAttempt = 1;
+  baselineAttempt.nextRetryAtMs = null;
+  Object.assign(baselineAttempt.circuitEvidence, {
+    evidenceRef: `${SYNTHETIC_REPAIR_TRUST_BINDING.circuitEvidenceRefPrefix}1`,
     priorEvidenceRef: null,
-    baselineNeverOpenedEvidenceRef: 'synthetic.independent-never-open-baseline',
-    baselineEvidenceOwner: 'synthetic.independent-baseline-owner',
-    baselineEvidenceFailureDomain: 'synthetic.independent-baseline-failure-domain',
+    baselineNeverOpenedEvidenceRef: `${SYNTHETIC_REPAIR_TRUST_BINDING.independentCircuitBaselineEvidenceRefPrefix}1`,
+    baselineEvidenceOwner: SYNTHETIC_REPAIR_TRUST_BINDING.independentCircuitOwner,
+    baselineEvidenceFailureDomain: SYNTHETIC_REPAIR_TRUST_BINDING.independentCircuitFailureDomain,
     openedAtMs: null,
     halfOpenAtMs: null,
     resetEligibleAtMs: null,
@@ -898,6 +941,10 @@ test('repair close proof rejects producer-common-mode transition and baseline ev
     independentCloseOwner: null,
     independentCloseFailureDomain: null,
   });
+  baselineEvidence.attempts = [baselineAttempt];
+  baselineEvidence.postconditionWindow.producerEvidenceRef = baselineAttempt.producerEvidenceRef;
+  baselineEvidence.postconditionWindow.verifierEvidenceRef = baselineAttempt.verifierEvidenceRef;
+  const baseline = evaluateRepairLoop(fixture.policy, baselineEvidence, FIXTURE_NOW_MS);
   assert.equal(projectRepair(baseline).assuranceResult, 'PASS');
 
   const cases = [
@@ -916,7 +963,7 @@ test('repair close proof rejects producer-common-mode transition and baseline ev
   }
 });
 
-test('resource PASS rows retain measurement freshness and downgrade after their exact TTL', () => {
+test('resource rows retain measurement freshness and surface staleness after their exact TTL', () => {
   const fixtureInput = structuredClone(RESOURCE_FIXTURES[0].input);
   fixtureInput.rows[0].observedAtMs = FIXTURE_NOW_MS;
   fixtureInput.rows[0].maxAgeMs = 1;
@@ -935,13 +982,14 @@ test('resource PASS rows retain measurement freshness and downgrade after their 
   assert.equal(row.assessmentFreshness, 'STALE');
   assert.equal(row.observedAtMs, FIXTURE_NOW_MS);
   assert.equal(row.maxAgeMs, 1);
-  assert.ok(row.reasonCodes.includes('RESOURCE_PASS_MEASUREMENT_STALE'));
+  assert.ok(row.reasonCodes.includes('RESOURCE_MEASUREMENT_STALE'));
   assert.equal(bundle.assuranceResult, 'UNKNOWN');
-  assert.ok(bundle.reasonCodes.includes('RESOURCE_PASS_MEASUREMENT_STALE'));
+  assert.ok(bundle.reasonCodes.includes('RESOURCE_MEASUREMENT_STALE'));
   assert.equal(bundle.reasonCodes.includes('RESOURCE_BUNDLE_RESULT_MISMATCH'), false);
 
-  const futureAtEvaluation = passingResourceAssessment();
-  futureAtEvaluation.rows[0].observedAtMs = FIXTURE_NOW_MS + 1;
+  const futureInput = structuredClone(RESOURCE_FIXTURES[0].input);
+  futureInput.rows[0].observedAtMs = FIXTURE_NOW_MS + 1;
+  const futureAtEvaluation = evaluateResourceEvidence(futureInput, FIXTURE_NOW_MS);
   const futureView = projectStabilityViewModel({
     cancellationAssessments: [],
     repairAssessments: [],
@@ -950,6 +998,24 @@ test('resource PASS rows retain measurement freshness and downgrade after their 
   const futureRow = futureView.resources.find((entry) => entry.resourceFamily === 'LLM_TOKENS');
   assert.equal(futureRow.assuranceResult, 'FAIL');
   assert.ok(futureRow.reasonCodes.includes('RESOURCE_MEASUREMENT_FROM_FUTURE'));
+});
+
+test('nested resource observations cannot postdate their assessment frame', () => {
+  for (const [sourceField, expectedCode] of [
+    ['throttling', 'RESOURCE_THROTTLING_EVIDENCE_FROM_FUTURE'],
+    ['circuit', 'RESOURCE_CIRCUIT_EVIDENCE_FROM_FUTURE'],
+  ]) {
+    const source = structuredClone(RESOURCE_FIXTURES[0].input);
+    source.rows[0][sourceField].observedAtMs = FIXTURE_NOW_MS + 1;
+    const assessment = evaluateResourceEvidence(source, FIXTURE_NOW_MS);
+    const view = projectStabilityViewModel({
+      cancellationAssessments: [],
+      repairAssessments: [],
+      resourceAssessment: assessment,
+    }, FIXTURE_NOW_MS + 2);
+    assert.equal(view.overallAssuranceResult, 'FAIL');
+    assert.ok(view.annunciators.some((entry) => entry.reasonCodes.includes(expectedCode)));
+  }
 });
 
 test('resource hard failures, unbounded numbers, and ambiguous blockers cannot be downgraded', () => {
@@ -961,9 +1027,9 @@ test('resource hard failures, unbounded numbers, and ambiguous blockers cannot b
   let view = projectStabilityViewModel({
     cancellationAssessments: [], repairAssessments: [], resourceAssessment: downgraded,
   }, FIXTURE_NOW_MS);
-  let row = view.resources.find((entry) => entry.resourceFamily === 'LLM_TOKENS');
-  assert.equal(row.assuranceResult, 'FAIL');
-  assert.ok(row.reasonCodes.includes('RESOURCE_HARD_FAILURE_RESULT_MISMATCH'));
+  assert.deepEqual(view.resources, []);
+  assert.ok(view.annunciators.some((entry) => entry.reasonCodes
+    .includes('ASSESSMENT_SOURCE_REPLAY_MISMATCH')));
 
   for (const [code, mutate] of [
     ['RESOURCE_NUMERIC_EVIDENCE_INVALID', (assessment) => {
@@ -984,9 +1050,9 @@ test('resource hard failures, unbounded numbers, and ambiguous blockers cannot b
     view = projectStabilityViewModel({
       cancellationAssessments: [], repairAssessments: [], resourceAssessment: forged,
     }, FIXTURE_NOW_MS);
-    row = view.resources.find((entry) => entry.resourceFamily === 'LLM_TOKENS');
-    assert.equal(row.assuranceResult, 'FAIL', code);
-    assert.ok(row.reasonCodes.includes(code), code);
+    assert.deepEqual(view.resources, [], code);
+    assert.ok(view.annunciators.some((entry) => entry.reasonCodes
+      .includes('ASSESSMENT_SOURCE_REPLAY_MISMATCH')), code);
   }
 
   const unknown = evaluateResourceEvidence(RESOURCE_FIXTURES[1].input, FIXTURE_NOW_MS);

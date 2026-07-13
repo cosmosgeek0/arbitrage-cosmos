@@ -8,6 +8,7 @@ import {
 } from '../../../../fixtures/productAssurance/systemic/stability/fixtures.mjs';
 import { CANCELLATION_LATE_RESULT_LAW } from '../../../../fixtures/productAssurance/systemic/stability/contracts.mjs';
 import { evaluateCancellationEvidence } from '../../../../fixtures/productAssurance/systemic/stability/reference-evaluator.mjs';
+import { cancellationRestartDigest } from '../../../../fixtures/productAssurance/systemic/stability/integrity.mjs';
 
 for (const fixture of CANCELLATION_FIXTURES) {
   test(`${fixture.id} evaluates deterministically`, () => {
@@ -260,7 +261,6 @@ test('restart evidence is tied to request, cancellation context, and stable stat
   for (const mutate of [
     (record) => { record.restartEvidence.restoredRequestId = 'different.request'; },
     (record) => { record.restartEvidence.restoredCancellationContextId = 'different.cancel-context'; },
-    (record) => { record.restartEvidence.stateDigestAfterRestart = 'different.state-digest'; },
   ]) {
     const record = structuredClone(valid);
     mutate(record);
@@ -269,9 +269,101 @@ test('restart evidence is tied to request, cancellation context, and stable stat
     assert.ok(assessment.violationCodes.includes('RESTART_LOST_CANCELLATION_OR_LATE_RESULT_IDENTITY'));
   }
 
+  const wrongDigest = structuredClone(valid);
+  wrongDigest.restartEvidence.stateDigestAfterRestart = `sha256:${'0'.repeat(64)}`;
+  const wrongDigestAssessment = evaluateCancellationEvidence(wrongDigest, FIXTURE_NOW_MS);
+  assert.equal(wrongDigestAssessment.assuranceResult, 'FAIL');
+  assert.ok(wrongDigestAssessment.contractIssues
+    .some((issue) => issue.code === 'RESTART_CHECKPOINT_DIGEST_MISMATCH'));
+
   const wrongLaw = structuredClone(valid);
   wrongLaw.restartEvidence.restoredLateResultLaw = 'different late-result law';
   const wrongLawAssessment = evaluateCancellationEvidence(wrongLaw, FIXTURE_NOW_MS);
   assert.equal(wrongLawAssessment.assuranceResult, 'FAIL');
   assert.ok(wrongLawAssessment.contractIssues.some((issue) => issue.code === 'RESTORED_LATE_RESULT_LAW_INVALID'));
+
+  for (const mutate of [
+    (record) => { record.operationId = 'forged.operation'; },
+    (record) => { record.canonicalOwner = 'forged.owner'; },
+    (record) => { record.localDeadlineAtMs += 1_000; },
+    (record) => { record.effect.initiatedAtMs = FIXTURE_NOW_MS - 1_000; },
+    (record) => { record.restartEvidence.stateAfterRestart.effect.initiatedAtMs = FIXTURE_NOW_MS - 1_000; },
+  ]) {
+    const record = structuredClone(valid);
+    mutate(record);
+    const assessment = evaluateCancellationEvidence(record, FIXTURE_NOW_MS);
+    assert.equal(assessment.assuranceResult, 'FAIL');
+    assert.ok(
+      assessment.contractIssues.some((issue) => issue.code === 'RESTART_STATE_SNAPSHOT_MISMATCH'),
+      assessment.contractIssues.map((issue) => issue.code).join(','),
+    );
+  }
+
+  const missingSnapshot = structuredClone(valid);
+  missingSnapshot.restartEvidence.stateBeforeRestart = null;
+  const missingAssessment = evaluateCancellationEvidence(missingSnapshot, FIXTURE_NOW_MS);
+  assert.equal(missingAssessment.assuranceResult, 'FAIL');
+  assert.ok(missingAssessment.contractIssues.some((issue) => issue.code === 'RESTART_STATE_SNAPSHOT_REQUIRED'));
+
+  const unchangedDigestForgery = structuredClone(valid);
+  for (const record of [
+    unchangedDigestForgery,
+    unchangedDigestForgery.restartEvidence.stateBeforeRestart,
+    unchangedDigestForgery.restartEvidence.stateAfterRestart,
+  ]) record.localDeadlineAtMs += 1_000;
+  const unchangedDigestAssessment = evaluateCancellationEvidence(unchangedDigestForgery, FIXTURE_NOW_MS);
+  assert.equal(unchangedDigestAssessment.assuranceResult, 'FAIL');
+  assert.ok(unchangedDigestAssessment.contractIssues
+    .some((issue) => issue.code === 'RESTART_CHECKPOINT_DIGEST_MISMATCH'));
+
+  const recomputedDigestForgery = structuredClone(unchangedDigestForgery);
+  const recomputedDigest = cancellationRestartDigest(
+    recomputedDigestForgery.restartEvidence.checkpointRef,
+    recomputedDigestForgery.restartEvidence.stateBeforeRestart,
+  );
+  recomputedDigestForgery.restartEvidence.stateDigestBeforeRestart = recomputedDigest;
+  recomputedDigestForgery.restartEvidence.stateDigestAfterRestart = recomputedDigest;
+  const recomputedDigestAssessment = evaluateCancellationEvidence(recomputedDigestForgery, FIXTURE_NOW_MS);
+  assert.equal(recomputedDigestAssessment.assuranceResult, 'FAIL');
+  assert.ok(recomputedDigestAssessment.violationCodes
+    .includes('SYNTHETIC_RESTART_TRUST_BINDING_MISMATCH'));
+});
+
+test('cancellation evaluation snapshots once and rejects accessors without invoking them', () => {
+  const accessorRecord = structuredClone(makeCancellationEvidence());
+  let getterCalls = 0;
+  Object.defineProperty(accessorRecord, 'localDeadlineAtMs', {
+    enumerable: true,
+    configurable: true,
+    get() {
+      getterCalls += 1;
+      return getterCalls < 7 ? FIXTURE_NOW_MS + 1_000 : FIXTURE_NOW_MS - 1;
+    },
+  });
+  const rejected = evaluateCancellationEvidence(accessorRecord, FIXTURE_NOW_MS);
+  assert.equal(rejected.assuranceResult, 'FAIL');
+  assert.deepEqual(rejected.reasonCodes, ['CONTRACT_INVALID']);
+  assert.ok(rejected.contractIssues.some((issue) => issue.code === 'PLAIN_DATA_SNAPSHOT_REQUIRED'));
+  assert.equal(getterCalls, 0);
+
+  const target = structuredClone(makeCancellationEvidence());
+  let proxyGetCalls = 0;
+  const proxy = new Proxy(target, {
+    get(source, key, receiver) {
+      proxyGetCalls += 1;
+      return key === 'recordId' ? 'forged.after.validation' : Reflect.get(source, key, receiver);
+    },
+  });
+  const captured = evaluateCancellationEvidence(proxy, FIXTURE_NOW_MS);
+  assert.equal(captured.assuranceResult, 'PASS');
+  assert.equal(captured.recordId, target.recordId);
+  assert.equal(captured.sourceEvidence.recordId, target.recordId);
+  assert.equal(proxyGetCalls, 0);
+
+  const revoked = Proxy.revocable(structuredClone(makeCancellationEvidence()), {});
+  revoked.revoke();
+  const revokedAssessment = evaluateCancellationEvidence(revoked.proxy, FIXTURE_NOW_MS);
+  assert.equal(revokedAssessment.assuranceResult, 'FAIL');
+  assert.ok(revokedAssessment.contractIssues
+    .some((issue) => issue.code === 'PLAIN_DATA_SNAPSHOT_REQUIRED'));
 });

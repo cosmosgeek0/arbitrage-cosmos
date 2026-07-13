@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { SYNTHETIC_RESOURCE_TRUST_BINDING } from '../../../../fixtures/productAssurance/systemic/stability/contracts.mjs';
+
 import {
   FIXTURE_NOW_MS,
   RESOURCE_FIXTURES,
@@ -101,7 +103,7 @@ test('over-budget evidence remains a read-only owner recommendation', () => {
   assert.equal(row.assuranceResult, 'FAIL');
   assert.equal(row.throttleDecision, null);
   assert.deepEqual(row.commands, []);
-  assert.equal(row.canonicalResponse.kind, 'RECOMMENDATION');
+  assert.equal(row.canonicalResponse.kind, 'UNKNOWN');
 });
 
 test('projected exhaustion is surfaced without issuing a throttle or circuit command', () => {
@@ -171,7 +173,7 @@ test('every statically visible attention state requires an exact response or una
     row.canonicalResponse = {
       kind: 'NONE',
       referenceId: null,
-      owner: 'accepted resource owner',
+      owner: row.canonicalOwner,
       wiringState: 'OWNER_GATED',
       unknownReason: null,
     };
@@ -187,7 +189,7 @@ test('temporal attention with no source response becomes an honest unavailable b
   bundle.rows[0].canonicalResponse = {
     kind: 'NONE',
     referenceId: null,
-    owner: 'accepted resource owner',
+    owner: bundle.rows[0].canonicalOwner,
     wiringState: 'OWNER_GATED',
     unknownReason: null,
   };
@@ -198,7 +200,7 @@ test('temporal attention with no source response becomes an honest unavailable b
   assert.deepEqual(row.canonicalResponse, {
     kind: 'UNKNOWN',
     referenceId: null,
-    owner: 'accepted resource owner',
+    owner: bundle.rows[0].canonicalOwner,
     wiringState: 'UNAVAILABLE',
     unknownReason: 'canonical owner response evidence is unavailable for this resource attention state',
   });
@@ -214,7 +216,7 @@ test('unknown top-consumer and circuit evidence remains UNKNOWN with exact block
   };
   bundle.rows[0].circuit = {
     state: 'UNKNOWN',
-    canonicalOwner: 'accepted resource circuit owner',
+    canonicalOwner: SYNTHETIC_RESOURCE_TRUST_BINDING.circuitOwner,
     ownerFailureDomain: null,
     observedAtMs: null,
     maxAgeMs: 5_000,
@@ -306,7 +308,7 @@ test('circuit transition claims are fully ordered, conditionally present, and in
 
 test('CLOSED baseline proof is complete and structurally independent', () => {
   const valid = evaluateResourceEvidence(makeResourceEvidenceBundle(), FIXTURE_NOW_MS);
-  assert.equal(valid.assuranceResult, 'PASS');
+  assert.equal(valid.assuranceResult, 'UNKNOWN');
   assert.deepEqual(valid.contractIssues, []);
 
   const cases = [
@@ -332,6 +334,9 @@ test('CLOSED baseline proof is complete and structurally independent', () => {
 
 test('UNAVAILABLE canonical response wiring cannot carry an affirmative recommendation', () => {
   const bundle = structuredClone(makeResourceEvidenceBundle());
+  bundle.rows[0].canonicalResponse.kind = 'RECOMMENDATION';
+  bundle.rows[0].canonicalResponse.referenceId = 'synthetic.owner-action.resource.001';
+  bundle.rows[0].canonicalResponse.unknownReason = null;
   bundle.rows[0].canonicalResponse.wiringState = 'UNAVAILABLE';
   const assessment = evaluateResourceEvidence(bundle, FIXTURE_NOW_MS);
   assert.equal(assessment.assuranceResult, 'FAIL');
@@ -366,6 +371,26 @@ test('resource evaluation freezes only reconstructed output, never caller-owned 
   assert.equal(Object.isFrozen(assessment), true);
   assert.notEqual(assessment.rows[0].topConsumers, consumerInput);
   assert.notEqual(assessment.rows[0].circuitEvidence, circuitInput);
+});
+
+test('paired resource owner and circuit relabeling cannot manufacture trusted evidence', () => {
+  const ownerForgery = structuredClone(makeResourceEvidenceBundle());
+  ownerForgery.rows[0].canonicalOwner = 'forged.resource.owner';
+  ownerForgery.rows[0].throttling.canonicalOwner = 'forged.resource.owner';
+  ownerForgery.rows[0].canonicalResponse.owner = 'forged.resource.owner';
+  let assessment = evaluateResourceEvidence(ownerForgery, FIXTURE_NOW_MS);
+  assert.equal(assessment.assuranceResult, 'FAIL');
+  assert.ok(assessment.contractIssues.some((issue) => issue.code === 'SYNTHETIC_RESOURCE_OWNER_TRUST_BINDING_MISMATCH'));
+
+  const circuitForgery = structuredClone(makeResourceEvidenceBundle());
+  const circuit = circuitForgery.rows[0].circuit;
+  circuit.canonicalOwner = 'forged.circuit.owner';
+  circuit.ownerFailureDomain = 'forged.circuit.domain';
+  circuit.baselineEvidenceOwner = 'forged.baseline.owner';
+  circuit.baselineEvidenceFailureDomain = 'forged.baseline.domain';
+  assessment = evaluateResourceEvidence(circuitForgery, FIXTURE_NOW_MS);
+  assert.equal(assessment.assuranceResult, 'FAIL');
+  assert.ok(assessment.contractIssues.some((issue) => issue.code === 'SYNTHETIC_RESOURCE_CIRCUIT_TRUST_BINDING_MISMATCH'));
 });
 
 test('future circuit evidence fails and cannot close or reset owner state', () => {
@@ -427,4 +452,22 @@ test('malformed resource subobjects fail closed instead of throwing', () => {
     assert.equal(assessment.assuranceResult, 'FAIL');
     assert.ok(assessment.reasonCodes.includes('CONTRACT_INVALID'));
   }
+});
+
+test('resource evaluation rejects changing measurement accessors without invoking them', () => {
+  const bundle = structuredClone(makeResourceEvidenceBundle());
+  let getterCalls = 0;
+  Object.defineProperty(bundle.rows[0].burn, 'value', {
+    enumerable: true,
+    configurable: true,
+    get() {
+      getterCalls += 1;
+      return getterCalls < 3 ? 40 : 100;
+    },
+  });
+  const assessment = evaluateResourceEvidence(bundle, FIXTURE_NOW_MS);
+  assert.equal(assessment.assuranceResult, 'FAIL');
+  assert.deepEqual(assessment.reasonCodes, ['CONTRACT_INVALID']);
+  assert.ok(assessment.contractIssues.some((issue) => issue.code === 'PLAIN_DATA_SNAPSHOT_REQUIRED'));
+  assert.equal(getterCalls, 0);
 });

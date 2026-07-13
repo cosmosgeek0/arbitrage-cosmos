@@ -2,12 +2,16 @@
 import {
   ASSURANCE_RESULTS,
   STABILITY_SCHEMA_VERSION,
+  SYNTHETIC_CANCELLATION_TRUST_BINDINGS,
+  SYNTHETIC_REPAIR_TRUST_BINDING,
+  SYNTHETIC_RESOURCE_OWNER,
   deepFreeze,
   validateCancellationEvidence,
   validateRepairEvidence,
   validateRepairPolicy,
   validateResourceEvidenceBundle,
 } from './contracts.mjs';
+import { captureCanonicalEvidence } from './integrity.mjs';
 
 function validNow(nowMs) {
   return Number.isSafeInteger(nowMs) && nowMs >= 0;
@@ -26,7 +30,42 @@ function sortedUnique(values) {
 function boundedSum(left, right) {
   if (left === null || right === null) return null;
   const sum = left + right;
-  return Number.isFinite(sum) && Math.abs(sum) <= Number.MAX_SAFE_INTEGER ? sum : null;
+  return Number.isSafeInteger(left) && Number.isSafeInteger(right) && Number.isSafeInteger(sum)
+    ? sum
+    : null;
+}
+
+function arraysEqual(left, right) {
+  return Array.isArray(left)
+    && Array.isArray(right)
+    && left.length === right.length
+    && left.every((entry, index) => entry === right[index]);
+}
+
+function fieldsMatch(value, expected) {
+  return value !== null && typeof value === 'object'
+    && Object.entries(expected).every(([field, expectedValue]) => (
+      expectedValue !== null && typeof expectedValue === 'object'
+        ? fieldsMatch(value[field], expectedValue)
+        : value[field] === expectedValue
+    ));
+}
+
+function clonePlainValue(value, seen = new WeakMap()) {
+  if (value === null || typeof value !== 'object') return value;
+  if (seen.has(value)) return seen.get(value);
+  const output = Array.isArray(value) ? [] : {};
+  seen.set(value, output);
+  if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index += 1) {
+      output.push(clonePlainValue(value[index], seen));
+    }
+  } else {
+    for (const [key, child] of Object.entries(value)) {
+      output[key] = clonePlainValue(child, seen);
+    }
+  }
+  return output;
 }
 
 function freshAt(observedAtMs, maxAgeMs, asOfMs) {
@@ -76,8 +115,29 @@ function invalidAssessment(kind, nowMs, issues) {
   });
 }
 
+function captureIssue(path) {
+  return deepFreeze([{
+    path,
+    code: 'PLAIN_DATA_SNAPSHOT_REQUIRED',
+    detail: 'bounded acyclic JSON-plain data properties are required; accessors and unstable exotic reads are forbidden',
+  }]);
+}
+
+function captureInput(value, path) {
+  try {
+    return { value: captureCanonicalEvidence(value), issues: null };
+  } catch {
+    return { value: null, issues: captureIssue(path) };
+  }
+}
+
 export function evaluateCancellationEvidence(record, nowMs) {
   if (!validNow(nowMs)) throw new TypeError('nowMs must be a non-negative safe integer from an injected clock');
+  const capturedRecord = captureInput(record, '$');
+  if (capturedRecord.issues !== null) {
+    return invalidAssessment('CANCELLATION_DEADLINE_LEASE', nowMs, capturedRecord.issues);
+  }
+  record = capturedRecord.value;
   const issues = validateCancellationEvidence(record);
   if (issues.length > 0) return invalidAssessment('CANCELLATION_DEADLINE_LEASE', nowMs, issues);
 
@@ -89,6 +149,12 @@ export function evaluateCancellationEvidence(record, nowMs) {
   let leaseEvidence = 'NOT_APPLICABLE';
   let staleAuthorityRejected = false;
   let mayInitiateNewLocalEffects = true;
+
+  if (record.requestKind === 'LONG_LIVED_LEASED'
+    && !fieldsMatch(record, SYNTHETIC_CANCELLATION_TRUST_BINDINGS.CURRENT_LEASE)) {
+    violations.push('SYNTHETIC_CURRENT_LEASE_TRUST_BINDING_MISMATCH');
+    mayInitiateNewLocalEffects = false;
+  }
 
   if (nowMs < record.startedAtMs) violations.push('EVALUATION_PRECEDES_REQUEST');
   const observedTimes = [
@@ -116,7 +182,10 @@ export function evaluateCancellationEvidence(record, nowMs) {
     const leaseFromFuture = [record.lease.acquiredAtMs, record.lease.lastRenewedAtMs, record.lease.lastHeartbeatAtMs]
       .some((observedAtMs) => observedAtMs > nowMs);
     const heartbeatAgeMs = nowMs - record.lease.lastHeartbeatAtMs;
-    if (record.lease.ownerId !== record.canonicalOwner) violations.push('LEASE_OWNER_NOT_CANONICAL_OWNER');
+    if (record.lease.ownerId !== record.canonicalOwner) {
+      violations.push('LEASE_OWNER_NOT_CANONICAL_OWNER');
+      mayInitiateNewLocalEffects = false;
+    }
     if (leaseFromFuture) {
       leaseEvidence = 'FUTURE_EVIDENCE';
       staleAuthorityRejected = true;
@@ -137,8 +206,12 @@ export function evaluateCancellationEvidence(record, nowMs) {
       leaseEvidence = 'CURRENT';
     }
     if (record.lease.completionEpoch !== null && record.lease.completionEpoch !== record.lease.activeFenceEpoch) {
-      staleAuthorityRejected = record.lease.completionDisposition === 'REJECTED';
-      if (record.lease.completionDisposition === 'APPLIED') violations.push('STALE_COMPLETION_APPLIED_AFTER_HANDOFF');
+      staleAuthorityRejected = staleAuthorityRejected
+        || record.lease.completionDisposition === 'REJECTED';
+      if (record.lease.completionDisposition === 'APPLIED') {
+        violations.push('STALE_COMPLETION_APPLIED_AFTER_HANDOFF');
+        mayInitiateNewLocalEffects = false;
+      }
       else if (record.lease.completionDisposition === 'REJECTED') reasons.push('STALE_COMPLETION_REJECTED_AS_AUTHORITY');
     }
     if (leaseEvidence !== 'CURRENT') mayInitiateNewLocalEffects = false;
@@ -206,8 +279,12 @@ export function evaluateCancellationEvidence(record, nowMs) {
           && detached.priorAuthorizationRef !== null));
     if (!validDetach) violations.push('DETACHED_RECOVERY_NOT_REGISTERED_OR_FENCED');
     else {
-      detachedRecoveryContinuationRequired = true;
-      reasons.push('REGISTERED_FENCED_RECOVERY_SURVIVES_INITIATOR_TIMEOUT');
+      if (!fieldsMatch(record, SYNTHETIC_CANCELLATION_TRUST_BINDINGS.DETACHED_RECOVERY)) {
+        violations.push('SYNTHETIC_DETACHED_RECOVERY_TRUST_BINDING_MISMATCH');
+      } else {
+        detachedRecoveryContinuationRequired = true;
+        reasons.push('REGISTERED_FENCED_RECOVERY_SURVIVES_INITIATOR_TIMEOUT');
+      }
     }
   }
 
@@ -241,6 +318,10 @@ export function evaluateCancellationEvidence(record, nowMs) {
         && record.restartEvidence.restoredReconciliationIdentityRef !== record.reconciliationEvidence.durableEvidenceRef))) {
     violations.push('RESTART_LOST_CANCELLATION_OR_LATE_RESULT_IDENTITY');
   }
+  if (record.restartEvidence.restoredFromCheckpoint
+    && !fieldsMatch(record, SYNTHETIC_CANCELLATION_TRUST_BINDINGS.RESTART)) {
+    violations.push('SYNTHETIC_RESTART_TRUST_BINDING_MISMATCH');
+  }
 
   const assuranceResult = violations.length > 0 ? 'FAIL' : unknowns.length > 0 ? 'UNKNOWN' : 'PASS';
   return deepFreeze({
@@ -264,6 +345,16 @@ export function evaluateCancellationEvidence(record, nowMs) {
     detachedRecoveryContinuationRequired,
     lateFactDisposition,
     staleAuthorityRejected,
+    sourceEvidence: clonePlainValue(record),
+    authorityEvidence: clonePlainValue({
+      requestKind: record.requestKind,
+      operationClass: record.operationClass,
+      cancellationContextId: record.cancellationContextId,
+      lease: record.lease,
+      detachedRecovery: record.detachedRecovery,
+      reconciliationEvidence: record.reconciliationEvidence,
+      restartEvidence: record.restartEvidence,
+    }),
     reasonCodes: sortedUnique([...reasons, ...violations, ...unknowns]),
     violationCodes: sortedUnique(violations),
     unknownCodes: sortedUnique(unknowns),
@@ -376,6 +467,16 @@ function crossesHysteresisExit(policy, progressValue) {
 
 export function evaluateRepairLoop(policy, evidence, nowMs) {
   if (!validNow(nowMs)) throw new TypeError('nowMs must be a non-negative safe integer from an injected clock');
+  const capturedPolicy = captureInput(policy, 'policy');
+  if (capturedPolicy.issues !== null) {
+    return invalidAssessment('REPAIR_CONTROL_LOOP', nowMs, capturedPolicy.issues);
+  }
+  const capturedEvidence = captureInput(evidence, 'evidence');
+  if (capturedEvidence.issues !== null) {
+    return invalidAssessment('REPAIR_CONTROL_LOOP', nowMs, capturedEvidence.issues);
+  }
+  policy = capturedPolicy.value;
+  evidence = capturedEvidence.value;
   const policyIssues = validateRepairPolicy(policy);
   const evidenceIssues = validateRepairEvidence(evidence);
   const combinedIssues = deepFreeze([
@@ -393,6 +494,10 @@ export function evaluateRepairLoop(policy, evidence, nowMs) {
   if (policy.commandRegistration.state !== 'CONFIRMED_IN_SYNTHETIC_FIXTURE') {
     if (evidence.nextActuationRequested) violations.push('ACTUATION_REQUESTED_WITH_UNCONFIRMED_COMMAND_MAPPING');
     else unknowns.push('COMMAND_MAPPING_OWNER_CONFIRMATION_REQUIRED');
+  } else if (evidence.readinessEvidence.evidenceRef !== SYNTHETIC_REPAIR_TRUST_BINDING.readinessEvidenceRef
+    || evidence.conflictGraphEvidence.graphRef !== SYNTHETIC_REPAIR_TRUST_BINDING.conflictGraphRef
+    || evidence.conflictGraphEvidence.evidenceRef !== SYNTHETIC_REPAIR_TRUST_BINDING.conflictGraphEvidenceRef) {
+    violations.push('SYNTHETIC_REPAIR_EVIDENCE_TRUST_BINDING_MISMATCH');
   }
   if (evidence.diagnosticConfidence < policy.minimumDiagnosticConfidence) {
     if (evidence.nextActuationRequested) violations.push('ACTUATION_REQUESTED_WITH_INSUFFICIENT_DIAGNOSTIC_CONFIDENCE');
@@ -427,7 +532,7 @@ export function evaluateRepairLoop(policy, evidence, nowMs) {
     || currentCampaignObservation.failureFingerprint !== evidence.failureFingerprint
     || currentCampaignObservation.startedAtMs !== evidence.campaignStartedAtMs
     || currentCampaignObservation.completedAtMs !== null
-    || currentCampaignObservation.resourceIds.join('|') !== policy.controlledState.resourceIds.join('|')
+    || !arraysEqual(currentCampaignObservation.resourceIds, policy.controlledState.resourceIds)
     || currentCampaignObservation.acquisitionDisposition !== 'ACQUIRED_ATOMICALLY') {
     violations.push('CURRENT_CAMPAIGN_ATOMIC_ACQUISITION_UNPROVED');
   }
@@ -452,9 +557,9 @@ export function evaluateRepairLoop(policy, evidence, nowMs) {
   if (evidence.assumptions.leaseFence === 'PASS' && evidence.lease === null) {
     violations.push('LEASE_EVIDENCE_MISSING');
   } else if (evidence.assumptions.leaseFence === 'PASS' && evidence.lease !== null) {
-    const expectedResources = policy.controlledState.resourceIds.join('|');
-    const observedResources = evidence.lease.resourceIds.join('|');
-    if (observedResources !== expectedResources) violations.push('LEASE_RESOURCE_SET_MISMATCH');
+    if (!arraysEqual(evidence.lease.resourceIds, policy.controlledState.resourceIds)) {
+      violations.push('LEASE_RESOURCE_SET_MISMATCH');
+    }
     if (evidence.lease.fenceEpoch !== evidence.currentFenceEpoch) violations.push('LEASE_EPOCH_NOT_CURRENT');
     if (evidence.lease.ownerId !== policy.fencingOwner) violations.push('LEASE_OWNER_NOT_POLICY_FENCING_OWNER');
     if (evidence.lease.acquiredAtMs > evidence.campaignStartedAtMs) violations.push('CAMPAIGN_STARTED_BEFORE_EXCLUSIVE_LEASE_ACQUISITION');
@@ -505,6 +610,28 @@ export function evaluateRepairLoop(policy, evidence, nowMs) {
     rateUnits = nextRateUnits;
     resourceUnits = nextResourceUnits;
     costUnits = nextCostUnits;
+    const trustedCircuit = attempt.circuitEvidence;
+    const trust = SYNTHETIC_REPAIR_TRUST_BINDING;
+    const knownCircuit = trustedCircuit.state !== 'UNKNOWN';
+    const expectedCircuitRef = `${trust.circuitEvidenceRefPrefix}${index + 1}`;
+    const expectedInitialPriorRef = trust.initialCircuitPriorEvidenceRefs[trustedCircuit.state];
+    const initialPriorMatches = index !== 0
+      || trustedCircuit.priorEvidenceRef === null
+      || trustedCircuit.priorEvidenceRef === expectedInitialPriorRef;
+    const independentCloseMatches = trustedCircuit.independentCloseEvidenceRef === null
+      || (trustedCircuit.independentCloseEvidenceRef === `${trust.independentCircuitEvidenceRefPrefix}${index + 1}`
+        && trustedCircuit.independentCloseOwner === trust.independentCircuitOwner
+        && trustedCircuit.independentCloseFailureDomain === trust.independentCircuitFailureDomain);
+    const baselineMatches = trustedCircuit.baselineNeverOpenedEvidenceRef === null
+      || (trustedCircuit.baselineNeverOpenedEvidenceRef === `${trust.independentCircuitBaselineEvidenceRefPrefix}${index + 1}`
+        && trustedCircuit.baselineEvidenceOwner === trust.independentCircuitOwner
+        && trustedCircuit.baselineEvidenceFailureDomain === trust.independentCircuitFailureDomain);
+    if (trustedCircuit.canonicalOwner !== trust.circuitOwner
+      || (knownCircuit && trustedCircuit.ownerFailureDomain !== trust.circuitOwnerFailureDomain)
+      || (knownCircuit && trustedCircuit.evidenceRef !== expectedCircuitRef)
+      || !initialPriorMatches || !independentCloseMatches || !baselineMatches) {
+      violations.push('SYNTHETIC_REPAIR_CIRCUIT_TRUST_BINDING_MISMATCH');
+    }
     if (attempt.commandIdentity !== policy.commandIdentity) violations.push('UNREGISTERED_COMMAND_IDENTITY');
     if (attempt.commandRegistryRef !== policy.commandRegistration.registryRef) violations.push('COMMAND_REGISTRY_REF_MISMATCH');
     if (attempt.policyRevision !== policy.policyRevision) violations.push('ATTEMPT_POLICY_REVISION_MISMATCH');
@@ -529,7 +656,9 @@ export function evaluateRepairLoop(policy, evidence, nowMs) {
       if (attempt.startedAtMs < evidence.lease.acquiredAtMs) violations.push('ATTEMPT_STARTED_BEFORE_LEASE_ACQUISITION');
       if (attempt.startedAtMs >= evidence.lease.expiresAtMs) violations.push('ATTEMPT_STARTED_AT_OR_AFTER_LEASE_EXPIRY');
       if (attempt.completedAtMs >= evidence.lease.expiresAtMs) violations.push('COMPLETION_APPLIED_AT_OR_AFTER_LEASE_EXPIRY');
-      if (attempt.resourceIds.join('|') !== evidence.lease.resourceIds.join('|')) violations.push('ATTEMPT_RESOURCE_SET_NOT_LEASED');
+      if (!arraysEqual(attempt.resourceIds, evidence.lease.resourceIds)) {
+        violations.push('ATTEMPT_RESOURCE_SET_NOT_LEASED');
+      }
     }
     if (actuationAvailableAtMs !== null && attempt.startedAtMs < actuationAvailableAtMs) violations.push('ACTUATION_BEFORE_DELAY');
     if (convergenceDeadlineAtMs !== null && attempt.startedAtMs >= convergenceDeadlineAtMs) violations.push('ACTUATION_AT_OR_AFTER_CONVERGENCE_DEADLINE');
@@ -853,7 +982,7 @@ export function evaluateRepairLoop(policy, evidence, nowMs) {
     && latest.fenceEpoch === evidence.currentFenceEpoch
     && evidence.lease !== null
     && latest.controllerId === evidence.lease.ownerId
-    && latest.resourceIds.join('|') === evidence.lease.resourceIds.join('|')
+    && arraysEqual(latest.resourceIds, evidence.lease.resourceIds)
     && latest.startedAtMs >= evidence.lease.acquiredAtMs
     && latest.completedAtMs < evidence.lease.expiresAtMs
     && !terminalContainmentDeclared
@@ -981,6 +1110,10 @@ export function evaluateRepairLoop(policy, evidence, nowMs) {
       completedAtMs: attempt.completedAtMs,
       producerOwner: attempt.producerOwner,
       producerFailureDomain: attempt.producerFailureDomain,
+      producerEvidenceRef: attempt.producerEvidenceRef,
+      verifierOwner: attempt.verifierOwner,
+      verifierFailureDomain: policyVerifierSignal.failureDomain,
+      verifierEvidenceRef: attempt.verifierEvidenceRef,
       actuationGateEvidence: { ...attempt.actuationGateEvidence },
       circuitEvidence: { ...attempt.circuitEvidence },
     }))),
@@ -1006,6 +1139,7 @@ export function evaluateRepairLoop(policy, evidence, nowMs) {
       ? 'QUARANTINE_OR_ESCALATE_OR_DURABLY_RECORD_UNRESOLVED'
       : 'NONE',
     automaticActionIssued: false,
+    sourceEvidence: clonePlainValue({ policy, evidence }),
     contractIssues: [],
     dataAuthority: 'SYNTHETIC_TEST',
     effectAuthority: 'NONE',
@@ -1014,12 +1148,21 @@ export function evaluateRepairLoop(policy, evidence, nowMs) {
 
 export function evaluateResourceEvidence(bundle, nowMs) {
   if (!validNow(nowMs)) throw new TypeError('nowMs must be a non-negative safe integer from an injected clock');
+  const capturedBundle = captureInput(bundle, '$');
+  if (capturedBundle.issues !== null) {
+    return invalidAssessment('RESOURCE_COST_CIRCUIT_EVIDENCE', nowMs, capturedBundle.issues);
+  }
+  bundle = capturedBundle.value;
   const issues = validateResourceEvidenceBundle(bundle);
   if (issues.length > 0) return invalidAssessment('RESOURCE_COST_CIRCUIT_EVIDENCE', nowMs, issues);
 
   const rows = bundle.rows.map((row) => {
     const reasons = [];
     const results = [];
+    if (row.canonicalOwner === SYNTHETIC_RESOURCE_OWNER) {
+      results.push('UNKNOWN');
+      reasons.push('CANONICAL_OWNER_CONFIRMATION_REQUIRED');
+    }
     if (nowMs < row.observedAtMs) {
       results.push('FAIL');
       reasons.push('MEASUREMENT_FROM_FUTURE');
@@ -1153,6 +1296,7 @@ export function evaluateResourceEvidence(bundle, nowMs) {
     controllerOwner: null,
     throttleDecision: null,
     commands: [],
+    sourceEvidence: clonePlainValue(bundle),
     contractIssues: [],
     dataAuthority: 'SYNTHETIC_TEST',
     effectAuthority: 'NONE',

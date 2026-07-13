@@ -7,8 +7,14 @@ import {
   REPAIR_RESTART_BEHAVIOR,
   RESOURCE_FAMILIES,
   STABILITY_SCHEMA_VERSION,
+  SYNTHETIC_RESOURCE_OWNER,
+  SYNTHETIC_RESOURCE_TRUST_BINDING,
   deepFreeze,
 } from './contracts.mjs';
+import {
+  cancellationRestartDigest,
+  captureCanonicalEvidence,
+} from './integrity.mjs';
 
 export const FIXTURE_NOW_MS = 1_800_000_000_000;
 
@@ -20,16 +26,77 @@ const REPAIR_CIRCUIT_OPENED_AT_MS = FIXTURE_NOW_MS - 20_000;
 const REPAIR_CIRCUIT_HALF_OPEN_AT_MS = FIXTURE_NOW_MS - 16_000;
 
 function plain(value) {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function cloneFixtureValue(value, seen = new WeakMap()) {
+  if (value === null || typeof value !== 'object') return value;
+  if (seen.has(value)) throw new TypeError('fixture overrides must be acyclic');
+  if (!Array.isArray(value) && !plain(value)) {
+    throw new TypeError('fixture overrides must contain only plain records, arrays, and primitives');
+  }
+  const output = Array.isArray(value) ? [] : {};
+  seen.set(value, output);
+  if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index += 1) {
+      if (!Object.hasOwn(value, index)) throw new TypeError('fixture override arrays must be dense');
+      output.push(cloneFixtureValue(value[index], seen));
+    }
+  } else {
+    for (const [key, child] of Object.entries(value)) {
+      output[key] = cloneFixtureValue(child, seen);
+    }
+  }
+  seen.delete(value);
+  return output;
+}
+
+function mergeCaptured(base, override) {
+  if (!plain(base) || !plain(override)) return cloneFixtureValue(override);
+  const output = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    output[key] = plain(value) && plain(base[key])
+      ? mergeCaptured(base[key], value)
+      : cloneFixtureValue(value);
+  }
+  return output;
 }
 
 function merge(base, override) {
-  if (!plain(base) || !plain(override)) return override;
-  const output = { ...base };
-  for (const [key, value] of Object.entries(override)) {
-    output[key] = plain(value) && plain(base[key]) ? merge(base[key], value) : value;
+  try {
+    return mergeCaptured(base, captureCanonicalEvidence(override));
+  } catch {
+    throw new TypeError('fixture overrides must contain only plain records, arrays, and primitives with enumerable data properties');
   }
-  return output;
+}
+
+function cancellationRestartSnapshot(record) {
+  return cloneFixtureValue({
+    recordId: record.recordId,
+    operationId: record.operationId,
+    operationClass: record.operationClass,
+    canonicalOwner: record.canonicalOwner,
+    requestId: record.requestId,
+    parentRequestId: record.parentRequestId,
+    requestKind: record.requestKind,
+    startedAtMs: record.startedAtMs,
+    inheritedDeadlineAtMs: record.inheritedDeadlineAtMs,
+    childBudgetMs: record.childBudgetMs,
+    localDeadlineAtMs: record.localDeadlineAtMs,
+    cancellationContextId: record.cancellationContextId,
+    lateResultLaw: record.lateResultLaw,
+    cancelRequestedAtMs: record.cancelRequestedAtMs,
+    cancelObservedAtMs: record.cancelObservedAtMs,
+    cancellationSupported: record.cancellationSupported,
+    cancellationUnknownReason: record.cancellationUnknownReason,
+    effect: record.effect,
+    lease: record.lease,
+    detachedRecovery: record.detachedRecovery,
+    lateFact: record.lateFact,
+    reconciliationEvidence: record.reconciliationEvidence,
+  });
 }
 
 export function makeCancellationEvidence(override = {}) {
@@ -78,6 +145,8 @@ export function makeCancellationEvidence(override = {}) {
       restoredReconciliationIdentityRef: null,
       restoredLateResultLaw: null,
       preservedFields: [],
+      stateBeforeRestart: null,
+      stateAfterRestart: null,
     },
     dataAuthority: 'SYNTHETIC_TEST',
     effectAuthority: 'NONE',
@@ -96,6 +165,13 @@ const lateFill = {
   reconciliationRef: 'reconciliation.lookup.client-order.001',
   attemptedToAuthorizeNewWork: false,
 };
+
+const cancellationRestartBaseline = makeCancellationEvidence({ recordId: 's8-restart-loss' });
+const cancellationRestartState011 = cancellationRestartSnapshot(cancellationRestartBaseline);
+const cancellationRestartDigest011 = cancellationRestartDigest(
+  'synthetic.checkpoint.cancel-011',
+  cancellationRestartState011,
+);
 
 export const CANCELLATION_FIXTURES = deepFreeze([
   {
@@ -323,13 +399,15 @@ export const CANCELLATION_FIXTURES = deepFreeze([
         preservedRequestId: true,
         preservedLateResultLaw: false,
         checkpointRef: 'synthetic.checkpoint.cancel-011',
-        stateDigestBeforeRestart: 'synthetic-cancel-state-011',
-        stateDigestAfterRestart: 'synthetic-cancel-state-011',
+        stateDigestBeforeRestart: cancellationRestartDigest011,
+        stateDigestAfterRestart: cancellationRestartDigest011,
         restoredRequestId: 'request-parent.001.child.001',
         restoredCancellationContextId: 'cancel-context.001',
         restoredReconciliationIdentityRef: null,
         restoredLateResultLaw: CANCELLATION_LATE_RESULT_LAW,
         preservedFields: ['requestId', 'cancellationContextId', 'deadline', 'effect', 'reconciliation', 'leaseFence', 'lateResultLaw'],
+        stateBeforeRestart: cloneFixtureValue(cancellationRestartState011),
+        stateAfterRestart: cloneFixtureValue(cancellationRestartState011),
       },
     }),
     expectedResult: 'FAIL',
@@ -481,12 +559,18 @@ export function makeRepairPolicy(override = {}) {
 }
 
 export function makeRepairCircuitEvidence(attemptRecord, index) {
-  const state = attemptRecord.circuitState;
+  let capturedAttempt;
+  try {
+    capturedAttempt = captureCanonicalEvidence(attemptRecord);
+  } catch {
+    throw new TypeError('repair circuit fixture input must contain only enumerable JSON-plain data properties');
+  }
+  const state = capturedAttempt.circuitState;
   const common = {
     state,
     canonicalOwner: 'synthetic.repair-circuit-owner',
     ownerFailureDomain: state === 'UNKNOWN' ? null : 'synthetic.repair-circuit-owner-domain',
-    observedAtMs: state === 'UNKNOWN' ? null : attemptRecord.verifierObservedAtMs,
+    observedAtMs: state === 'UNKNOWN' ? null : capturedAttempt.verifierObservedAtMs,
     maxAgeMs: 60_000,
     evidenceRef: state === 'UNKNOWN' ? null : `synthetic.repair-circuit.attempt.${index + 1}`,
     unknownReason: state === 'UNKNOWN' ? 'repair circuit owner state is unavailable' : null,
@@ -523,13 +607,13 @@ export function makeRepairCircuitEvidence(attemptRecord, index) {
       : `synthetic.repair-circuit.attempt.${index}`;
     common.openedAtMs = REPAIR_CIRCUIT_OPENED_AT_MS;
     common.halfOpenAtMs = REPAIR_CIRCUIT_HALF_OPEN_AT_MS;
-    common.resetEligibleAtMs = attemptRecord.startedAtMs;
-    common.closedAtMs = attemptRecord.completedAtMs;
+    common.resetEligibleAtMs = capturedAttempt.startedAtMs;
+    common.closedAtMs = capturedAttempt.completedAtMs;
     common.independentCloseEvidenceRef = `synthetic.independent-repair-circuit-close.${index + 1}`;
     common.independentCloseOwner = 'synthetic.independent-repair-circuit-verifier';
     common.independentCloseFailureDomain = 'synthetic.independent-repair-circuit-verifier-domain';
   }
-  return common;
+  return deepFreeze(common);
 }
 
 function attempt(index, override = {}) {
@@ -683,6 +767,8 @@ export function makeRepairEvidence(override = {}) {
       restoredCampaignId: null,
       stateBeforeRestart: null,
       stateAfterRestart: null,
+      attemptsBeforeRestart: [],
+      attemptsAfterRestart: [],
       preservedFields: [],
       attemptCountBeforeRestart: 0,
       restoredAttemptCount: 0,
@@ -847,8 +933,8 @@ export const REPAIR_FIXTURES = deepFreeze([
         restored: true,
         preservedCampaignId: true,
         checkpointRef: 'synthetic.checkpoint.campaign-resnapshot-010',
-        stateDigestBeforeRestart: 'synthetic-state-digest-before-010',
-        stateDigestAfterRestart: 'synthetic-state-digest-before-010',
+        stateDigestBeforeRestart: 'sha256:398674341fac1c8b87ae7e047507a869acceb5a6d352a569f103cd0239bfbf46',
+        stateDigestAfterRestart: 'sha256:795668561a555fc7dd098de2624671e6994651f370c6e293c0640e82c0d221cf',
         restoredCampaignId: 'campaign.resnapshot.001',
         stateBeforeRestart: {
           localAttempts: 1,
@@ -876,6 +962,8 @@ export const REPAIR_FIXTURES = deepFreeze([
           fenceEpoch: 3,
           lateResultLaw: REPAIR_LATE_RESULT_LAW,
         },
+        attemptsBeforeRestart: [attempt(0, { circuitState: 'HALF_OPEN', nextRetryAtMs: FIXTURE_NOW_MS - 14_000 })],
+        attemptsAfterRestart: [attempt(0, { circuitState: 'HALF_OPEN', nextRetryAtMs: FIXTURE_NOW_MS - 14_000 })],
         preservedFields: ['attempts', 'budgets', 'cooldown', 'lease', 'lateResultLaw', 'convergenceDeadline'],
         attemptCountBeforeRestart: 1,
         restoredAttemptCount: 0,
@@ -923,7 +1011,7 @@ function resourceRow(resourceFamily, index) {
   return {
     rowId: `resource.${String(index + 1).padStart(2, '0')}.${resourceFamily.toLowerCase()}`,
     resourceFamily,
-    canonicalOwner: 'OWNER_CONFIRMATION_REQUIRED:I00/I03 accepted resource owner',
+    canonicalOwner: SYNTHETIC_RESOURCE_OWNER,
     unit: resourceFamily === 'CLOUD_COST' ? 'usd-equivalent' : 'resource-units',
     windowMs: 60_000,
     observedAtMs: FIXTURE_NOW_MS - 100,
@@ -945,19 +1033,19 @@ function resourceRow(resourceFamily, index) {
       maxAgeMs: 5_000,
       evidenceRef: `fixture.throttling.${index + 1}`,
       unknownReason: null,
-      canonicalOwner: 'accepted resource owner',
+      canonicalOwner: SYNTHETIC_RESOURCE_OWNER,
     },
     circuit: {
       state: 'CLOSED',
-      canonicalOwner: 'accepted resource circuit owner',
-      ownerFailureDomain: 'accepted.resource-circuit-owner',
+      canonicalOwner: SYNTHETIC_RESOURCE_TRUST_BINDING.circuitOwner,
+      ownerFailureDomain: SYNTHETIC_RESOURCE_TRUST_BINDING.circuitOwnerFailureDomain,
       observedAtMs: FIXTURE_NOW_MS - 100,
       maxAgeMs: 5_000,
       evidenceRef: `fixture.circuit.${index + 1}`,
       unknownReason: null,
       baselineNeverOpenedEvidenceRef: `fixture.circuit-baseline.${index + 1}`,
-      baselineEvidenceOwner: 'independent resource circuit baseline verifier',
-      baselineEvidenceFailureDomain: 'independent.resource-circuit-baseline-verifier',
+      baselineEvidenceOwner: SYNTHETIC_RESOURCE_TRUST_BINDING.independentCircuitOwner,
+      baselineEvidenceFailureDomain: SYNTHETIC_RESOURCE_TRUST_BINDING.independentCircuitFailureDomain,
       openedAtMs: null,
       halfOpenAtMs: null,
       closedAtMs: null,
@@ -968,11 +1056,11 @@ function resourceRow(resourceFamily, index) {
       mayCloseOrReset: false,
     },
     canonicalResponse: {
-      kind: 'RECOMMENDATION',
-      referenceId: `recommendation.owner-review.${index + 1}`,
-      owner: 'accepted resource owner',
-      wiringState: 'DRAFT_INSERTION_REQUEST',
-      unknownReason: null,
+      kind: 'UNKNOWN',
+      referenceId: null,
+      owner: SYNTHETIC_RESOURCE_OWNER,
+      wiringState: 'UNAVAILABLE',
+      unknownReason: 'canonical resource owner confirmation is pending I00/I03 fan-in',
     },
     protections: {
       materialMoneyEvidencePreserved: 'PASS',
@@ -1009,7 +1097,7 @@ export const RESOURCE_FIXTURES = deepFreeze([
   {
     id: 'E01_EXACT_EIGHT_FAMILY_EVIDENCE_DENOMINATOR',
     input: completeResourceBundle,
-    expectedResult: 'PASS',
+    expectedResult: 'UNKNOWN',
   },
   {
     id: 'E02_UNKNOWN_FORECAST_REMAINS_NULL',

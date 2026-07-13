@@ -7,8 +7,10 @@ import {
   OPERATION_CLASSES,
   RESOURCE_FAMILIES,
   STABILITY_SCHEMAS,
+  STABILITY_PACKET_STATE,
   STABILITY_SCHEMA_VERSION,
   STABILITY_STRUCTURE_LIMITS,
+  deepFreeze,
   validateCancellationEvidence,
   validateRepairEvidence,
   validateRepairPolicy,
@@ -17,6 +19,7 @@ import {
 import {
   FIXTURE_NOW_MS,
   makeCancellationEvidence,
+  makeRepairCircuitEvidence,
   makeRepairEvidence,
   makeRepairPolicy,
   makeResourceEvidenceBundle,
@@ -24,6 +27,7 @@ import {
 
 test('S8 exposes one versioned packet-local schema family', () => {
   assert.equal(STABILITY_SCHEMA_VERSION, 'ip-assurance.systemic.stability.v1');
+  assert.equal(STABILITY_PACKET_STATE, 'STABILITY_PRESTAGE_READY');
   assert.deepEqual(Object.keys(STABILITY_SCHEMAS).sort(), [
     'cancellationEvidence',
     'repairEvidence',
@@ -160,11 +164,12 @@ test('registered fencing-owner binding rejects paired policy and lease-owner for
   const policy = structuredClone(makeRepairPolicy());
   const evidence = structuredClone(makeRepairEvidence());
   policy.fencingOwner = 'controller.forged';
+  policy.commandRegistration.registeredFencingOwner = 'controller.forged';
   evidence.lease.ownerId = 'controller.forged';
   for (const attempt of evidence.attempts) attempt.controllerId = 'controller.forged';
 
   assert.deepEqual(validateRepairEvidence(evidence), []);
-  assert.ok(validateRepairPolicy(policy).some((issue) => issue.code === 'FENCING_OWNER_REGISTRATION_MISMATCH'));
+  assert.ok(validateRepairPolicy(policy).some((issue) => issue.code === 'SYNTHETIC_REPAIR_TRUST_BINDING_MISMATCH'));
 });
 
 test('malformed controlled resource sets and optional verifier signals fail closed without throwing', () => {
@@ -398,12 +403,16 @@ test('all variable-size contract structures have explicit deterministic caps', (
   assert.ok(validateResourceEvidenceBundle(consumers).some((issue) => issue.code === 'TOO_MANY_TOP_CONSUMERS'));
 });
 
-test('over-cap structures short-circuit before adversarial entries are inspected', () => {
+test('accessor-bearing over-cap structures fail closed without invoking entries', () => {
+  let accessorCalls = 0;
   function overCapWithThrowingEntry(limit) {
-    const values = new Array(limit + 1);
+    const values = new Array(limit + 1).fill(null);
     Object.defineProperty(values, 0, {
       configurable: true,
-      get() { throw new Error('over-cap entry must not be inspected'); },
+      get() {
+        accessorCalls += 1;
+        throw new Error('over-cap entry must not be inspected');
+      },
     });
     return values;
   }
@@ -454,8 +463,32 @@ test('over-cap structures short-circuit before adversarial entries are inspected
   for (const scenario of cases) {
     let issues;
     assert.doesNotThrow(() => { issues = scenario.value(); }, scenario.code);
-    assert.ok(issues.some((issue) => issue.code === scenario.code), scenario.code);
+    assert.ok(issues.some((issue) => issue.code === 'PLAIN_DATA_SNAPSHOT_REQUIRED'), scenario.code);
   }
+  assert.equal(accessorCalls, 0);
+});
+
+test('every exported validator rejects accessors without invoking caller code', () => {
+  const cases = [
+    [validateCancellationEvidence, structuredClone(makeCancellationEvidence()), 'recordId'],
+    [validateRepairPolicy, structuredClone(makeRepairPolicy()), 'policyId'],
+    [validateRepairEvidence, structuredClone(makeRepairEvidence()), 'campaignId'],
+    [validateResourceEvidenceBundle, structuredClone(makeResourceEvidenceBundle()), 'bundleId'],
+  ];
+  let getterCalls = 0;
+  for (const [validate, value, field] of cases) {
+    Object.defineProperty(value, field, {
+      enumerable: true,
+      configurable: true,
+      get() {
+        getterCalls += 1;
+        return 'forged.after.validation';
+      },
+    });
+    const issues = validate(value);
+    assert.ok(issues.some((issue) => issue.code === 'PLAIN_DATA_SNAPSHOT_REQUIRED'), field);
+  }
+  assert.equal(getterCalls, 0);
 });
 
 test('unknown numeric resource truth must be wholly null with an exact blocker', () => {
@@ -499,6 +532,9 @@ test('resource truth conditionally requires consumer, throttle, response, and ci
   assert.ok(validateResourceEvidenceBundle(throttle).some((issue) => issue.code === 'THROTTLING_EVIDENCE_REQUIRED'));
 
   const response = structuredClone(makeResourceEvidenceBundle());
+  response.rows[0].canonicalResponse.kind = 'RECOMMENDATION';
+  response.rows[0].canonicalResponse.wiringState = 'OWNER_GATED';
+  response.rows[0].canonicalResponse.unknownReason = null;
   response.rows[0].canonicalResponse.referenceId = null;
   assert.ok(validateResourceEvidenceBundle(response).some((issue) => issue.code === 'CANONICAL_RESPONSE_REFERENCE_REQUIRED'));
 
@@ -541,14 +577,14 @@ test('sparse arrays fail closed across policy, campaign, and resource evidence',
 test('resource response, shedding, and circuit-close evidence cannot relabel uncertainty green', () => {
   const noneWithUnknown = structuredClone(makeResourceEvidenceBundle());
   noneWithUnknown.rows[0].canonicalResponse = {
-    kind: 'NONE', referenceId: null, owner: 'accepted resource owner',
+    kind: 'NONE', referenceId: null, owner: noneWithUnknown.rows[0].canonicalOwner,
     wiringState: 'DRAFT_INSERTION_REQUEST', unknownReason: 'response actually unknown',
   };
   assert.ok(validateResourceEvidenceBundle(noneWithUnknown).some((issue) => issue.code === 'NONE_RESPONSE_EVIDENCE_CONFLICT'));
 
   const unknownWithReference = structuredClone(makeResourceEvidenceBundle());
   unknownWithReference.rows[0].canonicalResponse = {
-    kind: 'UNKNOWN', referenceId: 'affirmative.reference', owner: 'accepted resource owner',
+    kind: 'UNKNOWN', referenceId: 'affirmative.reference', owner: unknownWithReference.rows[0].canonicalOwner,
     wiringState: 'UNAVAILABLE', unknownReason: 'owner response unavailable',
   };
   assert.ok(validateResourceEvidenceBundle(unknownWithReference).some((issue) => issue.code === 'UNKNOWN_RESPONSE_EVIDENCE_CONFLICT'));
@@ -581,4 +617,93 @@ test('all fixture contracts and schema metadata are immutable', () => {
     assert.ok(Object.isFrozen(value));
     assert.throws(() => { value.schemaVersion = 'mutated'; }, TypeError);
   }
+});
+
+test('deep freezing traverses data descriptors without invoking accessors', () => {
+  let getterCalls = 0;
+  const value = { nested: { stable: true } };
+  Object.defineProperty(value, 'computed', {
+    enumerable: true,
+    get() {
+      getterCalls += 1;
+      return { forged: true };
+    },
+  });
+  deepFreeze(value);
+  assert.equal(getterCalls, 0);
+  assert.equal(Object.isFrozen(value), true);
+  assert.equal(Object.isFrozen(value.nested), true);
+});
+
+test('fixture builders clone caller data, reject non-plain overrides, and freeze every returned descendant', () => {
+  const callerAttempt = structuredClone(makeRepairEvidence().attempts[0]);
+  const callerAttempts = [callerAttempt];
+  const built = makeRepairEvidence({ attempts: callerAttempts });
+  assert.equal(Object.isFrozen(callerAttempts), false);
+  assert.equal(Object.isFrozen(callerAttempt), false);
+  assert.notEqual(built.attempts, callerAttempts);
+  assert.notEqual(built.attempts[0], callerAttempt);
+  assert.equal(Object.isFrozen(built.attempts), true);
+  assert.equal(Object.isFrozen(built.attempts[0]), true);
+
+  const mutableChild = structuredClone(makeRepairEvidence().attempts[0]);
+  const shallowFrozen = Object.freeze([mutableChild]);
+  const fromFrozen = makeRepairEvidence({ attempts: shallowFrozen });
+  assert.equal(Object.isFrozen(mutableChild), false);
+  assert.equal(Object.isFrozen(fromFrozen.attempts[0]), true);
+
+  class NonPlainOverride {}
+  assert.throws(
+    () => makeCancellationEvidence({ effect: new NonPlainOverride() }),
+    /plain records, arrays, and primitives/,
+  );
+
+  let getterCalls = 0;
+  const accessorOverride = {};
+  Object.defineProperty(accessorOverride, 'recordId', {
+    enumerable: true,
+    get() {
+      getterCalls += 1;
+      return 'forged.fixture.id';
+    },
+  });
+  assert.throws(
+    () => makeCancellationEvidence(accessorOverride),
+    /enumerable data properties/,
+  );
+  assert.equal(getterCalls, 0);
+
+  let proxyGetCalls = 0;
+  const proxyTarget = { recordId: 'stable.fixture.id' };
+  const proxyOverride = new Proxy(proxyTarget, {
+    get(target, key, receiver) {
+      proxyGetCalls += 1;
+      return key === 'recordId' ? 'forged.fixture.id' : Reflect.get(target, key, receiver);
+    },
+  });
+  assert.equal(makeCancellationEvidence(proxyOverride).recordId, 'stable.fixture.id');
+  assert.equal(proxyGetCalls, 0);
+
+  const circuitAttempt = structuredClone(makeRepairEvidence().attempts[0]);
+  let circuitProxyGetCalls = 0;
+  const circuitProxy = new Proxy(circuitAttempt, {
+    get(target, key, receiver) {
+      circuitProxyGetCalls += 1;
+      return key === 'circuitState' ? 'OPEN' : Reflect.get(target, key, receiver);
+    },
+  });
+  const circuitEvidence = makeRepairCircuitEvidence(circuitProxy, 0);
+  assert.equal(circuitEvidence.state, circuitAttempt.circuitState);
+  assert.equal(Object.isFrozen(circuitEvidence), true);
+  assert.equal(circuitProxyGetCalls, 0);
+});
+
+test('hard-budget and resource accounting units reject fractional precision', () => {
+  const repair = structuredClone(makeRepairEvidence());
+  repair.attempts[0].costUnits = 0.25;
+  assert.ok(validateRepairEvidence(repair).some((issue) => issue.code === 'NON_NEGATIVE_SAFE_INTEGER_REQUIRED'));
+
+  const resources = structuredClone(makeResourceEvidenceBundle());
+  resources.rows[0].burn.value = 0.25;
+  assert.ok(validateResourceEvidenceBundle(resources).some((issue) => issue.code === 'NON_NEGATIVE_SAFE_INTEGER_REQUIRED'));
 });

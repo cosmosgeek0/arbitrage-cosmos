@@ -17,6 +17,7 @@ import {
   evaluateRepairLoop,
   evaluateResourceEvidence,
 } from '../../../../fixtures/productAssurance/systemic/stability/reference-evaluator.mjs';
+import { repairRestartDigest } from '../../../../fixtures/productAssurance/systemic/stability/integrity.mjs';
 
 function refreshAttemptEvidence(evidence) {
   const earliestAttemptStartMs = evidence.attempts.length === 0
@@ -352,12 +353,12 @@ test('an applied repair attempt cannot predate exclusive lease acquisition', () 
 });
 
 test('ordered atomic resource acquisition is exact across policy, campaign, lease, and applied attempts', () => {
-  const policy = structuredClone(makeRepairPolicy());
-  policy.controlledState.resourceIds = ['component.a', 'component.b'];
+  const policy = makeRepairPolicy();
   const evidence = structuredClone(makeRepairEvidence());
-  evidence.conflictGraphEvidence.observedCampaigns[0].resourceIds = ['component.b', 'component.a'];
-  evidence.lease.resourceIds = ['component.b', 'component.a'];
-  for (const attempt of evidence.attempts) attempt.resourceIds = ['component.b', 'component.a'];
+  const mismatchedResources = ['component.extra', 'component.public-source'];
+  evidence.conflictGraphEvidence.observedCampaigns[0].resourceIds = [...mismatchedResources];
+  evidence.lease.resourceIds = [...mismatchedResources];
+  for (const attempt of evidence.attempts) attempt.resourceIds = [...mismatchedResources];
   const assessment = evaluateRepairLoop(policy, evidence, FIXTURE_NOW_MS);
   assert.equal(assessment.assuranceResult, 'FAIL');
   assert.ok(assessment.violationCodes.includes('CURRENT_CAMPAIGN_ATOMIC_ACQUISITION_UNPROVED'));
@@ -731,6 +732,7 @@ test('repair circuit posture gates promotion and further actuation', () => {
 
 test('restart can restore safely before another attempt and preserves wall-time budget', () => {
   const evidence = structuredClone(makeRepairEvidence());
+  const checkpointRef = 'synthetic.checkpoint.restore-before-next-attempt';
   const expectedState = {
     localAttempts: 2,
     globalAttempts: 2,
@@ -744,15 +746,26 @@ test('restart can restore safely before another attempt and preserves wall-time 
     fenceEpoch: 3,
     lateResultLaw: REPAIR_LATE_RESULT_LAW,
   };
+  const attemptsBeforeRestart = structuredClone(evidence.attempts.slice(0, 2));
+  const stateDigest = repairRestartDigest({
+    checkpointRef,
+    campaignId: evidence.campaignId,
+    policyId: evidence.policyId,
+    policyRevision: evidence.policyRevision,
+    state: expectedState,
+    attempts: attemptsBeforeRestart,
+  });
   evidence.restartEvidence = {
     restored: true,
     preservedCampaignId: true,
-    checkpointRef: 'synthetic.checkpoint.restore-before-next-attempt',
-    stateDigestBeforeRestart: 'synthetic.state.restart-stable',
-    stateDigestAfterRestart: 'synthetic.state.restart-stable',
+    checkpointRef,
+    stateDigestBeforeRestart: stateDigest,
+    stateDigestAfterRestart: stateDigest,
     restoredCampaignId: evidence.campaignId,
     stateBeforeRestart: structuredClone(expectedState),
     stateAfterRestart: structuredClone(expectedState),
+    attemptsBeforeRestart,
+    attemptsAfterRestart: structuredClone(attemptsBeforeRestart),
     preservedFields: ['attempts', 'budgets', 'cooldown', 'lease', 'lateResultLaw', 'convergenceDeadline'],
     attemptCountBeforeRestart: 2,
     restoredAttemptCount: 2,
@@ -763,11 +776,59 @@ test('restart can restore safely before another attempt and preserves wall-time 
   assert.equal(assessment.assuranceResult, 'PASS', assessment.reasonCodes.join(','));
   assert.equal(assessment.violationCodes.includes('RESTART_ATTEMPT_BOUNDARY_INVALID'), false);
 
+  for (const field of ['attemptId', 'beforeStateRef', 'actionRef', 'afterStateRef']) {
+    const forged = structuredClone(evidence);
+    forged.attempts[0][field] = `forged.${field}`;
+    const forgedAssessment = evaluateRepairLoop(makeRepairPolicy(), forged, FIXTURE_NOW_MS);
+    assert.equal(forgedAssessment.assuranceResult, 'FAIL', field);
+    assert.ok(
+      forgedAssessment.contractIssues.some((issue) => issue.code === 'RESTART_ATTEMPT_HISTORY_MISMATCH'),
+      forgedAssessment.contractIssues.map((issue) => issue.code).join(','),
+    );
+  }
+
+  const afterSnapshotForgery = structuredClone(evidence);
+  afterSnapshotForgery.restartEvidence.attemptsAfterRestart[0].actionRef = 'forged.snapshot.action';
+  const afterSnapshotAssessment = evaluateRepairLoop(makeRepairPolicy(), afterSnapshotForgery, FIXTURE_NOW_MS);
+  assert.equal(afterSnapshotAssessment.assuranceResult, 'FAIL');
+  assert.ok(afterSnapshotAssessment.contractIssues.some((issue) => issue.code === 'RESTART_ATTEMPT_HISTORY_MISMATCH'));
+
+  const unchangedDigestForgery = structuredClone(evidence);
+  unchangedDigestForgery.attempts[0].actionRef = 'forged.coordinated.action';
+  unchangedDigestForgery.restartEvidence.attemptsBeforeRestart[0].actionRef = 'forged.coordinated.action';
+  unchangedDigestForgery.restartEvidence.attemptsAfterRestart[0].actionRef = 'forged.coordinated.action';
+  const unchangedDigestAssessment = evaluateRepairLoop(makeRepairPolicy(), unchangedDigestForgery, FIXTURE_NOW_MS);
+  assert.equal(unchangedDigestAssessment.assuranceResult, 'FAIL');
+  assert.ok(unchangedDigestAssessment.contractIssues
+    .some((issue) => issue.code === 'RESTART_CHECKPOINT_DIGEST_MISMATCH'));
+
+  const recomputedDigestForgery = structuredClone(unchangedDigestForgery);
+  const digestEnvelope = (state, attempts) => repairRestartDigest({
+    checkpointRef: recomputedDigestForgery.restartEvidence.checkpointRef,
+    campaignId: recomputedDigestForgery.campaignId,
+    policyId: recomputedDigestForgery.policyId,
+    policyRevision: recomputedDigestForgery.policyRevision,
+    state,
+    attempts,
+  });
+  recomputedDigestForgery.restartEvidence.stateDigestBeforeRestart = digestEnvelope(
+    recomputedDigestForgery.restartEvidence.stateBeforeRestart,
+    recomputedDigestForgery.restartEvidence.attemptsBeforeRestart,
+  );
+  recomputedDigestForgery.restartEvidence.stateDigestAfterRestart = digestEnvelope(
+    recomputedDigestForgery.restartEvidence.stateAfterRestart,
+    recomputedDigestForgery.restartEvidence.attemptsAfterRestart,
+  );
+  const recomputedDigestAssessment = evaluateRepairLoop(makeRepairPolicy(), recomputedDigestForgery, FIXTURE_NOW_MS);
+  assert.equal(recomputedDigestAssessment.assuranceResult, 'FAIL');
+  assert.ok(recomputedDigestAssessment.contractIssues
+    .some((issue) => issue.code === 'SYNTHETIC_RESTART_CHECKPOINT_TRUST_BINDING_MISMATCH'));
+
   evidence.restartEvidence.stateBeforeRestart.remainingRetryTimeMs = 19_000;
   evidence.restartEvidence.stateAfterRestart.remainingRetryTimeMs = 19_000;
   assessment = evaluateRepairLoop(makeRepairPolicy(), evidence, FIXTURE_NOW_MS);
   assert.equal(assessment.assuranceResult, 'FAIL');
-  assert.ok(assessment.violationCodes.includes('RESTART_RESET_CAMPAIGN_OR_BUDGET'));
+  assert.ok(assessment.contractIssues.some((issue) => issue.code === 'RESTART_CHECKPOINT_DIGEST_MISMATCH'));
 });
 
 test('non-restored campaigns reject every affirmative or contradictory restart claim', () => {
@@ -778,6 +839,7 @@ test('non-restored campaigns reject every affirmative or contradictory restart c
     stateDigestAfterRestart: 'synthetic.after',
     preservedCampaignId: true,
     preservedFields: ['attempts'],
+    attemptsBeforeRestart: [structuredClone(evidence.attempts[0])],
     attemptCountBeforeRestart: 99,
     restoredAttemptCount: 1,
     remainingCostUnitsBeforeRestart: 0,
@@ -799,7 +861,7 @@ test('FAILED_ATTENTION_REQUIRED must retain the policy escalation owner', () => 
 });
 
 test('every attempt carries bounded actuation-gate and owner-circuit evidence into the assessment', () => {
-  const evidence = makeRepairEvidence();
+  const evidence = structuredClone(makeRepairEvidence());
   const assessment = evaluateRepairLoop(makeRepairPolicy(), evidence, FIXTURE_NOW_MS);
   assert.equal(assessment.assuranceResult, 'PASS', assessment.reasonCodes.join(','));
   assert.deepEqual(Object.keys(assessment.actuationGateBinding).sort(), [
@@ -818,7 +880,8 @@ test('every attempt carries bounded actuation-gate and owner-circuit evidence in
   assert.equal(assessment.attemptEvidence.length, 2);
   assert.deepEqual(Object.keys(assessment.attemptEvidence[0]).sort(), [
     'actuationGateEvidence', 'attemptId', 'circuitEvidence', 'completedAtMs',
-    'producerFailureDomain', 'producerOwner', 'startedAtMs',
+    'producerEvidenceRef', 'producerFailureDomain', 'producerOwner', 'startedAtMs',
+    'verifierEvidenceRef', 'verifierFailureDomain', 'verifierOwner',
   ]);
   assert.equal(assessment.attemptEvidence[0].producerOwner, evidence.attempts[0].producerOwner);
   assert.equal(
@@ -954,25 +1017,88 @@ test('attempt producer and verifier identities bind their canonical policy signa
   assert.equal(assessmentHasCode(assessment, 'ATTEMPT_VERIFIER_EVIDENCE_BINDING_MISMATCH'), true);
 });
 
+test('campaign evidence roles are globally disjoint and circuit history cannot cycle', () => {
+  const reusedVerifier = structuredClone(makeRepairEvidence());
+  reusedVerifier.attempts[1].verifierEvidenceRef = reusedVerifier.attempts[0].producerEvidenceRef;
+  let assessment = evaluateRepairLoop(makeRepairPolicy(), reusedVerifier, FIXTURE_NOW_MS);
+  assert.equal(assessment.assuranceResult, 'FAIL');
+  assert.equal(assessmentHasCode(assessment, 'CAMPAIGN_EVIDENCE_REFERENCE_REUSE_FORBIDDEN'), true);
+
+  const reusedClose = structuredClone(makeRepairEvidence());
+  reusedClose.attempts.at(-1).circuitEvidence.independentCloseEvidenceRef
+    = reusedClose.attempts.at(-1).producerEvidenceRef;
+  assessment = evaluateRepairLoop(makeRepairPolicy(), reusedClose, FIXTURE_NOW_MS);
+  assert.equal(assessment.assuranceResult, 'FAIL');
+  assert.equal(assessmentHasCode(assessment, 'CROSS_ROLE_EVIDENCE_REFERENCE_REUSE_FORBIDDEN'), true);
+
+  const cycle = structuredClone(makeRepairEvidence());
+  cycle.attempts[0].circuitEvidence.priorEvidenceRef = cycle.attempts[1].circuitEvidence.evidenceRef;
+  assessment = evaluateRepairLoop(makeRepairPolicy(), cycle, FIXTURE_NOW_MS);
+  assert.equal(assessment.assuranceResult, 'FAIL');
+  assert.equal(assessmentHasCode(assessment, 'REPAIR_CIRCUIT_PRIOR_EVIDENCE_CYCLE'), true);
+});
+
+test('resource-set comparison is element-wise and cannot collide through delimiters', () => {
+  const policy = structuredClone(makeRepairPolicy());
+  policy.commandRegistration = {
+    state: 'OWNER_CONFIRMATION_REQUIRED',
+    registryRef: null,
+    implementationRef: null,
+    registeredFencingOwner: null,
+    fencingOwnerEvidenceRef: null,
+  };
+  policy.controlledState.resourceIds = ['component.a', 'component.b|component.c'];
+
+  const evidence = structuredClone(makeRepairEvidence());
+  const distinctResources = ['component.a|component.b', 'component.c'];
+  evidence.conflictGraphEvidence.observedCampaigns[0].resourceIds = [...distinctResources];
+  evidence.lease.resourceIds = [...distinctResources];
+  for (const attempt of evidence.attempts) attempt.resourceIds = [...distinctResources];
+
+  const assessment = evaluateRepairLoop(policy, evidence, FIXTURE_NOW_MS);
+  assert.equal(assessment.assuranceResult, 'FAIL');
+  assert.ok(assessment.violationCodes.includes('CURRENT_CAMPAIGN_ATOMIC_ACQUISITION_UNPROVED'));
+  assert.ok(assessment.violationCodes.includes('LEASE_RESOURCE_SET_MISMATCH'));
+});
+
 test('resource assessment rows preserve source freshness metadata', () => {
   const bundle = makeResourceEvidenceBundle();
   const assessment = evaluateResourceEvidence(bundle, FIXTURE_NOW_MS);
-  assert.equal(assessment.assuranceResult, 'PASS');
+  assert.equal(assessment.assuranceResult, 'UNKNOWN');
   assert.deepEqual(
     assessment.rows.map(({ rowId, observedAtMs, maxAgeMs }) => ({ rowId, observedAtMs, maxAgeMs })),
     bundle.rows.map(({ rowId, observedAtMs, maxAgeMs }) => ({ rowId, observedAtMs, maxAgeMs })),
   );
 });
 
+test('repair evaluation rejects changing attempt accessors before validation or evidence capture', () => {
+  const evidence = structuredClone(makeRepairEvidence());
+  let getterCalls = 0;
+  Object.defineProperty(evidence.attempts[0], 'costUnits', {
+    enumerable: true,
+    configurable: true,
+    get() {
+      getterCalls += 1;
+      return getterCalls < 3 ? 1 : 1_000;
+    },
+  });
+  const assessment = evaluateRepairLoop(makeRepairPolicy(), evidence, FIXTURE_NOW_MS);
+  assert.equal(assessment.assuranceResult, 'FAIL');
+  assert.deepEqual(assessment.reasonCodes, ['CONTRACT_INVALID']);
+  assert.ok(assessment.contractIssues.some((issue) => issue.code === 'PLAIN_DATA_SNAPSHOT_REQUIRED'));
+  assert.equal(getterCalls, 0);
+});
+
 test('paired lease and policy owner forgery loses the independent registration binding', () => {
   const policy = structuredClone(makeRepairPolicy());
   const evidence = structuredClone(makeRepairEvidence());
   policy.fencingOwner = 'controller.forged';
+  policy.commandRegistration.registeredFencingOwner = 'controller.forged';
   evidence.lease.ownerId = 'controller.forged';
   for (const attempt of evidence.attempts) attempt.controllerId = 'controller.forged';
   const assessment = evaluateRepairLoop(policy, evidence, FIXTURE_NOW_MS);
   assert.equal(assessment.assuranceResult, 'FAIL');
-  assert.equal(assessmentHasCode(assessment, 'FENCING_OWNER_REGISTRATION_MISMATCH'), true);
+  assert.equal(assessmentHasCode(assessment, 'SYNTHETIC_REPAIR_TRUST_BINDING_MISMATCH'), true);
 });
 
 test('derived attempt-budget arithmetic fails closed before numeric precision is lost', () => {

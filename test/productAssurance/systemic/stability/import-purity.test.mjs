@@ -186,8 +186,12 @@ test('packet-local modules import and evaluate without ambient work', async () =
     const resources = evaluators.evaluateResourceEvidence(fixtures.makeResourceEvidenceBundle(), fixtures.FIXTURE_NOW_MS);
     const projected = viewModel.projectStabilityViewModel({ cancellationAssessments: [cancellation], repairAssessments: [repair], resourceAssessment: resources }, fixtures.FIXTURE_NOW_MS);
     assert.equal(contracts.STABILITY_SCHEMA_VERSION, 'ip-assurance.systemic.stability.v1');
-    for (const [label, assessment] of [['cancellation', cancellation], ['repair', repair], ['resources', resources]]) {
-      assert.equal(assessment.assuranceResult, 'PASS', `${label} canonical evaluation must pass`);
+    for (const [label, assessment, expectedResult] of [
+      ['cancellation', cancellation, 'PASS'],
+      ['repair', repair, 'PASS'],
+      ['resources', resources, 'UNKNOWN'],
+    ]) {
+      assert.equal(assessment.assuranceResult, expectedResult, `${label} canonical evaluation must preserve its honest result`);
       assert.deepEqual(assessment.contractIssues, [], `${label} canonical evaluation must have no contract issues`);
       assert.ok(!assessment.reasonCodes?.includes('CONTRACT_INVALID'), `${label} canonical evaluation must not be contract-invalid`);
       assert.equal(assessment.dataAuthority, 'SYNTHETIC_TEST');
@@ -200,7 +204,7 @@ test('packet-local modules import and evaluate without ambient work', async () =
     assert.equal(resources.controllerOwner, null);
     assert.equal(resources.throttleDecision, null);
     assert.deepEqual(resources.commands, []);
-    assert.equal(projected.overallAssuranceResult, 'PASS');
+    assert.equal(projected.overallAssuranceResult, 'UNKNOWN');
     assert.equal(projected.effectAuthority, 'NONE');
     assert.deepEqual(projected.controls, []);
     assert.equal(projected.throttleDecision, null);

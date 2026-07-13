@@ -1,17 +1,25 @@
 # L11 state
 
-Status: `CORRECTED_VERIFIED_PENDING_ACCEPTANCE_RECORDS`
+Status: `L11_ACCEPTED_PENDING_ACCEPTANCE_SHA_SEAL`
 
 - Branch: `l11-volume-20260712`
 - Accepted base: `4ae270ac70fb819a706f94e85dfc2b6805edda9b`
 - D-LAUNCH-5 DAG proof: `1fec867fa3f62d17829543b3776dc768506ae8ac`
 - Initial implementation commit:
   `fbc748a16b251f06704ae8c38cf95e6bbf0e73e9`
-- Scope: Volume directional lifecycle only, directive Section 18 plus launch
-  Section 7 advisory/authority amendments
-- Exclusive source: `server/src/liveEdge/adapters/volumeLifecycle/**`
-- Exclusive tests: `server/test/liveEdge/volumeLifecycle/**`
-- Receipts/decisions/tasks: only `L11*` paths under the allowed directories
+- Corrected implementation commit:
+  `e95ce6a4331ae45dc2fe87425a16821077887cee`
+- Corrected implementation tree:
+  `86f41901a387c1f401255ac6cd8e7ed29df0ebbb`
+- Immutable receipt commit:
+  `f8710015845cf01bf694565b61bdacc28810679a`
+- Immutable receipt tree:
+  `ef7da82d6713de69d0fe244b8073299212655977`
+- Immutable receipt SHA-256:
+  `d12ed39483d350cc9905474c8ed81b68dd44862c93bdd8bc6000fac6b0528bac`
+- Acceptance record: `live-edge-receipts/RECEIPTS/L11_ACCEPTANCE.md`
+- Acceptance record SHA-256:
+  `e1cd90b3013621858dc068413ded4d5e14043313930e9613950dd5d79304bf6f`
 - Frozen six-file source aggregate SHA-256:
   `210c0d167a9831f0420363bb93d7331d17d05c33e6149ee65f0844d0926238bd`
 - Frozen six-file test aggregate SHA-256:
@@ -26,27 +34,15 @@ Status: `CORRECTED_VERIFIED_PENDING_ACCEPTANCE_RECORDS`
 - Frozen edge protocol: `22/22`
 - Existing Volume engine: `124/124`
 - Standard deterministic battery: `377/377`
-- Full repository battery: `4468/4468`; deterministic `377`, app gates `72`,
-  Intelligence Foundation `152`, Intelligence Runtime `394`, Capital `433`,
-  Foundation `2860`, System Integration `180`
-- Independent static acceptance review: `ACCEPT` on the exact frozen source and
-  test hashes, with no remaining lifecycle, schema, chronology, recovery,
-  replay, authority, secret or money-path blocker
-- Diff whitespace, exclusive-scope, protected-input, secret-literal,
-  ambient-egress and money-authority checks: pass
-- Acceptance review disposition: invariant gaps identified after
-  `fbc748a16b251f06704ae8c38cf95e6bbf0e73e9` are closed by the corrected tree;
-  final evidence refers only to this corrected tree
-- Immutable receipt: pending the correction implementation commit
-- Acceptance record: pending the immutable receipt commit
-- Accepted-SHA seal: pending the acceptance record commit
+- Full cross-family repository battery: `4468/4468`
+- Independent exact-tree static acceptance review: `ACCEPT`
 - Production Spot policy/wiring: `UNWIRED`; the existing L08 owner request
   remains required
 - Lifecycle authority: `ADVISORY_LIFECYCLE_PROJECTION_ONLY`
 - Simulation authority: `SYNTHETIC_FIXTURE`
 - Send eligibility: `false`
 - External action authorization: `NONE`
+- Merge/push: not performed
 
-Next exact task: commit the corrected implementation and this state, record that
-commit and its immutable hashes in `live-edge-receipts/RECEIPTS/L11.md`, commit
-the acceptance record, then seal its exact SHA here. Do not push or merge.
+Next exact task: commit this state together with the acceptance record, then
+record that containing commit's exact SHA and tree in a state-only seal.

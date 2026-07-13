@@ -162,6 +162,15 @@ test('machine report is canonical and self-digesting', () => {
   assert.equal(actual.targetState, 'PROOF_PRESTAGE_READY');
   assert.equal(actual.productVerdict, 'AWAITING_REAL_ADAPTERS');
   assert(actual.frozenInputs.every((input) => input.passed));
+  assert.equal(actual.historicalFrozenInputs.filter((input) => input.passed).length, 12);
+  assert.deepEqual(actual.historicalFrozenInputs.filter((input) => !input.passed).map((input) => input.path), [
+    'QL_DIRECTOR_STATE.md',
+    'QL_PARALLEL_DAG.md',
+  ]);
+  assert.equal(actual.livingDirectorInputAcceptance.passed, true);
+  assert.equal(actual.livingDirectorInputAcceptance.ruling, 'D-LAUNCH-7');
+  assert.equal(actual.livingDirectorInputAcceptance.mode, 'LATEST_CURRENT_MAIN_TOUCH');
+  assert.equal(actual.livingDirectorInputAcceptance.directiveResults.length, 5);
   assert(actual.authority.scanPassed);
   assert.equal(actual.authority.authorityConverged, false);
   assert(actual.authority.unresolvedConflictCount > 0);

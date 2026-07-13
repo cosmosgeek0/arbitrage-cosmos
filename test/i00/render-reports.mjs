@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   evaluateLoadShedding,
+  effectiveFrozenInputScan,
   frozenInputScan,
   measureResourceHarness,
   readJson,
@@ -125,9 +126,12 @@ export function buildMachineEvidence() {
   const scenarioDocument = readJson('fixtures/i00/scenarios.json');
   const resourceSamples = readJson('fixtures/i00/resource-samples.json');
   const receiptProvenance = readJson('fixtures/i00/receipt-provenance.json');
+  const livingInputAcceptance = readJson('fixtures/i00/living-director-input-acceptance.json');
   const scenarios = runAllScenarios(scenarioDocument);
   const authority = runAuthorityScan(catalog);
-  const frozenInputs = frozenInputScan(catalog);
+  const historicalFrozenInputs = frozenInputScan(catalog);
+  const effectiveInputs = effectiveFrozenInputScan(catalog, livingInputAcceptance);
+  const frozenInputs = effectiveInputs.acceptedInputs;
   const routes = routeContractScan(catalog);
   return {
     schemaVersion: 1,
@@ -155,6 +159,8 @@ export function buildMachineEvidence() {
       provenanceItems: receiptProvenance.items.length,
     },
     frozenInputs,
+    historicalFrozenInputs,
+    livingDirectorInputAcceptance: effectiveInputs.acceptance,
     authority,
     routes,
     scenarios,

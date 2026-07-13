@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import {
   buildIdentityGraph,
   deriveTruthLabel,
+  effectiveFrozenInputScan,
   evaluateEvidenceSemantics,
   evaluateMessage,
   frozenInputScan,
@@ -15,12 +16,43 @@ import {
 } from './harness.mjs';
 
 const catalog = readJson('fixtures/i00/proof-catalog.json');
+const livingInputAcceptance = readJson('fixtures/i00/living-director-input-acceptance.json');
 const protocolFixtures = readJson('packages/edge-protocol/fixtures/fixtures-v1.json');
 
-test('frozen protocol authority and dashboard inputs retain exact hashes', () => {
-  const results = frozenInputScan(catalog);
-  assert.equal(results.length, 14);
-  assert(results.every((result) => result.passed), JSON.stringify(results.filter((result) => !result.passed)));
+test('historical packet pins remain immutable while D-LAUNCH-7 accepts living director state', () => {
+  const historical = frozenInputScan(catalog);
+  assert.equal(historical.length, 14);
+  assert.equal(historical.filter((result) => result.passed).length, 12);
+  assert.deepEqual(historical.filter((result) => !result.passed).map((result) => result.path), [
+    'QL_DIRECTOR_STATE.md',
+    'QL_PARALLEL_DAG.md',
+  ]);
+
+  const effective = effectiveFrozenInputScan(catalog, livingInputAcceptance);
+  assert.equal(effective.acceptance.passed, true, JSON.stringify(effective.acceptance));
+  assert(effective.acceptedInputs.every((result) => result.passed), JSON.stringify(effective.acceptedInputs.filter((result) => !result.passed)));
+  assert.match(effective.acceptance.sourceTip, /^[a-f0-9]{40}$/);
+  assert.equal(effective.acceptance.rulingCommit, 'bdb29e37fb9b152aa1b7e1063ca892cd405c6245');
+  assert.deepEqual(effective.acceptance.livingResults.map((entry) => [entry.path, entry.latestCommit, entry.observedSha256]), [
+    ['QL_DIRECTOR_STATE.md', 'bdb29e37fb9b152aa1b7e1063ca892cd405c6245', '081f3bf6c99bd41b6e6e50a0e1c0b9bd12052b60f203f8ea5f0ea1ad422d85c4'],
+    ['QL_PARALLEL_DAG.md', '1fec867fa3f62d17829543b3776dc768506ae8ac', '469370d904484e450f17da301991d07b9d87ef39ee5b693048e14e997000338b'],
+  ]);
+  assert(effective.acceptedInputs.filter((entry) => entry.acceptanceMode === 'LATEST_CURRENT_MAIN_TOUCH')
+    .every((entry) => entry.historicalPacketPassed === false && entry.historicalPacketPinPreserved));
+});
+
+test('D-LAUNCH-7 acceptance fails closed on policy path provenance observation or directive tampering', () => {
+  const cases = [
+    { ...livingInputAcceptance, ruling: 'D-LAUNCH-6' },
+    { ...livingInputAcceptance, sourceRef: 'HEAD' },
+    { ...livingInputAcceptance, rulingCommit: '0'.repeat(40) },
+    { ...livingInputAcceptance, livingDirectorInputs: livingInputAcceptance.livingDirectorInputs.map((entry, index) => index === 0 ? { ...entry, path: 'STATE.md' } : entry) },
+    { ...livingInputAcceptance, livingDirectorInputs: livingInputAcceptance.livingDirectorInputs.map((entry, index) => index === 0 ? { ...entry, observedLatestCommit: '0'.repeat(40) } : entry) },
+    { ...livingInputAcceptance, livingDirectorInputs: livingInputAcceptance.livingDirectorInputs.map((entry, index) => index === 1 ? { ...entry, observedGitBlob: '0'.repeat(40) } : entry) },
+    { ...livingInputAcceptance, livingDirectorInputs: livingInputAcceptance.livingDirectorInputs.map((entry, index) => index === 1 ? { ...entry, observedSha256: '0'.repeat(64) } : entry) },
+    { ...livingInputAcceptance, ownerDirectives: livingInputAcceptance.ownerDirectives.map((entry, index) => index === 2 ? { ...entry, sha256: '0'.repeat(64) } : entry) },
+  ];
+  for (const document of cases) assert.equal(effectiveFrozenInputScan(catalog, document).acceptance.passed, false);
 });
 
 test('one owner and producer registry passes scoped duplicate-authority rules', () => {

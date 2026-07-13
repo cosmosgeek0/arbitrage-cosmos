@@ -34,15 +34,143 @@
       "path": "IP_PROOF.md",
       "sha256": "e59d516ba9acb9a7bb1ce63ca149ce662f308a0fd0900b72db3d2fe2e8bb93b6",
       "anchoredSha256": "e59d516ba9acb9a7bb1ce63ca149ce662f308a0fd0900b72db3d2fe2e8bb93b6",
-      "observedSha256": null,
-      "passed": false
+      "observedSha256": "e59d516ba9acb9a7bb1ce63ca149ce662f308a0fd0900b72db3d2fe2e8bb93b6",
+      "passed": true,
+      "acceptanceMode": "IMMUTABLE_PACKET_INPUT"
     },
     {
       "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
       "sha256": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5",
       "anchoredSha256": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5",
-      "observedSha256": null,
-      "passed": false
+      "observedSha256": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5",
+      "passed": true,
+      "acceptanceMode": "IMMUTABLE_PACKET_INPUT"
+    },
+    {
+      "path": "MISSION.md",
+      "sha256": "95e152d76844aa391b7a28bd45548d7fe58f83ed1ced558dbdbeb01797436362",
+      "anchoredSha256": "95e152d76844aa391b7a28bd45548d7fe58f83ed1ced558dbdbeb01797436362",
+      "observedSha256": "95e152d76844aa391b7a28bd45548d7fe58f83ed1ced558dbdbeb01797436362",
+      "passed": true,
+      "acceptanceMode": "IMMUTABLE_PACKET_INPUT"
+    },
+    {
+      "path": "docs/archive/What-i-want.txt",
+      "sha256": "f525644e8bf7dc00f1999b7ac79975ae382530531c194533a2ff56a1531c961a",
+      "anchoredSha256": "f525644e8bf7dc00f1999b7ac79975ae382530531c194533a2ff56a1531c961a",
+      "observedSha256": "f525644e8bf7dc00f1999b7ac79975ae382530531c194533a2ff56a1531c961a",
+      "passed": true,
+      "acceptanceMode": "IMMUTABLE_PACKET_INPUT"
+    },
+    {
+      "path": "QL_DIRECTOR_STATE.md",
+      "sha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
+      "anchoredSha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
+      "observedSha256": "6deab33ac445f92a4f7db29ad7be13e7307e185597b692db4886967e9a6f6e4a",
+      "passed": true,
+      "acceptanceMode": "LATEST_CURRENT_MAIN_TOUCH",
+      "historicalPacketPassed": false,
+      "historicalPacketPinPreserved": true,
+      "acceptedSourceRef": "current-main",
+      "acceptedSourceTip": "bdb29e37fb9b152aa1b7e1063ca892cd405c6245",
+      "acceptedLatestCommit": "bdb29e37fb9b152aa1b7e1063ca892cd405c6245",
+      "acceptedGitBlob": "f0c4422c6acb25da03feb41c5389ad6004c55c77",
+      "acceptedSha256": "081f3bf6c99bd41b6e6e50a0e1c0b9bd12052b60f203f8ea5f0ea1ad422d85c4"
+    },
+    {
+      "path": "QL_PARALLEL_DAG.md",
+      "sha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546",
+      "anchoredSha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546",
+      "observedSha256": "469370d904484e450f17da301991d07b9d87ef39ee5b693048e14e997000338b",
+      "passed": true,
+      "acceptanceMode": "LATEST_CURRENT_MAIN_TOUCH",
+      "historicalPacketPassed": false,
+      "historicalPacketPinPreserved": true,
+      "acceptedSourceRef": "current-main",
+      "acceptedSourceTip": "bdb29e37fb9b152aa1b7e1063ca892cd405c6245",
+      "acceptedLatestCommit": "1fec867fa3f62d17829543b3776dc768506ae8ac",
+      "acceptedGitBlob": "e068fe7634ac8d2b117935cff0e4a91d36d7d7b5",
+      "acceptedSha256": "469370d904484e450f17da301991d07b9d87ef39ee5b693048e14e997000338b"
+    },
+    {
+      "path": "quant/DIRECTIVE_INPUTS.lock",
+      "sha256": "d4bf31826625c2602ebb7ed72194e94a4571f7597a413ca545839f236c7a5a24",
+      "anchoredSha256": "d4bf31826625c2602ebb7ed72194e94a4571f7597a413ca545839f236c7a5a24",
+      "observedSha256": "d4bf31826625c2602ebb7ed72194e94a4571f7597a413ca545839f236c7a5a24",
+      "passed": true,
+      "acceptanceMode": "IMMUTABLE_PACKET_INPUT"
+    },
+    {
+      "path": "packages/edge-protocol/schema/edge-protocol-v1.schema.json",
+      "sha256": "229af0ff13d600c7d305c6deb7f57b61bdb6f8a35f6f2349d91f5ab1b4972f1c",
+      "anchoredSha256": "229af0ff13d600c7d305c6deb7f57b61bdb6f8a35f6f2349d91f5ab1b4972f1c",
+      "observedSha256": "229af0ff13d600c7d305c6deb7f57b61bdb6f8a35f6f2349d91f5ab1b4972f1c",
+      "passed": true,
+      "acceptanceMode": "IMMUTABLE_PACKET_INPUT"
+    },
+    {
+      "path": "packages/edge-protocol/fixtures/fixtures-v1.json",
+      "sha256": "c42a4257ea5f46abb38ec9ab4e56983e7049cdf5b448150a4d4647a6234d99a4",
+      "anchoredSha256": "c42a4257ea5f46abb38ec9ab4e56983e7049cdf5b448150a4d4647a6234d99a4",
+      "observedSha256": "c42a4257ea5f46abb38ec9ab4e56983e7049cdf5b448150a4d4647a6234d99a4",
+      "passed": true,
+      "acceptanceMode": "IMMUTABLE_PACKET_INPUT"
+    },
+    {
+      "path": "packages/edge-protocol-tests/protocol.test.mjs",
+      "sha256": "b9745ad52d92c50fcfa48b9772024b86fcf4fa738e8c35c817fa77021ad970b9",
+      "anchoredSha256": "b9745ad52d92c50fcfa48b9772024b86fcf4fa738e8c35c817fa77021ad970b9",
+      "observedSha256": "b9745ad52d92c50fcfa48b9772024b86fcf4fa738e8c35c817fa77021ad970b9",
+      "passed": true,
+      "acceptanceMode": "IMMUTABLE_PACKET_INPUT"
+    },
+    {
+      "path": "EDGE_PROTOCOL_V1.md",
+      "sha256": "951fdbb5f347f900c61e60055f90cf2e1e1e743b75b7dc733652acb8d43353a1",
+      "anchoredSha256": "951fdbb5f347f900c61e60055f90cf2e1e1e743b75b7dc733652acb8d43353a1",
+      "observedSha256": "951fdbb5f347f900c61e60055f90cf2e1e1e743b75b7dc733652acb8d43353a1",
+      "passed": true,
+      "acceptanceMode": "IMMUTABLE_PACKET_INPUT"
+    },
+    {
+      "path": "ARCHITECTURE.md",
+      "sha256": "beb8be8baefe2faa78356e2dc44983735b855535c21cd5f0172a8e1e3fa665db",
+      "anchoredSha256": "beb8be8baefe2faa78356e2dc44983735b855535c21cd5f0172a8e1e3fa665db",
+      "observedSha256": "beb8be8baefe2faa78356e2dc44983735b855535c21cd5f0172a8e1e3fa665db",
+      "passed": true,
+      "acceptanceMode": "IMMUTABLE_PACKET_INPUT"
+    },
+    {
+      "path": "docs/DASHBOARD_TRUTH.md",
+      "sha256": "9f44e9d9c6111ffcc176fe30ea27d02dced83006d8df9ceb218c2c1af8df07c7",
+      "anchoredSha256": "9f44e9d9c6111ffcc176fe30ea27d02dced83006d8df9ceb218c2c1af8df07c7",
+      "observedSha256": "9f44e9d9c6111ffcc176fe30ea27d02dced83006d8df9ceb218c2c1af8df07c7",
+      "passed": true,
+      "acceptanceMode": "IMMUTABLE_PACKET_INPUT"
+    },
+    {
+      "path": "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md",
+      "sha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162",
+      "anchoredSha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162",
+      "observedSha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162",
+      "passed": true,
+      "acceptanceMode": "IMMUTABLE_PACKET_INPUT"
+    }
+  ],
+  "historicalFrozenInputs": [
+    {
+      "path": "IP_PROOF.md",
+      "sha256": "e59d516ba9acb9a7bb1ce63ca149ce662f308a0fd0900b72db3d2fe2e8bb93b6",
+      "anchoredSha256": "e59d516ba9acb9a7bb1ce63ca149ce662f308a0fd0900b72db3d2fe2e8bb93b6",
+      "observedSha256": "e59d516ba9acb9a7bb1ce63ca149ce662f308a0fd0900b72db3d2fe2e8bb93b6",
+      "passed": true
+    },
+    {
+      "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+      "sha256": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5",
+      "anchoredSha256": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5",
+      "observedSha256": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5",
+      "passed": true
     },
     {
       "path": "MISSION.md",
@@ -129,6 +257,92 @@
       "passed": true
     }
   ],
+  "livingDirectorInputAcceptance": {
+    "schemaVersion": "I00_LIVING_DIRECTOR_INPUT_ACCEPTANCE_V1",
+    "ruling": "D-LAUNCH-7",
+    "mode": "LATEST_CURRENT_MAIN_TOUCH",
+    "sourceRef": "current-main",
+    "sourceTip": "bdb29e37fb9b152aa1b7e1063ca892cd405c6245",
+    "rulingCommit": "bdb29e37fb9b152aa1b7e1063ca892cd405c6245",
+    "structuralChecks": {
+      "schemaVersion": true,
+      "ruling": true,
+      "mode": true,
+      "sourceRef": true,
+      "rulingCommit": true,
+      "historicalPacketPinsPreserved": true,
+      "finalRealAdapterRepinRequired": true,
+      "assemblyCopiesRejected": true,
+      "livingPathSet": true,
+      "directivePathSet": true
+    },
+    "structurePassed": true,
+    "rulingVerified": true,
+    "livingResults": [
+      {
+        "path": "QL_DIRECTOR_STATE.md",
+        "historicalPacketSha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
+        "latestCommit": "bdb29e37fb9b152aa1b7e1063ca892cd405c6245",
+        "observedGitBlob": "f0c4422c6acb25da03feb41c5389ad6004c55c77",
+        "observedSha256": "081f3bf6c99bd41b6e6e50a0e1c0b9bd12052b60f203f8ea5f0ea1ad422d85c4",
+        "safePath": true,
+        "historicalPinValid": true,
+        "latestCommitReachable": true,
+        "observationMatches": true,
+        "passed": true
+      },
+      {
+        "path": "QL_PARALLEL_DAG.md",
+        "historicalPacketSha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546",
+        "latestCommit": "1fec867fa3f62d17829543b3776dc768506ae8ac",
+        "observedGitBlob": "e068fe7634ac8d2b117935cff0e4a91d36d7d7b5",
+        "observedSha256": "469370d904484e450f17da301991d07b9d87ef39ee5b693048e14e997000338b",
+        "safePath": true,
+        "historicalPinValid": true,
+        "latestCommitReachable": true,
+        "observationMatches": true,
+        "passed": true
+      }
+    ],
+    "directiveResults": [
+      {
+        "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+        "expectedSha256": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5",
+        "observedSha256": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5",
+        "safePath": true,
+        "passed": true
+      },
+      {
+        "path": "IP_RUNTIME.md",
+        "expectedSha256": "6e93016e3177db69a26844c12e6449d9afac1700e9946570a243051645565810",
+        "observedSha256": "6e93016e3177db69a26844c12e6449d9afac1700e9946570a243051645565810",
+        "safePath": true,
+        "passed": true
+      },
+      {
+        "path": "IP_CONTROL.md",
+        "expectedSha256": "5e57bf1d019f761731857be7a1c46c5b06eb7f80db9709d5425bbea749fb7278",
+        "observedSha256": "5e57bf1d019f761731857be7a1c46c5b06eb7f80db9709d5425bbea749fb7278",
+        "safePath": true,
+        "passed": true
+      },
+      {
+        "path": "IP_OPS.md",
+        "expectedSha256": "2af8348906f9306765a0d0d57f21b01349767e6115f04f43ce00fa6328f1b779",
+        "observedSha256": "2af8348906f9306765a0d0d57f21b01349767e6115f04f43ce00fa6328f1b779",
+        "safePath": true,
+        "passed": true
+      },
+      {
+        "path": "IP_PROOF.md",
+        "expectedSha256": "e59d516ba9acb9a7bb1ce63ca149ce662f308a0fd0900b72db3d2fe2e8bb93b6",
+        "observedSha256": "e59d516ba9acb9a7bb1ce63ca149ce662f308a0fd0900b72db3d2fe2e8bb93b6",
+        "safePath": true,
+        "passed": true
+      }
+    ],
+    "passed": true
+  },
   "authority": {
     "authorityConcepts": 13,
     "semanticStreams": 6,
@@ -10618,5 +10832,5 @@
       "gate": "IP-OPS accepted; no external mutation"
     }
   ],
-  "evidenceSha256": "64fd75e5b7a43eb4e9a0bd7bba5cf3d5862ea2a3ac2bd83d859786a4ed7fc1fd"
+  "evidenceSha256": "e84ad91ef6afff0e0f501efc349ee131e86ffcea13619959a27ab2a15fafe140"
 }

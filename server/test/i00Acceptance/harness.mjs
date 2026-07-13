@@ -4,6 +4,8 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { verifyLivingDirectorInputAcceptance } from '../../../test/i00/git-provenance.mjs';
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(HERE, '../../..');
 
@@ -844,6 +846,31 @@ export function frozenInputScan(catalog) {
       passed: anchoredSha256 !== null && input.sha256 === anchoredSha256 && observedSha256 === anchoredSha256,
     };
   });
+}
+
+export function effectiveFrozenInputScan(catalog, acceptanceDocument) {
+  const historicalInputs = frozenInputScan(catalog);
+  const acceptance = verifyLivingDirectorInputAcceptance(acceptanceDocument);
+  const livingByPath = new Map(acceptance.livingResults.map((entry) => [entry.path, entry]));
+  const acceptedInputs = historicalInputs.map((input) => {
+    const living = livingByPath.get(input.path);
+    if (!living) return Object.freeze({ ...input, acceptanceMode: 'IMMUTABLE_PACKET_INPUT' });
+    const historicalPacketPinPreserved = input.sha256 === input.anchoredSha256
+      && living.historicalPacketSha256 === input.anchoredSha256;
+    return Object.freeze({
+      ...input,
+      acceptanceMode: acceptance.mode,
+      historicalPacketPassed: input.passed,
+      historicalPacketPinPreserved,
+      acceptedSourceRef: acceptance.sourceRef,
+      acceptedSourceTip: acceptance.sourceTip,
+      acceptedLatestCommit: living.latestCommit,
+      acceptedGitBlob: living.observedGitBlob,
+      acceptedSha256: living.observedSha256,
+      passed: acceptance.passed && living.passed && historicalPacketPinPreserved,
+    });
+  });
+  return Object.freeze({ acceptance, historicalInputs: Object.freeze(historicalInputs), acceptedInputs: Object.freeze(acceptedInputs) });
 }
 
 function nearestRank(sorted, quantile) {

@@ -1,12 +1,14 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `37`
+State generation: `38`
 
-Updated: 2026-07-13T10:35:36+0530
+Updated: 2026-07-13T12:59:52+0530
 
-Status: `Q17 WORKING — FINAL PROOF/ACCEPTANCE PHASE`. Q13 and Q15 are accepted and
-director-merged. Q16 is exact-commit accepted. Q17 is the sole active phase and
-must stop at `LANE_READY` for director audit after separate C17/A17 commits.
+Status: `Q17 COMPLETE — READY FOR EXACT C17 VERIFICATION`. Q13 and Q15 are
+accepted and director-merged. Q16 is exact-commit accepted. Q17 implementation,
+proof, benchmark, generated kit and adversarial correction loop are complete. C17
+is pending exact Git scope verification; only a separate clean-archive A17 may set
+`LANE_READY` and park the branch for director audit.
 
 Program: Q lane — deterministic research evidence, labels, models, calibration,
 uncertainty and advisory-only local inference.
@@ -136,6 +138,65 @@ acceptance receipt. Implementation receipt SHA-256:
 `b3b08998bfc3450de2b3502defca482cb6759f6cfe44a4cbb9f2e95d43fea5d6`;
 Git blob `26d1c16390c9d7763969e5abb8eb42d8591af020`.
 
+## Completed Q17 truth pending exact C17 verification
+
+- Activation commit: `ba7323e0ac1f5013d9309b5b73998b84bdffbae5`; tree
+  `976feb81db7ad9d7bbc2ea48819dc500afcf5a1f`; exact parent A16.
+- Task: `quant/TASKS/Q17.md`; status complete/ready for independent commit
+  verification; SHA-256
+  `03d489ce5b0583dab2ec2a96380519535a2547ee78743d1794622cfc4a30c80e`.
+- Decision SHA-256:
+  `93cb9448846e0eb8fcc5d9160e822cd3fffe55256651f3e18579b815a8dda612`.
+- End-to-end design SHA-256:
+  `bd5ce7d8f6be2a5f1b43cee111e10a85c6d890503e0ac6a9371ef70bc4f268fa`.
+- Non-self-referential implementation receipt SHA-256:
+  `057617ed928bc61964a38efc22e185a65f2b5c4a14215928c8d228b4626db32f`.
+- Exact replay runs twice from accepted Q16 bytes, matches all six committed stage
+  identities and the protocol-valid assessment SHA-256
+  `10d4a858ac08c29b03ab3df6476b7eb6830359581d00791a229ccd765b369329`.
+  Pipeline SHA-256 is
+  `a48da64bd2fe055545c496595d01278cfc74f655f7fb334205162e8a07d4b1a9`.
+- Corruption, stopped-gap prefix, expired/future consumption and semantic lineage
+  mutations reject or return explicit safe abstention. Final action remains
+  `ABSTAIN_UNKNOWN`; predictions, scores, probabilities and gross estimate are
+  absent; net economics are `UNKNOWN`.
+- Accepted research evidence remains `DATA_INSUFFICIENT`; edge is
+  `NOT_ESTABLISHED`. The Q10 receipt's quantile best-index `11` versus both machine
+  artifacts' `7` is preserved as a documentary erratum. Q14 is its own synthetic
+  fixture comparison, not Q10/Q11 validation. Q15 remains non-loadable.
+- One actual benchmark observation records three samples after two warmups. Warm
+  single p50 is `3,349,209 ns`; focus-25 p50 is `89,467,750 ns`; candidate-128
+  p50 is `464,945,042 ns`; universe/watch-452 p50 is `1,614,296,000 ns`.
+  Child self peak RSS is `66,551,808` bytes within the provisional 8 GiB ceiling.
+  The rows are copies of one synthetic BNBUSDT fixture; current universe, event
+  trace and numeric latency promotion target remain `UNKNOWN`.
+- Syntax-aware scanning covers 152 source files plus the campaign with zero
+  findings. Nine frozen file identities match. The generated scope proof is a
+  declared expected inventory only; actual Git scope is reserved for the C17/A17
+  receipts.
+
+## Generated Q17 evidence
+
+- Accepted research projection SHA-256:
+  `e9f2de26df495538edf7c57db0edbf334dc1929456a2d23128e32fada4f03a7c`.
+- Benchmark SHA-256:
+  `6bd88082677513808145025272dab2c617df4e932df9b9d9d0e1619fa0cba788`.
+- Component manifest SHA-256:
+  `8269709a143d2720d70362eb213876e588d7ddb6a813226c2cf92cb52dcdaedd`.
+- End-to-end proof SHA-256:
+  `4831a31105f7e87099a75062e412c7fbc73f626ea3c4c00b8c8ddf8360b40f73`.
+- Fault campaign SHA-256:
+  `ed0d763343bef2671af0adab24abf1c7f0a96f45eadb37b6d36d7fcb4255f425`.
+- Integration instructions SHA-256:
+  `ad64875b533369c4dca1d7f7e30685fe2e5962e0b5f67d5f0f2cb9e53f030a79`.
+- Security/scope SHA-256:
+  `fb7affcb837349b5225e866ba301d4ef3bddaa9041667ff8119acf8f900ec229`.
+- Self-excluding artifact manifest SHA-256:
+  `c5574c79cbd9450e6a890b67ade9a6c71e2f1fb9574e71c0eaec3057c545e1b2`;
+  it contains seven exact current rows.
+- Generated component evidence binds activation/current task truth separately and
+  truthfully marks C17/A17 pending.
+
 ## Verification evidence
 
 - Restored baseline at director Q13 merge `3ed8e38`: `2455 passed, 6 skipped in
@@ -163,6 +224,25 @@ Git blob `26d1c16390c9d7763969e5abb8eb42d8591af020`.
 - Independent protocol review: acceptance-ready. Independent transport review:
   clear. Final lineage/body-version quality recheck: acceptance-ready. Every
   reproduced finding has a regression in `quant/tests/q16/**`.
+- Q17 focused after final artifact capture: `384 passed in 32.80s`; combined
+  `quant_edge.final_proof` branch coverage `96.50%` over 2,959 statements and 960
+  branches; required threshold 95% passed.
+- Stable Q17-era categories, recorded separately: unit `1,273`; property `81`;
+  contract `517`; leakage/validation `237`; replay `189`; Q16/Q17 integration
+  `279`; benchmark `121`.
+- Accumulated quant suite after final implementation corrections: `3,011 passed,
+  6 skipped in 81.50s`; the skips remain the documented Q08/Q15 shard-branch
+  scope laws.
+- Mutable static scope `src tests scripts`: Ruff lint/format clean over 325 files;
+  strict mypy clean over 325 source files. The immutable generated Q16 client is
+  intentionally not reformatted.
+- Q04 temporary campaign, Q16 deterministic builder `11/11`, Q17 artifact
+  validation, dependency lock, registry, frozen protocol `22/22` and Q00 scope
+  `6/6` all pass.
+- Root `npm test` and `npm run test:all`: exit 0. The latter's terminal integration
+  group reports `180 passed, 0 failed`.
+- Independent adversarial reviews of replay/evidence/components, benchmark,
+  security and generation report no remaining material finding after corrections.
 
 ## Scope and safety
 
@@ -179,13 +259,23 @@ Git blob `26d1c16390c9d7763969e5abb8eb42d8591af020`.
 - Q16 is `SYNTHETIC_ONLY`. It proves deterministic plumbing and safe abstention, not
   edge, observed-market validity, production performance, calibration quality,
   capacity or permission to act.
+- Expected C17 scope is exactly 28 regular `100644` files under `quant/**`, with
+  path-set SHA-256
+  `604cdd885b4b61211b5408bf6abadb36382fb79b2b52d015ba459521fd33f8c6`.
+  Actual staged/committed path and mode truth remains pending Git verification.
+- Q17 adds no environment/secret read, external listener/source, unsafe loader,
+  private/signed exchange call, order, test order or money/risk/execution authority.
+  UDS/literal-loopback-only Q16 transport remains the only serving boundary.
+- Q17 is `SYNTHETIC_ONLY` / `DATA_INSUFFICIENT`. Passing proof and benchmark
+  machinery do not establish edge, production performance or permission to act.
 
-## Active Q17 contract
+## Completed Q17 contract pending commit acceptance
 
-- Task: `quant/TASKS/Q17.md`; status working; SHA-256
-  `4aca562cea3d147152f5fba3a7c593f2c84845dba3ad84065a29a8bc229b4a57`.
-- Activation parent is Q16 acceptance A16. The commit first containing this task and
-  generation-37 state is the non-self-referential Q17 activation commit.
+- Task: `quant/TASKS/Q17.md`; status complete/ready for independent commit
+  verification; SHA-256
+  `03d489ce5b0583dab2ec2a96380519535a2547ee78743d1794622cfc4a30c80e`.
+- Activation parent is Q16 acceptance A16. Activation commit is
+  `ba7323e0ac1f5013d9309b5b73998b84bdffbae5`.
 - Exclusive writes: `quant/src/quant_edge/final_proof/**`, `quant/tests/q17/**`,
   `quant/scripts/q17_acceptance_campaign.py`, `quant/generated/q17/**`, Q17
   task/decision/docs/receipts and this quant state only.
@@ -198,15 +288,19 @@ Git blob `26d1c16390c9d7763969e5abb8eb42d8591af020`.
 - No Q17 result can promote Q13/Q15/Q16 truth. The final advisory action remains
   `ABSTAIN_UNKNOWN` unless accepted upstream bytes themselves change through a
   future director-controlled phase.
+- C17/A17 are not embedded in generated evidence. C17 must prove exact Git scope;
+  A17 must bind exact C17 and its clean-archive results.
 
 ## Exact next task
 
-1. Commit only `quant/TASKS/Q17.md` and this generation-37 state as the Q17
-   activation after scope and exact-diff gates.
-2. Execute the full Q17 implementation, focused/accumulated/adversarial/correction
-   loop; seal C17 and verify it from a clean archive.
-3. Create separate A17 acceptance/state, freeze HEAD and stop at `LANE_READY` for
-   director audit.
+1. Remove only Q17 transient coverage/bytecode artifacts; preserve both protected
+   untracked owner directives.
+2. Stage exactly the declared 28 C17 paths, verify cached path set, regular `100644`
+   modes, diff checks, scope gate and frozen bytes, then commit C17.
+3. Verify exact C17 Git identity and run the full acceptance gate from a clean
+   archive importing archive source only.
+4. Create separate A17 with only `quant/RECEIPTS/Q17_ACCEPTANCE.md` and this state
+   at generation 39; freeze HEAD at `LANE_READY — PARKED FOR DIRECTOR AUDIT`.
    Never push.
 
 ## Resume read order
@@ -214,7 +308,7 @@ Git blob `26d1c16390c9d7763969e5abb8eb42d8591af020`.
 1. Root `STATE.md`, `MISSION.md`, `ARCHITECTURE.md` Part II and `DIRECTOR.md`.
 2. The two launch directives, frozen protocol inputs and
    `quant/DIRECTIVE_INPUTS.lock`.
-3. This state, `quant/TASKS/Q17.md`, and immutable Q16 implementation/acceptance
-   receipts.
+3. This state, `quant/TASKS/Q17.md`, Q17 implementation receipt and immutable Q16
+   implementation/acceptance receipts.
 4. Confirm branch/HEAD, protected untracked inputs, frozen hashes and scope before
    resuming Q17 implementation or verification.

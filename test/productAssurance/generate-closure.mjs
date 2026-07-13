@@ -228,19 +228,19 @@ function buildInsertionRows(cockpitSectionIds) {
   }
 
   const systemicOwners = [
-    ['S1', 'HAZARD_ASSUMPTION_ATLAS_DENOMINATOR'],
-    ['S2', 'ACTION_SAFETY_EVIDENCE_ENVELOPE'],
-    ['S3', 'BOUNDED_PROTOCOL_CONFORMANCE'],
-    ['S4', 'DERIVED_ASSURANCE_CLAIM_GRAPH'],
-    ['S5', 'OBSERVABILITY_CONSERVATION'],
-    ['S6', 'DIAGNOSTIC_GOVERNANCE_EXTENSIONS'],
-    ['S8', 'CANCELLATION_CONTROL_LOOP_RESOURCE_EVIDENCE'],
+    ['S1', 'HAZARD_ASSUMPTION_ATLAS_DENOMINATOR', 'A-HAZARD', 'fixtures/productAssurance/systemic/hazard/**'],
+    ['S2', 'ACTION_SAFETY_EVIDENCE_ENVELOPE', 'S2_ACTION_EVIDENCE_SATELLITE', 'fixtures/productAssurance/systemic/actionEvidence/**'],
+    ['S3', 'BOUNDED_PROTOCOL_CONFORMANCE', 'A-FORMAL', 'fixtures/productAssurance/systemic/formal/**'],
+    ['S4', 'DERIVED_ASSURANCE_CLAIM_GRAPH', 'S4_ASSURANCE_CASE_SATELLITE', 'fixtures/productAssurance/systemic/assuranceCase/**'],
+    ['S5', 'OBSERVABILITY_CONSERVATION', 'A-COCKPIT', 'fixtures/productAssurance/systemic/cockpit/** + fixtures/productAssurance/systemic/observability/**'],
+    ['S6', 'DIAGNOSTIC_GOVERNANCE_EXTENSIONS', 'A-AGENT', 'fixtures/productAssurance/systemic/agentBoundary/**'],
+    ['S8', 'CANCELLATION_CONTROL_LOOP_RESOURCE_EVIDENCE', 'A-STABILITY', 'fixtures/productAssurance/systemic/stability/**'],
   ];
-  for (const [systemicId, contractId] of systemicOwners) {
+  for (const [systemicId, contractId, owner, seam] of systemicOwners) {
     rows.push(insertionRow(
       `AIR-SYSTEMIC-${systemicId}-FAN-IN`,
-      `${systemicId}_SATELLITE_OWNER`,
-      `fixtures/productAssurance/systemic/${systemicId.toLowerCase()}/**`,
+      owner,
+      seam,
       `Fan in the exact director-accepted ${contractId} packet from its immutable satellite commit; A-CORE does not recreate satellite files.`,
       `${systemicId} focused, scope, accumulated and dedup-matrix conformance tests`,
       'Only MISSING or narrow-EXTENDED dedup rows land, with no duplicate owner.',
@@ -261,6 +261,9 @@ function renderReliabilityRegistry(pa, scannerReport, operationCoverage, options
     policy.wiringState,
     policy.deadlineMs,
     policy.maximumAttempts,
+    policy.transientErrorCodes.length > 0 ? policy.transientErrorCodes : 'NONE',
+    policy.permanentErrorCodes.length > 0 ? policy.permanentErrorCodes : 'NONE',
+    policy.ambiguousErrorCodes.length > 0 ? policy.ambiguousErrorCodes : 'NONE',
     `${policy.backoff.baseDelayMs}/${policy.backoff.maximumDelayMs}/${policy.backoff.totalRetryBudgetMs}; jitter=${policy.backoff.jitterRatio}`,
     `${policy.rateBudget.priority}; reserve=${policy.rateBudget.reserveUnits}; ${policy.rateBudget.cooldownBehavior}`,
     `${policy.idempotency.required}; ${policy.idempotency.identityField ?? 'NONE'}; ${policy.idempotency.durability}`,
@@ -268,6 +271,7 @@ function renderReliabilityRegistry(pa, scannerReport, operationCoverage, options
     `${policy.circuit.failureThreshold}/${policy.circuit.resetAfterMs}/${policy.circuit.halfOpenMaximumProbes}/${policy.circuit.healthyQuietWindowMs}`,
     policy.concurrencyLimit,
     `${policy.cancellation.mode}; ${policy.cancellation.lateCompletionLaw}; ${policy.cancellation.maximumCancellationWaitMs}`,
+    policy.poisonEventQuarantine,
     `${policy.controlLoop.maximumConsecutiveRepairs}; amp=${policy.controlLoop.maximumAmplificationFactor}; cooldown=${policy.controlLoop.cooldownMs}`,
     `${policy.costResourceEvidence.required}; ${policy.costResourceEvidence.metricId}; ${policy.costResourceEvidence.missingBehavior}`,
     policy.fallbackEligibility,
@@ -300,9 +304,10 @@ Owner disposition required: enforce and prove GET-only semantics at the exact si
 ## Policies
 
 ${table([
-    'Operation', 'Class', 'Owner', 'Wiring', 'Deadline ms', 'Attempts', 'Backoff base/max/total',
+    'Operation', 'Class', 'Owner', 'Wiring', 'Deadline ms', 'Attempts', 'Transient errors',
+    'Permanent errors', 'Ambiguous errors', 'Backoff base/max/total',
     'Rate budget', 'Idempotency', 'Reconciliation', 'Circuit fail/reset/probes/quiet', 'Bulkhead',
-    'Cancellation', 'Control loop', 'Cost/resource evidence', 'Fallback', 'Degraded / blocked',
+    'Cancellation', 'Poison quarantine', 'Control loop', 'Cost/resource evidence', 'Fallback', 'Degraded / blocked',
     'Checkpoint', 'Auto remediation', 'Control / runbook', 'Metric / trace / event / incident',
     'Cockpit', 'Fault tests', 'Owner paths',
   ], policyRows)}
@@ -362,6 +367,28 @@ function renderCoverageMatrix(pa, structuralCoverage, scannerReport, options) {
     entry.fixtureId,
     entry.proofId,
   ]);
+  const runtimeProjectionRows = [
+    ['Expected component IDs', pa.EXPECTED_CANONICAL_COMPONENTS.map((entry) => entry.componentId), 'DECLARED_RELEASE_BOUND'],
+    ['Discovered component IDs', 'UNKNOWN_NOT_CONFIGURED', 'UNKNOWN'],
+    ['Expected dependency IDs', pa.EXPECTED_CANONICAL_DEPENDENCIES.map((entry) => entry.dependencyId), 'DECLARED_RELEASE_BOUND'],
+    ['Discovered dependency IDs', 'UNKNOWN_NOT_CONFIGURED', 'UNKNOWN'],
+    ['Instrumented component count / IDs', 'count=UNKNOWN; ids=UNKNOWN_NOT_CONFIGURED', 'UNKNOWN'],
+    ['Current component count / IDs', 'count=UNKNOWN; ids=UNKNOWN_NOT_CONFIGURED', 'UNKNOWN'],
+    ['Stale component count / IDs', 'count=UNKNOWN; ids=UNKNOWN_NOT_CONFIGURED', 'UNKNOWN'],
+    ['Silent component count / IDs', 'count=UNKNOWN; ids=UNKNOWN_NOT_CONFIGURED', 'UNKNOWN'],
+    ['Unavailable component count / IDs', 'count=UNKNOWN; ids=UNKNOWN_NOT_CONFIGURED', 'UNKNOWN'],
+    ['Missing component count / IDs', 'count=UNKNOWN; ids=UNKNOWN_NOT_CONFIGURED', 'UNKNOWN'],
+    ['Expected control IDs', pa.EXPECTED_CANONICAL_CONTROLS.map((entry) => entry.controlId), 'DECLARED_RELEASE_BOUND'],
+    ['Live control count / IDs', 'count=UNKNOWN; ids=UNKNOWN_NOT_CONFIGURED', 'UNKNOWN'],
+    ['Disabled control count / IDs', 'count=UNKNOWN; ids=UNKNOWN_NOT_CONFIGURED', 'UNKNOWN'],
+    ['Unimplemented control count / IDs', 'count=UNKNOWN; ids=UNKNOWN_NOT_CONFIGURED', 'UNKNOWN'],
+    ['Expected telemetry signal IDs', pa.EXPECTED_CANONICAL_TELEMETRY.map((entry) => entry.signalId), 'DECLARED_RELEASE_BOUND'],
+    ['Telemetry schema compatibility', 'UNKNOWN_NOT_CONFIGURED', 'UNKNOWN'],
+    ['Last complete correlation trace', 'UNKNOWN_NOT_CONFIGURED', 'UNKNOWN'],
+    ['Last independent black-box probe', 'UNKNOWN_NOT_CONFIGURED', 'UNKNOWN'],
+    ['Unobserved capital-critical dependency IDs', 'UNKNOWN_NOT_CONFIGURED', 'UNKNOWN'],
+    ['Observed runtime coverage percentage', 'UNKNOWN_NOT_CONFIGURED', 'UNKNOWN'],
+  ];
   return `# Telemetry Coverage Matrix
 
 Generated for release \`${RELEASE_ID}\`, tested commit \`${options.testedCommit}\`, at \`${iso(options.evaluatedAtMs)}\`.
@@ -383,6 +410,12 @@ Declared structural catalog coverage is **${structuralCoverage.verdict}: ${struc
 | Canonical telemetry signals | ${pa.EXPECTED_CANONICAL_TELEMETRY.length} |
 | Static production operation sites / covered | ${scannerReport.discovered} / ${scannerReport.covered} |
 
+## Expected-versus-observed runtime inventory projection
+
+${table(['Projection', 'Value', 'Truth'], runtimeProjectionRows)}
+
+Unknown runtime counts are intentionally not rendered as zero. Only the expected side is release-bound here; discovered, live, current, stale, silent, unavailable, missing, schema, trace, probe, and unobserved-critical-dependency truth requires canonical I08/I09 runtime observations.
+
 ## Obligations
 
 ${table([
@@ -396,6 +429,43 @@ ${table([
 function renderRecoveryReport(pa, options) {
   const stateRows = pa.REMEDIATION_STATES.map((state, index) => [index + 1, state]);
   const actionRows = pa.REMEDIATION_ACTIONS.map((action, index) => [index + 1, action]);
+  const attemptFields = [
+    ['Identity/cause', 'attemptId, causeEvidenceIds, policyRevision', 'stable, unique, evidence-bound'],
+    ['Budgets', 'localAttempt, globalAttempt, costUnits, concurrencyUnits', 'durable and bounded'],
+    ['Timeline', 'startedAtMs, completedAtMs, nextRetryAtMs', 'injected UTC times; null stays unknown/in-progress'],
+    ['State/action/result', 'beforeState, action, afterState, result, circuitState', 'AMBIGUOUS never becomes success'],
+    ['Durable evidence', 'materialEventRef, cockpitTraceId', 'required; existing owner persistence only'],
+  ];
+  const campaignFields = [
+    ['Identity', 'schema, revision, campaignId, fingerprint, policyRevision, action, state'],
+    ['Desired/observed truth', 'desiredState, observedState, lastKnownGoodState, allowedDegradedState'],
+    ['Dependencies/evidence', 'dependencyIds, invariantIds, triggerEvidenceIds, diagnosticConfidence'],
+    ['Preconditions/scope', 'preconditionIds, resourceIds, capitalPosture, predictedResult'],
+    ['Fencing', 'actionIdentity, fencingOwnerId, leaseEpoch'],
+    ['Attempt/time budgets', 'localAttempt, maximumLocalAttempts, globalAttempt, maximumGlobalAttempts, elapsedMs, maximumElapsedMs'],
+    ['Cost/concurrency budgets', 'costUnits, maximumCostUnits, concurrencyUnits, maximumConcurrencyUnits'],
+    ['Rollback/compensation', 'rollbackAction, compensationAction'],
+    ['Independent recovery proof', 'independentVerifierId, postconditionIds, provedPostconditionIds, verifiedAtMs, quietPeriodMs'],
+    ['Durable continuation', 'nextRetryAtMs, materialEventRef, cockpitTraceId, attemptRecords, createdAtMs, updatedAtMs'],
+  ];
+  const policyRows = pa.OPERATION_POLICY_REGISTRY.map((policy) => [
+    policy.operationId,
+    policy.canonicalOwnerId,
+    policy.automaticRemediationAllowed,
+    'UNBOUND_OWNER_SELECTION',
+    'OWNER_DEFINED_HEALTHY_STATE / UNKNOWN_OBSERVED / UNKNOWN_LAST_KNOWN_GOOD',
+    policy.degradedResult,
+    policy.faultTestIds,
+    'UNKNOWN_NOT_OBSERVED',
+    'OWNER_POLICY + CIRCUIT + RATE_BUDGET',
+    `${policy.operationId}; capital posture grants no authority`,
+    'NOT_CONFIGURED',
+    `attempts=${policy.maximumAttempts}; elapsed=${policy.backoff.totalRetryBudgetMs}ms; concurrency=${policy.concurrencyLimit}; cost=OWNER_BOUND_UNKNOWN`,
+    'OWNER_DEFINED_NOT_CONFIGURED',
+    `REQUIRED_NOT_OBSERVED; quiet=${policy.circuit.healthyQuietWindowMs}ms`,
+    `${policy.escalationControlId}<br>${policy.runbookId}`,
+    'NOT_CONFIGURED',
+  ]);
   return `# Out-of-Band Recovery Report
 
 Generated for \`${options.testedCommit}\` at \`${iso(options.evaluatedAtMs)}\`.
@@ -409,6 +479,25 @@ ${table(['#', 'Action'], actionRows)}
 ## Durable lifecycle states (${pa.REMEDIATION_STATES.length})
 
 ${table(['#', 'State'], stateRows)}
+
+## Durable attempt record contract
+
+${table(['Group', 'Exact fields', 'Law'], attemptFields)}
+
+## Durable campaign contract
+
+${table(['Group', 'Exact fields'], campaignFields)}
+
+## Per-policy/component recovery projection
+
+${table([
+    'Operation/component seam', 'Owner', 'Automatic allowed', 'Selected action', 'Desired / observed / last-good',
+    'Allowed degraded', 'Trigger evidence', 'Fingerprint/confidence', 'Preconditions', 'Maximum scope/capital posture',
+    'Action identity/fencing', 'Attempt/time/cost/concurrency budgets', 'Rollback/compensation',
+    'Independent postconditions/quiet', 'Escalation', 'Runtime state',
+  ], policyRows)}
+
+These rows project real registry constraints while leaving campaign identity, observed state, fingerprints, action selection, fencing, persistence, rollback, and postcondition evidence honestly unconfigured.
 
 Binding laws:
 
@@ -454,18 +543,225 @@ ${table(['Scenario', 'Kind', 'Seed', 'Iterations', 'Expected root cause', 'Verdi
 `;
 }
 
-function renderFailureAtlas(pa, options) {
+function buildSyntheticFailureAtlas(pa, observations, options) {
+  const scenariosById = new Map(pa.CANONICAL_FAULT_SCENARIOS.map((scenario) => [scenario.scenarioId, scenario]));
+  assert.equal(scenariosById.size, pa.CANONICAL_FAULT_SCENARIOS.length, 'fault scenario IDs must be unique');
+  assert.equal(observations.length, pa.CANONICAL_FAULT_SCENARIOS.length, 'synthetic Atlas requires one sealed run per canonical scenario');
+  const expectedFamilyIds = [...new Set(pa.CANONICAL_FAULT_SCENARIOS.map((scenario) => scenario.kind))].sort();
+  const records = observations.map((run) => {
+    const scenario = scenariosById.get(run.scenarioId);
+    assert.notEqual(scenario, undefined, `synthetic Atlas run ${run.scenarioId} has no declared scenario`);
+    assert.equal(run.testedCommit, options.testedCommit, `synthetic Atlas run ${run.scenarioId} is bound to another commit`);
+    assert.equal(run.state, 'COMPLETE', `synthetic Atlas run ${run.scenarioId} is incomplete`);
+    const provenanceEvidenceIds = [
+      run.injectionEvidence.evidenceId,
+      ...run.rootCauseEvidence.map((evidence) => evidence.evidenceId),
+      ...run.proofs.flatMap((proof) => proof.evidence.map((evidence) => evidence.evidenceId)),
+    ].sort();
+    assert.equal(new Set(provenanceEvidenceIds).size, provenanceEvidenceIds.length, `synthetic Atlas run ${run.scenarioId} has duplicate evidence IDs`);
+    const recordId = `ATLAS_RECORD_${run.scenarioId}`;
+    const fingerprint = sha256(JSON.stringify([
+      'PRODUCT_ASSURANCE_SYNTHETIC_ATLAS_FINGERPRINT_V1',
+      options.testedCommit,
+      run.scenarioId,
+      scenario.kind,
+      run.rootCauseCode,
+      run.runDigest,
+    ]));
+    return Object.freeze({
+      schema: 'PRODUCT_ASSURANCE_SYNTHETIC_ATLAS_RECORD_V1',
+      recordId,
+      fingerprint,
+      familyId: scenario.kind,
+      timeline: Object.freeze({
+        startedAtMs: run.startedAtMs,
+        completedAtMs: run.completedAtMs,
+        durationMs: run.completedAtMs - run.startedAtMs,
+      }),
+      component: Object.freeze({
+        componentId: 'PRODUCT_ASSURANCE_FAULT_MODEL',
+        dependencyIds: Object.freeze([]),
+        testedCommit: options.testedCommit,
+        simulatorRevision: run.simulatorRevision,
+        policyRevision: 'PRODUCT_ASSURANCE_OPERATION_POLICY_REGISTRY_V1',
+      }),
+      trigger: Object.freeze({
+        scenarioId: run.scenarioId,
+        kind: scenario.kind,
+        injected: run.injected,
+        expectedRootCauseCode: scenario.expectedRootCauseCode,
+      }),
+      symptomCodes: Object.freeze([...run.transitionCodes]),
+      failedInvariant: Object.freeze({
+        invariantId: `SYNTHETIC_TRIGGER_${scenario.expectedRootCauseCode}`,
+        truthState: 'MODELLED_TRIGGER_NOT_OBSERVED_RUNTIME_INVARIANT_FAILURE',
+      }),
+      impact: Object.freeze({
+        capital: 'SYNTHETIC_ONLY_NO_REAL_CAPITAL',
+        exposure: 'NO_NEW_EXPOSURE_BLOCKED_IN_MODEL',
+        liability: 'PRESERVED_IN_MODEL',
+        ambiguity: 'NO_RUNTIME_AMBIGUITY_MEASURED',
+      }),
+      containment: Object.freeze({
+        state: 'MODEL_PROVED',
+        transitionCodes: Object.freeze(run.transitionCodes.filter((code) => [
+          'READINESS_BLOCKED',
+          'NEW_EXPOSURE_BLOCKED',
+          'LIABILITY_PRESERVED',
+          'RISK_REDUCTION_PRESERVED',
+        ].includes(code))),
+      }),
+      repair: Object.freeze({
+        attemptIds: Object.freeze([]),
+        outcome: 'NOT_ATTEMPTED_SYNTHETIC_MODEL_CHECKPOINT_ONLY',
+        successfulRepair: 'UNKNOWN_NOT_RUN',
+        falseRepair: 'UNKNOWN_NOT_RUN',
+      }),
+      postconditions: Object.freeze({
+        proofVerdicts: Object.freeze(run.proofs.map((proof) => Object.freeze({ proofId: proof.proofId, verdict: proof.verdict }))),
+        verifierIndependence: 'MODEL_INTERNAL_NOT_RUNTIME_INDEPENDENT',
+        quietPeriodMs: null,
+        runtimeRecoveryDeclared: false,
+      }),
+      causes: Object.freeze({
+        rootCauseCode: run.rootCauseCode,
+        contributingCauseCodes: Object.freeze([]),
+      }),
+      regression: Object.freeze({
+        fixturePath: `${MACHINE_EVIDENCE_PATHS[1]}#runs/${run.scenarioId}`,
+        deterministicSeed: run.deterministicSeed,
+        playbookRevision: 'NOT_CONFIGURED',
+        modelRevision: run.simulatorRevision,
+      }),
+      governance: Object.freeze({
+        reviewerId: null,
+        postmortemId: null,
+        actionIds: Object.freeze([]),
+        recurrenceState: 'UNKNOWN_NOT_CONFIGURED',
+        accessClass: 'ASSURANCE_RESTRICTED',
+        retentionClass: 'PACKET_LOCAL_COMMIT_BOUND',
+        retentionUntilMs: null,
+        retentionState: 'OWNER_POLICY_NOT_CONFIGURED',
+      }),
+      provenance: Object.freeze({
+        runId: run.runId,
+        runDigest: run.runDigest,
+        evidenceIds: Object.freeze(provenanceEvidenceIds),
+      }),
+      truthLabel: 'SYNTHETIC_ONLY',
+      authorityGranted: false,
+    });
+  });
+  const recordIds = records.map((record) => record.recordId);
+  const fingerprints = records.map((record) => record.fingerprint);
+  assert.equal(new Set(recordIds).size, recordIds.length, 'synthetic Atlas record IDs must be unique');
+  assert.equal(new Set(fingerprints).size, fingerprints.length, 'synthetic Atlas fingerprints must be unique');
+  const representedFamilyIds = [...new Set(records.map((record) => record.familyId))].sort();
+  const missingExpectedFamilyIds = expectedFamilyIds.filter((familyId) => !representedFamilyIds.includes(familyId));
+  assert.deepEqual(missingExpectedFamilyIds, [], 'synthetic Atlas is missing a canonical fault-kind family');
+  return Object.freeze({
+    schema: 'PRODUCT_ASSURANCE_SYNTHETIC_FAILURE_ATLAS_V1',
+    revision: 1,
+    testedCommit: options.testedCommit,
+    evaluatedAtMs: options.evaluatedAtMs,
+    expectedFamilyIds: Object.freeze(expectedFamilyIds),
+    expectedFamilyIdsDigest: pa.failureFamilyDenominatorDigest(expectedFamilyIds),
+    denominatorSource: 'PROVISIONAL_CANONICAL_FAULT_KIND_DENOMINATOR',
+    s1AcceptedDenominatorBindingState: 'NOT_CONFIGURED_AWAITING_DIRECTOR_ACCEPTED_S1_FAN_IN',
+    representedFamilyIds: Object.freeze(representedFamilyIds),
+    missingExpectedFamilyIds: Object.freeze(missingExpectedFamilyIds),
+    expectedFamilyCount: expectedFamilyIds.length,
+    representedFamilyCount: representedFamilyIds.length,
+    recordCount: records.length,
+    uniqueRecordIdCount: new Set(recordIds).size,
+    uniqueFingerprintCount: new Set(fingerprints).size,
+    duplicateRecordIdCount: records.length - new Set(recordIds).size,
+    duplicateFingerprintCount: records.length - new Set(fingerprints).size,
+    realIncidentCorpusState: 'NOT_CONFIGURED',
+    realSoakState: 'NOT_RUN',
+    truthLabel: 'SYNTHETIC_ONLY',
+    authorityGranted: false,
+    records: Object.freeze(records),
+  });
+}
+
+function renderFailureAtlas(pa, syntheticAtlas, options) {
+  const familyRows = syntheticAtlas.expectedFamilyIds.map((familyId) => [
+    familyId,
+    syntheticAtlas.records.filter((record) => record.familyId === familyId).length,
+    syntheticAtlas.representedFamilyIds.includes(familyId),
+    syntheticAtlas.missingExpectedFamilyIds.includes(familyId),
+  ]);
+  const recordRows = syntheticAtlas.records.map((record) => [
+    record.recordId,
+    record.fingerprint,
+    record.familyId,
+    `${iso(record.timeline.startedAtMs)} -> ${iso(record.timeline.completedAtMs)} (${record.timeline.durationMs}ms)`,
+    `${record.component.componentId}<br>${record.component.testedCommit}<br>${record.component.simulatorRevision}<br>${record.component.policyRevision}`,
+    `${record.trigger.scenarioId}<br>${record.trigger.expectedRootCauseCode}<br>${record.symptomCodes.join('<br>')}`,
+    `${record.failedInvariant.invariantId}<br>${record.failedInvariant.truthState}`,
+    `${record.impact.capital}<br>${record.impact.exposure}<br>${record.impact.liability}<br>${record.impact.ambiguity}`,
+    `${record.containment.state}<br>${record.containment.transitionCodes.join('<br>')}<br>${record.repair.outcome}`,
+    `${record.postconditions.proofVerdicts.map((proof) => `${proof.proofId}:${proof.verdict}`).join('<br>')}<br>${record.postconditions.verifierIndependence}<br>quiet=${record.postconditions.quietPeriodMs ?? 'UNKNOWN_NOT_RUN'}`,
+    `${record.causes.rootCauseCode}<br>contributing=${record.causes.contributingCauseCodes.length === 0 ? 'UNKNOWN_NONE_OBSERVED_IN_MODEL' : record.causes.contributingCauseCodes.join(',')}`,
+    `${record.regression.fixturePath}<br>seed=${record.regression.deterministicSeed}<br>playbook=${record.regression.playbookRevision}<br>model=${record.regression.modelRevision}`,
+    `reviewer=${record.governance.reviewerId ?? 'UNKNOWN_NOT_CONFIGURED'}<br>postmortem=${record.governance.postmortemId ?? 'UNKNOWN_NOT_CONFIGURED'}<br>actions=${record.governance.actionIds.length === 0 ? 'UNKNOWN_NOT_CONFIGURED' : record.governance.actionIds.join(',')}<br>recurrence=${record.governance.recurrenceState}<br>access=${record.governance.accessClass}<br>retention=${record.governance.retentionClass}/${record.governance.retentionState}`,
+    `${record.provenance.runId}<br>${record.provenance.runDigest}<br>evidence=${record.provenance.evidenceIds.length}<br>${record.truthLabel}<br>authority=${record.authorityGranted}`,
+  ]);
   return `# Operational Failure Atlas
 
 Generated for \`${options.testedCommit}\` at \`${iso(options.evaluatedAtMs)}\`.
 
 Disposition: **SCHEMA_AND_PURE_PROJECTION_ONLY**. Real incident/test/soak/postmortem ingestion and analytics are **NOT_CONFIGURED**. The Atlas is a sanitized, retention/access-controlled, stable-ID, deduplicated read projection over canonical evidence—never a second incident store.
 
+## Sealed synthetic projection status
+
+| Records | Unique IDs | Unique fingerprints | Duplicate IDs | Duplicate fingerprints | Expected families | Represented families | Missing families | Truth | Real soak | Real incident corpus | Authority |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- | --- |
+| ${syntheticAtlas.recordCount} | ${syntheticAtlas.uniqueRecordIdCount} | ${syntheticAtlas.uniqueFingerprintCount} | ${syntheticAtlas.duplicateRecordIdCount} | ${syntheticAtlas.duplicateFingerprintCount} | ${syntheticAtlas.expectedFamilyCount} | ${syntheticAtlas.representedFamilyCount} | ${syntheticAtlas.missingExpectedFamilyIds.length === 0 ? 'none' : syntheticAtlas.missingExpectedFamilyIds.join(', ')} | ${syntheticAtlas.truthLabel} | ${syntheticAtlas.realSoakState} | ${syntheticAtlas.realIncidentCorpusState} | ${syntheticAtlas.authorityGranted} |
+
+The 103 rows below are populated from the sealed deterministic fault-run evidence emitted for this exact tested commit. They are actual packet test/fault evidence, but remain **SYNTHETIC_ONLY**: they are not runtime incidents, production fault injection, real soak, operational repair, independent runtime verification, or postmortems.
+
+## Expected-family denominator
+
+| Field | Value |
+| --- | --- |
+| Source | ${syntheticAtlas.denominatorSource} |
+| Expected-family digest | ${syntheticAtlas.expectedFamilyIdsDigest} |
+| S1 director-accepted binding | ${syntheticAtlas.s1AcceptedDenominatorBindingState} |
+
+${table(['Family', 'Synthetic records', 'Represented', 'Missing'], familyRows)}
+
+This denominator is a provisional, commit-bound projection over canonical fault kinds. It does **not** claim the S1 hazard/assumption denominator is accepted or integrated; that binding remains blocked pending director-accepted serial fan-in.
+
 ## Assurance dimensions
 
 ${table(['#', 'Dimension'], pa.FAILURE_ASSURANCE_DIMENSIONS.map((dimension, index) => [index + 1, dimension]))}
 
-## Required record truth
+## Record contract and current truth
+
+${table(['Group', 'Fields', 'Current packet truth'], [
+    ['Identity/dedup', 'schema, recordId, fingerprint, familyId', 'stable IDs; unique commit-bound fingerprints; duplicate counts are explicit'],
+    ['Timeline/revisions', 'startedAtMs, completedAtMs, durationMs, componentId, dependencyIds, testedCommit, simulatorRevision, policyRevision', 'exact synthetic-run times and immutable revisions'],
+    ['Failure', 'trigger, symptoms, failedInvariant, root/contributing causes', 'modelled trigger only; never represented as a runtime invariant failure'],
+    ['Impact/response', 'capital, exposure, liability, ambiguity, containment, repair attempts/outcome', 'synthetic impact; no operational repair was attempted'],
+    ['Recovery proof', 'proofVerdicts, verifierIndependence, quietPeriodMs, runtimeRecoveryDeclared', 'model-internal proof; runtime independence and quiet period are not configured; recovery=false'],
+    ['Regression', 'fixturePath, deterministicSeed, playbookRevision, modelRevision', 'sealed machine artifact path and seed; playbook not configured'],
+    ['Governance', 'reviewerId, postmortemId, actionIds, recurrenceState, accessClass, retentionClass/until/state', 'unknown fields stay unknown; restricted packet-local retention; owner retention policy not configured'],
+    ['Provenance/truth', 'runId, runDigest, evidenceIds, truthLabel, authorityGranted', 'sealed synthetic provenance; authority is always false'],
+  ])}
+
+## Populated synthetic records (${syntheticAtlas.records.length})
+
+The full normalized objects are also sealed in \`${MACHINE_EVIDENCE_PATHS[1]}\` under \`failureAtlas.records\`.
+
+${table([
+    'Record', 'Fingerprint', 'Family', 'Exact timeline', 'Component/revisions', 'Trigger/symptoms',
+    'Failed invariant truth', 'Impact', 'Containment/repair', 'Postconditions', 'Causes',
+    'Regression', 'Governance', 'Provenance/truth',
+  ], recordRows)}
+
+## Missing-data laws
 
 - failure fingerprint and exact timeline;
 - component/dependency and immutable revisions;
@@ -477,20 +773,65 @@ ${table(['#', 'Dimension'], pa.FAILURE_ASSURANCE_DIMENSIONS.map((dimension, inde
 - reviewer, postmortem, actions, recurrence, provenance, access and retention;
 - missing families and unknown evidence remain visible.
 
-Canonical synthetic failure denominator: **${pa.CANONICAL_FAULT_SCENARIOS.length}**. Synthetic fault evidence does not become a real incident corpus.
+Canonical synthetic scenario count: **${pa.CANONICAL_FAULT_SCENARIOS.length}**. Synthetic fault evidence does not become a real incident corpus, accepted S1 denominator, operational repair, or runtime readiness proof.
 `;
 }
 
 function renderDiagnosticBoundary(pa, options) {
+  const providerProjection = pa.evaluateProviderWorkloadIdentity({
+    state: 'NOT_CONFIGURED',
+    providerId: null,
+    modelId: null,
+    workloadIdentityId: null,
+    audienceId: null,
+    endpointId: null,
+    issuedAtMs: null,
+    expiresAtMs: null,
+    rotationDueAtMs: null,
+    secretMaterialPresentInProjection: false,
+  }, options.evaluatedAtMs);
+  assert.deepEqual(
+    [providerProjection.verdict, providerProjection.lifecycleState, providerProjection.authorityGranted],
+    ['UNKNOWN', 'NOT_CONFIGURED', false],
+  );
+  const corpusProjection = pa.evaluateDiagnosticCorpusGovernance([], options.evaluatedAtMs);
+  assert.deepEqual(
+    [corpusProjection.verdict, corpusProjection.eligibleEntryIds.length, corpusProjection.rejectedEntryIds.length, corpusProjection.reasonCodes],
+    ['UNKNOWN', 0, 0, ['DIAGNOSTIC_CORPUS_EMPTY']],
+  );
+  const classRows = [
+    ['A', 'OBSERVE_EXPLAIN', 'redacted evidence read + causal explanation', 'no mutation; no recovery declaration'],
+    ['B', 'BOUNDED_QUERY_REPLAY', 'bounded evidence query + isolated replay', 'no external mutation; replay remains isolated'],
+    ['C', 'PROPOSE_TYPED_ACTION; PATCH_ISOLATED_AND_TEST', 'typed registered-remediation proposal or isolated patch/test', 'proposal only; cannot execute operational action or write Main/production persistence'],
+    ['D', 'OWNER_APPROVED_HANDOFF_FOR_NON_MONEY_MERGE_OR_DEPLOY', 'exact owner-approved non-money handoff', 'handoff only; no autonomous merge/deploy and no money path'],
+  ];
+  assert.deepEqual(classRows.map(([selfCorrectionClass]) => selfCorrectionClass), [...pa.SELF_CORRECTION_CLASSES]);
   return `# Agentic Diagnostic Boundary
 
 Generated for \`${options.testedCommit}\` at \`${iso(options.evaluatedAtMs)}\`.
 
-Provider state: **NOT_CONFIGURED**. External sandbox: **DENY_BY_DEFAULT**. Runtime authority: **false**. The base §3.9 hierarchy is **REUSED**; there is no second LLM runtime.
+Provider state: **${providerProjection.lifecycleState}** (${providerProjection.verdict}; ${providerProjection.reasonCodes.join(', ')}). External sandbox: **DENY_BY_DEFAULT / NOT_CONFIGURED**. Runtime authority: **${providerProjection.authorityGranted}**. The base §3.9 hierarchy is **REUSED**; there is no second LLM runtime.
 
 ## Permission levels
 
 ${table(['#', 'Permission'], pa.DIAGNOSTIC_PERMISSION_LEVELS.map((permission, index) => [index + 1, permission]))}
+
+## Class A-D self-correction law
+
+${table(['Class', 'Exact permission', 'Permitted effect', 'Hard boundary'], classRows)}
+
+Promotion is one class at a time and requires every gate below to be PASS. UNKNOWN never promotes.
+
+${table(['Gate', 'Exact evidence/law', 'Missing/failed result'], [
+    ['Class step', 'toClass rank = fromClass rank + 1', 'FAIL: PROMOTION_MUST_BE_ONE_CLASS_AT_A_TIME'],
+    ['Permission binding', 'requestedPermission exactly belongs to target class', 'FAIL: PROMOTION_PERMISSION_CLASS_MISMATCH'],
+    ['Evaluation', 'evaluationVerdict=PASS', 'FAIL/UNKNOWN remains explicit'],
+    ['Independent holdout', 'holdoutVerdict=PASS', 'FAIL/UNKNOWN remains explicit'],
+    ['Sandbox', 'sandboxVerdict=PASS', 'FAIL/UNKNOWN remains explicit'],
+    ['Repair evidence', 'repairEvidenceVerdict=PASS', 'FAIL/UNKNOWN remains explicit'],
+    ['Independent verifier', 'independentVerifierId present and != producerId', 'missing=UNKNOWN; same producer=FAIL'],
+    ['Class D owner binding', 'ownerApprovalDigest present and exact', 'missing=UNKNOWN; no handoff'],
+  ])}
 
 ## Allowed capability IDs
 
@@ -499,6 +840,99 @@ ${table(['#', 'Capability'], pa.DIAGNOSTIC_ALLOWED_CAPABILITY_IDS.map((capabilit
 ## Forbidden capabilities
 
 ${table(['#', 'Capability'], pa.DIAGNOSTIC_FORBIDDEN_CAPABILITIES.map((capability, index) => [index + 1, capability]))}
+
+## Exact approval binding
+
+${table(['Field', 'Required binding', 'Current state'], [
+    ['approvalId', 'stable authorization record ID', 'NOT_CONFIGURED'],
+    ['artifactDigest', 'exact immutable SHA-256 artifact hash', 'NOT_CONFIGURED'],
+    ['actionId', 'exact registered action/handoff ID', 'NOT_CONFIGURED'],
+    ['environmentId', 'exact isolated/target environment identity', 'NOT_CONFIGURED'],
+    ['policyRevision', 'immutable policy revision', 'NOT_CONFIGURED'],
+    ['capability', 'exact permission level', 'NOT_CONFIGURED'],
+    ['maximumEffect', 'bounded maximum permitted effect', 'NOT_CONFIGURED'],
+    ['expiresAtMs', 'explicit UTC expiry within proposal lifetime', 'NOT_CONFIGURED'],
+    ['rollbackId', 'required exact rollback identity', 'NOT_CONFIGURED'],
+    ['approverId', 'authorized human/director owner identity', 'NOT_CONFIGURED'],
+  ])}
+
+An approval is usable only when every field matches the proposal and evaluation context exactly; expiry, artifact/action/environment/policy/capability/effect/rollback, or approver mismatch fails closed.
+
+## Provider workload identity lifecycle
+
+${table(['Field', 'Contract', 'Current value'], [
+    ['state', 'READY / NOT_CONFIGURED / UNAVAILABLE', providerProjection.lifecycleState],
+    ['providerId', 'immutable provider identity', 'UNKNOWN_NOT_CONFIGURED'],
+    ['modelId', 'immutable model identity', 'UNKNOWN_NOT_CONFIGURED'],
+    ['workloadIdentityId', 'short-lived workload identity; never a projected secret', 'UNKNOWN_NOT_CONFIGURED'],
+    ['audienceId', 'exact workload audience', 'UNKNOWN_NOT_CONFIGURED'],
+    ['endpointId', 'allowlisted endpoint identity', 'UNKNOWN_NOT_CONFIGURED'],
+    ['issuedAtMs / expiresAtMs / rotationDueAtMs', 'bounded lifecycle and rotation', 'UNKNOWN_NOT_CONFIGURED'],
+    ['secretMaterialPresentInProjection', 'must be false', false],
+    ['evaluation', 'fail/unknown closed; authority always false', `${providerProjection.verdict}: ${providerProjection.reasonCodes.join(', ')}`],
+  ])}
+
+## External sandbox, privacy, and independent retention
+
+${table(['Field/law', 'Exact contract', 'Current state'], [
+    ['sandboxId/providerId', 'stable sandbox and bound provider identities', 'NOT_CONFIGURED'],
+    ['default policy', 'denyByDefault=true / DENY_BY_DEFAULT', 'REQUIRED_NOT_CONFIGURED'],
+    ['network', 'NONE or exact endpoint allowlist; arbitrary network denied', 'NOT_CONFIGURED'],
+    ['filesystem', 'READ_ONLY_REDACTED or ISOLATED_EPHEMERAL_WORKTREE', 'NOT_CONFIGURED'],
+    ['capabilities', 'unique subset of allowed capability IDs; forbidden/unknown rejected', 'NOT_CONFIGURED'],
+    ['shell/persistence/external mutation', 'arbitrary shell=false; production persistence writable=false; external mutation=false', 'REQUIRED_NOT_CONFIGURED'],
+    ['secrets/Main', 'secret access denied; Main workspace write denied', 'REQUIRED_NOT_CONFIGURED'],
+    ['trace privacy', 'redaction=true; instruction/data boundary=true; raw evidence hash outside prompt; no secret material in prompt', 'NOT_CONFIGURED'],
+    ['independent retention', 'retention owner != provider; provider write/delete denied; evidence digest exact', 'NOT_CONFIGURED'],
+    ['provider outage', 'DIAGNOSTIC_PLANE_UNAVAILABLE; deterministic readiness/safety/execution unchanged', 'CONTRACT_ONLY'],
+  ])}
+
+## Repair-evidence law
+
+${table(['Field', 'Required law', 'Current state'], [
+    ['actionCompleted', 'boolean; completion alone is not recovery', 'UNKNOWN_NOT_CONFIGURED'],
+    ['independentPostconditionVerdict', 'PASS required', 'UNKNOWN_NOT_CONFIGURED'],
+    ['producerId / verifierId', 'both present and different', 'UNKNOWN_NOT_CONFIGURED'],
+    ['evidenceDigest', 'exact lowercase SHA-256 digest', 'UNKNOWN_NOT_CONFIGURED'],
+    ['verifiedAtMs / evaluatedAtMs', 'valid UTC ordering', 'UNKNOWN_NOT_CONFIGURED'],
+    ['quietPeriodMs', 'positive period fully elapsed after verification', 'UNKNOWN_NOT_CONFIGURED'],
+    ['rollbackAvailable', 'true for promotion', 'UNKNOWN_NOT_CONFIGURED'],
+    ['healthyPromotionAllowed', 'true only when aggregate verdict is PASS', 'false / NOT_EVALUATED'],
+  ])}
+
+## Diagnostic corpus governance
+
+${table(['Field', 'Required law', 'Current state'], [
+    ['corpusEntryId', 'stable unique ID', 'EMPTY'],
+    ['dedupFingerprint', 'unique stable fingerprint', 'EMPTY'],
+    ['provenanceDigest / sanitizedDigest', 'required exact SHA-256 digests', 'EMPTY'],
+    ['sourceEvidenceIds', 'unique, nonempty provenance IDs', 'EMPTY'],
+    ['accessClass', 'ASSURANCE_RESTRICTED or REVIEWER_RESTRICTED', 'EMPTY'],
+    ['retentionUntilMs', 'unexpired explicit UTC retention', 'EMPTY'],
+    ['reviewerId', 'required accountable reviewer', 'EMPTY'],
+    ['rawPromptStored / rawSecretStored', 'both must be false', 'EMPTY'],
+    ['validatedRegressionFixtureId', 'required before eligibility', 'EMPTY'],
+    ['evaluation', 'unknown corpus never becomes evidence', `${corpusProjection.verdict}: ${corpusProjection.reasonCodes.join(', ')}`],
+  ])}
+
+## Diagnostic run audit schema
+
+No provider run was performed, so there is no fabricated run record. Any future run must record every field below and remains non-authoritative.
+
+${table(['Group', 'Exact fields', 'Law/current state'], [
+    ['Identity/schema', 'schema, revision, runId, providerId, modelId, providerVersion', 'PRODUCT_ASSURANCE_DIAGNOSTIC_RUN_AUDIT_V1; NO_RUN_RECORD_PROVIDER_NOT_CONFIGURED'],
+    ['Prompt/policy', 'promptRevision, policyRevision', 'immutable identities required'],
+    ['Evidence/provenance', 'evidenceDigests, provenanceIds, retrievalIds', 'nonempty evidence/provenance; unique IDs/digests'],
+    ['Typed output', 'typedOutputDigest', 'required exact SHA-256 digest'],
+    ['Tools', 'toolEntries[toolId,inputDigest,resultDigest,verdict]', 'unique allowed tool IDs only; forbidden/unknown tools fail'],
+    ['Approvals/artifact', 'approvalIds, diffDigest', 'required for applicable patch/handoff disposition'],
+    ['Verification', 'testEvidenceIds, postconditionEvidenceIds', 'required for applicable patch/handoff disposition'],
+    ['Budgets', 'tokenUnits, costMicrounits, latencyMs', 'bounded nonnegative; latency equals completion-start'],
+    ['Correlation/time', 'incidentId, correlationId, startedAtMs, completedAtMs', 'stable IDs and valid UTC order'],
+    ['Disposition/authority', 'disposition, authorityGranted=false', 'closed enum; never execution authority'],
+  ])}
+
+${table(['#', 'Allowed run disposition'], pa.DIAGNOSTIC_RUN_DISPOSITIONS.map((disposition, index) => [index + 1, disposition]))}
 
 Binding laws: normalized schemas, raw-evidence hashes outside prompts, explicit untrusted-data separation, trace privacy, independent retention, immutable provider workload identity, exact capability checks, cost/rate budgets, audit records, repair-evidence law, Class A–D promotion law, and corpus governance. A diagnostic agent cannot sign, order, cancel, borrow, repay, change leverage/margin, transfer, withdraw, change Capital/Risk/hard ceilings, write Main/production persistence, use arbitrary shell/network, autonomously merge/deploy, delete evidence, execute operational actions, or declare recovery. Provider outage yields \`DIAGNOSTIC_PLANE_UNAVAILABLE\` without changing deterministic safety or product readiness.
 `;

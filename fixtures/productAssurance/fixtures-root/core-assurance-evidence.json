@@ -1,0 +1,248 @@
+{
+  "acceptedQIdentity": {
+    "acceptanceReceiptDigest": "9cfa0356228d7f48674df2d9db523f0f0d53dab1a4e4255b6ba9676e463ec5dc",
+    "acceptedProtocolCommit": "73e1a1ff7daa48df8dac45713fc5f106842edafc",
+    "acceptedQCommit": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+    "protocolSchemaDigest": "229af0ff13d600c7d305c6deb7f57b61bdb6f8a35f6f2349d91f5ab1b4972f1c"
+  },
+  "authorityGranted": false,
+  "baseCommit": "9785c93102b00389847b77c2f9348c06abc4344b",
+  "browserState": "NOT_RUN",
+  "changedPaths": [
+    "fixtures/productAssurance/fixtures-root/core-assurance-evidence.json",
+    "fixtures/productAssurance/fixtures-root/fault-harness-synthetic.json",
+    "fixtures/productAssurance/generated/AGENTIC_DIAGNOSTIC_BOUNDARY.md",
+    "fixtures/productAssurance/generated/ASSURANCE_INSERTION_REQUEST.md",
+    "fixtures/productAssurance/generated/FAULT_INJECTION_AND_SOAK_REPORT.md",
+    "fixtures/productAssurance/generated/OPERATIONAL_FAILURE_ATLAS.md",
+    "fixtures/productAssurance/generated/OUT_OF_BAND_RECOVERY_REPORT.md",
+    "fixtures/productAssurance/generated/Q_ASSURANCE_COVERAGE_MATRIX.md",
+    "fixtures/productAssurance/generated/RELIABILITY_POLICY_REGISTRY.md",
+    "fixtures/productAssurance/generated/SAFETY_INVARIANT_CATALOG.md",
+    "fixtures/productAssurance/generated/TELEMETRY_COVERAGE_MATRIX.md",
+    "fixtures/productAssurance/receipts/IP_ASSURANCE_RECEIPT.md",
+    "server/src/productAssurance/actionEvidence/evaluator.ts",
+    "server/src/productAssurance/assuranceCase/claimGraph.ts",
+    "server/src/productAssurance/catalog/core.ts",
+    "server/src/productAssurance/catalog/coverage.ts",
+    "server/src/productAssurance/cockpit/viewModel.ts",
+    "server/src/productAssurance/common.ts",
+    "server/src/productAssurance/controllers/gate.ts",
+    "server/src/productAssurance/coverage/matrix.ts",
+    "server/src/productAssurance/diagnostics/boundary.ts",
+    "server/src/productAssurance/diagnostics/governance.ts",
+    "server/src/productAssurance/failureAtlas/atlas.ts",
+    "server/src/productAssurance/faults/harness.ts",
+    "server/src/productAssurance/index.ts",
+    "server/src/productAssurance/invariants/evaluator.ts",
+    "server/src/productAssurance/inventory/coverage.ts",
+    "server/src/productAssurance/operations/policy.ts",
+    "server/src/productAssurance/projections/operationalTruth.ts",
+    "server/src/productAssurance/qCoverage/generator.ts",
+    "server/src/productAssurance/remediation/campaign.ts",
+    "server/test/productAssurance/core-policy-inventory.test.mjs",
+    "server/test/productAssurance/helpers.mjs",
+    "server/test/productAssurance/operational-remediation.test.mjs",
+    "server/test/productAssurance/production-operation-scan-adversarial.test.mjs",
+    "server/test/productAssurance/systemic-diagnostics.test.mjs",
+    "test/productAssurance/generate-closure.mjs",
+    "test/productAssurance/production-operation-scan.mjs",
+    "test/productAssurance/scope-purity.mjs"
+  ],
+  "counts": {
+    "cockpitSections": 11,
+    "components": 13,
+    "controls": 8,
+    "coverageObligations": 171,
+    "dependencies": 22,
+    "faultScenarios": 103,
+    "insertionRequests": 68,
+    "invariants": 17,
+    "operationPolicies": 13,
+    "ownerQuestions": 25,
+    "qRequirements": 11,
+    "telemetrySignals": 19
+  },
+  "deploymentState": "NOT_RUN",
+  "directorStateCommit": "2b6ef003d7e86af8558e1db242c2db6fe906d26b",
+  "disposition": "BLOCKED_AWAITING_DIRECTOR_ACCEPTED_SERIAL_ASSURANCE_SATELLITE_FAN_IN_AND_OWNER_DISPOSITION_OF_NEWS_CONTEXT_DYNAMIC_FETCH_METHOD",
+  "evaluatedAtMs": 1783900800000,
+  "evaluatedAtUtc": "2026-07-13T00:00:00.000Z",
+  "immutableInterfaces": [
+    {
+      "acceptedCommit": "9785c93102b00389847b77c2f9348c06abc4344b",
+      "authorityId": "CURRENT_MAIN_ACCEPTED_BASE",
+      "consumptionLaw": "Read canonical owners; never create a fourteenth supervisor component.",
+      "interfaceId": "ASSURANCE_FROZEN_BASE",
+      "protocolRevision": "EDGE_PROTOCOL_V1",
+      "receiptPaths": [
+        "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md"
+      ],
+      "schemaRevision": "SYSTEM_INTEGRATION_CONTRACTS_V1",
+      "sourcePaths": [
+        "ARCHITECTURE.md",
+        "server/src/systemIntegration/contracts/constants.ts"
+      ],
+      "status": "FROZEN_BASE"
+    },
+    {
+      "acceptedCommit": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+      "authorityId": "Q_LANE",
+      "consumptionLaw": "Metadata and accepted read contracts only; Q stays advisory and abstention preserves UNKNOWN.",
+      "interfaceId": "Q_ACCEPTED_ADVISORY_INTERFACE",
+      "protocolRevision": "EDGE_PROTOCOL_V1",
+      "receiptPaths": [
+        "quant/RECEIPTS/Q17.md",
+        "quant/RECEIPTS/Q17_ACCEPTANCE.md"
+      ],
+      "schemaRevision": "229af0ff13d600c7d305c6deb7f57b61bdb6f8a35f6f2349d91f5ab1b4972f1c",
+      "sourcePaths": [
+        "EDGE_PROTOCOL_V1.md",
+        "quant/RECEIPTS/Q17_ACCEPTANCE.md"
+      ],
+      "status": "ACCEPTED_ADVISORY_ONLY"
+    },
+    {
+      "acceptedCommit": "c86c41d64b92a5c0399dabfdb3fa81816bd03d45",
+      "authorityId": "L_LANE",
+      "consumptionLaw": "Consume accepted frontier metadata only; do not imply LANE_READY or consume active L09/L11 work.",
+      "interfaceId": "L_ACCEPTED_FRONTIER_INTERFACE",
+      "protocolRevision": "EDGE_PROTOCOL_V1",
+      "receiptPaths": [
+        "live-edge-receipts/RECEIPTS/L08.2.md",
+        "live-edge-receipts/RECEIPTS/L10_ACCEPTANCE.md",
+        "live-edge-receipts/RECEIPTS/L14_ACCEPTANCE.md"
+      ],
+      "schemaRevision": "L08_2_L10_L14_ACCEPTED_FRONTIER",
+      "sourcePaths": [
+        "EDGE_PROTOCOL_V1.md",
+        "live-edge-receipts/RECEIPTS/L08.2.md",
+        "live-edge-receipts/RECEIPTS/L10_ACCEPTANCE.md",
+        "live-edge-receipts/RECEIPTS/L14_ACCEPTANCE.md"
+      ],
+      "status": "ACCEPTED_PARTIAL_FRONTIER"
+    },
+    {
+      "acceptedCommit": "8058ab8febb639839333d4e2c604068a0c7390ea",
+      "authorityId": "IP_RUNTIME",
+      "consumptionLaw": "Consume immutable public runtime interfaces without importing sibling packet implementation.",
+      "interfaceId": "IP_RUNTIME_ACCEPTED_INTERFACE",
+      "protocolRevision": "IP_RUNTIME_PACKET_V1",
+      "receiptPaths": [
+        "IP_RUNTIME_RECEIPT.md"
+      ],
+      "schemaRevision": "IP_RUNTIME_ACCEPTED_AT_COMMIT",
+      "sourcePaths": [
+        "IP_RUNTIME_STATE.md"
+      ],
+      "status": "ACCEPTED_PACKET_TIP"
+    },
+    {
+      "acceptedCommit": "56c47dad398c485b6653036c8b90c53f11061b1e",
+      "authorityId": "IP_CONTROL",
+      "consumptionLaw": "Return render-neutral contracts and insertion notes; do not mount or duplicate the cockpit.",
+      "interfaceId": "IP_CONTROL_ACCEPTED_INTERFACE",
+      "protocolRevision": "IP_CONTROL_PACKET_V1",
+      "receiptPaths": [
+        "IP_CONTROL_RECEIPT.md"
+      ],
+      "schemaRevision": "IP_CONTROL_ACCEPTED_AT_COMMIT",
+      "sourcePaths": [
+        "IP_CONTROL_STATE.md"
+      ],
+      "status": "ACCEPTED_PACKET_TIP"
+    },
+    {
+      "acceptedCommit": "6bfd543afb693ea18f4baf08e962e6d698f140fb",
+      "authorityId": "IP_OPS",
+      "consumptionLaw": "Deployment remains owner-approved and artifact-only; this packet performs no external mutation.",
+      "interfaceId": "IP_OPS_ACCEPTED_INTERFACE",
+      "protocolRevision": "IP_OPS_PACKET_V1",
+      "receiptPaths": [
+        "IP_OPS_RECEIPT.md"
+      ],
+      "schemaRevision": "IP_OPS_ACCEPTED_AT_COMMIT",
+      "sourcePaths": [
+        "IP_OPS_STATE.md"
+      ],
+      "status": "ACCEPTED_PACKET_TIP"
+    },
+    {
+      "acceptedCommit": "23e985c17b9b860fee26be397fa05b26f3daf8f2",
+      "authorityId": "IP_PROOF",
+      "consumptionLaw": "Supply deterministic fixture contracts and exact insertion rows; IP-PROOF owns shared campaign execution.",
+      "interfaceId": "IP_PROOF_ACCEPTED_INTERFACE",
+      "protocolRevision": "IP_PROOF_PACKET_V1",
+      "receiptPaths": [
+        "IP_PROOF_RECEIPT.md"
+      ],
+      "schemaRevision": "IP_PROOF_ACCEPTED_AT_COMMIT",
+      "sourcePaths": [
+        "IP_PROOF_STATE.md"
+      ],
+      "status": "ACCEPTED_PACKET_TIP"
+    }
+  ],
+  "implementationCommit": "3391dcfba93bdf370859a62559612e5ea0d42a35",
+  "privateSignedState": "NOT_RUN",
+  "releaseId": "IP_ASSURANCE_CORE_SCAFFOLD_20260713",
+  "revision": 1,
+  "runtimeState": "NOT_CONFIGURED",
+  "scanner": {
+    "coverageVerdict": "FAIL",
+    "covered": 142,
+    "discovered": 143,
+    "failOnUncoveredExitCode": 1,
+    "filesScanned": 368,
+    "reasonCodes": [
+      "PRODUCTION_OPERATION_UNCOVERED"
+    ],
+    "schemaVersion": "production-operation-scan.v1",
+    "uncovered": 1,
+    "uncoveredSites": [
+      {
+        "column": 25,
+        "kind": "MUTATION_CALL",
+        "line": 2302,
+        "mappingRuleId": null,
+        "operationId": null,
+        "path": "server/src/services/newsContext.ts",
+        "siteId": "OPSITE_FD086559819579DF346A",
+        "symbol": "fetch:DYNAMIC_METHOD"
+      }
+    ]
+  },
+  "schema": "PRODUCT_ASSURANCE_CORE_EVIDENCE_V1",
+  "structuralCoverage": {
+    "coveragePercentage": 100,
+    "coveredCount": 171,
+    "duplicateSubjectKeys": [],
+    "expectedCount": 171,
+    "invalidSubjectKeys": [],
+    "missingSubjectKeys": [],
+    "reasonCodes": [],
+    "unexpectedSubjectKeys": [],
+    "verdict": "PASS"
+  },
+  "testedCommit": "3391dcfba93bdf370859a62559612e5ea0d42a35",
+  "verifiedInputs": [
+    {
+      "path": "IP_ASSURANCE.md",
+      "role": "DIRECTOR_AMENDED_PACKET",
+      "sha256": "5f6d4b3b70e384f6123e9ccc01891faf04aef9da7f7cfd1e0c63be5c3ba68803",
+      "verified": true
+    },
+    {
+      "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+      "role": "PARENT_AUTHORITY_UNTRACKED_OWNER_INPUT",
+      "sha256": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5",
+      "verified": true
+    },
+    {
+      "path": "fixtures/productAssurance/generated/SYSTEMIC_ASSURANCE_DEDUP_MATRIX.md",
+      "role": "DIRECTOR_ACCEPTED_DEDUP_LAW",
+      "sha256": "22686d2cd1c54bbc39af56399298a0ed9563bbc8643ad4f0e498718de83cb2cd",
+      "verified": true
+    }
+  ]
+}

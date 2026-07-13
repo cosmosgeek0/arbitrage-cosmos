@@ -1,12 +1,12 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `33`
+State generation: `34`
 
-Updated: 2026-07-13T08:50:29+0530
+Updated: 2026-07-13T08:58:07+0530
 
-Status: `RESUMED_FOR_Q16` — Q13 and Q15 are accepted and director-merged; the
+Status: `Q16 ACTIVE` — Q13 and Q15 are accepted and director-merged; the
 director board at `1fec867` authorizes the spine to execute Q16, then Q17, to
-`LANE_READY`. Q16 task activation follows this merge-record generation.
+`LANE_READY`. Q16 is bound to its exact task in this generation.
 
 Program: Q lane — deterministic research evidence, labels, models, calibration,
 uncertainty and advisory-only inference.
@@ -38,6 +38,10 @@ uncertainty and advisory-only inference.
 - Last accepted spine task: `quant/TASKS/Q12.md`; SHA-256
   `6356245d2c3d85f23faa6eef877073f09e7c0bdc5a25eb8ef4c186ae64130c01`;
   unchanged by Q12 implementation.
+- Active task: `quant/TASKS/Q16.md`; SHA-256
+  `671278117ae01ccc48401575579b0db3cefd674730675814b4a17ce8a5e97aa9`;
+  activation parent/state-generation-33 commit
+  `5076eba16299595961a7a250a7e917b868afd454`.
 - The two directive files remain protected untracked owner inputs and are never staged.
 
 ## Director and merge posture
@@ -59,7 +63,7 @@ uncertainty and advisory-only inference.
   gate. Q15 remains a `SYNTHETIC_ONLY` registry/champion-shadow/drift proof with no
   loadable live model or promotion authority. Exact historical evidence remains in
   immutable `quant/RECEIPTS/Q*.md` and `quant/RECEIPTS/Q*_ACCEPTANCE.md` files.
-- Q16 is the sole next phase. Q17 begins only after Q16 is self-accepted through the
+- Q16 is the sole active phase. Q17 begins only after Q16 is self-accepted through the
   full evidenced loop. No Q13/Q15/deep/registry-owned bytes are rewritten.
 
 ## Q12 current truth
@@ -141,13 +145,14 @@ uncertainty and advisory-only inference.
 - No secret, environment read, network access, ambient clock, import-time side effect,
   operational store or float-valued public numeric contract was added.
 - No merge or push is authorized or performed.
-- Generation 33 changes only `quant/QUANT_EDGE_BUILD_STATE.md`. Frozen registry,
-  protocol and input-lock bytes remain read-only; the two protected untracked owner
-  directives remain preserved and unstaged.
+- Generation 33 changed only `quant/QUANT_EDGE_BUILD_STATE.md`. Generation 34 adds
+  `quant/TASKS/Q16.md` and binds it in this state. Frozen registry, protocol and
+  input-lock bytes remain read-only; the two protected untracked owner directives
+  remain preserved and unstaged.
 
 ## Exact next task
 
-Activate and execute exactly Q16: local inference service plus generated protocol kit.
+Execute exactly Q16: local inference service plus generated protocol kit.
 The acceptance chain is raw fixture -> evidence -> features -> models -> calibrated
 `EdgeAssessmentEnvelopeV1` with deterministic hashes. Bind only to loopback or a
 permissioned Unix-domain socket; keep queues, bytes, rows, concurrency and time bounded;
@@ -161,8 +166,8 @@ end-to-end proof/benchmark/final receipt and stop at `LANE_READY`; never push.
 
 1. Root `STATE.md`, `MISSION.md`, `ARCHITECTURE.md` Part II and `DIRECTOR.md`.
 2. The two launch directives, frozen protocol inputs and `quant/DIRECTIVE_INPUTS.lock`.
-3. This state, `quant/TASKS/Q12.md`, immutable Q12/Q13/Q15 receipts, and the exact
+3. This state, `quant/TASKS/Q16.md`, immutable Q12/Q13/Q15 receipts, and the exact
    current Git ancestry.
-4. Confirm Q13 and Q15 acceptance plus director merges are ancestors, then bind the
-   Q16 task in a separate activation generation. Never rewrite accepted tasks, receipts,
-   generated evidence, frozen registry/protocol inputs or shard history.
+4. Confirm Q13 and Q15 acceptance plus director merges are ancestors, then execute
+   only the bound Q16 task. Never rewrite accepted tasks, receipts, generated evidence,
+   frozen registry/protocol inputs or shard history.

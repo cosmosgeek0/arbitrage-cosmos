@@ -1,12 +1,12 @@
 # L10 state
 
-Status: WORKING
+Status: L10_ACCEPTED
 Generation: 1
 Branch: `l10-reverse-basis-20260712`
 Canonical base SHA: `4ae270ac70fb819a706f94e85dfc2b6805edda9b`
 Starting HEAD: `4ae270ac70fb819a706f94e85dfc2b6805edda9b`
-Implementation SHA: UNSET
-Receipt SHA: UNSET
+Implementation SHA: 6f930d96a856119b7ed6c72a3ce25be66f4dfce2
+Receipt SHA: b6c4b6a20b73f5f50ce998881f42c66680ae834d
 Acceptance SHA: UNSET
 Integrated acceptance: NO
 External action authority: NONE
@@ -18,4 +18,4 @@ Standard deterministic gate: 377/377
 Full repository battery: 4468/4468
 Independent acceptance review: ACCEPT, no remaining blocker
 Canonical composition/wiring: UNWIRED, director-owned
-Next task: commit implementation, issue the immutable receipt, and seal L10 acceptance.
+Next task: record the acceptance commit SHA in a state-only seal, then stop.

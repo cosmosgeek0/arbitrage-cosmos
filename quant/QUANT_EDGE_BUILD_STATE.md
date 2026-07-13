@@ -1,11 +1,12 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `32`
+State generation: `33`
 
-Updated: 2026-07-13T08:12:36+0530
+Updated: 2026-07-13T08:50:29+0530
 
-Status: `Q12 ACCEPTED — PARKED` — exact C12 verification passed; A12 contains this
-generation and the separate acceptance receipt. No phase is active.
+Status: `RESUMED_FOR_Q16` — Q13 and Q15 are accepted and director-merged; the
+director board at `1fec867` authorizes the spine to execute Q16, then Q17, to
+`LANE_READY`. Q16 task activation follows this merge-record generation.
 
 Program: Q lane — deterministic research evidence, labels, models, calibration,
 uncertainty and advisory-only inference.
@@ -14,6 +15,11 @@ uncertainty and advisory-only inference.
 
 - Worktree: `/Users/cosmosgeek/Desktop/quant-edge-research-20260712`
 - Branch: `quant-edge-research-factory-20260712`
+- Generation-33 authoring parent / director Q13 merge:
+  `3ed8e38d65812e2eb8ed6eba19e4eb5084c253d1`; tree
+  `759f7f1fdc84bf01c8b41ecfa7314a54c214ee5e`; parents
+  `b9c4cee64084efc33daae481ff2d43eebe46047a` and
+  `06f0a8f0c722ece6c46f56c62156aec291a77317`.
 - Accepted C12: `7e403d2c24290deda81cae93f58308818144e017`; tree
   `2c8cef3458e4953cd279d7c11ec2939685eda1a4`; exact parent
   `c070fdaf7dc568448212067dde5e1fb2ecc21356`.
@@ -29,7 +35,7 @@ uncertainty and advisory-only inference.
   `26b1d5ce118982b4b3ba64b44b7fb3e88b0b7ded26a818a775a65bffaa0f2c06`.
 - Frozen input lock SHA-256:
   `410010ef635a5e44b205e56c6b38f2d06e5b8e72312f5d63edcb24a5086355e1`.
-- Active task: `quant/TASKS/Q12.md`; SHA-256
+- Last accepted spine task: `quant/TASKS/Q12.md`; SHA-256
   `6356245d2c3d85f23faa6eef877073f09e7c0bdc5a25eb8ef4c186ae64130c01`;
   unchanged by Q12 implementation.
 - The two directive files remain protected untracked owner inputs and are never staged.
@@ -39,14 +45,22 @@ uncertainty and advisory-only inference.
 - Q12 checkpoint ancestor: `12ccdf19368fd2ab5140f601cc46742bc685e0c8`.
 - Q15 acceptance: `e69f6879b5914879b5d9342e3f05fa964f5b9496`.
 - Director Q15 merge: `f54180c3a7d014e4d91a0c6b7dc5ea4c3d521754`.
-- Q15 merged-lane scope follow-up and current C12 parent:
+- Q15 merged-lane scope follow-up:
   `c070fdaf7dc568448212067dde5e1fb2ecc21356`.
-- Q13 acceptance exists at `06f0a8f0c722ece6c46f56c62156aec291a77317`
-  but is not an ancestor of this branch; its director merge remains pending until Q12 parks.
-- Q00–Q12 are accepted; Q11 and Q14 are accepted and director-merged; Q15 is accepted
-  and director-merged. Exact historical evidence remains in immutable
-  `quant/RECEIPTS/Q*.md` and `quant/RECEIPTS/Q*_ACCEPTANCE.md` files.
-- No phase is active. Q13/Q15/deep/registry-owned paths were not edited.
+- Q13 acceptance: `06f0a8f0c722ece6c46f56c62156aec291a77317`.
+- Director Q13 merge/current generation-33 parent:
+  `3ed8e38d65812e2eb8ed6eba19e4eb5084c253d1`.
+- Director-board evidence: `git show 1fec867 -- QL_PARALLEL_DAG.md`; the board commit is
+  not lane ancestry. Its Q row records Q13+Q15 merged and authorizes Q16 -> Q17 to
+  `LANE_READY`; board blob SHA-256
+  `469370d904484e450f17da301991d07b9d87ef39ee5b693048e14e997000338b`.
+- Q00–Q15 are accepted; Q08/Q09/Q11/Q13/Q14/Q15 are accepted and director-merged.
+  Q13 remains an honest `FAIL_DATA_INSUFFICIENT` / `REFERENCE_ONLY` deep-sequence
+  gate. Q15 remains a `SYNTHETIC_ONLY` registry/champion-shadow/drift proof with no
+  loadable live model or promotion authority. Exact historical evidence remains in
+  immutable `quant/RECEIPTS/Q*.md` and `quant/RECEIPTS/Q*_ACCEPTANCE.md` files.
+- Q16 is the sole next phase. Q17 begins only after Q16 is self-accepted through the
+  full evidenced loop. No Q13/Q15/deep/registry-owned bytes are rewritten.
 
 ## Q12 current truth
 
@@ -87,6 +101,11 @@ uncertainty and advisory-only inference.
   exact `100.00%` statement and branch coverage.
 - Accumulated Q suite: `2386 passed, 6 skipped`; the skips are four merged Q08 and two
   merged Q15 shard-scope laws that remain executable only on their shard branches.
+- Merged-lane resume baseline at `3ed8e38`: after restoring the exact pinned
+  CPython 3.13.14 / uv 0.11.28 environment with the locked `models` extra,
+  `PYTHONHASHSEED=0 .venv/bin/python -m pytest -q --hypothesis-seed=20260712` ->
+  `2455 passed, 6 skipped in 85.01s`, exit 0. The six skips are the same shard-only
+  scope laws; no test was hidden or filtered.
 - Artifact replay: byte-identical across three CWD/timezone/hash-seed environments.
 - Q12 fixture SHA-256:
   `88382d291f6d0ddb4443888df80ce1d03bc893790ca746d13237b23b58d2bb77`.
@@ -122,18 +141,28 @@ uncertainty and advisory-only inference.
 - No secret, environment read, network access, ambient clock, import-time side effect,
   operational store or float-valued public numeric contract was added.
 - No merge or push is authorized or performed.
+- Generation 33 changes only `quant/QUANT_EDGE_BUILD_STATE.md`. Frozen registry,
+  protocol and input-lock bytes remain read-only; the two protected untracked owner
+  directives remain preserved and unstaged.
 
 ## Exact next task
 
-None. The spine is parked. Q13 acceptance `06f0a8f0c722ece6c46f56c62156aec291a77317`
-remains pending director merge. Await a new director instruction after that merge. Do
-not begin Q16 or Q17, do not merge Q13 locally, and do not push.
+Activate and execute exactly Q16: local inference service plus generated protocol kit.
+The acceptance chain is raw fixture -> evidence -> features -> models -> calibrated
+`EdgeAssessmentEnvelopeV1` with deterministic hashes. Bind only to loopback or a
+permissioned Unix-domain socket; keep queues, bytes, rows, concurrency and time bounded;
+unavailable or ambiguous truth yields `ABSTAIN_UNKNOWN`. Preserve the frozen protocol
+and registry read-only, keep protocol tests `22/22`, and complete implementation,
+focused tests, accumulated suite, adversarial review, corrections, implementation
+commit, immutable receipt and independent acceptance/state commit. Then execute Q17's
+end-to-end proof/benchmark/final receipt and stop at `LANE_READY`; never push.
 
 ## Resume read order
 
 1. Root `STATE.md`, `MISSION.md`, `ARCHITECTURE.md` Part II and `DIRECTOR.md`.
 2. The two launch directives, frozen protocol inputs and `quant/DIRECTIVE_INPUTS.lock`.
-3. This state, `quant/TASKS/Q12.md`, both Q12 receipts, and the exact current Git
-   ancestry.
-4. Confirm Q12 is accepted and parked. Never rewrite C12 or either Q12 receipt; wait for
-   director-owned Q13 merge posture before any later phase.
+3. This state, `quant/TASKS/Q12.md`, immutable Q12/Q13/Q15 receipts, and the exact
+   current Git ancestry.
+4. Confirm Q13 and Q15 acceptance plus director merges are ancestors, then bind the
+   Q16 task in a separate activation generation. Never rewrite accepted tasks, receipts,
+   generated evidence, frozen registry/protocol inputs or shard history.

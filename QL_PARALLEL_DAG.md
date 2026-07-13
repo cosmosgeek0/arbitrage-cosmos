@@ -16,9 +16,9 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 | Q11 survival | ~/Desktop/q11-survival | q11-survival-20260712 | 8a5dd09 | ACCEPTED + MERGED (2,182 pass with Q14) |
 | L spine L00–L08 | live-execution-proof-20260712 | live-execution-control-proof-20260712 | 73e1a1f | L00–L08 + L08.1 + L08.2 (9f133ac) + L14 ACCEPTED; spine PARKED until L09/L10/L11 merge, then L12→L13→L16→L17; Codex left auditable uncommitted L06 work; TWO director decisions DEFERRED to I00: ledger compare-and-set primitive + Foundation quantity-bridge contract (see live-edge-receipts/patches/) |
 | L14 controls shard | ~/Desktop/l14-controls | l14-controls-20260712 | 39ebd98 | ACCEPTED + MERGED (51/51 liveEdge suites) |
-| L09 normal-basis shard | ~/Desktop/l09-normal-basis | l09-normal-basis-20260712 | rebased on c900907 | READY — L09-FINAL block (canonical gaps fixed; shard items 3-4 remain) |
+| L09 normal-basis shard | ~/Desktop/l09-normal-basis | l09-normal-basis-20260712 | rebased on c900907 | BLOCKED L09-005 → D-LAUNCH-12 correction phase issued (impl a7a0f7c intact) |
 | L10 reverse-basis shard | ~/Desktop/l10-reverse-basis | l10-reverse-basis-20260712 | 4ae270a | ACCEPTED + MERGED (63/63 liveEdge suites) |
-| L11 volume shard | ~/Desktop/l11-volume | l11-volume-20260712 | 4ae270a | WORKING (impl fbc748a committed; acceptance loop in flight) |
+| L11 volume shard | ~/Desktop/l11-volume | l11-volume-20260712 | 4ae270a | ACCEPTED + MERGED (68/68 liveEdge) |
 
 | IP-RUNTIME packet | ~/Desktop/ip-runtime | ip-runtime-20260713 | 420cc83 | PRESTAGE_READY — fan-in at I00 spine |
 | IP-CONTROL packet | ~/Desktop/ip-control | ip-control-20260713 | 420cc83 | BINDING_READY (56c47da) — fan-in at I00 spine |

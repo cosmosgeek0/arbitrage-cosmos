@@ -22,7 +22,7 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 
 | IP-RUNTIME packet | ~/Desktop/ip-runtime | ip-runtime-20260713 | 420cc83 | READY (I00 program, D-LAUNCH-6) |
 | IP-CONTROL packet | ~/Desktop/ip-control | ip-control-20260713 | 420cc83 | BINDING_READY (56c47da) — fan-in at I00 spine |
-| IP-OPS packet | ~/Desktop/ip-ops | ip-ops-20260713 | 420cc83 | READY (donor: accepted l15-infra 2cec412) |
+| IP-OPS packet | ~/Desktop/ip-ops | ip-ops-20260713 | 420cc83 | OPS_READY — fan-in at I00 spine |
 | IP-PROOF packet | ~/Desktop/ip-proof | ip-proof-20260713 | 420cc83 | PROOF_PRESTAGE_READY (23e985c) — fan-in at I00 spine |
 
 ## Frozen merge/integration order (mechanical)

@@ -67,6 +67,10 @@ Both branches descend from PROTOCOL_SHA. Main stays director-owned; neither Code
 4. Owner directives arrive from "commanders" (external ChatGPT) as .md files — verify hashes, correct stale assumptions from git truth (they are navigation hints, not acceptance evidence), register a D-LAUNCH-N acceptance entry here, then cut worktrees + blocks.
 5. External-action boundary (launch §10 / I00 §20) is never delegated and never inferred.
 
+## OWNER PRIORITY RULING (2026-07-13, binding)
+
+L-lane completion OUTRANKS everything: the moment L09 or L11 reports ACCEPTED, the director merges it immediately (runbook below) before any IP/assurance action, and issues the final L-spine block (L12→L13→L16→L17) at once. Assurance/IP packets are interruptible and expendable; committed Q/L work is not. Q is already complete and frozen (02b4ecc) — zero risk there. A post-integration full audit by a fresh builder is planned AFTER I00 lands; do not run it before.
+
 ## MERGE RUNBOOK (compaction-proof; execute even with zero chat memory)
 
 Q lane: COMPLETE, nothing pending — Q16/Q17 ran on the spine itself; frozen LANE_READY HEAD `02b4ecc` (3,011 pytest pass, protocol 22/22). No Q merge remains; only receipt audit at I00.

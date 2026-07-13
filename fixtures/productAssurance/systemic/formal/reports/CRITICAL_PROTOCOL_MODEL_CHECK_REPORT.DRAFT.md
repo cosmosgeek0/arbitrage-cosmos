@@ -15,6 +15,7 @@ formal_tooling_status: TLA_TOOLING_NOT_CONFIGURED
 authority: SUPPORTING_EVIDENCE_ONLY
 source_truth: SYNTHETIC_ONLY
 runtime_claim_closure: NOT_PERMITTED
+packet_terminal_status: BLOCKED_NO_NETWORK_BOUNDARY_VIOLATED
 ```
 
 ## Bounded explicit-state result
@@ -110,6 +111,9 @@ an authorized owner.
 
 ## Boundary and limitations
 
+- Artifact semantics and deterministic tests are clean, but the packet cannot
+  claim `FORMAL_PRESTAGE_READY` because the no-network process boundary was
+  violated once by a discarded delegated lookup.
 - No production evaluator, command path, risk gate, exchange call, money path,
   secret, timer, socket, filesystem access, package change, or external-system
   mutation exists in the packet runtime modules.

@@ -2,7 +2,7 @@
 
 ```text
 schema: ip-assurance.formal-packet-state.v1
-status: FORMAL_PRESTAGE_PENDING_IMMUTABLE_RECEIPT
+status: BLOCKED_NO_NETWORK_BOUNDARY_VIOLATED
 branch: ip-assur-formal-20260713
 base_commit: 9785c93102b00389847b77c2f9348c06abc4344b
 binding_ip_assurance_sha256: 5f6d4b3b70e384f6123e9ccc01891faf04aef9da7f7cfd1e0c63be5c3ba68803
@@ -25,6 +25,11 @@ implementation_conformance: MISMATCH_2_UNKNOWN_5
 runtime_corpus_eligible: 0
 external_mutation: NONE
 money_authority: NONE
-next_gate: SEAL_PACKET_LOCAL_IMMUTABLE_RECEIPT_AFTER_IMPLEMENTATION_COMMIT
-terminal_label_on_success: FORMAL_PRESTAGE_READY
+network_boundary: VIOLATED_BY_ONE_DISCARDED_READ_ONLY_LOOKUP
+artifact_semantics: CLEAN
+implementation_commit: bb2581a4f6ef950dbc4b321a3e9d09778fa46e00
+implementation_tree: 4a8e525313072dc790e397b1b4d892a064473d40
+immutable_receipt: fixtures/productAssurance/systemic/formal/receipts/FORMAL_BLOCKED_RECEIPT.md
+next_gate: DIRECTOR_DECISION_REQUIRED_AFTER_NETWORK_BOUNDARY_VIOLATION
+terminal_label: BLOCKED_NO_NETWORK_BOUNDARY_VIOLATED
 ```

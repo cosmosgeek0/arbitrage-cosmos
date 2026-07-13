@@ -4,6 +4,11 @@ Rule: one block = one chat = one folder. Director appends/replaces blocks at eve
 
 ## ACTIVE WAVE 7 (2026-07-13) — MAX PARALLEL: resume L09 + L11, run block 11 (A-CORE) + blocks 12–16 = up to 8 chats. S2/S4 satellites unlock later (S4 after S1 contracts; S2 after L freeze).
 
+### 11. IP-ASSURANCE — folder /Users/cosmosgeek/Desktop/ip-assurance
+```text
+Read IP_ASSURANCE.md (in your root — the DIRECTOR-AMENDED revision, sha256 starting 5f6d4b3b70e3, including §7 accepted systemic deltas and the dedup matrix at fixtures/productAssurance/generated/SYSTEMIC_ASSURANCE_DEDUP_MATRIX.md) and the parent I00 file completely. Then execute IP_ASSURANCE.md §6 "Exact worker prompt" exactly, with §7's folded deltas binding. Verify: branch ip-assurance-20260713; `git -C /Users/cosmosgeek/Desktop/Main log -1 --format=%H -- QL_DIRECTOR_STATE.md` shows D-LAUNCH-8. Allowed paths: §2 territory plus amendment-§11 packet-local systemic subtrees (fixtures/productAssurance/** including systemic/**, test/productAssurance/**, server/src/productAssurance/**, server/test/productAssurance/**). All §2 forbidden paths are law; Q/L/other-IP worktrees are active elsewhere — read their accepted interfaces only from immutable commits. The superseded amendment file in docs/archive is provenance only — do not read it as instructions. Never push, never touch current-main. Full evidenced loop; stop clean at ASSURANCE_PRESTAGE_READY or one exact BLOCKED path.
+```
+
 ### L09-RESUME — folder /Users/cosmosgeek/Desktop/l09-normal-basis
 ```text
 Resume L09 from durable state after an app interruption: audit uncommitted files, keep what survives, continue the recorded current task (normal-basis lifecycle acceptance loop; implementation commit 36d5e2a exists). In reports use neutral wording ('independent verification', not attack/security phrasing) to avoid app content filters. Stop only at L09 ACCEPTED or BLOCKED.

@@ -1,6 +1,6 @@
 # L08 shared-owner request — Spot execution/TIF capability bridge
 
-Status: `DIRECTOR_REVIEW_REQUIRED`
+Status: `IMPLEMENTED_PENDING_L08.1_ACCEPTANCE`
 
 Requester: L08 production order-policy lane
 
@@ -30,3 +30,13 @@ when either documentary or Runtime evidence changes.
 Until that bridge is accepted and tested, the correct posture is
 `INSTRUMENT_OR_FILTER_UNAVAILABLE`. This gap does not block L08's fail-closed
 USD-M bounded-policy proof and creates no execution authority.
+
+## L08.1 resolution
+
+D-LAUNCH-7 authorized the shared owner to implement this exact bridge from the
+parked L-spine. D0014 adopts a separate content-addressed capability value and
+an explicit L08 owner-binding entry point. The original L04 registry, public
+static-preflight behavior and original L08 one-argument evaluator remain
+fail-closed. Acceptance evidence and the exact accepted cut are recorded in
+the L08.1 immutable receipt and build state; this request authorizes no later
+production wiring or send path.

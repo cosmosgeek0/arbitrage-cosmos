@@ -13,9 +13,21 @@ import {
 } from './exact.js';
 import { validateInstrumentRegistrySnapshot } from './snapshot.js';
 import {
+  currentSpotOrderTifDocumentaryRevision,
+  deriveSpotOrderTifCapabilityRevision,
+  L081_BINANCE_SPOT_API_GIT_COMMIT,
+  L081_BINANCE_SPOT_ENUMS_SHA256,
+  L081_BINANCE_SPOT_REST_API_SHA256,
+  L081_SPOT_LIMIT_TIME_IN_FORCE,
+} from './spotOrderTifCapability.js';
+import {
   BINANCE_FILTER_REFERENCE_SCHEMA,
+  BINANCE_SPOT_ORDER_TIF_CAPABILITY_SCHEMA,
+  type BindBinanceSpotOrderTifCapabilityResult,
   type BinanceFilterReferenceEvidence,
   type BinanceInstrumentSpec,
+  type BinanceSpotOrderTifCapability,
+  type BinanceSpotLimitTimeInForce,
   type InstrumentSizingResult,
   type InstrumentSizingTransformation,
   type NormalizedInstrumentFilter,
@@ -40,6 +52,13 @@ const REFERENCE_FIELDS = Object.freeze([
 ] as const);
 
 type PlainRecord = Readonly<Record<string, unknown>>;
+
+interface SpotOrderTifBridgeContext {
+  readonly symbol: string;
+  readonly instrumentRevision: string;
+  readonly timeInForce: BinanceSpotLimitTimeInForce;
+  readonly documentaryRevision: string;
+}
 
 function deepFreeze<T>(value: T, seen = new Set<object>()): T {
   if (typeof value !== 'object' || value === null || seen.has(value)) return value;
@@ -409,9 +428,10 @@ function externalRequirements(spec: BinanceInstrumentSpec, orderType: string): r
  * Proves only deterministic public/static filter arithmetic. A PASS remains
  * non-sendable and retains every unavailable owner requirement.
  */
-export function preflightInstrumentSizing(
+function preflightInstrumentSizingCore(
   snapshotValue: unknown,
   requestValue: unknown,
+  spotOrderTifBridge: Readonly<SpotOrderTifBridgeContext> | null,
 ): Readonly<InstrumentSizingResult> {
   let details: Partial<Pick<InstrumentSizingResult,
   'instrumentRevision' | 'sourceEvidenceRevision' | 'registryRevision'
@@ -474,7 +494,16 @@ export function preflightInstrumentSizing(
     }
     if (orderType === 'LIMIT') {
       const timeInForce = safeText(request.timeInForce, 'request.timeInForce');
-      if (!spec.allowedTimeInForce.includes(timeInForce)) {
+      const bridgeMatches = spec.product === 'SPOT'
+        && spotOrderTifBridge !== null
+        && spotOrderTifBridge.documentaryRevision === currentSpotOrderTifDocumentaryRevision()
+        && spotOrderTifBridge.symbol === spec.symbol
+        && spotOrderTifBridge.instrumentRevision === spec.instrumentRevision
+        && spotOrderTifBridge.timeInForce === timeInForce
+        && L081_SPOT_LIMIT_TIME_IN_FORCE.includes(
+          timeInForce as (typeof L081_SPOT_LIMIT_TIME_IN_FORCE)[number],
+        );
+      if (!spec.allowedTimeInForce.includes(timeInForce) && !bridgeMatches) {
         return blocked(['TIME_IN_FORCE_NOT_ADVERTISED'], details, transformations, requirements);
       }
     } else if (request.timeInForce !== null) {
@@ -666,5 +695,142 @@ export function preflightInstrumentSizing(
     });
   } catch {
     return blocked(['STATIC_PREFLIGHT_INPUT_REJECTED'], details, transformations, requirements);
+  }
+}
+
+/**
+ * The accepted L04 static preflight remains unchanged. In particular, a Spot
+ * LIMIT still blocks because Runtime metadata does not own a symbol TIF list.
+ */
+export function preflightInstrumentSizing(
+  snapshotValue: unknown,
+  requestValue: unknown,
+): Readonly<InstrumentSizingResult> {
+  return preflightInstrumentSizingCore(snapshotValue, requestValue, null);
+}
+
+function rejectedSpotCapability(reasonCodes: readonly string[]): BindBinanceSpotOrderTifCapabilityResult {
+  return deepFreeze({
+    ok: false as const,
+    reasonCodes: [...new Set(reasonCodes)].sort(),
+  });
+}
+
+/**
+ * Binds one exact documentary Spot LIMIT/TIF contract to one exact current L04
+ * Runtime instrument/filter preflight. The result is evidence only and is
+ * mechanically non-sendable.
+ */
+export function bindSpotOrderTifCapability(
+  snapshotValue: unknown,
+  requestValue: unknown,
+): BindBinanceSpotOrderTifCapabilityResult {
+  try {
+    const snapshot = validateInstrumentRegistrySnapshot(snapshotValue);
+    const request = closedRecord(requestValue, REQUEST_FIELDS, 'Spot capability sizing request');
+    const symbol = safeText(request.symbol, 'request.symbol');
+    const instrumentRevision = safeText(request.instrumentRevision, 'request.instrumentRevision');
+    if (request.orderType !== 'LIMIT') return rejectedSpotCapability(['SPOT_CAPABILITY_LIMIT_REQUIRED']);
+    const timeInForce = safeText(request.timeInForce, 'request.timeInForce');
+    if (!L081_SPOT_LIMIT_TIME_IN_FORCE.includes(
+      timeInForce as (typeof L081_SPOT_LIMIT_TIME_IN_FORCE)[number],
+    )) return rejectedSpotCapability(['SPOT_CAPABILITY_TIME_IN_FORCE_UNSUPPORTED']);
+    if (snapshot.product !== 'SPOT') return rejectedSpotCapability(['SPOT_CAPABILITY_PRODUCT_MISMATCH']);
+    const instrument = snapshot.instruments.find((candidate) => candidate.symbol === symbol);
+    if (instrument === undefined) return rejectedSpotCapability(['SPOT_CAPABILITY_SYMBOL_MISSING']);
+    if (instrument.instrumentRevision !== instrumentRevision
+      || instrument.sourceEvidenceRevision.length === 0
+      || instrument.normalizationState !== 'READY_STATIC_ONLY'
+      || instrument.status !== 'TRADING'
+      || instrument.tradingAllowed !== true
+      || !instrument.advertisedOrderTypes.includes('LIMIT')
+      || !instrument.staticOrderTypes.includes('LIMIT')
+      || instrument.allowedTimeInForce.length !== 0
+      || !instrument.lossCodes.includes('SPOT_TIME_IN_FORCE_UNAVAILABLE')
+      || !instrument.lossCodes.includes('SPOT_EXECUTION_RULES_UNAVAILABLE')) {
+      return rejectedSpotCapability(['SPOT_CAPABILITY_INSTRUMENT_UNAVAILABLE']);
+    }
+    const documentaryRevision = currentSpotOrderTifDocumentaryRevision();
+    const bridgeContext: Readonly<SpotOrderTifBridgeContext> = Object.freeze({
+      symbol,
+      instrumentRevision,
+      timeInForce: timeInForce as BinanceSpotLimitTimeInForce,
+      documentaryRevision,
+    });
+    const preflight = preflightInstrumentSizingCore(snapshot, request, bridgeContext);
+    if (preflight.staticState !== 'PASS'
+      || preflight.instrumentRevision !== instrument.instrumentRevision
+      || preflight.sourceEvidenceRevision !== instrument.sourceEvidenceRevision
+      || preflight.registryRevision !== snapshot.registryRevision
+      || preflight.snapshotRevision !== snapshot.snapshotRevision
+      || preflight.evaluatedAtMs === null
+      || preflight.instrumentValidUntilMs === null
+      || preflight.requestedPrice === null
+      || preflight.requestedQuantity === null
+      || preflight.resultQuantity === null
+      || preflight.resultNotional === null) {
+      return rejectedSpotCapability([
+        'SPOT_CAPABILITY_PREFLIGHT_BLOCKED',
+        ...preflight.reasonCodes,
+      ]);
+    }
+    const validUntilMs = Math.min(
+      preflight.instrumentValidUntilMs,
+      preflight.referenceValidUntilMs ?? preflight.instrumentValidUntilMs,
+    );
+    if (preflight.evaluatedAtMs >= validUntilMs) {
+      return rejectedSpotCapability(['SPOT_CAPABILITY_SOURCE_EXPIRED']);
+    }
+    const remainingExternalRequirements = preflight.externalRequirements
+      .filter((requirement) => requirement !== 'SPOT_TIME_IN_FORCE_UNAVAILABLE');
+    const material: Omit<BinanceSpotOrderTifCapability, 'capabilityRevision'> = {
+      schema: BINANCE_SPOT_ORDER_TIF_CAPABILITY_SCHEMA,
+      state: 'PASS',
+      reasonCodes: [],
+      product: 'SPOT',
+      environment: 'PRODUCTION',
+      instrumentContractId: 'SPOT_EXCHANGE_INFO_FILTERS',
+      orderContractId: 'SPOT_ORDER_POST',
+      matrixSha256: snapshot.matrixSha256,
+      spotApiGitCommit: L081_BINANCE_SPOT_API_GIT_COMMIT,
+      restApiSha256: L081_BINANCE_SPOT_REST_API_SHA256,
+      enumsSha256: L081_BINANCE_SPOT_ENUMS_SHA256,
+      documentaryRevision,
+      symbol: instrument.symbol,
+      baseAsset: instrument.baseAsset,
+      quoteAsset: instrument.quoteAsset,
+      side: request.side as 'BUY' | 'SELL',
+      orderType: 'LIMIT',
+      timeInForce: timeInForce as BinanceSpotLimitTimeInForce,
+      instrumentRevision: instrument.instrumentRevision,
+      sourceEvidenceRevision: instrument.sourceEvidenceRevision,
+      registryRevision: snapshot.registryRevision,
+      snapshotRevision: snapshot.snapshotRevision,
+      referenceEvidenceRevision: preflight.referenceEvidenceRevision,
+      sourceReceivedAtMs: instrument.sourceReceivedAtMs,
+      sourceValidUntilMs: instrument.sourceValidUntilMs,
+      evaluatedAtMs: preflight.evaluatedAtMs,
+      validUntilMs,
+      preflightRevision: stableId('l081-spot-limit-preflight', preflight),
+      requestedPrice: preflight.requestedPrice,
+      requestedQuantity: preflight.requestedQuantity,
+      resultQuantity: preflight.resultQuantity,
+      resultNotional: preflight.resultNotional,
+      resolvedCapabilityGaps: ['SPOT_TIME_IN_FORCE_UNAVAILABLE'],
+      remainingExternalRequirements,
+      sendEligible: false,
+      documentaryAuthority: 'DOCUMENTARY_EVIDENCE_ONLY',
+      externalActionAuthorization: 'NONE',
+      actionAuthority: 'NONE_RECORD_ONLY',
+    };
+    return deepFreeze({
+      ok: true as const,
+      binding: {
+        ...material,
+        capabilityRevision: deriveSpotOrderTifCapabilityRevision(material),
+      },
+    });
+  } catch {
+    return rejectedSpotCapability(['SPOT_CAPABILITY_INPUT_REJECTED']);
   }
 }

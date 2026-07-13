@@ -177,6 +177,69 @@ export interface InstrumentSizingResult {
   readonly actionAuthority: 'NONE_RECORD_ONLY';
 }
 
+export const BINANCE_SPOT_ORDER_TIF_CAPABILITY_SCHEMA =
+  'BINANCE_SPOT_ORDER_TIF_CAPABILITY_V1' as const;
+
+export type BinanceSpotLimitTimeInForce = 'GTC' | 'IOC' | 'FOK';
+
+/**
+ * A non-sendable proof that one exact Spot LIMIT/TIF request was checked
+ * against both the accepted documentary contract and one current L04 Runtime
+ * instrument/filter snapshot. It does not widen the Runtime-owned
+ * `allowedTimeInForce` field on BinanceInstrumentSpec.
+ */
+export interface BinanceSpotOrderTifCapability {
+  readonly schema: typeof BINANCE_SPOT_ORDER_TIF_CAPABILITY_SCHEMA;
+  readonly state: 'PASS';
+  readonly reasonCodes: readonly [];
+  readonly product: 'SPOT';
+  readonly environment: 'PRODUCTION';
+  readonly instrumentContractId: 'SPOT_EXCHANGE_INFO_FILTERS';
+  readonly orderContractId: 'SPOT_ORDER_POST';
+  readonly matrixSha256: string;
+  readonly spotApiGitCommit: string;
+  readonly restApiSha256: string;
+  readonly enumsSha256: string;
+  readonly documentaryRevision: string;
+  readonly symbol: string;
+  readonly baseAsset: string;
+  readonly quoteAsset: string;
+  readonly side: 'BUY' | 'SELL';
+  readonly orderType: 'LIMIT';
+  readonly timeInForce: BinanceSpotLimitTimeInForce;
+  readonly instrumentRevision: string;
+  readonly sourceEvidenceRevision: string;
+  readonly registryRevision: string;
+  readonly snapshotRevision: string;
+  readonly referenceEvidenceRevision: string | null;
+  readonly sourceReceivedAtMs: number;
+  readonly sourceValidUntilMs: number;
+  readonly evaluatedAtMs: number;
+  readonly validUntilMs: number;
+  readonly preflightRevision: string;
+  readonly requestedPrice: string;
+  readonly requestedQuantity: string;
+  readonly resultQuantity: string;
+  readonly resultNotional: string;
+  readonly resolvedCapabilityGaps: readonly ['SPOT_TIME_IN_FORCE_UNAVAILABLE'];
+  readonly remainingExternalRequirements: readonly string[];
+  readonly capabilityRevision: string;
+  readonly sendEligible: false;
+  readonly documentaryAuthority: 'DOCUMENTARY_EVIDENCE_ONLY';
+  readonly externalActionAuthorization: 'NONE';
+  readonly actionAuthority: 'NONE_RECORD_ONLY';
+}
+
+export type BindBinanceSpotOrderTifCapabilityResult =
+  | {
+      readonly ok: true;
+      readonly binding: Readonly<BinanceSpotOrderTifCapability>;
+    }
+  | {
+      readonly ok: false;
+      readonly reasonCodes: readonly string[];
+    };
+
 export interface WaitingInstrumentBinding {
   readonly symbol: unknown;
   readonly instrumentRevision: unknown;

@@ -1,14 +1,14 @@
 # L09 state — normal Basis lifecycle shard
 
-Generation: `8`
+Generation: `9`
 
-Status: `BLOCKED_UNRESOLVED_ACCEPTANCE_GAPS`
+Status: `BLOCKED_SHARED_L02_L05_OWNER_DEPENDENCY`
 
 Implementation acceptance: `NO`
 
 Integrated acceptance: `NO`
 
-Surviving correction: `BUILT_AND_TESTED_NOT_PHASE_ACCEPTED`
+Surviving correction: `UNCOMMITTED_REVIEWED_WORKTREE_NOT_PHASE_ACCEPTED`
 
 ## Git and frozen inputs
 
@@ -66,65 +66,52 @@ Both identities match `live-edge-receipts/DIRECTIVE_INPUTS.lock`.
 
 ## Blocking findings
 
-1. Conflict-free one-way USD-M position/open-order truth is not proved.
-2. Base-asset fee-adjusted Spot exposure is not modeled.
-3. `reduceOnly`/`positionSide` are not bound to complete runtime twin request
-   evidence.
-4. Venue-arrival expiry is not checked against accepted policy/proposal expiry.
-5. A binary64 Foundation partial-close residual can reject matching exact
-   decimal venue owner truth.
-6. `REJECTED`/`EXPIRED_IN_MATCH` vocabulary and terminal-partial preservation
-   are not proved.
-7. `FAILED` agreement is absent, and partial/rejected/terminal-partial close
-   plus close/recovery cold-restart matrix rows remain missing.
-8. The non-green full System Integration result has no explicit director
-   baseline-exception ruling for L09 acceptance.
+1. Complete one-way USD-M position/open-order isolation is not provable from
+   the accepted L05 cut. `USDM_ALGO_OPEN_ORDERS` is unavailable, and D0009
+   forbids substituting standard open orders for conditional-order absence.
+2. L02/L05 are outside D-LAUNCH-12's exact granted paths. A normalBasis-local
+   absence claim would duplicate private-truth ownership.
+3. The prior non-green System Integration result remains unwaived; the
+   post-correction full gate was not reached in this blocked attempt.
 
-The earlier deep-copy/freeze finding is materially resolved by `a7a0f7c`.
+The fee, request-semantic, expiry, exact-decimal, terminal-status, FAILED and
+close/restart corrections survive in the uncommitted working tree, but do not
+constitute an accepted implementation while finding 1 remains unresolved.
 
-L09-003 made groups 1–5 independently blocking. The later group 3–4 assignment
-does not explicitly supersede groups 5–6. The acceptance verdict in `2fdb680`
-is therefore rejected.
-
-## Measured recovery verification
+## Measured bounded verification
 
 - Server build: exit `0`.
-- Normal Basis: `23/23`, exit `0`.
-- Exchange twin: `78/78`, exit `0`.
+- Normal Basis: `32/32`, exit `0`.
+- Exchange twin: `80/80`, exit `0`.
 - Execution policy: `49/49`, exit `0`.
-- Foundation execution: `173/173`, exit `0`.
+- Foundation execution: `178/178`, exit `0`.
 - Frozen protocol: `22/22`, exit `0`.
-- Import purity: `4/4`, exit `0`.
-- `npm test`: `377/377`, exit `0`.
-- System Integration: `179/180`, exit `1`; expected `PARTIAL`, actual
-  `DIVERGED` at
-  `server/test/systemIntegration/verticalSlice/authority.scenarios.test.mjs:521`.
 - `git diff --check`: pass.
 
-The shared mismatch has no normalBasis import and relevant blobs are unchanged
-from `ecd8006`; it is not an L09 regression and is not represented as green.
+Accumulated LiveEdge, full Foundation, `npm test`, full repository and current
+System Integration gates were not run after the final correction because the
+precise shared-owner blocker had already stopped the phase. They are not
+represented as green.
 
 ## Durable blocked disposition
 
 - Decision:
-  `live-edge-receipts/DECISIONS/L09-005-EMERGENCY-CHECKPOINT-AUDIT-BLOCKERS.md`.
+  `live-edge-receipts/DECISIONS/L09-006-D0009-ACCOUNT-ISOLATION-DEPENDENCY.md`.
 - Receipt:
-  `live-edge-receipts/RECEIPTS/L09_BLOCKED_EMERGENCY_CHECKPOINT_AUDIT.md`.
-- L09-005 decision SHA-256:
-  `5ce9e928645daafd740d6bfa7817ee7fd482fbe8721c9cb53d9d223ba9f30285`.
+  `live-edge-receipts/RECEIPTS/L09_BLOCKED_D0009_ACCOUNT_ISOLATION.md`.
+- L09-006 decision SHA-256:
+  `1ce6b88ee0575c86719dbe303908b176456d87dc3beebd1d2961df7a42628b9e`.
 - Blocked receipt SHA-256:
-  `96b2eabca36fa05f07e64103b1c56b4f013f16a12235f93cf9781763dc985b4e`.
-- Two-file code-unit-ordered manifest SHA-256:
-  `92b643b275400754c7054a4129c58197b576999c19399928fb303428e728ab96`.
+  `1cdaf3c21b7cdeca5ee197b91c62a77a3e41e00a2e4a366e0cb4045e732e7047`.
 
-Commit `11fec5c` contains the immutable blocked decision/receipt bytes and this
-state's generation-7 audit record. This generation is the state-only seal; it
-does not change implementation, decision or receipt.
+The containing blocked-documentation commit is recorded by the following
+state-only generation. This generation does not stage or commit implementation
+source/tests.
 
 ## Current posture and non-claims
 
-- L09: `BLOCKED_UNRESOLVED_ACCEPTANCE_GAPS`.
-- Implementation: `BUILT_AND_TESTED_NOT_PHASE_ACCEPTED`.
+- L09: `BLOCKED_SHARED_L02_L05_OWNER_DEPENDENCY`.
+- Implementation: `UNCOMMITTED_REVIEWED_WORKTREE_NOT_PHASE_ACCEPTED`.
 - Wiring: `UNWIRED`.
 - Money authority: `NONE`.
 - External actions: `NONE`.
@@ -138,7 +125,17 @@ enforced.
 
 ## Exact resume
 
-- Current step: `7/7` — immutable blocked audit and state-only seal complete.
-- Exact next task: stop `BLOCKED`. Do not modify implementation.
-- Resume only after the explicit director ruling or owner-scoped authorization
-  with exact path ownership required by L09-005.
+- Current step: D-LAUNCH-12 correction stopped before accumulated/full gates.
+- Exact blocker: accepted L05 records `USDM_ALGO_OPEN_ORDERS` as
+  `UNAVAILABLE_L02_CONTRACT_GAP_USDM_ALGO_OPEN_ORDERS`; D0009 forbids using
+  standard open orders as conditional-order absence.
+- The incomplete standard-only account fragment was discarded. Nineteen
+  independently mapped source/test paths remain modified but unstaged and
+  uncommitted; focused Normal Basis `32/32`, Exchange Twin `80/80`, Execution
+  Policy `49/49`, Foundation execution `178/178`, and protocol `22/22` pass.
+- Decision: `L09-006-D0009-ACCOUNT-ISOLATION-DEPENDENCY.md`.
+- Receipt: `L09_BLOCKED_D0009_ACCOUNT_ISOLATION.md`.
+- Exact next task: stop `BLOCKED_SHARED_L02_L05_OWNER_DEPENDENCY`.
+- Resume only after exact L02/L05 owner authorization for current USD-M algo
+  open-order truth or an explicit ruling that disposes D0009 and narrows the
+  L09-005 isolation finding. No System Integration exception is implied.

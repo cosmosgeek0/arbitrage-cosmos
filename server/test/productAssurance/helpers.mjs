@@ -1,14 +1,6 @@
 import { createHash } from 'node:crypto';
 import {
-  ACTION_SAFETY_CHECKS,
-  ACTION_SAFETY_CHECK_OWNERS,
-  ACTION_SAFETY_CHECK_REALMS,
-  ACTION_SAFETY_CHECK_SUBJECTS,
-  EXPECTED_CANONICAL_COMPONENTS,
-  EXPECTED_CANONICAL_CONTROLS,
-  EXPECTED_CANONICAL_DEPENDENCIES,
-  EXPECTED_CANONICAL_TELEMETRY,
-  computeActionSafetyEvidenceBindingDigest,
+  bindEvidenceTuple,
 } from '../../dist/productAssurance/index.js';
 
 export const NOW = 1_783_900_800_000;
@@ -32,102 +24,34 @@ export function evidence(label, overrides = {}) {
   });
 }
 
-export function completeInventoryObservation(overrides = {}) {
-  return Object.freeze({
-    observedAtMs: NOW,
-    components: EXPECTED_CANONICAL_COMPONENTS.map((component) => Object.freeze({
-      componentId: component.componentId,
-      discovered: true,
-      explicitlyUnavailable: false,
-      lastReporterSeenAtMs: NOW - 100,
-      lastMeaningfulAdvanceAtMs: NOW - 200,
-      observedRevision: 'SYSTEM_COMPONENT_SNAPSHOT_V1',
-    })),
-    dependencies: EXPECTED_CANONICAL_DEPENDENCIES.map((dependency) => Object.freeze({
-      dependencyId: dependency.dependencyId,
-      discovered: true,
-      state: 'AVAILABLE',
-    })),
-    controls: EXPECTED_CANONICAL_CONTROLS.map((control) => Object.freeze({
-      controlId: control.controlId,
-      state: 'LIVE',
-      backendCommandId: control.backendCommandId,
-    })),
-    telemetrySignals: EXPECTED_CANONICAL_TELEMETRY.map((signal) => Object.freeze({
-      signalId: signal.signalId,
-      observedAtMs: NOW - 100,
-      schemaRevision: signal.schemaRevision,
-      explicitlyUnavailable: false,
-    })),
-    completeCorrelationTraceAtMs: NOW - 100,
-    completeCorrelationTraceFreshnessMs: 30_000,
-    independentProbeAtMs: NOW - 100,
-    independentProbeFreshnessMs: 60_000,
-    independentProbeVerdict: 'PASS',
-    independentProbeEvidence: evidence('INDEPENDENT_BLACK_BOX_PROBE', {
-      ownerId: 'IP_OPS_DEPLOYMENT_OWNER',
-      observedAtMs: NOW - 100,
-      expiresAtMs: NOW + 60_000,
-      producerId: 'BLACK_BOX_PROBE_PRODUCER',
-      verifierId: 'BLACK_BOX_PROBE_VERIFIER',
-    }),
-    ...overrides,
-  });
-}
-
-export function invariantFacts(definitions, overrides = new Map()) {
+export function invariantFacts(
+  definitions,
+  overrides = new Map(),
+  releaseId = 'IP_ASSURANCE_TEST_RELEASE',
+  testedCommit = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+) {
   const factIds = [...new Set(definitions.flatMap((definition) => definition.factIds))].sort();
   const ownerByFactId = new Map(definitions.flatMap((definition) => definition.factIds.map((factId) => [factId, definition.factOwnerIds[factId]])));
-  return Object.freeze(factIds.map((factId, index) => Object.freeze({
-    factId,
-    value: overrides.has(factId) ? overrides.get(factId) : true,
-    evidence: evidence(`FACT_${index}`, {
+  const invariantByFactId = new Map(definitions.flatMap((definition) => definition.factIds.map((factId) => [factId, definition.invariantId])));
+  return Object.freeze(factIds.map((factId, index) => {
+    const factEvidence = evidence(`FACT_${index}`, {
       ownerId: ownerByFactId.get(factId),
       producerId: `FACT_PRODUCER_${index}`,
       verifierId: `FACT_VERIFIER_${index}`,
-    }),
-  })));
-}
-
-export function actionSafetyEnvelope(overrides = {}) {
-  const { checks: suppliedChecks, ...envelopeOverrides } = overrides;
-  const context = Object.freeze({
-    schema: 'PRODUCT_ASSURANCE_ACTION_SAFETY_EVIDENCE_V1',
-    revision: 1,
-    envelopeId: 'ENVELOPE_BASELINE',
-    actionId: 'ACTION_BASELINE',
-    actionRevision: 'ACTION_REVISION_1',
-    actionDigest: digest('action:baseline'),
-    actionClass: 'OBSERVATION',
-    createdAtMs: NOW - 2_000,
-    expiresAtMs: NOW + 30_000,
-    producerId: 'ACTION_ENVELOPE_PRODUCER',
-    verifierId: 'ACTION_ENVELOPE_VERIFIER',
-    commonModeGroupId: 'ACTION_COMMON_MODE_A',
-    verifierCommonModeGroupId: 'ACTION_COMMON_MODE_B',
-    ...envelopeOverrides,
-  });
-  const actionDigest = context.actionDigest;
-  const checks = ACTION_SAFETY_CHECKS.map((check, index) => {
-    const withoutBinding = {
-      check,
-      verdict: 'PASS',
-      reasonCodes: Object.freeze([]),
-      evidence: evidence(`ACTION_${index}`, { ownerId: ACTION_SAFETY_CHECK_OWNERS[check] }),
-      boundActionDigest: actionDigest,
-      evidenceSubjectId: ACTION_SAFETY_CHECK_SUBJECTS[check],
-      evidenceRealm: ACTION_SAFETY_CHECK_REALMS[check],
-      expectedOwnerId: ACTION_SAFETY_CHECK_OWNERS[check],
-    };
-    return Object.freeze({
-      ...withoutBinding,
-      bindingDigest: computeActionSafetyEvidenceBindingDigest(withoutBinding, context),
     });
-  });
-  return Object.freeze({
-    ...context,
-    checks: suppliedChecks ?? Object.freeze(checks),
-  });
+    return Object.freeze({
+      factId,
+      value: overrides.has(factId) ? overrides.get(factId) : true,
+      evidence: factEvidence,
+      evidenceBinding: bindEvidenceTuple({
+        ownerId: ownerByFactId.get(factId),
+        releaseId,
+        testedCommit,
+        subjectId: `INVARIANT:${invariantByFactId.get(factId)}:FACT:${factId}`,
+        evidenceDigest: factEvidence.digest,
+      }),
+    });
+  }));
 }
 
 export function campaign(overrides = {}) {

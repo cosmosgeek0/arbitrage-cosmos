@@ -4,10 +4,12 @@ import {
   assertIdentifier,
   assertSafeNonNegativeInteger,
   assertUtcMs,
+  evaluateEvidenceBinding,
   evaluateEvidenceRef,
   sortedUnique,
   verdictFromReasons,
   type AssuranceEvidenceRef,
+  type AssuranceEvidenceBinding,
   type AssuranceSeverity,
   type AssuranceVerdict,
 } from '../common.js';
@@ -95,10 +97,10 @@ export interface FailureControlEvidenceBinding {
   readonly dimension: FailureAssuranceDimension;
   readonly evidenceType: string;
   readonly evidenceSubjectId: string;
-  readonly evidenceDigest: string;
-  readonly releaseId: string;
-  readonly testedCommit: string;
+  readonly tupleBinding: Readonly<AssuranceEvidenceBinding>;
 }
+
+export const FAILURE_FAMILY_DENOMINATOR_SUBJECT_ID = 'FAILURE_ATLAS_EXPECTED_FAMILIES';
 
 export interface FailureAtlasFamilyDenominatorBinding {
   readonly schema: 'PRODUCT_ASSURANCE_FAILURE_FAMILY_DENOMINATOR_V1';
@@ -107,6 +109,7 @@ export interface FailureAtlasFamilyDenominatorBinding {
   readonly expectedFamilyIds: readonly string[];
   readonly expectedFamilyIdsDigest: string;
   readonly evidence: Readonly<AssuranceEvidenceRef>;
+  readonly evidenceBinding: Readonly<AssuranceEvidenceBinding>;
 }
 
 export function failureFamilyDenominatorDigest(expectedFamilyIds: readonly string[]): string {
@@ -343,9 +346,12 @@ function validateObservation(
         entry.evidenceBinding.evidenceSubjectId,
         'evidenceBinding.evidenceSubjectId',
       );
-      assertIdentifier(entry.evidenceBinding.releaseId, 'evidenceBinding.releaseId');
-      if (!/^[a-f0-9]{40}$/u.test(entry.evidenceBinding.testedCommit)) throw new TypeError('evidenceBinding.testedCommit must be a full Git SHA-1');
-      if (!/^[a-f0-9]{64}$/u.test(entry.evidenceBinding.evidenceDigest)) throw new TypeError('evidenceBinding.evidenceDigest must be a SHA-256 digest');
+      const tuple = entry.evidenceBinding.tupleBinding;
+      assertIdentifier(tuple.ownerId, 'evidenceBinding.tupleBinding.ownerId');
+      assertIdentifier(tuple.releaseId, 'evidenceBinding.tupleBinding.releaseId');
+      assertIdentifier(tuple.subjectId, 'evidenceBinding.tupleBinding.subjectId');
+      if (!/^[a-f0-9]{40}$/u.test(tuple.testedCommit)) throw new TypeError('evidenceBinding.tupleBinding.testedCommit must be a full Git SHA-1');
+      if (!/^[a-f0-9]{64}$/u.test(tuple.evidenceDigest)) throw new TypeError('evidenceBinding.tupleBinding.evidenceDigest must be a SHA-256 digest');
     }
   }
 }
@@ -381,6 +387,8 @@ function evaluateDimension(
   const binding = observation.evidenceBinding;
   if (observation.evidence !== null && binding === null) {
     failed.push('EVIDENCE_BINDING_MISSING');
+  } else if (observation.evidence === null && binding !== null) {
+    failed.push('EVIDENCE_BINDING_WITHOUT_EVIDENCE');
   } else if (binding !== null) {
     if (binding.failureId !== observation.failureId) {
       failed.push('EVIDENCE_FAILURE_SUBJECT_MISMATCH');
@@ -397,8 +405,16 @@ function evaluateDimension(
     if (binding.evidenceSubjectId !== control.expectedEvidenceSubjectId) {
       failed.push('EVIDENCE_SUBJECT_ID_MISMATCH');
     }
-    if (binding.releaseId !== releaseId || binding.testedCommit !== testedCommit) failed.push('EVIDENCE_RELEASE_BINDING_INVALID');
-    if (observation.evidence !== null && binding.evidenceDigest !== observation.evidence.digest) failed.push('EVIDENCE_DIGEST_BINDING_MISMATCH');
+    if (observation.evidence !== null) {
+      const exactBinding = evaluateEvidenceBinding(observation.evidence, binding.tupleBinding, {
+        ownerId: control.ownerId,
+        releaseId,
+        testedCommit,
+        subjectId: control.expectedEvidenceSubjectId,
+        evidenceDigest: observation.evidence.digest ?? '',
+      });
+      if (exactBinding.verdict === 'FAIL') failed.push(...exactBinding.reasonCodes);
+    }
   }
   if (evidenceReusedAcrossControls) {
     failed.push('EVIDENCE_ARTIFACT_REUSED_ACROSS_CONTROLS');
@@ -462,6 +478,17 @@ export function projectOperationalFailureAtlas(
   const familyBindingEvidence = evaluateEvidenceRef(familyBinding.evidence, observation.evaluatedAtMs, true);
   if (familyBinding.evidence.digest !== familyBinding.expectedFamilyIdsDigest) throw new TypeError('failure family denominator evidence digest mismatch');
   if (familyBinding.evidence.ownerId !== 'IP_ASSURANCE_HAZARD_SATELLITE') throw new TypeError('failure family denominator owner mismatch');
+  const familyBindingExact = evaluateEvidenceBinding(
+    familyBinding.evidence,
+    familyBinding.evidenceBinding,
+    {
+      ownerId: 'IP_ASSURANCE_HAZARD_SATELLITE',
+      releaseId: catalog.releaseId,
+      testedCommit: catalog.testedCommit,
+      subjectId: FAILURE_FAMILY_DENOMINATOR_SUBJECT_ID,
+      evidenceDigest: familyBinding.expectedFamilyIdsDigest,
+    },
+  );
   if (catalog.generatedAtMs > observation.evaluatedAtMs) throw new TypeError('failure atlas catalog cannot be generated after evaluation');
   const observationByControl = new Map(
     observation.controls.map(
@@ -545,6 +572,9 @@ export function projectOperationalFailureAtlas(
   if (missingFamilies.length > 0) reasons.push('EXPECTED_FAILURE_FAMILY_MISSING');
   if (familyBindingEvidence.verdict === 'FAIL') reasons.push('FAILURE_FAMILY_DENOMINATOR_EVIDENCE_FAILED');
   if (familyBindingEvidence.verdict === 'UNKNOWN') reasons.push('FAILURE_FAMILY_DENOMINATOR_EVIDENCE_UNKNOWN');
+  if (familyBindingExact.verdict === 'FAIL') {
+    reasons.push('FAILURE_FAMILY_DENOMINATOR_BINDING_FAILED', ...familyBindingExact.reasonCodes);
+  }
   if (failures.some((failure) => failure.verdict === 'FAIL')) {
     reasons.push('FAILURE_ASSURANCE_CONTROL_FAILED');
   }
@@ -552,7 +582,8 @@ export function projectOperationalFailureAtlas(
     reasons.push('FAILURE_ASSURANCE_CONTROL_UNKNOWN');
   }
 
-  const overallVerdict: AssuranceVerdict = familyBindingEvidence.verdict === 'FAIL' || failures.some(
+  const overallVerdict: AssuranceVerdict = familyBindingEvidence.verdict === 'FAIL'
+    || familyBindingExact.verdict === 'FAIL' || failures.some(
     (failure) => failure.verdict === 'FAIL',
   )
     ? 'FAIL'
@@ -668,72 +699,13 @@ export function projectOperationalFailureRecords(
   });
   const recordIds = records.map((record) => record.recordId);
   if (new Set(recordIds).size !== recordIds.length) throw new TypeError('failure record IDs must be unique');
-  const fingerprints = records.map((record) => record.fingerprint);
-  const duplicateFingerprints = new Set(fingerprints.filter((fingerprint, index) => fingerprints.indexOf(fingerprint) !== index));
-  const failed: string[] = [];
-  const unknown: string[] = [];
-  const eligible: string[] = [];
-  const rejected: string[] = [];
-  const recurrence: Record<string, number> = {};
-  for (const record of records) {
-    if (record.schema !== 'PRODUCT_ASSURANCE_FAILURE_RECORD_V1') throw new TypeError('failure record schema unsupported');
-    assertSafeNonNegativeInteger(record.revision, 'record.revision');
-    for (const [label, value] of [
-      ['recordId', record.recordId], ['fingerprint', record.fingerprint], ['releaseId', record.releaseId],
-      ['componentId', record.componentId], ['componentRevision', record.componentRevision],
-      ['regressionFixtureId', record.regressionFixtureId], ['playbookRevision', record.playbookRevision],
-      ['reviewerId', record.reviewerId], ['postmortemId', record.postmortemId],
-    ] as const) assertIdentifier(value, `record.${label}`);
-    if (!/^[a-f0-9]{40}$/u.test(record.testedCommit)) throw new TypeError('record.testedCommit must be a full Git SHA-1');
-    assertCode(record.triggerCode, 'record.triggerCode');
-    validateIdentifierArray(record.dependencyIds, 'record.dependencyIds', true);
-    validateIdentifierArray(record.failedInvariantIds, 'record.failedInvariantIds', true);
-    validateIdentifierArray(record.containmentActionIds, 'record.containmentActionIds', true);
-    validateIdentifierArray(record.rootCauseIds, 'record.rootCauseIds', true);
-    validateIdentifierArray(record.contributingCauseIds, 'record.contributingCauseIds');
-    validateIdentifierArray(record.modelRevisionIds, 'record.modelRevisionIds');
-    validateIdentifierArray(record.actionItemIds, 'record.actionItemIds');
-    if (!Array.isArray(record.symptomCodes) || record.symptomCodes.length === 0) throw new TypeError('record.symptomCodes must be nonempty');
-    for (const code of record.symptomCodes) assertCode(code, 'record.symptomCode');
-    assertSafeNonNegativeInteger(record.faultSeed, 'record.faultSeed');
-    assertSafeNonNegativeInteger(record.recurrenceCount, 'record.recurrenceCount');
-    for (const [label, value] of [
-      ['capitalImpactUnits', record.capitalImpactUnits], ['exposureImpactUnits', record.exposureImpactUnits], ['liabilityImpactUnits', record.liabilityImpactUnits],
-    ] as const) if (value !== null) assertSafeNonNegativeInteger(value, `record.${label}`);
-    if (!(['NONE', 'PRESENT', 'UNKNOWN'] as const).includes(record.ambiguityImpact)) throw new TypeError('record.ambiguityImpact unsupported');
-    if (!(['ASSURANCE_RESTRICTED', 'REVIEWER_RESTRICTED'] as const).includes(record.accessClass)) throw new TypeError('record.accessClass unsupported');
-    if (typeof record.sanitized !== 'boolean') throw new TypeError('record.sanitized must be boolean');
-    if (!/^[a-f0-9]{64}$/u.test(record.provenanceDigest)) throw new TypeError('record.provenanceDigest must be a SHA-256 digest');
-    assertUtcMs(record.retentionUntilMs, 'record.retentionUntilMs');
-    if (record.timeline.length === 0) throw new TypeError('record.timeline must be nonempty');
-    let lastTime = -1;
-    for (const event of record.timeline) {
-      assertIdentifier(event.eventId, 'timeline.eventId');
-      assertUtcMs(event.occurredAtMs, 'timeline.occurredAtMs');
-      if (event.occurredAtMs < lastTime || event.occurredAtMs > evaluatedAtMs) throw new TypeError('failure timeline must be ordered and not from the future');
-      lastTime = event.occurredAtMs;
-      if (!(['TRIGGER', 'SYMPTOM', 'CONTAINMENT', 'REPAIR', 'VERIFICATION', 'RECURRENCE'] as const).includes(event.phase)) throw new TypeError('timeline.phase unsupported');
-      assertIdentifier(event.componentId, 'timeline.componentId');
-      validateIdentifierArray(event.evidenceIds, 'timeline.evidenceIds', true);
-    }
-    if (record.repairAttempts.length === 0) unknown.push('FAILURE_REPAIR_ATTEMPTS_MISSING');
-    for (const attempt of record.repairAttempts) {
-      assertIdentifier(attempt.attemptId, 'repair.attemptId');
-      assertIdentifier(attempt.actionId, 'repair.actionId');
-      if (!(['SUCCEEDED', 'FAILED', 'FALSE_REPAIR', 'AMBIGUOUS'] as const).includes(attempt.result)) throw new TypeError('repair.result unsupported');
-      assertIdentifier(attempt.verifierId, 'repair.verifierId');
-      validateIdentifierArray(attempt.postconditionEvidenceIds, 'repair.postconditionEvidenceIds', true);
-    }
-    const evidence = evaluateEvidenceRef(record.evidence, evaluatedAtMs, true);
-    const recordFailed = !record.sanitized || record.retentionUntilMs <= evaluatedAtMs || evidence.verdict === 'FAIL';
-    const recordUnknown = record.repairAttempts.length === 0 || evidence.verdict === 'UNKNOWN';
-    if (!record.sanitized) failed.push('FAILURE_RECORD_NOT_SANITIZED');
-    if (record.retentionUntilMs <= evaluatedAtMs) failed.push('FAILURE_RECORD_RETENTION_EXPIRED');
-    if (evidence.verdict === 'FAIL') failed.push(...evidence.reasonCodes);
-    if (evidence.verdict === 'UNKNOWN') unknown.push(...evidence.reasonCodes);
-    if (duplicateFingerprints.has(record.fingerprint) && record.recurrenceCount === 0) failed.push('FAILURE_RECORD_DUPLICATE_WITHOUT_RECURRENCE');
-    recurrence[record.fingerprint] = (recurrence[record.fingerprint] ?? 0) + Math.max(1, record.recurrenceCount);
-    if (recordFailed || recordUnknown) rejected.push(record.recordId); else eligible.push(record.recordId);
-  }
-  return Object.freeze({ verdict: verdictFromReasons(failed, unknown), eligibleRecordIds: sortedUnique(eligible), rejectedRecordIds: sortedUnique(rejected), recurrenceByFingerprint: Object.freeze({ ...recurrence }), reasonCodes: sortedUnique([...failed, ...unknown]), secondStoreCreated: false });
+  for (const recordId of recordIds) assertIdentifier(recordId, 'record.recordId');
+  return Object.freeze({
+    verdict: 'UNKNOWN',
+    eligibleRecordIds: Object.freeze([]),
+    rejectedRecordIds: sortedUnique(recordIds),
+    recurrenceByFingerprint: Object.freeze({}),
+    reasonCodes: Object.freeze(['FAILURE_RECORD_OWNER_CONTRACT_WAITING']),
+    secondStoreCreated: false,
+  });
 }

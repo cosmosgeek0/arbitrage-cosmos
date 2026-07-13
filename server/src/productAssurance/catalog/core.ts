@@ -1,17 +1,9 @@
 import type {
-  ExpectedComponent,
-  ExpectedControl,
-  ExpectedDependency,
-  ExpectedInventoryManifest,
-  ExpectedTelemetrySignal,
-} from '../inventory/coverage.js';
-import type {
   SafetyInvariantDefinition,
 } from '../invariants/evaluator.js';
 import type {
   OperationClass,
   OperationPolicy,
-  OperationPriority,
   OperationWiringState,
 } from '../operations/policy.js';
 import type { AssuranceSeverity } from '../common.js';
@@ -73,13 +65,11 @@ interface OperationPolicySeed {
   readonly permanentErrorCodes?: readonly string[];
   readonly ambiguousErrorCodes?: readonly string[];
   readonly backoff?: OperationPolicy['backoff'];
-  readonly priority?: OperationPriority;
-  readonly reserveUnits?: number;
-  readonly cooldownBehavior?: OperationPolicy['rateBudget']['cooldownBehavior'];
   readonly idempotency?: OperationPolicy['idempotency'];
   readonly authoritativeReconciliationLookup?: string | null;
   readonly circuit?: OperationPolicy['circuit'];
-  readonly concurrencyLimit?: number;
+  readonly concurrencyLimit?: number | null;
+  readonly concurrencyLimitState?: OperationPolicy['concurrencyLimitState'];
   readonly cancellation?: OperationPolicy['cancellation'];
   readonly controlLoop?: OperationPolicy['controlLoop'];
   readonly costResourceEvidence?: OperationPolicy['costResourceEvidence'];
@@ -121,9 +111,12 @@ function operationPolicy(seed: Readonly<OperationPolicySeed>): Readonly<Operatio
       totalRetryBudgetMs: 2_500,
     }),
     rateBudget: Object.freeze({
-      priority: seed.priority ?? 'NORMAL',
-      reserveUnits: seed.reserveUnits ?? 0,
-      cooldownBehavior: seed.cooldownBehavior ?? 'HONOR_OWNER_COOLDOWN',
+      surface: 'RATE_BUDGET' as const,
+      ownerId: 'INTELLIGENCE_RUNTIME_RATE_BUDGET' as const,
+      contractState: 'OWNER_CONTRACT_WAITING' as const,
+      priority: null,
+      reserveUnits: null,
+      cooldownBehavior: 'OWNER_CONTRACT_WAITING' as const,
     }),
     idempotency: Object.freeze(seed.idempotency ?? {
       required: false,
@@ -132,20 +125,21 @@ function operationPolicy(seed: Readonly<OperationPolicySeed>): Readonly<Operatio
       durability: 'NOT_APPLICABLE',
     }),
     authoritativeReconciliationLookup: seed.authoritativeReconciliationLookup ?? null,
-    circuit: Object.freeze(seed.circuit ?? {
+    circuit: seed.circuit === null ? null : Object.freeze(seed.circuit ?? {
       failureThreshold: 3,
       resetAfterMs: 30_000,
       halfOpenMaximumProbes: 1,
       healthyQuietWindowMs: 30_000,
     }),
-    concurrencyLimit: seed.concurrencyLimit ?? 4,
+    concurrencyLimit: seed.concurrencyLimit === undefined ? 4 : seed.concurrencyLimit,
+    concurrencyLimitState: seed.concurrencyLimitState ?? 'KNOWN_BOUNDED',
     cancellation: Object.freeze(seed.cancellation ?? {
       mode: 'COOPERATIVE_ABORT',
       lateCompletionLaw: 'QUARANTINE',
       maximumCancellationWaitMs: seed.deadlineMs,
       cancellationEvidenceId: `${operationId}.cancellation`,
     }),
-    controlLoop: Object.freeze(seed.controlLoop ?? {
+    controlLoop: seed.controlLoop === null ? null : Object.freeze(seed.controlLoop ?? {
       maximumConsecutiveRepairs: 1,
       maximumAmplificationFactor: 1,
       alternatingFingerprintWindowMs: 60_000,
@@ -259,14 +253,13 @@ export const OPERATION_POLICY_REGISTRY: readonly Readonly<OperationPolicy>[] = O
     operationId: 'OP_PUBLIC_HTTP_READ',
     operationClass: 'PURE_READ',
     canonicalOwnerId: 'INTELLIGENCE_RUNTIME',
-    implementationPaths: ['server/src/binance/rest.ts', 'server/src/binance/icons.ts', 'server/src/binance/profile.ts', 'server/src/binance/moneyflow.ts', 'server/src/index.ts', 'server/src/services/newsContext.ts', 'server/src/intelligenceRuntime/**'],
+    implementationPaths: ['server/src/binance/rest.ts', 'server/src/binance/icons.ts', 'server/src/binance/profile.ts', 'server/src/binance/moneyflow.ts', 'server/src/index.ts', 'server/src/intelligenceRuntime/**'],
     wiringState: 'WIRED',
     deadlineMs: 5_000,
     transientErrorCodes: ['TIMEOUT', 'RATE_LIMITED', 'UPSTREAM_UNAVAILABLE'],
     permanentErrorCodes: ['INVALID_RESPONSE', 'AUTHORIZATION_DENIED'],
     ambiguousErrorCodes: [],
     maximumAttempts: 3,
-    priority: 'NORMAL',
     fallbackEligibility: 'ACCEPTED_OWNER_ONLY',
     degradedResult: 'PUBLIC_FACT_UNAVAILABLE',
     blockedResult: 'PUBLIC_SOURCE_BLOCKED',
@@ -287,6 +280,39 @@ export const OPERATION_POLICY_REGISTRY: readonly Readonly<OperationPolicy>[] = O
       metricId: 'OP_PUBLIC_HTTP_READ.rate_budget', missingBehavior: 'BLOCK_OPERATION',
     },
     faultTestIds: ['FAULT_HTTP_TIMEOUT', 'FAULT_THROTTLE_COOLDOWN'],
+  }),
+  operationPolicy({
+    operationId: 'OP_NEWS_CONTEXT_PUBLIC_READ',
+    operationClass: 'PURE_READ',
+    canonicalOwnerId: 'EXISTING_NEWS_CONTEXT_SERVICE',
+    implementationPaths: ['server/src/services/newsContext.ts'],
+    wiringState: 'WIRED',
+    deadlineMs: 16_350,
+    transientErrorCodes: ['TIMEOUT', 'UPSTREAM_UNAVAILABLE', 'HTTP_408', 'HTTP_429', 'HTTP_5XX'],
+    permanentErrorCodes: ['INVALID_RESPONSE', 'INVALID_CONTENT_TYPE', 'BODY_TOO_LARGE', 'REDIRECT_POLICY_REJECTED'],
+    ambiguousErrorCodes: [],
+    maximumAttempts: 2,
+    backoff: { baseDelayMs: 350, maximumDelayMs: 350, jitterRatio: 0, totalRetryBudgetMs: 16_350 },
+    concurrencyLimit: null,
+    concurrencyLimitState: 'OWNER_CONTRACT_WAITING',
+    fallbackEligibility: 'ACCEPTED_OWNER_ONLY',
+    degradedResult: 'CACHED_NEWS_CONTEXT_DELAYED',
+    blockedResult: 'NEWS_CONTEXT_SOURCE_ERROR',
+    automaticRemediationAllowed: false,
+    escalationControlId: 'OWNER_NEWS_CONTEXT_REVIEW',
+    runbookId: 'RUNBOOK_NEWS_CONTEXT_PUBLIC_READ',
+    cockpitLocation: 'news.context.source_health',
+    cancellation: {
+      mode: 'COOPERATIVE_ABORT', lateCompletionLaw: 'IGNORE_READ_ONLY',
+      maximumCancellationWaitMs: 8_000, cancellationEvidenceId: 'OP_NEWS_CONTEXT_PUBLIC_READ.cancellation',
+    },
+    circuit: null,
+    controlLoop: null,
+    costResourceEvidence: {
+      required: false, budgetOwnerId: 'INTELLIGENCE_RUNTIME_RATE_BUDGET',
+      metricId: 'OP_NEWS_CONTEXT_PUBLIC_READ.rate_budget', missingBehavior: 'NOT_APPLICABLE',
+    },
+    faultTestIds: ['FAULT_NEWS_CONTEXT_TIMEOUT', 'FAULT_NEWS_CONTEXT_REDIRECT', 'FAULT_NEWS_CONTEXT_BODY_LIMIT'],
   }),
   operationPolicy({
     operationId: 'OP_PUBLIC_WEBSOCKET_STREAM',
@@ -368,8 +394,6 @@ export const OPERATION_POLICY_REGISTRY: readonly Readonly<OperationPolicy>[] = O
     permanentErrorCodes: ['DATABASE_CORRUPT', 'SCHEMA_INCOMPATIBLE', 'DISK_FULL'],
     ambiguousErrorCodes: ['COMMIT_STATE_UNKNOWN'],
     maximumAttempts: 3,
-    priority: 'RECONCILIATION',
-    reserveUnits: 1,
     idempotency: { required: true, identityField: 'materialEventId', lifetimeMs: 31_536_000_000, durability: 'DURABLE' },
     authoritativeReconciliationLookup: 'LEDGER_MATERIAL_EVENT_ID_LOOKUP',
     concurrencyLimit: 1,
@@ -401,8 +425,6 @@ export const OPERATION_POLICY_REGISTRY: readonly Readonly<OperationPolicy>[] = O
     permanentErrorCodes: ['AUTHORIZATION_DENIED', 'TARGET_NOT_ALLOWED', 'INVALID_REQUEST'],
     ambiguousErrorCodes: ['CONTROL_RESULT_UNKNOWN'],
     maximumAttempts: 2,
-    priority: 'NORMAL',
-    cooldownBehavior: 'HONOR_OWNER_COOLDOWN',
     idempotency: { required: true, identityField: 'ownerApprovedRequestId', lifetimeMs: 86_400_000, durability: 'DURABLE' },
     authoritativeReconciliationLookup: 'AWS_OWNER_READBACK',
     concurrencyLimit: 1,
@@ -433,9 +455,6 @@ export const OPERATION_POLICY_REGISTRY: readonly Readonly<OperationPolicy>[] = O
     permanentErrorCodes: ['CONTROL_REJECTED', 'REVISION_CONFLICT', 'AUTHORIZATION_DENIED'],
     ambiguousErrorCodes: ['CONTROL_COMMIT_UNKNOWN'],
     maximumAttempts: 1,
-    priority: 'RISK_REDUCING',
-    reserveUnits: 2,
-    cooldownBehavior: 'NO_RETRY',
     idempotency: { required: true, identityField: 'requestDigest', lifetimeMs: 86_400_000, durability: 'DURABLE' },
     authoritativeReconciliationLookup: 'CONTROL_RECEIPT_AND_CHECKPOINT_LOOKUP',
     concurrencyLimit: 1,
@@ -466,7 +485,6 @@ export const OPERATION_POLICY_REGISTRY: readonly Readonly<OperationPolicy>[] = O
     permanentErrorCodes: ['REQUEST_SCHEMA_INVALID', 'AUTHORIZATION_DENIED'],
     ambiguousErrorCodes: [],
     maximumAttempts: 1,
-    cooldownBehavior: 'NOT_APPLICABLE',
     degradedResult: 'HTTP_READ_UNAVAILABLE',
     blockedResult: 'HTTP_SURFACE_BLOCKED',
     escalationControlId: 'OWNER_HTTP_DIAGNOSTIC',
@@ -517,9 +535,6 @@ export const OPERATION_POLICY_REGISTRY: readonly Readonly<OperationPolicy>[] = O
     ambiguousErrorCodes: ['UNKNOWN_SUBMISSION'],
     maximumAttempts: 1,
     backoff: { baseDelayMs: 0, maximumDelayMs: 0, jitterRatio: 0, totalRetryBudgetMs: 0 },
-    priority: 'NORMAL',
-    reserveUnits: 0,
-    cooldownBehavior: 'NO_RETRY',
     idempotency: { required: true, identityField: 'clientOperationId', lifetimeMs: 86_400_000, durability: 'DURABLE' },
     authoritativeReconciliationLookup: 'PRIVATE_EXCHANGE_QUERY_NOT_COMPOSED',
     circuit: { failureThreshold: 1, resetAfterMs: 86_400_000, halfOpenMaximumProbes: 1, healthyQuietWindowMs: 86_400_000 },
@@ -552,8 +567,6 @@ export const OPERATION_POLICY_REGISTRY: readonly Readonly<OperationPolicy>[] = O
     permanentErrorCodes: ['TELEMETRY_SCHEMA_INCOMPATIBLE'],
     ambiguousErrorCodes: ['EXPORT_DELIVERY_UNKNOWN'],
     maximumAttempts: 3,
-    priority: 'RECONCILIATION',
-    reserveUnits: 1,
     idempotency: { required: true, identityField: 'telemetryRecordId', lifetimeMs: 86_400_000, durability: 'DURABLE' },
     authoritativeReconciliationLookup: 'INDEPENDENT_TELEMETRY_DELIVERY_RECEIPT',
     concurrencyLimit: 4,
@@ -585,8 +598,6 @@ export const OPERATION_POLICY_REGISTRY: readonly Readonly<OperationPolicy>[] = O
     permanentErrorCodes: ['OUTPUT_SCHEMA_INVALID', 'TOOL_CAPABILITY_FORBIDDEN'],
     ambiguousErrorCodes: [],
     maximumAttempts: 1,
-    priority: 'OPTIONAL',
-    cooldownBehavior: 'NO_RETRY',
     poisonEventQuarantine: true,
     degradedResult: 'DIAGNOSTIC_PLANE_UNAVAILABLE',
     blockedResult: 'DIAGNOSTIC_PLANE_UNAVAILABLE',
@@ -614,9 +625,6 @@ export const OPERATION_POLICY_REGISTRY: readonly Readonly<OperationPolicy>[] = O
     permanentErrorCodes: ['ACTION_NOT_REGISTERED', 'BUDGET_EXHAUSTED', 'FENCE_REJECTED'],
     ambiguousErrorCodes: ['REPAIR_COMPLETION_UNKNOWN'],
     maximumAttempts: 1,
-    priority: 'RISK_REDUCING',
-    reserveUnits: 2,
-    cooldownBehavior: 'NO_RETRY',
     idempotency: { required: true, identityField: 'campaignActionIdentity', lifetimeMs: 604_800_000, durability: 'DURABLE' },
     authoritativeReconciliationLookup: 'INDEPENDENT_POSTCONDITION_AND_CAMPAIGN_LEDGER',
     concurrencyLimit: 1,
@@ -653,8 +661,6 @@ export const OPERATION_POLICY_REGISTRY: readonly Readonly<OperationPolicy>[] = O
     permanentErrorCodes: ['Q_PROTOCOL_INCOMPATIBLE', 'Q_SCHEMA_INCOMPATIBLE'],
     ambiguousErrorCodes: [],
     maximumAttempts: 1,
-    priority: 'OPTIONAL',
-    cooldownBehavior: 'NO_RETRY',
     poisonEventQuarantine: true,
     degradedResult: 'ABSTAIN_UNKNOWN',
     blockedResult: 'ABSTAIN_UNKNOWN',
@@ -886,20 +892,6 @@ export const SAFETY_INVARIANT_CATALOG: readonly Readonly<SafetyInvariantDefiniti
     adversarialTestIds: ['FAULT_STALE_FILTER', 'FAULT_ACCOUNT_MODE_CHANGE', 'FAULT_CLOCK_OFFSET'],
   }),
   invariantDefinition({
-    invariantId: 'INV_RISK_REDUCTION_RATE_RESERVE',
-    family: 'RISK_REDUCTION_RATE_RESERVE',
-    ownerId: 'BACKEND_FOUNDATION_EXECUTION',
-    expression: 'Rate capacity reserved for reconciliation and risk reduction remains available before normal or optional work.',
-    factIds: ['rate.reconciliation_reserve_available', 'rate.risk_reduction_reserve_available', 'rate.priority_order_enforced'],
-    rule: { kind: 'ALL_TRUE' },
-    failSafeAction: 'SHED_OPTIONAL_AND_NORMAL_WORK',
-    incidentId: 'INCIDENT_RATE_RESERVE',
-    cockpitSurface: 'health.assurance.rate_budget',
-    repairControlId: 'CONTROL_INTAKE_PAUSE',
-    runbookId: 'RUNBOOK_RATE_RESERVE',
-    adversarialTestIds: ['FAULT_THROTTLE_COOLDOWN', 'FAULT_RETRY_AMPLIFICATION'],
-  }),
-  invariantDefinition({
     invariantId: 'INV_DURABLE_ADVANCEMENT',
     family: 'DURABLE_ADVANCEMENT',
     ownerId: 'EXISTING_LEDGER',
@@ -926,20 +918,6 @@ export const SAFETY_INVARIANT_CATALOG: readonly Readonly<SafetyInvariantDefiniti
     repairControlId: 'OWNER_CONFIGURATION_REVIEW',
     runbookId: 'RUNBOOK_REVISION_COMPATIBILITY',
     adversarialTestIds: ['FAULT_SCHEMA_DRIFT', 'FAULT_MODEL_REVISION_MISSING', 'FAULT_PROTOCOL_MISMATCH'],
-  }),
-  invariantDefinition({
-    invariantId: 'INV_EXPECTED_INVENTORY_TELEMETRY',
-    family: 'EXPECTED_INVENTORY_TELEMETRY',
-    ownerId: 'SYSTEM_INTEGRATION',
-    expression: 'Every expected component, dependency, control, invariant, telemetry signal, and owner question is accounted for.',
-    factIds: ['inventory.expected_components_complete', 'inventory.expected_dependencies_complete', 'inventory.expected_controls_complete', 'inventory.expected_telemetry_complete', 'inventory.owner_questions_complete'],
-    rule: { kind: 'ALL_TRUE' },
-    failSafeAction: 'BLOCK_OVERALL_GREEN',
-    incidentId: 'INCIDENT_EXPECTED_INVENTORY_GAP',
-    cockpitSurface: 'health.assurance.coverage',
-    repairControlId: 'OWNER_INVENTORY_REVIEW',
-    runbookId: 'RUNBOOK_EXPECTED_INVENTORY',
-    adversarialTestIds: ['FAULT_MISSING_EXPECTED_COMPONENT', 'FAULT_SILENT_EXPECTED_COMPONENT', 'FAULT_SCHEMA_INCOMPATIBLE_TELEMETRY'],
   }),
   invariantDefinition({
     invariantId: 'INV_BACKUP_WATCHDOG_PROBE_FRESHNESS',
@@ -1212,147 +1190,3 @@ export const OWNER_QUESTION_COVERAGE: readonly Readonly<OwnerQuestionCoverageEnt
 ]);
 
 export const CORE_OWNER_QUESTION_COVERAGE = OWNER_QUESTION_COVERAGE;
-
-function component(
-  componentId: string,
-  ownerId: string,
-  ownerPath: string,
-  capitalCritical: boolean,
-  silentAfterMs: number,
-  staleAfterMs: number,
-): Readonly<ExpectedComponent> {
-  return Object.freeze({ componentId, ownerId, ownerPath, capitalCritical, silentAfterMs, staleAfterMs });
-}
-
-function dependency(
-  dependencyId: string,
-  fromComponentId: string,
-  toComponentId: string,
-  required: boolean,
-  capitalCritical: boolean,
-): Readonly<ExpectedDependency> {
-  return Object.freeze({ dependencyId, fromComponentId, toComponentId, required, capitalCritical });
-}
-
-function control(
-  controlId: string,
-  backendOwnerId: string,
-  backendCommandId: string,
-): Readonly<ExpectedControl> {
-  return Object.freeze({ controlId, backendOwnerId, backendCommandId, required: true });
-}
-
-function telemetry(
-  signalId: string,
-  ownerId: string,
-  schemaRevision: string,
-  freshnessMs: number,
-  capitalCritical: boolean,
-): Readonly<ExpectedTelemetrySignal> {
-  return Object.freeze({ signalId, ownerId, schemaRevision, freshnessMs, required: true, capitalCritical });
-}
-
-/** Exact canonical supervisor denominator. ProductAssurance is not a 14th node. */
-export const EXPECTED_CANONICAL_COMPONENTS: readonly Readonly<ExpectedComponent>[] = Object.freeze([
-  component('public-spot-source', 'INTELLIGENCE_RUNTIME', 'server/src/intelligenceRuntime', true, 10_000, 30_000),
-  component('public-usdm-source', 'INTELLIGENCE_RUNTIME', 'server/src/intelligenceRuntime', true, 10_000, 30_000),
-  component('market-universe', 'AUDITED_APP', 'server/src/engine/marketData.ts', true, 15_000, 60_000),
-  component('intelligence-runtime', 'INTELLIGENCE_RUNTIME', 'server/src/intelligenceRuntime', true, 15_000, 60_000),
-  component('market-intelligence', 'MARKET_INTELLIGENCE', 'server/src/intelligenceFoundation', true, 15_000, 60_000),
-  component('basis-engine', 'BASIS_ENGINE', 'server/src/engine/basis', false, 15_000, 60_000),
-  component('volume-engine', 'VOLUME_ENGINE', 'server/src/engine/volume', false, 15_000, 60_000),
-  component('capital-supervision', 'CAPITAL_SUPERVISION', 'server/src/capitalFoundation', true, 15_000, 60_000),
-  component('multileg-risk', 'BACKEND_FOUNDATION_RISK', 'server/src/foundation/risk', true, 15_000, 60_000),
-  component('execution-coordinator-validate-only', 'BACKEND_FOUNDATION_EXECUTION', 'server/src/foundation/execution', true, 15_000, 60_000),
-  component('reconciliation', 'BACKEND_FOUNDATION_RECONCILIATION', 'server/src/foundation/reconciliation', true, 15_000, 60_000),
-  component('ledger-persistence', 'EXISTING_LEDGER', 'server/src/ledger.ts', true, 15_000, 60_000),
-  component('engine-supervisor', 'SYSTEM_INTEGRATION', 'server/src/systemIntegration', true, 15_000, 60_000),
-]);
-
-export const EXPECTED_CANONICAL_DEPENDENCIES: readonly Readonly<ExpectedDependency>[] = Object.freeze([
-  dependency('DEP_LEDGER_TO_PUBLIC_SPOT', 'ledger-persistence', 'public-spot-source', true, true),
-  dependency('DEP_LEDGER_TO_PUBLIC_USDM', 'ledger-persistence', 'public-usdm-source', true, true),
-  dependency('DEP_LEDGER_TO_SUPERVISOR', 'ledger-persistence', 'engine-supervisor', true, true),
-  dependency('DEP_PUBLIC_SPOT_TO_UNIVERSE', 'public-spot-source', 'market-universe', true, true),
-  dependency('DEP_PUBLIC_USDM_TO_UNIVERSE', 'public-usdm-source', 'market-universe', false, false),
-  dependency('DEP_UNIVERSE_TO_RUNTIME', 'market-universe', 'intelligence-runtime', true, true),
-  dependency('DEP_PUBLIC_SPOT_TO_RUNTIME', 'public-spot-source', 'intelligence-runtime', true, true),
-  dependency('DEP_PUBLIC_USDM_TO_RUNTIME', 'public-usdm-source', 'intelligence-runtime', false, false),
-  dependency('DEP_RUNTIME_TO_MARKET_INTELLIGENCE', 'intelligence-runtime', 'market-intelligence', true, true),
-  dependency('DEP_MARKET_INTELLIGENCE_TO_BASIS', 'market-intelligence', 'basis-engine', true, false),
-  dependency('DEP_PUBLIC_SPOT_TO_BASIS', 'public-spot-source', 'basis-engine', true, false),
-  dependency('DEP_PUBLIC_USDM_TO_BASIS', 'public-usdm-source', 'basis-engine', true, false),
-  dependency('DEP_MARKET_INTELLIGENCE_TO_VOLUME', 'market-intelligence', 'volume-engine', true, false),
-  dependency('DEP_PUBLIC_SPOT_TO_VOLUME', 'public-spot-source', 'volume-engine', true, false),
-  dependency('DEP_MARKET_INTELLIGENCE_TO_CAPITAL', 'market-intelligence', 'capital-supervision', true, true),
-  dependency('DEP_BASIS_TO_CAPITAL', 'basis-engine', 'capital-supervision', false, false),
-  dependency('DEP_VOLUME_TO_CAPITAL', 'volume-engine', 'capital-supervision', false, false),
-  dependency('DEP_CAPITAL_TO_RISK', 'capital-supervision', 'multileg-risk', true, true),
-  dependency('DEP_RISK_TO_EXECUTION', 'multileg-risk', 'execution-coordinator-validate-only', true, true),
-  dependency('DEP_LEDGER_TO_EXECUTION', 'ledger-persistence', 'execution-coordinator-validate-only', true, true),
-  dependency('DEP_EXECUTION_TO_RECONCILIATION', 'execution-coordinator-validate-only', 'reconciliation', true, true),
-  dependency('DEP_LEDGER_TO_RECONCILIATION', 'ledger-persistence', 'reconciliation', true, true),
-]);
-
-/** All canonical commands are expected-live; disabled is evidence, not green. */
-export const EXPECTED_CANONICAL_CONTROLS: readonly Readonly<ExpectedControl>[] = Object.freeze([
-  control('CTRL_SET_COMPONENT_STATE', 'BACKEND_FOUNDATION_CONTROL', 'SET_COMPONENT_STATE'),
-  control('CTRL_SET_INTAKE_PAUSED', 'SYSTEM_INTEGRATION', 'SET_INTAKE_PAUSED'),
-  control('CTRL_SET_SAFE_MODE', 'BACKEND_FOUNDATION_CONTROL', 'SET_SAFE_MODE'),
-  control('CTRL_SET_KILL_SWITCH', 'BACKEND_FOUNDATION_CONTROL', 'SET_KILL_SWITCH'),
-  control('CTRL_APPLY_CONFIGURATION', 'SYSTEM_INTEGRATION', 'APPLY_CONFIGURATION'),
-  control('CTRL_REVOKE_APPROVAL', 'CAPITAL_SUPERVISION', 'REVOKE_APPROVAL'),
-  control('CTRL_REVOKE_RESERVATION', 'CAPITAL_SUPERVISION', 'REVOKE_RESERVATION'),
-  control('CTRL_RESTART_COMPONENT', 'BACKEND_FOUNDATION_CONTROL', 'RESTART_COMPONENT'),
-]);
-
-export const EXPECTED_CANONICAL_TELEMETRY: readonly Readonly<ExpectedTelemetrySignal>[] = Object.freeze([
-  telemetry('TEL_COMPONENT_PUBLIC_SPOT', 'public-spot-source', 'SYSTEM_COMPONENT_SNAPSHOT_V1', 10_000, true),
-  telemetry('TEL_COMPONENT_PUBLIC_USDM', 'public-usdm-source', 'SYSTEM_COMPONENT_SNAPSHOT_V1', 10_000, true),
-  telemetry('TEL_COMPONENT_MARKET_UNIVERSE', 'market-universe', 'SYSTEM_COMPONENT_SNAPSHOT_V1', 15_000, true),
-  telemetry('TEL_COMPONENT_INTELLIGENCE_RUNTIME', 'intelligence-runtime', 'SYSTEM_COMPONENT_SNAPSHOT_V1', 15_000, true),
-  telemetry('TEL_COMPONENT_MARKET_INTELLIGENCE', 'market-intelligence', 'SYSTEM_COMPONENT_SNAPSHOT_V1', 15_000, true),
-  telemetry('TEL_COMPONENT_BASIS_ENGINE', 'basis-engine', 'SYSTEM_COMPONENT_SNAPSHOT_V1', 15_000, false),
-  telemetry('TEL_COMPONENT_VOLUME_ENGINE', 'volume-engine', 'SYSTEM_COMPONENT_SNAPSHOT_V1', 15_000, false),
-  telemetry('TEL_COMPONENT_CAPITAL_SUPERVISION', 'capital-supervision', 'SYSTEM_COMPONENT_SNAPSHOT_V1', 15_000, true),
-  telemetry('TEL_COMPONENT_MULTILEG_RISK', 'multileg-risk', 'SYSTEM_COMPONENT_SNAPSHOT_V1', 15_000, true),
-  telemetry('TEL_COMPONENT_EXECUTION_VALIDATE_ONLY', 'execution-coordinator-validate-only', 'SYSTEM_COMPONENT_SNAPSHOT_V1', 15_000, true),
-  telemetry('TEL_COMPONENT_RECONCILIATION', 'reconciliation', 'SYSTEM_COMPONENT_SNAPSHOT_V1', 15_000, true),
-  telemetry('TEL_COMPONENT_LEDGER', 'ledger-persistence', 'SYSTEM_COMPONENT_SNAPSHOT_V1', 15_000, true),
-  telemetry('TEL_COMPONENT_SUPERVISOR', 'engine-supervisor', 'SYSTEM_COMPONENT_SNAPSHOT_V1', 15_000, true),
-  telemetry('TEL_COMPLETE_CORRELATION_TRACE', 'SYSTEM_INTEGRATION', 'SYSTEM_TRACE_V1', 30_000, true),
-  telemetry('TEL_INDEPENDENT_BLACK_BOX_PROBE', 'IP_OPS_DEPLOYMENT_OWNER', 'BLACK_BOX_PROBE_V1', 60_000, true),
-  telemetry('TEL_TELEMETRY_PIPELINE_SELF_HEALTH', 'SYSTEM_INTEGRATION', 'TELEMETRY_PIPELINE_HEALTH_V1', 15_000, true),
-  telemetry('TEL_LEDGER_ADVANCEMENT', 'EXISTING_LEDGER', 'LEDGER_ADVANCEMENT_V1', 15_000, true),
-  telemetry('TEL_QUEUE_BACKLOG_DROP', 'INTELLIGENCE_RUNTIME', 'QUEUE_TELEMETRY_V1', 10_000, true),
-  telemetry('TEL_EXECUTION_FENCE_EPOCH', 'BACKEND_FOUNDATION_EXECUTION', 'EXECUTION_FENCE_EPOCH_V1', 5_000, true),
-]);
-
-/** Template only; bind the tested implementation commit before emitting release evidence. */
-export const EXPECTED_INVENTORY_MANIFEST: Readonly<ExpectedInventoryManifest> = Object.freeze({
-  schema: 'PRODUCT_ASSURANCE_EXPECTED_INVENTORY_V1',
-  revision: 1,
-  releaseId: 'IP_ASSURANCE_PRESTAGE_TEMPLATE',
-  testedCommit: 'UNBOUND_TESTED_COMMIT',
-  generatedAtMs: 1_783_900_800_000,
-  components: EXPECTED_CANONICAL_COMPONENTS,
-  dependencies: EXPECTED_CANONICAL_DEPENDENCIES,
-  controls: EXPECTED_CANONICAL_CONTROLS,
-  telemetrySignals: EXPECTED_CANONICAL_TELEMETRY,
-  invariantIds: freezeStrings(SAFETY_INVARIANT_CATALOG.map((definition) => definition.invariantId)),
-  operationPolicyIds: freezeStrings(OPERATION_POLICY_REGISTRY.map((policy) => policy.operationId)),
-  ownerQuestionIds: freezeStrings(OWNER_QUESTION_COVERAGE.map((entry) => entry.questionId)),
-});
-
-export const CORE_EXPECTED_INVENTORY_MANIFEST = EXPECTED_INVENTORY_MANIFEST;
-
-export function bindExpectedInventoryManifest(
-  releaseId: string,
-  testedCommit: string,
-  generatedAtMs: number,
-): Readonly<ExpectedInventoryManifest> {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/u.test(releaseId)) throw new TypeError('releaseId is invalid');
-  if (!/^[a-f0-9]{40}$/u.test(testedCommit)) throw new TypeError('testedCommit must be a full lowercase Git SHA-1');
-  if (!Number.isSafeInteger(generatedAtMs) || generatedAtMs < 0) throw new TypeError('generatedAtMs must be a non-negative UTC millisecond value');
-  return Object.freeze({ ...EXPECTED_INVENTORY_MANIFEST, releaseId, testedCommit, generatedAtMs });
-}

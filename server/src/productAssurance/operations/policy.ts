@@ -29,14 +29,6 @@ export type OperationWiringState = (typeof OPERATION_WIRING_STATES)[number];
 export const CIRCUIT_STATES = Object.freeze(['CLOSED', 'OPEN', 'HALF_OPEN'] as const);
 export type CircuitState = (typeof CIRCUIT_STATES)[number];
 
-export const OPERATION_PRIORITIES = Object.freeze([
-  'OPTIONAL',
-  'NORMAL',
-  'RECONCILIATION',
-  'RISK_REDUCING',
-] as const);
-export type OperationPriority = (typeof OPERATION_PRIORITIES)[number];
-
 export const OPERATION_CANCELLATION_MODES = Object.freeze([
   'COOPERATIVE_ABORT',
   'DEADLINE_ONLY',
@@ -64,9 +56,12 @@ export interface OperationPolicy {
     totalRetryBudgetMs: number;
   }>;
   readonly rateBudget: Readonly<{
-    priority: OperationPriority;
-    reserveUnits: number;
-    cooldownBehavior: 'HONOR_OWNER_COOLDOWN' | 'NO_RETRY' | 'NOT_APPLICABLE';
+    surface: 'RATE_BUDGET';
+    ownerId: 'INTELLIGENCE_RUNTIME_RATE_BUDGET';
+    contractState: 'OWNER_CONTRACT_WAITING';
+    priority: null;
+    reserveUnits: null;
+    cooldownBehavior: 'OWNER_CONTRACT_WAITING';
   }>;
   readonly idempotency: Readonly<{
     required: boolean;
@@ -80,8 +75,10 @@ export interface OperationPolicy {
     resetAfterMs: number;
     halfOpenMaximumProbes: number;
     healthyQuietWindowMs: number;
-  }>;
-  readonly concurrencyLimit: number;
+  }> | null;
+  /** `null` means the canonical owner has not published an aggregate bound. */
+  readonly concurrencyLimit: number | null;
+  readonly concurrencyLimitState: 'KNOWN_BOUNDED' | 'OWNER_CONTRACT_WAITING';
   readonly cancellation: Readonly<{
     mode: OperationCancellationMode;
     lateCompletionLaw: 'RECONCILE_BEFORE_RETRY' | 'QUARANTINE' | 'IGNORE_READ_ONLY';
@@ -93,7 +90,7 @@ export interface OperationPolicy {
     maximumAmplificationFactor: number;
     alternatingFingerprintWindowMs: number;
     cooldownMs: number;
-  }>;
+  }> | null;
   readonly costResourceEvidence: Readonly<{
     required: boolean;
     budgetOwnerId: string;
@@ -199,18 +196,24 @@ export function validateOperationPolicy(policy: Readonly<OperationPolicy>): read
     assertSafeNonNegativeInteger(policy.revision, 'policy.revision');
     assertPositiveSafeInteger(policy.deadlineMs, 'policy.deadlineMs');
     assertPositiveSafeInteger(policy.maximumAttempts, 'policy.maximumAttempts');
-    assertPositiveSafeInteger(policy.concurrencyLimit, 'policy.concurrencyLimit');
+    if (policy.concurrencyLimit !== null) {
+      assertPositiveSafeInteger(policy.concurrencyLimit, 'policy.concurrencyLimit');
+    }
     assertSafeNonNegativeInteger(policy.cancellation.maximumCancellationWaitMs, 'policy.cancellation.maximumCancellationWaitMs');
-    assertPositiveSafeInteger(policy.controlLoop.maximumConsecutiveRepairs, 'policy.controlLoop.maximumConsecutiveRepairs');
-    assertSafeNonNegativeInteger(policy.controlLoop.alternatingFingerprintWindowMs, 'policy.controlLoop.alternatingFingerprintWindowMs');
-    assertSafeNonNegativeInteger(policy.controlLoop.cooldownMs, 'policy.controlLoop.cooldownMs');
+    if (policy.controlLoop !== null) {
+      assertPositiveSafeInteger(policy.controlLoop.maximumConsecutiveRepairs, 'policy.controlLoop.maximumConsecutiveRepairs');
+      assertSafeNonNegativeInteger(policy.controlLoop.alternatingFingerprintWindowMs, 'policy.controlLoop.alternatingFingerprintWindowMs');
+      assertSafeNonNegativeInteger(policy.controlLoop.cooldownMs, 'policy.controlLoop.cooldownMs');
+    }
     assertIdentifier(policy.cancellation.cancellationEvidenceId, 'policy.cancellation.cancellationEvidenceId');
     assertIdentifier(policy.costResourceEvidence.budgetOwnerId, 'policy.costResourceEvidence.budgetOwnerId');
     assertIdentifier(policy.costResourceEvidence.metricId, 'policy.costResourceEvidence.metricId');
-    assertPositiveSafeInteger(policy.circuit.failureThreshold, 'policy.circuit.failureThreshold');
-    assertPositiveSafeInteger(policy.circuit.resetAfterMs, 'policy.circuit.resetAfterMs');
-    assertPositiveSafeInteger(policy.circuit.halfOpenMaximumProbes, 'policy.circuit.halfOpenMaximumProbes');
-    assertPositiveSafeInteger(policy.circuit.healthyQuietWindowMs, 'policy.circuit.healthyQuietWindowMs');
+    if (policy.circuit !== null) {
+      assertPositiveSafeInteger(policy.circuit.failureThreshold, 'policy.circuit.failureThreshold');
+      assertPositiveSafeInteger(policy.circuit.resetAfterMs, 'policy.circuit.resetAfterMs');
+      assertPositiveSafeInteger(policy.circuit.halfOpenMaximumProbes, 'policy.circuit.halfOpenMaximumProbes');
+      assertPositiveSafeInteger(policy.circuit.healthyQuietWindowMs, 'policy.circuit.healthyQuietWindowMs');
+    }
     if (policy.idempotency.identityField !== null) assertIdentifier(policy.idempotency.identityField, 'policy.idempotency.identityField');
     if (policy.authoritativeReconciliationLookup !== null) {
       assertIdentifier(policy.authoritativeReconciliationLookup, 'policy.authoritativeReconciliationLookup');
@@ -222,13 +225,28 @@ export function validateOperationPolicy(policy: Readonly<OperationPolicy>): read
   if (!isOperationClass(policy.operationClass)) issues.push('OPERATION_CLASS_INVALID');
   if (!(OPERATION_WIRING_STATES as readonly string[]).includes(policy.wiringState)) issues.push('WIRING_STATE_INVALID');
   if (!(OPERATION_CANCELLATION_MODES as readonly string[]).includes(policy.cancellation.mode)) issues.push('CANCELLATION_MODE_INVALID');
-  if (!(OPERATION_PRIORITIES as readonly string[]).includes(policy.rateBudget.priority)) issues.push('RATE_BUDGET_PRIORITY_INVALID');
-  if (!(['HONOR_OWNER_COOLDOWN', 'NO_RETRY', 'NOT_APPLICABLE'] as const).includes(policy.rateBudget.cooldownBehavior)) issues.push('RATE_BUDGET_COOLDOWN_INVALID');
+  if (policy.rateBudget.surface !== 'RATE_BUDGET'
+    || policy.rateBudget.ownerId !== 'INTELLIGENCE_RUNTIME_RATE_BUDGET'
+    || policy.rateBudget.contractState !== 'OWNER_CONTRACT_WAITING'
+    || policy.rateBudget.priority !== null
+    || policy.rateBudget.reserveUnits !== null
+    || policy.rateBudget.cooldownBehavior !== 'OWNER_CONTRACT_WAITING') {
+    issues.push('RATE_BUDGET_OWNER_CONTRACT_WAITING_REQUIRED');
+  }
+  if (!(['KNOWN_BOUNDED', 'OWNER_CONTRACT_WAITING'] as const).includes(policy.concurrencyLimitState)) {
+    issues.push('CONCURRENCY_LIMIT_STATE_INVALID');
+  }
+  if ((policy.concurrencyLimit === null) !== (policy.concurrencyLimitState === 'OWNER_CONTRACT_WAITING')) {
+    issues.push('CONCURRENCY_LIMIT_STATE_MISMATCH');
+  }
   if (!(['RECONCILE_BEFORE_RETRY', 'QUARANTINE', 'IGNORE_READ_ONLY'] as const).includes(policy.cancellation.lateCompletionLaw)) issues.push('LATE_COMPLETION_LAW_INVALID');
   if (!(['NONE', 'ACCEPTED_OWNER_ONLY'] as const).includes(policy.fallbackEligibility)) issues.push('FALLBACK_ELIGIBILITY_INVALID');
   if (!(['BLOCK_OPERATION', 'SHED_OPTIONAL', 'NOT_APPLICABLE'] as const).includes(policy.costResourceEvidence.missingBehavior)) issues.push('COST_RESOURCE_MISSING_BEHAVIOR_INVALID');
-  if (!Number.isSafeInteger(policy.rateBudget.reserveUnits) || policy.rateBudget.reserveUnits < 0) issues.push('RATE_BUDGET_RESERVE_INVALID');
-  if (!Number.isFinite(policy.controlLoop.maximumAmplificationFactor) || policy.controlLoop.maximumAmplificationFactor < 1) issues.push('CONTROL_LOOP_AMPLIFICATION_INVALID');
+  if (policy.controlLoop !== null
+    && (!Number.isFinite(policy.controlLoop.maximumAmplificationFactor)
+      || policy.controlLoop.maximumAmplificationFactor < 1)) {
+    issues.push('CONTROL_LOOP_AMPLIFICATION_INVALID');
+  }
   if (policy.costResourceEvidence.required && policy.costResourceEvidence.missingBehavior === 'NOT_APPLICABLE') issues.push('COST_RESOURCE_MISSING_BEHAVIOR_INVALID');
   if (policy.implementationPaths.length === 0) issues.push('IMPLEMENTATION_PATH_MISSING');
   if (policy.backoff.baseDelayMs < 0 || !Number.isSafeInteger(policy.backoff.baseDelayMs)) issues.push('BACKOFF_BASE_INVALID');
@@ -421,6 +439,7 @@ export function transitionCircuit(
 ): Readonly<CircuitSnapshot> {
   const issues = validateOperationPolicy(policy);
   if (issues.length > 0) throw new TypeError(`transitionCircuit: invalid policy: ${issues.join(',')}`);
+  if (policy.circuit === null) throw new TypeError('transitionCircuit: owner circuit contract is waiting');
   assertUtcMs(event.atMs, 'event.atMs');
   assertSafeNonNegativeInteger(snapshot.consecutiveFailures, 'snapshot.consecutiveFailures');
   assertSafeNonNegativeInteger(snapshot.halfOpenProbes, 'snapshot.halfOpenProbes');
@@ -549,64 +568,4 @@ export function transitionCircuit(
     });
   }
   return observed({ consecutiveFailures: failures });
-}
-
-export interface RateBudgetRequest {
-  readonly requestId: string;
-  readonly priority: OperationPriority;
-  readonly units: number;
-}
-
-export interface RateBudgetAllocation {
-  readonly admittedRequestIds: readonly string[];
-  readonly blockedRequestIds: readonly string[];
-  readonly usedUnits: number;
-  readonly remainingUnits: number;
-}
-
-const PRIORITY_RANK: Readonly<Record<OperationPriority, number>> = Object.freeze({
-  RISK_REDUCING: 0,
-  RECONCILIATION: 1,
-  NORMAL: 2,
-  OPTIONAL: 3,
-});
-
-export function allocateRateBudget(
-  capacityUnits: number,
-  protectedPriorityReserveUnits: number,
-  requests: readonly Readonly<RateBudgetRequest>[],
-): Readonly<RateBudgetAllocation> {
-  assertSafeNonNegativeInteger(capacityUnits, 'capacityUnits');
-  assertSafeNonNegativeInteger(protectedPriorityReserveUnits, 'protectedPriorityReserveUnits');
-  if (protectedPriorityReserveUnits > capacityUnits) throw new TypeError('protectedPriorityReserveUnits cannot exceed capacityUnits');
-  if (!Array.isArray(requests)) throw new TypeError('requests must be an array');
-  for (const request of requests) {
-    assertIdentifier(request.requestId, 'request.requestId');
-    if (!(OPERATION_PRIORITIES as readonly unknown[]).includes(request.priority)) throw new TypeError('request.priority is unsupported');
-    assertPositiveSafeInteger(request.units, 'request.units');
-  }
-  if (new Set(requests.map((request) => request.requestId)).size !== requests.length) throw new TypeError('request IDs must be unique');
-  const sorted = [...requests].sort((left, right) => {
-    const rank = PRIORITY_RANK[left.priority as OperationPriority] - PRIORITY_RANK[right.priority as OperationPriority];
-    return rank !== 0 ? rank : left.requestId.localeCompare(right.requestId);
-  });
-  const admitted: string[] = [];
-  const blocked: string[] = [];
-  let used = 0;
-  for (const request of sorted) {
-    const protectedPriority = request.priority === 'RISK_REDUCING' || request.priority === 'RECONCILIATION';
-    const requestLimit = protectedPriority ? capacityUnits : capacityUnits - protectedPriorityReserveUnits;
-    if (used + request.units <= requestLimit) {
-      admitted.push(request.requestId);
-      used += request.units;
-    } else {
-      blocked.push(request.requestId);
-    }
-  }
-  return Object.freeze({
-    admittedRequestIds: Object.freeze(admitted),
-    blockedRequestIds: Object.freeze(blocked),
-    usedUnits: used,
-    remainingUnits: capacityUnits - used,
-  });
 }

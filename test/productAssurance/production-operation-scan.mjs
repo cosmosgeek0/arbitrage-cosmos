@@ -28,6 +28,48 @@ export const OPERATION_KINDS = Object.freeze({
   HTTP_SERVER_LISTEN: 'HTTP_SERVER_LISTEN',
 });
 
+/**
+ * Director-reviewed exceptions are exact, source-bound dispositions rather
+ * than path wildcards. Any byte, location, owner, or raw-classification drift
+ * returns the site to uncovered.
+ */
+export const REVIEWED_OPERATION_DISPOSITIONS = Object.freeze([
+  Object.freeze({
+    dispositionId: 'DISPOSITION_NEWS_CONTEXT_PUBLIC_GET_V1',
+    rulingCommit: 'c57610cb5f7d56efb61e53ae27057fbe92a6a2f6',
+    ownerId: 'EXISTING_NEWS_CONTEXT_SERVICE',
+    disposition: 'KEEP_CANONICAL',
+    operationClass: 'PURE_READ',
+    operationId: 'OP_NEWS_CONTEXT_PUBLIC_READ',
+    siteId: 'OPSITE_FD086559819579DF346A',
+    path: 'server/src/services/newsContext.ts',
+    line: 2302,
+    column: 25,
+    rawKind: 'MUTATION_CALL',
+    rawSymbol: 'fetch:DYNAMIC_METHOD',
+    sourceDigestAlgorithm: 'sha256',
+    sourceSha256: '38aa196200f1325cd135f2a8a00f46ace5caa1d2fcf0811c357c52f80f47bede',
+    effectiveKind: 'NETWORK_HTTP_REQUEST',
+    effectiveSymbol: 'fetch:GET',
+    observedSemantics: Object.freeze({
+      method: 'GET_BY_CURRENT_CALLER_CONTRACT',
+      urlPolicy: 'HTTPS_NO_CREDENTIALS_HOST_ALLOWLIST_REDIRECT_REVALIDATION',
+      redirects: 'MANUAL_MAX_3_REDIRECTS_4_REQUEST_HOPS',
+      timeoutPerAttemptMs: 8_000,
+      maximumAttempts: 2,
+      retryDelayMs: 350,
+      retryClasses: Object.freeze(['TIMEOUT', 'UNAVAILABLE', 'HTTP_408', 'HTTP_429', 'HTTP_5XX']),
+      bodyLimitBytes: 8 * 1024 * 1024,
+      contentTypeValidated: true,
+      inFlightCoalescing: 'SAME_KEY',
+      failureSuppressionMs: 15_000,
+      boundedStateEntries: 1_024,
+      failureResult: 'CACHED_DELAYED_OR_EXPLICIT_SOURCE_ERROR',
+      aggregateConcurrency: 'OWNER_CONTRACT_WAITING',
+    }),
+  }),
+]);
+
 const HTTP_KINDS = Object.freeze([OPERATION_KINDS.NETWORK_HTTP_REQUEST]);
 const STREAM_CLIENT_KINDS = Object.freeze([
   OPERATION_KINDS.STREAM_CONNECT,
@@ -144,7 +186,6 @@ export const OPERATION_MAPPING_REGISTRY = Object.freeze([
       'server/src/binance/profile.ts',
       'server/src/binance/rest.ts',
       'server/src/index.ts',
-      'server/src/services/newsContext.ts',
     ]),
     pathPrefixes: Object.freeze([]),
     kinds: HTTP_KINDS,
@@ -557,6 +598,7 @@ function nodeLocation(sourceFile, node) {
 
 function collectFileCandidates(absolutePath, relativePath) {
   const text = readFileSync(absolutePath, 'utf8');
+  const sourceSha256 = createHash('sha256').update(text, 'utf8').digest('hex');
   const sourceFile = ts.createSourceFile(relativePath, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const imports = importedBindings(sourceFile);
   const aliases = collectAliasOrigins(sourceFile, imports);
@@ -569,6 +611,7 @@ function collectFileCandidates(absolutePath, relativePath) {
       column: location.column,
       kind,
       symbol,
+      sourceSha256,
       start: node.getStart(sourceFile),
     });
   };
@@ -700,11 +743,68 @@ function matchesRule(site, rule) {
   return rule.symbolPattern === null || new RegExp(rule.symbolPattern, 'u').test(site.symbol);
 }
 
-export function mapOperationSite(site, registry = OPERATION_MAPPING_REGISTRY) {
+export function mapOperationSite(
+  site,
+  registry = OPERATION_MAPPING_REGISTRY,
+  reviewedRegistry = REVIEWED_OPERATION_DISPOSITIONS,
+) {
+  const reviewedMatches = reviewedRegistry.filter((disposition) => {
+    const canonical = REVIEWED_OPERATION_DISPOSITIONS.find(
+      (entry) => entry.dispositionId === disposition.dispositionId,
+    );
+    return canonical !== undefined
+    && Object.keys(disposition).sort().join('\n') === Object.keys(canonical).sort().join('\n')
+    && disposition.rulingCommit === canonical.rulingCommit
+    && disposition.ownerId === canonical.ownerId
+    && disposition.disposition === canonical.disposition
+    && disposition.operationClass === canonical.operationClass
+    && disposition.operationId === canonical.operationId
+    && disposition.siteId === canonical.siteId
+    && disposition.path === canonical.path
+    && disposition.line === canonical.line
+    && disposition.column === canonical.column
+    && disposition.rawKind === canonical.rawKind
+    && disposition.rawSymbol === canonical.rawSymbol
+    && disposition.sourceDigestAlgorithm === canonical.sourceDigestAlgorithm
+    && disposition.sourceSha256 === canonical.sourceSha256
+    && disposition.effectiveKind === canonical.effectiveKind
+    && disposition.effectiveSymbol === canonical.effectiveSymbol
+    && JSON.stringify(disposition.observedSemantics) === JSON.stringify(canonical.observedSemantics)
+    && disposition.siteId === site.siteId
+    && disposition.path === site.path
+    && disposition.line === site.line
+    && disposition.column === site.column
+    && disposition.rawKind === site.kind
+    && disposition.rawSymbol === site.symbol
+    && disposition.sourceDigestAlgorithm === 'sha256'
+    && disposition.sourceSha256 === site.sourceSha256;
+  });
+  if (reviewedMatches.length === 1) {
+    const disposition = reviewedMatches[0];
+    return Object.freeze({
+      operationId: disposition.operationId,
+      mappingRuleId: null,
+      reviewedDispositionId: disposition.dispositionId,
+      effectiveKind: disposition.effectiveKind,
+      effectiveSymbol: disposition.effectiveSymbol,
+    });
+  }
+  if (reviewedMatches.length > 1) {
+    return Object.freeze({
+      operationId: null,
+      mappingRuleId: null,
+      reviewedDispositionId: null,
+      effectiveKind: site.kind,
+      effectiveSymbol: site.symbol,
+    });
+  }
   const rule = registry.find((candidate) => matchesRule(site, candidate)) ?? null;
   return Object.freeze({
     operationId: rule?.operationId ?? null,
     mappingRuleId: rule?.ruleId ?? null,
+    reviewedDispositionId: null,
+    effectiveKind: site.kind,
+    effectiveSymbol: site.symbol,
   });
 }
 
@@ -738,16 +838,26 @@ export function scanProductionOperations(options = {}) {
     const key = `${candidate.path}\0${candidate.kind}\0${candidate.symbol}`;
     const occurrence = (occurrences.get(key) ?? 0) + 1;
     occurrences.set(key, occurrence);
-    const mapping = mapOperationSite(candidate, options.registry ?? OPERATION_MAPPING_REGISTRY);
+    const siteId = stableSiteId(candidate, occurrence);
+    const rawSite = Object.freeze({ ...candidate, siteId });
+    const mapping = mapOperationSite(
+      rawSite,
+      options.registry ?? OPERATION_MAPPING_REGISTRY,
+      options.reviewedDispositions ?? REVIEWED_OPERATION_DISPOSITIONS,
+    );
     return Object.freeze({
-      siteId: stableSiteId(candidate, occurrence),
+      siteId,
       path: candidate.path,
       line: candidate.line,
       column: candidate.column,
-      kind: candidate.kind,
-      symbol: candidate.symbol,
+      kind: mapping.effectiveKind,
+      symbol: mapping.effectiveSymbol,
+      rawKind: candidate.kind,
+      rawSymbol: candidate.symbol,
+      sourceSha256: candidate.sourceSha256,
       operationId: mapping.operationId,
       mappingRuleId: mapping.mappingRuleId,
+      reviewedDispositionId: mapping.reviewedDispositionId,
     });
   });
   const uncoveredSites = Object.freeze(sites.filter((site) => site.operationId === null));

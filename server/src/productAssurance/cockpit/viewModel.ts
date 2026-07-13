@@ -13,15 +13,21 @@ import {
   sortedUnique,
   type AssuranceVerdict,
 } from '../common.js';
-import type { ActionSafetyEvidenceResult } from '../actionEvidence/evaluator.js';
-import type { AssuranceClaimGraphProjection } from '../assuranceCase/claimGraph.js';
+import {
+  OWNER_CONTRACT_WAITING_SEAMS,
+  computeOwnerContractTupleDigest,
+  consumeOwnerContract,
+  digestOwnerContractPayload,
+  type OwnerContractConsumption,
+  type OwnerContractEnvelope,
+  type OwnerContractExpectation,
+  type OwnerContractSurface,
+} from '../adapters/ownerContracts.js';
 import type { DiagnosticBoundaryDecision } from '../diagnostics/boundary.js';
 import type { InvariantCatalogProjection } from '../invariants/evaluator.js';
-import type { InventoryCoverageProjection } from '../inventory/coverage.js';
 import type { OperationCoverageReport } from '../operations/policy.js';
 import type {
   ExecutionLeaseProjection,
-  RateBudgetProjection,
   SentinelProjection,
   TelemetryPipelineProjection,
   TemporalCoherenceProjection,
@@ -110,24 +116,39 @@ export interface IncidentCorrelationCockpitProjection {
   readonly causeIds: readonly string[];
   readonly effectIds: readonly string[];
   readonly correlationTraceIds: readonly string[];
-  readonly claimGraph: Readonly<AssuranceClaimGraphProjection>;
+  readonly assuranceCase: Readonly<OpaqueOwnerProjection>;
 }
+
+export interface OpaqueOwnerTruthPayload extends Readonly<Record<string, unknown>> {
+  readonly verdict: AssuranceVerdict;
+  readonly reasonCodes: readonly string[];
+}
+
+export type OpaqueOwnerProjection = OwnerContractConsumption<Readonly<OpaqueOwnerTruthPayload>>;
+
+export const COCKPIT_OWNER_CONTRACT_SLOTS = Object.freeze([
+  'INVENTORY_COVERAGE',
+  'RATE_BUDGET',
+  'INCIDENT_CORRELATION_ASSURANCE_CASE',
+  'AUTONOMIC_DIAGNOSTICS_ACTION_EVIDENCE',
+  'AUTONOMIC_DIAGNOSTICS_ASSURANCE_CASE',
+  'AUTONOMIC_DIAGNOSTICS_GOVERNANCE',
+] as const);
+export type CockpitOwnerContractSlot = (typeof COCKPIT_OWNER_CONTRACT_SLOTS)[number];
+export type TrustedCockpitOwnerExpectations = Readonly<Record<
+  CockpitOwnerContractSlot,
+  Readonly<OwnerContractExpectation>
+>>;
 
 export interface AutonomicDiagnosticsCockpitProjection {
   readonly verdict: AssuranceVerdict;
   readonly reasonCodes: readonly string[];
   readonly campaigns: readonly Readonly<RemediationCampaign>[];
-  readonly actionEvidence: readonly Readonly<ActionSafetyEvidenceResult>[];
-  readonly claimGraph: Readonly<AssuranceClaimGraphProjection>;
-  readonly diagnosticDecision: Readonly<DiagnosticBoundaryDecision>;
+  readonly actionEvidence: Readonly<OpaqueOwnerProjection>;
+  readonly assuranceCase: Readonly<OpaqueOwnerProjection>;
+  readonly governance: Readonly<OpaqueOwnerProjection>;
+  readonly diagnosticBoundary: Readonly<DiagnosticBoundaryDecision>;
   readonly diagnosticTraceIds: readonly string[];
-  readonly permissionLevel: string | null;
-  readonly tokenBudget: number | null;
-  readonly costBudgetMicrounits: number | null;
-  readonly latencyBudgetMs: number | null;
-  readonly approvalIds: readonly string[];
-  readonly verifierIds: readonly string[];
-  readonly postconditionIds: readonly string[];
   readonly providerState: 'READY' | 'NOT_CONFIGURED' | 'UNAVAILABLE' | 'BUDGET_EXHAUSTED';
 }
 
@@ -158,9 +179,9 @@ export interface CanonicalCockpitSection<
 
 export type AssuranceCockpitSection =
   | CanonicalCockpitSection<'INVARIANTS', Readonly<InvariantCatalogProjection>>
-  | CanonicalCockpitSection<'INVENTORY_COVERAGE', Readonly<InventoryCoverageProjection>>
+  | CanonicalCockpitSection<'INVENTORY_COVERAGE', Readonly<OpaqueOwnerProjection>>
   | CanonicalCockpitSection<'OPERATION_STABILITY', Readonly<OperationStabilityCockpitProjection>>
-  | CanonicalCockpitSection<'RATE_BUDGET', Readonly<RateBudgetProjection>>
+  | CanonicalCockpitSection<'RATE_BUDGET', Readonly<OpaqueOwnerProjection>>
   | CanonicalCockpitSection<'TEMPORAL_COHERENCE', Readonly<TemporalCoherenceProjection>>
   | CanonicalCockpitSection<'EXECUTION_LEASE', Readonly<ExecutionLeaseProjection>>
   | CanonicalCockpitSection<'MUTATION_LIFECYCLE', Readonly<MutationLifecycleCockpitProjection>>
@@ -187,6 +208,20 @@ const SPECIAL_WIRING_STATES = new Set<AssuranceCockpitWiringState>([
   'BLOCKED',
 ]);
 
+const DIRECT_OWNER_SECTION_SURFACES = Object.freeze({
+  INVENTORY_COVERAGE: 'COVERAGE',
+  RATE_BUDGET: 'RATE_BUDGET',
+} as const);
+
+const COCKPIT_OWNER_SLOT_SURFACES: Readonly<Record<CockpitOwnerContractSlot, OwnerContractSurface>> = Object.freeze({
+  INVENTORY_COVERAGE: 'COVERAGE',
+  RATE_BUDGET: 'RATE_BUDGET',
+  INCIDENT_CORRELATION_ASSURANCE_CASE: 'ASSURANCE_CASE',
+  AUTONOMIC_DIAGNOSTICS_ACTION_EVIDENCE: 'ACTION_EVIDENCE',
+  AUTONOMIC_DIAGNOSTICS_ASSURANCE_CASE: 'ASSURANCE_CASE',
+  AUTONOMIC_DIAGNOSTICS_GOVERNANCE: 'DIAGNOSTIC_GOVERNANCE',
+});
+
 function assertVerdict(value: unknown, label: string): asserts value is AssuranceVerdict {
   if (!(ASSURANCE_VERDICTS as readonly unknown[]).includes(value)) {
     throw new TypeError(`${label} is unsupported`);
@@ -200,6 +235,135 @@ function assertReasonCodes(value: unknown, label: string): asserts value is read
   }
 }
 
+function validateTrustedOwnerExpectations(
+  expectations: Readonly<TrustedCockpitOwnerExpectations>,
+): void {
+  if (!isPlainRecord(expectations)) throw new TypeError('trustedOwnerExpectations must be a plain object');
+  if (Object.keys(expectations).sort().join('\n') !== [...COCKPIT_OWNER_CONTRACT_SLOTS].sort().join('\n')) {
+    throw new TypeError('trustedOwnerExpectations must bind every cockpit owner slot exactly once');
+  }
+  for (const slot of COCKPIT_OWNER_CONTRACT_SLOTS) {
+    const expectation = expectations[slot];
+    const expectedSurface = COCKPIT_OWNER_SLOT_SURFACES[slot];
+    if (!isPlainRecord(expectation)) throw new TypeError(`${slot} trusted expectation must be a plain object`);
+    if (expectation.surface !== expectedSurface) {
+      throw new TypeError(`${slot} trusted expectation must bind ${expectedSurface}`);
+    }
+    if (expectation.ownerId !== OWNER_CONTRACT_WAITING_SEAMS[expectedSurface].ownerId) {
+      throw new TypeError(`${slot} trusted expectation owner is not canonical`);
+    }
+    const probe = consumeOwnerContract(null, expectation);
+    if (probe.state !== 'WAITING') throw new TypeError(`${slot} trusted expectation is invalid`);
+  }
+}
+
+function reconsumeOwnerProjection(
+  projection: Readonly<OpaqueOwnerProjection>,
+  expectation: Readonly<OwnerContractExpectation>,
+  expectedSurface: OwnerContractSurface,
+  label: string,
+): Readonly<OpaqueOwnerProjection> {
+  if (!isPlainRecord(projection)) throw new TypeError(`${label} owner projection must be a plain object`);
+  if (expectation.surface !== expectedSurface) throw new TypeError(`${label} trusted surface mismatch`);
+  const envelope = projection.envelope === null ? null : projection.envelope;
+  return consumeOwnerContract(envelope, expectation) as Readonly<OpaqueOwnerProjection>;
+}
+
+function normalizeOwnerAdapters(
+  section: Readonly<AssuranceCockpitSection>,
+  expectations: Readonly<TrustedCockpitOwnerExpectations>,
+): Readonly<AssuranceCockpitSection> {
+  if (section.projection === null) return section;
+  if (section.sectionId === 'INVENTORY_COVERAGE') {
+    return Object.freeze({
+      ...section,
+      projection: reconsumeOwnerProjection(
+        section.projection,
+        expectations.INVENTORY_COVERAGE,
+        'COVERAGE',
+        section.sectionId,
+      ),
+    });
+  }
+  if (section.sectionId === 'RATE_BUDGET') {
+    return Object.freeze({
+      ...section,
+      projection: reconsumeOwnerProjection(
+        section.projection,
+        expectations.RATE_BUDGET,
+        'RATE_BUDGET',
+        section.sectionId,
+      ),
+    });
+  }
+  if (section.sectionId === 'INCIDENT_CORRELATION') {
+    const projection = section.projection;
+    return Object.freeze({
+      ...section,
+      projection: Object.freeze({
+        ...projection,
+        assuranceCase: reconsumeOwnerProjection(
+          projection.assuranceCase,
+          expectations.INCIDENT_CORRELATION_ASSURANCE_CASE,
+          'ASSURANCE_CASE',
+          `${section.sectionId}.assuranceCase`,
+        ),
+      }),
+    });
+  }
+  if (section.sectionId === 'AUTONOMIC_DIAGNOSTICS') {
+    const projection = section.projection;
+    return Object.freeze({
+      ...section,
+      projection: Object.freeze({
+        ...projection,
+        actionEvidence: reconsumeOwnerProjection(
+          projection.actionEvidence,
+          expectations.AUTONOMIC_DIAGNOSTICS_ACTION_EVIDENCE,
+          'ACTION_EVIDENCE',
+          `${section.sectionId}.actionEvidence`,
+        ),
+        assuranceCase: reconsumeOwnerProjection(
+          projection.assuranceCase,
+          expectations.AUTONOMIC_DIAGNOSTICS_ASSURANCE_CASE,
+          'ASSURANCE_CASE',
+          `${section.sectionId}.assuranceCase`,
+        ),
+        governance: reconsumeOwnerProjection(
+          projection.governance,
+          expectations.AUTONOMIC_DIAGNOSTICS_GOVERNANCE,
+          'DIAGNOSTIC_GOVERNANCE',
+          `${section.sectionId}.governance`,
+        ),
+      }),
+    });
+  }
+  return section;
+}
+
+function immutableSnapshot(value: unknown, label: string): unknown {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new TypeError(`${label} contains a non-finite number`);
+    return Object.is(value, -0) ? 0 : value;
+  }
+  if (Array.isArray(value)) {
+    if (Object.keys(value).length !== value.length) throw new TypeError(`${label} must be a dense array`);
+    return Object.freeze(value.map((entry, index) => immutableSnapshot(entry, `${label}[${index}]`)));
+  }
+  if (!isPlainRecord(value)) throw new TypeError(`${label} must contain only plain JSON values`);
+  const output: Record<string, unknown> = {};
+  for (const key of Object.keys(value).sort()) {
+    Object.defineProperty(output, key, {
+      value: immutableSnapshot(value[key], `${label}.${key}`),
+      enumerable: true,
+      configurable: false,
+      writable: false,
+    });
+  }
+  return Object.freeze(output);
+}
+
 function verdictField(
   projection: unknown,
   field: string,
@@ -209,6 +373,101 @@ function verdictField(
   const verdict = projection[field];
   assertVerdict(verdict, `${label}.${field}`);
   return verdict;
+}
+
+function opaqueOwnerVerdict(
+  projection: unknown,
+  expectedSurface: OwnerContractSurface,
+  label: string,
+): AssuranceVerdict {
+  if (!isPlainRecord(projection)) throw new TypeError(`${label} owner projection must be a plain object`);
+  if (projection.surface !== expectedSurface) {
+    throw new TypeError(`${label} owner projection must consume ${expectedSurface}`);
+  }
+  const canonicalOwnerId = OWNER_CONTRACT_WAITING_SEAMS[expectedSurface].ownerId;
+  if (projection.ownerId !== canonicalOwnerId) {
+    throw new TypeError(`${label} owner projection must consume canonical owner ${canonicalOwnerId}`);
+  }
+  if (projection.authorityGranted !== false) {
+    throw new TypeError(`${label} owner projection cannot grant authority`);
+  }
+  assertReasonCodes(projection.reasonCodes, `${label}.reasonCodes`);
+  if (!['WAITING', 'REJECTED', 'CONSUMED'].includes(String(projection.state))) {
+    throw new TypeError(`${label} owner projection state is unsupported`);
+  }
+  assertVerdict(projection.verdict, `${label}.contractVerdict`);
+  if (projection.state === 'WAITING') {
+    if (projection.verdict !== 'UNKNOWN' || projection.payload !== null
+      || projection.tupleDigest !== null || projection.envelope !== null) {
+      throw new TypeError(`${label} WAITING owner projection must remain UNKNOWN without payload`);
+    }
+    return 'UNKNOWN';
+  }
+  if (projection.state === 'REJECTED') {
+    if (projection.verdict !== 'FAIL' || projection.payload !== null
+      || projection.tupleDigest !== null || projection.envelope !== null) {
+      throw new TypeError(`${label} REJECTED owner projection must remain FAIL without payload`);
+    }
+    return 'FAIL';
+  }
+  if (projection.verdict !== 'PASS' || !isPlainRecord(projection.payload)
+    || !isPlainRecord(projection.envelope)) {
+    throw new TypeError(`${label} CONSUMED owner projection requires an integrity PASS and owner payload`);
+  }
+  const verifiedEnvelope = projection.envelope as unknown as Readonly<OwnerContractEnvelope<OpaqueOwnerTruthPayload>>;
+  assertIdentifier(projection.releaseId, `${label}.releaseId`);
+  assertIdentifier(projection.subjectId, `${label}.subjectId`);
+  assertDigestOrNull(projection.digest, `${label}.digest`);
+  assertDigestOrNull(projection.tupleDigest, `${label}.tupleDigest`);
+  if (projection.digest === null || projection.tupleDigest === null) {
+    throw new TypeError(`${label} CONSUMED owner projection requires digest and tuple digest`);
+  }
+  if (digestOwnerContractPayload(projection.payload) !== projection.digest) {
+    throw new TypeError(`${label} owner payload digest mismatch`);
+  }
+  const expectedTupleDigest = computeOwnerContractTupleDigest({
+    schema: 'PRODUCT_ASSURANCE_OWNER_CONTRACT_TUPLE_V1',
+    surface: expectedSurface,
+    ownerId: canonicalOwnerId,
+    releaseId: projection.releaseId,
+    subjectId: projection.subjectId,
+    digestAlgorithm: 'sha256',
+    digest: projection.digest,
+  });
+  if (projection.tupleDigest !== expectedTupleDigest) {
+    throw new TypeError(`${label} owner tuple digest mismatch`);
+  }
+  if (verifiedEnvelope.tupleDigest !== projection.tupleDigest
+    || verifiedEnvelope.tuple.surface !== expectedSurface
+    || verifiedEnvelope.tuple.ownerId !== canonicalOwnerId
+    || verifiedEnvelope.tuple.releaseId !== projection.releaseId
+    || verifiedEnvelope.tuple.subjectId !== projection.subjectId
+    || verifiedEnvelope.tuple.digest !== projection.digest) {
+    throw new TypeError(`${label} verified envelope metadata mismatch`);
+  }
+  const ownerVerdict = projection.payload.verdict;
+  assertVerdict(ownerVerdict, `${label}.payload.verdict`);
+  assertReasonCodes(projection.payload.reasonCodes, `${label}.payload.reasonCodes`);
+  if (ownerVerdict === 'PASS' && projection.payload.reasonCodes.length > 0) {
+    throw new TypeError(`${label} passing owner payload cannot carry reason codes`);
+  }
+  if (ownerVerdict !== 'PASS' && projection.payload.reasonCodes.length === 0) {
+    throw new TypeError(`${label} non-passing owner payload requires reason codes`);
+  }
+  return ownerVerdict;
+}
+
+function assertParentPreservesOwnerTruth(
+  parentVerdict: AssuranceVerdict,
+  ownerVerdicts: readonly AssuranceVerdict[],
+  label: string,
+): void {
+  if (ownerVerdicts.includes('FAIL') && parentVerdict !== 'FAIL') {
+    throw new TypeError(`${label} cannot mask a failing owner projection`);
+  }
+  if (!ownerVerdicts.includes('FAIL') && ownerVerdicts.includes('UNKNOWN') && parentVerdict === 'PASS') {
+    throw new TypeError(`${label} cannot mask an unknown owner projection`);
+  }
 }
 
 /**
@@ -225,32 +484,49 @@ function authoritativeProjectionVerdict(
     case 'INVARIANTS':
       return verdictField(projection, 'tradeReadinessVerdict', section.sectionId);
     case 'INVENTORY_COVERAGE':
-      return verdictField(projection, 'overallVerdict', section.sectionId);
-    case 'OPERATION_STABILITY':
+      return opaqueOwnerVerdict(projection, 'COVERAGE', section.sectionId);
     case 'RATE_BUDGET':
+      return opaqueOwnerVerdict(projection, 'RATE_BUDGET', section.sectionId);
+    case 'OPERATION_STABILITY':
     case 'TEMPORAL_COHERENCE':
     case 'EXECUTION_LEASE':
     case 'MUTATION_LIFECYCLE':
     case 'TELEMETRY_INDEPENDENT_PROOF':
     case 'WATCHDOG_NOTIFICATION':
-    case 'INCIDENT_CORRELATION':
-    case 'AUTONOMIC_DIAGNOSTICS':
       return verdictField(projection, 'verdict', section.sectionId);
+    case 'INCIDENT_CORRELATION': {
+      const incident = projection as Readonly<IncidentCorrelationCockpitProjection>;
+      const parent = verdictField(incident, 'verdict', section.sectionId);
+      const owner = opaqueOwnerVerdict(incident.assuranceCase, 'ASSURANCE_CASE', `${section.sectionId}.assuranceCase`);
+      assertParentPreservesOwnerTruth(parent, [owner], section.sectionId);
+      return parent;
+    }
+    case 'AUTONOMIC_DIAGNOSTICS': {
+      const diagnostics = projection as Readonly<AutonomicDiagnosticsCockpitProjection>;
+      const parent = verdictField(diagnostics, 'verdict', section.sectionId);
+      const owners = [
+        opaqueOwnerVerdict(diagnostics.actionEvidence, 'ACTION_EVIDENCE', `${section.sectionId}.actionEvidence`),
+        opaqueOwnerVerdict(diagnostics.assuranceCase, 'ASSURANCE_CASE', `${section.sectionId}.assuranceCase`),
+        opaqueOwnerVerdict(diagnostics.governance, 'DIAGNOSTIC_GOVERNANCE', `${section.sectionId}.governance`),
+      ];
+      assertParentPreservesOwnerTruth(parent, owners, section.sectionId);
+      return parent;
+    }
   }
 }
 
 const REQUIRED_PROJECTION_FIELDS: Readonly<Record<AssuranceCockpitSectionId, readonly string[]>> = Object.freeze({
   INVARIANTS: Object.freeze(['evaluatedAtMs', 'results', 'counts', 'blockingInvariantIds', 'unknownCriticalInvariantIds']),
-  INVENTORY_COVERAGE: Object.freeze(['evaluatedAtMs', 'expectedCounts', 'componentStates', 'dependencyStates', 'controlStates', 'telemetryStates', 'counts', 'reasonCodes']),
+  INVENTORY_COVERAGE: Object.freeze(['surface', 'state', 'ownerId', 'releaseId', 'subjectId', 'digest', 'tupleDigest', 'envelope', 'reasonCodes', 'payload', 'authorityGranted']),
   OPERATION_STABILITY: Object.freeze(['reasonCodes', 'operationCoverage', 'campaigns']),
-  RATE_BUDGET: Object.freeze(['optionalWorkAllowed', 'reconciliationAllowed', 'riskReducingWorkAllowed', 'availableUnits', 'reservedUnits', 'reasonCodes']),
+  RATE_BUDGET: Object.freeze(['surface', 'state', 'ownerId', 'releaseId', 'subjectId', 'digest', 'tupleDigest', 'envelope', 'reasonCodes', 'payload', 'authorityGranted']),
   TEMPORAL_COHERENCE: Object.freeze(['crossMarketSkewMs', 'stagesOrdered', 'continuityProven', 'reasonCodes']),
   EXECUTION_LEASE: Object.freeze(['active', 'ownerId', 'epoch', 'processIdentity', 'releaseIdentity', 'renewedAtMs', 'expiresAtMs', 'evaluatedAtMs', 'reasonCodes']),
   MUTATION_LIFECYCLE: Object.freeze(['reasonCodes', 'records']),
   TELEMETRY_INDEPENDENT_PROOF: Object.freeze(['reasonCodes', 'telemetry', 'independentSentinel']),
   WATCHDOG_NOTIFICATION: Object.freeze(['reasonCodes']),
-  INCIDENT_CORRELATION: Object.freeze(['reasonCodes', 'incidentIds', 'causeIds', 'effectIds', 'correlationTraceIds', 'claimGraph']),
-  AUTONOMIC_DIAGNOSTICS: Object.freeze(['reasonCodes', 'campaigns', 'actionEvidence', 'claimGraph', 'diagnosticDecision', 'diagnosticTraceIds', 'permissionLevel', 'tokenBudget', 'costBudgetMicrounits', 'latencyBudgetMs', 'approvalIds', 'verifierIds', 'postconditionIds', 'providerState']),
+  INCIDENT_CORRELATION: Object.freeze(['reasonCodes', 'incidentIds', 'causeIds', 'effectIds', 'correlationTraceIds', 'assuranceCase']),
+  AUTONOMIC_DIAGNOSTICS: Object.freeze(['reasonCodes', 'campaigns', 'actionEvidence', 'assuranceCase', 'governance', 'diagnosticBoundary', 'diagnosticTraceIds', 'providerState']),
 });
 
 function validateProjectionShape(section: Readonly<AssuranceCockpitSection>): void {
@@ -324,8 +600,22 @@ function validateSection(
   }
 
   const hasProjection = section.projection !== null;
+  const directOwnerSurface = section.sectionId === 'INVENTORY_COVERAGE'
+    || section.sectionId === 'RATE_BUDGET'
+    ? DIRECT_OWNER_SECTION_SURFACES[section.sectionId]
+    : null;
+  const projectionRecord: Readonly<Record<string, unknown>> | null = isPlainRecord(section.projection)
+    ? section.projection as Readonly<Record<string, unknown>>
+    : null;
+  const directOwnerState = directOwnerSurface !== null
+    && projectionRecord !== null
+    && ['WAITING', 'REJECTED', 'CONSUMED'].includes(String(projectionRecord.state))
+    ? projectionRecord.state
+    : null;
+  const projectionRequiresSourceProof = hasProjection && directOwnerState !== 'WAITING'
+    && directOwnerState !== 'REJECTED';
   const hasCompleteSource = section.sourceRevision !== null && section.observedAtMs !== null;
-  if (hasProjection !== hasCompleteSource) {
+  if (projectionRequiresSourceProof !== hasCompleteSource) {
     throw new TypeError(
       `${section.sectionId} projection requires sourceRevision and observedAtMs together`,
     );
@@ -335,11 +625,27 @@ function validateSection(
     && section.verifierId !== null
     && section.producerCommonModeGroupId !== null
     && section.verifierCommonModeGroupId !== null;
-  if (hasProjection !== hasCompleteProof) throw new TypeError(`${section.sectionId} projection requires digest and independent producer/verifier proof`);
-  if (hasProjection && section.producerId === section.verifierId) throw new TypeError(`${section.sectionId} verifier must be independent`);
-  if (hasProjection && section.producerCommonModeGroupId === section.verifierCommonModeGroupId) throw new TypeError(`${section.sectionId} verifier common mode must differ`);
+  if (projectionRequiresSourceProof !== hasCompleteProof) throw new TypeError(`${section.sectionId} projection requires digest and independent producer/verifier proof`);
+  if (projectionRequiresSourceProof && section.producerId === section.verifierId) throw new TypeError(`${section.sectionId} verifier must be independent`);
+  if (projectionRequiresSourceProof && section.producerCommonModeGroupId === section.verifierCommonModeGroupId) throw new TypeError(`${section.sectionId} verifier common mode must differ`);
   validateProjectionShape(section);
   const authoritativeVerdict = authoritativeProjectionVerdict(section);
+  if (directOwnerSurface !== null && section.projection !== null) {
+    const ownerProjection = section.projection as Readonly<OpaqueOwnerProjection>;
+    const canonicalOwnerId = OWNER_CONTRACT_WAITING_SEAMS[directOwnerSurface].ownerId;
+    if (section.ownerId !== canonicalOwnerId) {
+      throw new TypeError(`${section.sectionId}.ownerId must equal canonical owner ${canonicalOwnerId}`);
+    }
+    if (ownerProjection.state === 'CONSUMED') {
+      if (section.sourceRevision !== ownerProjection.releaseId
+        || section.sourceId !== ownerProjection.subjectId
+        || section.sourceDigest !== ownerProjection.digest) {
+        throw new TypeError(`${section.sectionId} source metadata must bind the consumed owner tuple`);
+      }
+    } else if (hasCompleteSource || hasCompleteProof) {
+      throw new TypeError(`${section.sectionId} ${ownerProjection.state} owner seam cannot claim source proof`);
+    }
+  }
   if (section.canonicalVerdict !== authoritativeVerdict) {
     throw new TypeError(
       `${section.sectionId}.canonicalVerdict must equal projection verdict ${authoritativeVerdict}`,
@@ -368,9 +674,11 @@ function validateSection(
 export function buildAssuranceCockpitViewModel(
   sections: readonly Readonly<AssuranceCockpitSection>[],
   generatedAtMs: number,
+  trustedOwnerExpectations: Readonly<TrustedCockpitOwnerExpectations>,
 ): Readonly<AssuranceCockpitViewModel> {
   assertUtcMs(generatedAtMs, 'generatedAtMs');
   if (!Array.isArray(sections)) throw new TypeError('cockpit sections must be an array');
+  validateTrustedOwnerExpectations(trustedOwnerExpectations);
   const ids = sections.map((section) => section.sectionId);
   if (new Set(ids).size !== ids.length) throw new TypeError('cockpit contains duplicate section IDs');
   const missing = ASSURANCE_COCKPIT_SECTION_IDS.filter((sectionId) => !ids.includes(sectionId));
@@ -383,10 +691,17 @@ export function buildAssuranceCockpitViewModel(
     );
   }
 
-  for (const section of sections) validateSection(section, generatedAtMs);
+  const normalizedSections = sections.map((section) => normalizeOwnerAdapters(
+    section,
+    trustedOwnerExpectations,
+  ));
+  for (const section of normalizedSections) validateSection(section, generatedAtMs);
   const rank = new Map(ASSURANCE_COCKPIT_SECTION_IDS.map((sectionId, index) => [sectionId, index]));
-  const ordered = sections
-    .map((section) => Object.freeze({ ...section, reasonCodes: sortedUnique(section.reasonCodes) }))
+  const ordered = normalizedSections
+    .map((section) => immutableSnapshot({
+      ...section,
+      reasonCodes: sortedUnique(section.reasonCodes),
+    }, `section.${section.sectionId}`) as Readonly<AssuranceCockpitSection>)
     .sort((left, right) => (rank.get(left.sectionId) ?? 0) - (rank.get(right.sectionId) ?? 0));
 
   return Object.freeze({

@@ -5,6 +5,9 @@ import { join } from 'node:path';
 import test from 'node:test';
 import {
   OPERATION_KINDS,
+  OPERATION_MAPPING_REGISTRY,
+  REVIEWED_OPERATION_DISPOSITIONS,
+  mapOperationSite,
   scanProductionOperations,
 } from '../../../test/productAssurance/production-operation-scan.mjs';
 
@@ -82,4 +85,78 @@ test('scanner fails closed across dynamic HTTP methods, aliases, axios, node HTT
   } finally {
     rmSync(repositoryRoot, { recursive: true, force: true });
   }
+});
+
+test('reviewed news disposition rejects every tuple substitution and duplicate', () => {
+  const disposition = REVIEWED_OPERATION_DISPOSITIONS[0];
+  const site = Object.freeze({
+    siteId: disposition.siteId,
+    path: disposition.path,
+    line: disposition.line,
+    column: disposition.column,
+    kind: disposition.rawKind,
+    symbol: disposition.rawSymbol,
+    sourceSha256: disposition.sourceSha256,
+  });
+  const canonical = mapOperationSite(site, OPERATION_MAPPING_REGISTRY, REVIEWED_OPERATION_DISPOSITIONS);
+  assert.equal(canonical.operationId, 'OP_NEWS_CONTEXT_PUBLIC_READ');
+  assert.equal(canonical.effectiveKind, 'NETWORK_HTTP_REQUEST');
+
+  for (const mutation of [
+    { siteId: 'OPSITE_SUBSTITUTED' },
+    { path: 'server/src/services/other.ts' },
+    { line: disposition.line + 1 },
+    { column: disposition.column + 1 },
+    { kind: 'NETWORK_HTTP_REQUEST' },
+    { symbol: 'fetch:POST' },
+    { sourceSha256: '0'.repeat(64) },
+  ]) {
+    assert.equal(mapOperationSite({ ...site, ...mutation }, OPERATION_MAPPING_REGISTRY, REVIEWED_OPERATION_DISPOSITIONS).operationId, null);
+  }
+
+  for (const mutation of [
+    { rulingCommit: 'a'.repeat(40) },
+    { ownerId: 'FORGED_OWNER' },
+    { disposition: 'REPLACE_CANONICAL' },
+    { operationClass: 'NON_IDEMPOTENT_MUTATION' },
+    { operationId: 'OP_PUBLIC_HTTP_READ' },
+    { sourceDigestAlgorithm: 'sha512' },
+    { sourceSha256: 'f'.repeat(64) },
+    { effectiveKind: 'MUTATION_CALL' },
+    { effectiveSymbol: 'fetch:POST' },
+    { observedSemantics: { ...disposition.observedSemantics, maximumAttempts: 3 } },
+  ]) {
+    const hostileRegistry = [{ ...disposition, ...mutation }];
+    assert.equal(mapOperationSite(site, OPERATION_MAPPING_REGISTRY, hostileRegistry).operationId, null);
+  }
+
+  for (const [siteMutation, dispositionMutation] of [
+    [{ siteId: 'OPSITE_SUBSTITUTED' }, { siteId: 'OPSITE_SUBSTITUTED' }],
+    [{ path: 'server/src/services/other.ts' }, { path: 'server/src/services/other.ts' }],
+    [{ line: disposition.line + 1 }, { line: disposition.line + 1 }],
+    [{ column: disposition.column + 1 }, { column: disposition.column + 1 }],
+    [{ kind: 'NETWORK_HTTP_REQUEST' }, { rawKind: 'NETWORK_HTTP_REQUEST' }],
+    [{ symbol: 'fetch:GET' }, { rawSymbol: 'fetch:GET' }],
+    [{ sourceSha256: 'e'.repeat(64) }, { sourceSha256: 'e'.repeat(64) }],
+  ]) {
+    assert.equal(mapOperationSite(
+      { ...site, ...siteMutation },
+      OPERATION_MAPPING_REGISTRY,
+      [{ ...disposition, ...dispositionMutation }],
+    ).operationId, null);
+  }
+
+  assert.equal(mapOperationSite(
+    site,
+    OPERATION_MAPPING_REGISTRY,
+    [{ ...disposition, substitutedAuthority: true }],
+  ).operationId, null);
+
+  assert.equal(mapOperationSite(site, OPERATION_MAPPING_REGISTRY, [disposition, disposition]).operationId, null);
+  assert.equal(mapOperationSite({
+    ...site,
+    siteId: 'OPSITE_FUTURE_STATIC_GET',
+    kind: 'NETWORK_HTTP_REQUEST',
+    symbol: 'fetch',
+  }).operationId, null);
 });

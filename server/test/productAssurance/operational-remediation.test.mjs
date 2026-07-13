@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  OPERATION_POLICY_REGISTRY,
   acquireResourceSet,
   buildRepairConflictGraph,
   evaluateWatchdogDelivery,
   projectExecutionLease,
   projectIndependentSentinel,
-  projectRateBudget,
   projectTelemetryPipeline,
   projectTemporalCoherence,
   transitionRemediationCampaign,
@@ -20,34 +20,25 @@ import {
   stepCampaign,
 } from './helpers.mjs';
 
+test('operation policies expose rate-budget owner WAITING seams only', () => {
+  assert.ok(OPERATION_POLICY_REGISTRY.length > 0);
+  for (const policy of OPERATION_POLICY_REGISTRY) {
+    assert.deepEqual(policy.rateBudget, {
+      surface: 'RATE_BUDGET',
+      ownerId: 'INTELLIGENCE_RUNTIME_RATE_BUDGET',
+      contractState: 'OWNER_CONTRACT_WAITING',
+      priority: null,
+      reserveUnits: null,
+      cooldownBehavior: 'OWNER_CONTRACT_WAITING',
+    });
+  }
+});
+
 function apply(current, leases, kind, offsetMs, extra = {}) {
   const result = transitionRemediationCampaign(current, stepCampaign(current, leases, kind, offsetMs, extra), leases);
   assert.equal(result.applied, true, `${kind}: ${result.code}`);
   return result.after;
 }
-
-test('rate projection preserves risk-reduction reserve and rejects incoherent owner data', () => {
-  const input = {
-    observedAtMs: NOW - 1, maximumAgeMs: 10_000, totalUnits: 10, usedUnits: 4,
-    riskReducingReserveUnits: 3, cooldownUntilMs: null, ownerState: 'AVAILABLE',
-  };
-  const healthy = projectRateBudget(input, NOW);
-  assert.equal(healthy.verdict, 'PASS');
-  assert.equal(healthy.riskReducingWorkAllowed, true);
-  assert.equal(healthy.optionalWorkAllowed, true);
-  const saturated = projectRateBudget({
-    observedAtMs: NOW - 1, maximumAgeMs: 10_000, totalUnits: 10, usedUnits: 10,
-    riskReducingReserveUnits: 3, cooldownUntilMs: null, ownerState: 'EXHAUSTED',
-  }, NOW);
-  assert.equal(saturated.verdict, 'FAIL');
-  assert.equal(saturated.optionalWorkAllowed, false);
-  const reserveConsumed = projectRateBudget({ ...input, usedUnits: 9 }, NOW);
-  assert.equal(reserveConsumed.verdict, 'FAIL');
-  assert.equal(reserveConsumed.riskReducingWorkAllowed, false);
-  assert.equal(projectRateBudget({ ...input, observedAtMs: NOW + 1 }, NOW).verdict, 'FAIL');
-  assert.equal(projectRateBudget({ ...input, observedAtMs: NOW - input.maximumAgeMs }, NOW).verdict, 'FAIL');
-  assert.equal(projectRateBudget({ ...input, totalUnits: 5, usedUnits: 6 }, NOW).verdict, 'FAIL');
-});
 
 test('cross-market skew and sequence gaps invalidate temporal coherence', () => {
   const base = {

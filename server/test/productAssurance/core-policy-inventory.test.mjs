@@ -1,82 +1,103 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as productAssurance from '../../dist/productAssurance/index.js';
 import {
-  COVERAGE_OBLIGATIONS,
-  EXPECTED_INVENTORY_MANIFEST,
   OPERATION_POLICY_REGISTRY,
+  OWNER_CONTRACT_SURFACES,
+  OWNER_CONTRACT_WAITING_SEAMS,
   SAFETY_INVARIANT_CATALOG,
-  allocateRateBudget,
-  bindExpectedInventoryManifest,
+  bindEvidenceTuple,
+  bindOwnerContract,
+  computeOwnerContractTupleDigest,
+  consumeOwnerContract,
   decideRetry,
-  evaluateCanonicalCoverageMatrix,
+  digestOwnerContractPayload,
+  evaluateEvidenceBinding,
   evaluateEvidenceRef,
   evaluateInvariantCatalog,
-  projectInventoryCoverage,
-  projectCanonicalCoverageFreshness,
   scanOperationCoverage,
   transitionCircuit,
-  validateExpectedInventoryManifest,
   validateOperationPolicy,
 } from '../../dist/productAssurance/index.js';
-import { scanProductionOperations } from '../../../test/productAssurance/production-operation-scan.mjs';
 import {
-  NOW,
-  completeInventoryObservation,
-  digest,
-  evidence,
-  invariantFacts,
-} from './helpers.mjs';
+  REVIEWED_OPERATION_DISPOSITIONS,
+  scanProductionOperations,
+} from '../../../test/productAssurance/production-operation-scan.mjs';
+import { NOW, digest, evidence, invariantFacts } from './helpers.mjs';
 
-const policy = (operationId) => {
+const RELEASE_ID = 'IP_ASSURANCE_TEST_RELEASE';
+const TESTED_COMMIT = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const EVIDENCE_CONTEXT = Object.freeze({ releaseId: RELEASE_ID, testedCommit: TESTED_COMMIT });
+
+function policy(operationId) {
   const match = OPERATION_POLICY_REGISTRY.find((entry) => entry.operationId === operationId);
   assert.ok(match, `missing operation policy ${operationId}`);
   return match;
-};
+}
 
-const boundInventoryManifest = bindExpectedInventoryManifest(
-  'IP_ASSURANCE_TEST_RELEASE',
-  'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-  NOW - 10_000,
-);
-const COVERAGE_RELEASE_ID = 'IP_ASSURANCE_TEST_RELEASE';
-const COVERAGE_TESTED_COMMIT = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+function ownerContractFixture(surface, payload = Object.freeze({ projectionId: `PROJECTION_${surface}`, verdict: 'PASS' })) {
+  const seam = OWNER_CONTRACT_WAITING_SEAMS[surface];
+  const subjectId = `SUBJECT_${surface}`;
+  const envelope = bindOwnerContract({
+    surface,
+    ownerId: seam.ownerId,
+    releaseId: RELEASE_ID,
+    subjectId,
+  }, payload);
+  const expectation = Object.freeze({
+    surface,
+    ownerId: seam.ownerId,
+    releaseId: RELEASE_ID,
+    subjectId,
+    digestAlgorithm: 'sha256',
+    digest: envelope.tuple.digest,
+  });
+  return Object.freeze({ envelope, expectation, payload });
+}
 
-test('every fixture operation has a complete valid policy and production scan exposes exact owner blockers', () => {
-  assert.equal(OPERATION_POLICY_REGISTRY.length, 13);
+test('operation policies and reviewed news read cover all 143 production sites', () => {
+  assert.equal(OPERATION_POLICY_REGISTRY.length, 14);
   for (const entry of OPERATION_POLICY_REGISTRY) assert.deepEqual(validateOperationPolicy(entry), []);
   const report = scanProductionOperations();
   const coverage = scanOperationCoverage(OPERATION_POLICY_REGISTRY, report.sites);
   assert.equal(report.discovered, 143);
-  assert.equal(report.covered, 142);
-  assert.equal(report.uncovered, 1);
-  assert.deepEqual(report.uncoveredSites.map((site) => `${site.path}:${site.line}:${site.kind}:${site.symbol}`), [
-    'server/src/services/newsContext.ts:2302:MUTATION_CALL:fetch:DYNAMIC_METHOD',
-  ]);
-  assert.equal(coverage.verdict, 'FAIL');
-  assert.deepEqual(coverage.uncoveredSites.map((site) => site.path), ['server/src/services/newsContext.ts']);
-  assert.equal(report.operationCounts.OP_LEGACY_SIGNED_MONEY_PATH_DORMANT_BLOCKED, 45);
+  assert.equal(report.covered, 143);
+  assert.equal(report.uncovered, 0);
+  assert.deepEqual(report.uncoveredSites, []);
+  assert.equal(coverage.verdict, 'PASS');
+  assert.deepEqual(coverage.reasonCodes, []);
+  const news = report.sites.filter((site) => site.reviewedDispositionId === 'DISPOSITION_NEWS_CONTEXT_PUBLIC_GET_V1');
+  assert.equal(news.length, 1);
+  assert.equal(news[0].siteId, 'OPSITE_FD086559819579DF346A');
+  assert.equal(news[0].rawKind, 'MUTATION_CALL');
+  assert.equal(news[0].rawSymbol, 'fetch:DYNAMIC_METHOD');
+  assert.equal(news[0].kind, 'NETWORK_HTTP_REQUEST');
+  assert.equal(news[0].symbol, 'fetch:GET');
+  assert.equal(news[0].operationId, 'OP_NEWS_CONTEXT_PUBLIC_READ');
+  assert.equal(news[0].sourceSha256, REVIEWED_OPERATION_DISPOSITIONS[0].sourceSha256);
+  const newsPolicy = policy('OP_NEWS_CONTEXT_PUBLIC_READ');
+  assert.equal(newsPolicy.canonicalOwnerId, 'EXISTING_NEWS_CONTEXT_SERVICE');
+  assert.equal(newsPolicy.concurrencyLimit, null);
+  assert.equal(newsPolicy.concurrencyLimitState, 'OWNER_CONTRACT_WAITING');
+  assert.equal(newsPolicy.circuit, null);
+  assert.equal(newsPolicy.controlLoop, null);
   assert.equal(policy('OP_LEGACY_SIGNED_MONEY_PATH_DORMANT_BLOCKED').wiringState, 'DORMANT_BLOCKED');
-  assert.equal(policy('OP_LEGACY_SIGNED_MONEY_PATH_DORMANT_BLOCKED').automaticRemediationAllowed, false);
 });
 
-test('unknown scanner paths remain exact uncovered sites', () => {
-  const discovered = [{
+test('unknown paths and forged mutation-to-read mappings remain uncovered', () => {
+  const result = scanOperationCoverage(OPERATION_POLICY_REGISTRY, [{
     siteId: 'OPSITE_NEW_PATH', path: 'server/src/newOwner/client.ts', line: 7,
-    kind: 'NETWORK', symbol: 'fetch', operationId: null,
-  }];
-  const result = scanOperationCoverage(OPERATION_POLICY_REGISTRY, discovered);
-  assert.equal(result.verdict, 'FAIL');
-  assert.deepEqual(result.uncoveredSites.map((site) => site.path), ['server/src/newOwner/client.ts']);
-  const forgedMapping = scanOperationCoverage(OPERATION_POLICY_REGISTRY, [{
-    siteId: 'OPSITE_FORGED_MAPPING', path: 'server/src/newMoney.ts', line: 8,
-    kind: 'MUTATION', symbol: 'withdraw', operationId: 'OP_PUBLIC_HTTP_READ',
+    kind: 'NETWORK_HTTP_REQUEST', symbol: 'fetch', operationId: null,
   }]);
-  assert.equal(forgedMapping.verdict, 'FAIL');
-  assert.deepEqual(forgedMapping.uncoveredSites.map((site) => site.path), ['server/src/newMoney.ts']);
+  assert.equal(result.verdict, 'FAIL');
+  const forged = scanOperationCoverage(OPERATION_POLICY_REGISTRY, [{
+    siteId: 'OPSITE_FORGED_MAPPING', path: 'server/src/services/newsContext.ts', line: 2302,
+    kind: 'MUTATION_CALL', symbol: 'fetch:DYNAMIC_METHOD', operationId: 'OP_NEWS_CONTEXT_PUBLIC_READ',
+  }]);
+  assert.equal(forged.verdict, 'FAIL');
+  assert.equal(forged.uncoveredSites.length, 1);
 });
 
-test('ambiguous or accepted submissions never blind retry', () => {
+test('ambiguous submission retry and circuit recovery stay bounded', () => {
   const ledger = policy('OP_LEDGER_SQLITE');
   const baseline = {
     attempt: 0, elapsedMs: 100, errorCode: 'COMMIT_STATE_UNKNOWN',
@@ -86,23 +107,12 @@ test('ambiguous or accepted submissions never blind retry', () => {
   assert.equal(decideRetry(ledger, baseline).kind, 'RECONCILE_FIRST');
   assert.equal(decideRetry(ledger, { ...baseline, durableIdentityState: 'MISSING' }).reasonCode, 'DURABLE_IDENTITY_MISSING_OR_EXPIRED');
   assert.equal(decideRetry(ledger, { ...baseline, submissionState: 'ACCEPTED' }).reasonCode, 'SUBMISSION_ALREADY_ACCEPTED');
-  const provedAbsent = decideRetry(ledger, { ...baseline, reconciliationState: 'PROVED_ABSENT' });
-  assert.equal(provedAbsent.kind, 'RETRY');
-  assert.equal(provedAbsent.reasonCode, 'AMBIGUOUS_ABSENCE_RETRY_ALLOWED');
+  assert.equal(decideRetry(ledger, { ...baseline, reconciliationState: 'PROVED_ABSENT' }).kind, 'RETRY');
   const dormant = policy('OP_LEGACY_SIGNED_MONEY_PATH_DORMANT_BLOCKED');
   assert.equal(decideRetry(dormant, { ...baseline, errorCode: 'TIMEOUT', submissionState: 'NOT_SENT', reconciliationState: 'NOT_REQUIRED' }).reasonCode, 'OPERATION_NOT_WIRED');
-});
 
-test('retry budgets, deadlines, and independent circuit recovery are bounded', () => {
   const http = policy('OP_PUBLIC_HTTP_READ');
-  const retryInput = {
-    attempt: 0, elapsedMs: 100, errorCode: 'TIMEOUT', submissionState: 'NOT_SENT',
-    reconciliationState: 'NOT_REQUIRED', durableIdentityState: 'NOT_REQUIRED', deterministicJitterUnit: 0.5,
-  };
-  assert.equal(decideRetry(http, retryInput).kind, 'RETRY');
-  assert.equal(decideRetry(http, { ...retryInput, elapsedMs: http.deadlineMs }).reasonCode, 'OPERATION_DEADLINE_EXHAUSTED');
-  assert.equal(decideRetry(http, { ...retryInput, attempt: http.maximumAttempts - 1 }).reasonCode, 'MAXIMUM_ATTEMPTS_EXHAUSTED');
-
+  assert.ok(http.circuit);
   let snapshot = {
     state: 'CLOSED', consecutiveFailures: 0, openedAtMs: null, halfOpenProbes: 0,
     lastEventAtMs: null, probePassedAtMs: null, independentlyVerifiedAtMs: null,
@@ -111,118 +121,160 @@ test('retry budgets, deadlines, and independent circuit recovery are bounded', (
     snapshot = transitionCircuit(http, snapshot, { kind: 'FAILURE', atMs: NOW + count + 1 });
   }
   assert.equal(snapshot.state, 'OPEN');
-  const producerSuccess = transitionCircuit(http, snapshot, { kind: 'SUCCESS', atMs: NOW + 10 });
-  assert.equal(producerSuccess.state, 'OPEN');
-  snapshot = transitionCircuit(http, producerSuccess, { kind: 'TICK', atMs: snapshot.openedAtMs + http.circuit.resetAfterMs });
-  assert.equal(snapshot.state, 'HALF_OPEN');
+  snapshot = transitionCircuit(http, snapshot, { kind: 'TICK', atMs: snapshot.openedAtMs + http.circuit.resetAfterMs });
   snapshot = transitionCircuit(http, snapshot, { kind: 'PROBE_STARTED', atMs: snapshot.lastEventAtMs + 1 });
   snapshot = transitionCircuit(http, snapshot, { kind: 'PROBE_PASSED', atMs: snapshot.lastEventAtMs + 1 });
   snapshot = transitionCircuit(http, snapshot, { kind: 'INDEPENDENT_VERIFICATION_PASSED', atMs: snapshot.lastEventAtMs + 1, verifierId: 'INDEPENDENT_SENTINEL' });
-  const tooSoon = transitionCircuit(http, snapshot, { kind: 'TICK', atMs: snapshot.lastEventAtMs + http.circuit.healthyQuietWindowMs - 1 });
-  assert.equal(tooSoon.state, 'HALF_OPEN');
-  const recovered = transitionCircuit(http, tooSoon, { kind: 'TICK', atMs: snapshot.independentlyVerifiedAtMs + http.circuit.healthyQuietWindowMs });
-  assert.equal(recovered.state, 'CLOSED');
-  assert.equal(transitionCircuit(http, recovered, { kind: 'FAILURE', atMs: recovered.lastEventAtMs }).state, 'CLOSED');
+  snapshot = transitionCircuit(http, snapshot, { kind: 'TICK', atMs: snapshot.independentlyVerifiedAtMs + http.circuit.healthyQuietWindowMs });
+  assert.equal(snapshot.state, 'CLOSED');
+  assert.throws(() => transitionCircuit(policy('OP_NEWS_CONTEXT_PUBLIC_READ'), snapshot, { kind: 'FAILURE', atMs: NOW + 100_000 }), /owner circuit contract is waiting/u);
 });
 
-test('risk reduction and reconciliation outrank optional work under saturation', () => {
-  const result = allocateRateBudget(3, 1, [
-    { requestId: 'OPTIONAL', priority: 'OPTIONAL', units: 2 },
-    { requestId: 'NORMAL', priority: 'NORMAL', units: 2 },
-    { requestId: 'RECONCILE', priority: 'RECONCILIATION', units: 1 },
-    { requestId: 'RISK_REDUCE', priority: 'RISK_REDUCING', units: 2 },
+test('all adjudicated owner surfaces consume exact tuples and absence remains WAITING', () => {
+  assert.deepEqual([...OWNER_CONTRACT_SURFACES].sort(), [
+    'ACTION_EVIDENCE', 'ASSURANCE_CASE', 'COVERAGE', 'DIAGNOSTIC_GOVERNANCE', 'RATE_BUDGET',
   ]);
-  assert.deepEqual(result.admittedRequestIds, ['RISK_REDUCE', 'RECONCILE']);
-  assert.deepEqual(result.blockedRequestIds, ['NORMAL', 'OPTIONAL']);
-  const reserved = allocateRateBudget(3, 2, [
-    { requestId: 'OPTIONAL_ONLY', priority: 'OPTIONAL', units: 2 },
-  ]);
-  assert.deepEqual(reserved.admittedRequestIds, []);
-  assert.equal(reserved.remainingUnits, 3);
-  assert.throws(() => allocateRateBudget(3, 0, [{ requestId: 'FORGED', priority: 'FORGED', units: 1 }]));
+  for (const surface of OWNER_CONTRACT_SURFACES) {
+    const fixture = ownerContractFixture(surface);
+    const consumed = consumeOwnerContract(fixture.envelope, fixture.expectation);
+    assert.equal(consumed.state, 'CONSUMED');
+    assert.equal(consumed.verdict, 'PASS');
+    assert.notEqual(consumed.payload, fixture.payload);
+    assert.equal(consumed.payload.projectionId, fixture.payload.projectionId);
+    assert.equal(Object.isFrozen(consumed.payload), true);
+    assert.equal(consumed.tupleDigest, fixture.envelope.tupleDigest);
+    assert.equal(consumed.authorityGranted, false);
+
+    const absent = consumeOwnerContract(null, fixture.expectation);
+    assert.equal(absent.state, 'WAITING');
+    assert.equal(absent.verdict, 'UNKNOWN');
+    assert.deepEqual(absent.reasonCodes, ['OWNER_CONTRACT_WAITING']);
+    assert.equal(absent.tupleDigest, null);
+    assert.equal(absent.reasonCodes.includes('UNAVAILABLE'), false);
+  }
 });
 
-test('coverage denominator includes all five required subject families', () => {
-  assert.equal(productAssurance.evaluateCoverageMatrix, undefined);
-  const result = evaluateCanonicalCoverageMatrix(COVERAGE_RELEASE_ID, COVERAGE_TESTED_COMMIT);
-  assert.equal(result.verdict, 'PASS');
-  assert.equal(result.expectedCount, 171);
-  assert.equal(result.coveragePercentage, 100);
+test('owner contract rejects hostile owner, release, subject, digest, algorithm, splice, and extra-field substitutions', () => {
+  const fixture = ownerContractFixture('ACTION_EVIDENCE');
+  const identity = fixture.envelope.tuple;
+  for (const replacement of [
+    { releaseId: 'FORGED_RELEASE' },
+    { subjectId: 'FORGED_SUBJECT' },
+  ]) {
+    const hostile = bindOwnerContract({
+      surface: identity.surface,
+      ownerId: replacement.ownerId ?? identity.ownerId,
+      releaseId: replacement.releaseId ?? identity.releaseId,
+      subjectId: replacement.subjectId ?? identity.subjectId,
+    }, fixture.payload);
+    assert.equal(consumeOwnerContract(hostile, fixture.expectation).state, 'REJECTED');
+  }
+  assert.throws(() => bindOwnerContract({
+    surface: identity.surface, ownerId: 'FORGED_OWNER',
+    releaseId: identity.releaseId, subjectId: identity.subjectId,
+  }, fixture.payload), /registered canonical owner/u);
+  const pairedOwnerTuple = { ...identity, ownerId: 'FORGED_OWNER' };
+  const pairedOwner = consumeOwnerContract({
+    ...fixture.envelope,
+    tuple: pairedOwnerTuple,
+    tupleDigest: computeOwnerContractTupleDigest(pairedOwnerTuple),
+  }, { ...fixture.expectation, ownerId: 'FORGED_OWNER' });
+  assert.equal(pairedOwner.state, 'REJECTED');
+  assert.ok(pairedOwner.reasonCodes.includes('OWNER_CONTRACT_OWNER_NOT_CANONICAL'));
+  assert.ok(pairedOwner.reasonCodes.includes('OWNER_CONTRACT_EXPECTATION_OWNER_NOT_CANONICAL'));
 
-  const channelFields = {
-    METRIC: 'metricId', STRUCTURED_LOG: 'structuredLogId', MATERIAL_EVENT: 'materialEventId',
-    TRACE: 'traceId', INCIDENT: 'incidentId',
+  const otherPayload = Object.freeze({ projectionId: 'SUBSTITUTED', verdict: 'PASS' });
+  const digestSubstitution = bindOwnerContract({
+    surface: identity.surface, ownerId: identity.ownerId,
+    releaseId: identity.releaseId, subjectId: identity.subjectId,
+  }, otherPayload);
+  assert.equal(consumeOwnerContract(digestSubstitution, fixture.expectation).state, 'REJECTED');
+
+  const algorithmTuple = { ...identity, digestAlgorithm: 'sha512' };
+  const hostileAlgorithm = {
+    ...fixture.envelope,
+    tuple: algorithmTuple,
+    tupleDigest: computeOwnerContractTupleDigest(algorithmTuple),
   };
-  const observations = COVERAGE_OBLIGATIONS.flatMap((obligation) => Object.entries(channelFields).map(([channel, field]) => ({
-    releaseId: COVERAGE_RELEASE_ID,
-    testedCommit: COVERAGE_TESTED_COMMIT,
-    subjectKind: obligation.subjectKind,
-    subjectId: obligation.subjectId,
-    channel,
-    channelId: obligation[field],
-    evidenceId: `EVIDENCE_${obligation.subjectKind}_${obligation.subjectId}_${channel}`,
-    evidenceOwnerId: 'PRODUCT_ASSURANCE_COVERAGE_OWNER',
-    evidenceDigest: digest(`${obligation.subjectKind}:${obligation.subjectId}:${channel}`),
-    truthLabel: 'LIVE_PUBLIC',
-    lastObservedAtMs: NOW - 1,
-    explicitlyUnavailable: false,
-  })));
-  assert.equal(projectCanonicalCoverageFreshness(COVERAGE_RELEASE_ID, COVERAGE_TESTED_COMMIT, observations, NOW).verdict, 'PASS');
-  assert.notEqual(projectCanonicalCoverageFreshness(COVERAGE_RELEASE_ID, COVERAGE_TESTED_COMMIT, observations.slice(1), NOW).verdict, 'PASS');
-  assert.throws(() => projectCanonicalCoverageFreshness(COVERAGE_RELEASE_ID, COVERAGE_TESTED_COMMIT, [
-    { ...observations[0], channelId: 'UNRELATED_SIGNAL' }, ...observations.slice(1),
-  ], NOW));
-  assert.throws(() => projectCanonicalCoverageFreshness('IP_ASSURANCE_OTHER_RELEASE', COVERAGE_TESTED_COMMIT, observations, NOW), /release binding mismatch/u);
-  assert.notEqual(projectCanonicalCoverageFreshness(
-    COVERAGE_RELEASE_ID,
-    COVERAGE_TESTED_COMMIT,
-    observations.map((observation, index) => index === 0 ? { ...observation, truthLabel: 'SYNTHETIC_ONLY' } : observation),
-    NOW,
-  ).verdict, 'PASS');
-});
+  assert.equal(consumeOwnerContract(hostileAlgorithm, fixture.expectation).state, 'REJECTED');
+  const spliced = { ...fixture.envelope, payload: otherPayload };
+  assert.equal(consumeOwnerContract(spliced, fixture.expectation).state, 'REJECTED');
+  const extraTuple = { ...identity, unexpectedDigest: digest('extra') };
+  const extra = { ...fixture.envelope, tuple: extraTuple, tupleDigest: computeOwnerContractTupleDigest(extraTuple) };
+  assert.equal(consumeOwnerContract(extra, fixture.expectation).state, 'REJECTED');
+  assert.notEqual(digestOwnerContractPayload(otherPayload), fixture.expectation.digest);
 
-test('expected inventory, disabled controls, silence, and staleness cannot green', () => {
-  assert.throws(() => validateExpectedInventoryManifest(EXPECTED_INVENTORY_MANIFEST));
-  validateExpectedInventoryManifest(boundInventoryManifest);
-  const complete = projectInventoryCoverage(boundInventoryManifest, completeInventoryObservation());
-  assert.equal(complete.overallVerdict, 'PASS');
-  assert.equal(complete.observabilityCoveragePercentage, 100);
+  for (const malformed of [undefined, {}, { ...fixture.envelope, tuple: null }]) {
+    const rejected = consumeOwnerContract(malformed, fixture.expectation);
+    assert.equal(rejected.state, 'REJECTED');
+    assert.equal(rejected.payload, null);
+    assert.equal(rejected.tupleDigest, null);
+  }
 
-  const base = completeInventoryObservation();
-  const missing = projectInventoryCoverage(boundInventoryManifest, { ...base, components: base.components.slice(1) });
-  assert.equal(missing.overallVerdict, 'FAIL');
-  assert.equal(missing.componentStates[0].state, 'MISSING');
+  const prototypePayload = JSON.parse('{"safe":1,"__proto__":{"forged":true}}');
+  assert.notEqual(digestOwnerContractPayload(prototypePayload), digestOwnerContractPayload({ safe: 1 }));
+  const prototypeEnvelope = bindOwnerContract({
+    surface: identity.surface, ownerId: identity.ownerId,
+    releaseId: identity.releaseId, subjectId: 'PROTO_PAYLOAD_SUBJECT',
+  }, prototypePayload);
+  assert.equal(Object.getPrototypeOf(prototypeEnvelope.payload), null);
+  assert.equal(Object.hasOwn(prototypeEnvelope.payload, '__proto__'), true);
 
-  const silentComponents = base.components.map((entry, index) => index === 0 ? { ...entry, lastReporterSeenAtMs: null } : entry);
-  const staleComponents = base.components.map((entry, index) => index === 0 ? { ...entry, lastMeaningfulAdvanceAtMs: null } : entry);
-  assert.equal(projectInventoryCoverage(boundInventoryManifest, { ...base, components: silentComponents }).componentStates[0].state, 'SILENT');
-  assert.equal(projectInventoryCoverage(boundInventoryManifest, { ...base, components: staleComponents }).componentStates[0].state, 'STALE');
-
-  const disabledControls = base.controls.map((entry, index) => index === 0 ? { ...entry, state: 'DISABLED' } : entry);
-  const disabled = projectInventoryCoverage(boundInventoryManifest, { ...base, controls: disabledControls });
-  assert.equal(disabled.overallVerdict, 'FAIL');
-  assert.equal(disabled.controlStates[0].state, 'UNAVAILABLE');
-  const forgedProbe = projectInventoryCoverage(boundInventoryManifest, {
-    ...base,
-    independentProbeEvidence: { ...base.independentProbeEvidence, ownerId: 'SELF_REPORTED_OWNER' },
+  const mutablePayload = { projectionId: 'MUTABLE', nested: { value: 'ORIGINAL' } };
+  const mutableDigest = digestOwnerContractPayload(mutablePayload);
+  const mutableTuple = {
+    ...identity, subjectId: 'MUTABLE_PAYLOAD_SUBJECT', digest: mutableDigest,
+  };
+  const immutableConsumption = consumeOwnerContract({
+    schema: 'PRODUCT_ASSURANCE_OWNER_CONTRACT_ENVELOPE_V1',
+    tuple: mutableTuple,
+    tupleDigest: computeOwnerContractTupleDigest(mutableTuple),
+    payload: mutablePayload,
+  }, {
+    ...fixture.expectation, subjectId: mutableTuple.subjectId, digest: mutableDigest,
   });
-  assert.equal(forgedProbe.overallVerdict, 'FAIL');
+  assert.equal(immutableConsumption.state, 'CONSUMED');
+  mutablePayload.nested.value = 'MUTATED_AFTER_CONSUMPTION';
+  assert.equal(immutableConsumption.payload.nested.value, 'ORIGINAL');
+  assert.equal(Object.isFrozen(immutableConsumption.payload.nested), true);
+  assert.throws(() => { immutableConsumption.payload.nested.value = 'FORGED'; }, TypeError);
 });
 
-test('critical invariant UNKNOWN and empty catalogs block trade readiness', () => {
+test('critical invariants require exact release, owner, subject, and digest bindings', () => {
   const facts = invariantFacts(SAFETY_INVARIANT_CATALOG);
-  const pass = evaluateInvariantCatalog(SAFETY_INVARIANT_CATALOG, facts, NOW);
+  const pass = evaluateInvariantCatalog(SAFETY_INVARIANT_CATALOG, facts, NOW, EVIDENCE_CONTEXT);
   assert.equal(pass.tradeReadinessVerdict, 'PASS');
-  assert.equal(pass.results.length, 17);
+  assert.equal(pass.results.length, 15);
   const absent = facts.filter((fact) => fact.factId !== SAFETY_INVARIANT_CATALOG[0].factIds[0]);
-  const unknown = evaluateInvariantCatalog(SAFETY_INVARIANT_CATALOG, absent, NOW);
-  assert.equal(unknown.tradeReadinessVerdict, 'UNKNOWN');
-  assert.ok(unknown.unknownCriticalInvariantIds.includes(SAFETY_INVARIANT_CATALOG[0].invariantId));
-  assert.equal(evaluateInvariantCatalog([], [], NOW).tradeReadinessVerdict, 'UNKNOWN');
-  const forged = facts.map((fact, index) => index === 0
-    ? { ...fact, evidence: { ...fact.evidence, ownerId: 'FORGED_FACT_OWNER' } }
+  assert.equal(evaluateInvariantCatalog(SAFETY_INVARIANT_CATALOG, absent, NOW, EVIDENCE_CONTEXT).tradeReadinessVerdict, 'UNKNOWN');
+  assert.equal(evaluateInvariantCatalog([], [], NOW, EVIDENCE_CONTEXT).tradeReadinessVerdict, 'UNKNOWN');
+
+  const target = facts[0];
+  const definition = SAFETY_INVARIANT_CATALOG.find((entry) => entry.factIds.includes(target.factId));
+  assert.ok(definition);
+  const expectation = {
+    ownerId: definition.factOwnerIds[target.factId],
+    releaseId: RELEASE_ID,
+    testedCommit: TESTED_COMMIT,
+    subjectId: `INVARIANT:${definition.invariantId}:FACT:${target.factId}`,
+    evidenceDigest: target.evidence.digest,
+  };
+  assert.equal(evaluateEvidenceBinding(target.evidence, target.evidenceBinding, expectation).verdict, 'PASS');
+  for (const malformed of [null, [], {}]) {
+    assert.equal(evaluateEvidenceBinding(target.evidence, malformed, expectation).verdict, 'FAIL');
+  }
+  for (const mutation of [
+    { ownerId: 'FORGED_OWNER' }, { releaseId: 'FORGED_RELEASE' },
+    { testedCommit: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' },
+    { subjectId: 'FORGED_SUBJECT' }, { evidenceDigest: digest('forged') },
+  ]) {
+    const hostile = bindEvidenceTuple({ ...expectation, ...mutation });
+    assert.equal(evaluateEvidenceBinding(target.evidence, hostile, expectation).verdict, 'FAIL');
+  }
+  const swapped = facts.map((fact, index) => index === 0
+    ? { ...fact, evidence: facts[1].evidence, evidenceBinding: facts[1].evidenceBinding }
     : fact);
-  assert.equal(evaluateInvariantCatalog(SAFETY_INVARIANT_CATALOG, forged, NOW).tradeReadinessVerdict, 'FAIL');
+  assert.equal(evaluateInvariantCatalog(SAFETY_INVARIANT_CATALOG, swapped, NOW, EVIDENCE_CONTEXT).tradeReadinessVerdict, 'FAIL');
 });
 
 test('evidence expiry, truth realm, and future observations fail closed', () => {

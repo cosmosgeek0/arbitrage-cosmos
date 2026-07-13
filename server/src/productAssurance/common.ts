@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { isValidUtcMillis } from '../foundation/contracts/time.js';
 import {
   SYSTEM_TRUTH_LABELS,
@@ -25,6 +27,30 @@ export interface AssuranceEvidenceRef {
   readonly digest: string | null;
   readonly producerId: string;
   readonly verifierId: string | null;
+}
+
+/**
+ * Exact consumer-policy binding for one evidence artifact. The tuple digest
+ * prevents splicing independently valid owner, release, subject, and artifact
+ * fields. It is evidence integrity only and never grants domain authority.
+ */
+export interface AssuranceEvidenceBinding {
+  readonly schema: 'PRODUCT_ASSURANCE_EVIDENCE_BINDING_V1';
+  readonly ownerId: string;
+  readonly releaseId: string;
+  readonly testedCommit: string;
+  readonly subjectId: string;
+  readonly digestAlgorithm: 'sha256';
+  readonly evidenceDigest: string;
+  readonly tupleDigest: string;
+}
+
+export interface AssuranceEvidenceExpectation {
+  readonly ownerId: string;
+  readonly releaseId: string;
+  readonly testedCommit: string;
+  readonly subjectId: string;
+  readonly evidenceDigest: string;
 }
 
 export interface AssuranceIssue {
@@ -89,6 +115,110 @@ export function assertDigestOrNull(value: unknown, label: string): asserts value
   if (value !== null && (typeof value !== 'string' || !SHA256.test(value))) {
     throw new TypeError(`${label} must be null or a lowercase SHA-256 digest`);
   }
+}
+
+export function computeEvidenceBindingTupleDigest(
+  binding: Omit<AssuranceEvidenceBinding, 'tupleDigest'>,
+): string {
+  return createHash('sha256').update(JSON.stringify([
+    binding.schema,
+    binding.ownerId,
+    binding.releaseId,
+    binding.testedCommit,
+    binding.subjectId,
+    binding.digestAlgorithm,
+    binding.evidenceDigest,
+  ]), 'utf8').digest('hex');
+}
+
+export function bindEvidenceTuple(
+  expectation: Readonly<AssuranceEvidenceExpectation>,
+): Readonly<AssuranceEvidenceBinding> {
+  assertIdentifier(expectation.ownerId, 'expectation.ownerId');
+  assertIdentifier(expectation.releaseId, 'expectation.releaseId');
+  if (!/^[a-f0-9]{40}$/u.test(expectation.testedCommit)) {
+    throw new TypeError('expectation.testedCommit must be a full lowercase Git SHA-1');
+  }
+  assertIdentifier(expectation.subjectId, 'expectation.subjectId');
+  assertDigestOrNull(expectation.evidenceDigest, 'expectation.evidenceDigest');
+  if (expectation.evidenceDigest === null) throw new TypeError('expectation.evidenceDigest is required');
+  const withoutDigest = Object.freeze({
+    schema: 'PRODUCT_ASSURANCE_EVIDENCE_BINDING_V1' as const,
+    ownerId: expectation.ownerId,
+    releaseId: expectation.releaseId,
+    testedCommit: expectation.testedCommit,
+    subjectId: expectation.subjectId,
+    digestAlgorithm: 'sha256' as const,
+    evidenceDigest: expectation.evidenceDigest,
+  });
+  return Object.freeze({
+    ...withoutDigest,
+    tupleDigest: computeEvidenceBindingTupleDigest(withoutDigest),
+  });
+}
+
+export function evaluateEvidenceBinding(
+  evidence: Readonly<AssuranceEvidenceRef>,
+  binding: Readonly<AssuranceEvidenceBinding>,
+  expectation: Readonly<AssuranceEvidenceExpectation>,
+): Readonly<AssuranceEvaluation> {
+  const failed: string[] = [];
+  const exactKeys = [
+    'digestAlgorithm', 'evidenceDigest', 'ownerId', 'releaseId',
+    'schema', 'subjectId', 'testedCommit', 'tupleDigest',
+  ];
+  if (!isPlainRecord(binding)) {
+    failed.push('EVIDENCE_BINDING_FIELD_SET_MISMATCH');
+    return Object.freeze({
+      verdict: 'FAIL',
+      reasonCodes: sortedUnique(failed),
+      evidenceIds: Object.freeze([evidence.evidenceId]),
+    });
+  }
+  if (Object.keys(binding).sort().join('\n') !== exactKeys.join('\n')) {
+    failed.push('EVIDENCE_BINDING_FIELD_SET_MISMATCH');
+  }
+  const bindingCandidate = binding as unknown as Readonly<AssuranceEvidenceBinding>;
+  try { assertIdentifier(expectation.ownerId, 'expectation.ownerId'); } catch { failed.push('EVIDENCE_EXPECTATION_OWNER_INVALID'); }
+  try { assertIdentifier(expectation.releaseId, 'expectation.releaseId'); } catch { failed.push('EVIDENCE_EXPECTATION_RELEASE_INVALID'); }
+  if (!/^[a-f0-9]{40}$/u.test(expectation.testedCommit)) failed.push('EVIDENCE_EXPECTATION_TESTED_COMMIT_INVALID');
+  try { assertIdentifier(expectation.subjectId, 'expectation.subjectId'); } catch { failed.push('EVIDENCE_EXPECTATION_SUBJECT_INVALID'); }
+  try { assertDigestOrNull(expectation.evidenceDigest, 'expectation.evidenceDigest'); } catch { failed.push('EVIDENCE_EXPECTATION_DIGEST_INVALID'); }
+  if (bindingCandidate.schema !== 'PRODUCT_ASSURANCE_EVIDENCE_BINDING_V1') failed.push('EVIDENCE_BINDING_SCHEMA_MISMATCH');
+  try { assertIdentifier(bindingCandidate.ownerId, 'binding.ownerId'); } catch { failed.push('EVIDENCE_BINDING_OWNER_INVALID'); }
+  try { assertIdentifier(bindingCandidate.releaseId, 'binding.releaseId'); } catch { failed.push('EVIDENCE_BINDING_RELEASE_INVALID'); }
+  if (!/^[a-f0-9]{40}$/u.test(bindingCandidate.testedCommit)) failed.push('EVIDENCE_BINDING_TESTED_COMMIT_INVALID');
+  try { assertIdentifier(bindingCandidate.subjectId, 'binding.subjectId'); } catch { failed.push('EVIDENCE_BINDING_SUBJECT_INVALID'); }
+  if (bindingCandidate.digestAlgorithm !== 'sha256') failed.push('EVIDENCE_BINDING_DIGEST_ALGORITHM_MISMATCH');
+  try { assertDigestOrNull(bindingCandidate.evidenceDigest, 'binding.evidenceDigest'); } catch { failed.push('EVIDENCE_BINDING_DIGEST_INVALID'); }
+  try { assertDigestOrNull(bindingCandidate.tupleDigest, 'binding.tupleDigest'); } catch { failed.push('EVIDENCE_BINDING_TUPLE_DIGEST_INVALID'); }
+  if (bindingCandidate.ownerId !== expectation.ownerId || bindingCandidate.ownerId !== evidence.ownerId) failed.push('EVIDENCE_BINDING_OWNER_MISMATCH');
+  if (bindingCandidate.releaseId !== expectation.releaseId) failed.push('EVIDENCE_BINDING_RELEASE_MISMATCH');
+  if (bindingCandidate.testedCommit !== expectation.testedCommit) failed.push('EVIDENCE_BINDING_TESTED_COMMIT_MISMATCH');
+  if (bindingCandidate.subjectId !== expectation.subjectId) failed.push('EVIDENCE_BINDING_SUBJECT_MISMATCH');
+  if (bindingCandidate.evidenceDigest !== expectation.evidenceDigest || bindingCandidate.evidenceDigest !== evidence.digest) {
+    failed.push('EVIDENCE_BINDING_DIGEST_MISMATCH');
+  }
+  let computed: string | null = null;
+  try {
+    computed = computeEvidenceBindingTupleDigest({
+      schema: bindingCandidate.schema,
+      ownerId: bindingCandidate.ownerId,
+      releaseId: bindingCandidate.releaseId,
+      testedCommit: bindingCandidate.testedCommit,
+      subjectId: bindingCandidate.subjectId,
+      digestAlgorithm: bindingCandidate.digestAlgorithm,
+      evidenceDigest: bindingCandidate.evidenceDigest,
+    });
+  } catch {
+    failed.push('EVIDENCE_BINDING_TUPLE_INVALID');
+  }
+  if (computed === null || bindingCandidate.tupleDigest !== computed) failed.push('EVIDENCE_BINDING_TUPLE_DIGEST_MISMATCH');
+  return Object.freeze({
+    verdict: failed.length > 0 ? 'FAIL' : 'PASS',
+    reasonCodes: sortedUnique(failed),
+    evidenceIds: Object.freeze([evidence.evidenceId]),
+  });
 }
 
 export function assertSourcePath(value: unknown, label: string): asserts value is string {

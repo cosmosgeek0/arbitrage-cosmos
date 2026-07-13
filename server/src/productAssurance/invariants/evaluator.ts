@@ -4,11 +4,13 @@ import {
   assertPositiveSafeInteger,
   assertSafeNonNegativeInteger,
   assertUtcMs,
+  evaluateEvidenceBinding,
   evaluateEvidenceRef,
   isPlainRecord,
   sortedUnique,
   verdictFromReasons,
   type AssuranceEvidenceRef,
+  type AssuranceEvidenceBinding,
   type AssuranceSeverity,
   type AssuranceVerdict,
 } from '../common.js';
@@ -26,10 +28,8 @@ export const INVARIANT_FAMILIES = Object.freeze([
   'WITHDRAWAL_TRANSFER_IMPOSSIBILITY',
   'TRUTH_REALM_SEPARATION',
   'INSTRUMENT_ACCOUNT_COMPATIBILITY',
-  'RISK_REDUCTION_RATE_RESERVE',
   'DURABLE_ADVANCEMENT',
   'REVISION_COMPATIBILITY',
-  'EXPECTED_INVENTORY_TELEMETRY',
   'BACKUP_WATCHDOG_PROBE_FRESHNESS',
 ] as const);
 export type InvariantFamily = (typeof INVARIANT_FAMILIES)[number];
@@ -40,6 +40,12 @@ export interface AssuranceFact {
   readonly factId: string;
   readonly value: AssuranceFactValue;
   readonly evidence: Readonly<AssuranceEvidenceRef>;
+  readonly evidenceBinding: Readonly<AssuranceEvidenceBinding>;
+}
+
+export interface InvariantEvidenceContext {
+  readonly releaseId: string;
+  readonly testedCommit: string;
 }
 
 export type InvariantRule =
@@ -172,9 +178,14 @@ export function evaluateSafetyInvariant(
   definition: Readonly<SafetyInvariantDefinition>,
   facts: readonly Readonly<AssuranceFact>[],
   nowMs: number,
+  evidenceContext: Readonly<InvariantEvidenceContext>,
 ): Readonly<SafetyInvariantResult> {
   validateDefinition(definition);
   assertUtcMs(nowMs, 'nowMs');
+  assertIdentifier(evidenceContext.releaseId, 'evidenceContext.releaseId');
+  if (!/^[a-f0-9]{40}$/u.test(evidenceContext.testedCommit)) {
+    throw new TypeError('evidenceContext.testedCommit must be a full lowercase Git SHA-1');
+  }
   validateFacts(facts, nowMs);
   const factById = new Map(facts.map((fact) => [fact.factId, fact]));
   const failReasons: string[] = [];
@@ -190,9 +201,17 @@ export function evaluateSafetyInvariant(
     }
     assertIdentifier(fact.factId, 'fact.factId');
     const evidence = evaluateEvidenceRef(fact.evidence, nowMs, definition.independentVerificationRequired);
+    const binding = evaluateEvidenceBinding(fact.evidence, fact.evidenceBinding, {
+      ownerId: definition.factOwnerIds[factId],
+      releaseId: evidenceContext.releaseId,
+      testedCommit: evidenceContext.testedCommit,
+      subjectId: `INVARIANT:${definition.invariantId}:FACT:${factId}`,
+      evidenceDigest: fact.evidence.digest ?? '',
+    });
     evidenceIds.push(...evidence.evidenceIds);
     if (evidence.verdict === 'FAIL') failReasons.push(...evidence.reasonCodes);
     if (evidence.verdict === 'UNKNOWN') unknownReasons.push(...evidence.reasonCodes);
+    if (binding.verdict === 'FAIL') failReasons.push(...binding.reasonCodes);
     if (fact.evidence.ownerId !== definition.factOwnerIds[factId]) failReasons.push('FACT_CANONICAL_OWNER_MISMATCH');
     if (fact.value === null) unknownReasons.push('REQUIRED_FACT_UNKNOWN');
     else values.push(fact.value);
@@ -217,12 +236,18 @@ export function evaluateInvariantCatalog(
   definitions: readonly Readonly<SafetyInvariantDefinition>[],
   facts: readonly Readonly<AssuranceFact>[],
   nowMs: number,
+  evidenceContext: Readonly<InvariantEvidenceContext>,
 ): Readonly<InvariantCatalogProjection> {
   assertUtcMs(nowMs, 'nowMs');
   validateFacts(facts, nowMs);
   const ids = definitions.map((definition) => definition.invariantId);
   if (new Set(ids).size !== ids.length) throw new TypeError('invariant catalog contains duplicate IDs');
-  const results = definitions.map((definition) => evaluateSafetyInvariant(definition, facts, nowMs));
+  const results = definitions.map((definition) => evaluateSafetyInvariant(
+    definition,
+    facts,
+    nowMs,
+    evidenceContext,
+  ));
   const counts: Record<AssuranceVerdict, number> = { PASS: 0, FAIL: 0, UNKNOWN: 0 };
   for (const result of results) counts[result.verdict] += 1;
   const blocking = results.filter((result) => (result.capitalRelevant || result.severity === 'CRITICAL') && result.verdict !== 'PASS');

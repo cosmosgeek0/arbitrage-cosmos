@@ -2,6 +2,13 @@
 
 Rule: one block = one chat = one folder. Director appends/replaces blocks at every event; check the top entry's date. Board truth: QL_PARALLEL_DAG.md.
 
+## L09 FINAL RESUME (2026-07-13, post F-BRIDGE merge)
+
+### L09-FINAL — folder /Users/cosmosgeek/Desktop/l09-normal-basis
+```text
+L09 shard final resume (D-LAUNCH-11). Verify: branch l09-normal-basis-20260712; `git log --oneline -3` shows the director rebase merging current-main c900907 with the accepted F-BRIDGE canonical execution seams (both prior canonical gaps from L09-003 items 1 & 2 are now FIXED in server/src/foundation/execution/**). Your remaining work is the SHARD-SIDE items 3 & 4 from live-edge-receipts/DECISIONS/L09-003-INDEPENDENT-VERIFICATION-BLOCKERS.md: (3) stop fabricating proposal/mandate/reservation identities and the local fill-ratio reconciliation shortcut — consume canonical Foundation reconciliation + the now-available hydration seam, prove state from an owner checkpoint (not caller-shaped rev_* objects), preserve full plan/phase/leg/client-order/reason/revision lineage in recovery recommendations; (4) bind exact mutation identity (request sequence, request ID, intent fingerprint, sanitized-request hash, private-projection revision, reconciliation revision) — no inherited sequence 0 / constant. Implement only in server/src/liveEdge/adapters/normalBasis/** + server/test/liveEdge/normalBasis/**. Now that the canonical seams exist, your partial-fill and cold-restart tests must exercise the REAL Foundation seams (no in-memory pre-crash observation shortcut). Full evidenced loop → acceptance → record SHA. All prior laws; no shared files (F-BRIDGE already fixed Foundation); no push. Stop only at L09 ACCEPTED or BLOCKED.
+```
+
 ## MID-RUN AMENDMENTS (2026-07-13, D-LAUNCH-10 — paste into ALREADY-RUNNING chats)
 
 ### AMEND-A (paste into the A-CORE chat, folder ip-assurance)

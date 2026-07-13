@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$(dirname "$0")/helpers.sh"
+
+cat > "$TEST_TMP/snapshot.json" <<'JSON'
+{
+  "source":"CANONICAL_SUPERVISOR_READBACK",
+  "observedAtUtc":"2026-07-13T00:00:00Z",
+  "dependencies":[{"id":"ledger","required":true,"state":"READY"},{"id":"q","required":false,"state":"NOT_CONFIGURED"}],
+  "readiness":{"state":"READY","blockers":[],"observedAtUtc":"2026-07-13T00:00:00Z"},
+  "tradeReadiness":{"state":"BLOCKED","blockers":["PRIVATE_TRUTH_NOT_CONFIGURED"],"observedAtUtc":"2026-07-13T00:00:00Z"},
+  "recoveryReadiness":{"state":"READY","blockers":[],"observedAtUtc":"2026-07-13T00:00:00Z"}
+}
+JSON
+note "independent dependency/readiness/trade/recovery probes"
+PROBE=(--input "$TEST_TMP/snapshot.json" --simulation-clock --now 2026-07-13T00:00:30Z --max-age-sec 60)
+assert_success node "$I00_ROOT/bin/probe.mjs" "${PROBE[@]}" --kind dependency
+assert_success node "$I00_ROOT/bin/probe.mjs" "${PROBE[@]}" --kind readiness
+assert_failure node "$I00_ROOT/bin/probe.mjs" "${PROBE[@]}" --kind trade-readiness
+assert_success node "$I00_ROOT/bin/probe.mjs" "${PROBE[@]}" --kind recovery-readiness
+node -e 'const fs=require("fs");const p=process.argv[1];const v=require(p);v.dependencies[0].state="STALE";fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/snapshot.json"
+assert_failure node "$I00_ROOT/bin/probe.mjs" "${PROBE[@]}" --kind dependency
+node -e 'const fs=require("fs");const p=process.argv[1];const v=require(p);v.dependencies[0].state="READY";v.dependencies[0].required="true";fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/snapshot.json"
+assert_failure node "$I00_ROOT/bin/probe.mjs" "${PROBE[@]}" --kind dependency
+node -e 'const fs=require("fs");const p=process.argv[1];const v=require(p);v.dependencies[0].required=true;v.observedAtUtc="2026-07-12T23:00:00Z";fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/snapshot.json"
+assert_failure node "$I00_ROOT/bin/probe.mjs" "${PROBE[@]}" --kind dependency
+
+note "artifact-only deployment readback remains honestly blocked"
+cat > "$TEST_TMP/readback.json" <<'JSON'
+{
+  "testedSha":"0123456789abcdef0123456789abcdef01234567",
+  "deployedSha":null,
+  "releaseId":null,
+  "schemaRevision":"UNKNOWN",
+  "configRevision":"UNKNOWN",
+  "modelRevision":"UNAVAILABLE",
+  "services":[{"id":"cosmos-app","state":"NOT_CONFIGURED","source":"NOT_CONFIGURED"}],
+  "origin":{"state":"NOT_CONFIGURED","source":"NOT_CONFIGURED"},
+  "tunnel":{"state":"NOT_CONFIGURED","source":"NOT_CONFIGURED"},
+  "access":{"state":"NOT_CONFIGURED","source":"NOT_CONFIGURED"},
+  "watchdog":{"state":"NOT_CONFIGURED","source":"NOT_CONFIGURED"},
+  "lastBackup":null,
+  "lastRestoreDrill":null,
+  "rollbackCandidate":null,
+  "currentDeploymentBlocker":"EXTERNAL_AUTHORIZATION_AND_TARGET_INPUTS_ABSENT",
+  "observedAtUtc":"2026-07-13T00:00:00Z"
+}
+JSON
+READBACK_ARGS=(--input "$TEST_TMP/readback.json" --max-age-sec 60 --simulation-clock --now 2026-07-13T00:00:30Z)
+assert_success node "$I00_ROOT/bin/verify-readback.mjs" "${READBACK_ARGS[@]}"
+node -e 'const fs=require("fs");const p=process.argv[1];const v=require(p);v.currentDeploymentBlocker=null;fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/readback.json"
+assert_failure node "$I00_ROOT/bin/verify-readback.mjs" "${READBACK_ARGS[@]}"
+node -e 'const fs=require("fs");const p=process.argv[1];const v=require(p);v.currentDeploymentBlocker="BLOCKED";v.services[0]={id:"cosmos-app",state:"READY",source:"NOT_CONFIGURED"};fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/readback.json"
+assert_failure node "$I00_ROOT/bin/verify-readback.mjs" "${READBACK_ARGS[@]}"
+
+note "Cloudflare boundary validator requires both outer and origin proof"
+cat > "$TEST_TMP/cloudflare.json" <<'JSON'
+{"source":"CLOUDFLARE_OWNER_READBACK","account":"cf-account-123","hostname":"control.private.invalid","tunnelId":"tunnel-123","accessApplicationId":"access-app-123","originHost":"127.0.0.1:8080","evidenceSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","tunnelState":"HEALTHY","directOriginReachable":false,"unauthenticatedAccessStatus":302,"authenticatedAccessStatus":200,"originRejectedMissingJwt":true,"originValidatedJwt":true,"stableEgressRequired":true,"expectedEgressIp":"192.0.2.10","observedEgressIp":"192.0.2.10","observedAtUtc":"2026-07-13T00:00:00Z"}
+JSON
+CF_ARGS=(--input "$TEST_TMP/cloudflare.json" --max-age-sec 60 --expected-hostname control.private.invalid --expected-account cf-account-123 --simulation-clock --now 2026-07-13T00:00:30Z)
+assert_success node "$I00_ROOT/bin/verify-cloudflare-readback.mjs" "${CF_ARGS[@]}"
+node -e 'const fs=require("fs");const p=process.argv[1];const v=require(p);v.originRejectedMissingJwt=false;fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/cloudflare.json"
+assert_failure node "$I00_ROOT/bin/verify-cloudflare-readback.mjs" "${CF_ARGS[@]}"
+node -e 'const fs=require("fs");const p=process.argv[1];const v=require(p);v.originRejectedMissingJwt=true;v.observedAtUtc="2026-07-12T23:00:00Z";fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/cloudflare.json"
+assert_failure node "$I00_ROOT/bin/verify-cloudflare-readback.mjs" "${CF_ARGS[@]}"
+finish

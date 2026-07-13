@@ -1,0 +1,11 @@
+/var/lib/cosmos/ops/*.jsonl {
+    daily
+    maxsize 10M
+    rotate 14
+    missingok
+    notifempty
+    compress
+    delaycompress
+    su cosmos cosmos
+    create 0600 cosmos cosmos
+}

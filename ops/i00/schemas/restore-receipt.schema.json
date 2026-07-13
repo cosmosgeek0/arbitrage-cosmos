@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmos.invalid/i00/restore-receipt.schema.json",
+  "title": "I00 restore receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "kind", "backupId", "isolated", "appInactive", "integrityCheck", "foreignKeyViolations", "target", "status", "authorizationReference", "recordedAtUtc"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "kind": {"const": "RESTORE"},
+    "backupId": {"type": "string", "minLength": 1},
+    "isolated": {"type": "boolean"},
+    "appInactive": {"type": "boolean"},
+    "integrityCheck": {"const": "ok"},
+    "foreignKeyViolations": {"const": 0},
+    "target": {"type": "string", "minLength": 1},
+    "status": {"enum": ["ISOLATED_DRILL_PASS", "PRODUCTION_RESTORE_PROVED"]},
+    "authorizationReference": {"type": ["string", "null"]},
+    "recordedAtUtc": {"type": "string", "format": "date-time"}
+  },
+  "oneOf": [
+    {"properties": {"status": {"const": "ISOLATED_DRILL_PASS"}, "isolated": {"const": true}, "authorizationReference": {"type": "null"}}},
+    {"properties": {"status": {"const": "PRODUCTION_RESTORE_PROVED"}, "isolated": {"const": false}, "appInactive": {"const": true}, "authorizationReference": {"type": "string", "minLength": 1}}}
+  ]
+}

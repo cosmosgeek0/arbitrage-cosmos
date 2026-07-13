@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmos.invalid/i00/release-receipt.schema.json",
+  "title": "I00 release receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "kind", "releaseId", "testedSha", "artifactManifestSha256", "status", "recordedAtUtc"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "kind": {"const": "RELEASE"},
+    "releaseId": {"type": "string", "pattern": "^i00-[0-9a-f]{40}$"},
+    "testedSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "artifactManifestSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "status": {"enum": ["ASSEMBLED_NOT_DEPLOYED", "VALIDATED_NOT_DEPLOYED"]},
+    "recordedAtUtc": {"type": "string", "format": "date-time"}
+  }
+}

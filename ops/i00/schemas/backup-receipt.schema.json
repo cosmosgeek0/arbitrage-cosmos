@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmos.invalid/i00/backup-receipt.schema.json",
+  "title": "I00 backup receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "kind", "backupId", "sourceSha", "databaseSha256", "integrityCheck", "foreignKeyViolations", "evidencePaths", "status", "recordedAtUtc"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "kind": {"const": "BACKUP"},
+    "backupId": {"type": "string", "minLength": 1},
+    "sourceSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "databaseSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "integrityCheck": {"const": "ok"},
+    "foreignKeyViolations": {"const": 0},
+    "evidencePaths": {"type": "array", "items": {"type": "string"}},
+    "status": {"const": "BACKUP_VERIFIED"},
+    "recordedAtUtc": {"type": "string", "format": "date-time"}
+  }
+}

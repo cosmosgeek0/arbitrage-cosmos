@@ -1,0 +1,11 @@
+# Drop-in for the accepted L15 cosmos-app.service. Requires systemd >=247.
+# The absolute LoadCredential source is fatal when missing; no silent fallback.
+[Unit]
+Requires=cosmos-secrets-provider.service
+After=cosmos-secrets-provider.service
+
+[Service]
+LoadCredential=app-secrets:/run/cosmos-secret-source/app-secrets.json
+ExecStart=
+ExecStart=/usr/bin/node /usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs
+EnvironmentFile=/etc/cosmos/cosmos-i00.env

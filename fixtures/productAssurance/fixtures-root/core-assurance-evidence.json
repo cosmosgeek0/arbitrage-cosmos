@@ -5,9 +5,9 @@
     "acceptedQCommit": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
     "protocolSchemaDigest": "229af0ff13d600c7d305c6deb7f57b61bdb6f8a35f6f2349d91f5ab1b4972f1c"
   },
+  "assurancePrestageReady": false,
   "authorityGranted": false,
   "baseCommit": "9785c93102b00389847b77c2f9348c06abc4344b",
-  "browserState": "NOT_RUN",
   "changedPaths": [
     "fixtures/productAssurance/fixtures-root/core-assurance-evidence.json",
     "fixtures/productAssurance/fixtures-root/fault-harness-synthetic.json",
@@ -21,21 +21,17 @@
     "fixtures/productAssurance/generated/SAFETY_INVARIANT_CATALOG.md",
     "fixtures/productAssurance/generated/TELEMETRY_COVERAGE_MATRIX.md",
     "fixtures/productAssurance/receipts/IP_ASSURANCE_RECEIPT.md",
-    "server/src/productAssurance/actionEvidence/evaluator.ts",
-    "server/src/productAssurance/assuranceCase/claimGraph.ts",
+    "fixtures/productAssurance/receipts/IP_ASSURANCE_WORKER_STATE.md",
+    "server/src/productAssurance/adapters/ownerContracts.ts",
     "server/src/productAssurance/catalog/core.ts",
-    "server/src/productAssurance/catalog/coverage.ts",
     "server/src/productAssurance/cockpit/viewModel.ts",
     "server/src/productAssurance/common.ts",
     "server/src/productAssurance/controllers/gate.ts",
-    "server/src/productAssurance/coverage/matrix.ts",
     "server/src/productAssurance/diagnostics/boundary.ts",
-    "server/src/productAssurance/diagnostics/governance.ts",
     "server/src/productAssurance/failureAtlas/atlas.ts",
     "server/src/productAssurance/faults/harness.ts",
     "server/src/productAssurance/index.ts",
     "server/src/productAssurance/invariants/evaluator.ts",
-    "server/src/productAssurance/inventory/coverage.ts",
     "server/src/productAssurance/operations/policy.ts",
     "server/src/productAssurance/projections/operationalTruth.ts",
     "server/src/productAssurance/qCoverage/generator.ts",
@@ -43,6 +39,7 @@
     "server/test/productAssurance/core-policy-inventory.test.mjs",
     "server/test/productAssurance/helpers.mjs",
     "server/test/productAssurance/operational-remediation.test.mjs",
+    "server/test/productAssurance/owner-contract-gate-adversarial.test.mjs",
     "server/test/productAssurance/production-operation-scan-adversarial.test.mjs",
     "server/test/productAssurance/systemic-diagnostics.test.mjs",
     "test/productAssurance/generate-closure.mjs",
@@ -51,23 +48,18 @@
   ],
   "counts": {
     "cockpitSections": 11,
-    "components": 13,
-    "controls": 8,
-    "coverageObligations": 171,
-    "dependencies": 22,
     "faultScenarios": 103,
     "insertionRequests": 68,
-    "invariants": 17,
-    "operationPolicies": 13,
+    "invariants": 15,
+    "operationPolicies": 14,
+    "ownerContractSurfaces": 5,
     "ownerQuestions": 25,
-    "qRequirements": 11,
-    "telemetrySignals": 19
+    "qRequirements": 11
   },
-  "deploymentState": "NOT_RUN",
-  "directorStateCommit": "2b6ef003d7e86af8558e1db242c2db6fe906d26b",
-  "disposition": "BLOCKED_AWAITING_DIRECTOR_ACCEPTED_SERIAL_ASSURANCE_SATELLITE_FAN_IN_AND_OWNER_DISPOSITION_OF_NEWS_CONTEXT_DYNAMIC_FETCH_METHOD",
-  "evaluatedAtMs": 1783900800000,
-  "evaluatedAtUtc": "2026-07-13T00:00:00.000Z",
+  "disposition": "CORE_SCAFFOLD_READY",
+  "evaluatedAtMs": 1783952981020,
+  "evaluatedAtUtc": "2026-07-13T14:29:41.020Z",
+  "governingRulingCommit": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
   "immutableInterfaces": [
     {
       "acceptedCommit": "9785c93102b00389847b77c2f9348c06abc4344b",
@@ -183,65 +175,125 @@
       "status": "ACCEPTED_PACKET_TIP"
     }
   ],
-  "implementationCommit": "3391dcfba93bdf370859a62559612e5ea0d42a35",
-  "privateSignedState": "NOT_RUN",
+  "implementationCommit": "f67db03293b184473f7f8e79b8872c6f6697f264",
+  "ownerContractWaitingSeams": {
+    "ACTION_EVIDENCE": {
+      "blocker": "DIRECTOR_ACCEPTED_SATELLITE_COMMIT_MISSING",
+      "ownerId": "ACTION_EVIDENCE_SATELLITE",
+      "targetSeam": "fixtures/productAssurance/systemic/actionEvidence/**"
+    },
+    "ASSURANCE_CASE": {
+      "blocker": "DIRECTOR_ACCEPTED_SATELLITE_COMMIT_MISSING",
+      "ownerId": "ASSURANCE_CASE_SATELLITE",
+      "targetSeam": "fixtures/productAssurance/systemic/assuranceCase/**"
+    },
+    "COVERAGE": {
+      "blocker": "DIRECTOR_ACCEPTED_S5_AND_I08_OWNER_CONTRACT_MISSING",
+      "ownerId": "I08_S5_COVERAGE_OWNER",
+      "targetSeam": "canonical systemIntegration supervisor plus accepted S5 coverage contract"
+    },
+    "DIAGNOSTIC_GOVERNANCE": {
+      "blocker": "DIRECTOR_ACCEPTED_SATELLITE_COMMIT_MISSING",
+      "ownerId": "A_AGENT_DIAGNOSTIC_GOVERNANCE",
+      "targetSeam": "fixtures/productAssurance/systemic/agentBoundary/**"
+    },
+    "RATE_BUDGET": {
+      "blocker": "AGGREGATE_RATE_BUDGET_OWNER_CONTRACT_NOT_CONFIGURED",
+      "ownerId": "INTELLIGENCE_RUNTIME_RATE_BUDGET",
+      "targetSeam": "server/src/intelligenceRuntime lifecycle and aggregate snapshot contract"
+    }
+  },
   "releaseId": "IP_ASSURANCE_CORE_SCAFFOLD_20260713",
-  "revision": 1,
-  "runtimeState": "NOT_CONFIGURED",
+  "reviewedOperationDisposition": {
+    "column": 25,
+    "disposition": "KEEP_CANONICAL",
+    "dispositionId": "DISPOSITION_NEWS_CONTEXT_PUBLIC_GET_V1",
+    "effectiveKind": "NETWORK_HTTP_REQUEST",
+    "effectiveSymbol": "fetch:GET",
+    "line": 2302,
+    "observedSemantics": {
+      "aggregateConcurrency": "OWNER_CONTRACT_WAITING",
+      "bodyLimitBytes": 8388608,
+      "boundedStateEntries": 1024,
+      "contentTypeValidated": true,
+      "failureResult": "CACHED_DELAYED_OR_EXPLICIT_SOURCE_ERROR",
+      "failureSuppressionMs": 15000,
+      "inFlightCoalescing": "SAME_KEY",
+      "maximumAttempts": 2,
+      "method": "GET_BY_CURRENT_CALLER_CONTRACT",
+      "redirects": "MANUAL_MAX_3_REDIRECTS_4_REQUEST_HOPS",
+      "retryClasses": [
+        "TIMEOUT",
+        "UNAVAILABLE",
+        "HTTP_408",
+        "HTTP_429",
+        "HTTP_5XX"
+      ],
+      "retryDelayMs": 350,
+      "timeoutPerAttemptMs": 8000,
+      "urlPolicy": "HTTPS_NO_CREDENTIALS_HOST_ALLOWLIST_REDIRECT_REVALIDATION"
+    },
+    "operationClass": "PURE_READ",
+    "operationId": "OP_NEWS_CONTEXT_PUBLIC_READ",
+    "ownerId": "EXISTING_NEWS_CONTEXT_SERVICE",
+    "path": "server/src/services/newsContext.ts",
+    "rawKind": "MUTATION_CALL",
+    "rawSymbol": "fetch:DYNAMIC_METHOD",
+    "rulingCommit": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+    "siteId": "OPSITE_FD086559819579DF346A",
+    "sourceDigestAlgorithm": "sha256",
+    "sourceSha256": "38aa196200f1325cd135f2a8a00f46ace5caa1d2fcf0811c357c52f80f47bede"
+  },
+  "revision": 2,
   "scanner": {
-    "coverageVerdict": "FAIL",
-    "covered": 142,
+    "coverageVerdict": "PASS",
+    "covered": 143,
     "discovered": 143,
-    "failOnUncoveredExitCode": 1,
+    "failOnUncoveredExitCode": 0,
     "filesScanned": 368,
-    "reasonCodes": [
-      "PRODUCTION_OPERATION_UNCOVERED"
-    ],
-    "schemaVersion": "production-operation-scan.v1",
-    "uncovered": 1,
-    "uncoveredSites": [
-      {
-        "column": 25,
-        "kind": "MUTATION_CALL",
-        "line": 2302,
-        "mappingRuleId": null,
-        "operationId": null,
-        "path": "server/src/services/newsContext.ts",
-        "siteId": "OPSITE_FD086559819579DF346A",
-        "symbol": "fetch:DYNAMIC_METHOD"
-      }
-    ]
-  },
-  "schema": "PRODUCT_ASSURANCE_CORE_EVIDENCE_V1",
-  "structuralCoverage": {
-    "coveragePercentage": 100,
-    "coveredCount": 171,
-    "duplicateSubjectKeys": [],
-    "expectedCount": 171,
-    "invalidSubjectKeys": [],
-    "missingSubjectKeys": [],
     "reasonCodes": [],
-    "unexpectedSubjectKeys": [],
-    "verdict": "PASS"
+    "schemaVersion": "production-operation-scan.v1",
+    "uncovered": 0,
+    "uncoveredSites": []
   },
-  "testedCommit": "3391dcfba93bdf370859a62559612e5ea0d42a35",
+  "schema": "PRODUCT_ASSURANCE_CORE_EVIDENCE_V2",
+  "testedCommit": "f67db03293b184473f7f8e79b8872c6f6697f264",
   "verifiedInputs": [
     {
       "path": "IP_ASSURANCE.md",
-      "role": "DIRECTOR_AMENDED_PACKET",
+      "role": "FROZEN_D_LAUNCH_8_PACKET_PROVENANCE",
       "sha256": "5f6d4b3b70e384f6123e9ccc01891faf04aef9da7f7cfd1e0c63be5c3ba68803",
+      "source": "WORKTREE",
+      "verified": true
+    },
+    {
+      "gitObject": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6:IP_ASSURANCE.md",
+      "path": "IP_ASSURANCE.md",
+      "role": "D_LAUNCH_13_GOVERNING_PACKET",
+      "sha256": "49dcd690275ff35cb32566af307ad572d2a527e06d7388885f98826560968e84",
+      "source": "GIT_OBJECT",
+      "verified": true
+    },
+    {
+      "gitObject": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6:QL_DIRECTOR_STATE.md",
+      "path": "QL_DIRECTOR_STATE.md",
+      "role": "D_LAUNCH_13_DIRECTOR_RULING",
+      "sha256": "ec61e1678dcb108a92b9dda5503233c76b35fa5301c36077e04bdaead7b44307",
+      "source": "GIT_OBJECT",
       "verified": true
     },
     {
       "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
-      "role": "PARENT_AUTHORITY_UNTRACKED_OWNER_INPUT",
+      "role": "PROTECTED_UNTRACKED_I00_OWNER_INPUT",
       "sha256": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5",
+      "source": "WORKTREE",
       "verified": true
     },
     {
       "path": "fixtures/productAssurance/generated/SYSTEMIC_ASSURANCE_DEDUP_MATRIX.md",
-      "role": "DIRECTOR_ACCEPTED_DEDUP_LAW",
+      "role": "DIRECTOR_ACCEPTED_DEDUP_LAW_PROTECTED_INPUT",
       "sha256": "22686d2cd1c54bbc39af56399298a0ed9563bbc8643ad4f0e498718de83cb2cd",
+      "source": "WORKTREE",
       "verified": true
     }
   ]

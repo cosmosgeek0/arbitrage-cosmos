@@ -1,16 +1,25 @@
 {
   "authorityGranted": false,
   "declaredScenarioCount": 103,
-  "duplicateObservationScenarioIds": [],
-  "evaluatedAtMs": 1783900800000,
+  "evaluatedAtMs": 1783952981020,
   "failedScenarioIds": [],
+  "failureRecords": {
+    "eligibleRecordIds": [],
+    "reasonCodes": [
+      "FAILURE_RECORD_CORPUS_EMPTY"
+    ],
+    "recurrenceByFingerprint": {},
+    "rejectedRecordIds": [],
+    "secondStoreCreated": false,
+    "verdict": "UNKNOWN"
+  },
   "observedScenarioCount": 103,
   "passedScenarioCount": 103,
   "realSoakState": "NOT_RUN",
   "reasonCodes": [],
   "runs": [
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 2228227242,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -56,11 +65,11 @@
         }
       ],
       "rootCauseCode": "RESPONSE_LOST_AFTER_ACCEPTANCE",
-      "runDigest": "a88bb0a43c102c44389b145876fd5b0e3aa6b24fecb71d751301e10ba86fa362",
+      "runDigest": "3c031f480dcf5aca151e481f08f3dfcdbef7860aced77ddb590258931fd69ee3",
       "runId": "RUN_FAULT_REQUEST_ACCEPTED_RESPONSE_LOST",
       "scenarioId": "FAULT_REQUEST_ACCEPTED_RESPONSE_LOST",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -75,7 +84,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 1004251270,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -121,11 +130,11 @@
         }
       ],
       "rootCauseCode": "DUPLICATE_EVENT_DELIVERED",
-      "runDigest": "f8190dcb435cbbca30b3396cf1d40a3826bc740a48433b253ab98a4dd4f6b160",
+      "runDigest": "1470ea91043fdd8b5988e5542afbdf2a06a119632bbd94c25d6d70ca52eb8c8b",
       "runId": "RUN_FAULT_EVENT_DUPLICATE",
       "scenarioId": "FAULT_EVENT_DUPLICATE",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -140,7 +149,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 2879072471,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -186,11 +195,11 @@
         }
       ],
       "rootCauseCode": "EXPECTED_EVENT_MISSING",
-      "runDigest": "9fa8b4479b088fd468670d70ccfae601903e7cbbfb0fd0dceafa9a40ee20958a",
+      "runDigest": "6c74e727fda7aa8c4c071d719db20621ce70088f3fe84bd177bb4a59e13417e5",
       "runId": "RUN_FAULT_EVENT_MISSING",
       "scenarioId": "FAULT_EVENT_MISSING",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -205,7 +214,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 1174554313,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -251,11 +260,11 @@
         }
       ],
       "rootCauseCode": "EVENT_DELIVERY_DELAY_EXCEEDED",
-      "runDigest": "aaae9931929f760add4c203a01364bdb11bc24fc574edce81f3b337a96e8e8e3",
+      "runDigest": "6b0fffd61f5fc9d7378d252e47cf6bd8fb0c95ac177547afd7bc5a6ea0402776",
       "runId": "RUN_FAULT_EVENT_DELAYED",
       "scenarioId": "FAULT_EVENT_DELAYED",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -270,7 +279,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 2841732994,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -316,11 +325,11 @@
         }
       ],
       "rootCauseCode": "EVENT_DELIVERED_OUT_OF_ORDER",
-      "runDigest": "c7b3d51ddbc88c088c6034cc46be7fe486586bf6f0d12d6bb10748678b34dcc3",
+      "runDigest": "468722433f50d014c271184f27325b9c3a90cbebdeb80a5c42c98ee382d3b5bf",
       "runId": "RUN_FAULT_EVENT_OUT_OF_ORDER",
       "scenarioId": "FAULT_EVENT_OUT_OF_ORDER",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -335,7 +344,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 765017191,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -381,11 +390,11 @@
         }
       ],
       "rootCauseCode": "STREAM_ROTATION_INTERRUPTED_CONTINUITY",
-      "runDigest": "abd8ee6f01be2705937bea3e8611708f02832c487ffefdcccd0b49ba27247d9c",
+      "runDigest": "eaa92d2fa1fd2a24aa9a7053fe859bd080362409b44fb01bfd4418e4028c2601",
       "runId": "RUN_FAULT_STREAM_ROTATION",
       "scenarioId": "FAULT_STREAM_ROTATION",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -400,7 +409,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 3684982213,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -446,11 +455,11 @@
         }
       ],
       "rootCauseCode": "STREAM_SERVER_SHUTDOWN",
-      "runDigest": "ccc7a5cda624cf52f07ff1efe901d8f28878fdce78e6da683c57595113b2fd4d",
+      "runDigest": "ee2ca136a40272ab58a23fd21694e7ee62bb7db541a2022757d5f201a961a64c",
       "runId": "RUN_FAULT_STREAM_SERVER_SHUTDOWN",
       "scenarioId": "FAULT_STREAM_SERVER_SHUTDOWN",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -465,7 +474,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 2280091241,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -511,11 +520,11 @@
         }
       ],
       "rootCauseCode": "STREAM_PING_PONG_FAILED",
-      "runDigest": "c22dab1d0140f1ecf7312c7e9cfce395b658ea21142d0e72e5bf44a7da7c01d3",
+      "runDigest": "8a3703d19b34c3cd05bab73eb63df0c7e6c29f96ade2de892d782fa8ea202952",
       "runId": "RUN_FAULT_STREAM_PING_PONG_FAILURE",
       "scenarioId": "FAULT_STREAM_PING_PONG_FAILURE",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -530,7 +539,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799100,
+      "completedAtMs": 1783952980120,
       "deterministicSeed": 2255764788,
       "iterationsCompleted": 100,
       "proofVerdicts": [
@@ -580,11 +589,11 @@
         }
       ],
       "rootCauseCode": "STREAM_RECONNECT_AMPLIFICATION",
-      "runDigest": "b25fc2e462d73df7b357211259a09aa2c96c43e383be941c911a764bbfb8d0c5",
+      "runDigest": "4f2761ce9e3566f35ac7563aff52b86115bfd416b2f4a178f0bbbd46d02380f7",
       "runId": "RUN_FAULT_STREAM_RECONNECT_STORM",
       "scenarioId": "FAULT_STREAM_RECONNECT_STORM",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -599,7 +608,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799100,
+      "completedAtMs": 1783952980120,
       "deterministicSeed": 2966798676,
       "iterationsCompleted": 100,
       "proofVerdicts": [
@@ -645,11 +654,11 @@
         }
       ],
       "rootCauseCode": "LOCAL_BOOK_SEQUENCE_GAP",
-      "runDigest": "f37364f7de55a5817d4256bf22958de2d12aa774add3dc39acf658a06b997fbe",
+      "runDigest": "5d8312c92381d07cc9ca34661f5b997a6ab061149a40d7c49fd407cd2e7e4977",
       "runId": "RUN_FAULT_LOCAL_BOOK_SEQUENCE_GAP_RESNAPSHOT",
       "scenarioId": "FAULT_LOCAL_BOOK_SEQUENCE_GAP_RESNAPSHOT",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -664,7 +673,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799100,
+      "completedAtMs": 1783952980120,
       "deterministicSeed": 3697552496,
       "iterationsCompleted": 100,
       "proofVerdicts": [
@@ -710,11 +719,11 @@
         }
       ],
       "rootCauseCode": "SPOT_USDM_SKEW_EXCEEDED",
-      "runDigest": "6a1cba7c4816b79b8aef6df654ab53f62216d267136d98cf7299d32f957f208d",
+      "runDigest": "6cd59d69ef892464b45ec4130583d92fa73a78260c74a3c153c7e33a1a2040fd",
       "runId": "RUN_FAULT_SPOT_USDM_TEMPORAL_SKEW",
       "scenarioId": "FAULT_SPOT_USDM_TEMPORAL_SKEW",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -729,7 +738,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 1201553876,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -775,11 +784,11 @@
         }
       ],
       "rootCauseCode": "CLOCK_SAMPLE_STALE",
-      "runDigest": "cd6351252c97b7271037c53183cb436bf8e9bf46eae907533f081cd77e07bac5",
+      "runDigest": "f6576f9937571640235886b07427320465b88a732f6a0f385ac6f3221e9425ab",
       "runId": "RUN_FAULT_CLOCK_STALE",
       "scenarioId": "FAULT_CLOCK_STALE",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -794,7 +803,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 1414835190,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -840,11 +849,11 @@
         }
       ],
       "rootCauseCode": "SERVER_CLOCK_OFFSET_EXCEEDED",
-      "runDigest": "6868174788ebb8fccccf0c64c741833b8435cb07653e116d69265f58573df89d",
+      "runDigest": "06c4fb60e39e1c75246a5a6ee1c902d4feec383ab7b4fe10984898231d4633db",
       "runId": "RUN_FAULT_CLOCK_SERVER_OFFSET_EXCESSIVE",
       "scenarioId": "FAULT_CLOCK_SERVER_OFFSET_EXCESSIVE",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -859,7 +868,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799100,
+      "completedAtMs": 1783952980120,
       "deterministicSeed": 2768950506,
       "iterationsCompleted": 100,
       "proofVerdicts": [
@@ -905,11 +914,11 @@
         }
       ],
       "rootCauseCode": "EXCHANGE_THROTTLED",
-      "runDigest": "4e5d98d84e2e80309dfe20ab1a3a9c10311978075f867d697154f70eea6e0fd3",
+      "runDigest": "c62f71d80cda0a88380730a1f21667a6d1d4959d603b00e045537aa2c7020451",
       "runId": "RUN_FAULT_EXCHANGE_THROTTLE",
       "scenarioId": "FAULT_EXCHANGE_THROTTLE",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -924,7 +933,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799100,
+      "completedAtMs": 1783952980120,
       "deterministicSeed": 714693371,
       "iterationsCompleted": 100,
       "proofVerdicts": [
@@ -970,11 +979,11 @@
         }
       ],
       "rootCauseCode": "EXCHANGE_REQUEST_BANNED",
-      "runDigest": "f94b35022d97e26025af21809c111eed59b273a1d08912669d38cda87ca97128",
+      "runDigest": "1a1b0c664701418bce0d4e833ce6459b1f51c5302caef8b02066df7d4c9a5201",
       "runId": "RUN_FAULT_EXCHANGE_BAN",
       "scenarioId": "FAULT_EXCHANGE_BAN",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -989,7 +998,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799100,
+      "completedAtMs": 1783952980120,
       "deterministicSeed": 387171456,
       "iterationsCompleted": 100,
       "proofVerdicts": [
@@ -1035,11 +1044,11 @@
         }
       ],
       "rootCauseCode": "EXCHANGE_OVERLOADED",
-      "runDigest": "a41610b26e0719fb148012c90b84d86b60b5810d11f9b8bbdedfc96a95f86309",
+      "runDigest": "98e102010a9a4146e92bcaaf59d8a727f9b20609e4cbcb65caa4583c0b96baae",
       "runId": "RUN_FAULT_EXCHANGE_OVERLOAD",
       "scenarioId": "FAULT_EXCHANGE_OVERLOAD",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -1054,7 +1063,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799100,
+      "completedAtMs": 1783952980120,
       "deterministicSeed": 910367279,
       "iterationsCompleted": 100,
       "proofVerdicts": [
@@ -1100,11 +1109,11 @@
         }
       ],
       "rootCauseCode": "EXCHANGE_COOLDOWN_ACTIVE",
-      "runDigest": "b61d406cbe7e586622e1090c8fbd82c1b258aea8cc20b7d0168001992e26e284",
+      "runDigest": "8c2ae30d799a8d9794a4ff429ba04900423a534dfcfd09e6d12c86d831127b43",
       "runId": "RUN_FAULT_EXCHANGE_COOLDOWN",
       "scenarioId": "FAULT_EXCHANGE_COOLDOWN",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -1119,7 +1128,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 1177362524,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -1165,11 +1174,11 @@
         }
       ],
       "rootCauseCode": "BORROW_RESPONSE_LOST_AFTER_ACCEPTANCE",
-      "runDigest": "542b64cc57e5afc4bc1070145843c23c2283bac7a8c5a6186f7ac33c279e625f",
+      "runDigest": "9b97ac4725abb6a7cd672defbe471491f908447a260b3a312ce68eb05892de7c",
       "runId": "RUN_FAULT_BORROW_RESPONSE_LOST",
       "scenarioId": "FAULT_BORROW_RESPONSE_LOST",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -1184,7 +1193,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 2342074792,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -1230,11 +1239,11 @@
         }
       ],
       "rootCauseCode": "REPAY_RESPONSE_LOST_AFTER_ACCEPTANCE",
-      "runDigest": "c9e5a5e23a71825ae346c6bdc8856fd06d81310c28145a88ffa6fb693210c90a",
+      "runDigest": "85db816457d60a5025a12d71afe27fb4b85cf6723ea1acdab42b07736b689cf2",
       "runId": "RUN_FAULT_REPAY_RESPONSE_LOST",
       "scenarioId": "FAULT_REPAY_RESPONSE_LOST",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -1249,7 +1258,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 131885063,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -1295,11 +1304,11 @@
         }
       ],
       "rootCauseCode": "SPOT_LEG_PARTIALLY_FILLED",
-      "runDigest": "4e5ab47daff04607a08a1c1fe3d0cf5bdc378463eb7bd66eb61ff108b7e2dffc",
+      "runDigest": "6b747dac7dd7e70d97a457857eb0951a6928698e827071223db310364b4565a6",
       "runId": "RUN_FAULT_PARTIAL_FILL_SPOT_LEG",
       "scenarioId": "FAULT_PARTIAL_FILL_SPOT_LEG",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -1314,7 +1323,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 2174066708,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -1360,11 +1369,11 @@
         }
       ],
       "rootCauseCode": "USDM_LEG_PARTIALLY_FILLED",
-      "runDigest": "afd9ddd84fbf1589339bcf7c4cc8c6e3201baa93b9925ebda3abf768804ac9f1",
+      "runDigest": "de15d2c712eb973f90823093845768f0cdddbfa1a07172aeb8e44182152646a0",
       "runId": "RUN_FAULT_PARTIAL_FILL_USDM_LEG",
       "scenarioId": "FAULT_PARTIAL_FILL_USDM_LEG",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -1379,7 +1388,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 3051113376,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -1425,11 +1434,11 @@
         }
       ],
       "rootCauseCode": "CANCEL_ACKNOWLEDGEMENT_LOST",
-      "runDigest": "acb0a057525e10c8f89e3cbe1f8b711cf4cb093ca50cfbc961462f62d617c3be",
+      "runDigest": "26e7cbf49bda8cef93ceefcbcb71013254ffb361bae606fb2b63878ef9038057",
       "runId": "RUN_FAULT_CANCEL_ACKNOWLEDGEMENT_LOST",
       "scenarioId": "FAULT_CANCEL_ACKNOWLEDGEMENT_LOST",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -1444,7 +1453,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 3767172667,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -1490,11 +1499,11 @@
         }
       ],
       "rootCauseCode": "DB_FAILED_BEFORE_EXTERNAL_MUTATION",
-      "runDigest": "c124cd4291bc74e0722a864619a141d068ddf814ec8e828b038502b5967c9eb7",
+      "runDigest": "5a6928e386437cb88ce901eadbfec1a6df611823c6954ac6f2d5fefa53dd64a8",
       "runId": "RUN_FAULT_DB_FAILURE_BEFORE_EXTERNAL_MUTATION",
       "scenarioId": "FAULT_DB_FAILURE_BEFORE_EXTERNAL_MUTATION",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -1509,7 +1518,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 791468022,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -1555,11 +1564,11 @@
         }
       ],
       "rootCauseCode": "DB_FAILED_AFTER_EXTERNAL_MUTATION",
-      "runDigest": "8ecbef8cd891cc1e6207f2b7f34bdfda9cfd1a57bce5ce0b42fd2c169ea89ce4",
+      "runDigest": "1652d7d9eddbd542853ef90774a522007c266b039dde7f546f92b701a4aaa269",
       "runId": "RUN_FAULT_DB_FAILURE_AFTER_EXTERNAL_MUTATION",
       "scenarioId": "FAULT_DB_FAILURE_AFTER_EXTERNAL_MUTATION",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -1574,7 +1583,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 3197441671,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -1620,11 +1629,11 @@
         }
       ],
       "rootCauseCode": "PROCESS_DIED_BEFORE_MUTATION_INTENT",
-      "runDigest": "96604d4cc6802e41f8757c007bd888035db6d733e85e4670ea7cd45e374968a3",
+      "runDigest": "9d296c69599f8660fd9a5df526781f5c32bf6b3039f40024a71e9134fcdd89b8",
       "runId": "RUN_FAULT_PROCESS_DEATH_BEFORE_MUTATION_INTENT",
       "scenarioId": "FAULT_PROCESS_DEATH_BEFORE_MUTATION_INTENT",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -1639,7 +1648,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 1687560699,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -1685,11 +1694,11 @@
         }
       ],
       "rootCauseCode": "PROCESS_DIED_AFTER_INTENT_BEFORE_SUBMISSION",
-      "runDigest": "58beae8e162c909971e567d445c04b6a2134a9334733398a84190a6e151cf8d1",
+      "runDigest": "00dd4aa7d3c79b20df99359c3a3f4917041444c35ead04ff95ce50883033839c",
       "runId": "RUN_FAULT_PROCESS_DEATH_AFTER_INTENT_BEFORE_SUBMISSION",
       "scenarioId": "FAULT_PROCESS_DEATH_AFTER_INTENT_BEFORE_SUBMISSION",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -1704,7 +1713,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 2391941730,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -1750,11 +1759,11 @@
         }
       ],
       "rootCauseCode": "PROCESS_DIED_AFTER_SUBMISSION_BEFORE_ACCEPTANCE",
-      "runDigest": "5c547b3f1aeab6dab7a252c50b34ff91aed176e530fc59d8e6c017262b897093",
+      "runDigest": "3003b183022e53898f3eff027a166dd4128fcb047dac297545e5504a88ceb220",
       "runId": "RUN_FAULT_PROCESS_DEATH_AFTER_SUBMISSION_BEFORE_ACCEPTANCE",
       "scenarioId": "FAULT_PROCESS_DEATH_AFTER_SUBMISSION_BEFORE_ACCEPTANCE",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -1769,7 +1778,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 4106381136,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -1815,11 +1824,11 @@
         }
       ],
       "rootCauseCode": "PROCESS_DIED_AFTER_ACCEPTANCE_BEFORE_CHECKPOINT",
-      "runDigest": "78f4d09387f4e67d50e24920291cc9fe5f22bf02e8d73affd77bf5e68dabc00f",
+      "runDigest": "dc4b2fe709a7daf7b123349993515eefd8cdaee9fa7afd3b96049eb9dc1759b6",
       "runId": "RUN_FAULT_PROCESS_DEATH_AFTER_ACCEPTANCE_BEFORE_CHECKPOINT",
       "scenarioId": "FAULT_PROCESS_DEATH_AFTER_ACCEPTANCE_BEFORE_CHECKPOINT",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -1834,7 +1843,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 3921712124,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -1880,11 +1889,11 @@
         }
       ],
       "rootCauseCode": "PROCESS_DIED_DURING_RECONCILIATION",
-      "runDigest": "1f72bb0445dfe5ed54e7f4b8eabd27f595ffd046e7527657279958ab6a80143f",
+      "runDigest": "59f47d61d9c9ce0d409434861d499eb29ae226ed6c5ced228497b330a0314fef",
       "runId": "RUN_FAULT_PROCESS_DEATH_DURING_RECONCILIATION",
       "scenarioId": "FAULT_PROCESS_DEATH_DURING_RECONCILIATION",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -1899,7 +1908,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 1422083444,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -1945,11 +1954,11 @@
         }
       ],
       "rootCauseCode": "PROCESS_DIED_AFTER_RECONCILIATION_BEFORE_TERMINAL",
-      "runDigest": "405b7e284acbc7ed3c61d8b826a956d2567637219faf77ad3d593cac44d4f385",
+      "runDigest": "deee6dff9568443aeb96bd52e15dc160dc57d912ebe01cac0ca8fb1ac88a3460",
       "runId": "RUN_FAULT_PROCESS_DEATH_AFTER_RECONCILIATION_BEFORE_TERMINAL",
       "scenarioId": "FAULT_PROCESS_DEATH_AFTER_RECONCILIATION_BEFORE_TERMINAL",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -1964,7 +1973,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799100,
+      "completedAtMs": 1783952980120,
       "deterministicSeed": 1181333865,
       "iterationsCompleted": 100,
       "proofVerdicts": [
@@ -2010,11 +2019,11 @@
         }
       ],
       "rootCauseCode": "EXECUTION_FENCE_LOST",
-      "runDigest": "0605b0dfef57eb212402a22f35edacfde62a46ea244910dddbf096a47c8d8e07",
+      "runDigest": "cf3d80a3271123821a4012ab82284f4ff3a8fb8363ec38c37f9fdcbd246244ce",
       "runId": "RUN_FAULT_DUPLICATE_EXECUTOR_FENCE_LOSS",
       "scenarioId": "FAULT_DUPLICATE_EXECUTOR_FENCE_LOSS",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -2029,7 +2038,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 860167279,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -2075,11 +2084,11 @@
         }
       ],
       "rootCauseCode": "DISK_CAPACITY_EXHAUSTED",
-      "runDigest": "b3bfad204caacf66dddf3c5f5eea3e5ced657d44652362ddf1fdb388853b1c92",
+      "runDigest": "51dd1de88082e786d30fb864b43aa53e297d7a50872f1659c6a952ae65310f9b",
       "runId": "RUN_FAULT_DISK_FULL",
       "scenarioId": "FAULT_DISK_FULL",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -2094,7 +2103,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 2086244542,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -2140,11 +2149,11 @@
         }
       ],
       "rootCauseCode": "WAL_GROWTH_UNBOUNDED",
-      "runDigest": "5f837f3b1da1f806e5e1590da3e15c7819c6a8ac2debb8a27a135254e48d88d6",
+      "runDigest": "45a1d5cb4eb149ef0a874e5f8ce0250563a4040b3352517d7af68df1f8009023",
       "runId": "RUN_FAULT_WAL_GROWTH",
       "scenarioId": "FAULT_WAL_GROWTH",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -2159,7 +2168,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 3173031848,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -2205,11 +2214,11 @@
         }
       ],
       "rootCauseCode": "LOG_GROWTH_UNBOUNDED",
-      "runDigest": "7953caad552d03074e5ea22d6881225ed6bd964d22db7dee2dd82f2414e216fc",
+      "runDigest": "bdb0157769a85c569d7632dc4fd756a08e849a791a0097b8622673eb4c041874",
       "runId": "RUN_FAULT_LOG_GROWTH",
       "scenarioId": "FAULT_LOG_GROWTH",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -2224,7 +2233,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799100,
+      "completedAtMs": 1783952980120,
       "deterministicSeed": 4259435240,
       "iterationsCompleted": 100,
       "proofVerdicts": [
@@ -2274,11 +2283,11 @@
         }
       ],
       "rootCauseCode": "TELEMETRY_EXPORT_FAILED",
-      "runDigest": "04c462efb58162b0a0164122a2099a623495c8a7cd1e480c873fd7bfd092328f",
+      "runDigest": "e60791063c1e4589e1ff15e6913820246ad30309c4dbdadf53598a308446f1be",
       "runId": "RUN_FAULT_TELEMETRY_EXPORTER_FAILURE",
       "scenarioId": "FAULT_TELEMETRY_EXPORTER_FAILURE",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -2293,7 +2302,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799100,
+      "completedAtMs": 1783952980120,
       "deterministicSeed": 561415867,
       "iterationsCompleted": 100,
       "proofVerdicts": [
@@ -2343,11 +2352,11 @@
         }
       ],
       "rootCauseCode": "TELEMETRY_RECORDS_DROPPED",
-      "runDigest": "1ec8ce911cc8451c5a4f4fd758e98a2001724a8b17890384672af18f476c4552",
+      "runDigest": "990019d58d6f2ced9e12315b295c1fb190f9bb6f985e7aeadc7f30a4e1acb6e0",
       "runId": "RUN_FAULT_TELEMETRY_DROPPED_RECORDS",
       "scenarioId": "FAULT_TELEMETRY_DROPPED_RECORDS",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -2362,7 +2371,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 673707484,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -2408,11 +2417,11 @@
         }
       ],
       "rootCauseCode": "SECRETS_PROVIDER_FAILED",
-      "runDigest": "6e30616453370fde5e6fa086c453da1bb4ec9b637f824c6d8c937c5b6d897d08",
+      "runDigest": "22c5e60f88e1ead867348c78807d8a406e530ae80a4ee1aa3a03b0c7f1ea3b13",
       "runId": "RUN_FAULT_SECRETS_FAILURE",
       "scenarioId": "FAULT_SECRETS_FAILURE",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -2427,7 +2436,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 3761380228,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -2473,11 +2482,11 @@
         }
       ],
       "rootCauseCode": "KMS_PROVIDER_FAILED",
-      "runDigest": "08b69982235b6e63dcac42ab8f2c52b8cea1a699e67b5687c153e6097511c8e4",
+      "runDigest": "49ae24ce51292623d0d318a98de14477d3b220803f7aa6aacd34811eb5b82049",
       "runId": "RUN_FAULT_KMS_FAILURE",
       "scenarioId": "FAULT_KMS_FAILURE",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -2492,7 +2501,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 2440830986,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -2538,11 +2547,11 @@
         }
       ],
       "rootCauseCode": "REQUIRED_PERMISSION_DENIED",
-      "runDigest": "12e2310c283bdeecba0729138954324a7d2a782465013b4ae565d8b2f39f8250",
+      "runDigest": "aa55c22289fb362f2ae2531dd821b4defefe701797db1320559f11638ad6fd39",
       "runId": "RUN_FAULT_PERMISSION_FAILURE",
       "scenarioId": "FAULT_PERMISSION_FAILURE",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -2557,7 +2566,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 1751021274,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -2603,11 +2612,11 @@
         }
       ],
       "rootCauseCode": "INSTRUMENT_FILTER_STALE",
-      "runDigest": "9dd04fb28eca5e779769b05c05d5a0f9d209b0ba63d9abe57cadd892ba55ce85",
+      "runDigest": "d887b12f93a05259056010590c6b0bde9693d4b7acfa150a70c02e7a15dbb44d",
       "runId": "RUN_FAULT_STALE_INSTRUMENT_FILTER",
       "scenarioId": "FAULT_STALE_INSTRUMENT_FILTER",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -2622,7 +2631,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 2449169236,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -2668,11 +2677,11 @@
         }
       ],
       "rootCauseCode": "ACCOUNT_MODE_CHANGED",
-      "runDigest": "8b01166c2fe417080fe0eee784a448eaa027a9d741987585b610d91f96dbf03e",
+      "runDigest": "bed219b0953fd5608a7035061f6d3a6a78bf3fdf9481ff8a9b99634639ee78c0",
       "runId": "RUN_FAULT_ACCOUNT_MODE_CHANGE",
       "scenarioId": "FAULT_ACCOUNT_MODE_CHANGE",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -2687,7 +2696,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 3813875456,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -2733,11 +2742,11 @@
         }
       ],
       "rootCauseCode": "LEVERAGE_CHANGED",
-      "runDigest": "148ffe70e7ac627bc96c78d691eb8332cd0001c4a70773968b0b03fbca1294b9",
+      "runDigest": "b33d41ccd74bc493a0699f807e79bac2d00e9e00e067ae70fcbee30c5b4e8314",
       "runId": "RUN_FAULT_LEVERAGE_CHANGE",
       "scenarioId": "FAULT_LEVERAGE_CHANGE",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -2752,7 +2761,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 132723753,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -2798,11 +2807,11 @@
         }
       ],
       "rootCauseCode": "MARGIN_MODE_CHANGED",
-      "runDigest": "2d649af201b7f999a1bd6b41bde5789c68c207b820f88ff48acb9d764aa31d74",
+      "runDigest": "05d2406e531ef488e9ec0a7c1ec7ed88bfd43a6ab85b33e2a869cd9f40bb5e61",
       "runId": "RUN_FAULT_MARGIN_MODE_CHANGE",
       "scenarioId": "FAULT_MARGIN_MODE_CHANGE",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -2817,7 +2826,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 125595214,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -2863,11 +2872,11 @@
         }
       ],
       "rootCauseCode": "CLOUDFLARE_DISCONNECTED",
-      "runDigest": "64940e915007a8824e7507781adf221f1a53e048411cc1ed12148ec55c1593ab",
+      "runDigest": "5ffea1d4b3decd95b834e9f179d3b8df340e406bee1bf908b61f3f8db5d6f199",
       "runId": "RUN_FAULT_CLOUDFLARE_DISCONNECT",
       "scenarioId": "FAULT_CLOUDFLARE_DISCONNECT",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -2882,7 +2891,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 3799183079,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -2928,11 +2937,11 @@
         }
       ],
       "rootCauseCode": "DASHBOARD_DISCONNECTED",
-      "runDigest": "8bd20d3d11bf3eef4ea2f29670ed61243a053964a4fcb48b6bce819b606fc9df",
+      "runDigest": "f07836fc0771535b99493d4577e586a670d1221af35b74af31fea6d10cfec2b0",
       "runId": "RUN_FAULT_DASHBOARD_DISCONNECT",
       "scenarioId": "FAULT_DASHBOARD_DISCONNECT",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -2947,7 +2956,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 560707919,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -2993,11 +3002,11 @@
         }
       ],
       "rootCauseCode": "DASHBOARD_CURSOR_RESUME_GAP",
-      "runDigest": "2d38f8437176d9ed8f4e93089708f5875df7c98952448329570f9b7285638a84",
+      "runDigest": "54b4bd3a245b7f78ebfbb46f564379980961b747ad616d95a5bc04aa0a7a5a0c",
       "runId": "RUN_FAULT_DASHBOARD_CURSOR_RESUME",
       "scenarioId": "FAULT_DASHBOARD_CURSOR_RESUME",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -3012,7 +3021,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 2368430411,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -3054,11 +3063,11 @@
         }
       ],
       "rootCauseCode": "APPLICATION_UNAVAILABLE",
-      "runDigest": "140b15683b9f0afa2a8f89e7cc18050348e037304036cf4ee6b7affe572a24bd",
+      "runDigest": "d77b9f1292751e2b1c274a27d4c393a74d8842a6e48b2ed639565fa85a8a0abf",
       "runId": "RUN_FAULT_APP_LOSS",
       "scenarioId": "FAULT_APP_LOSS",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -3073,7 +3082,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 1260443928,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -3115,11 +3124,11 @@
         }
       ],
       "rootCauseCode": "HOST_UNAVAILABLE",
-      "runDigest": "7600a73e3781652306c2780e97f5761a0e21695e26cbcca1dd7b6fc36590962f",
+      "runDigest": "61d1ab246981d787587a22c09398dd0fa33f811c692bdb46d956171c1b3b6aab",
       "runId": "RUN_FAULT_HOST_LOSS",
       "scenarioId": "FAULT_HOST_LOSS",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -3134,7 +3143,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 2549942976,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -3176,11 +3185,11 @@
         }
       ],
       "rootCauseCode": "TUNNEL_UNAVAILABLE",
-      "runDigest": "b62c0bd7d2d2006b05029d9c9ab84fcfa21549006138d38400ff96d0eca9d930",
+      "runDigest": "16cd117babe65f5180fd34c7ccdd56c4f5b9cda9e0a91dd8bbdb9b48267e56f1",
       "runId": "RUN_FAULT_TUNNEL_LOSS",
       "scenarioId": "FAULT_TUNNEL_LOSS",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -3195,7 +3204,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 2239797187,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -3241,11 +3250,11 @@
         }
       ],
       "rootCauseCode": "WATCHDOG_DELIVERY_RECEIPT_MISSING",
-      "runDigest": "2d643ff169b38bcccb78bfc2f0cdf97b3f3a53b4f397933bcae7da49886ebc89",
+      "runDigest": "ef98a09e6bab0cee138a9634e997bf34d836542f30a89876f7fbccb3f1a5e1f2",
       "runId": "RUN_FAULT_WATCHDOG_LOSS",
       "scenarioId": "FAULT_WATCHDOG_LOSS",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -3260,7 +3269,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 2887490895,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -3306,11 +3315,11 @@
         }
       ],
       "rootCauseCode": "BACKUP_INCOMPLETE_RECOVERY",
-      "runDigest": "27be89e28ac9b76aea1780f2777f385bd761e1f115bc54793fc2743e494f61fd",
+      "runDigest": "4913004c86ee504c818158b30b1d4b68b74e1d9ae1b381fc316ba04223d5d4e0",
       "runId": "RUN_FAULT_BACKUP_INCOMPLETE_RECOVERY",
       "scenarioId": "FAULT_BACKUP_INCOMPLETE_RECOVERY",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -3325,7 +3334,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 4012852811,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -3371,11 +3380,11 @@
         }
       ],
       "rootCauseCode": "RESTORE_INCOMPLETE_RECOVERY",
-      "runDigest": "4cd444d9968a2e59a5c546b14def7f32509625dc07794ee7dc544d66affbe17b",
+      "runDigest": "40683122977c3404ddd7a91ebacee52584403f9e22a070575cb068eb93fd2035",
       "runId": "RUN_FAULT_RESTORE_INCOMPLETE_RECOVERY",
       "scenarioId": "FAULT_RESTORE_INCOMPLETE_RECOVERY",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -3390,7 +3399,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 2090542125,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -3436,11 +3445,11 @@
         }
       ],
       "rootCauseCode": "ROLLBACK_INCOMPLETE_RECOVERY",
-      "runDigest": "cecfa6eeeef9ace312e7d45990cec37bd5018d21933df8c38627be84ee96c8b7",
+      "runDigest": "968ce508d56cc9148f74d0f6482d271ebc23189f87e3d912c50cab58394ea669",
       "runId": "RUN_FAULT_ROLLBACK_INCOMPLETE_RECOVERY",
       "scenarioId": "FAULT_ROLLBACK_INCOMPLETE_RECOVERY",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -3455,7 +3464,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 1391235008,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -3501,11 +3510,11 @@
         }
       ],
       "rootCauseCode": "CONFLICTING_REPAIR_CAMPAIGNS",
-      "runDigest": "6fac2bb08d386562fb44a3f0ef1985230e6e72dc0f2d553e827cfb903bb9a540",
+      "runDigest": "33d6fb740331ffcabf8596fb16b8d54929091822eb8cd8519901b3efd0680602",
       "runId": "RUN_FAULT_REMEDIATION_CONFLICTING_CAMPAIGNS",
       "scenarioId": "FAULT_REMEDIATION_CONFLICTING_CAMPAIGNS",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -3520,7 +3529,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 2382884197,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -3566,11 +3575,11 @@
         }
       ],
       "rootCauseCode": "ATOMIC_MULTI_RESOURCE_CONFLICT",
-      "runDigest": "f775d476ea990b27d2b9b14b73c61db108b8ac911683eba127841d073bbf9b20",
+      "runDigest": "f523f65afb43ee4c829667d730126f32e7b51f425f2c8800efbe66d00a6b9857",
       "runId": "RUN_FAULT_REMEDIATION_ATOMIC_MULTI_RESOURCE_CONFLICT",
       "scenarioId": "FAULT_REMEDIATION_ATOMIC_MULTI_RESOURCE_CONFLICT",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -3585,7 +3594,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799100,
+      "completedAtMs": 1783952980120,
       "deterministicSeed": 1358866601,
       "iterationsCompleted": 100,
       "proofVerdicts": [
@@ -3635,11 +3644,11 @@
         }
       ],
       "rootCauseCode": "REMEDIATION_RETRY_AMPLIFICATION",
-      "runDigest": "54e42fdb2c14d579abb1002633fb3160d9fe3d7f30c8c97bfdaa844cd345d4ed",
+      "runDigest": "3ec6de241b8acab7e6042f92ab80eec7ef697961f388d3ed6c57276d6affbb4d",
       "runId": "RUN_FAULT_REMEDIATION_RETRY_AMPLIFICATION",
       "scenarioId": "FAULT_REMEDIATION_RETRY_AMPLIFICATION",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -3654,7 +3663,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799100,
+      "completedAtMs": 1783952980120,
       "deterministicSeed": 1440061943,
       "iterationsCompleted": 100,
       "proofVerdicts": [
@@ -3700,11 +3709,11 @@
         }
       ],
       "rootCauseCode": "REMEDIATION_RESTART_STORM",
-      "runDigest": "c05ef333f1e18c6ffde06ef5a43df2cdff2a4d85f448210d0689170f31188082",
+      "runDigest": "ba4a6bbbf387dccba6186f34194f0a174174914987caf5a602236d5f189c54bc",
       "runId": "RUN_FAULT_REMEDIATION_RESTART_STORM",
       "scenarioId": "FAULT_REMEDIATION_RESTART_STORM",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -3719,7 +3728,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799100,
+      "completedAtMs": 1783952980120,
       "deterministicSeed": 1497921788,
       "iterationsCompleted": 100,
       "proofVerdicts": [
@@ -3765,11 +3774,11 @@
         }
       ],
       "rootCauseCode": "ALTERNATING_REPAIR_LOOP",
-      "runDigest": "4ce5000dbb4d3189415ab64dbb3092012d7d0e8357e17c4abdfed9ba1d88f0d0",
+      "runDigest": "eaf71a3ca7509ec26988719a681b3f170ee4df033c585314ef830ea36426e87f",
       "runId": "RUN_FAULT_REMEDIATION_ALTERNATING_REPAIR_LOOP",
       "scenarioId": "FAULT_REMEDIATION_ALTERNATING_REPAIR_LOOP",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -3784,7 +3793,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 2518760464,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -3830,11 +3839,11 @@
         }
       ],
       "rootCauseCode": "CONTROLLER_CRASHED_AFTER_CONTAIN",
-      "runDigest": "63bd7fe481b9728a7641c7b8e1a14a1b24edd863a6e1d5be30d445c230c11b8b",
+      "runDigest": "eaaee617e368f8c4d55b3363cf3028a4578209e287f054e79d719ca2e7776dad",
       "runId": "RUN_FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_CONTAIN",
       "scenarioId": "FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_CONTAIN",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -3849,7 +3858,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 2994781112,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -3895,11 +3904,11 @@
         }
       ],
       "rootCauseCode": "CONTROLLER_CRASHED_AFTER_DIAGNOSE",
-      "runDigest": "349421f96b1472491f551504f5f84ed33fb674f6d4d61710c485a2362daf7f68",
+      "runDigest": "0b6a0766ee8a901dcdb53a3a4094172a0b3fb0950e22bca96079b64fae150024",
       "runId": "RUN_FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_DIAGNOSE",
       "scenarioId": "FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_DIAGNOSE",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -3914,7 +3923,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 1662367667,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -3960,11 +3969,11 @@
         }
       ],
       "rootCauseCode": "CONTROLLER_CRASHED_AFTER_PLAN",
-      "runDigest": "43e945d24b6fe2e8d387360685f50b233a1dc1ea1debb661af9f3e0d6ba9538d",
+      "runDigest": "3f242d62fd831786d54bf5c6dec1b3d5ea6ce346c7bd4199abe800a8a5768a2d",
       "runId": "RUN_FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_PLAN",
       "scenarioId": "FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_PLAN",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -3979,7 +3988,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 4012231867,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -4025,11 +4034,11 @@
         }
       ],
       "rootCauseCode": "CONTROLLER_CRASHED_AFTER_WAIT_FOR_AUTHORIZATION",
-      "runDigest": "6e17982e07a3e5b976592e8062163c0cf055b512d2234998b4f1bf4d290387d4",
+      "runDigest": "dde7d5e3f555a7ef928280b31865dcaad8d9362afe99306fb394ad8df2ccf564",
       "runId": "RUN_FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_WAIT_FOR_AUTHORIZATION",
       "scenarioId": "FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_WAIT_FOR_AUTHORIZATION",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -4044,7 +4053,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 1735943473,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -4090,11 +4099,11 @@
         }
       ],
       "rootCauseCode": "CONTROLLER_CRASHED_AFTER_AUTHORIZATION_GRANTED",
-      "runDigest": "b24b70cdeee8b1da74d00fbea2d71ad37007bbaf7a056dbbd2ae294c1843dc19",
+      "runDigest": "acde4601afc1dbf2d4dd09b4d72cc55e80eaf420b04f67345f76cddb1c058632",
       "runId": "RUN_FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_AUTHORIZATION_GRANTED",
       "scenarioId": "FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_AUTHORIZATION_GRANTED",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -4109,7 +4118,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 3103769654,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -4155,11 +4164,11 @@
         }
       ],
       "rootCauseCode": "CONTROLLER_CRASHED_AFTER_AUTHORIZATION_REJECTED_OR_EXPIRED",
-      "runDigest": "900c98222ee6099591316aac0168e69bacf3ba3a449a01bcc00cf424270e20b0",
+      "runDigest": "240291d1fa006c81f48153644d33bc63124d54f317259fb9bb110a71327c6358",
       "runId": "RUN_FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_AUTHORIZATION_REJECTED_OR_EXPIRED",
       "scenarioId": "FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_AUTHORIZATION_REJECTED_OR_EXPIRED",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -4174,7 +4183,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 3749301103,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -4220,11 +4229,11 @@
         }
       ],
       "rootCauseCode": "CONTROLLER_CRASHED_AFTER_EXECUTE",
-      "runDigest": "e824f6d6c72e92b482c5a11786f0005a10aa4c6d1e2d01453ca0935d70110f31",
+      "runDigest": "811b2247221baa160410ffe995c26c503940cf07446b714d70092398b3ab72a4",
       "runId": "RUN_FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_EXECUTE",
       "scenarioId": "FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_EXECUTE",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -4239,7 +4248,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 4131643672,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -4285,11 +4294,11 @@
         }
       ],
       "rootCauseCode": "CONTROLLER_CRASHED_AFTER_ACTION_COMPLETED",
-      "runDigest": "6b0d3bbb742dafbcd0f70b1f86458abd3db7f545882a6f444a5c9ebd6cecf74a",
+      "runDigest": "b3e44eb8f9ad53bb3bf9fa60fa54069520e69a7a99f3bae7fbf08a319a783362",
       "runId": "RUN_FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_ACTION_COMPLETED",
       "scenarioId": "FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_ACTION_COMPLETED",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -4304,7 +4313,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 4132695312,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -4350,11 +4359,11 @@
         }
       ],
       "rootCauseCode": "CONTROLLER_CRASHED_AFTER_POSTCONDITION_PASSED",
-      "runDigest": "059fcdd05f95dfe90a6d84eb29f79e6a898a5a02b65d41f227a901886808b377",
+      "runDigest": "f6ea97a9743adcad0f36df06461a20ee831407c18a7a04caea9215f8581c98a4",
       "runId": "RUN_FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_POSTCONDITION_PASSED",
       "scenarioId": "FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_POSTCONDITION_PASSED",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -4369,7 +4378,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 2906496725,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -4415,11 +4424,11 @@
         }
       ],
       "rootCauseCode": "CONTROLLER_CRASHED_AFTER_POSTCONDITION_FAILED",
-      "runDigest": "79b972b014cfeac5491f06f1b83a66e1dc98e7007549fb8ce24fb183235f0203",
+      "runDigest": "bf69ffb195d577a3ae4a71e1869cace283819ba96deba13cb0a7c4e4c12b4d2f",
       "runId": "RUN_FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_POSTCONDITION_FAILED",
       "scenarioId": "FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_POSTCONDITION_FAILED",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -4434,7 +4443,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 696026783,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -4480,11 +4489,11 @@
         }
       ],
       "rootCauseCode": "CONTROLLER_CRASHED_AFTER_QUIET_PERIOD_ELAPSED",
-      "runDigest": "747eaa2a5f74b7e0dcd631162bc2a5b90e7699b414644aa4cc71927b6364dceb",
+      "runDigest": "536ecc923ce6a4b884e56b5343c395513c25fa5ddfb89ff90a0bcd8aad3553df",
       "runId": "RUN_FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_QUIET_PERIOD_ELAPSED",
       "scenarioId": "FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_QUIET_PERIOD_ELAPSED",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -4499,7 +4508,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 220142746,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -4545,11 +4554,11 @@
         }
       ],
       "rootCauseCode": "CONTROLLER_CRASHED_AFTER_CANCEL",
-      "runDigest": "3e9ef528ead08929eef973a6e88a9eb99d864c7aa6b84222f5d66631fba4cb66",
+      "runDigest": "727072a88f968313a1c9c07733d255df5161fc8c720f1220bec2a06997de8a65",
       "runId": "RUN_FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_CANCEL",
       "scenarioId": "FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_CANCEL",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -4564,7 +4573,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 250650196,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -4610,11 +4619,11 @@
         }
       ],
       "rootCauseCode": "CONTROLLER_CRASHED_AFTER_SUPERSEDE",
-      "runDigest": "19994616a0bd2ed5668a110da4af1e8521616cda9a7093574c3a171dc5a395d7",
+      "runDigest": "a2bd7830295fec4c882dab7531b2eeffc545aceb5ede1eda6bd07b85b137e8d2",
       "runId": "RUN_FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_SUPERSEDE",
       "scenarioId": "FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_SUPERSEDE",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -4629,7 +4638,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 1989270708,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -4675,11 +4684,11 @@
         }
       ],
       "rootCauseCode": "CONTROLLER_CRASHED_AFTER_ROLLBACK",
-      "runDigest": "98449b57ea3e411137b891c24c76a477e8c4dec5f574e325bb0301023a4cec4f",
+      "runDigest": "3b489f98d5d9bdbd5d159c673cd7cc1ca1c408bc4dc064b0963e5ce51031ed20",
       "runId": "RUN_FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_ROLLBACK",
       "scenarioId": "FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_ROLLBACK",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -4694,7 +4703,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 609773581,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -4740,11 +4749,11 @@
         }
       ],
       "rootCauseCode": "CONTROLLER_CRASHED_AFTER_COMPENSATED",
-      "runDigest": "df930d7436b7189e36142029ed6a1e0598368e3fa122e9a34ae3a7ef4d500c47",
+      "runDigest": "99a28614a71aa2d68aac7d4fa8e08e780bcbe2baa7357bb1dff4c760225d60f2",
       "runId": "RUN_FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_COMPENSATED",
       "scenarioId": "FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_COMPENSATED",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -4759,7 +4768,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 3497449786,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -4805,11 +4814,11 @@
         }
       ],
       "rootCauseCode": "CONTROLLER_CRASHED_AFTER_COMPENSATION_FAILED",
-      "runDigest": "452a5a4f2bd2da45dd386be01583e06b1d5d7a8610f9c020e9f31f6b0ffb791d",
+      "runDigest": "6fb42afc5fb04b8778d980697affe7ed14786ac9d06502f659cd35b22e75d8b0",
       "runId": "RUN_FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_COMPENSATION_FAILED",
       "scenarioId": "FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_COMPENSATION_FAILED",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -4824,7 +4833,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 285104112,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -4870,11 +4879,11 @@
         }
       ],
       "rootCauseCode": "CONTROLLER_CRASHED_AFTER_QUARANTINE",
-      "runDigest": "da7c9862fb09e5fa46ee1a2a044e575303b2a9cea923d308dc513e3b2f3c41b9",
+      "runDigest": "7180981f2618d663948c3a0d210eed4bf437cbe88c3ff39d96bfc5df592ca5c9",
       "runId": "RUN_FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_QUARANTINE",
       "scenarioId": "FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_QUARANTINE",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -4889,7 +4898,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 2170190915,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -4935,11 +4944,11 @@
         }
       ],
       "rootCauseCode": "CONTROLLER_CRASHED_AFTER_EXHAUSTED",
-      "runDigest": "c3608d3a6f93e4e78d899e120dd82e95755af4a9af7577bb342ce67c3ef926d3",
+      "runDigest": "a615d5768a1955ace832dec268c8681d5d2ff676035b19db2770d9163f658405",
       "runId": "RUN_FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_EXHAUSTED",
       "scenarioId": "FAULT_REMEDIATION_CONTROLLER_CRASH_AFTER_EXHAUSTED",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -4954,7 +4963,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 1393865270,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -5000,11 +5009,11 @@
         }
       ],
       "rootCauseCode": "REMEDIATION_LEASE_EXPIRED",
-      "runDigest": "09f1d79175240d1f3c542ceb517cbadc64010e919dc3d44e36abfde35ddbadd6",
+      "runDigest": "4e19ff33e6f43d553b3859d21bb0a48005f07755e391752326f0779ae914061b",
       "runId": "RUN_FAULT_REMEDIATION_LEASE_EXPIRY",
       "scenarioId": "FAULT_REMEDIATION_LEASE_EXPIRY",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -5019,7 +5028,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 3628022721,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -5065,11 +5074,11 @@
         }
       ],
       "rootCauseCode": "STALE_OWNER_COMPLETION_AFTER_HANDOFF",
-      "runDigest": "bcc06168391964910943994a36ad2d7dd8373566ddecad9626f9189cbec26c2d",
+      "runDigest": "44f27d79362fa8ecbda5d0f24cceff0630c18a5592ddcff8c9c7c032b4ddb7a7",
       "runId": "RUN_FAULT_REMEDIATION_HANDOFF_STALE_COMPLETION",
       "scenarioId": "FAULT_REMEDIATION_HANDOFF_STALE_COMPLETION",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -5084,7 +5093,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 758219247,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -5130,11 +5139,11 @@
         }
       ],
       "rootCauseCode": "CAMPAIGN_RECORD_LOST",
-      "runDigest": "2125e7be92bb687cbc4575736f0e834c7964cfe2879c437e3cb76dfffc828078",
+      "runDigest": "5b9fa016f4a6805d93348e00c040faea839803e309d58e89885679964d12fc9e",
       "runId": "RUN_FAULT_REMEDIATION_CAMPAIGN_RECORD_LOST",
       "scenarioId": "FAULT_REMEDIATION_CAMPAIGN_RECORD_LOST",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -5149,7 +5158,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 3891311774,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -5195,11 +5204,11 @@
         }
       ],
       "rootCauseCode": "CAMPAIGN_RECORD_CORRUPT",
-      "runDigest": "eb1c5bf4d7f50f8509711eec3711418e22b7b2009552b4040bd4703fe58d1ea3",
+      "runDigest": "0e6341265cf6a8b69029d61142a94cefa4dabbf7112d0842ff809d079b8fa527",
       "runId": "RUN_FAULT_REMEDIATION_CAMPAIGN_RECORD_CORRUPT",
       "scenarioId": "FAULT_REMEDIATION_CAMPAIGN_RECORD_CORRUPT",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -5214,7 +5223,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 274699719,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -5260,11 +5269,11 @@
         }
       ],
       "rootCauseCode": "ROLLBACK_FAILED",
-      "runDigest": "cc4c76b62d41081f673de5713f6706642bacaf781cd3896913e0ffc546297ce0",
+      "runDigest": "57091786799576773003de6c0199ac902be132f5bb6cf2372cb6d5ab64db5552",
       "runId": "RUN_FAULT_REMEDIATION_ROLLBACK_FAILURE",
       "scenarioId": "FAULT_REMEDIATION_ROLLBACK_FAILURE",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -5279,7 +5288,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 1360255285,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -5325,11 +5334,11 @@
         }
       ],
       "rootCauseCode": "COMPENSATION_FAILED",
-      "runDigest": "e7bc1105d97dd3e7b07e764a2aa57dccd796ffad921a97e7c4ba9930e567da2e",
+      "runDigest": "c1bf36a688a511d5fe434f72c69d028f3d6d1248d1996d8458af0c5cdc1a7673",
       "runId": "RUN_FAULT_REMEDIATION_COMPENSATION_FAILURE",
       "scenarioId": "FAULT_REMEDIATION_COMPENSATION_FAILURE",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -5344,7 +5353,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 3972266383,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -5390,11 +5399,11 @@
         }
       ],
       "rootCauseCode": "VERIFIER_COMMON_MODE_FALSE_PROOF",
-      "runDigest": "867fe08301c235b653ab04e7e6a2ba4ec4a3bfb6247f17c686e9ea60249a0010",
+      "runDigest": "7ed84e35cc22c8b03e87b9bb5efc624e7c895f7a271c883cb0ab3798e9d2355d",
       "runId": "RUN_FAULT_REMEDIATION_COMMON_MODE_VERIFIER_FALSE_PROOF",
       "scenarioId": "FAULT_REMEDIATION_COMMON_MODE_VERIFIER_FALSE_PROOF",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -5409,7 +5418,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 3865782850,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -5455,11 +5464,11 @@
         }
       ],
       "rootCauseCode": "TELEMETRY_COMMON_MODE_FALSE_PROOF",
-      "runDigest": "1c71f50b161a7bd57054cbf180f91fec24939849d043093a623169bd882039cc",
+      "runDigest": "e890f3da22974800c5c2367b5d02c8384fb38da6d4576a3b9f7e2fb0942cbf68",
       "runId": "RUN_FAULT_REMEDIATION_COMMON_MODE_TELEMETRY_FALSE_PROOF",
       "scenarioId": "FAULT_REMEDIATION_COMMON_MODE_TELEMETRY_FALSE_PROOF",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -5474,7 +5483,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 2262957147,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -5520,11 +5529,11 @@
         }
       ],
       "rootCauseCode": "REMEDIATION_POSTCONDITION_FAILED",
-      "runDigest": "70a7b20aa2603965e54677c8b7236c91f5a560cb9a6ef2bbba2b6666f9589e4e",
+      "runDigest": "fe0712983dd876742c219076ec425b7fcdf4171b81d811c75c50aa1fddc44520",
       "runId": "RUN_FAULT_REMEDIATION_FAILED_POSTCONDITION",
       "scenarioId": "FAULT_REMEDIATION_FAILED_POSTCONDITION",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -5539,7 +5548,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 888100596,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -5581,11 +5590,11 @@
         }
       ],
       "rootCauseCode": "REMEDIATION_FALSE_SELF_REPORTED_HEALTHY",
-      "runDigest": "23e767a8d18511fe879aaeaf1e8f0a2fb39f34fcff5a522ae843dab130fd69db",
+      "runDigest": "c1ff946863c01bb67691ca93b0736d6f5657d864e3a11af01378e5366d7f05ab",
       "runId": "RUN_FAULT_REMEDIATION_FALSE_SELF_REPORTED_HEALTHY",
       "scenarioId": "FAULT_REMEDIATION_FALSE_SELF_REPORTED_HEALTHY",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -5600,7 +5609,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 3053885538,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -5646,11 +5655,11 @@
         }
       ],
       "rootCauseCode": "POSTCONDITION_NOT_STABLE",
-      "runDigest": "dd68b41db9bbe7751bb2f23cbdbeb0e41d8659906cda9a08d5910c213ec1a1a7",
+      "runDigest": "84fc58bead2988a85b075039181e9898f0547d98be5dc7c20387904e6b66298e",
       "runId": "RUN_FAULT_REMEDIATION_QUIET_PERIOD",
       "scenarioId": "FAULT_REMEDIATION_QUIET_PERIOD",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -5665,7 +5674,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 2998566827,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -5715,11 +5724,11 @@
         }
       ],
       "rootCauseCode": "MALICIOUS_LOG_TEXT",
-      "runDigest": "2b88e703f5af3f697a4ef274b242cd98ae8885db12601a675130402214c8af37",
+      "runDigest": "8c4861405c82ddc4aa96356b856c45244ff8e8731f823090481f1409615801c8",
       "runId": "RUN_FAULT_DIAGNOSTIC_MALICIOUS_LOG_TEXT",
       "scenarioId": "FAULT_DIAGNOSTIC_MALICIOUS_LOG_TEXT",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -5734,7 +5743,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 3419008039,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -5784,11 +5793,11 @@
         }
       ],
       "rootCauseCode": "MALICIOUS_MARKET_TEXT",
-      "runDigest": "e0d756cdea7abc3464726f82dcbade3fa2b862df8c7636e3532805deb3e9cf8d",
+      "runDigest": "1fa481900a47e5a6c63c29b6026dc756ae7abc43af6d15f941a246e1cb41fe3e",
       "runId": "RUN_FAULT_DIAGNOSTIC_MALICIOUS_MARKET_TEXT",
       "scenarioId": "FAULT_DIAGNOSTIC_MALICIOUS_MARKET_TEXT",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -5803,7 +5812,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 1556769502,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -5853,11 +5862,11 @@
         }
       ],
       "rootCauseCode": "MALICIOUS_NEWS_TEXT",
-      "runDigest": "d5f6bee2571db3c008e72d55b9d75458919b2d3fe2e219a1c15ce9257d194797",
+      "runDigest": "48d84c56b221ab2b88d7715dd7941dd702abb0ac291afae48527baf72850c30c",
       "runId": "RUN_FAULT_DIAGNOSTIC_MALICIOUS_NEWS_TEXT",
       "scenarioId": "FAULT_DIAGNOSTIC_MALICIOUS_NEWS_TEXT",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -5872,7 +5881,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 3080714017,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -5922,11 +5931,11 @@
         }
       ],
       "rootCauseCode": "MALICIOUS_RETRIEVAL_TEXT",
-      "runDigest": "a87c80f369c1ab536faa37cdeafb9ed927027d97455c42bcddc64ac19d1349e5",
+      "runDigest": "c8c605e32021b3f485e822f861ccf295d23aa52b583cfe5f34c2a11f0633d81a",
       "runId": "RUN_FAULT_DIAGNOSTIC_MALICIOUS_RETRIEVAL_TEXT",
       "scenarioId": "FAULT_DIAGNOSTIC_MALICIOUS_RETRIEVAL_TEXT",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -5941,7 +5950,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 895360144,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -5991,11 +6000,11 @@
         }
       ],
       "rootCauseCode": "UNTRUSTED_EVIDENCE_CONTAINED_INSTRUCTIONS",
-      "runDigest": "91c44fd12f878c86bc941438cc0dba76d8b1907821159bf5806b534dfb3d1f0d",
+      "runDigest": "5d0a6e33251b0bbea67ca636f6a9a7740d5e061548b4d12c18aaff716bd46f9c",
       "runId": "RUN_FAULT_DIAGNOSTIC_PROMPT_INJECTION",
       "scenarioId": "FAULT_DIAGNOSTIC_PROMPT_INJECTION",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -6010,7 +6019,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 671814458,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -6056,11 +6065,11 @@
         }
       ],
       "rootCauseCode": "FORBIDDEN_TOOL_REQUEST",
-      "runDigest": "0bc404d5845b8698f8c93ac24dee98f2881cc58c6571d6fb360563f3ed062e29",
+      "runDigest": "302d40462674e8b8e3e02b1cc01e8830e6875e9db207f8510012f84878d1aca4",
       "runId": "RUN_FAULT_DIAGNOSTIC_TOOL_ESCALATION",
       "scenarioId": "FAULT_DIAGNOSTIC_TOOL_ESCALATION",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -6075,7 +6084,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 1709659218,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -6121,11 +6130,11 @@
         }
       ],
       "rootCauseCode": "DIAGNOSIS_NOT_EVIDENCE_BACKED",
-      "runDigest": "98f3a3d64da78a3b32ceff8e305c7f06bfa066863d73458afd01e5048481f3ec",
+      "runDigest": "dd1f3cd155529dff6571bf6ef1ddd8da65d15074a7ddae2a98c97d59822596cf",
       "runId": "RUN_FAULT_DIAGNOSTIC_HALLUCINATED_DIAGNOSIS",
       "scenarioId": "FAULT_DIAGNOSTIC_HALLUCINATED_DIAGNOSIS",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -6140,7 +6149,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 3152105559,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -6186,11 +6195,11 @@
         }
       ],
       "rootCauseCode": "DIAGNOSTIC_EVIDENCE_EXPIRED",
-      "runDigest": "3e7375e38de181d2a75293f57b94c79c7e066cad1b82e6ea9d19f7610b973f48",
+      "runDigest": "f16747cd969aa64995762f36b2958e4ed40129990ac30e4ba523f0edf34c9d8a",
       "runId": "RUN_FAULT_DIAGNOSTIC_STALE_EVIDENCE",
       "scenarioId": "FAULT_DIAGNOSTIC_STALE_EVIDENCE",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -6205,7 +6214,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 187461589,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -6255,11 +6264,11 @@
         }
       ],
       "rootCauseCode": "DIAGNOSTIC_PROVIDER_UNAVAILABLE",
-      "runDigest": "67c663c83bda096a880f8bf596a4c32aa6669d5ebb6c94f690ac0eb42c05ee2e",
+      "runDigest": "db01b702dab934eb29b3c99d55f56121ccfb4993a61cf11259f98f0d71b861b7",
       "runId": "RUN_FAULT_DIAGNOSTIC_PROVIDER_OUTAGE",
       "scenarioId": "FAULT_DIAGNOSTIC_PROVIDER_OUTAGE",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -6274,7 +6283,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 936742078,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -6320,11 +6329,11 @@
         }
       ],
       "rootCauseCode": "DIAGNOSTIC_COST_BUDGET_EXHAUSTED",
-      "runDigest": "fcd70c2464c6070b835d57c73c666cf9bb6e60d275fdff9cf9e86ba51fe036d9",
+      "runDigest": "5cc89bb7cb9f3e289aa79f6d947d0ad5b7b3d683973dca038288ac25c3651e2c",
       "runId": "RUN_FAULT_DIAGNOSTIC_COST_EXHAUSTION",
       "scenarioId": "FAULT_DIAGNOSTIC_COST_EXHAUSTION",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -6339,7 +6348,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 1398302506,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -6385,11 +6394,11 @@
         }
       ],
       "rootCauseCode": "DIAGNOSTIC_PATCH_VERIFICATION_FAILED",
-      "runDigest": "b2293e3481bfd2a96fabf0d8932b872be01a0d9714dd26e46bd442f243b054f2",
+      "runDigest": "a2ec514081b9b77e9331cf846e7f57bbe605694c27e788b724ee7dd5b0a53f56",
       "runId": "RUN_FAULT_DIAGNOSTIC_FAILED_PATCH_VERIFICATION",
       "scenarioId": "FAULT_DIAGNOSTIC_FAILED_PATCH_VERIFICATION",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -6404,7 +6413,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 3970502591,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -6450,11 +6459,11 @@
         }
       ],
       "rootCauseCode": "DIAGNOSTIC_AGENT_ATTEMPTED_MONEY_MUTATION",
-      "runDigest": "cf54963b9928ed37c9c4aa71a62785ef4d190db0c9be8477d3214dcfe0f86067",
+      "runDigest": "083660c0eb805ed39977bd71f9f4467a0d01bf515645ce50af2f4202a92a639c",
       "runId": "RUN_FAULT_DIAGNOSTIC_ATTEMPTED_MONEY_MUTATION",
       "scenarioId": "FAULT_DIAGNOSTIC_ATTEMPTED_MONEY_MUTATION",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -6469,7 +6478,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799010,
+      "completedAtMs": 1783952980030,
       "deterministicSeed": 2525535859,
       "iterationsCompleted": 10,
       "proofVerdicts": [
@@ -6515,11 +6524,11 @@
         }
       ],
       "rootCauseCode": "EXPECTED_COMPONENT_NOT_DISCOVERED",
-      "runDigest": "8846dfd40c33538aa58958d9e442624cbdb57b65c810a49d91d342f368f5b3e4",
+      "runDigest": "93ad1b2610851c52e4ddab1f6f28335fc38427baffbab69696db5d19eb71bd8f",
       "runId": "RUN_FAULT_INVENTORY_MISSING",
       "scenarioId": "FAULT_INVENTORY_MISSING",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -6534,7 +6543,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799010,
+      "completedAtMs": 1783952980030,
       "deterministicSeed": 2472850506,
       "iterationsCompleted": 10,
       "proofVerdicts": [
@@ -6580,11 +6589,11 @@
         }
       ],
       "rootCauseCode": "COMPONENT_FRESHNESS_EXPIRED",
-      "runDigest": "49556e4646f9443bed0450223f93aabb310dda8f15a4e0bbdfd08ded5c192026",
+      "runDigest": "6af928236a13621e8476f5a98f41cd682797c1b8a2e88ff26aea57ec021484be",
       "runId": "RUN_FAULT_INVENTORY_STALE",
       "scenarioId": "FAULT_INVENTORY_STALE",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -6599,7 +6608,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799010,
+      "completedAtMs": 1783952980030,
       "deterministicSeed": 1837523824,
       "iterationsCompleted": 10,
       "proofVerdicts": [
@@ -6645,11 +6654,11 @@
         }
       ],
       "rootCauseCode": "EXPECTED_COMPONENT_NEVER_REPORTED",
-      "runDigest": "31f5855396c001ad2a78ecd60452885c8bd3b0c0059e965ec4ad33f6fa877a81",
+      "runDigest": "7ca6554555ae4515738c53dc485e6b73c5955dae019573b0bffb7066478b4031",
       "runId": "RUN_FAULT_INVENTORY_SILENT",
       "scenarioId": "FAULT_INVENTORY_SILENT",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -6664,7 +6673,7 @@
       ]
     },
     {
-      "completedAtMs": 1783900799025,
+      "completedAtMs": 1783952980045,
       "deterministicSeed": 3994175993,
       "iterationsCompleted": 25,
       "proofVerdicts": [
@@ -6706,11 +6715,11 @@
         }
       ],
       "rootCauseCode": "INDEPENDENT_SENTINEL_DISAGREED",
-      "runDigest": "dda26f0c08d2521ac2bd6dd7341fd844b722a83d8e8aea31a5d1d6ad08b3d46d",
+      "runDigest": "2b43e8a25f3a6bbe29f168ff8014ebc33ad20cbc40f2070c00a7933e990dbb0f",
       "runId": "RUN_FAULT_SENTINEL_DISAGREEMENT",
       "scenarioId": "FAULT_SENTINEL_DISAGREEMENT",
       "simulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
-      "startedAtMs": 1783900799000,
+      "startedAtMs": 1783952980020,
       "state": "COMPLETE",
       "transitionCodes": [
         "FAULT_INJECTED",
@@ -6726,9 +6735,8 @@
     }
   ],
   "schema": "PRODUCT_ASSURANCE_FAULT_HARNESS_REPORT_V1",
-  "testedCommit": "3391dcfba93bdf370859a62559612e5ea0d42a35",
+  "testedCommit": "f67db03293b184473f7f8e79b8872c6f6697f264",
   "truthLabel": "SYNTHETIC_ONLY",
-  "unexpectedObservationScenarioIds": [],
   "unknownScenarioIds": [],
   "verdict": "PASS"
 }

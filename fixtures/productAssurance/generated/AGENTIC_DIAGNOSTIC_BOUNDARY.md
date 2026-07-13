@@ -1,35 +1,18 @@
 # Agentic Diagnostic Boundary
 
-Generated for `3391dcfba93bdf370859a62559612e5ea0d42a35` at `2026-07-13T00:00:00.000Z`.
+Generated for f67db03293b184473f7f8e79b8872c6f6697f264 at 2026-07-13T14:29:41.020Z.
 
-Provider state: **NOT_CONFIGURED**. External sandbox: **DENY_BY_DEFAULT**. Runtime authority: **false**. The base §3.9 hierarchy is **REUSED**; there is no second LLM runtime.
+The locally owned boundary remains deny-by-default, redacts untrusted evidence, forbids money capabilities, and grants no authority. A-CORE no longer implements diagnostic governance, action-evidence evaluation, assurance-case graph evaluation, promotion classes, corpus governance, or provider identity authority.
 
-## Permission levels
+| Surface | Owner | State | Verdict | Target | Blocker | Authority |
+| --- | --- | --- | --- | --- | --- | --- |
+| ACTION_EVIDENCE | ACTION_EVIDENCE_SATELLITE | WAITING | UNKNOWN | fixtures/productAssurance/systemic/actionEvidence/** | DIRECTOR_ACCEPTED_SATELLITE_COMMIT_MISSING | false |
+| ASSURANCE_CASE | ASSURANCE_CASE_SATELLITE | WAITING | UNKNOWN | fixtures/productAssurance/systemic/assuranceCase/** | DIRECTOR_ACCEPTED_SATELLITE_COMMIT_MISSING | false |
+| DIAGNOSTIC_GOVERNANCE | A_AGENT_DIAGNOSTIC_GOVERNANCE | WAITING | UNKNOWN | fixtures/productAssurance/systemic/agentBoundary/** | DIRECTOR_ACCEPTED_SATELLITE_COMMIT_MISSING | false |
 
-| # | Permission |
-| --- | --- |
-| 1 | OBSERVE_EXPLAIN |
-| 2 | BOUNDED_QUERY_REPLAY |
-| 3 | PROPOSE_TYPED_ACTION |
-| 4 | PATCH_ISOLATED_AND_TEST |
-| 5 | OWNER_APPROVED_HANDOFF_FOR_NON_MONEY_MERGE_OR_DEPLOY |
+## Local deny list
 
-## Allowed capability IDs
-
-| # | Capability |
-| --- | --- |
-| 1 | READ_REDACTED_EVIDENCE |
-| 2 | EXPLAIN_CAUSAL_CHAIN |
-| 3 | QUERY_BOUNDED_EVIDENCE |
-| 4 | RUN_ISOLATED_REPLAY |
-| 5 | PROPOSE_REGISTERED_REMEDIATION |
-| 6 | PROPOSE_ISOLATED_PATCH |
-| 7 | RUN_ISOLATED_TESTS |
-| 8 | REQUEST_OWNER_HANDOFF |
-
-## Forbidden capabilities
-
-| # | Capability |
+| # | Forbidden capability |
 | --- | --- |
 | 1 | SIGN_ORDER |
 | 2 | CANCEL_ORDER |
@@ -55,4 +38,4 @@ Provider state: **NOT_CONFIGURED**. External sandbox: **DENY_BY_DEFAULT**. Runti
 | 22 | DELETE_EVIDENCE |
 | 23 | DECLARE_RECOVERY |
 
-Binding laws: normalized schemas, raw-evidence hashes outside prompts, explicit untrusted-data separation, trace privacy, independent retention, immutable provider workload identity, exact capability checks, cost/rate budgets, audit records, repair-evidence law, Class A–D promotion law, and corpus governance. A diagnostic agent cannot sign, order, cancel, borrow, repay, change leverage/margin, transfer, withdraw, change Capital/Risk/hard ceilings, write Main/production persistence, use arbitrary shell/network, autonomously merge/deploy, delete evidence, execute operational actions, or declare recovery. Provider outage yields `DIAGNOSTIC_PLANE_UNAVAILABLE` without changing deterministic safety or product readiness.
+Provider outage does not change deterministic safety, execution, money authority, or product readiness.

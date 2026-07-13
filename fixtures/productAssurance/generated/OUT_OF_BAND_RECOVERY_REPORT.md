@@ -1,10 +1,10 @@
 # Out-of-Band Recovery Report
 
-Generated for `3391dcfba93bdf370859a62559612e5ea0d42a35` at `2026-07-13T00:00:00.000Z`.
+Generated for f67db03293b184473f7f8e79b8872c6f6697f264 at 2026-07-13T14:29:41.020Z.
 
-Disposition: **CONTRACTS_AND_FIXTURES_ONLY**. Controller mounting, persistence, service/host restart, AWS, Cloudflare, Secrets, deployment, external mutation, private exchange access, and money mutation are **NOT_CONFIGURED** and grant no authority.
+Disposition: **CONTRACTS_AND_FIXTURES_ONLY**. Controller mounting, persistence, service restart, deployment, external mutation, and money paths are NOT_CONFIGURED.
 
-## Remediation actions (15)
+## Remediation actions
 
 | # | Action |
 | --- | --- |
@@ -24,7 +24,7 @@ Disposition: **CONTRACTS_AND_FIXTURES_ONLY**. Controller mounting, persistence, 
 | 14 | WATCHDOG_RESTART |
 | 15 | MAINTENANCE_DRAIN |
 
-## Durable lifecycle states (16)
+## Durable lifecycle states
 
 | # | State |
 | --- | --- |
@@ -45,13 +45,10 @@ Disposition: **CONTRACTS_AND_FIXTURES_ONLY**. Controller mounting, persistence, 
 | 15 | QUARANTINED |
 | 16 | FAILED_ATTENTION_REQUIRED |
 
-Binding laws:
+## Rate-budget owner seam
 
-- campaigns preserve stable identity, cause, policy revision, before/after evidence, attempt/time/cost budgets, restart checkpoints, and cockpit correlation;
-- ordered multi-resource leases are atomic; the repair-conflict graph prevents concurrent owners on one resource;
-- lease expiry or handoff rejects stale completion;
-- action completion never equals recovery;
-- recovery requires independent postconditions plus a positive quiet/hysteresis period;
-- authorization, cancellation, supersession, rollback, compensation, compensation failure, quarantine, and exhaustion stay explicit;
-- automatic work cannot widen capital authority, raise risk limits, clear liability, fabricate health, or close an incident;
-- owner-authorized external operations remain blocked at I00 §20.
+| Owner | State | Verdict | Target | Blocker | Authority |
+| --- | --- | --- | --- | --- | --- |
+| INTELLIGENCE_RUNTIME_RATE_BUDGET | WAITING | UNKNOWN | server/src/intelligenceRuntime lifecycle and aggregate snapshot contract | AGGREGATE_RATE_BUDGET_OWNER_CONTRACT_NOT_CONFIGURED | false |
+
+A-CORE no longer allocates or projects aggregate rate budget. Recovery stays bounded by durable identity, leases, attempts, authorization, cancellation, rollback, independent postconditions, and quiet periods, without granting execution or money authority.

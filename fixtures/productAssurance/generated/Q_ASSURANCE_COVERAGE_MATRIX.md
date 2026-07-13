@@ -1,10 +1,10 @@
 # Q Assurance Coverage Matrix
 
-Generated for `3391dcfba93bdf370859a62559612e5ea0d42a35` at `2026-07-13T00:00:00.000Z`.
+Generated for f67db03293b184473f7f8e79b8872c6f6697f264 at 2026-07-13T14:29:41.020Z.
 
-This is a read-only accepted-Q requirement projection. No current assessment envelope or independent holdout evidence was supplied to A-CORE, so evaluation remains **UNKNOWN**, safe advisory action is **ABSTAIN_UNKNOWN**, and authority granted is **false**. No Q data was fabricated or written.
+Read-only accepted-Q projection. No current assessment envelope or holdout evidence was supplied, so evaluation is UNKNOWN, the safe action is ABSTAIN_UNKNOWN, and authority is false.
 
-| Identity field | Immutable value |
+| Identity | Immutable value |
 | --- | --- |
 | Accepted protocol commit | 73e1a1ff7daa48df8dac45713fc5f106842edafc |
 | Accepted Q commit | 02b4eccc8d2ef53b830cafae06e5175715fa6ebb |

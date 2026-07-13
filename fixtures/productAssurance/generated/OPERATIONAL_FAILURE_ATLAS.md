@@ -1,10 +1,14 @@
 # Operational Failure Atlas
 
-Generated for `3391dcfba93bdf370859a62559612e5ea0d42a35` at `2026-07-13T00:00:00.000Z`.
+Generated for f67db03293b184473f7f8e79b8872c6f6697f264 at 2026-07-13T14:29:41.020Z.
 
-Disposition: **SCHEMA_AND_PURE_PROJECTION_ONLY**. Real incident/test/soak/postmortem ingestion and analytics are **NOT_CONFIGURED**. The Atlas is a sanitized, retention/access-controlled, stable-ID, deduplicated read projection over canonical evidence—never a second incident store.
+| Record corpus | Verdict | Eligible | Rejected | Reasons | Second store |
+| --- | --- | ---: | ---: | --- | --- |
+| Empty canonical input | UNKNOWN | 0 | 0 | FAILURE_RECORD_CORPUS_EMPTY | false |
 
-## Assurance dimensions
+Non-empty records remain FAILURE_RECORD_OWNER_CONTRACT_WAITING until the accepted S1 owner contract supplies exact provenance. Synthetic 103/103 PASS runs remain separate and never become incident records.
+
+## Exact assurance dimensions
 
 | # | Dimension |
 | --- | --- |
@@ -14,16 +18,4 @@ Disposition: **SCHEMA_AND_PURE_PROJECTION_ONLY**. Real incident/test/soak/postmo
 | 4 | RECOVERY |
 | 5 | PREVENTION |
 
-## Required record truth
-
-- failure fingerprint and exact timeline;
-- component/dependency and immutable revisions;
-- trigger, symptoms, failed invariant, and expected-family denominator binding;
-- capital, exposure, liability, and ambiguity impact;
-- containment, repair attempts, false repair, independent postconditions, and quiet period;
-- root and contributing causes;
-- regression fixture, deterministic fault seed, playbook/model revisions;
-- reviewer, postmortem, actions, recurrence, provenance, access and retention;
-- missing families and unknown evidence remain visible.
-
-Canonical synthetic failure denominator: **103**. Synthetic fault evidence does not become a real incident corpus.
+Control and family-denominator evidence require exact owner/release/tested-commit/subject/digest tuple binding with hostile substitution and splice proofs.

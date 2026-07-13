@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "packet": "IP-PROOF",
+  "targetState": "PROOF_PRESTAGE_CANDIDATE",
+  "generatedAtUtc": "2026-07-13T00:00:00Z",
+  "base": {
+    "branch": "ip-proof-20260713",
+    "head": "420cc83e5512d54ca1b1c064c1041d89b23914a0",
+    "launchReceiptCommit": "c418bbe7026bdec843b1d74424f5de1fb1265866",
+    "protocolCommit": "73e1a1ff7daa48df8dac45713fc5f106842edafc",
+    "convergenceCommit": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c"
+  },
+  "frozenInputs": [
+    { "path": "IP_PROOF.md", "sha256": "e59d516ba9acb9a7bb1ce63ca149ce662f308a0fd0900b72db3d2fe2e8bb93b6" },
+    { "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md", "sha256": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5" },
+    { "path": "MISSION.md", "sha256": "95e152d76844aa391b7a28bd45548d7fe58f83ed1ced558dbdbeb01797436362" },
+    { "path": "docs/archive/What-i-want.txt", "sha256": "f525644e8bf7dc00f1999b7ac79975ae382530531c194533a2ff56a1531c961a" },
+    { "path": "QL_DIRECTOR_STATE.md", "sha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278" },
+    { "path": "QL_PARALLEL_DAG.md", "sha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546" },
+    { "path": "quant/DIRECTIVE_INPUTS.lock", "sha256": "d4bf31826625c2602ebb7ed72194e94a4571f7597a413ca545839f236c7a5a24" },
+    { "path": "packages/edge-protocol/schema/edge-protocol-v1.schema.json", "sha256": "229af0ff13d600c7d305c6deb7f57b61bdb6f8a35f6f2349d91f5ab1b4972f1c" },
+    { "path": "packages/edge-protocol/fixtures/fixtures-v1.json", "sha256": "c42a4257ea5f46abb38ec9ab4e56983e7049cdf5b448150a4d4647a6234d99a4" },
+    { "path": "packages/edge-protocol-tests/protocol.test.mjs", "sha256": "b9745ad52d92c50fcfa48b9772024b86fcf4fa738e8c35c817fa77021ad970b9" },
+    { "path": "EDGE_PROTOCOL_V1.md", "sha256": "951fdbb5f347f900c61e60055f90cf2e1e1e743b75b7dc733652acb8d43353a1" },
+    { "path": "ARCHITECTURE.md", "sha256": "beb8be8baefe2faa78356e2dc44983735b855535c21cd5f0172a8e1e3fa665db" },
+    { "path": "docs/DASHBOARD_TRUTH.md", "sha256": "9f44e9d9c6111ffcc176fe30ea27d02dced83006d8df9ceb218c2c1af8df07c7" },
+    { "path": "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md", "sha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162" }
+  ],
+  "authorityOwners": [
+    { "concept": "basis-strategy", "owner": "BasisEngine", "path": "server/src/engine/basis" },
+    { "concept": "volume-strategy", "owner": "VolumeEngine", "path": "server/src/engine/volume" },
+    { "concept": "cross-engine-read", "owner": "CanonicalOpportunity", "path": "server/src/foundation/readModel" },
+    { "concept": "market-evidence", "owner": "intelligenceFoundation", "path": "server/src/intelligenceFoundation" },
+    { "concept": "public-source-lifecycle", "owner": "intelligenceRuntime", "path": "server/src/intelligenceRuntime" },
+    { "concept": "capital-policy", "owner": "capitalFoundation", "path": "server/src/capitalFoundation" },
+    { "concept": "machine-control", "owner": "DeterministicSupervisor", "path": "server/src/foundation/control" },
+    { "concept": "multi-leg-risk", "owner": "evaluateMultiLegRisk", "path": "server/src/foundation/risk" },
+    { "concept": "mechanical-execution", "owner": "foundation-execution", "path": "server/src/foundation/execution" },
+    { "concept": "reconciliation", "owner": "foundation-reconciliation", "path": "server/src/foundation/reconciliation" },
+    { "concept": "durable-history", "owner": "Ledger", "path": "server/src/ledger.ts" },
+    { "concept": "whole-machine-projection", "owner": "systemIntegration-supervisor", "path": "server/src/systemIntegration/supervisor" },
+    { "concept": "signed-exchange-mutation", "owner": "ABSENT_FUTURE_AUDITED_ADAPTER", "path": null }
+  ],
+  "semanticSources": [
+    { "dataset": "spot-mini-ticker-universe", "physicalProducer": "server/src/engine/marketData.ts", "semanticOwner": "server/src/intelligenceRuntime", "consumerClass": "broad" },
+    { "dataset": "spot-aggregate-trades", "physicalProducer": "server/src/services/volumeRuntime.ts", "semanticOwner": "server/src/intelligenceRuntime", "consumerClass": "broad" },
+    { "dataset": "basis-book-ticker", "physicalProducer": "server/src/services/basisRuntime.ts", "semanticOwner": "server/src/intelligenceRuntime", "consumerClass": "focused" },
+    { "dataset": "usdm-mark-funding-liquidation", "physicalProducer": "server/src/engine/marketData.ts", "semanticOwner": "server/src/intelligenceRuntime", "consumerClass": "broad" },
+    { "dataset": "viewed-symbol-depth", "physicalProducer": "server/src/services/bookStream.ts", "semanticOwner": "web-token-detail-read-service", "consumerClass": "ui-local" },
+    { "dataset": "runtime-manual-public-smoke", "physicalProducer": "server/src/intelligenceRuntime/smoke/nodeTransport.ts", "semanticOwner": "acceptance-tooling-only", "consumerClass": "manual" }
+  ],
+  "staticRules": [
+    { "id": "NO_INTEGRATION_SOCKET", "scope": "server/src/systemIntegration", "pattern": "new\\s+WebSocket|from\\s+['\"]ws['\"]|wss://", "expectedHits": 0 },
+    { "id": "NO_INTEGRATION_DATABASE", "scope": "server/src/systemIntegration", "pattern": "better-sqlite3|new\\s+Database", "expectedHits": 0 },
+    { "id": "NO_BROWSER_PRIVATE_BINANCE", "scope": "web/src", "pattern": "X-MBX-APIKEY|/sapi/v1/|/fapi/v1/order|/api/v3/order", "expectedHits": 0 },
+    { "id": "NO_IP_PROOF_PRODUCTION_IMPORT", "scope": "server/test/i00Acceptance", "pattern": "from\\s+['\"][^'\"]*(?:server/src|web/src|packages/edge-protocol)[^'\"]*['\"]", "expectedHits": 0 }
+  ],
+  "knownConflicts": [
+    { "id": "LEGACY_LIVE_ROUTE", "path": "server/src/index.ts", "needle": "app.post('/api/live'", "classification": "DIRECTOR_CLASSIFICATION_REQUIRED", "impact": "legacy mode route must not bypass final desired/effective mode" },
+    { "id": "LEGACY_TRADE_SEND_ROUTE", "path": "server/src/index.ts", "needle": "app.post('/api/trade/send'", "classification": "DIRECTOR_CLASSIFICATION_REQUIRED", "impact": "legacy send route requires restrict/retire proof before final integration" },
+    { "id": "LEGACY_MARGIN_MUTATION_ROUTES", "path": "server/src/index.ts", "needle": "app.post('/api/loans/borrow'", "classification": "DIRECTOR_CLASSIFICATION_REQUIRED", "impact": "legacy loan mutations remain outside IP-PROOF and require director migration" },
+    { "id": "UI_LOCAL_BINANCE_SOCKET", "path": "web/src/pages/TokenDetail.tsx", "needle": "new WebSocket", "classification": "CANONICAL_UI_LOCAL_EXCEPTION_REVIEW", "impact": "viewed-symbol delivery may remain UI-local but cannot become broad authority" },
+    { "id": "GENERATED_Q_CLIENT_ABSENT", "path": null, "needle": null, "classification": "BLOCKED_PENDING_ACCEPTED_Q_CLIENT", "impact": "schema-hash handshake and generated-client parity must be inserted from accepted Q tip" }
+  ],
+  "canonicalRoutes": [
+    { "method": "GET", "route": "/api/system-integration/supervisor", "sourceNeedle": "router.get('/supervisor'" },
+    { "method": "GET", "route": "/api/system-integration/graph", "sourceNeedle": "router.get('/graph'" },
+    { "method": "GET", "route": "/api/system-integration/events", "sourceNeedle": "router.get('/events'" },
+    { "method": "GET", "route": "/api/system-integration/controls", "sourceNeedle": "router.get('/controls'" },
+    { "method": "GET", "route": "/api/system-integration/traces/:correlationId", "sourceNeedle": "router.get('/traces/:correlationId'" },
+    { "method": "POST", "route": "/api/system-integration/controls", "sourceNeedle": "router.post('/controls'" }
+  ],
+  "capabilities": [
+    { "id": "CAP-01", "name": "public-evidence", "owner": "intelligenceRuntime", "fixtureState": "SYNTHETIC_ONLY", "realAdapter": "IP-RUNTIME public-source bridge" },
+    { "id": "CAP-02", "name": "q-advisory", "owner": "accepted-Q-inference", "fixtureState": "SYNTHETIC_ONLY", "realAdapter": "accepted Q client with protocol hash handshake" },
+    { "id": "CAP-03", "name": "basis-decision", "owner": "BasisEngine", "fixtureState": "SYNTHETIC_ONLY", "realAdapter": "IP-RUNTIME Basis snapshot adapter" },
+    { "id": "CAP-04", "name": "volume-decision", "owner": "VolumeEngine", "fixtureState": "SYNTHETIC_ONLY", "realAdapter": "IP-RUNTIME Volume snapshot adapter" },
+    { "id": "CAP-05", "name": "capital-policy", "owner": "capitalFoundation", "fixtureState": "SYNTHETIC_ONLY", "realAdapter": "accepted L Capital mandate adapter" },
+    { "id": "CAP-06", "name": "risk-verdict", "owner": "foundation-risk", "fixtureState": "SYNTHETIC_ONLY", "realAdapter": "accepted L risk adapter" },
+    { "id": "CAP-07", "name": "execution-twin", "owner": "accepted-L-exchange-twin", "fixtureState": "SYNTHETIC_ONLY", "realAdapter": "accepted L ticket/exchange-twin adapter" },
+    { "id": "CAP-08", "name": "reconciliation-recovery", "owner": "foundation-reconciliation", "fixtureState": "SYNTHETIC_ONLY", "realAdapter": "accepted L reconciliation/recovery adapter" },
+    { "id": "CAP-09", "name": "outcome-feedback", "owner": "ledger-plus-Q-feedback", "fixtureState": "SYNTHETIC_ONLY", "realAdapter": "accepted Q outcome feedback adapter" },
+    { "id": "CAP-10", "name": "supervisor-cockpit-trace", "owner": "systemIntegration-supervisor", "fixtureState": "SYNTHETIC_ONLY", "realAdapter": "IP-RUNTIME supervisor plus IP-CONTROL binding" }
+  ],
+  "pages": [
+    { "pageId": "dashboard", "page": "Dashboard", "canonicalApi": "/api/system-integration/supervisor", "fixtureState": "SYNTHETIC_ONLY", "controls": ["CTRL-KILL", "CTRL-MODE"], "errorBehavior": "UNKNOWN_NOT_GREEN", "blocker": "AWAITING_IP_CONTROL_BINDING" },
+    { "pageId": "account", "page": "Account", "canonicalApi": "PENDING_PRIVATE_TRUTH_ADAPTER", "fixtureState": "NOT_CONFIGURED", "controls": [], "errorBehavior": "PRODUCT_REALMS_SEPARATE", "blocker": "AWAITING_ACCEPTED_L_TIP; PRIVATE_READ_AUTHORIZATION_REQUIRED" },
+    { "pageId": "wallets", "page": "Wallets", "canonicalApi": "PENDING_PRIVATE_TRUTH_ADAPTER", "fixtureState": "NOT_CONFIGURED", "controls": [], "errorBehavior": "UNKNOWN_BALANCES_NOT_ZERO", "blocker": "AWAITING_ACCEPTED_L_TIP; PRIVATE_READ_AUTHORIZATION_REQUIRED" },
+    { "pageId": "markets", "page": "Markets", "canonicalApi": "PENDING_UNIVERSE_ADAPTER", "fixtureState": "SYNTHETIC_ONLY", "controls": ["CTRL-FOCUS"], "errorBehavior": "QUIET_SYMBOLS_RETAINED", "blocker": "AWAITING_IP_RUNTIME_ADAPTER" },
+    { "pageId": "detail", "page": "Token Detail", "canonicalApi": "/api/system-integration/traces/:correlationId plus PENDING_SYMBOL_ADAPTER", "fixtureState": "SYNTHETIC_ONLY", "controls": [], "errorBehavior": "MISSING_EVIDENCE_NAMED", "blocker": "AWAITING_IP_RUNTIME_ADAPTER; AWAITING_DIRECTOR_SHARED_COMPOSITION" },
+    { "pageId": "loans", "page": "Borrow", "canonicalApi": "PENDING_MARGIN_READ_ADAPTER", "fixtureState": "NOT_CONFIGURED", "controls": [], "errorBehavior": "UNKNOWN_NOT_ZERO", "blocker": "AWAITING_ACCEPTED_L_TIP; PRIVATE_READ_AUTHORIZATION_REQUIRED" },
+    { "pageId": "orders", "page": "Orders", "canonicalApi": "PENDING_L_ORDER_READ_MODEL", "fixtureState": "NOT_CONFIGURED", "controls": [], "errorBehavior": "AMBIGUITY_VISIBLE", "blocker": "AWAITING_ACCEPTED_L_TIP" },
+    { "pageId": "positions", "page": "Positions", "canonicalApi": "PENDING_L_POSITION_READ_MODEL", "fixtureState": "NOT_CONFIGURED", "controls": ["CTRL-RECOVERY"], "errorBehavior": "ONE_LEG_EXPOSURE_VISIBLE", "blocker": "AWAITING_ACCEPTED_L_TIP" },
+    { "pageId": "fills", "page": "Fills", "canonicalApi": "PENDING_L_FILL_READ_MODEL", "fixtureState": "NOT_CONFIGURED", "controls": [], "errorBehavior": "INCOMPLETE_FILL_TRUTH_VISIBLE", "blocker": "AWAITING_ACCEPTED_L_TIP" },
+    { "pageId": "pnl", "page": "PnL", "canonicalApi": "PENDING_L_OUTCOME_READ_MODEL", "fixtureState": "NOT_CONFIGURED", "controls": [], "errorBehavior": "INCOMPLETE_ATTRIBUTION_UNAVAILABLE", "blocker": "AWAITING_ACCEPTED_L_TIP; EMPIRICAL_OUTCOME_EVIDENCE_REQUIRED" },
+    { "pageId": "strategies", "page": "Basis", "canonicalApi": "PENDING_BASIS_ADAPTER", "fixtureState": "SYNTHETIC_ONLY", "controls": ["CTRL-BASIS-INTAKE"], "errorBehavior": "BORROW_UNKNOWN_BLOCKS_REVERSE", "blocker": "AWAITING_IP_RUNTIME_ADAPTER; AWAITING_ACCEPTED_L_TIP" },
+    { "pageId": "volume", "page": "Volume", "canonicalApi": "PENDING_VOLUME_ADAPTER", "fixtureState": "SYNTHETIC_ONLY", "controls": ["CTRL-VOLUME-INTAKE"], "errorBehavior": "FALSE_BURST_REJECT_VISIBLE", "blocker": "AWAITING_IP_RUNTIME_ADAPTER; AWAITING_ACCEPTED_L_TIP" },
+    { "pageId": "opportunities", "page": "Opportunities", "canonicalApi": "PENDING_OPPORTUNITY_ADAPTER", "fixtureState": "SYNTHETIC_ONLY", "controls": [], "errorBehavior": "REJECTION_EXACT", "blocker": "AWAITING_ACCEPTED_Q_TIP; AWAITING_ACCEPTED_L_TIP" },
+    { "pageId": "risk", "page": "Risk", "canonicalApi": "PENDING_L_RISK_ADAPTER", "fixtureState": "SYNTHETIC_ONLY", "controls": ["CTRL-KILL"], "errorBehavior": "STALE_TRUTH_BLOCKS", "blocker": "AWAITING_ACCEPTED_L_TIP; AWAITING_IP_CONTROL_BINDING" },
+    { "pageId": "ledger", "page": "Ledger / Logs", "canonicalApi": "/api/system-integration/events", "fixtureState": "SYNTHETIC_ONLY", "controls": [], "errorBehavior": "BOUNDED_CURSOR_AND_GAP_STATE", "blocker": "AWAITING_DIRECTOR_SHARED_COMPOSITION" },
+    { "pageId": "system", "page": "System Health", "canonicalApi": "/api/system-integration/graph", "fixtureState": "SYNTHETIC_ONLY", "controls": ["CTRL-COMPONENT"], "errorBehavior": "SILENT_OR_STALE_NOT_GREEN", "blocker": "AWAITING_IP_RUNTIME_ADAPTER; AWAITING_IP_OPS_BUNDLE" },
+    { "pageId": "notifications", "page": "Notifications", "canonicalApi": "PENDING_INCIDENT_ADAPTER", "fixtureState": "SYNTHETIC_ONLY", "controls": ["CTRL-ACK"], "errorBehavior": "FINGERPRINT_GROUPED", "blocker": "AWAITING_IP_CONTROL_BINDING" },
+    { "pageId": "news", "page": "News", "canonicalApi": "/api/news", "fixtureState": "BASE_REALITY_UNVERIFIED", "controls": [], "errorBehavior": "SOURCE_AGE_AND_EMPTY_STATE_VISIBLE", "blocker": "REAL_RUNTIME_READBACK_REQUIRED" },
+    { "pageId": "calendar", "page": "Calendar", "canonicalApi": "/api/calendar", "fixtureState": "BASE_REALITY_UNVERIFIED", "controls": [], "errorBehavior": "SOURCE_AGE_AND_EMPTY_STATE_VISIBLE", "blocker": "REAL_RUNTIME_READBACK_REQUIRED" }
+  ],
+  "requiredAbsentSurfaces": [
+    { "surface": "Control Room", "source": "I00#15", "state": "MISSING", "blocker": "AWAITING_IP_CONTROL_BINDING", "requiredEvidence": "real machine graph, registry search, preview-confirm-result, before/after receipt readback" }
+  ],
+  "controls": [
+    { "id": "CTRL-KILL", "command": "SET_KILL_SWITCH", "group": "global-posture", "label": "Halt new exposure", "explanation": "Blocks new risk-increasing work while recovery stays visible", "owner": "foundation-control", "targetTypes": ["system"], "payloadSchema": "{engaged:boolean}", "safeBounds": "boolean", "defaultValue": "engaged", "semantics": "desired strict effective OR", "effect": "immediate", "requiredPosture": "authenticated operator", "confirmation": "Confirm halt posture", "expiryMs": 30000, "reversible": true, "previewProvider": "supervisor", "invariants": ["cannot hide recovery", "cannot grant live"], "telemetry": ["control receipt", "before/after supervisor"], "wiringState": "WIRED_FIXTURE", "fixtureState": "WIRED_FIXTURE", "bounded": true, "moneyIncreasing": false },
+    { "id": "CTRL-MODE", "command": "SET_SAFE_MODE", "group": "global-posture", "label": "Set safe mode", "explanation": "Selects bounded non-live posture", "owner": "foundation-control", "targetTypes": ["system"], "payloadSchema": "{safeMode:READ_ONLY|ADVISORY|VALIDATE_ONLY}", "safeBounds": "closed safe-mode enum", "defaultValue": "READ_ONLY", "semantics": "desired/effective", "effect": "immediate", "requiredPosture": "authenticated operator", "confirmation": "Confirm safe mode", "expiryMs": 30000, "reversible": true, "previewProvider": "supervisor", "invariants": ["live modes rejected"], "telemetry": ["control receipt", "mode readback"], "wiringState": "WIRED_FIXTURE", "fixtureState": "WIRED_FIXTURE", "bounded": true, "moneyIncreasing": false },
+    { "id": "CTRL-COMPONENT", "command": "SET_COMPONENT_STATE", "group": "component-lifecycle", "label": "Set component desired state", "explanation": "Requests a bounded component lifecycle state", "owner": "foundation-control", "targetTypes": ["component"], "payloadSchema": "{componentId,desiredState}", "safeBounds": "registered component and state enum", "defaultValue": "STOPPED", "semantics": "desired distinct from observed", "effect": "drain-or-restart", "requiredPosture": "authenticated operator", "confirmation": "Confirm component request", "expiryMs": 30000, "reversible": true, "previewProvider": "graph", "invariants": ["dependency validation", "no implicit readiness"], "telemetry": ["control receipt", "graph readback"], "wiringState": "UNAVAILABLE:IP_CONTROL_COCKPIT_BINDING", "fixtureState": "BACKEND_BUILT_COCKPIT_MISSING", "bounded": true, "moneyIncreasing": false },
+    { "id": "CTRL-INTAKE", "command": "SET_INTAKE_PAUSED", "group": "global-posture", "label": "Pause intake", "explanation": "Pauses or resumes admitted proposal intake", "owner": "foundation-control", "targetTypes": ["system"], "payloadSchema": "{paused:boolean}", "safeBounds": "boolean", "defaultValue": "paused", "semantics": "desired/effective", "effect": "immediate", "requiredPosture": "authenticated operator", "confirmation": "Confirm intake state", "expiryMs": 30000, "reversible": true, "previewProvider": "supervisor", "invariants": ["resume requires safe dependencies"], "telemetry": ["control receipt", "intake readback"], "wiringState": "WIRED_FIXTURE", "fixtureState": "WIRED_FIXTURE", "bounded": true, "moneyIncreasing": false },
+    { "id": "CTRL-CONFIG", "command": "APPLY_CONFIGURATION", "group": "configuration", "label": "Apply configuration revision", "explanation": "Applies one digest-bound revision", "owner": "foundation-control", "targetTypes": ["configuration"], "payloadSchema": "{configurationRevision,payloadDigest}", "safeBounds": "registered schema and digest", "defaultValue": "no-change", "semantics": "expected revision", "effect": "component-defined", "requiredPosture": "authenticated operator", "confirmation": "Confirm configuration digest", "expiryMs": 30000, "reversible": false, "previewProvider": "configuration diff", "invariants": ["stale revision rejected"], "telemetry": ["control receipt", "configuration readback"], "wiringState": "UNAVAILABLE:IP_CONTROL_COCKPIT_BINDING", "fixtureState": "BACKEND_AND_STALE_REVISION_TEST_BUILT_COCKPIT_MISSING", "bounded": true, "moneyIncreasing": false },
+    { "id": "CTRL-REVOKE-APPROVAL", "command": "REVOKE_APPROVAL", "group": "capital-authority", "label": "Revoke approval", "explanation": "Revokes a named active approval", "owner": "foundation-control", "targetTypes": ["approval"], "payloadSchema": "{approvalId}", "safeBounds": "registered identifier", "defaultValue": "none", "semantics": "monotonic revoke", "effect": "immediate", "requiredPosture": "authenticated operator", "confirmation": "Confirm approval revocation", "expiryMs": 30000, "reversible": false, "previewProvider": "approval projection", "invariants": ["cannot create approval"], "telemetry": ["control receipt", "approval readback"], "wiringState": "UNAVAILABLE:IP_CONTROL_COCKPIT_BINDING", "fixtureState": "BACKEND_BUILT_COCKPIT_MISSING", "bounded": true, "moneyIncreasing": false },
+    { "id": "CTRL-REVOKE-RESERVATION", "command": "REVOKE_RESERVATION", "group": "capital-authority", "label": "Revoke reservation", "explanation": "Revokes a named capital reservation", "owner": "foundation-control", "targetTypes": ["reservation"], "payloadSchema": "{reservationId}", "safeBounds": "registered identifier", "defaultValue": "none", "semantics": "monotonic revoke", "effect": "immediate", "requiredPosture": "authenticated operator", "confirmation": "Confirm reservation revocation", "expiryMs": 30000, "reversible": false, "previewProvider": "capital projection", "invariants": ["cannot increase capital"], "telemetry": ["control receipt", "reservation readback"], "wiringState": "UNAVAILABLE:IP_CONTROL_COCKPIT_BINDING", "fixtureState": "BACKEND_BUILT_COCKPIT_MISSING", "bounded": true, "moneyIncreasing": false },
+    { "id": "CTRL-RESTART", "command": "RESTART_COMPONENT", "group": "component-lifecycle", "label": "Safe restart", "explanation": "Requests bounded restart with reconciliation barrier", "owner": "foundation-control", "targetTypes": ["component"], "payloadSchema": "{componentId}", "safeBounds": "registered restartable component", "defaultValue": "none", "semantics": "desired restart generation", "effect": "restart", "requiredPosture": "authenticated operator", "confirmation": "Confirm safe restart", "expiryMs": 30000, "reversible": false, "previewProvider": "graph", "invariants": ["reconcile before ready"], "telemetry": ["control receipt", "generation readback"], "wiringState": "UNAVAILABLE:IP_CONTROL_COCKPIT_BINDING", "fixtureState": "BACKEND_BUILT_COCKPIT_MISSING", "bounded": true, "moneyIncreasing": false },
+    { "id": "CTRL-RECONCILE", "command": "REQUEST_RECONCILIATION", "group": "recovery", "label": "Request reconciliation", "explanation": "Requests exact observed-state reconciliation", "owner": "foundation-reconciliation", "targetTypes": ["ticket", "account"], "payloadSchema": "{scopeId}", "safeBounds": "registered scope", "defaultValue": "none", "semantics": "async request", "effect": "immediate", "requiredPosture": "accepted L adapter", "confirmation": "Confirm reconciliation", "expiryMs": 30000, "reversible": false, "previewProvider": "reconciliation projection", "invariants": ["no new exposure"], "telemetry": ["future durable receipt"], "wiringState": "PENDING_BACKEND:REQUEST_RECONCILIATION", "fixtureState": "PENDING_BACKEND:REQUEST_RECONCILIATION", "bounded": true, "moneyIncreasing": false },
+    { "id": "CTRL-FOCUS", "command": "PIN_FOCUS", "group": "universe-attention", "label": "Pin focus", "explanation": "Pins bounded enrichment attention", "owner": "intelligenceRuntime", "targetTypes": ["symbol"], "payloadSchema": "{symbol,pinned:boolean}", "safeBounds": "eligible symbol and focus cap", "defaultValue": "unpinned", "semantics": "desired attention", "effect": "immediate", "requiredPosture": "accepted runtime adapter", "confirmation": "Confirm focus pin", "expiryMs": 30000, "reversible": true, "previewProvider": "focus projection", "invariants": ["hard capacity retained"], "telemetry": ["focus readback"], "wiringState": "PENDING_BACKEND:PIN_FOCUS", "fixtureState": "PENDING_BACKEND:PIN_FOCUS", "bounded": true, "moneyIncreasing": false },
+    { "id": "CTRL-BASIS-INTAKE", "command": "SET_BASIS_INTAKE", "group": "strategy-intake", "label": "Set Basis intake", "explanation": "Pauses only Basis proposal intake", "owner": "BasisEngine", "targetTypes": ["strategy"], "payloadSchema": "{paused:boolean}", "safeBounds": "boolean", "defaultValue": "paused", "semantics": "desired/effective", "effect": "immediate", "requiredPosture": "accepted runtime adapter", "confirmation": "Confirm Basis intake", "expiryMs": 30000, "reversible": true, "previewProvider": "Basis status", "invariants": ["engine authority unchanged"], "telemetry": ["Basis status readback"], "wiringState": "PENDING_BACKEND:SET_BASIS_INTAKE", "fixtureState": "PENDING_BACKEND:SET_BASIS_INTAKE", "bounded": true, "moneyIncreasing": false },
+    { "id": "CTRL-VOLUME-INTAKE", "command": "SET_VOLUME_INTAKE", "group": "strategy-intake", "label": "Set Volume intake", "explanation": "Pauses only Volume proposal intake", "owner": "VolumeEngine", "targetTypes": ["strategy"], "payloadSchema": "{paused:boolean}", "safeBounds": "boolean", "defaultValue": "paused", "semantics": "desired/effective", "effect": "immediate", "requiredPosture": "accepted runtime adapter", "confirmation": "Confirm Volume intake", "expiryMs": 30000, "reversible": true, "previewProvider": "Volume status", "invariants": ["engine authority unchanged"], "telemetry": ["Volume status readback"], "wiringState": "PENDING_BACKEND:SET_VOLUME_INTAKE", "fixtureState": "PENDING_BACKEND:SET_VOLUME_INTAKE", "bounded": true, "moneyIncreasing": false },
+    { "id": "CTRL-RECOVERY", "command": "EXECUTE_PRECOMPUTED_RECOVERY", "group": "recovery", "label": "Execute recovery", "explanation": "Executes only an accepted risk-reducing plan", "owner": "accepted-L-recovery", "targetTypes": ["position", "liability"], "payloadSchema": "{recoveryPlanId}", "safeBounds": "precomputed exact plan only", "defaultValue": "none", "semantics": "owner-gated", "effect": "async recovery", "requiredPosture": "accepted L plus explicit authority", "confirmation": "Confirm recovery plan digest", "expiryMs": 15000, "reversible": false, "previewProvider": "recovery plan", "invariants": ["risk reducing only", "no live grant in IP-PROOF"], "telemetry": ["future journal and reconciliation"], "wiringState": "OWNER_GATED", "fixtureState": "OWNER_GATED", "bounded": true, "moneyIncreasing": false },
+    { "id": "CTRL-ACK", "command": "ACKNOWLEDGE_INCIDENT", "group": "incidents", "label": "Acknowledge incident", "explanation": "Acknowledges attention without clearing root cause", "owner": "incident-projection", "targetTypes": ["incident"], "payloadSchema": "{incidentId}", "safeBounds": "registered open incident", "defaultValue": "unacknowledged", "semantics": "monotonic acknowledgement", "effect": "immediate", "requiredPosture": "authenticated operator", "confirmation": "Confirm acknowledgement", "expiryMs": 30000, "reversible": false, "previewProvider": "incident projection", "invariants": ["cannot resolve recovery by acknowledgement"], "telemetry": ["incident receipt", "incident readback"], "wiringState": "PENDING_BACKEND:ACKNOWLEDGE_INCIDENT", "fixtureState": "PENDING_BACKEND:ACKNOWLEDGE_INCIDENT", "bounded": true, "moneyIncreasing": false }
+  ],
+  "messageValidityCases": [
+    { "id": "MSG-VALID", "version": 1, "revision": 7, "expectedRevision": 7, "generationTimeMs": 1800000000000, "expiryTimeMs": 1800000001000, "nowMs": 1800000000500, "expected": "ACCEPT" },
+    { "id": "MSG-VERSION", "version": 2, "revision": 7, "expectedRevision": 7, "generationTimeMs": 1800000000000, "expiryTimeMs": 1800000001000, "nowMs": 1800000000500, "expected": "PROTOCOL_VERSION_UNSUPPORTED" },
+    { "id": "MSG-EXPIRED", "version": 1, "revision": 7, "expectedRevision": 7, "generationTimeMs": 1800000000000, "expiryTimeMs": 1800000000400, "nowMs": 1800000000500, "expected": "MESSAGE_EXPIRED" },
+    { "id": "MSG-REVISION", "version": 1, "revision": 6, "expectedRevision": 7, "generationTimeMs": 1800000000000, "expiryTimeMs": 1800000001000, "nowMs": 1800000000500, "expected": "REVISION_CONFLICT" },
+    { "id": "MSG-LIFETIME", "version": 1, "revision": 7, "expectedRevision": 7, "generationTimeMs": 1800000001000, "expiryTimeMs": 1800000000000, "nowMs": 1800000000500, "expected": "INVALID_LIFETIME" }
+  ],
+  "adapterInsertionPoints": [
+    { "fixture": "public-evidence", "replaceWith": "accepted IP-RUNTIME public evidence adapter", "gate": "Q/L/IP-RUNTIME accepted immutable tip" },
+    { "fixture": "q-assessment", "replaceWith": "accepted Q generated client and schema-hash handshake", "gate": "Q LANE_READY and client parity" },
+    { "fixture": "basis-volume-decision", "replaceWith": "existing engine canonical snapshot adapters", "gate": "IP-RUNTIME accepted" },
+    { "fixture": "capital-risk-ticket-twin", "replaceWith": "accepted L Capital/Risk/ticket/exchange-twin adapters", "gate": "L LANE_READY" },
+    { "fixture": "private-reconciliation-recovery", "replaceWith": "accepted L private truth/reconciliation/recovery adapters", "gate": "L LANE_READY; private smoke remains owner-authorized" },
+    { "fixture": "outcome-feedback", "replaceWith": "ledger outcome plus accepted Q feedback adapter", "gate": "Q/L accepted correlation graph" },
+    { "fixture": "supervisor-cockpit", "replaceWith": "canonical systemIntegration supervisor fed by accepted IP-RUNTIME adapters plus IP-CONTROL binding", "gate": "both IP packets accepted" },
+    { "fixture": "deployment-restore", "replaceWith": "IP-OPS preflight and isolated restore evidence", "gate": "IP-OPS accepted; no external mutation" }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "clockStartMs": 1800000000000,
+  "scenarios": [
+    { "id": "I00-01", "kind": "QUIET_NOOP", "title": "quiet symbol remains quiet", "expectedTerminal": "NO_OP" },
+    { "id": "I00-02", "kind": "Q_ABSTAIN_INCOMPLETE", "title": "Q abstains from incomplete data", "expectedTerminal": "ENGINE_REJECTED_INCOMPLETE" },
+    { "id": "I00-03", "kind": "NORMAL_BASIS_PASS_THEN_INVALIDATE", "title": "normal Basis passes dry-run planning then invalidates before entry", "expectedTerminal": "DRY_RUN_PLANNED_THEN_INVALIDATED" },
+    { "id": "I00-04", "kind": "NORMAL_BASIS_OUTCOME", "title": "normal Basis full synthetic outcome and feedback chain", "expectedTerminal": "FEEDBACK_ACKNOWLEDGED" },
+    { "id": "I00-05", "kind": "REVERSE_BASIS_MISSING_BORROW", "title": "reverse Basis rejects unknown borrow", "expectedTerminal": "BORROW_UNKNOWN_REJECTED" },
+    { "id": "I00-06", "kind": "REVERSE_BASIS_RESIDUAL_LIABILITY", "title": "reverse Basis cannot close with residual liability", "expectedTerminal": "RECOVERY_REQUIRED_RESIDUAL_LIABILITY" },
+    { "id": "I00-07", "kind": "VOLUME_CAP_RISK_STALE_DEPTH", "title": "Volume proposal is Capital-capped then Risk-rejected for stale depth", "expectedTerminal": "RISK_REJECTED_STALE_DEPTH" },
+    { "id": "I00-08", "kind": "VOLUME_FALSE_BURST", "title": "false burst is rejected", "expectedTerminal": "FALSE_BURST_REJECTED" },
+    { "id": "I00-09", "kind": "STALE_PUBLIC", "title": "stale public truth blocks new exposure", "expectedTerminal": "BLOCKED_STALE_PUBLIC" },
+    { "id": "I00-10", "kind": "STALE_PRIVATE", "title": "stale private truth blocks new exposure", "expectedTerminal": "BLOCKED_STALE_PRIVATE_RECOVERY_VISIBLE" },
+    { "id": "I00-11", "kind": "STALE_Q", "title": "stale Q truth abstains while deterministic engine remains bounded", "expectedTerminal": "Q_STALE_ABSTAIN" },
+    { "id": "I00-12", "kind": "AMBIGUOUS_SUBMISSION", "title": "ambiguous submission reconciles by client identity", "expectedTerminal": "RECONCILED_NO_DUPLICATE" },
+    { "id": "I00-13", "kind": "PARTIAL_FIRST_LEG", "title": "partial first leg elevates recovery", "expectedTerminal": "RECOVERY_REQUIRED_ONE_LEG" },
+    { "id": "I00-14", "kind": "KILL_DURING_ENTRY", "title": "kill during entry blocks additions but preserves recovery", "expectedTerminal": "KILLED_ADDITIONS_RECOVERY_VISIBLE" },
+    { "id": "I00-15", "kind": "CRASH_RESTART_RECONCILE", "title": "restart reconciles before readiness", "expectedTerminal": "READY_AFTER_RECONCILIATION" },
+    { "id": "I00-16", "kind": "DB_FAIL_BEFORE_REQUEST", "title": "database failure before request sends nothing", "expectedTerminal": "DB_BLOCKED_NO_REQUEST" },
+    { "id": "I00-17", "kind": "DB_FAIL_AFTER_REQUEST", "title": "database failure after request survives ambiguity and restart", "expectedTerminal": "RECONCILED_AFTER_DB_FAILURE" },
+    { "id": "I00-18", "kind": "DUPLICATE_COMMAND", "title": "duplicate command is idempotent", "expectedTerminal": "ALREADY_APPLIED" },
+    { "id": "I00-19", "kind": "STALE_REVISION", "title": "stale configuration revision rejects", "expectedTerminal": "REJECTED_STALE_REVISION" },
+    { "id": "I00-20", "kind": "INCIDENT_FLOOD", "title": "incident flood groups while material count survives", "expectedTerminal": "ONE_INCIDENT_100_EVENTS" },
+    { "id": "I00-21", "kind": "DEPLOYMENT_MISMATCH", "title": "deployment mismatch preserves current release", "expectedTerminal": "PREFLIGHT_REJECTED_CURRENT_RELEASE_ACTIVE" },
+    { "id": "I00-22", "kind": "RESTORE_DRILL", "title": "restore drill is isolated", "expectedTerminal": "ISOLATED_RESTORE_NO_PRODUCTION_MUTATION" }
+  ]
+}

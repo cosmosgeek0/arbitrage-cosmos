@@ -3,35 +3,99 @@
   "receiptId": "S5_COCKPIT_PRESTAGE_RECEIPT_V1",
   "status": "COCKPIT_PRESTAGE_READY",
   "branch": "ip-assur-cockpit-20260713",
-  "baseCommit": "9785c93",
-  "evaluatedAtMs": 1750000000000,
+  "baseCommit": "9785c93102b00389847b77c2f9348c06abc4344b",
+  "emergencyCheckpointCommit": "44f900d38817549db8758515c5253e5fdf3a7561",
+  "implementationCommit": "6b84d4c84b679debc6acbff5e1cc1b8c33d09a76",
+  "implementationTrees": {
+    "cockpitFixtures": "bd8a54613018f0f52eab4bd38bc55ab1410d1292",
+    "observabilityFixtures": "db923bf1d54c26632cbbb800b1fcb4607249fdc5",
+    "cockpitTests": "7bf295351429729894cd9a78deea62972b20da0e",
+    "observabilityTests": "7680a6243695945f56ee614ee76bda61488aa19d"
+  },
+  "evaluatedAtMs": 1783881000000,
   "releaseManifest": {
     "manifestId": "manifest.release.fixture-001",
-    "manifestRevision": 2,
-    "manifestSha256": "68428c85723a7d955c4e7bdeb9001429ff0ec6cce5d6db0e33c73eb33fa3a80e",
+    "manifestRevision": 5,
+    "manifestSha256": "076e3e2e74ae960b43d59364ac42e66cb924339f1146ddcd8de87879ac68e9be",
     "acceptedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
-    "cockpitProjectionCount": 20,
-    "commandPathCount": 1
+    "expectedItemCount": 84,
+    "requiredItemCount": 80,
+    "sourceStreamCount": 7,
+    "cockpitProjectionCount": 25,
+    "commandPathCount": 8,
+    "visibleControlCount": 6
   },
   "counts": {
+    "releaseExpectedItems": 84,
+    "releaseRequiredItems": 80,
+    "semanticSourceStreams": 7,
+    "systemCommandPaths": 8,
     "surfaces": 18,
-    "panelContracts": 20,
-    "dashboardRequiredFacts": 92,
-    "factSemantics": 255,
+    "panelContracts": 25,
+    "visibleControls": 6,
+    "dashboardRequiredFacts": 96,
+    "factSemantics": 295,
     "informationLevels": 5,
     "informationTopics": 28,
-    "focusedTestsPassed": 42,
+    "historicalMetricContracts": 23,
+    "sloSubobjectives": 25,
+    "cockpitFocusedTestsPassed": 50,
+    "observabilityFocusedTestsPassed": 100,
     "focusedTestsFailed": 0
   },
   "verification": {
-    "command": "node --test --test-concurrency=1 test/productAssurance/systemic/cockpit/*.test.mjs",
-    "networkUsed": false,
-    "ambientClockUsed": false,
-    "productionCodeTouched": false
+    "cockpit": {
+      "command": "node --test --test-concurrency=1 test/productAssurance/systemic/cockpit/*.test.mjs",
+      "result": {
+        "passed": 50,
+        "failed": 0,
+        "exitCode": 0
+      }
+    },
+    "observability": {
+      "command": "node --test --test-concurrency=1 test/productAssurance/systemic/observability/*.test.mjs",
+      "result": {
+        "passed": 100,
+        "failed": 0,
+        "exitCode": 0
+      }
+    },
+    "npmTest": {
+      "command": "npm test",
+      "exitCode": 0
+    },
+    "npmTestAll": {
+      "command": "npm run test:all",
+      "exitCode": 0
+    },
+    "diffCheck": {
+      "command": "git diff --check",
+      "exitCode": 0
+    },
+    "dependencyHydration": "npm ci completed with package-lock.json unchanged and zero reported vulnerabilities",
+    "networkUsedByPacketTests": false,
+    "ambientClockUsedByPacketCode": false,
+    "productionCodeTouched": false,
+    "externalRuntimeOrExchangeContactedByPacketTests": false,
+    "independentAudit": "Two post-observation temporal borrowing defects were reproduced, repaired, regression-tested, and rechecked; no money path, duplicate runtime owner, production UI mutation, or secret was found."
+  },
+  "inputHashes": {
+    "ipAssuranceSha256": "5f6d4b3b70e384f6123e9ccc01891faf04aef9da7f7cfd1e0c63be5c3ba68803",
+    "dedupMatrixSha256": "22686d2cd1c54bbc39af56399298a0ed9563bbc8643ad4f0e498718de83cb2cd",
+    "dashboardTruthSha256": "9f44e9d9c6111ffcc176fe30ea27d02dced83006d8df9ceb218c2c1af8df07c7",
+    "designSha256": "7d8f739e7994edf684aa719277f94cb467169955c111f379297a98bc79430a54",
+    "protectedI00Sha256": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5",
+    "packageLockSha256": "3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf"
   },
   "authority": "PACKET_LOCAL_REFERENCE_ONLY",
   "productionWiringState": "DIRECTOR_MOUNT_REQUIRED",
-  "commitState": "DIRECTOR_COMMIT_REQUIRED",
+  "commitState": "FEATURE_BRANCH_SEALED_DIRECTOR_LANDING_REQUIRED",
+  "sealCommitIdentity": "ENCLOSING_GIT_COMMIT_IS_AUTHORITY_AND_IS_NOT_SELF_RECORDED",
+  "nonClaims": [
+    "No production evaluator, route, store, startup, persistence, web UI, shared generated artifact, shared receipt, root document, Q/L path, or other satellite path was changed.",
+    "No live, signed, private, order, borrow, repay, transfer, withdrawal, leverage, margin, secret, deployment, or external-system action was implemented or performed.",
+    "Synthetic fixtures remain SYNTHETIC_ONLY and packet-local; the receipt does not claim INTEGRATED, LIVE, DEPLOYED_PROVED, or I00_ACCEPTED."
+  ],
   "artifacts": [
     {
       "path": "fixtures/productAssurance/systemic/cockpit/drafts/INSERTION_REQUEST_ROWS_DRAFT.v1.json",
@@ -47,27 +111,31 @@
     },
     {
       "path": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json",
-      "sha256": "692fd871a69278d33464ca1ec5ef163d6f9f9027c20c42014f1daf2ba25979cd"
+      "sha256": "21a788f3c2248f3f4a5d398bf9df6f2986d5715cf49038ca331cfcba621b5443"
     },
     {
       "path": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-observations.v1.json",
-      "sha256": "4001d152d1d7aad9906805ba3edfb23722372d4b093ddda03828319983189b87"
+      "sha256": "c120c4eedbf20105023c2248689d63979ccad276bc11ed264047963bff27c356"
     },
     {
       "path": "fixtures/productAssurance/systemic/cockpit/fixtures/surface-projection-matrix.v1.json",
-      "sha256": "cde6068979d5503bdcb557269ebe827ac91182e4de6c0aa8c26872b8f4c6dea7"
+      "sha256": "b6d6693e920b2ba90bf6e0a19dc54ec9b4b47e0ed67678c1378c7189fbe367b6"
     },
     {
       "path": "fixtures/productAssurance/systemic/cockpit/reference/cockpit-view-model.mjs",
-      "sha256": "f32ed8d2e35b5603cffae2698f84887b0c81057e7358c0cc8bb318720d67c1ed"
+      "sha256": "fe8bbca21091f5a88761ef58c7502922d6045a3dd814ddfffdc8dc79ec13acb1"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/cockpit/reference/release-bound-panel-evaluator.mjs",
+      "sha256": "7a7c051964a002adb0653aebc670012931ea3038005afd5bc00a4f15f2f67e03"
     },
     {
       "path": "fixtures/productAssurance/systemic/cockpit/schemas/cockpit-contract-set.v1.schema.json",
-      "sha256": "e8235fd36a2ea875a5fbba8329ca753f9a75d1b0373cfb361ea5d8a68f47967c"
+      "sha256": "0ca745c818fc96a60bec1ec42dd94a08427b3cb315c1fecda2cd054969492bed"
     },
     {
       "path": "fixtures/productAssurance/systemic/cockpit/schemas/cockpit-view-model.v1.schema.json",
-      "sha256": "825c463179da7906d31ec760e14b4d4a5bb8748788c949a8ad04c5a1ec227626"
+      "sha256": "9bbb1a57919a744ebd5d26145b004d8b3ff010e83e1a27a73695cf55c0ed9d1d"
     },
     {
       "path": "fixtures/productAssurance/systemic/cockpit/schemas/generated-row-drafts.v1.schema.json",
@@ -78,20 +146,104 @@
       "sha256": "6a604a1bf8b635436948b34d35b241bb82f6d5260d8801764d90d5099e3b3ada"
     },
     {
+      "path": "fixtures/productAssurance/systemic/cockpit/schemas/release-bound-panel-evaluation.v1.schema.json",
+      "sha256": "f3063c3c2cbb53228687784a64f907bd19002ca0f5a0577e8a753329bdaec521"
+    },
+    {
       "path": "fixtures/productAssurance/systemic/cockpit/schemas/surface-projection-matrix.v1.schema.json",
       "sha256": "4399ed5f1eeac4b92371094a66efbfb565581a5f74a81153808ad5a0fc9125b6"
     },
     {
       "path": "fixtures/productAssurance/systemic/cockpit/state/COCKPIT_PRESTAGE_STATE.v1.json",
-      "sha256": "3d19ce21038780d5fc67ced098bcec3af6f2470504af497734e76c16ebdeafa3"
+      "sha256": "c33b65ed96f0012092cd671a4eb0ccb21315294139d50c47cf9fb98f035ac9ff"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/observability/canonical-sha256.mjs",
+      "sha256": "40c3eb01b2a6a507897218279c64561be32b9734d66132e44a683e18603498b2"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/observability/cases/conservation-replay-balanced.json",
+      "sha256": "c5e28ca0f86d639554d85eb3fddf16301eba7b2b98ee5dfebafe597642eafa77"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/observability/cases/historical-series-complete.json",
+      "sha256": "9070c9acb087f14bcc7fee412b0b41b2d3f97201b47346cc92e5fd9de84c572d"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/observability/cases/reason-code-registry.v1.json",
+      "sha256": "24ff2b579f65983e277ac0f18a3a89c90a9c920e44aadeaa17a075470b098ab4"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/observability/cases/release-manifest-healthy.json",
+      "sha256": "1efd2e1401095d9def5a8e737676707b6d23ca05a5fdbcf8d347c08af9e959d7"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/observability/cases/slo-catalog-complete.json",
+      "sha256": "c3cf8db916d1a8250ede009f68deaa8d246b4515ba06342c08b7c4565309b8cc"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/observability/cases/slo-trend-history.json",
+      "sha256": "56a5eceacf684f7b513e5e423d68f820c483a0cf971a1edb1e30a6e93b378fa5"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/observability/conservation-accounting.schema.json",
+      "sha256": "6cd58af189f0376907cd2fdf272765987f9bf1eb4b8400e3259aa5f363236cfa"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/observability/conservation-evaluator.mjs",
+      "sha256": "b826027a96f78a9e84a7b7a112be93aa0f3183cbdc623f06b0731b2ae1e17d5d"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/observability/historical-series-evaluator.mjs",
+      "sha256": "2aa7aa0e2a80f68ba2ca5c72dae8f47d200bfa456f0631c32f86710def49e791"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/observability/historical-series.schema.json",
+      "sha256": "b2c8974be11b3b869b8b4007e153101ad9c966906ccdf8828833cebf3c4d7ba9"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/observability/reason-code-registry.mjs",
+      "sha256": "443e30bb5c38516219160f18a4fc58911779d78451575860e4a8587ba25142ba"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/observability/reason-code-registry.schema.json",
+      "sha256": "850feededc68f0735762e131a6d2df502c02870bbfb2f49bf1f93321938afa88"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/observability/reference-helpers.mjs",
+      "sha256": "a9cb8041e1242ddb0e5a1c167dbfb8127ea06ee9b6249fe8c535a359272ca577"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/observability/release-bound-expected-manifest.schema.json",
+      "sha256": "a39240eb42924f0c5b101e9a93561f28b90fa90fe4d22b5e29bcfc1d001773cf"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/observability/release-manifest-evaluator.mjs",
+      "sha256": "180bb5e33d5625fb8f3d56426c1db3549eafaf8612dd6021d99ca0aa414b1a10"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/observability/slo-catalog-contract.mjs",
+      "sha256": "c36302ffd3e32c859ce901780c146983ee6d49a4877d9e0feac09c00d5414594"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/observability/slo-catalog.schema.json",
+      "sha256": "c173bcc4dd9608cc4a47d3607b2cf0df5ce895cfec1ff480bc48ad1d3a74d7a7"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/observability/slo-trend-evaluator.mjs",
+      "sha256": "ebb253b5b78a20c27ec3114cd8d9dba5f0fa238bd6150ecd81d80085656e9b07"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/observability/slo-trend.schema.json",
+      "sha256": "66b8944b64de9c98249e8d34755dcb6af722ebcee55b7ea5070a75c8673625d5"
     },
     {
       "path": "test/productAssurance/systemic/cockpit/contract-and-projection.test.mjs",
-      "sha256": "4791ff41f0184afed9c5703bc120ff36ec87c9015d3e4c07127729a4ffdaa6eb"
+      "sha256": "436a553db7d68ec922550b263c2e1ba5eedb26dfd63dc240bbe59e9828b78e8b"
     },
     {
       "path": "test/productAssurance/systemic/cockpit/import-purity.test.mjs",
-      "sha256": "12d43424e7659a75824bc9921c207a0b88f5879383f57ed743e33a238b7bc73a"
+      "sha256": "9ec03ade4b65626e1a0133518e33c5b7a1998594e6b8a1183a1e8111e64c5b89"
     },
     {
       "path": "test/productAssurance/systemic/cockpit/path-scope.test.mjs",
@@ -99,19 +251,59 @@
     },
     {
       "path": "test/productAssurance/systemic/cockpit/receipt-and-state.test.mjs",
-      "sha256": "c42d3fb8da0f118c63d4152fc4c4dd61af62e48d42b53f2b05cd8cba97acbf98"
+      "sha256": "18cb393c2bef6de77c79162f58f8bb125d04057d1f8325e24e0fd47af5435db0"
+    },
+    {
+      "path": "test/productAssurance/systemic/cockpit/release-bound-panel.test.mjs",
+      "sha256": "1be772685e74fbad19838ed723973cec5f81cbb2a761fe6f90d381afd39cd115"
     },
     {
       "path": "test/productAssurance/systemic/cockpit/schema-and-drafts.test.mjs",
-      "sha256": "7c0240aa93abf0fb32978cae8c0afbacf80dfeba1bfebb1ccfb05cf2d89340a6"
+      "sha256": "9c8a56bfa364587895c2856b2107997701c0e92e9b050394d75b5261598d6c2b"
     },
     {
       "path": "test/productAssurance/systemic/cockpit/schema-conformance.test.mjs",
-      "sha256": "2404033e6d6dc84627f2d5640a962e6514d0129a955109c59fd58200ac3c1bea"
+      "sha256": "af0618408a84c2f21a90f4aa08f8c8ff54fbbf3b690e89eb16182fd80bc21d52"
+    },
+    {
+      "path": "test/productAssurance/systemic/cockpit/support/cockpit-fixture-builder.mjs",
+      "sha256": "5e4554d380d57bbc441dd7cc6d4e6305e80f0b80e94dface0db61dd972d2bc66"
     },
     {
       "path": "test/productAssurance/systemic/cockpit/support/json-schema-2020-12-subset.mjs",
       "sha256": "a4191c95f602024259882432b1f7c71c1cd6e8f07ad3ad0ff8a91f4e9a07c5be"
+    },
+    {
+      "path": "test/productAssurance/systemic/observability/conservation.test.mjs",
+      "sha256": "d3fc05e6cd17d73104adf22c88eeaca9cdc02f76d68bc211cee87d212d40c53c"
+    },
+    {
+      "path": "test/productAssurance/systemic/observability/historical-series.test.mjs",
+      "sha256": "ce7b6a7cb8a0ab0967669ed8d7d13c2fb612e8fb939ab995bf15316866ec1ec1"
+    },
+    {
+      "path": "test/productAssurance/systemic/observability/import-purity-and-scope.test.mjs",
+      "sha256": "3b229f3f6743138c95272c53111fb611f27c67a1c38ad67154984ee60a1b65f5"
+    },
+    {
+      "path": "test/productAssurance/systemic/observability/reason-code-registry.test.mjs",
+      "sha256": "9d4d1b9e3dd8e3c002c77ee946b1225d4d72ad505f10174fce680d45279e0756"
+    },
+    {
+      "path": "test/productAssurance/systemic/observability/release-manifest.test.mjs",
+      "sha256": "5fdeeccb6403db712f24911aedd43a3e01708a148fa35f679391121322f73f00"
+    },
+    {
+      "path": "test/productAssurance/systemic/observability/schema-conformance.test.mjs",
+      "sha256": "ca8cfeed576fe8b1cda00991be2d752eb807afaddc295ef879c612828d2cb5fa"
+    },
+    {
+      "path": "test/productAssurance/systemic/observability/slo-catalog.test.mjs",
+      "sha256": "e7086678273fb7869b57582dcf129b178d03eada1bf6084f297080b32f0ce562"
+    },
+    {
+      "path": "test/productAssurance/systemic/observability/slo-trend.test.mjs",
+      "sha256": "ed8b54fa6c6534a7aae1d19697b3496dd255b933d2ddf1b1fb77cafb03fa884a"
     }
   ]
 }

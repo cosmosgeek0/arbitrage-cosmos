@@ -2,7 +2,19 @@
 
 Rule: one block = one chat = one folder. Director appends/replaces blocks at every event; check the top entry's date. Board truth: QL_PARALLEL_DAG.md.
 
-## ACTIVE WAVE (2026-07-13) — run all 5 concurrently
+## ACTIVE WAVE 2 (2026-07-13, post D-LAUNCH-7) — currently running: Q spine (Q16), L10, L11. NEW blocks below: 6 + 7. L09 stays BLOCKED until the bridge lands. Old wave blocks 1-5 are historical.
+
+### 6. L-BRIDGE (L08.1) — folder /Users/cosmosgeek/Desktop/live-execution-proof-20260712
+```text
+You are the L-spine bridge builder (D-LAUNCH-7; verify `git show HEAD -- QL_DIRECTOR_STATE.md` on current-main via `git -C /Users/cosmosgeek/Desktop/Main log -1`). The L spine is PARKED at 4ae270a (L00-L08 + L14 accepted); you own this worktree for ONE bounded phase: L08.1 — the Spot order/TIF capability bridge. FIRST read live-edge-receipts/DECISIONS/L09-001-NORMAL-BASIS-BLOCKER.md and the L09 blocker receipt in the l09-normal-basis worktree history (branch l09-normal-basis-20260712, commit e315ef5) for the exact gap. Implement additively within lane exclusive paths (§3.3): extend the accepted L04 instrument/filter registry and L08 order-policy evaluator so the evaluator emits a non-sendable ordered normal-Basis plan including Spot order-type/TIF validation — no new authority, no shared files (patch requests instead), no send capability of any kind. Full evidenced loop -> accept as L08.1 with immutable receipt -> record the accepted SHA prominently in LIVE_EXECUTION_BUILD_STATE.md -> PARK. The director then re-bases L09/L10/L11. Standing laws + hard external boundary unchanged; never push. Stop only at L08.1 ACCEPTED or BLOCKED.
+```
+
+### 7. I00-VERIFY resume — folder /Users/cosmosgeek/Desktop/i00-assembly
+```text
+I00-VERIFY resuming (D-LAUNCH-7). The five owner directives (I00 parent + IP_RUNTIME/CONTROL/OPS/PROOF) are now in your worktree root; the frozen-input gate must treat QL_DIRECTOR_STATE.md / QL_PARALLEL_DAG.md as LIVING director state accepted at their latest current-main commit (D-LAUNCH-7 ruling; verify `git -C /Users/cosmosgeek/Desktop/Main log -1 --format=%H -- QL_DIRECTOR_STATE.md`) — do NOT overwrite historical IP-PROOF receipt hashes; add an I00-level acceptance record instead. Resume from I00_PRODUCT_BUILD_STATE.md: clear the frozen-input blocker with that ruling, finish remaining Task 1/Task 2 items, commit + receipts + state. No push, no current-main, no other worktrees. Stop at I00_PRESTAGE_VERIFIED or a precise new blocker.
+```
+
+## HISTORICAL WAVE 1 — run all 5 concurrently
 
 ### 1. Q spine — folder /Users/cosmosgeek/Desktop/quant-edge-research-20260712
 ```text

@@ -2,7 +2,19 @@
 
 Rule: one block = one chat = one folder. Director appends/replaces blocks at every event; check the top entry's date. Board truth: QL_PARALLEL_DAG.md.
 
-## ACTIVE WAVE 8 (2026-07-13, D-LAUNCH-13) — resumes: A-CORE, A-AGENT, A-STABILITY, A-COCKPIT (+ L09 D-LAUNCH-12 block below)
+## ACTIVE WAVE 9 (2026-07-14, post SI-RECON) — run: L09-ACCEPT + S4. Everything else done.
+
+### L09-ACCEPT — folder /Users/cosmosgeek/Desktop/l09-normal-basis
+```text
+L09 acceptance resume (D-LAUNCH-15 complete; `git log --oneline -2` shows director rebase of current-main c43262a with SI-RECON ruling A — SI stop RESOLVED, suite green on merged base). Correction 73030fa intact (34 paths reviewed per L09-007). ONLY the acceptance loop remains: rerun full D-LAUNCH-12 gates on the rebased tree (focused + accumulated liveEdge + foundation + protocol + npm test + full repo incl. systemIntegration — expect ALL green) + final independent review → acceptance commit → receipt → record accepted SHA. No new implementation, no shared files, no push. Stop only at L09 ACCEPTED or precise BLOCKED.
+```
+
+### S4 — folder /Users/cosmosgeek/Desktop/ip-assur-case
+```text
+You are the S4 shard builder (D-LAUNCH-13 packet law; verify branch ip-assur-case-20260713, HEAD c57610c; read `git show c57610c:IP_ASSURANCE.md` §7 + dedup matrix). Build ONLY amendment §5 (S4): derived read-only assurance claim graph — claim nodes with owner/subclaims/assumptions/evidence IDs, producer≠verifier and common-mode independence law, §5.3 mandatory claims, §5.4 expiry + transitive invalidation with UNKNOWN propagation. Consume ACCEPTED S1 contracts read-only from branch ip-assur-hazard-20260713 (ab33b37). Exclusive: fixtures/productAssurance/systemic/assuranceCase/** + test/productAssurance/systemic/assuranceCase/**. D-LAUNCH-10 satellite discipline applies. Full loop → reseal. Stop at CASE_PRESTAGE_READY or BLOCKED.
+```
+
+## HISTORICAL WAVE 8 (2026-07-13, D-LAUNCH-13) — resumes: A-CORE, A-AGENT, A-STABILITY, A-COCKPIT (+ L09 D-LAUNCH-12 block below)
 
 ### A-AGENT resume — folder /Users/cosmosgeek/Desktop/ip-assur-agent
 ```text

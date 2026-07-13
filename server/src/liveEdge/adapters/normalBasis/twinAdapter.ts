@@ -22,12 +22,17 @@ import {
   validateNormalBasisFoundationBinding,
 } from './binding.js';
 import {
+  cloneFreezeNormalBasis,
+  hydrateNormalBasisOwnerCheckpoint,
+  type HydratedNormalBasisOwnerCheckpoint,
+} from './ownerCheckpoint.js';
+import {
   NORMAL_BASIS_POSITION_MODE_EVIDENCE_SCHEMA,
   NORMAL_BASIS_TWIN_OBSERVATION_SCHEMA,
   type NormalBasisFoundationBinding,
   type NormalBasisFoundationLegRequestView,
-  type NormalBasisFoundationStateView,
   type NormalBasisLocalDisposition,
+  type NormalBasisMutationLineage,
   type NormalBasisPositionModeEvidence,
   type NormalBasisTwinLegObservation,
   type NormalBasisTwinStage,
@@ -130,19 +135,44 @@ function venueArrivalTime(input: RunNormalBasisTwinLegInput): number {
   return arrivals[0]!.occurredAtMs;
 }
 
-function validatePositionMode(
+function validatePrivateTruthEvidence(
   evidence: Readonly<NormalBasisPositionModeEvidence> | null | undefined,
   binding: Readonly<NormalBasisFoundationBinding>,
+  product: 'SPOT' | 'USD_M_PERPETUAL',
   atMs: number,
-): string {
+): Readonly<{
+  projectionRevision: string;
+  reconciliationResultRevision: string;
+}> {
   if (evidence?.schema !== NORMAL_BASIS_POSITION_MODE_EVIDENCE_SCHEMA
     || evidence.owner !== 'BINANCE_PRIVATE_TRUTH'
     || evidence.sendEligible !== false
     || evidence.actionAuthority !== 'NONE_RECORD_ONLY'
     || evidence.externalActionAuthorization !== 'NONE') {
-    throw new TypeError('current one-way USD-M positionSide=BOTH owner evidence is required');
+    throw new TypeError('current L05 private-truth owner evidence is required');
   }
   const projection = validatePrivateTruthProjection(evidence.projection);
+  const policyLeg = product === 'SPOT' ? binding.entry.spotLeg : binding.entry.perpLeg;
+  if (projection.accountRealmId !== policyLeg.accountRealmId
+    || projection.targetSymbol !== binding.ownerPlan.symbol
+    || projection.evaluatedAtMs > atMs
+    || projection.validUntilMs === null || atMs >= projection.validUntilMs
+    || projection.reconciliationObservation?.owner !== 'FOUNDATION_RECONCILIATION'
+    || projection.reconciliationObservation.status !== 'EXACT'
+    || projection.reconciliationObservation.executionAuthority !== 'NONE'
+    || typeof projection.reconciliationObservation.resultRevision !== 'string'
+    || projection.reconciliationObservation.resultRevision.length === 0) {
+    throw new TypeError('validated L05 projection is not current owner evidence for this leg');
+  }
+  if (product === 'SPOT') {
+    if (!['SPOT_NEW_EXPOSURE', 'SPOT_USDM_NEW_EXPOSURE'].includes(projection.posture)) {
+      throw new TypeError('validated L05 projection does not prove the Spot account realm');
+    }
+    return Object.freeze({
+      projectionRevision: projection.projectionRevision,
+      reconciliationResultRevision: projection.reconciliationObservation.resultRevision,
+    });
+  }
   const positionModes = projection.sourceFacts.filter((fact) => (
     fact.product === 'USD_M_PERPETUAL' && fact.factKind === 'USDM_POSITION_MODE'
   ));
@@ -158,10 +188,6 @@ function validatePositionMode(
     return Array.isArray(rows) && rows.every((row) => row.positionSide === 'BOTH');
   });
   if (!['USDM_NEW_EXPOSURE', 'SPOT_USDM_NEW_EXPOSURE'].includes(projection.posture)
-    || projection.accountRealmId !== binding.entry.perpLeg.accountRealmId
-    || projection.targetSymbol !== binding.ownerPlan.symbol
-    || projection.evaluatedAtMs > atMs
-    || projection.validUntilMs === null || atMs >= projection.validUntilMs
     || projection.permissions.length !== 2
     || projection.permissions.some((decision) => (
       decision.usdmDualSidePosition !== false || decision.acceptableForOwnerReview !== true
@@ -178,7 +204,10 @@ function validatePositionMode(
     || !positionRowsExact) {
     throw new TypeError('validated L05 projection does not prove current one-way USD-M positionSide=BOTH');
   }
-  return projection.projectionRevision;
+  return Object.freeze({
+    projectionRevision: projection.projectionRevision,
+    reconciliationResultRevision: projection.reconciliationObservation.resultRevision,
+  });
 }
 
 function validateL06Alias(
@@ -186,7 +215,7 @@ function validateL06Alias(
   request: Readonly<NormalBasisFoundationLegRequestView>,
   fixture: Readonly<TwinOrderFixture>,
   product: 'SPOT' | 'USD_M_PERPETUAL',
-): void {
+): Readonly<NormalBasisMutationLineage> {
   const identity = fixture.l06Snapshot.identity;
   const policyLeg = expectedPolicyLeg(binding, request.leg.key);
   if (fixture.l06Boundary.state !== 'SYNTHETIC_OBSERVATION_ELIGIBLE'
@@ -205,6 +234,8 @@ function validateL06Alias(
     || identity.ticketId !== binding.ownerPlan.planId
     || identity.legId !== request.leg.legId
     || identity.clientOrderId !== request.leg.clientOrderId
+    || !Number.isSafeInteger(identity.requestSequence)
+    || identity.requestSequence <= 0
     || identity.attempt !== 0
     || identity.product !== product
     || identity.accountRealmId !== policyLeg.accountRealmId
@@ -219,6 +250,19 @@ function validateL06Alias(
     || fixture.l06Snapshot.bindings.riskVerdictRevision !== binding.entry.plan.riskVerdictRevision) {
     throw new TypeError('normal-Basis L06 mutation identity/evidence alias is not exact');
   }
+  const lineageMaterial = {
+    requestSequence: identity.requestSequence,
+    requestId: identity.requestId,
+    intentFingerprint: identity.intentFingerprint,
+    sanitizedRequestContentHash: fixture.l06Snapshot.bindings.sanitizedRequestContentHash,
+    privateProjectionRevision: fixture.l06Snapshot.bindings.privateProjectionRevision,
+    foundationReconciliationResultRevision:
+      fixture.l06Snapshot.bindings.foundationReconciliationResultRevision,
+  };
+  return Object.freeze({
+    ...lineageMaterial,
+    lineageRevision: revision('l09mutationlineage_', lineageMaterial),
+  });
 }
 
 function nonNegativeOwnerQuantity(value: number, label: string): string {
@@ -235,14 +279,11 @@ function nonNegativeOwnerQuantity(value: number, label: string): string {
 function ownerResidual(
   binding: Readonly<NormalBasisFoundationBinding>,
   request: Readonly<NormalBasisFoundationLegRequestView>,
-  state: Readonly<NormalBasisFoundationStateView> | null | undefined,
-): Readonly<{ quantity: string; stateRevision: string }> {
-  if (state === null || state === undefined
-    || canonicalJson(state.plan) !== canonicalJson(binding.ownerPlan)
-    || !['HEDGED_OPEN', 'ONE_LEG_EXPOSED', 'RECOVERY_REQUIRED', 'CLOSING'].includes(state.lifecycle)
-    || !Number.isSafeInteger(state.revision) || state.revision <= 0
-    || typeof state.stateRevisionId !== 'string' || !state.stateRevisionId.startsWith('rev_')) {
-    throw new TypeError('canonical Foundation state is required to size a close/recovery leg');
+  checkpoint: Readonly<HydratedNormalBasisOwnerCheckpoint>,
+): string {
+  const state = checkpoint.state;
+  if (!['HEDGED_OPEN', 'ONE_LEG_EXPOSED', 'RECOVERY_REQUIRED', 'CLOSING'].includes(state.lifecycle)) {
+    throw new TypeError('canonical Foundation checkpoint is not eligible to size a close/recovery leg');
   }
   for (const key of ['SPOT', 'PERP'] as const) {
     if (canonicalJson(state.openingLegs?.[key]?.definition)
@@ -274,69 +315,58 @@ function ownerResidual(
   );
   const quantity = subtractTwinDecimals(opened, closed);
   if (quantity === '0') throw new TypeError('Foundation residual is already flat');
-  return Object.freeze({ quantity, stateRevision: state.stateRevisionId });
+  return quantity;
 }
 
-function expectedQuantity(input: RunNormalBasisTwinLegInput): Readonly<{
-  quantity: string;
-  ownerStateRevision: string | null;
-  priorObservationRevision: string | null;
-}> {
+function validateSubmissionCheckpoint(
+  input: Readonly<RunNormalBasisTwinLegInput>,
+  checkpoint: Readonly<HydratedNormalBasisOwnerCheckpoint>,
+): void {
+  const terms = stageTerms(input.stage);
+  const state = checkpoint.state;
+  const leg = terms.phase === 'OPEN'
+    ? state.openingLegs[terms.key] : state.closingLegs[terms.key];
+  const lastEvent = state.eventLog.at(-1);
+  if (leg.lifecycle !== 'SUBMITTING'
+    || leg.submittedQuantity !== input.ownerRequest.leg.quantity
+    || lastEvent?.type !== 'LEG_SUBMISSION_STARTED'
+    || lastEvent.phase !== terms.phase
+    || lastEvent.legKey !== terms.key
+    || lastEvent.submittedQuantity !== input.ownerRequest.leg.quantity) {
+    throw new TypeError('Foundation checkpoint does not prove this exact leg submission cut');
+  }
+}
+
+function expectedQuantity(
+  input: Readonly<RunNormalBasisTwinLegInput>,
+  checkpoint: Readonly<HydratedNormalBasisOwnerCheckpoint>,
+): string {
   const requestQuantity = exactNumber(input.ownerRequest.leg.quantity);
+  validateSubmissionCheckpoint(input, checkpoint);
   if (input.stage === 'ENTRY_SPOT') {
     if (requestQuantity !== input.binding.entry.spotAction.quantity) {
       throw new TypeError('Spot entry quantity changed after accepted policy');
     }
-    if (input.ownerState !== null && input.ownerState !== undefined
-      || input.priorSpotObservation !== null && input.priorSpotObservation !== undefined) {
-      throw new TypeError('Spot entry must not carry residual or prior-fill evidence');
-    }
-    return Object.freeze({
-      quantity: requestQuantity,
-      ownerStateRevision: null,
-      priorObservationRevision: null,
-    });
+    return requestQuantity;
   }
   if (input.stage === 'ENTRY_HEDGE') {
-    const spot = input.priorSpotObservation === null || input.priorSpotObservation === undefined
-      ? null : validateNormalBasisTwinLegObservation(
-        input.priorSpotObservation,
-        input.binding,
-      );
-    if (spot?.foundationBindingRevision !== input.binding.foundationBindingRevision
-      || spot.stage !== 'ENTRY_SPOT'
-      || spot.policyPlanId !== input.binding.entry.plan.planId
-      || spot.foundationPlanId !== input.binding.ownerPlan.planId
-      || spot.policyLegId !== input.binding.entry.spotLeg.legId
-      || spot.foundationLegId !== input.binding.ownerPlan.openingLegs.SPOT.legId
-      || spot.deterministicClientOrderId !== input.binding.ownerPlan.openingLegs.SPOT.clientOrderId
-      || spot.product !== 'SPOT' || spot.side !== 'BUY' || spot.reduceOnly !== false
-      || !['PARTIALLY_FILLED', 'FILLED'].includes(spot.localDisposition)
-      || compareTwinDecimals(spot.confirmedFilledQuantity, '0') <= 0
-      || requestQuantity !== spot.confirmedFilledQuantity) {
-      throw new TypeError('USD-M hedge quantity must equal confirmed Spot fill');
+    const spot = checkpoint.state.openingLegs.SPOT;
+    const filled = nonNegativeOwnerQuantity(
+      spot.cumulativeFilledQuantity,
+      'Foundation terminal Spot opening fill',
+    );
+    if (!['FILLED', 'CANCELLED'].includes(spot.lifecycle)
+      || compareTwinDecimals(filled, '0') <= 0
+      || requestQuantity !== filled) {
+      throw new TypeError('USD-M hedge quantity must equal terminal owner-checkpoint Spot fill');
     }
-    if (input.ownerState !== null && input.ownerState !== undefined) {
-      throw new TypeError('entry hedge must not carry close residual evidence');
-    }
-    return Object.freeze({
-      quantity: requestQuantity,
-      ownerStateRevision: null,
-      priorObservationRevision: spot.observationRevision,
-    });
+    return requestQuantity;
   }
-  if (input.priorSpotObservation !== null && input.priorSpotObservation !== undefined) {
-    throw new TypeError('close/recovery leg must use canonical owner residual state');
-  }
-  const residual = ownerResidual(input.binding, input.ownerRequest, input.ownerState);
-  if (residual.quantity !== requestQuantity) {
+  const residual = ownerResidual(input.binding, input.ownerRequest, checkpoint);
+  if (residual !== requestQuantity) {
     throw new TypeError('close/recovery quantity must equal confirmed residual owner truth');
   }
-  return Object.freeze({
-    quantity: requestQuantity,
-    ownerStateRevision: residual.stateRevision,
-    priorObservationRevision: null,
-  });
+  return requestQuantity;
 }
 
 function validateScenario(
@@ -421,6 +451,7 @@ function classify(order: Readonly<TwinOrderState>, orderingAmbiguous: boolean): 
 export function validateNormalBasisTwinLegObservation(
   value: Readonly<NormalBasisTwinLegObservation>,
   bindingValue: Readonly<NormalBasisFoundationBinding>,
+  checkpointHydrator: Readonly<RunNormalBasisTwinLegInput['ownerCheckpointHydrator']>,
 ): Readonly<NormalBasisTwinLegObservation> {
   const binding = validateNormalBasisFoundationBinding(bindingValue);
   if (value?.schema !== NORMAL_BASIS_TWIN_OBSERVATION_SCHEMA
@@ -477,58 +508,39 @@ export function validateNormalBasisTwinLegObservation(
     stage: value.stage,
     ownerRequest,
     scenario: retainedScenario,
-    priorSpotObservation: value.priorSpotObservationEvidence,
-    ownerState: value.ownerStateEvidence,
-    positionModeEvidence: value.positionModeEvidence,
+    ownerCheckpoint: value.ownerCheckpoint,
+    ownerCheckpointHydrator: checkpointHydrator,
+    privateTruthEvidence: value.positionModeEvidence,
   });
+  const checkpoint = hydrateNormalBasisOwnerCheckpoint(
+    binding,
+    value.ownerCheckpoint,
+    checkpointHydrator,
+  );
+  if (expectedQuantity(retainedInput, checkpoint) !== requestedQuantity) {
+    throw new TypeError('retained Foundation checkpoint sizes a different leg quantity');
+  }
   validateScenario(retainedInput, order.fixture, requestedQuantity);
-  validateL06Alias(binding, ownerRequest, order.fixture, terms.product);
+  const mutationLineage = validateL06Alias(binding, ownerRequest, order.fixture, terms.product);
   validateSpotOwnerEvidence(restored, order.fixture, binding, value.stage);
   if (value.stage === 'ENTRY_SPOT'
     && requestedQuantity !== binding.entry.spotAction.quantity) {
     throw new TypeError('retained Spot entry quantity changed after accepted policy');
   }
 
-  let expectedPositionModeRevision: string | null = null;
-  if (terms.product === 'USD_M_PERPETUAL') {
-    if (order.venueArrivalAtMs === null) {
-      throw new TypeError('USD-M observation omitted its venue-arrival time');
-    }
-    expectedPositionModeRevision = validatePositionMode(
-      value.positionModeEvidence,
-      binding,
-      order.venueArrivalAtMs,
-    );
-  } else if (value.positionModeEvidence !== null) {
-    throw new TypeError('Spot observation must not retain USD-M position-mode evidence');
+  if (order.venueArrivalAtMs === null) {
+    throw new TypeError('normal-Basis observation omitted its venue-arrival time');
   }
-
-  let expectedPriorObservationRevision: string | null = null;
-  if (value.stage === 'ENTRY_HEDGE') {
-    const priorValue = value.priorSpotObservationEvidence;
-    if (priorValue === null || priorValue.stage !== 'ENTRY_SPOT') {
-      throw new TypeError('hedge observation omitted its exact prior Spot-fill evidence');
-    }
-    const prior = validateNormalBasisTwinLegObservation(priorValue, binding);
-    if (!['PARTIALLY_FILLED', 'FILLED'].includes(prior.localDisposition)
-      || compareTwinDecimals(prior.confirmedFilledQuantity, '0') <= 0
-      || prior.confirmedFilledQuantity !== requestedQuantity) {
-      throw new TypeError('hedge observation is not sized by its retained prior Spot fill');
-    }
-    expectedPriorObservationRevision = prior.observationRevision;
-  } else if (value.priorSpotObservationEvidence !== null) {
-    throw new TypeError('only the hedge may retain prior Spot-fill evidence');
-  }
-
-  let expectedOwnerStateRevision: string | null = null;
-  if (value.stage.startsWith('EXIT_') || value.stage.startsWith('RECOVERY_CLOSE_')) {
-    const ownerEvidence = ownerResidual(binding, ownerRequest, value.ownerStateEvidence);
-    if (ownerEvidence.quantity !== requestedQuantity) {
-      throw new TypeError('close observation differs from retained Foundation residual truth');
-    }
-    expectedOwnerStateRevision = ownerEvidence.stateRevision;
-  } else if (value.ownerStateEvidence !== null) {
-    throw new TypeError('entry observation must not retain close residual evidence');
+  const privateTruth = validatePrivateTruthEvidence(
+    value.positionModeEvidence,
+    binding,
+    terms.product,
+    order.venueArrivalAtMs,
+  );
+  if (mutationLineage.privateProjectionRevision !== privateTruth.projectionRevision
+    || mutationLineage.foundationReconciliationResultRevision
+      !== privateTruth.reconciliationResultRevision) {
+    throw new TypeError('normal-Basis L06 mutation does not bind the retained L05 owner cut');
   }
 
   const localDisposition = classify(order, restored.orderingTruth === 'AMBIGUOUS');
@@ -546,15 +558,21 @@ export function validateNormalBasisTwinLegObservation(
     || value.foundationLegId !== ownerLeg.legId
     || value.foundationLegId !== order.fixture.l06Snapshot.identity.legId
     || value.l06MutationId !== order.fixture.l06Snapshot.mutationId
+    || canonicalJson(value.mutationLineage) !== canonicalJson(mutationLineage)
     || value.deterministicClientOrderId !== ownerLeg.clientOrderId
     || value.deterministicClientOrderId !== order.fixture.l06Snapshot.identity.clientOrderId
     || value.product !== terms.product || value.product !== order.fixture.product
     || value.side !== terms.side || value.side !== order.fixture.side
     || value.reduceOnly !== terms.reduceOnly
     || value.positionSide !== (terms.product === 'USD_M_PERPETUAL' ? 'BOTH' : null)
-    || value.positionModeProjectionRevision !== expectedPositionModeRevision
-    || value.priorObservationRevision !== expectedPriorObservationRevision
-    || value.ownerStateRevision !== expectedOwnerStateRevision
+    || value.positionModeProjectionRevision !== privateTruth.projectionRevision
+    || canonicalJson(value.positionModeEvidence) !== canonicalJson(retainedInput.privateTruthEvidence)
+    || value.ownerCheckpoint !== checkpoint.serialized
+    || value.ownerCheckpointChecksum !== checkpoint.checksum
+    || value.ownerCheckpointRevision !== checkpoint.checkpointRevision
+    || value.ownerStateRevision !== checkpoint.state.stateRevisionId
+    || value.ownerStateLifecycle !== checkpoint.state.lifecycle
+    || value.ownerStateLastSequence !== checkpoint.state.lastSequence
     || value.requestedQuantity !== order.fixture.quantity
     || value.venueFilledQuantity !== order.filledQuantity
     || value.confirmedFilledQuantity !== confirmedFilledQuantity
@@ -591,19 +609,33 @@ export function runNormalBasisTwinLeg(
   const binding = validateNormalBasisFoundationBinding(input.binding);
   validateOwnerRequest(binding, input.stage, input.ownerRequest);
   const terms = stageTerms(input.stage);
-  const quantityEvidence = expectedQuantity(input);
-  const quantity = quantityEvidence.quantity;
+  const checkpoint = hydrateNormalBasisOwnerCheckpoint(
+    binding,
+    input.ownerCheckpoint,
+    input.ownerCheckpointHydrator,
+  );
+  const quantity = expectedQuantity(input, checkpoint);
   const atMs = venueArrivalTime(input);
-  let positionModeProjectionRevision: string | null = null;
-  if (terms.product === 'USD_M_PERPETUAL') {
-    positionModeProjectionRevision = validatePositionMode(input.positionModeEvidence, binding, atMs);
-  } else if (input.positionModeEvidence !== null && input.positionModeEvidence !== undefined) {
-    throw new TypeError('Spot leg must not carry USD-M position-mode evidence');
-  }
+  const privateTruth = validatePrivateTruthEvidence(
+    input.privateTruthEvidence,
+    binding,
+    terms.product,
+    atMs,
+  );
   const fixture = input.scenario.fixtures[0];
   if (fixture === undefined) throw new TypeError('normal-Basis scenario fixture is missing');
   validateScenario(input, fixture, quantity);
-  validateL06Alias(binding, input.ownerRequest, fixture, terms.product);
+  const mutationLineage = validateL06Alias(
+    binding,
+    input.ownerRequest,
+    fixture,
+    terms.product,
+  );
+  if (mutationLineage.privateProjectionRevision !== privateTruth.projectionRevision
+    || mutationLineage.foundationReconciliationResultRevision
+      !== privateTruth.reconciliationResultRevision) {
+    throw new TypeError('normal-Basis L06 mutation does not bind the supplied L05 owner cut');
+  }
   const state = runExchangeTwinScenario(input.scenario);
   const order = state.orders.find((candidate) => candidate.fixture.fixtureId === fixture.fixtureId);
   if (order === undefined) throw new TypeError('normal-Basis twin result omitted its exact fixture');
@@ -623,18 +655,21 @@ export function runNormalBasisTwinLeg(
     policyLegId: alias.policyLegId,
     foundationLegId: input.ownerRequest.leg.legId,
     l06MutationId: fixture.l06Snapshot.mutationId,
+    mutationLineage,
     twinFixtureId: fixture.fixtureId,
     deterministicClientOrderId: input.ownerRequest.leg.clientOrderId,
     product: terms.product,
     side: terms.side,
     reduceOnly: terms.reduceOnly,
     positionSide: terms.product === 'USD_M_PERPETUAL' ? ('BOTH' as const) : null,
-    positionModeProjectionRevision,
-    positionModeEvidence: input.positionModeEvidence ?? null,
-    ownerStateRevision: quantityEvidence.ownerStateRevision,
-    ownerStateEvidence: input.ownerState ?? null,
-    priorObservationRevision: quantityEvidence.priorObservationRevision,
-    priorSpotObservationEvidence: input.priorSpotObservation ?? null,
+    positionModeProjectionRevision: privateTruth.projectionRevision,
+    positionModeEvidence: input.privateTruthEvidence,
+    ownerCheckpoint: checkpoint.serialized,
+    ownerCheckpointChecksum: checkpoint.checksum,
+    ownerCheckpointRevision: checkpoint.checkpointRevision,
+    ownerStateRevision: checkpoint.state.stateRevisionId,
+    ownerStateLifecycle: checkpoint.state.lifecycle,
+    ownerStateLastSequence: checkpoint.state.lastSequence,
     requestedQuantity: quantity,
     venueFilledQuantity: order.filledQuantity,
     confirmedFilledQuantity,
@@ -659,7 +694,7 @@ export function runNormalBasisTwinLeg(
     actionAuthority: 'NONE_RECORD_ONLY' as const,
     externalActionAuthorization: 'NONE' as const,
   };
-  return Object.freeze({
+  return cloneFreezeNormalBasis({
     schema: NORMAL_BASIS_TWIN_OBSERVATION_SCHEMA,
     ...material,
     observationRevision: revision('l09observation_', material),

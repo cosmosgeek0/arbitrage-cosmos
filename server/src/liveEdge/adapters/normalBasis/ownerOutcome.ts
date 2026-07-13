@@ -5,6 +5,7 @@ import {
 import {
   NORMAL_BASIS_TWIN_OBSERVATION_SCHEMA,
   type NormalBasisFoundationBinding,
+  type NormalBasisFoundationCheckpointHydrator,
   type NormalBasisOwnerLegOutcomeView,
   type NormalBasisTwinLegObservation,
 } from './types.js';
@@ -54,6 +55,7 @@ function failure(
 export function projectNormalBasisOwnerLegOutcome(
   value: Readonly<NormalBasisTwinLegObservation>,
   binding: Readonly<NormalBasisFoundationBinding>,
+  checkpointHydrator: Readonly<NormalBasisFoundationCheckpointHydrator>,
 ): Readonly<NormalBasisOwnerLegOutcomeView> {
   if (value?.schema !== NORMAL_BASIS_TWIN_OBSERVATION_SCHEMA
     || value.sendEligible !== false
@@ -62,7 +64,11 @@ export function projectNormalBasisOwnerLegOutcome(
     || value.simulationAuthority !== 'SYNTHETIC_FIXTURE') {
     throw new TypeError('normal-Basis observation authority is not exact');
   }
-  const observation = validateNormalBasisTwinLegObservation(value, binding);
+  const observation = validateNormalBasisTwinLegObservation(
+    value,
+    binding,
+    checkpointHydrator,
+  );
   if (observation.localDisposition === 'AMBIGUOUS') return failure('AMBIGUOUS', observation);
   if (observation.localDisposition === 'REJECTED'
     || observation.localDisposition === 'TERMINAL_NO_FILL') {

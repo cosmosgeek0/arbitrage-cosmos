@@ -177,20 +177,59 @@ export interface NormalBasisPositionModeEvidence {
 
 export interface NormalBasisFoundationLegStateView {
   readonly definition: Readonly<NormalBasisFoundationLegView>;
+  readonly lifecycle:
+    | 'PLANNED'
+    | 'VALIDATED'
+    | 'SUBMITTING'
+    | 'ACKNOWLEDGED'
+    | 'PARTIALLY_FILLED'
+    | 'FILLED'
+    | 'CANCEL_PENDING'
+    | 'CANCELLED'
+    | 'REJECTED'
+    | 'AMBIGUOUS';
+  readonly submittedQuantity: number;
   readonly cumulativeFilledQuantity: number;
+  readonly venueOrderId: string | null;
 }
 
-/** Structural view of canonical Foundation state used to prove close residuals. */
+/**
+ * Structural, data-only result returned by the injected canonical Foundation
+ * checkpoint hydrator. LiveEdge cannot import the execution owner directly.
+ */
 export interface NormalBasisFoundationStateView {
   readonly plan: Readonly<NormalBasisFoundationPlanView>;
   readonly lifecycle:
+    | 'CREATED'
+    | 'AWAITING_APPROVAL'
+    | 'PREFLIGHTING'
+    | 'READY'
+    | 'OPENING'
     | 'HEDGED_OPEN'
     | 'ONE_LEG_EXPOSED'
     | 'RECOVERY_REQUIRED'
+    | 'CLOSE_REQUESTED'
     | 'CLOSING'
-    | 'CLOSED';
+    | 'RECONCILING'
+    | 'CLOSED'
+    | 'FAILED'
+    | 'CANCELLED'
+    | 'EXPIRED';
   readonly revision: number;
   readonly stateRevisionId: string;
+  readonly lastSequence: number;
+  readonly createdAtMs: number;
+  readonly updatedAtMs: number;
+  readonly eventLog: readonly Readonly<{
+    readonly eventId: string;
+    readonly planId: string;
+    readonly sequence: number;
+    readonly occurredAtMs: number;
+    readonly type: string;
+    readonly phase?: NormalBasisFoundationLegPhase;
+    readonly legKey?: NormalBasisFoundationLegKey;
+    readonly submittedQuantity?: number;
+  }>[];
   readonly openingLegs: Readonly<Record<
     NormalBasisFoundationLegKey,
     Readonly<NormalBasisFoundationLegStateView>
@@ -199,6 +238,34 @@ export interface NormalBasisFoundationStateView {
     NormalBasisFoundationLegKey,
     Readonly<NormalBasisFoundationLegStateView>
   >>;
+}
+
+export type NormalBasisFoundationCheckpointRestoreView =
+  | {
+      readonly ok: true;
+      readonly state: Readonly<NormalBasisFoundationStateView>;
+    }
+  | {
+      readonly ok: false;
+      readonly code: string;
+      readonly message: string;
+    };
+
+/** Narrow dependency injection seam implemented by canonical Foundation. */
+export interface NormalBasisFoundationCheckpointHydrator {
+  hydrateExecutionCheckpoint(
+    serializedCheckpoint: string,
+  ): NormalBasisFoundationCheckpointRestoreView;
+}
+
+export interface NormalBasisMutationLineage {
+  readonly requestSequence: number;
+  readonly requestId: string;
+  readonly intentFingerprint: string;
+  readonly sanitizedRequestContentHash: string;
+  readonly privateProjectionRevision: string;
+  readonly foundationReconciliationResultRevision: string;
+  readonly lineageRevision: string;
 }
 
 export type NormalBasisLocalDisposition =
@@ -218,18 +285,21 @@ export interface NormalBasisTwinLegObservation {
   readonly policyLegId: string;
   readonly foundationLegId: string;
   readonly l06MutationId: string;
+  readonly mutationLineage: Readonly<NormalBasisMutationLineage>;
   readonly twinFixtureId: string;
   readonly deterministicClientOrderId: string;
   readonly product: 'SPOT' | 'USD_M_PERPETUAL';
   readonly side: 'BUY' | 'SELL';
   readonly reduceOnly: boolean;
   readonly positionSide: 'BOTH' | null;
-  readonly positionModeProjectionRevision: string | null;
-  readonly positionModeEvidence: Readonly<NormalBasisPositionModeEvidence> | null;
-  readonly ownerStateRevision: string | null;
-  readonly ownerStateEvidence: Readonly<NormalBasisFoundationStateView> | null;
-  readonly priorObservationRevision: string | null;
-  readonly priorSpotObservationEvidence: Readonly<NormalBasisTwinLegObservation> | null;
+  readonly positionModeProjectionRevision: string;
+  readonly positionModeEvidence: Readonly<NormalBasisPositionModeEvidence>;
+  readonly ownerCheckpoint: string;
+  readonly ownerCheckpointChecksum: string;
+  readonly ownerCheckpointRevision: string;
+  readonly ownerStateRevision: string;
+  readonly ownerStateLifecycle: NormalBasisFoundationStateView['lifecycle'];
+  readonly ownerStateLastSequence: number;
   readonly requestedQuantity: string;
   readonly venueFilledQuantity: string;
   readonly confirmedFilledQuantity: string;
@@ -260,9 +330,9 @@ export interface RunNormalBasisTwinLegInput {
   readonly stage: NormalBasisTwinStage;
   readonly ownerRequest: Readonly<NormalBasisFoundationLegRequestView>;
   readonly scenario: Readonly<TwinScenarioInput>;
-  readonly priorSpotObservation?: Readonly<NormalBasisTwinLegObservation> | null;
-  readonly ownerState?: Readonly<NormalBasisFoundationStateView> | null;
-  readonly positionModeEvidence?: Readonly<NormalBasisPositionModeEvidence> | null;
+  readonly ownerCheckpoint: string;
+  readonly ownerCheckpointHydrator: Readonly<NormalBasisFoundationCheckpointHydrator>;
+  readonly privateTruthEvidence: Readonly<NormalBasisPositionModeEvidence>;
 }
 
 /** Structural output accepted by the dormant Foundation PAPER port. */
@@ -293,6 +363,13 @@ export type NormalBasisCanonicalOutcome =
   | 'RECOVERY_REQUIRED';
 
 export interface NormalBasisRecoveryRecommendationView {
+  readonly planId: string;
+  readonly correlationId: string;
+  readonly ownerCheckpointChecksum: string;
+  readonly ownerRevision: number;
+  readonly ownerStateRevision: string;
+  readonly reconciliationEvidenceRevision: string;
+  readonly evaluatedAtMs: number;
   readonly action:
     | 'VERIFY_AMBIGUOUS_ORDER'
     | 'HEDGE_RESIDUAL'
@@ -301,20 +378,137 @@ export interface NormalBasisRecoveryRecommendationView {
     | 'MANUAL_REVIEW'
     | 'NO_ACTION';
   readonly riskEffect: 'RISK_INCREASING' | 'RISK_REDUCING' | 'NEUTRAL';
+  readonly reason: string;
+  readonly phase: NormalBasisFoundationLegPhase | null;
+  readonly legKey: NormalBasisFoundationLegKey | null;
+  readonly legId: string | null;
+  readonly clientOrderId: string | null;
   readonly automatic: false;
+  readonly recommendationRevision: string;
+}
+
+export interface NormalBasisFoundationRecoveryRecommendationView {
+  readonly action: NormalBasisRecoveryRecommendationView['action'];
+  readonly riskEffect: NormalBasisRecoveryRecommendationView['riskEffect'];
+  readonly reason: string;
+  readonly phase: NormalBasisFoundationLegPhase | null;
+  readonly legKey: NormalBasisFoundationLegKey | null;
+  readonly clientOrderId: string | null;
+  readonly automatic: false;
+}
+
+export interface NormalBasisFoundationRecoveryProvider {
+  recommendExecutionRecovery(
+    state: Readonly<NormalBasisFoundationStateView>,
+    evaluatedAtMs: number,
+  ): readonly Readonly<NormalBasisFoundationRecoveryRecommendationView>[];
+}
+
+export interface NormalBasisFoundationReconciledLegView {
+  readonly phase: NormalBasisFoundationLegPhase;
+  readonly legKey: NormalBasisFoundationLegKey;
+  readonly clientOrderId: string;
+  readonly venueOrderId: string | null;
+  readonly expectedLifecycle: string;
+  readonly expectedSubmittedQuantity: number;
+  readonly expectedFilledQuantity: number;
+  readonly observedOrderStatus:
+    | 'NEW'
+    | 'PARTIALLY_FILLED'
+    | 'FILLED'
+    | 'CANCELED'
+    | 'REJECTED'
+    | 'EXPIRED'
+    | 'UNKNOWN'
+    | null;
+  readonly observedOrderFilledQuantity: number | null;
+  readonly observedTradeFilledQuantity: number | null;
+  readonly observedFilledQuantity: number | null;
+  readonly observedRemainderQuantity: number | null;
+  readonly status: string;
+  readonly reasonCodes: readonly string[];
+}
+
+export interface NormalBasisFoundationReconciliationSourceView {
+  readonly sourceId: string;
+  readonly sourceTimeMs: number | null;
+  readonly receivedAtMs: number;
+  readonly maxAgeMs: number;
+  readonly freshness: string;
+  readonly authority: string;
+  readonly completeness: string;
+  readonly coverageStartMs: number | null;
+  readonly coverageEndMs: number | null;
+  readonly status: string;
+  readonly reasonCodes: readonly string[];
+}
+
+/** Full data-only view of canonical Foundation reconciliation output. */
+export interface NormalBasisFoundationReconciliationView {
+  readonly planId: string;
+  readonly correlationId: string;
+  readonly evaluatedAtMs: number;
+  readonly status: string;
+  readonly recommendation: string;
+  readonly executionAuthority: 'NONE';
+  readonly reasons: readonly Readonly<{
+    readonly code: string;
+    readonly status: string;
+    readonly detail: string;
+    readonly evidenceKind: string | null;
+    readonly phase: NormalBasisFoundationLegPhase | null;
+    readonly legKey: NormalBasisFoundationLegKey | null;
+  }>[];
+  readonly legs: readonly Readonly<NormalBasisFoundationReconciledLegView>[];
+  readonly positions: readonly Readonly<{
+    readonly venue: string;
+    readonly expectedDeltaQuantity: number;
+    readonly observedDeltaQuantity: number | null;
+    readonly differenceQuantity: number | null;
+    readonly status: string;
+    readonly reasonCodes: readonly string[];
+  }>[];
+  readonly sources: Readonly<{
+    readonly orders: Readonly<NormalBasisFoundationReconciliationSourceView>;
+    readonly fills: Readonly<NormalBasisFoundationReconciliationSourceView>;
+    readonly positions: Readonly<NormalBasisFoundationReconciliationSourceView>;
+  }>;
+  readonly normalization: Readonly<{
+    readonly exactDuplicateOrdersDropped: number;
+    readonly exactDuplicateFillsDropped: number;
+    readonly exactDuplicatePositionsDropped: number;
+    readonly outOfOrderFillPairs: number;
+  }>;
+}
+
+/** Narrow injected call-through to the canonical Foundation reconciler. */
+export interface NormalBasisFoundationReconciliationProvider {
+  reconcileExecutionState(
+    state: Readonly<NormalBasisFoundationStateView>,
+    evaluatedAtMs: number,
+  ): Readonly<NormalBasisFoundationReconciliationView>;
 }
 
 export interface EvaluateNormalBasisOwnerAgreementInput {
   readonly foundationBinding: Readonly<NormalBasisFoundationBinding>;
-  readonly ownerState: Readonly<NormalBasisFoundationStateView>;
+  readonly ownerCheckpoint: string;
+  readonly ownerCheckpointHydrator: Readonly<NormalBasisFoundationCheckpointHydrator>;
+  readonly ownerReconciliationProvider: Readonly<NormalBasisFoundationReconciliationProvider>;
+  readonly ownerReconciliationEvaluatedAtMs: number;
+  readonly recoveryProvider: Readonly<NormalBasisFoundationRecoveryProvider>;
+  readonly recoveryEvaluatedAtMs: number;
   readonly observations: readonly Readonly<NormalBasisTwinLegObservation>[];
-  readonly recoveryRecommendations: readonly Readonly<NormalBasisRecoveryRecommendationView>[];
 }
 
 export interface NormalBasisOwnerAgreement {
   readonly schema: typeof NORMAL_BASIS_OWNER_AGREEMENT_SCHEMA;
   readonly foundationBindingRevision: string;
+  readonly ownerCheckpointChecksum: string;
+  readonly ownerCheckpointRevision: string;
   readonly ownerStateRevision: string;
+  readonly reconciliationEvidenceRevision: string;
+  readonly reconciliationStatus: string;
+  readonly ownerReconciliationEvidence: Readonly<NormalBasisFoundationReconciliationView>;
   readonly canonicalOutcome: NormalBasisCanonicalOutcome;
   readonly state: 'PASS' | 'MANUAL_ACTION_REQUIRED' | 'BLOCKED';
   readonly reasonCodes: readonly string[];

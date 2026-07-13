@@ -4,12 +4,13 @@ import test from 'node:test';
 import {
   createExecutionCoordinator,
   recommendExecutionRecovery,
+  replayExecutionEvents,
+  restoreExecutionCheckpoint,
   restoreExecutionCoordinator,
 } from '../../../dist/foundation/execution/index.js';
 import {
-  checkpointExchangeTwin,
-  restoreExchangeTwin,
-} from '../../../dist/liveEdge/adapters/exchangeTwin/index.js';
+  reconcileExecutionState,
+} from '../../../dist/foundation/reconciliation/index.js';
 import {
   evaluateNormalBasisOwnerAgreement,
   projectNormalBasisOwnerLegOutcome,
@@ -19,35 +20,59 @@ import {
   event,
 } from '../exchangeTwin/fixtures.mjs';
 import {
-  buildNormalBasisL05Projection,
-} from './l05-fixture.mjs';
-import {
   ManualClock,
-  VENUE_ARRIVAL_MS,
   failure,
   makeNormalBasisBinding,
   makeTwinLegObservation,
 } from './fixtures.mjs';
 
-function recommendations(state, atMs) {
-  return recommendExecutionRecovery(state, atMs).map((item) => ({
-    action: item.action,
-    riskEffect: item.riskEffect,
-    automatic: item.automatic,
-  }));
+const RECONCILIATION_POLICY = Object.freeze({
+  quantityTolerance: 1e-9,
+  normalizedHedgeTolerance: 1e-9,
+});
+
+const OWNER_CHECKPOINT_HYDRATOR = Object.freeze({
+  hydrateExecutionCheckpoint(serializedCheckpoint) {
+    return restoreExecutionCheckpoint(serializedCheckpoint);
+  },
+});
+
+const OWNER_RECOVERY_PROVIDER = Object.freeze({
+  recommendExecutionRecovery(state, evaluatedAtMs) {
+    return recommendExecutionRecovery(state, evaluatedAtMs);
+  },
+});
+
+function ownerOrderStatus(observation) {
+  if (observation.venueStatus === 'BLOCKED') return 'REJECTED';
+  if (observation.localTruth !== 'OBSERVED') return 'UNKNOWN';
+  if (observation.venueStatus === 'CANCELED') return 'CANCELED';
+  if (observation.venueStatus === 'EXPIRED') return 'EXPIRED';
+  if (observation.venueStatus === 'FILLED') return 'FILLED';
+  if (observation.venueStatus === 'PARTIALLY_FILLED') return 'PARTIALLY_FILLED';
+  return 'NEW';
+}
+
+function foundationLookupStatus(status) {
+  if (status === 'ACKNOWLEDGED') return 'NEW';
+  if (status === 'CANCELLED') return 'CANCELED';
+  return status;
 }
 
 class TwinBackedFoundationPorts {
-  constructor(binding, modeProjection, modes = {}) {
+  constructor(binding, clock, ownerProof, modes = {}) {
     this.binding = binding;
-    this.modeProjection = modeProjection;
+    this.clock = clock;
+    this.ownerProof = ownerProof;
     this.modes = new Map(Object.entries(modes));
     this.identityClaims = new Map();
     this.calls = [];
     this.observations = [];
     this.lookups = new Map();
-    this.reconciliations = [];
     this.artifacts = new Map();
+    this.ownerOrders = new Map();
+    this.lastOwnerReconciliation = null;
+    this.lastReconciliationOutcome = null;
     this.coordinator = null;
     this.recoveryMode = false;
   }
@@ -65,11 +90,43 @@ class TwinBackedFoundationPorts {
 
   async preflight(plan) {
     this.calls.push({ method: 'preflight', planId: plan.planId });
+    assert.equal(plan.planId, this.binding.ownerPlan.planId);
+    assert.equal(plan.correlationId, this.binding.ownerPlan.correlationId);
+    assert.equal(plan.termsFingerprint, this.binding.ownerPlan.termsFingerprint);
+    assert.equal(this.ownerProof.riskInput.intent.planId, plan.planId);
+    assert.equal(
+      this.ownerProof.riskInput.intent.proposalRef,
+      plan.proposal.canonicalProposalId,
+    );
+    assert.equal(this.ownerProof.riskVerdict.allowed, true);
+    assert.deepEqual(this.ownerProof.riskVerdict.blockingCodes, []);
+    assert.equal(
+      this.ownerProof.riskVerdict.evaluatedAt,
+      this.ownerProof.riskInput.nowMs,
+    );
+    assert.ok(this.ownerProof.riskVerdict.expiresAt > this.clock.nowMs());
+    assert.ok(this.ownerProof.riskVerdict.checks.some((check) => (
+      check.code === 'APPROVAL_PRESENT'
+        && check.status === 'PASS'
+        && check.observed === plan.planId
+    )));
     return { ok: true };
   }
 
   async validateLeg(request) {
     this.calls.push({ method: 'validateLeg', request });
+    const expected = request.phase === 'OPEN'
+      ? this.binding.ownerPlan.openingLegs[request.leg.key]
+      : this.binding.ownerPlan.closingLegs[request.leg.key];
+    assert.equal(request.planId, this.binding.ownerPlan.planId);
+    assert.equal(request.correlationId, this.binding.ownerPlan.correlationId);
+    assert.equal(request.leg.legId, expected.legId);
+    assert.equal(request.leg.clientOrderId, expected.clientOrderId);
+    assert.equal(request.leg.venue, expected.venue);
+    assert.equal(request.leg.side, expected.side);
+    assert.equal(request.leg.reduceOnly, expected.reduceOnly);
+    assert.ok(request.leg.quantity > 0 && request.leg.quantity <= expected.quantity);
+    assert.equal(this.ownerProof.riskVerdict.allowed, true);
     return { ok: true };
   }
 
@@ -86,17 +143,13 @@ class TwinBackedFoundationPorts {
     assert.ok(this.coordinator, 'Foundation coordinator must be attached before use');
     const stage = this.stage(request);
     const mode = this.modes.get(`${request.phase}:${request.leg.key}`) ?? {};
-    const priorSpotObservation = stage === 'ENTRY_HEDGE'
-      ? this.observations.find((item) => item.stage === 'ENTRY_SPOT') ?? null
-      : null;
-    const ownerState = request.phase === 'CLOSE' ? this.coordinator.snapshot() : null;
+    const ownerCheckpoint = this.coordinator.checkpoint();
     const artifact = makeTwinLegObservation({
       binding: this.binding,
       ownerRequest: request,
       stage,
-      priorSpotObservation,
-      ownerState,
-      modeProjection: this.modeProjection,
+      ownerCheckpoint,
+      ownerCheckpointHydrator: OWNER_CHECKPOINT_HYDRATOR,
       localMode: mode.localMode ?? 'OBSERVED',
       fillQuantity: mode.fillQuantity,
     });
@@ -107,7 +160,12 @@ class TwinBackedFoundationPorts {
       stage,
     });
     this.observations.push(observation);
-    return projectNormalBasisOwnerLegOutcome(observation, this.binding);
+    this.recordObservation(request, observation);
+    return projectNormalBasisOwnerLegOutcome(
+      observation,
+      this.binding,
+      OWNER_CHECKPOINT_HYDRATOR,
+    );
   }
 
   queueLookup(key, ...outcomes) {
@@ -115,9 +173,155 @@ class TwinBackedFoundationPorts {
     return this;
   }
 
-  queueReconciliation(...outcomes) {
-    this.reconciliations.push(...outcomes);
-    return this;
+  recordObservation(request, observation) {
+    const status = ownerOrderStatus(observation);
+    const cumulativeFilledQuantity = observation.localTruth === 'OBSERVED'
+      ? Number(observation.confirmedFilledQuantity) : 0;
+    this.ownerOrders.set(request.leg.clientOrderId, {
+      request,
+      status,
+      cumulativeFilledQuantity,
+      venueOrderId: `twin-order-${observation.twinFixtureId}`,
+      updatedAtMs: observation.order.lastLocalObservationAtMs
+        ?? observation.order.lastVenueEffectAtMs
+        ?? this.clock.nowMs(),
+    });
+  }
+
+  recordLookup(request, outcome) {
+    if (outcome.kind === 'PROVEN_ABSENT') {
+      this.ownerOrders.delete(request.leg.clientOrderId);
+      return;
+    }
+    if (outcome.kind !== 'FOUND') return;
+    this.ownerOrders.set(request.leg.clientOrderId, {
+      request,
+      status: foundationLookupStatus(outcome.status),
+      cumulativeFilledQuantity: outcome.cumulativeFilledQuantity,
+      venueOrderId: outcome.venueOrderId ?? `lookup-order-${request.leg.clientOrderId}`,
+      updatedAtMs: this.clock.nowMs(),
+    });
+  }
+
+  ownerEvidence(state, evaluatedAtMs = Math.max(this.clock.nowMs(), state.updatedAtMs)) {
+    assert.ok(Number.isSafeInteger(evaluatedAtMs) && evaluatedAtMs >= state.updatedAtMs);
+    const rows = [...this.ownerOrders.values()].sort((left, right) => (
+      left.request.leg.clientOrderId < right.request.leg.clientOrderId ? -1 : 1
+    ));
+    const orders = rows.map((row) => ({
+      venue: row.request.leg.venue,
+      symbol: row.request.symbol,
+      clientOrderId: row.request.leg.clientOrderId,
+      venueOrderId: row.venueOrderId,
+      side: row.request.leg.side,
+      originalQuantity: row.request.leg.quantity,
+      cumulativeFilledQuantity: row.cumulativeFilledQuantity,
+      status: row.status,
+      reduceOnly: row.request.leg.reduceOnly,
+      updatedAtMs: Math.min(row.updatedAtMs, evaluatedAtMs),
+    }));
+    const fills = rows.filter((row) => row.cumulativeFilledQuantity > 0).map((row) => ({
+      venue: row.request.leg.venue,
+      symbol: row.request.symbol,
+      tradeId: `twin-fill-${row.request.leg.clientOrderId}`,
+      clientOrderId: row.request.leg.clientOrderId,
+      venueOrderId: row.venueOrderId,
+      side: row.request.leg.side,
+      quantity: row.cumulativeFilledQuantity,
+      price: row.request.leg.venue === 'BINANCE_SPOT' ? 100 : 99,
+      occurredAtMs: Math.min(row.updatedAtMs, evaluatedAtMs),
+    }));
+    const signed = (side, quantity) => side === 'BUY' ? quantity : -quantity;
+    const positionQuantity = (venue) => rows.filter((row) => (
+      row.request.leg.venue === venue
+    )).reduce((sum, row) => (
+      sum + signed(row.request.leg.side, row.cumulativeFilledQuantity)
+    ), 0);
+    const metadata = {
+      sourceId: 'normal-basis.synthetic-owner-evidence',
+      authority: 'SYNTHETIC_TEST',
+      completeness: 'COMPLETE',
+      sourceTimeMs: evaluatedAtMs,
+      receivedAtMs: evaluatedAtMs,
+      maxAgeMs: 5_000,
+      coverageStartMs: state.createdAtMs,
+      coverageEndMs: evaluatedAtMs,
+    };
+    return {
+      evaluatedAtMs,
+      input: {
+        orders: { metadata, records: orders },
+        fills: { metadata, records: fills },
+        positions: {
+          metadata: { ...metadata, coverageStartMs: null, coverageEndMs: null },
+          records: [
+            {
+              venue: 'BINANCE_SPOT',
+              symbol: state.plan.symbol,
+              positionSide: 'NET',
+              quantity: positionQuantity('BINANCE_SPOT'),
+              baselineQuantity: 0,
+              observedAtMs: evaluatedAtMs,
+            },
+            {
+              venue: 'BINANCE_USDM',
+              symbol: state.plan.symbol,
+              positionSide: 'BOTH',
+              quantity: positionQuantity('BINANCE_USDM'),
+              baselineQuantity: 0,
+              observedAtMs: evaluatedAtMs,
+            },
+          ],
+        },
+      },
+    };
+  }
+
+  canonicalReconciliation(
+    state,
+    evaluatedAtMs = Math.max(this.clock.nowMs(), state.updatedAtMs),
+  ) {
+    const evidence = this.ownerEvidence(state, evaluatedAtMs);
+    const result = reconcileExecutionState(
+      state,
+      evidence.input,
+      evidence.evaluatedAtMs,
+      RECONCILIATION_POLICY,
+    );
+    this.lastOwnerReconciliation = result;
+    return result;
+  }
+
+  reconciliationOutcome(result, state) {
+    if (result.status !== 'EXACT' || result.executionAuthority !== 'NONE') {
+      return {
+        kind: 'UNRESOLVED',
+        failure: failure(`FOUNDATION_RECONCILIATION_${result.status}`),
+      };
+    }
+    const priorOwner = replayExecutionEvents(state.eventLog.slice(0, -1));
+    if (!priorOwner.applied
+      || state.eventLog.at(-1)?.type !== 'RECONCILIATION_STARTED') {
+      return {
+        kind: 'UNRESOLVED',
+        failure: failure('FOUNDATION_OWNER_REPLAY_UNAVAILABLE'),
+      };
+    }
+    const flat = result.positions.every((position) => (
+      position.status === 'EXACT'
+        && position.observedDeltaQuantity === 0
+        && position.expectedDeltaQuantity === 0
+    ));
+    if (flat) {
+      return { kind: 'CLOSED' };
+    }
+    if (['HEDGED_OPEN', 'ONE_LEG_EXPOSED'].includes(priorOwner.state.lifecycle)) {
+      return { kind: priorOwner.state.lifecycle };
+    }
+    return {
+      kind: 'UNRESOLVED',
+      failure: failure(`FOUNDATION_OWNER_LIFECYCLE_${priorOwner.state.lifecycle}`),
+    };
   }
 
   async lookupByClientOrderId(request) {
@@ -125,16 +329,16 @@ class TwinBackedFoundationPorts {
     const queue = this.lookups.get(`${request.phase}:${request.leg.key}`);
     const outcome = queue?.shift()
       ?? { kind: 'UNRESOLVED', failure: failure('TWIN_LOOKUP_UNRESOLVED') };
+    this.recordLookup(request, outcome);
     if (outcome.kind === 'FOUND' && outcome.status === 'FILLED') {
       const stage = this.stage(request);
       const existingIndex = this.observations.findIndex((item) => (
         item.stage === stage
           && item.deterministicClientOrderId === request.leg.clientOrderId
       ));
-      assert.notEqual(existingIndex, -1, 'lookup must refresh an existing twin observation');
-      const existing = this.observations[existingIndex];
       const priorArtifact = this.artifacts.get(request.leg.clientOrderId);
-      assert.ok(priorArtifact, 'lookup must retain the original one-dispatch twin scenario');
+      if (existingIndex === -1 || priorArtifact === undefined) return outcome;
+      const existing = this.observations[existingIndex];
       assert.equal(
         String(outcome.cumulativeFilledQuantity),
         existing.venueFilledQuantity,
@@ -161,9 +365,9 @@ class TwinBackedFoundationPorts {
         ownerRequest: request,
         stage,
         scenario,
-        priorSpotObservation: existing.priorSpotObservationEvidence,
-        ownerState: existing.ownerStateEvidence,
-        positionModeEvidence: existing.positionModeEvidence,
+        ownerCheckpoint: existing.ownerCheckpoint,
+        ownerCheckpointHydrator: OWNER_CHECKPOINT_HYDRATOR,
+        privateTruthEvidence: existing.positionModeEvidence,
       });
       assert.equal(
         observation.deterministicClientOrderId,
@@ -181,42 +385,52 @@ class TwinBackedFoundationPorts {
 
   async reconcile(state) {
     this.calls.push({ method: 'reconcile', planId: state.plan.planId });
-    if (this.reconciliations.length > 0) return this.reconciliations.shift();
-    const spot = Math.max(
-      0,
-      state.openingLegs.SPOT.cumulativeFilledQuantity
-        - state.closingLegs.SPOT.cumulativeFilledQuantity,
-    );
-    const perp = Math.max(
-      0,
-      state.openingLegs.PERP.cumulativeFilledQuantity
-        - state.closingLegs.PERP.cumulativeFilledQuantity,
-    );
-    if (spot === 0 && perp === 0) return { kind: 'CLOSED' };
-    const spotRatio = spot / state.openingLegs.SPOT.definition.quantity;
-    const perpRatio = perp / state.openingLegs.PERP.definition.quantity;
-    return Math.abs(spotRatio - perpRatio) < 1e-12
-      ? { kind: 'HEDGED_OPEN' }
-      : { kind: 'ONE_LEG_EXPOSED' };
+    const result = this.canonicalReconciliation(state);
+    const outcome = this.reconciliationOutcome(result, state);
+    this.lastReconciliationOutcome = outcome;
+    return outcome;
   }
 }
 
 function harness(suffix, modes = {}, maxNakedDurationMs = 1_000) {
   const built = makeNormalBasisBinding({ suffix, maxNakedDurationMs });
-  const projection = buildNormalBasisL05Projection({
-    accountRealmId: built.binding.entry.perpLeg.accountRealmId,
-    targetSymbol: built.binding.ownerPlan.symbol,
-    evaluatedAtMs: VENUE_ARRIVAL_MS,
-  });
   const clock = new ManualClock();
-  const ports = new TwinBackedFoundationPorts(built.binding, projection, modes);
+  const ports = new TwinBackedFoundationPorts(built.binding, clock, {
+    riskInput: built.riskInput,
+    riskVerdict: built.riskVerdict,
+  }, modes);
   const coordinator = createExecutionCoordinator(built.foundationInput, clock, ports);
   ports.attach(coordinator);
-  return { ...built, clock, coordinator, ports, projection };
+  return { ...built, clock, coordinator, ports };
+}
+
+function ownerAgreement(
+  binding,
+  coordinator,
+  ports,
+  clock,
+  observations = ports.observations,
+) {
+  const state = coordinator.snapshot();
+  const evaluatedAtMs = Math.max(clock.nowMs(), state.updatedAtMs);
+  return evaluateNormalBasisOwnerAgreement({
+    foundationBinding: binding,
+    ownerCheckpoint: coordinator.checkpoint(),
+    ownerCheckpointHydrator: OWNER_CHECKPOINT_HYDRATOR,
+    ownerReconciliationProvider: Object.freeze({
+      reconcileExecutionState(ownerState, ownerEvaluatedAtMs) {
+        return ports.canonicalReconciliation(ownerState, ownerEvaluatedAtMs);
+      },
+    }),
+    ownerReconciliationEvaluatedAtMs: evaluatedAtMs,
+    recoveryProvider: OWNER_RECOVERY_PROVIDER,
+    recoveryEvaluatedAtMs: evaluatedAtMs,
+    observations,
+  });
 }
 
 test('full staged open hedges the confirmed Spot fill, then both canonical closes reconcile CLOSED', async () => {
-  const { binding, clock, coordinator, ports, projection } = harness('full-loop');
+  const { binding, clock, coordinator, ports } = harness('full-loop');
   assert.equal((await coordinator.preflight()).ok, true);
   const opened = await coordinator.open();
   assert.equal(opened.ok, true);
@@ -226,8 +440,14 @@ test('full staged open hedges the confirmed Spot fill, then both canonical close
   assert.equal(spotOpen.confirmedFilledQuantity, '0.1');
   assert.equal(perpOpen.stage, 'ENTRY_HEDGE');
   assert.equal(perpOpen.requestedQuantity, spotOpen.confirmedFilledQuantity);
-  assert.equal(perpOpen.priorObservationRevision, spotOpen.observationRevision);
-  assert.equal(perpOpen.positionModeProjectionRevision, projection.projectionRevision);
+  const hedgeOwnerCut = restoreExecutionCheckpoint(perpOpen.ownerCheckpoint);
+  assert.equal(hedgeOwnerCut.ok, true);
+  assert.equal(hedgeOwnerCut.state.openingLegs.SPOT.lifecycle, 'FILLED');
+  assert.equal(hedgeOwnerCut.state.openingLegs.SPOT.cumulativeFilledQuantity, 0.1);
+  assert.equal(
+    perpOpen.positionModeProjectionRevision,
+    perpOpen.mutationLineage.privateProjectionRevision,
+  );
   assert.deepEqual(ports.calls.filter((item) => item.method === 'submitPaper').map((item) => ({
     phase: item.request.phase,
     key: item.request.leg.key,
@@ -240,7 +460,12 @@ test('full staged open hedges the confirmed Spot fill, then both canonical close
   ]);
 
   const closed = await coordinator.close();
-  assert.equal(closed.ok, true);
+  assert.equal(closed.ok, true, JSON.stringify({
+    closed,
+    status: ports.lastOwnerReconciliation?.status,
+    reasons: ports.lastOwnerReconciliation?.reasons,
+    outcome: ports.lastReconciliationOutcome,
+  }));
   assert.equal(coordinator.snapshot().lifecycle, 'CLOSED');
   const closeCalls = ports.calls.filter((item) => (
     item.method === 'submitPaper' && item.request.phase === 'CLOSE'
@@ -257,81 +482,80 @@ test('full staged open hedges the confirmed Spot fill, then both canonical close
   const perpClose = ports.observations.find((item) => item.stage === 'EXIT_PERP');
   assert.equal(perpClose.positionSide, 'BOTH');
   assert.equal(perpClose.reduceOnly, true);
-  assert.equal(perpClose.positionModeProjectionRevision, projection.projectionRevision);
+  assert.equal(
+    perpClose.positionModeProjectionRevision,
+    perpClose.mutationLineage.privateProjectionRevision,
+  );
 
-  const state = coordinator.snapshot();
-  const agreement = evaluateNormalBasisOwnerAgreement({
-    foundationBinding: binding,
-    ownerState: state,
-    observations: ports.observations,
-    recoveryRecommendations: recommendations(state, clock.nowMs()),
-  });
+  const agreement = ownerAgreement(binding, coordinator, ports, clock);
   assert.equal(agreement.state, 'PASS', agreement.reasonCodes.join(','));
   assert.equal(agreement.residualSpotQuantity, '0');
   assert.equal(agreement.residualPerpQuantity, '0');
   assert.equal(agreement.netBaseQuantity, '0');
 });
 
-test('partial first fill hedges only the confirmed amount and retains the GTC remainder visibly', async () => {
+test('partial first fill waits for canonical terminal lookup before hedging the final fill', async () => {
   const { binding, clock, coordinator, ports } = harness('partial-spot', {
     'OPEN:SPOT': { fillQuantity: '0.04' },
   });
+  ports.queueLookup('OPEN:SPOT',
+    {
+      kind: 'FOUND',
+      status: 'PARTIALLY_FILLED',
+      venueOrderId: null,
+      cumulativeFilledQuantity: 0.04,
+    },
+    {
+      kind: 'FOUND',
+      status: 'CANCELLED',
+      venueOrderId: null,
+      cumulativeFilledQuantity: 0.04,
+    });
   assert.equal((await coordinator.preflight()).ok, true);
   const opened = await coordinator.open();
-  assert.equal(opened.ok, true);
-  assert.equal(coordinator.snapshot().lifecycle, 'ONE_LEG_EXPOSED');
-  const [spot, hedge] = ports.observations;
+  assert.equal(opened.ok, false);
+  assert.equal(opened.failure.code, 'OPENING_REMAINDER_FINALIZATION_REQUIRED');
+  assert.equal(coordinator.snapshot().openingLegs.SPOT.lifecycle, 'CANCEL_PENDING');
+  assert.equal(coordinator.snapshot().openingLegs.SPOT.cumulativeFilledQuantity, 0.04);
+  assert.equal(ports.observations.some((item) => item.stage === 'ENTRY_HEDGE'), false);
+  const finalized = await coordinator.submitNextOpeningLeg();
+  assert.equal(finalized.ok, true);
+  assert.equal(coordinator.snapshot().lifecycle, 'HEDGED_OPEN');
+  const spot = ports.observations.find((item) => item.stage === 'ENTRY_SPOT');
+  const hedge = ports.observations.find((item) => item.stage === 'ENTRY_HEDGE');
   assert.equal(spot.localDisposition, 'PARTIALLY_FILLED');
   assert.equal(spot.confirmedFilledQuantity, '0.04');
   assert.equal(spot.remainingQuantity, '0.06');
   assert.equal(spot.terminalStatus, null);
   assert.equal(hedge.requestedQuantity, '0.04');
   assert.equal(hedge.confirmedFilledQuantity, '0.04');
+  const hedgeOwnerCut = restoreExecutionCheckpoint(hedge.ownerCheckpoint);
+  assert.equal(hedgeOwnerCut.ok, true);
+  assert.equal(hedgeOwnerCut.state.openingLegs.SPOT.lifecycle, 'CANCELLED');
+  assert.equal(hedgeOwnerCut.state.openingLegs.SPOT.cumulativeFilledQuantity, 0.04);
   const hedgeCall = ports.calls.find((item) => (
     item.method === 'submitPaper' && item.request.phase === 'OPEN'
       && item.request.leg.key === 'PERP'
   ));
   assert.equal(hedgeCall.request.leg.quantity, 0.04);
-  const state = coordinator.snapshot();
-  const recs = recommendations(state, clock.nowMs());
-  assert.ok(recs.some((item) => item.action === 'CANCEL_REMAINDER'));
-  assert.ok(recs.every((item) => item.automatic === false && item.riskEffect !== 'RISK_INCREASING'));
-  const agreement = evaluateNormalBasisOwnerAgreement({
-    foundationBinding: binding,
-    ownerState: state,
-    observations: ports.observations,
-    recoveryRecommendations: recs,
-  });
+  const terminalLookupIndex = ports.calls.reduce((latest, item, index) => (
+    item.method === 'lookupByClientOrderId' ? index : latest
+  ), -1);
+  const hedgeSubmitIndex = ports.calls.findIndex((item) => (
+    item.method === 'submitPaper' && item.request.leg.key === 'PERP'
+  ));
+  assert.ok(terminalLookupIndex >= 0 && hedgeSubmitIndex > terminalLookupIndex);
+  const agreement = ownerAgreement(binding, coordinator, ports, clock);
   assert.equal(agreement.state, 'MANUAL_ACTION_REQUIRED', agreement.reasonCodes.join(','));
+  assert.equal(agreement.reconciliationStatus, 'PARTIAL');
+  assert.deepEqual(agreement.reasonCodes, []);
   assert.equal(agreement.manualActionRequired, true);
-  assert.equal(agreement.workingRemainderVisible, true);
+  assert.equal(agreement.workingRemainderVisible, false);
   assert.equal(agreement.unhedgedBaseQuantity, '0');
-
   const spotSubmit = ports.calls.find((item) => (
     item.method === 'submitPaper' && item.request.phase === 'OPEN'
       && item.request.leg.key === 'SPOT'
   ));
-  ports.queueReconciliation({
-    kind: 'UNRESOLVED',
-    failure: failure('PARTIAL_SPOT_REMAINDER_UNRESOLVED'),
-  });
-  const reconciled = await coordinator.reconcile();
-  assert.equal(reconciled.ok, false);
-  assert.equal(coordinator.snapshot().lifecycle, 'RECOVERY_REQUIRED');
-  const recovery = recommendExecutionRecovery(coordinator.snapshot(), clock.nowMs());
-  assert.ok(recovery.some((item) => (
-    item.action === 'CANCEL_REMAINDER'
-      && item.clientOrderId === spotSubmit.request.leg.clientOrderId
-      && item.automatic === false
-  )));
-  assert.ok(recovery.some((item) => (
-    item.action === 'MANUAL_REVIEW'
-      && item.automatic === false
-      && item.riskEffect === 'NEUTRAL'
-  )));
-  const blockedResume = await coordinator.open();
-  assert.equal(blockedResume.ok, false);
-  assert.equal(blockedResume.failure.code, 'PLAN_NOT_READY');
   const spotSubmits = ports.calls.filter((item) => (
     item.method === 'submitPaper' && item.request.phase === 'OPEN'
       && item.request.leg.key === 'SPOT'
@@ -353,15 +577,11 @@ test('partial hedge retains exact one-leg exposure and never promotes the book t
   assert.equal(hedge.localDisposition, 'PARTIALLY_FILLED');
   assert.equal(hedge.confirmedFilledQuantity, '0.04');
   assert.equal(hedge.remainingQuantity, '0.06');
-  const state = coordinator.snapshot();
-  const agreement = evaluateNormalBasisOwnerAgreement({
-    foundationBinding: binding,
-    ownerState: state,
-    observations: ports.observations,
-    recoveryRecommendations: recommendations(state, clock.nowMs()),
-  });
+  const agreement = ownerAgreement(binding, coordinator, ports, clock);
   assert.equal(agreement.state, 'MANUAL_ACTION_REQUIRED', agreement.reasonCodes.join(','));
+  assert.equal(agreement.reconciliationStatus, 'PARTIAL');
   assert.equal(agreement.manualActionRequired, true);
+  assert.deepEqual(agreement.reasonCodes, []);
   assert.equal(agreement.residualSpotQuantity, '0.1');
   assert.equal(agreement.residualPerpQuantity, '0.04');
   assert.equal(agreement.unhedgedBaseQuantity, '0.06');
@@ -370,12 +590,22 @@ test('partial hedge retains exact one-leg exposure and never promotes the book t
     item.method === 'submitPaper' && item.request.phase === 'OPEN'
       && item.request.leg.key === 'PERP'
   ));
-  ports.queueReconciliation({
-    kind: 'UNRESOLVED',
-    failure: failure('PARTIAL_HEDGE_REMAINDER_UNRESOLVED'),
-  });
+  const retainedCancel = agreement.ownerRecommendationsRetained.find((item) => (
+    item.action === 'CANCEL_REMAINDER' && item.legKey === 'PERP'
+  ));
+  assert.ok(retainedCancel);
+  assert.equal(retainedCancel.planId, binding.ownerPlan.planId);
+  assert.equal(retainedCancel.correlationId, binding.ownerPlan.correlationId);
+  assert.equal(retainedCancel.phase, 'OPEN');
+  assert.equal(retainedCancel.legId, binding.ownerPlan.openingLegs.PERP.legId);
+  assert.equal(retainedCancel.clientOrderId, hedgeSubmit.request.leg.clientOrderId);
+  assert.ok(retainedCancel.reason.length > 0);
+  assert.equal(retainedCancel.ownerStateRevision, coordinator.snapshot().stateRevisionId);
+  assert.equal(retainedCancel.reconciliationEvidenceRevision, agreement.reconciliationEvidenceRevision);
+  assert.ok(retainedCancel.recommendationRevision.startsWith('l09recovery_'));
   const reconciled = await coordinator.reconcile();
   assert.equal(reconciled.ok, false);
+  assert.equal(reconciled.failure.code, 'FOUNDATION_RECONCILIATION_PARTIAL');
   assert.equal(coordinator.snapshot().lifecycle, 'RECOVERY_REQUIRED');
   const recovery = recommendExecutionRecovery(coordinator.snapshot(), clock.nowMs());
   assert.ok(recovery.some((item) => (
@@ -415,7 +645,7 @@ test('second-leg rejection retains exposure and emergency recovery closes only t
   assert.equal(coordinator.snapshot().lifecycle, 'RECOVERY_REQUIRED');
   ports.recoveryMode = true;
   const recovered = await coordinator.close(true);
-  assert.equal(recovered.ok, true);
+  assert.equal(recovered.ok, true, JSON.stringify(recovered));
   assert.equal(coordinator.snapshot().lifecycle, 'CLOSED');
   const recoveryCloses = ports.observations.filter((item) => item.stage.startsWith('RECOVERY_CLOSE_'));
   assert.deepEqual(recoveryCloses.map((item) => item.stage), ['RECOVERY_CLOSE_SPOT']);
@@ -425,13 +655,7 @@ test('second-leg rejection retains exposure and emergency recovery closes only t
     item.type === 'CLOSE_REQUESTED' && item.emergency === true
   )));
 
-  const state = coordinator.snapshot();
-  const agreement = evaluateNormalBasisOwnerAgreement({
-    foundationBinding: binding,
-    ownerState: state,
-    observations: ports.observations,
-    recoveryRecommendations: recommendations(state, clock.nowMs()),
-  });
+  const agreement = ownerAgreement(binding, coordinator, ports, clock);
   assert.equal(agreement.state, 'PASS');
   assert.equal(agreement.residualSpotQuantity, '0');
   assert.equal(agreement.residualPerpQuantity, '0');
@@ -456,41 +680,14 @@ test('timeout after venue effect keeps fill UNKNOWN, blocks the hedge and requir
   const lookup = ports.calls.find((item) => item.method === 'lookupByClientOrderId');
   assert.equal(lookup.request.leg.clientOrderId, submit.request.leg.clientOrderId);
   const state = coordinator.snapshot();
-  const recs = recommendations(state, clock.nowMs());
+  const recs = recommendExecutionRecovery(state, clock.nowMs());
   assert.ok(recs.some((item) => item.action === 'VERIFY_AMBIGUOUS_ORDER'));
   assert.ok(recs.some((item) => item.action === 'MANUAL_REVIEW'));
-  const agreement = evaluateNormalBasisOwnerAgreement({
-    foundationBinding: binding,
-    ownerState: state,
-    observations: ports.observations,
-    recoveryRecommendations: recs,
-  });
-  assert.equal(agreement.state, 'MANUAL_ACTION_REQUIRED');
-  assert.equal(agreement.manualActionRequired, true);
+  const agreement = ownerAgreement(binding, coordinator, ports, clock);
+  assert.equal(agreement.state, 'BLOCKED');
+  assert.equal(agreement.manualActionRequired, false);
+  assert.ok(agreement.reasonCodes.includes('OWNER_RECONCILIATION_BLOCKED'));
   assert.equal(agreement.ambiguityVisible, true);
-
-  const foundationCheckpoint = coordinator.checkpoint();
-  assert.equal(coordinator.checkpoint(), foundationCheckpoint);
-  const twinRestored = restoreExchangeTwin(checkpointExchangeTwin(observation.state));
-  assert.deepEqual(twinRestored, observation.state);
-  const restoredResult = restoreExecutionCoordinator(foundationCheckpoint, clock, ports);
-  assert.equal(restoredResult.ok, true);
-  const restored = restoredResult.coordinator;
-  ports.attach(restored);
-
-  ports.queueLookup('OPEN:SPOT', {
-    kind: 'FOUND',
-    status: 'FILLED',
-    venueOrderId: 'lookup-ambiguous-spot',
-    cumulativeFilledQuantity: 0.1,
-  });
-  const resolved = await restored.resolveOutstandingAmbiguity('OPEN', 'SPOT');
-  assert.equal(resolved.ok, true);
-  const refreshedSpot = ports.observations.find((item) => item.stage === 'ENTRY_SPOT');
-  assert.equal(refreshedSpot.deterministicClientOrderId, observation.deterministicClientOrderId);
-  assert.notEqual(refreshedSpot.observationRevision, observation.observationRevision);
-  assert.equal(refreshedSpot.localDisposition, 'FILLED');
-  assert.equal(refreshedSpot.confirmedFilledQuantity, '0.1');
   const spotSubmits = ports.calls.filter((item) => (
     item.method === 'submitPaper' && item.request.phase === 'OPEN'
       && item.request.leg.key === 'SPOT'
@@ -500,84 +697,80 @@ test('timeout after venue effect keeps fill UNKNOWN, blocks the hedge and requir
       && item.request.leg.key === 'SPOT'
   ));
   assert.equal(spotSubmits.length, 1);
-  assert.equal(spotLookups.length, 2);
+  assert.equal(spotLookups.length, 1);
   assert.ok(spotLookups.every((item) => (
     item.request.leg.clientOrderId === spotSubmits[0].request.leg.clientOrderId
   )));
-  assert.ok(restored.snapshot().eventLog.some((item) => (
+  assert.ok(coordinator.snapshot().eventLog.some((item) => (
     item.type === 'LEG_RESPONSE_AMBIGUOUS'
   )));
-  const resolvedArtifact = ports.artifacts.get(spotSubmits[0].request.leg.clientOrderId);
-  assert.ok(resolvedArtifact);
-  assert.equal(resolvedArtifact.scenario.events.filter((item) => (
-    item.kind === 'PLACE_DISPATCH'
-  )).length, 1);
-  assert.equal(resolvedArtifact.observation.state.processedEvents.filter((item) => (
-    item.kind === 'PLACE_DISPATCH'
-  )).length, 1);
-  assert.equal(resolvedArtifact.observation.state.processedEvents.filter((item) => (
-    item.kind === 'RECONCILIATION_OBSERVATION'
-  )).length, 1);
-
-  const reconciled = await restored.reconcile();
-  assert.equal(reconciled.ok, true);
-  assert.equal(restored.snapshot().lifecycle, 'ONE_LEG_EXPOSED');
-  const hedged = await restored.submitNextOpeningLeg();
-  assert.equal(hedged.ok, true);
-  assert.equal(restored.snapshot().lifecycle, 'HEDGED_OPEN');
-  const closed = await restored.close();
-  assert.equal(closed.ok, true);
-  assert.equal(restored.snapshot().lifecycle, 'CLOSED');
-  const finalState = restored.snapshot();
-  assert.equal(finalState.eventLog.filter((item) => (
-    item.type === 'LEG_SUBMISSION_STARTED'
-      && item.phase === 'OPEN' && item.legKey === 'SPOT'
-  )).length, 1);
-  assert.equal(finalState.eventLog.filter((item) => (
-    item.type === 'LEG_RESPONSE_AMBIGUOUS'
-      && item.phase === 'OPEN' && item.legKey === 'SPOT'
-  )).length, 1);
-  assert.equal(finalState.eventLog.filter((item) => (
-    item.type === 'LEG_AMBIGUITY_RESOLVED'
-      && item.phase === 'OPEN' && item.legKey === 'SPOT'
-  )).length, 1);
-  const finalAgreement = evaluateNormalBasisOwnerAgreement({
-    foundationBinding: binding,
-    ownerState: finalState,
-    observations: ports.observations,
-    recoveryRecommendations: recommendations(finalState, clock.nowMs()),
-  });
-  assert.equal(finalAgreement.state, 'PASS', finalAgreement.reasonCodes.join(','));
-  assert.equal(finalAgreement.residualSpotQuantity, '0');
-  assert.equal(finalAgreement.residualPerpQuantity, '0');
 });
 
-test('Foundation and twin checkpoints restore between legs without resubmitting Spot', async () => {
-  const { binding, clock, coordinator, ports } = harness('restart');
+test('cold Foundation restore verifies owner truth before hedging and never reuses pre-crash observation', async () => {
+  const {
+    binding, clock, coordinator, ports, riskInput, riskVerdict,
+  } = harness('restart');
   assert.equal((await coordinator.preflight()).ok, true);
   assert.equal(coordinator.beginOpen().ok, true);
   assert.equal((await coordinator.submitNextOpeningLeg()).ok, true);
   assert.equal(coordinator.snapshot().lifecycle, 'ONE_LEG_EXPOSED');
-  const spot = ports.observations[0];
-  const twinRestored = restoreExchangeTwin(checkpointExchangeTwin(spot.state));
-  assert.deepEqual(twinRestored, spot.state);
+  assert.deepEqual(ports.observations.map((item) => item.stage), ['ENTRY_SPOT']);
+  const durableSpotObservationBytes = JSON.stringify(ports.observations[0]);
   const checkpointA = coordinator.checkpoint();
   const checkpointB = coordinator.checkpoint();
   assert.equal(checkpointB, checkpointA);
-  const restoredResult = restoreExecutionCoordinator(checkpointA, clock, ports);
+  const coldPorts = new TwinBackedFoundationPorts(binding, clock, { riskInput, riskVerdict });
+  coldPorts.queueLookup('OPEN:SPOT', {
+    kind: 'FOUND',
+    status: 'FILLED',
+    venueOrderId: null,
+    cumulativeFilledQuantity: 0.1,
+  });
+  const restoredResult = restoreExecutionCoordinator(checkpointA, clock, coldPorts);
   assert.equal(restoredResult.ok, true);
   const restored = restoredResult.coordinator;
-  ports.attach(restored);
+  coldPorts.attach(restored);
+  assert.equal(restored.restartRecoveryRequired(), true);
   assert.equal((await restored.submitNextOpeningLeg()).ok, true);
   assert.equal(restored.snapshot().lifecycle, 'HEDGED_OPEN');
   assert.equal(ports.calls.filter((item) => (
     item.method === 'submitPaper' && item.request.phase === 'OPEN'
       && item.request.leg.key === 'SPOT'
   )).length, 1);
-  const hedge = ports.observations.find((item) => item.stage === 'ENTRY_HEDGE');
-  assert.equal(hedge.requestedQuantity, spot.confirmedFilledQuantity);
-  assert.equal(hedge.priorObservationRevision, spot.observationRevision);
+  assert.equal(coldPorts.calls.some((item) => (
+    item.method === 'submitPaper' && item.request.leg.key === 'SPOT'
+  )), false);
+  assert.deepEqual(coldPorts.observations.map((item) => item.stage), ['ENTRY_HEDGE']);
+  const lookupIndex = coldPorts.calls.findIndex((item) => (
+    item.method === 'lookupByClientOrderId' && item.request.leg.key === 'SPOT'
+  ));
+  const reconcileIndex = coldPorts.calls.findIndex((item) => item.method === 'reconcile');
+  const hedgeIndex = coldPorts.calls.findIndex((item) => (
+    item.method === 'submitPaper' && item.request.leg.key === 'PERP'
+  ));
+  assert.ok(lookupIndex >= 0 && reconcileIndex > lookupIndex && hedgeIndex > reconcileIndex);
+  const hedge = coldPorts.observations.find((item) => item.stage === 'ENTRY_HEDGE');
+  assert.equal(hedge.requestedQuantity, String(binding.ownerPlan.openingLegs.SPOT.quantity));
+  const ownerCut = restoreExecutionCheckpoint(hedge.ownerCheckpoint);
+  assert.equal(ownerCut.ok, true);
+  assert.equal(ownerCut.state.openingLegs.SPOT.lifecycle, 'FILLED');
+  assert.equal(ownerCut.state.openingLegs.SPOT.cumulativeFilledQuantity, 0.1);
   assert.equal(restored.snapshot().plan.correlationId, binding.ownerPlan.correlationId);
+  const durableSpotObservation = JSON.parse(durableSpotObservationBytes);
+  assert.notEqual(durableSpotObservation, ports.observations[0]);
+  assert.deepEqual(durableSpotObservation, ports.observations[0]);
+  const agreement = ownerAgreement(
+    binding,
+    restored,
+    coldPorts,
+    clock,
+    [durableSpotObservation, ...coldPorts.observations],
+  );
+  assert.equal(agreement.state, 'PASS', agreement.reasonCodes.join(','));
+  assert.deepEqual(agreement.observationRevisions, [
+    durableSpotObservation.observationRevision,
+    hedge.observationRevision,
+  ]);
 });
 
 test('first-leg rejection has no exposure, reaches FAILED and never admits a hedge', async () => {
@@ -608,15 +801,10 @@ test('ambiguous hedge retains Spot exposure and cannot claim HEDGED_OPEN', async
   assert.equal(hedge.venueFilledQuantity, '0.1');
   assert.equal(hedge.confirmedFilledQuantity, '0');
   assert.equal(hedge.localDisposition, 'AMBIGUOUS');
-  const state = coordinator.snapshot();
-  const agreement = evaluateNormalBasisOwnerAgreement({
-    foundationBinding: binding,
-    ownerState: state,
-    observations: ports.observations,
-    recoveryRecommendations: recommendations(state, clock.nowMs()),
-  });
-  assert.equal(agreement.state, 'MANUAL_ACTION_REQUIRED', agreement.reasonCodes.join(','));
-  assert.equal(agreement.manualActionRequired, true);
+  const agreement = ownerAgreement(binding, coordinator, ports, clock);
+  assert.equal(agreement.state, 'BLOCKED', agreement.reasonCodes.join(','));
+  assert.equal(agreement.manualActionRequired, false);
+  assert.ok(agreement.reasonCodes.includes('OWNER_RECONCILIATION_BLOCKED'));
   assert.equal(agreement.residualSpotQuantity, '0.1');
   assert.equal(agreement.residualPerpQuantity, '0');
 
@@ -646,19 +834,11 @@ test('ambiguous hedge retains Spot exposure and cannot claim HEDGED_OPEN', async
   assert.ok(hedgeLookups.every((item) => (
     item.request.leg.clientOrderId === hedgeSubmits[0].request.leg.clientOrderId
   )));
-  const reconciled = await coordinator.reconcile();
-  assert.equal(reconciled.ok, true);
-  assert.equal(coordinator.snapshot().lifecycle, 'HEDGED_OPEN');
-  const closed = await coordinator.close();
+  ports.recoveryMode = true;
+  const closed = await coordinator.close(true);
   assert.equal(closed.ok, true);
   assert.equal(coordinator.snapshot().lifecycle, 'CLOSED');
-  const finalState = coordinator.snapshot();
-  const finalAgreement = evaluateNormalBasisOwnerAgreement({
-    foundationBinding: binding,
-    ownerState: finalState,
-    observations: ports.observations,
-    recoveryRecommendations: recommendations(finalState, clock.nowMs()),
-  });
+  const finalAgreement = ownerAgreement(binding, coordinator, ports, clock);
   assert.equal(finalAgreement.state, 'PASS', finalAgreement.reasonCodes.join(','));
   assert.equal(finalAgreement.residualSpotQuantity, '0');
   assert.equal(finalAgreement.residualPerpQuantity, '0');
@@ -676,15 +856,10 @@ test('ambiguous close stays RECOVERY_REQUIRED and never advances to the Perp clo
   assert.equal(spotClose.localDisposition, 'AMBIGUOUS');
   assert.equal(spotClose.confirmedFilledQuantity, '0');
   assert.equal(ports.observations.some((item) => item.stage === 'EXIT_PERP'), false);
-  const state = coordinator.snapshot();
-  const agreement = evaluateNormalBasisOwnerAgreement({
-    foundationBinding: binding,
-    ownerState: state,
-    observations: ports.observations,
-    recoveryRecommendations: recommendations(state, clock.nowMs()),
-  });
-  assert.equal(agreement.state, 'MANUAL_ACTION_REQUIRED', agreement.reasonCodes.join(','));
-  assert.equal(agreement.manualActionRequired, true);
+  const agreement = ownerAgreement(binding, coordinator, ports, clock);
+  assert.equal(agreement.state, 'BLOCKED', agreement.reasonCodes.join(','));
+  assert.equal(agreement.manualActionRequired, false);
+  assert.ok(agreement.reasonCodes.includes('OWNER_RECONCILIATION_BLOCKED'));
   assert.equal(agreement.ambiguityVisible, true);
 
   ports.queueLookup('CLOSE:SPOT', {
@@ -722,13 +897,7 @@ test('ambiguous close stays RECOVERY_REQUIRED and never advances to the Perp clo
       && item.request.leg.key === 'SPOT'
   )).length, 1);
   assert.equal(ports.observations.some((item) => item.stage === 'EXIT_PERP'), true);
-  const finalState = coordinator.snapshot();
-  const finalAgreement = evaluateNormalBasisOwnerAgreement({
-    foundationBinding: binding,
-    ownerState: finalState,
-    observations: ports.observations,
-    recoveryRecommendations: recommendations(finalState, clock.nowMs()),
-  });
+  const finalAgreement = ownerAgreement(binding, coordinator, ports, clock);
   assert.equal(finalAgreement.state, 'PASS', finalAgreement.reasonCodes.join(','));
   assert.equal(finalAgreement.residualSpotQuantity, '0');
   assert.equal(finalAgreement.residualPerpQuantity, '0');

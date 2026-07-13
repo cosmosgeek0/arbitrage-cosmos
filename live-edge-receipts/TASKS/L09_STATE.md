@@ -16,6 +16,8 @@ Status: `BLOCKED_SHARED_OWNER_DEPENDENCY`
 - Accepted L08 implementation: `0ea48414dcc7ab5fcf4ccd4ff295b4bec7ee222f`
 - Accepted L08 lane state: `86ab1b9d6bd3ea5604d0c61dd2d3b2cb902cd282`
 - Merged L14 parent: `04e50f43ab18b1a0e4b03effcb70f0d7ea5a0e28`
+- L09 blocker evidence commit:
+  `7602a4eff627baf3c11bd938de82973a39778013`
 - L directive SHA-256:
   `40de1feb6678d8741bd38f7538b2c6f25304c0f64195a596961fdb2539a3b037`
 - L08 receipt SHA-256:
@@ -71,8 +73,10 @@ output is mechanically unavailable.
 - Explicit compiled L08 Spot reproduction: accepted-owner input rejects with
   `INSTRUMENT_OR_FILTER_UNAVAILABLE`; forged `PASS` rejects with
   `INPUT_REJECTED`; exit `0`.
+- `npm test`: deterministic standard gate `377/377`, exit `0`; the only
+  warning was the existing Vite chunk-size advisory.
 
-The L09 focused, accumulated, protocol, `npm test` and `npm run test:all`
+The L09 focused, accumulated, protocol and `npm run test:all`
 acceptance gates were not run because no acceptable L09 implementation can be
 created before the owner bridge exists. Existing focused owners remain green;
 this state does not claim L09 implementation or acceptance.

@@ -17,8 +17,10 @@ Status: `L14_ACCEPTED`
   `40b97b7c69ed91e621d1b8a8f66a13a9bd23fec2`
 - Immutable receipt commit:
   `cf9a104c8f104e06082721203796d71b12d28bc3`
-- Acceptance record: the containing acceptance commit, recorded by the next
-  state-only seal because a commit cannot self-reference
+- Acceptance commit:
+  `6c622ac4d3c2d170a59309b73faa436e94d7918b`
+- Acceptance receipt SHA-256:
+  `e393ff9e82ef24b74295b978bab82e3edc161604366dd33b8e008bd7a490940d`
 - Canonical Ledger/System Integration wiring: `UNWIRED`, deferred to I00
 - L08-dependent action-policy validation: `WAITING_L08`
 - External action authorization: `NONE`

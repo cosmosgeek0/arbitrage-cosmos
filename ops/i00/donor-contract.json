@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "branch": "l15-deploy-infra-20260712",
+  "acceptedCommit": "2cec412927fa2f64f05a0b2774b18e45f8ce4fa5",
+  "implementationCommit": "9a82d4715c73ebe4156638c2bf5e8a2c02373bbf",
+  "baseCommit": "0f2bb884daf5b67981ea04f38298d89c1a980de7",
+  "liveTree": "584163858a0333cb1ccb9eff756e91a851b1cb71",
+  "testsTree": "f3348a74ef22d9ca2faee431ea8cc5df63f552af",
+  "acceptedSuites": 11,
+  "acceptedAssertions": 347,
+  "criticalFiles": {
+    "bin/common.sh": "190cc72426cc2186647385166b58ba08e8f42202a8b3d05ba04561b4627044bc",
+    "bin/deploy.sh": "4b8c4e39878d0c3a8c03aa414359d4f2c5a418b2b2d970818966ce32133f7598",
+    "bin/rollback.sh": "ca9441bff367b987589444d02c77cbf639c6a2301ada76d42873e57a31e4d725",
+    "bin/backup.sh": "26bd74cd78baecfe7697e356329460b3c8f2226c36573aef089a6641573ecd5c",
+    "bin/restore.sh": "348f5dae60be07cc162ac2ff35dacec219b58d87ccf947258cb6045c9d8bb2b2",
+    "bin/restore-drill.sh": "a5ef7885b68a92164ed249dfb44695f2b8b92d86fc5e6845530d5966228a4ce8",
+    "bin/watchdog.sh": "7d35a870d3ee67c38d47a8c3afb12a1316b77b8c99db2c04acda8efea42512bd"
+  },
+  "integrationPosture": "ADAPT_READ_ONLY",
+  "activationPosture": "OWNER_GATED"
+}

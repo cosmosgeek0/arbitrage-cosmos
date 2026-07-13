@@ -1,0 +1,10 @@
+# Merge this originRequest fragment into the accepted donor ingress rule only
+# after resolving placeholders. It does not create or mutate a tunnel.
+originRequest:
+  noTLSVerify: false
+  connectTimeout: 10s
+  access:
+    required: true
+    teamName: REPLACE_ME_ACCESS_TEAM_NAME
+    audTag:
+      - REPLACE_ME_ACCESS_APPLICATION_AUD

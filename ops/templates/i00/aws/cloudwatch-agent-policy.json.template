@@ -1,0 +1,26 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublishCosmosHostMetrics",
+      "Effect": "Allow",
+      "Action": "cloudwatch:PutMetricData",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {"cloudwatch:namespace": "Cosmos/I00"}
+      }
+    },
+    {
+      "Sid": "WriteOneCosmosLogGroup",
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogStreams"],
+      "Resource": "REPLACE_ME_EXACT_LOG_GROUP_ARN:*"
+    },
+    {
+      "Sid": "SetOneCosmosLogRetention",
+      "Effect": "Allow",
+      "Action": "logs:PutRetentionPolicy",
+      "Resource": "REPLACE_ME_EXACT_LOG_GROUP_ARN"
+    }
+  ]
+}

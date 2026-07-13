@@ -1,0 +1,58 @@
+{
+  "agent": {
+    "metrics_collection_interval": 60,
+    "debug": false
+  },
+  "metrics": {
+    "namespace": "Cosmos/I00",
+    "append_dimensions": {
+      "InstanceId": "${aws:InstanceId}"
+    },
+    "aggregation_dimensions": [["InstanceId"]],
+    "metrics_collected": {
+      "cpu": {
+        "measurement": ["usage_active", "usage_iowait"],
+        "totalcpu": true,
+        "metrics_collection_interval": 60
+      },
+      "mem": {
+        "measurement": ["used_percent"],
+        "metrics_collection_interval": 60
+      },
+      "disk": {
+        "measurement": ["used_percent", "inodes_free"],
+        "resources": ["/", "/var/lib/cosmos", "/var/backups/cosmos"],
+        "drop_device": true,
+        "metrics_collection_interval": 60
+      },
+      "procstat": [
+        {
+          "pattern": "app-entrypoint.mjs",
+          "measurement": ["pid_count", "cpu_usage", "memory_rss"],
+          "metrics_collection_interval": 60
+        },
+        {
+          "pattern": "cloudflared.*tunnel run",
+          "measurement": ["pid_count", "cpu_usage", "memory_rss"],
+          "metrics_collection_interval": 60
+        }
+      ]
+    }
+  },
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/lib/cosmos/ops/*.jsonl",
+            "log_group_name": "REPLACE_ME_COSMOS_OPS_LOG_GROUP",
+            "log_stream_name": "{instance_id}/ops",
+            "retention_in_days": 30,
+            "timezone": "UTC"
+          }
+        ]
+      }
+    },
+    "force_flush_interval": 15
+  }
+}

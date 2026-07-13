@@ -1,0 +1,33 @@
+[Unit]
+Description=Cosmos Q advisory sidecar (NOT_CONFIGURED until accepted Q command exists)
+Wants=network-online.target
+After=network-online.target
+Before=cosmos-app.service
+ConditionPathExists=/opt/cosmos/current/REPLACE_ME_Q_ENTRYPOINT
+
+[Service]
+Type=simple
+User=cosmos
+Group=cosmos
+WorkingDirectory=/opt/cosmos/current
+ExecStart=REPLACE_ME_Q_EXECUTABLE --bind 127.0.0.1 --port REPLACE_ME_Q_LOOPBACK_PORT
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/cosmos/models /var/lib/cosmos/evidence
+IPAddressAllow=localhost
+IPAddressDeny=any
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

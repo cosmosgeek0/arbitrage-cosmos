@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "actionsEnabled": false,
+  "note": "Template only. Action ARNs and exact dimensions are owner inputs at authorized activation.",
+  "metricAlarms": [
+    {
+      "name": "REPLACE_ME_PREFIX-AppProcessMissing",
+      "namespace": "Cosmos/I00",
+      "metricName": "procstat_lookup_pid_count",
+      "comparisonOperator": "LessThanThreshold",
+      "threshold": 1,
+      "periodSeconds": 60,
+      "evaluationPeriods": 3,
+      "datapointsToAlarm": 2,
+      "treatMissingData": "breaching"
+    },
+    {
+      "name": "REPLACE_ME_PREFIX-DiskUsedHigh",
+      "namespace": "Cosmos/I00",
+      "metricName": "disk_used_percent",
+      "comparisonOperator": "GreaterThanThreshold",
+      "threshold": 80,
+      "periodSeconds": 60,
+      "evaluationPeriods": 5,
+      "datapointsToAlarm": 3,
+      "treatMissingData": "breaching"
+    },
+    {
+      "name": "REPLACE_ME_PREFIX-CanonicalTradeUnsafe",
+      "namespace": "REPLACE_ME_CANONICAL_RUNTIME_NAMESPACE",
+      "metricName": "TradeReady",
+      "comparisonOperator": "LessThanThreshold",
+      "threshold": 1,
+      "periodSeconds": 60,
+      "evaluationPeriods": 2,
+      "datapointsToAlarm": 2,
+      "treatMissingData": "breaching",
+      "owner": "canonical runtime supervisor; ops must not synthesize this metric"
+    }
+  ],
+  "compositeAlarms": [
+    {
+      "name": "REPLACE_ME_PREFIX-TRADE_UNSAFE",
+      "rule": "ALARM(REPLACE_ME_PREFIX-AppProcessMissing) OR ALARM(REPLACE_ME_PREFIX-DiskUsedHigh) OR ALARM(REPLACE_ME_PREFIX-CanonicalTradeUnsafe)",
+      "missingRuntimeMetricPosture": "BLOCKED_FAIL_CLOSED"
+    }
+  ]
+}

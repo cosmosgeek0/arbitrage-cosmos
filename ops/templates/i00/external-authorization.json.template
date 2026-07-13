@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "authorizationId": "REPLACE_ME_DURABLE_AUTHORIZATION_ID",
+  "status": "REPLACE_ME_APPROVED_ONLY_AFTER_OWNER_SIGNOFF",
+  "actionClasses": ["REPLACE_ME_ONE_EXACT_ACTION_CLASS"],
+  "scope": "REPLACE_ME_EXACT_SCOPE",
+  "account": "REPLACE_ME_EXACT_ACCOUNT",
+  "environment": "REPLACE_ME_ENVIRONMENT",
+  "host": "REPLACE_ME_EXACT_HOST",
+  "issuedAtUtc": "REPLACE_ME_UTC",
+  "startsAtUtc": "REPLACE_ME_UTC",
+  "expiresAtUtc": "REPLACE_ME_UTC",
+  "allowedCommands": ["REPLACE_ME_EXACT_COMMAND"],
+  "allowedEndpoints": ["REPLACE_ME_EXACT_ENDPOINT"],
+  "allowedProducts": ["REPLACE_ME_EXACT_PRODUCT"],
+  "allowedCredentials": {
+    "types": ["REPLACE_ME_CREDENTIAL_TYPE_ONLY"],
+    "permissions": ["REPLACE_ME_EXACT_PERMISSION_ONLY"]
+  },
+  "preconditions": ["REPLACE_ME_EXACT_PRECONDITION"],
+  "maximumEffect": {
+    "capital": "REPLACE_ME_EXACT_CAPITAL_BOUND",
+    "notional": "REPLACE_ME_EXACT_NOTIONAL_BOUND",
+    "operational": "REPLACE_ME_EXACT_OPERATIONAL_BOUND"
+  },
+  "rollback": "REPLACE_ME_EXACT_ROLLBACK",
+  "recovery": "REPLACE_ME_EXACT_RECOVERY",
+  "ownerApproval": {
+    "approver": "REPLACE_ME_OWNER",
+    "approvedAtUtc": "REPLACE_ME_UTC",
+    "reference": "REPLACE_ME_DURABLE_REFERENCE"
+  },
+  "receiptTargets": {
+    "result": "REPLACE_ME_EXACT_RESULT_RECEIPT_TARGET",
+    "reconciliation": "REPLACE_ME_EXACT_RECONCILIATION_RECEIPT_TARGET"
+  }
+}

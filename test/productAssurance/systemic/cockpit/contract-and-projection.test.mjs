@@ -15,6 +15,11 @@ import {
   validatePanelObservation,
   validateSurfaceProjectionMatrix,
 } from '../../../../fixtures/productAssurance/systemic/cockpit/reference/cockpit-view-model.mjs';
+import {
+  allObservations,
+  availableControlState,
+  observationFor,
+} from './support/cockpit-fixture-builder.mjs';
 
 function json(relativePath) {
   return JSON.parse(readFileSync(new URL(
@@ -49,6 +54,9 @@ const FROZEN_DASHBOARD_VALUE_KEYS = Object.freeze([
   'activeExposureCount',
   'newestCandidateDisposition',
   'newestCandidateDispositionReason',
+  'newestCandidateId',
+  'newestCandidateSymbol',
+  'newestCandidateEvidenceRevision',
   'degradedSourceCount',
   'degradedSourceIdentities',
   'degradedSourceReasons',
@@ -114,6 +122,7 @@ const FROZEN_DASHBOARD_VALUE_KEYS = Object.freeze([
   'topAttentionReason',
   'topAttentionResolvingControl',
   'dashboardCorrelationChainId',
+  'traceTargetCount',
   'strategyStatus',
   'qStatus',
   'recentMaterialDecisionCount',
@@ -147,81 +156,6 @@ function expectCode(fn, code) {
   assert.throws(fn, (error) => error instanceof CockpitContractError && error.code === code);
 }
 
-function availableControlState(panel, backendMutationId = panel.controlBinding.backendMutationId) {
-  return {
-    available: true,
-    unavailableReasonCode: null,
-    backendMutationId,
-    effectPreview: {
-      effectType: 'SAFETY_STATE_TRANSITION',
-      summary: 'Engage the existing tested kill-switch path.',
-      maximumEffect: 'Blocks all advisory execution progression; never places or mutates an order.',
-    },
-    currentState: { stateType: 'KILL_SWITCH', value: 'DISENGAGED' },
-    previewState: 'READY_FOR_CONFIRMATION',
-    confirmState: 'CONFIRMED',
-    resultState: 'APPLIED',
-    beforeRevision: 41,
-    afterRevision: 42,
-    ledgerEvidenceRef: 'fixture:ledger:kill-switch:42',
-    correlationId: 'fixture-correlation-kill-switch-42',
-  };
-}
-
-function observationFor(panel) {
-  const observation = structuredClone(observationFixture.baseLiveObservation);
-  observation.contractId = panel.contractId;
-  observation.sourceProvenance.canonicalOwner = panel.sourceBinding.canonicalOwner;
-  observation.sourceProvenance.sourceSchemaId = panel.sourceBinding.schemaId;
-  observation.sourceProvenance.sourceSchemaVersion = panel.sourceBinding.schemaVersion;
-  observation.sourceProvenance.manifestItemId = panel.releaseBinding.expectedManifestItemId;
-  observation.denominator = {
-    expectedCount: panel.denominatorLaw.expectedCount,
-    visibleCount: panel.denominatorLaw.expectedCount,
-    filteredCount: 0,
-    hiddenCount: 0,
-    unknownCount: 0,
-  };
-  observation.evidence.observedCount = panel.denominatorLaw.expectedCount;
-  const dashboardValues = new Map(observation.values.map((value) => [value.key, value]));
-  observation.values = panel.factSemantics.map((semantic) => {
-    const dashboardValue = dashboardValues.get(semantic.valueKey);
-    if (dashboardValue && dashboardValue.unit === semantic.unit) return structuredClone(dashboardValue);
-    let value;
-    if (semantic.valueKind === 'ENUM') value = semantic.enumValues[0];
-    else if (semantic.valueKind === 'TEXT') value = `FIXTURE_${semantic.valueKey.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase()}`;
-    else if (semantic.valueKind === 'BOOLEAN') value = false;
-    else if (semantic.valueKind === 'UTC_MILLISECONDS') value = NOW;
-    else value = 0;
-    return { key: semantic.valueKey, value, unit: semantic.unit, unknownReasonCode: null };
-  });
-  if (panel.detectionClaim.kind === 'NONE') {
-    observation.detectionEvidence = {
-      registeredFailureId: null,
-      detectorConnected: null,
-      telemetryConnected: null,
-      browserConnected: null,
-      sloMatched: null,
-      outOfBandProofPresent: null,
-    };
-  } else if (panel.detectionClaim.kind === 'OUT_OF_BAND_ONLY') {
-    observation.detectionEvidence = {
-      registeredFailureId: panel.detectionClaim.registeredFailureId,
-      detectorConnected: true,
-      telemetryConnected: true,
-      browserConnected: null,
-      sloMatched: true,
-      outOfBandProofPresent: true,
-    };
-  }
-  observation.controlState = panel.panelKind === 'CONTROL' ? availableControlState(panel) : null;
-  return observation;
-}
-
-function allObservations() {
-  return contractSet.contracts.map(observationFor);
-}
-
 function fixtureProvenance() {
   return {
     truthLabel: observationFixture.fixtureTruthLabel,
@@ -231,14 +165,27 @@ function fixtureProvenance() {
   };
 }
 
+function requestNonGreen(input, state, markerCode, causeCode) {
+  input.requestedDisplayState = state;
+  input.reasonCodes = [markerCode, causeCode];
+  input.stateCauseEvidence = {
+    state,
+    causeCode,
+    subjectId: input.contractId,
+    evidenceRef: `fixture:state-cause:${causeCode}`,
+    observedAtMs: input.evidence.observedAtMs,
+  };
+  return input;
+}
+
 test('closed panel contracts cover exactly the accepted 18 IP-CONTROL surfaces', () => {
   assert.equal(validateCockpitContractSet(contractSet), true);
   assert.deepEqual(
     [...new Set(contractSet.contracts.map((entry) => entry.surfaceId))],
     I00_SURFACE_IDS,
   );
-  assert.equal(contractSet.contracts.length, 20);
-  assert.equal(contractSet.contracts.filter((entry) => entry.panelKind === 'CONTROL').length, 1);
+  assert.equal(contractSet.contracts.length, 25);
+  assert.equal(contractSet.contracts.filter((entry) => entry.panelKind === 'CONTROL').length, 6);
 });
 
 test('five-second claims require a connected registered path and dead-browser failures require out-of-band proof', () => {
@@ -340,7 +287,7 @@ test('build validates every hierarchy fact against surface, level, contract, and
     evaluatedAtMs: NOW,
     fixtureProvenance: fixtureProvenance(),
     contractSet,
-    observations: allObservations(),
+    observations: allObservations(contractSet),
   };
   const badKey = structuredClone(matrix);
   badKey.rows[0].factBindings[0].valueKey = 'decorativeFact';
@@ -385,14 +332,15 @@ test('fact values enforce exact kind, unit, bounded enum, key ownership, and reg
   expectCode(() => validatePanelObservation(unboundedEnum), 'FACT_VALUE_ENUM_INVALID');
 
   const undeclared = structuredClone(observationFixture.baseLiveObservation);
-  undeclared.values.push({ key: 'decorativeHealth', value: 'GREEN', unit: 'STATE', unknownReasonCode: null });
+  undeclared.values.push({ key: 'decorativeHealth', value: 'GREEN', valueState: 'KNOWN', unit: 'STATE', unknownReasonCode: null });
   expectCode(() => validatePanelObservation(undeclared), 'FACT_VALUE_KEY_UNDECLARED');
 
   const unregisteredNullCause = structuredClone(observationFixture.baseLiveObservation);
   const exposure = unregisteredNullCause.values.find((value) => value.key === 'activeExposureCount');
   exposure.value = null;
+  exposure.valueState = 'UNKNOWN';
   exposure.unknownReasonCode = 'FREE_FORM_NULL_CAUSE';
-  expectCode(() => validatePanelObservation(unregisteredNullCause), 'REASON_CODE_NOT_REGISTERED');
+  expectCode(() => validatePanelObservation(unregisteredNullCause), 'UNKNOWN_VALUE_DISCIPLINE');
 });
 
 test('all input reason-code fields bind to the frozen versioned packet registry', () => {
@@ -419,7 +367,7 @@ test('a panel cannot claim an information level absent from its surface projecti
     fixtureProvenance: fixtureProvenance(),
     contractSet: hostile,
     projectionMatrix: matrix,
-    observations: allObservations(),
+    observations: allObservations(contractSet),
   }), 'FACT_SEMANTIC_LEVEL_UNSUPPORTED');
 });
 
@@ -491,14 +439,18 @@ test('yellow and red require explicit machine reasons and are never inferred fro
   ]) {
     const input = structuredClone(observationFixture.baseLiveObservation);
     input.requestedDisplayState = requestedDisplayState;
-    const unreasoned = evaluate(contract(input.contractId), input);
-    assert.equal(unreasoned.displayState, 'UNKNOWN');
-    assert.ok(unreasoned.reasonCodes.includes(`DECLARED_${requestedDisplayState}_REQUIRED_${reasonFlag}_MISSING`));
-    input.reasonCodes = [reasonFlag];
+    expectCode(() => evaluate(contract(input.contractId), input), 'OBJECT_REQUIRED');
+    requestNonGreen(
+      input,
+      requestedDisplayState,
+      reasonFlag,
+      requestedDisplayState === 'YELLOW' ? 'SOURCE_STALE' : 'COMPONENT_BLOCKED',
+    );
     assert.equal(evaluate(contract(input.contractId), input).displayState, requestedDisplayState);
   }
   const staleWithoutStaleEvidence = structuredClone(observationFixture.baseLiveObservation);
-  staleWithoutStaleEvidence.requestedDisplayState = 'STALE';
+  requestNonGreen(staleWithoutStaleEvidence, 'STALE', 'STALE', 'SOURCE_STALE');
+  staleWithoutStaleEvidence.reasonCodes = ['SOURCE_STALE'];
   const output = evaluate(contract(staleWithoutStaleEvidence.contractId), staleWithoutStaleEvidence);
   assert.equal(output.displayState, 'UNKNOWN');
   assert.ok(output.reasonCodes.includes('DECLARED_STALE_REQUIRED_STALE_MISSING'));
@@ -522,11 +474,12 @@ test('render truth labels include unknown and unavailable and fail closed to axi
     assert.notEqual(output.values.find((value) => value.key === 'renderTruthLabel').value, 'LIVE');
   }
 
-  const alignedUnknown = structuredClone(observationFixture.baseLiveObservation);
+  const controlRoom = contract('PANEL_CONTROL_ROOM_TRUTH_V1');
+  const alignedUnknown = observationFor(controlRoom);
   alignedUnknown.truthAxes.truthLabel = 'UNKNOWN';
   alignedUnknown.values.find((value) => value.key === 'renderTruthLabel').value = 'UNKNOWN';
   assert.equal(validatePanelObservation(alignedUnknown), true);
-  assert.ok(!evaluate(contract(alignedUnknown.contractId), alignedUnknown).reasonCodes.includes('RENDER_TRUTH_LABEL_INCONSISTENT'));
+  assert.ok(!evaluate(controlRoom, alignedUnknown).reasonCodes.includes('RENDER_TRUTH_LABEL_INCONSISTENT'));
 });
 
 test('evidence-quality states remain explicit even when the owner requested yellow or red', () => {
@@ -536,7 +489,12 @@ test('evidence-quality states remain explicit even when the owner requested yell
     ['YELLOW', (input) => { input.truthAxes.freshnessState = 'STALE'; }, 'STALE', 'EVIDENCE_STALE'],
   ]) {
     const input = structuredClone(observationFixture.baseLiveObservation);
-    input.requestedDisplayState = requestedDisplayState;
+    requestNonGreen(
+      input,
+      requestedDisplayState,
+      requestedDisplayState === 'YELLOW' ? 'DEGRADED_REASON_PRESENT' : 'BLOCKING_REASON_PRESENT',
+      requestedDisplayState === 'YELLOW' ? 'SOURCE_STALE' : 'COMPONENT_BLOCKED',
+    );
     mutate(input);
     const output = evaluate(contract(input.contractId), input);
     assert.equal(output.displayState, expectedDisplayState);
@@ -569,14 +527,18 @@ test('source provenance, release identity, exact expected count, and observed de
 test('contract release binding is closed, immutable input to evaluation, and projected render-neutrally', () => {
   const panel = contract('PANEL_DASHBOARD_TRUTH_V1');
   assert.deepEqual(panel.releaseBinding, {
-    ...COCKPIT_RELEASE_MANIFEST_LAW,
+    manifestId: COCKPIT_RELEASE_MANIFEST_LAW.manifestId,
+    manifestRevision: COCKPIT_RELEASE_MANIFEST_LAW.manifestRevision,
+    manifestSha256: COCKPIT_RELEASE_MANIFEST_LAW.manifestSha256,
+    acceptedReleaseSha: COCKPIT_RELEASE_MANIFEST_LAW.acceptedReleaseSha,
     expectedManifestItemId: 'cockpit-projection:PANEL_DASHBOARD_TRUTH_V1',
   });
   assert.deepEqual(evaluate(panel, observationFixture.baseLiveObservation).releaseBinding, panel.releaseBinding);
-  assert.equal(new Set(contractSet.contracts.map((entry) => entry.releaseBinding.expectedManifestItemId)).size, 20);
+  assert.equal(new Set(contractSet.contracts.map((entry) => entry.releaseBinding.expectedManifestItemId)).size, 25);
+  const releaseBindingLawKeys = ['manifestId', 'manifestRevision', 'manifestSha256', 'acceptedReleaseSha'];
   for (const entry of contractSet.contracts) {
     assert.equal(entry.releaseBinding.expectedManifestItemId, `cockpit-projection:${entry.contractId}`);
-    for (const key of Object.keys(COCKPIT_RELEASE_MANIFEST_LAW)) {
+    for (const key of releaseBindingLawKeys) {
       assert.equal(entry.releaseBinding[key], COCKPIT_RELEASE_MANIFEST_LAW[key]);
     }
   }
@@ -614,6 +576,7 @@ test('missing or unknown required values and invalid render labels cannot produc
   const unknown = structuredClone(observationFixture.baseLiveObservation);
   const rootBlocker = unknown.values.find((value) => value.key === 'rootBlocker');
   rootBlocker.value = null;
+  rootBlocker.valueState = 'UNKNOWN';
   rootBlocker.unknownReasonCode = 'ROOT_BLOCKER_UNAVAILABLE';
   const unknownOutput = evaluate(contract(unknown.contractId), unknown);
   assert.equal(unknownOutput.displayState, 'UNKNOWN');
@@ -638,6 +601,18 @@ test('future evidence timestamps are rejected', () => {
   const input = structuredClone(observationFixture.baseLiveObservation);
   input.evidence.observedAtMs = NOW + 1;
   expectCode(() => evaluate(contract(input.contractId), input), 'EVIDENCE_TIME_IN_FUTURE');
+
+  const impossibleCause = requestNonGreen(
+    structuredClone(observationFixture.baseLiveObservation),
+    'YELLOW',
+    'DEGRADED_REASON_PRESENT',
+    'SOURCE_STALE',
+  );
+  impossibleCause.stateCauseEvidence.observedAtMs = impossibleCause.evidence.observedAtMs + 1;
+  expectCode(
+    () => evaluate(contract(impossibleCause.contractId), impossibleCause),
+    'NON_GREEN_CAUSE_EVIDENCE_TIME_INVALID',
+  );
 });
 
 test('incomplete denominator partitions are rejected instead of downgraded decoratively', () => {
@@ -646,7 +621,7 @@ test('incomplete denominator partitions are rejected instead of downgraded decor
   expectCode(() => validatePanelObservation(input), 'DENOMINATOR_INCOMPLETE');
 });
 
-test('a structurally complete 3-of-3 denominator cannot green against the 20-item release manifest', () => {
+test('a structurally complete 3-of-3 denominator cannot green against the 25-item release manifest', () => {
   const input = structuredClone(observationFixture.baseLiveObservation);
   input.denominator = {
     expectedCount: 3,
@@ -670,6 +645,7 @@ test('unknown numeric values require a bounded reason and never become zero', ()
   const input = structuredClone(observationFixture.baseLiveObservation);
   const exposure = input.values.find((value) => value.key === 'activeExposureCount');
   exposure.value = null;
+  exposure.valueState = 'UNKNOWN';
   expectCode(() => validatePanelObservation(input), 'UNKNOWN_VALUE_DISCIPLINE');
   exposure.unknownReasonCode = 'EXPOSURE_UNAVAILABLE';
   assert.equal(validatePanelObservation(input), true);
@@ -682,15 +658,16 @@ test('unknown numeric values require a bounded reason and never become zero', ()
 test('NaN and infinities are rejected as non-finite evidence values', () => {
   for (const value of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
     const input = structuredClone(observationFixture.baseLiveObservation);
-    input.values[0].value = value;
-    expectCode(() => validatePanelObservation(input), 'VALUE_INVALID');
+    input.values.find((entry) => entry.key === 'drawdown').value = value;
+    expectCode(() => validatePanelObservation(input), 'FACT_VALUE_KIND_MISMATCH');
   }
 });
 
 test('GREEN requires at least one rendered value datum', () => {
-  const input = structuredClone(observationFixture.baseLiveObservation);
+  const panel = contract('PANEL_MARKETS_TRUTH_V1');
+  const input = observationFor(panel);
   input.values = [];
-  const output = evaluate(contract(input.contractId), input);
+  const output = evaluate(panel, input);
   assert.equal(output.displayState, 'UNKNOWN');
   assert.ok(output.reasonCodes.includes('GREEN_VALUE_EVIDENCE_MISSING'));
   assert.ok(output.reasonCodes.includes('DECLARED_GREEN_FORBIDDEN_EVIDENCE_INSUFFICIENT'));
@@ -712,7 +689,7 @@ test('orphan gauges and fake controls fail closed', () => {
   observation.controlState = availableControlState(controlContract, 'DECORATIVE.NO_BACKEND');
   expectCode(() => evaluate(controlContract, observation), 'FAKE_CONTROL');
 
-  const incomplete = observationFor(controlContract);
+  const incomplete = observationFor(controlContract, { controlAvailable: true });
   incomplete.controlState.ledgerEvidenceRef = null;
   expectCode(() => validatePanelObservation(incomplete), 'CONTROL_EVIDENCE_INCOMPLETE');
 
@@ -732,13 +709,13 @@ test('fixture-derived view model is byte-stable and can never appear live', () =
     fixtureProvenance: fixtureProvenance(),
     contractSet,
     projectionMatrix: matrix,
-    observations: allObservations(),
+    observations: allObservations(contractSet),
   };
   const first = buildCockpitViewModel(input);
   const second = buildCockpitViewModel({ ...input, observations: [...input.observations].reverse() });
   assert.equal(JSON.stringify(first), JSON.stringify(second));
   assert.equal(first.surfaceCount, 18);
-  assert.equal(first.panelCount, 20);
+  assert.equal(first.panelCount, 25);
   assert.deepEqual(first.surfaces.map((surface) => surface.surfaceId), I00_SURFACE_IDS);
   for (const surface of first.surfaces) {
     assert.ok(surface.panels.every((panel) => panel.surfaceId === surface.surfaceId));
@@ -761,7 +738,7 @@ test('fixture-derived view model is byte-stable and can never appear live', () =
     panel.values.find((value) => value.key === 'renderTruthLabel')?.value === 'SYNTHETIC'
   )));
   const fixtureControls = panels.filter((panel) => panel.control !== null).map((panel) => panel.control.state);
-  assert.equal(fixtureControls.length, 1);
+  assert.equal(fixtureControls.length, 6);
   assert.ok(fixtureControls.every((state) => state.available === false
     && state.unavailableReasonCode === 'FIXTURE_CONTROL_UNAVAILABLE'
     && state.effectPreview === null
@@ -783,7 +760,7 @@ test('fixture provenance cannot be upgraded by a claimed-owner input', () => {
     },
     contractSet,
     projectionMatrix: matrix,
-    observations: allObservations(),
+    observations: allObservations(contractSet),
   };
   expectCode(() => buildCockpitViewModel(input), 'FIXTURE_PROVENANCE_INVALID');
 });

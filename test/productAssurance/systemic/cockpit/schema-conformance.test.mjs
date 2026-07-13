@@ -3,16 +3,18 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
-  FACT_SEMANTICS_BY_CONTRACT,
   buildCockpitViewModel,
-  validatePanelObservation,
 } from '../../../../fixtures/productAssurance/systemic/cockpit/reference/cockpit-view-model.mjs';
+import {
+  evaluateReleaseBoundPanel,
+} from '../../../../fixtures/productAssurance/systemic/cockpit/reference/release-bound-panel-evaluator.mjs';
 import {
   SchemaSubsetError,
   assertJsonSchemaValid,
   assertSchemaSubsetSupported,
   validateJsonSchema,
 } from './support/json-schema-2020-12-subset.mjs';
+import { allObservations, observationFor } from './support/cockpit-fixture-builder.mjs';
 
 function json(relativePath) {
   return JSON.parse(readFileSync(new URL(
@@ -26,81 +28,21 @@ const viewModelSchema = json('schemas/cockpit-view-model.v1.schema.json');
 const insertionDraftSchema = json('schemas/insertion-request-draft.v1.schema.json');
 const generatedRowsSchema = json('schemas/generated-row-drafts.v1.schema.json');
 const projectionSchema = json('schemas/surface-projection-matrix.v1.schema.json');
+const releaseBoundSchema = json('schemas/release-bound-panel-evaluation.v1.schema.json');
 
 const contractSet = json('fixtures/panel-contracts.v1.json');
 const projectionMatrix = json('fixtures/surface-projection-matrix.v1.json');
 const observationFixture = json('fixtures/panel-observations.v1.json');
+const releaseManifestFixture = json('../observability/cases/release-manifest-healthy.json');
 
-function allObservations() {
-  return contractSet.contracts.map((contract) => {
-    const observation = structuredClone(observationFixture.baseLiveObservation);
-    observation.contractId = contract.contractId;
-    observation.sourceProvenance.canonicalOwner = contract.sourceBinding.canonicalOwner;
-    observation.sourceProvenance.sourceSchemaId = contract.sourceBinding.schemaId;
-    observation.sourceProvenance.sourceSchemaVersion = contract.sourceBinding.schemaVersion;
-    observation.sourceProvenance.manifestItemId = contract.releaseBinding.expectedManifestItemId;
-    observation.denominator = {
-      expectedCount: contract.denominatorLaw.expectedCount,
-      visibleCount: contract.denominatorLaw.expectedCount,
-      filteredCount: 0,
-      hiddenCount: 0,
-      unknownCount: 0,
-    };
-    observation.evidence.observedCount = contract.denominatorLaw.expectedCount;
-    const dashboardValues = new Map(observation.values.map((value) => [value.key, value]));
-    observation.values = FACT_SEMANTICS_BY_CONTRACT[contract.contractId].map((semantic) => {
-      const dashboardValue = dashboardValues.get(semantic.valueKey);
-      if (dashboardValue && dashboardValue.unit === semantic.unit) return structuredClone(dashboardValue);
-      let value;
-      if (semantic.valueKind === 'ENUM') value = semantic.enumValues[0];
-      else if (semantic.valueKind === 'TEXT') value = `FIXTURE_${semantic.valueKey.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase()}`;
-      else if (semantic.valueKind === 'BOOLEAN') value = false;
-      else if (semantic.valueKind === 'UTC_MILLISECONDS') value = observationFixture.evaluatedAtMs;
-      else value = 0;
-      return { key: semantic.valueKey, value, unit: semantic.unit, unknownReasonCode: null };
-    });
-    if (contract.detectionClaim.kind === 'NONE') {
-      observation.detectionEvidence = {
-        registeredFailureId: null,
-        detectorConnected: null,
-        telemetryConnected: null,
-        browserConnected: null,
-        sloMatched: null,
-        outOfBandProofPresent: null,
-      };
-    } else if (contract.detectionClaim.kind === 'OUT_OF_BAND_ONLY') {
-      observation.detectionEvidence = {
-        registeredFailureId: contract.detectionClaim.registeredFailureId,
-        detectorConnected: true,
-        telemetryConnected: true,
-        browserConnected: null,
-        sloMatched: true,
-        outOfBandProofPresent: true,
-      };
-    }
-    if (contract.panelKind === 'CONTROL') {
-      observation.controlState = {
-        available: true,
-        unavailableReasonCode: null,
-        backendMutationId: contract.controlBinding.backendMutationId,
-        effectPreview: {
-          effectType: 'SAFETY_STATE_TRANSITION',
-          summary: 'Engage the existing tested kill-switch path.',
-          maximumEffect: 'Blocks advisory progression without placing or mutating an order.',
-        },
-        currentState: { stateType: 'KILL_SWITCH', value: 'DISENGAGED' },
-        previewState: 'READY_FOR_CONFIRMATION',
-        confirmState: 'CONFIRMED',
-        resultState: 'APPLIED',
-        beforeRevision: 41,
-        afterRevision: 42,
-        ledgerEvidenceRef: 'fixture:ledger:kill-switch:42',
-        correlationId: 'fixture-correlation-kill-switch-42',
-      };
-    }
-    validatePanelObservation(observation);
-    return observation;
-  });
+function composedReleaseBoundSchema() {
+  const schema = structuredClone(releaseBoundSchema);
+  schema.$defs = {
+    ...structuredClone(viewModelSchema.$defs),
+    ...schema.$defs,
+  };
+  schema.properties.panel = { $ref: '#/$defs/panel' };
+  return schema;
 }
 
 function buildFixtureViewModel() {
@@ -116,7 +58,7 @@ function buildFixtureViewModel() {
     },
     contractSet,
     projectionMatrix,
-    observations: allObservations(),
+    observations: allObservations(contractSet),
   });
 }
 
@@ -127,6 +69,7 @@ test('the packet validator recognizes every keyword used by the cockpit schemas'
     insertionDraftSchema,
     generatedRowsSchema,
     projectionSchema,
+    composedReleaseBoundSchema(),
   ]) assert.equal(assertSchemaSubsetSupported(schema), true, schema.$id);
 });
 
@@ -158,6 +101,30 @@ test('all cockpit JSON artifacts with declared schemas conform to those schemas'
 test('the render-neutral cockpit view-model output conforms to its closed schema', () => {
   const viewModel = buildFixtureViewModel();
   assert.equal(assertJsonSchemaValid(viewModelSchema, viewModel, 'cockpit view model'), true);
+});
+
+test('release-bound panel composition conforms after resolving the local cockpit panel schema', () => {
+  const panelContract = contractSet.contracts.find((entry) => (
+    entry.contractId === 'PANEL_DASHBOARD_TRUTH_V1'
+  ));
+  const stateRuleSet = contractSet.stateRuleSets.find((entry) => (
+    entry.ruleSetId === panelContract.stateRuleSetId
+  ));
+  const observation = observationFor(panelContract);
+  observation.evidence.observedAtMs = releaseManifestFixture.nowMs - 30;
+  observation.evidence.lastIndependentProofAtMs = releaseManifestFixture.nowMs - 150;
+  const output = evaluateReleaseBoundPanel({
+    contract: panelContract,
+    observation,
+    stateRuleSet,
+    evaluatedAtMs: releaseManifestFixture.nowMs,
+    releaseManifestInput: releaseManifestFixture,
+  });
+  assert.equal(assertJsonSchemaValid(
+    composedReleaseBoundSchema(),
+    output,
+    'release-bound panel evaluation',
+  ), true);
 });
 
 test('closed schemas reject a hostile undeclared field and schema drift is not ignored', () => {

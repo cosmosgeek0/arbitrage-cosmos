@@ -120,6 +120,7 @@
         "comparator",
         "threshold",
         "objectivePercent",
+        "measurementSource",
         "dependentCapabilityIds",
         "recommendedFailurePosture",
         "effectPolicy"
@@ -165,6 +166,7 @@
           "exclusiveMinimum": 0,
           "maximum": 100
         },
+        "measurementSource": { "$ref": "#/$defs/measurementSource" },
         "dependentCapabilityIds": {
           "type": "array",
           "maxItems": 32,
@@ -198,6 +200,7 @@
         "endMs",
         "evidenceObservedAtMs",
         "sourceTruthLabel",
+        "measurementSource",
         "canonicalEvidenceRefs",
         "samples"
       ],
@@ -219,6 +222,7 @@
             "UNKNOWN"
           ]
         },
+        "measurementSource": { "$ref": "#/$defs/measurementSource" },
         "canonicalEvidenceRefs": { "$ref": "#/$defs/canonicalEvidenceRefs" },
         "samples": {
           "type": "array",
@@ -249,6 +253,41 @@
           ]
         }
       }
+    },
+    "metricFamily": {
+      "enum": [
+        "SOURCE_AGE_PERCENTILES", "PROCESSING_AGE_PERCENTILES", "CROSS_SOURCE_SKEW",
+        "QUEUE_DEPTH_BACKPRESSURE", "DROPPED_COALESCED_EVENTS", "RECONCILIATION_GAP",
+        "AMBIGUITY_DURATION", "AUTOMATIC_RECOVERY_RESULT_RATE", "EXECUTION_COST", "SLIPPAGE",
+        "FUNDING", "BORROW_INTEREST", "MARKET_IMPACT", "INCIDENT_FREQUENCY",
+        "RECURRING_FAILED_INVARIANTS", "CPU_BUDGET", "MEMORY_BUDGET", "DISK_BUDGET",
+        "WAL_BUDGET", "API_RATE_BUDGET", "TELEMETRY_BUDGET", "TOKEN_BUDGET", "COST_BUDGET"
+      ]
+    },
+    "measurementSource": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "metricId", "family", "statistic"],
+          "properties": {
+            "kind": { "const": "HISTORICAL_METRIC_STATISTIC" },
+            "metricId": { "$ref": "#/$defs/identifier" },
+            "family": { "$ref": "#/$defs/metricFamily" },
+            "statistic": { "enum": ["P50", "P95", "P99", "COUNT", "RATE", "SUM", "UTILIZATION"] }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "ownerId", "evidenceKind"],
+          "properties": {
+            "kind": { "const": "CANONICAL_OWNER_EVIDENCE" },
+            "ownerId": { "$ref": "#/$defs/identifier" },
+            "evidenceKind": { "$ref": "#/$defs/identifier" }
+          }
+        }
+      ]
     }
   }
 }

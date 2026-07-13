@@ -499,7 +499,7 @@ function axisResult(actual, passValue, failValues, unknownValues, failCode, unkn
   return 'UNKNOWN';
 }
 
-function evaluateItem(expected, observed, nowMs, maximumAgeMs) {
+function evaluateItem(expected, observed, nowMs, observedAtMs, maximumAgeMs) {
   const blocking = expected.required && expected.enabled;
   const reasons = [];
   const results = [];
@@ -540,6 +540,23 @@ function evaluateItem(expected, observed, nowMs, maximumAgeMs) {
   results.push(axisResult(observed.freshnessState, 'CURRENT', ['STALE', 'SILENT', 'UNAVAILABLE'], ['UNKNOWN'], `EXPECTED_TELEMETRY_${observed.freshnessState}`, 'FRESHNESS_UNKNOWN', reasons));
   results.push(axisResult(observed.temporalCoherenceState, 'COHERENT', ['INCOHERENT'], ['UNKNOWN'], 'TEMPORAL_COHERENCE_FAILED', 'TEMPORAL_COHERENCE_UNKNOWN', reasons));
 
+  const contradictoryAxes = observed.identityState !== 'DISCOVERED'
+    && (observed.telemetryState === 'INSTRUMENTED'
+      || observed.freshnessState === 'CURRENT'
+      || observed.temporalCoherenceState === 'COHERENT');
+  if (contradictoryAxes) {
+    reasons.push('OBSERVABILITY_AXIS_CONTRADICTION');
+    results.push('FAIL');
+  }
+  if (observed.telemetryState !== 'INSTRUMENTED'
+      && (observed.freshnessState === 'CURRENT'
+        || observed.temporalCoherenceState === 'COHERENT'
+        || observed.telemetrySchemaVersion !== null
+        || observed.lastTelemetryAtMs !== null)) {
+    reasons.push('TELEMETRY_AXIS_CONTRADICTION');
+    results.push('FAIL');
+  }
+
   if (observed.lifecycleAuthority.readiness !== 'READY') {
     reasons.push(`READINESS_${observed.lifecycleAuthority.readiness}`);
     results.push(observed.lifecycleAuthority.readiness === 'WARMING' ? 'UNKNOWN' : 'FAIL');
@@ -576,6 +593,9 @@ function evaluateItem(expected, observed, nowMs, maximumAgeMs) {
     } else if (observed.lastIndependentProbeAtMs > nowMs) {
       reasons.push('INDEPENDENT_PROBE_TIMESTAMP_FROM_FUTURE');
       results.push('UNKNOWN');
+    } else if (observed.lastIndependentProbeAtMs > observedAtMs) {
+      reasons.push('INDEPENDENT_PROBE_TIMESTAMP_AFTER_OBSERVATION');
+      results.push('FAIL');
     } else if (nowMs - observed.lastIndependentProbeAtMs > maximumAgeMs) {
       reasons.push('INDEPENDENT_PROBE_EVIDENCE_EXPIRED');
       results.push('UNKNOWN');
@@ -599,6 +619,9 @@ function evaluateItem(expected, observed, nowMs, maximumAgeMs) {
   if (observed.telemetryState === 'INSTRUMENTED' && observed.lastTelemetryAtMs === null) {
     reasons.push('TELEMETRY_TIMESTAMP_MISSING');
     results.push('FAIL');
+  } else if (observed.lastTelemetryAtMs !== null && observed.lastTelemetryAtMs > observedAtMs) {
+    reasons.push('TELEMETRY_TIMESTAMP_AFTER_OBSERVATION');
+    results.push('FAIL');
   } else if (observed.lastTelemetryAtMs !== null && observed.lastTelemetryAtMs > nowMs) {
     reasons.push('TELEMETRY_TIMESTAMP_FROM_FUTURE');
     results.push('UNKNOWN');
@@ -621,6 +644,127 @@ function evaluateItem(expected, observed, nowMs, maximumAgeMs) {
     truthReasonCodes: liveEligible ? [] : ['EXPECTED_ITEM_NOT_LIVE_PUBLIC'],
     reasonCodes: sortedUniqueStrings(reasons),
     dependentCapabilityIds: [...expected.dependentCapabilityIds].sort(compareAscii),
+  };
+}
+
+function internalReferenceTarget(referenceId, expectedById) {
+  if (referenceId.startsWith('component:')
+      || referenceId.startsWith('command-path:')
+      || referenceId.startsWith('cockpit-projection:')) {
+    return expectedById.has(referenceId) ? referenceId : null;
+  }
+  if (referenceId.startsWith('cockpit-contract:') || referenceId.startsWith('control-contract:')) {
+    const contractId = referenceId.slice(referenceId.indexOf(':') + 1);
+    const target = `cockpit-projection:${contractId}`;
+    return expectedById.has(target) ? target : null;
+  }
+  if (referenceId.startsWith('semantic-stream:')) {
+    const target = `source:${referenceId.slice('semantic-stream:'.length)}`;
+    return expectedById.has(target) ? target : null;
+  }
+  return undefined;
+}
+
+function evaluateInternalReferenceIntegrity(manifest, expectedById) {
+  const unresolvedReferences = manifest.expectedItems
+    .flatMap((item) => item.dependentCapabilityIds.map((referenceId) => ({
+      expectedId: item.expectedId,
+      referenceId,
+      targetExpectedId: internalReferenceTarget(referenceId, expectedById),
+    })))
+    .filter((reference) => reference.targetExpectedId === null)
+    .sort((left, right) => compareAscii(
+      `${left.expectedId}:${left.referenceId}`,
+      `${right.expectedId}:${right.referenceId}`,
+    ));
+  return {
+    result: unresolvedReferences.length === 0 ? 'PASS' : 'FAIL',
+    unresolvedReferences,
+    reasonCodes: unresolvedReferences.length === 0 ? [] : ['INTERNAL_DEPENDENCY_REFERENCE_UNRESOLVED'],
+  };
+}
+
+function evaluateComponentDependencyHealth(itemEvaluationById) {
+  const incomingByComponentId = new Map(RELEASE_COMPONENT_CATALOG.map((entry) => [entry.componentId, []]));
+  for (const edge of RELEASE_DEPENDENCY_CATALOG) incomingByComponentId.get(edge.to)?.push(edge);
+  const memo = new Map();
+  const visiting = new Set();
+  let cycleDetected = false;
+
+  const visit = (componentId) => {
+    if (memo.has(componentId)) return memo.get(componentId);
+    if (visiting.has(componentId)) {
+      cycleDetected = true;
+      return {
+        componentId,
+        expectedId: `component:${componentId}`,
+        directResult: 'FAIL',
+        result: 'FAIL',
+        blockingRequiredDependencyIds: [],
+        unknownRequiredDependencyIds: [],
+        optionalAdvisoryDependencyIds: [],
+        rootCauseExpectedIds: [`component:${componentId}`],
+        reasonCodes: ['DEPENDENCY_GRAPH_CYCLE'],
+      };
+    }
+    visiting.add(componentId);
+    const expectedId = `component:${componentId}`;
+    const directResult = itemEvaluationById.get(expectedId)?.result ?? 'FAIL';
+    const requiredResults = [directResult];
+    const blockingRequiredDependencyIds = [];
+    const unknownRequiredDependencyIds = [];
+    const optionalAdvisoryDependencyIds = [];
+    const rootCauseExpectedIds = directResult === 'FAIL' ? [expectedId] : [];
+    const reasons = directResult === 'FAIL' ? ['COMPONENT_SELF_FAILED']
+      : directResult === 'UNKNOWN' ? ['COMPONENT_SELF_UNKNOWN'] : [];
+
+    for (const edge of incomingByComponentId.get(componentId) ?? []) {
+      const edgeResult = itemEvaluationById.get(edge.expectedId)?.result ?? 'FAIL';
+      const upstream = visit(edge.from);
+      const dependencyResult = strongestResult([edgeResult, upstream.result]);
+      if (!edge.required) {
+        if (dependencyResult !== 'PASS') optionalAdvisoryDependencyIds.push(edge.expectedId);
+        continue;
+      }
+      requiredResults.push(dependencyResult);
+      if (dependencyResult === 'FAIL') {
+        blockingRequiredDependencyIds.push(edge.expectedId);
+        rootCauseExpectedIds.push(
+          ...(edgeResult === 'FAIL' ? [edge.expectedId] : []),
+          ...upstream.rootCauseExpectedIds,
+        );
+      } else if (dependencyResult === 'UNKNOWN') {
+        unknownRequiredDependencyIds.push(edge.expectedId);
+      }
+    }
+    const result = strongestResult(requiredResults);
+    if (blockingRequiredDependencyIds.length > 0) reasons.push('REQUIRED_DEPENDENCY_FAILED');
+    if (unknownRequiredDependencyIds.length > 0) reasons.push('REQUIRED_DEPENDENCY_UNKNOWN');
+    if (optionalAdvisoryDependencyIds.length > 0) reasons.push('OPTIONAL_DEPENDENCY_DEGRADED');
+    const projection = {
+      componentId,
+      expectedId,
+      directResult,
+      result,
+      blockingRequiredDependencyIds: sortedUniqueStrings(blockingRequiredDependencyIds),
+      unknownRequiredDependencyIds: sortedUniqueStrings(unknownRequiredDependencyIds),
+      optionalAdvisoryDependencyIds: sortedUniqueStrings(optionalAdvisoryDependencyIds),
+      rootCauseExpectedIds: sortedUniqueStrings(rootCauseExpectedIds),
+      reasonCodes: sortedUniqueStrings(reasons),
+    };
+    visiting.delete(componentId);
+    memo.set(componentId, projection);
+    return projection;
+  };
+
+  const capabilities = RELEASE_COMPONENT_CATALOG
+    .map((entry) => visit(entry.componentId))
+    .sort((left, right) => compareAscii(left.componentId, right.componentId));
+  return {
+    result: cycleDetected ? 'FAIL' : strongestResult(capabilities.map((entry) => entry.result)),
+    cycleDetected,
+    capabilities,
+    reasonCodes: cycleDetected ? ['DEPENDENCY_GRAPH_CYCLE'] : [],
   };
 }
 
@@ -707,15 +851,12 @@ function evaluateExactInventorySet({
   const itemResults = canonicalRequiredEnabledIds
     .map((id) => itemEvaluationById.get(id)?.result ?? 'FAIL');
   const optionalFailedIds = optionalIds
-    .filter((id) => itemEvaluationById.get(id)?.result === 'FAIL');
+    .filter((id) => observedIds.includes(id) && itemEvaluationById.get(id)?.result === 'FAIL');
   const optionalUnknownIds = optionalIds
-    .filter((id) => itemEvaluationById.get(id)?.result === 'UNKNOWN');
+    .filter((id) => observedIds.includes(id) && itemEvaluationById.get(id)?.result === 'UNKNOWN');
   let result;
   if (reasons.length > 0 || bindingResult === 'FAIL') result = 'FAIL';
   else if (bindingResult !== 'PASS') result = 'UNKNOWN';
-  else if (missingOptionalObservedIds.length > 0
-      || optionalFailedIds.length > 0
-      || optionalUnknownIds.length > 0) result = 'UNKNOWN';
   else result = strongestResult(itemResults);
   return {
     source: definition.source,
@@ -784,9 +925,15 @@ export function evaluateReleaseBoundExpectedManifest(input) {
       && observation.lastCompleteCorrelationTrace.releaseSha !== acceptedReleaseSha) {
     bindingReasons.push('COMPLETE_TRACE_RELEASE_MISMATCH');
   }
+  if (observation.lastCompleteCorrelationTrace?.completedAtMs > observation.observedAtMs) {
+    bindingReasons.push('COMPLETE_TRACE_AFTER_OBSERVATION');
+  }
   if (observation.lastIndependentBlackBoxProbe?.releaseSha !== undefined
       && observation.lastIndependentBlackBoxProbe.releaseSha !== acceptedReleaseSha) {
     bindingReasons.push('BLACK_BOX_PROBE_RELEASE_MISMATCH');
+  }
+  if (observation.lastIndependentBlackBoxProbe?.observedAtMs > observation.observedAtMs) {
+    bindingReasons.push('BLACK_BOX_PROBE_AFTER_OBSERVATION');
   }
   const digestEvidence = observation.manifestDigestVerification;
   const digestReasons = [];
@@ -826,10 +973,18 @@ export function evaluateReleaseBoundExpectedManifest(input) {
       : 'PASS';
 
   const itemEvaluations = manifest.expectedItems
-    .map((expected) => evaluateItem(expected, observedById.get(expected.expectedId), nowMs, manifest.observationMaximumAgeMs))
+    .map((expected) => evaluateItem(
+      expected,
+      observedById.get(expected.expectedId),
+      nowMs,
+      observation.observedAtMs,
+      manifest.observationMaximumAgeMs,
+    ))
     .sort((left, right) => compareAscii(left.expectedId, right.expectedId));
   const itemEvaluationById = new Map(itemEvaluations.map((item) => [item.expectedId, item]));
   const blockingEvaluations = itemEvaluations.filter((item) => item.blocking);
+  const internalReferenceIntegrity = evaluateInternalReferenceIntegrity(manifest, expectedById);
+  const componentDependencyHealth = evaluateComponentDependencyHealth(itemEvaluationById);
   const evaluationEvidencePayload = {
     schemaVersion: 'release-bound-expected-manifest-evaluation-evidence.v1',
     evaluatedAtMs: nowMs,
@@ -919,6 +1074,8 @@ export function evaluateReleaseBoundExpectedManifest(input) {
     blackBoxResult,
     inventoryIntegrityResult,
     exactInventoryResult,
+    internalReferenceIntegrity.result,
+    componentDependencyHealth.result,
     ...blockingEvaluations.map((item) => item.result),
   ]);
 
@@ -985,6 +1142,8 @@ export function evaluateReleaseBoundExpectedManifest(input) {
       result: exactInventoryResult,
       reasonCodes: exactInventoryResult === 'PASS' ? [] : ['CANONICAL_RELEASE_INVENTORY_NOT_EXACT'],
     },
+    internalReferenceIntegrity,
+    componentDependencyHealth,
     ...exactInventorySets,
     overallResult,
     greenEligible: overallResult === 'PASS',

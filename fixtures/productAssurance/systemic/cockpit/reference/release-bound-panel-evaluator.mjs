@@ -16,6 +16,7 @@ export const RELEASE_BOUND_PANEL_REASON_CODES = Object.freeze([
   'PANEL_COMPONENT_FACT_IDENTITY_SET_MISMATCH',
   'PANEL_COMPONENT_FACT_RELEASE_MISMATCH',
   'PANEL_COMPONENT_INVENTORY_NOT_PASS',
+  'PANEL_COMPONENT_DEPENDENCY_GRAPH_NOT_PASS',
   'PANEL_CONTROL_COMMAND_BINDING_MISMATCH',
   'PANEL_CONTROL_COMMAND_ITEM_NOT_LIVE',
   'PANEL_CONTROL_COMMAND_ITEM_NOT_PASS',
@@ -27,6 +28,7 @@ export const RELEASE_BOUND_PANEL_REASON_CODES = Object.freeze([
   'PANEL_EXPECTED_MANIFEST_ITEM_NOT_LIVE',
   'PANEL_EXPECTED_MANIFEST_ITEM_NOT_PASS',
   'PANEL_EXPECTED_MANIFEST_ITEM_NOT_REQUIRED',
+  'PANEL_INTERNAL_DEPENDENCY_REFERENCE_NOT_PASS',
   'PANEL_MANIFEST_BINDING_NOT_PASS',
   'PANEL_MANIFEST_CANONICAL_DIGEST_NOT_PASS',
   'PANEL_MANIFEST_DENOMINATOR_COUNT_MISMATCH',
@@ -44,6 +46,10 @@ export const RELEASE_BOUND_PANEL_REASON_CODES = Object.freeze([
   'PANEL_SOURCE_AGGREGATION_IDENTITY_MISMATCH',
   'PANEL_SOURCE_INVENTORY_NOT_PASS',
   'PANEL_SOURCE_PRODUCER_BINDING_MISMATCH',
+  'PANEL_DEPENDENCY_SCOPE_MISSING',
+  'PANEL_DEPENDENT_COMPONENT_NOT_PASS',
+  'PANEL_WHOLE_MACHINE_COMPONENT_NOT_PASS',
+  'PANEL_WHOLE_MACHINE_MANIFEST_NOT_PASS',
 ]);
 
 const REASON_CODE_SET = new Set(RELEASE_BOUND_PANEL_REASON_CODES);
@@ -58,6 +64,29 @@ const EXACT_SET_KEYS = Object.freeze([
   'sentinels',
 ]);
 const DOWNGRADE_ORDER = Object.freeze(['MISSING', 'SILENT', 'STALE', 'SYNTHETIC', 'UNKNOWN']);
+const WHOLE_MACHINE_CONTRACT_IDS = new Set([
+  'PANEL_DASHBOARD_TRUTH_V1',
+  'PANEL_CONTROL_ROOM_TRUTH_V1',
+  'PANEL_HEALTH_TRUTH_V1',
+]);
+const PANEL_DEPENDENT_COMPONENT_IDS = Object.freeze({
+  PANEL_ACCOUNT_TRUTH_V1: Object.freeze(['reconciliation']),
+  PANEL_MARKETS_TRUTH_V1: Object.freeze(['market-universe']),
+  PANEL_TOKEN_TRUTH_V1: Object.freeze(['intelligence-runtime']),
+  PANEL_BASIS_TRUTH_V1: Object.freeze(['basis-engine']),
+  PANEL_VOLUME_TRUTH_V1: Object.freeze(['volume-engine']),
+  PANEL_OPPORTUNITIES_TRUTH_V1: Object.freeze(['market-intelligence']),
+  PANEL_BORROW_TRUTH_V1: Object.freeze(['capital-supervision']),
+  PANEL_EXECUTION_TRUTH_V1: Object.freeze(['execution-coordinator-validate-only', 'reconciliation']),
+  PANEL_ORDERS_TRUTH_V1: Object.freeze(['reconciliation']),
+  PANEL_POSITIONS_TRUTH_V1: Object.freeze(['reconciliation']),
+  PANEL_FILLS_TRUTH_V1: Object.freeze(['reconciliation']),
+  PANEL_PNL_TRUTH_V1: Object.freeze(['reconciliation']),
+  PANEL_RISK_TRUTH_V1: Object.freeze(['multileg-risk']),
+  PANEL_LOGS_LEDGER_TRUTH_V1: Object.freeze(['ledger-persistence']),
+  PANEL_NOTIFICATIONS_TRUTH_V1: Object.freeze(['engine-supervisor']),
+  PANEL_HEALTH_OUT_OF_BAND_LIVENESS_V1: Object.freeze([]),
+});
 
 export class ReleaseBoundPanelEvaluationError extends TypeError {
   constructor(code, path, detail) {
@@ -228,39 +257,38 @@ function rowBinding(rows, expectedIds, itemEvaluationById, releaseSha) {
 function sourceAggregationBinding(observation, sourceSet, componentSet, releaseInput, itemEvaluationById, releaseSha) {
   const rows = Array.isArray(observation.sourceRows) ? observation.sourceRows : [];
   const sourceIds = sourceSet.expectedRequiredEnabledIds;
-  const coveredStreamIds = rows.flatMap((row) => Array.isArray(row?.semanticStreamIds)
-    ? row.semanticStreamIds.map((id) => `source:${id}`)
+  const coveredStreamIds = rows.flatMap((row) => Array.isArray(row?.coveredExpectedManifestItemIds)
+    ? row.coveredExpectedManifestItemIds
     : []);
   const exactCoveredStreamIds = exactIds(coveredStreamIds);
   const duplicateStreamIds = duplicateIds(coveredStreamIds);
-  const rowIds = rows.map((row) => row?.sourceId).filter((value) => typeof value === 'string');
-  const expectedAggregationIds = exactIds(SOURCE_ROW_CATALOG.map((row) => row.sourceId));
+  const rowIds = rows.map((row) => row?.sourceAggregationId).filter((value) => typeof value === 'string');
+  const expectedAggregationIds = exactIds(SOURCE_ROW_CATALOG.map((row) => row.sourceAggregationId));
   const componentIds = new Set(componentSet.expectedRequiredEnabledIds.map((id) => id.slice('component:'.length)));
   const producerMismatchRowIds = [];
   for (const [index, row] of rows.entries()) {
     const catalog = SOURCE_ROW_CATALOG[index];
     const boundComponentIds = Array.isArray(row?.componentIds) ? row.componentIds : [];
     const rawSourceItems = releaseInput.manifest.expectedItems
-      .filter((item) => row?.semanticStreamIds?.some((id) => item.expectedId === `source:${id}`));
+      .filter((item) => row?.coveredExpectedManifestItemIds?.includes(item.expectedId));
     const ownerMatches = rawSourceItems.length > 0
       && rawSourceItems.every((item) => item.ownerId === row?.ownerId);
     const componentsMatch = boundComponentIds.length > 0
       && boundComponentIds.every((id) => componentIds.has(id));
     const producerMatches = catalog !== undefined
-      && row?.sourceId === catalog.sourceId
-      && row?.expectedManifestItemId === catalog.expectedManifestItemId
+      && row?.sourceAggregationId === catalog.sourceAggregationId
+      && JSON.stringify(row?.coveredExpectedManifestItemIds) === JSON.stringify(catalog.coveredExpectedManifestItemIds)
       && JSON.stringify(row?.physicalProducerIds) === JSON.stringify(catalog.physicalProducerIds)
-      && JSON.stringify(row?.componentIds) === JSON.stringify(catalog.componentIds)
-      && JSON.stringify(row?.semanticStreamIds) === JSON.stringify(catalog.semanticStreamIds);
+      && JSON.stringify(row?.componentIds) === JSON.stringify(catalog.componentIds);
     const releasesMatch = row?.acceptedReleaseSha === releaseSha && row?.runningReleaseSha === releaseSha;
     if (row?.aggregationKind !== 'NAMED_AGGREGATION' || !producerMatches
         || !ownerMatches || !componentsMatch || !releasesMatch) {
-      producerMismatchRowIds.push(row?.sourceId ?? 'UNKNOWN_SOURCE_ROW');
+      producerMismatchRowIds.push(row?.sourceAggregationId ?? 'UNKNOWN_SOURCE_ROW');
     }
   }
   const sourceRowsReleaseMismatch = rows
     .filter((row) => row?.acceptedReleaseSha !== releaseSha || row?.runningReleaseSha !== releaseSha)
-    .map((row) => row?.sourceId)
+    .map((row) => row?.sourceAggregationId)
     .filter((value) => typeof value === 'string');
   const nonPassingIds = sourceIds.filter((id) => {
     const evaluation = itemEvaluationById.get(id);
@@ -302,6 +330,49 @@ function sourceAggregationBinding(observation, sourceSet, componentSet, releaseI
     nonLiveIds,
     streamDenominatorMatches,
     aggregationDenominatorMatches,
+  };
+}
+
+function componentDependencyBinding(contract, releaseEvaluation, itemEvaluationById) {
+  const capabilities = releaseEvaluation.componentDependencyHealth.capabilities;
+  const wholeMachine = WHOLE_MACHINE_CONTRACT_IDS.has(contract.contractId);
+  const configuredIds = wholeMachine
+    ? capabilities.map((entry) => entry.componentId)
+    : PANEL_DEPENDENT_COMPONENT_IDS[contract.contractId];
+  const scopeMissing = contract.panelKind !== 'CONTROL' && configuredIds === undefined;
+  const expectedComponentIds = exactIds(configuredIds ?? []);
+  const selected = expectedComponentIds
+    .map((componentId) => capabilities.find((entry) => entry.componentId === componentId))
+    .filter((entry) => entry !== undefined);
+  const unresolvedComponentIds = expectedComponentIds
+    .filter((componentId) => !selected.some((entry) => entry.componentId === componentId));
+  const nonPassingIds = selected
+    .filter((entry) => entry.result !== 'PASS')
+    .map((entry) => entry.componentId)
+    .sort(compareCodePoints);
+  const nonLiveIds = selected
+    .filter((entry) => itemEvaluationById.get(entry.expectedId)?.liveEligible !== true)
+    .map((entry) => entry.componentId)
+    .sort(compareCodePoints);
+  const rootCauseExpectedIds = sortedUnique(selected.flatMap((entry) => entry.rootCauseExpectedIds));
+  const result = scopeMissing || unresolvedComponentIds.length > 0
+    ? 'FAIL'
+    : strongest(selected.map((entry) => entry.result));
+  return {
+    scope: wholeMachine ? 'WHOLE_MACHINE' : contract.panelKind === 'CONTROL' ? 'CONTROL_RECOVERY' : 'DEPENDENT_CAPABILITY',
+    result,
+    expectedComponentIds,
+    unresolvedComponentIds,
+    nonPassingIds,
+    nonLiveIds,
+    rootCauseExpectedIds,
+    reasonCodes: sortedUnique([
+      ...(scopeMissing ? ['PANEL_DEPENDENCY_SCOPE_MISSING'] : []),
+      ...(unresolvedComponentIds.length === 0 ? [] : ['PANEL_DEPENDENCY_SCOPE_MISSING']),
+      ...(nonPassingIds.length === 0 ? [] : [wholeMachine
+        ? 'PANEL_WHOLE_MACHINE_COMPONENT_NOT_PASS'
+        : 'PANEL_DEPENDENT_COMPONENT_NOT_PASS']),
+    ]),
   };
 }
 
@@ -400,6 +471,8 @@ export function evaluateReleaseBoundPanel(input) {
   const evaluatedItem = itemEvaluationById.get(release.expectedManifestItemId);
   const exactSet = exactSetForSource(releaseEvaluation, root.contract.denominatorLaw.expectedSource);
   const denominatorBinding = exactSetBinding(exactSet, itemEvaluationById);
+  const dependencyBinding = componentDependencyBinding(root.contract, releaseEvaluation, itemEvaluationById);
+  const wholeMachineGate = dependencyBinding.scope === 'WHOLE_MACHINE';
 
   const reasons = [];
   const results = [];
@@ -412,6 +485,11 @@ export function evaluateReleaseBoundPanel(input) {
   recordResult(reasons, results, releaseEvaluation.binding.result, 'PANEL_MANIFEST_BINDING_NOT_PASS');
   recordResult(reasons, results, releaseEvaluation.manifestDigestVerification.result, 'PANEL_MANIFEST_DIGEST_VERIFICATION_NOT_PASS');
   recordResult(reasons, results, releaseEvaluation.denominator.result, 'PANEL_MANIFEST_DENOMINATOR_NOT_PASS');
+  recordResult(reasons, results, releaseEvaluation.internalReferenceIntegrity.result, 'PANEL_INTERNAL_DEPENDENCY_REFERENCE_NOT_PASS');
+  recordResult(reasons, results, releaseEvaluation.componentDependencyHealth.cycleDetected ? 'FAIL' : 'PASS', 'PANEL_COMPONENT_DEPENDENCY_GRAPH_NOT_PASS');
+  if (wholeMachineGate) {
+    recordResult(reasons, results, releaseEvaluation.overallResult, 'PANEL_WHOLE_MACHINE_MANIFEST_NOT_PASS');
+  }
   record(reasons, results, expectedItem !== undefined, 'PANEL_EXPECTED_MANIFEST_ITEM_MISSING');
   if (expectedItem !== undefined) {
     record(reasons, results, expectedItem.kind === 'COCKPIT_PROJECTION', 'PANEL_EXPECTED_MANIFEST_ITEM_KIND_MISMATCH');
@@ -425,7 +503,9 @@ export function evaluateReleaseBoundPanel(input) {
   }
 
   record(reasons, results, exactSet !== null, 'PANEL_MANIFEST_DENOMINATOR_SOURCE_MISSING');
-  if (exactSet !== null) recordResult(reasons, results, exactSet.result, 'PANEL_MANIFEST_DENOMINATOR_NOT_PASS');
+  if (exactSet !== null && wholeMachineGate) {
+    recordResult(reasons, results, exactSet.result, 'PANEL_MANIFEST_DENOMINATOR_NOT_PASS');
+  }
   const partitionCount = root.observation.denominator.visibleCount
     + root.observation.denominator.filteredCount
     + root.observation.denominator.hiddenCount;
@@ -437,6 +517,10 @@ export function evaluateReleaseBoundPanel(input) {
   record(reasons, results, partitionCount === expectedDenominatorCount, 'PANEL_MANIFEST_DENOMINATOR_PARTITION_MISMATCH');
   record(reasons, results, root.observation.evidence.observedCount === expectedDenominatorCount, 'PANEL_MANIFEST_DENOMINATOR_EVIDENCE_COUNT_MISMATCH');
   record(reasons, results, root.observation.denominator.unknownCount === 0, 'PANEL_MANIFEST_DENOMINATOR_UNKNOWN_NONZERO', 'UNKNOWN');
+  if (dependencyBinding.result !== 'PASS') {
+    for (const reasonCode of dependencyBinding.reasonCodes) reasons.push(reasonCode);
+    results.push(dependencyBinding.result);
+  }
 
   const componentRowsRequired = root.contract.componentFactsBinding?.required === true;
   const componentBinding = rowBinding(
@@ -490,13 +574,14 @@ export function evaluateReleaseBoundPanel(input) {
 
   const result = strongest(results);
   const greenEligible = result === 'PASS';
-  const denominatorLive = denominatorBinding.nonLiveIds.length === 0;
+  const denominatorLive = !wholeMachineGate || denominatorBinding.nonLiveIds.length === 0;
   const componentLive = !componentRowsRequired || componentBinding.nonLiveIds.length === 0;
   const sourceLive = !sourceRowsRequired || sourceBinding.nonLiveIds.length === 0;
   const liveGreenEligible = greenEligible
     && evaluatedItem?.liveEligible === true
     && denominatorLive
     && componentLive
+    && dependencyBinding.nonLiveIds.length === 0
     && sourceLive
     && controlBinding.liveEligible;
   if (greenEligible && evaluatedItem?.liveEligible !== true) reasons.push('PANEL_EXPECTED_MANIFEST_ITEM_NOT_LIVE');
@@ -506,7 +591,10 @@ export function evaluateReleaseBoundPanel(input) {
     liveGreenEligible,
     expectedItem,
     observedItem,
-    denominatorBinding,
+    denominatorBinding: {
+      ...denominatorBinding,
+      nonLiveIds: wholeMachineGate ? denominatorBinding.nonLiveIds : [],
+    },
     gateResult: result,
   });
   const displayState = mergeDowngrade(panel.displayState, downgrade);
@@ -522,6 +610,8 @@ export function evaluateReleaseBoundPanel(input) {
     manifestEvaluationEvidenceSha256: releaseEvaluation.evaluationEvidence.evidenceSha256,
     manifestObservationSha256: releaseEvaluation.evaluationEvidence.observationSha256,
     denominatorIdentitySetSha256: denominatorBinding.identitySetSha256,
+    dependencyScope: dependencyBinding.scope,
+    dependencyComponentIds: dependencyBinding.expectedComponentIds,
     expectedManifestItemId: release.expectedManifestItemId,
     result,
     greenEligible,
@@ -558,6 +648,7 @@ export function evaluateReleaseBoundPanel(input) {
       identitySetSha256: releaseEvaluation.components.identitySetSha256,
       ...componentBinding,
     },
+    dependencyBinding,
     sourceBinding: {
       required: sourceRowsRequired,
       identitySetSha256: releaseEvaluation.sources.identitySetSha256,

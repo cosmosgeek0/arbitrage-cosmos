@@ -1,84 +1,104 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import test from 'node:test';
 
-const fixtureUrl = new URL('../../../../fixtures/productAssurance/systemic/observability/cases/slo-catalog-complete.json', import.meta.url);
+import {
+  HISTORICAL_METRIC_CONTRACTS,
+  SLO_CATEGORIES,
+  SLO_SUBOBJECTIVE_CONTRACTS,
+  SLO_SUBOBJECTIVE_IDS,
+  validateSloCatalog,
+} from '../../../../fixtures/productAssurance/systemic/observability/slo-catalog-contract.mjs';
 
-const REQUIRED_SLO_CATEGORIES = Object.freeze([
-  'SOURCE_COHERENCE_AGE',
-  'QUEUE_BACKPRESSURE',
-  'PROCESSING_COMMAND_LATENCY',
-  'AMBIGUITY_DURATION',
-  'RECONCILIATION_LAG',
-  'EVIDENCE_EXPIRY',
-  'TELEMETRY_COMPLETENESS',
-  'RECOVERY_VERIFICATION',
-  'SENTINEL_PAGING_DELIVERY',
-  'RESTART_RTO_RPO',
-  'RESOURCE_BUDGET',
-]);
-
-const REQUIRED_HISTORICAL_FAMILIES = Object.freeze([
-  'SOURCE_AGE_PERCENTILES',
-  'PROCESSING_AGE_PERCENTILES',
-  'CROSS_SOURCE_SKEW',
-  'QUEUE_DEPTH_BACKPRESSURE',
-  'DROPPED_COALESCED_EVENTS',
-  'RECONCILIATION_GAP',
-  'AMBIGUITY_DURATION',
-  'AUTOMATIC_RECOVERY_RESULT_RATE',
-  'EXECUTION_COST',
-  'SLIPPAGE',
-  'FUNDING',
-  'BORROW_INTEREST',
-  'MARKET_IMPACT',
-  'INCIDENT_FREQUENCY',
-  'RECURRING_FAILED_INVARIANTS',
-  'CPU_BUDGET',
-  'MEMORY_BUDGET',
-  'DISK_BUDGET',
-  'WAL_BUDGET',
-  'API_RATE_BUDGET',
-  'TELEMETRY_BUDGET',
-  'TOKEN_BUDGET',
-  'COST_BUDGET',
-]);
+const fixtureUrl = new URL(
+  '../../../../fixtures/productAssurance/systemic/observability/cases/slo-catalog-complete.json',
+  import.meta.url,
+);
 
 async function fixture() {
   return JSON.parse(await readFile(fixtureUrl, 'utf8'));
 }
 
-test('synthetic SLO catalog represents every amendment section 6.6 category exactly once', async () => {
+test('catalog denominator is the exact 25-subobjective law, not eleven category labels', async () => {
   const input = await fixture();
-  const categories = input.slos.map((entry) => entry.category).sort();
-  assert.deepEqual(categories, [...REQUIRED_SLO_CATEGORIES].sort());
-  assert.equal(new Set(input.slos.map((entry) => `${entry.sloId}@${entry.version}`)).size, 11);
-  assert.equal(input.slos.every((entry) => entry.truthLabel === 'SYNTHETIC_ONLY'), true);
-  assert.equal(input.slos.every((entry) => entry.authority === 'SYNTHETIC_TEST'), true);
-  assert.equal(input.slos.every((entry) => entry.evidenceOnly), true);
-  assert.equal(input.slos.every((entry) => entry.syntheticWindow.sampleCount > 0
-    && entry.syntheticWindow.startMs < entry.syntheticWindow.endMs), true);
-  assert.equal(new Set(input.slos.map((entry) => entry.syntheticWindow.windowId)).size, 11);
+  const validation = validateSloCatalog(input);
+  assert.equal(input.slos.length, 25);
+  assert.deepEqual(input.slos.map((entry) => entry.sloId), SLO_SUBOBJECTIVE_IDS);
+  assert.deepEqual(validation.missingSubobjectiveIds, []);
+  assert.deepEqual(validation.unexpectedSubobjectiveIds, []);
+  assert.deepEqual(validation.sloContractMismatches, []);
+  assert.deepEqual([...new Set(input.slos.map((entry) => entry.category))], SLO_CATEGORIES);
+  assert.deepEqual(Object.fromEntries(SLO_CATEGORIES.map((category) => [
+    category,
+    input.slos.filter((entry) => entry.category === category).length,
+  ])), {
+    SOURCE_COHERENCE_AGE: 2,
+    QUEUE_BACKPRESSURE: 2,
+    PROCESSING_COMMAND_LATENCY: 2,
+    AMBIGUITY_DURATION: 1,
+    RECONCILIATION_LAG: 1,
+    EVIDENCE_EXPIRY: 1,
+    TELEMETRY_COMPLETENESS: 1,
+    RECOVERY_VERIFICATION: 2,
+    SENTINEL_PAGING_DELIVERY: 3,
+    RESTART_RTO_RPO: 2,
+    RESOURCE_BUDGET: 8,
+  });
 });
 
-test('historical registry covers every required metric family exactly once', async () => {
+test('sixteen historical sources and nine owner-evidence sources are distinct and exact', async () => {
   const input = await fixture();
-  const families = input.historicalMetricRegistry.map((entry) => entry.family).sort();
-  assert.deepEqual(families, [...REQUIRED_HISTORICAL_FAMILIES].sort());
-  assert.equal(new Set(input.historicalMetricRegistry.map((entry) => entry.metricId)).size, 23);
-  assert.equal(input.historicalMetricRegistry.every((entry) => entry.maximumSeriesPoints > 0), true);
-  assert.equal(input.historicalMetricRegistry.every((entry) => entry.retentionWindowMs > 0), true);
-});
-
-test('source and processing age families mandate p50, p95, and p99', async () => {
-  const input = await fixture();
-  for (const family of ['SOURCE_AGE_PERCENTILES', 'PROCESSING_AGE_PERCENTILES']) {
-    const metric = input.historicalMetricRegistry.find((entry) => entry.family === family);
-    assert.deepEqual(metric.statistics, ['P50', 'P95', 'P99']);
+  const historical = input.slos.filter((entry) => (
+    entry.measurementSource.kind === 'HISTORICAL_METRIC_STATISTIC'
+  ));
+  const canonical = input.slos.filter((entry) => (
+    entry.measurementSource.kind === 'CANONICAL_OWNER_EVIDENCE'
+  ));
+  assert.equal(historical.length, 16);
+  assert.equal(canonical.length, 9);
+  assert.equal(new Set(input.slos.map((entry) => JSON.stringify(entry.measurementSource))).size, 25);
+  for (const entry of historical) {
+    assert.deepEqual(entry.historicalMetricBindings, [{
+      metricId: entry.measurementSource.metricId,
+      family: entry.measurementSource.family,
+    }]);
   }
+  for (const entry of canonical) {
+    assert.deepEqual(entry.historicalMetricBindings, []);
+    assert.equal(entry.measurementSource.ownerId, entry.ownerId);
+  }
+  assert.deepEqual(input.slos.map((entry) => ({
+    sloId: entry.sloId,
+    category: entry.category,
+    ownerId: entry.ownerId,
+    measurementSource: entry.measurementSource,
+  })), SLO_SUBOBJECTIVE_CONTRACTS.map((entry) => ({
+    sloId: entry.sloId,
+    category: entry.category,
+    ownerId: entry.ownerId,
+    measurementSource: entry.measurementSource,
+  })));
 });
 
-test('catalog and metric registry remain synthetic evidence with no mutation authority', async () => {
+test('historical registry freezes all 23 metric contracts and excludes sample-sum burn rate', async () => {
+  const input = await fixture();
+  const validation = validateSloCatalog(input);
+  assert.equal(input.historicalMetricRegistry.length, 23);
+  assert.deepEqual(validation.missingMetricFamilies, []);
+  assert.deepEqual(validation.metricContractMismatches, []);
+  assert.deepEqual(input.historicalMetricRegistry.map((entry) => ({
+    metricId: entry.metricId,
+    family: entry.family,
+    ownerId: entry.ownerId,
+    unit: entry.unit,
+    statistics: entry.statistics,
+    maximumSeriesPoints: entry.maximumSeriesPoints,
+    retentionWindowMs: entry.retentionWindowMs,
+  })), HISTORICAL_METRIC_CONTRACTS);
+  assert.ok(input.historicalMetricRegistry.every((entry) => !entry.statistics.includes('BURN_RATE')));
+});
+
+test('catalog and registry remain synthetic evidence with no mutation authority', async () => {
   const input = await fixture();
   assert.equal(input.truthLabel, 'SYNTHETIC_ONLY');
   assert.equal(input.authority, 'SYNTHETIC_TEST');
@@ -91,6 +111,8 @@ test('catalog and metric registry remain synthetic evidence with no mutation aut
     mayExecuteRepair: false,
     riskReductionMustRemainAvailable: true,
   });
-  assert.equal(input.historicalMetricRegistry.every((entry) => entry.truthLabel === 'SYNTHETIC_ONLY'
-    && entry.authority === 'SYNTHETIC_TEST' && entry.evidenceOnly), true);
+  assert.ok(input.slos.every((entry) => entry.truthLabel === 'SYNTHETIC_ONLY'
+    && entry.authority === 'SYNTHETIC_TEST' && entry.evidenceOnly));
+  assert.ok(input.historicalMetricRegistry.every((entry) => entry.truthLabel === 'SYNTHETIC_ONLY'
+    && entry.authority === 'SYNTHETIC_TEST' && entry.evidenceOnly));
 });

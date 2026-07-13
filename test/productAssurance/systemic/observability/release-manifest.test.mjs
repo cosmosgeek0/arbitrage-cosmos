@@ -51,7 +51,7 @@ test('healthy synthetic manifest passes the contract without claiming live green
   assert.equal(output.overallResult, 'PASS');
   assert.equal(output.greenEligible, true);
   assert.equal(output.liveGreenEligible, false);
-  assert.equal(output.denominatorCount, 75);
+  assert.equal(output.denominatorCount, 80);
   assert.equal(output.observabilityCoveragePercent, 100);
   assert.deepEqual(output.ids.missing, []);
   assert.equal(Object.isFrozen(output), true);
@@ -84,13 +84,16 @@ test('canonical manifest owns exact release-bound component, source, topology, c
     commandPaths.map((item) => item.expectedId).sort(),
     RELEASE_COMMAND_PATH_CATALOG.map((entry) => entry.expectedId).sort(),
   );
-  assert.equal(commandPaths.length, 6);
+  assert.equal(commandPaths.length, 8);
   assert.equal(commandPaths.every((item) => item.required && item.enabled), true);
   assert.equal(RELEASE_COMMAND_PATH_CATALOG.every((entry) => {
     const item = commandPaths.find((candidate) => candidate.expectedId === entry.expectedId);
     const reporter = input.observation.items.find((candidate) => candidate.expectedId === entry.expectedId);
+    const contractReference = entry.contractId === null
+      ? `system-control-command:${entry.command}`
+      : `control-contract:${entry.contractId}`;
     return item.ownerId === 'SYSTEM_INTEGRATION'
-      && item.dependentCapabilityIds.includes(`control-contract:${entry.contractId}`)
+      && item.dependentCapabilityIds.includes(contractReference)
       && item.dependentCapabilityIds.includes(`backend-mutation:${entry.backendMutationId}`)
       && reporter.controlState === 'LIVE'
       && reporter.dataMode === 'SYNTHETIC';
@@ -123,28 +126,29 @@ test('canonical manifest owns exact release-bound component, source, topology, c
   assert.deepEqual(manifestProjectionIds, expectedProjectionIds);
   assert.deepEqual(observedProjectionIds, expectedProjectionIds);
   assert.equal(input.manifest.manifestId, 'manifest.release.fixture-001');
-  assert.equal(input.manifest.manifestRevision, 4);
-  assert.equal(input.manifest.manifestSha256, 'a4a4b1f6a23bd32ad63138a20425184024a7165c2f47dd00c9a2a6b200a64abf');
+  assert.equal(input.manifest.manifestRevision, 5);
+  assert.equal(input.manifest.manifestSha256, '076e3e2e74ae960b43d59364ac42e66cb924339f1146ddcd8de87879ac68e9be');
   assert.equal(input.manifest.binding.acceptedReleaseSha, '9785c93102b00389847b77c2f9348c06abc4344b');
   for (const key of ['testedReleaseSha', 'runningReleaseSha', 'deployedReleaseSha']) {
     assert.equal(input.observation[key], '9785c93102b00389847b77c2f9348c06abc4344b');
   }
   const output = evaluateReleaseBoundExpectedManifest(input);
-  assert.equal(output.denominatorCount, 75);
-  assert.equal(output.items.length, 79);
+  assert.equal(output.denominatorCount, 80);
+  assert.equal(output.items.length, 84);
   assert.equal(output.items.filter((item) => item.expectedId.startsWith('cockpit-projection:')).length, 25);
   assert.equal(output.items.filter((item) => item.expectedId.startsWith('cockpit-projection:') && item.blocking).length, 25);
-  assert.equal(output.controls.expected, 6);
-  assert.equal(output.controls.live, 6);
+  assert.equal(output.controls.expected, 8);
+  assert.equal(output.controls.live, 8);
   assert.equal(output.exactInventory.result, 'PASS');
   assert.match(output.evaluationEvidence.evidenceSha256, /^[a-f0-9]{64}$/);
   const setExpectations = [
     ['components', 13, 13],
-    ['sources', 4, 4],
+    ['sources', 7, 7],
     ['dependencies', 22, 18],
     ['capitalPaths', 4, 4],
     ['recoveryPaths', 4, 4],
-    ['commandPaths', 6, 6],
+    ['commandPaths', 8, 8],
+    ['cockpitCommandProjections', 6, 6],
     ['cockpitProjections', 25, 25],
     ['sentinels', 1, 1],
   ];
@@ -165,7 +169,7 @@ test('canonical manifest owns exact release-bound component, source, topology, c
 test('every canonical inventory kind rejects a rehashed self-authored omission or extra row', async () => {
   const cases = [
     ['components', 'COMPONENT', 'component:public-spot-source', 'component:unexpected'],
-    ['sources', 'SOURCE', 'source-aggregation:spot-mini-ticker-universe', 'source-aggregation:unexpected'],
+    ['sources', 'SOURCE', 'source:MARKET_UNIVERSE', 'source:unexpected'],
     ['dependencies', 'DEPENDENCY', 'dependency:ledger-persistence:public-spot-source', 'dependency:unexpected:unexpected'],
     ['capitalPaths', 'CAPITAL_PATH', 'capital-path:evidence-proposal-to-capital-mandate', 'capital-path:unexpected'],
     ['recoveryPaths', 'RECOVERY_PATH', 'recovery-path:kill-switch-risk-reduction', 'recovery-path:unexpected'],
@@ -211,7 +215,7 @@ test('every canonical inventory kind rejects a rehashed self-authored omission o
 test('owner, required-flag, and backend-command binding drift fail the exact-set evidence law', async () => {
   for (const [outputKey, expectedId] of [
     ['components', 'component:market-universe'],
-    ['sources', 'source-aggregation:spot-aggregate-trades'],
+    ['sources', 'source:SPOT_AGGREGATE_TRADE'],
     ['dependencies', 'dependency:market-universe:intelligence-runtime'],
     ['capitalPaths', 'capital-path:capital-mandate-to-risk'],
     ['recoveryPaths', 'recovery-path:reconciliation-divergence'],
@@ -248,20 +252,91 @@ test('owner, required-flag, and backend-command binding drift fail the exact-set
   assert.equal(commandOutput.greenEligible, false);
 });
 
-test('missing optional dependency reporter degrades without failing the required release gate', async () => {
+test('missing optional dependency reporter remains an advisory and does not fail unrelated release capability', async () => {
   const input = await fixture();
   const optionalId = 'dependency:public-usdm-source:market-universe';
   input.observation.items = input.observation.items
     .filter((item) => item.expectedId !== optionalId);
   const output = evaluateReleaseBoundExpectedManifest(input);
-  assert.equal(output.denominatorCount, 75);
-  assert.equal(output.dependencies.result, 'UNKNOWN');
+  assert.equal(output.denominatorCount, 80);
+  assert.equal(output.dependencies.result, 'PASS');
   assert.deepEqual(output.dependencies.missingRequiredObservedIds, []);
   assert.deepEqual(output.dependencies.missingOptionalObservedIds, [optionalId]);
   assert.deepEqual(output.dependencies.advisoryReasonCodes, ['CANONICAL_OPTIONAL_REPORTER_INVENTORY_MISSING']);
-  assert.equal(output.overallResult, 'UNKNOWN');
-  assert.equal(output.greenEligible, false);
+  assert.equal(output.overallResult, 'PASS');
+  assert.equal(output.greenEligible, true);
   assert.equal(output.liveGreenEligible, false);
+  const marketUniverse = output.componentDependencyHealth.capabilities
+    .find((entry) => entry.componentId === 'market-universe');
+  assert.equal(marketUniverse.result, 'PASS');
+  assert.deepEqual(
+    marketUniverse.optionalAdvisoryDependencyIds,
+    ['dependency:public-usdm-source:market-universe'],
+  );
+});
+
+test('required dependency failure dereferences through dependants without poisoning unrelated capabilities', async () => {
+  const input = await fixture();
+  const failedEdgeId = 'dependency:public-spot-source:market-universe';
+  const reporter = input.observation.items.find((item) => item.expectedId === failedEdgeId);
+  reporter.freshnessState = 'STALE';
+  const output = evaluateReleaseBoundExpectedManifest(input);
+  const capabilities = new Map(output.componentDependencyHealth.capabilities
+    .map((entry) => [entry.componentId, entry]));
+
+  assert.equal(output.overallResult, 'FAIL');
+  assert.equal(capabilities.get('market-universe').result, 'FAIL');
+  assert.ok(capabilities.get('market-universe').blockingRequiredDependencyIds.includes(failedEdgeId));
+  assert.ok(capabilities.get('intelligence-runtime').rootCauseExpectedIds.includes(failedEdgeId));
+  assert.equal(capabilities.get('ledger-persistence').result, 'PASS');
+  assert.equal(capabilities.get('public-usdm-source').result, 'PASS');
+  assert.equal(capabilities.get('engine-supervisor').result, 'PASS');
+});
+
+test('manifest-addressable dependent capability references must dereference exactly', async () => {
+  const input = await fixture();
+  input.manifest.expectedItems
+    .find((item) => item.expectedId === 'capital-path:capital-mandate-to-risk')
+    .dependentCapabilityIds = ['component:capital-supervision', 'component:not-present'];
+  rebindManifest(input);
+  const output = evaluateReleaseBoundExpectedManifest(input);
+  assert.equal(output.internalReferenceIntegrity.result, 'FAIL');
+  assert.deepEqual(output.internalReferenceIntegrity.unresolvedReferences, [{
+    expectedId: 'capital-path:capital-mandate-to-risk',
+    referenceId: 'component:not-present',
+    targetExpectedId: null,
+  }]);
+  assert.equal(output.overallResult, 'FAIL');
+  assert.equal(output.greenEligible, false);
+});
+
+test('contradictory telemetry axes and evidence after the observation time fail closed', async () => {
+  const contradictory = await fixture();
+  const component = contradictory.observation.items
+    .find((item) => item.expectedId === 'component:public-spot-source');
+  component.identityState = 'MISSING';
+  const contradictoryOutput = evaluateReleaseBoundExpectedManifest(contradictory);
+  const contradictoryItem = contradictoryOutput.items
+    .find((item) => item.expectedId === component.expectedId);
+  assert.equal(contradictoryItem.result, 'FAIL');
+  assert.ok(contradictoryItem.reasonCodes.includes('OBSERVABILITY_AXIS_CONTRADICTION'));
+
+  const impossibleTime = await fixture();
+  const impossibleExpectedId = impossibleTime.observation.items[0].expectedId;
+  impossibleTime.observation.items[0].lastTelemetryAtMs = impossibleTime.observation.observedAtMs + 1;
+  const impossibleOutput = evaluateReleaseBoundExpectedManifest(impossibleTime);
+  const impossibleItem = impossibleOutput.items.find((item) => item.expectedId === impossibleExpectedId);
+  assert.equal(impossibleItem.result, 'FAIL');
+  assert.ok(impossibleItem.reasonCodes.includes('TELEMETRY_TIMESTAMP_AFTER_OBSERVATION'));
+
+  const impossibleProbeTime = await fixture();
+  const impossibleProbeExpectedId = impossibleProbeTime.observation.items[0].expectedId;
+  impossibleProbeTime.observation.items[0].lastIndependentProbeAtMs = impossibleProbeTime.observation.observedAtMs + 1;
+  const impossibleProbeOutput = evaluateReleaseBoundExpectedManifest(impossibleProbeTime);
+  const impossibleProbeItem = impossibleProbeOutput.items
+    .find((item) => item.expectedId === impossibleProbeExpectedId);
+  assert.equal(impossibleProbeItem.result, 'FAIL');
+  assert.ok(impossibleProbeItem.reasonCodes.includes('INDEPENDENT_PROBE_TIMESTAMP_AFTER_OBSERVATION'));
 });
 
 test('one missing cockpit projection reporter retains the manifest denominator and is non-green', async () => {
@@ -269,7 +344,7 @@ test('one missing cockpit projection reporter retains the manifest denominator a
   const missingId = 'cockpit-projection:PANEL_HEALTH_TRUTH_V1';
   input.observation.items = input.observation.items.filter((item) => item.expectedId !== missingId);
   const output = evaluateReleaseBoundExpectedManifest(input);
-  assert.equal(output.denominatorCount, 75);
+  assert.equal(output.denominatorCount, 80);
   assert.equal(output.counts.missing, 1);
   assert.deepEqual(output.ids.missing, [missingId]);
   assert.equal(output.overallResult, 'FAIL');
@@ -299,10 +374,10 @@ test('an unexpected reporter cannot enlarge the expected denominator', async () 
     expectedId: 'self-added-reporter',
   });
   const output = evaluateReleaseBoundExpectedManifest(input);
-  assert.equal(output.denominatorCount, 75);
-  assert.equal(output.counts.expected, 79);
-  assert.equal(output.counts.discovered, 79);
-  assert.equal(output.counts.instrumented, 79);
+  assert.equal(output.denominatorCount, 80);
+  assert.equal(output.counts.expected, 84);
+  assert.equal(output.counts.discovered, 84);
+  assert.equal(output.counts.instrumented, 84);
   assert.equal(output.observabilityCoveragePercent, 100);
   assert.deepEqual(output.ids.unexpectedObserved, ['self-added-reporter']);
   assert.deepEqual(output.observedInventoryIntegrity, {
@@ -355,8 +430,8 @@ test('orthogonal uninstrumented and unreconciled axes remain separately visible'
   assert.equal(item.result, 'FAIL');
   assert.ok(item.reasonCodes.includes('EXPECTED_TELEMETRY_UNINSTRUMENTED'));
   assert.ok(item.reasonCodes.includes('RECONCILIATION_NOT_COMPLETE'));
-  assert.equal(output.counts.instrumented, 78);
-  assert.equal(output.counts.current, 79);
+  assert.equal(output.counts.instrumented, 83);
+  assert.equal(output.counts.current, 84);
 });
 
 test('required unsupported or not-configured static manifest axes cannot pass', async () => {

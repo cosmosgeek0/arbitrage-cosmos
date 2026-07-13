@@ -19,6 +19,8 @@ import {
 import {
   deriveSloDefinitionSha256,
   SLO_CATEGORIES,
+  SLO_SUBOBJECTIVE_IDS,
+  validateSloMeasurementSource,
   validateSloCatalog,
 } from './slo-catalog-contract.mjs';
 
@@ -44,7 +46,7 @@ function validateDefinition(value, index) {
   assertClosedRecord(value, path, [
     'sloId', 'version', 'ownerId', 'category', 'criticality', 'unit', 'windowDurationMs',
     'maximumEvidenceAgeMs', 'minimumSampleCount', 'percentileMethod', 'evaluationStatistic',
-    'comparator', 'threshold', 'objectivePercent', 'dependentCapabilityIds',
+    'comparator', 'threshold', 'objectivePercent', 'measurementSource', 'dependentCapabilityIds',
     'recommendedFailurePosture', 'effectPolicy',
   ]);
   assertIdentifier(value.sloId, `${path}.sloId`);
@@ -61,6 +63,7 @@ function validateDefinition(value, index) {
   assertEnum(value.comparator, ['LTE', 'GTE'], `${path}.comparator`);
   assertFiniteNumber(value.threshold, `${path}.threshold`);
   assertFiniteNumber(value.objectivePercent, `${path}.objectivePercent`, Number.MIN_VALUE, 100);
+  validateSloMeasurementSource(value.measurementSource, `${path}.measurementSource`);
   assertArray(value.dependentCapabilityIds, `${path}.dependentCapabilityIds`, 32);
   value.dependentCapabilityIds.forEach((entry, child) => assertIdentifier(entry, `${path}.dependentCapabilityIds[${child}]`));
   assertUnique(value.dependentCapabilityIds, (entry) => entry, `${path}.dependentCapabilityIds`);
@@ -82,7 +85,7 @@ function validateWindow(value, index) {
   const path = `windows[${index}]`;
   assertClosedRecord(value, path, [
     'windowId', 'sloId', 'sloVersion', 'releaseSha', 'startMs', 'endMs',
-    'evidenceObservedAtMs', 'sourceTruthLabel', 'canonicalEvidenceRefs', 'samples',
+    'evidenceObservedAtMs', 'sourceTruthLabel', 'measurementSource', 'canonicalEvidenceRefs', 'samples',
   ]);
   assertIdentifier(value.windowId, `${path}.windowId`);
   assertIdentifier(value.sloId, `${path}.sloId`);
@@ -93,6 +96,7 @@ function validateWindow(value, index) {
   if (value.startMs >= value.endMs) throw new TypeError(`${path} must have startMs < endMs`);
   assertSafeInteger(value.evidenceObservedAtMs, `${path}.evidenceObservedAtMs`);
   assertEnum(value.sourceTruthLabel, TRUTH_LABELS, `${path}.sourceTruthLabel`);
+  validateSloMeasurementSource(value.measurementSource, `${path}.measurementSource`);
   assertClosedRecord(value.canonicalEvidenceRefs, `${path}.canonicalEvidenceRefs`, [
     'invariantResultId', 'materialEventId', 'evidenceIds', 'correlationId', 'incidentId',
   ]);
@@ -175,6 +179,9 @@ function evaluateWindow(definition, window, releaseSha, nowMs) {
   const currentReasons = [];
   if (window.releaseSha !== releaseSha) historicalReasons.push('SLO_WINDOW_RELEASE_MISMATCH');
   if (window.sloVersion !== definition.version) historicalReasons.push('SLO_DEFINITION_VERSION_MISMATCH');
+  if (JSON.stringify(window.measurementSource) !== JSON.stringify(definition.measurementSource)) {
+    historicalReasons.push('SLO_MEASUREMENT_SOURCE_MISMATCH');
+  }
   if (window.endMs > nowMs) historicalReasons.push('SLO_WINDOW_NOT_CLOSED');
   if (window.endMs - window.startMs !== definition.windowDurationMs) historicalReasons.push('SLO_WINDOW_DURATION_MISMATCH');
   if (window.evidenceObservedAtMs > nowMs) historicalReasons.push('SLO_EVIDENCE_FROM_FUTURE');
@@ -248,6 +255,7 @@ function evaluateWindow(definition, window, releaseSha, nowMs) {
     endMs: window.endMs,
     releaseSha: window.releaseSha,
     sourceTruthLabel: window.sourceTruthLabel,
+    measurementSource: structuredClone(window.measurementSource),
     result: currentResult,
     currentResult,
     historicalResult,
@@ -325,12 +333,20 @@ export function evaluateSloTrends(input, catalog) {
     catalogBindingReasons.push('SLO_CATALOG_CATEGORY_DENOMINATOR_INCOMPLETE');
     catalogBindingResult = 'FAIL';
   }
+  if (catalogValidation.sloContractMismatches.length > 0) {
+    catalogBindingReasons.push('SLO_CATALOG_SUBOBJECTIVE_CONTRACT_MISMATCH');
+    catalogBindingResult = 'FAIL';
+  }
   if (catalogValidation.missingMetricFamilies.length > 0) {
     catalogBindingReasons.push('SLO_CATALOG_METRIC_REGISTRY_INCOMPLETE');
     catalogBindingResult = 'FAIL';
   }
   if (catalogValidation.metricBindingMismatches.length > 0) {
     catalogBindingReasons.push('SLO_CATALOG_METRIC_BINDING_MISMATCH');
+    catalogBindingResult = 'FAIL';
+  }
+  if (catalogValidation.metricContractMismatches.length > 0) {
+    catalogBindingReasons.push('SLO_CATALOG_METRIC_CONTRACT_MISMATCH');
     catalogBindingResult = 'FAIL';
   }
 
@@ -351,6 +367,9 @@ export function evaluateSloTrends(input, catalog) {
     const mismatches = [];
     if (definition.category !== entry.category) mismatches.push(`${definitionKey(entry)}|CATEGORY`);
     if (definition.ownerId !== entry.ownerId) mismatches.push(`${definitionKey(entry)}|OWNER`);
+    if (JSON.stringify(definition.measurementSource) !== JSON.stringify(entry.measurementSource)) {
+      mismatches.push(`${definitionKey(entry)}|MEASUREMENT_SOURCE`);
+    }
     if (deriveSloDefinitionSha256(definition) !== entry.definitionSha256) {
       mismatches.push(`${definitionKey(entry)}|DEFINITION_DIGEST`);
     }
@@ -370,12 +389,17 @@ export function evaluateSloTrends(input, catalog) {
     return definition !== undefined
       && definition.category === entry.category
       && definition.ownerId === entry.ownerId
+      && JSON.stringify(definition.measurementSource) === JSON.stringify(entry.measurementSource)
       && deriveSloDefinitionSha256(definition) === entry.definitionSha256;
   });
   const coveredCategories = SLO_CATEGORIES.filter((category) => (
     boundCatalogEntries.some((entry) => entry.category === category)
   ));
   const missingCategories = SLO_CATEGORIES.filter((category) => !coveredCategories.includes(category));
+  const coveredSubobjectiveIds = SLO_SUBOBJECTIVE_IDS.filter((sloId) => (
+    boundCatalogEntries.some((entry) => entry.sloId === sloId)
+  ));
+  const missingSubobjectiveIds = SLO_SUBOBJECTIVE_IDS.filter((sloId) => !coveredSubobjectiveIds.includes(sloId));
   const windowsByDefinition = new Map();
   for (const window of input.windows) {
     const key = `${window.sloId}@${window.sloVersion}`;
@@ -392,7 +416,8 @@ export function evaluateSloTrends(input, catalog) {
     const definition = definitionByKey.get(definitionKey(catalogEntry));
     const definitionMatches = definition !== undefined
       && definition.category === catalogEntry.category
-      && definition.ownerId === catalogEntry.ownerId;
+      && definition.ownerId === catalogEntry.ownerId
+      && JSON.stringify(definition.measurementSource) === JSON.stringify(catalogEntry.measurementSource);
     if (!definitionMatches) {
       return {
         sloId: catalogEntry.sloId,
@@ -410,6 +435,7 @@ export function evaluateSloTrends(input, catalog) {
         historicalBreachCount: 0,
         historicalUnknownCount: 0,
         historicalMetricBindings: catalogEntry.historicalMetricBindings.map((binding) => ({ ...binding })),
+        measurementSource: structuredClone(catalogEntry.measurementSource),
         windows: [],
         effectPolicy: null,
       };
@@ -434,6 +460,7 @@ export function evaluateSloTrends(input, catalog) {
         historicalBreachCount: 0,
         historicalUnknownCount: 0,
         historicalMetricBindings: catalogEntry.historicalMetricBindings.map((binding) => ({ ...binding })),
+        measurementSource: structuredClone(catalogEntry.measurementSource),
         windows: [],
         effectPolicy: { ...definition.effectPolicy },
       };
@@ -456,6 +483,7 @@ export function evaluateSloTrends(input, catalog) {
       historicalBreachCount: closedWindows.filter((window) => window.historicalResult === 'FAIL').length,
       historicalUnknownCount: closedWindows.filter((window) => window.historicalResult === 'UNKNOWN').length,
       historicalMetricBindings: catalogEntry.historicalMetricBindings.map((binding) => ({ ...binding })),
+      measurementSource: structuredClone(catalogEntry.measurementSource),
       windows,
       effectPolicy: { ...definition.effectPolicy },
     };
@@ -499,10 +527,15 @@ export function evaluateSloTrends(input, catalog) {
     coveredCategoryCount: coveredCategories.length,
     coveredCategories,
     missingCategories,
+    coveredSubobjectiveCount: coveredSubobjectiveIds.length,
+    coveredSubobjectiveIds,
+    missingSubobjectiveIds,
     missingCatalogSloKeys,
     extraDefinitionKeys,
     definitionBindingMismatches,
     metricBindingMismatches: catalogValidation.metricBindingMismatches,
+    metricContractMismatches: catalogValidation.metricContractMismatches,
+    sloContractMismatches: catalogValidation.sloContractMismatches,
     unknownWindowIds,
     authorityMutation: false,
     blocksRiskReduction: false,

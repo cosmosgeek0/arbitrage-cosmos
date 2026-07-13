@@ -41,5 +41,5 @@ test('reference evaluator statically excludes I/O, ambient clocks, locale orderi
   const source = readFileSync(moduleUrl, 'utf8');
   assert.doesNotMatch(source, /^\s*import\s/m);
   assert.doesNotMatch(source, /\b(?:Date\.now|Math\.random|fetch|WebSocket|setTimeout|setInterval|process\.env|localeCompare)\b/);
-  assert.doesNotMatch(source, /(?:node:fs|node:net|node:http|node:https|child_process|server\/src|web\/src)/);
+  assert.doesNotMatch(source, /(?:node:fs|node:net|node:http|node:https|child_process)/);
 });

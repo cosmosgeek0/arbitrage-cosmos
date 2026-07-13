@@ -60,6 +60,22 @@ test('unregistered or context-invalid reason codes are rejected while null remai
   assert.equal(evaluateConservationAccounting(nullReasons).overallResult, 'PASS');
 });
 
+test('registered reason codes are bound to compatible transition and disposition targets', async () => {
+  const wrongTransition = await fixture();
+  wrongTransition.records[0].transitions[0].reasonCode = 'PROCESSING_LATE';
+  assert.throws(
+    () => evaluateConservationAccounting(wrongTransition),
+    /incompatible with transition state ACCEPTED/,
+  );
+
+  const wrongDisposition = await fixture();
+  wrongDisposition.records[0].disposition.reasonCode = 'DUPLICATE_RECONCILED';
+  assert.throws(
+    () => evaluateConservationAccounting(wrongDisposition),
+    /incompatible with disposition COMPLETED/,
+  );
+});
+
 test('missing expected event-stage-window tuple is UNKNOWN, never an implicit zero or green', async () => {
   const input = await fixture();
   input.records.pop();
@@ -85,6 +101,7 @@ test('unreconciled duplicate cannot hide behind a completed disposition', async 
   const record = input.records[1];
   record.disposition = { kind: 'COMPLETED', reasonCode: null, incidentId: null };
   record.transitions.at(-1).state = 'COMPLETED';
+  record.transitions.at(-1).reasonCode = null;
   const output = evaluateConservationAccounting(input);
   const tuple = output.tuples.find((entry) => entry.tupleKey.includes('event.public-002'));
   assert.equal(tuple.result, 'FAIL');
@@ -244,6 +261,44 @@ test('export gap buffered within an injected bounded budget remains accounted', 
   const tuple = output.tuples.find((entry) => entry.tupleKey.includes('event.material-001'));
   assert.equal(tuple.result, 'PASS');
   assert.equal(tuple.accounted, true);
+});
+
+test('positive export-gap recovery states reject cross-state evidence and non-exact counts', async () => {
+  const hostileRecoveries = [
+    {
+      state: 'BUFFERED_WITHIN_BUDGET', budgetId: 'buffer-budget', budgetExpiresAtMs: 3500,
+      incidentId: 'incident-not-allowed', bufferedCount: 1, replayedCount: 0,
+    },
+    {
+      state: 'BUFFERED_WITHIN_BUDGET', budgetId: 'buffer-budget', budgetExpiresAtMs: 3500,
+      incidentId: null, bufferedCount: 2, replayedCount: 0,
+    },
+    {
+      state: 'REPLAYED_WITHIN_BUDGET', budgetId: 'replay-budget', budgetExpiresAtMs: 3500,
+      incidentId: null, bufferedCount: 1, replayedCount: 1,
+    },
+    {
+      state: 'REPLAYED_WITHIN_BUDGET', budgetId: 'replay-budget', budgetExpiresAtMs: 3500,
+      incidentId: 'incident-not-allowed', bufferedCount: 0, replayedCount: 2,
+    },
+    {
+      state: 'EVIDENCE_GAP_INCIDENT_BOUND', budgetId: 'budget-not-allowed', budgetExpiresAtMs: 3500,
+      incidentId: 'gap-incident', bufferedCount: 0, replayedCount: 0,
+    },
+    {
+      state: 'EVIDENCE_GAP_INCIDENT_BOUND', budgetId: null, budgetExpiresAtMs: null,
+      incidentId: 'gap-incident', bufferedCount: 1, replayedCount: 0,
+    },
+  ];
+  for (const recovery of hostileRecoveries) {
+    const input = await fixture();
+    removeExport(input.records[0]);
+    input.records[0].exportRecovery = recovery;
+    const tuple = evaluateConservationAccounting(input).tuples
+      .find((entry) => entry.tupleKey.includes('event.material-001'));
+    assert.equal(tuple.result, 'FAIL', recovery.state);
+    assert.ok(tuple.reasonCodes.includes('EXPORT_GAP_UNBOUND'), recovery.state);
+  }
 });
 
 test('zero export gap rejects every invented recovery state, count, or evidence field', async () => {

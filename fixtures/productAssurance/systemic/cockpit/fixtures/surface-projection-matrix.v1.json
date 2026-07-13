@@ -143,6 +143,24 @@
           "valueKey": "newestCandidateDispositionReason"
         },
         {
+          "level": 5,
+          "topicId": "L5_BOUNDED_EVIDENCE_IMMUTABLE_REFS",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "newestCandidateId"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "newestCandidateSymbol"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_BOUNDED_EVIDENCE_IMMUTABLE_REFS",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "newestCandidateEvidenceRevision"
+        },
+        {
           "level": 2,
           "topicId": "L2_BLOCKED_DEGRADED_EDGES",
           "contractId": "PANEL_DASHBOARD_TRUTH_V1",
@@ -233,26 +251,26 @@
           "valueKey": "basisLiveAgeMs"
         },
         {
-          "level": 2,
-          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
           "contractId": "PANEL_DASHBOARD_TRUTH_V1",
           "valueKey": "basisUniverseCount"
         },
         {
-          "level": 2,
-          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
           "contractId": "PANEL_DASHBOARD_TRUTH_V1",
           "valueKey": "basisCandidateCount"
         },
         {
-          "level": 2,
-          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
           "contractId": "PANEL_DASHBOARD_TRUTH_V1",
           "valueKey": "basisFocusCount"
         },
         {
-          "level": 2,
-          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
           "contractId": "PANEL_DASHBOARD_TRUTH_V1",
           "valueKey": "basisProposalCount"
         },
@@ -275,26 +293,26 @@
           "valueKey": "volumeLiveAgeMs"
         },
         {
-          "level": 2,
-          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
           "contractId": "PANEL_DASHBOARD_TRUTH_V1",
           "valueKey": "volumeUniverseCount"
         },
         {
-          "level": 2,
-          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
           "contractId": "PANEL_DASHBOARD_TRUTH_V1",
           "valueKey": "volumeCandidateCount"
         },
         {
-          "level": 2,
-          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
           "contractId": "PANEL_DASHBOARD_TRUTH_V1",
           "valueKey": "volumeFocusCount"
         },
         {
-          "level": 2,
-          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
           "contractId": "PANEL_DASHBOARD_TRUTH_V1",
           "valueKey": "volumeProposalCount"
         },
@@ -413,26 +431,26 @@
           "valueKey": "drawdown"
         },
         {
-          "level": 2,
-          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
           "contractId": "PANEL_DASHBOARD_TRUTH_V1",
           "valueKey": "universeCount"
         },
         {
-          "level": 2,
-          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
           "contractId": "PANEL_DASHBOARD_TRUTH_V1",
           "valueKey": "candidateCount"
         },
         {
-          "level": 2,
-          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
           "contractId": "PANEL_DASHBOARD_TRUTH_V1",
           "valueKey": "focusCount"
         },
         {
-          "level": 2,
-          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
           "contractId": "PANEL_DASHBOARD_TRUTH_V1",
           "valueKey": "opportunityCount"
         },
@@ -533,6 +551,12 @@
           "valueKey": "dashboardCorrelationChainId"
         },
         {
+          "level": 5,
+          "topicId": "L5_TIMELINE_CORRELATION_TRACE",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "traceTargetCount"
+        },
+        {
           "level": 1,
           "topicId": "L1_OVERALL_POSTURE_REASON",
           "contractId": "PANEL_DASHBOARD_TRUTH_V1",
@@ -576,6 +600,7 @@
         1,
         2,
         3,
+        4,
         5
       ],
       "projectionQuestion": "What is expected, running, blocked, controllable, and evidenced across the machine graph?",
@@ -684,6 +709,222 @@
           "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
           "contractId": "CONTROL_KILL_SWITCH_V1",
           "valueKey": "controlProofState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_KILL_SWITCH_V1",
+          "valueKey": "controlOwner"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_KILL_SWITCH_V1",
+          "valueKey": "boundsState"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_KILL_SWITCH_V1",
+          "valueKey": "previewState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_TRUTH_MODE_LABEL",
+          "contractId": "CONTROL_SAFE_MODE_V1",
+          "valueKey": "currentSafeMode"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_TRUTH_MODE_LABEL",
+          "contractId": "CONTROL_SAFE_MODE_V1",
+          "valueKey": "requestedSafeMode"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_SAFE_MODE_V1",
+          "valueKey": "controlOwner"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_SAFE_MODE_V1",
+          "valueKey": "maximumEffect"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_SAFE_MODE_V1",
+          "valueKey": "boundsState"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_SAFE_MODE_V1",
+          "valueKey": "previewState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_TRUTH_MODE_LABEL",
+          "contractId": "CONTROL_INTAKE_PAUSE_V1",
+          "valueKey": "currentIntakePauseState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_TRUTH_MODE_LABEL",
+          "contractId": "CONTROL_INTAKE_PAUSE_V1",
+          "valueKey": "requestedIntakePauseState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_INTAKE_PAUSE_V1",
+          "valueKey": "controlOwner"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_INTAKE_PAUSE_V1",
+          "valueKey": "maximumEffect"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_INTAKE_PAUSE_V1",
+          "valueKey": "boundsState"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_INTAKE_PAUSE_V1",
+          "valueKey": "previewState"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "contractId": "CONTROL_COMPONENT_DESIRED_STATE_V1",
+          "valueKey": "targetComponentId"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_TRUTH_MODE_LABEL",
+          "contractId": "CONTROL_COMPONENT_DESIRED_STATE_V1",
+          "valueKey": "currentComponentDesiredState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_TRUTH_MODE_LABEL",
+          "contractId": "CONTROL_COMPONENT_DESIRED_STATE_V1",
+          "valueKey": "requestedComponentDesiredState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_COMPONENT_DESIRED_STATE_V1",
+          "valueKey": "controlOwner"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_COMPONENT_DESIRED_STATE_V1",
+          "valueKey": "maximumEffect"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_COMPONENT_DESIRED_STATE_V1",
+          "valueKey": "boundsState"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_COMPONENT_DESIRED_STATE_V1",
+          "valueKey": "previewState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_BOUNDED_EVIDENCE_IMMUTABLE_REFS",
+          "contractId": "CONTROL_APPROVAL_REVOKE_V1",
+          "valueKey": "approvalId"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "CONTROL_APPROVAL_REVOKE_V1",
+          "valueKey": "currentApprovalState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "CONTROL_APPROVAL_REVOKE_V1",
+          "valueKey": "requestedApprovalState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_APPROVAL_REVOKE_V1",
+          "valueKey": "controlOwner"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_APPROVAL_REVOKE_V1",
+          "valueKey": "maximumEffect"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_APPROVAL_REVOKE_V1",
+          "valueKey": "boundsState"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_APPROVAL_REVOKE_V1",
+          "valueKey": "previewState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_DEPLOYMENT_AGENT_PROVENANCE",
+          "contractId": "CONTROL_BOUNDED_CONFIG_REVISION_V1",
+          "valueKey": "requestedConfigurationRevision"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_BOUNDED_EVIDENCE_IMMUTABLE_REFS",
+          "contractId": "CONTROL_BOUNDED_CONFIG_REVISION_V1",
+          "valueKey": "requestedPayloadDigest"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_BOUNDED_CONFIG_REVISION_V1",
+          "valueKey": "boundedConfigValidationState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_BOUNDED_CONFIG_REVISION_V1",
+          "valueKey": "controlOwner"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_BOUNDED_CONFIG_REVISION_V1",
+          "valueKey": "maximumEffect"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_BOUNDED_CONFIG_REVISION_V1",
+          "valueKey": "boundsState"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_BOUNDED_CONFIG_REVISION_V1",
+          "valueKey": "previewState"
         }
       ]
     },
@@ -754,20 +995,20 @@
       "pageOwner": "markets",
       "factBindings": [
         {
-          "level": 2,
-          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
           "contractId": "PANEL_MARKETS_TRUTH_V1",
           "valueKey": "universeCount"
         },
         {
-          "level": 2,
-          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
           "contractId": "PANEL_MARKETS_TRUTH_V1",
           "valueKey": "candidateCount"
         },
         {
-          "level": 2,
-          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
           "contractId": "PANEL_MARKETS_TRUTH_V1",
           "valueKey": "focusCount"
         },

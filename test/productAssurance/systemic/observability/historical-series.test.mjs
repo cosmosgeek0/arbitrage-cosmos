@@ -12,6 +12,9 @@ import {
   sumCanonicalExactDecimals,
 } from '../../../../fixtures/productAssurance/systemic/observability/historical-series-evaluator.mjs';
 import {
+  deriveSloCatalogSha256,
+} from '../../../../fixtures/productAssurance/systemic/observability/slo-catalog-contract.mjs';
+import {
   assertJsonSchemaValid,
   assertSchemaSubsetSupported,
 } from '../cockpit/support/json-schema-2020-12-subset.mjs';
@@ -142,7 +145,7 @@ test('summaries and points are deterministic, canonical, and render-neutral', as
   assert.equal(execution.derivedCoherenceState, 'COHERENT');
 });
 
-test('declared COUNT/RATE/SUM/UTILIZATION/BURN_RATE have bound inputs and evaluated values', async () => {
+test('declared COUNT/RATE/SUM/UTILIZATION have dimensionally bound inputs and evaluated values', async () => {
   const output = evaluate(await fixture());
   for (const expected of catalogFixture.historicalMetricRegistry) {
     assert.deepEqual(Object.keys(seriesOf(output, expected.metricId).declaredStatistics), expected.statistics);
@@ -176,7 +179,7 @@ test('declared COUNT/RATE/SUM/UTILIZATION/BURN_RATE have bound inputs and evalua
     unit: 'percent',
     method: 'EXACT_DECIMAL_SCALE_18_HALF_UP',
   });
-  assert.equal(seriesOf(output, 'cpu-budget').declaredStatistics.BURN_RATE.value, '1');
+  assert.equal(Object.hasOwn(seriesOf(output, 'cpu-budget').declaredStatistics, 'BURN_RATE'), false);
 });
 
 test('quote-asset percentiles and sums remain canonical exact decimals without binary64 projection', async () => {
@@ -232,7 +235,7 @@ test('numeric coercion, noncanonical exact decimals, sign violations, and overfl
 test('catalog identity, revision, digest, and release bindings fail closed', async () => {
   for (const [field, value, reason] of [
     ['catalogId', 'caller-catalog', 'HISTORICAL_CATALOG_ID_MISMATCH'],
-    ['catalogRevision', 2, 'HISTORICAL_CATALOG_REVISION_MISMATCH'],
+    ['catalogRevision', 999, 'HISTORICAL_CATALOG_REVISION_MISMATCH'],
     ['catalogSha256', '2'.repeat(64), 'HISTORICAL_CATALOG_DECLARED_DIGEST_MISMATCH'],
     ['releaseSha', '2'.repeat(40), 'HISTORICAL_CATALOG_RELEASE_MISMATCH'],
   ]) {
@@ -250,6 +253,26 @@ test('catalog identity, revision, digest, and release bindings fail closed', asy
   assert.equal(hostileOutput.historicalResult, 'FAIL');
   assert.ok(hostileOutput.catalogBinding.historicalReasonCodes
     .includes('HISTORICAL_CATALOG_CANONICAL_DIGEST_MISMATCH'));
+
+  const rehashedCatalog = structuredClone(catalogFixture);
+  const hostileMetric = rehashedCatalog.historicalMetricRegistry
+    .find((entry) => entry.metricId === 'source-age-percentiles');
+  hostileMetric.ownerId = 'CALLER_OWNER';
+  rehashedCatalog.catalogSha256 = deriveSloCatalogSha256(rehashedCatalog);
+  const reboundInput = await fixture();
+  reboundInput.catalogBinding.catalogSha256 = rehashedCatalog.catalogSha256;
+  for (const entry of reboundInput.series) {
+    entry.catalogSha256 = rehashedCatalog.catalogSha256;
+    if (entry.metricId === hostileMetric.metricId) {
+      entry.ownerId = hostileMetric.ownerId;
+      entry.evidenceBinding.ownerId = hostileMetric.ownerId;
+    }
+    rehash(entry);
+  }
+  const reboundOutput = evaluate(reboundInput, rehashedCatalog);
+  assert.equal(reboundOutput.historicalResult, 'FAIL');
+  assert.ok(reboundOutput.catalogBinding.historicalReasonCodes
+    .includes('HISTORICAL_CATALOG_METRIC_CONTRACT_MISMATCH'));
 });
 
 test('per-series release, owner, unit, digest, and evidence bindings fail closed', async () => {
@@ -257,7 +280,7 @@ test('per-series release, owner, unit, digest, and evidence bindings fail closed
     ['release', (entry) => { entry.releaseSha = '2'.repeat(40); }, 'HISTORICAL_SERIES_RELEASE_MISMATCH'],
     ['owner', (entry) => { entry.ownerId = 'CALLER_OWNER'; }, 'HISTORICAL_SERIES_OWNER_MISMATCH'],
     ['unit', (entry) => { entry.unit = 'seconds'; }, 'HISTORICAL_SERIES_UNIT_MISMATCH'],
-    ['catalog revision', (entry) => { entry.catalogRevision = 2; }, 'HISTORICAL_SERIES_CATALOG_REVISION_MISMATCH'],
+    ['catalog revision', (entry) => { entry.catalogRevision = 999; }, 'HISTORICAL_SERIES_CATALOG_REVISION_MISMATCH'],
     ['catalog digest', (entry) => { entry.catalogSha256 = '2'.repeat(64); }, 'HISTORICAL_SERIES_CATALOG_DIGEST_MISMATCH'],
     ['catalog evidence', (entry) => { entry.evidenceBinding.catalogEvidenceRefId = 'evidence:other'; }, 'HISTORICAL_SERIES_CATALOG_EVIDENCE_MISMATCH'],
     ['evidence owner', (entry) => { entry.evidenceBinding.ownerId = 'CALLER_OWNER'; }, 'HISTORICAL_SERIES_EVIDENCE_OWNER_MISMATCH'],
@@ -348,6 +371,21 @@ test('future samples/evidence, incoherence, and cross-view windows cannot green'
   assert.ok(seriesOf(evaluate(incoherentInput), 'source-age-percentiles').historicalReasonCodes
     .includes('HISTORICAL_SERIES_COHERENCE_CLAIM_MISMATCH'));
 
+  for (const [label, timestamps] of [
+    ['start boundary', [2100, 2300, 2600, 3000]],
+    ['end boundary', [1000, 1300, 1600, 1900]],
+  ]) {
+    const boundaryInput = await fixture();
+    const boundarySeries = seriesOf(boundaryInput, 'source-age-percentiles');
+    boundarySeries.samples.forEach((sample, index) => { sample.observedAtMs = timestamps[index]; });
+    rehash(boundarySeries);
+    const boundaryOutput = seriesOf(evaluate(boundaryInput), 'source-age-percentiles');
+    assert.equal(boundaryOutput.derivedCoherenceState, 'INCOHERENT', label);
+    assert.equal(boundaryOutput.coherencePolicy.maximumObservedGapMs, 1100, label);
+    assert.ok(boundaryOutput.historicalReasonCodes
+      .includes('HISTORICAL_SERIES_COHERENCE_CLAIM_MISMATCH'), label);
+  }
+
   const unknownInput = await fixture();
   const unknown = seriesOf(unknownInput, 'source-age-percentiles');
   unknown.coherenceState = 'UNKNOWN';
@@ -369,7 +407,6 @@ test('declared statistic contexts reject zero/negative/overclaimed denominators 
     ['recovery evidence', 'automatic-recovery-result-rate', (entry) => { entry.samples[0].value = 0; }, 'HISTORICAL_SERIES_RECOVERY_RATE_EVIDENCE_MISMATCH'],
     ['per-time denominator', 'dropped-coalesced-events', (entry) => { entry.statisticContext.rateDenominatorMs = null; }, 'HISTORICAL_SERIES_PER_TIME_RATE_CONTEXT_INVALID'],
     ['capacity zero', 'cpu-budget', (entry) => { entry.statisticContext.capacity = 0; }, 'HISTORICAL_SERIES_CAPACITY_MISSING_OR_INVALID'],
-    ['budget negative', 'cpu-budget', (entry) => { entry.statisticContext.budget = -1; }, 'HISTORICAL_SERIES_BUDGET_MISSING_OR_INVALID'],
   ];
   for (const [label, metricId, mutate, reason] of hostileCases) {
     const input = await fixture();

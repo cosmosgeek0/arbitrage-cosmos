@@ -552,7 +552,7 @@ export const COMPONENT_FACT_CATALOG = Object.freeze([
   Object.freeze({ componentId: 'engine-supervisor', ownerId: 'SYSTEM_INTEGRATION', expectedManifestItemId: 'component:engine-supervisor' }),
 ]);
 export const COMPONENT_FACT_IDS = Object.freeze(COMPONENT_FACT_CATALOG.map((entry) => entry.componentId));
-export const SOURCE_ROW_CATALOG_ID = 'PUBLIC_SOURCE_IDS_V1';
+export const SOURCE_ROW_CATALOG_ID = 'SOURCE_AGGREGATION_IDS_V1';
 export const SEMANTIC_SOURCE_STREAM_CATALOG_ID = 'SYSTEM_SEMANTIC_STREAMS_V1';
 export const SEMANTIC_SOURCE_STREAM_IDS = Object.freeze([
   'MARKET_UNIVERSE', 'SPOT_MINI_TICKER', 'SPOT_AGGREGATE_TRADE',
@@ -561,36 +561,32 @@ export const SEMANTIC_SOURCE_STREAM_IDS = Object.freeze([
 ]);
 export const SOURCE_ROW_CATALOG = Object.freeze([
   Object.freeze({
-    sourceId: 'spot-mini-ticker-universe',
+    sourceAggregationId: 'spot-mini-ticker-universe',
     ownerId: 'INTELLIGENCE_RUNTIME',
-    expectedManifestItemId: 'source-aggregation:spot-mini-ticker-universe',
+    coveredExpectedManifestItemIds: Object.freeze(['source:MARKET_UNIVERSE', 'source:SPOT_MINI_TICKER']),
     physicalProducerIds: Object.freeze(['MarketEngine']),
     componentIds: Object.freeze(['public-spot-source', 'market-universe']),
-    semanticStreamIds: Object.freeze(['MARKET_UNIVERSE', 'SPOT_MINI_TICKER']),
   }),
   Object.freeze({
-    sourceId: 'spot-aggregate-trades',
+    sourceAggregationId: 'spot-aggregate-trades',
     ownerId: 'INTELLIGENCE_RUNTIME',
-    expectedManifestItemId: 'source-aggregation:spot-aggregate-trades',
+    coveredExpectedManifestItemIds: Object.freeze(['source:SPOT_AGGREGATE_TRADE']),
     physicalProducerIds: Object.freeze(['VolumeRuntime']),
     componentIds: Object.freeze(['public-spot-source', 'volume-engine']),
-    semanticStreamIds: Object.freeze(['SPOT_AGGREGATE_TRADE']),
   }),
   Object.freeze({
-    sourceId: 'spot-perpetual-bbo',
+    sourceAggregationId: 'spot-perpetual-bbo',
     ownerId: 'INTELLIGENCE_RUNTIME',
-    expectedManifestItemId: 'source-aggregation:spot-perpetual-bbo',
+    coveredExpectedManifestItemIds: Object.freeze(['source:SPOT_BEST_BID_ASK', 'source:USD_M_BEST_BID_ASK']),
     physicalProducerIds: Object.freeze(['BasisRuntime']),
     componentIds: Object.freeze(['public-spot-source', 'public-usdm-source', 'basis-engine']),
-    semanticStreamIds: Object.freeze(['SPOT_BEST_BID_ASK', 'USD_M_BEST_BID_ASK']),
   }),
   Object.freeze({
-    sourceId: 'usdm-mark-funding-liquidation',
+    sourceAggregationId: 'usdm-mark-funding-liquidation',
     ownerId: 'INTELLIGENCE_RUNTIME',
-    expectedManifestItemId: 'source-aggregation:usdm-mark-funding-liquidation',
+    coveredExpectedManifestItemIds: Object.freeze(['source:USD_M_MARK_FUNDING', 'source:USD_M_LIQUIDATION']),
     physicalProducerIds: Object.freeze(['MarketEngine']),
     componentIds: Object.freeze(['public-usdm-source', 'market-universe']),
-    semanticStreamIds: Object.freeze(['USD_M_MARK_FUNDING', 'USD_M_LIQUIDATION']),
   }),
 ]);
 
@@ -908,20 +904,20 @@ const PACKET_REASON_CODE_SET = new Set(PACKET_REASON_CODES);
 
 export const COCKPIT_RELEASE_MANIFEST_LAW = Object.freeze({
   manifestId: 'manifest.release.fixture-001',
-  manifestRevision: 4,
-  manifestSha256: 'a4a4b1f6a23bd32ad63138a20425184024a7165c2f47dd00c9a2a6b200a64abf',
+  manifestRevision: 5,
+  manifestSha256: '076e3e2e74ae960b43d59364ac42e66cb924339f1146ddcd8de87879ac68e9be',
   acceptedReleaseSha: '9785c93102b00389847b77c2f9348c06abc4344b',
-  totalExpectedCount: 79,
-  requiredExpectedCount: 75,
-  cockpitProjectionSetSha256: 'f39380f71defc2322247ff34fcf2e2ea9cc14586cae7348d2202f8998d12e444',
-  commandPathSetSha256: '1fcbf92980f95b925e9123d0f232e0e57ba2dcee714dba10a88764b51bcda92c',
-  componentSetSha256: 'fbe259ee27c4e2844dee065351c76cc0efee984e6229c7a253dfce4b2e02eacf',
-  sourceSetSha256: 'bf4310706d62f9b0f82a4d9cd5260f4a6df5560f977295761165c1b852a17c28',
-  observationSha256: '5ee35af76f9d212e7985b07013c7038aa525ac5045d951a5ab93146c67e8eeba',
-  evaluationEvidenceSha256: 'b6113dfe6d6eaa6f9a2c80dc47c0c2369269d23e23af33c67197cbfaf88199df',
+  totalExpectedCount: 84,
+  requiredExpectedCount: 80,
+  cockpitProjectionSetSha256: 'ee5eaf2be95e9745cd3264a4d667a90a7a755e08556e621d464259c9eea9ef2c',
+  commandPathSetSha256: '18821f9a416381af6c21488598f7e0e735cf9a7dd62f193a78d5ce5d25cc5615',
+  componentSetSha256: 'e764c9adcc490f96125965277453b804a26522d3cd8d8a1ca7d35b5557ded26a',
+  sourceSetSha256: 'bc4871ecbaf95acd704846586e58abf4412bc8241b78715acd21fc77c04e74aa',
+  observationSha256: 'd5b663b08c2128a48f88caf61a7287f65faec47d53bcbea2f66480179f42c2ff',
+  evaluationEvidenceSha256: '25a87b40835b26c3c1d5fd52d5b14221d45a774f7fb02f525254184890b7b5b8',
 });
 export const COCKPIT_EXPECTED_PROJECTION_COUNT = 25;
-export const COCKPIT_EXPECTED_COMMAND_PATH_COUNT = 6;
+export const COCKPIT_EXPECTED_COMMAND_PATH_COUNT = 8;
 
 export const INFORMATION_LEVELS = Object.freeze([1, 2, 3, 4, 5]);
 export const PANEL_KINDS = Object.freeze(['PANEL', 'GAUGE', 'GRAPH', 'TABLE', 'BADGE', 'CONTROL']);
@@ -1685,7 +1681,7 @@ function validateSourceRowCollections(root, valuesByKey) {
   if (!Array.isArray(root.sourceRows) || root.sourceRows.length !== SOURCE_ROW_CATALOG.length) {
     fail('SOURCE_ROW_COVERAGE_MISMATCH', '$.sourceRows', 'exactly four canonical named source aggregations are required');
   }
-  const ids = root.sourceRows.map((row) => object(row, '$.sourceRows').sourceId);
+  const ids = root.sourceRows.map((row) => object(row, '$.sourceRows').sourceAggregationId);
   if (new Set(ids).size !== ids.length) fail('DUPLICATE_SOURCE_ROW', '$.sourceRows', 'source identities must be unique');
   let coverageExpected = 0;
   let coverageCurrent = 0;
@@ -1704,8 +1700,8 @@ function validateSourceRowCollections(root, valuesByKey) {
   root.sourceRows.forEach((row, index) => {
     const path = `$.sourceRows[${index}]`;
     const rec = closed(row, [
-      'aggregationKind', 'canonicalRegistryRef', 'sourceId', 'ownerId', 'expectedManifestItemId',
-      'physicalProducerIds', 'componentIds', 'semanticStreamIds',
+      'aggregationKind', 'canonicalRegistryRef', 'sourceAggregationId', 'ownerId',
+      'coveredExpectedManifestItemIds', 'physicalProducerIds', 'componentIds',
       'acceptedReleaseSha', 'runningReleaseSha', 'sourceSchemaId', 'sourceSchemaVersion',
       'freshnessLawId', 'maximumMessageAgeMs', 'coherenceLawId',
       'connectionState', 'lastMessageAgeMs', 'sequenceGapCount', 'rateLimitBackoffState',
@@ -1717,12 +1713,18 @@ function validateSourceRowCollections(root, valuesByKey) {
     const expected = SOURCE_ROW_CATALOG[index];
     if (rec.aggregationKind !== 'NAMED_AGGREGATION'
         || rec.canonicalRegistryRef !== 'ARCHITECTURE_CANONICAL_SEMANTIC_SOURCE_REGISTRY'
-        || rec.sourceId !== expected.sourceId || rec.ownerId !== expected.ownerId
-        || rec.expectedManifestItemId !== expected.expectedManifestItemId
+        || rec.sourceAggregationId !== expected.sourceAggregationId || rec.ownerId !== expected.ownerId
+        || JSON.stringify(rec.coveredExpectedManifestItemIds) !== JSON.stringify(expected.coveredExpectedManifestItemIds)
         || JSON.stringify(rec.physicalProducerIds) !== JSON.stringify(expected.physicalProducerIds)
-        || JSON.stringify(rec.componentIds) !== JSON.stringify(expected.componentIds)
-        || JSON.stringify(rec.semanticStreamIds) !== JSON.stringify(expected.semanticStreamIds)) {
-      fail('SOURCE_ROW_IDENTITY_MISMATCH', path, 'named aggregation, owner, manifest item, producers, components, streams, and order must be exact');
+        || JSON.stringify(rec.componentIds) !== JSON.stringify(expected.componentIds)) {
+      fail('SOURCE_ROW_IDENTITY_MISMATCH', path, 'named aggregation, owner, covered manifest items, producers, components, and order must be exact');
+    }
+    uniqueStrings(rec.coveredExpectedManifestItemIds, `${path}.coveredExpectedManifestItemIds`, SEMANTIC_SOURCE_STREAM_IDS.length);
+    const coveredStreamIds = rec.coveredExpectedManifestItemIds.map((id) => (
+      typeof id === 'string' && id.startsWith('source:') ? id.slice('source:'.length) : null
+    ));
+    if (coveredStreamIds.length < 1 || coveredStreamIds.some((id) => !SEMANTIC_SOURCE_STREAM_IDS.includes(id))) {
+      fail('SOURCE_STREAM_ID_INVALID', `${path}.coveredExpectedManifestItemIds`, 'source aggregation must bind one or more canonical release-manifest source items');
     }
     if (rec.sourceSchemaId !== 'SYSTEM_SUPERVISOR_SOURCE_AGGREGATION_SNAPSHOT' || rec.sourceSchemaVersion !== 1) fail('SOURCE_ROW_SOURCE_MISMATCH', path, 'source rows must preserve supervisor source aggregation provenance');
     text(rec.freshnessLawId, `${path}.freshnessLawId`, 160);
@@ -1759,7 +1761,7 @@ function validateSourceRowCollections(root, valuesByKey) {
     text(rec.publisherDrilldownRef, `${path}.publisherDrilldownRef`, 240);
     uniqueStrings(rec.producerDrilldownRefs, `${path}.producerDrilldownRefs`, 16);
     uniqueStrings(rec.componentDrilldownRefs, `${path}.componentDrilldownRefs`, 16);
-    if (rec.publisherDrilldownRef !== `source-aggregation:${rec.sourceId}:publisher`
+    if (rec.publisherDrilldownRef !== `source-aggregation:${rec.sourceAggregationId}:publisher`
         || JSON.stringify(rec.producerDrilldownRefs) !== JSON.stringify(rec.physicalProducerIds.map((id) => `producer:${id}`))
         || JSON.stringify(rec.componentDrilldownRefs) !== JSON.stringify(rec.componentIds.map((id) => `component:${id}`))) {
       fail('SOURCE_ROW_DRILLDOWN_MISMATCH', path, 'publisher, producer, and component drill-downs must retain exact source identities');
@@ -1783,7 +1785,7 @@ function validateSourceRowCollections(root, valuesByKey) {
       oldestAge = oldestAge === null ? rec.lastMessageAgeMs : Math.max(oldestAge, rec.lastMessageAgeMs);
     }
     for (const symbol of rec.quietSymbolIds) allQuietSymbolIds.add(symbol);
-    streamIds.push(...rec.semanticStreamIds);
+    streamIds.push(...coveredStreamIds);
     connectionStates.add(rec.connectionState);
     backoffStates.add(rec.rateLimitBackoffState);
     if (!healthy) degradedRows.push(rec);
@@ -1792,10 +1794,10 @@ function validateSourceRowCollections(root, valuesByKey) {
       || rec.renderTruthLabel === 'UNKNOWN' || rec.renderTruthLabel === 'UNAVAILABLE');
     if (missingRow) {
       missing += 1;
-      missingStreamCount += rec.semanticStreamIds.length;
+      missingStreamCount += rec.coveredExpectedManifestItemIds.length;
     } else if (unknownRow) {
       unknown += 1;
-      unknownStreamCount += rec.semanticStreamIds.length;
+      unknownStreamCount += rec.coveredExpectedManifestItemIds.length;
     }
   });
   if (streamIds.length !== SEMANTIC_SOURCE_STREAM_IDS.length
@@ -1826,7 +1828,7 @@ function validateSourceRowCollections(root, valuesByKey) {
     if (fact?.value !== expected || (expected === null && fact?.valueState !== 'UNKNOWN')) fail('SOURCE_AGGREGATE_MISMATCH', `$.values.${key}`, 'Dashboard source aggregate must equal its exact source rows without collapsing unknown to zero');
   }
   const expectedConnections = [...connectionStates].sort(compareCodePoints);
-  const expectedDegradedIds = degradedRows.map((row) => row.sourceId).sort(compareCodePoints);
+  const expectedDegradedIds = degradedRows.map((row) => row.sourceAggregationId).sort(compareCodePoints);
   const sourceVocabularyMounted = sourceReasonVocabularyMounted();
   const expectedDegradedReasons = degradedRows.length > 0 && !sourceVocabularyMounted
     ? null
@@ -2032,6 +2034,9 @@ function validateStateCauseEvidence(root) {
   utcMsOrNull(cause.observedAtMs, '$.stateCauseEvidence.observedAtMs');
   if (cause.observedAtMs === null || !root.reasonCodes.includes(cause.causeCode)) {
     fail('NON_GREEN_CAUSE_EVIDENCE_REQUIRED', '$.stateCauseEvidence', 'cause evidence must be timestamped and included in observation reasons');
+  }
+  if (cause.observedAtMs > root.evidence.observedAtMs) {
+    fail('NON_GREEN_CAUSE_EVIDENCE_TIME_INVALID', '$.stateCauseEvidence.observedAtMs', 'cause evidence cannot postdate the panel observation');
   }
 }
 
@@ -2304,13 +2309,19 @@ export function validatePanelObservation(input) {
       }
     }
   }
+  const valuesByKey = new Map(root.values.map((value) => [value.key, value]));
+  validateComponentFactCollections(root, valuesByKey);
+  validateSourceRowCollections(root, valuesByKey);
+  validateAttentionRows(root, valuesByKey);
+  validateTraceTargets(root, valuesByKey);
+  validateStateCauseEvidence(root);
   return true;
 }
 
 function requiredValueEvaluation(contract, observation) {
   const valuesByKey = new Map(observation.values.map((value) => [value.key, value]));
   const missingKeys = contract.requiredValueKeys.filter((key) => !valuesByKey.has(key));
-  const unknownKeys = contract.requiredValueKeys.filter((key) => valuesByKey.get(key)?.value === null);
+  const unknownKeys = contract.requiredValueKeys.filter((key) => valuesByKey.get(key)?.valueState === 'UNKNOWN');
   return {
     satisfied: missingKeys.length === 0 && unknownKeys.length === 0,
     missingKeys,
@@ -2461,6 +2472,7 @@ function antiGreen(observation, contract, evaluatedAtMs) {
     [axes.completeness !== 'COMPLETE', 'COMPLETENESS_NOT_COMPLETE'],
     [axes.dataMode !== 'LIVE_PUBLIC', 'DATA_MODE_NOT_LIVE'],
     [axes.readiness !== 'READY', 'READINESS_NOT_READY'],
+    [contract.panelKind === 'CONTROL' && observation.controlState?.available !== true, 'CONTROL_UNAVAILABLE'],
     [!axes.releaseStatuses.includes('LIVE_PUBLIC'), 'RELEASE_NOT_LIVE_PUBLIC'],
     [observation.denominator.unknownCount !== 0, 'DENOMINATOR_HAS_UNKNOWN'],
     [observation.denominator.expectedCount !== contract.denominatorLaw.expectedCount, 'EXPECTED_MANIFEST_DENOMINATOR_MISMATCH'],
@@ -2529,6 +2541,7 @@ function declaredStateRuleEvaluation(ruleSet, observation, contract, evaluatedAt
   if (contradictoryReleaseStatuses.some((status) => status === 'MISSING' || status === 'NOT_CONFIGURED')) flags.add('MISSING');
   if (axes.truthLabel === 'UNKNOWN' || axes.dataMode === 'UNKNOWN'
       || axes.coherenceState === 'UNKNOWN' || !sourceProvenance.satisfied) flags.add('UNKNOWN');
+  if (contract.panelKind === 'CONTROL' && observation.controlState?.available !== true) flags.add('UNKNOWN');
   if (requiredValues.satisfied) flags.add('REQUIRED_VALUES_PRESENT');
   if (detection.satisfied) flags.add('DETECTION_CLAIM_SATISFIED');
 
@@ -2616,6 +2629,16 @@ export function evaluatePanel(contract, observation, evaluatedAtMs, stateRuleSet
     denominator: observation.denominator,
     evidence: observation.evidence,
     detectionEvidence: observation.detectionEvidence,
+    componentDenominator: observation.componentDenominator,
+    componentFacts: observation.componentFacts,
+    sourceDenominator: observation.sourceDenominator,
+    sourceAggregationDenominator: observation.sourceAggregationDenominator,
+    sourceRows: observation.sourceRows,
+    attentionDenominator: observation.attentionDenominator,
+    attentionRows: observation.attentionRows,
+    traceDenominator: observation.traceDenominator,
+    traceTargets: observation.traceTargets,
+    stateCauseEvidence: observation.stateCauseEvidence,
     values: [...failClosedValues].sort((left, right) => compareCodePoints(left.key, right.key)),
     reasonCodes,
     actionBinding: contract.actionBinding,

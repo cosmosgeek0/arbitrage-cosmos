@@ -31,6 +31,7 @@ test('all cockpit JSON schemas are versioned and recursively close object shapes
     'cockpit-view-model.v1.schema.json',
     'generated-row-drafts.v1.schema.json',
     'insertion-request-draft.v1.schema.json',
+    'release-bound-panel-evaluation.v1.schema.json',
     'surface-projection-matrix.v1.schema.json',
   ];
   for (const name of names) {

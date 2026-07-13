@@ -33,14 +33,14 @@
       "configurationState": "CONFIGURED"
     },
     "denominator": {
-      "expectedCount": 20,
-      "visibleCount": 19,
-      "filteredCount": 1,
+      "expectedCount": 25,
+      "visibleCount": 25,
+      "filteredCount": 0,
       "hiddenCount": 0,
       "unknownCount": 0
     },
     "evidence": {
-      "observedCount": 20,
+      "observedCount": 25,
       "observedAtMs": 1749999999000,
       "lastIndependentProofAtMs": 1749999998000
     },
@@ -48,552 +48,674 @@
       {
         "key": "desiredState",
         "value": "RUNNING",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "observedState",
         "value": "RUNNING",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "readiness",
         "value": "READY",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "liveness",
         "value": "LIVE",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "heartbeatAgeMs",
         "value": 1000,
+        "valueState": "KNOWN",
         "unit": "MILLISECONDS",
         "unknownReasonCode": null
       },
       {
         "key": "restartCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "currentError",
-        "value": "FIXTURE_CURREN_RROR",
+        "value": null,
+        "valueState": "KNOWN_ABSENT",
         "unit": "REASON_CODE",
         "unknownReasonCode": null
       },
       {
         "key": "renderTruthLabel",
         "value": "LIVE",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "mode",
-        "value": "READ_ONLY",
+        "value": "ADVISORY",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "desiredMode",
-        "value": "READ_ONLY",
+        "value": "ADVISORY",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "effectiveMode",
-        "value": "READ_ONLY",
+        "value": "ADVISORY",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "killSwitchState",
         "value": "DISENGAGED",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "killSwitchEffect",
         "value": "BLOCKS_ADVISORY_PROGRESSION_NO_MONEY_MUTATION",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "startupGeneration",
-        "value": 1,
+        "value": 0,
+        "valueState": "KNOWN",
         "unit": "GENERATION",
         "unknownReasonCode": null
       },
       {
         "key": "lastRestart",
-        "value": 1749999000000,
+        "value": 1750000000000,
+        "valueState": "KNOWN",
         "unit": "UTC_MILLISECONDS",
         "unknownReasonCode": null
       },
       {
         "key": "lastRestartResult",
-        "value": "SUCCESS",
+        "value": "FAILED",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "rootBlocker",
-        "value": "NONE",
-        "unit": "REASON_CODE",
+        "value": null,
+        "valueState": "KNOWN_ABSENT",
+        "unit": "IDENTITY",
         "unknownReasonCode": null
       },
       {
         "key": "overallPosture",
-        "value": "READY",
+        "value": "BLOCKED",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "activeExposureCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "newestCandidateDisposition",
         "value": "ACCEPTED",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "newestCandidateDispositionReason",
-        "value": "CANONICAL_ACCEPTANCE_CRITERIA_MET",
-        "unit": "REASON_CODE",
+        "value": [],
+        "valueState": "KNOWN_ABSENT",
+        "unit": "REASON_CODE_SET",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "newestCandidateId",
+        "value": "CANDIDATE_FIXTURE_001",
+        "valueState": "KNOWN",
+        "unit": "IDENTITY",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "newestCandidateSymbol",
+        "value": "BTCUSDT",
+        "valueState": "KNOWN",
+        "unit": "SYMBOL",
+        "unknownReasonCode": null
+      },
+      {
+        "key": "newestCandidateEvidenceRevision",
+        "value": "EVIDENCE_REVISION_001",
+        "valueState": "KNOWN",
+        "unit": "REVISION_ID",
         "unknownReasonCode": null
       },
       {
         "key": "degradedSourceCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "degradedSourceIdentities",
-        "value": "NONE",
+        "value": [],
+        "valueState": "KNOWN_ABSENT",
         "unit": "IDENTITY_SET",
         "unknownReasonCode": null
       },
       {
         "key": "degradedSourceReasons",
-        "value": "NONE",
+        "value": [],
+        "valueState": "KNOWN_ABSENT",
         "unit": "REASON_CODE_SET",
         "unknownReasonCode": null
       },
       {
         "key": "bootStartupTransactionState",
-        "value": "COMMITTED",
+        "value": "FIXTURE_BOOT_STARTUP_TRANSACTION_STATE",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "deployedRevision",
-        "value": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "value": "FIXTURE_DEPLOYED_REVISION",
+        "valueState": "KNOWN",
         "unit": "GIT_SHA",
         "unknownReasonCode": null
       },
       {
         "key": "testedRevision",
-        "value": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "value": "FIXTURE_TESTED_REVISION",
+        "valueState": "KNOWN",
         "unit": "GIT_SHA",
         "unknownReasonCode": null
       },
       {
         "key": "dataSourceHealthState",
         "value": "READY",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "dataSourceConnectionStates",
-        "value": "CONNECTED",
+        "value": [
+          "CONNECTED"
+        ],
+        "valueState": "KNOWN",
         "unit": "STATE_SET",
         "unknownReasonCode": null
       },
       {
         "key": "oldestDataSourceMessageAgeMs",
-        "value": 1000,
+        "value": 500,
+        "valueState": "KNOWN",
         "unit": "MILLISECONDS",
         "unknownReasonCode": null
       },
       {
         "key": "dataSourceSequenceGapCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "dataSourceRateLimitBackoffState",
         "value": "CLEAR",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "dataSourceCoverageExpectedCount",
-        "value": 0,
+        "value": 40,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "dataSourceCoverageCurrentCount",
-        "value": 0,
+        "value": 40,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "quietSymbolCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "basisLiveAgeMs",
-        "value": 1000,
+        "value": 0,
+        "valueState": "KNOWN",
         "unit": "MILLISECONDS",
         "unknownReasonCode": null
       },
       {
         "key": "basisUniverseCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "basisCandidateCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "basisFocusCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "basisProposalCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "basisLatestDecision",
-        "value": "NO_ACTION",
+        "value": "FIXTURE_BASIS_LATEST_DECISION",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "basisLatestRejectReasonCode",
-        "value": "NONE",
+        "value": null,
+        "valueState": "KNOWN_ABSENT",
         "unit": "REASON_CODE",
         "unknownReasonCode": null
       },
       {
         "key": "volumeLiveAgeMs",
-        "value": 1000,
+        "value": 0,
+        "valueState": "KNOWN",
         "unit": "MILLISECONDS",
         "unknownReasonCode": null
       },
       {
         "key": "volumeUniverseCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "volumeCandidateCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "volumeFocusCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "volumeProposalCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "volumeLatestDecision",
-        "value": "NO_ACTION",
+        "value": "FIXTURE_VOLUME_LATEST_DECISION",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "volumeLatestRejectReasonCode",
-        "value": "NONE",
+        "value": null,
+        "valueState": "KNOWN_ABSENT",
         "unit": "REASON_CODE",
         "unknownReasonCode": null
       },
       {
         "key": "qHealthState",
-        "value": "READY",
+        "value": "BLOCKED",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "qModelVersion",
-        "value": "fixture-q-model-v1",
+        "value": "FIXTURE_Q_MODEL_VERSION",
+        "valueState": "KNOWN",
         "unit": "VERSION",
         "unknownReasonCode": null
       },
       {
         "key": "qDatasetVersion",
-        "value": "fixture-q-dataset-v1",
+        "value": "FIXTURE_Q_DATASET_VERSION",
+        "valueState": "KNOWN",
         "unit": "VERSION",
         "unknownReasonCode": null
       },
       {
         "key": "qDriftState",
-        "value": "WITHIN_BOUND",
+        "value": "FIXTURE_Q_DRIFT_STATE",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "qLatestAssessment",
-        "value": "NO_ACTIONABLE_ASSESSMENT",
+        "value": "FIXTURE_Q_LATEST_ASSESSMENT",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "qLatestAssessmentAction",
-        "value": "WATCH",
+        "value": "ABSTAIN_UNKNOWN",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "qLatestAbstentionReason",
-        "value": "NONE",
-        "unit": "REASON_CODE",
+        "value": [],
+        "valueState": "KNOWN_ABSENT",
+        "unit": "REASON_CODE_SET",
         "unknownReasonCode": null
       },
       {
         "key": "allocatableTruthState",
-        "value": "AVAILABLE",
+        "value": "FIXTURE_ALLOCATABLE_TRUTH_STATE",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "reservationCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "stagedMandateCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "approvalState",
         "value": "APPROVED",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "approvalExpiresAtMs",
-        "value": 1750000060000,
+        "value": 1750000000000,
+        "valueState": "KNOWN",
         "unit": "UTC_MILLISECONDS",
         "unknownReasonCode": null
       },
       {
         "key": "capitalCeiling",
-        "value": 0,
+        "value": "0",
+        "valueState": "KNOWN",
         "unit": "USD",
         "unknownReasonCode": null
       },
       {
         "key": "equity",
-        "value": 0,
+        "value": "0",
+        "valueState": "KNOWN",
         "unit": "USD",
         "unknownReasonCode": null
       },
       {
         "key": "availableCapital",
-        "value": 0,
+        "value": "0",
+        "valueState": "KNOWN",
         "unit": "USD",
         "unknownReasonCode": null
       },
       {
         "key": "realizedPnl",
-        "value": 0,
+        "value": "0",
+        "valueState": "KNOWN",
         "unit": "USD",
         "unknownReasonCode": null
       },
       {
         "key": "drawdown",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "RATIO",
         "unknownReasonCode": null
       },
       {
         "key": "universeCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "candidateCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "focusCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "opportunityCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "activeOrderCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "activePositionCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "activeLiabilityCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "activeRecoveryCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "latestRiskVerdict",
-        "value": "ALLOW",
+        "value": "ABSTAIN",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "latestRiskBlockCodes",
-        "value": "NONE",
+        "value": [],
+        "valueState": "KNOWN_ABSENT",
         "unit": "REASON_CODE_SET",
         "unknownReasonCode": null
       },
       {
         "key": "executionDryRunPlanState",
-        "value": "PLANNED",
+        "value": "FIXTURE_EXECUTION_DRY_RUN_PLAN_STATE",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "executionDryRunLegState",
-        "value": "READY",
+        "value": "FIXTURE_EXECUTION_DRY_RUN_LEG_STATE",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "executionReconciliationState",
-        "value": "RECONCILED",
+        "value": "FIXTURE_EXECUTION_RECONCILIATION_STATE",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "liveExecutionBarrier",
         "value": "LIVE_EXECUTION_NOT_IMPLEMENTED",
+        "valueState": "KNOWN",
         "unit": "BARRIER_CODE",
         "unknownReasonCode": null
       },
       {
         "key": "attentionQueueCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "attentionQueueRankedState",
         "value": "EMPTY",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "topAttentionPriority",
-        "value": "NONE",
+        "value": null,
+        "valueState": "KNOWN_ABSENT",
         "unit": "PRIORITY",
         "unknownReasonCode": null
       },
       {
         "key": "topAttentionReason",
-        "value": "NONE",
-        "unit": "REASON_CODE",
+        "value": [],
+        "valueState": "KNOWN_ABSENT",
+        "unit": "REASON_CODE_SET",
         "unknownReasonCode": null
       },
       {
         "key": "topAttentionResolvingControl",
-        "value": "NONE",
+        "value": null,
+        "valueState": "KNOWN_ABSENT",
         "unit": "CONTROL_ID",
         "unknownReasonCode": null
       },
       {
         "key": "dashboardCorrelationChainId",
-        "value": "fixture:dashboard:correlation:001",
+        "value": "CORRELATION_FIXTURE_001",
+        "valueState": "KNOWN",
         "unit": "CORRELATION_ID",
         "unknownReasonCode": null
       },
       {
+        "key": "traceTargetCount",
+        "value": 3,
+        "valueState": "KNOWN",
+        "unit": "COUNT",
+        "unknownReasonCode": null
+      },
+      {
         "key": "strategyStatus",
-        "value": "READY",
+        "value": "BLOCKED",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "qStatus",
-        "value": "READY",
+        "value": "BLOCKED",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "recentMaterialDecisionCount",
         "value": 0,
+        "valueState": "KNOWN",
         "unit": "COUNT",
         "unknownReasonCode": null
       },
       {
         "key": "recentMaterialDecisionSummary",
-        "value": "NONE",
+        "value": "FIXTURE_RECENT_MATERIAL_DECISION_SUMMARY",
+        "valueState": "KNOWN",
         "unit": "STATE",
         "unknownReasonCode": null
       },
       {
         "key": "executionOwner",
-        "value": "NO_LIVE_EXECUTION_OWNER",
+        "value": "FIXTURE_EXECUTION_OWNER",
+        "valueState": "KNOWN",
         "unit": "IDENTITY",
         "unknownReasonCode": null
       },
       {
         "key": "executionFencingEpoch",
-        "value": 1,
+        "value": 0,
+        "valueState": "KNOWN",
         "unit": "EPOCH",
         "unknownReasonCode": null
       }
@@ -606,11 +728,11 @@
       "sourceSchemaVersion": 1,
       "supervisorSnapshotRevision": 42,
       "manifestId": "manifest.release.fixture-001",
-      "manifestSha256": "68428c85723a7d955c4e7bdeb9001429ff0ec6cce5d6db0e33c73eb33fa3a80e",
+      "manifestSha256": "076e3e2e74ae960b43d59364ac42e66cb924339f1146ddcd8de87879ac68e9be",
       "acceptedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
       "runningReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
       "manifestEvaluationResult": "MATCH",
-      "manifestRevision": 2,
+      "manifestRevision": 5,
       "manifestItemId": "cockpit-projection:PANEL_DASHBOARD_TRUTH_V1"
     },
     "detectionEvidence": {
@@ -620,7 +742,1059 @@
       "browserConnected": true,
       "sloMatched": true,
       "outOfBandProofPresent": null
-    }
+    },
+    "componentDenominator": {
+      "catalogId": "SYSTEM_COMPONENT_IDS_V1",
+      "expectedCount": 13,
+      "rowCount": 13,
+      "visibleCount": 13,
+      "filteredCount": 0,
+      "hiddenCount": 0,
+      "missingCount": 0,
+      "unknownCount": 0
+    },
+    "componentFacts": [
+      {
+        "componentId": "public-spot-source",
+        "ownerId": "INTELLIGENCE_RUNTIME",
+        "sourceCanonicalOwner": "SYSTEM_INTEGRATION",
+        "sourceSchemaId": "SYSTEM_SUPERVISOR_COMPONENT_SNAPSHOT",
+        "sourceSchemaVersion": 1,
+        "supervisorSnapshotRevision": 42,
+        "expectedManifestItemId": "component:public-spot-source",
+        "acceptedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "runningReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "releaseStatuses": [
+          "LIVE_PUBLIC"
+        ],
+        "freshnessLawId": "COMPONENT_HEARTBEAT_5000MS",
+        "maximumHeartbeatAgeMs": 5000,
+        "coherenceLawId": "SYSTEM_SUPERVISOR_SNAPSHOT_REVISION_COHERENT",
+        "desiredState": "RUNNING",
+        "observedState": "RUNNING",
+        "readiness": "READY",
+        "liveness": "LIVE",
+        "heartbeatAgeMs": 1000,
+        "restartCount": 0,
+        "currentError": null,
+        "renderTruthLabel": "LIVE",
+        "reasonCode": null,
+        "units": {
+          "desiredState": "STATE",
+          "observedState": "STATE",
+          "readiness": "STATE",
+          "liveness": "STATE",
+          "heartbeatAgeMs": "MILLISECONDS",
+          "restartCount": "COUNT",
+          "currentError": "REASON_CODE",
+          "renderTruthLabel": "STATE"
+        },
+        "ownerResponse": "Inspect canonical supervisor evidence and the bounded owner runbook.",
+        "runbookRef": "I00_COMPONENT:public-spot-source",
+        "incidentDrilldownRef": "component:public-spot-source:incident",
+        "traceDrilldownRef": "component:public-spot-source:trace",
+        "evidenceDrilldownRef": "component:public-spot-source:evidence"
+      },
+      {
+        "componentId": "public-usdm-source",
+        "ownerId": "INTELLIGENCE_RUNTIME",
+        "sourceCanonicalOwner": "SYSTEM_INTEGRATION",
+        "sourceSchemaId": "SYSTEM_SUPERVISOR_COMPONENT_SNAPSHOT",
+        "sourceSchemaVersion": 1,
+        "supervisorSnapshotRevision": 42,
+        "expectedManifestItemId": "component:public-usdm-source",
+        "acceptedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "runningReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "releaseStatuses": [
+          "LIVE_PUBLIC"
+        ],
+        "freshnessLawId": "COMPONENT_HEARTBEAT_5000MS",
+        "maximumHeartbeatAgeMs": 5000,
+        "coherenceLawId": "SYSTEM_SUPERVISOR_SNAPSHOT_REVISION_COHERENT",
+        "desiredState": "RUNNING",
+        "observedState": "RUNNING",
+        "readiness": "READY",
+        "liveness": "LIVE",
+        "heartbeatAgeMs": 1000,
+        "restartCount": 0,
+        "currentError": null,
+        "renderTruthLabel": "LIVE",
+        "reasonCode": null,
+        "units": {
+          "desiredState": "STATE",
+          "observedState": "STATE",
+          "readiness": "STATE",
+          "liveness": "STATE",
+          "heartbeatAgeMs": "MILLISECONDS",
+          "restartCount": "COUNT",
+          "currentError": "REASON_CODE",
+          "renderTruthLabel": "STATE"
+        },
+        "ownerResponse": "Inspect canonical supervisor evidence and the bounded owner runbook.",
+        "runbookRef": "I00_COMPONENT:public-usdm-source",
+        "incidentDrilldownRef": "component:public-usdm-source:incident",
+        "traceDrilldownRef": "component:public-usdm-source:trace",
+        "evidenceDrilldownRef": "component:public-usdm-source:evidence"
+      },
+      {
+        "componentId": "market-universe",
+        "ownerId": "AUDITED_APP",
+        "sourceCanonicalOwner": "SYSTEM_INTEGRATION",
+        "sourceSchemaId": "SYSTEM_SUPERVISOR_COMPONENT_SNAPSHOT",
+        "sourceSchemaVersion": 1,
+        "supervisorSnapshotRevision": 42,
+        "expectedManifestItemId": "component:market-universe",
+        "acceptedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "runningReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "releaseStatuses": [
+          "LIVE_PUBLIC"
+        ],
+        "freshnessLawId": "COMPONENT_HEARTBEAT_5000MS",
+        "maximumHeartbeatAgeMs": 5000,
+        "coherenceLawId": "SYSTEM_SUPERVISOR_SNAPSHOT_REVISION_COHERENT",
+        "desiredState": "RUNNING",
+        "observedState": "RUNNING",
+        "readiness": "READY",
+        "liveness": "LIVE",
+        "heartbeatAgeMs": 1000,
+        "restartCount": 0,
+        "currentError": null,
+        "renderTruthLabel": "LIVE",
+        "reasonCode": null,
+        "units": {
+          "desiredState": "STATE",
+          "observedState": "STATE",
+          "readiness": "STATE",
+          "liveness": "STATE",
+          "heartbeatAgeMs": "MILLISECONDS",
+          "restartCount": "COUNT",
+          "currentError": "REASON_CODE",
+          "renderTruthLabel": "STATE"
+        },
+        "ownerResponse": "Inspect canonical supervisor evidence and the bounded owner runbook.",
+        "runbookRef": "I00_COMPONENT:market-universe",
+        "incidentDrilldownRef": "component:market-universe:incident",
+        "traceDrilldownRef": "component:market-universe:trace",
+        "evidenceDrilldownRef": "component:market-universe:evidence"
+      },
+      {
+        "componentId": "intelligence-runtime",
+        "ownerId": "INTELLIGENCE_RUNTIME",
+        "sourceCanonicalOwner": "SYSTEM_INTEGRATION",
+        "sourceSchemaId": "SYSTEM_SUPERVISOR_COMPONENT_SNAPSHOT",
+        "sourceSchemaVersion": 1,
+        "supervisorSnapshotRevision": 42,
+        "expectedManifestItemId": "component:intelligence-runtime",
+        "acceptedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "runningReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "releaseStatuses": [
+          "LIVE_PUBLIC"
+        ],
+        "freshnessLawId": "COMPONENT_HEARTBEAT_5000MS",
+        "maximumHeartbeatAgeMs": 5000,
+        "coherenceLawId": "SYSTEM_SUPERVISOR_SNAPSHOT_REVISION_COHERENT",
+        "desiredState": "RUNNING",
+        "observedState": "RUNNING",
+        "readiness": "READY",
+        "liveness": "LIVE",
+        "heartbeatAgeMs": 1000,
+        "restartCount": 0,
+        "currentError": null,
+        "renderTruthLabel": "LIVE",
+        "reasonCode": null,
+        "units": {
+          "desiredState": "STATE",
+          "observedState": "STATE",
+          "readiness": "STATE",
+          "liveness": "STATE",
+          "heartbeatAgeMs": "MILLISECONDS",
+          "restartCount": "COUNT",
+          "currentError": "REASON_CODE",
+          "renderTruthLabel": "STATE"
+        },
+        "ownerResponse": "Inspect canonical supervisor evidence and the bounded owner runbook.",
+        "runbookRef": "I00_COMPONENT:intelligence-runtime",
+        "incidentDrilldownRef": "component:intelligence-runtime:incident",
+        "traceDrilldownRef": "component:intelligence-runtime:trace",
+        "evidenceDrilldownRef": "component:intelligence-runtime:evidence"
+      },
+      {
+        "componentId": "market-intelligence",
+        "ownerId": "MARKET_INTELLIGENCE",
+        "sourceCanonicalOwner": "SYSTEM_INTEGRATION",
+        "sourceSchemaId": "SYSTEM_SUPERVISOR_COMPONENT_SNAPSHOT",
+        "sourceSchemaVersion": 1,
+        "supervisorSnapshotRevision": 42,
+        "expectedManifestItemId": "component:market-intelligence",
+        "acceptedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "runningReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "releaseStatuses": [
+          "LIVE_PUBLIC"
+        ],
+        "freshnessLawId": "COMPONENT_HEARTBEAT_5000MS",
+        "maximumHeartbeatAgeMs": 5000,
+        "coherenceLawId": "SYSTEM_SUPERVISOR_SNAPSHOT_REVISION_COHERENT",
+        "desiredState": "RUNNING",
+        "observedState": "RUNNING",
+        "readiness": "READY",
+        "liveness": "LIVE",
+        "heartbeatAgeMs": 1000,
+        "restartCount": 0,
+        "currentError": null,
+        "renderTruthLabel": "LIVE",
+        "reasonCode": null,
+        "units": {
+          "desiredState": "STATE",
+          "observedState": "STATE",
+          "readiness": "STATE",
+          "liveness": "STATE",
+          "heartbeatAgeMs": "MILLISECONDS",
+          "restartCount": "COUNT",
+          "currentError": "REASON_CODE",
+          "renderTruthLabel": "STATE"
+        },
+        "ownerResponse": "Inspect canonical supervisor evidence and the bounded owner runbook.",
+        "runbookRef": "I00_COMPONENT:market-intelligence",
+        "incidentDrilldownRef": "component:market-intelligence:incident",
+        "traceDrilldownRef": "component:market-intelligence:trace",
+        "evidenceDrilldownRef": "component:market-intelligence:evidence"
+      },
+      {
+        "componentId": "basis-engine",
+        "ownerId": "BASIS_ENGINE",
+        "sourceCanonicalOwner": "SYSTEM_INTEGRATION",
+        "sourceSchemaId": "SYSTEM_SUPERVISOR_COMPONENT_SNAPSHOT",
+        "sourceSchemaVersion": 1,
+        "supervisorSnapshotRevision": 42,
+        "expectedManifestItemId": "component:basis-engine",
+        "acceptedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "runningReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "releaseStatuses": [
+          "LIVE_PUBLIC"
+        ],
+        "freshnessLawId": "COMPONENT_HEARTBEAT_5000MS",
+        "maximumHeartbeatAgeMs": 5000,
+        "coherenceLawId": "SYSTEM_SUPERVISOR_SNAPSHOT_REVISION_COHERENT",
+        "desiredState": "RUNNING",
+        "observedState": "RUNNING",
+        "readiness": "READY",
+        "liveness": "LIVE",
+        "heartbeatAgeMs": 1000,
+        "restartCount": 0,
+        "currentError": null,
+        "renderTruthLabel": "LIVE",
+        "reasonCode": null,
+        "units": {
+          "desiredState": "STATE",
+          "observedState": "STATE",
+          "readiness": "STATE",
+          "liveness": "STATE",
+          "heartbeatAgeMs": "MILLISECONDS",
+          "restartCount": "COUNT",
+          "currentError": "REASON_CODE",
+          "renderTruthLabel": "STATE"
+        },
+        "ownerResponse": "Inspect canonical supervisor evidence and the bounded owner runbook.",
+        "runbookRef": "I00_COMPONENT:basis-engine",
+        "incidentDrilldownRef": "component:basis-engine:incident",
+        "traceDrilldownRef": "component:basis-engine:trace",
+        "evidenceDrilldownRef": "component:basis-engine:evidence"
+      },
+      {
+        "componentId": "volume-engine",
+        "ownerId": "VOLUME_ENGINE",
+        "sourceCanonicalOwner": "SYSTEM_INTEGRATION",
+        "sourceSchemaId": "SYSTEM_SUPERVISOR_COMPONENT_SNAPSHOT",
+        "sourceSchemaVersion": 1,
+        "supervisorSnapshotRevision": 42,
+        "expectedManifestItemId": "component:volume-engine",
+        "acceptedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "runningReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "releaseStatuses": [
+          "LIVE_PUBLIC"
+        ],
+        "freshnessLawId": "COMPONENT_HEARTBEAT_5000MS",
+        "maximumHeartbeatAgeMs": 5000,
+        "coherenceLawId": "SYSTEM_SUPERVISOR_SNAPSHOT_REVISION_COHERENT",
+        "desiredState": "RUNNING",
+        "observedState": "RUNNING",
+        "readiness": "READY",
+        "liveness": "LIVE",
+        "heartbeatAgeMs": 1000,
+        "restartCount": 0,
+        "currentError": null,
+        "renderTruthLabel": "LIVE",
+        "reasonCode": null,
+        "units": {
+          "desiredState": "STATE",
+          "observedState": "STATE",
+          "readiness": "STATE",
+          "liveness": "STATE",
+          "heartbeatAgeMs": "MILLISECONDS",
+          "restartCount": "COUNT",
+          "currentError": "REASON_CODE",
+          "renderTruthLabel": "STATE"
+        },
+        "ownerResponse": "Inspect canonical supervisor evidence and the bounded owner runbook.",
+        "runbookRef": "I00_COMPONENT:volume-engine",
+        "incidentDrilldownRef": "component:volume-engine:incident",
+        "traceDrilldownRef": "component:volume-engine:trace",
+        "evidenceDrilldownRef": "component:volume-engine:evidence"
+      },
+      {
+        "componentId": "capital-supervision",
+        "ownerId": "CAPITAL_SUPERVISION",
+        "sourceCanonicalOwner": "SYSTEM_INTEGRATION",
+        "sourceSchemaId": "SYSTEM_SUPERVISOR_COMPONENT_SNAPSHOT",
+        "sourceSchemaVersion": 1,
+        "supervisorSnapshotRevision": 42,
+        "expectedManifestItemId": "component:capital-supervision",
+        "acceptedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "runningReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "releaseStatuses": [
+          "LIVE_PUBLIC"
+        ],
+        "freshnessLawId": "COMPONENT_HEARTBEAT_5000MS",
+        "maximumHeartbeatAgeMs": 5000,
+        "coherenceLawId": "SYSTEM_SUPERVISOR_SNAPSHOT_REVISION_COHERENT",
+        "desiredState": "RUNNING",
+        "observedState": "RUNNING",
+        "readiness": "READY",
+        "liveness": "LIVE",
+        "heartbeatAgeMs": 1000,
+        "restartCount": 0,
+        "currentError": null,
+        "renderTruthLabel": "LIVE",
+        "reasonCode": null,
+        "units": {
+          "desiredState": "STATE",
+          "observedState": "STATE",
+          "readiness": "STATE",
+          "liveness": "STATE",
+          "heartbeatAgeMs": "MILLISECONDS",
+          "restartCount": "COUNT",
+          "currentError": "REASON_CODE",
+          "renderTruthLabel": "STATE"
+        },
+        "ownerResponse": "Inspect canonical supervisor evidence and the bounded owner runbook.",
+        "runbookRef": "I00_COMPONENT:capital-supervision",
+        "incidentDrilldownRef": "component:capital-supervision:incident",
+        "traceDrilldownRef": "component:capital-supervision:trace",
+        "evidenceDrilldownRef": "component:capital-supervision:evidence"
+      },
+      {
+        "componentId": "multileg-risk",
+        "ownerId": "BACKEND_FOUNDATION_RISK",
+        "sourceCanonicalOwner": "SYSTEM_INTEGRATION",
+        "sourceSchemaId": "SYSTEM_SUPERVISOR_COMPONENT_SNAPSHOT",
+        "sourceSchemaVersion": 1,
+        "supervisorSnapshotRevision": 42,
+        "expectedManifestItemId": "component:multileg-risk",
+        "acceptedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "runningReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "releaseStatuses": [
+          "LIVE_PUBLIC"
+        ],
+        "freshnessLawId": "COMPONENT_HEARTBEAT_5000MS",
+        "maximumHeartbeatAgeMs": 5000,
+        "coherenceLawId": "SYSTEM_SUPERVISOR_SNAPSHOT_REVISION_COHERENT",
+        "desiredState": "RUNNING",
+        "observedState": "RUNNING",
+        "readiness": "READY",
+        "liveness": "LIVE",
+        "heartbeatAgeMs": 1000,
+        "restartCount": 0,
+        "currentError": null,
+        "renderTruthLabel": "LIVE",
+        "reasonCode": null,
+        "units": {
+          "desiredState": "STATE",
+          "observedState": "STATE",
+          "readiness": "STATE",
+          "liveness": "STATE",
+          "heartbeatAgeMs": "MILLISECONDS",
+          "restartCount": "COUNT",
+          "currentError": "REASON_CODE",
+          "renderTruthLabel": "STATE"
+        },
+        "ownerResponse": "Inspect canonical supervisor evidence and the bounded owner runbook.",
+        "runbookRef": "I00_COMPONENT:multileg-risk",
+        "incidentDrilldownRef": "component:multileg-risk:incident",
+        "traceDrilldownRef": "component:multileg-risk:trace",
+        "evidenceDrilldownRef": "component:multileg-risk:evidence"
+      },
+      {
+        "componentId": "execution-coordinator-validate-only",
+        "ownerId": "BACKEND_FOUNDATION_EXECUTION",
+        "sourceCanonicalOwner": "SYSTEM_INTEGRATION",
+        "sourceSchemaId": "SYSTEM_SUPERVISOR_COMPONENT_SNAPSHOT",
+        "sourceSchemaVersion": 1,
+        "supervisorSnapshotRevision": 42,
+        "expectedManifestItemId": "component:execution-coordinator-validate-only",
+        "acceptedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "runningReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "releaseStatuses": [
+          "LIVE_PUBLIC"
+        ],
+        "freshnessLawId": "COMPONENT_HEARTBEAT_5000MS",
+        "maximumHeartbeatAgeMs": 5000,
+        "coherenceLawId": "SYSTEM_SUPERVISOR_SNAPSHOT_REVISION_COHERENT",
+        "desiredState": "RUNNING",
+        "observedState": "RUNNING",
+        "readiness": "READY",
+        "liveness": "LIVE",
+        "heartbeatAgeMs": 1000,
+        "restartCount": 0,
+        "currentError": null,
+        "renderTruthLabel": "LIVE",
+        "reasonCode": null,
+        "units": {
+          "desiredState": "STATE",
+          "observedState": "STATE",
+          "readiness": "STATE",
+          "liveness": "STATE",
+          "heartbeatAgeMs": "MILLISECONDS",
+          "restartCount": "COUNT",
+          "currentError": "REASON_CODE",
+          "renderTruthLabel": "STATE"
+        },
+        "ownerResponse": "Inspect canonical supervisor evidence and the bounded owner runbook.",
+        "runbookRef": "I00_COMPONENT:execution-coordinator-validate-only",
+        "incidentDrilldownRef": "component:execution-coordinator-validate-only:incident",
+        "traceDrilldownRef": "component:execution-coordinator-validate-only:trace",
+        "evidenceDrilldownRef": "component:execution-coordinator-validate-only:evidence"
+      },
+      {
+        "componentId": "reconciliation",
+        "ownerId": "BACKEND_FOUNDATION_RECONCILIATION",
+        "sourceCanonicalOwner": "SYSTEM_INTEGRATION",
+        "sourceSchemaId": "SYSTEM_SUPERVISOR_COMPONENT_SNAPSHOT",
+        "sourceSchemaVersion": 1,
+        "supervisorSnapshotRevision": 42,
+        "expectedManifestItemId": "component:reconciliation",
+        "acceptedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "runningReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "releaseStatuses": [
+          "LIVE_PUBLIC"
+        ],
+        "freshnessLawId": "COMPONENT_HEARTBEAT_5000MS",
+        "maximumHeartbeatAgeMs": 5000,
+        "coherenceLawId": "SYSTEM_SUPERVISOR_SNAPSHOT_REVISION_COHERENT",
+        "desiredState": "RUNNING",
+        "observedState": "RUNNING",
+        "readiness": "READY",
+        "liveness": "LIVE",
+        "heartbeatAgeMs": 1000,
+        "restartCount": 0,
+        "currentError": null,
+        "renderTruthLabel": "LIVE",
+        "reasonCode": null,
+        "units": {
+          "desiredState": "STATE",
+          "observedState": "STATE",
+          "readiness": "STATE",
+          "liveness": "STATE",
+          "heartbeatAgeMs": "MILLISECONDS",
+          "restartCount": "COUNT",
+          "currentError": "REASON_CODE",
+          "renderTruthLabel": "STATE"
+        },
+        "ownerResponse": "Inspect canonical supervisor evidence and the bounded owner runbook.",
+        "runbookRef": "I00_COMPONENT:reconciliation",
+        "incidentDrilldownRef": "component:reconciliation:incident",
+        "traceDrilldownRef": "component:reconciliation:trace",
+        "evidenceDrilldownRef": "component:reconciliation:evidence"
+      },
+      {
+        "componentId": "ledger-persistence",
+        "ownerId": "EXISTING_LEDGER",
+        "sourceCanonicalOwner": "SYSTEM_INTEGRATION",
+        "sourceSchemaId": "SYSTEM_SUPERVISOR_COMPONENT_SNAPSHOT",
+        "sourceSchemaVersion": 1,
+        "supervisorSnapshotRevision": 42,
+        "expectedManifestItemId": "component:ledger-persistence",
+        "acceptedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "runningReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "releaseStatuses": [
+          "LIVE_PUBLIC"
+        ],
+        "freshnessLawId": "COMPONENT_HEARTBEAT_5000MS",
+        "maximumHeartbeatAgeMs": 5000,
+        "coherenceLawId": "SYSTEM_SUPERVISOR_SNAPSHOT_REVISION_COHERENT",
+        "desiredState": "RUNNING",
+        "observedState": "RUNNING",
+        "readiness": "READY",
+        "liveness": "LIVE",
+        "heartbeatAgeMs": 1000,
+        "restartCount": 0,
+        "currentError": null,
+        "renderTruthLabel": "LIVE",
+        "reasonCode": null,
+        "units": {
+          "desiredState": "STATE",
+          "observedState": "STATE",
+          "readiness": "STATE",
+          "liveness": "STATE",
+          "heartbeatAgeMs": "MILLISECONDS",
+          "restartCount": "COUNT",
+          "currentError": "REASON_CODE",
+          "renderTruthLabel": "STATE"
+        },
+        "ownerResponse": "Inspect canonical supervisor evidence and the bounded owner runbook.",
+        "runbookRef": "I00_COMPONENT:ledger-persistence",
+        "incidentDrilldownRef": "component:ledger-persistence:incident",
+        "traceDrilldownRef": "component:ledger-persistence:trace",
+        "evidenceDrilldownRef": "component:ledger-persistence:evidence"
+      },
+      {
+        "componentId": "engine-supervisor",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "sourceCanonicalOwner": "SYSTEM_INTEGRATION",
+        "sourceSchemaId": "SYSTEM_SUPERVISOR_COMPONENT_SNAPSHOT",
+        "sourceSchemaVersion": 1,
+        "supervisorSnapshotRevision": 42,
+        "expectedManifestItemId": "component:engine-supervisor",
+        "acceptedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "runningReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "releaseStatuses": [
+          "LIVE_PUBLIC"
+        ],
+        "freshnessLawId": "COMPONENT_HEARTBEAT_5000MS",
+        "maximumHeartbeatAgeMs": 5000,
+        "coherenceLawId": "SYSTEM_SUPERVISOR_SNAPSHOT_REVISION_COHERENT",
+        "desiredState": "RUNNING",
+        "observedState": "RUNNING",
+        "readiness": "READY",
+        "liveness": "LIVE",
+        "heartbeatAgeMs": 1000,
+        "restartCount": 0,
+        "currentError": null,
+        "renderTruthLabel": "LIVE",
+        "reasonCode": null,
+        "units": {
+          "desiredState": "STATE",
+          "observedState": "STATE",
+          "readiness": "STATE",
+          "liveness": "STATE",
+          "heartbeatAgeMs": "MILLISECONDS",
+          "restartCount": "COUNT",
+          "currentError": "REASON_CODE",
+          "renderTruthLabel": "STATE"
+        },
+        "ownerResponse": "Inspect canonical supervisor evidence and the bounded owner runbook.",
+        "runbookRef": "I00_COMPONENT:engine-supervisor",
+        "incidentDrilldownRef": "component:engine-supervisor:incident",
+        "traceDrilldownRef": "component:engine-supervisor:trace",
+        "evidenceDrilldownRef": "component:engine-supervisor:evidence"
+      }
+    ],
+    "sourceDenominator": {
+      "catalogId": "SYSTEM_SEMANTIC_STREAMS_V1",
+      "expectedCount": 7,
+      "coveredCount": 7,
+      "missingCount": 0,
+      "unknownCount": 0
+    },
+    "sourceAggregationDenominator": {
+      "catalogId": "SOURCE_AGGREGATION_IDS_V1",
+      "expectedCount": 4,
+      "rowCount": 4,
+      "visibleCount": 4,
+      "filteredCount": 0,
+      "hiddenCount": 0,
+      "missingCount": 0,
+      "unknownCount": 0
+    },
+    "sourceRows": [
+      {
+        "aggregationKind": "NAMED_AGGREGATION",
+        "canonicalRegistryRef": "ARCHITECTURE_CANONICAL_SEMANTIC_SOURCE_REGISTRY",
+        "sourceAggregationId": "spot-mini-ticker-universe",
+        "ownerId": "INTELLIGENCE_RUNTIME",
+        "coveredExpectedManifestItemIds": [
+          "source:MARKET_UNIVERSE",
+          "source:SPOT_MINI_TICKER"
+        ],
+        "physicalProducerIds": [
+          "MarketEngine"
+        ],
+        "componentIds": [
+          "public-spot-source",
+          "market-universe"
+        ],
+        "acceptedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "runningReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "sourceSchemaId": "SYSTEM_SUPERVISOR_SOURCE_AGGREGATION_SNAPSHOT",
+        "sourceSchemaVersion": 1,
+        "freshnessLawId": "SOURCE_MESSAGE_5000MS",
+        "maximumMessageAgeMs": 5000,
+        "coherenceLawId": "SOURCE_AGGREGATION_STREAM_COHERENCE",
+        "connectionState": "CONNECTED",
+        "lastMessageAgeMs": 500,
+        "sequenceGapCount": 0,
+        "rateLimitBackoffState": "CLEAR",
+        "coverageExpectedCount": 10,
+        "coverageCurrentCount": 10,
+        "quietSymbolCount": 0,
+        "quietSymbolIds": [],
+        "renderTruthLabel": "LIVE",
+        "domainReasonCodes": [],
+        "reasonVocabularyBinding": {
+          "ownerId": "INTELLIGENCE_RUNTIME",
+          "vocabularyId": "INTELLIGENCE_RUNTIME_SOURCE_REASON_V1",
+          "revision": 1,
+          "sourceSha256": null,
+          "bindingState": "UNMOUNTED",
+          "shape": "SET",
+          "ordering": "CODE_POINT_ASC",
+          "emptyLaw": "EMPTY_ARRAY_IS_KNOWN_EMPTY"
+        },
+        "projectionCauseCode": null,
+        "units": {
+          "lastMessageAgeMs": "MILLISECONDS",
+          "sequenceGapCount": "COUNT",
+          "coverageExpectedCount": "COUNT",
+          "coverageCurrentCount": "COUNT",
+          "quietSymbolCount": "COUNT"
+        },
+        "publisherDrilldownRef": "source-aggregation:spot-mini-ticker-universe:publisher",
+        "producerDrilldownRefs": [
+          "producer:MarketEngine"
+        ],
+        "componentDrilldownRefs": [
+          "component:public-spot-source",
+          "component:market-universe"
+        ],
+        "incidentRef": "source-aggregation:spot-mini-ticker-universe:incident",
+        "traceRef": "source-aggregation:spot-mini-ticker-universe:trace",
+        "evidenceRef": "source-aggregation:spot-mini-ticker-universe:evidence"
+      },
+      {
+        "aggregationKind": "NAMED_AGGREGATION",
+        "canonicalRegistryRef": "ARCHITECTURE_CANONICAL_SEMANTIC_SOURCE_REGISTRY",
+        "sourceAggregationId": "spot-aggregate-trades",
+        "ownerId": "INTELLIGENCE_RUNTIME",
+        "coveredExpectedManifestItemIds": [
+          "source:SPOT_AGGREGATE_TRADE"
+        ],
+        "physicalProducerIds": [
+          "VolumeRuntime"
+        ],
+        "componentIds": [
+          "public-spot-source",
+          "volume-engine"
+        ],
+        "acceptedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "runningReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "sourceSchemaId": "SYSTEM_SUPERVISOR_SOURCE_AGGREGATION_SNAPSHOT",
+        "sourceSchemaVersion": 1,
+        "freshnessLawId": "SOURCE_MESSAGE_5000MS",
+        "maximumMessageAgeMs": 5000,
+        "coherenceLawId": "SOURCE_AGGREGATION_STREAM_COHERENCE",
+        "connectionState": "CONNECTED",
+        "lastMessageAgeMs": 500,
+        "sequenceGapCount": 0,
+        "rateLimitBackoffState": "CLEAR",
+        "coverageExpectedCount": 10,
+        "coverageCurrentCount": 10,
+        "quietSymbolCount": 0,
+        "quietSymbolIds": [],
+        "renderTruthLabel": "LIVE",
+        "domainReasonCodes": [],
+        "reasonVocabularyBinding": {
+          "ownerId": "INTELLIGENCE_RUNTIME",
+          "vocabularyId": "INTELLIGENCE_RUNTIME_SOURCE_REASON_V1",
+          "revision": 1,
+          "sourceSha256": null,
+          "bindingState": "UNMOUNTED",
+          "shape": "SET",
+          "ordering": "CODE_POINT_ASC",
+          "emptyLaw": "EMPTY_ARRAY_IS_KNOWN_EMPTY"
+        },
+        "projectionCauseCode": null,
+        "units": {
+          "lastMessageAgeMs": "MILLISECONDS",
+          "sequenceGapCount": "COUNT",
+          "coverageExpectedCount": "COUNT",
+          "coverageCurrentCount": "COUNT",
+          "quietSymbolCount": "COUNT"
+        },
+        "publisherDrilldownRef": "source-aggregation:spot-aggregate-trades:publisher",
+        "producerDrilldownRefs": [
+          "producer:VolumeRuntime"
+        ],
+        "componentDrilldownRefs": [
+          "component:public-spot-source",
+          "component:volume-engine"
+        ],
+        "incidentRef": "source-aggregation:spot-aggregate-trades:incident",
+        "traceRef": "source-aggregation:spot-aggregate-trades:trace",
+        "evidenceRef": "source-aggregation:spot-aggregate-trades:evidence"
+      },
+      {
+        "aggregationKind": "NAMED_AGGREGATION",
+        "canonicalRegistryRef": "ARCHITECTURE_CANONICAL_SEMANTIC_SOURCE_REGISTRY",
+        "sourceAggregationId": "spot-perpetual-bbo",
+        "ownerId": "INTELLIGENCE_RUNTIME",
+        "coveredExpectedManifestItemIds": [
+          "source:SPOT_BEST_BID_ASK",
+          "source:USD_M_BEST_BID_ASK"
+        ],
+        "physicalProducerIds": [
+          "BasisRuntime"
+        ],
+        "componentIds": [
+          "public-spot-source",
+          "public-usdm-source",
+          "basis-engine"
+        ],
+        "acceptedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "runningReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "sourceSchemaId": "SYSTEM_SUPERVISOR_SOURCE_AGGREGATION_SNAPSHOT",
+        "sourceSchemaVersion": 1,
+        "freshnessLawId": "SOURCE_MESSAGE_5000MS",
+        "maximumMessageAgeMs": 5000,
+        "coherenceLawId": "SOURCE_AGGREGATION_STREAM_COHERENCE",
+        "connectionState": "CONNECTED",
+        "lastMessageAgeMs": 500,
+        "sequenceGapCount": 0,
+        "rateLimitBackoffState": "CLEAR",
+        "coverageExpectedCount": 10,
+        "coverageCurrentCount": 10,
+        "quietSymbolCount": 0,
+        "quietSymbolIds": [],
+        "renderTruthLabel": "LIVE",
+        "domainReasonCodes": [],
+        "reasonVocabularyBinding": {
+          "ownerId": "INTELLIGENCE_RUNTIME",
+          "vocabularyId": "INTELLIGENCE_RUNTIME_SOURCE_REASON_V1",
+          "revision": 1,
+          "sourceSha256": null,
+          "bindingState": "UNMOUNTED",
+          "shape": "SET",
+          "ordering": "CODE_POINT_ASC",
+          "emptyLaw": "EMPTY_ARRAY_IS_KNOWN_EMPTY"
+        },
+        "projectionCauseCode": null,
+        "units": {
+          "lastMessageAgeMs": "MILLISECONDS",
+          "sequenceGapCount": "COUNT",
+          "coverageExpectedCount": "COUNT",
+          "coverageCurrentCount": "COUNT",
+          "quietSymbolCount": "COUNT"
+        },
+        "publisherDrilldownRef": "source-aggregation:spot-perpetual-bbo:publisher",
+        "producerDrilldownRefs": [
+          "producer:BasisRuntime"
+        ],
+        "componentDrilldownRefs": [
+          "component:public-spot-source",
+          "component:public-usdm-source",
+          "component:basis-engine"
+        ],
+        "incidentRef": "source-aggregation:spot-perpetual-bbo:incident",
+        "traceRef": "source-aggregation:spot-perpetual-bbo:trace",
+        "evidenceRef": "source-aggregation:spot-perpetual-bbo:evidence"
+      },
+      {
+        "aggregationKind": "NAMED_AGGREGATION",
+        "canonicalRegistryRef": "ARCHITECTURE_CANONICAL_SEMANTIC_SOURCE_REGISTRY",
+        "sourceAggregationId": "usdm-mark-funding-liquidation",
+        "ownerId": "INTELLIGENCE_RUNTIME",
+        "coveredExpectedManifestItemIds": [
+          "source:USD_M_MARK_FUNDING",
+          "source:USD_M_LIQUIDATION"
+        ],
+        "physicalProducerIds": [
+          "MarketEngine"
+        ],
+        "componentIds": [
+          "public-usdm-source",
+          "market-universe"
+        ],
+        "acceptedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "runningReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+        "sourceSchemaId": "SYSTEM_SUPERVISOR_SOURCE_AGGREGATION_SNAPSHOT",
+        "sourceSchemaVersion": 1,
+        "freshnessLawId": "SOURCE_MESSAGE_5000MS",
+        "maximumMessageAgeMs": 5000,
+        "coherenceLawId": "SOURCE_AGGREGATION_STREAM_COHERENCE",
+        "connectionState": "CONNECTED",
+        "lastMessageAgeMs": 500,
+        "sequenceGapCount": 0,
+        "rateLimitBackoffState": "CLEAR",
+        "coverageExpectedCount": 10,
+        "coverageCurrentCount": 10,
+        "quietSymbolCount": 0,
+        "quietSymbolIds": [],
+        "renderTruthLabel": "LIVE",
+        "domainReasonCodes": [],
+        "reasonVocabularyBinding": {
+          "ownerId": "INTELLIGENCE_RUNTIME",
+          "vocabularyId": "INTELLIGENCE_RUNTIME_SOURCE_REASON_V1",
+          "revision": 1,
+          "sourceSha256": null,
+          "bindingState": "UNMOUNTED",
+          "shape": "SET",
+          "ordering": "CODE_POINT_ASC",
+          "emptyLaw": "EMPTY_ARRAY_IS_KNOWN_EMPTY"
+        },
+        "projectionCauseCode": null,
+        "units": {
+          "lastMessageAgeMs": "MILLISECONDS",
+          "sequenceGapCount": "COUNT",
+          "coverageExpectedCount": "COUNT",
+          "coverageCurrentCount": "COUNT",
+          "quietSymbolCount": "COUNT"
+        },
+        "publisherDrilldownRef": "source-aggregation:usdm-mark-funding-liquidation:publisher",
+        "producerDrilldownRefs": [
+          "producer:MarketEngine"
+        ],
+        "componentDrilldownRefs": [
+          "component:public-usdm-source",
+          "component:market-universe"
+        ],
+        "incidentRef": "source-aggregation:usdm-mark-funding-liquidation:incident",
+        "traceRef": "source-aggregation:usdm-mark-funding-liquidation:trace",
+        "evidenceRef": "source-aggregation:usdm-mark-funding-liquidation:evidence"
+      }
+    ],
+    "attentionDenominator": {
+      "expectedCount": 0,
+      "rowCount": 0,
+      "visibleCount": 0,
+      "filteredCount": 0,
+      "hiddenCount": 0,
+      "unknownCount": 0
+    },
+    "attentionRows": [],
+    "traceDenominator": {
+      "expectedCount": 3,
+      "rowCount": 3,
+      "visibleCount": 3,
+      "filteredCount": 0,
+      "hiddenCount": 0,
+      "unknownCount": 0,
+      "availabilityState": "COMPLETE",
+      "absenceReasonCode": null
+    },
+    "traceTargets": [
+      {
+        "targetKind": "CANDIDATE",
+        "subjectId": "CANDIDATE_FIXTURE_001",
+        "symbol": "BTCUSDT",
+        "correlationId": "CORRELATION_FIXTURE_001",
+        "evidenceRevision": "EVIDENCE_REVISION_001",
+        "disposition": "ACCEPTED",
+        "dispositionReasonCodes": [],
+        "reasonVocabularyBinding": {
+          "ownerId": "FOUNDATION_READ_MODEL",
+          "vocabularyId": "CANONICAL_OPPORTUNITY_REJECTION_REASON_V1",
+          "revision": 1,
+          "sourceSha256": "eaaddb8dd995389f9d8a7ee98c876ed826b0c7dbd2bcaefd88ab7de6e4386905",
+          "bindingState": "MOUNTED",
+          "shape": "SET",
+          "ordering": "OWNER_ORDER",
+          "emptyLaw": "EMPTY_ARRAY_IS_KNOWN_EMPTY"
+        },
+        "stages": [
+          {
+            "stage": "EVIDENCE",
+            "state": "PRESENT",
+            "reference": "candidate-001:EVIDENCE",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:candidate-001:EVIDENCE"
+          },
+          {
+            "stage": "ASSESSMENT",
+            "state": "PRESENT",
+            "reference": "candidate-001:ASSESSMENT",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:candidate-001:ASSESSMENT"
+          },
+          {
+            "stage": "DECISION",
+            "state": "PRESENT",
+            "reference": "candidate-001:DECISION",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:candidate-001:DECISION"
+          },
+          {
+            "stage": "CAPITAL",
+            "state": "PRESENT",
+            "reference": "candidate-001:CAPITAL",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:candidate-001:CAPITAL"
+          },
+          {
+            "stage": "RISK",
+            "state": "PRESENT",
+            "reference": "candidate-001:RISK",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:candidate-001:RISK"
+          },
+          {
+            "stage": "PLAN",
+            "state": "PRESENT",
+            "reference": "candidate-001:PLAN",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:candidate-001:PLAN"
+          },
+          {
+            "stage": "RECONCILIATION",
+            "state": "PRESENT",
+            "reference": "candidate-001:RECONCILIATION",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:candidate-001:RECONCILIATION"
+          },
+          {
+            "stage": "LEDGER",
+            "state": "PRESENT",
+            "reference": "candidate-001:LEDGER",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:candidate-001:LEDGER"
+          }
+        ]
+      },
+      {
+        "targetKind": "DECISION",
+        "subjectId": "DECISION_FIXTURE_001",
+        "symbol": null,
+        "correlationId": "CORRELATION_FIXTURE_001",
+        "evidenceRevision": "EVIDENCE_REVISION_001",
+        "disposition": null,
+        "dispositionReasonCodes": [],
+        "reasonVocabularyBinding": null,
+        "stages": [
+          {
+            "stage": "EVIDENCE",
+            "state": "PRESENT",
+            "reference": "decision-001:EVIDENCE",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:decision-001:EVIDENCE"
+          },
+          {
+            "stage": "ASSESSMENT",
+            "state": "PRESENT",
+            "reference": "decision-001:ASSESSMENT",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:decision-001:ASSESSMENT"
+          },
+          {
+            "stage": "DECISION",
+            "state": "PRESENT",
+            "reference": "decision-001:DECISION",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:decision-001:DECISION"
+          },
+          {
+            "stage": "CAPITAL",
+            "state": "PRESENT",
+            "reference": "decision-001:CAPITAL",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:decision-001:CAPITAL"
+          },
+          {
+            "stage": "RISK",
+            "state": "PRESENT",
+            "reference": "decision-001:RISK",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:decision-001:RISK"
+          },
+          {
+            "stage": "PLAN",
+            "state": "PRESENT",
+            "reference": "decision-001:PLAN",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:decision-001:PLAN"
+          },
+          {
+            "stage": "RECONCILIATION",
+            "state": "PRESENT",
+            "reference": "decision-001:RECONCILIATION",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:decision-001:RECONCILIATION"
+          },
+          {
+            "stage": "LEDGER",
+            "state": "PRESENT",
+            "reference": "decision-001:LEDGER",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:decision-001:LEDGER"
+          }
+        ]
+      },
+      {
+        "targetKind": "PLAN",
+        "subjectId": "PLAN_FIXTURE_001",
+        "symbol": null,
+        "correlationId": "CORRELATION_FIXTURE_001",
+        "evidenceRevision": "EVIDENCE_REVISION_001",
+        "disposition": null,
+        "dispositionReasonCodes": [],
+        "reasonVocabularyBinding": null,
+        "stages": [
+          {
+            "stage": "EVIDENCE",
+            "state": "PRESENT",
+            "reference": "plan-001:EVIDENCE",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:plan-001:EVIDENCE"
+          },
+          {
+            "stage": "ASSESSMENT",
+            "state": "PRESENT",
+            "reference": "plan-001:ASSESSMENT",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:plan-001:ASSESSMENT"
+          },
+          {
+            "stage": "DECISION",
+            "state": "PRESENT",
+            "reference": "plan-001:DECISION",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:plan-001:DECISION"
+          },
+          {
+            "stage": "CAPITAL",
+            "state": "PRESENT",
+            "reference": "plan-001:CAPITAL",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:plan-001:CAPITAL"
+          },
+          {
+            "stage": "RISK",
+            "state": "PRESENT",
+            "reference": "plan-001:RISK",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:plan-001:RISK"
+          },
+          {
+            "stage": "PLAN",
+            "state": "PRESENT",
+            "reference": "plan-001:PLAN",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:plan-001:PLAN"
+          },
+          {
+            "stage": "RECONCILIATION",
+            "state": "PRESENT",
+            "reference": "plan-001:RECONCILIATION",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:plan-001:RECONCILIATION"
+          },
+          {
+            "stage": "LEDGER",
+            "state": "PRESENT",
+            "reference": "plan-001:LEDGER",
+            "reasonCode": null,
+            "evidenceRef": "fixture:evidence:plan-001:LEDGER"
+          }
+        ]
+      }
+    ],
+    "stateCauseEvidence": null
   },
   "antiGreenCases": [
     {

@@ -9,6 +9,10 @@
     "contractSetId",
     "reasonCodeRegistryVersion",
     "reasonCodeRegistry",
+    "domainReasonVocabularyRegistryId",
+    "domainReasonVocabularyRegistryRevision",
+    "domainReasonVocabularyRegistrySha256",
+    "domainReasonVocabularies",
     "stateRuleSets",
     "contracts"
   ],
@@ -26,15 +30,34 @@
       "const": [
         "BLOCKING_REASON_PRESENT",
         "BORROW_READ_ONLY_NO_MONEY_UI",
+        "COMPONENT_BLOCKED",
+        "COMPONENT_DRY_RUN",
+        "COMPONENT_MISSING",
+        "COMPONENT_NOT_CONFIGURED",
+        "COMPONENT_SHADOW",
+        "COMPONENT_SILENT",
+        "COMPONENT_STALE",
+        "COMPONENT_SYNTHETIC",
+        "COMPONENT_UNKNOWN",
+        "COMPONENT_UNAVAILABLE",
+        "COMPONENT_VALIDATE_ONLY",
         "CONTROL_UNAVAILABLE",
         "DEGRADED_REASON_PRESENT",
+        "DIRECTOR_MOUNT_REQUIRED",
         "EXPOSURE_UNAVAILABLE",
         "FIXTURE_CONTROL_UNAVAILABLE",
         "MISSING",
         "OPERATOR_MUTATION_NOT_AUTOMATIC",
+        "OWNER_REASON_VOCABULARY_UNMOUNTED",
         "READ_ONLY_PROJECTION_NO_AUTOMATIC_ACTION",
         "ROOT_BLOCKER_UNAVAILABLE",
         "SILENT",
+        "SOURCE_COVERAGE_INCOMPLETE",
+        "SOURCE_DISCONNECTED",
+        "SOURCE_RATE_LIMITED",
+        "SOURCE_SEQUENCE_GAP",
+        "SOURCE_STALE",
+        "SOURCE_SYNTHETIC",
         "STALE",
         "SYNTHETIC",
         "UNKNOWN"
@@ -50,10 +73,139 @@
     },
     "contracts": {
       "type": "array",
-      "minItems": 18,
-      "maxItems": 256,
+      "minItems": 25,
+      "maxItems": 25,
       "items": {
         "$ref": "#/$defs/panelContract"
+      }
+    },
+    "domainReasonVocabularyRegistryId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240
+    },
+    "domainReasonVocabularyRegistryRevision": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000000
+    },
+    "domainReasonVocabularyRegistrySha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "domainReasonVocabularies": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "vocabularyId",
+          "ownerId",
+          "bindingState",
+          "revision",
+          "sourcePath",
+          "sourceSha256",
+          "matchKind",
+          "exactCodes",
+          "parameterizedPrefixes",
+          "codePattern",
+          "maxSetItems",
+          "ordering"
+        ],
+        "properties": {
+          "vocabularyId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "ownerId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "bindingState": {
+            "enum": [
+              "MOUNTED",
+              "UNMOUNTED"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "sourcePath": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "sourceSha256": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            ]
+          },
+          "matchKind": {
+            "enum": [
+              "EXACT",
+              "UNMOUNTED",
+              "EXACT_AND_PARAMETERIZED",
+              "PATTERN"
+            ]
+          },
+          "exactCodes": {
+            "type": "array",
+            "maxItems": 128,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            }
+          },
+          "parameterizedPrefixes": {
+            "type": "array",
+            "maxItems": 64,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            }
+          },
+          "codePattern": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              }
+            ]
+          },
+          "maxSetItems": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "ordering": {
+            "enum": [
+              "SCALAR",
+              "OWNER_ORDER",
+              "CHECK_ORDER",
+              "CODE_POINT_ASC"
+            ]
+          }
+        }
       }
     }
   },
@@ -176,7 +328,8 @@
         "drilldowns",
         "drilldownBounds",
         "lastIndependentProofTimePath",
-        "controlBinding"
+        "controlBinding",
+        "componentFactsBinding"
       ],
       "properties": {
         "contractId": {
@@ -273,6 +426,9 @@
           "items": {
             "$ref": "#/$defs/factSemantic"
           }
+        },
+        "componentFactsBinding": {
+          "$ref": "#/$defs/componentFactsBinding"
         }
       }
     },
@@ -378,7 +534,7 @@
         "expectedCount": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 20
+          "maximum": 25
         },
         "requireExactPartition": {
           "const": true
@@ -644,10 +800,10 @@
           "const": "manifest.release.fixture-001"
         },
         "manifestRevision": {
-          "const": 2
+          "const": 5
         },
         "manifestSha256": {
-          "const": "68428c85723a7d955c4e7bdeb9001429ff0ec6cce5d6db0e33c73eb33fa3a80e"
+          "const": "076e3e2e74ae960b43d59364ac42e66cb924339f1146ddcd8de87879ac68e9be"
         },
         "acceptedReleaseSha": {
           "const": "9785c93102b00389847b77c2f9348c06abc4344b"
@@ -667,7 +823,9 @@
         "topicId",
         "valueKind",
         "unit",
-        "enumValues"
+        "enumValues",
+        "valueConstraints",
+        "reasonVocabularyBinding"
       ],
       "properties": {
         "valueKey": {
@@ -719,7 +877,14 @@
             "BOOLEAN",
             "NON_NEGATIVE_INTEGER",
             "UTC_MILLISECONDS",
-            "FINITE_NUMBER"
+            "FINITE_NUMBER",
+            "NON_NEGATIVE_DECIMAL_STRING",
+            "SIGNED_DECIMAL_STRING",
+            "IDENTITY_SET",
+            "ENUM_SET",
+            "PACKET_REASON_CODE_SET",
+            "DOMAIN_REASON_CODE",
+            "DOMAIN_REASON_CODE_SET"
           ]
         },
         "unit": {
@@ -744,6 +909,128 @@
               }
             }
           ]
+        },
+        "valueConstraints": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [],
+              "properties": {
+                "knownAbsenceAllowed": {
+                  "type": "boolean"
+                },
+                "canonicalPattern": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                "maximumTotalDigits": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "signPolicy": {
+                  "enum": [
+                    "NON_NEGATIVE",
+                    "SIGNED_NEGATIVE_ZERO_FORBIDDEN"
+                  ]
+                },
+                "minimum": {
+                  "type": [
+                    "string",
+                    "number"
+                  ]
+                },
+                "maximum": {
+                  "type": [
+                    "string",
+                    "number"
+                  ]
+                },
+                "finite": {
+                  "type": "boolean"
+                }
+              }
+            }
+          ]
+        },
+        "reasonVocabularyBinding": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ownerId",
+                "vocabularyId",
+                "revision",
+                "sourceSha256",
+                "bindingState",
+                "shape",
+                "ordering",
+                "emptyLaw"
+              ],
+              "properties": {
+                "ownerId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                },
+                "vocabularyId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                },
+                "revision": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "sourceSha256": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    }
+                  ]
+                },
+                "bindingState": {
+                  "enum": [
+                    "MOUNTED",
+                    "UNMOUNTED"
+                  ]
+                },
+                "shape": {
+                  "enum": [
+                    "SCALAR",
+                    "SET"
+                  ]
+                },
+                "ordering": {
+                  "enum": [
+                    "SCALAR",
+                    "OWNER_ORDER",
+                    "CHECK_ORDER",
+                    "CODE_POINT_ASC"
+                  ]
+                },
+                "emptyLaw": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                }
+              }
+            }
+          ]
         }
       }
     },
@@ -751,19 +1038,69 @@
       "enum": [
         "BLOCKING_REASON_PRESENT",
         "BORROW_READ_ONLY_NO_MONEY_UI",
+        "COMPONENT_BLOCKED",
+        "COMPONENT_DRY_RUN",
+        "COMPONENT_MISSING",
+        "COMPONENT_NOT_CONFIGURED",
+        "COMPONENT_SHADOW",
+        "COMPONENT_SILENT",
+        "COMPONENT_STALE",
+        "COMPONENT_SYNTHETIC",
+        "COMPONENT_UNKNOWN",
+        "COMPONENT_UNAVAILABLE",
+        "COMPONENT_VALIDATE_ONLY",
         "CONTROL_UNAVAILABLE",
         "DEGRADED_REASON_PRESENT",
+        "DIRECTOR_MOUNT_REQUIRED",
         "EXPOSURE_UNAVAILABLE",
         "FIXTURE_CONTROL_UNAVAILABLE",
         "MISSING",
         "OPERATOR_MUTATION_NOT_AUTOMATIC",
+        "OWNER_REASON_VOCABULARY_UNMOUNTED",
         "READ_ONLY_PROJECTION_NO_AUTOMATIC_ACTION",
         "ROOT_BLOCKER_UNAVAILABLE",
         "SILENT",
+        "SOURCE_COVERAGE_INCOMPLETE",
+        "SOURCE_DISCONNECTED",
+        "SOURCE_RATE_LIMITED",
+        "SOURCE_SEQUENCE_GAP",
+        "SOURCE_STALE",
+        "SOURCE_SYNTHETIC",
         "STALE",
         "SYNTHETIC",
         "UNKNOWN"
       ]
+    },
+    "componentFactsBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "catalogId",
+        "expectedCount"
+      ],
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "catalogId": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            }
+          ]
+        },
+        "expectedCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000000
+        }
+      }
     }
   }
 }

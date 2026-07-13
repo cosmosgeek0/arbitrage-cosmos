@@ -29,7 +29,7 @@ const VIEW_WINDOW_POLICY_REVISION = 1;
 const TRUTH_LABELS = [
   'LIVE_PUBLIC', 'DRY_RUN', 'SYNTHETIC_ONLY', 'RECORDED_REPLAY', 'UNAVAILABLE', 'UNKNOWN',
 ];
-const STATISTICS = ['P50', 'P95', 'P99', 'COUNT', 'RATE', 'SUM', 'UTILIZATION', 'BURN_RATE'];
+const STATISTICS = ['P50', 'P95', 'P99', 'COUNT', 'RATE', 'SUM', 'UTILIZATION'];
 const MAX_SERIES = HISTORICAL_METRIC_FAMILIES.length;
 const MAX_SERIES_POINTS = 1024;
 const MAX_SIGNED_SAFE = Number.MAX_SAFE_INTEGER;
@@ -130,7 +130,7 @@ function validateOptionalMetricValue(value, path) {
 function validateStatisticContext(value, path) {
   assertClosedRecord(value, path, [
     'countTotal', 'rateKind', 'rateNumeratorCount', 'rateDenominatorCount',
-    'rateDenominatorMs', 'capacity', 'budget',
+    'rateDenominatorMs', 'capacity',
   ]);
   for (const key of ['countTotal', 'rateNumeratorCount', 'rateDenominatorCount']) {
     if (value[key] !== null) assertSafeInteger(value[key], `${path}.${key}`, 0);
@@ -140,7 +140,6 @@ function validateStatisticContext(value, path) {
     assertSafeInteger(value.rateDenominatorMs, `${path}.rateDenominatorMs`, 1, 2_592_000_000);
   }
   validateOptionalMetricValue(value.capacity, `${path}.capacity`);
-  validateOptionalMetricValue(value.budget, `${path}.budget`);
 }
 
 function validateSample(value, path) {
@@ -450,21 +449,14 @@ function statisticContextReason(observed, expected) {
       reasons.push('HISTORICAL_SERIES_RECOVERY_RATE_EVIDENCE_MISMATCH');
     }
   }
-  for (const [statistic, key, reason] of [
-    ['UTILIZATION', 'capacity', 'HISTORICAL_SERIES_CAPACITY_MISSING_OR_INVALID'],
-    ['BURN_RATE', 'budget', 'HISTORICAL_SERIES_BUDGET_MISSING_OR_INVALID'],
-  ]) {
-    if (!expected.statistics.includes(statistic)) continue;
-    const value = context[key];
+  if (expected.statistics.includes('UTILIZATION')) {
+    const value = context.capacity;
     if (value === null || metricValueReason(value, expected) !== null || !isPositiveMetricValue(value, expected)) {
-      reasons.push(reason);
+      reasons.push('HISTORICAL_SERIES_CAPACITY_MISSING_OR_INVALID');
     }
   }
   if (!expected.statistics.includes('UTILIZATION') && context.capacity !== null) {
     reasons.push('HISTORICAL_SERIES_UNDECLARED_CAPACITY_CONTEXT');
-  }
-  if (!expected.statistics.includes('BURN_RATE') && context.budget !== null) {
-    reasons.push('HISTORICAL_SERIES_UNDECLARED_BUDGET_CONTEXT');
   }
   return reasons;
 }
@@ -521,7 +513,7 @@ function sumMetricValues(values, expected) {
 function declaredStatistics(observed, expected, summary) {
   if (summary.sampleCount === 0 || summary.latest === null) return null;
   const values = observed.samples.map((sample) => sample.value);
-  const sum = expected.statistics.includes('SUM') || expected.statistics.includes('BURN_RATE')
+  const sum = expected.statistics.includes('SUM')
     ? sumMetricValues(values, expected)
     : null;
   const output = {};
@@ -560,14 +552,6 @@ function declaredStatistics(observed, expected, summary) {
         denominator: observed.statisticContext.capacity,
         value: divideMetricValuesToDecimal(summary.latest, observed.statisticContext.capacity, 100),
         unit: 'percent',
-        method: 'EXACT_DECIMAL_SCALE_18_HALF_UP',
-      };
-    } else if (statistic === 'BURN_RATE') {
-      output.BURN_RATE = {
-        numerator: sum,
-        denominator: observed.statisticContext.budget,
-        value: divideMetricValuesToDecimal(sum, observed.statisticContext.budget),
-        unit: 'ratio',
         method: 'EXACT_DECIMAL_SCALE_18_HALF_UP',
       };
     }
@@ -613,6 +597,9 @@ function evaluateCatalogBinding(input, catalog, validation) {
   }
   if (validation.metricBindingMismatches.length > 0) {
     historicalReasons.push('HISTORICAL_CATALOG_SLO_BINDING_MISMATCH');
+  }
+  if (validation.metricContractMismatches.length > 0) {
+    historicalReasons.push('HISTORICAL_CATALOG_METRIC_CONTRACT_MISMATCH');
   }
   if (catalog.generatedAtMs > input.nowMs) historicalReasons.push('HISTORICAL_CATALOG_FROM_FUTURE');
   if (binding.verifiedAtMs > input.nowMs) historicalReasons.push('HISTORICAL_CATALOG_VERIFICATION_FROM_FUTURE');
@@ -741,9 +728,14 @@ function evaluateOneSeries(input, catalog, expected, observed) {
     left.observedAtMs - right.observedAtMs || compareAscii(left.sampleId, right.sampleId)
   ));
   const latestObservedAtMs = chronological.at(-1)?.observedAtMs ?? null;
-  const maximumObservedGapMs = chronological.slice(1).reduce((maximum, sample, index) => (
-    Math.max(maximum, sample.observedAtMs - chronological[index].observedAtMs)
-  ), 0);
+  const observedGapsMs = chronological.length === 0 ? [] : [
+    chronological[0].observedAtMs - observed.startMs,
+    ...chronological.slice(1).map((sample, index) => (
+      sample.observedAtMs - chronological[index].observedAtMs
+    )),
+    observed.endMs - chronological.at(-1).observedAtMs,
+  ];
+  const maximumObservedGapMs = observedGapsMs.length === 0 ? 0 : Math.max(...observedGapsMs);
   const derivedCoherenceState = maximumObservedGapMs <= observed.coherencePolicy.maximumSampleGapMs
     ? 'COHERENT'
     : 'INCOHERENT';

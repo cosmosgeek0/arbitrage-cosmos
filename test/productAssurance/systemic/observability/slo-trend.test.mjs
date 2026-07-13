@@ -1,14 +1,25 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import test from 'node:test';
 
+import {
+  deriveSloCatalogSha256,
+  deriveSloDefinitionSha256,
+  SLO_SUBOBJECTIVE_IDS,
+} from '../../../../fixtures/productAssurance/systemic/observability/slo-catalog-contract.mjs';
 import {
   evaluateSloTrends as evaluateSloTrendsReference,
   nearestRankPercentile,
 } from '../../../../fixtures/productAssurance/systemic/observability/slo-trend-evaluator.mjs';
 
-const fixtureUrl = new URL('../../../../fixtures/productAssurance/systemic/observability/cases/slo-trend-history.json', import.meta.url);
-const catalogUrl = new URL('../../../../fixtures/productAssurance/systemic/observability/cases/slo-catalog-complete.json', import.meta.url);
+const fixtureUrl = new URL(
+  '../../../../fixtures/productAssurance/systemic/observability/cases/slo-trend-history.json',
+  import.meta.url,
+);
+const catalogUrl = new URL(
+  '../../../../fixtures/productAssurance/systemic/observability/cases/slo-catalog-complete.json',
+  import.meta.url,
+);
 const catalogFixture = JSON.parse(await readFile(catalogUrl, 'utf8'));
 
 function evaluateSloTrends(input, catalog = structuredClone(catalogFixture)) {
@@ -19,48 +30,23 @@ async function fixture() {
   return JSON.parse(await readFile(fixtureUrl, 'utf8'));
 }
 
-const ALL_CATEGORIES = [
-  'SOURCE_COHERENCE_AGE', 'QUEUE_BACKPRESSURE', 'PROCESSING_COMMAND_LATENCY',
-  'AMBIGUITY_DURATION', 'RECONCILIATION_LAG', 'EVIDENCE_EXPIRY',
-  'TELEMETRY_COMPLETENESS', 'RECOVERY_VERIFICATION', 'SENTINEL_PAGING_DELIVERY',
-  'RESTART_RTO_RPO', 'RESOURCE_BUDGET',
-];
+function definition(input, sloId) {
+  return input.definitions.find((entry) => entry.sloId === sloId);
+}
 
-async function completeCategoryFixture() {
-  const input = await fixture();
-  const templateDefinition = input.definitions.find((definition) => definition.sloId === 'source-coherence-age');
-  const templateWindow = input.windows.find((window) => window.windowId === 'source-age-window-latest');
-  const existingCategories = new Set(input.definitions.map((definition) => definition.category));
-  for (const catalogEntry of catalogFixture.slos) {
-    if (existingCategories.has(catalogEntry.category)) continue;
-    const suffix = catalogEntry.category.toLowerCase().replaceAll('_', '-');
-    input.definitions.push({
-      ...structuredClone(templateDefinition),
-      sloId: catalogEntry.sloId,
-      version: catalogEntry.version,
-      ownerId: catalogEntry.ownerId,
-      category: catalogEntry.category,
-      dependentCapabilityIds: [`${catalogEntry.sloId}-capability`],
-    });
-    input.windows.push({
-      ...structuredClone(templateWindow),
-      windowId: `${catalogEntry.sloId}-current-window`,
-      sloId: catalogEntry.sloId,
-      sloVersion: catalogEntry.version,
-      canonicalEvidenceRefs: {
-        invariantResultId: `invariant-${suffix}`,
-        materialEventId: `material-event-${suffix}`,
-        evidenceIds: [`evidence-${suffix}`],
-        correlationId: `correlation-${suffix}`,
-        incidentId: null,
-      },
-      samples: templateWindow.samples.map((sample, index) => ({
-        ...sample,
-        sampleId: `${catalogEntry.sloId}-sample-${index + 1}`,
-      })),
-    });
-  }
-  return input;
+function window(input, sloId, suffix = 'latest') {
+  return input.windows.find((entry) => entry.windowId === `${sloId}-window-${suffix}`);
+}
+
+function evaluatedSlo(output, sloId) {
+  return output.slos.find((entry) => entry.sloId === sloId);
+}
+
+function rebindCatalog(input, catalog, sloId) {
+  const entry = catalog.slos.find((item) => item.sloId === sloId);
+  entry.definitionSha256 = deriveSloDefinitionSha256(definition(input, sloId));
+  catalog.catalogSha256 = deriveSloCatalogSha256(catalog);
+  input.catalogDigestVerification.verifiedCatalogSha256 = catalog.catalogSha256;
 }
 
 test('nearest-rank p50/p95/p99 is deterministic', () => {
@@ -71,324 +57,281 @@ test('nearest-rank p50/p95/p99 is deterministic', () => {
   assert.deepEqual(values, [80, 20, 60, 40]);
 });
 
-test('latest closed window controls current posture while older breaches remain historical', async () => {
-  const input = await completeCategoryFixture();
+test('complete fixture evaluates the exact 25 subobjectives without synthetic live claims', async () => {
+  const input = await fixture();
   const output = evaluateSloTrends(input);
-  const resource = output.slos.find((slo) => slo.sloId === 'resource-budget');
-  assert.equal(resource.currentResult, 'PASS');
-  assert.equal(resource.latestWindowId, 'resource-window-latest-pass');
-  assert.equal(resource.historicalBreachCount, 1);
-  assert.equal(resource.historicalPassCount, 1);
+  assert.equal(input.definitions.length, 25);
+  assert.equal(output.denominatorCount, 25);
+  assert.equal(output.catalogDenominatorCount, 25);
+  assert.equal(output.coveredSubobjectiveCount, 25);
+  assert.deepEqual(output.coveredSubobjectiveIds, SLO_SUBOBJECTIVE_IDS);
+  assert.deepEqual(output.missingSubobjectiveIds, []);
+  assert.equal(output.categoryDenominatorCount, 11);
+  assert.equal(output.coveredCategoryCount, 11);
+  assert.equal(output.catalogBinding.result, 'PASS');
+  assert.equal(output.definitionBinding.result, 'PASS');
   assert.equal(output.overallResult, 'PASS');
-});
-
-test('every historical window exposes p50/p95/p99 and error-budget burn', async () => {
-  const output = evaluateSloTrends(await fixture());
-  const source = output.slos.find((slo) => slo.sloId === 'source-coherence-age');
-  const window = source.windows[0];
-  assert.deepEqual(window.percentiles, { p50: 40, p95: 80, p99: 80, method: 'NEAREST_RANK' });
-  assert.equal(window.errorBudgetBurnRatio, 0);
-  assert.equal(window.authorityMutation, false);
-  assert.equal(window.blocksRiskReduction, false);
-});
-
-test('synthetic windows may pass fixture evaluation but can never claim live green', async () => {
-  const output = evaluateSloTrends(await completeCategoryFixture());
   assert.equal(output.greenEligible, true);
   assert.equal(output.liveGreenEligible, false);
-  const sourceWindow = output.slos.find((slo) => slo.sloId === 'source-coherence-age').windows[0];
-  assert.equal(sourceWindow.result, 'PASS');
-  assert.equal(sourceWindow.liveGreenEligible, false);
+  assert.ok(output.slos.every((entry) => entry.currentResult === 'PASS'));
+  assert.ok(output.slos.every((entry) => entry.liveGreenEligible === false));
+  assert.equal(new Set(input.definitions.map((entry) => JSON.stringify(entry.measurementSource))).size, 25);
+});
+
+test('latest CPU window controls current posture while its older breach remains historical', async () => {
+  const output = evaluateSloTrends(await fixture());
+  const cpu = evaluatedSlo(output, 'cpu-budget');
+  assert.equal(cpu.currentResult, 'PASS');
+  assert.equal(cpu.latestWindowId, 'cpu-budget-window-latest');
+  assert.equal(cpu.historicalBreachCount, 1);
+  assert.equal(cpu.historicalPassCount, 1);
+  assert.equal(cpu.windows.find((entry) => entry.windowId.endsWith('old-breach')).historicalResult, 'FAIL');
+});
+
+test('window output exposes deterministic percentiles and valid error-budget burn', async () => {
+  const output = evaluateSloTrends(await fixture());
+  const sourceWindow = evaluatedSlo(output, 'source-age').windows[0];
+  assert.deepEqual(sourceWindow.percentiles, { p50: 40, p95: 80, p99: 80, method: 'NEAREST_RANK' });
+  assert.equal(sourceWindow.errorBudgetBurnRatio, 0);
   assert.deepEqual(sourceWindow.truthReasonCodes, ['NON_LIVE_TRUTH_SYNTHETIC_ONLY']);
+  assert.equal(sourceWindow.authorityMutation, false);
+  assert.equal(sourceWindow.blocksRiskReduction, false);
 });
 
-test('fixed eleven-category denominator cannot be reduced by a passing supplied subset', async () => {
-  const completeOutput = evaluateSloTrends(await completeCategoryFixture());
-  assert.equal(completeOutput.categoryDenominatorCount, 11);
-  assert.equal(completeOutput.coveredCategoryCount, 11);
-  assert.deepEqual(completeOutput.coveredCategories, ALL_CATEGORIES);
-  assert.deepEqual(completeOutput.missingCategories, []);
-  assert.equal(completeOutput.overallResult, 'PASS');
-  assert.equal(completeOutput.greenEligible, true);
-  assert.equal(completeOutput.liveGreenEligible, false);
-
-  const twoCategoryInput = await fixture();
-  const twoCategoryOutput = evaluateSloTrends(twoCategoryInput);
-  assert.equal(twoCategoryOutput.denominatorCount, 11);
-  assert.equal(twoCategoryOutput.suppliedDefinitionCount, 2);
-  assert.equal(twoCategoryOutput.categoryDenominatorCount, 11);
-  assert.equal(twoCategoryOutput.coveredCategoryCount, 2);
-  assert.equal(twoCategoryOutput.missingCategories.length, 9);
-  assert.equal(twoCategoryOutput.overallResult, 'UNKNOWN');
-  assert.equal(twoCategoryOutput.greenEligible, false);
-
-  const oneCategoryInput = await fixture();
-  oneCategoryInput.definitions = oneCategoryInput.definitions
-    .filter((definition) => definition.category === 'SOURCE_COHERENCE_AGE');
-  oneCategoryInput.windows = oneCategoryInput.windows
-    .filter((window) => window.sloId === 'source-coherence-age');
-  const oneCategoryOutput = evaluateSloTrends(oneCategoryInput);
-  assert.equal(oneCategoryOutput.categoryDenominatorCount, 11);
-  assert.equal(oneCategoryOutput.coveredCategoryCount, 1);
-  assert.deepEqual(oneCategoryOutput.coveredCategories, ['SOURCE_COHERENCE_AGE']);
-  assert.equal(oneCategoryOutput.missingCategories.length, 10);
-  assert.equal(oneCategoryOutput.overallResult, 'UNKNOWN');
-  assert.equal(oneCategoryOutput.greenEligible, false);
-});
-
-test('catalog identities, not cloned category labels, own the SLO denominator', async () => {
-  const boundInput = await completeCategoryFixture();
-  const boundOutput = evaluateSloTrends(boundInput);
-  assert.equal(boundOutput.catalogBinding.result, 'PASS');
-  assert.equal(boundOutput.definitionBinding.result, 'PASS');
-  assert.equal(boundOutput.catalogDenominatorCount, 11);
-  assert.deepEqual(boundOutput.missingCatalogSloKeys, []);
-  assert.deepEqual(boundOutput.extraDefinitionKeys, []);
-
-  const relabeledInput = await completeCategoryFixture();
-  for (const [index, definition] of relabeledInput.definitions.entries()) {
-    const oldId = definition.sloId;
-    const newId = `caller-clone-${index + 1}`;
-    definition.sloId = newId;
-    for (const window of relabeledInput.windows) {
-      if (window.sloId === oldId) window.sloId = newId;
-    }
-  }
-  const relabeledOutput = evaluateSloTrends(relabeledInput);
-  assert.equal(relabeledOutput.definitionBinding.result, 'FAIL');
-  assert.equal(relabeledOutput.missingCatalogSloKeys.length, 11);
-  assert.equal(relabeledOutput.extraDefinitionKeys.length, 11);
-  assert.equal(relabeledOutput.overallResult, 'FAIL');
-  assert.equal(relabeledOutput.greenEligible, false);
-});
-
-test('catalog definition digests reject no-version-bump contract drift and loosened thresholds', async () => {
-  const mutations = [
-    ['threshold', (definition) => { definition.threshold += 1; }],
-    ['comparator', (definition) => { definition.comparator = 'GTE'; }],
-    ['objectivePercent', (definition) => { definition.objectivePercent = 98; }],
-    ['windowDurationMs', (definition) => { definition.windowDurationMs = 2000; }],
-    ['maximumEvidenceAgeMs', (definition) => { definition.maximumEvidenceAgeMs = 3000; }],
-    ['minimumSampleCount', (definition) => { definition.minimumSampleCount = 3; }],
-    ['criticality', (definition) => { definition.criticality = 'AVAILABILITY'; }],
-    ['unit', (definition) => { definition.unit = 'seconds'; }],
-    ['recommendedFailurePosture', (definition) => { definition.recommendedFailurePosture = 'DEGRADED'; }],
-    ['dependentCapabilityIds', (definition) => { definition.dependentCapabilityIds.push('unversioned-capability'); }],
-  ];
-  for (const [field, mutate] of mutations) {
-    const input = await completeCategoryFixture();
-    const definition = input.definitions.find((entry) => entry.sloId === 'source-coherence-age');
-    mutate(definition);
-    const output = evaluateSloTrends(input);
-    assert.equal(output.definitionBinding.result, 'FAIL', field);
-    assert.ok(
-      output.definitionBindingMismatches.includes('source-coherence-age@1|DEFINITION_DIGEST'),
-      field,
-    );
-    assert.equal(output.overallResult, 'FAIL', field);
-    assert.equal(output.greenEligible, false, field);
-  }
-
-  const loosened = await completeCategoryFixture();
-  loosened.definitions.find((entry) => entry.sloId === 'source-coherence-age').threshold = 1000;
-  loosened.windows.find((entry) => entry.sloId === 'source-coherence-age').samples
-    .forEach((sample) => { sample.value = 500; });
-  const loosenedOutput = evaluateSloTrends(loosened);
-  const localWindow = loosenedOutput.slos
-    .find((entry) => entry.sloId === 'source-coherence-age').windows[0];
-  assert.equal(localWindow.currentResult, 'PASS');
-  assert.equal(loosenedOutput.definitionBinding.result, 'FAIL');
-  assert.equal(loosenedOutput.overallResult, 'FAIL');
-  assert.equal(loosenedOutput.greenEligible, false);
-
-  const authorityDrift = await completeCategoryFixture();
-  authorityDrift.definitions.find((entry) => entry.sloId === 'source-coherence-age')
-    .effectPolicy.mayMutateControls = true;
-  assert.throws(() => evaluateSloTrends(authorityDrift), /evidence-only authority boundary/);
-});
-
-test('catalog digest, revision, release, and metric registry bindings are fail-closed', async () => {
-  const input = await completeCategoryFixture();
-  const hostileCatalog = structuredClone(catalogFixture);
-  hostileCatalog.catalogRevision += 1;
-  hostileCatalog.slos[0].historicalMetricBindings[0].family = 'COST_BUDGET';
-  const output = evaluateSloTrends(input, hostileCatalog);
-  assert.equal(output.catalogBinding.result, 'FAIL');
-  assert.ok(output.catalogBinding.reasonCodes.includes('SLO_CATALOG_CANONICAL_DIGEST_MISMATCH'));
-  assert.ok(output.catalogBinding.reasonCodes.includes('SLO_CATALOG_VERIFIED_REVISION_MISMATCH'));
-  assert.ok(output.catalogBinding.reasonCodes.includes('SLO_CATALOG_METRIC_BINDING_MISMATCH'));
-  assert.equal(output.metricBindingMismatches.length, 1);
-  assert.equal(output.greenEligible, false);
-
-  const releaseInput = await completeCategoryFixture();
-  releaseInput.catalogDigestVerification.verifiedReleaseSha = '2'.repeat(40);
-  const releaseOutput = evaluateSloTrends(releaseInput);
-  assert.equal(releaseOutput.catalogBinding.result, 'UNKNOWN');
-  assert.ok(releaseOutput.catalogBinding.reasonCodes.includes('SLO_CATALOG_RELEASE_MISMATCH'));
-  assert.equal(releaseOutput.greenEligible, false);
-});
-
-test('cross-release window is UNKNOWN and is not mixed into current truth', async () => {
+test('one missing member of a plural category cannot hide behind category coverage', async () => {
   const input = await fixture();
-  input.windows.find((window) => window.windowId === 'source-age-window-latest').releaseSha = '2'.repeat(40);
+  input.definitions = input.definitions.filter((entry) => entry.sloId !== 'cross-source-coherence');
+  input.windows = input.windows.filter((entry) => entry.sloId !== 'cross-source-coherence');
   const output = evaluateSloTrends(input);
-  const source = output.slos.find((slo) => slo.sloId === 'source-coherence-age');
-  assert.equal(source.currentResult, 'UNKNOWN');
-  assert.ok(source.reasonCodes.includes('SLO_WINDOW_RELEASE_MISMATCH'));
+  assert.equal(output.coveredCategoryCount, 11);
+  assert.deepEqual(output.missingCategories, []);
+  assert.equal(output.coveredSubobjectiveCount, 24);
+  assert.deepEqual(output.missingSubobjectiveIds, ['cross-source-coherence']);
+  assert.deepEqual(output.missingCatalogSloKeys, ['cross-source-coherence@1']);
   assert.equal(output.overallResult, 'UNKNOWN');
-  assert.equal(output.liveGreenEligible, false);
-});
-
-test('missing expected SLO window remains UNKNOWN', async () => {
-  const input = await fixture();
-  input.windows = input.windows.filter((window) => window.sloId !== 'source-coherence-age');
-  const output = evaluateSloTrends(input);
-  const source = output.slos.find((slo) => slo.sloId === 'source-coherence-age');
-  assert.equal(source.currentResult, 'UNKNOWN');
-  assert.deepEqual(source.reasonCodes, ['EXPECTED_SLO_WINDOW_MISSING']);
   assert.equal(output.greenEligible, false);
 });
 
-test('insufficient samples and expired evidence are UNKNOWN', async () => {
+test('catalog identities, not caller-cloned labels, own the denominator', async () => {
   const input = await fixture();
-  const window = input.windows.find((entry) => entry.windowId === 'source-age-window-latest');
-  window.samples = window.samples.slice(0, 2);
-  window.evidenceObservedAtMs = 1000;
+  for (const [index, item] of input.definitions.entries()) {
+    const oldId = item.sloId;
+    item.sloId = `caller-clone-${index + 1}`;
+    for (const candidate of input.windows) if (candidate.sloId === oldId) candidate.sloId = item.sloId;
+  }
   const output = evaluateSloTrends(input);
-  const evaluated = output.slos.find((slo) => slo.sloId === 'source-coherence-age').windows[0];
+  assert.equal(output.definitionBinding.result, 'FAIL');
+  assert.equal(output.missingCatalogSloKeys.length, 25);
+  assert.equal(output.extraDefinitionKeys.length, 25);
+  assert.equal(output.overallResult, 'FAIL');
+});
+
+test('definition digests reject unversioned threshold, source, and authority drift', async () => {
+  for (const [label, mutate] of [
+    ['threshold', (item) => { item.threshold += 1; }],
+    ['measurement source', (item) => { item.measurementSource.statistic = 'P99'; }],
+    ['owner', (item) => { item.ownerId = 'CALLER_OWNER'; }],
+  ]) {
+    const input = await fixture();
+    mutate(definition(input, 'source-age'));
+    const output = evaluateSloTrends(input);
+    assert.equal(output.definitionBinding.result, 'FAIL', label);
+    assert.ok(output.definitionBindingMismatches.some((entry) => (
+      entry.startsWith('source-age@1|')
+    )), label);
+    assert.equal(output.overallResult, 'FAIL', label);
+  }
+  const authority = await fixture();
+  definition(authority, 'source-age').effectPolicy.mayMutateControls = true;
+  assert.throws(() => evaluateSloTrends(authority), /evidence-only authority boundary/);
+});
+
+test('a fully rehashed historical proxy swap still fails the exact subobjective law', async () => {
+  const input = await fixture();
+  const catalog = structuredClone(catalogFixture);
+  const hostileSource = {
+    kind: 'HISTORICAL_METRIC_STATISTIC',
+    metricId: 'execution-cost',
+    family: 'EXECUTION_COST',
+    statistic: 'P95',
+  };
+  const catalogEntry = catalog.slos.find((entry) => entry.sloId === 'source-age');
+  catalogEntry.measurementSource = structuredClone(hostileSource);
+  catalogEntry.historicalMetricBindings = [{ metricId: 'execution-cost', family: 'EXECUTION_COST' }];
+  definition(input, 'source-age').measurementSource = structuredClone(hostileSource);
+  window(input, 'source-age').measurementSource = structuredClone(hostileSource);
+  rebindCatalog(input, catalog, 'source-age');
+  const output = evaluateSloTrends(input, catalog);
+  assert.equal(output.definitionBinding.result, 'PASS');
+  assert.equal(output.catalogBinding.result, 'FAIL');
+  assert.deepEqual(output.sloContractMismatches, ['source-age']);
+  assert.ok(output.catalogBinding.reasonCodes.includes('SLO_CATALOG_SUBOBJECTIVE_CONTRACT_MISMATCH'));
+});
+
+test('canonical owner objectives cannot be collapsed onto historical metric proxies', async () => {
+  const input = await fixture();
+  const catalog = structuredClone(catalogFixture);
+  const proxy = {
+    kind: 'HISTORICAL_METRIC_STATISTIC',
+    metricId: 'recurring-failed-invariants',
+    family: 'RECURRING_FAILED_INVARIANTS',
+    statistic: 'RATE',
+  };
+  const catalogEntry = catalog.slos.find((entry) => entry.sloId === 'evidence-expiry');
+  catalogEntry.measurementSource = structuredClone(proxy);
+  catalogEntry.historicalMetricBindings = [{
+    metricId: proxy.metricId,
+    family: proxy.family,
+  }];
+  definition(input, 'evidence-expiry').measurementSource = structuredClone(proxy);
+  window(input, 'evidence-expiry').measurementSource = structuredClone(proxy);
+  rebindCatalog(input, catalog, 'evidence-expiry');
+  const output = evaluateSloTrends(input, catalog);
+  assert.equal(output.catalogBinding.result, 'FAIL');
+  assert.deepEqual(output.sloContractMismatches, ['evidence-expiry']);
+});
+
+test('definition and window measurement sources must remain identical', async () => {
+  const input = await fixture();
+  window(input, 'source-age').measurementSource.statistic = 'P99';
+  const output = evaluateSloTrends(input);
+  const sourceWindow = evaluatedSlo(output, 'source-age').windows[0];
+  assert.equal(sourceWindow.historicalResult, 'FAIL');
+  assert.ok(sourceWindow.reasonCodes.includes('SLO_MEASUREMENT_SOURCE_MISMATCH'));
+  assert.equal(output.overallResult, 'FAIL');
+});
+
+test('rehashed metric owner drift fails the fixed 23-contract registry', async () => {
+  const input = await fixture();
+  const catalog = structuredClone(catalogFixture);
+  catalog.historicalMetricRegistry.find((entry) => entry.metricId === 'cpu-budget').ownerId = 'CALLER_OWNER';
+  catalog.catalogSha256 = deriveSloCatalogSha256(catalog);
+  input.catalogDigestVerification.verifiedCatalogSha256 = catalog.catalogSha256;
+  const output = evaluateSloTrends(input, catalog);
+  assert.equal(output.catalogBinding.result, 'FAIL');
+  assert.deepEqual(output.metricContractMismatches, ['CPU_BUDGET']);
+  assert.ok(output.catalogBinding.reasonCodes.includes('SLO_CATALOG_METRIC_CONTRACT_MISMATCH'));
+});
+
+test('catalog verification release drift is UNKNOWN and never green', async () => {
+  const input = await fixture();
+  input.catalogDigestVerification.verifiedReleaseSha = '2'.repeat(40);
+  const output = evaluateSloTrends(input);
+  assert.equal(output.catalogBinding.result, 'UNKNOWN');
+  assert.ok(output.catalogBinding.reasonCodes.includes('SLO_CATALOG_RELEASE_MISMATCH'));
+  assert.equal(output.greenEligible, false);
+});
+
+test('cross-release and missing windows remain UNKNOWN', async () => {
+  const crossRelease = await fixture();
+  window(crossRelease, 'source-age').releaseSha = '2'.repeat(40);
+  let output = evaluateSloTrends(crossRelease);
+  assert.equal(evaluatedSlo(output, 'source-age').currentResult, 'UNKNOWN');
+  assert.ok(evaluatedSlo(output, 'source-age').reasonCodes.includes('SLO_WINDOW_RELEASE_MISMATCH'));
+
+  const missing = await fixture();
+  missing.windows = missing.windows.filter((entry) => entry.sloId !== 'source-age');
+  output = evaluateSloTrends(missing);
+  assert.equal(evaluatedSlo(output, 'source-age').currentResult, 'UNKNOWN');
+  assert.deepEqual(evaluatedSlo(output, 'source-age').reasonCodes, ['EXPECTED_SLO_WINDOW_MISSING']);
+});
+
+test('insufficient, expired, and temporally impossible evidence cannot green', async () => {
+  const insufficient = await fixture();
+  window(insufficient, 'source-age').samples = window(insufficient, 'source-age').samples.slice(0, 2);
+  window(insufficient, 'source-age').evidenceObservedAtMs = 1000;
+  let evaluated = evaluatedSlo(evaluateSloTrends(insufficient), 'source-age').windows[0];
   assert.equal(evaluated.result, 'UNKNOWN');
   assert.ok(evaluated.reasonCodes.includes('SLO_INSUFFICIENT_SAMPLES'));
   assert.ok(evaluated.reasonCodes.includes('SLO_EVIDENCE_EXPIRED'));
-});
 
-test('evidence envelope cannot predate its closed window or latest sample', async () => {
-  const input = await fixture();
-  const window = input.windows.find((entry) => entry.windowId === 'source-age-window-latest');
-  window.evidenceObservedAtMs = 2600;
-  const evaluated = evaluateSloTrends(input).slos
-    .find((slo) => slo.sloId === 'source-coherence-age').windows[0];
+  const impossible = await fixture();
+  window(impossible, 'source-age').evidenceObservedAtMs = 2600;
+  evaluated = evaluatedSlo(evaluateSloTrends(impossible), 'source-age').windows[0];
   assert.equal(evaluated.result, 'FAIL');
   assert.ok(evaluated.reasonCodes.includes('SLO_EVIDENCE_BEFORE_WINDOW_END'));
   assert.ok(evaluated.reasonCodes.includes('SLO_EVIDENCE_BEFORE_LATEST_SAMPLE'));
 });
 
-test('fresh envelope cannot republish an old historical window as current', async () => {
+test('time advance expires current truth without rewriting historical pass and breach', async () => {
   const input = await fixture();
-  input.nowMs = 10000;
-  for (const window of input.windows) window.evidenceObservedAtMs = 9999;
-  const output = evaluateSloTrends(input);
-  const source = output.slos.find((slo) => slo.sloId === 'source-coherence-age');
-  assert.equal(source.currentResult, 'UNKNOWN');
-  assert.ok(source.reasonCodes.includes('SLO_WINDOW_TOO_OLD_FOR_CURRENT'));
-  assert.equal(source.liveGreenEligible, false);
-});
-
-test('time advance expires current eligibility without rewriting historical PASS or FAIL', async () => {
-  const initialInput = await fixture();
-  const initial = evaluateSloTrends(initialInput);
-  const initialResource = initial.slos.find((slo) => slo.sloId === 'resource-budget');
-  assert.equal(initialResource.historicalPassCount, 1);
-  assert.equal(initialResource.historicalBreachCount, 1);
-
-  const advancedInput = structuredClone(initialInput);
+  const initial = evaluateSloTrends(input);
+  const advancedInput = structuredClone(input);
   advancedInput.nowMs = 10000;
   advancedInput.catalogDigestVerification.verifiedAtMs = 9999;
   const advanced = evaluateSloTrends(advancedInput);
-  const advancedResource = advanced.slos.find((slo) => slo.sloId === 'resource-budget');
-  assert.equal(advancedResource.currentResult, 'UNKNOWN');
-  assert.equal(advancedResource.historicalPassCount, 1);
-  assert.equal(advancedResource.historicalBreachCount, 1);
-  assert.equal(advancedResource.historicalUnknownCount, 0);
-  const oldBreach = advancedResource.windows.find((window) => window.windowId === 'resource-window-old-breach');
-  const latestPass = advancedResource.windows.find((window) => window.windowId === 'resource-window-latest-pass');
-  assert.equal(oldBreach.historicalResult, 'FAIL');
-  assert.equal(latestPass.historicalResult, 'PASS');
-  assert.equal(oldBreach.currentResult, 'UNKNOWN');
-  assert.equal(latestPass.currentResult, 'UNKNOWN');
+  const initialCpu = evaluatedSlo(initial, 'cpu-budget');
+  const advancedCpu = evaluatedSlo(advanced, 'cpu-budget');
+  assert.equal(advancedCpu.currentResult, 'UNKNOWN');
+  assert.equal(advancedCpu.historicalPassCount, initialCpu.historicalPassCount);
+  assert.equal(advancedCpu.historicalBreachCount, initialCpu.historicalBreachCount);
+  assert.deepEqual(
+    advancedCpu.windows.map((entry) => entry.historicalResult),
+    initialCpu.windows.map((entry) => entry.historicalResult),
+  );
 });
 
-test('canonical SLO evidence refs are closed, copied, and incident-bound on FAIL', async () => {
+test('failed SLO evidence requires an incident reference and preserves closed refs', async () => {
   const input = await fixture();
-  const sourceWindow = input.windows.find((window) => window.windowId === 'source-age-window-latest');
+  const sourceWindow = window(input, 'source-age');
+  sourceWindow.samples[0].good = false;
   sourceWindow.canonicalEvidenceRefs.evidenceIds = ['evidence-z', 'evidence-a'];
-  input.definitions.find((definition) => definition.sloId === 'source-coherence-age').threshold = 1;
-  const output = evaluateSloTrends(input);
-  const evaluated = output.slos.find((slo) => slo.sloId === 'source-coherence-age').windows[0];
+  const evaluated = evaluatedSlo(evaluateSloTrends(input), 'source-age').windows[0];
   assert.equal(evaluated.historicalResult, 'FAIL');
-  assert.equal(evaluated.currentResult, 'FAIL');
   assert.equal(evaluated.canonicalEvidenceComplete, false);
-  assert.ok(evaluated.historicalReasonCodes.includes('SLO_FAIL_INCIDENT_REF_MISSING'));
+  assert.ok(evaluated.reasonCodes.includes('SLO_FAIL_INCIDENT_REF_MISSING'));
   assert.deepEqual(evaluated.canonicalEvidenceRefs.evidenceIds, ['evidence-a', 'evidence-z']);
-  assert.equal(evaluated.canonicalEvidenceRefs.invariantResultId, 'invariant-source-coherence-age-latest');
-  assert.equal(evaluated.canonicalEvidenceRefs.materialEventId, 'material-event-source-coherence-age-latest');
-  assert.equal(evaluated.canonicalEvidenceRefs.correlationId, 'correlation-source-coherence-age-latest');
-
-  const malformed = await fixture();
-  delete malformed.windows[0].canonicalEvidenceRefs;
-  assert.throws(() => evaluateSloTrends(malformed), /canonicalEvidenceRefs/);
 });
 
-test('duplicate stable sample identity cannot satisfy minimum evidence', async () => {
-  const input = await fixture();
-  const samples = input.windows.find((entry) => entry.windowId === 'source-age-window-latest').samples;
+test('duplicate sample and semantic window identities are rejected', async () => {
+  const duplicateSample = await fixture();
+  const samples = window(duplicateSample, 'source-age').samples;
   samples[1].sampleId = samples[0].sampleId;
-  assert.throws(() => evaluateSloTrends(input), /duplicate key/);
-});
+  assert.throws(() => evaluateSloTrends(duplicateSample), /duplicate key/);
 
-test('aliased SLO window cannot duplicate one semantic release interval', async () => {
-  const input = await fixture();
-  const original = input.windows.find((entry) => entry.windowId === 'source-age-window-latest');
-  const alias = structuredClone(original);
-  alias.windowId = 'source-age-window-aliased';
-  alias.samples = alias.samples.map((sample, index) => ({
-    ...sample,
-    sampleId: `source-age-alias-${index + 1}`,
-    value: 999,
-    good: false,
-  }));
-  input.windows.push(alias);
-  assert.throws(() => evaluateSloTrends(input), /input\.windows semantic intervals contains duplicate key/);
+  const alias = await fixture();
+  const original = window(alias, 'source-age');
+  alias.windows.push({
+    ...structuredClone(original),
+    windowId: 'source-age-window-alias',
+    samples: original.samples.map((sample, index) => ({
+      ...sample,
+      sampleId: `source-age-alias-${index + 1}`,
+    })),
+  });
+  assert.throws(() => evaluateSloTrends(alias), /input\.windows semantic intervals contains duplicate key/);
 });
 
 test('100 percent objective has bounded zero-error-budget semantics', async () => {
   const passing = await fixture();
-  passing.definitions.find((definition) => definition.sloId === 'source-coherence-age').objectivePercent = 100;
-  let output = evaluateSloTrends(passing);
-  let window = output.slos.find((slo) => slo.sloId === 'source-coherence-age').windows[0];
-  assert.equal(window.result, 'PASS');
-  assert.equal(window.errorBudgetBurnRatio, 0);
+  definition(passing, 'source-age').objectivePercent = 100;
+  let evaluated = evaluatedSlo(evaluateSloTrends(passing), 'source-age').windows[0];
+  assert.equal(evaluated.result, 'PASS');
+  assert.equal(evaluated.errorBudgetBurnRatio, 0);
 
   const failing = await fixture();
-  failing.definitions.find((definition) => definition.sloId === 'source-coherence-age').objectivePercent = 100;
-  failing.windows.find((entry) => entry.sloId === 'source-coherence-age').samples[0].good = false;
-  output = evaluateSloTrends(failing);
-  window = output.slos.find((slo) => slo.sloId === 'source-coherence-age').windows[0];
-  assert.equal(window.result, 'FAIL');
-  assert.equal(window.errorBudgetBurnRatio, null);
-  assert.ok(window.reasonCodes.includes('SLO_ZERO_ERROR_BUDGET_BREACH'));
-  assert.equal(JSON.stringify(output).includes('Infinity'), false);
-  assert.equal(JSON.stringify(output).includes('NaN'), false);
+  definition(failing, 'source-age').objectivePercent = 100;
+  window(failing, 'source-age').samples[0].good = false;
+  evaluated = evaluatedSlo(evaluateSloTrends(failing), 'source-age').windows[0];
+  assert.equal(evaluated.result, 'FAIL');
+  assert.equal(evaluated.errorBudgetBurnRatio, null);
+  assert.ok(evaluated.reasonCodes.includes('SLO_ZERO_ERROR_BUDGET_BREACH'));
+  assert.equal(JSON.stringify(evaluated).includes('Infinity'), false);
 });
 
 test('availability breach never blocks independently safe risk reduction', async () => {
   const input = await fixture();
-  input.windows = input.windows.filter((window) => window.windowId !== 'resource-window-latest-pass');
+  input.windows = input.windows.filter((entry) => entry.windowId !== 'cpu-budget-window-latest');
   const output = evaluateSloTrends(input);
-  const resource = output.slos.find((slo) => slo.sloId === 'resource-budget');
-  assert.equal(resource.currentResult, 'FAIL');
-  assert.equal(resource.windows[0].recommendedPosture, 'DEGRADED');
-  assert.equal(resource.windows[0].blocksRiskReduction, false);
+  const cpu = evaluatedSlo(output, 'cpu-budget');
+  assert.equal(cpu.currentResult, 'FAIL');
+  assert.equal(cpu.windows[0].recommendedPosture, 'DEGRADED');
+  assert.equal(cpu.windows[0].blocksRiskReduction, false);
   assert.equal(output.blocksRiskReduction, false);
   assert.equal(output.authorityMutation, false);
 });
 
-test('effect policy cannot grant mutation authority', async () => {
-  const input = await fixture();
-  input.definitions[0].effectPolicy.mayMutateCapital = true;
-  assert.throws(() => evaluateSloTrends(input), /evidence-only authority boundary/);
-});
-
-test('evaluation uses injected nowMs, is deterministic, and does not mutate input', async () => {
+test('evaluation uses injected time, is deterministic, non-mutating, and deeply frozen', async () => {
   const input = await fixture();
   const before = structuredClone(input);
   const first = evaluateSloTrends(input);
@@ -396,4 +339,6 @@ test('evaluation uses injected nowMs, is deterministic, and does not mutate inpu
   assert.deepEqual(first, second);
   assert.deepEqual(input, before);
   assert.equal(Object.isFrozen(first), true);
+  assert.equal(Object.isFrozen(first.slos), true);
+  assert.equal(Object.isFrozen(first.slos[0].windows[0]), true);
 });

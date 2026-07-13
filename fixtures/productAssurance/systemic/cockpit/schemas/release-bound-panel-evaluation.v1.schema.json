@@ -77,6 +77,7 @@
           "PANEL_COMPONENT_FACT_IDENTITY_SET_MISMATCH",
           "PANEL_COMPONENT_FACT_RELEASE_MISMATCH",
           "PANEL_COMPONENT_INVENTORY_NOT_PASS",
+          "PANEL_COMPONENT_DEPENDENCY_GRAPH_NOT_PASS",
           "PANEL_CONTROL_COMMAND_BINDING_MISMATCH",
           "PANEL_CONTROL_COMMAND_ITEM_NOT_LIVE",
           "PANEL_CONTROL_COMMAND_ITEM_NOT_PASS",
@@ -88,6 +89,7 @@
           "PANEL_EXPECTED_MANIFEST_ITEM_NOT_LIVE",
           "PANEL_EXPECTED_MANIFEST_ITEM_NOT_PASS",
           "PANEL_EXPECTED_MANIFEST_ITEM_NOT_REQUIRED",
+          "PANEL_INTERNAL_DEPENDENCY_REFERENCE_NOT_PASS",
           "PANEL_MANIFEST_BINDING_NOT_PASS",
           "PANEL_MANIFEST_CANONICAL_DIGEST_NOT_PASS",
           "PANEL_MANIFEST_DENOMINATOR_COUNT_MISMATCH",
@@ -104,7 +106,11 @@
           "PANEL_SOURCE_AGGREGATION_COVERAGE_MISMATCH",
           "PANEL_SOURCE_AGGREGATION_IDENTITY_MISMATCH",
           "PANEL_SOURCE_INVENTORY_NOT_PASS",
-          "PANEL_SOURCE_PRODUCER_BINDING_MISMATCH"
+          "PANEL_SOURCE_PRODUCER_BINDING_MISMATCH",
+          "PANEL_DEPENDENCY_SCOPE_MISSING",
+          "PANEL_DEPENDENT_COMPONENT_NOT_PASS",
+          "PANEL_WHOLE_MACHINE_COMPONENT_NOT_PASS",
+          "PANEL_WHOLE_MACHINE_MANIFEST_NOT_PASS"
         ]
       }
     },
@@ -234,6 +240,30 @@
         "reasonCodes": { "$ref": "#/$defs/reasonCodes" }
       }
     },
+    "dependencyBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "result",
+        "expectedComponentIds",
+        "unresolvedComponentIds",
+        "nonPassingIds",
+        "nonLiveIds",
+        "rootCauseExpectedIds",
+        "reasonCodes"
+      ],
+      "properties": {
+        "scope": { "enum": ["WHOLE_MACHINE", "DEPENDENT_CAPABILITY", "CONTROL_RECOVERY"] },
+        "result": { "$ref": "#/$defs/result" },
+        "expectedComponentIds": { "$ref": "#/$defs/idArray" },
+        "unresolvedComponentIds": { "$ref": "#/$defs/idArray" },
+        "nonPassingIds": { "$ref": "#/$defs/idArray" },
+        "nonLiveIds": { "$ref": "#/$defs/idArray" },
+        "rootCauseExpectedIds": { "$ref": "#/$defs/idArray" },
+        "reasonCodes": { "$ref": "#/$defs/reasonCodes" }
+      }
+    },
     "releaseManifestGate": {
       "type": "object",
       "additionalProperties": false,
@@ -256,6 +286,7 @@
         "gateEvidenceSha256",
         "denominatorBinding",
         "componentBinding",
+        "dependencyBinding",
         "sourceBinding",
         "controlBinding",
         "reasonCodes"
@@ -279,6 +310,7 @@
         "gateEvidenceSha256": { "$ref": "#/$defs/sha256" },
         "denominatorBinding": { "$ref": "#/$defs/denominatorBinding" },
         "componentBinding": { "$ref": "#/$defs/componentBinding" },
+        "dependencyBinding": { "$ref": "#/$defs/dependencyBinding" },
         "sourceBinding": { "$ref": "#/$defs/sourceBinding" },
         "controlBinding": { "$ref": "#/$defs/controlBinding" },
         "reasonCodes": { "$ref": "#/$defs/reasonCodes" }

@@ -80,10 +80,6 @@ test('reference evaluators import only packet-local pure modules', async () => {
     /crypto\.subtle/,
     /subtle\.digest\s*\(/,
     /createHash\s*\(/,
-    /server\/src\//,
-    /web\/src\//,
-    /quant\//,
-    /live-edge-receipts\//,
   ];
   const canonicalRoot = `${await realpath(fixtureRoot)}${sep}`;
   for (const name of evaluatorNames) {

@@ -63,15 +63,34 @@
       "const": [
         "BLOCKING_REASON_PRESENT",
         "BORROW_READ_ONLY_NO_MONEY_UI",
+        "COMPONENT_BLOCKED",
+        "COMPONENT_DRY_RUN",
+        "COMPONENT_MISSING",
+        "COMPONENT_NOT_CONFIGURED",
+        "COMPONENT_SHADOW",
+        "COMPONENT_SILENT",
+        "COMPONENT_STALE",
+        "COMPONENT_SYNTHETIC",
+        "COMPONENT_UNKNOWN",
+        "COMPONENT_UNAVAILABLE",
+        "COMPONENT_VALIDATE_ONLY",
         "CONTROL_UNAVAILABLE",
         "DEGRADED_REASON_PRESENT",
+        "DIRECTOR_MOUNT_REQUIRED",
         "EXPOSURE_UNAVAILABLE",
         "FIXTURE_CONTROL_UNAVAILABLE",
         "MISSING",
         "OPERATOR_MUTATION_NOT_AUTOMATIC",
+        "OWNER_REASON_VOCABULARY_UNMOUNTED",
         "READ_ONLY_PROJECTION_NO_AUTOMATIC_ACTION",
         "ROOT_BLOCKER_UNAVAILABLE",
         "SILENT",
+        "SOURCE_COVERAGE_INCOMPLETE",
+        "SOURCE_DISCONNECTED",
+        "SOURCE_RATE_LIMITED",
+        "SOURCE_SEQUENCE_GAP",
+        "SOURCE_STALE",
+        "SOURCE_SYNTHETIC",
         "STALE",
         "SYNTHETIC",
         "UNKNOWN"
@@ -81,9 +100,7 @@
       "const": 18
     },
     "panelCount": {
-      "type": "integer",
-      "minimum": 18,
-      "maximum": 256
+      "const": 25
     },
     "surfaces": {
       "type": "array",
@@ -225,6 +242,16 @@
         "denominator",
         "evidence",
         "detectionEvidence",
+        "componentDenominator",
+        "componentFacts",
+        "sourceDenominator",
+        "sourceAggregationDenominator",
+        "sourceRows",
+        "attentionDenominator",
+        "attentionRows",
+        "traceDenominator",
+        "traceTargets",
+        "stateCauseEvidence",
         "values",
         "reasonCodes",
         "actionBinding",
@@ -354,6 +381,1362 @@
           "items": {
             "$ref": "#/$defs/factSemantic"
           }
+        },
+        "componentDenominator": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "catalogId",
+                "expectedCount",
+                "rowCount",
+                "visibleCount",
+                "filteredCount",
+                "hiddenCount",
+                "missingCount",
+                "unknownCount"
+              ],
+              "properties": {
+                "catalogId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                },
+                "expectedCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "rowCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "visibleCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "filteredCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "hiddenCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "missingCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "unknownCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                }
+              }
+            }
+          ]
+        },
+        "componentFacts": {
+          "type": "array",
+          "maxItems": 13,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "componentId",
+              "ownerId",
+              "sourceCanonicalOwner",
+              "sourceSchemaId",
+              "sourceSchemaVersion",
+              "supervisorSnapshotRevision",
+              "expectedManifestItemId",
+              "acceptedReleaseSha",
+              "runningReleaseSha",
+              "releaseStatuses",
+              "freshnessLawId",
+              "maximumHeartbeatAgeMs",
+              "coherenceLawId",
+              "desiredState",
+              "observedState",
+              "readiness",
+              "liveness",
+              "heartbeatAgeMs",
+              "restartCount",
+              "currentError",
+              "renderTruthLabel",
+              "reasonCode",
+              "units",
+              "ownerResponse",
+              "runbookRef",
+              "incidentDrilldownRef",
+              "traceDrilldownRef",
+              "evidenceDrilldownRef"
+            ],
+            "properties": {
+              "componentId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "ownerId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "sourceCanonicalOwner": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "sourceSchemaId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "sourceSchemaVersion": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000000000
+              },
+              "supervisorSnapshotRevision": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000000000
+              },
+              "expectedManifestItemId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "acceptedReleaseSha": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{40}$"
+              },
+              "runningReleaseSha": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{40}$"
+              },
+              "releaseStatuses": {
+                "type": "array",
+                "maxItems": 8,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                }
+              },
+              "freshnessLawId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "maximumHeartbeatAgeMs": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000000000
+              },
+              "coherenceLawId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "desiredState": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "observedState": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "readiness": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "liveness": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "heartbeatAgeMs": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000
+                  }
+                ]
+              },
+              "restartCount": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000
+                  }
+                ]
+              },
+              "currentError": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  }
+                ]
+              },
+              "renderTruthLabel": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "reasonCode": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  }
+                ]
+              },
+              "units": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "desiredState",
+                  "observedState",
+                  "readiness",
+                  "liveness",
+                  "heartbeatAgeMs",
+                  "restartCount",
+                  "currentError",
+                  "renderTruthLabel"
+                ],
+                "properties": {
+                  "desiredState": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "observedState": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "readiness": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "liveness": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "heartbeatAgeMs": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "restartCount": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "currentError": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "renderTruthLabel": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  }
+                }
+              },
+              "ownerResponse": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "runbookRef": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "incidentDrilldownRef": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "traceDrilldownRef": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "evidenceDrilldownRef": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              }
+            }
+          }
+        },
+        "sourceDenominator": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "catalogId",
+                "expectedCount",
+                "coveredCount",
+                "missingCount",
+                "unknownCount"
+              ],
+              "properties": {
+                "catalogId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                },
+                "expectedCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "coveredCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "missingCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "unknownCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                }
+              }
+            }
+          ]
+        },
+        "sourceAggregationDenominator": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "catalogId",
+                "expectedCount",
+                "rowCount",
+                "visibleCount",
+                "filteredCount",
+                "hiddenCount",
+                "missingCount",
+                "unknownCount"
+              ],
+              "properties": {
+                "catalogId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                },
+                "expectedCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "rowCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "visibleCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "filteredCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "hiddenCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "missingCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "unknownCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                }
+              }
+            }
+          ]
+        },
+        "sourceRows": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "aggregationKind",
+              "canonicalRegistryRef",
+              "sourceAggregationId",
+              "ownerId",
+              "coveredExpectedManifestItemIds",
+              "physicalProducerIds",
+              "componentIds",
+              "acceptedReleaseSha",
+              "runningReleaseSha",
+              "sourceSchemaId",
+              "sourceSchemaVersion",
+              "freshnessLawId",
+              "maximumMessageAgeMs",
+              "coherenceLawId",
+              "connectionState",
+              "lastMessageAgeMs",
+              "sequenceGapCount",
+              "rateLimitBackoffState",
+              "coverageExpectedCount",
+              "coverageCurrentCount",
+              "quietSymbolCount",
+              "quietSymbolIds",
+              "renderTruthLabel",
+              "domainReasonCodes",
+              "reasonVocabularyBinding",
+              "projectionCauseCode",
+              "units",
+              "publisherDrilldownRef",
+              "producerDrilldownRefs",
+              "componentDrilldownRefs",
+              "incidentRef",
+              "traceRef",
+              "evidenceRef"
+            ],
+            "properties": {
+              "aggregationKind": {
+                "const": "NAMED_AGGREGATION"
+              },
+              "canonicalRegistryRef": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "sourceAggregationId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "ownerId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "coveredExpectedManifestItemIds": {
+                "type": "array",
+                "maxItems": 7,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                }
+              },
+              "physicalProducerIds": {
+                "type": "array",
+                "maxItems": 16,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                }
+              },
+              "componentIds": {
+                "type": "array",
+                "maxItems": 16,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                }
+              },
+              "acceptedReleaseSha": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{40}$"
+              },
+              "runningReleaseSha": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{40}$"
+              },
+              "sourceSchemaId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "sourceSchemaVersion": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000000000
+              },
+              "freshnessLawId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "maximumMessageAgeMs": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000000000
+              },
+              "coherenceLawId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "connectionState": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "lastMessageAgeMs": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000
+                  }
+                ]
+              },
+              "sequenceGapCount": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000
+                  }
+                ]
+              },
+              "rateLimitBackoffState": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "coverageExpectedCount": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000
+                  }
+                ]
+              },
+              "coverageCurrentCount": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000
+                  }
+                ]
+              },
+              "quietSymbolCount": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000000
+                  }
+                ]
+              },
+              "quietSymbolIds": {
+                "type": "array",
+                "maxItems": 1000,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                }
+              },
+              "renderTruthLabel": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "domainReasonCodes": {
+                "type": "array",
+                "maxItems": 64,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                }
+              },
+              "reasonVocabularyBinding": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "ownerId",
+                      "vocabularyId",
+                      "revision",
+                      "sourceSha256",
+                      "bindingState",
+                      "shape",
+                      "ordering",
+                      "emptyLaw"
+                    ],
+                    "properties": {
+                      "ownerId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240
+                      },
+                      "vocabularyId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000000
+                      },
+                      "sourceSha256": {
+                        "oneOf": [
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          }
+                        ]
+                      },
+                      "bindingState": {
+                        "enum": [
+                          "MOUNTED",
+                          "UNMOUNTED"
+                        ]
+                      },
+                      "shape": {
+                        "enum": [
+                          "SCALAR",
+                          "SET"
+                        ]
+                      },
+                      "ordering": {
+                        "enum": [
+                          "SCALAR",
+                          "OWNER_ORDER",
+                          "CHECK_ORDER",
+                          "CODE_POINT_ASC"
+                        ]
+                      },
+                      "emptyLaw": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240
+                      }
+                    }
+                  }
+                ]
+              },
+              "projectionCauseCode": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  }
+                ]
+              },
+              "units": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "lastMessageAgeMs",
+                  "sequenceGapCount",
+                  "coverageExpectedCount",
+                  "coverageCurrentCount",
+                  "quietSymbolCount"
+                ],
+                "properties": {
+                  "lastMessageAgeMs": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "sequenceGapCount": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "coverageExpectedCount": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "coverageCurrentCount": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "quietSymbolCount": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  }
+                }
+              },
+              "publisherDrilldownRef": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "producerDrilldownRefs": {
+                "type": "array",
+                "maxItems": 16,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                }
+              },
+              "componentDrilldownRefs": {
+                "type": "array",
+                "maxItems": 16,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                }
+              },
+              "incidentRef": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "traceRef": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "evidenceRef": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              }
+            }
+          }
+        },
+        "attentionDenominator": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "expectedCount",
+                "rowCount",
+                "visibleCount",
+                "filteredCount",
+                "hiddenCount",
+                "unknownCount"
+              ],
+              "properties": {
+                "expectedCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "rowCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "visibleCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "filteredCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "hiddenCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "unknownCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                }
+              }
+            }
+          ]
+        },
+        "attentionRows": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "attentionId",
+              "rank",
+              "capitalExposed",
+              "unresolvedLiability",
+              "severity",
+              "reasonCodes",
+              "reasonVocabularyBinding",
+              "resolvingControlId",
+              "subjectKind",
+              "subjectId",
+              "incidentRef",
+              "traceRef",
+              "evidenceRef"
+            ],
+            "properties": {
+              "attentionId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "rank": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000000000
+              },
+              "capitalExposed": {
+                "type": "boolean"
+              },
+              "unresolvedLiability": {
+                "type": "boolean"
+              },
+              "severity": {
+                "enum": [
+                  "CRITICAL",
+                  "HIGH",
+                  "MEDIUM",
+                  "LOW"
+                ]
+              },
+              "reasonCodes": {
+                "type": "array",
+                "maxItems": 64,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                }
+              },
+              "reasonVocabularyBinding": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "ownerId",
+                      "vocabularyId",
+                      "revision",
+                      "sourceSha256",
+                      "bindingState",
+                      "shape",
+                      "ordering",
+                      "emptyLaw"
+                    ],
+                    "properties": {
+                      "ownerId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240
+                      },
+                      "vocabularyId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000000
+                      },
+                      "sourceSha256": {
+                        "oneOf": [
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          }
+                        ]
+                      },
+                      "bindingState": {
+                        "enum": [
+                          "MOUNTED",
+                          "UNMOUNTED"
+                        ]
+                      },
+                      "shape": {
+                        "enum": [
+                          "SCALAR",
+                          "SET"
+                        ]
+                      },
+                      "ordering": {
+                        "enum": [
+                          "SCALAR",
+                          "OWNER_ORDER",
+                          "CHECK_ORDER",
+                          "CODE_POINT_ASC"
+                        ]
+                      },
+                      "emptyLaw": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240
+                      }
+                    }
+                  }
+                ]
+              },
+              "resolvingControlId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "subjectKind": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "subjectId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "incidentRef": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "traceRef": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "evidenceRef": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              }
+            }
+          }
+        },
+        "traceDenominator": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "expectedCount",
+                "rowCount",
+                "visibleCount",
+                "filteredCount",
+                "hiddenCount",
+                "unknownCount",
+                "availabilityState",
+                "absenceReasonCode"
+              ],
+              "properties": {
+                "expectedCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "rowCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "visibleCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "filteredCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "hiddenCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "unknownCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "availabilityState": {
+                  "enum": [
+                    "COMPLETE",
+                    "UNAVAILABLE"
+                  ]
+                },
+                "absenceReasonCode": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "traceTargets": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "targetKind",
+              "subjectId",
+              "symbol",
+              "correlationId",
+              "evidenceRevision",
+              "disposition",
+              "dispositionReasonCodes",
+              "reasonVocabularyBinding",
+              "stages"
+            ],
+            "properties": {
+              "targetKind": {
+                "enum": [
+                  "CANDIDATE",
+                  "DECISION",
+                  "PLAN"
+                ]
+              },
+              "subjectId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "symbol": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  }
+                ]
+              },
+              "correlationId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "evidenceRevision": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "disposition": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  }
+                ]
+              },
+              "dispositionReasonCodes": {
+                "type": "array",
+                "maxItems": 64,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                }
+              },
+              "reasonVocabularyBinding": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "ownerId",
+                      "vocabularyId",
+                      "revision",
+                      "sourceSha256",
+                      "bindingState",
+                      "shape",
+                      "ordering",
+                      "emptyLaw"
+                    ],
+                    "properties": {
+                      "ownerId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240
+                      },
+                      "vocabularyId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000000
+                      },
+                      "sourceSha256": {
+                        "oneOf": [
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          }
+                        ]
+                      },
+                      "bindingState": {
+                        "enum": [
+                          "MOUNTED",
+                          "UNMOUNTED"
+                        ]
+                      },
+                      "shape": {
+                        "enum": [
+                          "SCALAR",
+                          "SET"
+                        ]
+                      },
+                      "ordering": {
+                        "enum": [
+                          "SCALAR",
+                          "OWNER_ORDER",
+                          "CHECK_ORDER",
+                          "CODE_POINT_ASC"
+                        ]
+                      },
+                      "emptyLaw": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240
+                      }
+                    }
+                  }
+                ]
+              },
+              "stages": {
+                "type": "array",
+                "minItems": 8,
+                "maxItems": 8,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "stage",
+                    "state",
+                    "reference",
+                    "reasonCode",
+                    "evidenceRef"
+                  ],
+                  "properties": {
+                    "stage": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    },
+                    "state": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    },
+                    "reference": {
+                      "oneOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 512
+                        }
+                      ]
+                    },
+                    "reasonCode": {
+                      "oneOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        }
+                      ]
+                    },
+                    "evidenceRef": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "stateCauseEvidence": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "state",
+                "causeCode",
+                "subjectId",
+                "evidenceRef",
+                "observedAtMs"
+              ],
+              "properties": {
+                "state": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                },
+                "causeCode": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                },
+                "subjectId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                },
+                "evidenceRef": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                "observedAtMs": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4102444800000
+                }
+              }
+            }
+          ]
         }
       }
     },
@@ -723,6 +2106,7 @@
       "required": [
         "key",
         "value",
+        "valueState",
         "unit",
         "unknownReasonCode"
       ],
@@ -737,6 +2121,7 @@
             "string",
             "number",
             "boolean",
+            "array",
             "null"
           ]
         },
@@ -753,6 +2138,13 @@
             {
               "$ref": "#/$defs/inputReasonCode"
             }
+          ]
+        },
+        "valueState": {
+          "enum": [
+            "KNOWN",
+            "KNOWN_ABSENT",
+            "UNKNOWN"
           ]
         }
       }
@@ -1138,10 +2530,10 @@
           "const": "manifest.release.fixture-001"
         },
         "manifestRevision": {
-          "const": 2
+          "const": 5
         },
         "manifestSha256": {
-          "const": "68428c85723a7d955c4e7bdeb9001429ff0ec6cce5d6db0e33c73eb33fa3a80e"
+          "const": "076e3e2e74ae960b43d59364ac42e66cb924339f1146ddcd8de87879ac68e9be"
         },
         "acceptedReleaseSha": {
           "const": "9785c93102b00389847b77c2f9348c06abc4344b"
@@ -1279,7 +2671,9 @@
         "topicId",
         "valueKind",
         "unit",
-        "enumValues"
+        "enumValues",
+        "valueConstraints",
+        "reasonVocabularyBinding"
       ],
       "properties": {
         "valueKey": {
@@ -1331,7 +2725,14 @@
             "BOOLEAN",
             "NON_NEGATIVE_INTEGER",
             "UTC_MILLISECONDS",
-            "FINITE_NUMBER"
+            "FINITE_NUMBER",
+            "NON_NEGATIVE_DECIMAL_STRING",
+            "SIGNED_DECIMAL_STRING",
+            "IDENTITY_SET",
+            "ENUM_SET",
+            "PACKET_REASON_CODE_SET",
+            "DOMAIN_REASON_CODE",
+            "DOMAIN_REASON_CODE_SET"
           ]
         },
         "unit": {
@@ -1356,6 +2757,128 @@
               }
             }
           ]
+        },
+        "valueConstraints": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [],
+              "properties": {
+                "knownAbsenceAllowed": {
+                  "type": "boolean"
+                },
+                "canonicalPattern": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                "maximumTotalDigits": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "signPolicy": {
+                  "enum": [
+                    "NON_NEGATIVE",
+                    "SIGNED_NEGATIVE_ZERO_FORBIDDEN"
+                  ]
+                },
+                "minimum": {
+                  "type": [
+                    "string",
+                    "number"
+                  ]
+                },
+                "maximum": {
+                  "type": [
+                    "string",
+                    "number"
+                  ]
+                },
+                "finite": {
+                  "type": "boolean"
+                }
+              }
+            }
+          ]
+        },
+        "reasonVocabularyBinding": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ownerId",
+                "vocabularyId",
+                "revision",
+                "sourceSha256",
+                "bindingState",
+                "shape",
+                "ordering",
+                "emptyLaw"
+              ],
+              "properties": {
+                "ownerId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                },
+                "vocabularyId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                },
+                "revision": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "sourceSha256": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    }
+                  ]
+                },
+                "bindingState": {
+                  "enum": [
+                    "MOUNTED",
+                    "UNMOUNTED"
+                  ]
+                },
+                "shape": {
+                  "enum": [
+                    "SCALAR",
+                    "SET"
+                  ]
+                },
+                "ordering": {
+                  "enum": [
+                    "SCALAR",
+                    "OWNER_ORDER",
+                    "CHECK_ORDER",
+                    "CODE_POINT_ASC"
+                  ]
+                },
+                "emptyLaw": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                }
+              }
+            }
+          ]
         }
       }
     },
@@ -1363,15 +2886,34 @@
       "enum": [
         "BLOCKING_REASON_PRESENT",
         "BORROW_READ_ONLY_NO_MONEY_UI",
+        "COMPONENT_BLOCKED",
+        "COMPONENT_DRY_RUN",
+        "COMPONENT_MISSING",
+        "COMPONENT_NOT_CONFIGURED",
+        "COMPONENT_SHADOW",
+        "COMPONENT_SILENT",
+        "COMPONENT_STALE",
+        "COMPONENT_SYNTHETIC",
+        "COMPONENT_UNKNOWN",
+        "COMPONENT_UNAVAILABLE",
+        "COMPONENT_VALIDATE_ONLY",
         "CONTROL_UNAVAILABLE",
         "DEGRADED_REASON_PRESENT",
+        "DIRECTOR_MOUNT_REQUIRED",
         "EXPOSURE_UNAVAILABLE",
         "FIXTURE_CONTROL_UNAVAILABLE",
         "MISSING",
         "OPERATOR_MUTATION_NOT_AUTOMATIC",
+        "OWNER_REASON_VOCABULARY_UNMOUNTED",
         "READ_ONLY_PROJECTION_NO_AUTOMATIC_ACTION",
         "ROOT_BLOCKER_UNAVAILABLE",
         "SILENT",
+        "SOURCE_COVERAGE_INCOMPLETE",
+        "SOURCE_DISCONNECTED",
+        "SOURCE_RATE_LIMITED",
+        "SOURCE_SEQUENCE_GAP",
+        "SOURCE_STALE",
+        "SOURCE_SYNTHETIC",
         "STALE",
         "SYNTHETIC",
         "UNKNOWN"

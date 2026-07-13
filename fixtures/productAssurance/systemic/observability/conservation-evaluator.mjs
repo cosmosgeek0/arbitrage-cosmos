@@ -41,6 +41,20 @@ const FINAL_TRANSITION = Object.freeze({
   UNRESOLVED_INCIDENT_BOUND: 'UNRESOLVED',
   DUPLICATED_REPLAYED_RECONCILED: 'RECONCILED',
 });
+const TRANSITION_REASON_TARGETS = Object.freeze({
+  DROP_CONFLICT: Object.freeze(['DROPPED']),
+  DUPLICATE_REPLAY: Object.freeze(['REPLAYED']),
+  DUPLICATE_RECONCILED: Object.freeze(['RECONCILED']),
+  MATERIAL_DROP_ATTEMPT: Object.freeze(['DROPPED', 'COALESCED']),
+  PROCESSING_LATE: Object.freeze(['LATE']),
+  UNRESOLVED_EXPORT_ACK: Object.freeze(['UNRESOLVED']),
+});
+const DISPOSITION_REASON_TARGETS = Object.freeze({
+  DUPLICATE_RECONCILED: Object.freeze(['DUPLICATED_REPLAYED_RECONCILED']),
+  MATERIAL_DROP_ATTEMPT: Object.freeze(['DROPPED', 'COALESCED']),
+  PROCESSING_LATE: Object.freeze(['LATE']),
+  UNRESOLVED_EXPORT_ACK: Object.freeze(['UNRESOLVED_INCIDENT_BOUND']),
+});
 
 function assertIdentifier(value, path) {
   assertBoundedString(value, path, 1, 160);
@@ -128,6 +142,9 @@ function validateRecord(value, index) {
     assertNullableIdentifier(transition.reasonCode, `${childPath}.reasonCode`);
     if (transition.reasonCode !== null) {
       assertReasonCodeMembership(transition.reasonCode, 'TRANSITION', `${childPath}.reasonCode`);
+      if (!TRANSITION_REASON_TARGETS[transition.reasonCode]?.includes(transition.state)) {
+        throw new TypeError(`${childPath}.reasonCode is incompatible with transition state ${transition.state}`);
+      }
     }
   });
   assertClosedRecord(value.disposition, `${path}.disposition`, ['kind', 'reasonCode', 'incidentId']);
@@ -135,6 +152,9 @@ function validateRecord(value, index) {
   assertNullableIdentifier(value.disposition.reasonCode, `${path}.disposition.reasonCode`);
   if (value.disposition.reasonCode !== null) {
     assertReasonCodeMembership(value.disposition.reasonCode, 'DISPOSITION', `${path}.disposition.reasonCode`);
+    if (!DISPOSITION_REASON_TARGETS[value.disposition.reasonCode]?.includes(value.disposition.kind)) {
+      throw new TypeError(`${path}.disposition.reasonCode is incompatible with disposition ${value.disposition.kind}`);
+    }
   }
   assertNullableIdentifier(value.disposition.incidentId, `${path}.disposition.incidentId`);
   assertClosedRecord(value.duplicateAccounting, `${path}.duplicateAccounting`, ['seenCount', 'replayCount', 'reconciledDuplicateCount', 'canonicalEventId']);
@@ -310,20 +330,21 @@ function evaluateRecord(expected, record, nowMs) {
   const exportGapCount = Math.max(counts.processed - counts.exported, 0);
   const recovery = record.exportRecovery;
   if (exportGapCount > 0) {
+    let recoveryValid = false;
     if (recovery.state === 'BUFFERED_WITHIN_BUDGET') {
-      if (recovery.budgetId === null || recovery.budgetExpiresAtMs === null
-          || recovery.budgetExpiresAtMs < nowMs || recovery.bufferedCount < exportGapCount) {
-        reasons.push('EXPORT_GAP_UNBOUND');
-      }
+      recoveryValid = recovery.budgetId !== null && recovery.budgetExpiresAtMs !== null
+        && recovery.budgetExpiresAtMs >= nowMs && recovery.incidentId === null
+        && recovery.bufferedCount === exportGapCount && recovery.replayedCount === 0;
     } else if (recovery.state === 'REPLAYED_WITHIN_BUDGET') {
-      if (recovery.budgetId === null || recovery.budgetExpiresAtMs === null
-          || recovery.budgetExpiresAtMs < nowMs || recovery.replayedCount < exportGapCount) {
-        reasons.push('EXPORT_GAP_UNBOUND');
-      }
+      recoveryValid = recovery.budgetId !== null && recovery.budgetExpiresAtMs !== null
+        && recovery.budgetExpiresAtMs >= nowMs && recovery.incidentId === null
+        && recovery.bufferedCount === 0 && recovery.replayedCount === exportGapCount;
     } else if (recovery.state === 'EVIDENCE_GAP_INCIDENT_BOUND') {
-      if (recovery.incidentId === null) reasons.push('EXPORT_GAP_UNBOUND');
-      else reasons.push('VISIBLE_EVIDENCE_GAP_INCIDENT');
-    } else reasons.push('EXPORT_GAP_UNBOUND');
+      recoveryValid = recovery.budgetId === null && recovery.budgetExpiresAtMs === null
+        && recovery.incidentId !== null && recovery.bufferedCount === 0 && recovery.replayedCount === 0;
+      if (recoveryValid) reasons.push('VISIBLE_EVIDENCE_GAP_INCIDENT');
+    }
+    if (!recoveryValid) reasons.push('EXPORT_GAP_UNBOUND');
   } else if (recovery.state !== 'NOT_REQUIRED'
       || recovery.budgetId !== null || recovery.budgetExpiresAtMs !== null || recovery.incidentId !== null
       || recovery.bufferedCount !== 0 || recovery.replayedCount !== 0) {

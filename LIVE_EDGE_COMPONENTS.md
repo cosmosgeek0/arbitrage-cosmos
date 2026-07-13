@@ -107,11 +107,25 @@ canonical persistence and fractional Foundation comparison remain unclaimed.
 | Causal multi-leg documentary plan | content-addressed action/candidate/plan values | `BUILT_AND_TESTED` | later lifecycle input candidate only | Ordered second-leg quantity is explicitly actual-fill-derived and capped; concurrent per-leg transitions are explicit; cancel/replacement is separate, same-leg, single-use and deadline-monotonic; recovery is exact-exposure-bound and risk-reducing only |
 | Offline order-policy proofs | `server/test/liveEdge/executionPolicy/**` | focused `45/45` | test-only | Owner-envelope non-widening, L04 Spot fail-closed posture, bounded USD-M GTC/IOC/FOK mechanics, MARKET rejection, exact CVaR/ranking, latency, sequence, recovery, cancel graph, hostile input, deep-freeze and hard-boundary proofs; network-free |
 
-Accepted L04 cannot currently prove Spot execution rules or Spot TIF from its
-Runtime-owned metadata seam. L08 preserves that `BLOCKED` truth and records the
-director-owned bridge request in
+At the historical accepted L08 cut, L04 could not prove Spot execution rules
+or Spot TIF from its Runtime-owned metadata seam. L08 therefore preserved that
+`BLOCKED` truth and recorded the director-owned bridge request in
 `live-edge-receipts/patches/L08-spot-tif-capability.request.md`; it does not
-cross-cast USD-M capability or silently widen L04.
+cross-cast USD-M capability or silently widen L04. L08.1 resolves only the
+exact Spot LIMIT/TIF join below.
+
+## L08.1 delta
+
+| Component | Path | Lane build proof | Integration state | Authority / limitation |
+| --- | --- | --- | --- | --- |
+| Exact Spot LIMIT/TIF capability binding | `server/src/liveEdge/adapters/binanceInstrumentSpecs/spotOrderTifCapability.ts`, `sizing.ts`, `types.ts` | `BUILT_AND_TESTED` | `LANE_READY_UNWIRED` | Binds pinned documentary `LIMIT` plus `GTC`/`IOC`/`FOK` to one exact current L04 Runtime snapshot and sizing result; preserves the registry's empty Spot TIF list and original losses, resolves only the exact TIF join, retains remaining gaps, and is deeply frozen/non-sendable |
+| Opt-in Spot policy owner-binding seam | `evaluateExecutionPolicyWithOwnerBindings` in `server/src/liveEdge/adapters/executionPolicy/policy.ts` | `BUILT_AND_TESTED` | documentary plan candidate only | Receives the current frozen L04 Runtime snapshot plus complete sizing/reference request, rebinds the capability internally on every evaluation, then requires an exact matching Spot leg, content-bound `INSTRUMENT_FILTER` dependency and unexpired evidence; a receipt/source/snapshot/preflight/reference change invalidates the prior policy, the accepted one-argument evaluator remains fail-closed, and no binding can create Capital/Risk/send authority |
+| Ordered normal-Basis policy proof | `server/test/liveEdge/executionPolicy/spot-order-tif-bridge.test.mjs` | execution-policy suite `49/49` | test-only | Proves Spot BUY first, USD-M SELL second, second-leg `ACTUAL_FILL_OF_LEG`, exact TIF/expiry/revision gates, hostile binding rejection and `sendEligible=false`; no lifecycle or order is created |
+| Spot bridge owner proofs | `server/test/liveEdge/instrumentSpecs/spot-order-tif-capability.test.mjs` | instrument-spec suite `248/248` | test-only | Proves unchanged legacy rejection, exact official pins, GTC/IOC/FOK, Runtime revision and expiry invalidation, content/arithmetic tamper rejection, deep freeze and import purity; network-free |
+
+L08.1 resolves only the L09 Spot order/TIF capability blocker. It does not
+wire L09, alter strategy ownership, or add a live/test order route. Director
+must rebase L09/L10/L11 from the exact accepted L08.1 receipt cut.
 
 ## Director-owned integration still required
 
@@ -146,10 +160,13 @@ evidence. It remains `UNWIRED`, non-sendable and non-authoritative; Foundation
 still owns canonical execution/reconciliation truth, and production order
 policy/composition begins no earlier than director-controlled later phases.
 
-L08 consumes only injected owner projections and accepted L04/L07 revisions.
-It creates no Capital/Risk decision, order, ticket, coordinator, lifecycle,
+L08/L08.1 consume only injected owner projections and accepted L04/L07
+revisions; L08.1 reruns the current L04 binding rather than trusting a caller's
+self-sealed projection.
+They create no Capital/Risk decision, order, ticket, coordinator, lifecycle,
 reconciliation or persistence owner. Production composition remains
-director-owned and begins no earlier than L09 from the exact accepted L08 SHA.
+director-owned; L09/L10/L11 must rebase from the exact accepted L08.1 receipt
+cut.
 
 ## Explicitly absent
 

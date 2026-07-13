@@ -158,6 +158,10 @@ function allowedImportReason(file, node, specifier) {
       || (base === 'sizing.ts'
         && names.size === 1
         && names.has('stableId'))
+      || (base === 'spotOrderTifCapability.ts'
+        && names.size === 2
+        && names.has('canonicalJson')
+        && names.has('stableId'))
       || (base === 'snapshot.ts'
         && names.size === 2
         && names.has('canonicalJson')
@@ -168,7 +172,8 @@ function allowedImportReason(file, node, specifier) {
     && names.size === 1
     && names.has('RuntimeListingMetadata')) return null;
   if (normalized.startsWith('./') || normalized.startsWith('../')) {
-    if (normalized === '../binanceContracts/index.js' && base === 'contract.ts') return null;
+    if (normalized === '../binanceContracts/index.js'
+      && ['contract.ts', 'spotOrderTifCapability.ts'].includes(base)) return null;
     if (normalized === './sizing.js' && base === 'waiting.ts') {
       return names.size === 2
         && names.has('requiredFilterReferenceEvidence')
@@ -411,7 +416,8 @@ test('instrument-spec source is pure and imports only narrow canonical contract 
     files.map((file) => path.basename(file)),
     [
       'capabilities.ts', 'contract.ts', 'exact.ts', 'filterSchemas.ts', 'index.ts',
-      'normalize.ts', 'sizing.ts', 'snapshot.ts', 'types.ts', 'waiting.ts',
+      'normalize.ts', 'sizing.ts', 'snapshot.ts', 'spotOrderTifCapability.ts',
+      'types.ts', 'waiting.ts',
     ],
   );
   assert.deepEqual(staticViolations(files), []);

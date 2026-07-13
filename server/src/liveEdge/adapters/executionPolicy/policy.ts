@@ -3,6 +3,14 @@ import { types as utilTypes } from 'node:util';
 
 import { canonicalJson } from '../../../foundation/contracts/index.js';
 import {
+  deriveSpotOrderTifDependencyRevision,
+  validateSpotOrderTifCapability,
+} from '../binanceInstrumentSpecs/spotOrderTifCapability.js';
+import { bindSpotOrderTifCapability } from '../binanceInstrumentSpecs/sizing.js';
+import type {
+  BinanceSpotOrderTifCapability,
+} from '../binanceInstrumentSpecs/types.js';
+import {
   addPolicyDecimals,
   comparePolicyDecimals,
   compareRationals,
@@ -16,6 +24,7 @@ import {
   EXECUTION_POLICY_CANDIDATE_SCHEMA,
   EXECUTION_POLICY_DECISION_SCHEMA,
   EXECUTION_POLICY_INPUT_SCHEMA,
+  EXECUTION_POLICY_OWNER_BINDINGS_SCHEMA,
   type ExactCvarEvidence,
   type ExecutionPolicyCandidate,
   type ExecutionPolicyDecision,
@@ -72,6 +81,8 @@ const INPUT_FIELDS = Object.freeze([
   'schema', 'policyRequestId', 'policyVersion', 'evaluatedAtMs', 'authority',
   'dependencies', 'legs', 'candidates',
 ] as const);
+const OWNER_BINDING_FIELDS = Object.freeze(['schema', 'spotOrderTifOwnerInputs'] as const);
+const SPOT_OWNER_INPUT_FIELDS = Object.freeze(['registrySnapshot', 'sizingRequest'] as const);
 const AUTHORITY_FIELDS = Object.freeze([
   'state', 'intentId', 'intentRevision', 'externalPlanId', 'correlationId',
   'authorizationRevision', 'mandateId', 'mandateRevision', 'capitalReservationId',
@@ -706,7 +717,11 @@ function validateCandidate(
   return { candidate: candidate as unknown as ExecutionPolicyCandidate, metrics };
 }
 
-function validateLeg(raw: unknown): PolicyLeg {
+function validateLeg(
+  raw: unknown,
+  spotCapabilities: readonly BinanceSpotOrderTifCapability[],
+  usedSpotCapabilityRevisions: Set<string>,
+): PolicyLeg {
   const leg = record(raw, LEG_FIELDS, 'policy leg');
   text(leg.legId, 'legId');
   text(leg.instrumentRevision, 'instrumentRevision');
@@ -718,8 +733,36 @@ function validateLeg(raw: unknown): PolicyLeg {
   const allowedOrderTypes = closedStringArray(leg.allowedOrderTypes, ['LIMIT', 'MARKET'], 'allowedOrderTypes');
   const allowedTimeInForce = closedStringArray(leg.allowedTimeInForce, ['FOK', 'GTC', 'IOC'], 'allowedTimeInForce');
   const product = oneOf(leg.product, ['SPOT', 'USD_M_PERPETUAL'], 'leg product');
-  if (product === 'SPOT' && (l04PreflightState !== 'BLOCKED' || allowedTimeInForce.length !== 0)) {
-    throw new TypeError('accepted L04 cannot prove Spot execution/TIF readiness');
+  const spotCapability = product === 'SPOT'
+    ? spotCapabilities.find((capability) => capability.symbol === leg.symbol
+      && capability.side === leg.side)
+    : undefined;
+  if (product === 'SPOT' && spotCapability === undefined
+    && (l04PreflightState !== 'BLOCKED' || allowedTimeInForce.length !== 0)) {
+    throw new TypeError('accepted L04 cannot prove Spot execution/TIF readiness without an owner binding');
+  }
+  if (product === 'SPOT' && spotCapability !== undefined) {
+    if (usedSpotCapabilityRevisions.has(spotCapability.capabilityRevision)
+      || l04PreflightState !== 'PASS'
+      || canonicalJson(allowedOrderTypes) !== '["LIMIT"]'
+      || canonicalJson(allowedTimeInForce) !== canonicalJson([spotCapability.timeInForce])
+      || leg.instrumentRevision !== spotCapability.instrumentRevision
+      || leg.filterRevision !== spotCapability.registryRevision
+      || leg.l04SizingRevision !== spotCapability.preflightRevision
+      || leg.l04SourceEvidenceRevision !== spotCapability.sourceEvidenceRevision
+      || leg.l04SnapshotRevision !== spotCapability.snapshotRevision
+      || leg.symbol !== spotCapability.symbol
+      || leg.baseAsset !== spotCapability.baseAsset
+      || leg.quoteAsset !== spotCapability.quoteAsset
+      || leg.side !== spotCapability.side
+      || leg.reduceOnly !== false
+      || leg.requestedQuantity !== spotCapability.requestedQuantity
+      || leg.filteredQuantity !== spotCapability.resultQuantity
+      || leg.authorizedLimitPrice !== spotCapability.requestedPrice
+      || leg.filteredNotionalQuote !== spotCapability.resultNotional) {
+      throw new TypeError('Spot policy leg does not exactly bind its L04 order/TIF capability');
+    }
+    usedSpotCapabilityRevisions.add(spotCapability.capabilityRevision);
   }
   if (product === 'USD_M_PERPETUAL' && l04PreflightState === 'PASS'
     && (allowedOrderTypes.length === 0 || allowedTimeInForce.length === 0)) {
@@ -823,7 +866,10 @@ function rejectGlobal(
   });
 }
 
-export function evaluateExecutionPolicy(rawInput: unknown): ExecutionPolicyDecision {
+function evaluateExecutionPolicyCore(
+  rawInput: unknown,
+  spotCapabilities: readonly BinanceSpotOrderTifCapability[],
+): ExecutionPolicyDecision {
   let cloned: unknown;
   try {
     cloned = snapshot(rawInput);
@@ -876,7 +922,12 @@ export function evaluateExecutionPolicy(rawInput: unknown): ExecutionPolicyDecis
     }
     if (dependencyKinds.size !== DEPENDENCY_KINDS.length) throw new TypeError('dependency set is incomplete');
 
-    const legs = array(raw.legs, 2, 2, 'policy legs').map(validateLeg);
+    const usedSpotCapabilityRevisions = new Set<string>();
+    const legs = array(raw.legs, 2, 2, 'policy legs')
+      .map((leg) => validateLeg(leg, spotCapabilities, usedSpotCapabilityRevisions));
+    if (usedSpotCapabilityRevisions.size !== spotCapabilities.length) {
+      throw new TypeError('every Spot owner binding must bind exactly one policy leg');
+    }
     if (new Set(legs.map((leg) => leg.legId)).size !== legs.length) throw new TypeError('leg identities must be unique');
     if (new Set(legs.map((leg) => leg.baseAsset)).size !== 1) throw new TypeError('policy legs require one exposure quantity asset');
     if (new Set(legs.map((leg) => leg.quoteAsset)).size !== 1) throw new TypeError('policy legs require one quote/loss unit');
@@ -887,6 +938,15 @@ export function evaluateExecutionPolicy(rawInput: unknown): ExecutionPolicyDecis
     );
 
     const globalReasons = new Set<PolicyRejectionReason>();
+    if (spotCapabilities.length > 0
+      && dependencyRevision('INSTRUMENT_FILTER')
+        !== deriveSpotOrderTifDependencyRevision(spotCapabilities)) {
+      globalReasons.add('OWNER_REVISION_MISMATCH');
+    }
+    if (spotCapabilities.some((capability) => capability.evaluatedAtMs > evaluatedAtMs
+      || capability.validUntilMs <= evaluatedAtMs)) {
+      globalReasons.add('DEPENDENCY_STALE');
+    }
     if (constraints.some((constraint) => constraint.cvarConfidencePpm !== confidencePpm)) {
       globalReasons.add('OWNER_REVISION_MISMATCH');
     }
@@ -1051,6 +1111,7 @@ export function evaluateExecutionPolicy(rawInput: unknown): ExecutionPolicyDecis
       selected.candidate.expiresAtMs,
       selected.candidate.distribution.validUntilMs,
       ...dependencies.map((dependency) => (dependency as Record<string, number>).validUntilMs),
+      ...spotCapabilities.map((capability) => capability.validUntilMs),
     );
     const planMaterial = {
       schema: 'LIVE_EDGE_EXECUTION_POLICY_PLAN_V1' as const,
@@ -1070,10 +1131,12 @@ export function evaluateExecutionPolicy(rawInput: unknown): ExecutionPolicyDecis
       operatorApprovalRevision: authority.operatorApprovalRevision as string,
       riskVerdictId: authority.riskVerdictId as string,
       riskVerdictRevision: authority.riskVerdictRevision as string,
-      evidenceRevisions: Object.freeze(dependencies.map((dependency) => {
+      evidenceRevisions: Object.freeze([...dependencies.map((dependency) => {
         const value = dependency as Record<string, string>;
         return `${value.kind}:${value.revision}`;
-      }).sort()),
+      }), ...spotCapabilities.map((capability) => (
+        `SPOT_ORDER_TIF_CAPABILITY:${capability.capabilityRevision}`
+      ))].sort()),
       distributionRevision: selected.candidate.distribution.distributionRevision,
       modelRevision: selected.candidate.distribution.modelRevision,
       calibrationRevision: selected.candidate.distribution.calibrationRevision,
@@ -1103,6 +1166,52 @@ export function evaluateExecutionPolicy(rawInput: unknown): ExecutionPolicyDecis
       reasonCodes: Object.freeze([]), selectedPlan: plan,
       candidateEvaluations: evaluations, ...AUTHORITY,
     });
+  } catch {
+    return rejectedInput();
+  }
+}
+
+/**
+ * Preserves the accepted L08 evaluator exactly: without an explicit owner
+ * binding, Spot remains fail-closed at the accepted L04 posture.
+ */
+export function evaluateExecutionPolicy(rawInput: unknown): ExecutionPolicyDecision {
+  return evaluateExecutionPolicyCore(rawInput, Object.freeze([]));
+}
+
+/**
+ * Opt-in L08.1 seam for an exact, non-sendable L04 Spot LIMIT/TIF binding.
+ * The binding can validate policy mechanics; it cannot submit an action.
+ */
+export function evaluateExecutionPolicyWithOwnerBindings(
+  rawInput: unknown,
+  rawBindings: unknown,
+): ExecutionPolicyDecision {
+  try {
+    const clonedBindings = deepFreeze(snapshot(rawBindings));
+    const envelope = record(clonedBindings, OWNER_BINDING_FIELDS, 'execution-policy owner bindings');
+    if (envelope.schema !== EXECUTION_POLICY_OWNER_BINDINGS_SCHEMA) {
+      throw new TypeError('execution-policy owner binding schema is unsupported');
+    }
+    const capabilities = array(
+      envelope.spotOrderTifOwnerInputs,
+      1,
+      2,
+      'Spot order/TIF owner inputs',
+    ).map((rawOwnerInput) => {
+      const ownerInput = record(rawOwnerInput, SPOT_OWNER_INPUT_FIELDS, 'Spot order/TIF owner input');
+      const result = bindSpotOrderTifCapability(
+        ownerInput.registrySnapshot,
+        ownerInput.sizingRequest,
+      );
+      if (!result.ok) throw new TypeError(`Spot owner binding failed: ${result.reasonCodes.join(',')}`);
+      return validateSpotOrderTifCapability(result.binding);
+    });
+    if (new Set(capabilities.map((capability) => capability.capabilityRevision)).size
+      !== capabilities.length) {
+      throw new TypeError('Spot order/TIF capability revisions must be unique');
+    }
+    return evaluateExecutionPolicyCore(rawInput, Object.freeze(capabilities));
   } catch {
     return rejectedInput();
   }

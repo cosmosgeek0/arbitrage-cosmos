@@ -1,6 +1,23 @@
+import type {
+  BinanceInstrumentRegistrySnapshot,
+  InstrumentSizingRequest,
+} from '../binanceInstrumentSpecs/types.js';
+
 export const EXECUTION_POLICY_INPUT_SCHEMA = 'LIVE_EDGE_EXECUTION_POLICY_INPUT_V1' as const;
 export const EXECUTION_POLICY_DECISION_SCHEMA = 'LIVE_EDGE_EXECUTION_POLICY_DECISION_V1' as const;
 export const EXECUTION_POLICY_CANDIDATE_SCHEMA = 'LIVE_EDGE_EXECUTION_POLICY_CANDIDATE_V1' as const;
+export const EXECUTION_POLICY_OWNER_BINDINGS_SCHEMA =
+  'LIVE_EDGE_EXECUTION_POLICY_OWNER_BINDINGS_V1' as const;
+
+export interface ExecutionPolicySpotOrderTifOwnerInput {
+  readonly registrySnapshot: BinanceInstrumentRegistrySnapshot;
+  readonly sizingRequest: InstrumentSizingRequest;
+}
+
+export interface ExecutionPolicyOwnerBindings {
+  readonly schema: typeof EXECUTION_POLICY_OWNER_BINDINGS_SCHEMA;
+  readonly spotOrderTifOwnerInputs: readonly ExecutionPolicySpotOrderTifOwnerInput[];
+}
 
 export type PolicyProduct = 'SPOT' | 'USD_M_PERPETUAL';
 export type PolicySide = 'BUY' | 'SELL';

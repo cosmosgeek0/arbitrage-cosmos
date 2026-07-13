@@ -1,6 +1,6 @@
 # L08 shared-owner request — Spot execution/TIF capability bridge
 
-Status: `IMPLEMENTED_PENDING_L08.1_ACCEPTANCE`
+Status: `RESOLVED_BY_ACCEPTED_L08.1`
 
 Requester: L08 production order-policy lane
 

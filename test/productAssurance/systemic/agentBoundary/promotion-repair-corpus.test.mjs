@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  IP_ASSURANCE_CLASS_LAW,
   CLASS_CANDIDATES,
   CLASS_POLICIES,
   CORPUS_DEDUP_REGISTRY,
@@ -31,6 +32,7 @@ import {
   repairEvidencePolicyDigest,
   selfCorrectionClassPolicyDigest,
   selfCorrectionHoldoutEvidenceDigest,
+  selfCorrectionVerifierEvidenceDigest,
 } from '../../../../fixtures/productAssurance/systemic/agentBoundary/evaluators.mjs';
 import { appendChainDigest, sha256Hex, stableUnique } from '../../../../fixtures/productAssurance/systemic/agentBoundary/canonical.mjs';
 
@@ -63,6 +65,21 @@ function promote(className, overrides = {}) {
     nowMs: NOW,
     ...overrides,
   });
+}
+
+function resealCandidate(candidate, policy) {
+  const resealed = clone(candidate);
+  resealed.independentVerifier.evidenceDigest = selfCorrectionVerifierEvidenceDigest({
+    candidate: resealed,
+    policy,
+    verifier: resealed.independentVerifier,
+  });
+  resealed.holdout.evidenceDigest = selfCorrectionHoldoutEvidenceDigest({
+    candidate: resealed,
+    policy,
+    holdout: resealed.holdout,
+  });
+  return resealed;
 }
 
 test('folded S6 independent repair evidence passes without declaring recovery', () => {
@@ -429,7 +446,7 @@ test('corpus release rejects leakage, incomplete decisions, and fabricated PASS 
   assert.ok(evaluateCorpusReleaseGovernance({ release: commonModeReview, itemDecisions: [itemDecision], nowMs: NOW }).reasonCodes.includes('CORPUS_RELEASE_REVIEWER_NOT_INDEPENDENT'));
 });
 
-test('opaque Class A-D labels resolve only under a content-bound owner policy projection', () => {
+test('Class A-D labels resolve only from a §7.1 trigger and content-bound owner policy', () => {
   for (const className of ['A', 'B', 'C', 'D']) {
     assert.equal(deriveSelfCorrectionClass(CLASS_CANDIDATES[className], CLASS_POLICIES[className]), className);
     assert.equal(deriveSelfCorrectionClass(CLASS_CANDIDATES[className], null), 'UNKNOWN');
@@ -439,22 +456,187 @@ test('opaque Class A-D labels resolve only under a content-bound owner policy pr
   assert.equal(deriveSelfCorrectionClass(CLASS_CANDIDATES.A, wrongRevision), 'UNKNOWN');
 });
 
-test('opaque Class A-D fixtures remain blocked owner-review evidence with no operational action', () => {
+test('owner-defined Class A-D fixtures project their exact non-overlapping routes without operational action', () => {
   const results = Object.fromEntries(['A', 'B', 'C', 'D'].map((className) => [className, promote(className)]));
+  assert.equal(results.A.disposition, 'CLASS_A_REGISTERED_ELIGIBILITY_PROVEN');
+  assert.equal(results.A.classRoute, 'CANONICAL_CONTROL_PLANE_REGISTERED_COMMAND');
+  assert.equal(results.A.registeredCommandId, 'RESTART_BOUNDED_WORKER');
+  assert.equal(results.A.automaticEligibility, 'ELIGIBLE_REGISTERED_ONLY');
+  assert.equal(results.A.ownerLawDigest, IP_ASSURANCE_CLASS_LAW.packetSha256);
+  assert.equal(results.A.shadowRequirement, 'SHADOW_OR_NO_AUTHORITY_REQUIRED');
+  assert.deepEqual(results.A.policyBounds, CLASS_POLICIES.A.automaticBounds);
+  assert.deepEqual(results.A.candidateBounds, {
+    attemptLimit: 2,
+    rateLimitPerWindow: 1,
+    rateWindowMs: 60_000,
+    resourceLimit: 1,
+    resourceIds: ['resource.fixture.worker-1'],
+    capitalEffect: 'NONE',
+    exposureEffect: 'NONE',
+    externalEnvironmentEffect: 'NONE',
+  });
+  assert.deepEqual(results.A.monitoredDemotionTriggerCodes,
+    stableUnique(IP_ASSURANCE_CLASS_LAW.classADemotionTriggerCodes));
+  assert.equal(results.B.disposition, 'CLASS_B_CANONICAL_RECOVERY_REQUIRED');
+  assert.equal(results.B.classRoute, 'CANONICAL_RECONCILIATION_RECOVERY');
+  assert.equal(results.C.disposition, 'CLASS_C_OWNER_APPROVED_RELEASE_REQUIRED');
+  assert.equal(results.C.classRoute, 'OWNER_APPROVED_HASH_BOUND_RELEASE');
+  assert.equal(results.C.approvalStatus, 'APPROVED');
+  assert.equal(results.D.disposition, 'CLASS_D_ABSTAIN_OR_DEMOTION_REQUIRED');
+  assert.equal(results.D.classRoute, 'ACCEPTED_Q_RUNTIME_ABSTAIN_OR_DEMOTION');
   for (const result of Object.values(results)) {
-    assert.equal(result.status, 'UNKNOWN');
-    assert.equal(result.disposition, 'PROMOTION_BLOCKED_UNKNOWN');
-    assert.ok(result.reasonCodes.includes('CLASS_TAXONOMY_OWNER_LAW_MISSING'));
-    assert.equal(result.classRoute, 'CANONICAL_OWNER_REVIEW_ONLY');
-    assert.equal(result.registeredCommandId, null);
-    assert.equal(result.approvalStatus, 'APPROVED');
+    assert.equal(result.status, 'PASS');
+    assert.deepEqual(result.reasonCodes, []);
     assert.equal(result.operationalActionAllowed, false);
     assert.equal(result.mayDeclareRecovery, false);
     assert.equal(result.allowed, false);
   }
+  assert.deepEqual(results.A.promotionEvidenceIds, stableUnique(IP_ASSURANCE_CLASS_LAW.classAPromotionEvidenceIds));
+  assert.deepEqual(results.A.promotionEvidenceSatisfied, stableUnique(IP_ASSURANCE_CLASS_LAW.classAPromotionEvidenceIds));
+  for (const className of ['B', 'C', 'D']) {
+    assert.equal(results[className].automaticEligibility, 'NEVER');
+    assert.equal(results[className].registeredCommandId, null);
+    assert.deepEqual(results[className].promotionEvidenceIds, []);
+  }
 });
 
-test('no opaque class receives caller-defined automatic privilege, forbidden effect, or unknown capability', () => {
+test('Class A requires every one of the nine owner-defined promotion evidence points', () => {
+  const cases = [
+    ['CLASS_TRIGGER_REJECTED', (candidate) => { candidate.trigger.deterministic = false; }],
+    ['CLASS_A_FAILURE_REPRODUCTION_UNKNOWN', (candidate) => { candidate.failureReproduction.status = 'UNKNOWN'; }],
+    ['CLASS_A_REGISTERED_COMMAND_REQUIRED', (candidate) => { candidate.registeredCommandId = null; }],
+    ['PROMOTION_REQUIRED_TEST_KINDS_MISMATCH', (candidate) => { candidate.tests = candidate.tests.filter((entry) => entry.kind !== 'FAULT'); }],
+    ['CLASS_A_SHADOW_EXERCISE_UNKNOWN', (candidate) => { candidate.shadowExercise.status = 'UNKNOWN'; }],
+    ['PROMOTION_VERIFIER_UNKNOWN', (candidate) => { candidate.independentVerifier.status = 'UNKNOWN'; }],
+    ['CLASS_A_QUIET_PERIOD_INCOMPLETE', (candidate) => { candidate.quietPeriod.observedMs = candidate.quietPeriod.requiredMs - 1; }],
+    ['CLASS_A_BOUNDS_EXCEEDED', (candidate) => { candidate.bounds.attemptLimit += 1; }],
+    ['CLASS_A_DEMOTION_GUARD_UNKNOWN', (candidate) => { candidate.demotionGuard.status = 'UNKNOWN'; }],
+  ];
+  for (const [reason, mutate] of cases) {
+    const candidate = clone(CLASS_CANDIDATES.A);
+    mutate(candidate);
+    const result = promote('A', { candidate: resealCandidate(candidate, CLASS_POLICIES.A) });
+    assert.notEqual(result.status, 'PASS', reason);
+    assert.ok(result.reasonCodes.includes(reason), `${reason}: ${result.reasonCodes.join(',')}`);
+    assert.equal(result.operationalActionAllowed, false);
+  }
+});
+
+test('Class A recurrence, drift, or changed assumptions automatically demote to the Class D owner route', () => {
+  for (const triggerCode of IP_ASSURANCE_CLASS_LAW.classADemotionTriggerCodes) {
+    const candidate = clone(CLASS_CANDIDATES.A);
+    candidate.demotionGuard.activeTriggerCodes = [triggerCode];
+    const result = promote('A', { candidate: resealCandidate(candidate, CLASS_POLICIES.A) });
+    assert.equal(result.status, 'PASS', triggerCode);
+    assert.equal(result.disposition, 'CLASS_A_AUTOMATIC_DEMOTION_REQUIRED');
+    assert.equal(result.declaredClass, 'A');
+    assert.equal(result.derivedClass, 'A');
+    assert.equal(result.effectiveClass, 'D');
+    assert.equal(result.classRoute, 'ACCEPTED_Q_RUNTIME_ABSTAIN_OR_DEMOTION');
+    assert.equal(result.automaticEligibility, 'DEMOTED_TO_CLASS_D');
+    assert.equal(result.automaticDemotionRequired, true);
+    assert.deepEqual(result.activeDemotionTriggerCodes, [triggerCode]);
+    assert.equal(result.operationalActionAllowed, false);
+    assert.equal(isEvaluationEnvelope(result, NOW, 'SELF_CORRECTION_PROMOTION'), true);
+  }
+});
+
+test('Class A bounds are local, non-capital, non-external, and registry-owned', () => {
+  const mutations = [
+    ['PERMANENT_EFFECT_BOUNDARY', (candidate) => { candidate.effectFlags = ['CAPITAL']; }],
+    ['CLASS_A_PROMOTION_EVIDENCE_CONTRACT_INVALID', (candidate) => { candidate.bounds.capitalEffect = 'CAPITAL'; }],
+    ['CLASS_A_PROMOTION_EVIDENCE_CONTRACT_INVALID', (candidate) => { candidate.bounds.externalEnvironmentEffect = 'AWS'; }],
+    ['CLASS_A_BOUNDS_EXCEEDED', (candidate) => { candidate.bounds.resourceLimit += 1; }],
+    ['CLASS_A_BOUNDS_UNKNOWN', (candidate) => { candidate.bounds.resourceIds = []; }],
+  ];
+  for (const [reason, mutate] of mutations) {
+    const candidate = clone(CLASS_CANDIDATES.A);
+    mutate(candidate);
+    const result = promote('A', { candidate: resealCandidate(candidate, CLASS_POLICIES.A) });
+    assert.notEqual(result.status, 'PASS', reason);
+    assert.ok(result.reasonCodes.includes(reason), `${reason}: ${result.reasonCodes.join(',')}`);
+  }
+});
+
+test('Class A trigger-specific clock, event-preservation, and backup-path laws are explicit and fail closed', () => {
+  for (const [triggerCode, requirements] of Object.entries(IP_ASSURANCE_CLASS_LAW.classATriggerEvidenceRequirements)) {
+    const missing = clone(CLASS_CANDIDATES.A);
+    missing.trigger.triggerCode = triggerCode;
+    missing.trigger.evidenceDigest = h(`class-A-trigger-${triggerCode}`);
+    const missingResult = promote('A', { candidate: resealCandidate(missing, CLASS_POLICIES.A) });
+    assert.equal(missingResult.status, 'UNKNOWN', triggerCode);
+    assert.ok(missingResult.reasonCodes.includes('CLASS_A_TRIGGER_SPECIFIC_EVIDENCE_INCOMPLETE'));
+    assert.deepEqual(missingResult.requiredTriggerEvidenceIds, stableUnique(requirements));
+    assert.deepEqual(missingResult.satisfiedTriggerEvidenceIds, []);
+
+    const complete = clone(missing);
+    complete.tests.push(...requirements.map((checkId, index) => ({
+      checkId,
+      kind: 'FAULT',
+      status: 'PASS',
+      evidenceDigest: h(`class-A-${triggerCode}-${checkId}`),
+      verifierId: `trigger-law-verifier.fixture.${index}`,
+    })));
+    const completeResult = promote('A', { candidate: resealCandidate(complete, CLASS_POLICIES.A) });
+    assert.equal(completeResult.status, 'PASS', `${triggerCode}: ${completeResult.reasonCodes.join(',')}`);
+    assert.deepEqual(completeResult.requiredTriggerEvidenceIds, stableUnique(requirements));
+    assert.deepEqual(completeResult.satisfiedTriggerEvidenceIds, stableUnique(requirements));
+    assert.equal(completeResult.operationalActionAllowed, false);
+  }
+});
+
+test('Class B capital-affecting triggers route only to canonical recovery and can never become agent repair', () => {
+  const result = promote('B');
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.automaticEligibility, 'NEVER');
+  assert.equal(result.registeredCommandId, null);
+  assert.equal(result.classRoute, 'CANONICAL_RECONCILIATION_RECOVERY');
+
+  const candidate = clone(CLASS_CANDIDATES.B);
+  candidate.registeredCommandId = CLASS_CANDIDATES.A.registeredCommandId;
+  const rejected = promote('B', { candidate: resealCandidate(candidate, CLASS_POLICIES.B) });
+  assert.equal(rejected.status, 'FAIL');
+  assert.ok(rejected.reasonCodes.includes('NON_CLASS_A_REGISTERED_COMMAND_FORBIDDEN'));
+});
+
+test('Class C code changes stay hash-bound while external activation remains separately owner-gated', () => {
+  assert.equal(promote('C').status, 'PASS');
+
+  const candidate = clone(CLASS_CANDIDATES.C);
+  candidate.trigger.triggerCode = 'DEPLOYMENT_CHANGE';
+  const gated = promote('C', { candidate: resealCandidate(candidate, CLASS_POLICIES.C) });
+  assert.equal(gated.status, 'UNKNOWN');
+  assert.equal(gated.externalAuthorizationRequired, true);
+  assert.ok(gated.reasonCodes.includes('I00_SECTION_20_EXTERNAL_AUTHORIZATION_REQUIRED'));
+  assert.equal(gated.operationalActionAllowed, false);
+});
+
+test('Class D drift and unknown-research triggers remain abstention or demotion recommendations', () => {
+  for (const triggerCode of IP_ASSURANCE_CLASS_LAW.classDTriggerCodes) {
+    const candidate = clone(CLASS_CANDIDATES.D);
+    candidate.trigger.triggerCode = triggerCode;
+    const result = promote('D', { candidate: resealCandidate(candidate, CLASS_POLICIES.D) });
+    assert.equal(result.status, 'PASS', triggerCode);
+    assert.equal(result.disposition, 'CLASS_D_ABSTAIN_OR_DEMOTION_REQUIRED');
+    assert.equal(result.automaticEligibility, 'NEVER');
+    assert.equal(result.operationalActionAllowed, false);
+  }
+});
+
+test('the accepted class policy is pinned to the exact D-LAUNCH-13 source object and packet digest', () => {
+  for (const policy of Object.values(CLASS_POLICIES)) {
+    assert.equal(policy.bindingLawRef, 'c57610c:IP_ASSURANCE.md#7.1');
+    assert.equal(policy.ownerLawDigest, IP_ASSURANCE_CLASS_LAW.packetSha256);
+  }
+  const drifted = clone(CLASS_POLICIES.A);
+  drifted.ownerLawDigest = h('not-the-owner-law');
+  drifted.evidenceDigest = selfCorrectionClassPolicyDigest(drifted);
+  const result = promote('A', { policy: drifted, acceptedPolicyEvidenceDigest: drifted.evidenceDigest });
+  assert.equal(result.status, 'FAIL');
+  assert.ok(result.reasonCodes.includes('CLASS_POLICY_LAW_MISMATCH'));
+});
+
+test('no class receives caller-defined automatic privilege, forbidden effect, or unknown capability', () => {
   assert.notEqual(promote('A', { policy: null }).status, 'PASS');
 
   const automaticB = clone(CLASS_POLICIES.B);
@@ -611,7 +793,7 @@ test('owner-resealed repair policy drift and dedup target-content drift are reje
 
 test('promotion evidence expires at its earliest prerequisite and cannot be resealed with empty evidence', () => {
   const decision = promote('C');
-  assert.equal(decision.status, 'UNKNOWN');
+  assert.equal(decision.status, 'PASS');
   assert.equal(decision.validUntilMs, CLASS_CANDIDATES.C.approval.expiresAtMs);
   assert.equal(isEvaluationEnvelope(decision, NOW, 'SELF_CORRECTION_PROMOTION'), true);
   assert.equal(isEvaluationEnvelope(decision, decision.validUntilMs, 'SELF_CORRECTION_PROMOTION'), false);

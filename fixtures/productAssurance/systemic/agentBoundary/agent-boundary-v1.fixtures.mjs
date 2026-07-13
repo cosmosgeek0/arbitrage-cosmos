@@ -1,5 +1,6 @@
 import { appendChainDigest, sha256Hex, stableUnique } from './canonical.mjs';
 import {
+  IP_ASSURANCE_CLASS_LAW,
   PERMANENTLY_FORBIDDEN_CAPABILITIES,
   corpusContentDigest,
   corpusDedupRegistryDigest,
@@ -14,6 +15,8 @@ import {
   selfCorrectionVerifierEvidenceDigest,
   workloadIdentityEventEvidenceHash,
 } from './evaluators.mjs';
+
+export { IP_ASSURANCE_CLASS_LAW };
 
 export const NOW = 1_900_000_000_000;
 export const RETENTION_POLICY = Object.freeze({
@@ -37,7 +40,7 @@ const REPAIR_POLICY_BASE = Object.freeze({
   requiresRollback: true,
   requiresCompensation: false,
   minimumQuietPeriodMs: 5_000,
-  allowedActionIds: Object.freeze(['repair-action.fixture.1']),
+  allowedActionIds: Object.freeze(['RESTART_BOUNDED_WORKER']),
   allowedExecutorIds: Object.freeze(['canonical-control.fixture']),
   allowedProducerIds: Object.freeze(['diagnostic-worker.fixture']),
   requiredResourceIds: Object.freeze(['resource.fixture.worker-1']),
@@ -302,7 +305,7 @@ export const REPAIR_EVIDENCE = Object.freeze({
   schema: 'RepairEvidenceBundleV1',
   version: 1,
   campaignId: 'repair-campaign.fixture.1',
-  actionId: 'repair-action.fixture.1',
+  actionId: 'RESTART_BOUNDED_WORKER',
   fingerprint: 'failure-fingerprint.fixture.1',
   policyRevision: REPAIR_POLICY.revision,
   artifactDigest: DIAGNOSTIC_TRACE.diffDigest,
@@ -344,12 +347,14 @@ function candidate(className, policy) {
   const rollbackPlanDigest = h(`candidate-${className}-rollback`);
   const capabilities = Object.freeze(['PROPOSE_TYPED_ACTION']);
   const effectFlags = Object.freeze([...policy.allowedEffectFlags]);
-  const registeredCommandId = null;
-  const tests = Object.freeze([check(
-    `candidate-${className}-success`,
-    `candidate-${className}-test`,
-    `independent-candidate-test-verifier.fixture.${className}`,
-  )]);
+  const registeredCommandId = className === 'A' ? REPAIR_EVIDENCE.actionId : null;
+  const tests = Object.freeze(policy.requiredTestKinds.map((kind) => Object.freeze({
+    checkId: `candidate-${className}-${kind.toLowerCase()}`,
+    kind,
+    status: 'PASS',
+    evidenceDigest: h(`candidate-${className}-${kind.toLowerCase()}-test`),
+    verifierId: `independent-candidate-${kind.toLowerCase()}-verifier.fixture.${className}`,
+  })));
   const approvalExpiresAtMs = NOW + 30_000;
   const approverId = `human-assurance-owner.fixture.${className}`;
   const approvalRef = `approval.fixture.class-${className}`;
@@ -392,6 +397,58 @@ function candidate(className, policy) {
     bindingDigest: approvalBindingDigest,
     expiresAtMs: approvalExpiresAtMs,
   });
+  const classA = className === 'A';
+  const triggerCode = Object.freeze({
+    A: 'RESTART_BOUNDED_WORKER',
+    B: 'UNKNOWN_EXCHANGE_OUTCOME',
+    C: 'AGENT_CODE_CHANGE',
+    D: 'MODEL_DRIFT',
+  })[className];
+  const trigger = Object.freeze({
+    triggerCode,
+    deterministic: true,
+    status: 'PASS',
+    evidenceDigest: h(`candidate-${className}-trigger-${triggerCode}`),
+  });
+  const failureReproduction = Object.freeze({
+    status: classA ? 'PASS' : 'NOT_REQUIRED',
+    deterministic: classA,
+    fixtureId: classA ? 'fault.fixture.restart-bounded-worker' : `not-required.fixture.${className}`,
+    evidenceDigest: h(`candidate-${className}-failure-reproduction`),
+  });
+  const shadowExercise = Object.freeze({
+    status: classA ? 'PASS' : 'NOT_REQUIRED',
+    mode: classA ? 'NO_AUTHORITY' : 'NOT_REQUIRED',
+    authorityEffect: 'NONE',
+    evidenceDigest: h(`candidate-${className}-shadow-exercise`),
+  });
+  const quietPeriod = Object.freeze({
+    status: classA ? 'PASS' : 'NOT_REQUIRED',
+    requiredMs: classA ? REPAIR_EVIDENCE.quietPeriod.requiredMs : 0,
+    observedMs: classA
+      ? REPAIR_EVIDENCE.quietPeriod.observedThroughMs - REPAIR_EVIDENCE.quietPeriod.startedAtMs : 0,
+    recurrenceCount: 0,
+    evidenceDigest: h(`candidate-${className}-quiet-period`),
+  });
+  const bounds = Object.freeze({
+    status: classA ? 'PASS' : 'NOT_REQUIRED',
+    attemptLimit: classA ? policy.automaticBounds.maxAttempts : 0,
+    rateLimitPerWindow: classA ? policy.automaticBounds.maxRatePerWindow : 0,
+    rateWindowMs: classA ? policy.automaticBounds.rateWindowMs : 0,
+    resourceLimit: classA ? policy.automaticBounds.maxResourceCount : 0,
+    resourceIds: classA ? Object.freeze(['resource.fixture.worker-1']) : Object.freeze([]),
+    capitalEffect: 'NONE',
+    exposureEffect: 'NONE',
+    externalEnvironmentEffect: 'NONE',
+    evidenceDigest: h(`candidate-${className}-bounds`),
+  });
+  const demotionGuard = Object.freeze({
+    status: classA ? 'PASS' : 'NOT_REQUIRED',
+    automatic: classA,
+    monitoredTriggerCodes: classA ? Object.freeze([...policy.demotionTriggerCodes]) : Object.freeze([]),
+    activeTriggerCodes: Object.freeze([]),
+    evidenceDigest: h(`candidate-${className}-demotion-guard`),
+  });
   const verifierBase = Object.freeze({
     verifierId: 'independent-promotion-verifier.fixture',
     relationship: 'INDEPENDENT',
@@ -412,8 +469,14 @@ function candidate(className, policy) {
     registeredCommandId,
     artifactDigest,
     evidenceReportDigest: h(`candidate-${className}-evidence`),
+    trigger,
+    failureReproduction,
     tests,
+    shadowExercise,
     independentVerifier: verifierBase,
+    quietPeriod,
+    bounds,
+    demotionGuard,
     expiresAtMs: NOW + 60_000,
     rollback: Object.freeze({ available: true, planDigest: rollbackPlanDigest }),
     holdout: holdoutBase,
@@ -431,29 +494,100 @@ function candidate(className, policy) {
   return Object.freeze({ ...candidateWithVerifier, holdout });
 }
 
-const OPAQUE_CLASS_POLICY_FIXTURE = Object.freeze({
-  mode: 'OPAQUE_OWNER_BOUND_CLASS',
-  route: 'CANONICAL_OWNER_REVIEW_ONLY',
-  effectFlag: 'TYPED_EVIDENCE_RECOMMENDATION_ONLY',
-  promotionDisposition: 'OWNER_BOUND_EVIDENCE_REVIEW_REQUIRED',
-  automaticEligibility: 'NEVER',
-  canonicalOwnerRef: 'IP_ASSURANCE.md/7/director-accepted-systemic-deltas',
+const CLASS_POLICY_FIXTURES = Object.freeze({
+  A: Object.freeze({
+    mode: 'REGISTERED_DETERMINISTIC_LOCAL_NON_CAPITAL',
+    route: 'CANONICAL_CONTROL_PLANE_REGISTERED_COMMAND',
+    effectFlag: 'LOCAL_NON_CAPITAL_CONTROL_COMMAND',
+    promotionDisposition: 'CLASS_A_REGISTERED_ELIGIBILITY_PROVEN',
+    automaticEligibility: 'REGISTERED_ONLY',
+    triggerCodes: IP_ASSURANCE_CLASS_LAW.classATriggerCodes,
+    shadowRequirement: 'SHADOW_OR_NO_AUTHORITY_REQUIRED',
+    automaticBounds: Object.freeze({ maxAttempts: 2, maxRatePerWindow: 1, maxResourceCount: 1, rateWindowMs: 60_000 }),
+    demotionTriggerCodes: IP_ASSURANCE_CLASS_LAW.classADemotionTriggerCodes,
+    promotionEvidenceIds: IP_ASSURANCE_CLASS_LAW.classAPromotionEvidenceIds,
+    requiredTestKinds: Object.freeze(['FAULT', 'FOCUSED', 'REGRESSION']),
+    externalAuthorizationRequirement: 'NEVER',
+    registeredCommandIds: Object.freeze(['RESTART_BOUNDED_WORKER']),
+    requiresApproval: false,
+    requiresRepairEvidence: true,
+    requiresCorpusDecision: true,
+    requiresHoldout: false,
+  }),
+  B: Object.freeze({
+    mode: 'CANONICAL_RECOVERY_NEVER_AGENT_REPAIR',
+    route: 'CANONICAL_RECONCILIATION_RECOVERY',
+    effectFlag: 'CANONICAL_RECOVERY_ROUTE_ONLY',
+    promotionDisposition: 'CLASS_B_CANONICAL_RECOVERY_REQUIRED',
+    automaticEligibility: 'NEVER',
+    triggerCodes: IP_ASSURANCE_CLASS_LAW.classBTriggerCodes,
+    shadowRequirement: 'NOT_REQUIRED',
+    automaticBounds: null,
+    demotionTriggerCodes: Object.freeze([]),
+    promotionEvidenceIds: Object.freeze([]),
+    requiredTestKinds: Object.freeze([]),
+    externalAuthorizationRequirement: 'NEVER',
+    registeredCommandIds: Object.freeze([]),
+    requiresApproval: false,
+    requiresRepairEvidence: false,
+    requiresCorpusDecision: true,
+    requiresHoldout: false,
+  }),
+  C: Object.freeze({
+    mode: 'OWNER_APPROVED_NORMAL_RELEASE',
+    route: 'OWNER_APPROVED_HASH_BOUND_RELEASE',
+    effectFlag: 'HASH_BOUND_RELEASE_HANDOFF_ONLY',
+    promotionDisposition: 'CLASS_C_OWNER_APPROVED_RELEASE_REQUIRED',
+    automaticEligibility: 'NEVER',
+    triggerCodes: IP_ASSURANCE_CLASS_LAW.classCTriggerCodes,
+    shadowRequirement: 'NOT_REQUIRED',
+    automaticBounds: null,
+    demotionTriggerCodes: Object.freeze([]),
+    promotionEvidenceIds: Object.freeze([]),
+    requiredTestKinds: Object.freeze(['FAULT', 'FOCUSED', 'REGRESSION']),
+    externalAuthorizationRequirement: 'I00_SECTION_20_FOR_EXTERNAL_ACTIVATION',
+    registeredCommandIds: Object.freeze([]),
+    requiresApproval: true,
+    requiresRepairEvidence: true,
+    requiresCorpusDecision: true,
+    requiresHoldout: true,
+  }),
+  D: Object.freeze({
+    mode: 'ABSTAIN_OR_RECOMMEND_DEMOTION',
+    route: 'ACCEPTED_Q_RUNTIME_ABSTAIN_OR_DEMOTION',
+    effectFlag: 'ABSTAIN_OR_DEMOTION_RECOMMENDATION_ONLY',
+    promotionDisposition: 'CLASS_D_ABSTAIN_OR_DEMOTION_REQUIRED',
+    automaticEligibility: 'NEVER',
+    triggerCodes: IP_ASSURANCE_CLASS_LAW.classDTriggerCodes,
+    shadowRequirement: 'NOT_REQUIRED',
+    automaticBounds: null,
+    demotionTriggerCodes: Object.freeze([]),
+    promotionEvidenceIds: Object.freeze([]),
+    requiredTestKinds: Object.freeze([]),
+    externalAuthorizationRequirement: 'NEVER',
+    registeredCommandIds: Object.freeze([]),
+    requiresApproval: false,
+    requiresRepairEvidence: false,
+    requiresCorpusDecision: true,
+    requiresHoldout: false,
+  }),
+});
+
+const CLASS_POLICY_OWNER = Object.freeze({
+  canonicalOwnerRef: 'IP_ASSURANCE.md/7.1/class-a-d-self-correction-taxonomy',
   basePolicyRef: 'IP_ASSURANCE.md/3.9/subordinate-diagnostic-plane',
-  requiresApproval: true,
-  requiresRepairEvidence: true,
-  requiresCorpusDecision: true,
-  requiresHoldout: true,
 });
 
 function classPolicy(className) {
-  const law = OPAQUE_CLASS_POLICY_FIXTURE;
+  const law = CLASS_POLICY_FIXTURES[className];
   const base = {
     schema: 'SelfCorrectionClassPolicyV1',
     version: 1,
     authorityId: `director-supplied-class-policy.fixture.${className}`,
-    bindingLawRef: 'IP_ASSURANCE.md#7',
-    canonicalOwnerRef: law.canonicalOwnerRef,
-    basePolicyRef: law.basePolicyRef,
+    bindingLawRef: IP_ASSURANCE_CLASS_LAW.source,
+    ownerLawDigest: IP_ASSURANCE_CLASS_LAW.packetSha256,
+    canonicalOwnerRef: CLASS_POLICY_OWNER.canonicalOwnerRef,
+    basePolicyRef: CLASS_POLICY_OWNER.basePolicyRef,
     registrySnapshotDigest: h('accepted-self-correction-policy-registry-snapshot'),
     registrationReceiptDigest: h(`self-correction-class-${className}-registration-receipt`),
     ownerPreauthorizationDigest: h(`self-correction-class-${className}-owner-preauthorization`),
@@ -464,10 +598,17 @@ function classPolicy(className) {
     mode: law.mode,
     route: law.route,
     automaticEligibility: law.automaticEligibility,
+    triggerCodes: Object.freeze([...law.triggerCodes]),
+    shadowRequirement: law.shadowRequirement,
+    automaticBounds: law.automaticBounds,
+    demotionTriggerCodes: Object.freeze([...law.demotionTriggerCodes]),
+    promotionEvidenceIds: Object.freeze([...law.promotionEvidenceIds]),
+    requiredTestKinds: Object.freeze([...law.requiredTestKinds]),
+    externalAuthorizationRequirement: law.externalAuthorizationRequirement,
     environment: SANDBOX_BINDING.environment,
     allowedEffectFlags: Object.freeze([law.effectFlag]),
     allowedCapabilities: Object.freeze(['PROPOSE_TYPED_ACTION']),
-    registeredCommandIds: Object.freeze([]),
+    registeredCommandIds: Object.freeze([...law.registeredCommandIds]),
     promotionDisposition: law.promotionDisposition,
     requiresApproval: law.requiresApproval,
     requiresRepairEvidence: law.requiresRepairEvidence,

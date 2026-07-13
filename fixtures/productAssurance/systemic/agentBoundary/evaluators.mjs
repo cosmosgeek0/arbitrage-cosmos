@@ -74,6 +74,159 @@ const SAFE_STUB_TOOL_CAPABILITIES = Object.freeze({
 const HASH = /^[a-f0-9]{64}$/;
 const ACTIVE_IDENTITY_STATES = new Set(['ACTIVE', 'ROTATION_DUE']);
 const SELF_CORRECTION_CLASSES = new Set(['A', 'B', 'C', 'D']);
+export const IP_ASSURANCE_CLASS_LAW = Object.freeze({
+  source: 'c57610c:IP_ASSURANCE.md#7.1',
+  packetSha256: '49dcd690275ff35cb32566af307ad572d2a527e06d7388885f98826560968e84',
+  classATriggerCodes: Object.freeze([
+    'DIAGNOSTIC_COLLECTION',
+    'FAILOVER_ACCEPTED_SOURCE',
+    'INVALIDATE_CACHE',
+    'RECONNECT',
+    'RECOVER_TELEMETRY_EXPORT',
+    'RESTART_BOUNDED_WORKER',
+    'RESYNC_CLOCK',
+    'RESNAPSHOT_SEQUENCE_GAP',
+    'RESUBSCRIBE',
+  ]),
+  classATriggerEvidenceRequirements: Object.freeze({
+    FAILOVER_ACCEPTED_SOURCE: Object.freeze([
+      'BACKUP_PATH_COHERENCE_PROVEN',
+      'BACKUP_PATH_CURRENT_PROOF',
+      'BACKUP_PATH_IDENTITY_PROVEN',
+      'BACKUP_PATH_SAME_TRUTH_SEMANTICS',
+    ]),
+    RECOVER_TELEMETRY_EXPORT: Object.freeze(['MATERIAL_EVENTS_PRESERVED_OR_VISIBLE_GAP']),
+    RESNAPSHOT_SEQUENCE_GAP: Object.freeze(['MATERIAL_EVENTS_PRESERVED_OR_VISIBLE_GAP']),
+    RESYNC_CLOCK: Object.freeze(['NO_IN_PROCESS_WALL_CLOCK_STEP']),
+  }),
+  classBTriggerCodes: Object.freeze([
+    'ACCOUNTING_MISMATCH',
+    'BORROW_LIABILITY',
+    'CAPITAL_AFFECTING_STATE',
+    'FUNDING_LIABILITY',
+    'PARTIAL_FILL',
+    'POSITION_AMBIGUITY',
+    'UNKNOWN_EXCHANGE_OUTCOME',
+  ]),
+  classCTriggerCodes: Object.freeze([
+    'AGENT_CODE_CHANGE',
+    'AWS_CHANGE',
+    'CLOUDFLARE_CHANGE',
+    'CONFIGURATION_CHANGE',
+    'DEPLOYMENT_CHANGE',
+    'HOST_CHANGE',
+    'HUMAN_CODE_CHANGE',
+    'PROVIDER_ACTIVATION',
+    'SECRETS_CHANGE',
+    'SERVICE_CHANGE',
+  ]),
+  classDTriggerCodes: Object.freeze([
+    'CALIBRATION_LOSS',
+    'LABEL_DRIFT',
+    'MODEL_DRIFT',
+    'STRATEGY_UNDERPERFORMANCE',
+    'UNKNOWN_RESEARCH_EVIDENCE',
+    'UNSUPPORTED_COHORT',
+  ]),
+  classADemotionTriggerCodes: Object.freeze(['ASSUMPTIONS_CHANGED', 'DRIFT_DETECTED', 'RECURRENCE_DETECTED']),
+  classAPromotionEvidenceIds: Object.freeze([
+    'DETERMINISTIC_FAILURE_REPRODUCTION',
+    'EXACT_REGISTERED_COMMAND_IDENTITY',
+    'FOCUSED_REGRESSION_FAULT_TESTS',
+    'SHADOW_OR_NO_AUTHORITY_EXERCISE',
+    'INDEPENDENT_POSTCONDITION_VERIFIER',
+    'DECLARED_QUIET_PERIOD_NO_RECURRENCE',
+    'OWNER_PREAUTHORIZED_NARROW_CLASS',
+    'BOUNDED_RATE_RESOURCE_ATTEMPT_EXPOSURE',
+    'AUTOMATIC_DEMOTION_ON_RECURRENCE_DRIFT_OR_CHANGED_ASSUMPTIONS',
+  ]),
+});
+const CLASS_TRIGGER_CODES = Object.freeze({
+  A: IP_ASSURANCE_CLASS_LAW.classATriggerCodes,
+  B: IP_ASSURANCE_CLASS_LAW.classBTriggerCodes,
+  C: IP_ASSURANCE_CLASS_LAW.classCTriggerCodes,
+  D: IP_ASSURANCE_CLASS_LAW.classDTriggerCodes,
+});
+const CLASS_ROUTES = Object.freeze({
+  A: 'CANONICAL_CONTROL_PLANE_REGISTERED_COMMAND',
+  B: 'CANONICAL_RECONCILIATION_RECOVERY',
+  C: 'OWNER_APPROVED_HASH_BOUND_RELEASE',
+  D: 'ACCEPTED_Q_RUNTIME_ABSTAIN_OR_DEMOTION',
+});
+const CLASS_MODES = Object.freeze({
+  A: 'REGISTERED_DETERMINISTIC_LOCAL_NON_CAPITAL',
+  B: 'CANONICAL_RECOVERY_NEVER_AGENT_REPAIR',
+  C: 'OWNER_APPROVED_NORMAL_RELEASE',
+  D: 'ABSTAIN_OR_RECOMMEND_DEMOTION',
+});
+const CLASS_DISPOSITIONS = Object.freeze({
+  A: 'CLASS_A_REGISTERED_ELIGIBILITY_PROVEN',
+  B: 'CLASS_B_CANONICAL_RECOVERY_REQUIRED',
+  C: 'CLASS_C_OWNER_APPROVED_RELEASE_REQUIRED',
+  D: 'CLASS_D_ABSTAIN_OR_DEMOTION_REQUIRED',
+});
+const CLASS_POLICY_EXPECTATIONS = Object.freeze({
+  A: Object.freeze({
+    automaticEligibility: 'REGISTERED_ONLY',
+    effectFlags: Object.freeze(['LOCAL_NON_CAPITAL_CONTROL_COMMAND']),
+    registeredCommandIds: Object.freeze(['RESTART_BOUNDED_WORKER']),
+    requiresApproval: false,
+    requiresRepairEvidence: true,
+    requiresCorpusDecision: true,
+    requiresHoldout: false,
+    shadowRequirement: 'SHADOW_OR_NO_AUTHORITY_REQUIRED',
+    externalAuthorizationRequirement: 'NEVER',
+    promotionEvidenceIds: IP_ASSURANCE_CLASS_LAW.classAPromotionEvidenceIds,
+    requiredTestKinds: Object.freeze(['FAULT', 'FOCUSED', 'REGRESSION']),
+    automaticBounds: Object.freeze({ maxAttempts: 2, maxRatePerWindow: 1, maxResourceCount: 1, rateWindowMs: 60_000 }),
+  }),
+  B: Object.freeze({
+    automaticEligibility: 'NEVER',
+    effectFlags: Object.freeze(['CANONICAL_RECOVERY_ROUTE_ONLY']),
+    registeredCommandIds: Object.freeze([]),
+    requiresApproval: false,
+    requiresRepairEvidence: false,
+    requiresCorpusDecision: true,
+    requiresHoldout: false,
+    shadowRequirement: 'NOT_REQUIRED',
+    externalAuthorizationRequirement: 'NEVER',
+    promotionEvidenceIds: Object.freeze([]),
+    requiredTestKinds: Object.freeze([]),
+    automaticBounds: null,
+  }),
+  C: Object.freeze({
+    automaticEligibility: 'NEVER',
+    effectFlags: Object.freeze(['HASH_BOUND_RELEASE_HANDOFF_ONLY']),
+    registeredCommandIds: Object.freeze([]),
+    requiresApproval: true,
+    requiresRepairEvidence: true,
+    requiresCorpusDecision: true,
+    requiresHoldout: true,
+    shadowRequirement: 'NOT_REQUIRED',
+    externalAuthorizationRequirement: 'I00_SECTION_20_FOR_EXTERNAL_ACTIVATION',
+    promotionEvidenceIds: Object.freeze([]),
+    requiredTestKinds: Object.freeze(['FAULT', 'FOCUSED', 'REGRESSION']),
+    automaticBounds: null,
+  }),
+  D: Object.freeze({
+    automaticEligibility: 'NEVER',
+    effectFlags: Object.freeze(['ABSTAIN_OR_DEMOTION_RECOMMENDATION_ONLY']),
+    registeredCommandIds: Object.freeze([]),
+    requiresApproval: false,
+    requiresRepairEvidence: false,
+    requiresCorpusDecision: true,
+    requiresHoldout: false,
+    shadowRequirement: 'NOT_REQUIRED',
+    externalAuthorizationRequirement: 'NEVER',
+    promotionEvidenceIds: Object.freeze([]),
+    requiredTestKinds: Object.freeze([]),
+    automaticBounds: null,
+  }),
+});
+const EXTERNAL_CLASS_C_TRIGGERS = new Set([
+  'AWS_CHANGE', 'CLOUDFLARE_CHANGE', 'CONFIGURATION_CHANGE', 'DEPLOYMENT_CHANGE',
+  'HOST_CHANGE', 'PROVIDER_ACTIVATION', 'SECRETS_CHANGE', 'SERVICE_CHANGE',
+]);
 const PERMANENTLY_FORBIDDEN_EFFECTS = new Set([
   'ARBITRARY_NETWORK', 'ARBITRARY_SHELL', 'AUTONOMOUS_DEPLOY', 'AUTONOMOUS_MERGE',
   'CAPITAL', 'EVIDENCE_DELETION', 'GUARDRAIL', 'HARD_CEILING', 'MONEY', 'PERMISSION',
@@ -81,15 +234,38 @@ const PERMANENTLY_FORBIDDEN_EFFECTS = new Set([
 ]);
 const SELF_CORRECTION_CLASS_POLICY_KEYS = Object.freeze([
   'allowedCapabilities', 'allowedEffectFlags', 'authorityId', 'automaticEligibility', 'basePolicyRef',
-  'bindingLawRef', 'canonicalOwnerRef', 'class', 'environment', 'evidenceDigest', 'mode', 'ownerPreauthorizationDigest',
+  'bindingLawRef', 'canonicalOwnerRef', 'class', 'demotionTriggerCodes', 'environment', 'evidenceDigest',
+  'externalAuthorizationRequirement', 'mode', 'ownerLawDigest', 'ownerPreauthorizationDigest',
   'policyId', 'promotionDisposition', 'registered', 'registeredCommandIds', 'registrationReceiptDigest',
-  'registrySnapshotDigest', 'requiresApproval', 'requiresCorpusDecision',
-  'requiresHoldout', 'requiresRepairEvidence', 'revision', 'route', 'schema', 'version',
+  'registrySnapshotDigest', 'requiredTestKinds', 'requiresApproval', 'requiresCorpusDecision',
+  'requiresHoldout', 'requiresRepairEvidence', 'revision', 'route', 'schema', 'shadowRequirement',
+  'triggerCodes', 'version', 'automaticBounds', 'promotionEvidenceIds',
 ]);
 const SELF_CORRECTION_CANDIDATE_KEYS = Object.freeze([
   'approval', 'artifactDigest', 'candidateId', 'capabilities', 'declaredClass', 'effectFlags',
-  'evidenceReportDigest', 'expiresAtMs', 'holdout', 'hypothesis', 'independentVerifier', 'policyId',
-  'policyRevision', 'registeredCommandId', 'revision', 'rollback', 'schema', 'tests', 'traceId', 'version',
+  'bounds', 'demotionGuard', 'evidenceReportDigest', 'expiresAtMs', 'failureReproduction', 'holdout',
+  'hypothesis', 'independentVerifier', 'policyId', 'policyRevision', 'quietPeriod', 'registeredCommandId',
+  'revision', 'rollback', 'schema', 'shadowExercise', 'tests', 'traceId', 'trigger', 'version',
+]);
+const SELF_CORRECTION_AUTOMATIC_BOUNDS_KEYS = Object.freeze([
+  'maxAttempts', 'maxRatePerWindow', 'maxResourceCount', 'rateWindowMs',
+]);
+const SELF_CORRECTION_TRIGGER_KEYS = Object.freeze(['deterministic', 'evidenceDigest', 'status', 'triggerCode']);
+const SELF_CORRECTION_FAILURE_REPRODUCTION_KEYS = Object.freeze([
+  'deterministic', 'evidenceDigest', 'fixtureId', 'status',
+]);
+const SELF_CORRECTION_SHADOW_KEYS = Object.freeze([
+  'authorityEffect', 'evidenceDigest', 'mode', 'status',
+]);
+const SELF_CORRECTION_QUIET_PERIOD_KEYS = Object.freeze([
+  'evidenceDigest', 'observedMs', 'recurrenceCount', 'requiredMs', 'status',
+]);
+const SELF_CORRECTION_BOUNDS_KEYS = Object.freeze([
+  'attemptLimit', 'capitalEffect', 'evidenceDigest', 'exposureEffect', 'externalEnvironmentEffect',
+  'rateLimitPerWindow', 'rateWindowMs', 'resourceIds', 'resourceLimit', 'status',
+]);
+const SELF_CORRECTION_DEMOTION_KEYS = Object.freeze([
+  'activeTriggerCodes', 'automatic', 'evidenceDigest', 'monitoredTriggerCodes', 'status',
 ]);
 const REPAIR_EVIDENCE_POLICY_KEYS = Object.freeze([
   'allowedActionIds', 'allowedExecutorIds', 'allowedProducerIds', 'authorityId', 'basePolicyRef',
@@ -159,10 +335,18 @@ const EVALUATION_PASS_KEYS = Object.freeze({
     'retentionVerifierId', 'retentionVerifierIds', 'retentionWriterIds', 'sourceOwnerIds', 'stableKey',
     'validationVerifierId']),
   SELF_CORRECTION_PROMOTION: Object.freeze([...EVALUATION_PASS_COMMON_KEYS,
+    'activeDemotionTriggerCodes', 'automaticDemotionRequired', 'automaticEligibility',
     'approvalRef', 'approvalStatus', 'artifactDigest', 'candidateId', 'candidateRevision',
-    'classRoute', 'declaredClass', 'derivedClass', 'effectiveClass', 'mayDeclareRecovery',
-    'operationalActionAllowed', 'policyEvidenceDigest', 'policyId', 'policyRevision',
-    'registeredCommandId', 'traceDecisionDigest', 'traceId', 'validUntilMs']),
+    'boundsStatus', 'candidateBounds', 'classRoute', 'declaredClass', 'demotionStatus',
+    'derivedClass', 'effectiveClass',
+    'externalAuthorizationRequired', 'failureReproductionStatus', 'independentVerifierStatus',
+    'mayDeclareRecovery', 'monitoredDemotionTriggerCodes', 'operationalActionAllowed',
+    'ownerLawDigest', 'ownerPreauthorizationStatus', 'policyBounds', 'policyEvidenceDigest',
+    'policyId', 'policyRevision', 'promotionEvidenceIds',
+    'promotionEvidenceSatisfied', 'quietPeriodStatus', 'registeredCommandId', 'shadowExerciseMode',
+    'shadowExerciseStatus', 'shadowRequirement', 'satisfiedTriggerEvidenceIds', 'testEvidenceStatus',
+    'traceDecisionDigest', 'traceId', 'triggerCode', 'triggerStatus', 'requiredTriggerEvidenceIds',
+    'validUntilMs']),
 });
 const WORKLOAD_IDENTITY_EVENT_KEYS = Object.freeze([
   'audience', 'bindingId', 'capabilityDigest', 'environment', 'evidenceHash', 'expiresAtMs',
@@ -347,7 +531,34 @@ export function decisionContractDigest(decision) {
       classRoute: decision.classRoute ?? null, registeredCommandId: decision.registeredCommandId ?? null,
       approvalRef: decision.approvalRef ?? null, approvalStatus: decision.approvalStatus ?? null,
       declaredClass: decision.declaredClass ?? null, derivedClass: decision.derivedClass ?? null,
-      effectiveClass: decision.effectiveClass ?? null, operationalActionAllowed: decision.operationalActionAllowed ?? null,
+      effectiveClass: decision.effectiveClass ?? null, triggerCode: decision.triggerCode ?? null,
+      triggerStatus: decision.triggerStatus ?? null,
+      requiredTriggerEvidenceIds: stableUnique(Array.isArray(decision.requiredTriggerEvidenceIds)
+        ? decision.requiredTriggerEvidenceIds : []),
+      satisfiedTriggerEvidenceIds: stableUnique(Array.isArray(decision.satisfiedTriggerEvidenceIds)
+        ? decision.satisfiedTriggerEvidenceIds : []),
+      failureReproductionStatus: decision.failureReproductionStatus ?? null,
+      testEvidenceStatus: decision.testEvidenceStatus ?? null,
+      shadowRequirement: decision.shadowRequirement ?? null,
+      shadowExerciseMode: decision.shadowExerciseMode ?? null,
+      shadowExerciseStatus: decision.shadowExerciseStatus ?? null,
+      independentVerifierStatus: decision.independentVerifierStatus ?? null,
+      quietPeriodStatus: decision.quietPeriodStatus ?? null,
+      ownerPreauthorizationStatus: decision.ownerPreauthorizationStatus ?? null,
+      ownerLawDigest: decision.ownerLawDigest ?? null,
+      boundsStatus: decision.boundsStatus ?? null,
+      policyBounds: decision.policyBounds ?? null,
+      candidateBounds: decision.candidateBounds ?? null,
+      demotionStatus: decision.demotionStatus ?? null,
+      monitoredDemotionTriggerCodes: stableUnique(Array.isArray(decision.monitoredDemotionTriggerCodes)
+        ? decision.monitoredDemotionTriggerCodes : []),
+      promotionEvidenceIds: stableUnique(Array.isArray(decision.promotionEvidenceIds) ? decision.promotionEvidenceIds : []),
+      promotionEvidenceSatisfied: stableUnique(Array.isArray(decision.promotionEvidenceSatisfied) ? decision.promotionEvidenceSatisfied : []),
+      activeDemotionTriggerCodes: stableUnique(Array.isArray(decision.activeDemotionTriggerCodes) ? decision.activeDemotionTriggerCodes : []),
+      automaticEligibility: decision.automaticEligibility ?? null,
+      automaticDemotionRequired: decision.automaticDemotionRequired ?? null,
+      externalAuthorizationRequired: decision.externalAuthorizationRequired ?? null,
+      operationalActionAllowed: decision.operationalActionAllowed ?? null,
       mayDeclareRecovery: decision.mayDeclareRecovery ?? null, validUntilMs: decision.validUntilMs ?? null });
   }
   return null;
@@ -514,10 +725,109 @@ export function isEvaluationEnvelope(decision, nowMs, decisionKind) {
       && decision.mayDeclareRecovery === false;
   }
   if (decisionKind === 'SELF_CORRECTION_PROMOTION') {
-    return isNonEmptyString(decision.disposition)
+    const promotionEvidenceIds = Array.isArray(decision.promotionEvidenceIds) ? decision.promotionEvidenceIds : [];
+    const promotionEvidenceSatisfied = Array.isArray(decision.promotionEvidenceSatisfied)
+      ? decision.promotionEvidenceSatisfied : [];
+    const requiredTriggerEvidenceIds = Array.isArray(decision.requiredTriggerEvidenceIds)
+      ? decision.requiredTriggerEvidenceIds : [];
+    const satisfiedTriggerEvidenceIds = Array.isArray(decision.satisfiedTriggerEvidenceIds)
+      ? decision.satisfiedTriggerEvidenceIds : [];
+    const activeDemotionTriggerCodes = Array.isArray(decision.activeDemotionTriggerCodes)
+      ? decision.activeDemotionTriggerCodes : [];
+    const monitoredDemotionTriggerCodes = Array.isArray(decision.monitoredDemotionTriggerCodes)
+      ? decision.monitoredDemotionTriggerCodes : [];
+    const classAProjection = decision.declaredClass === 'A';
+    const classADemoted = classAProjection && decision.effectiveClass === 'D';
+    const expectedTriggerEvidenceIds = classAProjection
+      ? (IP_ASSURANCE_CLASS_LAW.classATriggerEvidenceRequirements[decision.triggerCode] ?? []) : [];
+    const policyBoundsValid = classAProjection
+      ? hasExactKeys(decision.policyBounds, SELF_CORRECTION_AUTOMATIC_BOUNDS_KEYS)
+        && automaticBoundsMatch(decision.policyBounds, CLASS_POLICY_EXPECTATIONS.A.automaticBounds)
+      : decision.policyBounds === null;
+    const candidateBoundsValid = classAProjection
+      ? hasExactKeys(decision.candidateBounds, [
+        'attemptLimit', 'capitalEffect', 'exposureEffect', 'externalEnvironmentEffect',
+        'rateLimitPerWindow', 'rateWindowMs', 'resourceIds', 'resourceLimit',
+      ])
+        && Number.isSafeInteger(decision.candidateBounds.attemptLimit)
+        && decision.candidateBounds.attemptLimit >= 1
+        && decision.candidateBounds.attemptLimit <= decision.policyBounds.maxAttempts
+        && Number.isSafeInteger(decision.candidateBounds.rateLimitPerWindow)
+        && decision.candidateBounds.rateLimitPerWindow >= 1
+        && decision.candidateBounds.rateLimitPerWindow <= decision.policyBounds.maxRatePerWindow
+        && Number.isSafeInteger(decision.candidateBounds.rateWindowMs)
+        && decision.candidateBounds.rateWindowMs >= decision.policyBounds.rateWindowMs
+        && Number.isSafeInteger(decision.candidateBounds.resourceLimit)
+        && decision.candidateBounds.resourceLimit >= 1
+        && decision.candidateBounds.resourceLimit <= decision.policyBounds.maxResourceCount
+        && uniqueStrings(decision.candidateBounds.resourceIds)
+        && decision.candidateBounds.resourceIds.length >= 1
+        && decision.candidateBounds.resourceIds.length <= decision.candidateBounds.resourceLimit
+        && decision.candidateBounds.capitalEffect === 'NONE'
+        && decision.candidateBounds.exposureEffect === 'NONE'
+        && decision.candidateBounds.externalEnvironmentEffect === 'NONE'
+      : decision.candidateBounds === null;
+    const classRouteValid = decision.classRoute === (classADemoted ? CLASS_ROUTES.D : CLASS_ROUTES[decision.declaredClass]);
+    const classDispositionValid = decision.disposition === (classADemoted
+      ? 'CLASS_A_AUTOMATIC_DEMOTION_REQUIRED'
+      : CLASS_DISPOSITIONS[decision.declaredClass]);
+    const classIdentityValid = classADemoted
+      ? decision.derivedClass === 'A'
+      : decision.declaredClass === decision.effectiveClass && decision.derivedClass === decision.effectiveClass;
+    const classAEvidenceValid = !classAProjection || (
+      canonicalStringify(stableUnique(promotionEvidenceIds))
+        === canonicalStringify(stableUnique(IP_ASSURANCE_CLASS_LAW.classAPromotionEvidenceIds))
+      && canonicalStringify(stableUnique(promotionEvidenceSatisfied))
+        === canonicalStringify(stableUnique(IP_ASSURANCE_CLASS_LAW.classAPromotionEvidenceIds))
+      && decision.failureReproductionStatus === 'PASS'
+      && decision.testEvidenceStatus === 'PASS'
+      && decision.shadowRequirement === 'SHADOW_OR_NO_AUTHORITY_REQUIRED'
+      && ['SHADOW', 'NO_AUTHORITY'].includes(decision.shadowExerciseMode)
+      && decision.shadowExerciseStatus === 'PASS'
+      && decision.independentVerifierStatus === 'PASS'
+      && decision.quietPeriodStatus === 'PASS'
+      && decision.ownerPreauthorizationStatus === 'PASS'
+      && decision.boundsStatus === 'PASS'
+      && policyBoundsValid
+      && candidateBoundsValid
+      && decision.demotionStatus === 'PASS'
+      && exactStringSet(monitoredDemotionTriggerCodes, IP_ASSURANCE_CLASS_LAW.classADemotionTriggerCodes)
+      && exactStringSet(requiredTriggerEvidenceIds, expectedTriggerEvidenceIds)
+      && exactStringSet(satisfiedTriggerEvidenceIds, expectedTriggerEvidenceIds)
+      && decision.registeredCommandId !== null
+      && decision.approvalStatus === 'NOT_REQUIRED'
+      && decision.externalAuthorizationRequired === false
+      && decision.automaticEligibility === (classADemoted ? 'DEMOTED_TO_CLASS_D' : 'ELIGIBLE_REGISTERED_ONLY')
+      && decision.automaticDemotionRequired === classADemoted
+      && (classADemoted
+        ? activeDemotionTriggerCodes.length > 0
+        : activeDemotionTriggerCodes.length === 0)
+    );
+    const nonClassAEvidenceValid = classAProjection || (
+      promotionEvidenceIds.length === 0
+      && promotionEvidenceSatisfied.length === 0
+      && decision.failureReproductionStatus === 'NOT_REQUIRED'
+      && decision.shadowRequirement === 'NOT_REQUIRED'
+      && decision.shadowExerciseMode === 'NOT_REQUIRED'
+      && decision.shadowExerciseStatus === 'NOT_REQUIRED'
+      && decision.quietPeriodStatus === 'NOT_REQUIRED'
+      && decision.boundsStatus === 'NOT_REQUIRED'
+      && decision.demotionStatus === 'NOT_REQUIRED'
+      && policyBoundsValid
+      && candidateBoundsValid
+      && decision.registeredCommandId === null
+      && decision.automaticEligibility === 'NEVER'
+      && decision.automaticDemotionRequired === false
+      && activeDemotionTriggerCodes.length === 0
+      && monitoredDemotionTriggerCodes.length === 0
+      && requiredTriggerEvidenceIds.length === 0
+      && satisfiedTriggerEvidenceIds.length === 0
+    );
+    return classDispositionValid
+      && classRouteValid
+      && classIdentityValid
       && SELF_CORRECTION_CLASSES.has(decision.effectiveClass)
-      && decision.declaredClass === decision.effectiveClass
-      && decision.derivedClass === decision.effectiveClass
+      && SELF_CORRECTION_CLASSES.has(decision.declaredClass)
       && isNonEmptyString(decision.candidateId)
       && Number.isSafeInteger(decision.candidateRevision)
       && decision.candidateRevision >= 1
@@ -529,10 +839,17 @@ export function isEvaluationEnvelope(decision, nowMs, decisionKind) {
       && (decision.registeredCommandId === null || isNonEmptyString(decision.registeredCommandId))
       && hasHash(decision.artifactDigest)
       && hasHash(decision.policyEvidenceDigest)
-      && isNonEmptyString(decision.classRoute)
+      && decision.ownerLawDigest === IP_ASSURANCE_CLASS_LAW.packetSha256
+      && CLASS_TRIGGER_CODES[decision.declaredClass]?.includes(decision.triggerCode)
+      && decision.triggerStatus === 'PASS'
       && Number.isSafeInteger(decision.validUntilMs)
       && nowMs < decision.validUntilMs
       && ['APPROVED', 'NOT_REQUIRED'].includes(decision.approvalStatus)
+      && decision.independentVerifierStatus === 'PASS'
+      && decision.ownerPreauthorizationStatus === 'PASS'
+      && decision.externalAuthorizationRequired === false
+      && classAEvidenceValid
+      && nonClassAEvidenceValid
       && decision.operationalActionAllowed === false
       && decision.mayDeclareRecovery === false;
   }
@@ -1203,6 +1520,7 @@ export function selfCorrectionClassPolicyDigest(policy) {
     version: policy?.version ?? null,
     authorityId: policy?.authorityId ?? null,
     bindingLawRef: policy?.bindingLawRef ?? null,
+    ownerLawDigest: policy?.ownerLawDigest ?? null,
     canonicalOwnerRef: policy?.canonicalOwnerRef ?? null,
     basePolicyRef: policy?.basePolicyRef ?? null,
     registrySnapshotDigest: policy?.registrySnapshotDigest ?? null,
@@ -1215,6 +1533,13 @@ export function selfCorrectionClassPolicyDigest(policy) {
     mode: policy?.mode ?? null,
     route: policy?.route ?? null,
     automaticEligibility: policy?.automaticEligibility ?? null,
+    triggerCodes: stableUnique(Array.isArray(policy?.triggerCodes) ? policy.triggerCodes : []),
+    shadowRequirement: policy?.shadowRequirement ?? null,
+    automaticBounds: policy?.automaticBounds ?? null,
+    demotionTriggerCodes: stableUnique(Array.isArray(policy?.demotionTriggerCodes) ? policy.demotionTriggerCodes : []),
+    promotionEvidenceIds: stableUnique(Array.isArray(policy?.promotionEvidenceIds) ? policy.promotionEvidenceIds : []),
+    requiredTestKinds: stableUnique(Array.isArray(policy?.requiredTestKinds) ? policy.requiredTestKinds : []),
+    externalAuthorizationRequirement: policy?.externalAuthorizationRequirement ?? null,
     environment: policy?.environment ?? null,
     allowedEffectFlags: stableUnique(policy?.allowedEffectFlags ?? []),
     allowedCapabilities: stableUnique(policy?.allowedCapabilities ?? []),
@@ -1227,16 +1552,35 @@ export function selfCorrectionClassPolicyDigest(policy) {
   });
 }
 
+function exactStringSet(actual, expected) {
+  return allStrings(actual)
+    && canonicalStringify(stableUnique(actual)) === canonicalStringify(stableUnique(expected));
+}
+
+function automaticBoundsMatch(actual, expected) {
+  if (expected === null) return actual === null;
+  return Boolean(actual
+    && hasExactKeys(actual, SELF_CORRECTION_AUTOMATIC_BOUNDS_KEYS)
+    && findForbiddenKeys(actual).length === 0
+    && Number.isSafeInteger(actual.maxAttempts) && actual.maxAttempts === expected.maxAttempts
+    && Number.isSafeInteger(actual.maxRatePerWindow) && actual.maxRatePerWindow === expected.maxRatePerWindow
+    && Number.isSafeInteger(actual.maxResourceCount) && actual.maxResourceCount === expected.maxResourceCount
+    && Number.isSafeInteger(actual.rateWindowMs) && actual.rateWindowMs === expected.rateWindowMs);
+}
+
 function isExactSelfCorrectionClassPolicy(policy) {
-  return Boolean(SELF_CORRECTION_CLASSES.has(policy?.class)
+  const expected = CLASS_POLICY_EXPECTATIONS[policy?.class];
+  return Boolean(expected
+    && SELF_CORRECTION_CLASSES.has(policy?.class)
     && hasExactKeys(policy, SELF_CORRECTION_CLASS_POLICY_KEYS)
     && findForbiddenKeys(policy).length === 0
     && policy.schema === 'SelfCorrectionClassPolicyV1'
     && policy.version === 1
     && isNonEmptyString(policy.authorityId)
-    && policy.bindingLawRef === 'IP_ASSURANCE.md#7'
-    && isNonEmptyString(policy.canonicalOwnerRef)
-    && isNonEmptyString(policy.basePolicyRef)
+    && policy.bindingLawRef === IP_ASSURANCE_CLASS_LAW.source
+    && policy.ownerLawDigest === IP_ASSURANCE_CLASS_LAW.packetSha256
+    && policy.canonicalOwnerRef === 'IP_ASSURANCE.md/7.1/class-a-d-self-correction-taxonomy'
+    && policy.basePolicyRef === 'IP_ASSURANCE.md/3.9/subordinate-diagnostic-plane'
     && hasHash(policy.registrySnapshotDigest)
     && hasHash(policy.registrationReceiptDigest)
     && hasHash(policy.ownerPreauthorizationDigest)
@@ -1244,32 +1588,43 @@ function isExactSelfCorrectionClassPolicy(policy) {
     && Number.isSafeInteger(policy.revision)
     && policy.revision >= 1
     && policy.registered === true
-    && isNonEmptyString(policy.mode)
-    && isNonEmptyString(policy.route)
-    && policy.automaticEligibility === 'NEVER'
+    && policy.mode === CLASS_MODES[policy.class]
+    && policy.route === CLASS_ROUTES[policy.class]
+    && policy.automaticEligibility === expected.automaticEligibility
+    && exactStringSet(policy.triggerCodes, CLASS_TRIGGER_CODES[policy.class])
+    && policy.shadowRequirement === expected.shadowRequirement
+    && automaticBoundsMatch(policy.automaticBounds, expected.automaticBounds)
+    && exactStringSet(policy.demotionTriggerCodes,
+      policy.class === 'A' ? IP_ASSURANCE_CLASS_LAW.classADemotionTriggerCodes : [])
+    && exactStringSet(policy.promotionEvidenceIds, expected.promotionEvidenceIds)
+    && exactStringSet(policy.requiredTestKinds, expected.requiredTestKinds)
+    && policy.externalAuthorizationRequirement === expected.externalAuthorizationRequirement
     && isNonEmptyString(policy.environment)
-    && allStrings(policy.allowedEffectFlags)
-    && policy.allowedEffectFlags.length > 0
+    && exactStringSet(policy.allowedEffectFlags, expected.effectFlags)
     && !policy.allowedEffectFlags.some((effect) => PERMANENTLY_FORBIDDEN_EFFECTS.has(effect))
-    && allStrings(policy.allowedCapabilities)
-    && policy.allowedCapabilities.length > 0
+    && exactStringSet(policy.allowedCapabilities, ['PROPOSE_TYPED_ACTION'])
     && policy.allowedCapabilities.every((capability) => SAFE_CAPABILITY_SET.has(capability))
-    && allStrings(policy.registeredCommandIds)
-    && isNonEmptyString(policy.promotionDisposition)
-    && typeof policy.requiresApproval === 'boolean'
-    && typeof policy.requiresRepairEvidence === 'boolean'
-    && typeof policy.requiresCorpusDecision === 'boolean'
-    && typeof policy.requiresHoldout === 'boolean'
+    && exactStringSet(policy.registeredCommandIds, expected.registeredCommandIds)
+    && policy.promotionDisposition === CLASS_DISPOSITIONS[policy.class]
+    && policy.requiresApproval === expected.requiresApproval
+    && policy.requiresRepairEvidence === expected.requiresRepairEvidence
+    && policy.requiresCorpusDecision === expected.requiresCorpusDecision
+    && policy.requiresHoldout === expected.requiresHoldout
     && hasHash(policy.evidenceDigest)
     && policy.evidenceDigest === selfCorrectionClassPolicyDigest(policy));
 }
 
-/** Classes are opaque until the exact accepted law and a content-bound registered policy bind one. */
+/** The owner-defined trigger plus the exact accepted policy determines the class. */
 export function deriveSelfCorrectionClass(candidate, policy) {
   if (!candidate || !policy || !SELF_CORRECTION_CLASSES.has(candidate.declaredClass)) return 'UNKNOWN';
   if (policy.class !== candidate.declaredClass || policy.policyId !== candidate.policyId
     || policy.revision !== candidate.policyRevision || !isExactSelfCorrectionClassPolicy(policy)) return 'UNKNOWN';
-  return candidate.declaredClass;
+  if (!hasExactKeys(candidate.trigger, SELF_CORRECTION_TRIGGER_KEYS)
+    || candidate.trigger.deterministic !== true
+    || candidate.trigger.status !== 'PASS'
+    || !hasHash(candidate.trigger.evidenceDigest)
+    || !policy.triggerCodes.includes(candidate.trigger.triggerCode)) return 'UNKNOWN';
+  return policy.class;
 }
 
 export function selfCorrectionVerifierEvidenceDigest({ candidate, policy, verifier = candidate?.independentVerifier }) {
@@ -1285,11 +1640,17 @@ export function selfCorrectionVerifierEvidenceDigest({ candidate, policy, verifi
     hypothesis: candidate?.hypothesis ?? null,
     artifactDigest: candidate?.artifactDigest ?? null,
     evidenceReportDigest: candidate?.evidenceReportDigest ?? null,
+    trigger: candidate?.trigger ?? null,
+    failureReproduction: candidate?.failureReproduction ?? null,
+    shadowExercise: candidate?.shadowExercise ?? null,
+    quietPeriod: candidate?.quietPeriod ?? null,
+    bounds: candidate?.bounds ?? null,
+    demotionGuard: candidate?.demotionGuard ?? null,
     effectFlags: stableUnique(candidate?.effectFlags ?? []),
     capabilities: stableUnique(candidate?.capabilities ?? []),
     registeredCommandId: candidate?.registeredCommandId ?? null,
     tests: [...(candidate?.tests ?? [])]
-      .map(({ checkId, status, evidenceDigest, verifierId }) => ({ checkId, status, evidenceDigest, verifierId }))
+      .map(({ checkId, kind, status, evidenceDigest, verifierId }) => ({ checkId, kind, status, evidenceDigest, verifierId }))
       .sort((left, right) => compareCodeUnits(canonicalStringify(left), canonicalStringify(right))),
     verifierId: verifier?.verifierId ?? null,
     relationship: verifier?.relationship ?? null,
@@ -1305,11 +1666,17 @@ export function selfCorrectionHoldoutEvidenceDigest({ candidate, policy, holdout
     traceId: candidate?.traceId ?? null,
     hypothesis: candidate?.hypothesis ?? null,
     evidenceReportDigest: candidate?.evidenceReportDigest ?? null,
+    trigger: candidate?.trigger ?? null,
+    failureReproduction: candidate?.failureReproduction ?? null,
+    shadowExercise: candidate?.shadowExercise ?? null,
+    quietPeriod: candidate?.quietPeriod ?? null,
+    bounds: candidate?.bounds ?? null,
+    demotionGuard: candidate?.demotionGuard ?? null,
     effectFlags: stableUnique(candidate?.effectFlags ?? []),
     capabilities: stableUnique(candidate?.capabilities ?? []),
     registeredCommandId: candidate?.registeredCommandId ?? null,
     tests: [...(candidate?.tests ?? [])]
-      .map(({ checkId, status, evidenceDigest, verifierId }) => ({ checkId, status, evidenceDigest, verifierId }))
+      .map(({ checkId, kind, status, evidenceDigest, verifierId }) => ({ checkId, kind, status, evidenceDigest, verifierId }))
       .sort((left, right) => compareCodeUnits(canonicalStringify(left), canonicalStringify(right))),
     policyId: candidate?.policyId ?? null,
     policyRevision: candidate?.policyRevision ?? null,
@@ -1343,7 +1710,19 @@ export function evaluateSelfCorrectionPromotion({
   const declaredClass = candidate.declaredClass;
   if (!SELF_CORRECTION_CLASSES.has(declaredClass)) failReasons.push('DECLARED_CLASS_INVALID');
   if (derivedClass === 'UNKNOWN') unknownReasons.push('SELF_CORRECTION_CLASS_POLICY_UNRESOLVED');
-  const effectiveClass = derivedClass;
+  let effectiveClass = derivedClass;
+  let classRoute = policy?.route ?? 'UNKNOWN';
+  let finalDisposition = policy?.promotionDisposition ?? 'PROMOTION_BLOCKED_UNKNOWN';
+  let automaticEligibility = 'NEVER';
+  let automaticDemotionRequired = false;
+  let externalAuthorizationRequired = false;
+  const promotionEvidenceSatisfied = [];
+  const activeDemotionTriggerCodes = allStrings(candidate.demotionGuard?.activeTriggerCodes)
+    ? stableUnique(candidate.demotionGuard.activeTriggerCodes) : [];
+  const requiredTriggerEvidenceIds = declaredClass === 'A' && isNonEmptyString(candidate.trigger?.triggerCode)
+    ? stableUnique(IP_ASSURANCE_CLASS_LAW.classATriggerEvidenceRequirements[candidate.trigger.triggerCode] ?? [])
+    : [];
+  let satisfiedTriggerEvidenceIds = [];
   if (!policy) unknownReasons.push('CLASS_POLICY_MISSING');
   else {
     if (!hasExactKeys(policy, SELF_CORRECTION_CLASS_POLICY_KEYS) || findForbiddenKeys(policy).length > 0) {
@@ -1359,7 +1738,7 @@ export function evaluateSelfCorrectionPromotion({
     if (!exactSubset(candidate.effectFlags, policy.allowedEffectFlags)) failReasons.push('EFFECT_NOT_REGISTERED');
     if (!exactSubset(candidate.capabilities, policy.allowedCapabilities)) failReasons.push('CAPABILITY_NOT_REGISTERED_BY_CLASS_POLICY');
     if (!isNonEmptyString(policy.mode) || !isNonEmptyString(policy.route)
-      || policy.automaticEligibility !== 'NEVER'
+      || !['NEVER', 'REGISTERED_ONLY'].includes(policy.automaticEligibility)
       || !isNonEmptyString(policy.promotionDisposition)) failReasons.push('CLASS_POLICY_MODE_DISPOSITION_MISMATCH');
     if (!isNonEmptyString(policy.environment)) failReasons.push('CLASS_POLICY_ENVIRONMENT_MISSING');
   }
@@ -1368,6 +1747,19 @@ export function evaluateSelfCorrectionPromotion({
   }
   if (candidate.schema !== 'SelfCorrectionCandidateV1' || candidate.version !== 1
     || !Number.isSafeInteger(candidate.revision) || candidate.revision < 1) failReasons.push('PROMOTION_CANDIDATE_SCHEMA_UNSUPPORTED');
+  if (!hasExactKeys(candidate.trigger, SELF_CORRECTION_TRIGGER_KEYS)
+    || findForbiddenKeys(candidate.trigger).length > 0
+    || !isNonEmptyString(candidate.trigger?.triggerCode)
+    || typeof candidate.trigger?.deterministic !== 'boolean'
+    || !['PASS', 'FAIL', 'UNKNOWN'].includes(candidate.trigger?.status)
+    || !hasHash(candidate.trigger?.evidenceDigest)) {
+    failReasons.push('CLASS_TRIGGER_CONTRACT_INVALID');
+  } else {
+    evidenceRefs.push(candidate.trigger.evidenceDigest);
+    if (candidate.trigger.status === 'FAIL' || candidate.trigger.deterministic !== true) failReasons.push('CLASS_TRIGGER_REJECTED');
+    else if (candidate.trigger.status !== 'PASS') unknownReasons.push('CLASS_TRIGGER_UNKNOWN');
+    if (!policy?.triggerCodes?.includes(candidate.trigger.triggerCode)) failReasons.push('CLASS_TRIGGER_NOT_ALLOWED');
+  }
   if (candidate.registeredCommandId !== null
     && (!isNonEmptyString(candidate.registeredCommandId)
       || !policy?.registeredCommandIds?.includes(candidate.registeredCommandId))) {
@@ -1380,17 +1772,190 @@ export function evaluateSelfCorrectionPromotion({
   if (candidate.effectFlags?.some((effect) => PERMANENTLY_FORBIDDEN_EFFECTS.has(effect))) failReasons.push('PERMANENT_EFFECT_BOUNDARY');
   if (!hasHash(candidate.artifactDigest) || !hasHash(candidate.evidenceReportDigest)) failReasons.push('PROMOTION_DIGEST_INVALID');
   else evidenceRefs.push(candidate.artifactDigest, candidate.evidenceReportDigest);
-  const candidateTestKeys = ['checkId', 'evidenceDigest', 'status', 'verifierId'];
-  if (!Array.isArray(candidate.tests) || candidate.tests.length === 0) unknownReasons.push('PROMOTION_TESTS_MISSING');
+  const candidateTestKeys = ['checkId', 'evidenceDigest', 'kind', 'status', 'verifierId'];
+  if (!Array.isArray(candidate.tests)) failReasons.push('PROMOTION_TEST_CONTRACT_INVALID');
+  else if (policy?.requiredTestKinds?.length > 0 && candidate.tests.length === 0) unknownReasons.push('PROMOTION_TESTS_MISSING');
   else {
     if (candidate.tests.some((entry) => entry.status === 'FAIL')) failReasons.push('PROMOTION_TEST_FAILED');
     if (candidate.tests.some((entry) => entry.status !== 'PASS')) unknownReasons.push('PROMOTION_TEST_UNKNOWN');
     if (candidate.tests.some((entry) => !hasExactKeys(entry, candidateTestKeys)
       || !isNonEmptyString(entry.checkId) || !hasHash(entry.evidenceDigest)
+      || !['FAULT', 'FOCUSED', 'REGRESSION'].includes(entry.kind)
       || !isNonEmptyString(entry.verifierId) || findForbiddenKeys(entry).length > 0)) {
       failReasons.push('PROMOTION_TEST_CONTRACT_INVALID');
     }
+    if (!exactStringSet(candidate.tests.map((entry) => entry.kind), policy?.requiredTestKinds ?? [])) {
+      failReasons.push('PROMOTION_REQUIRED_TEST_KINDS_MISMATCH');
+    }
     evidenceRefs.push(...candidate.tests.map((entry) => entry.evidenceDigest).filter(hasHash));
+  }
+  const failureReproductionContractValid = hasExactKeys(candidate.failureReproduction,
+    SELF_CORRECTION_FAILURE_REPRODUCTION_KEYS)
+    && findForbiddenKeys(candidate.failureReproduction).length === 0
+    && ['PASS', 'FAIL', 'UNKNOWN', 'NOT_REQUIRED'].includes(candidate.failureReproduction?.status)
+    && typeof candidate.failureReproduction?.deterministic === 'boolean'
+    && isNonEmptyString(candidate.failureReproduction?.fixtureId)
+    && hasHash(candidate.failureReproduction?.evidenceDigest);
+  const shadowContractValid = hasExactKeys(candidate.shadowExercise, SELF_CORRECTION_SHADOW_KEYS)
+    && findForbiddenKeys(candidate.shadowExercise).length === 0
+    && ['PASS', 'FAIL', 'UNKNOWN', 'NOT_REQUIRED'].includes(candidate.shadowExercise?.status)
+    && ['SHADOW', 'NO_AUTHORITY', 'NOT_REQUIRED'].includes(candidate.shadowExercise?.mode)
+    && candidate.shadowExercise?.authorityEffect === 'NONE'
+    && hasHash(candidate.shadowExercise?.evidenceDigest);
+  const quietPeriodContractValid = hasExactKeys(candidate.quietPeriod, SELF_CORRECTION_QUIET_PERIOD_KEYS)
+    && findForbiddenKeys(candidate.quietPeriod).length === 0
+    && ['PASS', 'FAIL', 'UNKNOWN', 'NOT_REQUIRED'].includes(candidate.quietPeriod?.status)
+    && Number.isSafeInteger(candidate.quietPeriod?.requiredMs) && candidate.quietPeriod.requiredMs >= 0
+    && Number.isSafeInteger(candidate.quietPeriod?.observedMs) && candidate.quietPeriod.observedMs >= 0
+    && Number.isSafeInteger(candidate.quietPeriod?.recurrenceCount) && candidate.quietPeriod.recurrenceCount >= 0
+    && hasHash(candidate.quietPeriod?.evidenceDigest);
+  const boundsContractValid = hasExactKeys(candidate.bounds, SELF_CORRECTION_BOUNDS_KEYS)
+    && findForbiddenKeys(candidate.bounds).length === 0
+    && ['PASS', 'FAIL', 'UNKNOWN', 'NOT_REQUIRED'].includes(candidate.bounds?.status)
+    && Number.isSafeInteger(candidate.bounds?.attemptLimit) && candidate.bounds.attemptLimit >= 0
+    && Number.isSafeInteger(candidate.bounds?.rateLimitPerWindow) && candidate.bounds.rateLimitPerWindow >= 0
+    && Number.isSafeInteger(candidate.bounds?.rateWindowMs) && candidate.bounds.rateWindowMs >= 0
+    && Number.isSafeInteger(candidate.bounds?.resourceLimit) && candidate.bounds.resourceLimit >= 0
+    && uniqueStrings(candidate.bounds?.resourceIds)
+    && candidate.bounds.resourceIds.length <= candidate.bounds.resourceLimit
+    && candidate.bounds?.capitalEffect === 'NONE'
+    && candidate.bounds?.exposureEffect === 'NONE'
+    && candidate.bounds?.externalEnvironmentEffect === 'NONE'
+    && hasHash(candidate.bounds?.evidenceDigest);
+  const demotionContractValid = hasExactKeys(candidate.demotionGuard, SELF_CORRECTION_DEMOTION_KEYS)
+    && findForbiddenKeys(candidate.demotionGuard).length === 0
+    && ['PASS', 'FAIL', 'UNKNOWN', 'NOT_REQUIRED'].includes(candidate.demotionGuard?.status)
+    && typeof candidate.demotionGuard?.automatic === 'boolean'
+    && uniqueStrings(candidate.demotionGuard?.monitoredTriggerCodes)
+    && allStrings(candidate.demotionGuard?.activeTriggerCodes)
+    && new Set(candidate.demotionGuard.activeTriggerCodes).size === candidate.demotionGuard.activeTriggerCodes.length
+    && candidate.demotionGuard.activeTriggerCodes.every((code) => candidate.demotionGuard.monitoredTriggerCodes.includes(code))
+    && hasHash(candidate.demotionGuard?.evidenceDigest);
+  const policyBoundsProjection = declaredClass === 'A'
+    && automaticBoundsMatch(policy?.automaticBounds, CLASS_POLICY_EXPECTATIONS.A.automaticBounds)
+    ? { ...policy.automaticBounds } : null;
+  const candidateBoundsProjection = declaredClass === 'A' && boundsContractValid
+    ? {
+      attemptLimit: candidate.bounds.attemptLimit,
+      rateLimitPerWindow: candidate.bounds.rateLimitPerWindow,
+      rateWindowMs: candidate.bounds.rateWindowMs,
+      resourceLimit: candidate.bounds.resourceLimit,
+      resourceIds: stableUnique(candidate.bounds.resourceIds),
+      capitalEffect: candidate.bounds.capitalEffect,
+      exposureEffect: candidate.bounds.exposureEffect,
+      externalEnvironmentEffect: candidate.bounds.externalEnvironmentEffect,
+    } : null;
+  const monitoredDemotionTriggerCodes = declaredClass === 'A' && demotionContractValid
+    ? stableUnique(candidate.demotionGuard.monitoredTriggerCodes) : [];
+  if (!failureReproductionContractValid || !shadowContractValid || !quietPeriodContractValid
+    || !boundsContractValid || !demotionContractValid) failReasons.push('CLASS_A_PROMOTION_EVIDENCE_CONTRACT_INVALID');
+  else evidenceRefs.push(
+    candidate.failureReproduction.evidenceDigest,
+    candidate.shadowExercise.evidenceDigest,
+    candidate.quietPeriod.evidenceDigest,
+    candidate.bounds.evidenceDigest,
+    candidate.demotionGuard.evidenceDigest,
+  );
+
+  if (declaredClass === 'A') {
+    if (candidate.failureReproduction.status === 'FAIL' || candidate.failureReproduction.deterministic !== true) {
+      failReasons.push('CLASS_A_FAILURE_REPRODUCTION_FAILED');
+    } else if (candidate.failureReproduction.status !== 'PASS') unknownReasons.push('CLASS_A_FAILURE_REPRODUCTION_UNKNOWN');
+    else promotionEvidenceSatisfied.push('DETERMINISTIC_FAILURE_REPRODUCTION');
+
+    if (!isNonEmptyString(candidate.registeredCommandId)
+      || !policy?.registeredCommandIds?.includes(candidate.registeredCommandId)) {
+      failReasons.push('CLASS_A_REGISTERED_COMMAND_REQUIRED');
+    } else promotionEvidenceSatisfied.push('EXACT_REGISTERED_COMMAND_IDENTITY');
+
+    const testKindsPass = Array.isArray(candidate.tests) && candidate.tests.length > 0
+      && candidate.tests.every((entry) => entry.status === 'PASS')
+      && exactStringSet(candidate.tests.map((entry) => entry.kind), policy?.requiredTestKinds ?? []);
+    if (testKindsPass) promotionEvidenceSatisfied.push('FOCUSED_REGRESSION_FAULT_TESTS');
+    satisfiedTriggerEvidenceIds = Array.isArray(candidate.tests)
+      ? requiredTriggerEvidenceIds.filter((requirementId) => candidate.tests.some(
+        (entry) => entry.checkId === requirementId && entry.status === 'PASS',
+      )) : [];
+    if (!exactStringSet(satisfiedTriggerEvidenceIds, requiredTriggerEvidenceIds)) {
+      unknownReasons.push('CLASS_A_TRIGGER_SPECIFIC_EVIDENCE_INCOMPLETE');
+    }
+
+    if (candidate.shadowExercise.status === 'FAIL'
+      || !['SHADOW', 'NO_AUTHORITY'].includes(candidate.shadowExercise.mode)
+      || candidate.shadowExercise.authorityEffect !== 'NONE') failReasons.push('CLASS_A_SHADOW_EXERCISE_FAILED');
+    else if (candidate.shadowExercise.status !== 'PASS') unknownReasons.push('CLASS_A_SHADOW_EXERCISE_UNKNOWN');
+    else promotionEvidenceSatisfied.push('SHADOW_OR_NO_AUTHORITY_EXERCISE');
+
+    if (candidate.quietPeriod.status === 'FAIL' || candidate.quietPeriod.recurrenceCount > 0) {
+      failReasons.push('CLASS_A_QUIET_PERIOD_BREACHED');
+    } else if (candidate.quietPeriod.status !== 'PASS'
+      || candidate.quietPeriod.requiredMs < 1
+      || candidate.quietPeriod.observedMs < candidate.quietPeriod.requiredMs) {
+      unknownReasons.push('CLASS_A_QUIET_PERIOD_INCOMPLETE');
+    } else promotionEvidenceSatisfied.push('DECLARED_QUIET_PERIOD_NO_RECURRENCE');
+
+    if (!policy || !hasHash(policy.ownerPreauthorizationDigest)
+      || policy.ownerLawDigest !== IP_ASSURANCE_CLASS_LAW.packetSha256) {
+      unknownReasons.push('CLASS_A_OWNER_PREAUTHORIZATION_UNKNOWN');
+    } else promotionEvidenceSatisfied.push('OWNER_PREAUTHORIZED_NARROW_CLASS');
+
+    const automaticBounds = policy?.automaticBounds;
+    const boundsWithinPolicy = boundsContractValid && automaticBounds
+      && candidate.bounds.status === 'PASS'
+      && candidate.bounds.attemptLimit >= 1 && candidate.bounds.attemptLimit <= automaticBounds.maxAttempts
+      && candidate.bounds.rateLimitPerWindow >= 1 && candidate.bounds.rateLimitPerWindow <= automaticBounds.maxRatePerWindow
+      && candidate.bounds.rateWindowMs >= automaticBounds.rateWindowMs
+      && candidate.bounds.resourceLimit >= 1 && candidate.bounds.resourceLimit <= automaticBounds.maxResourceCount
+      && candidate.bounds.resourceIds.length >= 1;
+    const boundsExceeded = automaticBounds && candidate.bounds.status === 'PASS'
+      && (candidate.bounds.attemptLimit > automaticBounds.maxAttempts
+        || candidate.bounds.rateLimitPerWindow > automaticBounds.maxRatePerWindow
+        || candidate.bounds.resourceLimit > automaticBounds.maxResourceCount);
+    if (candidate.bounds.status === 'FAIL') failReasons.push('CLASS_A_BOUNDS_FAILED');
+    else if (boundsExceeded) failReasons.push('CLASS_A_BOUNDS_EXCEEDED');
+    else if (!boundsWithinPolicy) unknownReasons.push('CLASS_A_BOUNDS_UNKNOWN');
+    else promotionEvidenceSatisfied.push('BOUNDED_RATE_RESOURCE_ATTEMPT_EXPOSURE');
+
+    const demotionGuardBound = demotionContractValid
+      && candidate.demotionGuard.status === 'PASS'
+      && candidate.demotionGuard.automatic === true
+      && exactStringSet(candidate.demotionGuard.monitoredTriggerCodes, policy?.demotionTriggerCodes ?? []);
+    if (candidate.demotionGuard.status === 'FAIL') failReasons.push('CLASS_A_DEMOTION_GUARD_FAILED');
+    else if (!demotionGuardBound) unknownReasons.push('CLASS_A_DEMOTION_GUARD_UNKNOWN');
+    else promotionEvidenceSatisfied.push('AUTOMATIC_DEMOTION_ON_RECURRENCE_DRIFT_OR_CHANGED_ASSUMPTIONS');
+
+    if (demotionGuardBound && activeDemotionTriggerCodes.length > 0) {
+      automaticDemotionRequired = true;
+      automaticEligibility = 'DEMOTED_TO_CLASS_D';
+      effectiveClass = 'D';
+      classRoute = CLASS_ROUTES.D;
+      finalDisposition = 'CLASS_A_AUTOMATIC_DEMOTION_REQUIRED';
+    } else {
+      automaticEligibility = 'ELIGIBLE_REGISTERED_ONLY';
+    }
+  } else {
+    const nonClassAEvidenceCoherent = failureReproductionContractValid
+      && candidate.failureReproduction.status === 'NOT_REQUIRED'
+      && candidate.failureReproduction.deterministic === false
+      && shadowContractValid && candidate.shadowExercise.status === 'NOT_REQUIRED'
+      && candidate.shadowExercise.mode === 'NOT_REQUIRED'
+      && quietPeriodContractValid && candidate.quietPeriod.status === 'NOT_REQUIRED'
+      && candidate.quietPeriod.requiredMs === 0 && candidate.quietPeriod.observedMs === 0
+      && candidate.quietPeriod.recurrenceCount === 0
+      && boundsContractValid && candidate.bounds.status === 'NOT_REQUIRED'
+      && candidate.bounds.attemptLimit === 0 && candidate.bounds.rateLimitPerWindow === 0
+      && candidate.bounds.rateWindowMs === 0 && candidate.bounds.resourceLimit === 0
+      && candidate.bounds.resourceIds.length === 0
+      && demotionContractValid && candidate.demotionGuard.status === 'NOT_REQUIRED'
+      && candidate.demotionGuard.automatic === false
+      && candidate.demotionGuard.monitoredTriggerCodes.length === 0
+      && candidate.demotionGuard.activeTriggerCodes.length === 0;
+    if (!nonClassAEvidenceCoherent) failReasons.push('NON_CLASS_A_PROMOTION_EVIDENCE_MUST_BE_NOT_REQUIRED');
+    if (candidate.registeredCommandId !== null) failReasons.push('NON_CLASS_A_REGISTERED_COMMAND_FORBIDDEN');
+    if (declaredClass === 'C' && EXTERNAL_CLASS_C_TRIGGERS.has(candidate.trigger?.triggerCode)) {
+      externalAuthorizationRequired = true;
+      unknownReasons.push('I00_SECTION_20_EXTERNAL_AUTHORIZATION_REQUIRED');
+    }
   }
   if (!hasExactKeys(candidate.independentVerifier, ['evidenceDigest', 'relationship', 'status', 'verifierId'])
     || findForbiddenKeys(candidate.independentVerifier).length > 0
@@ -1437,6 +2002,10 @@ export function evaluateSelfCorrectionPromotion({
   if (hasHash(candidate.independentVerifier?.evidenceDigest)
     && candidate.independentVerifier.evidenceDigest === selfCorrectionVerifierEvidenceDigest({ candidate, policy })) {
     evidenceRefs.push(candidate.independentVerifier.evidenceDigest);
+    if (declaredClass === 'A' && candidate.independentVerifier.status === 'PASS'
+      && candidate.independentVerifier.relationship === 'INDEPENDENT') {
+      promotionEvidenceSatisfied.push('INDEPENDENT_POSTCONDITION_VERIFIER');
+    }
   } else failReasons.push('PROMOTION_VERIFIER_DIGEST_INVALID');
   if (!Number.isSafeInteger(candidate.expiresAtMs) || nowMs >= candidate.expiresAtMs) failReasons.push('PROMOTION_CANDIDATE_EXPIRED');
   if (!hasExactKeys(candidate.rollback, ['available', 'planDigest']) || findForbiddenKeys(candidate.rollback).length > 0) {
@@ -1561,7 +2130,10 @@ export function evaluateSelfCorrectionPromotion({
   if (policy && traceDecision?.status === 'PASS' && traceDecision.environment !== policy.environment) failReasons.push('PROMOTION_TRACE_ENVIRONMENT_MISMATCH');
   evidenceRefs.push(...(traceDecision?.evidenceRefs ?? []));
   if (!isEvaluationEnvelope(traceDecision, nowMs, 'TRACE_PRIVACY_RETENTION')) failReasons.push('PROMOTION_TRACE_DECISION_ENVELOPE_INVALID');
-  unknownReasons.push('CLASS_TAXONOMY_OWNER_LAW_MISSING');
+  if (declaredClass === 'A'
+    && !exactStringSet(promotionEvidenceSatisfied, IP_ASSURANCE_CLASS_LAW.classAPromotionEvidenceIds)) {
+    unknownReasons.push('CLASS_A_NINE_POINT_PROMOTION_EVIDENCE_INCOMPLETE');
+  }
 
   const promotionValidityCandidates = [
     candidate.expiresAtMs,
@@ -1586,20 +2158,52 @@ export function evaluateSelfCorrectionPromotion({
     traceId: candidate.traceId,
     traceDecisionDigest: traceDecision?.decisionDigest ?? null,
     artifactDigest: candidate.artifactDigest,
-    classRoute: policy?.route ?? 'UNKNOWN',
+    classRoute,
     registeredCommandId: candidate.registeredCommandId ?? null,
     approvalRef: policy?.requiresApproval ? (candidate.approval?.approvalRef ?? null) : null,
     approvalStatus: policy?.requiresApproval ? (candidate.approval?.status ?? 'UNKNOWN') : 'NOT_REQUIRED',
     declaredClass,
     derivedClass,
     effectiveClass,
+    triggerCode: candidate.trigger?.triggerCode ?? null,
+    triggerStatus: candidate.trigger?.status ?? 'UNKNOWN',
+    requiredTriggerEvidenceIds,
+    satisfiedTriggerEvidenceIds: stableUnique(satisfiedTriggerEvidenceIds),
+    failureReproductionStatus: declaredClass === 'A' ? (candidate.failureReproduction?.status ?? 'UNKNOWN') : 'NOT_REQUIRED',
+    testEvidenceStatus: policy?.requiredTestKinds?.length > 0
+      ? (Array.isArray(candidate.tests) && candidate.tests.some((entry) => entry.status === 'FAIL')
+        ? 'FAIL'
+        : (Array.isArray(candidate.tests) && candidate.tests.length > 0
+          && exactStringSet(candidate.tests.map((entry) => entry.kind), policy.requiredTestKinds)
+          && candidate.tests.every((entry) => entry.status === 'PASS') ? 'PASS' : 'UNKNOWN'))
+      : 'NOT_REQUIRED',
+    shadowRequirement: ['SHADOW_OR_NO_AUTHORITY_REQUIRED', 'NOT_REQUIRED'].includes(policy?.shadowRequirement)
+      ? policy.shadowRequirement : 'UNKNOWN',
+    shadowExerciseMode: declaredClass === 'A' ? (candidate.shadowExercise?.mode ?? 'NOT_REQUIRED') : 'NOT_REQUIRED',
+    shadowExerciseStatus: declaredClass === 'A' ? (candidate.shadowExercise?.status ?? 'UNKNOWN') : 'NOT_REQUIRED',
+    independentVerifierStatus: candidate.independentVerifier?.status ?? 'UNKNOWN',
+    quietPeriodStatus: declaredClass === 'A' ? (candidate.quietPeriod?.status ?? 'UNKNOWN') : 'NOT_REQUIRED',
+    ownerPreauthorizationStatus: policy?.ownerLawDigest === IP_ASSURANCE_CLASS_LAW.packetSha256
+      && hasHash(policy?.ownerPreauthorizationDigest) ? 'PASS' : 'UNKNOWN',
+    ownerLawDigest: hasHash(policy?.ownerLawDigest) ? policy.ownerLawDigest : null,
+    boundsStatus: declaredClass === 'A' ? (candidate.bounds?.status ?? 'UNKNOWN') : 'NOT_REQUIRED',
+    policyBounds: policyBoundsProjection,
+    candidateBounds: candidateBoundsProjection,
+    demotionStatus: declaredClass === 'A' ? (candidate.demotionGuard?.status ?? 'UNKNOWN') : 'NOT_REQUIRED',
+    monitoredDemotionTriggerCodes,
+    promotionEvidenceIds: declaredClass === 'A' ? stableUnique(IP_ASSURANCE_CLASS_LAW.classAPromotionEvidenceIds) : [],
+    promotionEvidenceSatisfied: declaredClass === 'A' ? stableUnique(promotionEvidenceSatisfied) : [],
+    activeDemotionTriggerCodes: declaredClass === 'A' ? activeDemotionTriggerCodes : [],
+    automaticEligibility,
+    automaticDemotionRequired,
+    externalAuthorizationRequired,
     validUntilMs,
     operationalActionAllowed: false,
     mayDeclareRecovery: false,
   };
   if (failReasons.length > 0) return fail(nowMs, 'PROMOTION_REJECTED', failReasons, evidenceRefs, fixedExtra);
   if (unknownReasons.length > 0) return unknown(nowMs, 'PROMOTION_BLOCKED_UNKNOWN', unknownReasons, evidenceRefs, fixedExtra);
-  return sealedEvidencePass(nowMs, policy.promotionDisposition, evidenceRefs, fixedExtra);
+  return sealedEvidencePass(nowMs, finalDisposition, evidenceRefs, fixedExtra);
 }
 
 export function repairEvidencePolicyDigest(policy) {

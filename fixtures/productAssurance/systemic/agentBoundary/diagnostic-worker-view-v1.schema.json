@@ -22,7 +22,10 @@
         "reasonCodes": { "$ref": "#/$defs/ReasonList" }
       }
     },
-    "EvidenceStatus": { "enum": ["PASS", "FAIL", "UNKNOWN"] }
+    "EvidenceStatus": { "enum": ["PASS", "FAIL", "UNKNOWN"] },
+    "EvidenceOrNotRequiredStatus": { "enum": ["PASS", "FAIL", "UNKNOWN", "NOT_REQUIRED"] },
+    "PolicyBounds": { "type": "object", "additionalProperties": false, "required": ["maxAttempts", "maxRatePerWindow", "maxResourceCount", "rateWindowMs"], "properties": { "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 1000000 }, "maxRatePerWindow": { "type": "integer", "minimum": 1, "maximum": 1000000 }, "maxResourceCount": { "type": "integer", "minimum": 1, "maximum": 1000000 }, "rateWindowMs": { "type": "integer", "minimum": 1, "maximum": 31536000000 } } },
+    "CandidateBounds": { "type": "object", "additionalProperties": false, "required": ["attemptLimit", "rateLimitPerWindow", "rateWindowMs", "resourceLimit", "resourceIds", "capitalEffect", "exposureEffect", "externalEnvironmentEffect"], "properties": { "attemptLimit": { "type": "integer", "minimum": 1, "maximum": 1000000 }, "rateLimitPerWindow": { "type": "integer", "minimum": 1, "maximum": 1000000 }, "rateWindowMs": { "type": "integer", "minimum": 1, "maximum": 31536000000 }, "resourceLimit": { "type": "integer", "minimum": 1, "maximum": 1000000 }, "resourceIds": { "$ref": "#/$defs/IdList" }, "capitalEffect": { "const": "NONE" }, "exposureEffect": { "const": "NONE" }, "externalEnvironmentEffect": { "const": "NONE" } } }
   },
   "type": "object",
   "additionalProperties": false,
@@ -87,7 +90,38 @@
     "budget": { "type": "object", "additionalProperties": false, "required": ["callsUsed", "callsLimit", "tokensUsed", "tokensLimit", "costMicrounitsUsed", "costMicrounitsLimit", "latencyMs", "latencyLimitMs"], "properties": { "callsUsed": { "$ref": "#/$defs/NullableInteger" }, "callsLimit": { "$ref": "#/$defs/NullableInteger" }, "tokensUsed": { "$ref": "#/$defs/NullableInteger" }, "tokensLimit": { "$ref": "#/$defs/NullableInteger" }, "costMicrounitsUsed": { "$ref": "#/$defs/NullableInteger" }, "costMicrounitsLimit": { "$ref": "#/$defs/NullableInteger" }, "latencyMs": { "$ref": "#/$defs/NullableInteger" }, "latencyLimitMs": { "$ref": "#/$defs/NullableInteger" } } },
     "proposalAssurance": { "type": "object", "additionalProperties": false, "required": ["proposalId", "approvalRef", "approvalStatus", "verifierId", "verifierStatus", "postconditionStatus", "quietPeriodStatus"], "properties": { "proposalId": { "$ref": "#/$defs/NullableId" }, "approvalRef": { "$ref": "#/$defs/NullableId" }, "approvalStatus": { "enum": ["APPROVED", "REJECTED", "EXPIRED", "NOT_REQUIRED", "UNKNOWN", "NOT_CONFIGURED"] }, "verifierId": { "$ref": "#/$defs/NullableId" }, "verifierStatus": { "$ref": "#/$defs/EvidenceStatus" }, "postconditionStatus": { "$ref": "#/$defs/EvidenceStatus" }, "quietPeriodStatus": { "$ref": "#/$defs/EvidenceStatus" } } },
     "trace": { "type": "object", "additionalProperties": false, "required": ["privacy", "lastAppendSequence", "lastChainDigest", "retentionOwnerId", "independentEvidencePass"], "properties": { "privacy": { "$ref": "#/$defs/Decision" }, "lastAppendSequence": { "$ref": "#/$defs/NullableInteger" }, "lastChainDigest": { "$ref": "#/$defs/NullableHash" }, "retentionOwnerId": { "$ref": "#/$defs/NullableId" }, "independentEvidencePass": { "type": "boolean" } } },
-    "selfCorrection": { "type": "object", "additionalProperties": false, "required": ["declaredClass", "derivedClass", "effectiveClass", "promotion", "operationalActionAllowed"], "properties": { "declaredClass": { "anyOf": [{ "enum": ["A", "B", "C", "D"] }, { "type": "null" }] }, "derivedClass": { "anyOf": [{ "enum": ["A", "B", "C", "D", "UNKNOWN"] }, { "type": "null" }] }, "effectiveClass": { "anyOf": [{ "enum": ["A", "B", "C", "D", "UNKNOWN"] }, { "type": "null" }] }, "promotion": { "$ref": "#/$defs/Decision" }, "operationalActionAllowed": { "const": false } } },
+    "selfCorrection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["declaredClass", "derivedClass", "effectiveClass", "classRoute", "ownerLawDigest", "triggerCode", "triggerStatus", "requiredTriggerEvidenceIds", "satisfiedTriggerEvidenceIds", "shadowRequirement", "shadowExerciseMode", "shadowExerciseStatus", "boundsStatus", "policyBounds", "candidateBounds", "requiredPromotionEvidenceIds", "satisfiedPromotionEvidenceIds", "automaticEligibility", "demotionStatus", "monitoredDemotionTriggerCodes", "automaticDemotionRequired", "activeDemotionTriggerCodes", "externalAuthorizationRequired", "promotion", "operationalActionAllowed"],
+      "properties": {
+        "declaredClass": { "anyOf": [{ "enum": ["A", "B", "C", "D"] }, { "type": "null" }] },
+        "derivedClass": { "anyOf": [{ "enum": ["A", "B", "C", "D", "UNKNOWN"] }, { "type": "null" }] },
+        "effectiveClass": { "anyOf": [{ "enum": ["A", "B", "C", "D", "UNKNOWN"] }, { "type": "null" }] },
+        "classRoute": { "$ref": "#/$defs/NullableId" },
+        "ownerLawDigest": { "$ref": "#/$defs/NullableHash" },
+        "triggerCode": { "$ref": "#/$defs/NullableId" },
+        "triggerStatus": { "$ref": "#/$defs/EvidenceStatus" },
+        "requiredTriggerEvidenceIds": { "$ref": "#/$defs/IdList" },
+        "satisfiedTriggerEvidenceIds": { "$ref": "#/$defs/IdList" },
+        "shadowRequirement": { "enum": ["SHADOW_OR_NO_AUTHORITY_REQUIRED", "NOT_REQUIRED", "UNKNOWN"] },
+        "shadowExerciseMode": { "enum": ["SHADOW", "NO_AUTHORITY", "NOT_REQUIRED", "UNKNOWN"] },
+        "shadowExerciseStatus": { "$ref": "#/$defs/EvidenceOrNotRequiredStatus" },
+        "boundsStatus": { "$ref": "#/$defs/EvidenceOrNotRequiredStatus" },
+        "policyBounds": { "anyOf": [{ "$ref": "#/$defs/PolicyBounds" }, { "type": "null" }] },
+        "candidateBounds": { "anyOf": [{ "$ref": "#/$defs/CandidateBounds" }, { "type": "null" }] },
+        "requiredPromotionEvidenceIds": { "$ref": "#/$defs/IdList" },
+        "satisfiedPromotionEvidenceIds": { "$ref": "#/$defs/IdList" },
+        "automaticEligibility": { "enum": ["ELIGIBLE_REGISTERED_ONLY", "DEMOTED_TO_CLASS_D", "NEVER", "UNKNOWN"] },
+        "demotionStatus": { "$ref": "#/$defs/EvidenceOrNotRequiredStatus" },
+        "monitoredDemotionTriggerCodes": { "$ref": "#/$defs/IdList" },
+        "automaticDemotionRequired": { "type": "boolean" },
+        "activeDemotionTriggerCodes": { "$ref": "#/$defs/IdList" },
+        "externalAuthorizationRequired": { "type": "boolean" },
+        "promotion": { "$ref": "#/$defs/Decision" },
+        "operationalActionAllowed": { "const": false }
+      }
+    },
     "repairEvidence": { "type": "object", "additionalProperties": false, "required": ["evaluation", "eligibleForCanonicalRecoveryReadback", "postconditionStatus", "quietPeriodStatus", "verifierId", "verifierStatus", "recoveryDeclared"], "properties": { "evaluation": { "$ref": "#/$defs/Decision" }, "eligibleForCanonicalRecoveryReadback": { "type": "boolean" }, "postconditionStatus": { "$ref": "#/$defs/EvidenceStatus" }, "quietPeriodStatus": { "$ref": "#/$defs/EvidenceStatus" }, "verifierId": { "$ref": "#/$defs/NullableId" }, "verifierStatus": { "$ref": "#/$defs/EvidenceStatus" }, "recoveryDeclared": { "const": false } } },
     "corpusGovernance": { "$ref": "#/$defs/Decision" },
     "killControl": { "type": "object", "additionalProperties": false, "required": ["controlId", "desiredState", "effectiveState", "blockingState", "wiringState", "pendingCommandId", "selfReenableAllowed", "retentionContinuesWhenEngaged"], "properties": { "controlId": { "$ref": "#/$defs/Id" }, "desiredState": { "enum": ["ENGAGED", "DISENGAGED", "UNKNOWN"] }, "effectiveState": { "enum": ["ENGAGED", "DISENGAGED", "UNKNOWN"] }, "blockingState": { "enum": ["ENGAGED", "DISENGAGED", "UNKNOWN"] }, "wiringState": { "type": "string", "pattern": "^PENDING_BACKEND:[A-Za-z0-9_.:-]{1,128}$" }, "pendingCommandId": { "$ref": "#/$defs/Id" }, "selfReenableAllowed": { "const": false }, "retentionContinuesWhenEngaged": { "const": true } } },

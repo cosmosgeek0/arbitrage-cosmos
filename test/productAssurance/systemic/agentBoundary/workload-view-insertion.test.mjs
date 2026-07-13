@@ -12,6 +12,7 @@ import {
   CORPUS_ITEM,
   DIAGNOSTIC_REQUEST,
   DIAGNOSTIC_TRACE,
+  IP_ASSURANCE_CLASS_LAW,
   KILL_CONTROL_VIEW,
   KILL_READBACK_FIXTURE,
   NOW,
@@ -36,6 +37,8 @@ import {
   evaluateSelfCorrectionPromotion,
   evaluateTracePrivacyAndRetention,
   reduceWorkloadIdentity,
+  selfCorrectionHoldoutEvidenceDigest,
+  selfCorrectionVerifierEvidenceDigest,
 } from '../../../../fixtures/productAssurance/systemic/agentBoundary/evaluators.mjs';
 import { runDeterministicProviderStub } from '../../../../fixtures/productAssurance/systemic/agentBoundary/provider-stub.mjs';
 import { projectDiagnosticWorkerView } from '../../../../fixtures/productAssurance/systemic/agentBoundary/view-models.mjs';
@@ -121,19 +124,57 @@ function view(over = {}) {
   });
 }
 
-test('render-neutral view is closed, synthetic, taxonomy-blocked, lifecycle-separated, and authority-free', () => {
+function resealPromotionCandidate(candidate, policy) {
+  const resealed = clone(candidate);
+  resealed.independentVerifier.evidenceDigest = selfCorrectionVerifierEvidenceDigest({
+    candidate: resealed,
+    policy,
+    verifier: resealed.independentVerifier,
+  });
+  resealed.holdout.evidenceDigest = selfCorrectionHoldoutEvidenceDigest({
+    candidate: resealed,
+    policy,
+    holdout: resealed.holdout,
+  });
+  return resealed;
+}
+
+function promotionFor(className, candidate = CLASS_CANDIDATES[className]) {
+  const base = decisions();
+  return evaluateSelfCorrectionPromotion({
+    candidate,
+    policy: CLASS_POLICIES[className],
+    acceptedPolicyEvidenceDigest: CLASS_POLICIES[className].evidenceDigest,
+    traceDecision: base.traceDecision,
+    repairDecision: base.repairDecision,
+    corpusDecision: base.corpusDecision,
+    nowMs: NOW,
+  });
+}
+
+test('render-neutral view is closed, synthetic, owner-law-bound, lifecycle-separated, and authority-free', () => {
   const projected = view();
   assert.deepEqual(validateView(viewSchema, projected), []);
   assert.equal(projected.sourceState, 'SYNTHETIC_ONLY');
   assert.equal(projected.planeAvailability, 'AVAILABLE');
-  assert.equal(projected.assuranceStatus, 'UNKNOWN');
-  assert.equal(projected.operatingDisposition, 'BLOCKED');
-  assert.equal(projected.rootBlocker, 'CLASS_TAXONOMY_OWNER_LAW_MISSING');
+  assert.equal(projected.assuranceStatus, 'PASS');
+  assert.equal(projected.operatingDisposition, 'ELIGIBLE_FOR_STUB_EVIDENCE');
+  assert.equal(projected.rootBlocker, null);
   assert.equal(projected.observedLifecycle, 'READY');
   assert.equal(projected.capability, 'SYNTHETIC');
   assert.equal(projected.productReadinessImpact, 'NONE');
   assert.equal(projected.tradeReadinessImpact, 'NONE');
   assert.equal(projected.executionAuthorityEffect, 'NONE');
+  assert.equal(projected.selfCorrection.declaredClass, 'C');
+  assert.equal(projected.selfCorrection.classRoute, 'OWNER_APPROVED_HASH_BOUND_RELEASE');
+  assert.equal(projected.selfCorrection.triggerCode, 'AGENT_CODE_CHANGE');
+  assert.equal(projected.selfCorrection.triggerStatus, 'PASS');
+  assert.equal(projected.selfCorrection.shadowExerciseStatus, 'NOT_REQUIRED');
+  assert.equal(projected.selfCorrection.boundsStatus, 'NOT_REQUIRED');
+  assert.equal(projected.selfCorrection.automaticEligibility, 'NEVER');
+  assert.equal(projected.selfCorrection.automaticDemotionRequired, false);
+  assert.deepEqual(projected.selfCorrection.requiredPromotionEvidenceIds, []);
+  assert.deepEqual(projected.selfCorrection.activeDemotionTriggerCodes, []);
   assert.equal(projected.selfCorrection.operationalActionAllowed, false);
   assert.equal(projected.repairEvidence.recoveryDeclared, false);
   assert.equal(projected.killControl.selfReenableAllowed, false);
@@ -158,6 +199,41 @@ test('cockpit carries canonical owner, freshness, revision, proposal, verifier, 
   assert.equal(projected.repairEvidence.quietPeriodStatus, 'PASS');
   assert.equal(projected.repairEvidence.verifierId, REPAIR_EVIDENCE.verifier.verifierId);
   assert.equal(projected.repairEvidence.verifierStatus, 'PASS');
+});
+
+test('cockpit projects exact Class A trigger, shadow, bounds, and automatic demotion evidence', () => {
+  const classA = view({ promotionDecision: promotionFor('A') });
+  assert.deepEqual(validateView(viewSchema, classA), []);
+  assert.equal(classA.selfCorrection.ownerLawDigest, IP_ASSURANCE_CLASS_LAW.packetSha256);
+  assert.equal(classA.selfCorrection.triggerCode, 'RESTART_BOUNDED_WORKER');
+  assert.equal(classA.selfCorrection.shadowRequirement, 'SHADOW_OR_NO_AUTHORITY_REQUIRED');
+  assert.equal(classA.selfCorrection.shadowExerciseMode, 'NO_AUTHORITY');
+  assert.deepEqual(classA.selfCorrection.policyBounds, CLASS_POLICIES.A.automaticBounds);
+  assert.deepEqual(classA.selfCorrection.candidateBounds, {
+    attemptLimit: 2,
+    rateLimitPerWindow: 1,
+    rateWindowMs: 60_000,
+    resourceLimit: 1,
+    resourceIds: ['resource.fixture.worker-1'],
+    capitalEffect: 'NONE',
+    exposureEffect: 'NONE',
+    externalEnvironmentEffect: 'NONE',
+  });
+  assert.deepEqual(classA.selfCorrection.requiredPromotionEvidenceIds,
+    [...IP_ASSURANCE_CLASS_LAW.classAPromotionEvidenceIds].sort());
+  assert.deepEqual(classA.selfCorrection.monitoredDemotionTriggerCodes,
+    [...IP_ASSURANCE_CLASS_LAW.classADemotionTriggerCodes].sort());
+
+  const candidate = clone(CLASS_CANDIDATES.A);
+  candidate.demotionGuard.activeTriggerCodes = ['DRIFT_DETECTED'];
+  const demotedCandidate = resealPromotionCandidate(candidate, CLASS_POLICIES.A);
+  const demoted = view({ promotionDecision: promotionFor('A', demotedCandidate) });
+  assert.deepEqual(validateView(viewSchema, demoted), []);
+  assert.equal(demoted.selfCorrection.effectiveClass, 'D');
+  assert.equal(demoted.selfCorrection.automaticEligibility, 'DEMOTED_TO_CLASS_D');
+  assert.equal(demoted.selfCorrection.automaticDemotionRequired, true);
+  assert.deepEqual(demoted.selfCorrection.activeDemotionTriggerCodes, ['DRIFT_DETECTED']);
+  assert.equal(demoted.selfCorrection.operationalActionAllowed, false);
 });
 
 test('cockpit repair detail is sourced only from the repair decision and cannot retain proposal green', () => {
@@ -340,8 +416,8 @@ test('provider outage is unavailable and remains diagnostic-only', () => {
   const outage = view({ provider: outageProvider, providerDecision: outageDecision });
   assert.equal(outage.planeAvailability, 'UNAVAILABLE');
   assert.equal(outage.assuranceStatus, 'UNKNOWN');
-  assert.equal(outage.operatingDisposition, 'BLOCKED');
-  assert.equal(outage.rootBlocker, 'CLASS_TAXONOMY_OWNER_LAW_MISSING');
+  assert.equal(outage.operatingDisposition, 'UNAVAILABLE');
+  assert.equal(outage.rootBlocker, 'STUBBED_PROVIDER_OUTAGE');
   assert.equal(outage.providerEvaluation.disposition, 'DIAGNOSTIC_PLANE_UNAVAILABLE');
   assert.equal(outage.productReadinessImpact, 'NONE');
 });
@@ -485,6 +561,20 @@ test('diagnostic kill insertion draft carries the full I00 control-registry meta
   assert.match(JSON.stringify(row), /late results/i);
   assert.match(JSON.stringify(row), /cancellation receipt/i);
   assert.match(JSON.stringify(row), /cannot re-enable itself/i);
+});
+
+test('cockpit insertion draft carries the owner-law Class A-D projection contract', () => {
+  const row = insertionRows.find((entry) => entry.rowId.endsWith('diagnostic-worker-cockpit'));
+  const serialized = JSON.stringify(row);
+  for (const phrase of [
+    'D-LAUNCH-13 owner-law digest',
+    'deterministic trigger and special trigger evidence',
+    'policy and candidate bounds',
+    'all nine Class A evidence IDs',
+    'operationalActionAllowed remains false',
+  ]) {
+    assert.ok(serialized.includes(phrase), phrase);
+  }
 });
 
 test('main boundary schema owns extensions only and does not redeclare base §3.9 hierarchy', () => {

@@ -534,6 +534,38 @@ export function projectDiagnosticWorkerView({
       declaredClass: notConfigured || !promotionEnvelopeValid ? null : (promotionDecision.declaredClass ?? null),
       derivedClass: notConfigured || !promotionEnvelopeValid ? null : (promotionDecision.derivedClass ?? null),
       effectiveClass: notConfigured || !promotionEnvelopeValid ? null : (promotionDecision.effectiveClass ?? null),
+      classRoute: notConfigured || !promotionEnvelopeValid ? null : (promotionDecision.classRoute ?? null),
+      ownerLawDigest: notConfigured || !promotionEnvelopeValid ? null : (promotionDecision.ownerLawDigest ?? null),
+      triggerCode: notConfigured || !promotionEnvelopeValid ? null : (promotionDecision.triggerCode ?? null),
+      triggerStatus: notConfigured || !promotionEnvelopeValid ? 'UNKNOWN' : (promotionDecision.triggerStatus ?? 'UNKNOWN'),
+      requiredTriggerEvidenceIds: notConfigured || !promotionEnvelopeValid
+        ? [] : stableUnique(promotionDecision.requiredTriggerEvidenceIds ?? []),
+      satisfiedTriggerEvidenceIds: notConfigured || !promotionEnvelopeValid
+        ? [] : stableUnique(promotionDecision.satisfiedTriggerEvidenceIds ?? []),
+      shadowRequirement: notConfigured || !promotionEnvelopeValid
+        ? 'UNKNOWN' : (promotionDecision.shadowRequirement ?? 'UNKNOWN'),
+      shadowExerciseMode: notConfigured || !promotionEnvelopeValid
+        ? 'UNKNOWN' : (promotionDecision.shadowExerciseMode ?? 'UNKNOWN'),
+      shadowExerciseStatus: notConfigured || !promotionEnvelopeValid
+        ? 'UNKNOWN' : (promotionDecision.shadowExerciseStatus ?? 'UNKNOWN'),
+      boundsStatus: notConfigured || !promotionEnvelopeValid ? 'UNKNOWN' : (promotionDecision.boundsStatus ?? 'UNKNOWN'),
+      policyBounds: notConfigured || !promotionEnvelopeValid ? null : (promotionDecision.policyBounds ?? null),
+      candidateBounds: notConfigured || !promotionEnvelopeValid ? null : (promotionDecision.candidateBounds ?? null),
+      requiredPromotionEvidenceIds: notConfigured || !promotionEnvelopeValid
+        ? [] : stableUnique(promotionDecision.promotionEvidenceIds ?? []),
+      satisfiedPromotionEvidenceIds: notConfigured || !promotionEnvelopeValid
+        ? [] : stableUnique(promotionDecision.promotionEvidenceSatisfied ?? []),
+      automaticEligibility: notConfigured || !promotionEnvelopeValid
+        ? 'UNKNOWN' : (promotionDecision.automaticEligibility ?? 'UNKNOWN'),
+      demotionStatus: notConfigured || !promotionEnvelopeValid ? 'UNKNOWN' : (promotionDecision.demotionStatus ?? 'UNKNOWN'),
+      monitoredDemotionTriggerCodes: notConfigured || !promotionEnvelopeValid
+        ? [] : stableUnique(promotionDecision.monitoredDemotionTriggerCodes ?? []),
+      automaticDemotionRequired: !notConfigured && promotionEnvelopeValid
+        ? (promotionDecision.automaticDemotionRequired ?? false) : false,
+      activeDemotionTriggerCodes: notConfigured || !promotionEnvelopeValid
+        ? [] : stableUnique(promotionDecision.activeDemotionTriggerCodes ?? []),
+      externalAuthorizationRequired: !notConfigured && promotionEnvelopeValid
+        ? (promotionDecision.externalAuthorizationRequired ?? false) : false,
       promotion: notConfigured ? decisionSummary(null, 'NOT_CONFIGURED')
         : (promotionEnvelopeValid ? decisionSummary(promotionDecision) : decisionSummary(null, 'INVALID_ENVELOPE')),
       operationalActionAllowed: false,

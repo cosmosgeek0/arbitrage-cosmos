@@ -120,6 +120,8 @@
     "contract": [
       "Consume DiagnosticWorkerViewV1 as render-neutral data and retain SYNTHETIC_ONLY or NOT_CONFIGURED source labels.",
       "Show desired and observed lifecycle, provider/model revision, identity generation and expiry, sandbox decision, permission and capabilities, run/correlation, nullable budgets, privacy, append receipt, verifier, repair postcondition, corpus disposition, and kill state.",
+      "Project the exact D-LAUNCH-13 owner-law digest, Class A-D route, deterministic trigger and special trigger evidence, shadow requirement and exercise, policy and candidate bounds, all nine Class A evidence IDs, and monitored or active demotion triggers without recomputation.",
+      "A Class A PASS is registered-only eligibility evidence: operationalActionAllowed remains false in this packet, and the canonical Control Plane remains the only command owner.",
       "Provider self-report alone never produces green; independent trace retention and required verifier evidence must pass.",
       "Provider outage renders planeAvailability UNAVAILABLE; NOT_CONFIGURED renders planeAvailability NOT_CONFIGURED; both retain productReadinessImpact NONE.",
       "Never render raw prompts, raw evidence, credential material, or a functional control without its canonical backend command."
@@ -128,6 +130,7 @@
       "NOT_CONFIGURED, outage, kill-engaged, identity-expired, retention-unknown, and synthetic-ready fixtures render distinct states.",
       "Null budget or timestamp values remain null rather than fabricated zero.",
       "Reason codes and capabilities are stable-sorted and duplicate-free.",
+      "Class A trigger, shadow, numeric bounds, nine-point evidence, and recurrence/drift/assumption demotion fields round-trip through the closed view schema.",
       "Sensitive fields are absent and source state can never be LIVE_PUBLIC.",
       "All pending controls remain disabled with the exact owner and command blocker."
     ],

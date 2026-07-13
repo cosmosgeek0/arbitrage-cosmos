@@ -23,3 +23,9 @@ reversibility, preview provider, invariants, telemetry, and pending wiring.
 Only an owning implementation with preview, exact revision/digest, durable
 receipt, and independent readback may ever change the row from
 `DRAFT`/`PENDING_BACKEND`.
+
+The cockpit draft now explicitly requests the D-LAUNCH-13 owner-law digest and
+the closed Class A-D trigger, special-trigger evidence, shadow, numeric-bounds,
+nine-point promotion, and automatic-demotion projection. A projected Class A
+PASS remains registered-only eligibility evidence; this packet always projects
+`operationalActionAllowed=false` and never becomes the command owner.

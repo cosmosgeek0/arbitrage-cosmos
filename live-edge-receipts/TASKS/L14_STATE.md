@@ -1,6 +1,6 @@
 # L14 state
 
-Status: `WORKING`
+Status: `L14_ACCEPTED`
 
 - Branch: `l14-controls-20260712`
 - Accepted base: `39ebd984a4e2e24b598a96784137f96c4d643b03`
@@ -13,9 +13,15 @@ Status: `WORKING`
 - Standard deterministic gate: `377/377`
 - Full repository battery: `4468/4468`
 - Independent adversarial reviews: `ACCEPT`, no remaining blocker
+- Implementation commit:
+  `40b97b7c69ed91e621d1b8a8f66a13a9bd23fec2`
+- Immutable receipt commit:
+  `cf9a104c8f104e06082721203796d71b12d28bc3`
+- Acceptance record: the containing acceptance commit, recorded by the next
+  state-only seal because a commit cannot self-reference
 - Canonical Ledger/System Integration wiring: `UNWIRED`, deferred to I00
 - L08-dependent action-policy validation: `WAITING_L08`
 - External action authorization: `NONE`
 
-Do not advance this file to `ACCEPTED` until the implementation commit,
-immutable receipt and acceptance commit are complete.
+L14 is accepted only as `LANE_READY_BUILT_AND_TESTED_UNWIRED`. No integration,
+external action or push is authorized by this state.

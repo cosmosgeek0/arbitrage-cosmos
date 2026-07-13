@@ -18,6 +18,12 @@ Status: `BLOCKED_SHARED_OWNER_DEPENDENCY`
   `ada6e344b6707638ec6c44e43534f45ab3babfec`
 - Accepted L08.1 implementation:
   `2754d16e9bf59bbe6965ae83d8283592d2e48195`
+- New L09 blocker evidence commit:
+  `ad397169ec2ccc554548bfe253678fd1c33861e3`
+- New L09 blocker evidence tree:
+  `80e558836d8875da672a110ff323a6f8886c4bf7`
+- Immutable blocker receipt:
+  `live-edge-receipts/RECEIPTS/L09_BLOCKED_L07_SPOT_BINDING.md`
 - Frozen protocol SHA: `73e1a1ff7daa48df8dac45713fc5f106842edafc`
 
 The tracked tree and index were clean at resume. The only untracked inputs are

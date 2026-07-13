@@ -1,14 +1,13 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `38`
+State generation: `39`
 
-Updated: 2026-07-13T12:59:52+0530
+Updated: 2026-07-13T13:26:11+0530
 
-Status: `Q17 COMPLETE — READY FOR EXACT C17 VERIFICATION`. Q13 and Q15 are
-accepted and director-merged. Q16 is exact-commit accepted. Q17 implementation,
-proof, benchmark, generated kit and adversarial correction loop are complete. C17
-is pending exact Git scope verification; only a separate clean-archive A17 may set
-`LANE_READY` and park the branch for director audit.
+Status: `LANE_READY — PARKED FOR DIRECTOR AUDIT`. Q13 and Q15 are accepted and
+director-merged. Q16 and Q17 are exact-commit accepted. Exact C17 Git and clean-
+archive verification passed; the separate A17 acceptance receipt and this final
+state freeze the Q lane. No further builder action, merge or push is authorized.
 
 Program: Q lane — deterministic research evidence, labels, models, calibration,
 uncertainty and advisory-only local inference.
@@ -17,6 +16,14 @@ uncertainty and advisory-only local inference.
 
 - Worktree: `/Users/cosmosgeek/Desktop/quant-edge-research-20260712`
 - Branch: `quant-edge-research-factory-20260712`
+- Accepted Q17 implementation C17:
+  `4cc83f43edd9a50ff2d3e20970a57e2d0a57e92a`; tree
+  `1aec7711f64419d50770d9c515d012173e982240`; exact parent Q17 activation
+  `ba7323e0ac1f5013d9309b5b73998b84bdffbae5`.
+- Q17 acceptance receipt SHA-256:
+  `9cfa0356228d7f48674df2d9db523f0f0d53dab1a4e4255b6ba9676e463ec5dc`.
+  A17 is the first commit containing that non-self-referential receipt and this
+  generation-39 state; its exact SHA is reported externally after commit.
 - Accepted Q16 implementation C16:
   `b3d8cedece8cf3a9f546c60016beae442f85f160`; tree
   `a35b888041cbdd4ea56accd29a490a8ce043cef0`; exact parent
@@ -138,10 +145,17 @@ acceptance receipt. Implementation receipt SHA-256:
 `b3b08998bfc3450de2b3502defca482cb6759f6cfe44a4cbb9f2e95d43fea5d6`;
 Git blob `26d1c16390c9d7763969e5abb8eb42d8591af020`.
 
-## Completed Q17 truth pending exact C17 verification
+## Accepted Q17 truth
 
 - Activation commit: `ba7323e0ac1f5013d9309b5b73998b84bdffbae5`; tree
   `976feb81db7ad9d7bbc2ea48819dc500afcf5a1f`; exact parent A16.
+- Accepted implementation C17:
+  `4cc83f43edd9a50ff2d3e20970a57e2d0a57e92a`; tree
+  `1aec7711f64419d50770d9c515d012173e982240`; exact parent activation.
+- Exact-C17 archive tar SHA-256:
+  `271fedc527a5da2d4096415f72915458e9d7a32f52505c7d9d1e66a50b2f4127`.
+- Acceptance receipt: `quant/RECEIPTS/Q17_ACCEPTANCE.md`; SHA-256
+  `9cfa0356228d7f48674df2d9db523f0f0d53dab1a4e4255b6ba9676e463ec5dc`.
 - Task: `quant/TASKS/Q17.md`; status complete/ready for independent commit
   verification; SHA-256
   `03d489ce5b0583dab2ec2a96380519535a2547ee78743d1794622cfc4a30c80e`.
@@ -195,7 +209,8 @@ Git blob `26d1c16390c9d7763969e5abb8eb42d8591af020`.
   `c5574c79cbd9450e6a890b67ade9a6c71e2f1fb9574e71c0eaec3057c545e1b2`;
   it contains seven exact current rows.
 - Generated component evidence binds activation/current task truth separately and
-  truthfully marks C17/A17 pending.
+  truthfully marks C17/A17 pending because it predates those commits. Exact Git
+  inspection and the acceptance receipt provide the non-self-referential binding.
 
 ## Verification evidence
 
@@ -243,6 +258,24 @@ Git blob `26d1c16390c9d7763969e5abb8eb42d8591af020`.
   group reports `180 passed, 0 failed`.
 - Independent adversarial reviews of replay/evidence/components, benchmark,
   security and generation report no remaining material finding after corrections.
+- Exact-C17 archive SHA-256:
+  `271fedc527a5da2d4096415f72915458e9d7a32f52505c7d9d1e66a50b2f4127`.
+  Explicit import assertions proved `quant_edge`, `quant_edge.inference` and
+  `quant_edge.final_proof` resolved inside the extracted archive.
+- The first accumulated archive attempt exposed only the absent archived
+  `quant/.venv/bin/python` harness path: four Q16 subprocess tests could not launch.
+  After linking the pinned interpreter while forcing archive `PYTHONPATH`, import
+  isolation was reproved and the suite reran from the beginning.
+- Exact-C17 archive focused: `384 passed in 33.72s`, `96.50%` branch coverage.
+  Accumulated: `3,011 passed, 6 skipped in 83.57s`.
+- Exact-C17 archive stable categories: unit `1,273`; property `81`; contract `517`;
+  leakage/validation `237`; replay `189`; Q16/Q17 integration `279`; benchmark
+  `121`.
+- Exact-C17 archive Ruff/format/mypy are clean over 325 files; lock 68 packages;
+  registry eight families; protocol `22/22`; Q00 guard `6/6`; Q04/Q16/Q17
+  deterministic evidence exact-current.
+- Exact-C17 archive root `npm test` and `npm run test:all`: exit 0; terminal
+  integration `180 passed, 0 failed`.
 
 ## Scope and safety
 
@@ -259,17 +292,20 @@ Git blob `26d1c16390c9d7763969e5abb8eb42d8591af020`.
 - Q16 is `SYNTHETIC_ONLY`. It proves deterministic plumbing and safe abstention, not
   edge, observed-market validity, production performance, calibration quality,
   capacity or permission to act.
-- Expected C17 scope is exactly 28 regular `100644` files under `quant/**`, with
+- Accepted C17 scope is exactly 28 regular `100644` files under `quant/**`, with
   path-set SHA-256
   `604cdd885b4b61211b5408bf6abadb36382fb79b2b52d015ba459521fd33f8c6`.
-  Actual staged/committed path and mode truth remains pending Git verification.
+  Exact committed-tree and mode inspection passed.
+- A17 is restricted to `quant/RECEIPTS/Q17_ACCEPTANCE.md` and this state, both
+  regular `100644`. Its commit identity is external to its non-self-referential
+  bytes and freezes final HEAD for director audit.
 - Q17 adds no environment/secret read, external listener/source, unsafe loader,
   private/signed exchange call, order, test order or money/risk/execution authority.
   UDS/literal-loopback-only Q16 transport remains the only serving boundary.
 - Q17 is `SYNTHETIC_ONLY` / `DATA_INSUFFICIENT`. Passing proof and benchmark
   machinery do not establish edge, production performance or permission to act.
 
-## Completed Q17 contract pending commit acceptance
+## Accepted Q17 contract
 
 - Task: `quant/TASKS/Q17.md`; status complete/ready for independent commit
   verification; SHA-256
@@ -288,27 +324,22 @@ Git blob `26d1c16390c9d7763969e5abb8eb42d8591af020`.
 - No Q17 result can promote Q13/Q15/Q16 truth. The final advisory action remains
   `ABSTAIN_UNKNOWN` unless accepted upstream bytes themselves change through a
   future director-controlled phase.
-- C17/A17 are not embedded in generated evidence. C17 must prove exact Git scope;
-  A17 must bind exact C17 and its clean-archive results.
+- C17/A17 are not embedded in generated evidence. Exact C17 Git proof, the clean-
+  archive acceptance receipt and externally reported A17 identity complete the
+  binding without self-reference.
 
 ## Exact next task
 
-1. Remove only Q17 transient coverage/bytecode artifacts; preserve both protected
-   untracked owner directives.
-2. Stage exactly the declared 28 C17 paths, verify cached path set, regular `100644`
-   modes, diff checks, scope gate and frozen bytes, then commit C17.
-3. Verify exact C17 Git identity and run the full acceptance gate from a clean
-   archive importing archive source only.
-4. Create separate A17 with only `quant/RECEIPTS/Q17_ACCEPTANCE.md` and this state
-   at generation 39; freeze HEAD at `LANE_READY — PARKED FOR DIRECTOR AUDIT`.
-   Never push.
+1. Freeze A17 HEAD and preserve both protected untracked owner directives.
+2. Park for director audit. The director may inspect exact C17/A17 and decide
+   controlled integration on a director-owned branch.
+3. Do not resume implementation, merge or push from this lane.
 
 ## Resume read order
 
 1. Root `STATE.md`, `MISSION.md`, `ARCHITECTURE.md` Part II and `DIRECTOR.md`.
 2. The two launch directives, frozen protocol inputs and
    `quant/DIRECTIVE_INPUTS.lock`.
-3. This state, `quant/TASKS/Q17.md`, Q17 implementation receipt and immutable Q16
-   implementation/acceptance receipts.
-4. Confirm branch/HEAD, protected untracked inputs, frozen hashes and scope before
-   resuming Q17 implementation or verification.
+3. This state, Q17 implementation/acceptance receipts and immutable Q16 receipts.
+4. Confirm final A17 HEAD, exact C17 ancestry, protected untracked inputs and frozen
+   hashes before any director audit. The builder lane stays parked.

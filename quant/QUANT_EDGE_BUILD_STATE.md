@@ -1,12 +1,13 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `35`
+State generation: `36`
 
-Updated: 2026-07-13T10:15:18+0530
+Updated: 2026-07-13T10:32:21+0530
 
-Status: `Q16 COMPLETE — READY_FOR_INDEPENDENT COMMIT VERIFICATION`. Q13 and Q15
-are accepted and director-merged. The Q-lane spine is authorized to self-accept
-Q16, execute Q17, and then stop at `LANE_READY` for director audit.
+Status: `Q16 ACCEPTED — Q17 READY TO ACTIVATE`. Q13 and Q15 are accepted and
+director-merged. Exact C16 verification is sealed by
+`quant/RECEIPTS/Q16_ACCEPTANCE.md`. The Q-lane spine must now execute Q17 and stop
+at `LANE_READY` for director audit.
 
 Program: Q lane — deterministic research evidence, labels, models, calibration,
 uncertainty and advisory-only local inference.
@@ -15,7 +16,11 @@ uncertainty and advisory-only local inference.
 
 - Worktree: `/Users/cosmosgeek/Desktop/quant-edge-research-20260712`
 - Branch: `quant-edge-research-factory-20260712`
-- Q16 activation commit / current implementation parent:
+- Accepted Q16 implementation C16:
+  `b3d8cedece8cf3a9f546c60016beae442f85f160`; tree
+  `a35b888041cbdd4ea56accd29a490a8ce043cef0`; exact parent
+  `cff7943845231ef1518dbfb937f986cdf2e247f5`.
+- Q16 activation commit:
   `cff7943845231ef1518dbfb937f986cdf2e247f5`; tree
   `b988cd7ebc2eff2090f972115a0741f6089d358a`; exact parent
   `5076eba16299595961a7a250a7e917b868afd454`.
@@ -73,12 +78,13 @@ uncertainty and advisory-only local inference.
   frozen fixture SHA-256:
   `c42a4257ea5f46abb38ec9ab4e56983e7049cdf5b448150a4d4647a6234d99a4`.
 
-## Q16 delivered truth
+## Accepted Q16 truth
 
 - Task: `quant/TASKS/Q16.md`; status complete; SHA-256
   `5b98e966af7fcc40ef540b20e9f22828d74c4b00dde7eaaaa407120e7c51b0d0`.
-- Decision: `quant/DECISIONS/Q16-001-LOCAL-INFERENCE.md`; SHA-256
-  `4a950122a78250f83a05c7e2a6962ee0a44a0926dfa2fcf0c897419c6858acfa`.
+- Decision: `quant/DECISIONS/Q16-001-LOCAL-INFERENCE.md`; authoritative C16
+  SHA-256
+  `eac813f4e07c72915e06ee3bd707b0d7a9c71951c1c9fb2bad9a387e345d2d`.
 - Design: `quant/docs/Q16_INFERENCE_PROTOCOL_DESIGN.md`; SHA-256
   `a4e96d377cfe4f0557bd4ec6535f96b2be6d9549020ec246a97adcb1ab93e316`.
 - Generated raw fixture SHA-256:
@@ -122,16 +128,20 @@ uncertainty and advisory-only local inference.
   operation, timeout, shutdown and fail-closed integration instructions.
 - `protocol_kit_manifest.v1.json` hashes every generated Q16 file except itself.
 
-Exact current hashes are recorded in immutable `quant/RECEIPTS/Q16.md`; generation
-35 does not predict the containing C16 commit SHA. Immutable receipt SHA-256:
-`b3b08998bfc3450de2b3502defca482cb6759f6cfe44a4cbb9f2e95d43fea5d6`.
+Exact current hashes are recorded in immutable `quant/RECEIPTS/Q16.md`, with its
+single stale decision-document hash corrected fail-closed by the immutable
+acceptance receipt. Implementation receipt SHA-256:
+`b3b08998bfc3450de2b3502defca482cb6759f6cfe44a4cbb9f2e95d43fea5d6`;
+Git blob `26d1c16390c9d7763969e5abb8eb42d8591af020`.
 
 ## Verification evidence
 
 - Restored baseline at director Q13 merge `3ed8e38`: `2455 passed, 6 skipped in
   85.01s` under pinned CPython 3.13.14, uv 0.11.28 and `models` extra.
+- Exact-C16 clean archive SHA-256:
+  `7c5073166795ee3dd7f88d3f5e71bbe4e4942ebfb18dfd440c7894cc24763621`.
 - Q16 focused: `172 passed`; combined `quant_edge.inference` branch coverage
-  `95.50%` over 1,373 statements and 514 branches; required threshold 95% passed.
+  `95.50%` over 1,374 statements and 514 branches; required threshold 95% passed.
 - Accumulated Q suite after final corrections: `2627 passed, 6 skipped in 62.15s`.
   Four Q08 and two Q15 skips are the documented shard-branch-only scope laws.
 - Ruff lint/format and strict mypy over the Q16 implementation/tests: clean.
@@ -142,6 +152,9 @@ Exact current hashes are recorded in immutable `quant/RECEIPTS/Q16.md`; generati
   `6/6`.
 - `npm test`: exit 0; typecheck/build and all deterministic server/web checks pass.
   Vite's existing chunk-size warning is non-failing.
+- Clean archive accumulated suite: `2627 passed, 6 skipped in 65.13s`; Ruff and
+  format-check clean over 310 files; strict mypy clean over 310 files; lock,
+  registry, protocol and Q00 gates all passed.
 - Generation is byte-identical across CWD, timezone and hash-seed changes. Node and
   Python canonical hashes agree over frozen fixtures and deterministic numeric
   vectors.
@@ -151,9 +164,11 @@ Exact current hashes are recorded in immutable `quant/RECEIPTS/Q16.md`; generati
 
 ## Scope and safety
 
-- Q16 writes only its exclusive additions under `quant/**`, this state and its
-  immutable receipt. Frozen registry/protocol/input-lock and accepted Q00–Q15 bytes
-  remain unchanged.
+- C16 contains exactly 32 changed regular `100644` paths, all under `quant/**`.
+  Frozen registry/protocol/input-lock and accepted Q00–Q15 bytes remain unchanged.
+- Exact verification found one stale Q16 decision SHA in the immutable C16 receipt;
+  `quant/RECEIPTS/Q16_ACCEPTANCE.md` records the authoritative hash and preserves
+  the original receipt rather than rewriting history.
 - No Main, other worktree, merge or push is touched.
 - No environment/secret read, public listener, external network source, private or
   signed exchange call, unsafe deserializer, order, test order, borrow/repay,
@@ -165,14 +180,12 @@ Exact current hashes are recorded in immutable `quant/RECEIPTS/Q16.md`; generati
 
 ## Exact next task
 
-1. Stage only the explicit Q16 write set plus this generation-35 state and
-   `quant/RECEIPTS/Q16.md`; run the scope and diff gates; create C16.
-2. Verify exact C16 from Git/clean archive. Create only
-   `quant/RECEIPTS/Q16_ACCEPTANCE.md` and generation-36 state in A16.
-3. Activate Q17 in a separate generation, execute its end-to-end proof, fault
+1. Commit only `quant/RECEIPTS/Q16_ACCEPTANCE.md` and this generation-36 state as
+   A16 after the scope and exact-diff gates.
+2. Activate Q17 in a separate generation, execute its end-to-end proof, fault
    campaigns, benchmark, security/scope evidence, final receipt and exact-commit
    acceptance.
-4. Stop at `LANE_READY` with the accepted HEAD frozen and park for director audit.
+3. Stop at `LANE_READY` with the accepted HEAD frozen and park for director audit.
    Never push.
 
 ## Resume read order
@@ -180,6 +193,6 @@ Exact current hashes are recorded in immutable `quant/RECEIPTS/Q16.md`; generati
 1. Root `STATE.md`, `MISSION.md`, `ARCHITECTURE.md` Part II and `DIRECTOR.md`.
 2. The two launch directives, frozen protocol inputs and
    `quant/DIRECTIVE_INPUTS.lock`.
-3. This state, Q16 task/decision/design and immutable Q16 receipts.
+3. This state, Q16 task/decision/design and both immutable Q16 receipts.
 4. Confirm branch/HEAD, protected untracked inputs, frozen hashes and scope before
-   exact-C16 verification or Q17 activation.
+   Q17 activation.

@@ -1,5 +1,6 @@
 import type {
   BinanceInstrumentRegistrySnapshot,
+  BindBinanceSpotOrderTifCapabilityResult,
   InstrumentSizingRequest,
   InstrumentSizingResult,
 } from '../binanceInstrumentSpecs/types.js';
@@ -112,6 +113,7 @@ export type TwinEvent =
   | TwinBookDeltaEvent
   | TwinBookUnavailableEvent
   | TwinPreflightEvent
+  | TwinSpotOrderTifPreflightEvent
   | TwinRateDecisionEvent
   | TwinPlaceDispatchEvent
   | TwinVenueArrivalEvent
@@ -179,6 +181,13 @@ export type TwinPreflightEvent = TwinEventEnvelope<'PREFLIGHT_EVIDENCE', {
   readonly fixtureId: string;
   readonly registrySnapshot: BinanceInstrumentRegistrySnapshot;
   readonly sizingRequest: InstrumentSizingRequest;
+}>;
+
+export type TwinSpotOrderTifPreflightEvent = TwinEventEnvelope<'SPOT_ORDER_TIF_PREFLIGHT_EVIDENCE', {
+  readonly fixtureId: string;
+  readonly registrySnapshot: BinanceInstrumentRegistrySnapshot;
+  readonly sizingRequest: InstrumentSizingRequest;
+  readonly expectedCapabilityRevision: string;
 }>;
 
 export type TwinRateDecisionEvent = TwinEventEnvelope<'RATE_DECISION', {
@@ -325,6 +334,26 @@ export interface TwinBookState {
   readonly asks: readonly TwinBookLevel[];
 }
 
+export interface TwinStaticPreflightEvidence {
+  readonly fixtureId: string;
+  readonly registrySnapshot: BinanceInstrumentRegistrySnapshot;
+  readonly sizingRequest: InstrumentSizingRequest;
+  readonly result: InstrumentSizingResult;
+}
+
+export interface TwinSpotOrderTifPreflightEvidence {
+  readonly ownerEvidenceKind: 'L081_SPOT_LIMIT_TIF';
+  readonly fixtureId: string;
+  readonly registrySnapshot: BinanceInstrumentRegistrySnapshot;
+  readonly sizingRequest: InstrumentSizingRequest;
+  readonly expectedCapabilityRevision: string;
+  readonly result: BindBinanceSpotOrderTifCapabilityResult;
+}
+
+export type TwinInstrumentPreflightEvidence =
+  | TwinStaticPreflightEvidence
+  | TwinSpotOrderTifPreflightEvidence;
+
 export interface TwinScenarioState {
   readonly schema: typeof EXCHANGE_TWIN_SCHEMA;
   readonly scenarioId: string;
@@ -339,12 +368,7 @@ export interface TwinScenarioState {
   readonly book: TwinBookState;
   readonly bookRevisions: readonly string[];
   readonly orders: readonly TwinOrderState[];
-  readonly preflights: readonly {
-    readonly fixtureId: string;
-    readonly registrySnapshot: BinanceInstrumentRegistrySnapshot;
-    readonly sizingRequest: InstrumentSizingRequest;
-    readonly result: InstrumentSizingResult;
-  }[];
+  readonly preflights: readonly TwinInstrumentPreflightEvidence[];
   readonly rateDecisions: readonly {
     readonly fixtureId: string;
     readonly ownerEvidenceSha256: string;

@@ -31,7 +31,13 @@ const EXACT_IMPORTS = new Map([
     'subtractExactDecimals',
   ])],
   ['../../../foundation/contracts/index.js', new Set(['canonicalJson'])],
-  ['../binanceInstrumentSpecs/sizing.js', new Set(['preflightInstrumentSizing'])],
+  ['../binanceInstrumentSpecs/sizing.js', new Set([
+    'bindSpotOrderTifCapability',
+    'preflightInstrumentSizing',
+  ])],
+  ['../binanceInstrumentSpecs/spotOrderTifCapability.js', new Set([
+    'validateSpotOrderTifCapability',
+  ])],
   ['../binanceSignedKernel/rateBudget.js', new Set([
     'BinanceRateBudgetState',
     'BinanceRateReservationDecision',
@@ -42,6 +48,7 @@ const EXACT_IMPORTS = new Map([
 const TYPE_ONLY_IMPORTS = new Map([
   ['../binanceInstrumentSpecs/types.js', new Set([
     'BinanceInstrumentRegistrySnapshot',
+    'BindBinanceSpotOrderTifCapabilityResult',
     'InstrumentSizingRequest',
     'InstrumentSizingResult',
   ])],
@@ -57,7 +64,13 @@ const EXACT_TYPE_BINDINGS = new Map([
   ])],
 ]);
 const EXACT_RUNTIME_BINDINGS = new Map([
-  ['../binanceInstrumentSpecs/sizing.js', new Set(['preflightInstrumentSizing'])],
+  ['../binanceInstrumentSpecs/sizing.js', new Set([
+    'bindSpotOrderTifCapability',
+    'preflightInstrumentSizing',
+  ])],
+  ['../binanceInstrumentSpecs/spotOrderTifCapability.js', new Set([
+    'validateSpotOrderTifCapability',
+  ])],
   ['../binanceSignedKernel/rateBudget.js', new Set(['reserveRateBudget'])],
   ['../durableMutationJournal/journal.js', new Set(['validateMutationJournalSnapshot'])],
 ]);

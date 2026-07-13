@@ -127,6 +127,20 @@ L08.1 resolves only the L09 Spot order/TIF capability blocker. It does not
 wire L09, alter strategy ownership, or add a live/test order route. Director
 must rebase L09/L10/L11 from the exact accepted L08.1 receipt cut.
 
+## L08.2 delta
+
+| Component | Path | Lane build proof | Integration state | Authority / limitation |
+| --- | --- | --- | --- | --- |
+| Explicit Spot capability preflight event | `SPOT_ORDER_TIF_PREFLIGHT_EVIDENCE` in `server/src/liveEdge/adapters/exchangeTwin/types.ts`, `twin.ts` | `BUILT_AND_TESTED` | `LANE_READY_UNWIRED` | Accepts only a fixture ID, current L04 registry snapshot, complete sizing request and expected L08.1 capability revision for one Spot `LIMIT` fixture; caller-supplied results are impossible, legacy Spot preflight stays blocked, and every mismatch remains `PREFLIGHT_NOT_EXACT` with zero economic effect |
+| Current-owner replay seam | `evaluateExchangeTwinSpotOrderTifPreflight` in `server/src/liveEdge/adapters/exchangeTwin/ownerEvidence.ts` | `BUILT_AND_TESTED` | injected comparison only | Reruns the accepted L08.1/L04 binder and validator at event ingestion, venue arrival and checkpoint validation with exact injected-time binding; it owns no registry, policy, order, transport, action or persistence truth |
+| Spot LIMIT/TIF twin proofs | `server/test/liveEdge/exchangeTwin/spot-order-tif-bridge.test.mjs` | exchange-twin suite `78/78` | test-only | Proves exact Spot BUY LIMIT GTC, GTC/IOC/FOK mechanics, passive trade-through, legacy Spot and USD-M regression, revision/request/expiry/quantity tamper rejection, replay/checkpoint integrity, closed events, frozen legacy hashes and equal-time ambiguity; network-free |
+
+L08.2 resolves only the L09-002 L07-consumption blocker. It consumes the exact
+accepted L08.1 Spot `LIMIT` plus `GTC`/`IOC`/`FOK` surface without changing
+L04, L08.1 or the accepted L07 fill mechanics. It adds no sender, order route,
+policy authority or production wiring. Director must rebase L09/L10/L11 from
+the exact accepted L08.2 receipt cut.
+
 ## Director-owned integration still required
 
 - owner-approved Basis/Volume advisory intake;
@@ -160,12 +174,12 @@ evidence. It remains `UNWIRED`, non-sendable and non-authoritative; Foundation
 still owns canonical execution/reconciliation truth, and production order
 policy/composition begins no earlier than director-controlled later phases.
 
-L08/L08.1 consume only injected owner projections and accepted L04/L07
-revisions; L08.1 reruns the current L04 binding rather than trusting a caller's
-self-sealed projection.
+L08/L08.1/L08.2 consume only injected owner projections and accepted L04/L07
+revisions; L08.1 and L08.2 rerun the current L04 binding rather than trusting a
+caller's self-sealed projection.
 They create no Capital/Risk decision, order, ticket, coordinator, lifecycle,
 reconciliation or persistence owner. Production composition remains
-director-owned; L09/L10/L11 must rebase from the exact accepted L08.1 receipt
+director-owned; L09/L10/L11 must rebase from the exact accepted L08.2 receipt
 cut.
 
 ## Explicitly absent

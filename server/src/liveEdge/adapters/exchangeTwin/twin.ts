@@ -17,6 +17,7 @@ import {
   evaluateExchangeTwinInstrumentPreflight,
   evaluateExchangeTwinMutationSnapshot,
   evaluateExchangeTwinRateReservation,
+  evaluateExchangeTwinSpotOrderTifPreflight,
 } from './ownerEvidence.js';
 import {
   EXCHANGE_TWIN_CHECKPOINT_SCHEMA,
@@ -30,6 +31,7 @@ import {
   type TwinEvent,
   type TwinFeeEvidence,
   type TwinFill,
+  type TwinInstrumentPreflightEvidence,
   type TwinOrderFixture,
   type TwinOrderState,
   type TwinScenarioInput,
@@ -56,6 +58,7 @@ const L06_MUTATION_ID = /^l06mut_[0-9a-f]{64}$/;
 const L06_OUTCOME_REVISION = /^l06outcome_[0-9a-f]{64}$/;
 const L06_HEAD_DIGEST = /^l06head_[0-9a-f]{64}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
+const L081_SPOT_CAPABILITY_REVISION = /^l081-spot-order-tif-capability:[0-9a-f]{24}$/;
 const SECRET_FIELDS = new Set([
   'apikey', 'apisecret', 'secret', 'password', 'passphrase', 'token', 'bearer',
   'signature', 'privatekey', 'credential', 'cookie', 'mnemonic',
@@ -92,6 +95,9 @@ const EVENT_PAYLOAD_FIELDS: Readonly<Record<TwinEvent['kind'], readonly string[]
   BOOK_DELTA: Object.freeze(['product', 'symbol', 'bookRevision', 'previousBookRevision', 'sourceSequence', 'observedAtMs', 'validUntilMs', 'bidUpdates', 'askUpdates']),
   BOOK_UNAVAILABLE: Object.freeze(['product', 'symbol', 'state', 'evidenceRevision']),
   PREFLIGHT_EVIDENCE: Object.freeze(['fixtureId', 'registrySnapshot', 'sizingRequest']),
+  SPOT_ORDER_TIF_PREFLIGHT_EVIDENCE: Object.freeze([
+    'fixtureId', 'registrySnapshot', 'sizingRequest', 'expectedCapabilityRevision',
+  ]),
   RATE_DECISION: Object.freeze(['fixtureId', 'rateState', 'reservationInput', 'ownerEvidenceSha256']),
   PLACE_DISPATCH: Object.freeze(['fixtureId']),
   VENUE_ARRIVAL: Object.freeze(['fixtureId', 'feeEvidence']),
@@ -125,6 +131,7 @@ const EVENT_PRIORITY: Readonly<Record<TwinEvent['kind'], number>> = Object.freez
   BOOK_SNAPSHOT: 12,
   BOOK_DELTA: 13,
   PREFLIGHT_EVIDENCE: 20,
+  SPOT_ORDER_TIF_PREFLIGHT_EVIDENCE: 20,
   RATE_DECISION: 21,
   PLACE_DISPATCH: 30,
   CANCEL_DISPATCH: 31,
@@ -951,6 +958,36 @@ function validateCommittedState(value: unknown, label: string): Readonly<TwinSce
     throw new RangeError('owner-evidence histories are overbound');
   }
   for (const preflightValue of state.preflights) {
+    if (typeof preflightValue === 'object' && preflightValue !== null
+      && Object.hasOwn(preflightValue, 'ownerEvidenceKind')) {
+      const preflight = record(preflightValue, [
+        'ownerEvidenceKind', 'fixtureId', 'registrySnapshot', 'sizingRequest',
+        'expectedCapabilityRevision', 'result',
+      ], 'Spot order/TIF preflight history');
+      const fixture = canonicalFixtures.get(identifier(preflight.fixtureId, 'Spot preflight fixture ID'));
+      const expectedCapabilityRevision = identifier(
+        preflight.expectedCapabilityRevision,
+        'expected Spot capability revision',
+      );
+      if (preflight.ownerEvidenceKind !== 'L081_SPOT_LIMIT_TIF'
+        || fixture?.product !== 'SPOT'
+        || fixture.orderType !== 'LIMIT'
+        || !L081_SPOT_CAPABILITY_REVISION.test(expectedCapabilityRevision)) {
+        throw new TypeError('Spot order/TIF preflight history identity is invalid');
+      }
+      const registrySnapshot = deepFreeze(snapshot(preflight.registrySnapshot));
+      const sizingRequest = deepFreeze(snapshot(preflight.sizingRequest)) as { evaluatedAtMs?: unknown };
+      const result = snapshot(preflight.result);
+      const recomputed = evaluateExchangeTwinSpotOrderTifPreflight(
+        registrySnapshot,
+        sizingRequest,
+        sizingRequest.evaluatedAtMs,
+      );
+      if (canonicalJson(result) !== canonicalJson(recomputed)) {
+        throw new TypeError('Spot order/TIF preflight history does not reproduce owner result');
+      }
+      continue;
+    }
     const preflight = record(preflightValue, ['fixtureId', 'registrySnapshot', 'sizingRequest', 'result'], 'preflight history');
     const fixture = canonicalFixtures.get(identifier(preflight.fixtureId, 'preflight fixture ID'));
     if (fixture === undefined) {
@@ -1136,6 +1173,56 @@ function preflightPass(
 ): boolean {
   const evidence = [...state.preflights].reverse()
     .find((entry) => entry.fixtureId === fixture.fixtureId);
+  if (evidence !== undefined && 'ownerEvidenceKind' in evidence) {
+    const result = evidence.result;
+    const capability = result.ok ? result.binding : null;
+    const request = evidence.sizingRequest as unknown as Readonly<Record<string, unknown>>;
+    const instrument = evidence.registrySnapshot.instruments.find((candidate) => (
+      candidate.symbol === fixture.symbol
+      && candidate.instrumentRevision === fixture.instrumentRevision
+    ));
+    return capability !== null
+      && fixture.product === 'SPOT'
+      && fixture.orderType === 'LIMIT'
+      && fixture.timeInForce !== null
+      && instrument !== undefined
+      && instrument.product === 'SPOT'
+      && instrument.baseAsset === fixture.baseAsset
+      && instrument.quoteAsset === fixture.quoteAsset
+      && instrument.sourceEvidenceRevision === fixture.sourceEvidenceRevision
+      && request.symbol === fixture.symbol
+      && request.instrumentRevision === fixture.instrumentRevision
+      && request.side === fixture.side
+      && request.orderType === fixture.orderType
+      && request.timeInForce === fixture.timeInForce
+      && request.requestedPrice === fixture.price
+      && request.requestedQuantity === fixture.quantity
+      && request.notionalAsset === fixture.quoteAsset
+      && evidence.expectedCapabilityRevision === capability.capabilityRevision
+      && capability.product === fixture.product
+      && capability.symbol === fixture.symbol
+      && capability.baseAsset === fixture.baseAsset
+      && capability.quoteAsset === fixture.quoteAsset
+      && capability.side === fixture.side
+      && capability.orderType === fixture.orderType
+      && capability.timeInForce === fixture.timeInForce
+      && capability.instrumentRevision === fixture.instrumentRevision
+      && capability.sourceEvidenceRevision === fixture.sourceEvidenceRevision
+      && capability.registryRevision === evidence.registrySnapshot.registryRevision
+      && capability.snapshotRevision === evidence.registrySnapshot.snapshotRevision
+      && capability.requestedPrice === fixture.price
+      && capability.requestedQuantity === fixture.quantity
+      && capability.resultQuantity === fixture.quantity
+      && fixture.price !== null
+      && capability.resultNotional === multiplyTwinDecimals(fixture.price, fixture.quantity)
+      && capability.evaluatedAtMs === evaluatedAtMs
+      && evaluatedAtMs < capability.validUntilMs
+      && capability.sendEligible === false
+      && capability.documentaryAuthority === 'DOCUMENTARY_EVIDENCE_ONLY'
+      && capability.actionAuthority === 'NONE_RECORD_ONLY'
+      && capability.externalActionAuthorization === 'NONE';
+  }
+  if (fixture.product === 'SPOT' && fixture.orderType === 'LIMIT') return false;
   const result = evidence?.result;
   const request = evidence?.sizingRequest as Readonly<Record<string, unknown>> | undefined;
   const instrument = evidence?.registrySnapshot.instruments.find((candidate) => (
@@ -1703,6 +1790,38 @@ function reduceCanonical(
       sizingRequest,
       result,
     }] };
+  } else if (event.kind === 'SPOT_ORDER_TIF_PREFLIGHT_EVIDENCE') {
+    const index = orderIndex(state, payload.fixtureId);
+    const fixture = state.orders[index].fixture;
+    if (fixture.product !== 'SPOT' || fixture.orderType !== 'LIMIT'
+      || fixture.timeInForce === null) {
+      throw new TypeError('Spot order/TIF preflight event requires a Spot LIMIT fixture');
+    }
+    const expectedCapabilityRevision = identifier(
+      payload.expectedCapabilityRevision,
+      'expected Spot capability revision',
+    );
+    if (!L081_SPOT_CAPABILITY_REVISION.test(expectedCapabilityRevision)) {
+      throw new TypeError('expected Spot capability revision is invalid');
+    }
+    const registrySnapshot = deepFreeze(snapshot(payload.registrySnapshot)) as unknown as
+      TwinScenarioState['preflights'][number]['registrySnapshot'];
+    const sizingRequest = deepFreeze(snapshot(payload.sizingRequest)) as unknown as
+      TwinScenarioState['preflights'][number]['sizingRequest'];
+    const result = evaluateExchangeTwinSpotOrderTifPreflight(
+      registrySnapshot,
+      sizingRequest,
+      event.occurredAtMs,
+    );
+    const evidence: TwinInstrumentPreflightEvidence = {
+      ownerEvidenceKind: 'L081_SPOT_LIMIT_TIF',
+      fixtureId: fixture.fixtureId,
+      registrySnapshot,
+      sizingRequest,
+      expectedCapabilityRevision,
+      result,
+    };
+    state = { ...state, preflights: [...state.preflights, evidence] };
   } else if (event.kind === 'RATE_DECISION') {
     const index = orderIndex(state, payload.fixtureId);
     const rateState = deepFreeze(snapshot(payload.rateState)) as
@@ -1772,16 +1891,30 @@ function reduceCanonical(
         .lastIndexOf(order.fixture.fixtureId);
       if (preflightIndex >= 0) {
         const ownerEvidence = state.preflights[preflightIndex];
-        const result = evaluateExchangeTwinInstrumentPreflight(
-          ownerEvidence.registrySnapshot,
-          ownerEvidence.sizingRequest,
-          event.occurredAtMs,
-        );
+        const preflights: readonly TwinInstrumentPreflightEvidence[] = 'ownerEvidenceKind' in ownerEvidence
+          ? state.preflights.map((entry, current) => current === preflightIndex
+            ? {
+              ...ownerEvidence,
+              result: evaluateExchangeTwinSpotOrderTifPreflight(
+                ownerEvidence.registrySnapshot,
+                ownerEvidence.sizingRequest,
+                event.occurredAtMs,
+              ),
+            }
+            : entry)
+          : state.preflights.map((entry, current) => current === preflightIndex
+            ? {
+              ...ownerEvidence,
+              result: evaluateExchangeTwinInstrumentPreflight(
+                ownerEvidence.registrySnapshot,
+                ownerEvidence.sizingRequest,
+                event.occurredAtMs,
+              ),
+            }
+            : entry);
         state = {
           ...state,
-          preflights: state.preflights.map((entry, current) => current === preflightIndex
-            ? { ...entry, result }
-            : entry),
+          preflights,
         };
       }
       const executed = executeAggressive(state, order, event);

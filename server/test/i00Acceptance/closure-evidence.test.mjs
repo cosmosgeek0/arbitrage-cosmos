@@ -3,7 +3,7 @@ import { readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 
-import { discoverOperationalPageIds, evaluateLoadShedding, measureResourceHarness, readJson, ROOT, sha256 } from './harness.mjs';
+import { discoverOperationalPageIds, evaluateLoadShedding, measureResourceHarness, readJson, readText, ROOT, sha256 } from './harness.mjs';
 import { buildMachineEvidence, evidenceDigest, renderReports } from '../../../test/i00/render-reports.mjs';
 import { verifyReceiptProvenance } from '../../../test/i00/git-provenance.mjs';
 
@@ -159,7 +159,7 @@ test('machine report is canonical and self-digesting', () => {
   const expected = buildMachineEvidence();
   assert.deepEqual({ ...actual, evidenceSha256: undefined }, { ...expected, evidenceSha256: undefined });
   assert.equal(actual.evidenceSha256, evidenceDigest(expected));
-  assert.equal(actual.targetState, 'PROOF_PRESTAGE_CANDIDATE');
+  assert.equal(actual.targetState, 'PROOF_PRESTAGE_READY');
   assert.equal(actual.productVerdict, 'AWAITING_REAL_ADAPTERS');
   assert(actual.frozenInputs.every((input) => input.passed));
   assert(actual.authority.scanPassed);
@@ -167,4 +167,17 @@ test('machine report is canonical and self-digesting', () => {
   assert(actual.authority.unresolvedConflictCount > 0);
   assert(actual.receiptProvenanceVerification.passed);
   assert(actual.routes.every((route) => route.observed));
+});
+
+test('ready seal records implementation identity receipt hashes and exact next integration command', () => {
+  const state = readText('IP_PROOF_STATE.md');
+  const receipt = readText('IP_PROOF_RECEIPT.md');
+  for (const document of [state, receipt]) {
+    assert(document.includes('PROOF_PRESTAGE_READY'));
+    assert(document.includes('88430c6a0e4850823f631c6b72afbfe2b6bb8b37'));
+    assert(document.includes('node packages/edge-protocol-tests/protocol.test.mjs'));
+    assert(document.includes('npm run test:all'));
+  }
+  assert(receipt.includes('83f730e10b73e1c7a0ab098b9f0d32a97d90424c14625359acc7d344c4889ab2'));
+  assert(state.includes('authorityConverged=false'));
 });

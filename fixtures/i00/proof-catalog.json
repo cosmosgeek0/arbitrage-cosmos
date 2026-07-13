@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "packet": "IP-PROOF",
-  "targetState": "PROOF_PRESTAGE_CANDIDATE",
+  "targetState": "PROOF_PRESTAGE_READY",
   "generatedAtUtc": "2026-07-13T00:00:00Z",
   "base": {
     "branch": "ip-proof-20260713",

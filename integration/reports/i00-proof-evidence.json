@@ -4,7 +4,7 @@
   "generatedAtUtc": "2026-07-13T00:00:00Z",
   "proofScope": "FIXTURE_PRESTAGE",
   "truthLabel": "SYNTHETIC",
-  "targetState": "PROOF_PRESTAGE_CANDIDATE",
+  "targetState": "PROOF_PRESTAGE_READY",
   "productVerdict": "AWAITING_REAL_ADAPTERS",
   "base": {
     "branch": "ip-proof-20260713",
@@ -10166,5 +10166,5 @@
       "gate": "IP-OPS accepted; no external mutation"
     }
   ],
-  "evidenceSha256": "52475c45557a3e80c2f8954c6da8a1955008985e29b884a3b8e7170d652ed5ca"
+  "evidenceSha256": "83f730e10b73e1c7a0ab098b9f0d32a97d90424c14625359acc7d344c4889ab2"
 }

@@ -210,6 +210,7 @@ export interface VolumeLifecycleSignals {
 export interface VolumeOccupancyRecord {
   readonly recordId: string;
   readonly recordRevision: string;
+  readonly projectionRevision: string | null;
   readonly kind: 'POSITION' | 'TICKET';
   readonly lifecycleId: string;
   readonly proposalId: string;
@@ -306,6 +307,7 @@ export interface VolumeLifecycleActionRequest {
   readonly downsideRevision: string;
   readonly triggerEpisodeRevision: string | null;
   readonly triggerReasonCodes: readonly string[];
+  readonly recoveryRetryRevision: string | null;
   readonly policyRevision: string;
   readonly plannedAtMs: number;
   readonly requiresOwnerPreflight: true;
@@ -333,6 +335,39 @@ export interface VolumeSettledTwinRecord {
   readonly fixtureId: string;
   readonly twinStateRevision: string;
   readonly twinOutcomeRevision: string;
+  readonly settlementState: 'NO_FILL' | 'FILLED' | 'RECOVERY_REQUIRED';
+  readonly outcomeSequence: number;
+}
+
+export interface VolumeNoFillRecord {
+  readonly action: Readonly<VolumeLifecycleActionRequest>;
+  readonly evidenceKind: 'TWIN_NO_FILL' | 'CANONICAL_NO_EFFECT';
+  readonly fixtureId: string | null;
+  readonly twinStateRevision: string | null;
+  readonly twinOutcomeRevision: string | null;
+  readonly recoveryResolutionRevision: string | null;
+}
+
+export interface VolumeRecoveryConsumptionRecord {
+  readonly recoveryResolutionRevision: string;
+  readonly baseProjectionRevision: string;
+  readonly noFill: Readonly<VolumeNoFillRecord> | null;
+  readonly priorConsumptionRevision: string | null;
+  readonly outcomeSequence: number;
+  readonly consumptionRevision: string;
+}
+
+export interface VolumeUnresolvedTwinConflict {
+  readonly kind: 'SIMULTANEOUS_CANONICAL_NO_EFFECT' | 'LATE_CANONICAL_NO_EFFECT'
+    | 'SETTLED_TWIN_REPLAY_MISMATCH' | 'ORPHAN_TWIN_EVIDENCE' | 'TWIN_CHRONOLOGY_INVALID'
+    | 'TWIN_EFFECT_RECONSTRUCTION_REQUIRED';
+  readonly actionKey: string;
+  readonly fixtureId: string;
+  readonly recoveryResolutionRevision: string | null;
+  readonly twinStateRevision: string;
+  readonly twinOutcomeRevision: string;
+  readonly filledQuantity: string;
+  readonly conflictRevision: string;
 }
 
 export interface VolumeLifecycleProjection {
@@ -348,6 +383,7 @@ export interface VolumeLifecycleProjection {
   readonly proposalId: string;
   readonly proposalRevision: string;
   readonly proposalDigest: string;
+  readonly entryKind: VolumeEntryKind;
   readonly featureRevision: string;
   readonly evidenceRevision: string;
   readonly exitPlanRevision: string;
@@ -385,15 +421,20 @@ export interface VolumeLifecycleProjection {
   readonly openedAtMs: number | null;
   readonly stageEnteredAtMs: number;
   readonly entryAveragePrice: string | null;
+  readonly entryCostBasisQuote: string;
+  readonly entryCostBasisQuantity: string;
   readonly currentPrice: string;
   readonly favorableExtremePrice: string | null;
+  readonly lastMarketObservedAtMs: number | null;
+  readonly lastSignalObservedAtMs: number | null;
+  readonly lastMarketObservationRevision: string | null;
+  readonly lastSignalObservationRevision: string | null;
   readonly positionQuantity: string;
   readonly positionQuantityTruth: 'EXACT' | 'UNKNOWN';
   readonly mandateUsageAtLifecycleStartQuote: string;
   readonly projectedMandateUsageQuote: string;
   readonly capitalUsageTruth: 'EXACT' | 'UNKNOWN';
-  readonly lastNoFillOwnerEvidenceRevision: string | null;
-  readonly lastNoFillIntentKey: string | null;
+  readonly lastNoFill: Readonly<VolumeNoFillRecord> | null;
   readonly reductionEpisodeRevision: string | null;
   readonly reductionEpisodeReasonCodes: readonly string[] | null;
   readonly reductionBasisQuantity: string | null;
@@ -410,7 +451,11 @@ export interface VolumeLifecycleProjection {
   readonly recoveryEvidenceFixtureId: string | null;
   readonly recoveryEvidenceTwinStateRevision: string | null;
   readonly recoveryEvidenceTwinOutcomeRevision: string | null;
+  readonly unresolvedTwinConflict: Readonly<VolumeUnresolvedTwinConflict> | null;
   readonly lastRecoveryResolutionRevision: string | null;
+  readonly lastRecoveryResolvedAtMs: number | null;
+  readonly consumedRecoveryRevisions: readonly string[];
+  readonly recoveryConsumptionHistory: readonly Readonly<VolumeRecoveryConsumptionRecord>[];
   readonly terminalOutcomeReasonCodes: readonly string[] | null;
   readonly feedbackOutcomeRevision: string | null;
   readonly lastTransition: Readonly<VolumeLastTransition>;
@@ -437,8 +482,8 @@ export interface VolumeTwinSettlement {
   readonly localTruth: string;
   readonly filledQuantity: string;
   readonly filledQuoteNotional: string;
-  readonly filledFeeQuote: string;
-  readonly filledCapitalUsageQuote: string;
+  readonly filledFeeQuote: string | null;
+  readonly filledCapitalUsageQuote: string | null;
   readonly remainingQuantity: string;
   readonly reasonCodes: readonly string[];
 }

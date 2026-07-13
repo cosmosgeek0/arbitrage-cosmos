@@ -12,7 +12,7 @@ import {
   twinForAction,
 } from './fixtures.mjs';
 
-test('an ACK without local fill observation remains pending and never becomes a fill', () => {
+test('positive venue evidence without local fill observation enters durable reconstruction', () => {
   const planned = planProbe();
   const evidence = twinForAction(planned.actionRequest, {
     includePrivate: false,
@@ -22,11 +22,15 @@ test('an ACK without local fill observation remains pending and never becomes a 
     current: planned.projection,
     twinEvidence: evidence,
   }));
-  assert.equal(result.disposition, 'HOLD');
+  assert.equal(result.disposition, 'RECOVERY_REQUIRED');
   assert.equal(result.twinSettlement.state, 'PENDING');
   assert.equal(result.projection.positionQuantity, '0');
+  assert.equal(result.projection.positionQuantityTruth, 'UNKNOWN');
+  assert.equal(result.projection.capitalUsageTruth, 'UNKNOWN');
   assert.equal(result.projection.openedAtMs, null);
   assert.equal(result.projection.pendingAction.actionKey, planned.actionRequest.actionKey);
+  assert.equal(result.projection.unresolvedTwinConflict.kind, 'TWIN_EFFECT_RECONSTRUCTION_REQUIRED');
+  assert.ok(result.reasonCodes.includes('TWIN_EFFECT_RECONSTRUCTION_REQUIRED'));
 });
 
 for (const [name, overrides] of [
@@ -47,7 +51,7 @@ for (const [name, overrides] of [
   });
 }
 
-test('HTTP timeout is durable UNKNOWN and emits a reconciliation-only recovery handoff', () => {
+test('HTTP timeout with positive venue evidence is durable UNKNOWN and reconstruction-only', () => {
   const planned = planProbe();
   const evidence = twinForAction(planned.actionRequest, {
     includePrivate: false,
@@ -60,12 +64,13 @@ test('HTTP timeout is durable UNKNOWN and emits a reconciliation-only recovery h
   }));
   assert.equal(result.disposition, 'RECOVERY_REQUIRED');
   assert.equal(result.projection.state, 'RECOVERY_REQUIRED');
-  assert.equal(result.recoveryHandoff.kind, 'RECONCILIATION_REQUIRED');
+  assert.equal(result.recoveryHandoff.kind, 'POSITION_RECONSTRUCTION');
   assert.equal(result.recoveryHandoff.recommendationOnly, true);
   assert.equal(result.recoveryHandoff.sendEligible, false);
   assert.equal(result.projection.pendingAction.actionKey, planned.actionRequest.actionKey);
   assert.equal(result.projection.settledTwinHistory.length, 0);
   assert.equal(result.projection.pendingTwinOutcomeRevision, result.recoveryHandoff.twinOutcomeRevision);
+  assert.equal(result.projection.unresolvedTwinConflict.kind, 'TWIN_EFFECT_RECONSTRUCTION_REQUIRED');
 
   const repeat = evaluateVolumeLifecycle(lifecycleInput({ current: result.projection, twinEvidence: evidence }));
   assert.equal(repeat.disposition, 'RECOVERY_REQUIRED');
@@ -75,14 +80,30 @@ test('HTTP timeout is durable UNKNOWN and emits a reconciliation-only recovery h
     current: result.projection,
     twinEvidence: twinForAction(planned.actionRequest),
   }));
-  assert.equal(corrected.disposition, 'SETTLED');
-  assert.equal(corrected.projection.positionQuantity, '0.02');
-  assert.equal(corrected.projection.positionQuantityTruth, 'EXACT');
-  assert.equal(corrected.projection.capitalUsageTruth, 'EXACT');
-  assert.equal(corrected.projection.pendingAction, null);
-  assert.equal(corrected.projection.pendingTwinStateRevision, null);
-  assert.equal(corrected.projection.recoveryEvidenceActionKey, null);
-  assert.equal(corrected.projection.lastSettledActionKey, planned.actionRequest.actionKey);
+  assert.equal(corrected.disposition, 'RECOVERY_REQUIRED');
+  assert.equal(corrected.projection.positionQuantity, '0');
+  assert.equal(corrected.projection.positionQuantityTruth, 'UNKNOWN');
+  assert.equal(corrected.projection.capitalUsageTruth, 'UNKNOWN');
+  assert.equal(corrected.projection.pendingAction.actionKey, planned.actionRequest.actionKey);
+  assert.equal(corrected.projection.unresolvedTwinConflict.conflictRevision,
+    result.projection.unresolvedTwinConflict.conflictRevision);
+
+  const canonicalNoEffectInput = lifecycleInput({
+    current: corrected.projection,
+    authority: { riskActionClass: 'RECOVERY' },
+    signals: {
+      reconciliationState: 'EXACT', recoveryDisposition: 'RESOLVED',
+      recoveryOutcome: 'NO_EFFECT', recoveryRevision: 'volume-timeout-positive-no-effect',
+    },
+  });
+  canonicalNoEffectInput.occupancy.activeRecords = canonicalNoEffectInput.occupancy.activeRecords
+    .filter((record) => record.kind === 'POSITION');
+  const unresolved = evaluateVolumeLifecycle(canonicalNoEffectInput);
+  assert.equal(unresolved.disposition, 'RECOVERY_REQUIRED');
+  assert.deepEqual(unresolved.projection.consumedRecoveryRevisions, []);
+  assert.equal(unresolved.projection.pendingAction.actionKey, planned.actionRequest.actionKey);
+  assert.equal(unresolved.projection.unresolvedTwinConflict.conflictRevision,
+    result.projection.unresolvedTwinConflict.conflictRevision);
 });
 
 test('partial ENTRY observation records exposure before recovery and settles the original ticket', () => {
@@ -102,12 +123,14 @@ test('partial ENTRY observation records exposure before recovery and settles the
 
 test('an observed fill is accounted before a missing canonical ticket forces recovery', () => {
   const planned = planProbe({ proposal: { proposalId: 'volume-proposal-binding-fill' } });
-  const result = evaluateVolumeLifecycle(lifecycleInput({
+  const input = lifecycleInput({
     proposal: { proposalId: 'volume-proposal-binding-fill' },
     current: planned.projection,
     twinEvidence: twinForAction(planned.actionRequest),
-    occupancy: { activeRecords: [] },
-  }));
+  });
+  input.occupancy.activeRecords = input.occupancy.activeRecords
+    .filter((record) => record.kind === 'POSITION');
+  const result = evaluateVolumeLifecycle(input);
   assert.equal(result.disposition, 'RECOVERY_REQUIRED');
   assert.equal(result.projection.positionQuantity, '0.02');
   assert.equal(result.projection.pendingAction, null);
@@ -197,6 +220,23 @@ test('a fee-driven final ADD cap breach retains the full observed exposure and u
   assert.equal(result.projection.projectedMandateUsageQuote, '11.505');
   assert.equal(result.projection.positionQuantityTruth, 'EXACT');
   assert.ok(result.reasonCodes.includes('TWIN_FILL_EXCEEDS_SINGLE_MANDATE_CAP'));
+  assert.equal(result.projection.unresolvedTwinConflict.kind,
+    'TWIN_EFFECT_RECONSTRUCTION_REQUIRED');
+
+  const noEffect = evaluateVolumeLifecycle(lifecycleInput({
+    proposal,
+    current: result.projection,
+    authority: { riskActionClass: 'RECOVERY' },
+    signals: {
+      reconciliationState: 'EXACT', recoveryDisposition: 'RESOLVED',
+      recoveryOutcome: 'NO_EFFECT', recoveryRevision: 'volume-final-add-cap-no-effect',
+    },
+  }));
+  assert.equal(noEffect.disposition, 'RECOVERY_REQUIRED');
+  assert.equal(noEffect.projection.projectedMandateUsageQuote, '11.505');
+  assert.deepEqual(noEffect.projection.consumedRecoveryRevisions, []);
+  assert.equal(noEffect.projection.unresolvedTwinConflict.conflictRevision,
+    result.projection.unresolvedTwinConflict.conflictRevision);
 });
 
 test('an observed full EXIT outside its SELL bound closes exposure before terminal recovery', () => {
@@ -450,12 +490,17 @@ test('canonical reconciliation mismatch enters recovery and resolves only from e
 
 test('a second active lifecycle discovered after entry escalates to recovery rather than hiding exposure', () => {
   const opened = openProbe();
-  const result = evaluateVolumeLifecycle(lifecycleInput({
+  const baseline = lifecycleInput({
     current: opened.settled.projection,
+  });
+  const result = evaluateVolumeLifecycle({
+    ...baseline,
     occupancy: {
-      activeRecords: [{
+      ...baseline.occupancy,
+      activeRecords: [...baseline.occupancy.activeRecords, {
         recordId: 'foreign-volume-ticket-record-0001',
         recordRevision: 'foreign-volume-ticket-revision-0001',
+        projectionRevision: null,
         kind: 'TICKET',
         lifecycleId: 'foreign-volume-ticket-0001',
         proposalId: 'foreign-volume-proposal-0001',
@@ -469,7 +514,7 @@ test('a second active lifecycle discovered after entry escalates to recovery rat
         actionKey: `l11action_${'e'.repeat(64)}`,
       }],
     },
-  }));
+  });
   assert.equal(result.disposition, 'RECOVERY_REQUIRED');
   assert.ok(result.reasonCodes.includes('ONE_POSITION_LIMIT'));
   assert.equal(result.recoveryHandoff.kind, 'POSITION_RECONSTRUCTION');

@@ -5,6 +5,7 @@ import { canonicalJson } from '../../../foundation/contracts/index.js';
 import {
   addVolumeDecimals,
   compareVolumeDecimals,
+  divideVolumeDecimals,
   multiplyVolumeDecimals,
   positiveVolumeDecimal,
   subtractVolumeDecimals,
@@ -16,8 +17,11 @@ import {
   VOLUME_LIFECYCLE_PROJECTION_SCHEMA,
   type VolumeLifecycleActionRequest,
   type VolumeLifecycleInput,
+  type VolumeOccupancyProjection,
   type VolumeLifecycleProjection,
   type VolumeLifecycleState,
+  type VolumeNoFillRecord,
+  type VolumeUnresolvedTwinConflict,
 } from './types.js';
 
 export const MAX_UTC_MS = 4_102_444_800_000;
@@ -34,6 +38,11 @@ const ENTRY_REVISION = /^l11entry_[0-9a-f]{64}$/u;
 const OWNER_REVISION = /^l11owner_[0-9a-f]{64}$/u;
 const RISK_CONTEXT_REVISION = /^l11riskcontext_[0-9a-f]{64}$/u;
 const REDUCTION_REVISION = /^l11reduction_[0-9a-f]{64}$/u;
+const RECOVERY_RETRY_REVISION = /^l11retry_[0-9a-f]{64}$/u;
+const RECOVERY_CONSUMPTION_REVISION = /^l11recoveryconsumption_[0-9a-f]{64}$/u;
+const TWIN_CONFLICT_REVISION = /^l11twinconflict_[0-9a-f]{64}$/u;
+const MARKET_OBSERVATION_REVISION = /^l11marketobservation_[0-9a-f]{64}$/u;
+const SIGNAL_OBSERVATION_REVISION = /^l11signalobservation_[0-9a-f]{64}$/u;
 const FEEDBACK_REVISION = /^l11feedback_[0-9a-f]{64}$/u;
 const SECRET_FIELDS = new Set([
   'apikey', 'apisecret', 'secret', 'password', 'passphrase', 'token', 'bearer',
@@ -93,7 +102,7 @@ const OCCUPANCY_FIELDS = Object.freeze([
   'owner', 'truth', 'observedAtMs', 'validUntilMs', 'activeRecords', 'priorActions',
 ] as const);
 const OCCUPANCY_RECORD_FIELDS = Object.freeze([
-  'recordId', 'recordRevision', 'kind', 'lifecycleId', 'proposalId', 'assessmentId',
+  'recordId', 'recordRevision', 'projectionRevision', 'kind', 'lifecycleId', 'proposalId', 'assessmentId',
   'symbol', 'direction', 'ownerFamily', 'state', 'positionQuantity', 'intentKey',
   'actionKey',
 ] as const);
@@ -103,7 +112,20 @@ const PRIOR_ACTION_FIELDS = Object.freeze([
 ] as const);
 const TWIN_EVIDENCE_FIELDS = Object.freeze(['schema', 'actionKey', 'fixtureId', 'twinState'] as const);
 const SETTLED_TWIN_FIELDS = Object.freeze([
-  'actionKey', 'fixtureId', 'twinStateRevision', 'twinOutcomeRevision',
+  'actionKey', 'fixtureId', 'twinStateRevision', 'twinOutcomeRevision', 'settlementState',
+  'outcomeSequence',
+] as const);
+const NO_FILL_FIELDS = Object.freeze([
+  'action', 'evidenceKind', 'fixtureId', 'twinStateRevision', 'twinOutcomeRevision',
+  'recoveryResolutionRevision',
+] as const);
+const RECOVERY_CONSUMPTION_FIELDS = Object.freeze([
+  'recoveryResolutionRevision', 'baseProjectionRevision', 'noFill',
+  'priorConsumptionRevision', 'outcomeSequence', 'consumptionRevision',
+] as const);
+const TWIN_CONFLICT_FIELDS = Object.freeze([
+  'kind', 'actionKey', 'fixtureId', 'recoveryResolutionRevision', 'twinStateRevision',
+  'twinOutcomeRevision', 'filledQuantity', 'conflictRevision',
 ] as const);
 const ACTION_FIELDS = Object.freeze([
   'schema', 'actionKey', 'intentKey', 'lifecycleId', 'projectionRevision',
@@ -121,7 +143,8 @@ const ACTION_FIELDS = Object.freeze([
   'inventoryRevision', 'inventoryAsset', 'inventoryAccountRealmId',
   'inventoryObservedAtMs', 'inventoryValidUntilMs',
   'instrumentRevision', 'filterRevision', 'sourceEvidenceRevision', 'bookRevision',
-  'costRevision', 'downsideRevision', 'triggerEpisodeRevision', 'triggerReasonCodes', 'policyRevision',
+  'costRevision', 'downsideRevision', 'triggerEpisodeRevision', 'triggerReasonCodes',
+  'recoveryRetryRevision', 'policyRevision',
   'plannedAtMs', 'requiresOwnerPreflight',
   'requiresCanonicalRisk', 'syntheticTwinProofRequired', 'sendEligible',
   'actionAuthority', 'externalActionAuthorization', 'lifecycleAuthority',
@@ -134,7 +157,7 @@ const TRANSITION_FIELDS = Object.freeze([
 const PROJECTION_FIELDS = Object.freeze([
   'schema', 'lifecycleId', 'projectionRevision', 'revision', 'symbol', 'direction',
   'accountRealmId', 'baseAsset', 'quoteAsset',
-  'proposalId', 'proposalRevision', 'proposalDigest', 'featureRevision',
+  'proposalId', 'proposalRevision', 'proposalDigest', 'entryKind', 'featureRevision',
   'evidenceRevision', 'exitPlanRevision', 'invalidationConditions', 'assessmentId',
   'assessmentRevision', 'assessmentFingerprintSha256', 'advisoryModelRevision',
   'advisoryFeatureRevision', 'advisoryEvidenceRevision', 'entryInstrumentRevision',
@@ -147,15 +170,21 @@ const PROJECTION_FIELDS = Object.freeze([
   'capitalReservationId', 'capitalReservationRevision', 'capitalMaximumQuote',
   'policyRevision', 'state',
   'recoveryResumeState', 'openedAtMs', 'stageEnteredAtMs', 'entryAveragePrice',
-  'currentPrice', 'favorableExtremePrice', 'positionQuantity', 'positionQuantityTruth',
+  'entryCostBasisQuote', 'entryCostBasisQuantity',
+  'currentPrice', 'favorableExtremePrice', 'lastMarketObservedAtMs', 'lastSignalObservedAtMs',
+  'lastMarketObservationRevision', 'lastSignalObservationRevision',
+  'positionQuantity', 'positionQuantityTruth',
   'mandateUsageAtLifecycleStartQuote', 'projectedMandateUsageQuote', 'capitalUsageTruth',
-  'lastNoFillOwnerEvidenceRevision', 'lastNoFillIntentKey', 'reductionEpisodeRevision',
+  'lastNoFill', 'reductionEpisodeRevision',
   'reductionEpisodeReasonCodes', 'reductionBasisQuantity', 'reductionTargetQuantity', 'pendingAction',
   'pendingActionBaseProjectionRevision', 'pendingTwinStateRevision', 'pendingTwinOutcomeRevision',
   'lastSettledActionKey', 'lastTwinStateRevision', 'lastTwinOutcomeRevision', 'settledTwinHistory',
   'recoveryEvidenceActionKey', 'recoveryEvidenceFixtureId',
   'recoveryEvidenceTwinStateRevision', 'recoveryEvidenceTwinOutcomeRevision',
-  'lastRecoveryResolutionRevision', 'terminalOutcomeReasonCodes', 'feedbackOutcomeRevision',
+  'unresolvedTwinConflict',
+  'lastRecoveryResolutionRevision', 'lastRecoveryResolvedAtMs',
+  'consumedRecoveryRevisions', 'recoveryConsumptionHistory',
+  'terminalOutcomeReasonCodes', 'feedbackOutcomeRevision',
   'lastTransition', 'lifecycleAuthority',
   'simulationAuthority', 'sendEligible',
   'actionAuthority', 'externalActionAuthorization',
@@ -285,6 +314,7 @@ export function deriveVolumeEntryEvidenceRevision(value: Readonly<Record<string,
     proposalId: value.proposalId,
     proposalRevision: value.proposalRevision,
     proposalDigest: value.proposalDigest,
+    entryKind: value.entryKind,
     featureRevision: value.featureRevision,
     evidenceRevision: value.evidenceRevision,
     exitPlanRevision: value.exitPlanRevision,
@@ -330,6 +360,7 @@ export function deriveVolumeIntentKey(value: Readonly<{
   capitalReservationId: string;
   entryEvidenceRevision: string;
   triggerEpisodeRevision: string | null;
+  recoveryRetryRevision: string | null;
 }>): string {
   return digest('l11intent_', {
     lifecycleId: value.lifecycleId,
@@ -343,6 +374,41 @@ export function deriveVolumeIntentKey(value: Readonly<{
     capitalReservationId: value.capitalReservationId,
     entryEvidenceRevision: value.entryEvidenceRevision,
     triggerEpisodeRevision: value.triggerEpisodeRevision,
+    recoveryRetryRevision: value.recoveryRetryRevision,
+  });
+}
+
+export function deriveVolumeRecoveryRetryRevision(value: Readonly<{
+  lifecycleId: string;
+  kind: 'REDUCE' | 'EXIT';
+  priorNoFillActionKey: string;
+  priorNoFillIntentKey: string;
+  canonicalRecoveryResolutionRevision: string;
+}>): string {
+  return digest('l11retry_', {
+    lifecycleId: value.lifecycleId,
+    kind: value.kind,
+    priorNoFillActionKey: value.priorNoFillActionKey,
+    priorNoFillIntentKey: value.priorNoFillIntentKey,
+    canonicalRecoveryResolutionRevision: value.canonicalRecoveryResolutionRevision,
+  });
+}
+
+export function deriveVolumeRecoveryConsumptionRevision(value: Readonly<{
+  lifecycleId: string;
+  recoveryResolutionRevision: string;
+  baseProjectionRevision: string;
+  noFill: Readonly<VolumeNoFillRecord> | null;
+  priorConsumptionRevision: string | null;
+  outcomeSequence: number;
+}>): string {
+  return digest('l11recoveryconsumption_', {
+    lifecycleId: value.lifecycleId,
+    recoveryResolutionRevision: value.recoveryResolutionRevision,
+    baseProjectionRevision: value.baseProjectionRevision,
+    noFill: value.noFill,
+    priorConsumptionRevision: value.priorConsumptionRevision,
+    outcomeSequence: value.outcomeSequence,
   });
 }
 
@@ -421,6 +487,12 @@ function validateAction(value: unknown): Readonly<VolumeLifecycleActionRequest> 
   if (action.triggerEpisodeRevision !== null) {
     text(action.triggerEpisodeRevision, 'triggerEpisodeRevision', REDUCTION_REVISION);
   }
+  if (action.recoveryRetryRevision !== null) {
+    text(action.recoveryRetryRevision, 'recoveryRetryRevision', RECOVERY_RETRY_REVISION);
+    if (action.kind !== 'REDUCE' && action.kind !== 'EXIT') {
+      throw new TypeError('Only a risk-reduction action may retain a recovery retry revision');
+    }
+  }
   if (!Array.isArray(action.triggerReasonCodes) || action.triggerReasonCodes.length > 64
     || action.triggerReasonCodes.some((reason) => typeof reason !== 'string' || !ID.test(reason))
     || new Set(action.triggerReasonCodes).size !== action.triggerReasonCodes.length) {
@@ -449,6 +521,46 @@ function validateAction(value: unknown): Readonly<VolumeLifecycleActionRequest> 
 
 export function validateVolumeLifecycleActionRequest(value: unknown): Readonly<VolumeLifecycleActionRequest> {
   return validateAction(snapshot(value));
+}
+
+function noFillActionIsBoundToProjection(
+  action: Readonly<VolumeLifecycleActionRequest>,
+  projection: Readonly<Record<string, unknown>>,
+): boolean {
+  return action.lifecycleId === projection.lifecycleId
+    && action.symbol === projection.symbol
+    && action.direction === projection.direction
+    && action.accountRealmId === projection.accountRealmId
+    && action.baseAsset === projection.baseAsset
+    && action.quoteAsset === projection.quoteAsset
+    && action.proposalId === projection.proposalId
+    && action.proposalRevision === projection.proposalRevision
+    && action.proposalDigest === projection.proposalDigest
+    && action.assessmentId === projection.assessmentId
+    && action.assessmentRevision === projection.assessmentRevision
+    && action.assessmentFingerprintSha256 === projection.assessmentFingerprintSha256
+    && action.modelRevision === projection.advisoryModelRevision
+    && action.featureRevision === projection.featureRevision
+    && action.evidenceRevision === projection.evidenceRevision
+    && action.exitPlanRevision === projection.exitPlanRevision
+    && action.entryEvidenceRevision === projection.entryEvidenceRevision
+    && action.instrumentRevision === projection.entryInstrumentRevision
+    && action.filterRevision === projection.entryFilterRevision
+    && action.sourceEvidenceRevision === projection.entrySourceEvidenceRevision
+    && (action.kind === 'ADD'
+      || (action.inventoryMode === projection.entryInventoryMode
+        && action.availableBaseQuantity === projection.entryAvailableBaseQuantity
+        && action.inventoryRevision === projection.entryInventoryRevision
+        && action.inventoryAsset === projection.entryInventoryAsset
+        && action.inventoryAccountRealmId === projection.entryInventoryAccountRealmId
+        && action.inventoryObservedAtMs === projection.entryInventoryObservedAtMs
+        && action.inventoryValidUntilMs === projection.entryInventoryValidUntilMs))
+    && action.capitalMandateId === projection.capitalMandateId
+    && action.capitalMandateRevision === projection.capitalMandateRevision
+    && action.capitalMandateDigest === projection.capitalMandateDigest
+    && action.capitalReservationId === projection.capitalReservationId
+    && action.capitalReservationRevision === projection.capitalReservationRevision
+    && action.capitalMaximumQuote === projection.capitalMaximumQuote;
 }
 
 function projectionMaterial(projection: Omit<VolumeLifecycleProjection, 'projectionRevision'>): unknown {
@@ -484,6 +596,7 @@ export function validateLifecycleProjection(value: unknown): Readonly<VolumeLife
   text(projection.proposalId, 'projection proposalId');
   text(projection.proposalRevision, 'projection proposalRevision');
   text(projection.proposalDigest, 'projection proposalDigest');
+  oneOf(projection.entryKind, ['CONTINUATION', 'FADE'], 'projection entryKind');
   text(projection.featureRevision, 'projection featureRevision');
   text(projection.evidenceRevision, 'projection evidenceRevision');
   text(projection.exitPlanRevision, 'projection exitPlanRevision');
@@ -563,8 +676,46 @@ export function validateLifecycleProjection(value: unknown): Readonly<VolumeLife
   if (projection.openedAtMs !== null) timestamp(projection.openedAtMs, 'openedAtMs');
   timestamp(projection.stageEnteredAtMs, 'stageEnteredAtMs');
   if (projection.entryAveragePrice !== null) positiveVolumeDecimal(projection.entryAveragePrice, 'entryAveragePrice');
+  volumeDecimal(projection.entryCostBasisQuote, 'entryCostBasisQuote');
+  volumeDecimal(projection.entryCostBasisQuantity, 'entryCostBasisQuantity');
+  const emptyEntryCostBasis = projection.entryCostBasisQuote === '0'
+    && projection.entryCostBasisQuantity === '0';
+  if ((projection.entryCostBasisQuote === '0') !== (projection.entryCostBasisQuantity === '0')
+    || (projection.entryAveragePrice === null) !== emptyEntryCostBasis
+    || (projection.openedAtMs === null) !== emptyEntryCostBasis) {
+    throw new TypeError('Volume entry average and exact cost basis must be present together');
+  }
+  if (!emptyEntryCostBasis
+    && projection.entryAveragePrice !== divideVolumeDecimals(
+      projection.entryCostBasisQuote as string,
+      projection.entryCostBasisQuantity as string,
+    )) {
+    throw new TypeError('Volume entry average display does not match its exact cost basis');
+  }
   positiveVolumeDecimal(projection.currentPrice, 'projection currentPrice');
   if (projection.favorableExtremePrice !== null) positiveVolumeDecimal(projection.favorableExtremePrice, 'favorableExtremePrice');
+  if (projection.lastMarketObservedAtMs !== null) {
+    timestamp(projection.lastMarketObservedAtMs, 'lastMarketObservedAtMs');
+  }
+  if (projection.lastSignalObservedAtMs !== null) {
+    timestamp(projection.lastSignalObservedAtMs, 'lastSignalObservedAtMs');
+  }
+  if (projection.lastMarketObservationRevision !== null) {
+    text(projection.lastMarketObservationRevision, 'lastMarketObservationRevision', MARKET_OBSERVATION_REVISION);
+  }
+  if (projection.lastSignalObservationRevision !== null) {
+    text(projection.lastSignalObservationRevision, 'lastSignalObservationRevision', SIGNAL_OBSERVATION_REVISION);
+  }
+  const observationPresence = [projection.lastMarketObservedAtMs, projection.lastSignalObservedAtMs,
+    projection.lastMarketObservationRevision, projection.lastSignalObservationRevision];
+  if ((observationPresence.some((value) => value === null)
+      && observationPresence.some((value) => value !== null))
+    || (projection.openedAtMs === null && projection.lastMarketObservedAtMs !== null)
+    || (projection.openedAtMs !== null && projection.lastMarketObservedAtMs !== null
+      && ((projection.lastMarketObservedAtMs as number) < (projection.openedAtMs as number)
+        || (projection.lastSignalObservedAtMs as number) < (projection.openedAtMs as number)))) {
+    throw new TypeError('Volume retained market observation chronology is invalid');
+  }
   volumeDecimal(projection.positionQuantity, 'positionQuantity');
   oneOf(projection.positionQuantityTruth, ['EXACT', 'UNKNOWN'], 'positionQuantityTruth');
   if (projection.positionQuantityTruth === 'UNKNOWN' && projection.state !== 'RECOVERY_REQUIRED') {
@@ -581,14 +732,184 @@ export function validateLifecycleProjection(value: unknown): Readonly<VolumeLife
       && compareVolumeDecimals(projection.projectedMandateUsageQuote as string, projection.capitalMaximumQuote as string) > 0)) {
     throw new TypeError('Volume lifecycle projected mandate usage is outside its immutable Capital binding');
   }
-  if (projection.lastNoFillOwnerEvidenceRevision !== null) {
-    text(projection.lastNoFillOwnerEvidenceRevision, 'lastNoFillOwnerEvidenceRevision', OWNER_REVISION);
+  let lastNoFill: Readonly<{
+    action: Readonly<VolumeLifecycleActionRequest>;
+    evidenceKind: 'TWIN_NO_FILL' | 'CANONICAL_NO_EFFECT';
+    fixtureId: string | null;
+    twinStateRevision: string | null;
+    twinOutcomeRevision: string | null;
+    recoveryResolutionRevision: string | null;
+  }> | null = null;
+  if (projection.lastNoFill !== null) {
+    const retained = record(projection.lastNoFill, NO_FILL_FIELDS, 'Volume no-fill record');
+    const action = validateAction(retained.action);
+    const evidenceKind = oneOf(retained.evidenceKind, ['TWIN_NO_FILL', 'CANONICAL_NO_EFFECT'],
+      'no-fill evidence kind');
+    const evidenceTuple = [retained.fixtureId, retained.twinStateRevision, retained.twinOutcomeRevision];
+    if (evidenceKind === 'TWIN_NO_FILL') {
+      if (evidenceTuple.some((entry) => entry === null)) {
+        throw new TypeError('Twin no-fill record requires complete twin evidence');
+      }
+      text(retained.fixtureId, 'no-fill fixtureId');
+      text(retained.twinStateRevision, 'no-fill twinStateRevision');
+      text(retained.twinOutcomeRevision, 'no-fill twinOutcomeRevision');
+      if (retained.fixtureId !== `l11fixture_${action.actionKey.slice('l11action_'.length)}`) {
+        throw new TypeError('Twin no-fill fixture is not intrinsic to its action');
+      }
+    } else if (evidenceTuple.some((entry) => entry !== null)
+      || retained.recoveryResolutionRevision === null) {
+      throw new TypeError('Canonical no-effect record requires only recovery evidence');
+    }
+    if (retained.recoveryResolutionRevision !== null) {
+      text(retained.recoveryResolutionRevision, 'no-fill recoveryResolutionRevision');
+    }
+    lastNoFill = {
+      action,
+      evidenceKind,
+      fixtureId: retained.fixtureId as string | null,
+      twinStateRevision: retained.twinStateRevision as string | null,
+      twinOutcomeRevision: retained.twinOutcomeRevision as string | null,
+      recoveryResolutionRevision: retained.recoveryResolutionRevision as string | null,
+    };
+    if (!noFillActionIsBoundToProjection(action, projection)) {
+      throw new TypeError('Volume no-fill action is not bound to its lifecycle projection');
+    }
+    if (action.positionBeforeQuantity !== projection.positionQuantity
+      || action.mandateUsageBeforeQuote !== projection.projectedMandateUsageQuote) {
+      throw new TypeError('Volume latest no-fill action does not match retained exposure and Capital usage');
+    }
   }
-  if (projection.lastNoFillIntentKey !== null) {
-    text(projection.lastNoFillIntentKey, 'lastNoFillIntentKey', INTENT_KEY);
+  if (!Array.isArray(projection.consumedRecoveryRevisions)
+    || projection.consumedRecoveryRevisions.length > 32
+    || projection.consumedRecoveryRevisions.some((revision) => typeof revision !== 'string'
+      || !ID.test(revision) || revision.length > MAX_TEXT)
+    || new Set(projection.consumedRecoveryRevisions).size !== projection.consumedRecoveryRevisions.length) {
+    throw new TypeError('Volume consumed recovery revisions must be bounded and unique');
   }
-  if ((projection.lastNoFillOwnerEvidenceRevision === null) !== (projection.lastNoFillIntentKey === null)) {
-    throw new TypeError('Volume no-fill owner evidence and intent must be retained together');
+  if (projection.lastRecoveryResolutionRevision !== null) {
+    text(projection.lastRecoveryResolutionRevision, 'lastRecoveryResolutionRevision');
+  }
+  if (projection.lastRecoveryResolvedAtMs !== null) {
+    timestamp(projection.lastRecoveryResolvedAtMs, 'lastRecoveryResolvedAtMs');
+  }
+  if ((projection.lastRecoveryResolutionRevision === null)
+    !== (projection.lastRecoveryResolvedAtMs === null)) {
+    throw new TypeError('Volume latest recovery revision and resolution time must be present together');
+  }
+  if ((projection.lastRecoveryResolutionRevision === null)
+      !== (projection.consumedRecoveryRevisions.length === 0)
+    || (projection.lastRecoveryResolutionRevision !== null
+      && projection.consumedRecoveryRevisions.at(-1) !== projection.lastRecoveryResolutionRevision)) {
+    throw new TypeError('Volume latest recovery resolution must match its consumed history');
+  }
+  if (!Array.isArray(projection.recoveryConsumptionHistory)
+    || projection.recoveryConsumptionHistory.length > 32
+    || projection.recoveryConsumptionHistory.length !== projection.consumedRecoveryRevisions.length) {
+    throw new TypeError('Volume recovery consumption history must exactly cover consumed revisions');
+  }
+  let priorConsumptionRevision: string | null = null;
+  let priorRecoveryOutcomeSequence = 0;
+  const recoveryConsumptionActionKeys = new Set<string>();
+  const retainedOutcomeSequences = new Set<number>();
+  const recoveryNoFillOutcomes: Array<Readonly<{
+    outcomeSequence: number;
+    noFill: Readonly<VolumeNoFillRecord>;
+  }>> = [];
+  for (const [index, candidate] of projection.recoveryConsumptionHistory.entries()) {
+    const consumption = record(candidate, RECOVERY_CONSUMPTION_FIELDS,
+      'Volume recovery consumption record');
+    text(consumption.recoveryResolutionRevision, 'recovery consumption resolution revision');
+    text(consumption.baseProjectionRevision, 'recovery consumption base projection revision', CONTENT_REVISION);
+    if (consumption.priorConsumptionRevision !== null) {
+      text(consumption.priorConsumptionRevision, 'prior recovery consumption revision',
+        RECOVERY_CONSUMPTION_REVISION);
+    }
+    text(consumption.consumptionRevision, 'recovery consumption revision',
+      RECOVERY_CONSUMPTION_REVISION);
+    integer(consumption.outcomeSequence, 1, projection.revision as number,
+      'recovery consumption outcomeSequence');
+    if ((consumption.outcomeSequence as number) <= priorRecoveryOutcomeSequence
+      || retainedOutcomeSequences.has(consumption.outcomeSequence as number)) {
+      throw new TypeError('Volume recovery outcome sequence must be strictly increasing and unique');
+    }
+    priorRecoveryOutcomeSequence = consumption.outcomeSequence as number;
+    retainedOutcomeSequences.add(priorRecoveryOutcomeSequence);
+    let consumedNoFill: Readonly<VolumeNoFillRecord> | null = null;
+    if (consumption.noFill !== null) {
+      const retained = record(consumption.noFill, NO_FILL_FIELDS,
+        'Volume recovery consumption no-fill record');
+      const action = validateAction(retained.action);
+      const evidenceKind = oneOf(retained.evidenceKind, ['TWIN_NO_FILL', 'CANONICAL_NO_EFFECT'],
+        'recovery consumption no-fill evidence kind');
+      const evidenceTuple = [retained.fixtureId, retained.twinStateRevision, retained.twinOutcomeRevision];
+      if (evidenceKind === 'TWIN_NO_FILL') {
+        if (evidenceTuple.some((entry) => entry === null)) {
+          throw new TypeError('Recovery consumption twin no-fill requires complete twin evidence');
+        }
+        text(retained.fixtureId, 'recovery consumption no-fill fixtureId');
+        text(retained.twinStateRevision, 'recovery consumption no-fill twinStateRevision');
+        text(retained.twinOutcomeRevision, 'recovery consumption no-fill twinOutcomeRevision');
+        if (retained.fixtureId !== `l11fixture_${action.actionKey.slice('l11action_'.length)}`) {
+          throw new TypeError('Recovery consumption twin fixture is not intrinsic to its action');
+        }
+      } else if (evidenceTuple.some((entry) => entry !== null)
+        || retained.recoveryResolutionRevision === null) {
+        throw new TypeError('Recovery consumption canonical no-effect requires only recovery evidence');
+      }
+      if (retained.recoveryResolutionRevision !== consumption.recoveryResolutionRevision) {
+        throw new TypeError('Recovery consumption no-fill does not match its resolution revision');
+      }
+      if (!noFillActionIsBoundToProjection(action, projection)) {
+        throw new TypeError('Recovery consumption no-fill action is not bound to its lifecycle projection');
+      }
+      if (recoveryConsumptionActionKeys.has(action.actionKey)) {
+        throw new TypeError('Recovery consumption no-fill action is duplicated');
+      }
+      recoveryConsumptionActionKeys.add(action.actionKey);
+      consumedNoFill = {
+        action,
+        evidenceKind,
+        fixtureId: retained.fixtureId as string | null,
+        twinStateRevision: retained.twinStateRevision as string | null,
+        twinOutcomeRevision: retained.twinOutcomeRevision as string | null,
+        recoveryResolutionRevision: retained.recoveryResolutionRevision as string,
+      };
+      recoveryNoFillOutcomes.push(Object.freeze({
+        outcomeSequence: consumption.outcomeSequence as number,
+        noFill: consumedNoFill,
+      }));
+    }
+    if (projection.consumedRecoveryRevisions[index] !== consumption.recoveryResolutionRevision) {
+      throw new TypeError('Recovery consumption record does not match consumed revision order');
+    }
+    if (consumption.priorConsumptionRevision !== priorConsumptionRevision) {
+      throw new TypeError('Recovery consumption history is not a closed chain');
+    }
+    const expectedConsumptionRevision = deriveVolumeRecoveryConsumptionRevision({
+      lifecycleId: projection.lifecycleId as string,
+      recoveryResolutionRevision: consumption.recoveryResolutionRevision as string,
+      baseProjectionRevision: consumption.baseProjectionRevision as string,
+      noFill: consumedNoFill,
+      priorConsumptionRevision,
+      outcomeSequence: consumption.outcomeSequence as number,
+    });
+    if (consumption.consumptionRevision !== expectedConsumptionRevision) {
+      throw new TypeError('Recovery consumption revision does not match its retained proof');
+    }
+    priorConsumptionRevision = consumption.consumptionRevision as string;
+  }
+  if (lastNoFill !== null && lastNoFill.recoveryResolutionRevision !== null
+    && !projection.consumedRecoveryRevisions.includes(lastNoFill.recoveryResolutionRevision)) {
+    throw new TypeError('Volume no-fill recovery revision is not retained as consumed');
+  }
+  if (lastNoFill !== null && lastNoFill.recoveryResolutionRevision !== null) {
+    const matchingConsumption = projection.recoveryConsumptionHistory.find((candidate) => (
+      candidate.recoveryResolutionRevision === lastNoFill?.recoveryResolutionRevision
+    ));
+    if (matchingConsumption === undefined
+      || canonicalJson(matchingConsumption.noFill) !== canonicalJson(lastNoFill)) {
+      throw new TypeError('Volume no-fill recovery proof is not retained in consumption history');
+    }
   }
   const episodeValues = [projection.reductionEpisodeRevision, projection.reductionEpisodeReasonCodes,
     projection.reductionBasisQuantity, projection.reductionTargetQuantity];
@@ -618,11 +939,28 @@ export function validateLifecycleProjection(value: unknown): Readonly<VolumeLife
   if ((pending === null) !== (projection.pendingActionBaseProjectionRevision === null)) {
     throw new TypeError('Volume pending action base revision must be present exactly with the action');
   }
-  if (pending !== null && projection.lastNoFillIntentKey === pending.intentKey) {
+  if (pending !== null && lastNoFill?.action.intentKey === pending.intentKey) {
     throw new TypeError('Volume pending action repeats the retained no-fill intent');
   }
+  if (pending !== null) {
+    const retryKind = pending.kind === 'REDUCE' || pending.kind === 'EXIT' ? pending.kind : null;
+    const expectedRecoveryRetryRevision = retryKind !== null
+      && lastNoFill?.action.kind === retryKind
+      && lastNoFill.recoveryResolutionRevision !== null
+      ? deriveVolumeRecoveryRetryRevision({
+        lifecycleId: projection.lifecycleId as string,
+        kind: retryKind,
+        priorNoFillActionKey: lastNoFill.action.actionKey,
+        priorNoFillIntentKey: lastNoFill.action.intentKey,
+        canonicalRecoveryResolutionRevision: lastNoFill.recoveryResolutionRevision,
+      })
+      : null;
+    if (pending.recoveryRetryRevision !== expectedRecoveryRetryRevision) {
+      throw new TypeError('Volume pending action recovery retry lineage does not match the projection');
+    }
+  }
   if (pending !== null && (pending.kind === 'ENTRY' || pending.kind === 'ADD')
-    && projection.lastNoFillOwnerEvidenceRevision === pending.ownerEvidenceRevision) {
+    && lastNoFill?.action.ownerEvidenceRevision === pending.ownerEvidenceRevision) {
     throw new TypeError('Volume increasing action repeats unchanged no-fill owner evidence');
   }
   for (const field of ['pendingTwinStateRevision', 'pendingTwinOutcomeRevision'] as const) {
@@ -644,12 +982,23 @@ export function validateLifecycleProjection(value: unknown): Readonly<VolumeLife
     throw new TypeError('Volume settled twin history must be a bounded array');
   }
   const settledKeys = new Set<string>();
+  let priorSettledOutcomeSequence = 0;
   for (const candidate of projection.settledTwinHistory) {
     const settled = record(candidate, SETTLED_TWIN_FIELDS, 'Volume settled twin record');
     text(settled.actionKey, 'settled twin actionKey', ACTION_KEY);
     text(settled.fixtureId, 'settled twin fixtureId');
     text(settled.twinStateRevision, 'settled twin state revision');
     text(settled.twinOutcomeRevision, 'settled twin outcome revision');
+    oneOf(settled.settlementState, ['NO_FILL', 'FILLED', 'RECOVERY_REQUIRED'],
+      'settled twin settlementState');
+    integer(settled.outcomeSequence, 1, projection.revision as number,
+      'settled twin outcomeSequence');
+    if ((settled.outcomeSequence as number) <= priorSettledOutcomeSequence
+      || retainedOutcomeSequences.has(settled.outcomeSequence as number)) {
+      throw new TypeError('Volume settled outcome sequence must be strictly increasing and unique');
+    }
+    priorSettledOutcomeSequence = settled.outcomeSequence as number;
+    retainedOutcomeSequences.add(priorSettledOutcomeSequence);
     if (settled.fixtureId !== `l11fixture_${(settled.actionKey as string).slice('l11action_'.length)}`) {
       throw new TypeError('Volume settled twin fixture is not intrinsic to its action');
     }
@@ -657,6 +1006,11 @@ export function validateLifecycleProjection(value: unknown): Readonly<VolumeLife
     settledKeys.add(settled.actionKey as string);
   }
   const latestSettled = projection.settledTwinHistory.at(-1);
+  if (projection.settledTwinHistory.slice(0, -1).some((record) => (
+    record.settlementState === 'RECOVERY_REQUIRED'
+  ))) {
+    throw new TypeError('Volume settled recovery effect must be the latest retained twin outcome');
+  }
   if ((latestSettled === undefined) !== (projection.lastSettledActionKey === null)
     || (latestSettled === undefined
       && (projection.lastTwinStateRevision !== null || projection.lastTwinOutcomeRevision !== null))
@@ -668,6 +1022,38 @@ export function validateLifecycleProjection(value: unknown): Readonly<VolumeLife
   if (pending !== null && settledKeys.has(pending.actionKey)) {
     throw new TypeError('Volume pending action cannot already be settled');
   }
+  if (lastNoFill?.evidenceKind === 'TWIN_NO_FILL') {
+    const retainedNoFill = projection.settledTwinHistory.find((record) => (
+      record.actionKey === lastNoFill?.action.actionKey
+    ));
+    if (retainedNoFill === undefined
+      || retainedNoFill.settlementState !== 'NO_FILL'
+      || retainedNoFill.fixtureId !== lastNoFill.fixtureId
+      || retainedNoFill.twinStateRevision !== lastNoFill.twinStateRevision
+      || retainedNoFill.twinOutcomeRevision !== lastNoFill.twinOutcomeRevision) {
+      throw new TypeError('Volume twin no-fill lineage is not retained in settled history');
+    }
+  }
+  const latestRecoveryNoFill = recoveryNoFillOutcomes.at(-1);
+  const latestSettledOutcomeSequence = latestSettled?.outcomeSequence as number | undefined;
+  if (latestRecoveryNoFill !== undefined
+    && (latestSettledOutcomeSequence === undefined
+      || latestRecoveryNoFill.outcomeSequence > latestSettledOutcomeSequence)) {
+    if (lastNoFill === null
+      || canonicalJson(lastNoFill) !== canonicalJson(latestRecoveryNoFill.noFill)) {
+      throw new TypeError('Volume current no-fill head does not match its latest recovery outcome');
+    }
+  } else if (latestSettled !== undefined && latestSettled.settlementState === 'NO_FILL') {
+    if (lastNoFill?.evidenceKind !== 'TWIN_NO_FILL'
+      || lastNoFill.action.actionKey !== latestSettled.actionKey
+      || lastNoFill.fixtureId !== latestSettled.fixtureId
+      || lastNoFill.twinStateRevision !== latestSettled.twinStateRevision
+      || lastNoFill.twinOutcomeRevision !== latestSettled.twinOutcomeRevision) {
+      throw new TypeError('Volume current no-fill head does not match its latest twin outcome');
+    }
+  } else if (lastNoFill !== null) {
+    throw new TypeError('Volume current no-fill head lacks a latest retained outcome');
+  }
   if (pending?.kind === 'REDUCE'
     && (pending.triggerEpisodeRevision === null
       || pending.triggerEpisodeRevision !== projection.reductionEpisodeRevision
@@ -677,6 +1063,10 @@ export function validateLifecycleProjection(value: unknown): Readonly<VolumeLife
   }
   const recoveryEvidenceValues = [projection.recoveryEvidenceActionKey, projection.recoveryEvidenceFixtureId,
     projection.recoveryEvidenceTwinStateRevision, projection.recoveryEvidenceTwinOutcomeRevision];
+  const unresolvedConflictActionKey = projection.unresolvedTwinConflict !== null
+    && typeof projection.unresolvedTwinConflict === 'object'
+    && 'actionKey' in projection.unresolvedTwinConflict
+    ? projection.unresolvedTwinConflict.actionKey : null;
   if (recoveryEvidenceValues.some((entry) => entry !== null)
     && recoveryEvidenceValues.some((entry) => entry === null)) {
     throw new TypeError('Volume recovery evidence correlation must be wholly present or absent');
@@ -689,6 +1079,12 @@ export function validateLifecycleProjection(value: unknown): Readonly<VolumeLife
       throw new TypeError('Volume recovery evidence fixture is not intrinsic to its action');
     }
     if (projection.recoveryEvidenceActionKey !== pending?.actionKey
+      && projection.recoveryEvidenceActionKey !== lastNoFill?.action.actionKey
+      && projection.recoveryEvidenceActionKey !== unresolvedConflictActionKey
+      && !projection.recoveryConsumptionHistory.some((record) => (
+        record.noFill?.evidenceKind === 'CANONICAL_NO_EFFECT'
+        && record.noFill.action.actionKey === projection.recoveryEvidenceActionKey
+      ))
       && !settledKeys.has(projection.recoveryEvidenceActionKey as string)) {
       throw new TypeError('Volume recovery evidence action is not retained by the lifecycle');
     }
@@ -697,14 +1093,127 @@ export function validateLifecycleProjection(value: unknown): Readonly<VolumeLife
     text(projection.recoveryEvidenceTwinStateRevision, 'recovery evidence twin state revision');
     text(projection.recoveryEvidenceTwinOutcomeRevision, 'recovery evidence twin outcome revision');
   }
-  if (projection.lastRecoveryResolutionRevision !== null) {
-    text(projection.lastRecoveryResolutionRevision, 'lastRecoveryResolutionRevision');
+  const unresolvedRiskNoFill = lastNoFill?.evidenceKind === 'TWIN_NO_FILL'
+    && lastNoFill.recoveryResolutionRevision === null
+    && (lastNoFill.action.kind === 'REDUCE' || lastNoFill.action.kind === 'EXIT')
+    ? lastNoFill : null;
+  if (unresolvedRiskNoFill !== null
+    && (projection.state !== 'RECOVERY_REQUIRED'
+      || pending !== null
+      || (projection.unresolvedTwinConflict === null
+        && (projection.recoveryEvidenceActionKey !== unresolvedRiskNoFill.action.actionKey
+          || projection.recoveryEvidenceFixtureId !== unresolvedRiskNoFill.fixtureId
+          || projection.recoveryEvidenceTwinStateRevision !== unresolvedRiskNoFill.twinStateRevision
+          || projection.recoveryEvidenceTwinOutcomeRevision !== unresolvedRiskNoFill.twinOutcomeRevision)))) {
+    throw new TypeError('Volume unresolved risk no-fill requires its exact recovery evidence tuple');
   }
   if (projection.pendingTwinStateRevision !== null
     && (projection.recoveryEvidenceActionKey !== pending?.actionKey
       || projection.recoveryEvidenceTwinStateRevision !== projection.pendingTwinStateRevision
       || projection.recoveryEvidenceTwinOutcomeRevision !== projection.pendingTwinOutcomeRevision)) {
     throw new TypeError('Volume pending twin revisions must match their recovery evidence correlation');
+  }
+  if (projection.unresolvedTwinConflict !== null) {
+    const conflict = record(projection.unresolvedTwinConflict, TWIN_CONFLICT_FIELDS,
+      'Volume unresolved twin conflict');
+    oneOf(conflict.kind, [
+      'SIMULTANEOUS_CANONICAL_NO_EFFECT', 'LATE_CANONICAL_NO_EFFECT',
+      'SETTLED_TWIN_REPLAY_MISMATCH', 'ORPHAN_TWIN_EVIDENCE', 'TWIN_CHRONOLOGY_INVALID',
+      'TWIN_EFFECT_RECONSTRUCTION_REQUIRED',
+    ],
+      'unresolved twin conflict kind');
+    text(conflict.actionKey, 'unresolved twin conflict actionKey', ACTION_KEY);
+    text(conflict.fixtureId, 'unresolved twin conflict fixtureId');
+    if (conflict.recoveryResolutionRevision !== null) {
+      text(conflict.recoveryResolutionRevision, 'unresolved twin conflict recovery resolution revision');
+    }
+    text(conflict.twinStateRevision, 'unresolved twin conflict state revision');
+    text(conflict.twinOutcomeRevision, 'unresolved twin conflict outcome revision');
+    volumeDecimal(conflict.filledQuantity, 'unresolved twin conflict filledQuantity');
+    text(conflict.conflictRevision, 'unresolved twin conflict revision', TWIN_CONFLICT_REVISION);
+    const expectedConflictRevision = digest('l11twinconflict_', {
+      lifecycleId: projection.lifecycleId,
+      kind: conflict.kind,
+      actionKey: conflict.actionKey,
+      fixtureId: conflict.fixtureId,
+      recoveryResolutionRevision: conflict.recoveryResolutionRevision,
+      twinStateRevision: conflict.twinStateRevision,
+      twinOutcomeRevision: conflict.twinOutcomeRevision,
+      filledQuantity: conflict.filledQuantity,
+    });
+    const retainedCanonicalNoEffect = conflict.actionKey === lastNoFill?.action.actionKey
+      && lastNoFill?.evidenceKind === 'CANONICAL_NO_EFFECT'
+      ? lastNoFill : projection.recoveryConsumptionHistory.find((record) => (
+        record.noFill?.evidenceKind === 'CANONICAL_NO_EFFECT'
+        && record.noFill.action.actionKey === conflict.actionKey
+      ))?.noFill ?? null;
+    const retainedCanonicalAction = conflict.actionKey === pending?.actionKey
+      || retainedCanonicalNoEffect !== null;
+    const retainedSettledAction = settledKeys.has(conflict.actionKey as string);
+    const retainedEffectSettlement = latestSettled?.actionKey === conflict.actionKey
+      && latestSettled.fixtureId === conflict.fixtureId
+      && latestSettled.twinStateRevision === conflict.twinStateRevision
+      && latestSettled.twinOutcomeRevision === conflict.twinOutcomeRevision
+      && latestSettled.settlementState === 'RECOVERY_REQUIRED'
+      ? latestSettled : undefined;
+    const pendingEffectShape = conflict.actionKey === pending?.actionKey
+      && retainedEffectSettlement === undefined
+      && projection.pendingTwinStateRevision === conflict.twinStateRevision
+      && projection.pendingTwinOutcomeRevision === conflict.twinOutcomeRevision;
+    const settledEffectShape = retainedEffectSettlement !== undefined
+      && pending === null
+      && projection.pendingTwinStateRevision === null
+      && projection.pendingTwinOutcomeRevision === null;
+    const conflictScopedToPending = conflict.actionKey === pending?.actionKey;
+    const conflictKindValid = conflict.kind === 'SIMULTANEOUS_CANONICAL_NO_EFFECT'
+      ? conflict.actionKey === pending?.actionKey
+        && conflict.recoveryResolutionRevision !== null
+        && !projection.consumedRecoveryRevisions.includes(conflict.recoveryResolutionRevision)
+      : conflict.kind === 'LATE_CANONICAL_NO_EFFECT'
+        ? retainedCanonicalNoEffect !== null
+          && conflict.recoveryResolutionRevision === retainedCanonicalNoEffect.recoveryResolutionRevision
+      : conflict.kind === 'SETTLED_TWIN_REPLAY_MISMATCH'
+        ? retainedSettledAction && conflict.recoveryResolutionRevision === null
+        : conflict.kind === 'TWIN_EFFECT_RECONSTRUCTION_REQUIRED'
+          ? (settledEffectShape || pendingEffectShape)
+            && conflict.recoveryResolutionRevision === null
+            && compareVolumeDecimals(conflict.filledQuantity as string, '0') > 0
+        : conflict.kind === 'TWIN_CHRONOLOGY_INVALID'
+          ? conflict.actionKey === pending?.actionKey && conflict.recoveryResolutionRevision === null
+        : !retainedCanonicalAction && !retainedSettledAction
+          && conflict.recoveryResolutionRevision === null;
+    const effectReconstruction = conflict.kind === 'TWIN_EFFECT_RECONSTRUCTION_REQUIRED';
+    const pendingEffectReconstruction = effectReconstruction && pendingEffectShape;
+    if (conflict.conflictRevision !== expectedConflictRevision
+      || conflict.fixtureId !== `l11fixture_${(conflict.actionKey as string).slice('l11action_'.length)}`
+      || conflict.actionKey !== projection.recoveryEvidenceActionKey
+      || conflict.fixtureId !== projection.recoveryEvidenceFixtureId
+      || conflict.twinStateRevision !== projection.recoveryEvidenceTwinStateRevision
+      || conflict.twinOutcomeRevision !== projection.recoveryEvidenceTwinOutcomeRevision
+      || (conflictScopedToPending
+        && (projection.pendingTwinStateRevision !== conflict.twinStateRevision
+          || projection.pendingTwinOutcomeRevision !== conflict.twinOutcomeRevision))
+      || (!conflictScopedToPending
+        && (projection.pendingTwinStateRevision !== null
+          || projection.pendingTwinOutcomeRevision !== null))
+      || !conflictKindValid
+      || projection.state !== 'RECOVERY_REQUIRED'
+      || (!effectReconstruction && projection.positionQuantityTruth !== 'UNKNOWN')
+      || (!effectReconstruction && projection.capitalUsageTruth !== 'UNKNOWN')
+      || (pendingEffectReconstruction && projection.positionQuantityTruth !== 'UNKNOWN')
+      || (pendingEffectReconstruction && projection.capitalUsageTruth !== 'UNKNOWN')) {
+      throw new TypeError('Volume unresolved twin conflict is not durably bound to recovery evidence');
+    }
+  }
+  const retainedTwinConflict = projection.unresolvedTwinConflict as Readonly<VolumeUnresolvedTwinConflict> | null;
+  if (latestSettled?.settlementState === 'RECOVERY_REQUIRED'
+    && (retainedTwinConflict === null
+      || retainedTwinConflict.kind !== 'TWIN_EFFECT_RECONSTRUCTION_REQUIRED'
+      || retainedTwinConflict.actionKey !== latestSettled.actionKey
+      || retainedTwinConflict.fixtureId !== latestSettled.fixtureId
+      || retainedTwinConflict.twinStateRevision !== latestSettled.twinStateRevision
+      || retainedTwinConflict.twinOutcomeRevision !== latestSettled.twinOutcomeRevision)) {
+    throw new TypeError('Volume settled twin recovery effect requires its durable reconstruction conflict');
   }
   const terminalState = projection.state === 'EXIT'
     || (projection.state === 'RECOVERY_REQUIRED' && projection.recoveryResumeState === 'EXIT');
@@ -751,7 +1260,67 @@ export function validateLifecycleProjection(value: unknown): Readonly<VolumeLife
     || transition.reasonCodes[0] !== transition.primaryReasonCode) {
     throw new TypeError('transition reasonCodes must be bounded, unique, and primary-first');
   }
+  const conflictTransitionReasons = new Set([
+    'CANONICAL_RECOVERY_TWIN_EVIDENCE_CONFLICT',
+    'CANONICAL_RECOVERY_TWIN_EVIDENCE_UNRESOLVED',
+    'CANONICAL_NO_EFFECT_LATE_TWIN_CONFLICT',
+    'LATE_TWIN_EVIDENCE_REQUIRES_RECONCILIATION',
+    'SETTLED_TWIN_REPLAY_MISMATCH',
+    'ORPHAN_TWIN_EVIDENCE',
+    'TWIN_CHRONOLOGY_INVALID',
+    'TWIN_EFFECT_RECONSTRUCTION_REQUIRED',
+    'TWIN_POSITION_RECONSTRUCTION_REQUIRED',
+    'TWIN_CAPITAL_RECONSTRUCTION_REQUIRED',
+    'UNRESOLVED_TWIN_CONFLICT_REQUIRES_RECONSTRUCTION',
+  ]);
+  if ((transition.reasonCodes as unknown[]).some((reason) => conflictTransitionReasons.has(reason as string))
+    && projection.unresolvedTwinConflict === null) {
+    throw new TypeError('Volume conflict-class recovery transition requires its durable twin conflict');
+  }
+  if (projection.unresolvedTwinConflict !== null) {
+    const retainedKind = (projection.unresolvedTwinConflict as { kind: string }).kind;
+    const expectedReason = retainedKind === 'SIMULTANEOUS_CANONICAL_NO_EFFECT'
+      ? ['CANONICAL_RECOVERY_TWIN_EVIDENCE_CONFLICT', 'CANONICAL_RECOVERY_TWIN_EVIDENCE_UNRESOLVED']
+      : retainedKind === 'LATE_CANONICAL_NO_EFFECT'
+        ? ['CANONICAL_NO_EFFECT_LATE_TWIN_CONFLICT', 'LATE_TWIN_EVIDENCE_REQUIRES_RECONCILIATION']
+        : retainedKind === 'SETTLED_TWIN_REPLAY_MISMATCH' ? ['SETTLED_TWIN_REPLAY_MISMATCH']
+          : retainedKind === 'ORPHAN_TWIN_EVIDENCE' ? ['ORPHAN_TWIN_EVIDENCE']
+            : retainedKind === 'TWIN_CHRONOLOGY_INVALID' ? ['TWIN_CHRONOLOGY_INVALID']
+              : ['TWIN_EFFECT_RECONSTRUCTION_REQUIRED'];
+    if (!expectedReason.some((reason) => (transition.reasonCodes as unknown[]).includes(reason))) {
+      throw new TypeError('Volume durable twin conflict kind does not match its recovery transition');
+    }
+    if (retainedKind === 'TWIN_EFFECT_RECONSTRUCTION_REQUIRED'
+      && (((transition.reasonCodes as unknown[]).includes('TWIN_POSITION_RECONSTRUCTION_REQUIRED')
+          && projection.positionQuantityTruth !== 'UNKNOWN')
+        || ((transition.reasonCodes as unknown[]).includes('TWIN_CAPITAL_RECONSTRUCTION_REQUIRED')
+          && projection.capitalUsageTruth !== 'UNKNOWN'))) {
+      throw new TypeError('Volume twin effect reconstruction truth flags do not match its recovery reasons');
+    }
+  }
   timestamp(transition.occurredAtMs, 'transition occurredAtMs');
+  if ((projection.openedAtMs !== null
+      && (projection.openedAtMs as number) > (transition.occurredAtMs as number))
+    || (projection.stageEnteredAtMs as number) > (transition.occurredAtMs as number)) {
+    throw new TypeError('Volume lifecycle chronology cannot postdate the retained transition');
+  }
+  if (projection.lastRecoveryResolvedAtMs !== null
+    && (projection.lastRecoveryResolvedAtMs as number) > (transition.occurredAtMs as number)) {
+    throw new TypeError('Volume recovery resolution time cannot postdate the lifecycle transition');
+  }
+  if ((projection.lastMarketObservedAtMs !== null
+      && (projection.lastMarketObservedAtMs as number) > (transition.occurredAtMs as number))
+    || (projection.lastSignalObservedAtMs !== null
+      && (projection.lastSignalObservedAtMs as number) > (transition.occurredAtMs as number))) {
+    throw new TypeError('Volume retained observation cannot postdate the lifecycle transition');
+  }
+  if ((lastNoFill !== null && lastNoFill.action.plannedAtMs > (transition.occurredAtMs as number))
+    || projection.recoveryConsumptionHistory.some((consumption) => (
+      consumption.noFill !== null
+      && consumption.noFill.action.plannedAtMs > (transition.occurredAtMs as number)
+    ))) {
+    throw new TypeError('Volume no-fill action cannot postdate the retained lifecycle transition');
+  }
   stringArray(transition.evidenceIds, 'transition evidenceIds');
   if (transition.twinOutcomeRevision !== null) text(transition.twinOutcomeRevision, 'transition twin outcome');
   if (projection.state === 'RECOVERY_REQUIRED'
@@ -791,9 +1360,29 @@ export function validateLifecycleProjection(value: unknown): Readonly<VolumeLife
   if (projection.openedAtMs === null && projection.positionQuantity !== '0') {
     throw new TypeError('Volume lifecycle cannot carry exposure before an observed opening fill');
   }
+  if (!emptyEntryCostBasis
+    && compareVolumeDecimals(
+      projection.positionQuantity as string,
+      projection.entryCostBasisQuantity as string,
+    ) > 0) {
+    throw new TypeError('Volume projected position cannot exceed its exact entry cost-basis quantity');
+  }
   if (compareVolumeDecimals(projection.positionQuantity as string, '0') > 0
     && (projection.entryAveragePrice === null || projection.favorableExtremePrice === null)) {
     throw new TypeError('Volume active exposure must retain entry and favorable-extreme protection truth');
+  }
+  if (projection.favorableExtremePrice !== null
+    && ((projection.direction === 'LONG'
+      && compareVolumeDecimals(
+        projection.favorableExtremePrice as string,
+        projection.currentPrice as string,
+      ) < 0)
+      || (projection.direction === 'SHORT'
+        && compareVolumeDecimals(
+          projection.favorableExtremePrice as string,
+          projection.currentPrice as string,
+        ) > 0))) {
+    throw new TypeError('Volume favorable extreme cannot be worse than the retained current price');
   }
   if (projection.state === 'EXIT' && (projection.positionQuantity !== '0' || pending !== null
     || projection.positionQuantityTruth !== 'EXACT')) {
@@ -827,13 +1416,6 @@ export function validateLifecycleProjection(value: unknown): Readonly<VolumeLife
       || pending.instrumentRevision !== projection.entryInstrumentRevision
       || pending.filterRevision !== projection.entryFilterRevision
       || pending.sourceEvidenceRevision !== projection.entrySourceEvidenceRevision
-      || pending.inventoryMode !== projection.entryInventoryMode
-      || pending.availableBaseQuantity !== projection.entryAvailableBaseQuantity
-      || pending.inventoryRevision !== projection.entryInventoryRevision
-      || pending.inventoryAsset !== projection.entryInventoryAsset
-      || pending.inventoryAccountRealmId !== projection.entryInventoryAccountRealmId
-      || pending.inventoryObservedAtMs !== projection.entryInventoryObservedAtMs
-      || pending.inventoryValidUntilMs !== projection.entryInventoryValidUntilMs
       || pending.capitalMandateId !== projection.capitalMandateId
       || pending.capitalMandateRevision !== projection.capitalMandateRevision
       || pending.capitalMandateDigest !== projection.capitalMandateDigest
@@ -841,6 +1423,16 @@ export function validateLifecycleProjection(value: unknown): Readonly<VolumeLife
       || pending.capitalReservationRevision !== projection.capitalReservationRevision
       || pending.capitalMaximumQuote !== projection.capitalMaximumQuote) {
       throw new TypeError('Volume pending action is not bound to its lifecycle projection');
+    }
+    if (pending.kind !== 'ADD'
+      && (pending.inventoryMode !== projection.entryInventoryMode
+        || pending.availableBaseQuantity !== projection.entryAvailableBaseQuantity
+        || pending.inventoryRevision !== projection.entryInventoryRevision
+        || pending.inventoryAsset !== projection.entryInventoryAsset
+        || pending.inventoryAccountRealmId !== projection.entryInventoryAccountRealmId
+        || pending.inventoryObservedAtMs !== projection.entryInventoryObservedAtMs
+        || pending.inventoryValidUntilMs !== projection.entryInventoryValidUntilMs)) {
+      throw new TypeError('Volume pending action inventory is not bound to entry provenance');
     }
     if (projection.positionQuantityTruth !== 'EXACT' && projection.state !== 'RECOVERY_REQUIRED') {
       throw new TypeError('Volume pending action requires exact position quantity truth');
@@ -1138,6 +1730,9 @@ function validateOccupancy(value: unknown): void {
     const active = record(candidate, OCCUPANCY_RECORD_FIELDS, 'Volume occupancy record');
     text(active.recordId, 'occupancy recordId');
     text(active.recordRevision, 'occupancy recordRevision');
+    if (active.projectionRevision !== null) {
+      text(active.projectionRevision, 'occupancy projectionRevision', CONTENT_REVISION);
+    }
     oneOf(active.kind, ['POSITION', 'TICKET'], 'occupancy kind');
     text(active.lifecycleId, 'occupancy lifecycleId');
     text(active.proposalId, 'occupancy proposalId');
@@ -1146,6 +1741,9 @@ function validateOccupancy(value: unknown): void {
     oneOf(active.direction, ['LONG', 'SHORT'], 'occupancy direction');
     text(active.ownerFamily, 'occupancy ownerFamily');
     oneOf(active.state, ['ACTIVE', 'RECOVERY_REQUIRED', 'CLOSED'], 'occupancy state');
+    if (active.ownerFamily === 'VOLUME_LIFECYCLE_ADAPTER' && active.projectionRevision === null) {
+      throw new TypeError('Volume-owned occupancy record requires an exact projection revision');
+    }
     if (active.positionQuantity !== null) volumeDecimal(active.positionQuantity, 'occupancy positionQuantity');
     if (active.intentKey !== null) text(active.intentKey, 'occupancy intentKey', INTENT_KEY);
     if (active.actionKey !== null) text(active.actionKey, 'occupancy actionKey', ACTION_KEY);
@@ -1175,6 +1773,12 @@ function validateOccupancy(value: unknown): void {
     if (actionKeys.has(prior.actionKey as string)) throw new TypeError('Volume prior action key is duplicated');
     actionKeys.add(prior.actionKey as string);
   }
+}
+
+export function validateVolumeOccupancyProjection(value: unknown): Readonly<VolumeOccupancyProjection> {
+  const cloned = snapshot(value);
+  validateOccupancy(cloned);
+  return deepFreeze(cloned as VolumeOccupancyProjection);
 }
 
 export function validateLifecycleInput(value: unknown): Readonly<VolumeLifecycleInput> {

@@ -106,8 +106,36 @@ function compareScaledProducts(
   rightPrice: string,
   rightMultiplier: number,
 ): -1 | 0 | 1 {
-  const left = parts(leftPrice, 'left price');
-  const right = parts(rightPrice, 'right price');
+  return compareScaledFactorProducts(
+    [leftPrice],
+    leftMultiplier,
+    [rightPrice],
+    rightMultiplier,
+  );
+}
+
+function compareScaledFactorProducts(
+  leftValues: readonly string[],
+  leftMultiplier: number,
+  rightValues: readonly string[],
+  rightMultiplier: number,
+): -1 | 0 | 1 {
+  if (leftValues.length === 0 || rightValues.length === 0
+    || ![leftMultiplier, rightMultiplier].every((value) => Number.isSafeInteger(value) && value >= 0)) {
+    throw new RangeError('scaled decimal product comparison is invalid');
+  }
+  const product = (values: readonly string[], label: string): DecimalParts => values.reduce<DecimalParts>(
+    (accumulator, value) => {
+      const parsed = parts(value, label);
+      return {
+        coefficient: accumulator.coefficient * parsed.coefficient,
+        scale: accumulator.scale + parsed.scale,
+      };
+    },
+    { coefficient: 1n, scale: 0 },
+  );
+  const left = product(leftValues, 'left product decimal');
+  const right = product(rightValues, 'right product decimal');
   const scale = Math.max(left.scale, right.scale);
   const leftScaled = left.coefficient * power10(scale - left.scale) * BigInt(leftMultiplier);
   const rightScaled = right.coefficient * power10(scale - right.scale) * BigInt(rightMultiplier);
@@ -142,6 +170,69 @@ export function trailingStopReached(
   const active = direction === 'LONG'
     ? compareScaledProducts(favorableExtremePrice, 10_000, entryAveragePrice, 10_000 + activationBps) >= 0
     : compareScaledProducts(favorableExtremePrice, 10_000, entryAveragePrice, 10_000 - activationBps) <= 0;
+  if (!active) return false;
+  return direction === 'LONG'
+    ? compareScaledProducts(currentPrice, 10_000, favorableExtremePrice, 10_000 - distanceBps) <= 0
+    : compareScaledProducts(currentPrice, 10_000, favorableExtremePrice, 10_000 + distanceBps) >= 0;
+}
+
+export function lossStopReachedFromCostBasis(
+  direction: 'LONG' | 'SHORT',
+  entryCostBasisQuote: string,
+  entryCostBasisQuantity: string,
+  currentPrice: string,
+  maximumLossBps: number,
+): boolean {
+  positiveVolumeDecimal(entryCostBasisQuote, 'entry cost-basis quote');
+  positiveVolumeDecimal(entryCostBasisQuantity, 'entry cost-basis quantity');
+  positiveVolumeDecimal(currentPrice, 'current price');
+  if (!Number.isSafeInteger(maximumLossBps) || maximumLossBps <= 0 || maximumLossBps >= 10_000) {
+    throw new RangeError('maximum loss bps is invalid');
+  }
+  return direction === 'LONG'
+    ? compareScaledFactorProducts(
+      [currentPrice, entryCostBasisQuantity],
+      10_000,
+      [entryCostBasisQuote],
+      10_000 - maximumLossBps,
+    ) <= 0
+    : compareScaledFactorProducts(
+      [currentPrice, entryCostBasisQuantity],
+      10_000,
+      [entryCostBasisQuote],
+      10_000 + maximumLossBps,
+    ) >= 0;
+}
+
+export function trailingStopReachedFromCostBasis(
+  direction: 'LONG' | 'SHORT',
+  entryCostBasisQuote: string,
+  entryCostBasisQuantity: string,
+  favorableExtremePrice: string,
+  currentPrice: string,
+  activationBps: number,
+  distanceBps: number,
+): boolean {
+  positiveVolumeDecimal(entryCostBasisQuote, 'entry cost-basis quote');
+  positiveVolumeDecimal(entryCostBasisQuantity, 'entry cost-basis quantity');
+  positiveVolumeDecimal(favorableExtremePrice, 'favorable extreme price');
+  positiveVolumeDecimal(currentPrice, 'current price');
+  if (![activationBps, distanceBps].every((value) => Number.isSafeInteger(value) && value > 0 && value < 10_000)) {
+    throw new RangeError('trailing bps is invalid');
+  }
+  const active = direction === 'LONG'
+    ? compareScaledFactorProducts(
+      [favorableExtremePrice, entryCostBasisQuantity],
+      10_000,
+      [entryCostBasisQuote],
+      10_000 + activationBps,
+    ) >= 0
+    : compareScaledFactorProducts(
+      [favorableExtremePrice, entryCostBasisQuantity],
+      10_000,
+      [entryCostBasisQuote],
+      10_000 - activationBps,
+    ) <= 0;
   if (!active) return false;
   return direction === 'LONG'
     ? compareScaledProducts(currentPrice, 10_000, favorableExtremePrice, 10_000 - distanceBps) <= 0

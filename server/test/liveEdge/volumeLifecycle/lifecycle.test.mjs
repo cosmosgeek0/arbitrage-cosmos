@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   evaluateVolumeLifecycle,
 } from '../../../dist/liveEdge/adapters/volumeLifecycle/index.js';
+import { finalizeProjection } from '../../../dist/liveEdge/adapters/volumeLifecycle/validation.js';
 import {
   lifecycleInput,
   openProbe,
@@ -127,6 +128,7 @@ test('one active Volume ticket or position on the symbol blocks a new lifecycle'
       activeRecords: [{
         recordId: 'foreign-volume-record-0001',
         recordRevision: 'foreign-volume-record-revision-0001',
+        projectionRevision: null,
         kind: 'POSITION',
         lifecycleId: 'foreign-volume-lifecycle-0001',
         proposalId: 'foreign-volume-proposal-0001',
@@ -195,4 +197,66 @@ test('a short proposal without exact pre-owned inventory proof is blocked', () =
   }));
   assert.equal(blocked.disposition, 'BLOCKED');
   assert.ok(blocked.reasonCodes.includes('SHORT_INVENTORY_NOT_PROVED'));
+});
+
+test('canonical occupancy rejects rehashed favorable-extreme forks before normal or bound-twin evaluation', () => {
+  for (const direction of ['LONG', 'SHORT']) {
+    const proposal = {
+      proposalId: `volume-proposal-${direction.toLowerCase()}-projection-anchor`,
+      direction,
+    };
+    const opened = openProbe({ proposal });
+    const honest = opened.settled.projection;
+    const { projectionRevision: _revision, ...material } = honest;
+    const forgedPrice = direction === 'LONG' ? '90' : '110';
+    const forged = finalizeProjection({
+      ...material,
+      currentPrice: forgedPrice,
+      favorableExtremePrice: forgedPrice,
+    });
+    const anchoredInput = lifecycleInput({ proposal, current: honest });
+    anchoredInput.current = forged;
+    assert.throws(
+      () => evaluateVolumeLifecycle(anchoredInput),
+      /does not match canonical occupancy lineage/u,
+    );
+  }
+
+  const proposal = { proposalId: 'volume-proposal-pending-projection-anchor' };
+  const opened = openProbe({ proposal });
+  const planned = evaluateVolumeLifecycle(lifecycleInput({
+    proposal,
+    current: opened.settled.projection,
+    authority: { riskActionClass: 'ADD' },
+  }));
+  const { projectionRevision: _revision, ...material } = planned.projection;
+  const forgedPending = finalizeProjection({
+    ...material,
+    currentPrice: '90',
+    favorableExtremePrice: '90',
+  });
+  const anchoredPendingInput = lifecycleInput({
+    proposal,
+    current: planned.projection,
+    authority: { riskActionClass: 'ADD' },
+    twinEvidence: twinForAction(planned.actionRequest, { asks: [] }),
+  });
+  anchoredPendingInput.current = forgedPending;
+  assert.throws(
+    () => evaluateVolumeLifecycle(anchoredPendingInput),
+    /does not match canonical occupancy lineage/u,
+  );
+
+  const missingPositionAnchorInput = lifecycleInput({
+    proposal,
+    current: planned.projection,
+    authority: { riskActionClass: 'ADD' },
+    occupancy: { activeRecords: [] },
+    twinEvidence: twinForAction(planned.actionRequest, { asks: [] }),
+  });
+  missingPositionAnchorInput.current = forgedPending;
+  assert.throws(
+    () => evaluateVolumeLifecycle(missingPositionAnchorInput),
+    /does not match canonical occupancy lineage/u,
+  );
 });

@@ -139,7 +139,7 @@ function authority(overrides = {}, now = NOW, current = null) {
     riskVerdictId: 'risk-verdict-0001',
     riskVerdictRevision: `risk-verdict-revision-${riskSeed}`,
     riskVerdictDigest: `risk-verdict-digest-${riskSeed}`,
-    riskEvaluatedAtMs: now - 1,
+    riskEvaluatedAtMs: riskClass === 'RECOVERY' || current !== null ? now : now - 1,
     riskExpiresAtMs: now + 5_000,
     riskBoundLifecycleId: current?.lifecycleId ?? null,
     riskBoundProjectionRevision: current?.projectionRevision ?? null,
@@ -240,9 +240,10 @@ function signals(overrides = {}, now = NOW) {
 function occupancy(overrides = {}, now = NOW, current = null) {
   const seed = current === null ? null : createHash('sha256').update(current.projectionRevision).digest('hex').slice(0, 24);
   const generated = current === null ? [] : [
-    ...(current.positionQuantity === '0' ? [] : [{
+    ...[{
       recordId: `volume-position-${seed}`,
       recordRevision: `volume-position-revision-${seed}`,
+      projectionRevision: current.projectionRevision,
       kind: 'POSITION',
       lifecycleId: current.lifecycleId,
       proposalId: current.proposalId,
@@ -250,14 +251,16 @@ function occupancy(overrides = {}, now = NOW, current = null) {
       symbol: current.symbol,
       direction: current.direction,
       ownerFamily: 'VOLUME_LIFECYCLE_ADAPTER',
-      state: current.state === 'RECOVERY_REQUIRED' ? 'RECOVERY_REQUIRED' : 'ACTIVE',
+      state: current.state === 'RECOVERY_REQUIRED' ? 'RECOVERY_REQUIRED'
+        : current.state === 'EXIT' ? 'CLOSED' : 'ACTIVE',
       positionQuantity: current.positionQuantity,
       intentKey: null,
       actionKey: null,
-    }]),
+    }],
     ...(current.pendingAction === null ? [] : [{
       recordId: `volume-ticket-${seed}`,
       recordRevision: `volume-ticket-revision-${seed}`,
+      projectionRevision: current.projectionRevision,
       kind: 'TICKET',
       lifecycleId: current.lifecycleId,
       proposalId: current.proposalId,
@@ -274,7 +277,7 @@ function occupancy(overrides = {}, now = NOW, current = null) {
   return {
     owner: 'CANONICAL_POSITION_TICKET_JOURNAL_PROJECTION',
     truth: 'COMPLETE',
-    observedAtMs: now - 10,
+    observedAtMs: current === null ? now - 10 : Math.max(now - 10, current.lastTransition.occurredAtMs),
     validUntilMs: now + 5_000,
     activeRecords: Object.hasOwn(overrides, 'activeRecords') ? overrides.activeRecords : generated,
     priorActions: [],
@@ -287,8 +290,12 @@ export function lifecycleInput(overrides = {}) {
   const twinLastEventAtMs = overrides.twinEvidence?.twinState?.processedEvents
     ?.reduce((latest, item) => Math.max(latest, item.occurredAtMs), 0) ?? 0;
   const now = overrides.evaluatedAtMs
-    ?? Math.max(NOW, current?.lastTransition?.occurredAtMs ?? 0, twinLastEventAtMs);
+    ?? Math.max(NOW, current === null ? 0 : current.lastTransition.occurredAtMs + 1, twinLastEventAtMs);
   const direction = overrides.proposal?.direction ?? 'LONG';
+  const marketOverrides = current !== null && !Object.hasOwn(overrides.market ?? {}, 'observedAtMs')
+    ? { ...(overrides.market ?? {}), observedAtMs: now } : overrides.market;
+  const signalOverrides = current !== null && !Object.hasOwn(overrides.signals ?? {}, 'observedAtMs')
+    ? { ...(overrides.signals ?? {}), observedAtMs: now } : overrides.signals;
   const built = {
     schema: 'LIVE_EDGE_VOLUME_LIFECYCLE_INPUT_V1',
     evaluatedAtMs: now,
@@ -297,12 +304,21 @@ export function lifecycleInput(overrides = {}) {
     authority: authority(overrides.authority, now, current),
     policy: protectionPolicy(),
     sizing: sizing(direction, overrides.sizing, now),
-    market: market(direction, overrides.market, now),
-    signals: signals(overrides.signals, now),
+    market: market(direction, marketOverrides, now),
+    signals: signals(signalOverrides, now),
     occupancy: occupancy(overrides.occupancy, now, current),
     current,
     twinEvidence: Object.hasOwn(overrides, 'twinEvidence') ? overrides.twinEvidence : null,
   };
+  const canonicalRecoveryResolution = built.signals.recoveryDisposition === 'RESOLVED'
+    && built.signals.recoveryOutcome === 'NO_EFFECT'
+    && built.signals.recoveryRevision !== null;
+  if (canonicalRecoveryResolution && !Object.hasOwn(overrides.signals ?? {}, 'observedAtMs')) {
+    built.signals = { ...built.signals, observedAtMs: now };
+  }
+  if (canonicalRecoveryResolution && !Object.hasOwn(overrides.occupancy ?? {}, 'observedAtMs')) {
+    built.occupancy = { ...built.occupancy, observedAtMs: now };
+  }
   built.policy = overrides.policy ?? built.policy;
   built.authority = {
     ...built.authority,

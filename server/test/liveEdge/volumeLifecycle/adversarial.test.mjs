@@ -16,6 +16,7 @@ import { runExchangeTwinScenario } from '../../../dist/liveEdge/adapters/exchang
 import {
   deriveVolumeActionKey,
   deriveVolumeIntentKey,
+  deriveVolumeRecoveryConsumptionRevision,
   finalizeProjection,
   validateLifecycleProjection,
 } from '../../../dist/liveEdge/adapters/volumeLifecycle/validation.js';
@@ -109,7 +110,10 @@ test('rehashed increasing actions cannot claim exit triggers and active stages c
       reasonCodes: ['FORGED_ZERO_CONFIRM'],
     },
   });
-  assert.throws(() => validateLifecycleProjection(zeroConfirm), /requires retained exposure/u);
+  assert.throws(
+    () => validateLifecycleProjection(zeroConfirm),
+    /entry average and exact cost basis must be present together/u,
+  );
 });
 
 test('rehashed ENTRY and REDUCE quantities remain bound to retained stage and episode targets', () => {
@@ -318,19 +322,21 @@ test('risk verdict context must bind the exact current projection and exposure',
 
 test('risk reduction refuses foreign, unavailable, future, stale or post-verdict sizing truth', () => {
   const opened = openProbe({ proposal: { proposalId: 'volume-proposal-risk-recheck-sizing' } });
-  for (const sizing of [
-    { state: 'UNAVAILABLE' },
-    { observedAtMs: NOW + 1 },
-    { observedAtMs: NOW - 6_000, validUntilMs: NOW + 100 },
-    { observedAtMs: NOW },
-    { validUntilMs: NOW },
+  const evaluatedAtMs = opened.settled.projection.lastTransition.occurredAtMs + 1;
+  for (const scenario of [
+    { sizing: { state: 'UNAVAILABLE' } },
+    { sizing: { observedAtMs: evaluatedAtMs + 1 } },
+    { sizing: { observedAtMs: evaluatedAtMs - 6_000, validUntilMs: evaluatedAtMs + 100 } },
+    { sizing: { observedAtMs: evaluatedAtMs }, authority: { riskEvaluatedAtMs: evaluatedAtMs - 1 } },
+    { sizing: { validUntilMs: evaluatedAtMs } },
   ]) {
     const result = evaluateVolumeLifecycle(lifecycleInput({
       proposal: { proposalId: 'volume-proposal-risk-recheck-sizing' },
+      evaluatedAtMs,
       current: opened.settled.projection,
-      authority: { riskActionClass: 'EXIT' },
+      authority: { riskActionClass: 'EXIT', ...(scenario.authority ?? {}) },
       signals: { globalHalt: true },
-      sizing,
+      sizing: scenario.sizing,
     }));
     assert.equal(result.disposition, 'RECOVERY_REQUIRED');
     assert.ok(result.reasonCodes.includes('RISK_REDUCTION_OWNER_RECHECK_REQUIRED'));
@@ -388,6 +394,7 @@ test('a recent PLANNED symbol intent blocks a new proposal and a same-lifecycle 
     occupancy: { activeRecords: [{
       recordId: 'same-lifecycle-position-record',
       recordRevision: 'same-lifecycle-position-revision',
+      projectionRevision: planned.projection.projectionRevision,
       kind: 'POSITION',
       lifecycleId: planned.projection.lifecycleId,
       proposalId: planned.projection.proposalId,
@@ -537,10 +544,16 @@ for (const [name, signals, expectedKind] of [
     assert.equal(resolved.actionRequest, null);
     assert.ok(resolved.reasonCodes.includes('CANONICAL_RECOVERY_RESOLVED_RISK_RECHECK_REQUIRED'));
 
+    const recheckAtMs = resolved.projection.lastTransition.occurredAtMs + 20;
     const rechecked = evaluateVolumeLifecycle(lifecycleInput({
       proposal: { proposalId: `volume-proposal-recovery-${name.replace(' ', '-')}` },
+      evaluatedAtMs: recheckAtMs,
       current: resolved.projection,
-      authority: { riskActionClass: expectedKind },
+      authority: {
+        riskActionClass: expectedKind,
+        riskEvaluatedAtMs: recheckAtMs,
+        riskExpiresAtMs: recheckAtMs + 5_000,
+      },
       signals,
     }));
     assert.equal(rechecked.disposition, 'PLANNED');
@@ -552,14 +565,17 @@ for (const [kind, signals, book] of [
   ['REDUCE', { exhaustion: 'PRESENT' }, { bids: [] }],
   ['EXIT', { reversal: 'PRESENT' }, { bids: [] }],
 ]) {
-  test(`${kind} no-fill preserves exposure and requires canonical recovery before retry`, () => {
-    const opened = openProbe();
+  test(`${kind} no-fill requires one canonical recovery revision and a fresh Risk-bound retry`, () => {
+    const proposal = { proposalId: `volume-proposal-${kind.toLowerCase()}-retry-lineage` };
+    const opened = openProbe({ proposal });
     const planned = evaluateVolumeLifecycle(lifecycleInput({
+      proposal,
       current: opened.settled.projection,
       authority: { riskActionClass: kind },
       signals,
     }));
     const result = evaluateVolumeLifecycle(lifecycleInput({
+      proposal,
       current: planned.projection,
       authority: { riskActionClass: kind },
       signals,
@@ -569,22 +585,599 @@ for (const [kind, signals, book] of [
     assert.equal(result.projection.positionQuantity, '0.02');
     assert.equal(result.projection.pendingAction, null);
     assert.ok(result.reasonCodes.includes('RISK_REDUCTION_PROVED_NO_FILL'));
-    const resolved = evaluateVolumeLifecycle(lifecycleInput({
+    assert.equal(result.projection.lastNoFill.action.actionKey, planned.actionRequest.actionKey);
+    assert.equal(result.projection.lastNoFill.action.kind, kind);
+    assert.equal(result.projection.lastNoFill.action.ownerEvidenceRevision, planned.actionRequest.ownerEvidenceRevision);
+    assert.equal(result.projection.lastNoFill.action.intentKey, planned.actionRequest.intentKey);
+    assert.equal(result.projection.lastNoFill.evidenceKind, 'TWIN_NO_FILL');
+    assert.equal(result.projection.lastNoFill.recoveryResolutionRevision, null);
+
+    const unresolvedOnce = evaluateVolumeLifecycle(lifecycleInput({
+      proposal,
+      evaluatedAtMs: result.projection.lastTransition.occurredAtMs,
       current: result.projection,
+      authority: { riskActionClass: 'RECOVERY' },
+      signals,
+    }));
+    const unresolvedTwice = evaluateVolumeLifecycle(lifecycleInput({
+      proposal,
+      evaluatedAtMs: unresolvedOnce.projection.lastTransition.occurredAtMs,
+      current: unresolvedOnce.projection,
+      authority: { riskActionClass: 'RECOVERY' },
+      signals,
+    }));
+    assert.equal(unresolvedOnce.disposition, 'RECOVERY_REQUIRED');
+    assert.ok(unresolvedOnce.reasonCodes.includes('CANONICAL_RECOVERY_NOT_RESOLVED'));
+    assert.equal(unresolvedTwice.projection.projectionRevision, unresolvedOnce.projection.projectionRevision);
+    assert.equal(unresolvedTwice.projection.lastNoFill.action.actionKey, planned.actionRequest.actionKey);
+
+    const resolutionRevision = `volume-${kind.toLowerCase()}-no-fill-resolved`;
+    const resolutionAtMs = unresolvedTwice.projection.lastTransition.occurredAtMs + 20;
+    const resolved = evaluateVolumeLifecycle(lifecycleInput({
+      proposal,
+      evaluatedAtMs: resolutionAtMs,
+      current: unresolvedTwice.projection,
       authority: { riskActionClass: 'RECOVERY' },
       signals: {
         ...signals, reconciliationState: 'EXACT', recoveryDisposition: 'RESOLVED',
-        recoveryOutcome: 'NO_EFFECT', recoveryRevision: `volume-${kind.toLowerCase()}-no-fill-resolved`,
+        recoveryOutcome: 'NO_EFFECT', recoveryRevision: resolutionRevision,
       },
     }));
     assert.equal(resolved.disposition, 'BLOCKED');
     assert.ok(resolved.reasonCodes.includes('CANONICAL_RECOVERY_RESOLVED_RISK_RECHECK_REQUIRED'));
     assert.equal(resolved.projection.pendingTwinStateRevision, null);
     assert.equal(resolved.projection.recoveryEvidenceActionKey, null);
-    assert.notEqual(resolved.projection.lastNoFillOwnerEvidenceRevision, null);
-    assert.notEqual(resolved.projection.lastNoFillIntentKey, null);
+    assert.equal(resolved.projection.lastRecoveryResolutionRevision, resolutionRevision);
+    assert.equal(resolved.projection.lastNoFill.action.actionKey, planned.actionRequest.actionKey);
+    assert.equal(resolved.projection.lastNoFill.action.kind, kind);
+    assert.equal(resolved.projection.lastNoFill.action.ownerEvidenceRevision, planned.actionRequest.ownerEvidenceRevision);
+    assert.equal(resolved.projection.lastNoFill.action.intentKey, planned.actionRequest.intentKey);
+    assert.equal(resolved.projection.lastNoFill.recoveryResolutionRevision, resolutionRevision);
+
+    const retryAtMs = resolutionAtMs + 20;
+    const evidenceObservedAtMs = resolutionAtMs + 1;
+    const evidenceValidUntilMs = evidenceObservedAtMs + 5_000;
+    const staleRisk = evaluateVolumeLifecycle(lifecycleInput({
+      proposal,
+      evaluatedAtMs: retryAtMs,
+      current: resolved.projection,
+      authority: {
+        riskActionClass: kind,
+        riskEvaluatedAtMs: resolutionAtMs - 1,
+        riskExpiresAtMs: retryAtMs + 5_000,
+      },
+      sizing: { observedAtMs: evidenceObservedAtMs, validUntilMs: evidenceValidUntilMs },
+      market: { observedAtMs: evidenceObservedAtMs, validUntilMs: evidenceValidUntilMs },
+      signals: {
+        ...signals,
+        observedAtMs: evidenceObservedAtMs,
+        validUntilMs: evidenceValidUntilMs,
+      },
+    }));
+    assert.equal(staleRisk.disposition, 'RECOVERY_REQUIRED');
+    assert.ok(staleRisk.reasonCodes.includes('RISK_REDUCTION_OWNER_RECHECK_REQUIRED'));
+    assert.equal(staleRisk.actionRequest, null);
+
+    const staleRecoveryResolutionRevision = `volume-${kind.toLowerCase()}-stale-risk-recovery-r2`;
+    const staleRecoveryResolutionAtMs = staleRisk.projection.lastTransition.occurredAtMs + 20;
+    const resolvedStaleRecovery = evaluateVolumeLifecycle(lifecycleInput({
+      proposal,
+      evaluatedAtMs: staleRecoveryResolutionAtMs,
+      current: staleRisk.projection,
+      authority: { riskActionClass: 'RECOVERY' },
+      sizing: {
+        observedAtMs: staleRisk.projection.lastTransition.occurredAtMs + 5,
+        validUntilMs: staleRecoveryResolutionAtMs + 5_000,
+      },
+      market: {
+        observedAtMs: staleRisk.projection.lastTransition.occurredAtMs + 5,
+        validUntilMs: staleRecoveryResolutionAtMs + 5_000,
+      },
+      signals: {
+        ...signals,
+        observedAtMs: staleRisk.projection.lastTransition.occurredAtMs + 5,
+        validUntilMs: staleRecoveryResolutionAtMs + 5_000,
+        reconciliationState: 'EXACT',
+        recoveryDisposition: 'RESOLVED',
+        recoveryOutcome: 'NO_EFFECT',
+        recoveryRevision: staleRecoveryResolutionRevision,
+      },
+    }));
+    assert.equal(resolvedStaleRecovery.disposition, 'BLOCKED');
+    assert.deepEqual(resolvedStaleRecovery.projection.consumedRecoveryRevisions, [
+      resolutionRevision,
+      staleRecoveryResolutionRevision,
+    ]);
+    assert.equal(
+      resolvedStaleRecovery.projection.lastNoFill.recoveryResolutionRevision,
+      resolutionRevision,
+    );
+    assert.equal(resolvedStaleRecovery.projection.recoveryConsumptionHistory[1].noFill, null);
+
+    const crossedKind = kind === 'REDUCE' ? 'EXIT' : 'REDUCE';
+    const crossedSignals = crossedKind === 'EXIT'
+      ? { ...signals, exhaustion: 'ABSENT', reversal: 'PRESENT' }
+      : { ...signals, reversal: 'ABSENT', exhaustion: 'PRESENT' };
+    const crossedStaleRisk = evaluateVolumeLifecycle(lifecycleInput({
+      proposal,
+      evaluatedAtMs: retryAtMs,
+      current: resolved.projection,
+      authority: {
+        riskActionClass: crossedKind,
+        riskEvaluatedAtMs: resolutionAtMs - 1,
+        riskExpiresAtMs: retryAtMs + 5_000,
+      },
+      sizing: { observedAtMs: evidenceObservedAtMs, validUntilMs: retryAtMs + 5_000 },
+      market: { observedAtMs: evidenceObservedAtMs, validUntilMs: retryAtMs + 5_000 },
+      signals: {
+        ...crossedSignals,
+        observedAtMs: evidenceObservedAtMs,
+        validUntilMs: retryAtMs + 5_000,
+      },
+    }));
+    assert.equal(crossedStaleRisk.disposition, 'RECOVERY_REQUIRED');
+    assert.ok(crossedStaleRisk.reasonCodes.includes('RISK_REDUCTION_OWNER_RECHECK_REQUIRED'));
+    assert.equal(crossedStaleRisk.actionRequest, null);
+
+    const retryInput = {
+      proposal,
+      evaluatedAtMs: retryAtMs,
+      current: resolved.projection,
+      authority: {
+        riskActionClass: kind,
+        riskEvaluatedAtMs: resolutionAtMs + 10,
+        riskExpiresAtMs: retryAtMs + 5_000,
+      },
+      sizing: { observedAtMs: resolutionAtMs + 5, validUntilMs: retryAtMs + 5_000 },
+      market: { observedAtMs: resolutionAtMs + 5, validUntilMs: retryAtMs + 5_000 },
+      signals: {
+        ...signals,
+        observedAtMs: resolutionAtMs + 5,
+        validUntilMs: retryAtMs + 5_000,
+      },
+      occupancy: { observedAtMs: retryAtMs, priorActions: [priorRecord(planned)] },
+    };
+    const boundRetryInput = lifecycleInput(retryInput);
+    const retry = evaluateVolumeLifecycle(boundRetryInput);
+    const deterministicRetry = evaluateVolumeLifecycle(lifecycleInput(retryInput));
+    assert.equal(retry.disposition, 'PLANNED');
+    assert.equal(retry.actionRequest.kind, kind);
+    assert.equal(retry.projection.positionQuantity, '0.02');
+    assert.equal(retry.actionRequest.requestedQuantity, kind === 'REDUCE' ? '0.01' : '0.02');
+    assert.equal(retry.actionRequest.riskContextRevision, boundRetryInput.authority.riskContextRevision);
+    assert.match(retry.actionRequest.recoveryRetryRevision, /^l11retry_[a-f0-9]{64}$/u);
+    assert.notEqual(retry.actionRequest.intentKey, planned.actionRequest.intentKey);
+    assert.notEqual(retry.actionRequest.actionKey, planned.actionRequest.actionKey);
+    assert.deepEqual(deterministicRetry.actionRequest, retry.actionRequest);
+    assertHardLabels(retry.actionRequest);
+
+    const duplicate = evaluateVolumeLifecycle(lifecycleInput({
+      ...retryInput,
+      occupancy: {
+        observedAtMs: retryAtMs,
+        priorActions: [priorRecord(planned), priorRecord(retry)],
+      },
+    }));
+    assert.equal(duplicate.disposition, 'NOOP_REPEAT');
+    assert.ok(duplicate.reasonCodes.includes('ACTION_ALREADY_RECORDED'));
+    assert.equal(duplicate.actionRequest, null);
+
+    const refreshedRetryInput = {
+      ...retryInput,
+      evaluatedAtMs: retryAtMs + 1,
+      authority: {
+        riskActionClass: kind,
+        riskEvaluatedAtMs: resolutionAtMs + 11,
+        riskExpiresAtMs: retryAtMs + 5_001,
+      },
+      sizing: { observedAtMs: resolutionAtMs + 6, validUntilMs: retryAtMs + 5_001 },
+      market: { observedAtMs: resolutionAtMs + 6, validUntilMs: retryAtMs + 5_001 },
+      signals: {
+        ...signals,
+        observedAtMs: resolutionAtMs + 6,
+        validUntilMs: retryAtMs + 5_001,
+      },
+      occupancy: { observedAtMs: retryAtMs + 1, priorActions: [priorRecord(planned)] },
+    };
+    const refreshedRetry = evaluateVolumeLifecycle(lifecycleInput(refreshedRetryInput));
+    assert.equal(refreshedRetry.disposition, 'PLANNED');
+    assert.equal(refreshedRetry.actionRequest.intentKey, retry.actionRequest.intentKey);
+    assert.notEqual(refreshedRetry.actionRequest.actionKey, retry.actionRequest.actionKey);
+
+    const intentDuplicate = evaluateVolumeLifecycle(lifecycleInput({
+      ...refreshedRetryInput,
+      occupancy: {
+        observedAtMs: retryAtMs + 1,
+        priorActions: [priorRecord(planned), priorRecord(retry)],
+      },
+    }));
+    assert.equal(intentDuplicate.disposition, 'NOOP_REPEAT');
+    assert.ok(intentDuplicate.reasonCodes.includes('ACTION_ALREADY_RECORDED'));
+    assert.equal(intentDuplicate.actionRequest, null);
+
+    const secondNoFill = evaluateVolumeLifecycle(lifecycleInput({
+      proposal,
+      current: retry.projection,
+      authority: { riskActionClass: kind },
+      signals,
+      twinEvidence: twinForAction(retry.actionRequest, book),
+    }));
+    assert.equal(secondNoFill.disposition, 'RECOVERY_REQUIRED');
+    assert.equal(secondNoFill.projection.lastNoFill.action.actionKey, retry.actionRequest.actionKey);
+    assert.equal(secondNoFill.projection.lastNoFill.action.kind, kind);
+    assert.equal(secondNoFill.projection.lastNoFill.action.intentKey, retry.actionRequest.intentKey);
+    assert.equal(secondNoFill.projection.lastRecoveryResolutionRevision, resolutionRevision);
+
+    const reusedResolution = evaluateVolumeLifecycle(lifecycleInput({
+      proposal,
+      evaluatedAtMs: secondNoFill.projection.lastTransition.occurredAtMs + 20,
+      current: secondNoFill.projection,
+      authority: { riskActionClass: 'RECOVERY' },
+      signals: {
+        ...signals,
+        reconciliationState: 'EXACT',
+        recoveryDisposition: 'RESOLVED',
+        recoveryOutcome: 'NO_EFFECT',
+        recoveryRevision: resolutionRevision,
+      },
+    }));
+    assert.equal(reusedResolution.disposition, 'RECOVERY_REQUIRED');
+    assert.ok(reusedResolution.reasonCodes.includes('CANONICAL_RECOVERY_NOT_RESOLVED'));
+    assert.equal(reusedResolution.actionRequest, null);
+    assert.equal(reusedResolution.projection.lastRecoveryResolutionRevision, resolutionRevision);
+
+    const secondResolutionRevision = `volume-${kind.toLowerCase()}-no-fill-resolved-second`;
+    const secondResolutionAtMs = secondNoFill.projection.lastTransition.occurredAtMs + 40;
+    const resolvedSecond = evaluateVolumeLifecycle(lifecycleInput({
+      proposal,
+      evaluatedAtMs: secondResolutionAtMs,
+      current: secondNoFill.projection,
+      authority: { riskActionClass: 'RECOVERY' },
+      signals: {
+        ...signals,
+        reconciliationState: 'EXACT',
+        recoveryDisposition: 'RESOLVED',
+        recoveryOutcome: 'NO_EFFECT',
+        recoveryRevision: secondResolutionRevision,
+      },
+    }));
+    assert.equal(resolvedSecond.disposition, 'BLOCKED');
+    assert.deepEqual(resolvedSecond.projection.consumedRecoveryRevisions, [
+      resolutionRevision,
+      secondResolutionRevision,
+    ]);
+    assert.equal(
+      resolvedSecond.projection.lastNoFill.recoveryResolutionRevision,
+      secondResolutionRevision,
+    );
+
+    const { projectionRevision: _resolvedSecondRevision, ...resolvedSecondMaterial } = resolvedSecond.projection;
+    const forgedEarlierRevision = `volume-${kind.toLowerCase()}-forged-consumed-r1`;
+    const substitutedConsumedOnly = finalizeProjection({
+      ...resolvedSecondMaterial,
+      consumedRecoveryRevisions: [forgedEarlierRevision, secondResolutionRevision],
+    });
+    assert.throws(
+      () => validateLifecycleProjection(substitutedConsumedOnly),
+      /consumption record does not match consumed revision order/u,
+    );
+    const substitutedProof = finalizeProjection({
+      ...resolvedSecondMaterial,
+      consumedRecoveryRevisions: [forgedEarlierRevision, secondResolutionRevision],
+      recoveryConsumptionHistory: resolvedSecond.projection.recoveryConsumptionHistory.map((record, index) => (
+        index === 0 ? { ...record, recoveryResolutionRevision: forgedEarlierRevision } : record
+      )),
+    });
+    assert.throws(
+      () => validateLifecycleProjection(substitutedProof),
+      /no-fill does not match its resolution revision/u,
+    );
+    const firstConsumption = resolvedSecond.projection.recoveryConsumptionHistory[0];
+    const forgedFirstNoFill = {
+      ...firstConsumption.noFill,
+      recoveryResolutionRevision: forgedEarlierRevision,
+    };
+    const forgedFirstConsumption = {
+      ...firstConsumption,
+      recoveryResolutionRevision: forgedEarlierRevision,
+      noFill: forgedFirstNoFill,
+      consumptionRevision: deriveVolumeRecoveryConsumptionRevision({
+        lifecycleId: resolvedSecond.projection.lifecycleId,
+        recoveryResolutionRevision: forgedEarlierRevision,
+        baseProjectionRevision: firstConsumption.baseProjectionRevision,
+        noFill: forgedFirstNoFill,
+        priorConsumptionRevision: null,
+        outcomeSequence: firstConsumption.outcomeSequence,
+      }),
+    };
+    const rehashedPrefixOnly = finalizeProjection({
+      ...resolvedSecondMaterial,
+      consumedRecoveryRevisions: [forgedEarlierRevision, secondResolutionRevision],
+      recoveryConsumptionHistory: [
+        forgedFirstConsumption,
+        resolvedSecond.projection.recoveryConsumptionHistory[1],
+      ],
+    });
+    assert.throws(
+      () => validateLifecycleProjection(rehashedPrefixOnly),
+      /Recovery consumption history is not a closed chain/u,
+    );
+    const truncatedPrefix = finalizeProjection({
+      ...resolvedSecondMaterial,
+      consumedRecoveryRevisions: [secondResolutionRevision],
+      recoveryConsumptionHistory: [resolvedSecond.projection.recoveryConsumptionHistory[1]],
+    });
+    assert.throws(
+      () => validateLifecycleProjection(truncatedPrefix),
+      /Recovery consumption history is not a closed chain/u,
+    );
+
+    const thirdRetryAtMs = secondResolutionAtMs + 20;
+    const thirdRetry = evaluateVolumeLifecycle(lifecycleInput({
+      proposal,
+      evaluatedAtMs: thirdRetryAtMs,
+      current: resolvedSecond.projection,
+      authority: {
+        riskActionClass: kind,
+        riskEvaluatedAtMs: secondResolutionAtMs + 10,
+        riskExpiresAtMs: thirdRetryAtMs + 5_000,
+      },
+      sizing: { observedAtMs: secondResolutionAtMs + 5, validUntilMs: thirdRetryAtMs + 5_000 },
+      market: { observedAtMs: secondResolutionAtMs + 5, validUntilMs: thirdRetryAtMs + 5_000 },
+      signals: {
+        ...signals,
+        observedAtMs: secondResolutionAtMs + 5,
+        validUntilMs: thirdRetryAtMs + 5_000,
+      },
+      occupancy: { priorActions: [priorRecord(planned), priorRecord(retry)] },
+    }));
+    assert.equal(thirdRetry.disposition, 'PLANNED');
+    assert.notEqual(thirdRetry.actionRequest.intentKey, retry.actionRequest.intentKey);
+
+    const thirdNoFill = evaluateVolumeLifecycle(lifecycleInput({
+      proposal,
+      current: thirdRetry.projection,
+      authority: { riskActionClass: kind },
+      signals,
+      twinEvidence: twinForAction(thirdRetry.actionRequest, book),
+    }));
+    assert.equal(thirdNoFill.disposition, 'RECOVERY_REQUIRED');
+    assert.deepEqual(thirdNoFill.projection.consumedRecoveryRevisions, [
+      resolutionRevision,
+      secondResolutionRevision,
+    ]);
+
+    const reusedFirstAfterSecond = evaluateVolumeLifecycle(lifecycleInput({
+      proposal,
+      evaluatedAtMs: thirdNoFill.projection.lastTransition.occurredAtMs + 20,
+      current: thirdNoFill.projection,
+      authority: { riskActionClass: 'RECOVERY' },
+      signals: {
+        ...signals,
+        reconciliationState: 'EXACT',
+        recoveryDisposition: 'RESOLVED',
+        recoveryOutcome: 'NO_EFFECT',
+        recoveryRevision: resolutionRevision,
+      },
+    }));
+    assert.equal(reusedFirstAfterSecond.disposition, 'RECOVERY_REQUIRED');
+    assert.ok(reusedFirstAfterSecond.reasonCodes.includes('CANONICAL_RECOVERY_NOT_RESOLVED'));
+    assert.deepEqual(reusedFirstAfterSecond.projection.consumedRecoveryRevisions, [
+      resolutionRevision,
+      secondResolutionRevision,
+    ]);
+    assert.equal(
+      reusedFirstAfterSecond.projection.lastRecoveryResolutionRevision,
+      secondResolutionRevision,
+    );
   });
 }
+
+test('rehashed projections cannot forge no-fill action, evidence, or consumed recovery lineage', () => {
+  const proposal = { proposalId: 'volume-proposal-forged-no-fill-lineage' };
+  const opened = openProbe({ proposal });
+  const planned = evaluateVolumeLifecycle(lifecycleInput({
+    proposal,
+    current: opened.settled.projection,
+    authority: { riskActionClass: 'REDUCE' },
+    signals: { exhaustion: 'PRESENT' },
+  }));
+  const noFill = evaluateVolumeLifecycle(lifecycleInput({
+    proposal,
+    current: planned.projection,
+    authority: { riskActionClass: 'REDUCE' },
+    signals: { exhaustion: 'PRESENT' },
+    twinEvidence: twinForAction(planned.actionRequest, { bids: [] }),
+  }));
+  assert.equal(noFill.disposition, 'RECOVERY_REQUIRED');
+
+  const foreignProposal = { proposalId: 'volume-proposal-foreign-no-fill-lineage' };
+  const foreignOpened = openProbe({ proposal: foreignProposal });
+  const foreignPlanned = evaluateVolumeLifecycle(lifecycleInput({
+    proposal: foreignProposal,
+    current: foreignOpened.settled.projection,
+    authority: { riskActionClass: 'REDUCE' },
+    signals: { exhaustion: 'PRESENT' },
+  }));
+  const foreignNoFill = evaluateVolumeLifecycle(lifecycleInput({
+    proposal: foreignProposal,
+    current: foreignPlanned.projection,
+    authority: { riskActionClass: 'REDUCE' },
+    signals: { exhaustion: 'PRESENT' },
+    twinEvidence: twinForAction(foreignPlanned.actionRequest, { bids: [] }),
+  }));
+  assert.equal(foreignNoFill.disposition, 'RECOVERY_REQUIRED');
+
+  const supersedingConflict = evaluateVolumeLifecycle(lifecycleInput({
+    proposal,
+    current: noFill.projection,
+    twinEvidence: twinForAction(foreignPlanned.actionRequest),
+  }));
+  assert.equal(supersedingConflict.disposition, 'RECOVERY_REQUIRED');
+  assert.equal(supersedingConflict.projection.lastNoFill.action.actionKey,
+    planned.actionRequest.actionKey);
+  assert.equal(supersedingConflict.projection.unresolvedTwinConflict.kind,
+    'ORPHAN_TWIN_EVIDENCE');
+  assert.equal(supersedingConflict.projection.recoveryEvidenceActionKey,
+    foreignPlanned.actionRequest.actionKey);
+
+  const rehash = (projection, overrides) => {
+    const { projectionRevision: _projectionRevision, ...material } = projection;
+    return finalizeProjection({ ...material, ...overrides });
+  };
+  const forgedAction = {
+    ...noFill.projection.lastNoFill.action,
+    ownerEvidenceRevision: `l11owner_${'e'.repeat(64)}`,
+  };
+  forgedAction.actionKey = deriveVolumeActionKey(forgedAction);
+  const forgedActionLineage = rehash(noFill.projection, {
+    lastNoFill: {
+      ...noFill.projection.lastNoFill,
+      action: forgedAction,
+    },
+  });
+  assert.throws(
+    () => validateLifecycleProjection(forgedActionLineage),
+    /fixture is not intrinsic|lineage is not retained/u,
+  );
+
+  const foreignSettled = foreignNoFill.projection.settledTwinHistory.at(-1);
+  const foreignActionLineage = rehash(noFill.projection, {
+    lastNoFill: foreignNoFill.projection.lastNoFill,
+    lastSettledActionKey: foreignNoFill.projection.lastSettledActionKey,
+    lastTwinStateRevision: foreignNoFill.projection.lastTwinStateRevision,
+    lastTwinOutcomeRevision: foreignNoFill.projection.lastTwinOutcomeRevision,
+    settledTwinHistory: [...noFill.projection.settledTwinHistory.slice(0, -1), foreignSettled],
+    recoveryEvidenceActionKey: foreignNoFill.projection.recoveryEvidenceActionKey,
+    recoveryEvidenceFixtureId: foreignNoFill.projection.recoveryEvidenceFixtureId,
+    recoveryEvidenceTwinStateRevision: foreignNoFill.projection.recoveryEvidenceTwinStateRevision,
+    recoveryEvidenceTwinOutcomeRevision: foreignNoFill.projection.recoveryEvidenceTwinOutcomeRevision,
+    lastTransition: {
+      ...noFill.projection.lastTransition,
+      twinOutcomeRevision: foreignNoFill.projection.lastTransition.twinOutcomeRevision,
+    },
+  });
+  assert.throws(
+    () => validateLifecycleProjection(foreignActionLineage),
+    /no-fill action is not bound to its lifecycle projection/u,
+  );
+
+  const forgedEvidenceLineage = rehash(noFill.projection, {
+    lastNoFill: {
+      ...noFill.projection.lastNoFill,
+      twinOutcomeRevision: 'forged-no-fill-twin-outcome-revision',
+    },
+  });
+  assert.throws(
+    () => validateLifecycleProjection(forgedEvidenceLineage),
+    /twin no-fill lineage is not retained/u,
+  );
+
+  const erasedTwinNoFillHead = rehash(noFill.projection, { lastNoFill: null });
+  assert.throws(
+    () => validateLifecycleProjection(erasedTwinNoFillHead),
+    /current no-fill head does not match its latest twin outcome/u,
+  );
+  const strippedRiskNoFillRecoveryTuple = rehash(noFill.projection, {
+    recoveryEvidenceActionKey: null,
+    recoveryEvidenceFixtureId: null,
+    recoveryEvidenceTwinStateRevision: null,
+    recoveryEvidenceTwinOutcomeRevision: null,
+  });
+  assert.throws(
+    () => validateLifecycleProjection(strippedRiskNoFillRecoveryTuple),
+    /unresolved risk no-fill requires its exact recovery evidence tuple/u,
+  );
+
+  const resolutionRevision = 'volume-forged-lineage-resolution-r1';
+  const resolved = evaluateVolumeLifecycle(lifecycleInput({
+    proposal,
+    evaluatedAtMs: noFill.projection.lastTransition.occurredAtMs + 20,
+    current: noFill.projection,
+    authority: { riskActionClass: 'RECOVERY' },
+    signals: {
+      exhaustion: 'PRESENT',
+      reconciliationState: 'EXACT',
+      recoveryDisposition: 'RESOLVED',
+      recoveryOutcome: 'NO_EFFECT',
+      recoveryRevision: resolutionRevision,
+    },
+  }));
+  assert.equal(resolved.disposition, 'BLOCKED');
+
+  const erasedResolvedNoFillHead = rehash(resolved.projection, { lastNoFill: null });
+  assert.throws(
+    () => validateLifecycleProjection(erasedResolvedNoFillHead),
+    /current no-fill head does not match its latest recovery outcome/u,
+  );
+
+  const erasedConsumedHistory = rehash(resolved.projection, {
+    consumedRecoveryRevisions: [],
+  });
+  assert.throws(
+    () => validateLifecycleProjection(erasedConsumedHistory),
+    /latest recovery resolution must match its consumed history/u,
+  );
+
+  const duplicatedConsumedHistory = rehash(resolved.projection, {
+    consumedRecoveryRevisions: [resolutionRevision, resolutionRevision],
+  });
+  assert.throws(
+    () => validateLifecycleProjection(duplicatedConsumedHistory),
+    /consumed recovery revisions must be bounded and unique/u,
+  );
+
+  const forgedNoFillResolution = rehash(resolved.projection, {
+    lastNoFill: {
+      ...resolved.projection.lastNoFill,
+      recoveryResolutionRevision: 'volume-forged-lineage-unconsumed-r2',
+    },
+  });
+  assert.throws(
+    () => validateLifecycleProjection(forgedNoFillResolution),
+    /no-fill recovery revision is not retained as consumed/u,
+  );
+});
+
+test('an unrelated recovery resolution does not consume an older twin no-fill', () => {
+  const proposal = { proposalId: 'volume-proposal-unrelated-no-fill-resolution' };
+  const opened = openProbe({ proposal });
+  const planned = evaluateVolumeLifecycle(lifecycleInput({
+    proposal,
+    current: opened.settled.projection,
+    authority: { riskActionClass: 'ADD' },
+  }));
+  const noFill = evaluateVolumeLifecycle(lifecycleInput({
+    proposal,
+    current: planned.projection,
+    twinEvidence: twinForAction(planned.actionRequest, { asks: [] }),
+  }));
+  assert.equal(noFill.disposition, 'SETTLED');
+  assert.equal(noFill.projection.lastNoFill.recoveryResolutionRevision, null);
+
+  const recovery = evaluateVolumeLifecycle(lifecycleInput({
+    proposal,
+    current: noFill.projection,
+    authority: { riskActionClass: 'RECOVERY' },
+    signals: { reconciliationState: 'MISMATCH' },
+  }));
+  assert.equal(recovery.disposition, 'RECOVERY_REQUIRED');
+  assert.equal(recovery.projection.recoveryEvidenceActionKey, null);
+
+  const resolved = evaluateVolumeLifecycle(lifecycleInput({
+    proposal,
+    current: recovery.projection,
+    authority: { riskActionClass: 'RECOVERY' },
+    signals: {
+      reconciliationState: 'EXACT', recoveryDisposition: 'RESOLVED',
+      recoveryOutcome: 'NO_EFFECT', recoveryRevision: 'volume-unrelated-no-fill-resolution',
+    },
+  }));
+  assert.equal(resolved.disposition, 'SETTLED');
+  assert.equal(resolved.projection.lastNoFill.action.actionKey, planned.actionRequest.actionKey);
+  assert.equal(resolved.projection.lastNoFill.recoveryResolutionRevision, null);
+  assert.equal(resolved.projection.recoveryConsumptionHistory.at(-1).noFill, null);
+});
 
 test('one exhaustion episode reduces from its original basis once, and a tighter policy uses the same anchor', () => {
   const policy = protectionPolicy();
@@ -621,6 +1214,10 @@ test('one exhaustion episode reduces from its original basis once, and a tighter
   });
   const adopted = projectVolumeProtectionRevision({
     projection: reduced.projection,
+    occupancy: lifecycleInput({
+      current: reduced.projection,
+      evaluatedAtMs: reduced.projection.lastTransition.occurredAtMs,
+    }).occupancy,
     currentPolicy: policy,
     proposedPolicy: tightened,
     evaluatedAtMs: reduced.projection.lastTransition.occurredAtMs,
@@ -695,7 +1292,10 @@ test('same settled twin evidence is a no-op, while orphan evidence enters recove
     twinEvidence: opened.twinEvidence,
   }));
   assert.equal(replay.disposition, 'NOOP_REPEAT');
-  assert.equal(replay.projection.projectionRevision, opened.settled.projection.projectionRevision);
+  assert.equal(replay.projection.state, opened.settled.projection.state);
+  assert.equal(replay.projection.positionQuantity, opened.settled.projection.positionQuantity);
+  assert.ok(replay.projection.lastMarketObservedAtMs >= opened.settled.projection.lastMarketObservedAtMs);
+  assert.ok(replay.projection.favorableExtremePrice >= opened.settled.projection.favorableExtremePrice);
 
   const other = planProbe({ proposal: { proposalId: 'volume-proposal-orphan-0002' } });
   const orphan = evaluateVolumeLifecycle(lifecycleInput({
@@ -704,8 +1304,11 @@ test('same settled twin evidence is a no-op, while orphan evidence enters recove
   }));
   assert.equal(orphan.disposition, 'RECOVERY_REQUIRED');
   assert.ok(orphan.reasonCodes.includes('ORPHAN_TWIN_EVIDENCE'));
-  assert.equal(orphan.projection.recoveryEvidenceActionKey, null);
-  assert.equal(orphan.recoveryHandoff.actionKey, null);
+  assert.equal(orphan.projection.recoveryEvidenceActionKey, other.actionRequest.actionKey);
+  assert.equal(orphan.recoveryHandoff.actionKey, other.actionRequest.actionKey);
+  assert.equal(orphan.projection.positionQuantityTruth, 'UNKNOWN');
+  assert.equal(orphan.projection.capitalUsageTruth, 'UNKNOWN');
+  assert.equal(orphan.projection.unresolvedTwinConflict.kind, 'ORPHAN_TWIN_EVIDENCE');
 });
 
 test('retained twin history makes old exact replay inert and changed replay coherently recoverable', () => {
@@ -723,7 +1326,9 @@ test('retained twin history makes old exact replay inert and changed replay cohe
     proposal, current: confirmed.projection, twinEvidence: opened.twinEvidence,
   }));
   assert.equal(oldReplay.disposition, 'NOOP_REPEAT');
-  assert.equal(oldReplay.projection.projectionRevision, confirmed.projection.projectionRevision);
+  assert.equal(oldReplay.projection.state, confirmed.projection.state);
+  assert.equal(oldReplay.projection.positionQuantity, confirmed.projection.positionQuantity);
+  assert.ok(oldReplay.projection.lastMarketObservedAtMs >= confirmed.projection.lastMarketObservedAtMs);
 
   const addAllowed = evaluateVolumeLifecycle(lifecycleInput({ proposal, current: confirmed.projection }));
   const finalPlan = evaluateVolumeLifecycle(lifecycleInput({
@@ -751,10 +1356,12 @@ test('retained twin history makes old exact replay inert and changed replay cohe
     proposal, current: changedOld.projection, twinEvidence: twinForAction(finalPlan.actionRequest),
   }));
   assert.equal(settledNewer.disposition, 'RECOVERY_REQUIRED');
-  assert.equal(settledNewer.projection.positionQuantity, '0.1');
-  assert.equal(settledNewer.projection.pendingAction, null);
-  assert.equal(settledNewer.projection.lastSettledActionKey, finalPlan.actionRequest.actionKey);
+  assert.equal(settledNewer.projection.positionQuantity, changedOld.projection.positionQuantity);
+  assert.equal(settledNewer.projection.pendingAction.actionKey, finalPlan.actionRequest.actionKey);
+  assert.equal(settledNewer.projection.lastSettledActionKey, latestSettledKey);
   assert.equal(settledNewer.projection.recoveryEvidenceActionKey, opened.planned.actionRequest.actionKey);
+  assert.equal(settledNewer.projection.unresolvedTwinConflict.conflictRevision,
+    changedOld.projection.unresolvedTwinConflict.conflictRevision);
 
   const recoveryReplay = evaluateVolumeLifecycle(lifecycleInput({
     proposal, current: settledNewer.projection, twinEvidence: opened.twinEvidence,
@@ -828,15 +1435,40 @@ test('canonical NO_EFFECT recovery closes a pending ticket only after occupancy 
   assert.notEqual(stillOpen.projection.pendingAction, null);
   assert.ok(stillOpen.reasonCodes.includes('CANONICAL_OCCUPANCY_BINDING_MISMATCH'));
 
-  const closed = evaluateVolumeLifecycle(lifecycleInput({
+  const conflictingLateFillInput = lifecycleInput({
+    proposal,
+    current: recovery.projection,
+    authority: { riskActionClass: 'RECOVERY' },
+    signals: resolution,
+    twinEvidence: twinForAction(planned.actionRequest),
+  });
+  conflictingLateFillInput.occupancy.activeRecords = conflictingLateFillInput.occupancy.activeRecords
+    .filter((record) => record.kind === 'POSITION');
+  const conflictingLateFill = evaluateVolumeLifecycle(conflictingLateFillInput);
+  assert.equal(conflictingLateFill.disposition, 'RECOVERY_REQUIRED');
+  assert.ok(conflictingLateFill.reasonCodes.includes('CANONICAL_RECOVERY_TWIN_EVIDENCE_CONFLICT'));
+  assert.equal(conflictingLateFill.projection.positionQuantity, '0');
+  assert.equal(conflictingLateFill.projection.pendingAction.actionKey, planned.actionRequest.actionKey);
+  assert.equal(conflictingLateFill.projection.lastSettledActionKey, null);
+  assert.equal(conflictingLateFill.projection.lastRecoveryResolutionRevision, null);
+  assert.deepEqual(conflictingLateFill.projection.consumedRecoveryRevisions, []);
+  assert.equal(conflictingLateFill.twinSettlement.state, 'FILLED');
+  assert.equal(conflictingLateFill.projection.positionQuantityTruth, 'UNKNOWN');
+  assert.equal(conflictingLateFill.projection.capitalUsageTruth, 'UNKNOWN');
+  assert.equal(conflictingLateFill.projection.unresolvedTwinConflict.kind,
+    'SIMULTANEOUS_CANONICAL_NO_EFFECT');
+
+  const closedInput = lifecycleInput({
     proposal, current: recovery.projection, authority: { riskActionClass: 'RECOVERY' }, signals: resolution,
-    occupancy: { activeRecords: [] },
-  }));
+  });
+  closedInput.occupancy.activeRecords = closedInput.occupancy.activeRecords
+    .filter((record) => record.kind === 'POSITION');
+  const closed = evaluateVolumeLifecycle(closedInput);
   assert.equal(closed.disposition, 'TERMINAL');
   assert.equal(closed.projection.state, 'EXIT');
   assert.equal(closed.projection.positionQuantity, '0');
   assert.equal(closed.projection.pendingAction, null);
-  assert.equal(closed.projection.lastNoFillIntentKey, planned.actionRequest.intentKey);
+  assert.equal(closed.projection.lastNoFill.action.intentKey, planned.actionRequest.intentKey);
   assert.ok(closed.reasonCodes.includes('ENTRY_CANONICAL_NO_EFFECT'));
 });
 
@@ -848,6 +1480,8 @@ test('unchanged HOLD, terminal and unresolved recovery projections reach a fixpo
   }));
   const hold2 = evaluateVolumeLifecycle(lifecycleInput({
     current: hold1.projection,
+    evaluatedAtMs: hold1.projection.lastTransition.occurredAtMs,
+    market: { observedAtMs: hold1.projection.lastMarketObservedAtMs },
     signals: { confirmation: 'PENDING' },
   }));
   assert.equal(hold2.projection.projectionRevision, hold1.projection.projectionRevision);
@@ -875,10 +1509,12 @@ test('unchanged HOLD, terminal and unresolved recovery projections reach a fixpo
   }));
   const recovery2 = evaluateVolumeLifecycle(lifecycleInput({
     proposal: { proposalId: 'volume-proposal-recovery-fixpoint' },
+    evaluatedAtMs: recovery1.projection.lastTransition.occurredAtMs,
     current: recovery1.projection,
   }));
   const recovery3 = evaluateVolumeLifecycle(lifecycleInput({
     proposal: { proposalId: 'volume-proposal-recovery-fixpoint' },
+    evaluatedAtMs: recovery2.projection.lastTransition.occurredAtMs,
     current: recovery2.projection,
   }));
   assert.equal(recovery3.projection.projectionRevision, recovery2.projection.projectionRevision);
@@ -958,6 +1594,10 @@ test('an ambiguous pending action defers every protection revision atomically', 
   });
   assert.throws(() => projectVolumeProtectionRevision({
     projection: recovery.projection,
+    occupancy: lifecycleInput({
+      current: recovery.projection,
+      evaluatedAtMs: recovery.projection.lastTransition.occurredAtMs,
+    }).occupancy,
     currentPolicy: policy,
     proposedPolicy: wider,
     evaluatedAtMs: recovery.projection.lastTransition.occurredAtMs,
@@ -1010,6 +1650,32 @@ test('future twin effects and unknown fee conversion fail to recovery', () => {
   }));
   assert.equal(future.disposition, 'RECOVERY_REQUIRED');
   assert.ok(future.reasonCodes.includes('TWIN_CHRONOLOGY_INVALID'));
+  assert.equal(future.projection.positionQuantity, '0');
+  assert.equal(future.projection.entryCostBasisQuote, '0');
+  assert.equal(future.projection.openedAtMs, null);
+  assert.equal(future.projection.positionQuantityTruth, 'UNKNOWN');
+  assert.equal(future.projection.capitalUsageTruth, 'UNKNOWN');
+  assert.equal(future.projection.unresolvedTwinConflict.kind, 'TWIN_CHRONOLOGY_INVALID');
+  const { projectionRevision: _futureRevision, ...futureMaterial } = future.projection;
+  const strippedPendingTwinTuple = finalizeProjection({
+    ...futureMaterial,
+    pendingTwinStateRevision: null,
+    pendingTwinOutcomeRevision: null,
+  });
+  assert.throws(
+    () => validateLifecycleProjection(strippedPendingTwinTuple),
+    /durably bound to recovery evidence/u,
+  );
+  const futureReplay = evaluateVolumeLifecycle(lifecycleInput({
+    evaluatedAtMs: future.projection.lastTransition.occurredAtMs + 100,
+    proposal: { proposalId: 'volume-proposal-future-twin' },
+    current: future.projection,
+    twinEvidence: twinForAction(futurePlan.actionRequest),
+  }));
+  assert.equal(futureReplay.disposition, 'RECOVERY_REQUIRED');
+  assert.equal(futureReplay.projection.positionQuantity, '0');
+  assert.equal(futureReplay.projection.unresolvedTwinConflict.conflictRevision,
+    future.projection.unresolvedTwinConflict.conflictRevision);
 
   const feePlan = planProbe({ proposal: { proposalId: 'volume-proposal-fee-unknown' } });
   const unknownFee = evaluateVolumeLifecycle(lifecycleInput({
@@ -1024,7 +1690,36 @@ test('future twin effects and unknown fee conversion fail to recovery', () => {
   assert.equal(unknownFee.projection.positionQuantity, '0.02');
   assert.equal(unknownFee.projection.positionQuantityTruth, 'EXACT');
   assert.equal(unknownFee.projection.capitalUsageTruth, 'UNKNOWN');
+  assert.equal(unknownFee.projection.unresolvedTwinConflict.kind,
+    'TWIN_EFFECT_RECONSTRUCTION_REQUIRED');
   assert.notEqual(unknownFee.projection.favorableExtremePrice, null);
+});
+
+test('settled recovery effects cannot be moved behind a later twin outcome', () => {
+  const proposal = { proposalId: 'volume-proposal-recovery-outcome-order' };
+  const opened = openProbe({ proposal });
+  const planned = evaluateVolumeLifecycle(lifecycleInput({
+    proposal,
+    current: opened.settled.projection,
+    authority: { riskActionClass: 'ADD' },
+  }));
+  const settled = evaluateVolumeLifecycle(lifecycleInput({
+    proposal,
+    current: planned.projection,
+    twinEvidence: twinForAction(planned.actionRequest),
+  }));
+  assert.equal(settled.projection.settledTwinHistory.length, 2);
+  const { projectionRevision: _revision, ...material } = settled.projection;
+  const forgedHistory = finalizeProjection({
+    ...material,
+    settledTwinHistory: settled.projection.settledTwinHistory.map((record, index) => (
+      index === 0 ? { ...record, settlementState: 'RECOVERY_REQUIRED' } : record
+    )),
+  });
+  assert.throws(
+    () => validateLifecycleProjection(forgedHistory),
+    /settled recovery effect must be the latest retained twin outcome/u,
+  );
 });
 
 test('known-converted base fee records exposure but requires exact position reconstruction', () => {
@@ -1049,6 +1744,8 @@ test('known-converted base fee records exposure but requires exact position reco
   assert.equal(result.projection.positionQuantity, '0.02');
   assert.equal(result.projection.positionQuantityTruth, 'UNKNOWN');
   assert.equal(result.projection.capitalUsageTruth, 'EXACT');
+  assert.equal(result.projection.unresolvedTwinConflict.kind,
+    'TWIN_EFFECT_RECONSTRUCTION_REQUIRED');
   assert.equal(result.projection.pendingAction, null);
   assert.equal(result.projection.lastSettledActionKey, plan.actionRequest.actionKey);
   assert.equal(result.recoveryHandoff.actionKey, plan.actionRequest.actionKey);
@@ -1066,6 +1763,16 @@ test('known-converted base fee records exposure but requires exact position reco
   }));
   assert.equal(unresolved.disposition, 'RECOVERY_REQUIRED');
   assert.equal(unresolved.projection.positionQuantityTruth, 'UNKNOWN');
+
+  const { projectionRevision: _revision, ...material } = result.projection;
+  const forgedExactPosition = finalizeProjection({
+    ...material,
+    positionQuantityTruth: 'EXACT',
+  });
+  assert.throws(
+    () => validateLifecycleProjection(forgedExactPosition),
+    /reconstruction truth flags do not match/u,
+  );
 });
 
 test('observed price/notional breach records synthetic exposure before recovery', () => {
@@ -1081,6 +1788,29 @@ test('observed price/notional breach records synthetic exposure before recovery'
   assert.equal(result.projection.positionQuantity, '0.02');
   assert.notEqual(result.projection.favorableExtremePrice, null);
   assert.ok(result.reasonCodes.includes('TWIN_PRICE_BOUND_EXCEEDED'));
+  assert.equal(result.projection.unresolvedTwinConflict.kind,
+    'TWIN_EFFECT_RECONSTRUCTION_REQUIRED');
+
+  const noEffect = evaluateVolumeLifecycle(lifecycleInput({
+    proposal: { proposalId: 'volume-proposal-bound-breach' },
+    current: result.projection,
+    authority: { riskActionClass: 'RECOVERY' },
+    signals: {
+      reconciliationState: 'EXACT', recoveryDisposition: 'RESOLVED',
+      recoveryOutcome: 'NO_EFFECT', recoveryRevision: 'volume-bound-breach-no-effect',
+    },
+  }));
+  assert.equal(noEffect.disposition, 'RECOVERY_REQUIRED');
+  assert.deepEqual(noEffect.projection.consumedRecoveryRevisions, []);
+  assert.equal(noEffect.projection.unresolvedTwinConflict.conflictRevision,
+    result.projection.unresolvedTwinConflict.conflictRevision);
+
+  const { projectionRevision: _revision, ...material } = result.projection;
+  const strippedConflict = finalizeProjection({ ...material, unresolvedTwinConflict: null });
+  assert.throws(
+    () => validateLifecycleProjection(strippedConflict),
+    /durable reconstruction conflict|durable twin conflict|settled twin recovery effect/u,
+  );
 });
 
 test('terminal exposure, terminal pending ENTRY and visible-action tampering fail closed validation', () => {
@@ -1096,7 +1826,7 @@ test('terminal exposure, terminal pending ENTRY and visible-action tampering fai
   exposedExit.feedbackOutcomeRevision = null;
   assert.throws(() => evaluateVolumeLifecycle(lifecycleInput({
     proposal: { proposalId: 'volume-proposal-corruption' }, current: exposedExit,
-  })), /exposure before|terminal EXIT/u);
+  })), /exposure before|terminal EXIT|latest no-fill action/u);
 
   const reopenedExit = structuredClone(terminal.projection);
   reopenedExit.feedbackOutcomeRevision = null;
@@ -1104,7 +1834,7 @@ test('terminal exposure, terminal pending ENTRY and visible-action tampering fai
   reopenedExit.pendingActionBaseProjectionRevision = planned.actionRequest.projectionRevision;
   assert.throws(() => evaluateVolumeLifecycle(lifecycleInput({
     proposal: { proposalId: 'volume-proposal-corruption' }, current: reopenedExit,
-  })), /pending action cannot already be settled|pending ENTRY|terminal EXIT/u);
+  })), /pending action cannot already be settled|pending ENTRY|terminal EXIT|repeats the retained no-fill intent/u);
 
   const tamperedPending = structuredClone(planned.projection);
   tamperedPending.pendingAction.priceBound = '102';

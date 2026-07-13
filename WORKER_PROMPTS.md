@@ -2,7 +2,14 @@
 
 Rule: one block = one chat = one folder. Director appends/replaces blocks at every event; check the top entry's date. Board truth: QL_PARALLEL_DAG.md.
 
-## ACTIVE WAVE 4 (2026-07-13, post L09-002) — running: Q spine, L10, L11. NEW: block 9 (L08.2 twin Spot seam). L09 BLOCKED until it lands.
+## ACTIVE WAVE 5 (2026-07-13, post L08.2) — running: Q17, L10, L11. NEW: block 10.
+
+### 10. L09 resume (2nd) — folder /Users/cosmosgeek/Desktop/l09-normal-basis
+```text
+L09 shard resuming (both blockers cleared). Verify: branch l09-normal-basis-20260712; `git log --oneline -2` shows the director re-base of L08.2 (9f133ac — twin now preflights/simulates Spot LIMIT/GTC exactly). Per your own L09-002 resume route: first prove the accepted chain end-to-end (L08.1 evaluator plan → L07 twin accepts the exact Spot BUY LIMIT GTC leg), then implement ONLY server/src/liveEdge/adapters/normalBasis/** and server/test/liveEdge/normalBasis/** — the NORMAL-BASIS two-leg lifecycle (§17: staged entry, hedge, partial-fill/one-leg exposure, close, recovery) through the twin, deterministic, network-free. All prior laws unchanged; no shared files; no push; hard external boundary. Full loop → acceptance → record SHA. Stop only at L09 ACCEPTED or BLOCKED.
+```
+
+## HISTORICAL WAVE 4 (2026-07-13, post L09-002) — running: Q spine, L10, L11. NEW: block 9 (L08.2 twin Spot seam). L09 BLOCKED until it lands.
 
 ### 9. L08.2 twin Spot seam — folder /Users/cosmosgeek/Desktop/live-execution-proof-20260712
 ```text

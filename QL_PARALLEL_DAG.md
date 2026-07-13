@@ -27,9 +27,9 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 
 | I00-VERIFY | ~/Desktop/i00-assembly | i00-product-assembly-20260713 | 1fec867 | I00_PRESTAGE_VERIFIED (635ad83) — awaits director real-adapter I00 after lanes |
 
-| F-BRIDGE canonical execution | ~/Desktop/f-bridge | f-bridge-execution-20260713 | 24ac894 | WORKING — hard predecessor of L09 acceptance (D-LAUNCH-9) |
+| F-BRIDGE canonical execution | ~/Desktop/f-bridge | f-bridge-execution-20260713 | 24ac894 | impl 735b4a60 committed; BLOCKED on 2 stale out-of-scope fixture files — D-LAUNCH-11 widened allowlist, resume issued |
 | A-CORE IP-ASSURANCE | ~/Desktop/ip-assurance | ip-assurance-20260713 | 9785c93 | WORKING (ownership excludes satellite subtrees per D-LAUNCH-10) |
-| A-HAZARD S1 | ~/Desktop/ip-assur-hazard | ip-assur-hazard-20260713 | 9785c93 | WORKING |
+| A-HAZARD S1 | ~/Desktop/ip-assur-hazard | ip-assur-hazard-20260713 | 9785c93 | HAZARD_PRESTAGE_READY (ab33b37, D-LAUNCH-10 resealed) |
 | A-FORMAL S3 | ~/Desktop/ip-assur-formal | ip-assur-formal-20260713 | 9785c93 | WORKING |
 | A-COCKPIT S5 | ~/Desktop/ip-assur-cockpit | ip-assur-cockpit-20260713 | 9785c93 | WORKING |
 | A-AGENT S6 | ~/Desktop/ip-assur-agent | ip-assur-agent-20260713 | 9785c93 | WORKING |

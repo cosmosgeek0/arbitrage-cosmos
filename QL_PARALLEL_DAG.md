@@ -16,9 +16,9 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 | Q11 survival | ~/Desktop/q11-survival | q11-survival-20260712 | 8a5dd09 | ACCEPTED + MERGED (2,182 pass with Q14) |
 | L spine L00–L08 | live-execution-proof-20260712 | live-execution-control-proof-20260712 | 73e1a1f | L00–L08 + L08.1 + L08.2 (9f133ac) + L14 ACCEPTED; spine PARKED until L09/L10/L11 merge, then L12→L13→L16→L17; Codex left auditable uncommitted L06 work; TWO director decisions DEFERRED to I00: ledger compare-and-set primitive + Foundation quantity-bridge contract (see live-edge-receipts/patches/) |
 | L14 controls shard | ~/Desktop/l14-controls | l14-controls-20260712 | 39ebd98 | ACCEPTED + MERGED (51/51 liveEdge suites) |
-| L09 normal-basis shard | ~/Desktop/l09-normal-basis | l09-normal-basis-20260712 | f79247a | re-based on L08.2 (9f133ac) — READY, resume block 10 |
+| L09 normal-basis shard | ~/Desktop/l09-normal-basis | l09-normal-basis-20260712 | 9f133ac rebase | PARKED-BLOCKED (L09-003 sealed 9069475f) — awaits F-BRIDGE merge + rebase; shard-side items 3-4 fixed at resume |
 | L10 reverse-basis shard | ~/Desktop/l10-reverse-basis | l10-reverse-basis-20260712 | 4ae270a | ACCEPTED + MERGED (63/63 liveEdge suites) |
-| L11 volume shard | ~/Desktop/l11-volume | l11-volume-20260712 | 4ae270a | READY |
+| L11 volume shard | ~/Desktop/l11-volume | l11-volume-20260712 | 4ae270a | WORKING (impl fbc748a committed; acceptance loop in flight) |
 
 | IP-RUNTIME packet | ~/Desktop/ip-runtime | ip-runtime-20260713 | 420cc83 | PRESTAGE_READY — fan-in at I00 spine |
 | IP-CONTROL packet | ~/Desktop/ip-control | ip-control-20260713 | 420cc83 | BINDING_READY (56c47da) — fan-in at I00 spine |
@@ -26,6 +26,16 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 | IP-PROOF packet | ~/Desktop/ip-proof | ip-proof-20260713 | 420cc83 | PROOF_PRESTAGE_READY (23e985c) — fan-in at I00 spine |
 
 | I00-VERIFY | ~/Desktop/i00-assembly | i00-product-assembly-20260713 | 1fec867 | I00_PRESTAGE_VERIFIED (635ad83) — awaits director real-adapter I00 after lanes |
+
+| F-BRIDGE canonical execution | ~/Desktop/f-bridge | f-bridge-execution-20260713 | 24ac894 | WORKING — hard predecessor of L09 acceptance (D-LAUNCH-9) |
+| A-CORE IP-ASSURANCE | ~/Desktop/ip-assurance | ip-assurance-20260713 | 9785c93 | WORKING (ownership excludes satellite subtrees per D-LAUNCH-10) |
+| A-HAZARD S1 | ~/Desktop/ip-assur-hazard | ip-assur-hazard-20260713 | 9785c93 | WORKING |
+| A-FORMAL S3 | ~/Desktop/ip-assur-formal | ip-assur-formal-20260713 | 9785c93 | WORKING |
+| A-COCKPIT S5 | ~/Desktop/ip-assur-cockpit | ip-assur-cockpit-20260713 | 9785c93 | WORKING |
+| A-AGENT S6 | ~/Desktop/ip-assur-agent | ip-assur-agent-20260713 | 9785c93 | WORKING |
+| A-STABILITY S8 | ~/Desktop/ip-assur-stability | ip-assur-stability-20260713 | 9785c93 | WORKING |
+| S2 actionEvidence satellite | (cut after L lane freeze) | — | — | WAITING (dependency law §11) |
+| S4 assuranceCase satellite | (cut after S1 contracts accepted) | — | — | WAITING |
 
 ## Frozen merge/integration order (mechanical)
 

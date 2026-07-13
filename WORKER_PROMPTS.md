@@ -2,6 +2,18 @@
 
 Rule: one block = one chat = one folder. Director appends/replaces blocks at every event; check the top entry's date. Board truth: QL_PARALLEL_DAG.md.
 
+## MID-RUN AMENDMENTS (2026-07-13, D-LAUNCH-10 — paste into ALREADY-RUNNING chats)
+
+### AMEND-A (paste into the A-CORE chat, folder ip-assurance)
+```text
+Director ownership amendment (D-LAUNCH-10): your write territory EXCLUDES all satellite-owned subtrees — fixtures/productAssurance/systemic/{hazard,actionEvidence,formal,assuranceCase,cockpit,observability,agentBoundary,stability}/** and all matching test/productAssurance/systemic/**. You canonically own server/src/productAssurance/**, server/test/productAssurance/**, and non-satellite packet-general fixtures/productAssurance/{generated,receipts,fixtures-root}/**. If you already wrote any satellite path, revert your own copies now and note it. Build dependency-independent base scaffolding freely; any production projection consuming systemic contracts WAITS until those fixture contracts are accepted+merged+frozen by the director. Do not claim full ASSURANCE_PRESTAGE_READY before that; an interim CORE_SCAFFOLD_READY checkpoint is acceptable.
+```
+
+### AMEND-S (paste into EACH of the 5 satellite chats)
+```text
+Director discipline amendment (D-LAUNCH-10): implement ONLY your dedup-matrix rows classified MISSING or narrow EXTENDED. REUSED = reference/insertion-draft evidence only, never rebuilt. REJECTED = forbidden. EXTERNAL_CONFIGURATION = report-only rows, never fabricated implementation. No production evaluator code, no shared files — unchanged. Note this in your state file and continue.
+```
+
 ## ACTIVE WAVE 7 (2026-07-13) — MAX PARALLEL: resume L09 + L11, run block 11 (A-CORE) + blocks 12–16 = up to 8 chats. S2/S4 satellites unlock later (S4 after S1 contracts; S2 after L freeze).
 
 ### 17. F-BRIDGE canonical execution seams — folder /Users/cosmosgeek/Desktop/f-bridge

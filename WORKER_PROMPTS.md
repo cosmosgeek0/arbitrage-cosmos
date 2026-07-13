@@ -2,6 +2,28 @@
 
 Rule: one block = one chat = one folder. Director appends/replaces blocks at every event; check the top entry's date. Board truth: QL_PARALLEL_DAG.md.
 
+## ACTIVE WAVE 8 (2026-07-13, D-LAUNCH-13) — resumes: A-CORE, A-AGENT, A-STABILITY, A-COCKPIT (+ L09 D-LAUNCH-12 block below)
+
+### A-AGENT resume — folder /Users/cosmosgeek/Desktop/ip-assur-agent
+```text
+Resume under D-LAUNCH-13: your CLASS_TAXONOMY_OWNER_LAW_MISSING blocker is cleared — the exact Class A-D taxonomy + nine-point promotion evidence law is now folded into IP_ASSURANCE.md §7.1 on current-main commit c57610c (read it read-only: `git show c57610c:IP_ASSURANCE.md`; packet sha256 now starts 49dcd690275f). Implement the owner-defined trigger/shadow/bounds/demotion projection against that law, rerun focused + repository gates, emit packet-local receipt, reseal. Stop at AGENT_PRESTAGE_READY or BLOCKED.
+```
+
+### A-STABILITY resume — folder /Users/cosmosgeek/Desktop/ip-assur-stability
+```text
+Resume: your emergency-checkpoint repair commit 65ac643 stands. Complete your own recovery receipt steps: rerun every focused + repository gate, final read-only adversarial review, add the immutable acceptance receipt, reseal. Stop at STABILITY_PRESTAGE_READY or BLOCKED.
+```
+
+### A-COCKPIT resume — folder /Users/cosmosgeek/Desktop/ip-assur-cockpit
+```text
+Resume from the wip emergency checkpoint 44f900d (32 uncommitted files): audit them, keep what survives, commit the surviving base, then continue your S5 work under all D-LAUNCH-10 bounds. Full loop, reseal. Stop at COCKPIT_PRESTAGE_READY or BLOCKED.
+```
+
+### A-CORE resume — folder /Users/cosmosgeek/Desktop/ip-assurance
+```text
+Resume under D-LAUNCH-13 (read rulings: `git -C /Users/cosmosgeek/Desktop/Main log -1 --format=%H -- QL_DIRECTOR_STATE.md`, and the updated packet law `git show c57610c:IP_ASSURANCE.md`). Your three blockers are dispositioned: (1) core hardening repairs AUTHORIZED — exact owner/release/subject/digest tuple binding with hostile substitution proofs, and fix the unreachable SILENT branch (absent input must not pre-convert to UNAVAILABLE); (2) one-concept/one-owner ADJUDICATED — reduce every surface overlapping satellite/runtime owners (assurance-case, action-evidence, governance, coverage, rate-budget) to adapter boundaries or WAITING seams consuming the owner contract; remove duplicate-authority implementations yourself; (3) newsContext.ts:2302 dynamic fetch DISPOSITIONED as PURE_READ / KEEP_CANONICAL owned by the existing service — register it with observed semantics + an I00 insertion-request row; do NOT touch the service file. Then regenerate twice with byte-identity, rerun the complete evidence loop (expect ops scan 143/143 mapped), seal receipts. Your terminal word before director fan-in is CORE_SCAFFOLD_READY (full ASSURANCE_PRESTAGE_READY only after fan-in). Stop there or at a new precise BLOCKED.
+```
+
 ## L09 FINAL RESUME (2026-07-13, post F-BRIDGE merge)
 
 ### L09-FINAL — folder /Users/cosmosgeek/Desktop/l09-normal-basis

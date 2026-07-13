@@ -1,37 +1,35 @@
 # L09 state — normal Basis lifecycle shard
 
-Generation: `5`
+Generation: `6`
 
-Status: `BLOCKED_SHARED_OWNER_DEPENDENCY`
+Status: `L09_ACCEPTED`
 
-Implementation acceptance: `NO`
+Acceptance class: `LANE_READY_BUILT_AND_TESTED_UNWIRED`
+
+Implementation acceptance: `YES`
+
+Integrated acceptance: `NO`
 
 ## Git and frozen inputs
 
 - Worktree: `/Users/cosmosgeek/Desktop/l09-normal-basis`
 - Branch: `l09-normal-basis-20260712`
-- L09 phase base/direct implementation parent:
-  `ef931cfdcce8db012e520fb0e42bac52a9c113a7`
-- Phase-base tree:
-  `03d500438af11e65937c3d81c7950f05a57f82c4`
-- Accepted L08.2 receipt cut:
-  `1dd33b13288f051f1d7835baea156ebfe0ea8e1e`
-- L09 implementation commit:
+- Director rebase parent:
+  `ecd800679ded1fe21e3d9e97774bbfcaa9341070`
+- Accepted F-BRIDGE seam cut:
+  `c9009079b0c27c2a7e2d1a0111a022bceb2e61db`
+- Prior L09 implementation:
   `36d5e2a39b013b51d2b932f902ec272c9217c23c`
-- L09 implementation tree:
-  `1e30868d8b19aed63735150845cdf0ee2eba2b8d`
-- Immutable independent-verification receipt cut:
-  `6fb1b24aa8ba1b9bb83079a1d27fbf65ba388986`
-- Receipt-cut tree:
-  `0f28b26c865b2d121aac33408cc6bb8cfca806bd`
+- Accepted L09 correction:
+  `a7a0f7c8f154539b05b7fb9845f1a4a3dec60eb8`
+- Accepted L09 correction tree:
+  `27c688759a74026a15ea63c3300545c191c10cc2`
 - Frozen protocol SHA:
   `73e1a1ff7daa48df8dac45713fc5f106842edafc`
 
-The implementation commit changes exactly 11 allowed paths: six files under
-`server/src/liveEdge/adapters/normalBasis/**` and five under
-`server/test/liveEdge/normalBasis/**`. The immutable disposition cut adds only
-the L09-003 decision and blocked-acceptance receipt inside the task's
-documentation allowlist.
+The correction changes exactly ten allowed implementation paths: six under
+`server/src/liveEdge/adapters/normalBasis/**` and four under
+`server/test/liveEdge/normalBasis/**`. No Foundation or shared source changed.
 
 The owner inputs remain preserved byte-for-byte, untracked and unstaged:
 
@@ -42,99 +40,93 @@ The owner inputs remain preserved byte-for-byte, untracked and unstaged:
 
 Both identities match `live-edge-receipts/DIRECTIVE_INPUTS.lock`.
 
-## Acceptance-loop result
+## Accepted owner truth
 
-All automated gates pass. Independent verification nevertheless identified
-`ACCEPTANCE_BLOCKERS_PRESENT`, so L09 is blocked after implementation and the
-full gate. No green test is relabeled as phase acceptance.
-
-The durable findings and owner resolution are recorded in:
-
-- `live-edge-receipts/DECISIONS/L09-003-INDEPENDENT-VERIFICATION-BLOCKERS.md`
-- `live-edge-receipts/RECEIPTS/L09_BLOCKED_INDEPENDENT_VERIFICATION.md`
-
-Content identities frozen by the immutable receipt cut:
-
-- L09-003 decision SHA-256:
-  `67f02bf7d6f8fbac1b4a88c465a24aa889dbd3e9d42991831d693e226d230e4a`
-- blocked-acceptance receipt SHA-256:
-  `31c209c4fa57b7ff4945cbf1fa737768696f616d6379b55d4f0236b4e1f60222`
+- Proposal, allocation, reservation, staged-plan and mandate identities are
+  created by their existing deterministic owners.
+- Foundation checkpoint bytes are restored by the injected canonical hydration
+  seam and bound to their envelope, checksum, plan, revision, event stream and
+  leg definitions.
+- Partial entry is terminalized through Foundation lookup before the dependent
+  hedge is sized.
+- Cold restart restores into fresh ports and proves lookup, canonical
+  reconciliation, then hedge without a pre-crash in-memory progression input.
+- Agreement consumes the complete canonical Foundation reconciliation result;
+  the prior local fill-ratio shortcut and caller-shaped owner state are absent.
+- Recovery recommendations retain complete plan/phase/leg/client-order/reason
+  and checkpoint/owner/reconciliation/recommendation revision lineage.
+- Each submitted semantic leg binds one positive request sequence, request ID,
+  intent fingerprint, sanitized-request hash, private-projection revision and
+  reconciliation revision. Sequence zero and every single-field substitution
+  fail closed.
 
 ## Measured verification evidence
 
 - `npm run build -w server`: exit `0`.
-- Focused L09 normal-Basis suite: `21/21`, exit `0`, `51.512s`.
-- Accepted L07/L08.2 exchange-twin suite: `78/78`, exit `0`, `27.795s`.
+- Focused L09 normal-Basis suite: `23/23`, exit `0`.
+- Accepted L07/L08.2 exchange-twin suite: `78/78`, exit `0`.
 - Accepted L08 execution-policy suite: `49/49`, exit `0`.
-- Canonical Foundation execution owner: `132/132`, exit `0`.
-- Accumulated LiveEdge suite: `1,244/1,244`, exit `0`, `205.300s`.
+- Canonical Foundation execution owner: `173/173`, exit `0`.
+- Accumulated LiveEdge suite: `1,246/1,246`, exit `0`.
 - Frozen protocol conformance: `22/22`, exit `0`.
 - `npm test`: deterministic standard battery `377/377`, exit `0`.
-- `npm run test:all`: full repository battery `4,468/4,468`, exit `0`.
-- Frozen protocol diff: empty.
-- `git diff --check`: pass before the blocked-state commit.
+- Import-purity checks: `4/4`, exit `0`.
+- `git diff --check`: pass before the implementation commit.
+- Three fresh independent verification passes: `ACCEPT`.
 
-Only the existing Vite chunk-size advisory was observed.
+`npm run test:all` completes all stages through System Integration, then exits
+`1` at `179/180` in that unchanged shared group. The sole mismatch is
+`authority.scenarios.test.mjs:521`: expected `PARTIAL`, actual `DIVERGED`.
+A clean archive of `ecd8006` builds successfully and reproduces the exact
+isolated `28/29` failure. The scenario has no normalBasis dependency, and the
+relevant blobs are unchanged from `ecd8006`. The full repository battery is
+therefore not claimed green; the result is an evidenced shared baseline
+exception and not an L09 correction regression.
 
-## Blocking owner gaps
+## Durable disposition
 
-1. Foundation advances from the first positive opening Spot fill without an
-   accepted refresh or terminalization step for the still-working remainder.
-   A later remainder fill can drift exposure after the hedge is sized.
-2. Restart proof retains pre-crash in-memory observations. Cold hydration,
-   reconciliation-before-progression and recovery from a restored
-   `SUBMITTING` opening leg are not defined by the shared Foundation seam.
-3. The harness constructs Capital/Risk identities and a local reconciliation
-   result instead of proving the complete Basis -> Capital -> Risk -> policy
-   -> Foundation execution -> L06 -> L07 -> Foundation reconciliation chain.
-4. L06 request sequence, ID, fingerprint, request-content and private/
-   reconciliation revisions are not exactly bound; same-product open/close
-   fixtures reuse transport request identity.
-5. One-way net-position/open-order isolation and fee-adjusted Spot exposure are
-   not proved; reduce-only and position-side claims are derived rather than
-   bound to accepted request evidence.
-6. Venue-arrival expiry, exact residual arithmetic, terminal status, state
-   authenticity, recovery lineage, deep immutability and the required
-   close/recovery matrix remain incomplete.
+- Decision:
+  `live-edge-receipts/DECISIONS/L09-004-INDEPENDENT-VERIFICATION-ACCEPTANCE.md`
+- Receipt:
+  `live-edge-receipts/RECEIPTS/L09_ACCEPTANCE.md`
 
-The first two require shared Foundation/composition changes outside the L09
-allowlist. An L09-only patch would remain incomplete and could create a second
-lifecycle or reconciliation owner. No post-verification implementation source
-or test correction was made.
-
-## Seal posture
-
-Git metadata is writable in the resumed environment. The immutable decision
-and receipt were committed at
-`6fb1b24aa8ba1b9bb83079a1d27fbf65ba388986`; the prior read-only annotation is
-retired. The blocked-acceptance state commit and tree are:
-
-- commit: `6643635a23903a62c2aa98814017a5b460dfa8b2`
-- tree: `e221b0aa742d21d2739bb4c7ac81fe1a846d4546`
-
-This generation is the state-only seal recording that exact cut. It changes
-no implementation source, test, owner input, protocol or immutable receipt.
+This generation cannot record the SHA of its own containing acceptance commit.
+A following state-only seal records that exact acceptance cut without changing
+the immutable decision or receipt.
 
 ## Current posture and non-claims
 
-- L09: `BLOCKED_SHARED_OWNER_DEPENDENCY`
-- Implementation: `PRESENT_NOT_ACCEPTED`
+- L09: `ACCEPTED`
+- Implementation: `BUILT_AND_TESTED`
 - Wiring: `UNWIRED`
 - Money authority: `NONE`
 - External actions: `NONE`
 - Secrets inspected: `NONE`
 - Live/test/signed orders or private reads: `NONE`
 - Reverse Basis, Margin/liability and Volume work: `NONE`
+- Push: `NONE`
 
 All execution artifacts remain PAPER/synthetic, non-sendable,
 `NONE_RECORD_ONLY`, with external authorization `NONE`.
 `LIVE_EXECUTION_NOT_IMPLEMENTED` remains enforced.
 
-## Exact resume
+## Emergency resume checkpoint
 
-Resume L09 only after the director lands and accepts the shared-owner
-corrections specified by L09-003 and rebases this branch onto that exact cut.
-Then correct only the local adapter/tests, prove the complete owner chain, and
-repeat the full gate plus independent verification.
-
-Until then L09 remains `BLOCKED`, not `PARTIAL`, `LANE_READY` or `ACCEPTED`.
+- Current step: `6/7` — implementation and independent verification complete;
+  durable acceptance documentation and final state seal are in progress.
+- Exact next sub-task: inspect the emergency documentation commit, complete
+  the immutable L09 acceptance record without changing implementation, then
+  create the state-only seal that records the acceptance-documentation SHA.
+- Half-finished: `L09.md`, this state file, `L09-004` and
+  `L09_ACCEPTANCE.md` were drafted after implementation commit `a7a0f7c`; they
+  have not received their acceptance-documentation SHA/content-hash seal and
+  must not yet be treated as final phase closure.
+- Verified before the emergency stop: implementation commit
+  `a7a0f7c8f154539b05b7fb9845f1a4a3dec60eb8`; focused normal Basis `23/23`;
+  exchange twin `78/78`; execution policy `49/49`; Foundation execution
+  `173/173`; accumulated LiveEdge `1,246/1,246`; protocol `22/22`; `npm test`
+  `377/377`; import purity `4/4`; three independent verification results
+  `ACCEPT`. `npm run test:all` has the unchanged shared baseline exception
+  recorded above and is not claimed green.
+- Protected owner inputs remain pre-existing untracked files and are not part
+  of this worker's current changes; preserve them byte-for-byte on resume.

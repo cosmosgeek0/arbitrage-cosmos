@@ -30,7 +30,7 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 | F-BRIDGE canonical execution | ~/Desktop/f-bridge | f-bridge-execution-20260713 | 24ac894 | ACCEPTED (1e9d28a) + MERGED to current-main c900907 (24/24 foundation, npm test green) |
 | A-CORE IP-ASSURANCE | ~/Desktop/ip-assurance | ip-assurance-20260713 | 9785c93 | WORKING (ownership excludes satellite subtrees per D-LAUNCH-10) |
 | A-HAZARD S1 | ~/Desktop/ip-assur-hazard | ip-assur-hazard-20260713 | 9785c93 | HAZARD_PRESTAGE_READY (ab33b37, D-LAUNCH-10 resealed) |
-| A-FORMAL S3 | ~/Desktop/ip-assur-formal | ip-assur-formal-20260713 | 9785c93 | WORKING |
+| A-FORMAL S3 | ~/Desktop/ip-assur-formal | ip-assur-formal-20260713 | 9785c93 | FORMAL_PRESTAGE_READY (89c783b, D-LAUNCH-10 resealed) |
 | A-COCKPIT S5 | ~/Desktop/ip-assur-cockpit | ip-assur-cockpit-20260713 | 9785c93 | WORKING |
 | A-AGENT S6 | ~/Desktop/ip-assur-agent | ip-assur-agent-20260713 | 9785c93 | WORKING |
 | A-STABILITY S8 | ~/Desktop/ip-assur-stability | ip-assur-stability-20260713 | 9785c93 | WORKING |

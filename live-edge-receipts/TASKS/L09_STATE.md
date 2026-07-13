@@ -1,14 +1,14 @@
 # L09 state — normal Basis lifecycle shard
 
-Generation: `10`
+Generation: `11`
 
-Status: `BLOCKED_SHARED_L02_L05_OWNER_DEPENDENCY`
+Status: `STOP_FOR_DIRECTOR_SYSTEM_INTEGRATION_RULING`
 
-Implementation acceptance: `NO`
+Implementation acceptance: `NO_PHASE_ACCEPTANCE_SI_GATE_NON_GREEN`
 
 Integrated acceptance: `NO`
 
-Surviving correction: `UNCOMMITTED_REVIEWED_WORKTREE_NOT_PHASE_ACCEPTED`
+Committed correction: `INDEPENDENTLY_REVIEWED_RETAINED_NOT_L09_ACCEPTED`
 
 ## Git and frozen inputs
 
@@ -24,22 +24,20 @@ Surviving correction: `UNCOMMITTED_REVIEWED_WORKTREE_NOT_PHASE_ACCEPTED`
   `c9009079b0c27c2a7e2d1a0111a022bceb2e61db`.
 - Prior L09 implementation:
   `36d5e2a39b013b51d2b932f902ec272c9217c23c`.
-- Surviving correction:
+- Surviving correction base:
   `a7a0f7c8f154539b05b7fb9845f1a4a3dec60eb8`.
-- Correction tree:
-  `27c688759a74026a15ea63c3300545c191c10cc2`.
-- Rejected emergency acceptance checkpoint:
-  `2fdb6806e35da404134dbc537695f2860a369078`.
-- Blocked checkpoint-audit commit:
-  `11fec5cb6e3ca39cf738da393ee27a7ae14e6302`.
-- Blocked checkpoint-audit tree:
-  `827fab39d3c718eb03acc6a966a8f39df262e57d`.
+- D-LAUNCH-12 director state:
+  `3acd1164671ecb8f19b4649455fabbdc17181a9d`.
+- D-LAUNCH-14 director state:
+  `0f48f3b667a9f9f7570fee624eb1e3e712c3dc50`.
+- D14 committed correction:
+  `73030fab20234d3812e3445c024d21dbc2d3222b`.
+- D14 correction tree:
+  `008b07b7132755061d1a2b8ed74117456e9ffcb3`.
+- D14 correction parent:
+  `4b1f8907de2be873c45c72adcaede4d18e1ca826`.
 - Frozen protocol SHA:
   `73e1a1ff7daa48df8dac45713fc5f106842edafc`.
-
-The correction changes exactly six source files, three test modules and one
-fixture under the exclusive normalBasis implementation namespaces. No shared
-owner changed.
 
 The owner inputs remain untracked and unstaged:
 
@@ -50,74 +48,73 @@ The owner inputs remain untracked and unstaged:
 
 Both identities match `live-edge-receipts/DIRECTIVE_INPUTS.lock`.
 
-## Surviving implementation truth
+## Committed implementation truth
 
-- F-BRIDGE closes shared opening-remainder and cold-restart gaps.
-- `a7a0f7c` materially closes L09-003 groups 3–4: real owner identities,
-  canonical checkpoint hydration/reconciliation, recovery lineage and exact
-  mutation binding.
+- D0009 is resolved through an additive, hash-locked and read-only
+  `USDM_ALGO_OPEN_ORDERS` L02 contract extension consumed by L05.
+- The accepted L02 base matrix remains frozen.
+- L05 projection requires independent standard and algo all-symbol facts;
+  unavailable/null truth stays fail-closed.
+- Normal Basis requires exact current account/position truth, stage-specific
+  signed residuals and no target standard or algo order.
+- Fee-adjusted exposure, request binding, expiry, exact decimals,
+  rejected/terminal-partial truth, terminal `FAILED` agreement and the full
+  close/restart matrix are retained.
+- Changed source/test paths: `34`.
+- Insertions/deletions: `3087/231`.
 - Source aggregate SHA-256:
-  `e541485191e43df3bb1dcde0756cc5f04640953a9d3acf7a75affce1c6bcb848`.
-- Test-namespace aggregate SHA-256:
-  `79a32ba6d067b44874944b6d416830613cf135435ce2db92bb053b89a699595d`.
-- Ten-path aggregate SHA-256:
-  `4b48e80b7f2cc21d71436de61f5086396719566ee8ac319ec26f972656664a20`.
+  `94bcf3c1bdd9d0c04c79323106f0d906b8314d14e0701e728354e154e40d8b9e`.
+- Test aggregate SHA-256:
+  `d11def5b0928544efc2eeb99babd7c90f0e29e802344ab37eac8113b2dfda8c1`.
+- 34-path aggregate SHA-256:
+  `ca24a7cd524ee65d62291b50ed3df78194af628c23bfee304f71f6ded4d8bdc1`.
 - Wiring: `UNWIRED`; money authority and external actions: `NONE`.
 
-## Blocking findings
-
-1. Complete one-way USD-M position/open-order isolation is not provable from
-   the accepted L05 cut. `USDM_ALGO_OPEN_ORDERS` is unavailable, and D0009
-   forbids substituting standard open orders for conditional-order absence.
-2. L02/L05 are outside D-LAUNCH-12's exact granted paths. A normalBasis-local
-   absence claim would duplicate private-truth ownership.
-3. The prior non-green System Integration result remains unwaived; the
-   post-correction full gate was not reached in this blocked attempt.
-
-The fee, request-semantic, expiry, exact-decimal, terminal-status, FAILED and
-close/restart corrections survive in the uncommitted working tree, but do not
-constitute an accepted implementation while finding 1 remains unresolved.
-
-## Measured bounded verification
+## Measured verification
 
 - Server build: exit `0`.
-- Normal Basis: `32/32`, exit `0`.
-- Exchange twin: `80/80`, exit `0`.
-- Execution policy: `49/49`, exit `0`.
+- Normal Basis: `35/35`, exit `0`.
+- Exchange Twin: `84/84`, exit `0`.
+- Execution Policy: `49/49`, exit `0`.
 - Foundation execution: `178/178`, exit `0`.
+- Accumulated LiveEdge: `1274/1274`, exit `0`.
+- Full Foundation battery: `2504/2504` across 20 modules, exit `0`.
 - Frozen protocol: `22/22`, exit `0`.
+- `npm test`: exit `0`.
 - `git diff --check`: pass.
+- Final whole-diff independent review: `ACCEPT`.
 
-Accumulated LiveEdge, full Foundation, `npm test`, full repository and current
-System Integration gates were not run after the final correction because the
-precise shared-owner blocker had already stopped the phase. They are not
-represented as green.
+Full repository `npm run test:all` exits `1` at the final System Integration
+family after every preceding family passes:
 
-## Durable blocked disposition
+- full System Integration: `179/180`;
+- isolated scenario file: `28/29`;
+- test starts at `authority.scenarios.test.mjs:516`;
+- assertion at line `521` expects `PARTIAL`;
+- canonical actual result is `DIVERGED`.
+
+The System Integration test blob is
+`5c3d23db891ba64f286988b3022cca09a835a14c` at both `a7a0f7c` and the
+committed correction. No System Integration path changed.
+
+## Durable disposition
 
 - Decision:
-  `live-edge-receipts/DECISIONS/L09-006-D0009-ACCOUNT-ISOLATION-DEPENDENCY.md`.
+  `live-edge-receipts/DECISIONS/L09-007-DLAUNCH14-SYSTEM-INTEGRATION-RULING-STOP.md`.
 - Receipt:
-  `live-edge-receipts/RECEIPTS/L09_BLOCKED_D0009_ACCOUNT_ISOLATION.md`.
-- L09-006 decision SHA-256:
-  `1ce6b88ee0575c86719dbe303908b176456d87dc3beebd1d2961df7a42628b9e`.
-- Blocked receipt SHA-256:
-  `1cdaf3c21b7cdeca5ee197b91c62a77a3e41e00a2e4a366e0cb4045e732e7047`.
+  `live-edge-receipts/RECEIPTS/L09_DLAUNCH14_SI_RULING_STOP.md`.
+- L09: `STOP_FOR_DIRECTOR_SYSTEM_INTEGRATION_RULING`.
+- Phase acceptance: `NO`.
+- Integrated acceptance: `NO`.
+- Merge/push: `NONE`.
 
-Blocked-documentation commit:
-`ea369e869a6ea3d8d7e0c1bfe2ebad4a206e6adc`.
-
-Blocked-documentation tree:
-`65305ed4b4a8d98f0e1cb7b5085ac5d28d092471`.
-
-That commit contains the immutable L09-006 decision/receipt and the
-generation-9 task/state bytes. This generation is the state-only seal. Neither
-commit stages or commits any implementation source/test path.
+The decision, receipt and generation-11 task/state bytes are committed next;
+a state-only seal records that exact documentation commit identity.
 
 ## Current posture and non-claims
 
-- L09: `BLOCKED_SHARED_L02_L05_OWNER_DEPENDENCY`.
-- Implementation: `UNCOMMITTED_REVIEWED_WORKTREE_NOT_PHASE_ACCEPTED`.
+- Correction implementation: `COMMITTED_INDEPENDENTLY_REVIEWED`.
+- L09 acceptance: `NO`.
 - Wiring: `UNWIRED`.
 - Money authority: `NONE`.
 - External actions: `NONE`.
@@ -131,17 +128,7 @@ enforced.
 
 ## Exact resume
 
-- Current step: D-LAUNCH-12 correction stopped before accumulated/full gates.
-- Exact blocker: accepted L05 records `USDM_ALGO_OPEN_ORDERS` as
-  `UNAVAILABLE_L02_CONTRACT_GAP_USDM_ALGO_OPEN_ORDERS`; D0009 forbids using
-  standard open orders as conditional-order absence.
-- The incomplete standard-only account fragment was discarded. Nineteen
-  independently mapped source/test paths remain modified but unstaged and
-  uncommitted; focused Normal Basis `32/32`, Exchange Twin `80/80`, Execution
-  Policy `49/49`, Foundation execution `178/178`, and protocol `22/22` pass.
-- Decision: `L09-006-D0009-ACCOUNT-ISOLATION-DEPENDENCY.md`.
-- Receipt: `L09_BLOCKED_D0009_ACCOUNT_ISOLATION.md`.
-- Exact next task: stop `BLOCKED_SHARED_L02_L05_OWNER_DEPENDENCY`.
-- Resume only after exact L02/L05 owner authorization for current USD-M algo
-  open-order truth or an explicit ruling that disposes D0009 and narrows the
-  L09-005 isolation finding. No System Integration exception is implied.
+Stop `STOP_FOR_DIRECTOR_SYSTEM_INTEGRATION_RULING`. Resume only after an exact
+director ruling disposes the unchanged partial-helper scenario and assigns any
+shared-owner correction. Then rerun the required System Integration and full
+repository gates before any L09 acceptance claim.

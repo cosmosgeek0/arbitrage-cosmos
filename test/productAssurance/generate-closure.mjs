@@ -160,6 +160,12 @@ function gitChangedPaths(implementationCommit) {
   return Object.freeze([...new Set([...committed, ...ALL_CLOSURE_PATHS])].sort());
 }
 
+function trackedDirtyPaths() {
+  const unstaged = commandOutput(['diff', '--name-only', '--']).split('\n').filter(Boolean);
+  const staged = commandOutput(['diff', '--cached', '--name-only', '--']).split('\n').filter(Boolean);
+  return Object.freeze([...new Set([...unstaged, ...staged])].sort());
+}
+
 function insertionRow(requestId, owner, seam, contract, test, expectedBehavior, blocker = 'DIRECTOR_OWNED_WIRING_NOT_PERFORMED') {
   return Object.freeze({
     requestId,
@@ -229,9 +235,9 @@ function buildInsertionRows(cockpitSectionIds) {
 
   const systemicOwners = [
     ['S1', 'HAZARD_ASSUMPTION_ATLAS_DENOMINATOR', 'A-HAZARD', 'fixtures/productAssurance/systemic/hazard/**'],
-    ['S2', 'ACTION_SAFETY_EVIDENCE_ENVELOPE', 'S2_ACTION_EVIDENCE_SATELLITE', 'fixtures/productAssurance/systemic/actionEvidence/**'],
+    ['S2', 'ACTION_SAFETY_EVIDENCE_ENVELOPE', 'ACTION_EVIDENCE_SATELLITE', 'fixtures/productAssurance/systemic/actionEvidence/**'],
     ['S3', 'BOUNDED_PROTOCOL_CONFORMANCE', 'A-FORMAL', 'fixtures/productAssurance/systemic/formal/**'],
-    ['S4', 'DERIVED_ASSURANCE_CLAIM_GRAPH', 'S4_ASSURANCE_CASE_SATELLITE', 'fixtures/productAssurance/systemic/assuranceCase/**'],
+    ['S4', 'DERIVED_ASSURANCE_CLAIM_GRAPH', 'ASSURANCE_CASE_SATELLITE', 'fixtures/productAssurance/systemic/assuranceCase/**'],
     ['S5', 'OBSERVABILITY_CONSERVATION', 'A-COCKPIT', 'fixtures/productAssurance/systemic/cockpit/** + fixtures/productAssurance/systemic/observability/**'],
     ['S6', 'DIAGNOSTIC_GOVERNANCE_EXTENSIONS', 'A-AGENT', 'fixtures/productAssurance/systemic/agentBoundary/**'],
     ['S8', 'CANCELLATION_CONTROL_LOOP_RESOURCE_EVIDENCE', 'A-STABILITY', 'fixtures/productAssurance/systemic/stability/**'],
@@ -289,7 +295,7 @@ function renderReliabilityRegistry(pa, scannerReport, operationCoverage, options
 
 Generated deterministically by \`${GENERATOR_SCHEMA}\` for tested commit \`${options.testedCommit}\` at \`${iso(options.evaluatedAtMs)}\`.
 
-Truth boundary: this is a 13-policy contract registry and static production-operation scan. It is not runtime, private, signed, deployment, or recovery proof. Scanner verdict is **${operationCoverage.verdict}**; all operations are **not** registered.
+Truth boundary: this is a 13-policy contract registry and static production-operation scan. It is not runtime, private, signed, deployment, or recovery proof. Scanner verdict is **${operationCoverage.verdict}**; not all discovered operations are registered.
 
 ## Scanner summary
 
@@ -543,237 +549,60 @@ ${table(['Scenario', 'Kind', 'Seed', 'Iterations', 'Expected root cause', 'Verdi
 `;
 }
 
-function buildSyntheticFailureAtlas(pa, observations, options) {
-  const scenariosById = new Map(pa.CANONICAL_FAULT_SCENARIOS.map((scenario) => [scenario.scenarioId, scenario]));
-  assert.equal(scenariosById.size, pa.CANONICAL_FAULT_SCENARIOS.length, 'fault scenario IDs must be unique');
-  assert.equal(observations.length, pa.CANONICAL_FAULT_SCENARIOS.length, 'synthetic Atlas requires one sealed run per canonical scenario');
-  const expectedFamilyIds = [...new Set(pa.CANONICAL_FAULT_SCENARIOS.map((scenario) => scenario.kind))].sort();
-  const records = observations.map((run) => {
-    const scenario = scenariosById.get(run.scenarioId);
-    assert.notEqual(scenario, undefined, `synthetic Atlas run ${run.scenarioId} has no declared scenario`);
-    assert.equal(run.testedCommit, options.testedCommit, `synthetic Atlas run ${run.scenarioId} is bound to another commit`);
-    assert.equal(run.state, 'COMPLETE', `synthetic Atlas run ${run.scenarioId} is incomplete`);
-    const provenanceEvidenceIds = [
-      run.injectionEvidence.evidenceId,
-      ...run.rootCauseEvidence.map((evidence) => evidence.evidenceId),
-      ...run.proofs.flatMap((proof) => proof.evidence.map((evidence) => evidence.evidenceId)),
-    ].sort();
-    assert.equal(new Set(provenanceEvidenceIds).size, provenanceEvidenceIds.length, `synthetic Atlas run ${run.scenarioId} has duplicate evidence IDs`);
-    const recordId = `ATLAS_RECORD_${run.scenarioId}`;
-    const fingerprint = sha256(JSON.stringify([
-      'PRODUCT_ASSURANCE_SYNTHETIC_ATLAS_FINGERPRINT_V1',
-      options.testedCommit,
-      run.scenarioId,
-      scenario.kind,
-      run.rootCauseCode,
-      run.runDigest,
-    ]));
-    return Object.freeze({
-      schema: 'PRODUCT_ASSURANCE_SYNTHETIC_ATLAS_RECORD_V1',
-      recordId,
-      fingerprint,
-      familyId: scenario.kind,
-      timeline: Object.freeze({
-        startedAtMs: run.startedAtMs,
-        completedAtMs: run.completedAtMs,
-        durationMs: run.completedAtMs - run.startedAtMs,
-      }),
-      component: Object.freeze({
-        componentId: 'PRODUCT_ASSURANCE_FAULT_MODEL',
-        dependencyIds: Object.freeze([]),
-        testedCommit: options.testedCommit,
-        simulatorRevision: run.simulatorRevision,
-        policyRevision: 'PRODUCT_ASSURANCE_OPERATION_POLICY_REGISTRY_V1',
-      }),
-      trigger: Object.freeze({
-        scenarioId: run.scenarioId,
-        kind: scenario.kind,
-        injected: run.injected,
-        expectedRootCauseCode: scenario.expectedRootCauseCode,
-      }),
-      symptomCodes: Object.freeze([...run.transitionCodes]),
-      failedInvariant: Object.freeze({
-        invariantId: `SYNTHETIC_TRIGGER_${scenario.expectedRootCauseCode}`,
-        truthState: 'MODELLED_TRIGGER_NOT_OBSERVED_RUNTIME_INVARIANT_FAILURE',
-      }),
-      impact: Object.freeze({
-        capital: 'SYNTHETIC_ONLY_NO_REAL_CAPITAL',
-        exposure: 'NO_NEW_EXPOSURE_BLOCKED_IN_MODEL',
-        liability: 'PRESERVED_IN_MODEL',
-        ambiguity: 'NO_RUNTIME_AMBIGUITY_MEASURED',
-      }),
-      containment: Object.freeze({
-        state: 'MODEL_PROVED',
-        transitionCodes: Object.freeze(run.transitionCodes.filter((code) => [
-          'READINESS_BLOCKED',
-          'NEW_EXPOSURE_BLOCKED',
-          'LIABILITY_PRESERVED',
-          'RISK_REDUCTION_PRESERVED',
-        ].includes(code))),
-      }),
-      repair: Object.freeze({
-        attemptIds: Object.freeze([]),
-        outcome: 'NOT_ATTEMPTED_SYNTHETIC_MODEL_CHECKPOINT_ONLY',
-        successfulRepair: 'UNKNOWN_NOT_RUN',
-        falseRepair: 'UNKNOWN_NOT_RUN',
-      }),
-      postconditions: Object.freeze({
-        proofVerdicts: Object.freeze(run.proofs.map((proof) => Object.freeze({ proofId: proof.proofId, verdict: proof.verdict }))),
-        verifierIndependence: 'MODEL_INTERNAL_NOT_RUNTIME_INDEPENDENT',
-        quietPeriodMs: null,
-        runtimeRecoveryDeclared: false,
-      }),
-      causes: Object.freeze({
-        rootCauseCode: run.rootCauseCode,
-        contributingCauseCodes: Object.freeze([]),
-      }),
-      regression: Object.freeze({
-        fixturePath: `${MACHINE_EVIDENCE_PATHS[1]}#runs/${run.scenarioId}`,
-        deterministicSeed: run.deterministicSeed,
-        playbookRevision: 'NOT_CONFIGURED',
-        modelRevision: run.simulatorRevision,
-      }),
-      governance: Object.freeze({
-        reviewerId: null,
-        postmortemId: null,
-        actionIds: Object.freeze([]),
-        recurrenceState: 'UNKNOWN_NOT_CONFIGURED',
-        accessClass: 'ASSURANCE_RESTRICTED',
-        retentionClass: 'PACKET_LOCAL_COMMIT_BOUND',
-        retentionUntilMs: null,
-        retentionState: 'OWNER_POLICY_NOT_CONFIGURED',
-      }),
-      provenance: Object.freeze({
-        runId: run.runId,
-        runDigest: run.runDigest,
-        evidenceIds: Object.freeze(provenanceEvidenceIds),
-      }),
-      truthLabel: 'SYNTHETIC_ONLY',
-      authorityGranted: false,
-    });
-  });
-  const recordIds = records.map((record) => record.recordId);
-  const fingerprints = records.map((record) => record.fingerprint);
-  assert.equal(new Set(recordIds).size, recordIds.length, 'synthetic Atlas record IDs must be unique');
-  assert.equal(new Set(fingerprints).size, fingerprints.length, 'synthetic Atlas fingerprints must be unique');
-  const representedFamilyIds = [...new Set(records.map((record) => record.familyId))].sort();
-  const missingExpectedFamilyIds = expectedFamilyIds.filter((familyId) => !representedFamilyIds.includes(familyId));
-  assert.deepEqual(missingExpectedFamilyIds, [], 'synthetic Atlas is missing a canonical fault-kind family');
-  return Object.freeze({
-    schema: 'PRODUCT_ASSURANCE_SYNTHETIC_FAILURE_ATLAS_V1',
-    revision: 1,
-    testedCommit: options.testedCommit,
-    evaluatedAtMs: options.evaluatedAtMs,
-    expectedFamilyIds: Object.freeze(expectedFamilyIds),
-    expectedFamilyIdsDigest: pa.failureFamilyDenominatorDigest(expectedFamilyIds),
-    denominatorSource: 'PROVISIONAL_CANONICAL_FAULT_KIND_DENOMINATOR',
-    s1AcceptedDenominatorBindingState: 'NOT_CONFIGURED_AWAITING_DIRECTOR_ACCEPTED_S1_FAN_IN',
-    representedFamilyIds: Object.freeze(representedFamilyIds),
-    missingExpectedFamilyIds: Object.freeze(missingExpectedFamilyIds),
-    expectedFamilyCount: expectedFamilyIds.length,
-    representedFamilyCount: representedFamilyIds.length,
-    recordCount: records.length,
-    uniqueRecordIdCount: new Set(recordIds).size,
-    uniqueFingerprintCount: new Set(fingerprints).size,
-    duplicateRecordIdCount: records.length - new Set(recordIds).size,
-    duplicateFingerprintCount: records.length - new Set(fingerprints).size,
-    realIncidentCorpusState: 'NOT_CONFIGURED',
-    realSoakState: 'NOT_RUN',
-    truthLabel: 'SYNTHETIC_ONLY',
-    authorityGranted: false,
-    records: Object.freeze(records),
-  });
-}
-
-function renderFailureAtlas(pa, syntheticAtlas, options) {
-  const familyRows = syntheticAtlas.expectedFamilyIds.map((familyId) => [
-    familyId,
-    syntheticAtlas.records.filter((record) => record.familyId === familyId).length,
-    syntheticAtlas.representedFamilyIds.includes(familyId),
-    syntheticAtlas.missingExpectedFamilyIds.includes(familyId),
-  ]);
-  const recordRows = syntheticAtlas.records.map((record) => [
-    record.recordId,
-    record.fingerprint,
-    record.familyId,
-    `${iso(record.timeline.startedAtMs)} -> ${iso(record.timeline.completedAtMs)} (${record.timeline.durationMs}ms)`,
-    `${record.component.componentId}<br>${record.component.testedCommit}<br>${record.component.simulatorRevision}<br>${record.component.policyRevision}`,
-    `${record.trigger.scenarioId}<br>${record.trigger.expectedRootCauseCode}<br>${record.symptomCodes.join('<br>')}`,
-    `${record.failedInvariant.invariantId}<br>${record.failedInvariant.truthState}`,
-    `${record.impact.capital}<br>${record.impact.exposure}<br>${record.impact.liability}<br>${record.impact.ambiguity}`,
-    `${record.containment.state}<br>${record.containment.transitionCodes.join('<br>')}<br>${record.repair.outcome}`,
-    `${record.postconditions.proofVerdicts.map((proof) => `${proof.proofId}:${proof.verdict}`).join('<br>')}<br>${record.postconditions.verifierIndependence}<br>quiet=${record.postconditions.quietPeriodMs ?? 'UNKNOWN_NOT_RUN'}`,
-    `${record.causes.rootCauseCode}<br>contributing=${record.causes.contributingCauseCodes.length === 0 ? 'UNKNOWN_NONE_OBSERVED_IN_MODEL' : record.causes.contributingCauseCodes.join(',')}`,
-    `${record.regression.fixturePath}<br>seed=${record.regression.deterministicSeed}<br>playbook=${record.regression.playbookRevision}<br>model=${record.regression.modelRevision}`,
-    `reviewer=${record.governance.reviewerId ?? 'UNKNOWN_NOT_CONFIGURED'}<br>postmortem=${record.governance.postmortemId ?? 'UNKNOWN_NOT_CONFIGURED'}<br>actions=${record.governance.actionIds.length === 0 ? 'UNKNOWN_NOT_CONFIGURED' : record.governance.actionIds.join(',')}<br>recurrence=${record.governance.recurrenceState}<br>access=${record.governance.accessClass}<br>retention=${record.governance.retentionClass}/${record.governance.retentionState}`,
-    `${record.provenance.runId}<br>${record.provenance.runDigest}<br>evidence=${record.provenance.evidenceIds.length}<br>${record.truthLabel}<br>authority=${record.authorityGranted}`,
-  ]);
+function renderFailureAtlas(pa, failureAtlas, faultReport, options) {
+  const syntheticScenarioKindCount = new Set(
+    pa.CANONICAL_FAULT_SCENARIOS.map((scenario) => scenario.kind),
+  ).size;
   return `# Operational Failure Atlas
 
 Generated for \`${options.testedCommit}\` at \`${iso(options.evaluatedAtMs)}\`.
 
-Disposition: **SCHEMA_AND_PURE_PROJECTION_ONLY**. Real incident/test/soak/postmortem ingestion and analytics are **NOT_CONFIGURED**. The Atlas is a sanitized, retention/access-controlled, stable-ID, deduplicated read projection over canonical evidence—never a second incident store.
+Disposition: **CANONICAL_EMPTY_CORPUS / UNKNOWN**. The canonical Failure Atlas record owner is \`productAssurance/failureAtlas\`. A-CORE does not create a second record schema or promote synthetic fault runs into incident records.
 
-## Sealed synthetic projection status
+## Canonical record projection
 
-| Records | Unique IDs | Unique fingerprints | Duplicate IDs | Duplicate fingerprints | Expected families | Represented families | Missing families | Truth | Real soak | Real incident corpus | Authority |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- | --- |
-| ${syntheticAtlas.recordCount} | ${syntheticAtlas.uniqueRecordIdCount} | ${syntheticAtlas.uniqueFingerprintCount} | ${syntheticAtlas.duplicateRecordIdCount} | ${syntheticAtlas.duplicateFingerprintCount} | ${syntheticAtlas.expectedFamilyCount} | ${syntheticAtlas.representedFamilyCount} | ${syntheticAtlas.missingExpectedFamilyIds.length === 0 ? 'none' : syntheticAtlas.missingExpectedFamilyIds.join(', ')} | ${syntheticAtlas.truthLabel} | ${syntheticAtlas.realSoakState} | ${syntheticAtlas.realIncidentCorpusState} | ${syntheticAtlas.authorityGranted} |
+| Verdict | Eligible records | Rejected records | Recurrence fingerprints | Reason codes | Second store created |
+| --- | ---: | ---: | ---: | --- | --- |
+| ${failureAtlas.verdict} | ${failureAtlas.eligibleRecordIds.length} | ${failureAtlas.rejectedRecordIds.length} | ${Object.keys(failureAtlas.recurrenceByFingerprint).length} | ${failureAtlas.reasonCodes.join(', ')} | ${failureAtlas.secondStoreCreated} |
 
-The 103 rows below are populated from the sealed deterministic fault-run evidence emitted for this exact tested commit. They are actual packet test/fault evidence, but remain **SYNTHETIC_ONLY**: they are not runtime incidents, production fault injection, real soak, operational repair, independent runtime verification, or postmortems.
+The corpus is intentionally empty. The synthetic runs do not contain honest canonical reviewer, postmortem, retention, repair-attempt, dependency, invariant, and independent record-evidence bindings. Those values remain **UNKNOWN / NOT_CONFIGURED** instead of being fabricated.
+
+## Synthetic fault source (not Atlas records)
+
+| Declared | Observed | Passed | Failed | Unknown | Truth | Real soak | Authority |
+| ---: | ---: | ---: | ---: | ---: | --- | --- | --- |
+| ${faultReport.declaredScenarioCount} | ${faultReport.observedScenarioCount} | ${faultReport.passedScenarioIds.length} | ${faultReport.failedScenarioIds.length} | ${faultReport.unknownScenarioIds.length} | ${faultReport.truthLabel} | ${faultReport.realSoakState} | ${faultReport.authorityGranted} |
+
+The deterministic runs remain sealed under \`${MACHINE_EVIDENCE_PATHS[1]}\` as fault-harness evidence. They prove only the synthetic model contract and do not become runtime incidents, real soak, operational repair, independent runtime verification, postmortems, or canonical Failure Atlas records.
 
 ## Expected-family denominator
 
 | Field | Value |
 | --- | --- |
-| Source | ${syntheticAtlas.denominatorSource} |
-| Expected-family digest | ${syntheticAtlas.expectedFamilyIdsDigest} |
-| S1 director-accepted binding | ${syntheticAtlas.s1AcceptedDenominatorBindingState} |
+| Accepted S1 denominator binding | NOT_CONFIGURED_AWAITING_DIRECTOR_ACCEPTED_S1_FAN_IN |
+| Provisional synthetic scenario-kind count | ${syntheticScenarioKindCount} |
+| Canonical record family coverage | UNKNOWN_EMPTY_CORPUS |
 
-${table(['Family', 'Synthetic records', 'Represented', 'Missing'], familyRows)}
-
-This denominator is a provisional, commit-bound projection over canonical fault kinds. It does **not** claim the S1 hazard/assumption denominator is accepted or integrated; that binding remains blocked pending director-accepted serial fan-in.
+The scenario-kind count is a bounded description of the synthetic harness, not the accepted S1 hazard/assumption denominator.
 
 ## Assurance dimensions
 
 ${table(['#', 'Dimension'], pa.FAILURE_ASSURANCE_DIMENSIONS.map((dimension, index) => [index + 1, dimension]))}
 
-## Record contract and current truth
+## Required canonical record truth
 
-${table(['Group', 'Fields', 'Current packet truth'], [
-    ['Identity/dedup', 'schema, recordId, fingerprint, familyId', 'stable IDs; unique commit-bound fingerprints; duplicate counts are explicit'],
-    ['Timeline/revisions', 'startedAtMs, completedAtMs, durationMs, componentId, dependencyIds, testedCommit, simulatorRevision, policyRevision', 'exact synthetic-run times and immutable revisions'],
-    ['Failure', 'trigger, symptoms, failedInvariant, root/contributing causes', 'modelled trigger only; never represented as a runtime invariant failure'],
-    ['Impact/response', 'capital, exposure, liability, ambiguity, containment, repair attempts/outcome', 'synthetic impact; no operational repair was attempted'],
-    ['Recovery proof', 'proofVerdicts, verifierIndependence, quietPeriodMs, runtimeRecoveryDeclared', 'model-internal proof; runtime independence and quiet period are not configured; recovery=false'],
-    ['Regression', 'fixturePath, deterministicSeed, playbookRevision, modelRevision', 'sealed machine artifact path and seed; playbook not configured'],
-    ['Governance', 'reviewerId, postmortemId, actionIds, recurrenceState, accessClass, retentionClass/until/state', 'unknown fields stay unknown; restricted packet-local retention; owner retention policy not configured'],
-    ['Provenance/truth', 'runId, runDigest, evidenceIds, truthLabel, authorityGranted', 'sealed synthetic provenance; authority is always false'],
-  ])}
-
-## Populated synthetic records (${syntheticAtlas.records.length})
-
-The full normalized objects are also sealed in \`${MACHINE_EVIDENCE_PATHS[1]}\` under \`failureAtlas.records\`.
-
-${table([
-    'Record', 'Fingerprint', 'Family', 'Exact timeline', 'Component/revisions', 'Trigger/symptoms',
-    'Failed invariant truth', 'Impact', 'Containment/repair', 'Postconditions', 'Causes',
-    'Regression', 'Governance', 'Provenance/truth',
-  ], recordRows)}
-
-## Missing-data laws
-
-- failure fingerprint and exact timeline;
+- stable fingerprint, release/run identity, and exact ordered timeline;
 - component/dependency and immutable revisions;
-- trigger, symptoms, failed invariant, and expected-family denominator binding;
+- trigger, symptoms, canonical failed-invariant IDs, and accepted family binding;
 - capital, exposure, liability, and ambiguity impact;
 - containment, repair attempts, false repair, independent postconditions, and quiet period;
 - root and contributing causes;
 - regression fixture, deterministic fault seed, playbook/model revisions;
-- reviewer, postmortem, actions, recurrence, provenance, access and retention;
+- reviewer, postmortem, actions, recurrence, provenance, access, and retention;
+- subject/value/release-bound evidence with independent verification;
 - missing families and unknown evidence remain visible.
 
-Canonical synthetic scenario count: **${pa.CANONICAL_FAULT_SCENARIOS.length}**. Synthetic fault evidence does not become a real incident corpus, accepted S1 denominator, operational repair, or runtime readiness proof.
+Synthetic fault evidence does not become a real incident corpus, operational recovery proof, or runtime-readiness authority.
 `;
 }
 
@@ -1152,8 +981,12 @@ function writeOutput(path, content) {
 async function main() {
   const options = parseArguments(process.argv.slice(2));
   assert.equal(commandOutput(['branch', '--show-current']), 'ip-assurance-20260713', 'closure must run on the assigned branch');
+  assert.equal(options.implementationCommit, options.testedCommit, 'implementation and tested commits must be identical for packet closure');
+  assert.equal(commandOutput(['rev-parse', 'HEAD']), options.testedCommit, 'tested commit must equal current HEAD');
   assert.equal(commandOutput(['merge-base', BASE_COMMIT, options.implementationCommit]), BASE_COMMIT, 'implementation commit must descend from the frozen base');
   assert.equal(commandOutput(['merge-base', BASE_COMMIT, options.testedCommit]), BASE_COMMIT, 'tested commit must descend from the frozen base');
+  const nonClosureDirtyPaths = trackedDirtyPaths().filter((path) => !ALL_CLOSURE_PATHS.includes(path));
+  assert.deepEqual(nonClosureDirtyPaths, [], 'closure generation requires clean tracked source; only generated closure outputs may differ');
   const verifiedInputs = verifyInputs();
   const pa = await import(pathToFileURL(join(ROOT, 'server', 'dist', 'productAssurance', 'index.js')).href);
 
@@ -1201,7 +1034,11 @@ async function main() {
     [faultReport.verdict, faultReport.declaredScenarioCount, faultReport.observedScenarioCount, faultReport.passedScenarioIds.length, faultReport.truthLabel, faultReport.realSoakState, faultReport.authorityGranted],
     ['PASS', 103, 103, 103, 'SYNTHETIC_ONLY', 'NOT_RUN', false],
   );
-  const syntheticAtlas = buildSyntheticFailureAtlas(pa, observations, options);
+  const failureAtlas = pa.projectOperationalFailureRecords([], options.evaluatedAtMs);
+  assert.deepEqual(
+    [failureAtlas.verdict, failureAtlas.eligibleRecordIds.length, failureAtlas.rejectedRecordIds.length, failureAtlas.reasonCodes, failureAtlas.secondStoreCreated],
+    ['UNKNOWN', 0, 0, ['FAILURE_RECORD_CORPUS_EMPTY'], false],
+  );
 
   const insertionRows = buildInsertionRows(pa.ASSURANCE_COCKPIT_SECTION_IDS);
   const changedPaths = gitChangedPaths(options.implementationCommit);
@@ -1277,7 +1114,7 @@ async function main() {
     unexpectedObservationScenarioIds: faultReport.unexpectedObservationScenarioIds,
     duplicateObservationScenarioIds: faultReport.duplicateObservationScenarioIds,
     reasonCodes: faultReport.reasonCodes,
-    failureAtlas: syntheticAtlas,
+    failureAtlas,
     runs: observations.map((run) => ({
       scenarioId: run.scenarioId,
       runId: run.runId,
@@ -1300,7 +1137,7 @@ async function main() {
     [GENERATED_DOCUMENT_PATHS[2], renderCoverageMatrix(pa, structuralCoverage, scannerReport, options)],
     [GENERATED_DOCUMENT_PATHS[3], renderRecoveryReport(pa, options)],
     [GENERATED_DOCUMENT_PATHS[4], renderFaultReport(pa, faultReport, observations, options)],
-    [GENERATED_DOCUMENT_PATHS[5], renderFailureAtlas(pa, syntheticAtlas, options)],
+    [GENERATED_DOCUMENT_PATHS[5], renderFailureAtlas(pa, failureAtlas, faultReport, options)],
     [GENERATED_DOCUMENT_PATHS[6], renderDiagnosticBoundary(pa, options)],
     [GENERATED_DOCUMENT_PATHS[7], renderInsertionRequest(insertionRows, options)],
     [GENERATED_DOCUMENT_PATHS[8], renderQMatrix(pa, options)],

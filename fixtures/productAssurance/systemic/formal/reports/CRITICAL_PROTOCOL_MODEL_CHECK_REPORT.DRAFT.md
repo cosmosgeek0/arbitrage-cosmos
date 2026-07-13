@@ -126,5 +126,5 @@ an authorized owner.
 - The protected untracked parent I00 input remains outside this packet and must
   not be staged by this satellite.
 
-The shared report, ordinary-harness replays, checker-backed TLA result, and
-composed-scenario fan-in remain director/canonical-owner insertion requests.
+The shared report, S3 ordinary-harness replays, and checker-backed TLA result
+remain director/canonical-owner insertion requests.

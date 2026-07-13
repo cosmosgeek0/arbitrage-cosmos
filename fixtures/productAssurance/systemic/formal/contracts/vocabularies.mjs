@@ -30,15 +30,3 @@ export const CONFORMANCE_VERDICTS = Object.freeze([
   'UNKNOWN',
   'MISMATCH',
 ]);
-
-export const TOOLING_STATUSES = Object.freeze([
-  'NODE_EXPLICIT_STATE_ONLY',
-  'TLA_TOOLING_NOT_CONFIGURED',
-  'TLA_TOOLING_CONFIGURED_UNVERIFIED',
-  'TLA_CHECKED',
-]);
-
-export const RELEASE_LABELS = Object.freeze([
-  'BUILT_AND_TESTED',
-  'SYNTHETIC_ONLY',
-]);

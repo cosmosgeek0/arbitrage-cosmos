@@ -48,6 +48,11 @@ function hasExactKeys(value, expected) {
     && JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...expected].sort());
 }
 
+function safeEvidenceRefs(value) {
+  if (!Array.isArray(value)) return [];
+  return stableUnique(value.filter((entry) => typeof entry === 'string' && HASH.test(entry)));
+}
+
 export function isValidTypedProviderStubOutput(output) {
   return hasExactKeys(output, OUTPUT_KEYS)
     && output.schema === 'TypedRemediationProposalStubV1'
@@ -67,6 +72,7 @@ export function isValidTypedProviderStubOutput(output) {
 
 export function isDeterministicProviderStubDescriptor(provider) {
   return hasExactKeys(provider, PROVIDER_KEYS)
+    && findForbiddenKeys(provider).length === 0
     && provider.configurationState === 'SYNTHETIC_ONLY'
     && provider.mode === 'DETERMINISTIC_STUB'
     && PROVIDER_POSTURES.has(provider.posture)
@@ -198,6 +204,8 @@ export function runDeterministicProviderStub({
     && HASH.test(boundaryDecision?.decisionDigest ?? '')
     && boundaryDecision.decisionDigest === decisionContractDigest(boundaryDecision)
     && boundaryDecision?.requestDigest === requestDigest
+    && identityDecision?.status === 'PASS'
+    && traceDecision?.status === 'PASS'
     && isEvaluationEnvelope(identityDecision, nowMs, 'WORKLOAD_IDENTITY')
     && isEvaluationEnvelope(traceDecision, nowMs, 'TRACE_PRIVACY_RETENTION')
     && boundaryDecision.identityDecisionDigest === identityDecision?.decisionDigest
@@ -223,7 +231,7 @@ export function runDeterministicProviderStub({
     && boundaryDecision.toolIds.length === new Set(boundaryDecision.toolIds).size
     && boundaryDecision.toolIds.every((toolId) => ID.test(toolId) && toolId.startsWith('fixture.'));
   if (!boundaryValid) {
-    return decisionFailure(nowMs, 'STUB_NOT_INVOKED', ['SANDBOX_BINDING_DID_NOT_ALLOW_STUB'], base, boundaryDecision?.evidenceRefs ?? []);
+    return decisionFailure(nowMs, 'STUB_NOT_INVOKED', ['SANDBOX_BINDING_DID_NOT_ALLOW_STUB'], base, safeEvidenceRefs(boundaryDecision?.evidenceRefs));
   }
   if (!hasExactKeys(provider, PROVIDER_KEYS)) {
     return decisionFailure(nowMs, 'STUB_NOT_INVOKED', ['PROVIDER_DESCRIPTOR_SCHEMA_REJECTED'], base);
@@ -267,6 +275,9 @@ export function runDeterministicProviderStub({
   }
   if (!isValidTypedProviderStubOutput(scriptedOutcome.typedOutput)) {
     return decisionFailure(nowMs, 'STUB_RESPONSE_REJECTED', ['STUB_TYPED_OUTPUT_SCHEMA_REJECTED'], base);
+  }
+  if (!scriptedOutcome.typedOutput.evidenceDigests.every((digest) => boundaryDecision.evidenceRefs.includes(digest))) {
+    return decisionFailure(nowMs, 'STUB_RESPONSE_REJECTED', ['STUB_OUTPUT_EVIDENCE_NOT_BOUND_TO_SANDBOX'], base);
   }
 
   const typedOutput = immutableClone(scriptedOutcome.typedOutput);

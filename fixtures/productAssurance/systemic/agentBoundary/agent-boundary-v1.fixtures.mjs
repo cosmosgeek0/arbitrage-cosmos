@@ -29,7 +29,7 @@ const REPAIR_POLICY_BASE = Object.freeze({
   schema: 'RepairEvidencePolicyFixtureV1',
   version: 1,
   authorityId: 'canonical-control-plane-command-registry',
-  bindingLawRef: 'IP_ASSURANCE.md#7.6',
+  bindingLawRef: 'IP_ASSURANCE.md#7',
   basePolicyRef: 'IP_ASSURANCE.md#3.4:remediation-policy',
   registrySnapshotDigest: h('canonical-remediation-registry-snapshot'),
   ownerPreauthorizationDigest: h('class-A-owner-preauthorization'),
@@ -344,14 +344,14 @@ function candidate(className, policy) {
   const rollbackPlanDigest = h(`candidate-${className}-rollback`);
   const capabilities = Object.freeze(['PROPOSE_TYPED_ACTION']);
   const effectFlags = Object.freeze([...policy.allowedEffectFlags]);
-  const registeredCommandId = className === 'A' ? REPAIR_POLICY.allowedActionIds[0] : null;
+  const registeredCommandId = null;
   const tests = Object.freeze([check(
     `candidate-${className}-success`,
     `candidate-${className}-test`,
     `independent-candidate-test-verifier.fixture.${className}`,
   )]);
   const approvalExpiresAtMs = NOW + 30_000;
-  const approverId = className === 'C' ? 'human-release-owner.fixture' : `${policy.authorityId}.fixture`;
+  const approverId = `human-assurance-owner.fixture.${className}`;
   const approvalRef = `approval.fixture.class-${className}`;
   const approvalStatus = policy.requiresApproval ? 'APPROVED' : 'NOT_REQUIRED';
   const holdoutBase = Object.freeze({
@@ -431,20 +431,27 @@ function candidate(className, policy) {
   return Object.freeze({ ...candidateWithVerifier, holdout });
 }
 
-const CLASS_LAW_FIXTURE = Object.freeze({
-  A: Object.freeze({ mode: 'REGISTERED_LOCAL_COMMAND_ONLY', route: 'REGISTERED_LOCAL_NON_CAPITAL_CONTROL_COMMAND', effectFlag: 'REGISTERED_LOCAL_CONTROL_COMMAND', promotionDisposition: 'REGISTERED_LOCAL_CONTROL_COMMAND_EVIDENCE_ELIGIBLE', automaticEligibility: 'REGISTERED_ONLY', authorityId: 'canonical-control-plane-command-registry', canonicalOwnerRef: 'IP_ASSURANCE.md/3.4/canonical-control-plane-command-registry', basePolicyRef: 'IP_ASSURANCE.md/3.4/remediation-policy', requiresApproval: false, requiresRepairEvidence: true, requiresCorpusDecision: false, requiresHoldout: false }),
-  B: Object.freeze({ mode: 'CANONICAL_RECOVERY_ONLY', route: 'CANONICAL_RECONCILIATION_AND_RECOVERY', effectFlag: 'CANONICAL_RECOVERY_ROUTE', promotionDisposition: 'CANONICAL_RECONCILIATION_RECOVERY_REQUIRED', automaticEligibility: 'NEVER', authorityId: 'canonical-reconciliation-owner', canonicalOwnerRef: 'IP_ASSURANCE.md/3.4/canonical-reconciliation-recovery', basePolicyRef: 'IP_ASSURANCE.md/3.4/reconcile-lifecycle', requiresApproval: false, requiresRepairEvidence: false, requiresCorpusDecision: false, requiresHoldout: false }),
-  C: Object.freeze({ mode: 'OWNER_APPROVED_RELEASE_ONLY', route: 'EXISTING_HASH_BOUND_RELEASE_PIPELINE', effectFlag: 'ISOLATED_PATCH_RELEASE_HANDOFF', promotionDisposition: 'OWNER_APPROVED_HASH_BOUND_RELEASE_REQUIRED', automaticEligibility: 'NEVER', authorityId: 'existing-release-owner', canonicalOwnerRef: 'IP_ASSURANCE.md/3.9/owner-approved-release', basePolicyRef: 'IP_ASSURANCE.md/3.9/hash-bound-release-pipeline', requiresApproval: true, requiresRepairEvidence: false, requiresCorpusDecision: false, requiresHoldout: true }),
-  D: Object.freeze({ mode: 'ABSTAIN_OR_DEMOTE_ONLY', route: 'EXISTING_Q_RUNTIME_OWNER', effectFlag: 'ABSTAIN_OR_RECOMMEND_DEMOTION', promotionDisposition: 'ABSTAIN_OR_DEMOTE_REQUIRED', automaticEligibility: 'NEVER', authorityId: 'accepted-q-runtime-owner', canonicalOwnerRef: 'IP_ASSURANCE.md/3.7/accepted-q-runtime-boundary', basePolicyRef: 'IP_ASSURANCE.md/3.7/abstain-demote-law', requiresApproval: false, requiresRepairEvidence: false, requiresCorpusDecision: false, requiresHoldout: false }),
+const OPAQUE_CLASS_POLICY_FIXTURE = Object.freeze({
+  mode: 'OPAQUE_OWNER_BOUND_CLASS',
+  route: 'CANONICAL_OWNER_REVIEW_ONLY',
+  effectFlag: 'TYPED_EVIDENCE_RECOMMENDATION_ONLY',
+  promotionDisposition: 'OWNER_BOUND_EVIDENCE_REVIEW_REQUIRED',
+  automaticEligibility: 'NEVER',
+  canonicalOwnerRef: 'IP_ASSURANCE.md/7/director-accepted-systemic-deltas',
+  basePolicyRef: 'IP_ASSURANCE.md/3.9/subordinate-diagnostic-plane',
+  requiresApproval: true,
+  requiresRepairEvidence: true,
+  requiresCorpusDecision: true,
+  requiresHoldout: true,
 });
 
 function classPolicy(className) {
-  const law = CLASS_LAW_FIXTURE[className];
+  const law = OPAQUE_CLASS_POLICY_FIXTURE;
   const base = {
     schema: 'SelfCorrectionClassPolicyV1',
     version: 1,
-    authorityId: law.authorityId,
-    bindingLawRef: 'IP_ASSURANCE.md#7.5-7.6',
+    authorityId: `director-supplied-class-policy.fixture.${className}`,
+    bindingLawRef: 'IP_ASSURANCE.md#7',
     canonicalOwnerRef: law.canonicalOwnerRef,
     basePolicyRef: law.basePolicyRef,
     registrySnapshotDigest: h('accepted-self-correction-policy-registry-snapshot'),
@@ -460,7 +467,7 @@ function classPolicy(className) {
     environment: SANDBOX_BINDING.environment,
     allowedEffectFlags: Object.freeze([law.effectFlag]),
     allowedCapabilities: Object.freeze(['PROPOSE_TYPED_ACTION']),
-    registeredCommandIds: Object.freeze(className === 'A' ? [...REPAIR_POLICY.allowedActionIds] : []),
+    registeredCommandIds: Object.freeze([]),
     promotionDisposition: law.promotionDisposition,
     requiresApproval: law.requiresApproval,
     requiresRepairEvidence: law.requiresRepairEvidence,
@@ -642,7 +649,7 @@ export const PROVIDER_SCRIPTED_OUTCOME = Object.freeze({
     proposalId: 'proposal.fixture.1',
     disposition: 'PROPOSE_TYPED_ACTION',
     actionKind: 'ISOLATED_PATCH_PROPOSAL',
-    evidenceDigests: Object.freeze([h('typed-proposal-evidence')]),
+    evidenceDigests: Object.freeze([DIAGNOSTIC_TRACE.evidenceRefs[0].digest]),
     operationalAuthority: 'NONE',
   }),
 });

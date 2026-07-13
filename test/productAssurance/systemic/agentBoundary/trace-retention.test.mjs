@@ -195,3 +195,46 @@ test('provider outage and denied diagnostic attempts may still retain valid evid
     assert.equal(evaluate(resealTrace(trace)).status, 'PASS', disposition);
   }
 });
+
+test('trace PASS binds the full retention policy and rejects producer-provider common mode', () => {
+  const baseline = evaluate();
+  const weakenedPolicy = { ...RETENTION_POLICY, minimumRetentionMs: 1 };
+  const weakened = evaluate(DIAGNOSTIC_TRACE, weakenedPolicy);
+  assert.equal(weakened.status, 'PASS');
+  assert.notEqual(weakened.tracePolicyDigest, baseline.tracePolicyDigest);
+  assert.notEqual(weakened.sourceEvidenceDigest, baseline.sourceEvidenceDigest);
+  assert.notEqual(weakened.decisionDigest, baseline.decisionDigest);
+
+  const commonMode = clone(DIAGNOSTIC_TRACE);
+  commonMode.producerId = commonMode.providerId;
+  const rejected = evaluate(resealTrace(commonMode));
+  assert.equal(rejected.status, 'FAIL');
+  assert.ok(rejected.reasonCodes.includes('TRACE_PRODUCER_PROVIDER_COMMON_MODE'));
+});
+
+test('allowed trace string slots reject raw secret material without reflecting it', () => {
+  const trace = clone(DIAGNOSTIC_TRACE);
+  trace.evidenceRefs[0].evidenceId = 'sk-live-rawsecret123';
+  const result = evaluate(resealTrace(trace));
+  assert.equal(result.status, 'FAIL');
+  assert.ok(result.reasonCodes.includes('TRACE_SECRET_BEARING_FIELD_FORBIDDEN'));
+  assert.doesNotMatch(JSON.stringify(result), /sk-live-rawsecret123/);
+});
+
+test('retention independence includes every historical writer and verifier', () => {
+  const trace = clone(DIAGNOSTIC_TRACE);
+  const first = trace.retentionReceipts[0];
+  const second = {
+    ...first,
+    sequence: first.sequence + 1,
+    previousChainDigest: first.chainDigest,
+    retainedAtMs: first.retainedAtMs + 1,
+    writerId: first.verifierId,
+    verifierId: 'independent-retention-probe-2',
+  };
+  second.chainDigest = appendChainDigest(second);
+  trace.retentionReceipts.push(second);
+  const result = evaluate(trace);
+  assert.equal(result.status, 'FAIL');
+  assert.ok(result.reasonCodes.includes('RETENTION_CROSS_RECEIPT_COMMON_MODE'));
+});

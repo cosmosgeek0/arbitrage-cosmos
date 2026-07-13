@@ -19,11 +19,13 @@ import {
 import {
   diagnosticKillReadbackDigest,
   diagnosticRequestDigest,
+  diagnosticTracePayloadDigest,
   evaluateSandboxBinding,
   evaluateTracePrivacyAndRetention,
   reduceWorkloadIdentity,
   workloadIdentityEventEvidenceHash,
 } from '../../../../fixtures/productAssurance/systemic/agentBoundary/evaluators.mjs';
+import { appendChainDigest } from '../../../../fixtures/productAssurance/systemic/agentBoundary/canonical.mjs';
 import { runDeterministicProviderStub } from '../../../../fixtures/productAssurance/systemic/agentBoundary/provider-stub.mjs';
 
 function activeIdentity(events = ACTIVE_IDENTITY_EVENTS, over = {}) {
@@ -331,4 +333,53 @@ test('provider outage, cost exhaustion, and NOT_CONFIGURED remain diagnostic-onl
     assert.equal(result.productReadinessImpact, 'NONE');
     assert.equal(result.externalCallAttempted, false);
   }
+});
+
+test('coherently rehashed identity swaps and cross-trace decision replay fail closed', () => {
+  const swappedEvents = clone(ACTIVE_IDENTITY_EVENTS).map((event) => sealIdentityEvent({
+    ...event,
+    subjectDigest: h('identity-swapped-subject'),
+  }));
+  const swappedIdentity = activeIdentity(swappedEvents);
+  assert.equal(swappedIdentity.status, 'FAIL');
+  assert.ok(swappedIdentity.reasonCodes.includes('IDENTITY_SUBJECT_MISMATCH'));
+
+  const replayedTrace = clone(DIAGNOSTIC_TRACE);
+  replayedTrace.traceId = 'diagnostic-trace.replayed';
+  const receipt = replayedTrace.retentionReceipts[0];
+  receipt.payloadDigest = diagnosticTracePayloadDigest(replayedTrace);
+  receipt.chainDigest = appendChainDigest(receipt);
+  const replayedDecision = evaluateTracePrivacyAndRetention({ trace: replayedTrace, policy: RETENTION_POLICY, nowMs: NOW });
+  assert.equal(replayedDecision.status, 'PASS');
+  const rejected = boundary({ retentionDecision: replayedDecision, privacyDecision: replayedDecision });
+  assert.equal(rejected.status, 'FAIL');
+  assert.ok(rejected.reasonCodes.includes('TRACE_PRIVACY_RETENTION_RECOMPUTE_MISMATCH'));
+});
+
+test('sandbox input rejects raw secret material and every prerequisite PASS envelope is closed', () => {
+  const secretRequest = clone(DIAGNOSTIC_REQUEST);
+  secretRequest.requestId = 'sk-live-sandboxsecret123';
+  const secretResult = boundary({ request: secretRequest });
+  assert.equal(secretResult.status, 'FAIL');
+  assert.ok(secretResult.reasonCodes.includes('SECRET_BEARING_FIELD_FORBIDDEN'));
+  assert.doesNotMatch(JSON.stringify(secretResult), /sk-live-sandboxsecret123/);
+
+  for (const [field, decision] of [
+    ['identityDecision', { ...activeIdentity(), unexpected: true }],
+    ['privacyDecision', { ...traceDecision(), unexpected: true }],
+    ['retentionDecision', { ...traceDecision(), unexpected: true }],
+  ]) {
+    const result = boundary({ [field]: decision });
+    assert.equal(result.status, 'FAIL', field);
+    assert.equal(result.allowed, false, field);
+    assert.ok(result.reasonCodes.some((reason) => reason.endsWith('DECISION_ENVELOPE_INVALID')), field);
+  }
+});
+
+test('sandbox expiry is the earliest prerequisite expiry and never an optimistic binding expiry', () => {
+  const result = boundary();
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.expiresAtMs, NOW + SANDBOX_BINDING.killReadbackMaxAgeMs);
+  assert.ok(result.expiresAtMs < SANDBOX_BINDING.expiresAtMs);
+  assert.ok(result.expiresAtMs < SANDBOX_APPROVAL_FIXTURE.expiresAtMs);
 });

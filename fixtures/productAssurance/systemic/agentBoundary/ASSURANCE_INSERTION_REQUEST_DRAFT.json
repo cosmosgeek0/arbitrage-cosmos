@@ -39,13 +39,14 @@
       "targetTypes": ["DIAGNOSTIC_PLANE"],
       "payloadSchema": {
         "schema": "DiagnosticPlaneKillPayloadDraftV1",
+        "type": "object",
         "additionalProperties": false,
         "required": ["desiredState", "expectedRevision", "expiresAtMs", "reasonCode", "requestDigest"],
         "properties": {
           "desiredState": { "enum": ["ENGAGED", "DISENGAGED"] },
-          "expectedRevision": { "type": "integer", "minimum": 1 },
-          "expiresAtMs": { "type": "integer" },
-          "reasonCode": { "type": "string" },
+          "expectedRevision": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+          "expiresAtMs": { "type": "integer", "minimum": 1262304000000, "maximum": 4102444800000 },
+          "reasonCode": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,127}$" },
           "requestDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
         }
       },

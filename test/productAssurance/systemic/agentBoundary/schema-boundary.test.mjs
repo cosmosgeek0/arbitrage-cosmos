@@ -14,6 +14,8 @@ import {
 import {
   canonicalStringify,
   findForbiddenKeys,
+  makeEvaluation,
+  sha256Hex,
 } from '../../../../fixtures/productAssurance/systemic/agentBoundary/canonical.mjs';
 import { createSchemaValidator } from './schema-validator.mjs';
 
@@ -62,4 +64,30 @@ test('NOT_CONFIGURED sandbox is a closed complete absence state with no invented
   for (const invented of ['providerId', 'workloadIdentityRef', 'approvalRef', 'issuedAtMs', 'expiresAtMs', 'budget', 'allowedCapabilities']) {
     assert.equal(Object.hasOwn(SANDBOX_NOT_CONFIGURED, invented), false, invented);
   }
+});
+
+test('schema and canonical helpers reject unsafe integers, raw secret material, and cross-type hash ambiguity', () => {
+  const unsafe = clone(CLASS_CANDIDATES.A);
+  unsafe.revision = Number.MAX_SAFE_INTEGER;
+  assert.ok(validate(schema, unsafe).length > 0);
+  assert.throws(() => canonicalStringify({ unsafe: Number.MAX_SAFE_INTEGER + 1 }), /unsafe integer/);
+
+  const secret = clone(CLASS_CANDIDATES.A);
+  secret.hypothesis = 'Bearer abcdefghijklmnopqrstuvwxyz';
+  assert.ok(validate(schema, secret).length > 0);
+  assert.deepEqual(findForbiddenKeys(secret), ['$.hypothesis']);
+
+  assert.notEqual(sha256Hex('null'), sha256Hex(null));
+  assert.notEqual(sha256Hex('{"a":1}'), sha256Hex({ a: 1 }));
+
+  const protectedEnvelope = makeEvaluation({
+    status: 'FAIL',
+    disposition: 'DENY',
+    evaluatedAtMs: 1_900_000_000_000,
+    extra: { status: 'PASS', allowed: true, productReadinessImpact: 'LIVE', customFact: 'retained' },
+  });
+  assert.equal(protectedEnvelope.status, 'FAIL');
+  assert.equal(protectedEnvelope.allowed, false);
+  assert.equal(protectedEnvelope.productReadinessImpact, 'NONE');
+  assert.equal(protectedEnvelope.customFact, 'retained');
 });

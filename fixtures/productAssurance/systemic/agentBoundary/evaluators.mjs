@@ -2,6 +2,7 @@ import {
   appendChainDigest,
   assertUtcMillis,
   canonicalStringify,
+  compareCodeUnits,
   findForbiddenKeys,
   immutableClone,
   makeEvaluation,
@@ -78,64 +79,6 @@ const PERMANENTLY_FORBIDDEN_EFFECTS = new Set([
   'CAPITAL', 'EVIDENCE_DELETION', 'GUARDRAIL', 'HARD_CEILING', 'MONEY', 'PERMISSION',
   'PRODUCTION_PERSISTENCE', 'RISK',
 ]);
-const SELF_CORRECTION_CLASS_LAW = Object.freeze({
-  A: Object.freeze({
-    mode: 'REGISTERED_LOCAL_COMMAND_ONLY',
-    route: 'REGISTERED_LOCAL_NON_CAPITAL_CONTROL_COMMAND',
-    effectFlag: 'REGISTERED_LOCAL_CONTROL_COMMAND',
-    promotionDisposition: 'REGISTERED_LOCAL_CONTROL_COMMAND_EVIDENCE_ELIGIBLE',
-    automaticEligibility: 'REGISTERED_ONLY',
-    authorityId: 'canonical-control-plane-command-registry',
-    canonicalOwnerRef: 'IP_ASSURANCE.md/3.4/canonical-control-plane-command-registry',
-    basePolicyRef: 'IP_ASSURANCE.md/3.4/remediation-policy',
-    requiresApproval: false,
-    requiresRepairEvidence: true,
-    requiresCorpusDecision: false,
-    requiresHoldout: false,
-  }),
-  B: Object.freeze({
-    mode: 'CANONICAL_RECOVERY_ONLY',
-    route: 'CANONICAL_RECONCILIATION_AND_RECOVERY',
-    effectFlag: 'CANONICAL_RECOVERY_ROUTE',
-    promotionDisposition: 'CANONICAL_RECONCILIATION_RECOVERY_REQUIRED',
-    automaticEligibility: 'NEVER',
-    authorityId: 'canonical-reconciliation-owner',
-    canonicalOwnerRef: 'IP_ASSURANCE.md/3.4/canonical-reconciliation-recovery',
-    basePolicyRef: 'IP_ASSURANCE.md/3.4/reconcile-lifecycle',
-    requiresApproval: false,
-    requiresRepairEvidence: false,
-    requiresCorpusDecision: false,
-    requiresHoldout: false,
-  }),
-  C: Object.freeze({
-    mode: 'OWNER_APPROVED_RELEASE_ONLY',
-    route: 'EXISTING_HASH_BOUND_RELEASE_PIPELINE',
-    effectFlag: 'ISOLATED_PATCH_RELEASE_HANDOFF',
-    promotionDisposition: 'OWNER_APPROVED_HASH_BOUND_RELEASE_REQUIRED',
-    automaticEligibility: 'NEVER',
-    authorityId: 'existing-release-owner',
-    canonicalOwnerRef: 'IP_ASSURANCE.md/3.9/owner-approved-release',
-    basePolicyRef: 'IP_ASSURANCE.md/3.9/hash-bound-release-pipeline',
-    requiresApproval: true,
-    requiresRepairEvidence: false,
-    requiresCorpusDecision: false,
-    requiresHoldout: true,
-  }),
-  D: Object.freeze({
-    mode: 'ABSTAIN_OR_DEMOTE_ONLY',
-    route: 'EXISTING_Q_RUNTIME_OWNER',
-    effectFlag: 'ABSTAIN_OR_RECOMMEND_DEMOTION',
-    promotionDisposition: 'ABSTAIN_OR_DEMOTE_REQUIRED',
-    automaticEligibility: 'NEVER',
-    authorityId: 'accepted-q-runtime-owner',
-    canonicalOwnerRef: 'IP_ASSURANCE.md/3.7/accepted-q-runtime-boundary',
-    basePolicyRef: 'IP_ASSURANCE.md/3.7/abstain-demote-law',
-    requiresApproval: false,
-    requiresRepairEvidence: false,
-    requiresCorpusDecision: false,
-    requiresHoldout: false,
-  }),
-});
 const SELF_CORRECTION_CLASS_POLICY_KEYS = Object.freeze([
   'allowedCapabilities', 'allowedEffectFlags', 'authorityId', 'automaticEligibility', 'basePolicyRef',
   'bindingLawRef', 'canonicalOwnerRef', 'class', 'environment', 'evidenceDigest', 'mode', 'ownerPreauthorizationDigest',
@@ -161,6 +104,35 @@ const REPAIR_EVIDENCE_BUNDLE_KEYS = Object.freeze([
   'postconditions', 'producerId', 'producerReport', 'quietPeriod', 'rollback', 'schema', 'tests', 'traceId',
   'verifier', 'version',
 ]);
+const REPAIR_LEASE_KEYS = Object.freeze([
+  'acquiredAtMs', 'completedAtMs', 'completionOwnerId', 'epoch', 'expiresAtMs', 'ownerId', 'resourceIds',
+]);
+const REPAIR_PRODUCER_REPORT_KEYS = Object.freeze(['reportedAtMs', 'state']);
+const REPAIR_VERIFIER_KEYS = Object.freeze(['evidenceDigest', 'observedAtMs', 'relationship', 'status', 'verifierId']);
+const EVIDENCE_CHECK_KEYS = Object.freeze(['checkId', 'evidenceDigest', 'status']);
+const VERIFIED_EVIDENCE_CHECK_KEYS = Object.freeze([...EVIDENCE_CHECK_KEYS, 'verifierId']);
+const REPAIR_QUIET_PERIOD_KEYS = Object.freeze(['breachCount', 'observedThroughMs', 'requiredMs', 'startedAtMs']);
+const REPAIR_CONTINGENCY_KEYS = Object.freeze(['evidenceDigest', 'required', 'status']);
+const CORPUS_SOURCE_REFERENCE_KEYS = Object.freeze(['digest', 'evidenceId', 'kind', 'ownerId']);
+const CORPUS_INDEPENDENT_OUTCOME_KEYS = Object.freeze(['evidenceDigest', 'relationship', 'status', 'verifierId']);
+const CORPUS_PARTITION_KEYS = Object.freeze(['assignmentRevision', 'locked', 'name']);
+const CORPUS_DEDUP_KEYS = Object.freeze(['existingContentDigest', 'existingItemId', 'stableKey', 'state']);
+const CORPUS_ATLAS_KEYS = Object.freeze([
+  'actionIds', 'causeCodes', 'componentRevisions', 'failedInvariantIds', 'faultSeedIds', 'impactCodes',
+  'independentPostconditionRefs', 'modelRevisions', 'playbookRevisions', 'postmortemId', 'recurrenceCount',
+  'regressionFixtureIds', 'repairAttemptIds', 'reviewerId', 'symptomCodes', 'timelineEvidenceIds', 'triggerCodes',
+]);
+const CORPUS_COMPONENT_REVISION_KEYS = Object.freeze(['componentId', 'revision']);
+const CORPUS_ACCESS_KEYS = Object.freeze(['policyRevision', 'tier']);
+const CORPUS_RETENTION_KEYS = Object.freeze(['decision', 'minimumRetainUntilMs', 'policyRevision']);
+const CORPUS_GOVERNANCE_DISPOSITION_KEYS = Object.freeze(['exclusionReasonCodes', 'inclusion']);
+const CORPUS_RELEASE_KEYS = Object.freeze([
+  'holdoutLocked', 'itemBindings', 'leakageScan', 'manifestDigest', 'partitions', 'policyRevision',
+  'releaseId', 'reviewer', 'revision', 'schema', 'version',
+]);
+const CORPUS_RELEASE_PARTITION_KEYS = Object.freeze(['holdout', 'retrievalOnly', 'train', 'validation']);
+const CORPUS_RELEASE_ITEM_BINDING_KEYS = Object.freeze(['contentDigest', 'corpusItemId', 'partition', 'stableKey']);
+const CORPUS_RELEASE_REVIEWER_KEYS = Object.freeze(['evidenceDigest', 'relationship', 'reviewerId', 'status']);
 const EVALUATION_PASS_COMMON_KEYS = Object.freeze([
   'allowed', 'decisionDigest', 'decisionKind', 'disposition', 'evaluatedAtMs', 'evidenceRefs',
   'productReadinessImpact', 'reasonCodes', 'schema', 'sourceEvidenceDigest', 'status', 'version',
@@ -174,7 +146,8 @@ const EVALUATION_PASS_KEYS = Object.freeze({
     'accessTier', 'correlationId', 'diffDigest', 'environment', 'forbiddenFieldPaths', 'incidentId',
     'lastAppendSequence', 'lastChainDigest', 'privacyPolicyRevision', 'retentionCoverageUntilMs',
     'retentionOwnerId', 'retentionPolicyRevision', 'retentionVerifierId', 'retentionVerifierIds',
-    'retentionWriterIds', 'runId', 'traceId', 'traceProducerId', 'traceProviderId', 'typedOutputDigest']),
+    'retentionWriterIds', 'runId', 'traceId', 'tracePolicyDigest', 'traceProducerId', 'traceProviderId',
+    'typedOutputDigest']),
   REPAIR_EVIDENCE: Object.freeze([...EVALUATION_PASS_COMMON_KEYS,
     'actionId', 'artifactDigest', 'campaignId', 'eligibleForCanonicalRecoveryReadback', 'executorId',
     'incidentId', 'mayDeclareRecovery', 'policyDigest', 'policyRevision', 'postconditionStatus',
@@ -189,7 +162,7 @@ const EVALUATION_PASS_KEYS = Object.freeze({
     'approvalRef', 'approvalStatus', 'artifactDigest', 'candidateId', 'candidateRevision',
     'classRoute', 'declaredClass', 'derivedClass', 'effectiveClass', 'mayDeclareRecovery',
     'operationalActionAllowed', 'policyEvidenceDigest', 'policyId', 'policyRevision',
-    'registeredCommandId', 'traceDecisionDigest', 'traceId']),
+    'registeredCommandId', 'traceDecisionDigest', 'traceId', 'validUntilMs']),
 });
 const WORKLOAD_IDENTITY_EVENT_KEYS = Object.freeze([
   'audience', 'bindingId', 'capabilityDigest', 'environment', 'evidenceHash', 'expiresAtMs',
@@ -326,6 +299,7 @@ export function decisionContractDigest(decision) {
   if (decision?.decisionKind === 'TRACE_PRIVACY_RETENTION') {
     return sha256Hex({ ...common, traceId: decision.traceId ?? null, privacyPolicyRevision: decision.privacyPolicyRevision ?? null,
       retentionPolicyRevision: decision.retentionPolicyRevision ?? null, retentionCoverageUntilMs: decision.retentionCoverageUntilMs ?? null,
+      tracePolicyDigest: decision.tracePolicyDigest ?? null,
       accessTier: decision.accessTier ?? null, diffDigest: decision.diffDigest ?? null, typedOutputDigest: decision.typedOutputDigest ?? null,
       lastAppendSequence: decision.lastAppendSequence ?? null, lastChainDigest: decision.lastChainDigest ?? null,
       retentionOwnerId: decision.retentionOwnerId ?? null, retentionVerifierId: decision.retentionVerifierId ?? null,
@@ -374,7 +348,7 @@ export function decisionContractDigest(decision) {
       approvalRef: decision.approvalRef ?? null, approvalStatus: decision.approvalStatus ?? null,
       declaredClass: decision.declaredClass ?? null, derivedClass: decision.derivedClass ?? null,
       effectiveClass: decision.effectiveClass ?? null, operationalActionAllowed: decision.operationalActionAllowed ?? null,
-      mayDeclareRecovery: decision.mayDeclareRecovery ?? null });
+      mayDeclareRecovery: decision.mayDeclareRecovery ?? null, validUntilMs: decision.validUntilMs ?? null });
   }
   return null;
 }
@@ -418,9 +392,13 @@ export function isEvaluationEnvelope(decision, nowMs, decisionKind) {
     && hasHash(decision.sourceEvidenceDigest)
   );
   if (!commonValid) return false;
+  const allowedEnvelopeKeys = new Set(EVALUATION_PASS_KEYS[decisionKind] ?? []);
+  if (Object.keys(decision).some((key) => !allowedEnvelopeKeys.has(key)) || findForbiddenKeys(decision).length > 0) return false;
+  if (decisionKind === 'SELF_CORRECTION_PROMOTION'
+    && (!Number.isSafeInteger(decision.validUntilMs) || nowMs >= decision.validUntilMs)) return false;
   if (decision.status !== 'PASS') return true;
-  if (!hasExactKeys(decision, EVALUATION_PASS_KEYS[decisionKind] ?? [])
-    || findForbiddenKeys(decision).length > 0) return false;
+  if (decision.evidenceRefs.length === 0) return false;
+  if (!hasExactKeys(decision, EVALUATION_PASS_KEYS[decisionKind] ?? [])) return false;
   const canonicalPosture = decision.reasonCodes.length === 0
     && decision.productReadinessImpact === 'NONE'
     && hasHash(decision.decisionDigest)
@@ -456,6 +434,7 @@ export function isEvaluationEnvelope(decision, nowMs, decisionKind) {
       && isNonEmptyString(decision.environment)
       && isNonEmptyString(decision.privacyPolicyRevision)
       && isNonEmptyString(decision.retentionPolicyRevision)
+      && hasHash(decision.tracePolicyDigest)
       && isNonEmptyString(decision.accessTier)
       && hasHash(decision.diffDigest)
       && hasHash(decision.typedOutputDigest)
@@ -535,15 +514,10 @@ export function isEvaluationEnvelope(decision, nowMs, decisionKind) {
       && decision.mayDeclareRecovery === false;
   }
   if (decisionKind === 'SELF_CORRECTION_PROMOTION') {
-    const law = SELF_CORRECTION_CLASS_LAW[decision.effectiveClass];
-    return ['REGISTERED_LOCAL_CONTROL_COMMAND_EVIDENCE_ELIGIBLE',
-      'CANONICAL_RECONCILIATION_RECOVERY_REQUIRED', 'OWNER_APPROVED_HASH_BOUND_RELEASE_REQUIRED',
-      'ABSTAIN_OR_DEMOTE_REQUIRED'].includes(decision.disposition)
+    return isNonEmptyString(decision.disposition)
       && SELF_CORRECTION_CLASSES.has(decision.effectiveClass)
       && decision.declaredClass === decision.effectiveClass
       && decision.derivedClass === decision.effectiveClass
-      && law?.promotionDisposition === decision.disposition
-      && law?.route === decision.classRoute
       && isNonEmptyString(decision.candidateId)
       && Number.isSafeInteger(decision.candidateRevision)
       && decision.candidateRevision >= 1
@@ -552,10 +526,12 @@ export function isEvaluationEnvelope(decision, nowMs, decisionKind) {
       && decision.policyRevision >= 1
       && isNonEmptyString(decision.traceId)
       && hasHash(decision.traceDecisionDigest)
-      && (decision.effectiveClass === 'A' ? isNonEmptyString(decision.registeredCommandId) : decision.registeredCommandId === null)
+      && (decision.registeredCommandId === null || isNonEmptyString(decision.registeredCommandId))
       && hasHash(decision.artifactDigest)
       && hasHash(decision.policyEvidenceDigest)
       && isNonEmptyString(decision.classRoute)
+      && Number.isSafeInteger(decision.validUntilMs)
+      && nowMs < decision.validUntilMs
       && ['APPROVED', 'NOT_REQUIRED'].includes(decision.approvalStatus)
       && decision.operationalActionAllowed === false
       && decision.mayDeclareRecovery === false;
@@ -1068,6 +1044,18 @@ export function diagnosticTracePayloadDigest(trace) {
   return sha256Hex(payload);
 }
 
+export function traceRetentionPolicyDigest(policy) {
+  return sha256Hex({
+    revision: policy?.revision ?? null,
+    privacyPolicyRevision: policy?.privacyPolicyRevision ?? null,
+    minimumRetentionMs: policy?.minimumRetentionMs ?? null,
+    allowedAccessTiers: stableUnique(policy?.allowedAccessTiers ?? []),
+    expectedFirstSequence: policy?.expectedFirstSequence ?? null,
+    expectedPreviousChainDigest: policy?.expectedPreviousChainDigest ?? null,
+    anchorEvidenceDigest: policy?.anchorEvidenceDigest ?? null,
+  });
+}
+
 /** Evaluates privacy and append-only retention evidence without persisting it. */
 export function evaluateTracePrivacyAndRetention({ trace, policy, nowMs }) {
   assertUtcMillis(nowMs);
@@ -1077,8 +1065,10 @@ export function evaluateTracePrivacyAndRetention({ trace, policy, nowMs }) {
   }
   if (!policy || !isNonEmptyString(policy.revision) || !isNonEmptyString(policy.privacyPolicyRevision)
     || !Number.isSafeInteger(policy.minimumRetentionMs)
-    || policy.minimumRetentionMs < 1 || !Array.isArray(policy.allowedAccessTiers)
+    || policy.minimumRetentionMs < 1 || policy.minimumRetentionMs > 31_536_000_000
+    || !uniqueStrings(policy.allowedAccessTiers) || policy.allowedAccessTiers.length === 0
     || !Number.isSafeInteger(policy.expectedFirstSequence) || policy.expectedFirstSequence < 1
+    || policy.expectedFirstSequence > 2_147_483_647
     || !(policy.expectedPreviousChainDigest === 'GENESIS' || hasHash(policy.expectedPreviousChainDigest))
     || !hasHash(policy.anchorEvidenceDigest)) {
     return unknown(nowMs, 'TRACE_POLICY_UNKNOWN', ['TRACE_RETENTION_POLICY_MISSING_OR_INVALID'], [], {
@@ -1092,7 +1082,8 @@ export function evaluateTracePrivacyAndRetention({ trace, policy, nowMs }) {
   }
   const failReasons = [];
   const unknownReasons = [];
-  const evidenceRefs = [policy.anchorEvidenceDigest];
+  const policyDigest = traceRetentionPolicyDigest(policy);
+  const evidenceRefs = [policy.anchorEvidenceDigest, policyDigest];
   const traceContext = {
     traceId: trace?.traceId ?? null,
     runId: trace?.runId ?? null,
@@ -1106,7 +1097,11 @@ export function evaluateTracePrivacyAndRetention({ trace, policy, nowMs }) {
     diffDigest: trace?.diffDigest ?? null,
     typedOutputDigest: trace?.typedOutputDigest ?? null,
     decisionKind: 'TRACE_PRIVACY_RETENTION',
-    sourceEvidenceDigest: diagnosticTracePayloadDigest(trace),
+    sourceEvidenceDigest: sha256Hex({
+      tracePayloadDigest: diagnosticTracePayloadDigest(trace),
+      tracePolicyDigest: policyDigest,
+    }),
+    tracePolicyDigest: policyDigest,
     accessTier: trace?.privacy?.accessTier ?? null,
   };
   const forbiddenKeys = findForbiddenKeys(trace);
@@ -1127,6 +1122,7 @@ export function evaluateTracePrivacyAndRetention({ trace, policy, nowMs }) {
     || trace.baseTraceRef?.reuseMode !== 'BASE_REUSED') failReasons.push('TRACE_BASE_CONTRACT_UNBOUND');
   if (![trace.traceId, trace.runId, trace.incidentId, trace.correlationId, trace.producerId, trace.providerId, trace.environment]
     .every(isNonEmptyString)) failReasons.push('TRACE_ACTOR_OR_RUN_IDENTITY_INVALID');
+  if (trace.producerId === trace.providerId) failReasons.push('TRACE_PRODUCER_PROVIDER_COMMON_MODE');
   if (!hasHash(trace.baseTraceRef?.baseRecordDigest) || !hasHash(trace.typedOutputDigest) || !hasHash(trace.diffDigest)) failReasons.push('TRACE_DIGEST_INVALID');
   if (!Array.isArray(trace.evidenceRefs) || trace.evidenceRefs.length === 0) unknownReasons.push('TRACE_PROVENANCE_MISSING');
   else {
@@ -1232,16 +1228,15 @@ export function selfCorrectionClassPolicyDigest(policy) {
 }
 
 function isExactSelfCorrectionClassPolicy(policy) {
-  const law = SELF_CORRECTION_CLASS_LAW[policy?.class];
-  return Boolean(law
+  return Boolean(SELF_CORRECTION_CLASSES.has(policy?.class)
     && hasExactKeys(policy, SELF_CORRECTION_CLASS_POLICY_KEYS)
     && findForbiddenKeys(policy).length === 0
     && policy.schema === 'SelfCorrectionClassPolicyV1'
     && policy.version === 1
-    && policy.authorityId === law.authorityId
-    && policy.bindingLawRef === 'IP_ASSURANCE.md#7.5-7.6'
-    && policy.canonicalOwnerRef === law.canonicalOwnerRef
-    && policy.basePolicyRef === law.basePolicyRef
+    && isNonEmptyString(policy.authorityId)
+    && policy.bindingLawRef === 'IP_ASSURANCE.md#7'
+    && isNonEmptyString(policy.canonicalOwnerRef)
+    && isNonEmptyString(policy.basePolicyRef)
     && hasHash(policy.registrySnapshotDigest)
     && hasHash(policy.registrationReceiptDigest)
     && hasHash(policy.ownerPreauthorizationDigest)
@@ -1249,21 +1244,22 @@ function isExactSelfCorrectionClassPolicy(policy) {
     && Number.isSafeInteger(policy.revision)
     && policy.revision >= 1
     && policy.registered === true
-    && policy.mode === law.mode
-    && policy.route === law.route
-    && policy.automaticEligibility === law.automaticEligibility
+    && isNonEmptyString(policy.mode)
+    && isNonEmptyString(policy.route)
+    && policy.automaticEligibility === 'NEVER'
     && isNonEmptyString(policy.environment)
     && allStrings(policy.allowedEffectFlags)
-    && canonicalStringify(stableUnique(policy.allowedEffectFlags)) === canonicalStringify([law.effectFlag])
+    && policy.allowedEffectFlags.length > 0
+    && !policy.allowedEffectFlags.some((effect) => PERMANENTLY_FORBIDDEN_EFFECTS.has(effect))
     && allStrings(policy.allowedCapabilities)
-    && canonicalStringify(stableUnique(policy.allowedCapabilities)) === canonicalStringify(['PROPOSE_TYPED_ACTION'])
+    && policy.allowedCapabilities.length > 0
+    && policy.allowedCapabilities.every((capability) => SAFE_CAPABILITY_SET.has(capability))
     && allStrings(policy.registeredCommandIds)
-    && (policy.class === 'A' ? policy.registeredCommandIds.length > 0 : policy.registeredCommandIds.length === 0)
-    && policy.promotionDisposition === law.promotionDisposition
-    && policy.requiresApproval === law.requiresApproval
-    && policy.requiresRepairEvidence === law.requiresRepairEvidence
-    && policy.requiresCorpusDecision === law.requiresCorpusDecision
-    && policy.requiresHoldout === law.requiresHoldout
+    && isNonEmptyString(policy.promotionDisposition)
+    && typeof policy.requiresApproval === 'boolean'
+    && typeof policy.requiresRepairEvidence === 'boolean'
+    && typeof policy.requiresCorpusDecision === 'boolean'
+    && typeof policy.requiresHoldout === 'boolean'
     && hasHash(policy.evidenceDigest)
     && policy.evidenceDigest === selfCorrectionClassPolicyDigest(policy));
 }
@@ -1294,7 +1290,7 @@ export function selfCorrectionVerifierEvidenceDigest({ candidate, policy, verifi
     registeredCommandId: candidate?.registeredCommandId ?? null,
     tests: [...(candidate?.tests ?? [])]
       .map(({ checkId, status, evidenceDigest, verifierId }) => ({ checkId, status, evidenceDigest, verifierId }))
-      .sort((left, right) => canonicalStringify(left).localeCompare(canonicalStringify(right))),
+      .sort((left, right) => compareCodeUnits(canonicalStringify(left), canonicalStringify(right))),
     verifierId: verifier?.verifierId ?? null,
     relationship: verifier?.relationship ?? null,
     status: verifier?.status ?? null,
@@ -1314,7 +1310,7 @@ export function selfCorrectionHoldoutEvidenceDigest({ candidate, policy, holdout
     registeredCommandId: candidate?.registeredCommandId ?? null,
     tests: [...(candidate?.tests ?? [])]
       .map(({ checkId, status, evidenceDigest, verifierId }) => ({ checkId, status, evidenceDigest, verifierId }))
-      .sort((left, right) => canonicalStringify(left).localeCompare(canonicalStringify(right))),
+      .sort((left, right) => compareCodeUnits(canonicalStringify(left), canonicalStringify(right))),
     policyId: candidate?.policyId ?? null,
     policyRevision: candidate?.policyRevision ?? null,
     policyEvidenceDigest: policy?.evidenceDigest ?? null,
@@ -1350,7 +1346,6 @@ export function evaluateSelfCorrectionPromotion({
   const effectiveClass = derivedClass;
   if (!policy) unknownReasons.push('CLASS_POLICY_MISSING');
   else {
-    const law = SELF_CORRECTION_CLASS_LAW[declaredClass];
     if (!hasExactKeys(policy, SELF_CORRECTION_CLASS_POLICY_KEYS) || findForbiddenKeys(policy).length > 0) {
       failReasons.push('CLASS_POLICY_CONTRACT_INVALID');
     }
@@ -1363,9 +1358,9 @@ export function evaluateSelfCorrectionPromotion({
     if (!isExactSelfCorrectionClassPolicy(policy)) failReasons.push('CLASS_POLICY_LAW_MISMATCH');
     if (!exactSubset(candidate.effectFlags, policy.allowedEffectFlags)) failReasons.push('EFFECT_NOT_REGISTERED');
     if (!exactSubset(candidate.capabilities, policy.allowedCapabilities)) failReasons.push('CAPABILITY_NOT_REGISTERED_BY_CLASS_POLICY');
-    if (!law || policy.mode !== law.mode || policy.route !== law.route
-      || policy.automaticEligibility !== law.automaticEligibility
-      || policy.promotionDisposition !== law.promotionDisposition) failReasons.push('CLASS_POLICY_MODE_DISPOSITION_MISMATCH');
+    if (!isNonEmptyString(policy.mode) || !isNonEmptyString(policy.route)
+      || policy.automaticEligibility !== 'NEVER'
+      || !isNonEmptyString(policy.promotionDisposition)) failReasons.push('CLASS_POLICY_MODE_DISPOSITION_MISMATCH');
     if (!isNonEmptyString(policy.environment)) failReasons.push('CLASS_POLICY_ENVIRONMENT_MISSING');
   }
   if (!hasExactKeys(candidate, SELF_CORRECTION_CANDIDATE_KEYS) || findForbiddenKeys(candidate).length > 0) {
@@ -1373,9 +1368,9 @@ export function evaluateSelfCorrectionPromotion({
   }
   if (candidate.schema !== 'SelfCorrectionCandidateV1' || candidate.version !== 1
     || !Number.isSafeInteger(candidate.revision) || candidate.revision < 1) failReasons.push('PROMOTION_CANDIDATE_SCHEMA_UNSUPPORTED');
-  if ((declaredClass === 'A' && (!isNonEmptyString(candidate.registeredCommandId)
-      || !policy?.registeredCommandIds?.includes(candidate.registeredCommandId)))
-    || (declaredClass !== 'A' && candidate.registeredCommandId !== null)) {
+  if (candidate.registeredCommandId !== null
+    && (!isNonEmptyString(candidate.registeredCommandId)
+      || !policy?.registeredCommandIds?.includes(candidate.registeredCommandId))) {
     failReasons.push('REGISTERED_COMMAND_BINDING_INVALID');
   }
   if (!Array.isArray(candidate.capabilities) || candidate.capabilities.some((capability) => !SAFE_CAPABILITY_SET.has(capability))) {
@@ -1541,7 +1536,7 @@ export function evaluateSelfCorrectionPromotion({
     if (repairDecision?.status === 'PASS' && repairDecision.traceDecisionDigest !== traceDecision?.decisionDigest) {
       failReasons.push('REPAIR_TRACE_DECISION_REPLAY_OR_MISMATCH');
     }
-    if (declaredClass === 'A' && repairDecision?.status === 'PASS'
+    if (isNonEmptyString(candidate.registeredCommandId) && repairDecision?.status === 'PASS'
       && repairDecision.actionId !== candidate.registeredCommandId) {
       failReasons.push('REPAIR_REGISTERED_COMMAND_BINDING_MISMATCH');
     }
@@ -1566,7 +1561,14 @@ export function evaluateSelfCorrectionPromotion({
   if (policy && traceDecision?.status === 'PASS' && traceDecision.environment !== policy.environment) failReasons.push('PROMOTION_TRACE_ENVIRONMENT_MISMATCH');
   evidenceRefs.push(...(traceDecision?.evidenceRefs ?? []));
   if (!isEvaluationEnvelope(traceDecision, nowMs, 'TRACE_PRIVACY_RETENTION')) failReasons.push('PROMOTION_TRACE_DECISION_ENVELOPE_INVALID');
+  unknownReasons.push('CLASS_TAXONOMY_OWNER_LAW_MISSING');
 
+  const promotionValidityCandidates = [
+    candidate.expiresAtMs,
+    traceDecision?.retentionCoverageUntilMs,
+    ...(policy?.requiresApproval ? [candidate.approval?.expiresAtMs] : []),
+  ].filter(Number.isSafeInteger);
+  const validUntilMs = promotionValidityCandidates.length > 0 ? Math.min(...promotionValidityCandidates) : null;
   const fixedExtra = {
     decisionKind: 'SELF_CORRECTION_PROMOTION',
     sourceEvidenceDigest: sha256Hex({
@@ -1591,6 +1593,7 @@ export function evaluateSelfCorrectionPromotion({
     declaredClass,
     derivedClass,
     effectiveClass,
+    validUntilMs,
     operationalActionAllowed: false,
     mayDeclareRecovery: false,
   };
@@ -1622,7 +1625,7 @@ export function repairEvidencePolicyDigest(policy) {
   });
 }
 
-/** §7.6 repair evidence law; never an operational recovery declaration. */
+/** Folded S6 repair evidence law; never an operational recovery declaration. */
 export function evaluateRepairEvidence({ bundle, policy, acceptedPolicyEvidenceDigest, traceDecision, nowMs }) {
   assertUtcMillis(nowMs);
   if (!bundle) return unknown(nowMs, 'REPAIR_EVIDENCE_UNKNOWN', ['REPAIR_BUNDLE_MISSING']);
@@ -1631,6 +1634,19 @@ export function evaluateRepairEvidence({ bundle, policy, acceptedPolicyEvidenceD
   const evidenceRefs = [];
   if (!hasExactKeys(bundle, REPAIR_EVIDENCE_BUNDLE_KEYS) || findForbiddenKeys(bundle).length > 0) {
     failReasons.push('REPAIR_BUNDLE_CONTRACT_INVALID');
+  }
+  const evidenceCheckContractValid = (entry) => hasExactKeys(entry, EVIDENCE_CHECK_KEYS)
+    || hasExactKeys(entry, VERIFIED_EVIDENCE_CHECK_KEYS);
+  if (!hasExactKeys(bundle.lease, REPAIR_LEASE_KEYS)
+    || !hasExactKeys(bundle.producerReport, REPAIR_PRODUCER_REPORT_KEYS)
+    || !hasExactKeys(bundle.verifier, REPAIR_VERIFIER_KEYS)
+    || !Array.isArray(bundle.tests) || bundle.tests.some((entry) => !evidenceCheckContractValid(entry))
+    || !Array.isArray(bundle.counterexamples) || bundle.counterexamples.some((entry) => !evidenceCheckContractValid(entry))
+    || !Array.isArray(bundle.postconditions) || bundle.postconditions.some((entry) => !hasExactKeys(entry, VERIFIED_EVIDENCE_CHECK_KEYS))
+    || !hasExactKeys(bundle.quietPeriod, REPAIR_QUIET_PERIOD_KEYS)
+    || !hasExactKeys(bundle.rollback, REPAIR_CONTINGENCY_KEYS)
+    || !hasExactKeys(bundle.compensation, REPAIR_CONTINGENCY_KEYS)) {
+    failReasons.push('REPAIR_NESTED_CONTRACT_INVALID');
   }
   if (bundle.schema !== 'RepairEvidenceBundleV1' || bundle.version !== 1) failReasons.push('REPAIR_SCHEMA_UNSUPPORTED');
   if (bundle.actionState === 'FAILED' || bundle.actionState === 'ROLLED_BACK') failReasons.push('REPAIR_ACTION_FAILED');
@@ -1645,7 +1661,7 @@ export function evaluateRepairEvidence({ bundle, policy, acceptedPolicyEvidenceD
   if (!policy || !hasExactKeys(policy, REPAIR_EVIDENCE_POLICY_KEYS) || findForbiddenKeys(policy).length > 0
     || policy.schema !== 'RepairEvidencePolicyFixtureV1' || policy.version !== 1
     || policy.authorityId !== 'canonical-control-plane-command-registry'
-    || policy.bindingLawRef !== 'IP_ASSURANCE.md#7.6'
+    || policy.bindingLawRef !== 'IP_ASSURANCE.md#7'
     || policy.basePolicyRef !== 'IP_ASSURANCE.md#3.4:remediation-policy'
     || !hasHash(policy.registrySnapshotDigest) || !hasHash(policy.ownerPreauthorizationDigest)
     || !isNonEmptyString(policy.revision) || typeof policy.requiresRollback !== 'boolean'
@@ -1805,14 +1821,14 @@ export function evaluateRepairEvidence({ bundle, policy, acceptedPolicyEvidenceD
 export function corpusStableKey(item) {
   const sourceEvidenceRefs = [...(item?.sourceEvidenceRefs ?? [])]
     .map(({ kind, evidenceId, ownerId, digest }) => ({ kind, evidenceId, ownerId, digest }))
-    .sort((left, right) => canonicalStringify(left).localeCompare(canonicalStringify(right)));
+    .sort((left, right) => compareCodeUnits(canonicalStringify(left), canonicalStringify(right)));
   return sha256Hex({ fingerprint: item?.fingerprint ?? null, sourceEvidenceRefs });
 }
 
 export function corpusSourceProjectionDigest(item) {
   const sourceEvidenceRefs = [...(item?.sourceEvidenceRefs ?? [])]
     .map(({ kind, evidenceId, ownerId, digest }) => ({ kind, evidenceId, ownerId, digest }))
-    .sort((left, right) => canonicalStringify(left).localeCompare(canonicalStringify(right)));
+    .sort((left, right) => compareCodeUnits(canonicalStringify(left), canonicalStringify(right)));
   return sha256Hex({ fingerprint: item?.fingerprint ?? null, sourceEvidenceRefs });
 }
 
@@ -1821,7 +1837,7 @@ export function corpusDedupRegistryDigest(registry) {
     .map(({ corpusItemId, stableKey, sourceProjectionDigest, contentDigest }) => ({
       corpusItemId, stableKey, sourceProjectionDigest, contentDigest,
     }))
-    .sort((left, right) => canonicalStringify(left).localeCompare(canonicalStringify(right)));
+    .sort((left, right) => compareCodeUnits(canonicalStringify(left), canonicalStringify(right)));
   return sha256Hex({
     schema: registry?.schema ?? null,
     version: registry?.version ?? null,
@@ -1857,7 +1873,7 @@ export function corpusContentDigest(item) {
   });
 }
 
-/** §7.7 item governance for a read projection; never a corpus store write. */
+/** Folded S6 item governance for a read projection; never a corpus store write. */
 export function evaluateCorpusItemGovernance({ item, retentionDecision, dedupRegistry, nowMs }) {
   assertUtcMillis(nowMs);
   if (!item) return unknown(nowMs, 'CORPUS_ITEM_UNKNOWN', ['CORPUS_ITEM_MISSING']);
@@ -1866,6 +1882,20 @@ export function evaluateCorpusItemGovernance({ item, retentionDecision, dedupReg
   const evidenceRefs = [];
   if (!hasExactKeys(item, CORPUS_ITEM_KEYS) || findForbiddenKeys(item).length > 0) {
     failReasons.push('CORPUS_ITEM_CONTRACT_INVALID');
+  }
+  if (!Array.isArray(item.sourceEvidenceRefs)
+    || item.sourceEvidenceRefs.some((ref) => !hasExactKeys(ref, CORPUS_SOURCE_REFERENCE_KEYS))
+    || !hasExactKeys(item.validation, VERIFIED_EVIDENCE_CHECK_KEYS)
+    || !hasExactKeys(item.independentOutcome, CORPUS_INDEPENDENT_OUTCOME_KEYS)
+    || !hasExactKeys(item.partition, CORPUS_PARTITION_KEYS)
+    || !hasExactKeys(item.dedup, CORPUS_DEDUP_KEYS)
+    || !hasExactKeys(item.atlasProjection, CORPUS_ATLAS_KEYS)
+    || !Array.isArray(item.atlasProjection?.componentRevisions)
+    || item.atlasProjection.componentRevisions.some((entry) => !hasExactKeys(entry, CORPUS_COMPONENT_REVISION_KEYS))
+    || !hasExactKeys(item.access, CORPUS_ACCESS_KEYS)
+    || !hasExactKeys(item.retention, CORPUS_RETENTION_KEYS)
+    || !hasExactKeys(item.governanceDisposition, CORPUS_GOVERNANCE_DISPOSITION_KEYS)) {
+    failReasons.push('CORPUS_ITEM_NESTED_CONTRACT_INVALID');
   }
   if (item.schema !== 'CorpusItemV1' || item.version !== 1) failReasons.push('CORPUS_ITEM_SCHEMA_UNSUPPORTED');
   if (item.mutationIntent !== 'READ_PROJECTION_ONLY') failReasons.push('CANONICAL_EVIDENCE_MUTATION_FORBIDDEN');
@@ -2025,6 +2055,15 @@ export function evaluateCorpusReleaseGovernance({ release, itemDecisions, nowMs 
   const failReasons = [];
   const unknownReasons = [];
   const evidenceRefs = [];
+  if (!hasExactKeys(release, CORPUS_RELEASE_KEYS) || findForbiddenKeys(release).length > 0
+    || !hasExactKeys(release.partitions, CORPUS_RELEASE_PARTITION_KEYS)
+    || !Array.isArray(release.itemBindings)
+    || release.itemBindings.some((entry) => !hasExactKeys(entry, CORPUS_RELEASE_ITEM_BINDING_KEYS))
+    || (!hasExactKeys(release.leakageScan, EVIDENCE_CHECK_KEYS)
+      && !hasExactKeys(release.leakageScan, VERIFIED_EVIDENCE_CHECK_KEYS))
+    || !hasExactKeys(release.reviewer, CORPUS_RELEASE_REVIEWER_KEYS)) {
+    failReasons.push('CORPUS_RELEASE_CONTRACT_INVALID');
+  }
   if (release.schema !== 'CorpusReleaseV1' || release.version !== 1) failReasons.push('CORPUS_RELEASE_SCHEMA_UNSUPPORTED');
   const partitions = release.partitions ?? {};
   const names = ['train', 'validation', 'holdout', 'retrievalOnly'];
@@ -2080,7 +2119,7 @@ export function evaluateCorpusReleaseGovernance({ release, itemDecisions, nowMs 
     partitions: Object.fromEntries(names.map((name) => [name, stableUnique(partitions[name] ?? [])])),
     itemBindings: [...(release.itemBindings ?? [])]
       .map(({ corpusItemId, stableKey, contentDigest, partition }) => ({ corpusItemId, stableKey, contentDigest, partition }))
-      .sort((left, right) => canonicalStringify(left).localeCompare(canonicalStringify(right))),
+      .sort((left, right) => compareCodeUnits(canonicalStringify(left), canonicalStringify(right))),
   };
   const expectedManifestDigest = sha256Hex(digestInput);
   if (release.manifestDigest !== expectedManifestDigest) failReasons.push('CORPUS_MANIFEST_DIGEST_MISMATCH');
@@ -2100,7 +2139,7 @@ export function corpusManifestDigest(release) {
     partitions: Object.fromEntries(names.map((name) => [name, stableUnique(release.partitions?.[name] ?? [])])),
     itemBindings: [...(release.itemBindings ?? [])]
       .map(({ corpusItemId, stableKey, contentDigest, partition }) => ({ corpusItemId, stableKey, contentDigest, partition }))
-      .sort((left, right) => canonicalStringify(left).localeCompare(canonicalStringify(right))),
+      .sort((left, right) => compareCodeUnits(canonicalStringify(left), canonicalStringify(right))),
   });
 }
 
@@ -2119,7 +2158,7 @@ export function corpusReleaseReviewEvidenceDigest(release) {
 }
 
 export function diagnosticRequestDigest(request) {
-  return sha256Hex(canonicalStringify(request));
+  return sha256Hex(request);
 }
 
 export function workloadIdentityEventEvidenceHash(event) {

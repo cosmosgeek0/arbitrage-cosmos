@@ -20,12 +20,15 @@ import {
   corpusContentDigest,
   corpusManifestDigest,
   corpusReleaseReviewEvidenceDigest,
+  decisionContractDigest,
   deriveSelfCorrectionClass,
   evaluateCorpusItemGovernance,
   evaluateCorpusReleaseGovernance,
   evaluateRepairEvidence,
   evaluateSelfCorrectionPromotion,
   evaluateTracePrivacyAndRetention,
+  isEvaluationEnvelope,
+  repairEvidencePolicyDigest,
   selfCorrectionClassPolicyDigest,
   selfCorrectionHoldoutEvidenceDigest,
 } from '../../../../fixtures/productAssurance/systemic/agentBoundary/evaluators.mjs';
@@ -62,7 +65,7 @@ function promote(className, overrides = {}) {
   });
 }
 
-test('§7.6 independent repair evidence passes without declaring recovery', () => {
+test('folded S6 independent repair evidence passes without declaring recovery', () => {
   const result = repair();
   assert.equal(result.status, 'PASS');
   assert.equal(result.disposition, 'REPAIR_EVIDENCE_ELIGIBLE_FOR_CANONICAL_READBACK');
@@ -213,7 +216,7 @@ test('repair evidence must bind the independently retained trace and exact artif
   assert.ok(repair(unrelatedIncident).reasonCodes.includes('REPAIR_TRACE_BINDING_MISMATCH'));
 });
 
-test('§7.7 corpus admits only sanitized provenance-preserved content-bound read projections', () => {
+test('folded S6 corpus admits only sanitized provenance-preserved content-bound read projections', () => {
   const result = corpus();
   assert.equal(result.status, 'PASS');
   assert.equal(result.disposition, 'CORPUS_READ_PROJECTION_ELIGIBLE');
@@ -426,7 +429,7 @@ test('corpus release rejects leakage, incomplete decisions, and fabricated PASS 
   assert.ok(evaluateCorpusReleaseGovernance({ release: commonModeReview, itemDecisions: [itemDecision], nowMs: NOW }).reasonCodes.includes('CORPUS_RELEASE_REVIEWER_NOT_INDEPENDENT'));
 });
 
-test('Class A-D resolve only under the exact accepted, content-bound owner policy projection', () => {
+test('opaque Class A-D labels resolve only under a content-bound owner policy projection', () => {
   for (const className of ['A', 'B', 'C', 'D']) {
     assert.equal(deriveSelfCorrectionClass(CLASS_CANDIDATES[className], CLASS_POLICIES[className]), className);
     assert.equal(deriveSelfCorrectionClass(CLASS_CANDIDATES[className], null), 'UNKNOWN');
@@ -436,29 +439,26 @@ test('Class A-D resolve only under the exact accepted, content-bound owner polic
   assert.equal(deriveSelfCorrectionClass(CLASS_CANDIDATES.A, wrongRevision), 'UNKNOWN');
 });
 
-test('Class A-D route exactly to registered command, canonical recovery, normal release, or abstain/demote', () => {
+test('opaque Class A-D fixtures remain blocked owner-review evidence with no operational action', () => {
   const results = Object.fromEntries(['A', 'B', 'C', 'D'].map((className) => [className, promote(className)]));
-  assert.equal(results.A.disposition, 'REGISTERED_LOCAL_CONTROL_COMMAND_EVIDENCE_ELIGIBLE');
-  assert.equal(results.B.disposition, 'CANONICAL_RECONCILIATION_RECOVERY_REQUIRED');
-  assert.equal(results.C.disposition, 'OWNER_APPROVED_HASH_BOUND_RELEASE_REQUIRED');
-  assert.equal(results.D.disposition, 'ABSTAIN_OR_DEMOTE_REQUIRED');
-  assert.equal(results.A.registeredCommandId, REPAIR_EVIDENCE.actionId);
-  assert.equal(results.B.classRoute, 'CANONICAL_RECONCILIATION_AND_RECOVERY');
-  assert.equal(results.C.classRoute, 'EXISTING_HASH_BOUND_RELEASE_PIPELINE');
-  assert.equal(results.D.classRoute, 'EXISTING_Q_RUNTIME_OWNER');
   for (const result of Object.values(results)) {
-    assert.equal(result.status, 'PASS');
+    assert.equal(result.status, 'UNKNOWN');
+    assert.equal(result.disposition, 'PROMOTION_BLOCKED_UNKNOWN');
+    assert.ok(result.reasonCodes.includes('CLASS_TAXONOMY_OWNER_LAW_MISSING'));
+    assert.equal(result.classRoute, 'CANONICAL_OWNER_REVIEW_ONLY');
+    assert.equal(result.registeredCommandId, null);
+    assert.equal(result.approvalStatus, 'APPROVED');
     assert.equal(result.operationalActionAllowed, false);
     assert.equal(result.mayDeclareRecovery, false);
     assert.equal(result.allowed, false);
   }
 });
 
-test('no class receives a caller-defined law, automatic privilege, weakened policy, or unknown capability', () => {
+test('no opaque class receives caller-defined automatic privilege, forbidden effect, or unknown capability', () => {
   assert.notEqual(promote('A', { policy: null }).status, 'PASS');
 
   const automaticB = clone(CLASS_POLICIES.B);
-  automaticB.mode = 'AUTOMATIC_ELIGIBILITY';
+  automaticB.automaticEligibility = 'REGISTERED_ONLY';
   assert.ok(promote('B', { policy: automaticB }).reasonCodes.includes('CLASS_POLICY_LAW_MISMATCH'));
 
   const unsupportedPolicy = clone(CLASS_POLICIES.B);
@@ -558,4 +558,71 @@ test('promotion binds exact effect, trace artifact, repair artifact, corpus trac
   crossEnvironmentCandidate.approval.bindingDigest = h('cross-environment-approval-placeholder');
   const crossEnvironment = promote('B', { candidate: crossEnvironmentCandidate, policy: crossEnvironmentPolicy });
   assert.ok(crossEnvironment.reasonCodes.includes('PROMOTION_TRACE_ENVIRONMENT_MISMATCH'));
+});
+
+test('repair and corpus evaluators enforce every closed nested contract', () => {
+  const repairBundle = clone(REPAIR_EVIDENCE);
+  repairBundle.lease.unexpected = true;
+  const rejectedRepair = repair(repairBundle);
+  assert.equal(rejectedRepair.status, 'FAIL');
+  assert.ok(rejectedRepair.reasonCodes.includes('REPAIR_NESTED_CONTRACT_INVALID'));
+
+  const corpusItem = clone(CORPUS_ITEM);
+  corpusItem.validation.unexpected = true;
+  corpusItem.contentDigest = corpusContentDigest(corpusItem);
+  const rejectedItem = corpus(corpusItem);
+  assert.equal(rejectedItem.status, 'FAIL');
+  assert.ok(rejectedItem.reasonCodes.includes('CORPUS_ITEM_NESTED_CONTRACT_INVALID'));
+
+  const corpusDecision = corpus();
+  const release = clone(CORPUS_RELEASE);
+  release.reviewer.unexpected = true;
+  const rejectedRelease = evaluateCorpusReleaseGovernance({ release, itemDecisions: [corpusDecision], nowMs: NOW });
+  assert.equal(rejectedRelease.status, 'FAIL');
+  assert.ok(rejectedRelease.reasonCodes.includes('CORPUS_RELEASE_CONTRACT_INVALID'));
+});
+
+test('owner-resealed repair policy drift and dedup target-content drift are rejected', () => {
+  const driftedPolicy = clone(REPAIR_POLICY);
+  driftedPolicy.minimumQuietPeriodMs += 1;
+  driftedPolicy.evidenceDigest = repairEvidencePolicyDigest(driftedPolicy);
+  const driftedBundle = clone(REPAIR_EVIDENCE);
+  driftedBundle.quietPeriod.requiredMs = driftedPolicy.minimumQuietPeriodMs;
+  driftedBundle.quietPeriod.observedThroughMs = driftedBundle.quietPeriod.startedAtMs + driftedPolicy.minimumQuietPeriodMs;
+  const policyResult = evaluateRepairEvidence({
+    bundle: driftedBundle,
+    policy: driftedPolicy,
+    acceptedPolicyEvidenceDigest: REPAIR_POLICY.evidenceDigest,
+    traceDecision: traceDecision(),
+    nowMs: NOW,
+  });
+  assert.equal(policyResult.status, 'FAIL');
+  assert.ok(policyResult.reasonCodes.includes('REPAIR_POLICY_NOT_ACCEPTED_BY_OWNER'));
+
+  const exact = clone(CORPUS_ITEM);
+  exact.dedup.state = 'EXACT_MATCH';
+  exact.dedup.existingItemId = EXACT_CORPUS_DEDUP_REGISTRY.entries[0].corpusItemId;
+  exact.dedup.existingContentDigest = h('wrong-registered-target-content');
+  exact.contentDigest = corpusContentDigest(exact);
+  const dedupResult = corpus(exact, traceDecision(), EXACT_CORPUS_DEDUP_REGISTRY);
+  assert.equal(dedupResult.status, 'FAIL');
+  assert.ok(dedupResult.reasonCodes.includes('CORPUS_DEDUP_TARGET_CONTENT_DIGEST_MISMATCH'));
+});
+
+test('promotion evidence expires at its earliest prerequisite and cannot be resealed with empty evidence', () => {
+  const decision = promote('C');
+  assert.equal(decision.status, 'UNKNOWN');
+  assert.equal(decision.validUntilMs, CLASS_CANDIDATES.C.approval.expiresAtMs);
+  assert.equal(isEvaluationEnvelope(decision, NOW, 'SELF_CORRECTION_PROMOTION'), true);
+  assert.equal(isEvaluationEnvelope(decision, decision.validUntilMs, 'SELF_CORRECTION_PROMOTION'), false);
+
+  const emptyEvidence = {
+    ...decision,
+    status: 'PASS',
+    disposition: CLASS_POLICIES.C.promotionDisposition,
+    reasonCodes: [],
+    evidenceRefs: [],
+  };
+  emptyEvidence.decisionDigest = decisionContractDigest(emptyEvidence);
+  assert.equal(isEvaluationEnvelope(emptyEvidence, NOW, 'SELF_CORRECTION_PROMOTION'), false);
 });

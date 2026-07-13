@@ -175,3 +175,33 @@ test('NOT_CONFIGURED remains valid only as a complete provider-fact absence stat
   assert.equal(invented.allowed, false);
   assert.ok(invented.reasonCodes.includes('PROVIDER_NOT_CONFIGURED_FACTS_INVALID'));
 });
+
+test('provider stub requires current PASS identity and trace prerequisites', () => {
+  for (const [field, decision] of [
+    ['identityDecision', { ...identityDecision(), status: 'FAIL', disposition: 'IDENTITY_BLOCKED' }],
+    ['traceDecision', { ...traceDecision(), status: 'UNKNOWN', disposition: 'TRACE_RETENTION_UNKNOWN' }],
+  ]) {
+    const result = runStub({ [field]: decision });
+    assert.equal(result.status, 'FAIL', field);
+    assert.equal(result.allowed, false, field);
+    assert.equal(result.externalCallAttempted, false, field);
+    assert.equal(result.toolExecuted, false, field);
+    assert.ok(result.reasonCodes.includes('SANDBOX_BINDING_DID_NOT_ALLOW_STUB'), field);
+  }
+});
+
+test('provider failures never reflect malformed evidence and typed output provenance is sandbox-bound', () => {
+  const malformedBoundary = { ...sandboxDecision(), evidenceRefs: [{ raw: 'sk-live-reflect123' }, 'sk-live-reflect123'] };
+  const rejectedBoundary = runStub({ boundaryDecision: malformedBoundary });
+  assert.equal(rejectedBoundary.status, 'FAIL');
+  assert.deepEqual(rejectedBoundary.evidenceRefs, []);
+  assert.doesNotMatch(JSON.stringify(rejectedBoundary), /sk-live-reflect123/);
+
+  const fabricated = clone(PROVIDER_SCRIPTED_OUTCOME);
+  fabricated.typedOutput.evidenceDigests = [h('fabricated-unbound-provider-evidence')];
+  const rejectedOutput = runStub({ scriptedOutcome: fabricated });
+  assert.equal(rejectedOutput.status, 'FAIL');
+  assert.ok(rejectedOutput.reasonCodes.includes('STUB_OUTPUT_EVIDENCE_NOT_BOUND_TO_SANDBOX'));
+  assert.equal(rejectedOutput.externalCallAttempted, false);
+  assert.equal(rejectedOutput.toolExecuted, false);
+});

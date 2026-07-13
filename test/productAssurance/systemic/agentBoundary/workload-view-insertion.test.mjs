@@ -121,13 +121,14 @@ function view(over = {}) {
   });
 }
 
-test('render-neutral view is closed, synthetic, immutable, lifecycle-separated, and authority-free', () => {
+test('render-neutral view is closed, synthetic, taxonomy-blocked, lifecycle-separated, and authority-free', () => {
   const projected = view();
   assert.deepEqual(validateView(viewSchema, projected), []);
   assert.equal(projected.sourceState, 'SYNTHETIC_ONLY');
   assert.equal(projected.planeAvailability, 'AVAILABLE');
-  assert.equal(projected.assuranceStatus, 'PASS');
-  assert.equal(projected.operatingDisposition, 'ELIGIBLE_FOR_STUB_EVIDENCE');
+  assert.equal(projected.assuranceStatus, 'UNKNOWN');
+  assert.equal(projected.operatingDisposition, 'BLOCKED');
+  assert.equal(projected.rootBlocker, 'CLASS_TAXONOMY_OWNER_LAW_MISSING');
   assert.equal(projected.observedLifecycle, 'READY');
   assert.equal(projected.capability, 'SYNTHETIC');
   assert.equal(projected.productReadinessImpact, 'NONE');
@@ -299,11 +300,10 @@ test('NOT_CONFIGURED nulls provider, run, proposal, and budget facts without cha
 
   const identityOnlyAbsence = view({ workloadIdentityDecision });
   assert.equal(identityOnlyAbsence.sourceState, 'SYNTHETIC_ONLY');
-  assert.equal(identityOnlyAbsence.planeAvailability, 'NOT_CONFIGURED');
-  assert.equal(identityOnlyAbsence.provider.providerId, null);
-  assert.equal(identityOnlyAbsence.run.runId, null);
-  assert.equal(identityOnlyAbsence.budget.callsLimit, null);
-  assert.equal(identityOnlyAbsence.rootBlocker, 'PROVIDER_NOT_CONFIGURED');
+  assert.equal(identityOnlyAbsence.planeAvailability, 'AVAILABLE');
+  assert.equal(identityOnlyAbsence.provider.providerId, PROVIDER_STUB.providerId);
+  assert.equal(identityOnlyAbsence.assuranceStatus, 'FAIL');
+  assert.equal(identityOnlyAbsence.rootBlocker, 'ASSURANCE_DECISION_ENVELOPE_INVALID');
   assert.ok(identityOnlyAbsence.reasonCodes.includes(identityOnlyAbsence.rootBlocker));
 });
 
@@ -340,8 +340,9 @@ test('provider outage is unavailable and remains diagnostic-only', () => {
   const outage = view({ provider: outageProvider, providerDecision: outageDecision });
   assert.equal(outage.planeAvailability, 'UNAVAILABLE');
   assert.equal(outage.assuranceStatus, 'UNKNOWN');
-  assert.equal(outage.operatingDisposition, 'UNAVAILABLE');
-  assert.equal(outage.rootBlocker, 'STUBBED_PROVIDER_OUTAGE');
+  assert.equal(outage.operatingDisposition, 'BLOCKED');
+  assert.equal(outage.rootBlocker, 'CLASS_TAXONOMY_OWNER_LAW_MISSING');
+  assert.equal(outage.providerEvaluation.disposition, 'DIAGNOSTIC_PLANE_UNAVAILABLE');
   assert.equal(outage.productReadinessImpact, 'NONE');
 });
 
@@ -492,4 +493,69 @@ test('main boundary schema owns extensions only and does not redeclare base §3.
   }
   assert.ok(boundarySchema.$defs.DiagnosticTracePrivacyRetentionExtensionV1);
   assert.equal(DIAGNOSTIC_REQUEST.baseContractRef.reuseMode, 'BASE_REUSED');
+});
+
+test('invalid assurance envelopes are sanitized before any cockpit detail can remain green', () => {
+  const baseline = decisions();
+  const cases = [
+    ['workloadIdentityDecision', 'workloadIdentity', { ...baseline.workloadIdentityDecision, unexpected: true }],
+    ['traceDecision', 'trace', { ...baseline.traceDecision, unexpected: true }],
+    ['promotionDecision', 'selfCorrection', { ...baseline.promotionDecision, unexpected: true }],
+    ['repairDecision', 'repairEvidence', { ...baseline.repairDecision, unexpected: true }],
+    ['corpusDecision', 'corpusGovernance', { ...baseline.corpusDecision, unexpected: true }],
+  ];
+  for (const [field, projection, decision] of cases) {
+    const projected = view({ [field]: decision });
+    assert.equal(projected.assuranceStatus, 'FAIL', field);
+    assert.equal(projected.rootBlocker, 'ASSURANCE_DECISION_ENVELOPE_INVALID', field);
+    if (projection === 'workloadIdentity') assert.equal(projected.workloadIdentity.status, 'UNKNOWN');
+    if (projection === 'trace') {
+      assert.equal(projected.trace.privacy.status, 'UNKNOWN');
+      assert.equal(projected.trace.lastAppendSequence, null);
+    }
+    if (projection === 'selfCorrection') {
+      assert.equal(projected.selfCorrection.promotion.status, 'UNKNOWN');
+      assert.equal(projected.selfCorrection.effectiveClass, null);
+    }
+    if (projection === 'repairEvidence') {
+      assert.equal(projected.repairEvidence.evaluation.status, 'UNKNOWN');
+      assert.equal(projected.repairEvidence.eligibleForCanonicalRecoveryReadback, false);
+    }
+    if (projection === 'corpusGovernance') assert.equal(projected.corpusGovernance.status, 'UNKNOWN');
+  }
+});
+
+test('missing run, null kill, and forged NOT_CONFIGURED evidence fail closed without throwing', () => {
+  assert.doesNotThrow(() => view({ run: undefined }));
+  const missingRun = view({ run: undefined });
+  assert.equal(missingRun.assuranceStatus, 'FAIL');
+  assert.equal(missingRun.rootBlocker, 'DIAGNOSTIC_RUN_MISSING');
+  assert.equal(missingRun.run.runId, null);
+  assert.equal(missingRun.budget.callsLimit, null);
+  assert.deepEqual(validateView(viewSchema, missingRun), []);
+
+  const nullKill = view({ killControl: null });
+  assert.equal(nullKill.assuranceStatus, 'UNKNOWN');
+  assert.equal(nullKill.rootBlocker, 'DIAGNOSTIC_KILL_BINDING_INVALID');
+  assert.equal(nullKill.killControl.blockingState, 'UNKNOWN');
+
+  const forgedAbsence = view({ workloadIdentityDecision: { disposition: 'NOT_CONFIGURED' } });
+  assert.notEqual(forgedAbsence.planeAvailability, 'NOT_CONFIGURED');
+  assert.equal(forgedAbsence.rootBlocker, 'ASSURANCE_DECISION_ENVELOPE_INVALID');
+});
+
+test('diagnostic kill payload draft is executable as a closed object schema', () => {
+  const row = insertionRows.find((entry) => entry.rowId.endsWith('diagnostic-kill-control'));
+  const payloadSchema = row.controlDraft.payloadSchema;
+  const valid = {
+    desiredState: 'ENGAGED',
+    expectedRevision: 1,
+    expiresAtMs: NOW + 1_000,
+    reasonCode: 'OPERATOR_REQUEST',
+    requestDigest: 'a'.repeat(64),
+  };
+  assert.deepEqual(validateBoundary(payloadSchema, valid), []);
+  for (const scalar of [null, 1, 'ENGAGED', []]) assert.ok(validateBoundary(payloadSchema, scalar).length > 0);
+  assert.ok(validateBoundary(payloadSchema, { ...valid, unexpected: true }).length > 0);
+  assert.ok(validateBoundary(payloadSchema, { ...valid, expectedRevision: Number.MAX_SAFE_INTEGER }).length > 0);
 });

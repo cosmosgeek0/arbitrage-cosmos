@@ -43,6 +43,11 @@ const PROVIDER_PASS_KEYS = Object.freeze([
   'providerId', 'reasonCodes', 'requestDigest', 'requestId', 'sandboxDecisionDigest', 'schema',
   'sourceEvidenceDigest', 'status', 'toolExecuted', 'typedOutput', 'version',
 ]);
+const IDENTITY_NOT_CONFIGURED_KEYS = Object.freeze([
+  'allowed', 'diagnosticAuthorityEffect', 'disposition', 'evaluatedAtMs', 'evidenceRefs', 'expiresAtMs',
+  'generation', 'identityRef', 'identityState', 'productReadinessImpact', 'reasonCodes', 'rotationDueAtMs',
+  'schema', 'status', 'version',
+]);
 
 function hasExactKeys(value, expected) {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -144,6 +149,42 @@ function validProviderPass(decision, provider, sandboxDecision, nowMs) {
     && decision.policyRevision === provider?.policyRevision;
 }
 
+function validProviderAbsence(provider) {
+  return provider
+    && hasExactKeys(provider, ['configurationState', 'mode', 'modelId', 'modelVersion', 'policyRevision', 'posture', 'providerId'])
+    && provider.configurationState === 'NOT_CONFIGURED'
+    && provider.mode === 'NOT_CONFIGURED'
+    && provider.posture === 'NOT_CONFIGURED'
+    && provider.providerId === null
+    && provider.modelId === null
+    && provider.modelVersion === null
+    && provider.policyRevision === null;
+}
+
+function validIdentityAbsence(decision, nowMs) {
+  return hasExactKeys(decision, IDENTITY_NOT_CONFIGURED_KEYS)
+    && decision.schema === 'AgentBoundaryEvaluationV1'
+    && decision.version === 1
+    && decision.status === 'UNKNOWN'
+    && decision.disposition === 'NOT_CONFIGURED'
+    && decision.allowed === false
+    && decision.productReadinessImpact === 'NONE'
+    && decision.diagnosticAuthorityEffect === 'NONE'
+    && decision.identityState === 'NOT_CONFIGURED'
+    && decision.generation === null
+    && decision.identityRef === null
+    && decision.expiresAtMs === null
+    && decision.rotationDueAtMs === null
+    && Number.isSafeInteger(decision.evaluatedAtMs)
+    && decision.evaluatedAtMs <= nowMs
+    && Array.isArray(decision.reasonCodes)
+    && decision.reasonCodes.length === 1
+    && decision.reasonCodes[0] === 'PROVIDER_WORKLOAD_IDENTITY_NOT_CONFIGURED'
+    && Array.isArray(decision.evidenceRefs)
+    && decision.evidenceRefs.length === 0
+    && findForbiddenKeys(decision).length === 0;
+}
+
 function decisionSummary(decision, fallback = 'MISSING') {
   if (!decision) return Object.freeze({ status: 'UNKNOWN', disposition: fallback, reasonCodes: Object.freeze([]) });
   return Object.freeze({
@@ -205,10 +246,10 @@ export function projectDiagnosticWorkerView({
     workloadIdentityDecision, sandboxDecision, providerDecision, traceDecision,
     promotionDecision, repairDecision, corpusDecision,
   ];
-  const decisionReasonCodes = decisions.flatMap((decision) => decision?.reasonCodes ?? []);
+  const decisionReasonCodes = decisions.flatMap((decision) => Array.isArray(decision?.reasonCodes)
+    ? decision.reasonCodes.filter((reason) => typeof reason === 'string') : []);
   const notConfigured = sourceState === 'NOT_CONFIGURED'
-    || workloadIdentityDecision?.disposition === 'NOT_CONFIGURED'
-    || workloadIdentityDecision?.identityState === 'NOT_CONFIGURED';
+    || (validIdentityAbsence(workloadIdentityDecision, nowMs) && validProviderAbsence(provider));
   const killBindingValid = killControl?.controlId === DIAGNOSTIC_KILL_CONTROL_ID
     && killControl?.pendingCommandId === DIAGNOSTIC_KILL_COMMAND_ID
     && killControl?.wiringState === DIAGNOSTIC_KILL_WIRING_STATE;
@@ -231,7 +272,8 @@ export function projectDiagnosticWorkerView({
     || !Number.isSafeInteger(ownerSnapshot.lastMeaningfulAdvanceAtMs)
     || ownerSnapshot.lastMeaningfulAdvanceAtMs > ownerSnapshot.freshness.evaluatedAtMs
   );
-  const deadlineExpired = !Number.isSafeInteger(run?.deadlineAtMs) || run.deadlineAtMs <= nowMs;
+  const runMissing = !run || typeof run !== 'object' || Array.isArray(run);
+  const deadlineExpired = !runMissing && (!Number.isSafeInteger(run?.deadlineAtMs) || run.deadlineAtMs <= nowMs);
   const runBudgetInvalid = budgetInvalid(run?.budget);
   const callsExceedBinding = !runBudgetInvalid && sandboxDecision?.status === 'PASS'
     && (!Number.isSafeInteger(sandboxDecision.maxCalls) || sandboxDecision.maxCalls < 1
@@ -245,17 +287,22 @@ export function projectDiagnosticWorkerView({
   const providerDescriptorValid = isDeterministicProviderStubDescriptor(provider);
   const providerPassValid = providerDecision?.status === 'PASS'
     && validProviderPass(providerDecision, provider, sandboxDecision, nowMs);
+  const workloadEnvelopeValid = !notConfigured && isEvaluationEnvelope(workloadIdentityDecision, nowMs, 'WORKLOAD_IDENTITY');
+  const traceEnvelopeValid = !notConfigured && isEvaluationEnvelope(traceDecision, nowMs, 'TRACE_PRIVACY_RETENTION');
+  const promotionEnvelopeValid = !notConfigured && isEvaluationEnvelope(promotionDecision, nowMs, 'SELF_CORRECTION_PROMOTION');
+  const repairEnvelopeValid = !notConfigured && isEvaluationEnvelope(repairDecision, nowMs, 'REPAIR_EVIDENCE');
+  const corpusEnvelopeValid = !notConfigured && isEvaluationEnvelope(corpusDecision, nowMs, 'CORPUS_ITEM_GOVERNANCE');
   const providerStateCoherent = providerDecision?.status === 'PASS'
     ? provider?.posture === 'AVAILABLE'
     : (!providerUnavailable
       || (providerDecision?.disposition === 'DIAGNOSTIC_BUDGET_EXHAUSTED' && provider?.posture === 'COST_EXHAUSTED')
       || (providerDecision?.disposition === 'DIAGNOSTIC_PLANE_UNAVAILABLE' && provider?.posture === 'OUTAGE'));
   const evidenceEnvelopeInvalid = !notConfigured && (
-    !isEvaluationEnvelope(workloadIdentityDecision, nowMs, 'WORKLOAD_IDENTITY')
-    || !isEvaluationEnvelope(traceDecision, nowMs, 'TRACE_PRIVACY_RETENTION')
-    || !isEvaluationEnvelope(promotionDecision, nowMs, 'SELF_CORRECTION_PROMOTION')
-    || !isEvaluationEnvelope(repairDecision, nowMs, 'REPAIR_EVIDENCE')
-    || !isEvaluationEnvelope(corpusDecision, nowMs, 'CORPUS_ITEM_GOVERNANCE')
+    !workloadEnvelopeValid
+    || !traceEnvelopeValid
+    || !promotionEnvelopeValid
+    || !repairEnvelopeValid
+    || !corpusEnvelopeValid
     || (sandboxDecision?.status === 'PASS' && !sandboxPassValid)
     || !providerDescriptorValid
     || !providerStateCoherent
@@ -275,7 +322,7 @@ export function projectDiagnosticWorkerView({
       || sandboxDecision.identityDecisionDigest !== workloadIdentityDecision?.decisionDigest
       || sandboxDecision.traceDecisionDigest !== traceDecision?.decisionDigest))
     || (providerDecision?.status === 'PASS' && providerDecision.proposalId !== run?.proposal?.proposalId)
-    || (promotionDecision?.status === 'PASS' && (promotionDecision.approvalRef !== run?.proposal?.approvalRef
+    || (promotionEnvelopeValid && (promotionDecision.approvalRef !== run?.proposal?.approvalRef
       || promotionDecision.approvalStatus !== run?.proposal?.approvalStatus
       || promotionDecision.traceId !== traceDecision?.traceId
       || promotionDecision.traceDecisionDigest !== traceDecision?.decisionDigest
@@ -334,12 +381,14 @@ export function projectDiagnosticWorkerView({
     assuranceStatus = 'UNKNOWN';
     operatingDisposition = 'BLOCKED';
     rootBlocker = 'OWNER_FRESHNESS_INCONSISTENT';
-  } else if (deadlineExpired || runBudgetInvalid || callsExceedBinding) {
-    assuranceStatus = deadlineExpired ? 'FAIL' : 'UNKNOWN';
+  } else if (runMissing || deadlineExpired || runBudgetInvalid || callsExceedBinding) {
+    assuranceStatus = runMissing || deadlineExpired ? 'FAIL' : 'UNKNOWN';
     operatingDisposition = 'BLOCKED';
-    rootBlocker = deadlineExpired
-      ? 'DIAGNOSTIC_RUN_DEADLINE_EXPIRED'
-      : (runBudgetInvalid ? 'DIAGNOSTIC_RUN_BUDGET_INVALID' : 'DIAGNOSTIC_RUN_CALL_BUDGET_EXCEEDS_BINDING');
+    rootBlocker = runMissing
+      ? 'DIAGNOSTIC_RUN_MISSING'
+      : (deadlineExpired
+        ? 'DIAGNOSTIC_RUN_DEADLINE_EXPIRED'
+        : (runBudgetInvalid ? 'DIAGNOSTIC_RUN_BUDGET_INVALID' : 'DIAGNOSTIC_RUN_CALL_BUDGET_EXCEEDS_BINDING'));
   } else if (runRedactionFailed || runEvidenceUnknown) {
     assuranceStatus = runRedactionFailed ? 'FAIL' : 'UNKNOWN';
     operatingDisposition = 'BLOCKED';
@@ -375,6 +424,7 @@ export function projectDiagnosticWorkerView({
     ...(rootBlocker ? [rootBlocker] : []),
   ]);
   const independentEvidencePass = assuranceStatus === 'PASS' && !notConfigured
+    && workloadEnvelopeValid && traceEnvelopeValid && repairEnvelopeValid && promotionEnvelopeValid && corpusEnvelopeValid
     && [workloadIdentityDecision, traceDecision, repairDecision, promotionDecision, corpusDecision]
       .every((decision) => decision?.status === 'PASS');
   const nullBudget = {
@@ -428,12 +478,12 @@ export function projectDiagnosticWorkerView({
       policyRevision: provider.policyRevision,
     },
     workloadIdentity: {
-      status: notConfigured ? 'UNKNOWN' : (workloadIdentityDecision?.status ?? 'UNKNOWN'),
-      state: notConfigured ? 'NOT_CONFIGURED' : (workloadIdentityDecision?.identityState ?? 'UNKNOWN'),
-      generation: notConfigured ? null : (workloadIdentityDecision?.generation ?? null),
-      identityRef: notConfigured ? null : (workloadIdentityDecision?.identityRef ?? null),
-      expiresAtMs: notConfigured ? null : (workloadIdentityDecision?.expiresAtMs ?? null),
-      rotationDueAtMs: notConfigured ? null : (workloadIdentityDecision?.rotationDueAtMs ?? null),
+      status: notConfigured ? 'UNKNOWN' : (workloadEnvelopeValid ? workloadIdentityDecision.status : 'UNKNOWN'),
+      state: notConfigured ? 'NOT_CONFIGURED' : (workloadEnvelopeValid ? workloadIdentityDecision.identityState : 'UNKNOWN'),
+      generation: notConfigured || !workloadEnvelopeValid ? null : (workloadIdentityDecision.generation ?? null),
+      identityRef: notConfigured || !workloadEnvelopeValid ? null : (workloadIdentityDecision.identityRef ?? null),
+      expiresAtMs: notConfigured || !workloadEnvelopeValid ? null : (workloadIdentityDecision.expiresAtMs ?? null),
+      rotationDueAtMs: notConfigured || !workloadEnvelopeValid ? null : (workloadIdentityDecision.rotationDueAtMs ?? null),
     },
     sandbox: {
       status: notConfigured ? 'UNKNOWN' : (sandboxPassValid ? 'PASS' : (sandboxDecision?.status === 'FAIL' ? 'FAIL' : 'UNKNOWN')),
@@ -449,53 +499,58 @@ export function projectDiagnosticWorkerView({
       runId: null, incidentId: null, correlationId: null, deadlineAtMs: null, disposition: 'NOT_CONFIGURED',
       evidenceDigestCount: null, retrievalCount: null, redactionState: 'UNKNOWN', permissionLevel: null,
     } : {
-      runId: run.runId,
-      incidentId: run.incidentId,
-      correlationId: run.correlationId,
-      deadlineAtMs: run.deadlineAtMs,
+      runId: run?.runId ?? null,
+      incidentId: run?.incidentId ?? null,
+      correlationId: run?.correlationId ?? null,
+      deadlineAtMs: run?.deadlineAtMs ?? null,
       disposition: providerDecision?.status === 'PASS' && !providerPassValid ? 'EVIDENCE_INVALID' : (providerDecision?.disposition ?? 'NOT_RUN'),
-      evidenceDigestCount: run.evidenceDigestCount,
-      retrievalCount: run.retrievalCount,
-      redactionState: run.redactionState,
-      permissionLevel: run.permissionLevel,
+      evidenceDigestCount: run?.evidenceDigestCount ?? null,
+      retrievalCount: run?.retrievalCount ?? null,
+      redactionState: run?.redactionState ?? 'UNKNOWN',
+      permissionLevel: run?.permissionLevel ?? null,
     },
-    budget: notConfigured ? nullBudget : run.budget,
+    budget: notConfigured || runMissing ? nullBudget : run.budget,
     proposalAssurance: notConfigured ? {
       proposalId: null, approvalRef: null, approvalStatus: 'NOT_CONFIGURED', verifierId: null,
       verifierStatus: 'UNKNOWN', postconditionStatus: 'UNKNOWN', quietPeriodStatus: 'UNKNOWN',
     } : {
       proposalId: providerPassValid ? providerDecision.proposalId : null,
-      approvalRef: promotionDecision?.approvalRef ?? null,
-      approvalStatus: promotionDecision?.approvalStatus ?? 'UNKNOWN',
-      verifierId: repairDecision?.verifierId ?? null,
-      verifierStatus: repairDecision?.verifierStatus ?? 'UNKNOWN',
-      postconditionStatus: repairDecision?.postconditionStatus ?? 'UNKNOWN',
-      quietPeriodStatus: repairDecision?.quietPeriodStatus ?? 'UNKNOWN',
+      approvalRef: promotionEnvelopeValid ? (promotionDecision.approvalRef ?? null) : null,
+      approvalStatus: promotionEnvelopeValid ? (promotionDecision.approvalStatus ?? 'UNKNOWN') : 'UNKNOWN',
+      verifierId: repairEnvelopeValid ? (repairDecision.verifierId ?? null) : null,
+      verifierStatus: repairEnvelopeValid ? (repairDecision.verifierStatus ?? 'UNKNOWN') : 'UNKNOWN',
+      postconditionStatus: repairEnvelopeValid ? (repairDecision.postconditionStatus ?? 'UNKNOWN') : 'UNKNOWN',
+      quietPeriodStatus: repairEnvelopeValid ? (repairDecision.quietPeriodStatus ?? 'UNKNOWN') : 'UNKNOWN',
     },
     trace: {
-      privacy: notConfigured ? decisionSummary(null, 'NOT_CONFIGURED') : decisionSummary(traceDecision),
-      lastAppendSequence: notConfigured ? null : (traceDecision?.lastAppendSequence ?? null),
-      lastChainDigest: notConfigured ? null : (traceDecision?.lastChainDigest ?? null),
-      retentionOwnerId: notConfigured ? null : (traceDecision?.retentionOwnerId ?? null),
+      privacy: notConfigured ? decisionSummary(null, 'NOT_CONFIGURED')
+        : (traceEnvelopeValid ? decisionSummary(traceDecision) : decisionSummary(null, 'INVALID_ENVELOPE')),
+      lastAppendSequence: notConfigured || !traceEnvelopeValid ? null : (traceDecision.lastAppendSequence ?? null),
+      lastChainDigest: notConfigured || !traceEnvelopeValid ? null : (traceDecision.lastChainDigest ?? null),
+      retentionOwnerId: notConfigured || !traceEnvelopeValid ? null : (traceDecision.retentionOwnerId ?? null),
       independentEvidencePass,
     },
     selfCorrection: {
-      declaredClass: notConfigured ? null : (promotionDecision?.declaredClass ?? null),
-      derivedClass: notConfigured ? null : (promotionDecision?.derivedClass ?? null),
-      effectiveClass: notConfigured ? null : (promotionDecision?.effectiveClass ?? null),
-      promotion: notConfigured ? decisionSummary(null, 'NOT_CONFIGURED') : decisionSummary(promotionDecision),
+      declaredClass: notConfigured || !promotionEnvelopeValid ? null : (promotionDecision.declaredClass ?? null),
+      derivedClass: notConfigured || !promotionEnvelopeValid ? null : (promotionDecision.derivedClass ?? null),
+      effectiveClass: notConfigured || !promotionEnvelopeValid ? null : (promotionDecision.effectiveClass ?? null),
+      promotion: notConfigured ? decisionSummary(null, 'NOT_CONFIGURED')
+        : (promotionEnvelopeValid ? decisionSummary(promotionDecision) : decisionSummary(null, 'INVALID_ENVELOPE')),
       operationalActionAllowed: false,
     },
     repairEvidence: {
-      evaluation: notConfigured ? decisionSummary(null, 'NOT_CONFIGURED') : decisionSummary(repairDecision),
-      eligibleForCanonicalRecoveryReadback: notConfigured ? false : (repairDecision?.eligibleForCanonicalRecoveryReadback ?? false),
-      postconditionStatus: notConfigured ? 'UNKNOWN' : (repairDecision?.postconditionStatus ?? 'UNKNOWN'),
-      quietPeriodStatus: notConfigured ? 'UNKNOWN' : (repairDecision?.quietPeriodStatus ?? 'UNKNOWN'),
-      verifierId: notConfigured ? null : (repairDecision?.verifierId ?? null),
-      verifierStatus: notConfigured ? 'UNKNOWN' : (repairDecision?.verifierStatus ?? 'UNKNOWN'),
+      evaluation: notConfigured ? decisionSummary(null, 'NOT_CONFIGURED')
+        : (repairEnvelopeValid ? decisionSummary(repairDecision) : decisionSummary(null, 'INVALID_ENVELOPE')),
+      eligibleForCanonicalRecoveryReadback: !notConfigured && repairEnvelopeValid
+        ? (repairDecision.eligibleForCanonicalRecoveryReadback ?? false) : false,
+      postconditionStatus: !notConfigured && repairEnvelopeValid ? (repairDecision.postconditionStatus ?? 'UNKNOWN') : 'UNKNOWN',
+      quietPeriodStatus: !notConfigured && repairEnvelopeValid ? (repairDecision.quietPeriodStatus ?? 'UNKNOWN') : 'UNKNOWN',
+      verifierId: !notConfigured && repairEnvelopeValid ? (repairDecision.verifierId ?? null) : null,
+      verifierStatus: !notConfigured && repairEnvelopeValid ? (repairDecision.verifierStatus ?? 'UNKNOWN') : 'UNKNOWN',
       recoveryDeclared: false,
     },
-    corpusGovernance: notConfigured ? decisionSummary(null, 'NOT_CONFIGURED') : decisionSummary(corpusDecision),
+    corpusGovernance: notConfigured ? decisionSummary(null, 'NOT_CONFIGURED')
+      : (corpusEnvelopeValid ? decisionSummary(corpusDecision) : decisionSummary(null, 'INVALID_ENVELOPE')),
     killControl: {
       controlId: killBindingValid ? killControl.controlId : DIAGNOSTIC_KILL_CONTROL_ID,
       desiredState: killBindingValid ? killControl.desiredState : 'UNKNOWN',

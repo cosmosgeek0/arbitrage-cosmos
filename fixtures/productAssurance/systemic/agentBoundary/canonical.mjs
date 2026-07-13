@@ -1,6 +1,13 @@
 import { createHash } from 'node:crypto';
 
-const FORBIDDEN_KEY = /(?:apikey|apisecret|privatekey|signingkey|encryptionkey|clientsecret|authorizationheader|signedrequest)|^(?:secret|secrets|secretvalue|secretref|credential|credentials|password|passphrase|token|tokenvalue|accesstoken|refreshtoken|bearertoken|authtoken|sessiontoken|idtoken|servicetoken|rawprompt|rawevidence)$/i;
+const FORBIDDEN_KEY = /(?:accesskey|apikey|apisecret|privatekey|signingkey|encryptionkey|clientsecret|authorizationheader|signedrequest)|^(?:secret|secrets|secretvalue|secretref|credential|credentials|password|passphrase|token|tokenvalue|accesstoken|refreshtoken|bearertoken|authtoken|sessiontoken|idtoken|servicetoken|rawprompt|rawevidence)$/i;
+const FORBIDDEN_STRING = Object.freeze([
+  /-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----/,
+  /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/i,
+  /\bAKIA[A-Z0-9]{16}\b/,
+  /\b(?:sk|rk|pk)-(?:live|test|prod)-[A-Za-z0-9_-]{8,}\b/i,
+  /\b(?:api[_-]?key|api[_-]?secret|client[_-]?secret|secret[_-]?access[_-]?key|password|passphrase)\s*[:=]\s*\S+/i,
+]);
 
 export function isPlainRecord(value) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -21,6 +28,9 @@ export function canonicalStringify(value) {
   }
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) throw new TypeError('canonical data cannot contain a non-finite number');
+    if (Number.isInteger(value) && !Number.isSafeInteger(value)) {
+      throw new TypeError('canonical data cannot contain an unsafe integer');
+    }
     return JSON.stringify(value);
   }
   if (Array.isArray(value)) {
@@ -36,12 +46,21 @@ export function canonicalStringify(value) {
 }
 
 export function sha256Hex(value) {
-  const encoded = typeof value === 'string' ? value : canonicalStringify(value);
+  const encoded = typeof value === 'string'
+    ? `text\u0000${value}`
+    : `json\u0000${canonicalStringify(value)}`;
   return createHash('sha256').update(encoded, 'utf8').digest('hex');
 }
 
+export function compareCodeUnits(left, right) {
+  return left < right ? -1 : (left > right ? 1 : 0);
+}
+
 export function stableUnique(values) {
-  return Object.freeze([...new Set(values)].sort((left, right) => left.localeCompare(right)));
+  if (!Array.isArray(values) || values.some((value) => typeof value !== 'string')) {
+    throw new TypeError('stableUnique requires an array of strings');
+  }
+  return Object.freeze([...new Set(values)].sort(compareCodeUnits));
 }
 
 export function deepFreeze(value, seen = new WeakSet()) {
@@ -64,6 +83,8 @@ export function findForbiddenKeys(value, trail = '$') {
       if (FORBIDDEN_KEY.test(key.replace(/[-_]/g, ''))) hits.push(`${trail}.${key}`);
       hits.push(...findForbiddenKeys(child, `${trail}.${key}`));
     }
+  } else if (typeof value === 'string' && FORBIDDEN_STRING.some((pattern) => pattern.test(value))) {
+    hits.push(trail);
   }
   return stableUnique(hits);
 }
@@ -79,7 +100,9 @@ export function makeEvaluation({
 }) {
   assertUtcMillis(evaluatedAtMs, 'evaluatedAtMs');
   if (!['PASS', 'FAIL', 'UNKNOWN'].includes(status)) throw new TypeError('invalid evaluation status');
+  if (!isPlainRecord(extra)) throw new TypeError('evaluation extra must be a plain record');
   return immutableClone({
+    ...extra,
     schema: 'AgentBoundaryEvaluationV1',
     version: 1,
     status,
@@ -89,7 +112,6 @@ export function makeEvaluation({
     evaluatedAtMs,
     reasonCodes: stableUnique(reasonCodes),
     evidenceRefs: stableUnique(evidenceRefs),
-    ...extra,
   });
 }
 

@@ -9,6 +9,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const fixtureRoot = path.resolve(here, '../../../../fixtures/productAssurance/systemic/agentBoundary');
 const testRoot = path.resolve(here);
 const repoRoot = path.resolve(here, '../../../..');
+const assignedBase = '9785c93102b00389847b77c2f9348c06abc4344b';
 
 function filesUnder(root) {
   const files = [];
@@ -63,8 +64,12 @@ test('packet imports no Q, L, exchange, production evaluator, runtime owner, or 
 test('test imports remain local, standard-library-only, and outside Q/L/production owners', () => {
   for (const file of testFiles.filter((entry) => entry.endsWith('.mjs'))) {
     const source = readFileSync(file, 'utf8');
-    const imports = [...source.matchAll(/from\s+['"]([^'"]+)['"]/g)].map((match) => match[1]);
+    const imports = [
+      ...source.matchAll(/(?:from\s+|import\s*\(\s*)['"]([^'"]+)['"]/g),
+      ...source.matchAll(/^\s*import\s+['"]([^'"]+)['"]/gm),
+    ].map((match) => match[1]);
     for (const specifier of imports) {
+      assert.equal(specifier.startsWith('node:') || specifier.startsWith('.'), true, `${file}: ${specifier}`);
       assert.doesNotMatch(specifier, /server\/src|server\/dist|(?:^|\/)quant\/|liveEdge|systemIntegration|capitalFoundation/);
     }
   }
@@ -104,8 +109,14 @@ test('fixture inventory remains entirely inside the assigned packet subtree', ()
 });
 
 test('actual Git path set is confined to the satellite subtrees plus the protected parent I00 input', () => {
+  assert.doesNotThrow(() => execFileSync('git', ['merge-base', '--is-ancestor', assignedBase, 'HEAD'], { cwd: repoRoot }));
+  const committedPaths = execFileSync('git', ['diff', '--name-only', `${assignedBase}..HEAD`], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+  }).split('\n').filter(Boolean);
   const status = execFileSync('git', ['status', '--porcelain=v1', '--untracked-files=all'], { cwd: repoRoot, encoding: 'utf8' });
-  const paths = status.trim().split('\n').filter(Boolean).map((line) => line.slice(3));
+  const dirtyPaths = status.split('\n').filter(Boolean).flatMap((line) => line.slice(3).split(' -> '));
+  const paths = [...committedPaths, ...dirtyPaths];
   const allowed = [
     'I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md',
     'fixtures/productAssurance/systemic/agentBoundary/',

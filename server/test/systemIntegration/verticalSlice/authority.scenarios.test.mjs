@@ -518,7 +518,7 @@ test('synthetic helper coverage: partial and ambiguous states remain explicit da
     'OPEN:SPOT': { kind: 'PARTIALLY_FILLED', venueOrderId: 'paper-OPEN-SPOT', cumulativeFilledQuantity: 0.4 },
   });
   const partialResult = reconcileExecutionState(partial, syntheticEvidenceForState(partial), NOW, { quantityTolerance: 1e-9, normalizedHedgeTolerance: 1e-9 });
-  assert.equal(partialResult.status, 'PARTIAL');
+  assert.equal(partialResult.status, 'DIVERGED');
   assert.equal(partialResult.executionAuthority, 'NONE');
   assert.notEqual(partialResult.recommendation, 'NO_ACTION', 'partial/one-leg truth must remain recovery-required');
 

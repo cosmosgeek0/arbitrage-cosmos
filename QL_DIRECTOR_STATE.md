@@ -67,6 +67,15 @@ Both branches descend from PROTOCOL_SHA. Main stays director-owned; neither Code
 4. Owner directives arrive from "commanders" (external ChatGPT) as .md files — verify hashes, correct stale assumptions from git truth (they are navigation hints, not acceptance evidence), register a D-LAUNCH-N acceptance entry here, then cut worktrees + blocks.
 5. External-action boundary (launch §10 / I00 §20) is never delegated and never inferred.
 
+## MERGE RUNBOOK (compaction-proof; execute even with zero chat memory)
+
+Q lane: COMPLETE, nothing pending — Q16/Q17 ran on the spine itself; frozen LANE_READY HEAD `02b4ecc` (3,011 pytest pass, protocol 22/22). No Q merge remains; only receipt audit at I00.
+L lane pending merges (serial, only while the L spine worktree /Users/cosmosgeek/Desktop/live-execution-proof-20260712 is PARKED — currently parked at L08.2 tip 9f133ac + L10 merge):
+1. When L09 ACCEPTED: `cd live-execution-proof-20260712 && git merge --no-ff l09-normal-basis-20260712` → `npm run build -w server` → run every server/test/liveEdge/*.test.mjs (node --test) → all green → board update.
+2. Same for `l11-volume-20260712`.
+3. Then append the final L-spine block to WORKER_PROMPTS: L12 → L13 → L16 → L17 continuous to LANE_READY under D-LAUNCH-2 laws (L15 satellite already ACCEPTED; L14 merged).
+4. At L LANE_READY: freeze HEAD on board. Then director-only real I00: fan-in ip-* + assurance branches onto i00-assembly, shared wiring per IP insertion requests + live-edge-receipts/patches/*, mount dashboard donor, run combined battery + I00 §21 harness + DASHBOARD_TRUTH owner test, land on current-main, push. Scope-guard failures on merges follow the Q08/Q15 branch-skip pattern.
+
 ## Director acceptance log
 
 - **D-LAUNCH-1 (2026-07-12): authentic launch-file digest bound.** Both lanes correctly blocked at the launch hash gate: prompts cited sha256 `0cc192e3…d3cc`, actual bytes hash to `26b1d5ce118982b4b3ba64b44b7fb3e88b0b7ded26a818a775a65bffaa0f2c06` (git blob `587c1b83e8f9d32b9097d88df7fea40d9829b68e`). Root cause: the owner re-saved DIRECTOR_Q_L_TWO_LANE_LAUNCH.md between the director's first shasum measurement and the blob/copy step; all three copies (Main, Q worktree, L worktree) verified byte-identical, blob matches the frozen lock throughout, and the file still contains the known (waived) L-directive SHA typo on line 18 — content unchanged in substance. DIRECTOR ACCEPTS blob `587c1b83` / sha256 `26b1d5ce…0f2c06` as THE authentic launch file. `0cc192e3…` is a stale measurement, superseded. Lanes: record this acceptance in your DECISIONS, treat the launch hash gate as PASSED with the corrected digest, complete Q00/L00 acceptance, and continue. Do not redo the already-verified reuse audits or research.

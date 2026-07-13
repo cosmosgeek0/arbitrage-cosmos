@@ -2,17 +2,26 @@
 
 Schema version: 1
 
-Generation: 11
+Generation: 12
 
 Program: `LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H`
 
 Current phase: `L08`
 
-Phase status: `READY`
+Phase status: `ACCEPTED`
 
-Lane status: `WORKING`
+Lane status: `L08_ACCEPTED_PARKED`
 
-Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`, `L06`, `L07`
+Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`, `L06`, `L07`, `L08`
+
+## ACCEPTED L08 DIRECTOR CUT — PARK HERE
+
+- **Exact accepted L08 SHA:**
+  **`0e9025c7c6965d7c675c230cb8856ef546476406`**
+- This is the immutable L08 receipt commit and includes the final L08
+  implementation commit as its direct parent.
+- Director-owned L09, L10 and L11 branches must cut from this exact SHA.
+- The L lane is parked. Do not begin, prebuild or speculate into L09/L10/L11.
 
 ## Git identity
 
@@ -55,6 +64,11 @@ Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`, `L06`, `L07`
 - L07 implementation tree: `727bdf27b736095b8fab7d2f1eca51329a66960e`
 - L07 immutable receipt commit: `ebd7aa567334e8e6cbd82e3559f2bcebf56a0088`
 - L07 receipt tree: `1081d40583fcb93d0dd8bd81f8f7a14d9afb83ba`
+- L08 implementation commit: `0ea48414dcc7ab5fcf4ccd4ff295b4bec7ee222f`
+- L08 implementation tree: `5646ae320afec171a425d98100e495c285668738`
+- L08 immutable receipt commit / exact director cut:
+  `0e9025c7c6965d7c675c230cb8856ef546476406`
+- L08 receipt tree: `d0857b41328adb35d6563fbf5bfe2413c86d1229`
 - Latest director continuous-run/self-acceptance authority: `D-LAUNCH-2` at `84d2ff65fd8d2b200821126dd17b4ba75f3c131c`
 - Latest director launch-input acceptance: `D-LAUNCH-1` at `9ca01537f4edda06ee566cd261e612d5c315fb76` on `current-main`
 - Latest director launch/protocol commit on lane ancestry: `73e1a1ff7daa48df8dac45713fc5f106842edafc`
@@ -64,9 +78,11 @@ Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`, `L06`, `L07`
 
 - Path: `live-edge-receipts/TASKS/L08.md`
 - Git blob at phase start: `cbbfb8323cc48c1edf878cec77261bd1f082dccd`
-- SHA-256: `1dea716da90ea7ab28715ce801b03a470334c1880ffb296f3e4c0cca64854998`
-- Latest accepted receipt: `live-edge-receipts/RECEIPTS/L07.md`
-- Latest accepted receipt SHA-256: `9977d9ea6000a5c2980988254b80893090aaa84bde46164495b5c4d50879c62d`
+- Phase-start SHA-256: `1dea716da90ea7ab28715ce801b03a470334c1880ffb296f3e4c0cca64854998`
+- Completed task blob: `8d95a3d4aaea27521dcabf4d96565d9f96a66a27`
+- Completed task SHA-256: `ce8e5ac3df5f395830675173f4ccb7fac4582c586f9adce027cc53e1baeba061`
+- Latest accepted receipt: `live-edge-receipts/RECEIPTS/L08.md`
+- Latest accepted receipt SHA-256: `e232f9180c2933f6677965ed66341177dce8fe5353d37b0627747661a23bedc9`
 
 ## Frozen input hashes
 
@@ -96,8 +112,11 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 
 - Expected tracked modifications after this state-acceptance commit: none.
 - Expected untracked preserved owner inputs: `DIRECTOR_Q_L_TWO_LANE_LAUNCH.md`, `LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md`.
-- Accepted L07 tree is cleanly sealed by implementation, immutable receipt and this state transition.
-- L08 is task-ready; no L08 implementation file exists yet.
+- Accepted L08 tree is cleanly sealed by implementation, immutable receipt and
+  this state generation.
+- Exact L08 director cut remains
+  `0e9025c7c6965d7c675c230cb8856ef546476406`; this mutable state commit does
+  not redefine the cut or attempt to embed its own containing SHA.
 - Active workers: none.
 - The two owner-supplied directive inputs remain untracked and preserved.
 
@@ -123,7 +142,10 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 - L05 lane-ready: exact injected private-fact normalization, closed permissions/query coverage, independent Spot/USD-M/Margin completeness, product-specific lifecycle reducers, canonical comparison hand-off and waiting guards are `BUILT_AND_TESTED` but `UNWIRED`, evidence-only and always non-sendable.
 - L06 lane-ready: immutable injected journal values, exact append/CAS and injected-ACK validation with `persistenceProven=false`, bounded race/idempotency/ambiguity reduction, content-committed Foundation projection and Section 7 seams are `BUILT_AND_TESTED`, `UNWIRED` and non-sendable; canonical Ledger CAS and fractional quantity bridging remain deferred to I00.
 - L07 lane-ready: deterministic injected exchange twin, exact event replay, conservative book/fill/TIF/queue semantics, separate venue/local truth, crash/restart, fee/cost and calibration evidence are `BUILT_AND_TESTED`, `UNWIRED` and non-sendable.
-- L08 ready: pure deterministic production order-policy task is defined; implementation remains absent until this acceptance state is committed.
+- L08 lane-ready: pure deterministic production order policy with independent
+  owner envelopes, exact injected distributions/CVaR, L04 capability posture,
+  actual-fill multi-leg sequencing, bounded recovery/cancel graphs and explicit
+  non-send authority is `BUILT_AND_TESTED`, `UNWIRED` and accepted.
 - Synthetic only: capital mandate and reconciliation/execution fixtures.
 - Unavailable in canonical convergence: authenticated production private acquisition, signed validation, exchange-observed fills/reconciliation, durable mutation/recovery mechanics and live execution.
 - Mechanically blocked: `LIVE_EXECUTION_NOT_IMPLEMENTED` remains enforced.
@@ -136,12 +158,15 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 - Source evidence: 34 official-only records, 0 evidence-hash mismatches; no private/account calls.
 - Contract evidence: 112 inert records with exact Spot/USD-M/Margin production/demo/testnet current, unknown, non-applicable, removed and conflict posture.
 - Spot signature/HMAC/JSON selection, USD-M routed private-stream selection, Margin risk-versus-account separation and permission/status/mode proof requirements are hash-locked.
-- L02 is accepted and consumed fail-closed by accepted L03/L04/L05/L06/L07; L08 must reuse the same exact matrix and owner seams without widening documentary or action authority.
+- L02 is accepted and consumed fail-closed by accepted L03/L04/L05/L06/L07/L08.
+- Accepted L04 still cannot prove Spot execution rules/TIF. L08 preserves that
+  block and records the director-owned bridge request at
+  `live-edge-receipts/patches/L08-spot-tif-capability.request.md`.
 
 ## Measured tests
 
 - `node packages/edge-protocol-tests/protocol.test.mjs`: exit 0, 22/22, 0.02s real.
-- `node --test --test-concurrency=1 --test-reporter=spec "server/test/liveEdge/**/*.test.mjs"`: exit 0, 1,121/1,121.
+- `node --test --test-concurrency=1 --test-reporter=spec "server/test/liveEdge/**/*.test.mjs"`: exit 0, 1,166/1,166.
 - L02 focused source-contract subset: exit 0, 43/43.
 - L03 focused signed-kernel subset: exit 0, 161/161.
 - L04 focused instrument-spec subset: exit 0, 242/242 (normalization 115, sizing 27, waiting/import-purity 100).
@@ -175,6 +200,19 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 - L07 source/test/full phase aggregates: `b6ecf633ba933a325c42e2f151b3cf65140740d4d84ca8e6f21fa8d7aff3faea`, `8ed949dd22129cfdb6e88efda7ade5f2fb4f57d5e80053a1f6e694ac1626b0f0`, `737906837338b3b806c133370bd187019dae15d7e524cb5fb33c075d8d096064`.
 - L07 scope/frozen/diff/ancestry/static purity gates: pass; exactly 18 implementation paths from accepted L06 state through the implementation tree.
 - L07 final independent verification: `ACCEPT`; immutable receipt sealed at `9977d9ea6000a5c2980988254b80893090aaa84bde46164495b5c4d50879c62d`.
+- L08 final uncontended reruns: build exit 0; focused execution policy `45/45`;
+  accumulated live-edge `1,166/1,166`; protocol `22/22`; `npm test`
+  `377/377`; `npm run test:all` `2,479/2,479`.
+- L08 source/test/full phase aggregates:
+  `a212a75fd41ca2c58765d8db682e76d68cbe45acfd9cde7cea10ec5e7f959402`,
+  `5aa2a052a096b393f034012d3dfdff835e46fa30c5ce1c8a1e7b9471cdd363cd`,
+  `82d569ba186a40b96425d4fe973d6b88dc9a691f40b8d3328a5a65c9feaa0f51`.
+- L08 scope/frozen/diff/ancestry/static-purity gates: pass; exactly 13
+  implementation paths from accepted L07 state through the implementation
+  tree.
+- L08 final fresh independent verification: two passes `ACCEPT`; immutable
+  receipt sealed at
+  `e232f9180c2933f6677965ed66341177dce8fe5353d37b0627747661a23bedc9`.
 - Only existing Vite chunk-size warning observed.
 
 ## Runtime, deployment and secret boundary
@@ -189,7 +227,7 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 ## Section 7 routing
 
 - L-A: fixed 10-USDT envelope remains unchanged; later evidence-ladder seam belongs inside existing later phases and cannot auto-increase capital.
-- L-B: empirical region and event-to-private-confirmation latency chain remains owner-gated and routes through L03/L05-L07/L13/L15-L17.
+- L-B: empirical region and event-to-private-confirmation latency chain remains owner-gated and routes through L03/L05-L08/L13/L15-L17.
 - L-C: Q regime remains versioned advisory to existing Strategy/Capital/Risk; L01's bridge rejects unknown/unsupported/conflicting posture and remains `UNWIRED` pending owner-approved integration.
 - L-D: L01 consumes recording health through a read-only injected seam; no duplicate feed or dependency on reconciliation/recovery was created.
 
@@ -205,20 +243,20 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 - L05 is accepted `LANE_READY` / `BUILT_AND_TESTED` / `UNWIRED` and must not be repeated.
 - L06 is accepted `LANE_READY` / `BUILT_AND_TESTED` / `UNWIRED` and must not be repeated.
 - L07 is accepted `LANE_READY` / `BUILT_AND_TESTED` / `UNWIRED` and must not be repeated.
+- L08 is accepted `LANE_READY` / `BUILT_AND_TESTED` / `UNWIRED` and must not be repeated.
 - D0011 records both L06 shared-owner requests as director-resolved `DEFERRED_TO_I00`; they do not block injected-port L06 and authorize no shared edits.
 - Frozen protocol own-property/fixture/hash-coverage gaps remain unchanged; D0003 requests a future director revision while the L01 consumer hardens locally.
 - Production Basis/Volume assessment ingress, production component identity/policy binding, package scripts and supervisor/API projection remain director-owned.
-- L08 is active only from the accepted L07 receipt/state cut. L09-L17 are untouched.
+- L09-L17 are untouched. L09/L10/L11 are director-owned branches from the
+  exact accepted L08 SHA; this lane must remain parked.
 
 ## Exact next task
 
-Execute only `live-edge-receipts/TASKS/L08.md`: build the pure deterministic production order-policy engine under its exclusive adapter/test paths; compare exact passive/aggressive/TIF/escalation/leg-sequence/recovery distributions without widening Capital/Risk or creating action authority; complete implementation, independent verification, gates, receipt and state transition before L09.
+`PARK`. The L-lane lead performs no L09/L10/L11 work. Await a director-owned
+branch/task cut from exact accepted L08 SHA
+`0e9025c7c6965d7c675c230cb8856ef546476406`.
 
-Exact first command on resume:
-
-```bash
-shasum -a 256 live-edge-receipts/TASKS/L08.md live-edge-receipts/RECEIPTS/L07.md server/src/liveEdge/adapters/binanceContracts/matrix.ts && git diff --exit-code 73e1a1ff7daa48df8dac45713fc5f106842edafc -- EDGE_PROTOCOL_V1.md packages/edge-protocol packages/edge-protocol-tests
-```
+No automatic resume command is authorized from this parked state.
 
 ## Files to re-read on resume
 
@@ -228,20 +266,20 @@ shasum -a 256 live-edge-receipts/TASKS/L08.md live-edge-receipts/RECEIPTS/L07.md
 - `live-edge-receipts/TASKS/L08.md`
 - `live-edge-receipts/DIRECTIVE_INPUTS.lock`
 - `live-edge-receipts/DECISIONS/D0002-director-launch-digest-acceptance.md`
-- `live-edge-receipts/RECEIPTS/L07.md`
-- `live-edge-receipts/DECISIONS/D0012-l07-exchange-twin-policy.md`
-- `server/src/liveEdge/adapters/binanceSignedKernel/rateBudget.ts`
-- `server/src/liveEdge/adapters/binanceSignedKernel/ambiguity.ts`
-- `server/src/liveEdge/adapters/binanceInstrumentSpecs/index.ts`
-- `server/src/liveEdge/adapters/durableMutationJournal/index.ts`
-- `server/src/liveEdge/adapters/exchangeTwin/index.ts`
+- `live-edge-receipts/RECEIPTS/L08.md`
+- `live-edge-receipts/DECISIONS/D0013-l08-execution-policy.md`
+- `live-edge-receipts/patches/L08-spot-tif-capability.request.md`
+- `server/src/liveEdge/adapters/executionPolicy/index.ts`
 - `EDGE_PROTOCOL_V1.md`
 - `LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md`
 - only Section 7 of the corrected/accepted launch file
 
 ## Work not to repeat unless inputs changed
 
-- Do not repeat accepted L00/L01/L02/L03/L04/L05/L06/L07 work, broad source discovery, canonical owner/code/test inventory or launch-hash investigation.
-- Reuse accepted L02/L03/L04/L05/L06/L07 artifacts and verify only current official order-policy, TIF, cancel/escalation, price-bound and product-mode semantics needed for L08.
+- Do not repeat accepted L00/L01/L02/L03/L04/L05/L06/L07/L08 work, broad
+  source discovery, canonical owner/code/test inventory or launch-hash
+  investigation.
+- Do not create an L09/L10/L11 task, implementation, scaffold, receipt or state
+  transition in this lane.
 - Do not edit frozen protocol or shared production/package files.
-- Do not begin L09 before L08 implementation, tests, independent-verification corrections, commits, immutable receipt and state transition are complete.
+- Keep the lane parked until the director provides a new exact branch/task.

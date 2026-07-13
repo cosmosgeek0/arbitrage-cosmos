@@ -98,6 +98,21 @@ canonical persistence and fractional Foundation comparison remain unclaimed.
 | Replay/checkpoint and calibration evidence | `checkpointExchangeTwin`, `restoreExchangeTwin`, `compareExchangeTwinOutcome` | `BUILT_AND_TESTED` | value-only evidence | Retains exact canonical events, reconstructs state before reuse, bounds aggregate fills and preserves fee/cost/calibration missing values; hashes are commitments rather than persistence or model-promotion authority |
 | Offline exchange-twin proofs | `server/test/liveEdge/exchangeTwin/**` | focused `69/69`; accumulated live-edge `1121/1121` | test-only | Conservative depth/queue allocation, TIF, ambiguity, fee units/conversion, owner lineage, crash/restart, every durable state, exact resource boundaries and hard external-boundary proofs; network-free |
 
+## L08 delta
+
+| Component | Path | Lane build proof | Integration state | Authority / limitation |
+| --- | --- | --- | --- | --- |
+| Deterministic execution-mechanics policy | `server/src/liveEdge/adapters/executionPolicy/policy.ts`, `types.ts`, `exact.ts` | `BUILT_AND_TESTED` | `LANE_READY_UNWIRED` | Compares bounded injected candidates for an already-authorized intent only; four owner-specific constraint envelopes, L04 capability cuts and current dependency revisions remain exact, while every output is advisory, synthetic-only and non-sendable |
+| Exact distribution and conservative objective | `evaluateExecutionPolicy`, exact PPM/CVaR evidence | `BUILT_AND_TESTED` | immutable value only | Retains signed fee/rebate, adverse selection, opportunity decay, cancel/race, unhedged/recovery loss, fill latency, naked exposure and per-leg fill evidence; exact partial-atom CVaR and the declared lexicographic objective introduce no predictor, trainer or calibration threshold owner |
+| Causal multi-leg documentary plan | content-addressed action/candidate/plan values | `BUILT_AND_TESTED` | later lifecycle input candidate only | Ordered second-leg quantity is explicitly actual-fill-derived and capped; concurrent per-leg transitions are explicit; cancel/replacement is separate, same-leg, single-use and deadline-monotonic; recovery is exact-exposure-bound and risk-reducing only |
+| Offline order-policy proofs | `server/test/liveEdge/executionPolicy/**` | focused `45/45` | test-only | Owner-envelope non-widening, L04 Spot fail-closed posture, bounded USD-M GTC/IOC/FOK mechanics, MARKET rejection, exact CVaR/ranking, latency, sequence, recovery, cancel graph, hostile input, deep-freeze and hard-boundary proofs; network-free |
+
+Accepted L04 cannot currently prove Spot execution rules or Spot TIF from its
+Runtime-owned metadata seam. L08 preserves that `BLOCKED` truth and records the
+director-owned bridge request in
+`live-edge-receipts/patches/L08-spot-tif-capability.request.md`; it does not
+cross-cast USD-M capability or silently widen L04.
+
 ## Director-owned integration still required
 
 - owner-approved Basis/Volume advisory intake;
@@ -131,6 +146,11 @@ evidence. It remains `UNWIRED`, non-sendable and non-authoritative; Foundation
 still owns canonical execution/reconciliation truth, and production order
 policy/composition begins no earlier than director-controlled later phases.
 
+L08 consumes only injected owner projections and accepted L04/L07 revisions.
+It creates no Capital/Risk decision, order, ticket, coordinator, lifecycle,
+reconciliation or persistence owner. Production composition remains
+director-owned and begins no earlier than L09 from the exact accepted L08 SHA.
+
 ## Explicitly absent
 
 - private account reads, signed/test/live orders and exchange mutations;
@@ -158,6 +178,10 @@ policy/composition begins no earlier than director-controlled later phases.
 - an exchange client, private/account read, signer, socket, retry scheduler,
   canonical fill/position/reconciliation verdict, model trainer, persistence
   owner or production execution-policy binding in L07.
+- an order sender, market-price bypass, blind retry, atomic cancel-replace,
+  recovery mutation, second strategy/coordinator, Capital/Risk override,
+  calibration owner, store, ticket, canonical lifecycle or production binding
+  in L08.
 
 `LIVE_EXECUTION_NOT_IMPLEMENTED` remains mechanically enforced by the canonical
 Foundation execution barrier and the L01 regression proof.

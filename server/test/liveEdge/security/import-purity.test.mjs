@@ -49,6 +49,15 @@ const CAPITAL_DECIMAL_CONSUMERS = new Map([
     'normalizeNonNegativeExactDecimal',
     'subtractExactDecimals',
   ])],
+  [path.resolve('server/src/liveEdge/adapters/executionPolicy/exact.ts'), new Set([
+    'ExactDecimal',
+    'NonNegativeDecimal',
+    'addExactDecimals',
+    'compareExactDecimals',
+    'multiplyExactDecimals',
+    'normalizeExactDecimal',
+    'normalizeNonNegativeExactDecimal',
+  ])],
 ]);
 const CANONICAL_BARRIER_SOURCE = path.resolve('server/src/systemIntegration/contracts/constants.ts');
 const BINANCE_DOCUMENTARY_DATA_SOURCE = path.resolve(

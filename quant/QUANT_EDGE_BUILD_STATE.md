@@ -1,13 +1,12 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `36`
+State generation: `37`
 
-Updated: 2026-07-13T10:32:21+0530
+Updated: 2026-07-13T10:35:36+0530
 
-Status: `Q16 ACCEPTED — Q17 READY TO ACTIVATE`. Q13 and Q15 are accepted and
-director-merged. Exact C16 verification is sealed by
-`quant/RECEIPTS/Q16_ACCEPTANCE.md`. The Q-lane spine must now execute Q17 and stop
-at `LANE_READY` for director audit.
+Status: `Q17 WORKING — FINAL PROOF/ACCEPTANCE PHASE`. Q13 and Q15 are accepted and
+director-merged. Q16 is exact-commit accepted. Q17 is the sole active phase and
+must stop at `LANE_READY` for director audit after separate C17/A17 commits.
 
 Program: Q lane — deterministic research evidence, labels, models, calibration,
 uncertainty and advisory-only local inference.
@@ -20,6 +19,9 @@ uncertainty and advisory-only local inference.
   `b3d8cedece8cf3a9f546c60016beae442f85f160`; tree
   `a35b888041cbdd4ea56accd29a490a8ce043cef0`; exact parent
   `cff7943845231ef1518dbfb937f986cdf2e247f5`.
+- Q16 acceptance A16 / Q17 activation parent:
+  `4ac05802244a194639865a4b615ee2af13dce4e2`; tree
+  `eb367affe1952093be09d8ec2d1d1344ae905453`; exact parent C16.
 - Q16 activation commit:
   `cff7943845231ef1518dbfb937f986cdf2e247f5`; tree
   `b988cd7ebc2eff2090f972115a0741f6089d358a`; exact parent
@@ -178,14 +180,33 @@ Git blob `26d1c16390c9d7763969e5abb8eb42d8591af020`.
   edge, observed-market validity, production performance, calibration quality,
   capacity or permission to act.
 
+## Active Q17 contract
+
+- Task: `quant/TASKS/Q17.md`; status working; SHA-256
+  `4aca562cea3d147152f5fba3a7c593f2c84845dba3ad84065a29a8bc229b4a57`.
+- Activation parent is Q16 acceptance A16. The commit first containing this task and
+  generation-37 state is the non-self-referential Q17 activation commit.
+- Exclusive writes: `quant/src/quant_edge/final_proof/**`, `quant/tests/q17/**`,
+  `quant/scripts/q17_acceptance_campaign.py`, `quant/generated/q17/**`, Q17
+  task/decision/docs/receipts and this quant state only.
+- Q17 composes accepted owners for deterministic end-to-end replay, fault proof,
+  accepted research-evidence projection, actual benchmark/resource measurement,
+  AST-exact security/scope proof and the final component/artifact manifests.
+- The benchmark uses the Q00 fixed synthetic universe/focus load shape and 8 GiB
+  provisional ceiling. Current point-in-time universe, retained event-rate trace and
+  numeric latency promotion targets remain `UNKNOWN`.
+- No Q17 result can promote Q13/Q15/Q16 truth. The final advisory action remains
+  `ABSTAIN_UNKNOWN` unless accepted upstream bytes themselves change through a
+  future director-controlled phase.
+
 ## Exact next task
 
-1. Commit only `quant/RECEIPTS/Q16_ACCEPTANCE.md` and this generation-36 state as
-   A16 after the scope and exact-diff gates.
-2. Activate Q17 in a separate generation, execute its end-to-end proof, fault
-   campaigns, benchmark, security/scope evidence, final receipt and exact-commit
-   acceptance.
-3. Stop at `LANE_READY` with the accepted HEAD frozen and park for director audit.
+1. Commit only `quant/TASKS/Q17.md` and this generation-37 state as the Q17
+   activation after scope and exact-diff gates.
+2. Execute the full Q17 implementation, focused/accumulated/adversarial/correction
+   loop; seal C17 and verify it from a clean archive.
+3. Create separate A17 acceptance/state, freeze HEAD and stop at `LANE_READY` for
+   director audit.
    Never push.
 
 ## Resume read order
@@ -193,6 +214,7 @@ Git blob `26d1c16390c9d7763969e5abb8eb42d8591af020`.
 1. Root `STATE.md`, `MISSION.md`, `ARCHITECTURE.md` Part II and `DIRECTOR.md`.
 2. The two launch directives, frozen protocol inputs and
    `quant/DIRECTIVE_INPUTS.lock`.
-3. This state, Q16 task/decision/design and both immutable Q16 receipts.
+3. This state, `quant/TASKS/Q17.md`, and immutable Q16 implementation/acceptance
+   receipts.
 4. Confirm branch/HEAD, protected untracked inputs, frozen hashes and scope before
-   Q17 activation.
+   resuming Q17 implementation or verification.

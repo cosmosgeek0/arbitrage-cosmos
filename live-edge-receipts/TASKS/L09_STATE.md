@@ -1,6 +1,6 @@
 # L09 state — normal Basis lifecycle shard
 
-Generation: `11`
+Generation: `12`
 
 Status: `STOP_FOR_DIRECTOR_SYSTEM_INTEGRATION_RULING`
 
@@ -103,13 +103,22 @@ committed correction. No System Integration path changed.
   `live-edge-receipts/DECISIONS/L09-007-DLAUNCH14-SYSTEM-INTEGRATION-RULING-STOP.md`.
 - Receipt:
   `live-edge-receipts/RECEIPTS/L09_DLAUNCH14_SI_RULING_STOP.md`.
+- L09-007 decision SHA-256:
+  `5bc1346a63e6f617c88a6614fda8fdd0d0077425f4ece7b751ca228f12241c63`.
+- D14 SI-ruling-stop receipt SHA-256:
+  `23da2658b1da2d5c4c47c38ef064e88d640935b25691874cfb47e7e64915cf66`.
+- Ruling-stop documentation commit:
+  `83ce1b043703e93ee815108f16426a4ff630bb67`.
+- Ruling-stop documentation tree:
+  `0631573e8050b72e6a75f6624d19db5390e852ee`.
 - L09: `STOP_FOR_DIRECTOR_SYSTEM_INTEGRATION_RULING`.
 - Phase acceptance: `NO`.
 - Integrated acceptance: `NO`.
 - Merge/push: `NONE`.
 
-The decision, receipt and generation-11 task/state bytes are committed next;
-a state-only seal records that exact documentation commit identity.
+That documentation commit contains the immutable L09-007 decision/receipt and
+the generation-11 task/state bytes. This generation is the state-only seal.
+It changes no implementation/test path and claims no L09 acceptance.
 
 ## Current posture and non-claims
 

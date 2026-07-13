@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "verificationBase": "420cc83e5512d54ca1b1c064c1041d89b23914a0",
+  "items": [
+    { "sha": "b272049b1e482ff75de27fbdaece7be5a7bbcc5d", "claimType": "NAMED_IN_RECEIPT", "receiptPath": "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md", "receiptSha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162", "expectedNeedle": "b272049b1e482ff75de27fbdaece7be5a7bbcc5d", "ancestorRequired": true },
+    { "sha": "3340f75270049de96846d153672b91f065844eef", "claimType": "NAMED_IN_RECEIPT", "receiptPath": "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md", "receiptSha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162", "expectedNeedle": "3340f75270049de96846d153672b91f065844eef", "ancestorRequired": true },
+    { "sha": "c4ae7a9aee51050da2076bf4a454988b1d372bc4", "claimType": "NAMED_ADAPTED_PROVENANCE", "receiptPath": "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md", "receiptSha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162", "expectedNeedle": "c4ae7a9aee51050da2076bf4a454988b1d372bc4", "ancestorRequired": true },
+    { "sha": "e28b4c13c2f57f181cc6ea61508089719c7ff59c", "claimType": "NAMED_IN_RECEIPT", "receiptPath": "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md", "receiptSha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162", "expectedNeedle": "e28b4c13c2f57f181cc6ea61508089719c7ff59c", "ancestorRequired": true },
+    { "sha": "963538d3cc9da74b51b70347a70a017b6eab2910", "claimType": "NAMED_IN_RECEIPT", "receiptPath": "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md", "receiptSha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162", "expectedNeedle": "963538d3cc9da74b51b70347a70a017b6eab2910", "ancestorRequired": true },
+    { "sha": "87af78285a4b11bc8ca98c4cc9b3bb4a551d2537", "claimType": "NAMED_ACCEPTED_INTEGRATION_BASE", "receiptPath": "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md", "receiptSha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162", "expectedNeedle": "87af78285a4b11bc8ca98c4cc9b3bb4a551d2537", "ancestorRequired": true },
+    { "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c", "claimType": "COMMIT_CONTAINING_RECEIPT", "receiptPath": "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md", "receiptPathAtCommit": "SYSTEM_CONVERGENCE_RECEIPT.md", "receiptSha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162", "expectedNeedle": "# System Convergence Receipt", "ancestorRequired": true }
+  ]
+}

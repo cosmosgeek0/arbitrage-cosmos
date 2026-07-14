@@ -25,7 +25,7 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 | IP-OPS packet | ~/Desktop/ip-ops | ip-ops-20260713 | 420cc83 | OPS_READY — fan-in at I00 spine |
 | IP-PROOF packet | ~/Desktop/ip-proof | ip-proof-20260713 | 420cc83 | PROOF_PRESTAGE_READY (23e985c) — fan-in at I00 spine |
 
-| I00-VERIFY | ~/Desktop/i00-assembly | i00-product-assembly-20260713 | 1fec867 | ROLE-2 INTEGRATOR ACTIVE — past final L merge (ec82bc5, L exactly LAST, 16/16/16/16 regenerated inventory per D-LAUNCH-20); remaining: L shared wiring, source-freeze rerun, runtime/browser acceptance, candidate seal → INTEGRATION_CANDIDATE_READY |
+| I00-VERIFY | ~/Desktop/i00-assembly | i00-product-assembly-20260713 | 1fec867 | ROLE-2 INTEGRATOR at 3dcf0ec, RESUMING (app-side stop mid WS-close 1012/1006 fix, 3 files uncommitted; resume block D-LAUNCH-31) — then closure reports → C → complete battery → seal S → INTEGRATION_CANDIDATE_READY; must adjudicate preflight PF-001..008 before C-freeze |
 
 | F-BRIDGE canonical execution | ~/Desktop/f-bridge | f-bridge-execution-20260713 | 24ac894 | ACCEPTED (1e9d28a) + MERGED to current-main c900907 (24/24 foundation, npm test green) |
 | A-CORE IP-ASSURANCE | ~/Desktop/ip-assurance | ip-assurance-20260713 | 9785c93 | CORE_SCAFFOLD_READY (08a0a09) — full READY after director fan-in |
@@ -40,8 +40,9 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 | S4 assuranceCase satellite | ~/Desktop/ip-assur-case | ip-assur-case-20260713 | c57610c | RESEALED b4d8a44 + INTEGRATED by Role-2 (merge 86ee3b5, 41/41 blobs exact) |
 
 | AIOPS-PRESTAGE (non-donor) | ~/Desktop/aiops-prestage | aiops-prestage-20260714 | d78be24 | AIOPS_PRESTAGE_READY ACCEPTED (08e0bea, pushed; D-LAUNCH-30) — collision map ratified for port phase; reuse inventory + insertion registry = integrator reading; PARKED |
-| AIOPS SHADOW A1–A5 | ~/Desktop/aiops-shadow-a1..a5 | aiops-shadow-a1..a5-20260715 | 03857dc | WORKING (wave 18, D-LAUNCH-29) — SHADOW_SPECULATIVE, no acceptance status; PORT + full rerun at INTEGRATED_ACCEPTED |
-| ROLE3-PREFLIGHT | ~/Desktop/role3-preflight | role3-preflight-20260715 | 03857dc | WORKING (wave 18) — read-only scout, findings only, no verdict |
+| AIOPS SHADOW A1/A3/A4/A5 | ~/Desktop/aiops-shadow-* | aiops-shadow-*-20260715 | 03857dc | SHADOW_ARTIFACT_READY SEALED (83c1624/c345fbb/b5f4c47/e0411ea, pushed; D-LAUNCH-31) — PARKED; port + full rerun at INTEGRATED_ACCEPTED |
+| AIOPS SHADOW A2 | ~/Desktop/aiops-shadow-a2 | aiops-shadow-a2-20260715 | 03857dc | RESUMING (app-side stop; untracked scaffolding, 0 commits) — resume block issued D-LAUNCH-31 |
+| ROLE3-PREFLIGHT | ~/Desktop/role3-preflight | role3-preflight-20260715 | 03857dc | PREFLIGHT_FINDINGS_READY SEALED (06bb64a, pushed) — PF-001..008 delivered to I00 as evidence; PARKED |
 | C-SHARDS 1–6 | (cut at C freeze) | read-only at exact C | C | ARMED (wave 19) — acceptance battery sharded; receipts feed Role 3 |
 | EGRESS-PATCH | (cut after landing) | from landed main | INTEGRATED_ACCEPTED | ARMED — wave 17 block |
 

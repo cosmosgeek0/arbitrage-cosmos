@@ -67,6 +67,10 @@ Both branches descend from PROTOCOL_SHA. Main stays director-owned; neither Code
 4. Owner directives arrive from "commanders" (external ChatGPT) as .md files — verify hashes, correct stale assumptions from git truth (they are navigation hints, not acceptance evidence), register a D-LAUNCH-N acceptance entry here, then cut worktrees + blocks.
 5. External-action boundary (launch §10 / I00 §20) is never delegated and never inferred.
 
+## D-LAUNCH-19 (2026-07-14): commander audit + addendum adjudicated
+
+Both GREEN; endorsed. Bindings: (1) TOKENS PINNED — Role 3 outputs exactly `VERIFIED_CANDIDATE` (per controlling FINAL_INTEGRATION order Phase 3; the addendum's INTEGRATED_ACCEPTED reading applies to Phase-5 landing, which records `INTEGRATED_ACCEPTED`; both tokens exact, no paraphrase satisfies either gate). (2) Candidate receipt MUST contain the REGENERATED donor inventory equality (15 donors incl. sealed L df6b472; never the old fixed 14) and Q C17→A17 ancestry mapping (4cc83f4→02b4ecc). (3) The two money-path patch requests (ledger CAS, quantity bridge) each need an explicit written disposition in the candidate receipt. (4) STATE.md is stale by design — rewritten atomically ONLY in the landing commit. (5) Audit Phase-A items are COMPLETE per git (addendum verified) — no re-doing. (6) New worktree preverify-20260714 is declared NON-DONOR: its outputs never enter the candidate; it produces read-only pre-verification evidence + owner runbook drafts + a STATE.md landing draft for the director.
+
 ## D-LAUNCH-18 (2026-07-14): L lane SEALED LANE_READY / BUILT_AND_TESTED_UNWIRED (L worktree df6b472). ALL donors accepted+sealed: Q(02b4ecc), L lane, dash-shell, l15-infra, 4 IP packets, assurance A-CORE+hazard/formal/cockpit/agent/stability/S4. Role-2 integrator (WORKER_PROMPTS wave 11, folder i00-assembly) now integrates every donor incl. L LAST, then INTEGRATION_CANDIDATE_READY. Role-3 verifier = different fresh session next. Landing (Phase 5) = me.
 
 ## D-LAUNCH-17 (2026-07-14): FINAL_INTEGRATION order accepted — Phase 1 handoff complete

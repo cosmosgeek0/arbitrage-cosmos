@@ -1,6 +1,6 @@
 {
   "schemaVersion": "I00_LIVING_DIRECTOR_INPUT_ACCEPTANCE_V1",
-  "recordedAtUtc": "2026-07-13T03:55:11Z",
+  "recordedAtUtc": "2026-07-14T05:30:00Z",
   "ruling": "D-LAUNCH-7",
   "rulingCommit": "bdb29e37fb9b152aa1b7e1063ca892cd405c6245",
   "sourceRef": "current-main",
@@ -12,16 +12,16 @@
     {
       "path": "QL_DIRECTOR_STATE.md",
       "historicalPacketSha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
-      "observedLatestCommit": "bdb29e37fb9b152aa1b7e1063ca892cd405c6245",
-      "observedGitBlob": "f0c4422c6acb25da03feb41c5389ad6004c55c77",
-      "observedSha256": "081f3bf6c99bd41b6e6e50a0e1c0b9bd12052b60f203f8ea5f0ea1ad422d85c4"
+      "observedLatestCommit": "7ff1fd05584779672690f5058a01b1de573b4ccd",
+      "observedGitBlob": "0537a84b7608acffd1c4208b0aba2201e8c7fce4",
+      "observedSha256": "b4a81f58fb0c2f701f1c761a8cce0b7e032854d9b52f2ce4fc400ac849765ec2"
     },
     {
       "path": "QL_PARALLEL_DAG.md",
       "historicalPacketSha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546",
-      "observedLatestCommit": "1fec867fa3f62d17829543b3776dc768506ae8ac",
-      "observedGitBlob": "e068fe7634ac8d2b117935cff0e4a91d36d7d7b5",
-      "observedSha256": "469370d904484e450f17da301991d07b9d87ef39ee5b693048e14e997000338b"
+      "observedLatestCommit": "5aa6c34e20d00ce5963c2d0e848d5dd6183775a4",
+      "observedGitBlob": "3d0a28e55c90504773cd887de2d969422dd57936",
+      "observedSha256": "f6802f2e6236622c8f2d4b7bf2a5dda049f90aa553522034d929ca6a6e15a110"
     }
   ],
   "ownerDirectives": [

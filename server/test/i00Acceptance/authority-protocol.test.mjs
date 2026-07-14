@@ -3,21 +3,82 @@ import { test } from 'node:test';
 
 import {
   buildIdentityGraph,
+  compareQDirectiveInputLocks,
   deriveTruthLabel,
   effectiveFrozenInputScan,
   evaluateEvidenceSemantics,
   evaluateMessage,
   frozenInputScan,
   readJson,
+  readText,
   routeContractScan,
   runAuthorityScan,
   validateExactFilters,
   validateAssessmentSemantics,
+  verifyQDirectiveInputSupersession,
 } from './harness.mjs';
 
 const catalog = readJson('fixtures/i00/proof-catalog.json');
 const livingInputAcceptance = readJson('fixtures/i00/living-director-input-acceptance.json');
+const qDirectiveInputSupersession = readJson('fixtures/i00/q-directive-input-supersession.json');
 const protocolFixtures = readJson('packages/edge-protocol/fixtures/fixtures-v1.json');
+
+test('D-LAUNCH-1 authorizes exactly one external Q directive-lock supersession', () => {
+  const result = verifyQDirectiveInputSupersession(qDirectiveInputSupersession);
+  assert.equal(result.status, 'AUTHORIZED_EXTERNAL_SUPERSESSION', JSON.stringify(result));
+  assert.equal(result.passed, true, JSON.stringify(result));
+  assert.equal(result.transition.inventoryRows, 6);
+  assert.equal(result.transition.headersUnchanged, true);
+  assert.equal(result.transition.remainingRowsUnchanged, true);
+  assert.equal(result.observations.headReachable, true);
+  assert.equal(result.observations.sourceReachable, true);
+  assert.equal(result.observations.authorityParentLockGitBlob, qDirectiveInputSupersession.donor.lockGitBlob);
+  assert.equal(result.observations.authorityResultLockGitBlob, qDirectiveInputSupersession.current.lockGitBlob);
+  assert.equal(result.observations.ownerLaunchSha256, qDirectiveInputSupersession.authority.ownerLaunchSha256);
+});
+
+test('Q directive-lock supersession fails closed on provenance and document mutation', () => {
+  const cases = [
+    { ...qDirectiveInputSupersession, status: 'BYTE_IDENTICAL' },
+    { ...qDirectiveInputSupersession, donor: { ...qDirectiveInputSupersession.donor, tip: '0'.repeat(40) } },
+    { ...qDirectiveInputSupersession, donor: { ...qDirectiveInputSupersession.donor, tree: '0'.repeat(40) } },
+    { ...qDirectiveInputSupersession, donor: { ...qDirectiveInputSupersession.donor, lockSha256: '0'.repeat(64) } },
+    { ...qDirectiveInputSupersession, authority: { ...qDirectiveInputSupersession.authority, commit: '0'.repeat(40) } },
+    { ...qDirectiveInputSupersession, authority: { ...qDirectiveInputSupersession.authority, sourceRef: 'HEAD' } },
+    { ...qDirectiveInputSupersession, authority: { ...qDirectiveInputSupersession.authority, ownerLaunchGitBlob: '0'.repeat(40) } },
+    { ...qDirectiveInputSupersession, authority: { ...qDirectiveInputSupersession.authority, ownerLaunchSha256: '0'.repeat(64) } },
+    { ...qDirectiveInputSupersession, current: { ...qDirectiveInputSupersession.current, lockGitBlob: '0'.repeat(40) } },
+    { ...qDirectiveInputSupersession, transition: { ...qDirectiveInputSupersession.transition, currentLaunchRow: `${qDirectiveInputSupersession.transition.currentLaunchRow} forged` } },
+    { ...qDirectiveInputSupersession, unexpected: true },
+  ];
+  for (const document of cases) {
+    const result = verifyQDirectiveInputSupersession(document);
+    assert.equal(result.status, 'BLOCKED');
+    assert.equal(result.passed, false);
+  }
+});
+
+test('Q directive-lock transition rejects third hashes extra row drift and malformed bytes', () => {
+  const current = readText('quant/DIRECTIVE_INPUTS.lock');
+  const donor = current.replace(
+    qDirectiveInputSupersession.transition.currentLaunchRow,
+    qDirectiveInputSupersession.transition.donorLaunchRow,
+  );
+  const accepted = compareQDirectiveInputLocks(Buffer.from(donor), Buffer.from(current), qDirectiveInputSupersession.transition);
+  assert.equal(accepted.passed, true, JSON.stringify(accepted));
+
+  const cases = [
+    [Buffer.from(donor.replace('0cc192e3', '1cc192e3')), Buffer.from(current)],
+    [Buffer.from(donor), Buffer.from(current.replace('26b1d5ce', '36b1d5ce'))],
+    [Buffer.from(donor), Buffer.from(current.replace('MISSION.md |', 'MISSION-CHANGED.md |'))],
+    [Buffer.from(`${donor}EXTRA | ROW | FORBIDDEN\n`), Buffer.from(current)],
+    [Buffer.from(donor.slice(0, -1)), Buffer.from(current)],
+    [Buffer.from([0xff, 0x0a]), Buffer.from(current)],
+  ];
+  for (const [donorBytes, currentBytes] of cases) {
+    assert.equal(compareQDirectiveInputLocks(donorBytes, currentBytes, qDirectiveInputSupersession.transition).passed, false);
+  }
+});
 
 test('historical packet pins remain immutable while D-LAUNCH-7 accepts living director state', () => {
   const historical = frozenInputScan(catalog);
@@ -34,8 +95,8 @@ test('historical packet pins remain immutable while D-LAUNCH-7 accepts living di
   assert.match(effective.acceptance.sourceTip, /^[a-f0-9]{40}$/);
   assert.equal(effective.acceptance.rulingCommit, 'bdb29e37fb9b152aa1b7e1063ca892cd405c6245');
   assert.deepEqual(effective.acceptance.livingResults.map((entry) => [entry.path, entry.latestCommit, entry.observedSha256]), [
-    ['QL_DIRECTOR_STATE.md', 'bdb29e37fb9b152aa1b7e1063ca892cd405c6245', '081f3bf6c99bd41b6e6e50a0e1c0b9bd12052b60f203f8ea5f0ea1ad422d85c4'],
-    ['QL_PARALLEL_DAG.md', '1fec867fa3f62d17829543b3776dc768506ae8ac', '469370d904484e450f17da301991d07b9d87ef39ee5b693048e14e997000338b'],
+    ['QL_DIRECTOR_STATE.md', '7ff1fd05584779672690f5058a01b1de573b4ccd', 'b4a81f58fb0c2f701f1c761a8cce0b7e032854d9b52f2ce4fc400ac849765ec2'],
+    ['QL_PARALLEL_DAG.md', '5aa6c34e20d00ce5963c2d0e848d5dd6183775a4', 'f6802f2e6236622c8f2d4b7bf2a5dda049f90aa553522034d929ca6a6e15a110'],
   ]);
   assert(effective.acceptedInputs.filter((entry) => entry.acceptanceMode === 'LATEST_CURRENT_MAIN_TOUCH')
     .every((entry) => entry.historicalPacketPassed === false && entry.historicalPacketPinPreserved));

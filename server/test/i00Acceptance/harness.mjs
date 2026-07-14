@@ -4,7 +4,13 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { verifyLivingDirectorInputAcceptance } from '../../../test/i00/git-provenance.mjs';
+import {
+  compareQDirectiveInputLocks,
+  verifyLivingDirectorInputAcceptance,
+  verifyQDirectiveInputSupersession,
+} from '../../../test/i00/git-provenance.mjs';
+
+export { compareQDirectiveInputLocks, verifyQDirectiveInputSupersession };
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(HERE, '../../..');

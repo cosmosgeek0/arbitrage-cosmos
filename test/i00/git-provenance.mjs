@@ -46,6 +46,178 @@ function sameMembers(actual, expected) {
   return actual.length === expected.length && [...actual].sort().every((value, index) => value === [...expected].sort()[index]);
 }
 
+function exactKeys(value, expected) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    && sameMembers(Object.keys(value), expected);
+}
+
+function regularUtf8Lines(bytes) {
+  if (!Buffer.isBuffer(bytes) || bytes.length === 0 || bytes.at(-1) !== 0x0a || bytes.includes(0)) return null;
+  try {
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    const lines = text.split('\n');
+    if (lines.at(-1) !== '') return null;
+    lines.pop();
+    return lines;
+  } catch {
+    return null;
+  }
+}
+
+export function compareQDirectiveInputLocks(donorBytes, currentBytes, transition) {
+  const donorLines = regularUtf8Lines(donorBytes);
+  const currentLines = regularUtf8Lines(currentBytes);
+  const transitionShape = exactKeys(transition, ['donorLaunchRow', 'currentLaunchRow']);
+  const inventoryShape = donorLines !== null && currentLines !== null
+    && donorLines.length === 8 && currentLines.length === 8;
+  const headersUnchanged = inventoryShape
+    && donorLines[0] === currentLines[0] && donorLines[1] === currentLines[1];
+  const remainingRowsUnchanged = inventoryShape
+    && donorLines.slice(3).every((line, index) => line === currentLines[index + 3]);
+  const launchRowExact = transitionShape && inventoryShape
+    && donorLines[2] === transition.donorLaunchRow
+    && currentLines[2] === transition.currentLaunchRow
+    && donorLines[2] !== currentLines[2];
+  return Object.freeze({
+    inventoryRows: inventoryShape ? 6 : null,
+    headersUnchanged,
+    remainingRowsUnchanged,
+    launchRowExact,
+    passed: transitionShape && inventoryShape && headersUnchanged && remainingRowsUnchanged && launchRowExact,
+  });
+}
+
+export function verifyQDirectiveInputSupersession(document) {
+  const structuralChecks = Object.freeze({
+    documentKeys: exactKeys(document, ['schemaVersion', 'status', 'donor', 'authority', 'current', 'transition']),
+    schemaVersion: document?.schemaVersion === 'I00_Q_DIRECTIVE_INPUT_SUPERSESSION_V1',
+    status: document?.status === 'AUTHORIZED_EXTERNAL_SUPERSESSION',
+    donorKeys: exactKeys(document?.donor, ['tip', 'tree', 'lockPath', 'lockGitBlob', 'lockSha256', 'lockBytes']),
+    authorityKeys: exactKeys(document?.authority, [
+      'commit',
+      'sourceRef',
+      'lockPath',
+      'parentLockGitBlob',
+      'resultLockGitBlob',
+      'ownerLaunchGitBlob',
+      'ownerLaunchSha256',
+      'ownerLaunchBytes',
+      'commitMessageNeedles',
+    ]),
+    currentKeys: exactKeys(document?.current, ['lockPath', 'lockGitBlob', 'lockSha256', 'lockBytes']),
+    transitionKeys: exactKeys(document?.transition, ['donorLaunchRow', 'currentLaunchRow']),
+    donorTip: FULL_SHA.test(document?.donor?.tip ?? ''),
+    donorTree: FULL_SHA.test(document?.donor?.tree ?? ''),
+    authorityCommit: FULL_SHA.test(document?.authority?.commit ?? ''),
+    sourceRef: document?.authority?.sourceRef === 'current-main',
+    lockPath: document?.donor?.lockPath === 'quant/DIRECTIVE_INPUTS.lock'
+      && document?.authority?.lockPath === 'quant/DIRECTIVE_INPUTS.lock'
+      && document?.current?.lockPath === 'quant/DIRECTIVE_INPUTS.lock',
+    blobs: FULL_SHA.test(document?.donor?.lockGitBlob ?? '')
+      && FULL_SHA.test(document?.authority?.parentLockGitBlob ?? '')
+      && FULL_SHA.test(document?.authority?.resultLockGitBlob ?? '')
+      && FULL_SHA.test(document?.authority?.ownerLaunchGitBlob ?? '')
+      && FULL_SHA.test(document?.current?.lockGitBlob ?? ''),
+    digests: SHA256.test(document?.donor?.lockSha256 ?? '')
+      && SHA256.test(document?.authority?.ownerLaunchSha256 ?? '')
+      && SHA256.test(document?.current?.lockSha256 ?? ''),
+    byteLengths: Number.isSafeInteger(document?.donor?.lockBytes) && document.donor.lockBytes > 0
+      && Number.isSafeInteger(document?.authority?.ownerLaunchBytes) && document.authority.ownerLaunchBytes > 0
+      && Number.isSafeInteger(document?.current?.lockBytes) && document.current.lockBytes > 0,
+    messageNeedles: Array.isArray(document?.authority?.commitMessageNeedles)
+      && document.authority.commitMessageNeedles.length === 3
+      && document.authority.commitMessageNeedles.every((needle) => typeof needle === 'string' && needle.length > 0 && needle.length <= 160),
+  });
+  const structurePassed = Object.values(structuralChecks).every(Boolean);
+  if (!structurePassed) return Object.freeze({
+    status: 'BLOCKED',
+    structuralChecks,
+    structurePassed,
+    transition: null,
+    observations: null,
+    passed: false,
+  });
+
+  const donorExists = gitExitZero(['cat-file', '-e', `${document.donor.tip}^{commit}`]);
+  const authorityExists = gitExitZero(['cat-file', '-e', `${document.authority.commit}^{commit}`]);
+  const headReachable = authorityExists && gitExitZero(['merge-base', '--is-ancestor', document.authority.commit, 'HEAD']);
+  const sourceReachable = authorityExists && gitExitZero(['merge-base', '--is-ancestor', document.authority.commit, document.authority.sourceRef]);
+  const donorTree = donorExists ? safeGit(['rev-parse', `${document.donor.tip}^{tree}`])?.trim() ?? null : null;
+  const donorLockGitBlob = donorExists ? safeGit(['rev-parse', `${document.donor.tip}:${document.donor.lockPath}`])?.trim() ?? null : null;
+  const donorBytes = donorExists ? safeGit(['show', `${document.donor.tip}:${document.donor.lockPath}`], null) : null;
+  const authorityParentLockGitBlob = authorityExists
+    ? safeGit(['rev-parse', `${document.authority.commit}^:${document.authority.lockPath}`])?.trim() ?? null
+    : null;
+  const authorityParentBytes = authorityExists
+    ? safeGit(['show', `${document.authority.commit}^:${document.authority.lockPath}`], null)
+    : null;
+  const authorityResultLockGitBlob = authorityExists
+    ? safeGit(['rev-parse', `${document.authority.commit}:${document.authority.lockPath}`])?.trim() ?? null
+    : null;
+  const authorityResultBytes = authorityExists
+    ? safeGit(['show', `${document.authority.commit}:${document.authority.lockPath}`], null)
+    : null;
+  const authorityMessage = authorityExists ? safeGit(['show', '-s', '--format=%B', document.authority.commit]) : null;
+  const ownerLaunchBytes = safeGit(['cat-file', 'blob', document.authority.ownerLaunchGitBlob], null);
+  let currentBytes = null;
+  try {
+    currentBytes = readFileSync(path.join(ROOT, document.current.lockPath));
+  } catch {
+    currentBytes = null;
+  }
+  const currentLockGitBlob = currentBytes === null ? null : safeGit(['hash-object', document.current.lockPath])?.trim() ?? null;
+  const transition = donorBytes === null || currentBytes === null
+    ? null
+    : compareQDirectiveInputLocks(donorBytes, currentBytes, document.transition);
+  const observations = Object.freeze({
+    donorExists,
+    donorTree,
+    donorLockGitBlob,
+    donorLockSha256: donorBytes === null ? null : digest(donorBytes),
+    donorLockBytes: donorBytes?.length ?? null,
+    authorityExists,
+    headReachable,
+    sourceReachable,
+    authorityParentLockGitBlob,
+    authorityParentLockSha256: authorityParentBytes === null ? null : digest(authorityParentBytes),
+    authorityResultLockGitBlob,
+    authorityResultLockSha256: authorityResultBytes === null ? null : digest(authorityResultBytes),
+    authorityMessageVerified: authorityMessage !== null
+      && document.authority.commitMessageNeedles.every((needle) => authorityMessage.includes(needle)),
+    ownerLaunchSha256: ownerLaunchBytes === null ? null : digest(ownerLaunchBytes),
+    ownerLaunchBytes: ownerLaunchBytes?.length ?? null,
+    currentLockGitBlob,
+    currentLockSha256: currentBytes === null ? null : digest(currentBytes),
+    currentLockBytes: currentBytes?.length ?? null,
+  });
+  const passed = donorTree === document.donor.tree
+    && donorLockGitBlob === document.donor.lockGitBlob
+    && observations.donorLockSha256 === document.donor.lockSha256
+    && observations.donorLockBytes === document.donor.lockBytes
+    && headReachable && sourceReachable
+    && authorityParentLockGitBlob === document.authority.parentLockGitBlob
+    && authorityParentLockGitBlob === document.donor.lockGitBlob
+    && observations.authorityParentLockSha256 === document.donor.lockSha256
+    && authorityResultLockGitBlob === document.authority.resultLockGitBlob
+    && authorityResultLockGitBlob === document.current.lockGitBlob
+    && observations.authorityResultLockSha256 === document.current.lockSha256
+    && observations.authorityMessageVerified
+    && observations.ownerLaunchSha256 === document.authority.ownerLaunchSha256
+    && observations.ownerLaunchBytes === document.authority.ownerLaunchBytes
+    && currentLockGitBlob === document.current.lockGitBlob
+    && observations.currentLockSha256 === document.current.lockSha256
+    && observations.currentLockBytes === document.current.lockBytes
+    && transition?.passed === true;
+  return Object.freeze({
+    status: passed ? 'AUTHORIZED_EXTERNAL_SUPERSESSION' : 'BLOCKED',
+    structuralChecks,
+    structurePassed,
+    transition,
+    observations,
+    passed,
+  });
+}
+
 export function verifyLivingDirectorInputAcceptance(document) {
   const structuralChecks = Object.freeze({
     schemaVersion: document?.schemaVersion === 'I00_LIVING_DIRECTOR_INPUT_ACCEPTANCE_V1',

@@ -21,7 +21,7 @@ function filesRecursively(path) {
 
 test('model manifest independently verifies every source file and bundle digest', () => {
   assert.equal(MODEL_BUNDLE_HASH_ALGORITHM, 'SHA256_SORTED_PATH_NUL_FILE_SHA256_NEWLINE');
-  assert.equal(MODEL_MANIFEST.length, 7);
+  assert.equal(MODEL_MANIFEST.length, 10);
   for (const model of MODEL_MANIFEST) {
     const seen = new Set();
     for (const file of model.files) {
@@ -36,13 +36,13 @@ test('model manifest independently verifies every source file and bundle digest'
   }
 });
 
-test('seven TLA modules and seven TLC configs are structurally paired without claiming execution', () => {
+test('manifest-count TLA modules and TLC configs are structurally paired without claiming execution', () => {
   const tlaDir = `${FORMAL_ROOT}tla/`;
   const names = readdirSync(tlaDir).sort();
   const modules = names.filter((name) => name.endsWith('.tla'));
   const configs = names.filter((name) => name.endsWith('.cfg'));
-  assert.equal(modules.length, 7);
-  assert.equal(configs.length, 7);
+  assert.equal(modules.length, MODEL_MANIFEST.length);
+  assert.equal(configs.length, MODEL_MANIFEST.length);
   assert.deepEqual(modules.map((name) => name.slice(0, -4)), configs.map((name) => name.slice(0, -4)));
   for (const moduleName of modules.map((name) => name.slice(0, -4))) {
     const source = readFileSync(`${tlaDir}${moduleName}.tla`, 'utf8');

@@ -69,7 +69,7 @@ function conformanceContext(candidate) {
   });
 }
 
-test('all seven packet conformance fixtures are valid and stay fail-closed', () => {
+test('all ten packet conformance fixtures are valid and stay fail-closed', () => {
   const verdicts = CONFORMANCE_FIXTURES.map((fixture) => {
     assert.equal(validateConformanceMapping(fixture).ok, true, fixture.modelId);
     const result = evaluateConformanceMapping(fixture);
@@ -77,7 +77,10 @@ test('all seven packet conformance fixtures are valid and stay fail-closed', () 
     assert.notEqual(result.verdict, 'SUPPORTING_EVIDENCE');
     return result.verdict;
   });
-  assert.deepEqual(verdicts, ['MISMATCH', 'MISMATCH', 'UNKNOWN', 'UNKNOWN', 'UNKNOWN', 'UNKNOWN', 'UNKNOWN']);
+  assert.deepEqual(verdicts, [
+    'MISMATCH', 'MISMATCH', 'UNKNOWN', 'UNKNOWN', 'UNKNOWN', 'UNKNOWN', 'UNKNOWN',
+    'UNKNOWN', 'REFERENCE_ONLY', 'REFERENCE_ONLY',
+  ]);
 });
 
 test('self-declared conformance data cannot produce supporting evidence without a pinned owner registry', () => {
@@ -209,7 +212,7 @@ test('complete triage inventory authenticates every failed negative-control prop
     .map((triage) => `${triage.modelId}:${triage.modelProfile}:${triage.propertyId}`)
     .sort();
 
-  assert.equal(actualFailures.length, 13);
+  assert.equal(actualFailures.length, 18);
   assert.equal(inventory.length, actualFailures.length);
   assert.deepEqual(inventoryIdentities, actualFailures);
   assert.equal(new Set(inventory.map((triage) => triage.triageId)).size, inventory.length);
@@ -404,9 +407,9 @@ test('render-neutral view separates bounded model results from implementation as
   assert.equal(view.overall.boundedModelStatus, 'BOUNDED_EXHAUSTIVE_PASS');
   assert.equal(view.overall.implementationAssuranceStatus, 'MISMATCH');
   assert.equal(view.overall.runtimeClaimClosure, 'NOT_PERMITTED');
-  assert.equal(view.models.length, 7);
+  assert.equal(view.models.length, 10);
   assert.equal(view.models.every((model) => model.sourceTruth === 'SYNTHETIC_ONLY' && model.runtimeWiring === 'NOT_WIRED'), true);
-  assert.equal(view.models.reduce((total, model) => total + model.triage.total, 0), 13);
+  assert.equal(view.models.reduce((total, model) => total + model.triage.total, 0), 18);
   assert.equal(view.models.every((model) => model.triage.total >= 1 && model.triage.runtimeCorpusEligible === 0), true);
   const inventoryCounts = new Map();
   for (const triage of buildCounterexampleTriageInventory()) {
@@ -652,7 +655,7 @@ test('packet JSON schemas parse, use draft 2020-12, and close object extension p
   }
 });
 
-test('manifest IDs and hashes cover exactly the seven canonical model reports', () => {
+test('manifest IDs and hashes cover exactly the canonical model reports', () => {
   const reports = runModels(CANONICAL_MODELS);
   assert.deepEqual(Object.keys(MODEL_HASHES).sort(), reports.map((report) => report.modelId).sort());
   for (const report of reports) {

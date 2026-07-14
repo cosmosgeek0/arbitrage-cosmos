@@ -2,6 +2,7 @@ import { CONFORMANCE_MAPPING_SCHEMA } from '../contracts/conformance.mjs';
 import { MODEL_MANIFEST_BY_ID } from './model-manifest.mjs';
 
 export const IMPLEMENTATION_RELEASE_SHA = '9785c93102b00389847b77c2f9348c06abc4344b';
+export const FROZEN_L_IMPLEMENTATION_RELEASE_SHA = 'df6b472993ca9659ce09cf5f72004981c6835f0d';
 export const FORMAL_FIXTURE_TIME_MS = 1_783_900_800_000;
 
 const VERSION = Object.freeze({
@@ -11,6 +12,18 @@ const VERSION = Object.freeze({
   persistenceTypes: 'server/src/systemIntegration/persistence/types.ts@sha256:5370239485d05c0d453044df92c05d33d4252412df35f5a22c96d69549168a88',
   riskChecks: 'server/src/foundation/risk/checks.ts@sha256:bbecf37e026caf3c60ecad6ebe65d4ce4e6d44e60801322152b5f51126bed1ed',
   validateOnlyOrchestrator: 'server/src/systemIntegration/verticalSlice/orchestrator.ts@sha256:34397e5581e3f48bb152c9b1b3605608a609e5c925bcfc1026e8ccce24eb5338',
+});
+
+const FROZEN_L_VERSION = Object.freeze({
+  executionPolicyTypes: 'server/src/liveEdge/adapters/executionPolicy/types.ts@sha256:da466c08356b6707f69f3df85501661d3d985082feddb4127b7e7974cdf54402',
+  executionPolicy: 'server/src/liveEdge/adapters/executionPolicy/policy.ts@sha256:c713027a55961e3b8e10b11ffe6d1c0c3470f101fe74fa2b7449570ec9669c50',
+  foundationExecutionContract: 'server/src/foundation/contracts/execution.ts@sha256:fe0fd1b360f8dd340cfe3742b04d652d12584e00bd2ba2bf1f26e97dc40d41d4',
+  foundationExecutionReducer: 'server/src/foundation/execution/reducer.ts@sha256:bd451c9f7e5085389f51c63ad7cc918d51d9256ef8e867e466b76cb3fe6b9df2',
+  normalBasisTypes: 'server/src/liveEdge/adapters/normalBasis/types.ts@sha256:8fc7a86fcf4aa3d3fb8d212e1c83624f743ac442567d20d41f6318bf9fd2fb60',
+  normalBasisTwin: 'server/src/liveEdge/adapters/normalBasis/twinAdapter.ts@sha256:c8015c0f9c63186d6f77738d1687c608d541d0f66e2cc2181725378e49ef3029',
+  normalBasisEvidence: 'server/src/liveEdge/adapters/normalBasis/evidence.ts@sha256:a2101caacc8a1d5fe5bb5552274531dc9288f7ea5d635c214d9e6272c8311f51',
+  reverseBasisTypes: 'server/src/liveEdge/adapters/reverseBasisLifecycle/types.ts@sha256:530598f7f05804690a34e6344833235db6762e31cc5343438ab104499680ef53',
+  reverseBasisLifecycle: 'server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts@sha256:f287106fb6002cf2cd05e26049cac73e79726448d703c86a61d785adcbecd7be',
 });
 
 export const CONFORMANCE_EVIDENCE_REFS = Object.freeze({
@@ -25,6 +38,16 @@ export const CONFORMANCE_EVIDENCE_REFS = Object.freeze({
   validateOnlyOrchestrator: 'server/src/systemIntegration/verticalSlice/orchestrator.ts#L793-L841',
   riskReplay: 'server/test/foundation/risk/risk.mjs#L434-L468',
   authorityReplay: 'server/test/systemIntegration/verticalSlice/authority.scenarios.test.mjs#L361-L400',
+  l08Authority: 'server/src/liveEdge/adapters/executionPolicy/policy.ts#L142-L148',
+  l08ActionValidation: 'server/src/liveEdge/adapters/executionPolicy/policy.ts#L348-L690',
+  l08Evaluation: 'server/src/liveEdge/adapters/executionPolicy/policy.ts#L832-L1194',
+  l09OwnerTransitions: 'server/src/foundation/contracts/execution.ts#L133-L211',
+  l09Reducer: 'server/src/foundation/execution/reducer.ts#L299-L783',
+  l09TwinAdapter: 'server/src/liveEdge/adapters/normalBasis/twinAdapter.ts#L454-L930',
+  l09Agreement: 'server/src/liveEdge/adapters/normalBasis/evidence.ts#L500-L760',
+  l10EventReducer: 'server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts#L1465-L1913',
+  l10StageProjection: 'server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts#L1283-L1462',
+  l10FoldAndReplay: 'server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts#L1919-L2810',
 });
 
 function freezeRows(rows) {
@@ -61,6 +84,7 @@ function fixture({
   unreachableAbstractions = [],
   omittedEnvironmentBehavior,
   residualAssumptions,
+  implementationReleaseSha = IMPLEMENTATION_RELEASE_SHA,
 }) {
   const manifest = MODEL_MANIFEST_BY_ID[modelId];
   return Object.freeze({
@@ -69,7 +93,7 @@ function fixture({
     modelId,
     modelVersion: manifest.modelVersion,
     modelContentSha256: manifest.bundleSha256,
-    implementationReleaseSha: IMPLEMENTATION_RELEASE_SHA,
+    implementationReleaseSha,
     implementationSchemaVersions: Object.freeze([...schemaVersions]),
     implementationCommandVersions: Object.freeze([...commandVersions]),
     implementationStorageTransitionVersions: Object.freeze([...storageVersions]),
@@ -231,4 +255,160 @@ const M07 = fixture({
   residualAssumptions: ['Existing execution cancellation refusal is partial safety evidence only and is not a full protocol mapping.'],
 });
 
-export const CONFORMANCE_FIXTURES = Object.freeze([M01, M02, M03, M04, M05, M06, M07]);
+const M08 = fixture({
+  mappingId: 'S3-CONFORMANCE-M08',
+  modelId: 'S3-M08-ORDER-POLICY',
+  implementationReleaseSha: FROZEN_L_IMPLEMENTATION_RELEASE_SHA,
+  schemaVersions: [FROZEN_L_VERSION.executionPolicyTypes],
+  commandVersions: [FROZEN_L_VERSION.executionPolicy],
+  storageVersions: ['NOT_APPLICABLE'],
+  mappings: freezeRows([
+    {
+      mappingId: 'S3-M08-MAP-STATE', category: 'STATE', modelElementId: 'RAW|EVALUATE|PLANNED|REJECTED',
+      implementationOwner: 'liveEdge.adapters.executionPolicy', implementationPath: 'server/src/liveEdge/adapters/executionPolicy/types.ts', implementationSymbol: 'ExecutionPolicyInput and ExecutionPolicyDecision',
+      durableRecord: null, postcondition: null, atomicity: 'MANY_TO_ONE', status: 'MAPPED', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l08Authority, CONFORMANCE_EVIDENCE_REFS.l08Evaluation],
+    },
+    {
+      mappingId: 'S3-M08-MAP-PARSE', category: 'ACTION', modelElementId: 'PARSE_POLICY_ENVELOPE',
+      implementationOwner: 'liveEdge.adapters.executionPolicy', implementationPath: 'server/src/liveEdge/adapters/executionPolicy/policy.ts', implementationSymbol: 'validateAction, validateTransitions, validateLegTransitions, and validateCandidate',
+      durableRecord: null, postcondition: null, atomicity: 'ONE_TO_MANY', status: 'MAPPED', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l08ActionValidation],
+    },
+    {
+      mappingId: 'S3-M08-MAP-EVALUATE', category: 'ACTION', modelElementId: 'EVALUATE_GLOBAL_AUTHORITY_AND_DEPENDENCIES',
+      implementationOwner: 'liveEdge.adapters.executionPolicy', implementationPath: 'server/src/liveEdge/adapters/executionPolicy/policy.ts', implementationSymbol: 'evaluateExecutionPolicyCore, rejectGlobal, and rejectedInput',
+      durableRecord: null, postcondition: null, atomicity: 'ONE_TO_MANY', status: 'MAPPED', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l08Evaluation],
+    },
+    {
+      mappingId: 'S3-M08-MAP-GRAPH', category: 'ACTION', modelElementId: 'VALIDATE_CANCEL_REPLACE_AND_RECOVERY_GRAPH',
+      implementationOwner: 'liveEdge.adapters.executionPolicy', implementationPath: 'server/src/liveEdge/adapters/executionPolicy/policy.ts', implementationSymbol: 'validateAction, validateTransitions, validateLegTransitions, and validateCandidate',
+      durableRecord: null, postcondition: null, atomicity: 'ONE_TO_MANY', status: 'MAPPED', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l08ActionValidation],
+    },
+    {
+      mappingId: 'S3-M08-MAP-INVARIANT', category: 'INVARIANT', modelElementId: 'S3-SAF-08|S3-SAF-11|S3-SAF-12|S3-SAF-13|S3-SAF-14',
+      implementationOwner: 'liveEdge.adapters.executionPolicy', implementationPath: 'server/src/liveEdge/adapters/executionPolicy/policy.ts', implementationSymbol: 'evaluateExecutionPolicyCore and validateCandidate',
+      durableRecord: null, postcondition: 'Kill/revoke, UNKNOWN authority/dependency, stale evidence, invalid cancel graph, and widening recovery all fail closed in the record-only evaluator.',
+      atomicity: 'MANY_TO_ONE', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l08ActionValidation, CONFORMANCE_EVIDENCE_REFS.l08Evaluation],
+    },
+    {
+      mappingId: 'S3-M08-MAP-POST', category: 'POSTCONDITION', modelElementId: 'NON_SENDABLE_PLANNED_OR_FAIL_CLOSED_REJECTED',
+      implementationOwner: 'liveEdge.adapters.executionPolicy', implementationPath: 'server/src/liveEdge/adapters/executionPolicy/policy.ts', implementationSymbol: 'AUTHORITY, finalizeDecision, and evaluateExecutionPolicyCore',
+      durableRecord: null, postcondition: 'Every decision remains SYNTHETIC_FIXTURE, sendEligible false, NONE_RECORD_ONLY, and externalActionAuthorization NONE.',
+      atomicity: 'MANY_TO_ONE', status: 'MAPPED', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l08Authority, CONFORMANCE_EVIDENCE_REFS.l08Evaluation],
+    },
+  ]),
+  omittedEnvironmentBehavior: ['The frozen implementation is a one-shot pure evaluator; it has no runtime reducer, executor, cancel observer, repair worker, lease, or persistence transition.'],
+  residualAssumptions: ['SYNTHETIC_ONLY and SUPPORTING_EVIDENCE_ONLY; runtime_claim_closure is NOT_PERMITTED and no plan is sendable.'],
+});
+
+const M09 = fixture({
+  mappingId: 'S3-CONFORMANCE-M09',
+  modelId: 'S3-M09-NORMAL-BASIS-LIFECYCLE',
+  implementationReleaseSha: FROZEN_L_IMPLEMENTATION_RELEASE_SHA,
+  schemaVersions: [FROZEN_L_VERSION.foundationExecutionContract, FROZEN_L_VERSION.normalBasisTypes],
+  commandVersions: [FROZEN_L_VERSION.foundationExecutionReducer, FROZEN_L_VERSION.normalBasisTwin, FROZEN_L_VERSION.normalBasisEvidence],
+  storageVersions: ['CALLER_OWNED_CHECKPOINT_NOT_ENFORCED'],
+  mappings: freezeRows([
+    {
+      mappingId: 'S3-M09-MAP-STATE', category: 'STATE', modelElementId: 'FOUNDATION_PLAN_AND_LEG_LIFECYCLES',
+      implementationOwner: 'foundation.execution', implementationPath: 'server/src/foundation/contracts/execution.ts', implementationSymbol: 'PLAN_LIFECYCLE_TRANSITIONS and LEG_LIFECYCLE_TRANSITIONS',
+      durableRecord: 'ExecutionPlanState checkpoint returned to the caller', postcondition: null,
+      atomicity: 'MANY_TO_ONE', status: 'MAPPED', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l09OwnerTransitions],
+    },
+    {
+      mappingId: 'S3-M09-MAP-PLAN', category: 'ACTION', modelElementId: 'PLAN_PREFLIGHT_OPEN_CLOSE_TRANSITIONS',
+      implementationOwner: 'foundation.execution', implementationPath: 'server/src/foundation/execution/reducer.ts', implementationSymbol: 'reduceExecutionEvent plan-event branches',
+      durableRecord: 'Reducer eventLog and stateRevisionId inside returned checkpoint', postcondition: null,
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l09Reducer],
+    },
+    {
+      mappingId: 'S3-M09-MAP-LEG', category: 'ACTION', modelElementId: 'LEG_SUBMIT_FILL_CANCEL_AMBIGUITY_TRANSITIONS',
+      implementationOwner: 'foundation.execution', implementationPath: 'server/src/foundation/execution/reducer.ts', implementationSymbol: 'reduceExecutionEvent leg submit, fill, cancel, and reconciliation branches',
+      durableRecord: 'Opening and closing leg state inside returned checkpoint', postcondition: null,
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l09Reducer, CONFORMANCE_EVIDENCE_REFS.l09OwnerTransitions],
+    },
+    {
+      mappingId: 'S3-M09-MAP-EVIDENCE', category: 'ACTION', modelElementId: 'NORMAL_BASIS_TWIN_OBSERVATION_AND_AGREEMENT',
+      implementationOwner: 'liveEdge.adapters.normalBasis', implementationPath: 'server/src/liveEdge/adapters/normalBasis/twinAdapter.ts', implementationSymbol: 'runNormalBasisTwinLeg and evaluateNormalBasisOwnerAgreement',
+      durableRecord: 'Caller-supplied owner checkpoint plus immutable evidence projection', postcondition: null,
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l09TwinAdapter, CONFORMANCE_EVIDENCE_REFS.l09Agreement],
+    },
+    {
+      mappingId: 'S3-M09-MAP-REPAIR', category: 'ACTION', modelElementId: 'RECONCILE_OR_REPAIR_RESIDUAL',
+      implementationOwner: 'foundation.execution + liveEdge.adapters.normalBasis', implementationPath: 'server/src/foundation/execution/reducer.ts', implementationSymbol: 'reduceExecutionEvent reconciliation branches and evaluateNormalBasisOwnerAgreement',
+      durableRecord: 'Returned checkpoint and evidence-only agreement', postcondition: null,
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l09Reducer, CONFORMANCE_EVIDENCE_REFS.l09Agreement],
+    },
+    {
+      mappingId: 'S3-M09-MAP-INVARIANT', category: 'INVARIANT', modelElementId: 'S3-SAF-03|S3-SAF-06|S3-SAF-07|S3-SAF-12|S3-SAF-13|S3-SAF-14|S3-SAF-15|S3-M09-INV-01',
+      implementationOwner: 'foundation.execution + liveEdge.adapters.normalBasis', implementationPath: 'server/src/foundation/execution/reducer.ts', implementationSymbol: 'reduceExecutionEvent, runNormalBasisTwinLeg, and evaluateNormalBasisOwnerAgreement',
+      durableRecord: 'Returned Foundation checkpoint and evidence projections', postcondition: 'Cancel request remains CANCEL_PENDING; fill residual is retained; non-exact truth blocks agreement PASS; terminal plans have no submit successor.',
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l09OwnerTransitions, CONFORMANCE_EVIDENCE_REFS.l09Reducer, CONFORMANCE_EVIDENCE_REFS.l09TwinAdapter, CONFORMANCE_EVIDENCE_REFS.l09Agreement],
+    },
+    {
+      mappingId: 'S3-M09-MAP-POST', category: 'POSTCONDITION', modelElementId: 'HEDGED_OPEN|CLOSED|BLOCKED|DURABLE_UNRESOLVED',
+      implementationOwner: 'foundation.execution + liveEdge.adapters.normalBasis', implementationPath: 'server/src/liveEdge/adapters/normalBasis/evidence.ts', implementationSymbol: 'evaluateNormalBasisOwnerAgreement',
+      durableRecord: 'Caller-owned Foundation checkpoint; adapter output is immutable evidence only', postcondition: 'PASS requires exact owner agreement; ambiguity and residual exposure remain manual, blocked, or recovery-required.',
+      atomicity: 'MANY_TO_ONE', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l09Agreement, CONFORMANCE_EVIDENCE_REFS.l09Reducer],
+    },
+  ]),
+  omittedEnvironmentBehavior: ['No literal HALT event, executor fence, durable scheduler, automatic repair executor, or adapter-owned lifecycle exists in the mapped files.'],
+  residualAssumptions: ['Foundation remains the lifecycle and reconciliation owner; normalBasis is SYNTHETIC_FIXTURE evidence only and runtime_claim_closure is NOT_PERMITTED.'],
+});
+
+const M10 = fixture({
+  mappingId: 'S3-CONFORMANCE-M10',
+  modelId: 'S3-M10-REVERSE-BASIS-LIABILITY',
+  implementationReleaseSha: FROZEN_L_IMPLEMENTATION_RELEASE_SHA,
+  schemaVersions: [FROZEN_L_VERSION.reverseBasisTypes],
+  commandVersions: [FROZEN_L_VERSION.reverseBasisLifecycle],
+  storageVersions: ['FINITE_EVENT_BATCH_NO_RUNTIME_STORE'],
+  mappings: freezeRows([
+    {
+      mappingId: 'S3-M10-MAP-STATE', category: 'STATE', modelElementId: 'DERIVED_REVERSE_BASIS_STAGE_AND_EVENT_FOLD',
+      implementationOwner: 'liveEdge.adapters.reverseBasisLifecycle', implementationPath: 'server/src/liveEdge/adapters/reverseBasisLifecycle/types.ts', implementationSymbol: 'ReverseBasisLifecycleStage, ReverseBasisEvent, and ReverseBasisLifecycleState',
+      durableRecord: 'Finite input event batch and immutable returned projection', postcondition: null,
+      atomicity: 'MANY_TO_ONE', status: 'MAPPED', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l10EventReducer, CONFORMANCE_EVIDENCE_REFS.l10StageProjection],
+    },
+    {
+      mappingId: 'S3-M10-MAP-LIABILITY', category: 'ACTION', modelElementId: 'OBSERVE_BORROW_LIABILITY_AND_REPAY',
+      implementationOwner: 'liveEdge.adapters.reverseBasisLifecycle', implementationPath: 'server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts', implementationSymbol: 'applyEvent BORROW_OBSERVED, LIABILITY_OBSERVED, and REPAY_OBSERVED branches',
+      durableRecord: 'Immutable event fold retained in returned lifecycle state', postcondition: null,
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l10EventReducer],
+    },
+    {
+      mappingId: 'S3-M10-MAP-ORDERS', category: 'ACTION', modelElementId: 'OBSERVE_ENTRY_HEDGE_EXIT_AND_COVER',
+      implementationOwner: 'liveEdge.adapters.reverseBasisLifecycle', implementationPath: 'server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts', implementationSymbol: 'applyEvent ORDER_OBSERVED branch and projectOrder',
+      durableRecord: 'Projected order map inside returned lifecycle state', postcondition: null,
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l10EventReducer, CONFORMANCE_EVIDENCE_REFS.l10FoldAndReplay],
+    },
+    {
+      mappingId: 'S3-M10-MAP-RECOVERY', category: 'ACTION', modelElementId: 'OBSERVE_RECOVERY_CLOSURE_OR_MANUAL_EVIDENCE',
+      implementationOwner: 'liveEdge.adapters.reverseBasisLifecycle', implementationPath: 'server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts', implementationSymbol: 'applyEvent RECOVERY_EVIDENCE, CLOSURE_RECONCILED, and MANUAL_INTERVENTION branches',
+      durableRecord: 'Immutable event fold retained in returned lifecycle state', postcondition: null,
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l10EventReducer],
+    },
+    {
+      mappingId: 'S3-M10-MAP-DERIVE', category: 'ACTION', modelElementId: 'DERIVE_REVERSE_BASIS_STAGE',
+      implementationOwner: 'liveEdge.adapters.reverseBasisLifecycle', implementationPath: 'server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts', implementationSymbol: 'deriveLifecycle and runReverseBasisLifecycle',
+      durableRecord: 'Derived immutable lifecycle projection', postcondition: null,
+      atomicity: 'MANY_TO_ONE', status: 'MAPPED', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l10StageProjection, CONFORMANCE_EVIDENCE_REFS.l10FoldAndReplay],
+    },
+    {
+      mappingId: 'S3-M10-MAP-INVARIANT', category: 'INVARIANT', modelElementId: 'S3-SAF-06|S3-SAF-07|S3-SAF-12|S3-SAF-13|S3-SAF-14|S3-SAF-15|S3-M10-INV-01|S3-M10-INV-02',
+      implementationOwner: 'liveEdge.adapters.reverseBasisLifecycle', implementationPath: 'server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts', implementationSymbol: 'applyEvent, computeExposure, closureReasons, and deriveLifecycle',
+      durableRecord: 'Immutable event fold and derived liability/exposure projection', postcondition: 'Principal and interest cannot regress before repay; zero binds confirmed repay; paired fills are bounded; UNKNOWN remains recovery-required; closure is final.',
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l10EventReducer, CONFORMANCE_EVIDENCE_REFS.l10StageProjection, CONFORMANCE_EVIDENCE_REFS.l10FoldAndReplay],
+    },
+    {
+      mappingId: 'S3-M10-MAP-POST', category: 'POSTCONDITION', modelElementId: 'EXACT_ZERO_LIABILITY_CLOSURE_OR_VISIBLE_RECOVERY',
+      implementationOwner: 'liveEdge.adapters.reverseBasisLifecycle', implementationPath: 'server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts', implementationSymbol: 'closureReasons, deriveLifecycle, and runReverseBasisLifecycle',
+      durableRecord: 'Immutable final projection over the supplied event batch', postcondition: 'CLOSED or RECOVERED requires exact current closure, zero debt, paired flat legs, and no open, ambiguous, or unmatched references.',
+      atomicity: 'MANY_TO_ONE', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l10StageProjection, CONFORMANCE_EVIDENCE_REFS.l10FoldAndReplay],
+    },
+  ]),
+  unreachableAbstractions: ['BORROWING is declared in ReverseBasisLifecycleStage but is never assigned by frozen deriveLifecycle; confirmed borrow projects to RECOVERY_REQUIRED until liability truth.'],
+  omittedEnvironmentBehavior: ['No literal HALT event, executor fence, ambient scheduler, durable event store, or live mutation executor exists in this finite evidence-batch adapter.'],
+  residualAssumptions: ['SYNTHETIC_ONLY and SUPPORTING_EVIDENCE_ONLY; stage is derived rather than a transition guard and runtime_claim_closure is NOT_PERMITTED.'],
+});
+
+export const CONFORMANCE_FIXTURES = Object.freeze([M01, M02, M03, M04, M05, M06, M07, M08, M09, M10]);

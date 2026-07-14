@@ -7,9 +7,10 @@ gate, exchange hand, remediation controller, ledger, supervisor, or cockpit.
 
 ## Evidence boundary
 
-- Seven finite protocol models cover ambiguity, two-leg recovery, execution
-  fencing, repair campaigns, borrow liability, halt asymmetry, and cancellation
-  boundaries.
+- Ten finite protocol models currently cover the original ambiguity, recovery,
+  fencing, repair, liability, halt, and cancellation set plus frozen-L order
+  policy, Foundation-owned normal-Basis lifecycle, and Reverse-Basis liability
+  recovery. Batch 2 adds Volume, exchange-twin, and durable-control models.
 - The executable bounded-check path is a deterministic, dependency-free explicit-state
   explorer running on the repository's existing Node.js runtime.
 - TLA+ modules and TLC configurations are source artifacts only. No independent
@@ -30,6 +31,11 @@ node --test --test-concurrency=1 --test-reporter=spec test/productAssurance/syst
 The root test scripts do not discover this packet-local test path. Wiring the
 focused command into the combined acceptance harness is therefore a director-
 owned insertion request, not a package edit by this satellite.
+
+Under D-LAUNCH-22, the prior root-egress result is adjudicated
+`KNOWN_PREEXISTING_TEST_EGRESS`; this non-candidate worker must not rerun the
+root gate or touch server startup. The active gate is only the focused command
+under total network denial.
 
 ## Truth labels
 

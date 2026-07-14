@@ -30,6 +30,9 @@ const EXPECTED_CANONICAL_COUNTS = Object.freeze({
   'S3-M05-BORROW-LIABILITY': Object.freeze([88, 105]),
   'S3-M06-HALT-RISK-REDUCTION': Object.freeze([323, 373]),
   'S3-M07-CANCELLATION-BOUNDARY': Object.freeze([47, 47]),
+  'S3-M08-ORDER-POLICY': Object.freeze([13, 12]),
+  'S3-M09-NORMAL-BASIS-LIFECYCLE': Object.freeze([69, 78]),
+  'S3-M10-REVERSE-BASIS-LIABILITY': Object.freeze([198, 219]),
 });
 
 const EXPECTED_AMENDMENT_PROPERTY_IDS = Object.freeze([
@@ -43,6 +46,11 @@ const EXPECTED_AMENDMENT_PROPERTY_IDS = Object.freeze([
   'S3-SAF-08',
   'S3-SAF-09',
   'S3-SAF-10',
+  'S3-SAF-11',
+  'S3-SAF-12',
+  'S3-SAF-13',
+  'S3-SAF-14',
+  'S3-SAF-15',
   'S3-LIV-01',
   'S3-LIV-02',
   'S3-LIV-03',
@@ -84,9 +92,9 @@ function tinyModel({
   });
 }
 
-test('seven canonical models exhaust their pinned bounded graphs and cover the full property catalog', () => {
+test('ten canonical models exhaust their pinned bounded graphs and cover the full property catalog', () => {
   const reports = runModels(CANONICAL_MODELS);
-  assert.equal(reports.length, 7);
+  assert.equal(reports.length, 10);
   assert.deepEqual(reports.map((report) => report.modelId), Object.keys(EXPECTED_CANONICAL_COUNTS));
   for (const report of reports) {
     assert.equal(report.overallStatus, 'PASS', report.modelId);
@@ -99,8 +107,8 @@ test('seven canonical models exhaust their pinned bounded graphs and cover the f
     assert.equal(report.properties.some((property) => property.status !== 'PASS'), false, report.modelId);
     assert.equal(validateExplicitStateReport(report).ok, true, report.modelId);
   }
-  assert.equal(reports.reduce((sum, report) => sum + report.exploration.states, 0), 1_323);
-  assert.equal(reports.reduce((sum, report) => sum + report.exploration.transitions, 0), 1_631);
+  assert.equal(reports.reduce((sum, report) => sum + report.exploration.states, 0), 1_603);
+  assert.equal(reports.reduce((sum, report) => sum + report.exploration.transitions, 0), 1_940);
   const covered = new Set(reports.flatMap((report) => report.properties.map((property) => property.propertyId)));
   assert.deepEqual([...covered].sort(), PROPERTY_CATALOG.map((property) => property.propertyId).sort());
   assert.deepEqual(
@@ -139,6 +147,9 @@ test('every hostile negative control is detected with a counterexample', () => {
     LOST_REPAY_CLEARS_LIABILITY: ['S3-SAF-06', 'S3-SAF-07'],
     HALT_COMMIT_RACE: ['S3-SAF-08', 'S3-SAF-10'],
     LOCAL_EFFECT_AFTER_OBSERVED_CANCEL: ['S3-LIV-05'],
+    DROP_KILL_GUARD: ['S3-SAF-08', 'S3-SAF-11'],
+    CANCEL_REQUEST_IS_FACT: ['S3-SAF-03', 'S3-SAF-14'],
+    REPAY_PRINCIPAL_ONLY: ['S3-SAF-15'],
   });
   for (const report of reports) {
     assert.equal(report.overallStatus, 'FAIL', report.profile);

@@ -89,13 +89,14 @@ function hasExactKeys(value, keys) {
 }
 
 function assertInput(input) {
+  const expectedModelCount = CANONICAL_MODEL_IDS.length;
   const inputKeys = [
     'reports', 'conformanceMappings', 'conformanceVerificationContextsByModel',
     'counterexampleTriages', 'triageVerificationContextsById', 'generatedAtMs',
   ];
   if (!hasExactKeys(input, inputKeys)) throw new TypeError('view input must be a closed plain object');
-  if (!Array.isArray(input.reports) || input.reports.length !== 7) throw new TypeError('view input requires exactly seven model reports');
-  if (!Array.isArray(input.conformanceMappings) || input.conformanceMappings.length !== 7) throw new TypeError('view input requires exactly seven conformance mappings');
+  if (!Array.isArray(input.reports) || input.reports.length !== expectedModelCount) throw new TypeError(`view input requires exactly ${expectedModelCount} model reports`);
+  if (!Array.isArray(input.conformanceMappings) || input.conformanceMappings.length !== expectedModelCount) throw new TypeError(`view input requires exactly ${expectedModelCount} conformance mappings`);
   if (!isPlainObject(input.conformanceVerificationContextsByModel)) throw new TypeError('conformanceVerificationContextsByModel must be a plain object');
   if (!Array.isArray(input.counterexampleTriages) || input.counterexampleTriages.length > 256) throw new TypeError('counterexampleTriages must be a bounded array');
   if (!isPlainObject(input.triageVerificationContextsById)) throw new TypeError('triageVerificationContextsById must be a plain object');
@@ -105,7 +106,7 @@ function assertInput(input) {
     if (!validated.ok) throw new TypeError(`model report ${index} is invalid: ${validated.issues[0].code}`);
   });
   const ids = new Set(input.reports.map((report) => report.modelId));
-  if (ids.size !== 7 || CANONICAL_MODEL_IDS.some((modelId) => !ids.has(modelId))) throw new TypeError('model report IDs must match the canonical manifest exactly');
+  if (ids.size !== expectedModelCount || CANONICAL_MODEL_IDS.some((modelId) => !ids.has(modelId))) throw new TypeError('model report IDs must match the canonical manifest exactly');
   const canonicalReports = new Map(runModels(CANONICAL_MODELS).map((report) => [report.modelId, report]));
   input.reports.forEach((report, index) => {
     const manifest = MODEL_MANIFEST_BY_ID[report.modelId];
@@ -128,7 +129,7 @@ function assertInput(input) {
     }
     return evaluated;
   });
-  if (conformanceIds.size !== 7) throw new TypeError('conformance model IDs must match the seven reports exactly');
+  if (conformanceIds.size !== expectedModelCount) throw new TypeError('conformance model IDs must match the canonical reports exactly');
   for (const key of Object.keys(input.conformanceVerificationContextsByModel)) {
     if (!ids.has(key)) throw new TypeError(`conformance context has an unknown model ID: ${key}`);
   }

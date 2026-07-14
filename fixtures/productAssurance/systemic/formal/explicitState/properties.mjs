@@ -64,6 +64,36 @@ const catalog = [
     statement: 'An approval cannot be reused outside its bound identity, scope, version, expiry, and use identity.',
   },
   {
+    propertyId: 'S3-SAF-11',
+    kind: 'SAFETY',
+    title: 'Halt excludes new risk-increasing orders',
+    statement: 'Once the represented halt boundary is current, no new risk-increasing order authorization or submission may occur.',
+  },
+  {
+    propertyId: 'S3-SAF-12',
+    kind: 'SAFETY',
+    title: 'Repair cannot increase capital authority',
+    statement: 'While repair or recovery is active, its capital authorization ceiling cannot exceed the ceiling captured on repair entry.',
+  },
+  {
+    propertyId: 'S3-SAF-13',
+    kind: 'SAFETY',
+    title: 'Unknown never resolves to pass',
+    statement: 'An UNKNOWN authority, dependency, mutation, liability, order, or reconciliation fact cannot be normalized or terminalized as PASS without explicit authoritative evidence.',
+  },
+  {
+    propertyId: 'S3-SAF-14',
+    kind: 'SAFETY',
+    title: 'Observed cancellation is an effect boundary',
+    statement: 'After cancellation is observed, the cancelled local scope cannot commit a new effect; late external facts remain reconciliation inputs rather than new local effects.',
+  },
+  {
+    propertyId: 'S3-SAF-15',
+    kind: 'SAFETY',
+    title: 'Two-leg recovery conserves liability',
+    statement: 'Two-leg recovery cannot erase residual exposure or debt: every represented unit is paired, repaid with bound evidence, or retained as explicit unresolved liability.',
+  },
+  {
     propertyId: 'S3-LIV-01',
     kind: 'LIVENESS',
     title: 'Acknowledged mutation resolves',
@@ -110,6 +140,24 @@ const catalog = [
     kind: 'SAFETY',
     title: 'Halt preserves canonical risk reduction',
     statement: 'A halt posture does not turn a valid risk-reducing operation into a canonical risk denial, and any applied reduction lowers exposure.',
+  },
+  {
+    propertyId: 'S3-M09-INV-01',
+    kind: 'SAFETY',
+    title: 'Terminal Foundation plans cannot submit',
+    statement: 'A terminal Foundation plan lifecycle has no successor that starts a new leg submission.',
+  },
+  {
+    propertyId: 'S3-M10-INV-01',
+    kind: 'SAFETY',
+    title: 'Reverse-Basis closure is absorbing',
+    statement: 'After exact Reverse-Basis closure evidence, no later borrow, order, repay, liability, or recovery event is accepted.',
+  },
+  {
+    propertyId: 'S3-M10-INV-02',
+    kind: 'SAFETY',
+    title: 'Reverse-Basis repay ends ordering',
+    statement: 'After a confirmed repay observation, no later order observation is accepted before exact zero-liability and closure evidence.',
   },
 ];
 

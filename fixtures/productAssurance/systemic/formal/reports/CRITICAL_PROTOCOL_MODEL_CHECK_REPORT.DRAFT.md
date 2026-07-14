@@ -15,7 +15,9 @@ formal_tooling_status: TLA_TOOLING_NOT_CONFIGURED
 authority: SUPPORTING_EVIDENCE_ONLY
 source_truth: SYNTHETIC_ONLY
 runtime_claim_closure: NOT_PERMITTED
-packet_terminal_status: BLOCKED_ROOT_TEST_EXTERNAL_EGRESS_OUTSIDE_S3_SCOPE
+frozen_l_donor_commit: df6b472993ca9659ce09cf5f72004981c6835f0d
+frozen_l_donor_tree: 1add5ee43fea623509c20d0990ec9efac2543fc4
+packet_checkpoint_status: FORMAL_DEEPENING_BATCH_01_PASS
 ```
 
 ## Bounded explicit-state result
@@ -32,15 +34,45 @@ the recorded fairness/store/lease/exchange/clock assumptions.
 | S3-M05 borrow liability | 88 | 105 | 15 | 24 | 0 | `94b4a2d8ea11f8a5` | 7 | `PASS / EXHAUSTIVE` |
 | S3-M06 halt/risk reduction | 323 | 373 | 6 | 152 | 0 | `dbc0f41fc1e1ccfe` | 3 | `PASS / EXHAUSTIVE` |
 | S3-M07 cancellation boundary | 47 | 47 | 9 | 25 | 0 | `b68929a44adb3466` | 8 | `PASS / EXHAUSTIVE` |
-| **Total** | **1,323** | **1,631** |  | **505** | **0** |  | **43** | **7/7 bounded pass** |
+| S3-M08 frozen-L order policy | 13 | 12 | 2 | 6 | 0 | `588b54fbbc1420bf` | 6 | `PASS / EXHAUSTIVE` |
+| S3-M09 normal-Basis lifecycle | 69 | 78 | 14 | 28 | 0 | `f49e4d501711b685` | 12 | `PASS / EXHAUSTIVE` |
+| S3-M10 Reverse-Basis liability | 198 | 219 | 16 | 87 | 0 | `676f7194331bb8b1` | 12 | `PASS / EXHAUSTIVE` |
+| **Total** | **1,603** | **1,940** |  | **626** | **0** |  | **73** | **10/10 bounded pass** |
 
-The 43 model-property checks cover all ten §4.3 safety properties, all six
-§4.3 liveness properties, and two model-specific strengthening invariants:
-bounded repair attempts and preserved halt-time risk reduction. Liveness uses
+The 73 model-property checks cover all fifteen global safety properties, all
+six global liveness properties, and five model-specific strengthening
+invariants. The five deepening properties make halt exclusion, repair capital
+ceilings, UNKNOWN propagation, observed cancellation, and two-leg liability
+conservation explicit. Liveness uses
 an obligation monitor, explicit stuttering, weak fairness of continuously
 enabled non-stuttering progress, and shortest deterministic counterexample
 witnesses. An unexercised liveness antecedent is `UNKNOWN`, never vacuous
 `PASS`.
+
+## Frozen-L transition conformance — batch 1
+
+These are abstraction mappings, not runtime closure. Every row retains
+`SYNTHETIC_ONLY`, `SUPPORTING_EVIDENCE_ONLY`, and
+`runtime_claim_closure: NOT_PERMITTED`.
+
+| Model transition family | Frozen `df6b472` file / exact symbol |
+| --- | --- |
+| M08 parse six finite evaluator scenarios | `server/src/liveEdge/adapters/executionPolicy/policy.ts::validateAction`, `validateTransitions`, `validateLegTransitions`, `validateCandidate` (lines 348–690) |
+| M08 authorize/reject halt, UNKNOWN, stale, or invalid policy | `server/src/liveEdge/adapters/executionPolicy/policy.ts::evaluateExecutionPolicyCore`, `rejectGlobal`, `rejectedInput`, `finalizeDecision` (lines 832–1194) |
+| M08 documentary cancel/replace and recovery graph | `server/src/liveEdge/adapters/executionPolicy/policy.ts::validateAction`, `validateCandidate` (lines 348–690); no runtime reducer exists |
+| M09 plan preflight/open/close | `server/src/foundation/contracts/execution.ts::PLAN_LIFECYCLE_TRANSITIONS`; `server/src/foundation/execution/reducer.ts::reduceExecutionEvent` |
+| M09 leg submit/fill/cancel/ambiguity | `server/src/foundation/contracts/execution.ts::LEG_LIFECYCLE_TRANSITIONS`; `server/src/foundation/execution/reducer.ts::reduceExecutionEvent` (lines 299–783) |
+| M09 twin observation/agreement | `server/src/liveEdge/adapters/normalBasis/twinAdapter.ts::runNormalBasisTwinLeg`; `server/src/liveEdge/adapters/normalBasis/evidence.ts::evaluateNormalBasisOwnerAgreement` |
+| M10 borrow/liability/repay evidence | `server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts::applyEvent` branches `BORROW_OBSERVED`, `LIABILITY_OBSERVED`, `REPAY_OBSERVED` (lines 1465–1913) |
+| M10 entry/hedge/exit/cover evidence | `server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts::applyEvent` branch `ORDER_OBSERVED`, plus `projectOrder` |
+| M10 recovery/closure/manual evidence | `server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts::applyEvent` branches `RECOVERY_EVIDENCE`, `CLOSURE_RECONCILED`, `MANUAL_INTERVENTION` |
+| M10 stage projection | `server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts::deriveLifecycle`, `runReverseBasisLifecycle` |
+
+M09 and M10 do not expose literal HALT or executor-fencing primitives. Their
+models therefore prove terminal-plan/order and closure boundaries, while the
+generic halt and revision-fencing obligations remain allocated to the models
+whose frozen owners expose those seams. M10 records `BORROWING` as declared but
+unreachable: frozen `deriveLifecycle` never assigns it.
 
 ## Hostile negative controls
 
@@ -53,15 +85,18 @@ witnesses. An unexercised liveness antecedent is `UNKNOWN`, never vacuous
 | `LOST_REPAY_CLEARS_LIABILITY` | 92 | 109 | `S3-SAF-06`, `S3-SAF-07` |
 | `HALT_COMMIT_RACE` | 438 | 509 | `S3-SAF-08`, `S3-SAF-10` |
 | `LOCAL_EFFECT_AFTER_OBSERVED_CANCEL` | 48 | 48 | `S3-LIV-05` |
+| `DROP_KILL_GUARD` | 13 | 12 | `S3-SAF-08`, `S3-SAF-11` |
+| `CANCEL_REQUEST_IS_FACT` | 28 | 29 | `S3-SAF-03`, `S3-SAF-14` |
+| `REPAY_PRINCIPAL_ONLY` | 174 | 195 | `S3-SAF-15` |
 
-All seven negative controls fail. Safety failures carry shortest BFS traces;
+All ten negative controls fail. Safety failures carry shortest BFS traces;
 liveness failures carry a finite prefix plus a fair non-discharging lasso.
 
 ## §4.4 counterexample gate
 
 The deterministic classification fixtures cover exactly the five amendment
-dispositions. A separate complete inventory authenticates all 13 currently
-failed property traces across the seven negative-control profiles. None is
+dispositions. A separate complete inventory authenticates all 18 currently
+failed property traces across the ten negative-control profiles. None is
 eligible for the runtime failure corpus: each current trace is authenticated as
 a packet negative control and is categorically non-promotable. Future
 eligibility requires an exact failing `CANONICAL` model report plus an
@@ -80,6 +115,9 @@ exists in this packet.
 | S3-M05 | `UNKNOWN` | The canonical borrow owner is read-only; no accepted money-mutation protocol exists. |
 | S3-M06 | `UNKNOWN` | Validate-only risk checks map partially, but there is no storage transition or operational mutation path. |
 | S3-M07 | `UNKNOWN` | No full abort/detach/fenced-reconciliation protocol exists. |
+| S3-M08 | `UNKNOWN` | Exact evaluator branches map, but the frozen owner is one-shot, non-sendable, and has no storage/runtime reducer. |
+| S3-M09 | `REFERENCE_ONLY` | Foundation lifecycle and adapter evidence map by exact source, but no owner-pinned replay registry closes conformance. |
+| S3-M10 | `REFERENCE_ONLY` | The finite event fold and derived stage map by exact source, but no owner-pinned replay registry closes conformance. |
 
 Every mapping records the model version/hash, implementation release and
 available source-content versions, all four mapping categories, replay status,
@@ -94,51 +132,39 @@ this packet. Every result keeps `runtimeClaimClosure: NOT_PERMITTED`.
 ```text
 focused_command: node --test --test-concurrency=1 --test-reporter=spec test/productAssurance/systemic/formal/*.test.mjs test/productAssurance/systemic/formal/contracts/*.test.mjs
 focused_result: PASS 43 / FAIL 0 / SKIP 0
-canonical_models: PASS 7 / FAIL 0 / UNKNOWN 0
-negative_controls_detected: 7 / 7
-tla_sources: 7
-tlc_configs: 7
+canonical_models: PASS 10 / FAIL 0 / UNKNOWN 0
+negative_controls_detected: 10 / 10
+tla_sources: 10
+tlc_configs: 10
 tla_execution: NOT_RUN — TLA_TOOLING_NOT_CONFIGURED
-historical_unhydrated_npm_test: BLOCKED exit 127 — sh: tsc: command not found
-clean_install: PASS exit 0 — npm ci added 229 packages, audited 232, vulnerabilities 0
-toolchain: node 22.23.1 / npm 10.9.8 / typescript 5.9.3
-npm_test: PASS exit 0 — typecheck, build, 377 reported checks
-npm_test_network_qualification: BLOCKED — effectful child attempts external Binance WebSockets
-externally_denied_npm_test: PASS exit 0 — external outbound denied, loopback allowed
-plain_diagnostic_network_proof: UNAVAILABLE — no egress monitor was installed
+focused_network_policy: TOTAL_NETWORK_DENY
+root_npm_test: NOT_RUN_BY_D_LAUNCH_22
+root_egress_adjudication: KNOWN_PREEXISTING_TEST_EGRESS
 ```
 
-The old exit 127 is reproduced only by an unhydrated dependency tree. It does
-not reproduce after the required clean install: TypeScript is already declared
-by both workspaces and locked with its `tsc` binary. S3 introduced no package or
-lockfile change.
-
-The clean root gate is nevertheless not acceptable as a zero-network proof.
-Its perimeter test spawns the full server, whose startup unconditionally begins
-external public-market WebSockets. Those failures are contained, so the test
-can stay green after an egress attempt. A macOS sandboxed rerun exited 0 while
-denying external outbound traffic and allowing loopback; that proves blocking,
-not zero attempted egress. The exact owner patch is recorded in
-`drafts/D_LAUNCH_20_ROOT_TEST_OFFLINE_PATCH_REQUEST.DRAFT.md`.
+D-LAUNCH-22 accepted and adjudicated the prior receipt: root startup egress is
+`KNOWN_PREEXISTING_TEST_EGRESS`, and its canonical patch is queued for a
+director-controlled post-landing wave. This worker did not rerun the root gate
+or touch server startup. Its active gate is only the focused S3 suite under
+total network denial.
 
 ## Boundary and limitations
 
-- The S3 focused suite is intrinsically network-free and passes 43/43 under a
-  full external-network deny. The root gate is not intrinsically network-free,
-  so this packet cannot claim `FORMAL_REPAIRED_RESEALED`.
+- The S3 focused suite is intrinsically network-free and passes 43/43 under
+  total network denial. No root-gate or startup claim is made.
 - No production evaluator, command path, risk gate, exchange call, money path,
   secret, timer, socket, filesystem access, package change, or external-system
   mutation exists in the packet runtime modules.
 - TLA+/TLC sources are structurally paired and content-hashed, but they are not
   checker-backed evidence until the tooling insertion request is accepted and
   executed.
-- One interrupted read-only research subagent performed a discarded web lookup
-  before the no-network boundary was reasserted. No result was written, used,
-  or incorporated into packet decisions; all implementation evidence is local.
+- Frozen-L implementation evidence came only from read-only
+  `git show df6b472:<path>` object reads; no external source or network result
+  was used.
 - The immutable prior BLOCKED receipts remain historical truth and are not
   rewritten by D-LAUNCH-20.
-- The shared root/perimeter/startup repair is outside S3 and must be completed
-  by its canonical owner, followed by a director-controlled post-landing wave.
+- This branch remains NON-CANDIDATE. Its repaired/deepened tip can re-enter only
+  in a director-controlled post-landing wave.
 - The protected untracked parent I00 input remains outside this packet and must
   not be staged by this satellite.
 

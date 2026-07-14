@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "S6_AGENT_BOUNDARY_D_LAUNCH_13_PRESTAGE_RECEIPT_V1",
+  "status": "AGENT_PRESTAGE_READY",
+  "recordedAt": "2026-07-13T19:27:21+05:30",
+  "branch": "ip-assur-agent-20260713",
+  "baseCommit": "9785c93102b00389847b77c2f9348c06abc4344b",
+  "emergencyCheckpointCommit": "66a11f99f6a953be6534d3ff6722dce043501a87",
+  "auditedCheckpointCommit": "498d087dbc445d403be6aac5149ae7e377f04418",
+  "implementationCommit": "86a0e80f53069de33488f30aa55338648a46cf37",
+  "implementationTree": "5b5e3991bc7be7a80217932c67e806a474b5fc33",
+  "implementationTrees": {
+    "fixtures": "9b0af78dbabe49c3aacd30183b1b78a54fa21d77",
+    "tests": "06c9c7ab222ff2329aded1ca098c4386d5c33002"
+  },
+  "ownerLaw": {
+    "directive": "D-LAUNCH-13",
+    "sourceRef": "c57610c:IP_ASSURANCE.md#7.1",
+    "sourceCommit": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+    "sourceBlob": "308a7b90a3a75a707bb22a8880ee02b6acef9675",
+    "packetSha256": "49dcd690275ff35cb32566af307ad572d2a527e06d7388885f98826560968e84",
+    "classCount": 4,
+    "classAPromotionEvidencePointCount": 9
+  },
+  "projection": {
+    "classARoute": "CANONICAL_CONTROL_PLANE_REGISTERED_COMMAND",
+    "classBRoute": "CANONICAL_RECONCILIATION_RECOVERY",
+    "classCRoute": "OWNER_APPROVED_HASH_BOUND_RELEASE",
+    "classDRoute": "ACCEPTED_Q_RUNTIME_ABSTAIN_OR_DEMOTION",
+    "classAAutomaticEligibility": "REGISTERED_ONLY",
+    "shadowRequirement": "SHADOW_OR_NO_AUTHORITY_REQUIRED",
+    "specialTriggerEvidence": [
+      "NO_IN_PROCESS_WALL_CLOCK_STEP",
+      "MATERIAL_EVENTS_PRESERVED_OR_VISIBLE_GAP",
+      "BACKUP_PATH_CURRENT_PROOF",
+      "BACKUP_PATH_COHERENCE_PROVEN",
+      "BACKUP_PATH_IDENTITY_PROVEN",
+      "BACKUP_PATH_SAME_TRUTH_SEMANTICS"
+    ],
+    "demotionTriggers": [
+      "ASSUMPTIONS_CHANGED",
+      "DRIFT_DETECTED",
+      "RECURRENCE_DETECTED"
+    ],
+    "operationalActionAllowed": false,
+    "mayDeclareRecovery": false
+  },
+  "counts": {
+    "focusedTestsPassed": 111,
+    "focusedTestsFailed": 0,
+    "repositoryStandardReportedChecks": 253,
+    "repositoryAllFamiliesReportedChecks": 3365,
+    "classATriggerCodes": 9,
+    "classBTriggerCodes": 7,
+    "classCTriggerCodes": 10,
+    "classDTriggerCodes": 6,
+    "classAPromotionEvidencePoints": 9,
+    "insertionRequestRows": 3,
+    "implementationChangedPaths": 9
+  },
+  "verification": {
+    "focused": {
+      "command": "node --test --test-concurrency=1 test/productAssurance/systemic/agentBoundary/*.test.mjs",
+      "result": {
+        "passed": 111,
+        "failed": 0,
+        "exitCode": 0
+      }
+    },
+    "npmTest": {
+      "command": "npm test",
+      "reportedChecks": 253,
+      "exitCode": 0
+    },
+    "npmTestAll": {
+      "command": "npm run test:all",
+      "reportedChecks": 3365,
+      "exitCode": 0
+    },
+    "repositoryGateEnvironment": "DISPOSABLE_WORKTREE_COPY_WITH_MATCHING_DONOR_NODE_MODULES",
+    "dependencyManifestMatch": {
+      "packageJsonSha256": "e49ff499d4612a0141c884a0818663912f1a19c9a61afdb2f6b99a6b1a2b5e8a",
+      "packageLockSha256": "3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf",
+      "serverPackageJsonSha256": "4fcc270fcb046db17b7e581e11bc02216a1b07465ff713b52edfd9a7b17feaf6",
+      "webPackageJsonSha256": "839d4196aa8dc0d9056796592a7630ab5176d67134a724b521421593438775a8"
+    },
+    "syntaxAndJsonParse": {
+      "exitCode": 0
+    },
+    "diffCheck": {
+      "command": "git diff --check",
+      "exitCode": 0
+    },
+    "packetTestsNetworkFree": true,
+    "packetCodeAmbientClockFree": true,
+    "productionCodeTouched": false,
+    "externalRuntimeOrExchangeContactedByPacketTests": false,
+    "adversarialReview": "Nine-point omission, recurrence/drift/assumption demotion, capital or external bounds widening, special clock/event/backup trigger gaps, owner-law drift, external Class C activation, forged envelopes, replay, common mode, and false-green view paths are regression-tested and fail closed."
+  },
+  "inputHashes": {
+    "protectedI00Sha256": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5",
+    "packageLockSha256": "3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf"
+  },
+  "researchInputs": [
+    "https://json-schema.org/draft/2020-12",
+    "https://nodejs.org/download/release/v22.17.0/docs/api/test.html",
+    "https://www.nist.gov/news-events/news/2025/04/nist-revises-sp-800-61-incident-response-recommendations-and-considerations",
+    "https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final"
+  ],
+  "authority": "PACKET_LOCAL_REFERENCE_ONLY",
+  "productionWiringState": "DIRECTOR_MOUNT_REQUIRED",
+  "commitState": "FEATURE_BRANCH_SEALED_DIRECTOR_LANDING_REQUIRED",
+  "statePath": "fixtures/productAssurance/systemic/agentBoundary/AGENT_BOUNDARY_STATE.md",
+  "sealCommitIdentity": "ENCLOSING_GIT_COMMIT_IS_AUTHORITY_AND_IS_NOT_SELF_RECORDED",
+  "nonClaims": [
+    "No production evaluator, runtime, route, store, startup, persistence, package, lockfile, web UI, shared generated artifact, root document, Q/L path, exchange adapter, capital owner, or other satellite path was changed.",
+    "No live, signed, private, order, test-order, borrow, repay, transfer, withdrawal, leverage, margin, secret, deployment, provider-activation, or external-system action was implemented or performed.",
+    "Class A PASS means registered-only eligibility evidence for the canonical owner; this packet never executes a command or declares recovery.",
+    "Synthetic fixtures remain SYNTHETIC_ONLY and packet-local; this receipt does not claim INTEGRATED, LIVE, DEPLOYED_PROVED, or I00_ACCEPTED."
+  ],
+  "artifacts": [
+    {
+      "path": "fixtures/productAssurance/systemic/agentBoundary/ASSURANCE_INSERTION_REQUEST_DRAFT.json",
+      "sha256": "edd989ce3848c9f182e3e9f6d7a1b80cca9458e1a4a7db5a266ba8a0dbb50bba"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/agentBoundary/ASSURANCE_INSERTION_REQUEST_DRAFT.md",
+      "sha256": "5384486703cdc8dfdcb959a8f7030be44fae98f3cf8e2a681fd914e797bae4e6"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/agentBoundary/agent-boundary-v1.fixtures.mjs",
+      "sha256": "12e2a1ae65f647f32af8781f0bfefb8b180ea8917824f95ba3fff836ac62f856"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/agentBoundary/agent-boundary-v1.schema.json",
+      "sha256": "abc7f76af710c08abf43b2b3f67a083861e131eadbeb5bcce8b7b4c72db372bc"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/agentBoundary/diagnostic-worker-view-v1.schema.json",
+      "sha256": "2595eacc09fcf9edbe7bb3cfd023740f99a09e61aa5f07f832770afc82f3ba7f"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/agentBoundary/evaluators.mjs",
+      "sha256": "8ee0711d3980052022c3c3cd237486b075da4244f9a7a8b8229b52ee4ac74eb3"
+    },
+    {
+      "path": "fixtures/productAssurance/systemic/agentBoundary/view-models.mjs",
+      "sha256": "eb613142140a4451844fd16b20ff178c19431ef786ceef0c7cea6167d21fa92a"
+    },
+    {
+      "path": "test/productAssurance/systemic/agentBoundary/promotion-repair-corpus.test.mjs",
+      "sha256": "6fdb39d03a80f3ca2aa4f015a04ce16293fd77ceaa4b3bf645cd1d05ea1368e4"
+    },
+    {
+      "path": "test/productAssurance/systemic/agentBoundary/workload-view-insertion.test.mjs",
+      "sha256": "e7287f98a144a666572052c4373ce28c88722e54869d7ab798a9f3a50eacc2fd"
+    }
+  ]
+}

@@ -1,0 +1,145 @@
+[
+  {
+    "schema": "InsertionRequestRowV1",
+    "version": 1,
+    "rowId": "agent-boundary.draft.diagnostic-kill-control",
+    "status": "DRAFT",
+    "requestedOwner": "L14/IP-CONTROL plus the I09 canonical Control Plane registry owner",
+    "targetSeam": "Canonical control registry, command validation/service, durable command receipt, and existing Control Room adapter; do not overload SET_KILL_SWITCH",
+    "reason": "The diagnostic plane needs a separately scoped fail-closed latch without changing capital, Risk, reconciliation, recovery, or deterministic product readiness.",
+    "contract": [
+      "Proposed control ID diagnostic-plane.kill and proposed backend command ID SET_DIAGNOSTIC_PLANE_KILL are new draft identifiers, not existing authority.",
+      "Payload is a closed desired state ENGAGED or DISENGAGED plus expected revision, expiry, reason, digest, and server-derived operator.",
+      "ENGAGED and UNKNOWN block new diagnostic runs, provider-stub eligibility, tool activity, isolated patch work, and non-money handoff preparation.",
+      "ENGAGED immediately revokes new diagnostic capability, commands the canonical owner to cancel in-flight work within a bounded deadline, rejects late results, and requires a durable cancellation receipt; the diagnostic agent cannot re-enable itself.",
+      "Trace append, independent retention, ledgering, deterministic safety, reconciliation, risk reduction, exposure visibility, and product readiness continue unchanged.",
+      "Command follows preview, digest and revision confirmation, submit, durable result, before and after readback, and correlation trace."
+    ],
+    "tests": [
+      "Duplicate idempotency key returns the prior durable result without a second effect.",
+      "Stale revision, expired command, browser-supplied identity, and unsupported state reject exactly.",
+      "ENGAGED and UNKNOWN deny new diagnostic work while retained audit evidence continues.",
+      "In-flight cancellation produces a trace and cannot delete or rewrite prior evidence.",
+      "Resume requires authorized revision plus fresh sandbox, workload identity, privacy, and independent-retention evidence.",
+      "No diagnostic kill transition changes deterministic product or trade readiness."
+    ],
+    "expectedBehavior": [
+      "Render disabled until the canonical owner supplies and proves the backend command.",
+      "Keep the existing financial SET_KILL_SWITCH semantics untouched.",
+      "Expose desired, effective, pending, rejected, expired, and readback states with exact reason codes.",
+      "Never claim WIRED_LIVE from this packet."
+    ],
+    "controlDraft": {
+      "controlId": "diagnostic-plane.kill",
+      "backendCommandId": "SET_DIAGNOSTIC_PLANE_KILL",
+      "group": "DIAGNOSTIC_ASSURANCE",
+      "label": "Diagnostic plane kill",
+      "explanation": "Fail-closed latch for optional diagnostic work only; it creates no financial, recovery, or product-readiness authority.",
+      "backendOwner": "I09 canonical Control Plane registry and L14/IP-CONTROL command owners",
+      "targetTypes": ["DIAGNOSTIC_PLANE"],
+      "payloadSchema": {
+        "schema": "DiagnosticPlaneKillPayloadDraftV1",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["desiredState", "expectedRevision", "expiresAtMs", "reasonCode", "requestDigest"],
+        "properties": {
+          "desiredState": { "enum": ["ENGAGED", "DISENGAGED"] },
+          "expectedRevision": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+          "expiresAtMs": { "type": "integer", "minimum": 1262304000000, "maximum": 4102444800000 },
+          "reasonCode": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,127}$" },
+          "requestDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        }
+      },
+      "safeBounds": [
+        "Desired state is exactly ENGAGED or DISENGAGED.",
+        "Expiry is server-validated and no more than 30000 milliseconds after issue.",
+        "Browser-supplied operator identity is ignored.",
+        "ENGAGED cancels in-flight work within 5000 milliseconds and rejects late results."
+      ],
+      "defaultValue": { "desiredState": "ENGAGED" },
+      "desiredEffectiveSemantics": "Desired and effective states remain separate; UNKNOWN effective state is treated as ENGAGED until canonical readback.",
+      "effect": "IMMEDIATE_CAPABILITY_REVOCATION_AND_BOUNDED_CANCEL",
+      "requiredPosture": "OWNER_AUTHORIZED_NON_MONEY",
+      "requiredAuthority": "CANONICAL_CONTROL_PLANE_ONLY",
+      "confirmationText": "Confirm diagnostic-plane kill transition; deterministic product behavior and retained evidence continue unchanged.",
+      "expiryMs": 30000,
+      "reversibility": "OWNER_REVERSIBLE_WITH_FRESH_EVIDENCE",
+      "previewProvider": "CANONICAL_CONTROL_PREVIEW",
+      "invariants": [
+        "No diagnostic agent can re-enable itself.",
+        "Trace append and independent retention continue while engaged.",
+        "No transition changes Risk, Capital, reconciliation, recovery, or product readiness."
+      ],
+      "telemetry": [
+        "Durable command receipt with idempotency key and correlation ID.",
+        "Desired and effective readback with revision and reason code.",
+        "Cancellation deadline, cancellation receipt, and late-result rejection count."
+      ],
+      "wiringState": "PENDING_BACKEND:SET_DIAGNOSTIC_PLANE_KILL"
+    },
+    "wiringState": "PENDING_BACKEND:SET_DIAGNOSTIC_PLANE_KILL",
+    "authorityCreated": false
+  },
+  {
+    "schema": "InsertionRequestRowV1",
+    "version": 1,
+    "rowId": "agent-boundary.draft.provider-workload-identity",
+    "status": "DRAFT",
+    "requestedOwner": "I03 lifecycle, I08 supervisor, and I13 deployment/configuration owners",
+    "targetSeam": "Existing provider configuration boundary and canonical lifecycle/supervisor projection; deployment retains workload-identity and secret-reference ownership",
+    "reason": "A future diagnostic provider needs a non-secret, generation-fenced workload-identity lifecycle, while NOT_CONFIGURED remains a complete and valid product state.",
+    "contract": [
+      "Consume WorkloadIdentityEventV1 evidence with monotonic sequence, generation, binding, subject, audience, capability, lifetime, rotation, revocation, and proof digests.",
+      "Never project a token, credential value, environment-variable contents, secret payload, static cloud key, or provider SDK response; retain only the non-secret environment identifier required for binding.",
+      "NOT_CONFIGURED, revoked, expired, mismatched, rotating, failed, and unknown identities deny only optional diagnostic-provider use.",
+      "Rotation cannot widen capability digest and stale generations cannot complete or re-enable a provider.",
+      "Any external activation remains owner-authorized under I00 section 20 and is outside this packet."
+    ],
+    "tests": [
+      "NOT_CONFIGURED is stable, visible, and has productReadinessImpact NONE.",
+      "Illegal transition, sequence gap, time regression, stale generation, audience mismatch, binding mismatch, and capability widening fail closed.",
+      "Revocation and expiry immediately deny diagnostic eligibility.",
+      "No fixture, log, view model, or receipt contains secret-bearing fields."
+    ],
+    "expectedBehavior": [
+      "Mount only after the canonical owner maps source evidence into the packet contract.",
+      "Keep provider calls disabled when configuration or identity truth is absent.",
+      "Do not add a new supervisor component identity or a second lifecycle authority."
+    ],
+    "wiringState": "PENDING_BACKEND:MOUNT_DIAGNOSTIC_PROVIDER_WORKLOAD_IDENTITY_PROJECTION",
+    "authorityCreated": false
+  },
+  {
+    "schema": "InsertionRequestRowV1",
+    "version": 1,
+    "rowId": "agent-boundary.draft.diagnostic-worker-cockpit",
+    "status": "DRAFT",
+    "requestedOwner": "I08 supervisor read-model owner plus IP-CONTROL/I10 cockpit adapter owner",
+    "targetSeam": "Existing supervisor extension/read adapter and the existing Health, Control Room, Logs, and incident surfaces; never a fourteenth canonical component",
+    "reason": "Operators need honest diagnostic-worker, sandbox, identity, privacy, retention, promotion, repair, corpus, cost, outage, and kill posture without UI recomputation.",
+    "contract": [
+      "Consume DiagnosticWorkerViewV1 as render-neutral data and retain SYNTHETIC_ONLY or NOT_CONFIGURED source labels.",
+      "Show desired and observed lifecycle, provider/model revision, identity generation and expiry, sandbox decision, permission and capabilities, run/correlation, nullable budgets, privacy, append receipt, verifier, repair postcondition, corpus disposition, and kill state.",
+      "Project the exact D-LAUNCH-13 owner-law digest, Class A-D route, deterministic trigger and special trigger evidence, shadow requirement and exercise, policy and candidate bounds, all nine Class A evidence IDs, and monitored or active demotion triggers without recomputation.",
+      "A Class A PASS is registered-only eligibility evidence: operationalActionAllowed remains false in this packet, and the canonical Control Plane remains the only command owner.",
+      "Provider self-report alone never produces green; independent trace retention and required verifier evidence must pass.",
+      "Provider outage renders planeAvailability UNAVAILABLE; NOT_CONFIGURED renders planeAvailability NOT_CONFIGURED; both retain productReadinessImpact NONE.",
+      "Never render raw prompts, raw evidence, credential material, or a functional control without its canonical backend command."
+    ],
+    "tests": [
+      "NOT_CONFIGURED, outage, kill-engaged, identity-expired, retention-unknown, and synthetic-ready fixtures render distinct states.",
+      "Null budget or timestamp values remain null rather than fabricated zero.",
+      "Reason codes and capabilities are stable-sorted and duplicate-free.",
+      "Class A trigger, shadow, numeric bounds, nine-point evidence, and recurrence/drift/assumption demotion fields round-trip through the closed view schema.",
+      "Sensitive fields are absent and source state can never be LIVE_PUBLIC.",
+      "All pending controls remain disabled with the exact owner and command blocker."
+    ],
+    "expectedBehavior": [
+      "Project into the existing Health, Control Room, Logs, and incident drill-down surfaces without creating a new cockpit shell.",
+      "Use canonical supervisor and control owners for runtime truth and command state.",
+      "Never infer recovery, operational authority, product readiness, or execution authority from this view."
+    ],
+    "wiringState": "PENDING_BACKEND:PROJECT_DIAGNOSTIC_WORKER_ASSURANCE_FIELDS",
+    "authorityCreated": false
+  }
+]

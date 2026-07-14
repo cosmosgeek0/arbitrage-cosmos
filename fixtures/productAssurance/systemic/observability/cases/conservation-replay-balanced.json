@@ -1,0 +1,134 @@
+{
+  "schemaVersion": "conservation-accounting.v1",
+  "nowMs": 3000,
+  "expectedTuples": [
+    {
+      "stableLogicalEventId": "event.material-001",
+      "stageId": "ledger-stage",
+      "window": { "windowId": "window-001", "startMs": 1000, "endMs": 2000 },
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "evidenceClass": "LEDGER_AUDIT"
+    },
+    {
+      "stableLogicalEventId": "event.public-002",
+      "stageId": "telemetry-export-stage",
+      "window": { "windowId": "window-001", "startMs": 1000, "endMs": 2000 },
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "evidenceClass": "ROUTINE_PUBLIC"
+    }
+  ],
+  "records": [
+    {
+      "stableLogicalEventId": "event.material-001",
+      "stageId": "ledger-stage",
+      "window": { "windowId": "window-001", "startMs": 1000, "endMs": 2000 },
+      "serviceId": "ledger-service",
+      "componentId": "ledger-persistence",
+      "instanceId": "fixture-instance-1",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "environment": "LOCAL_FIXTURE",
+      "authorityOwnerId": "EXISTING_LEDGER",
+      "telemetrySchemaVersion": "telemetry.v1",
+      "evidenceClass": "LEDGER_AUDIT",
+      "counts": {
+        "accepted": 1,
+        "refused": 0,
+        "queued": 1,
+        "processed": 1,
+        "exported": 1,
+        "dropped": 0,
+        "inFlight": 0
+      },
+      "queue": { "depth": 0, "ageMs": 0, "capacity": 10 },
+      "times": {
+        "eventAtMs": 900,
+        "receiptAtMs": 1100,
+        "availableAtMs": 1110,
+        "processingStartedAtMs": 1120,
+        "processingEndedAtMs": 1140
+      },
+      "transitions": [
+        { "sequence": 1, "state": "ACCEPTED", "atMs": 1100, "reasonCode": null },
+        { "sequence": 2, "state": "QUEUED", "atMs": 1105, "reasonCode": null },
+        { "sequence": 3, "state": "PROCESSING", "atMs": 1120, "reasonCode": null },
+        { "sequence": 4, "state": "EXPORTED", "atMs": 1130, "reasonCode": null },
+        { "sequence": 5, "state": "COMPLETED", "atMs": 1140, "reasonCode": null }
+      ],
+      "disposition": { "kind": "COMPLETED", "reasonCode": null, "incidentId": null },
+      "duplicateAccounting": {
+        "seenCount": 1,
+        "replayCount": 0,
+        "reconciledDuplicateCount": 0,
+        "canonicalEventId": "event.material-001"
+      },
+      "sampling": { "mode": "NONE", "budgetId": null },
+      "exportRecovery": {
+        "state": "NOT_REQUIRED",
+        "budgetId": null,
+        "budgetExpiresAtMs": null,
+        "incidentId": null,
+        "bufferedCount": 0,
+        "replayedCount": 0
+      }
+    },
+    {
+      "stableLogicalEventId": "event.public-002",
+      "stageId": "telemetry-export-stage",
+      "window": { "windowId": "window-001", "startMs": 1000, "endMs": 2000 },
+      "serviceId": "telemetry-service",
+      "componentId": "engine-supervisor",
+      "instanceId": "fixture-instance-1",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "environment": "LOCAL_FIXTURE",
+      "authorityOwnerId": "I08_SUPERVISOR",
+      "telemetrySchemaVersion": "telemetry.v1",
+      "evidenceClass": "ROUTINE_PUBLIC",
+      "counts": {
+        "accepted": 1,
+        "refused": 0,
+        "queued": 0,
+        "processed": 2,
+        "exported": 2,
+        "dropped": 0,
+        "inFlight": 0
+      },
+      "queue": { "depth": 0, "ageMs": 0, "capacity": 10 },
+      "times": {
+        "eventAtMs": 1000,
+        "receiptAtMs": 1200,
+        "availableAtMs": 1205,
+        "processingStartedAtMs": 1210,
+        "processingEndedAtMs": 1250
+      },
+      "transitions": [
+        { "sequence": 1, "state": "ACCEPTED", "atMs": 1200, "reasonCode": null },
+        { "sequence": 2, "state": "PROCESSING", "atMs": 1210, "reasonCode": null },
+        { "sequence": 3, "state": "EXPORTED", "atMs": 1220, "reasonCode": null },
+        { "sequence": 4, "state": "REPLAYED", "atMs": 1230, "reasonCode": "DUPLICATE_REPLAY" },
+        { "sequence": 5, "state": "PROCESSING", "atMs": 1240, "reasonCode": null },
+        { "sequence": 6, "state": "EXPORTED", "atMs": 1250, "reasonCode": null },
+        { "sequence": 7, "state": "RECONCILED", "atMs": 1260, "reasonCode": "DUPLICATE_RECONCILED" }
+      ],
+      "disposition": {
+        "kind": "DUPLICATED_REPLAYED_RECONCILED",
+        "reasonCode": "DUPLICATE_RECONCILED",
+        "incidentId": null
+      },
+      "duplicateAccounting": {
+        "seenCount": 2,
+        "replayCount": 1,
+        "reconciledDuplicateCount": 1,
+        "canonicalEventId": "event.public-002"
+      },
+      "sampling": { "mode": "NONE", "budgetId": null },
+      "exportRecovery": {
+        "state": "NOT_REQUIRED",
+        "budgetId": null,
+        "budgetExpiresAtMs": null,
+        "incidentId": null,
+        "bufferedCount": 0,
+        "replayedCount": 0
+      }
+    }
+  ]
+}

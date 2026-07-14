@@ -1,0 +1,1071 @@
+{
+  "schemaVersion": "slo-catalog.v1",
+  "catalogId": "s5-observability-catalog-fixture",
+  "catalogRevision": 2,
+  "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+  "releaseSha": "1111111111111111111111111111111111111111",
+  "generatedAtMs": 4000,
+  "truthLabel": "SYNTHETIC_ONLY",
+  "authority": "SYNTHETIC_TEST",
+  "dataMode": "SYNTHETIC",
+  "evidenceOnly": true,
+  "effectPolicy": {
+    "authority": "EVIDENCE_ONLY",
+    "mayMutateCapital": false,
+    "mayMutateControls": false,
+    "mayExecuteRepair": false,
+    "riskReductionMustRemainAvailable": true
+  },
+  "slos": [
+    {
+      "sloId": "source-age",
+      "version": 1,
+      "category": "SOURCE_COHERENCE_AGE",
+      "ownerId": "INTELLIGENCE_RUNTIME",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "769f127a4f09f328caabad557f8ad6b4901820a4b35dbf86e6fe199071a7e14d",
+      "measurementSource": {
+        "kind": "HISTORICAL_METRIC_STATISTIC",
+        "metricId": "source-age-percentiles",
+        "family": "SOURCE_AGE_PERCENTILES",
+        "statistic": "P95"
+      },
+      "historicalMetricBindings": [
+        {
+          "metricId": "source-age-percentiles",
+          "family": "SOURCE_AGE_PERCENTILES"
+        }
+      ],
+      "syntheticWindow": {
+        "windowId": "source-age-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "cross-source-coherence",
+      "version": 1,
+      "category": "SOURCE_COHERENCE_AGE",
+      "ownerId": "INTELLIGENCE_RUNTIME",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "e68821a784b5872a6d9afcd53ededea582cf09e538fcaea56891f86c41172bcf",
+      "measurementSource": {
+        "kind": "HISTORICAL_METRIC_STATISTIC",
+        "metricId": "cross-source-skew",
+        "family": "CROSS_SOURCE_SKEW",
+        "statistic": "P95"
+      },
+      "historicalMetricBindings": [
+        {
+          "metricId": "cross-source-skew",
+          "family": "CROSS_SOURCE_SKEW"
+        }
+      ],
+      "syntheticWindow": {
+        "windowId": "cross-source-coherence-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "queue-depth-backpressure",
+      "version": 1,
+      "category": "QUEUE_BACKPRESSURE",
+      "ownerId": "I08_SUPERVISOR",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "64cca007f35dc8f4b36894071c5bcf3023e54c37442a633cc038fa1f60609a9f",
+      "measurementSource": {
+        "kind": "HISTORICAL_METRIC_STATISTIC",
+        "metricId": "queue-depth-backpressure",
+        "family": "QUEUE_DEPTH_BACKPRESSURE",
+        "statistic": "UTILIZATION"
+      },
+      "historicalMetricBindings": [
+        {
+          "metricId": "queue-depth-backpressure",
+          "family": "QUEUE_DEPTH_BACKPRESSURE"
+        }
+      ],
+      "syntheticWindow": {
+        "windowId": "queue-depth-backpressure-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "dropped-coalesced-events",
+      "version": 1,
+      "category": "QUEUE_BACKPRESSURE",
+      "ownerId": "TELEMETRY_OWNER",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "23fd5da714e1b5f04900cc32010e8aec06cbe7c41d9e9433013d570b2c462edb",
+      "measurementSource": {
+        "kind": "HISTORICAL_METRIC_STATISTIC",
+        "metricId": "dropped-coalesced-events",
+        "family": "DROPPED_COALESCED_EVENTS",
+        "statistic": "RATE"
+      },
+      "historicalMetricBindings": [
+        {
+          "metricId": "dropped-coalesced-events",
+          "family": "DROPPED_COALESCED_EVENTS"
+        }
+      ],
+      "syntheticWindow": {
+        "windowId": "dropped-coalesced-events-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "processing-latency",
+      "version": 1,
+      "category": "PROCESSING_COMMAND_LATENCY",
+      "ownerId": "I08_SUPERVISOR",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "094acbd6f61cbc1e80cc879a2bae7e8c6cd2a28609741d20b092de986a27537f",
+      "measurementSource": {
+        "kind": "HISTORICAL_METRIC_STATISTIC",
+        "metricId": "processing-age-percentiles",
+        "family": "PROCESSING_AGE_PERCENTILES",
+        "statistic": "P95"
+      },
+      "historicalMetricBindings": [
+        {
+          "metricId": "processing-age-percentiles",
+          "family": "PROCESSING_AGE_PERCENTILES"
+        }
+      ],
+      "syntheticWindow": {
+        "windowId": "processing-latency-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "command-latency",
+      "version": 1,
+      "category": "PROCESSING_COMMAND_LATENCY",
+      "ownerId": "I08_SUPERVISOR",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "e95381918efd4a37864dff9d1fcf918cda7c9ecee2460bbf77e6cb3e6e30e039",
+      "measurementSource": {
+        "kind": "CANONICAL_OWNER_EVIDENCE",
+        "ownerId": "I08_SUPERVISOR",
+        "evidenceKind": "COMMAND_ROUND_TRIP_EVIDENCE"
+      },
+      "historicalMetricBindings": [],
+      "syntheticWindow": {
+        "windowId": "command-latency-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "ambiguity-duration",
+      "version": 1,
+      "category": "AMBIGUITY_DURATION",
+      "ownerId": "FOUNDATION_RECONCILIATION",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "d6571da0eeeec2de936fbfd0739343f648a8930e998cf1100f4bb8b04af70fc2",
+      "measurementSource": {
+        "kind": "HISTORICAL_METRIC_STATISTIC",
+        "metricId": "ambiguity-duration",
+        "family": "AMBIGUITY_DURATION",
+        "statistic": "P95"
+      },
+      "historicalMetricBindings": [
+        {
+          "metricId": "ambiguity-duration",
+          "family": "AMBIGUITY_DURATION"
+        }
+      ],
+      "syntheticWindow": {
+        "windowId": "ambiguity-duration-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "reconciliation-lag",
+      "version": 1,
+      "category": "RECONCILIATION_LAG",
+      "ownerId": "FOUNDATION_RECONCILIATION",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "419e6f2cda56b884bffcc0f5d05025f3d52e897692aeea8b09e50d1cc46b0d79",
+      "measurementSource": {
+        "kind": "HISTORICAL_METRIC_STATISTIC",
+        "metricId": "reconciliation-gap",
+        "family": "RECONCILIATION_GAP",
+        "statistic": "P95"
+      },
+      "historicalMetricBindings": [
+        {
+          "metricId": "reconciliation-gap",
+          "family": "RECONCILIATION_GAP"
+        }
+      ],
+      "syntheticWindow": {
+        "windowId": "reconciliation-lag-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "evidence-expiry",
+      "version": 1,
+      "category": "EVIDENCE_EXPIRY",
+      "ownerId": "I08_SUPERVISOR",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "8925e81932c236ea0473b7d75a9f72a1efb8ea36fe01ba6745057567118e3e54",
+      "measurementSource": {
+        "kind": "CANONICAL_OWNER_EVIDENCE",
+        "ownerId": "I08_SUPERVISOR",
+        "evidenceKind": "EVIDENCE_EXPIRY_EVALUATION"
+      },
+      "historicalMetricBindings": [],
+      "syntheticWindow": {
+        "windowId": "evidence-expiry-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "telemetry-completeness",
+      "version": 1,
+      "category": "TELEMETRY_COMPLETENESS",
+      "ownerId": "TELEMETRY_OWNER",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "33fa1b436eb83e58fc6011174b7f5568c5695f8647da06dc831a75bd8009237b",
+      "measurementSource": {
+        "kind": "CANONICAL_OWNER_EVIDENCE",
+        "ownerId": "TELEMETRY_OWNER",
+        "evidenceKind": "TELEMETRY_COMPLETENESS_EVIDENCE"
+      },
+      "historicalMetricBindings": [],
+      "syntheticWindow": {
+        "windowId": "telemetry-completeness-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "automatic-recovery-result",
+      "version": 1,
+      "category": "RECOVERY_VERIFICATION",
+      "ownerId": "CONTROL_PLANE",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "ce6e7f5bdd52cb2eec73ea622de73033a68c242b98a84512e1996ec64a648d79",
+      "measurementSource": {
+        "kind": "HISTORICAL_METRIC_STATISTIC",
+        "metricId": "automatic-recovery-result-rate",
+        "family": "AUTOMATIC_RECOVERY_RESULT_RATE",
+        "statistic": "RATE"
+      },
+      "historicalMetricBindings": [
+        {
+          "metricId": "automatic-recovery-result-rate",
+          "family": "AUTOMATIC_RECOVERY_RESULT_RATE"
+        }
+      ],
+      "syntheticWindow": {
+        "windowId": "automatic-recovery-result-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "recovery-verification",
+      "version": 1,
+      "category": "RECOVERY_VERIFICATION",
+      "ownerId": "CONTROL_PLANE",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "2525103e9adf3765f803251d557d667f4d6d4eb090ec8ddc82b5c6e7162027ab",
+      "measurementSource": {
+        "kind": "CANONICAL_OWNER_EVIDENCE",
+        "ownerId": "CONTROL_PLANE",
+        "evidenceKind": "INDEPENDENT_RECOVERY_VERIFICATION"
+      },
+      "historicalMetricBindings": [],
+      "syntheticWindow": {
+        "windowId": "recovery-verification-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "sentinel-delivery",
+      "version": 1,
+      "category": "SENTINEL_PAGING_DELIVERY",
+      "ownerId": "I08_SUPERVISOR",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "423aed700b845de19a349254d4303e147a8aeda95a2452037dfdb6850c2df8b5",
+      "measurementSource": {
+        "kind": "CANONICAL_OWNER_EVIDENCE",
+        "ownerId": "I08_SUPERVISOR",
+        "evidenceKind": "SENTINEL_DELIVERY_RECEIPT"
+      },
+      "historicalMetricBindings": [],
+      "syntheticWindow": {
+        "windowId": "sentinel-delivery-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "paging-delivery",
+      "version": 1,
+      "category": "SENTINEL_PAGING_DELIVERY",
+      "ownerId": "I08_SUPERVISOR",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "db34b2e7df6b9c0bd51c24114aa9ba1f26b15e45f55da3ec1a83ee17b76a2704",
+      "measurementSource": {
+        "kind": "CANONICAL_OWNER_EVIDENCE",
+        "ownerId": "I08_SUPERVISOR",
+        "evidenceKind": "PAGING_DELIVERY_RECEIPT"
+      },
+      "historicalMetricBindings": [],
+      "syntheticWindow": {
+        "windowId": "paging-delivery-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "paging-acknowledgement",
+      "version": 1,
+      "category": "SENTINEL_PAGING_DELIVERY",
+      "ownerId": "I08_SUPERVISOR",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "8aa50d20e208221670de0ab0cb2bfeb39e69465e1e98209559a67f9484e87a30",
+      "measurementSource": {
+        "kind": "CANONICAL_OWNER_EVIDENCE",
+        "ownerId": "I08_SUPERVISOR",
+        "evidenceKind": "PAGING_ACKNOWLEDGEMENT_RECEIPT"
+      },
+      "historicalMetricBindings": [],
+      "syntheticWindow": {
+        "windowId": "paging-acknowledgement-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "restart-rto",
+      "version": 1,
+      "category": "RESTART_RTO_RPO",
+      "ownerId": "I00_OPERATIONS",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "3091c353eeb45732f13c19276ee585f1a81e8d00e0f1cd37ab9e3063ad33f70e",
+      "measurementSource": {
+        "kind": "CANONICAL_OWNER_EVIDENCE",
+        "ownerId": "I00_OPERATIONS",
+        "evidenceKind": "RESTART_RTO_EVIDENCE"
+      },
+      "historicalMetricBindings": [],
+      "syntheticWindow": {
+        "windowId": "restart-rto-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "restart-rpo",
+      "version": 1,
+      "category": "RESTART_RTO_RPO",
+      "ownerId": "I00_OPERATIONS",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "68290487e9666dd7c9b9c14dac52d3b3bd399df242c9fe808282831078a02528",
+      "measurementSource": {
+        "kind": "CANONICAL_OWNER_EVIDENCE",
+        "ownerId": "I00_OPERATIONS",
+        "evidenceKind": "RESTART_RPO_EVIDENCE"
+      },
+      "historicalMetricBindings": [],
+      "syntheticWindow": {
+        "windowId": "restart-rpo-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "cpu-budget",
+      "version": 1,
+      "category": "RESOURCE_BUDGET",
+      "ownerId": "I00_OPERATIONS",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "a43c2296cbf8cf11880c41cdf6f6492cbdcb670946ad282cb1a8742b4a058903",
+      "measurementSource": {
+        "kind": "HISTORICAL_METRIC_STATISTIC",
+        "metricId": "cpu-budget",
+        "family": "CPU_BUDGET",
+        "statistic": "UTILIZATION"
+      },
+      "historicalMetricBindings": [
+        {
+          "metricId": "cpu-budget",
+          "family": "CPU_BUDGET"
+        }
+      ],
+      "syntheticWindow": {
+        "windowId": "cpu-budget-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "memory-budget",
+      "version": 1,
+      "category": "RESOURCE_BUDGET",
+      "ownerId": "I00_OPERATIONS",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "63b2a84ce26e2124a4f44ab0c04f96b758cc2ccdbbd93b63c53e12b2af99904c",
+      "measurementSource": {
+        "kind": "HISTORICAL_METRIC_STATISTIC",
+        "metricId": "memory-budget",
+        "family": "MEMORY_BUDGET",
+        "statistic": "UTILIZATION"
+      },
+      "historicalMetricBindings": [
+        {
+          "metricId": "memory-budget",
+          "family": "MEMORY_BUDGET"
+        }
+      ],
+      "syntheticWindow": {
+        "windowId": "memory-budget-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "disk-budget",
+      "version": 1,
+      "category": "RESOURCE_BUDGET",
+      "ownerId": "I00_OPERATIONS",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "6813d1091748bdb3caf0f0f5e07d92197210d9de351c5859eb98f459adee71e3",
+      "measurementSource": {
+        "kind": "HISTORICAL_METRIC_STATISTIC",
+        "metricId": "disk-budget",
+        "family": "DISK_BUDGET",
+        "statistic": "UTILIZATION"
+      },
+      "historicalMetricBindings": [
+        {
+          "metricId": "disk-budget",
+          "family": "DISK_BUDGET"
+        }
+      ],
+      "syntheticWindow": {
+        "windowId": "disk-budget-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "wal-budget",
+      "version": 1,
+      "category": "RESOURCE_BUDGET",
+      "ownerId": "EXISTING_LEDGER",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "42e5c635836bae9b5e553613c5e72156b8bc00175a720722d2151702e93bc9a2",
+      "measurementSource": {
+        "kind": "HISTORICAL_METRIC_STATISTIC",
+        "metricId": "wal-budget",
+        "family": "WAL_BUDGET",
+        "statistic": "UTILIZATION"
+      },
+      "historicalMetricBindings": [
+        {
+          "metricId": "wal-budget",
+          "family": "WAL_BUDGET"
+        }
+      ],
+      "syntheticWindow": {
+        "windowId": "wal-budget-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "api-rate-budget",
+      "version": 1,
+      "category": "RESOURCE_BUDGET",
+      "ownerId": "EXCHANGE_GATEWAY",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "d5324b3fc5d1a9fd2b3b9dfcc0ee87fe10f32aad99f4ccca6461aed01a907d8e",
+      "measurementSource": {
+        "kind": "HISTORICAL_METRIC_STATISTIC",
+        "metricId": "api-rate-budget",
+        "family": "API_RATE_BUDGET",
+        "statistic": "UTILIZATION"
+      },
+      "historicalMetricBindings": [
+        {
+          "metricId": "api-rate-budget",
+          "family": "API_RATE_BUDGET"
+        }
+      ],
+      "syntheticWindow": {
+        "windowId": "api-rate-budget-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "telemetry-budget",
+      "version": 1,
+      "category": "RESOURCE_BUDGET",
+      "ownerId": "TELEMETRY_OWNER",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "c276c10c9a7c881dd4442634dcc8a34099a9df53c95de5b13e392df0a5998da7",
+      "measurementSource": {
+        "kind": "HISTORICAL_METRIC_STATISTIC",
+        "metricId": "telemetry-budget",
+        "family": "TELEMETRY_BUDGET",
+        "statistic": "UTILIZATION"
+      },
+      "historicalMetricBindings": [
+        {
+          "metricId": "telemetry-budget",
+          "family": "TELEMETRY_BUDGET"
+        }
+      ],
+      "syntheticWindow": {
+        "windowId": "telemetry-budget-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "token-budget",
+      "version": 1,
+      "category": "RESOURCE_BUDGET",
+      "ownerId": "DIAGNOSTIC_PLANE",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "be73e667865f3f27f555e3d260fd09f880df201a18d75b30e1e56ef91178cd3f",
+      "measurementSource": {
+        "kind": "HISTORICAL_METRIC_STATISTIC",
+        "metricId": "token-budget",
+        "family": "TOKEN_BUDGET",
+        "statistic": "UTILIZATION"
+      },
+      "historicalMetricBindings": [
+        {
+          "metricId": "token-budget",
+          "family": "TOKEN_BUDGET"
+        }
+      ],
+      "syntheticWindow": {
+        "windowId": "token-budget-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "sloId": "cost-budget",
+      "version": 1,
+      "category": "RESOURCE_BUDGET",
+      "ownerId": "I00_OPERATIONS",
+      "definitionSchemaVersion": "slo-trend.v1",
+      "definitionSha256": "6b3c29ef1f82d92f41b28e6d4d5d4e922fc1cf228acc2cb979785921b23b0e78",
+      "measurementSource": {
+        "kind": "HISTORICAL_METRIC_STATISTIC",
+        "metricId": "cost-budget",
+        "family": "COST_BUDGET",
+        "statistic": "UTILIZATION"
+      },
+      "historicalMetricBindings": [
+        {
+          "metricId": "cost-budget",
+          "family": "COST_BUDGET"
+        }
+      ],
+      "syntheticWindow": {
+        "windowId": "cost-budget-window",
+        "startMs": 2000,
+        "endMs": 3000,
+        "sampleCount": 4
+      },
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    }
+  ],
+  "historicalMetricRegistry": [
+    {
+      "metricId": "source-age-percentiles",
+      "family": "SOURCE_AGE_PERCENTILES",
+      "ownerId": "INTELLIGENCE_RUNTIME",
+      "unit": "milliseconds",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "metricId": "processing-age-percentiles",
+      "family": "PROCESSING_AGE_PERCENTILES",
+      "ownerId": "I08_SUPERVISOR",
+      "unit": "milliseconds",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "metricId": "cross-source-skew",
+      "family": "CROSS_SOURCE_SKEW",
+      "ownerId": "INTELLIGENCE_RUNTIME",
+      "unit": "milliseconds",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "metricId": "queue-depth-backpressure",
+      "family": "QUEUE_DEPTH_BACKPRESSURE",
+      "ownerId": "I08_SUPERVISOR",
+      "unit": "events",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "UTILIZATION"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "metricId": "dropped-coalesced-events",
+      "family": "DROPPED_COALESCED_EVENTS",
+      "ownerId": "TELEMETRY_OWNER",
+      "unit": "events",
+      "statistics": [
+        "COUNT",
+        "RATE"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "metricId": "reconciliation-gap",
+      "family": "RECONCILIATION_GAP",
+      "ownerId": "FOUNDATION_RECONCILIATION",
+      "unit": "milliseconds",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "metricId": "ambiguity-duration",
+      "family": "AMBIGUITY_DURATION",
+      "ownerId": "FOUNDATION_RECONCILIATION",
+      "unit": "milliseconds",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "metricId": "automatic-recovery-result-rate",
+      "family": "AUTOMATIC_RECOVERY_RESULT_RATE",
+      "ownerId": "CONTROL_PLANE",
+      "unit": "ratio",
+      "statistics": [
+        "COUNT",
+        "RATE"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "metricId": "execution-cost",
+      "family": "EXECUTION_COST",
+      "ownerId": "CAPITAL_SUPERVISION",
+      "unit": "quote-asset",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "SUM"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "metricId": "slippage",
+      "family": "SLIPPAGE",
+      "ownerId": "CAPITAL_SUPERVISION",
+      "unit": "basis-points",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "metricId": "funding",
+      "family": "FUNDING",
+      "ownerId": "CAPITAL_SUPERVISION",
+      "unit": "quote-asset",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "SUM"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "metricId": "borrow-interest",
+      "family": "BORROW_INTEREST",
+      "ownerId": "CAPITAL_SUPERVISION",
+      "unit": "quote-asset",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "SUM"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "metricId": "market-impact",
+      "family": "MARKET_IMPACT",
+      "ownerId": "CAPITAL_SUPERVISION",
+      "unit": "basis-points",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "metricId": "incident-frequency",
+      "family": "INCIDENT_FREQUENCY",
+      "ownerId": "I08_SUPERVISOR",
+      "unit": "incidents",
+      "statistics": [
+        "COUNT",
+        "RATE"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "metricId": "recurring-failed-invariants",
+      "family": "RECURRING_FAILED_INVARIANTS",
+      "ownerId": "I08_SUPERVISOR",
+      "unit": "invariant-failures",
+      "statistics": [
+        "COUNT",
+        "RATE"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "metricId": "cpu-budget",
+      "family": "CPU_BUDGET",
+      "ownerId": "I00_OPERATIONS",
+      "unit": "percent",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "UTILIZATION"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "metricId": "memory-budget",
+      "family": "MEMORY_BUDGET",
+      "ownerId": "I00_OPERATIONS",
+      "unit": "bytes",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "UTILIZATION"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "metricId": "disk-budget",
+      "family": "DISK_BUDGET",
+      "ownerId": "I00_OPERATIONS",
+      "unit": "bytes",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "UTILIZATION"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "metricId": "wal-budget",
+      "family": "WAL_BUDGET",
+      "ownerId": "EXISTING_LEDGER",
+      "unit": "bytes",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "UTILIZATION"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "metricId": "api-rate-budget",
+      "family": "API_RATE_BUDGET",
+      "ownerId": "EXCHANGE_GATEWAY",
+      "unit": "request-weight",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "UTILIZATION"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "metricId": "telemetry-budget",
+      "family": "TELEMETRY_BUDGET",
+      "ownerId": "TELEMETRY_OWNER",
+      "unit": "events",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "UTILIZATION"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "metricId": "token-budget",
+      "family": "TOKEN_BUDGET",
+      "ownerId": "DIAGNOSTIC_PLANE",
+      "unit": "tokens",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "UTILIZATION"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    },
+    {
+      "metricId": "cost-budget",
+      "family": "COST_BUDGET",
+      "ownerId": "I00_OPERATIONS",
+      "unit": "quote-asset",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "SUM",
+        "UTILIZATION"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "truthLabel": "SYNTHETIC_ONLY",
+      "authority": "SYNTHETIC_TEST",
+      "evidenceOnly": true
+    }
+  ]
+}

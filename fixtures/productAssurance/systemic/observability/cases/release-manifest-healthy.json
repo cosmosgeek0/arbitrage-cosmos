@@ -1,0 +1,3765 @@
+{
+  "schemaVersion": "release-bound-expected-manifest.v1",
+  "nowMs": 200000,
+  "manifest": {
+    "manifestId": "manifest.release.fixture-001",
+    "manifestSha256": "076e3e2e74ae960b43d59364ac42e66cb924339f1146ddcd8de87879ac68e9be",
+    "manifestRevision": 5,
+    "binding": {
+      "acceptedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+      "missionCoverageSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "authorityRegistrySha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "componentRegistrySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "deploymentTopologySha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    "review": {
+      "reviewerOwnerId": "I00_DIRECTOR",
+      "reviewEvidenceId": "manifest-review.fixture-002",
+      "reviewedAtMs": 199000
+    },
+    "observationMaximumAgeMs": 1000,
+    "expectedItems": [
+      {
+        "expectedId": "component:ledger-persistence",
+        "kind": "COMPONENT",
+        "ownerId": "EXISTING_LEDGER",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "durable-evidence",
+          "reconciliation"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "component:public-spot-source",
+        "kind": "COMPONENT",
+        "ownerId": "INTELLIGENCE_RUNTIME",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": ["managed-component:public-spot-source"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "WIRED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "component:public-usdm-source",
+        "kind": "COMPONENT",
+        "ownerId": "INTELLIGENCE_RUNTIME",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": ["managed-component:public-usdm-source"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "WIRED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "component:market-universe",
+        "kind": "COMPONENT",
+        "ownerId": "AUDITED_APP",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": ["managed-component:market-universe"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "WIRED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "component:intelligence-runtime",
+        "kind": "COMPONENT",
+        "ownerId": "INTELLIGENCE_RUNTIME",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": ["managed-component:intelligence-runtime"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "WIRED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "component:market-intelligence",
+        "kind": "COMPONENT",
+        "ownerId": "MARKET_INTELLIGENCE",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": ["managed-component:market-intelligence"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "WIRED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "component:basis-engine",
+        "kind": "COMPONENT",
+        "ownerId": "BASIS_ENGINE",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": ["managed-component:basis-engine"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "WIRED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "component:volume-engine",
+        "kind": "COMPONENT",
+        "ownerId": "VOLUME_ENGINE",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": ["managed-component:volume-engine"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "WIRED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "component:capital-supervision",
+        "kind": "COMPONENT",
+        "ownerId": "CAPITAL_SUPERVISION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": ["managed-component:capital-supervision"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "WIRED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "component:multileg-risk",
+        "kind": "COMPONENT",
+        "ownerId": "BACKEND_FOUNDATION_RISK",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": ["managed-component:multileg-risk"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "WIRED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "component:execution-coordinator-validate-only",
+        "kind": "COMPONENT",
+        "ownerId": "BACKEND_FOUNDATION_EXECUTION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": ["managed-component:execution-coordinator-validate-only"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "WIRED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "component:reconciliation",
+        "kind": "COMPONENT",
+        "ownerId": "BACKEND_FOUNDATION_RECONCILIATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": ["managed-component:reconciliation"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "WIRED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "component:engine-supervisor",
+        "kind": "COMPONENT",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": ["managed-component:engine-supervisor"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "WIRED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "source:MARKET_UNIVERSE",
+        "kind": "SOURCE",
+        "ownerId": "INTELLIGENCE_RUNTIME",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:market-universe",
+          "semantic-stream:MARKET_UNIVERSE"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "source:SPOT_MINI_TICKER",
+        "kind": "SOURCE",
+        "ownerId": "INTELLIGENCE_RUNTIME",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:public-spot-source",
+          "semantic-stream:SPOT_MINI_TICKER"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "source:SPOT_AGGREGATE_TRADE",
+        "kind": "SOURCE",
+        "ownerId": "INTELLIGENCE_RUNTIME",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:public-spot-source",
+          "semantic-stream:SPOT_AGGREGATE_TRADE"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "source:SPOT_BEST_BID_ASK",
+        "kind": "SOURCE",
+        "ownerId": "INTELLIGENCE_RUNTIME",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:public-spot-source",
+          "semantic-stream:SPOT_BEST_BID_ASK"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "source:USD_M_BEST_BID_ASK",
+        "kind": "SOURCE",
+        "ownerId": "INTELLIGENCE_RUNTIME",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:public-usdm-source",
+          "semantic-stream:USD_M_BEST_BID_ASK"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "source:USD_M_MARK_FUNDING",
+        "kind": "SOURCE",
+        "ownerId": "INTELLIGENCE_RUNTIME",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:public-usdm-source",
+          "semantic-stream:USD_M_MARK_FUNDING"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "source:USD_M_LIQUIDATION",
+        "kind": "SOURCE",
+        "ownerId": "INTELLIGENCE_RUNTIME",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:public-usdm-source",
+          "semantic-stream:USD_M_LIQUIDATION"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "dependency:ledger-persistence:public-spot-source",
+        "kind": "DEPENDENCY",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:ledger-persistence",
+          "component:public-spot-source"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "dependency:ledger-persistence:public-usdm-source",
+        "kind": "DEPENDENCY",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:ledger-persistence",
+          "component:public-usdm-source"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "dependency:ledger-persistence:engine-supervisor",
+        "kind": "DEPENDENCY",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:ledger-persistence",
+          "component:engine-supervisor"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "dependency:public-spot-source:market-universe",
+        "kind": "DEPENDENCY",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:public-spot-source",
+          "component:market-universe"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "dependency:public-usdm-source:market-universe",
+        "kind": "DEPENDENCY",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": false,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "component:public-usdm-source",
+          "component:market-universe"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "dependency:market-universe:intelligence-runtime",
+        "kind": "DEPENDENCY",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:market-universe",
+          "component:intelligence-runtime"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "dependency:public-spot-source:intelligence-runtime",
+        "kind": "DEPENDENCY",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:public-spot-source",
+          "component:intelligence-runtime"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "dependency:public-usdm-source:intelligence-runtime",
+        "kind": "DEPENDENCY",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": false,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "component:public-usdm-source",
+          "component:intelligence-runtime"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "dependency:intelligence-runtime:market-intelligence",
+        "kind": "DEPENDENCY",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:intelligence-runtime",
+          "component:market-intelligence"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "dependency:market-intelligence:basis-engine",
+        "kind": "DEPENDENCY",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:market-intelligence",
+          "component:basis-engine"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "dependency:public-spot-source:basis-engine",
+        "kind": "DEPENDENCY",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:public-spot-source",
+          "component:basis-engine"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "dependency:public-usdm-source:basis-engine",
+        "kind": "DEPENDENCY",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:public-usdm-source",
+          "component:basis-engine"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "dependency:market-intelligence:volume-engine",
+        "kind": "DEPENDENCY",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:market-intelligence",
+          "component:volume-engine"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "dependency:public-spot-source:volume-engine",
+        "kind": "DEPENDENCY",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:public-spot-source",
+          "component:volume-engine"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "dependency:market-intelligence:capital-supervision",
+        "kind": "DEPENDENCY",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:market-intelligence",
+          "component:capital-supervision"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "dependency:basis-engine:capital-supervision",
+        "kind": "DEPENDENCY",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": false,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "component:basis-engine",
+          "component:capital-supervision"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "dependency:volume-engine:capital-supervision",
+        "kind": "DEPENDENCY",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": false,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "component:volume-engine",
+          "component:capital-supervision"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "dependency:capital-supervision:multileg-risk",
+        "kind": "DEPENDENCY",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:capital-supervision",
+          "component:multileg-risk"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "dependency:multileg-risk:execution-coordinator-validate-only",
+        "kind": "DEPENDENCY",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:multileg-risk",
+          "component:execution-coordinator-validate-only"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "dependency:ledger-persistence:execution-coordinator-validate-only",
+        "kind": "DEPENDENCY",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:ledger-persistence",
+          "component:execution-coordinator-validate-only"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "dependency:execution-coordinator-validate-only:reconciliation",
+        "kind": "DEPENDENCY",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:execution-coordinator-validate-only",
+          "component:reconciliation"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "dependency:ledger-persistence:reconciliation",
+        "kind": "DEPENDENCY",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:ledger-persistence",
+          "component:reconciliation"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "capital-path:evidence-proposal-to-capital-mandate",
+        "kind": "CAPITAL_PATH",
+        "ownerId": "CAPITAL_SUPERVISION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:market-intelligence",
+          "component:capital-supervision"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "capital-path:capital-mandate-to-risk",
+        "kind": "CAPITAL_PATH",
+        "ownerId": "BACKEND_FOUNDATION_RISK",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:capital-supervision",
+          "component:multileg-risk"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "capital-path:accepted-risk-to-validate-only-plan",
+        "kind": "CAPITAL_PATH",
+        "ownerId": "BACKEND_FOUNDATION_EXECUTION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:multileg-risk",
+          "component:execution-coordinator-validate-only"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "capital-path:reconciliation-to-ledger-outcome",
+        "kind": "CAPITAL_PATH",
+        "ownerId": "BACKEND_FOUNDATION_RECONCILIATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:reconciliation",
+          "component:ledger-persistence"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "recovery-path:kill-switch-risk-reduction",
+        "kind": "RECOVERY_PATH",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "command-path:SET_KILL_SWITCH",
+          "component:multileg-risk"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "recovery-path:reconciliation-divergence",
+        "kind": "RECOVERY_PATH",
+        "ownerId": "BACKEND_FOUNDATION_RECONCILIATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:reconciliation",
+          "component:ledger-persistence"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "recovery-path:managed-restart-restore",
+        "kind": "RECOVERY_PATH",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:engine-supervisor",
+          "component:ledger-persistence"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "recovery-path:graceful-drain",
+        "kind": "RECOVERY_PATH",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "component:engine-supervisor",
+          "component:ledger-persistence"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "independent-sentinel",
+        "kind": "SENTINEL",
+        "ownerId": "I08_SUPERVISOR",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "trade-readiness"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "command-path:SET_KILL_SWITCH",
+        "kind": "COMMAND_PATH",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": [
+          "control-contract:CONTROL_KILL_SWITCH_V1",
+          "backend-mutation:SYSTEM_INTEGRATION.SET_KILL_SWITCH"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "WIRED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "command-path:SET_SAFE_MODE",
+        "kind": "COMMAND_PATH",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": ["control-contract:CONTROL_SAFE_MODE_V1", "backend-mutation:SYSTEM_INTEGRATION.SET_SAFE_MODE"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "WIRED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "command-path:SET_INTAKE_PAUSED",
+        "kind": "COMMAND_PATH",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": ["control-contract:CONTROL_INTAKE_PAUSE_V1", "backend-mutation:SYSTEM_INTEGRATION.SET_INTAKE_PAUSED"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "WIRED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "command-path:SET_COMPONENT_STATE",
+        "kind": "COMMAND_PATH",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": ["control-contract:CONTROL_COMPONENT_DESIRED_STATE_V1", "backend-mutation:SYSTEM_INTEGRATION.SET_COMPONENT_STATE"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "WIRED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "command-path:REVOKE_APPROVAL",
+        "kind": "COMMAND_PATH",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": ["control-contract:CONTROL_APPROVAL_REVOKE_V1", "backend-mutation:SYSTEM_INTEGRATION.REVOKE_APPROVAL"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "WIRED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "command-path:APPLY_CONFIGURATION",
+        "kind": "COMMAND_PATH",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": ["control-contract:CONTROL_BOUNDED_CONFIG_REVISION_V1", "backend-mutation:SYSTEM_INTEGRATION.APPLY_CONFIGURATION"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "WIRED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "command-path:REVOKE_RESERVATION",
+        "kind": "COMMAND_PATH",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": true,
+        "dependentCapabilityIds": ["system-control-command:REVOKE_RESERVATION", "backend-mutation:SYSTEM_INTEGRATION.REVOKE_RESERVATION"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "WIRED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "command-path:RESTART_COMPONENT",
+        "kind": "COMMAND_PATH",
+        "ownerId": "SYSTEM_INTEGRATION",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": ["system-control-command:RESTART_COMPONENT", "backend-mutation:SYSTEM_INTEGRATION.RESTART_COMPONENT"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "WIRED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": true,
+        "reconciliationRequired": true
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_DASHBOARD_TRUTH_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "cockpit-contract:PANEL_DASHBOARD_TRUTH_V1"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_CONTROL_ROOM_TRUTH_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "cockpit-contract:PANEL_CONTROL_ROOM_TRUTH_V1"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:CONTROL_KILL_SWITCH_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "cockpit-contract:CONTROL_KILL_SWITCH_V1"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:CONTROL_SAFE_MODE_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": ["cockpit-contract:CONTROL_SAFE_MODE_V1"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:CONTROL_INTAKE_PAUSE_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": ["cockpit-contract:CONTROL_INTAKE_PAUSE_V1"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:CONTROL_COMPONENT_DESIRED_STATE_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": ["cockpit-contract:CONTROL_COMPONENT_DESIRED_STATE_V1"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:CONTROL_APPROVAL_REVOKE_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": ["cockpit-contract:CONTROL_APPROVAL_REVOKE_V1"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:CONTROL_BOUNDED_CONFIG_REVISION_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": ["cockpit-contract:CONTROL_BOUNDED_CONFIG_REVISION_V1"],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": ["BUILT_AND_TESTED", "SYNTHETIC_ONLY"],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_ACCOUNT_TRUTH_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "cockpit-contract:PANEL_ACCOUNT_TRUTH_V1"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_MARKETS_TRUTH_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "cockpit-contract:PANEL_MARKETS_TRUTH_V1"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_TOKEN_TRUTH_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "cockpit-contract:PANEL_TOKEN_TRUTH_V1"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_BASIS_TRUTH_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "cockpit-contract:PANEL_BASIS_TRUTH_V1"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_VOLUME_TRUTH_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "cockpit-contract:PANEL_VOLUME_TRUTH_V1"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_OPPORTUNITIES_TRUTH_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "cockpit-contract:PANEL_OPPORTUNITIES_TRUTH_V1"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_BORROW_TRUTH_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "cockpit-contract:PANEL_BORROW_TRUTH_V1"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_EXECUTION_TRUTH_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "cockpit-contract:PANEL_EXECUTION_TRUTH_V1"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_ORDERS_TRUTH_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "cockpit-contract:PANEL_ORDERS_TRUTH_V1"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_POSITIONS_TRUTH_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "cockpit-contract:PANEL_POSITIONS_TRUTH_V1"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_FILLS_TRUTH_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "cockpit-contract:PANEL_FILLS_TRUTH_V1"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_PNL_TRUTH_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "cockpit-contract:PANEL_PNL_TRUTH_V1"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_RISK_TRUTH_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "cockpit-contract:PANEL_RISK_TRUTH_V1"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_HEALTH_TRUTH_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "cockpit-contract:PANEL_HEALTH_TRUTH_V1"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_LOGS_LEDGER_TRUTH_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "cockpit-contract:PANEL_LOGS_LEDGER_TRUTH_V1"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_NOTIFICATIONS_TRUTH_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "cockpit-contract:PANEL_NOTIFICATIONS_TRUTH_V1"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_HEALTH_OUT_OF_BAND_LIVENESS_V1",
+        "kind": "COCKPIT_PROJECTION",
+        "ownerId": "IP_CONTROL",
+        "required": true,
+        "enabled": true,
+        "capitalCritical": false,
+        "dependentCapabilityIds": [
+          "cockpit-contract:PANEL_HEALTH_OUT_OF_BAND_LIVENESS_V1"
+        ],
+        "supportState": "SUPPORTED",
+        "configurationState": "CONFIGURED",
+        "expectedReleaseStatuses": [
+          "BUILT_AND_TESTED",
+          "SYNTHETIC_ONLY"
+        ],
+        "expectedTelemetrySchemaVersion": "telemetry.v1",
+        "expectedDataMode": "SYNTHETIC",
+        "independentProbeRequired": false,
+        "reconciliationRequired": false
+      }
+    ]
+  },
+  "observation": {
+    "manifestId": "manifest.release.fixture-001",
+    "manifestSha256": "076e3e2e74ae960b43d59364ac42e66cb924339f1146ddcd8de87879ac68e9be",
+    "testedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+    "runningReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+    "deployedReleaseSha": "9785c93102b00389847b77c2f9348c06abc4344b",
+    "observedAtMs": 199970,
+    "telemetrySchemaCompatibility": "COMPATIBLE",
+    "manifestDigestVerification": {
+      "result": "PASS",
+      "verifiedManifestSha256": "076e3e2e74ae960b43d59364ac42e66cb924339f1146ddcd8de87879ac68e9be",
+      "verifiedMissionCoverageSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "verifiedAuthorityRegistrySha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "verifiedComponentRegistrySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "verifiedDeploymentTopologySha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "verifierOwnerId": "I00_RELEASE_OWNER",
+      "verifierReferenceId": "manifest-digest-proof.fixture-001",
+      "verifiedAtMs": 199850
+    },
+    "lastCompleteCorrelationTrace": {
+      "correlationId": "corr.fixture-001",
+      "completedAtMs": 199800,
+      "releaseSha": "9785c93102b00389847b77c2f9348c06abc4344b"
+    },
+    "lastIndependentBlackBoxProbe": {
+      "probeId": "probe.fixture-001",
+      "result": "PASS",
+      "observedAtMs": 199850,
+      "releaseSha": "9785c93102b00389847b77c2f9348c06abc4344b"
+    },
+    "items": [
+      {
+        "expectedId": "component:ledger-persistence",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "component:public-spot-source",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","WIRED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "component:public-usdm-source",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","WIRED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "component:market-universe",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","WIRED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "component:intelligence-runtime",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","WIRED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "component:market-intelligence",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","WIRED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "component:basis-engine",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","WIRED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "component:volume-engine",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","WIRED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "component:capital-supervision",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","WIRED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "component:multileg-risk",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","WIRED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "component:execution-coordinator-validate-only",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","WIRED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "component:reconciliation",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","WIRED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "component:engine-supervisor",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","WIRED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "source:MARKET_UNIVERSE",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199900,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": [],
+        "observedOwnerId": "INTELLIGENCE_RUNTIME",
+        "semanticStream": "MARKET_UNIVERSE",
+        "physicalProducer": {
+          "kind": "EXISTING_AUDITED",
+          "producerId": "market-engine",
+          "ownerPath": "server/src/engine/marketData.ts",
+          "transport": "INJECTED_EXISTING"
+        },
+        "semanticPublisher": "intelligence-runtime"
+      },
+      {
+        "expectedId": "source:SPOT_MINI_TICKER",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199900,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": [],
+        "observedOwnerId": "INTELLIGENCE_RUNTIME",
+        "semanticStream": "SPOT_MINI_TICKER",
+        "physicalProducer": {
+          "kind": "EXISTING_AUDITED",
+          "producerId": "market-engine",
+          "ownerPath": "server/src/engine/marketData.ts",
+          "transport": "INJECTED_EXISTING"
+        },
+        "semanticPublisher": "intelligence-runtime"
+      },
+      {
+        "expectedId": "source:SPOT_AGGREGATE_TRADE",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199900,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": [],
+        "observedOwnerId": "INTELLIGENCE_RUNTIME",
+        "semanticStream": "SPOT_AGGREGATE_TRADE",
+        "physicalProducer": {
+          "kind": "EXISTING_AUDITED",
+          "producerId": "volume-runtime",
+          "ownerPath": "server/src/services/volumeRuntime.ts",
+          "transport": "INJECTED_EXISTING"
+        },
+        "semanticPublisher": "intelligence-runtime"
+      },
+      {
+        "expectedId": "source:SPOT_BEST_BID_ASK",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199900,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": [],
+        "observedOwnerId": "INTELLIGENCE_RUNTIME",
+        "semanticStream": "SPOT_BEST_BID_ASK",
+        "physicalProducer": {
+          "kind": "EXISTING_AUDITED",
+          "producerId": "basis-runtime",
+          "ownerPath": "server/src/services/basisRuntime.ts",
+          "transport": "INJECTED_EXISTING"
+        },
+        "semanticPublisher": "intelligence-runtime"
+      },
+      {
+        "expectedId": "source:USD_M_BEST_BID_ASK",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199900,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": [],
+        "observedOwnerId": "INTELLIGENCE_RUNTIME",
+        "semanticStream": "USD_M_BEST_BID_ASK",
+        "physicalProducer": {
+          "kind": "EXISTING_AUDITED",
+          "producerId": "basis-runtime",
+          "ownerPath": "server/src/services/basisRuntime.ts",
+          "transport": "INJECTED_EXISTING"
+        },
+        "semanticPublisher": "intelligence-runtime"
+      },
+      {
+        "expectedId": "source:USD_M_MARK_FUNDING",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199900,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": [],
+        "observedOwnerId": "INTELLIGENCE_RUNTIME",
+        "semanticStream": "USD_M_MARK_FUNDING",
+        "physicalProducer": {
+          "kind": "EXISTING_AUDITED",
+          "producerId": "market-engine",
+          "ownerPath": "server/src/engine/marketData.ts",
+          "transport": "INJECTED_EXISTING"
+        },
+        "semanticPublisher": "intelligence-runtime"
+      },
+      {
+        "expectedId": "source:USD_M_LIQUIDATION",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199900,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": [],
+        "observedOwnerId": "INTELLIGENCE_RUNTIME",
+        "semanticStream": "USD_M_LIQUIDATION",
+        "physicalProducer": {
+          "kind": "EXISTING_AUDITED",
+          "producerId": "market-engine",
+          "ownerPath": "server/src/engine/marketData.ts",
+          "transport": "INJECTED_EXISTING"
+        },
+        "semanticPublisher": "intelligence-runtime"
+      },
+      {
+        "expectedId": "dependency:ledger-persistence:public-spot-source",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "dependency:ledger-persistence:public-usdm-source",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "dependency:ledger-persistence:engine-supervisor",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "dependency:public-spot-source:market-universe",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "dependency:public-usdm-source:market-universe",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "dependency:market-universe:intelligence-runtime",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "dependency:public-spot-source:intelligence-runtime",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "dependency:public-usdm-source:intelligence-runtime",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "dependency:intelligence-runtime:market-intelligence",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "dependency:market-intelligence:basis-engine",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "dependency:public-spot-source:basis-engine",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "dependency:public-usdm-source:basis-engine",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "dependency:market-intelligence:volume-engine",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "dependency:public-spot-source:volume-engine",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "dependency:market-intelligence:capital-supervision",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "dependency:basis-engine:capital-supervision",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "dependency:volume-engine:capital-supervision",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "dependency:capital-supervision:multileg-risk",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "dependency:multileg-risk:execution-coordinator-validate-only",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "dependency:ledger-persistence:execution-coordinator-validate-only",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "dependency:execution-coordinator-validate-only:reconciliation",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "dependency:ledger-persistence:reconciliation",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "capital-path:evidence-proposal-to-capital-mandate",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "capital-path:capital-mandate-to-risk",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "capital-path:accepted-risk-to-validate-only-plan",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "capital-path:reconciliation-to-ledger-outcome",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "recovery-path:kill-switch-risk-reduction",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "recovery-path:reconciliation-divergence",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "recovery-path:managed-restart-restore",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "recovery-path:graceful-drain",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "independent-sentinel",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "command-path:SET_KILL_SWITCH",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "WIRED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "LIVE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "command-path:SET_SAFE_MODE",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","WIRED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "LIVE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "command-path:SET_INTAKE_PAUSED",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","WIRED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "LIVE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "command-path:SET_COMPONENT_STATE",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","WIRED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "LIVE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "command-path:REVOKE_APPROVAL",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","WIRED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "LIVE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "command-path:APPLY_CONFIGURATION",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","WIRED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "LIVE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "command-path:REVOKE_RESERVATION",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","WIRED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "LIVE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "command-path:RESTART_COMPONENT",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","WIRED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "PASS",
+        "reconciliationState": "RECONCILED",
+        "controlState": "LIVE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": 199850,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_DASHBOARD_TRUTH_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_CONTROL_ROOM_TRUTH_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:CONTROL_KILL_SWITCH_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:CONTROL_SAFE_MODE_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:CONTROL_INTAKE_PAUSE_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:CONTROL_COMPONENT_DESIRED_STATE_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:CONTROL_APPROVAL_REVOKE_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:CONTROL_BOUNDED_CONFIG_REVISION_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {"ownerState":"READY","readiness":"READY","releaseStatuses":["BUILT_AND_TESTED","SYNTHETIC_ONLY"],"truthLabel":"SYNTHETIC_ONLY","authority":"SYNTHETIC_TEST"},
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_ACCOUNT_TRUTH_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_MARKETS_TRUTH_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_TOKEN_TRUTH_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_BASIS_TRUTH_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_VOLUME_TRUTH_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_OPPORTUNITIES_TRUTH_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_BORROW_TRUTH_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_EXECUTION_TRUTH_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_ORDERS_TRUTH_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_POSITIONS_TRUTH_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_FILLS_TRUTH_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_PNL_TRUTH_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_RISK_TRUTH_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_HEALTH_TRUTH_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_LOGS_LEDGER_TRUTH_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_NOTIFICATIONS_TRUTH_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      },
+      {
+        "expectedId": "cockpit-projection:PANEL_HEALTH_OUT_OF_BAND_LIVENESS_V1",
+        "identityState": "DISCOVERED",
+        "telemetryState": "INSTRUMENTED",
+        "freshnessState": "CURRENT",
+        "temporalCoherenceState": "COHERENT",
+        "lifecycleAuthority": {
+          "ownerState": "READY",
+          "readiness": "READY",
+          "releaseStatuses": [
+            "BUILT_AND_TESTED",
+            "SYNTHETIC_ONLY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY",
+          "authority": "SYNTHETIC_TEST"
+        },
+        "dataMode": "SYNTHETIC",
+        "independentProbeState": "NOT_REQUIRED",
+        "reconciliationState": "NOT_APPLICABLE",
+        "controlState": "NOT_APPLICABLE",
+        "telemetrySchemaVersion": "telemetry.v1",
+        "lastTelemetryAtMs": 199950,
+        "lastIndependentProbeAtMs": null,
+        "reasonCodes": []
+      }
+    ]
+  }
+}

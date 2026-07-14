@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ip-assurance:systemic:cockpit:generated-row-drafts:v1",
+  "title": "IP Assurance S5 Generated Closure Row Drafts v1",
+  "$defs": {
+    "text": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "columns": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/text" }
+    },
+    "telemetryValues": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["Subject Kind/ID", "Metric", "Structured Log", "Ledger/Material Event", "Trace", "Incident", "Freshness/Hysteresis", "Missing-Data Law", "Severity", "Cockpit Surface", "Repair/Control", "Fixture", "Proof"],
+      "properties": {
+        "Subject Kind/ID": { "$ref": "#/$defs/text" },
+        "Metric": { "$ref": "#/$defs/text" },
+        "Structured Log": { "$ref": "#/$defs/text" },
+        "Ledger/Material Event": { "$ref": "#/$defs/text" },
+        "Trace": { "$ref": "#/$defs/text" },
+        "Incident": { "$ref": "#/$defs/text" },
+        "Freshness/Hysteresis": { "$ref": "#/$defs/text" },
+        "Missing-Data Law": { "$ref": "#/$defs/text" },
+        "Severity": { "$ref": "#/$defs/text" },
+        "Cockpit Surface": { "$ref": "#/$defs/text" },
+        "Repair/Control": { "$ref": "#/$defs/text" },
+        "Fixture": { "$ref": "#/$defs/text" },
+        "Proof": { "$ref": "#/$defs/text" }
+      }
+    },
+    "resourceValues": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["Category", "Required Measurement", "Budget/SLO", "Degradation/Load-Shedding Law", "Protected Owner", "Fixture Evidence", "Proof", "Remaining Blocker"],
+      "properties": {
+        "Category": { "$ref": "#/$defs/text" },
+        "Required Measurement": { "$ref": "#/$defs/text" },
+        "Budget/SLO": { "$ref": "#/$defs/text" },
+        "Degradation/Load-Shedding Law": { "$ref": "#/$defs/text" },
+        "Protected Owner": { "$ref": "#/$defs/text" },
+        "Fixture Evidence": { "$ref": "#/$defs/text" },
+        "Proof": { "$ref": "#/$defs/text" },
+        "Remaining Blocker": { "$ref": "#/$defs/text" }
+      }
+    },
+    "telemetryRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rowId", "status", "integrationState", "values"],
+      "properties": {
+        "rowId": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "status": { "const": "DRAFT" },
+        "integrationState": { "const": "DIRECTOR_MOUNT_REQUIRED" },
+        "values": { "$ref": "#/$defs/telemetryValues" }
+      }
+    },
+    "resourceRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rowId", "status", "integrationState", "values"],
+      "properties": {
+        "rowId": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "status": { "const": "DRAFT" },
+        "integrationState": { "const": "DIRECTOR_MOUNT_REQUIRED" },
+        "values": { "$ref": "#/$defs/resourceValues" }
+      }
+    },
+    "telemetryEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "artifactState", "targetArtifact", "columns", "rows"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "artifactState": { "const": "DRAFT_ONLY" },
+        "targetArtifact": { "const": "TELEMETRY_COVERAGE_MATRIX.md" },
+        "columns": { "$ref": "#/$defs/columns" },
+        "rows": { "type": "array", "minItems": 5, "maxItems": 5, "items": { "$ref": "#/$defs/telemetryRow" } }
+      }
+    },
+    "resourceEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "artifactState", "targetArtifact", "columns", "rows"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "artifactState": { "const": "DRAFT_ONLY" },
+        "targetArtifact": { "const": "RESOURCE_AND_BACKPRESSURE_REPORT.md" },
+        "columns": { "$ref": "#/$defs/columns" },
+        "rows": { "type": "array", "minItems": 14, "maxItems": 14, "items": { "$ref": "#/$defs/resourceRow" } }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/telemetryEnvelope" },
+    { "$ref": "#/$defs/resourceEnvelope" }
+  ]
+}

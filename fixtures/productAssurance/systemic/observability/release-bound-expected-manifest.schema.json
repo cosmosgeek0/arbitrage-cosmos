@@ -1,0 +1,391 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ip-assurance:s5:observability:release-bound-expected-manifest:v1",
+  "title": "Release-bound expected manifest evaluation input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "nowMs", "manifest", "observation"],
+  "properties": {
+    "schemaVersion": { "const": "release-bound-expected-manifest.v1" },
+    "nowMs": { "$ref": "#/$defs/utcMillis" },
+    "manifest": { "$ref": "#/$defs/manifest" },
+    "observation": { "$ref": "#/$defs/observation" }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "releaseSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40,64}$"
+    },
+    "utcMillis": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "nullableUtcMillis": {
+      "oneOf": [
+        { "$ref": "#/$defs/utcMillis" },
+        { "type": "null" }
+      ]
+    },
+    "releaseStatus": {
+      "enum": [
+        "BUILT_AND_TESTED",
+        "IMPORTED",
+        "WIRED",
+        "LIVE_PUBLIC",
+        "SYNTHETIC_ONLY",
+        "BLOCKED",
+        "NOT_CONFIGURED",
+        "MISSING"
+      ]
+    },
+    "truthLabel": {
+      "enum": [
+        "LIVE_PUBLIC",
+        "DRY_RUN",
+        "SYNTHETIC_ONLY",
+        "RECORDED_REPLAY",
+        "UNAVAILABLE",
+        "UNKNOWN"
+      ]
+    },
+    "readiness": {
+      "enum": ["STOPPED", "WARMING", "READY", "DEGRADED", "BLOCKED", "FAILED"]
+    },
+    "authority": {
+      "enum": [
+        "LIVE_PUBLIC",
+        "LIVE_PRIVATE",
+        "DERIVED_LIVE",
+        "RECORDED_REPLAY",
+        "SYNTHETIC_TEST",
+        "UNAVAILABLE"
+      ]
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "acceptedReleaseSha",
+        "missionCoverageSha256",
+        "authorityRegistrySha256",
+        "componentRegistrySha256",
+        "deploymentTopologySha256"
+      ],
+      "properties": {
+        "acceptedReleaseSha": { "$ref": "#/$defs/releaseSha" },
+        "missionCoverageSha256": { "$ref": "#/$defs/sha256" },
+        "authorityRegistrySha256": { "$ref": "#/$defs/sha256" },
+        "componentRegistrySha256": { "$ref": "#/$defs/sha256" },
+        "deploymentTopologySha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewerOwnerId", "reviewEvidenceId", "reviewedAtMs"],
+      "properties": {
+        "reviewerOwnerId": { "$ref": "#/$defs/identifier" },
+        "reviewEvidenceId": { "$ref": "#/$defs/identifier" },
+        "reviewedAtMs": { "$ref": "#/$defs/utcMillis" }
+      }
+    },
+    "expectedItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expectedId",
+        "kind",
+        "ownerId",
+        "required",
+        "enabled",
+        "capitalCritical",
+        "dependentCapabilityIds",
+        "supportState",
+        "configurationState",
+        "expectedReleaseStatuses",
+        "expectedTelemetrySchemaVersion",
+        "expectedDataMode",
+        "independentProbeRequired",
+        "reconciliationRequired"
+      ],
+      "properties": {
+        "expectedId": { "$ref": "#/$defs/identifier" },
+        "kind": {
+          "enum": [
+            "COMPONENT",
+            "DEPENDENCY",
+            "SOURCE",
+            "COMMAND_PATH",
+            "CAPITAL_PATH",
+            "RECOVERY_PATH",
+            "SENTINEL",
+            "COCKPIT_PROJECTION"
+          ]
+        },
+        "ownerId": { "$ref": "#/$defs/identifier" },
+        "required": { "type": "boolean" },
+        "enabled": { "type": "boolean" },
+        "capitalCritical": { "type": "boolean" },
+        "dependentCapabilityIds": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/identifier" }
+        },
+        "supportState": { "enum": ["SUPPORTED", "UNSUPPORTED", "UNKNOWN"] },
+        "configurationState": {
+          "enum": ["CONFIGURED", "NOT_CONFIGURED", "OWNER_GATED", "UNKNOWN"]
+        },
+        "expectedReleaseStatuses": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/releaseStatus" }
+        },
+        "expectedTelemetrySchemaVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "expectedDataMode": { "enum": ["LIVE", "SYNTHETIC", "SHADOW", "UNAVAILABLE"] },
+        "independentProbeRequired": { "type": "boolean" },
+        "reconciliationRequired": { "type": "boolean" }
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifestId",
+        "manifestSha256",
+        "manifestRevision",
+        "binding",
+        "review",
+        "observationMaximumAgeMs",
+        "expectedItems"
+      ],
+      "properties": {
+        "manifestId": { "$ref": "#/$defs/identifier" },
+        "manifestSha256": { "$ref": "#/$defs/sha256" },
+        "manifestRevision": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "binding": { "$ref": "#/$defs/binding" },
+        "review": { "$ref": "#/$defs/review" },
+        "observationMaximumAgeMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 604800000
+        },
+        "expectedItems": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 512,
+          "items": { "$ref": "#/$defs/expectedItem" }
+        }
+      }
+    },
+    "lifecycleAuthority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ownerState", "readiness", "releaseStatuses", "truthLabel", "authority"],
+      "properties": {
+        "ownerState": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "readiness": { "$ref": "#/$defs/readiness" },
+        "releaseStatuses": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/releaseStatus" }
+        },
+        "truthLabel": { "$ref": "#/$defs/truthLabel" },
+        "authority": { "$ref": "#/$defs/authority" }
+      }
+    },
+    "physicalProducer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "producerId", "ownerPath", "transport"],
+      "properties": {
+        "kind": { "enum": ["EXISTING_AUDITED", "MANUAL_ACCEPTANCE_ONLY", "NONE"] },
+        "producerId": {
+          "oneOf": [
+            { "$ref": "#/$defs/identifier" },
+            { "type": "null" }
+          ]
+        },
+        "ownerPath": {
+          "oneOf": [
+            { "type": "string", "minLength": 1, "maxLength": 512 },
+            { "type": "null" }
+          ]
+        },
+        "transport": { "enum": ["INJECTED_EXISTING", "MANUAL_PUBLIC_SMOKE", "NONE"] }
+      }
+    },
+    "observedItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expectedId",
+        "identityState",
+        "telemetryState",
+        "freshnessState",
+        "temporalCoherenceState",
+        "lifecycleAuthority",
+        "dataMode",
+        "independentProbeState",
+        "reconciliationState",
+        "controlState",
+        "telemetrySchemaVersion",
+        "lastTelemetryAtMs",
+        "lastIndependentProbeAtMs",
+        "reasonCodes"
+      ],
+      "properties": {
+        "expectedId": { "$ref": "#/$defs/identifier" },
+        "identityState": { "enum": ["DISCOVERED", "MISSING", "UNKNOWN"] },
+        "telemetryState": { "enum": ["INSTRUMENTED", "UNINSTRUMENTED", "UNKNOWN"] },
+        "freshnessState": { "enum": ["CURRENT", "STALE", "SILENT", "UNAVAILABLE", "UNKNOWN"] },
+        "temporalCoherenceState": { "enum": ["COHERENT", "INCOHERENT", "UNKNOWN"] },
+        "lifecycleAuthority": { "$ref": "#/$defs/lifecycleAuthority" },
+        "dataMode": { "enum": ["LIVE", "SYNTHETIC", "SHADOW", "UNAVAILABLE", "UNKNOWN"] },
+        "independentProbeState": { "enum": ["PASS", "FAIL", "UNKNOWN", "NOT_REQUIRED"] },
+        "reconciliationState": {
+          "enum": ["RECONCILED", "UNRECONCILED", "UNKNOWN", "NOT_APPLICABLE"]
+        },
+        "controlState": { "enum": ["LIVE", "DISABLED", "UNIMPLEMENTED", "NOT_APPLICABLE", "UNKNOWN"] },
+        "telemetrySchemaVersion": {
+          "oneOf": [
+            { "type": "string", "minLength": 1, "maxLength": 80 },
+            { "type": "null" }
+          ]
+        },
+        "lastTelemetryAtMs": { "$ref": "#/$defs/nullableUtcMillis" },
+        "lastIndependentProbeAtMs": { "$ref": "#/$defs/nullableUtcMillis" },
+        "observedOwnerId": { "$ref": "#/$defs/identifier" },
+        "semanticStream": {
+          "enum": [
+            "MARKET_UNIVERSE",
+            "SPOT_MINI_TICKER",
+            "SPOT_AGGREGATE_TRADE",
+            "SPOT_BEST_BID_ASK",
+            "USD_M_BEST_BID_ASK",
+            "USD_M_MARK_FUNDING",
+            "USD_M_LIQUIDATION"
+          ]
+        },
+        "physicalProducer": { "$ref": "#/$defs/physicalProducer" },
+        "semanticPublisher": { "$ref": "#/$defs/identifier" },
+        "reasonCodes": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/identifier" }
+        }
+      }
+    },
+    "traceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["correlationId", "completedAtMs", "releaseSha"],
+      "properties": {
+        "correlationId": { "$ref": "#/$defs/identifier" },
+        "completedAtMs": { "$ref": "#/$defs/utcMillis" },
+        "releaseSha": { "$ref": "#/$defs/releaseSha" }
+      }
+    },
+    "probeReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["probeId", "result", "observedAtMs", "releaseSha"],
+      "properties": {
+        "probeId": { "$ref": "#/$defs/identifier" },
+        "result": { "enum": ["PASS", "FAIL", "UNKNOWN"] },
+        "observedAtMs": { "$ref": "#/$defs/utcMillis" },
+        "releaseSha": { "$ref": "#/$defs/releaseSha" }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifestId",
+        "manifestSha256",
+        "testedReleaseSha",
+        "runningReleaseSha",
+        "deployedReleaseSha",
+        "observedAtMs",
+        "telemetrySchemaCompatibility",
+        "manifestDigestVerification",
+        "lastCompleteCorrelationTrace",
+        "lastIndependentBlackBoxProbe",
+        "items"
+      ],
+      "properties": {
+        "manifestId": { "$ref": "#/$defs/identifier" },
+        "manifestSha256": { "$ref": "#/$defs/sha256" },
+        "testedReleaseSha": { "$ref": "#/$defs/releaseSha" },
+        "runningReleaseSha": { "$ref": "#/$defs/releaseSha" },
+        "deployedReleaseSha": { "$ref": "#/$defs/releaseSha" },
+        "observedAtMs": { "$ref": "#/$defs/utcMillis" },
+        "telemetrySchemaCompatibility": { "enum": ["COMPATIBLE", "INCOMPATIBLE", "UNKNOWN"] },
+        "manifestDigestVerification": { "$ref": "#/$defs/manifestDigestVerification" },
+        "lastCompleteCorrelationTrace": {
+          "oneOf": [
+            { "$ref": "#/$defs/traceReference" },
+            { "type": "null" }
+          ]
+        },
+        "lastIndependentBlackBoxProbe": {
+          "oneOf": [
+            { "$ref": "#/$defs/probeReference" },
+            { "type": "null" }
+          ]
+        },
+        "items": {
+          "type": "array",
+          "maxItems": 512,
+          "items": { "$ref": "#/$defs/observedItem" }
+        }
+      }
+    },
+    "manifestDigestVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result",
+        "verifiedManifestSha256",
+        "verifiedMissionCoverageSha256",
+        "verifiedAuthorityRegistrySha256",
+        "verifiedComponentRegistrySha256",
+        "verifiedDeploymentTopologySha256",
+        "verifierOwnerId",
+        "verifierReferenceId",
+        "verifiedAtMs"
+      ],
+      "properties": {
+        "result": { "enum": ["PASS", "FAIL", "UNKNOWN"] },
+        "verifiedManifestSha256": { "$ref": "#/$defs/sha256" },
+        "verifiedMissionCoverageSha256": { "$ref": "#/$defs/sha256" },
+        "verifiedAuthorityRegistrySha256": { "$ref": "#/$defs/sha256" },
+        "verifiedComponentRegistrySha256": { "$ref": "#/$defs/sha256" },
+        "verifiedDeploymentTopologySha256": { "$ref": "#/$defs/sha256" },
+        "verifierOwnerId": { "$ref": "#/$defs/identifier" },
+        "verifierReferenceId": { "$ref": "#/$defs/identifier" },
+        "verifiedAtMs": { "$ref": "#/$defs/nullableUtcMillis" }
+      }
+    }
+  }
+}

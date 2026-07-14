@@ -1,6 +1,6 @@
 # STATE.md — what is true right now
 
-**Current checkpoint:** 2026-07-14 · Phase 2 accepted A-HAZARD merge `bfb813ba1c15a23c7f4f0bff6a8da2f13d5c2729` receipted after A-CORE on `i00-product-assembly-20260713`
+**Current checkpoint:** 2026-07-14 · Phase 2 accepted A-COCKPIT packet integrated after receipted A-HAZARD on `i00-product-assembly-20260713`
 **Law:** any landed change that alters project state must update this file in the same commit. This file wins on "what is the current state"; `ARCHITECTURE.md` wins on "how it is designed"; `MISSION.md` wins on "why".
 
 ## What this is
@@ -16,6 +16,7 @@ A private Binance arbitrage/intelligence operating machine ("Cosmos Arbitrage Co
 - Accepted L15 donor `2cec412927fa2f64f05a0b2774b18e45f8ce4fa5` is integrated by exact Git ancestry. Its 31-file `ops/live/**` tree remains exactly `584163858a0333cb1ccb9eff756e91a851b1cb71`; all 17 donor-owned `ops/tests/**` paths remain byte-identical while the enclosing target tree also retains previously accepted `ops/tests/i00/**`. Its root integration note is archived byte-identically at `docs/archive/i00-phase2/L15_OPS_INTEGRATION_NOTES.md` to preserve root-document law.
 - Accepted A-CORE donor `08a0a09780727e2b4ba59017b5701998abe29b77` is integrated by exact Git ancestry with 36 donor paths. Its 14-file `server/src/productAssurance/**` scaffold is dormant, its 68-row insertion inventory remains deferred evidence, and `CORE_SCAFFOLD_READY` is not relabeled as overall assurance readiness.
 - Accepted A-HAZARD donor `ab33b3712cddd67c3ec91cfa1dd232c75226cd9f` is integrated by exact Git ancestry with 24 donor paths. Its systemic hazard fixtures and 69-test proof are dormant; all insertion rows remain explicitly `DRAFT` and non-authoritative.
+- Accepted A-COCKPIT donor `d4ff9c94c9fec9477481223c4b33d8f671a34f6d` is integrated by exact Git ancestry with 53 donor paths. Its cockpit/observability evidence is fixture-only and all production mount rows remain `DIRECTOR_MOUNT_REQUIRED`; it cannot mint live green.
 - Milestone tags (all pushed): `sprint-foundation-final`, `sprint-intelligence-final`, `sprint-runtime-final`, `sprint-capital-final`, `sprint-convergence-final`.
 - Milestone commits on `current-main`: audited baseline `b272049` → organs round 1 `c4ae7a9` → organs round 2 `87af782` → convergence `b58e64e`.
 - Feature branches preserved on origin as recovery points (`market-intelligence-main-20260711`, `backend-foundation-parallel-20260711-070056`, `live-intelligence-runtime-main-20260711`, `capital-supervision-main-20260711`, `system-convergence-vertical-slice-20260711`, `engine-overdrive`, `engine-volume-overdrive`).
@@ -39,7 +40,7 @@ A private Binance arbitrage/intelligence operating machine ("Cosmos Arbitrage Co
 | Operator modes | READ_ONLY / ADVISORY / VALIDATE_ONLY only; kill switch fail-closed for new risk |
 | Live execution / signed calls / borrow / transfer | MISSING by design — mechanically blocked |
 
-## Verification (Phase 2 through accepted A-HAZARD integration, 2026-07-14)
+## Verification (Phase 2 through accepted A-COCKPIT integration, 2026-07-14)
 
 ```bash
 npm run test:foundation  # exit 0; all 24 sorted files passed at the F-BRIDGE cut
@@ -51,12 +52,14 @@ bash ops/tests/run-all.sh  # exit 0; 11/11 files; 347 assertions; network-free e
 node --test --test-concurrency=1 --test-reporter=spec "server/test/productAssurance/**/*.test.mjs"  # 32/32
 node test/productAssurance/production-operation-scan.mjs --fail-on-uncovered  # 143/143; zero uncovered
 node --test --test-concurrency=1 --test-reporter=spec "test/productAssurance/systemic/hazard/**/*.test.mjs"  # 69/69
+node --test --test-concurrency=1 test/productAssurance/systemic/cockpit/*.test.mjs  # 50/50
+node --test --test-concurrency=1 test/productAssurance/systemic/observability/*.test.mjs  # 100/100
 # From a clean git archive of exact Q donor 02b4eccc with only its pinned .venv linked:
 PYTHONPATH=src .venv/bin/python -m pytest tests/q17 -q --cov=quant_edge.final_proof --cov-branch --cov-report=term  # 384/384; 96.50%
 PYTHONPATH=src .venv/bin/python -m pytest -q --tb=short  # 3,011 passed; 6 documented shard-only skips
 ```
 
-F-BRIDGE focused proof is green: execution `173/173`, execution import purity `30/30`, compatibility `131/131`, reconciliation `75/75`. SI-RECON focused proof is `29/29`. Q is green only in the immutable donor view: focused `384/384` at `96.50%` and accumulated `3,011` plus six documented skips. Running Q17 against the combined target correctly produces `366 passed / 18 failed / 93.70%` because its immutable proof freezes the historical 1,568-byte directive lock; this is recorded diagnostic evidence, never reported as a green target-tree Q17 gate. The integration-owned provenance suite proves the exact D-LAUNCH-1 external supersession `14/14`. Dashboard donor equivalence is exact at Git-tree level and its focused Product Control Room contract suite passes `18/18`. L15's complete network-free operational suite passes `11/11` files and 347 assertions. A-CORE passes `32/32` scaffold tests and registers all 143 production operation sites with zero uncovered; A-HAZARD passes `69/69`. Root `npm test`, protocol `22/22`, and `npm run test:all` all pass; the complete root gate reports System Integration `180/180`. Product Assurance satellite tests are still outside root-script discovery until the serial spine wires the harness; this omission is explicit, not a green claim. The SI corrected expectation remains `DIVERGED`, not a weakened `PARTIAL` claim.
+F-BRIDGE focused proof is green: execution `173/173`, execution import purity `30/30`, compatibility `131/131`, reconciliation `75/75`. SI-RECON focused proof is `29/29`. Q is green only in the immutable donor view: focused `384/384` at `96.50%` and accumulated `3,011` plus six documented skips. Running Q17 against the combined target correctly produces `366 passed / 18 failed / 93.70%` because its immutable proof freezes the historical 1,568-byte directive lock; this is recorded diagnostic evidence, never reported as a green target-tree Q17 gate. The integration-owned provenance suite proves the exact D-LAUNCH-1 external supersession `14/14`. Dashboard donor equivalence is exact at Git-tree level and its focused Product Control Room contract suite passes `18/18`. L15's complete network-free operational suite passes `11/11` files and 347 assertions. A-CORE passes `32/32` and registers 143/143 operations; A-HAZARD passes `69/69`; A-COCKPIT passes `50/50` plus observability `100/100`. Root `npm test`, protocol `22/22`, and `npm run test:all` all pass; the complete root gate reports System Integration `180/180`. Product Assurance satellite tests are still outside root-script discovery until the serial spine wires the harness; this omission is explicit, not a green claim. The SI corrected expectation remains `DIVERGED`, not a weakened `PARTIAL` claim.
 
 ## What is genuinely live vs not
 
@@ -66,7 +69,7 @@ F-BRIDGE focused proof is green: execution `173/173`, execution import purity `3
 
 ## Next build families (in order)
 
-1. Finish remaining accepted Phase 2 donor fan-in one donor at a time: A-COCKPIT, A-AGENT, A-STABILITY. Keep A-FORMAL, A-CASE, and any unsealed L lane refused at their exact blockers.
+1. Finish remaining accepted Phase 2 donor fan-in one donor at a time: A-AGENT, A-STABILITY. Keep A-FORMAL, A-CASE, and any unsealed L lane refused at their exact blockers.
 2. Apply the accepted shared insertion requests through the existing System Integration/Ledger/Foundation owners; mount the Q protocol client and dashboard without creating duplicate truth or lifecycle owners.
 3. Complete authenticated private account truth (Spot/USD-M/Margin balances, liabilities, permissions, fees, funding, borrow capacity, freshness) only from an accepted donor; otherwise retain `NOT_CONFIGURED`.
 4. Prove dependency-driven startup, runtime readback, browser truth, restart/reconciliation, and complete I00 local acceptance.

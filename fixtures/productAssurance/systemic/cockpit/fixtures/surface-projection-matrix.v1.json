@@ -1,0 +1,2170 @@
+{
+  "schemaVersion": 1,
+  "matrixId": "I00_SECTION_15_FIVE_LEVEL_PROJECTIONS_V1",
+  "rows": [
+    {
+      "surfaceId": "dashboard",
+      "informationLevels": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "projectionQuestion": "What is the immediate machine, capital, and decision posture and why?",
+      "routeKind": "CANONICAL_SURFACE",
+      "canonicalRoute": "dashboard",
+      "pageOwner": "dashboard",
+      "factBindings": [
+        {
+          "level": 2,
+          "topicId": "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "desiredState"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "observedState"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "readiness"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "liveness"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_SOURCE_AGE_COHERENCE",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "heartbeatAgeMs"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_PROGRESS_CADENCE_COOLDOWN_ATTEMPTS",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "restartCount"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_BLOCKED_DEGRADED_EDGES",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "currentError"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_TRUTH_MODE_LABEL",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "renderTruthLabel"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_TRUTH_MODE_LABEL",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "mode"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_TRUTH_MODE_LABEL",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "desiredMode"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_TRUTH_MODE_LABEL",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "effectiveMode"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "killSwitchState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "killSwitchEffect"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "startupGeneration"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_PROGRESS_CADENCE_COOLDOWN_ATTEMPTS",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "lastRestart"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_PROGRESS_CADENCE_COOLDOWN_ATTEMPTS",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "lastRestartResult"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_OVERALL_POSTURE_REASON",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "rootBlocker"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_OVERALL_POSTURE_REASON",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "overallPosture"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXPOSURE_UNRESOLVED_LIABILITY",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "activeExposureCount"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "newestCandidateDisposition"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "newestCandidateDispositionReason"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_BOUNDED_EVIDENCE_IMMUTABLE_REFS",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "newestCandidateId"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "newestCandidateSymbol"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_BOUNDED_EVIDENCE_IMMUTABLE_REFS",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "newestCandidateEvidenceRevision"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_BLOCKED_DEGRADED_EDGES",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "degradedSourceCount"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_BLOCKED_DEGRADED_EDGES",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "degradedSourceIdentities"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_BLOCKED_DEGRADED_EDGES",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "degradedSourceReasons"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_STARTUP_RUNTIME_DEPENDENCIES",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "bootStartupTransactionState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_DEPLOYMENT_AGENT_PROVENANCE",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "deployedRevision"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_DEPLOYMENT_AGENT_PROVENANCE",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "testedRevision"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "dataSourceHealthState"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "dataSourceConnectionStates"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_SOURCE_AGE_COHERENCE",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "oldestDataSourceMessageAgeMs"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "dataSourceSequenceGapCount"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_RETRY_CIRCUIT_QUARANTINE_REPAIR",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "dataSourceRateLimitBackoffState"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "dataSourceCoverageExpectedCount"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "dataSourceCoverageCurrentCount"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "quietSymbolCount"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_SOURCE_AGE_COHERENCE",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "basisLiveAgeMs"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "basisUniverseCount"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "basisCandidateCount"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "basisFocusCount"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "basisProposalCount"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "basisLatestDecision"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "basisLatestRejectReasonCode"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_SOURCE_AGE_COHERENCE",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "volumeLiveAgeMs"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "volumeUniverseCount"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "volumeCandidateCount"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "volumeFocusCount"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "volumeProposalCount"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "volumeLatestDecision"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "volumeLatestRejectReasonCode"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "qHealthState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_DEPLOYMENT_AGENT_PROVENANCE",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "qModelVersion"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_DEPLOYMENT_AGENT_PROVENANCE",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "qDatasetVersion"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "qDriftState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "qLatestAssessment"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "qLatestAssessmentAction"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "qLatestAbstentionReason"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "allocatableTruthState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "reservationCount"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "stagedMandateCount"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "approvalState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "approvalExpiresAtMs"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_PREDICTED_REALIZED_ECONOMICS",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "capitalCeiling"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_PREDICTED_REALIZED_ECONOMICS",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "equity"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_PREDICTED_REALIZED_ECONOMICS",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "availableCapital"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_PREDICTED_REALIZED_ECONOMICS",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "realizedPnl"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_PREDICTED_REALIZED_ECONOMICS",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "drawdown"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "universeCount"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "candidateCount"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "focusCount"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "opportunityCount"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXPOSURE_UNRESOLVED_LIABILITY",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "activeOrderCount"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXPOSURE_UNRESOLVED_LIABILITY",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "activePositionCount"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXPOSURE_UNRESOLVED_LIABILITY",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "activeLiabilityCount"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_SCENARIO_BOUNDED_RECOVERABILITY",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "activeRecoveryCount"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "latestRiskVerdict"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "latestRiskBlockCodes"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "executionDryRunPlanState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "executionDryRunLegState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "executionReconciliationState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_CRITICAL_UNSUPPORTED_CLAIMS",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "liveExecutionBarrier"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_INCIDENT_PAGE_DRILLDOWN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "attentionQueueCount"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_INCIDENT_PAGE_DRILLDOWN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "attentionQueueRankedState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_INCIDENT_PAGE_DRILLDOWN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "topAttentionPriority"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_INCIDENT_PAGE_DRILLDOWN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "topAttentionReason"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_INCIDENT_PAGE_DRILLDOWN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "topAttentionResolvingControl"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_TIMELINE_CORRELATION_TRACE",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "dashboardCorrelationChainId"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_TIMELINE_CORRELATION_TRACE",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "traceTargetCount"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_OVERALL_POSTURE_REASON",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "strategyStatus"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_OVERALL_POSTURE_REASON",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "qStatus"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "recentMaterialDecisionCount"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "recentMaterialDecisionSummary"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "executionOwner"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "PANEL_DASHBOARD_TRUTH_V1",
+          "valueKey": "executionFencingEpoch"
+        }
+      ]
+    },
+    {
+      "surfaceId": "control-room",
+      "informationLevels": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "projectionQuestion": "What is expected, running, blocked, controllable, and evidenced across the machine graph?",
+      "routeKind": "CANONICAL_SURFACE",
+      "canonicalRoute": "control-room",
+      "pageOwner": "control-room",
+      "factBindings": [
+        {
+          "level": 2,
+          "topicId": "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+          "contractId": "PANEL_CONTROL_ROOM_TRUTH_V1",
+          "valueKey": "desiredState"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+          "contractId": "PANEL_CONTROL_ROOM_TRUTH_V1",
+          "valueKey": "observedState"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+          "contractId": "PANEL_CONTROL_ROOM_TRUTH_V1",
+          "valueKey": "readiness"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+          "contractId": "PANEL_CONTROL_ROOM_TRUTH_V1",
+          "valueKey": "liveness"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_SOURCE_AGE_COHERENCE",
+          "contractId": "PANEL_CONTROL_ROOM_TRUTH_V1",
+          "valueKey": "heartbeatAgeMs"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_PROGRESS_CADENCE_COOLDOWN_ATTEMPTS",
+          "contractId": "PANEL_CONTROL_ROOM_TRUTH_V1",
+          "valueKey": "restartCount"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_BLOCKED_DEGRADED_EDGES",
+          "contractId": "PANEL_CONTROL_ROOM_TRUTH_V1",
+          "valueKey": "currentError"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_TRUTH_MODE_LABEL",
+          "contractId": "PANEL_CONTROL_ROOM_TRUTH_V1",
+          "valueKey": "renderTruthLabel"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_STARTUP_RUNTIME_DEPENDENCIES",
+          "contractId": "PANEL_CONTROL_ROOM_TRUTH_V1",
+          "valueKey": "dependencyState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_TIMELINE_CORRELATION_TRACE",
+          "contractId": "PANEL_CONTROL_ROOM_TRUTH_V1",
+          "valueKey": "bootTimelineState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_DEPLOYMENT_AGENT_PROVENANCE",
+          "contractId": "PANEL_CONTROL_ROOM_TRUTH_V1",
+          "valueKey": "configHistoryState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_CRITICAL_UNSUPPORTED_CLAIMS",
+          "contractId": "PANEL_CONTROL_ROOM_TRUTH_V1",
+          "valueKey": "controlAvailabilityState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_TIMELINE_CORRELATION_TRACE",
+          "contractId": "PANEL_CONTROL_ROOM_TRUTH_V1",
+          "valueKey": "correlationTraceId"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_REPAIR_PROPOSALS_APPROVALS",
+          "contractId": "PANEL_CONTROL_ROOM_TRUTH_V1",
+          "valueKey": "repairProposalApprovalState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_KILL_SWITCH_V1",
+          "valueKey": "killSwitchState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_KILL_SWITCH_V1",
+          "valueKey": "killSwitchEffect"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_KILL_SWITCH_V1",
+          "valueKey": "controlProofState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_KILL_SWITCH_V1",
+          "valueKey": "controlOwner"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_KILL_SWITCH_V1",
+          "valueKey": "boundsState"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_KILL_SWITCH_V1",
+          "valueKey": "previewState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_TRUTH_MODE_LABEL",
+          "contractId": "CONTROL_SAFE_MODE_V1",
+          "valueKey": "currentSafeMode"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_TRUTH_MODE_LABEL",
+          "contractId": "CONTROL_SAFE_MODE_V1",
+          "valueKey": "requestedSafeMode"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_SAFE_MODE_V1",
+          "valueKey": "controlOwner"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_SAFE_MODE_V1",
+          "valueKey": "maximumEffect"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_SAFE_MODE_V1",
+          "valueKey": "boundsState"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_SAFE_MODE_V1",
+          "valueKey": "previewState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_TRUTH_MODE_LABEL",
+          "contractId": "CONTROL_INTAKE_PAUSE_V1",
+          "valueKey": "currentIntakePauseState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_TRUTH_MODE_LABEL",
+          "contractId": "CONTROL_INTAKE_PAUSE_V1",
+          "valueKey": "requestedIntakePauseState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_INTAKE_PAUSE_V1",
+          "valueKey": "controlOwner"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_INTAKE_PAUSE_V1",
+          "valueKey": "maximumEffect"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_INTAKE_PAUSE_V1",
+          "valueKey": "boundsState"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_INTAKE_PAUSE_V1",
+          "valueKey": "previewState"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "contractId": "CONTROL_COMPONENT_DESIRED_STATE_V1",
+          "valueKey": "targetComponentId"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_TRUTH_MODE_LABEL",
+          "contractId": "CONTROL_COMPONENT_DESIRED_STATE_V1",
+          "valueKey": "currentComponentDesiredState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_TRUTH_MODE_LABEL",
+          "contractId": "CONTROL_COMPONENT_DESIRED_STATE_V1",
+          "valueKey": "requestedComponentDesiredState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_COMPONENT_DESIRED_STATE_V1",
+          "valueKey": "controlOwner"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_COMPONENT_DESIRED_STATE_V1",
+          "valueKey": "maximumEffect"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_COMPONENT_DESIRED_STATE_V1",
+          "valueKey": "boundsState"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_COMPONENT_DESIRED_STATE_V1",
+          "valueKey": "previewState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_BOUNDED_EVIDENCE_IMMUTABLE_REFS",
+          "contractId": "CONTROL_APPROVAL_REVOKE_V1",
+          "valueKey": "approvalId"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "CONTROL_APPROVAL_REVOKE_V1",
+          "valueKey": "currentApprovalState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "CONTROL_APPROVAL_REVOKE_V1",
+          "valueKey": "requestedApprovalState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_APPROVAL_REVOKE_V1",
+          "valueKey": "controlOwner"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_APPROVAL_REVOKE_V1",
+          "valueKey": "maximumEffect"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_APPROVAL_REVOKE_V1",
+          "valueKey": "boundsState"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_APPROVAL_REVOKE_V1",
+          "valueKey": "previewState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_DEPLOYMENT_AGENT_PROVENANCE",
+          "contractId": "CONTROL_BOUNDED_CONFIG_REVISION_V1",
+          "valueKey": "requestedConfigurationRevision"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_BOUNDED_EVIDENCE_IMMUTABLE_REFS",
+          "contractId": "CONTROL_BOUNDED_CONFIG_REVISION_V1",
+          "valueKey": "requestedPayloadDigest"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_BOUNDED_CONFIG_REVISION_V1",
+          "valueKey": "boundedConfigValidationState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_BOUNDED_CONFIG_REVISION_V1",
+          "valueKey": "controlOwner"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "CONTROL_BOUNDED_CONFIG_REVISION_V1",
+          "valueKey": "maximumEffect"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_BOUNDED_CONFIG_REVISION_V1",
+          "valueKey": "boundsState"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "CONTROL_BOUNDED_CONFIG_REVISION_V1",
+          "valueKey": "previewState"
+        }
+      ]
+    },
+    {
+      "surfaceId": "account",
+      "informationLevels": [
+        1,
+        4
+      ],
+      "projectionQuestion": "What reconciled capital, exposure, liability, and account truth exists?",
+      "routeKind": "CANONICAL_SURFACE",
+      "canonicalRoute": "account",
+      "pageOwner": "account",
+      "factBindings": [
+        {
+          "level": 1,
+          "topicId": "L1_TRUTH_MODE_LABEL",
+          "contractId": "PANEL_ACCOUNT_TRUTH_V1",
+          "valueKey": "accountTruthState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_PREDICTED_REALIZED_ECONOMICS",
+          "contractId": "PANEL_ACCOUNT_TRUTH_V1",
+          "valueKey": "equity"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_PREDICTED_REALIZED_ECONOMICS",
+          "contractId": "PANEL_ACCOUNT_TRUTH_V1",
+          "valueKey": "availableCapital"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXPOSURE_UNRESOLVED_LIABILITY",
+          "contractId": "PANEL_ACCOUNT_TRUTH_V1",
+          "valueKey": "openOrdersCount"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXPOSURE_UNRESOLVED_LIABILITY",
+          "contractId": "PANEL_ACCOUNT_TRUTH_V1",
+          "valueKey": "openPositionsCount"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXPOSURE_UNRESOLVED_LIABILITY",
+          "contractId": "PANEL_ACCOUNT_TRUTH_V1",
+          "valueKey": "liabilitiesTotal"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_ACCOUNT_TRUTH_V1",
+          "valueKey": "reconciliationState"
+        }
+      ]
+    },
+    {
+      "surfaceId": "markets",
+      "informationLevels": [
+        2,
+        4
+      ],
+      "projectionQuestion": "What canonical universe and source-quality evidence feeds decisions?",
+      "routeKind": "CANONICAL_SURFACE",
+      "canonicalRoute": "markets",
+      "pageOwner": "markets",
+      "factBindings": [
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_MARKETS_TRUTH_V1",
+          "valueKey": "universeCount"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_MARKETS_TRUTH_V1",
+          "valueKey": "candidateCount"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_MARKETS_TRUTH_V1",
+          "valueKey": "focusCount"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+          "contractId": "PANEL_MARKETS_TRUTH_V1",
+          "valueKey": "sourceFreshness"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+          "contractId": "PANEL_MARKETS_TRUTH_V1",
+          "valueKey": "sourceCompleteness"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_MARKETS_TRUTH_V1",
+          "valueKey": "qAssessmentState"
+        }
+      ]
+    },
+    {
+      "surfaceId": "token",
+      "informationLevels": [
+        4,
+        5
+      ],
+      "projectionQuestion": "What exact symbol chronology, uncertainty, decisions, and outcome are correlated?",
+      "routeKind": "CANONICAL_SURFACE",
+      "canonicalRoute": "token",
+      "pageOwner": "token",
+      "factBindings": [
+        {
+          "level": 5,
+          "topicId": "L5_TIMELINE_CORRELATION_TRACE",
+          "contractId": "PANEL_TOKEN_TRUTH_V1",
+          "valueKey": "timelineState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_BOUNDED_EVIDENCE_IMMUTABLE_REFS",
+          "contractId": "PANEL_TOKEN_TRUTH_V1",
+          "valueKey": "firstChangedEvidence"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_TIMELINE_CORRELATION_TRACE",
+          "contractId": "PANEL_TOKEN_TRUTH_V1",
+          "valueKey": "evidenceChronologyState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_TOKEN_TRUTH_V1",
+          "valueKey": "modelUncertainty"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_TOKEN_TRUTH_V1",
+          "valueKey": "basisDecisionState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_TOKEN_TRUTH_V1",
+          "valueKey": "volumeDecisionState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_TOKEN_TRUTH_V1",
+          "valueKey": "outcomeState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_TIMELINE_CORRELATION_TRACE",
+          "contractId": "PANEL_TOKEN_TRUTH_V1",
+          "valueKey": "correlationTraceId"
+        }
+      ]
+    },
+    {
+      "surfaceId": "basis",
+      "informationLevels": [
+        4
+      ],
+      "projectionQuestion": "What Basis evidence, economics, feasibility, proposal, and lifecycle truth exists?",
+      "routeKind": "CANONICAL_SURFACE",
+      "canonicalRoute": "basis",
+      "pageOwner": "basis",
+      "factBindings": [
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_BASIS_TRUTH_V1",
+          "valueKey": "basisDecisionState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_BASIS_TRUTH_V1",
+          "valueKey": "directionalCase"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_PREDICTED_REALIZED_ECONOMICS",
+          "contractId": "PANEL_BASIS_TRUTH_V1",
+          "valueKey": "executableNetEconomics"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_BASIS_TRUTH_V1",
+          "valueKey": "gapPersistence"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_BASIS_TRUTH_V1",
+          "valueKey": "fundingContext"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_PREDICTED_REALIZED_ECONOMICS",
+          "contractId": "PANEL_BASIS_TRUTH_V1",
+          "valueKey": "depthSlippage"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_BASIS_TRUTH_V1",
+          "valueKey": "borrowFeasibility"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_BASIS_TRUTH_V1",
+          "valueKey": "proposalDisposition"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_BASIS_TRUTH_V1",
+          "valueKey": "lifecycleState"
+        }
+      ]
+    },
+    {
+      "surfaceId": "volume",
+      "informationLevels": [
+        4
+      ],
+      "projectionQuestion": "What Volume transition, evidence, uncertainty, proposal, and outcome truth exists?",
+      "routeKind": "CANONICAL_SURFACE",
+      "canonicalRoute": "volume",
+      "pageOwner": "volume",
+      "factBindings": [
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_VOLUME_TRUTH_V1",
+          "valueKey": "volumeDecisionState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_VOLUME_TRUTH_V1",
+          "valueKey": "quietBaselineState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_VOLUME_TRUTH_V1",
+          "valueKey": "transitionStage"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_VOLUME_TRUTH_V1",
+          "valueKey": "anomalyEvidence"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_VOLUME_TRUTH_V1",
+          "valueKey": "followThroughEvidence"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_VOLUME_TRUTH_V1",
+          "valueKey": "leadershipState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_VOLUME_TRUTH_V1",
+          "valueKey": "liquidityCrowdingState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_VOLUME_TRUTH_V1",
+          "valueKey": "modelUncertainty"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_VOLUME_TRUTH_V1",
+          "valueKey": "proposalDisposition"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_VOLUME_TRUTH_V1",
+          "valueKey": "outcomeState"
+        }
+      ]
+    },
+    {
+      "surfaceId": "opportunities",
+      "informationLevels": [
+        4
+      ],
+      "projectionQuestion": "Why was each proposal accepted, capped, rejected, expired, or invalidated?",
+      "routeKind": "CANONICAL_SURFACE",
+      "canonicalRoute": "opportunities",
+      "pageOwner": "opportunities",
+      "factBindings": [
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_OPPORTUNITIES_TRUTH_V1",
+          "valueKey": "opportunityDisposition"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_OPPORTUNITIES_TRUTH_V1",
+          "valueKey": "sourceRevision"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_OPPORTUNITIES_TRUTH_V1",
+          "valueKey": "evidenceMissingness"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_OPPORTUNITIES_TRUTH_V1",
+          "valueKey": "modelAssessment"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_PREDICTED_REALIZED_ECONOMICS",
+          "contractId": "PANEL_OPPORTUNITIES_TRUTH_V1",
+          "valueKey": "netEconomics"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_PREDICTED_REALIZED_ECONOMICS",
+          "contractId": "PANEL_OPPORTUNITIES_TRUTH_V1",
+          "valueKey": "capitalVerdict"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_PREDICTED_REALIZED_ECONOMICS",
+          "contractId": "PANEL_OPPORTUNITIES_TRUTH_V1",
+          "valueKey": "riskVerdict"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_OPPORTUNITIES_TRUTH_V1",
+          "valueKey": "sizeStaging"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_OPPORTUNITIES_TRUTH_V1",
+          "valueKey": "expiryInvalidation"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_OPPORTUNITIES_TRUTH_V1",
+          "valueKey": "rejectionReason"
+        }
+      ]
+    },
+    {
+      "surfaceId": "borrow",
+      "informationLevels": [
+        1,
+        4
+      ],
+      "projectionQuestion": "What borrow availability, liability, interest, freshness, and linkage truth exists?",
+      "routeKind": "CANONICAL_SURFACE",
+      "canonicalRoute": "borrow",
+      "pageOwner": "borrow",
+      "factBindings": [
+        {
+          "level": 1,
+          "topicId": "L1_TRUTH_MODE_LABEL",
+          "contractId": "PANEL_BORROW_TRUTH_V1",
+          "valueKey": "borrowTruthState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXPOSURE_UNRESOLVED_LIABILITY",
+          "contractId": "PANEL_BORROW_TRUTH_V1",
+          "valueKey": "assetAvailability"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXPOSURE_UNRESOLVED_LIABILITY",
+          "contractId": "PANEL_BORROW_TRUTH_V1",
+          "valueKey": "maximumBorrowable"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_PREDICTED_REALIZED_ECONOMICS",
+          "contractId": "PANEL_BORROW_TRUTH_V1",
+          "valueKey": "interestRate"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_BORROW_TRUTH_V1",
+          "valueKey": "collateralMode"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXPOSURE_UNRESOLVED_LIABILITY",
+          "contractId": "PANEL_BORROW_TRUTH_V1",
+          "valueKey": "principalLiability"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_PREDICTED_REALIZED_ECONOMICS",
+          "contractId": "PANEL_BORROW_TRUTH_V1",
+          "valueKey": "accruedInterest"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_BORROW_TRUTH_V1",
+          "valueKey": "repayStatus"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_BORROW_TRUTH_V1",
+          "valueKey": "ticketLinkage"
+        }
+      ]
+    },
+    {
+      "surfaceId": "execution",
+      "informationLevels": [
+        1,
+        3,
+        4,
+        5
+      ],
+      "projectionQuestion": "What execution owner, fencing, action lifecycle, ambiguity, and recovery truth exists?",
+      "routeKind": "ACCOUNT_ALIAS",
+      "canonicalRoute": "account",
+      "pageOwner": "account",
+      "factBindings": [
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_EXECUTION_TRUTH_V1",
+          "valueKey": "executionLifecycleState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_EXECUTION_TRUTH_V1",
+          "valueKey": "ticketState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_EXECUTION_TRUTH_V1",
+          "valueKey": "legState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_EXECUTION_TRUTH_V1",
+          "valueKey": "requestedQuantity"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_EXECUTION_TRUTH_V1",
+          "valueKey": "acknowledgedQuantity"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_EXECUTION_TRUTH_V1",
+          "valueKey": "filledQuantity"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_EXECUTION_TRUTH_V1",
+          "valueKey": "ambiguityState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "contractId": "PANEL_EXECUTION_TRUTH_V1",
+          "valueKey": "fencingTokenState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_EXECUTION_TRUTH_V1",
+          "valueKey": "reconciliationState"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "PANEL_EXECUTION_TRUTH_V1",
+          "valueKey": "recoveryState"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_DEADLINE_LEASE_CANCELLATION_LATE_RESULT",
+          "contractId": "PANEL_EXECUTION_TRUTH_V1",
+          "valueKey": "deadlineState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_TIMELINE_CORRELATION_TRACE",
+          "contractId": "PANEL_EXECUTION_TRUTH_V1",
+          "valueKey": "correlationTraceId"
+        }
+      ]
+    },
+    {
+      "surfaceId": "orders",
+      "informationLevels": [
+        4,
+        5
+      ],
+      "projectionQuestion": "What requested, acknowledged, filled, ambiguous, and reconciled order truth exists?",
+      "routeKind": "ACCOUNT_ALIAS",
+      "canonicalRoute": "account",
+      "pageOwner": "account",
+      "factBindings": [
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_ORDERS_TRUTH_V1",
+          "valueKey": "orderLifecycleState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_BOUNDED_EVIDENCE_IMMUTABLE_REFS",
+          "contractId": "PANEL_ORDERS_TRUTH_V1",
+          "valueKey": "orderIdentity"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_ORDERS_TRUTH_V1",
+          "valueKey": "requestedQuantity"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_ORDERS_TRUTH_V1",
+          "valueKey": "acknowledgedQuantity"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_ORDERS_TRUTH_V1",
+          "valueKey": "filledQuantity"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "contractId": "PANEL_ORDERS_TRUTH_V1",
+          "valueKey": "ambiguityState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_ORDERS_TRUTH_V1",
+          "valueKey": "reconciliationState"
+        }
+      ]
+    },
+    {
+      "surfaceId": "positions",
+      "informationLevels": [
+        1,
+        4,
+        5
+      ],
+      "projectionQuestion": "What exposure, exit capacity, lifecycle, and forensic position truth exists?",
+      "routeKind": "ACCOUNT_ALIAS",
+      "canonicalRoute": "account",
+      "pageOwner": "account",
+      "factBindings": [
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_POSITIONS_TRUTH_V1",
+          "valueKey": "positionLifecycleState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_EXPOSURE_UNRESOLVED_LIABILITY",
+          "contractId": "PANEL_POSITIONS_TRUTH_V1",
+          "valueKey": "exposureState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_SCENARIO_BOUNDED_RECOVERABILITY",
+          "contractId": "PANEL_POSITIONS_TRUTH_V1",
+          "valueKey": "exitCapacity"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_POSITIONS_TRUTH_V1",
+          "valueKey": "fundingBorrowState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_CORRECTIVE_ACTIONS",
+          "contractId": "PANEL_POSITIONS_TRUTH_V1",
+          "valueKey": "positionRecoveryState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_TIMELINE_CORRELATION_TRACE",
+          "contractId": "PANEL_POSITIONS_TRUTH_V1",
+          "valueKey": "correlationTraceId"
+        }
+      ]
+    },
+    {
+      "surfaceId": "fills",
+      "informationLevels": [
+        4,
+        5
+      ],
+      "projectionQuestion": "What fill identities, quantities, costs, and correlation evidence exist?",
+      "routeKind": "ACCOUNT_ALIAS",
+      "canonicalRoute": "account",
+      "pageOwner": "account",
+      "factBindings": [
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_FILLS_TRUTH_V1",
+          "valueKey": "fillLifecycleState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_BOUNDED_EVIDENCE_IMMUTABLE_REFS",
+          "contractId": "PANEL_FILLS_TRUTH_V1",
+          "valueKey": "fillIdentity"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_FILLS_TRUTH_V1",
+          "valueKey": "filledQuantity"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_PREDICTED_REALIZED_ECONOMICS",
+          "contractId": "PANEL_FILLS_TRUTH_V1",
+          "valueKey": "fee"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_PREDICTED_REALIZED_ECONOMICS",
+          "contractId": "PANEL_FILLS_TRUTH_V1",
+          "valueKey": "slippage"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_TIMELINE_CORRELATION_TRACE",
+          "contractId": "PANEL_FILLS_TRUTH_V1",
+          "valueKey": "correlationTraceId"
+        }
+      ]
+    },
+    {
+      "surfaceId": "pnl",
+      "informationLevels": [
+        1,
+        4,
+        5
+      ],
+      "projectionQuestion": "What realized attribution and unresolved execution or recovery error exists?",
+      "routeKind": "ACCOUNT_ALIAS",
+      "canonicalRoute": "account",
+      "pageOwner": "account",
+      "factBindings": [
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_PNL_TRUTH_V1",
+          "valueKey": "pnlAttributionState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_PREDICTED_REALIZED_ECONOMICS",
+          "contractId": "PANEL_PNL_TRUTH_V1",
+          "valueKey": "realizedPnl"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_PREDICTED_REALIZED_ECONOMICS",
+          "contractId": "PANEL_PNL_TRUTH_V1",
+          "valueKey": "feeAttribution"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_PREDICTED_REALIZED_ECONOMICS",
+          "contractId": "PANEL_PNL_TRUTH_V1",
+          "valueKey": "fundingAttribution"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_PREDICTED_REALIZED_ECONOMICS",
+          "contractId": "PANEL_PNL_TRUTH_V1",
+          "valueKey": "slippageAttribution"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_CRITICAL_UNSUPPORTED_CLAIMS",
+          "contractId": "PANEL_PNL_TRUTH_V1",
+          "valueKey": "unresolvedError"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_OVERALL_POSTURE_REASON",
+          "contractId": "PANEL_PNL_TRUTH_V1",
+          "valueKey": "rootBlocker"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_BOUNDED_EVIDENCE_IMMUTABLE_REFS",
+          "contractId": "PANEL_PNL_TRUTH_V1",
+          "valueKey": "pnlEvidenceRef"
+        }
+      ]
+    },
+    {
+      "surfaceId": "risk",
+      "informationLevels": [
+        1,
+        3,
+        4,
+        5
+      ],
+      "projectionQuestion": "What envelope, utilization, blockers, halt posture, and exact gate evidence exists?",
+      "routeKind": "CANONICAL_SURFACE",
+      "canonicalRoute": "risk",
+      "pageOwner": "risk",
+      "factBindings": [
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_RISK_TRUTH_V1",
+          "valueKey": "riskGateState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_RISK_TRUTH_V1",
+          "valueKey": "envelopeState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_PREDICTED_REALIZED_ECONOMICS",
+          "contractId": "PANEL_RISK_TRUTH_V1",
+          "valueKey": "utilizationState"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_OVERALL_POSTURE_REASON",
+          "contractId": "PANEL_RISK_TRUTH_V1",
+          "valueKey": "blockerReasons"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_OVERALL_POSTURE_REASON",
+          "contractId": "PANEL_RISK_TRUTH_V1",
+          "valueKey": "haltState"
+        },
+        {
+          "level": 4,
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "contractId": "PANEL_RISK_TRUTH_V1",
+          "valueKey": "reservationState"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "contractId": "PANEL_RISK_TRUTH_V1",
+          "valueKey": "recoveryReadiness"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_TIMELINE_CORRELATION_TRACE",
+          "contractId": "PANEL_RISK_TRUTH_V1",
+          "valueKey": "correlationTraceId"
+        }
+      ]
+    },
+    {
+      "surfaceId": "health",
+      "informationLevels": [
+        1,
+        2,
+        3,
+        5
+      ],
+      "projectionQuestion": "What component, freshness, coherence, backpressure, SLO, resource, and watchdog truth exists?",
+      "routeKind": "CANONICAL_SURFACE",
+      "canonicalRoute": "health",
+      "pageOwner": "health",
+      "factBindings": [
+        {
+          "level": 2,
+          "topicId": "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+          "contractId": "PANEL_HEALTH_TRUTH_V1",
+          "valueKey": "desiredState"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+          "contractId": "PANEL_HEALTH_TRUTH_V1",
+          "valueKey": "observedState"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+          "contractId": "PANEL_HEALTH_TRUTH_V1",
+          "valueKey": "readiness"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+          "contractId": "PANEL_HEALTH_TRUTH_V1",
+          "valueKey": "liveness"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_SOURCE_AGE_COHERENCE",
+          "contractId": "PANEL_HEALTH_TRUTH_V1",
+          "valueKey": "heartbeatAgeMs"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_PROGRESS_CADENCE_COOLDOWN_ATTEMPTS",
+          "contractId": "PANEL_HEALTH_TRUTH_V1",
+          "valueKey": "restartCount"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_BLOCKED_DEGRADED_EDGES",
+          "contractId": "PANEL_HEALTH_TRUTH_V1",
+          "valueKey": "currentError"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_TRUTH_MODE_LABEL",
+          "contractId": "PANEL_HEALTH_TRUTH_V1",
+          "valueKey": "renderTruthLabel"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_SLO_ERROR_BUDGET_TRENDS",
+          "contractId": "PANEL_HEALTH_TRUTH_V1",
+          "valueKey": "sloState"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_SLO_ERROR_BUDGET_TRENDS",
+          "contractId": "PANEL_HEALTH_TRUTH_V1",
+          "valueKey": "resourcePressureState"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_SLO_ERROR_BUDGET_TRENDS",
+          "contractId": "PANEL_HEALTH_TRUTH_V1",
+          "valueKey": "backpressureState"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_SENTINEL_PAGING_RECEIPTS",
+          "contractId": "PANEL_HEALTH_TRUTH_V1",
+          "valueKey": "watchdogProofState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_DEPLOYMENT_AGENT_PROVENANCE",
+          "contractId": "PANEL_HEALTH_TRUTH_V1",
+          "valueKey": "releaseState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_COUNTEREXAMPLE_FAILURE_ATLAS",
+          "contractId": "PANEL_HEALTH_TRUTH_V1",
+          "valueKey": "failureAtlasEvidenceRef"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_DEPLOYMENT_AGENT_PROVENANCE",
+          "contractId": "PANEL_HEALTH_TRUTH_V1",
+          "valueKey": "deploymentAgentProvenanceRef"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+          "contractId": "PANEL_HEALTH_OUT_OF_BAND_LIVENESS_V1",
+          "valueKey": "desiredState"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+          "contractId": "PANEL_HEALTH_OUT_OF_BAND_LIVENESS_V1",
+          "valueKey": "observedState"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+          "contractId": "PANEL_HEALTH_OUT_OF_BAND_LIVENESS_V1",
+          "valueKey": "readiness"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+          "contractId": "PANEL_HEALTH_OUT_OF_BAND_LIVENESS_V1",
+          "valueKey": "liveness"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_SOURCE_AGE_COHERENCE",
+          "contractId": "PANEL_HEALTH_OUT_OF_BAND_LIVENESS_V1",
+          "valueKey": "heartbeatAgeMs"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_PROGRESS_CADENCE_COOLDOWN_ATTEMPTS",
+          "contractId": "PANEL_HEALTH_OUT_OF_BAND_LIVENESS_V1",
+          "valueKey": "restartCount"
+        },
+        {
+          "level": 2,
+          "topicId": "L2_BLOCKED_DEGRADED_EDGES",
+          "contractId": "PANEL_HEALTH_OUT_OF_BAND_LIVENESS_V1",
+          "valueKey": "currentError"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_TRUTH_MODE_LABEL",
+          "contractId": "PANEL_HEALTH_OUT_OF_BAND_LIVENESS_V1",
+          "valueKey": "renderTruthLabel"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_SENTINEL_PAGING_RECEIPTS",
+          "contractId": "PANEL_HEALTH_OUT_OF_BAND_LIVENESS_V1",
+          "valueKey": "watchdogProofState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_TIMELINE_CORRELATION_TRACE",
+          "contractId": "PANEL_HEALTH_OUT_OF_BAND_LIVENESS_V1",
+          "valueKey": "correlationTraceId"
+        }
+      ]
+    },
+    {
+      "surfaceId": "logs-ledger",
+      "informationLevels": [
+        5
+      ],
+      "projectionQuestion": "What bounded correlated timeline, raw evidence, and immutable authority history exists?",
+      "routeKind": "CANONICAL_SURFACE",
+      "canonicalRoute": "logs-ledger",
+      "pageOwner": "logs-ledger",
+      "factBindings": [
+        {
+          "level": 5,
+          "topicId": "L5_TIMELINE_CORRELATION_TRACE",
+          "contractId": "PANEL_LOGS_LEDGER_TRUTH_V1",
+          "valueKey": "traceState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_TIMELINE_CORRELATION_TRACE",
+          "contractId": "PANEL_LOGS_LEDGER_TRUTH_V1",
+          "valueKey": "correlationId"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_BOUNDED_EVIDENCE_IMMUTABLE_REFS",
+          "contractId": "PANEL_LOGS_LEDGER_TRUTH_V1",
+          "valueKey": "structuredEventCount"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_BOUNDED_EVIDENCE_IMMUTABLE_REFS",
+          "contractId": "PANEL_LOGS_LEDGER_TRUTH_V1",
+          "valueKey": "ledgerEvidenceRef"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_BOUNDED_EVIDENCE_IMMUTABLE_REFS",
+          "contractId": "PANEL_LOGS_LEDGER_TRUTH_V1",
+          "valueKey": "retentionState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_BOUNDED_EVIDENCE_IMMUTABLE_REFS",
+          "contractId": "PANEL_LOGS_LEDGER_TRUTH_V1",
+          "valueKey": "redactionState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_ASSUMPTION_CLAIM_CAUSALITY",
+          "contractId": "PANEL_LOGS_LEDGER_TRUTH_V1",
+          "valueKey": "assumptionClaimCausalityRefs"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_DEPLOYMENT_AGENT_PROVENANCE",
+          "contractId": "PANEL_LOGS_LEDGER_TRUTH_V1",
+          "valueKey": "deploymentAgentProvenanceRef"
+        }
+      ]
+    },
+    {
+      "surfaceId": "notifications",
+      "informationLevels": [
+        1,
+        3,
+        5
+      ],
+      "projectionQuestion": "What deduplicated root-cause incident needs action and what proves recovery?",
+      "routeKind": "CANONICAL_SURFACE",
+      "canonicalRoute": "notifications",
+      "pageOwner": "notifications",
+      "factBindings": [
+        {
+          "level": 1,
+          "topicId": "L1_INCIDENT_PAGE_DRILLDOWN",
+          "contractId": "PANEL_NOTIFICATIONS_TRUTH_V1",
+          "valueKey": "incidentState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_ASSUMPTION_CLAIM_CAUSALITY",
+          "contractId": "PANEL_NOTIFICATIONS_TRUTH_V1",
+          "valueKey": "rootCauseId"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_ASSUMPTION_CLAIM_CAUSALITY",
+          "contractId": "PANEL_NOTIFICATIONS_TRUTH_V1",
+          "valueKey": "deduplicationKey"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_CORRECTIVE_ACTIONS",
+          "contractId": "PANEL_NOTIFICATIONS_TRUTH_V1",
+          "valueKey": "recoveryProofRef"
+        },
+        {
+          "level": 1,
+          "topicId": "L1_INCIDENT_PAGE_DRILLDOWN",
+          "contractId": "PANEL_NOTIFICATIONS_TRUTH_V1",
+          "valueKey": "actionRequired"
+        },
+        {
+          "level": 3,
+          "topicId": "L3_SENTINEL_PAGING_RECEIPTS",
+          "contractId": "PANEL_NOTIFICATIONS_TRUTH_V1",
+          "valueKey": "pagingReceiptState"
+        },
+        {
+          "level": 5,
+          "topicId": "L5_REPAIR_PROPOSALS_APPROVALS",
+          "contractId": "PANEL_NOTIFICATIONS_TRUTH_V1",
+          "valueKey": "repairProposalApprovalState"
+        }
+      ]
+    }
+  ],
+  "levelDefinitions": [
+    {
+      "level": 1,
+      "levelId": "L1_IMMEDIATE_SAFETY_VIEW",
+      "title": "Immediate safety view",
+      "topics": [
+        {
+          "topicId": "L1_OVERALL_POSTURE_REASON",
+          "definition": "Overall posture and the exact reason for it."
+        },
+        {
+          "topicId": "L1_TRUTH_MODE_LABEL",
+          "definition": "Exact live, shadow, validate-only, dry-run, synthetic, blocked, unavailable, missing, or unknown truth label."
+        },
+        {
+          "topicId": "L1_EXPOSURE_UNRESOLVED_LIABILITY",
+          "definition": "Active exposure and unresolved liability."
+        },
+        {
+          "topicId": "L1_EXECUTION_OWNER_FENCING",
+          "definition": "Execution ownership and fencing posture."
+        },
+        {
+          "topicId": "L1_SOURCE_AGE_COHERENCE",
+          "definition": "Critical source age and temporal coherence."
+        },
+        {
+          "topicId": "L1_SCENARIO_BOUNDED_RECOVERABILITY",
+          "definition": "Scenario-bounded recovery and exit capacity."
+        },
+        {
+          "topicId": "L1_CRITICAL_UNSUPPORTED_CLAIMS",
+          "definition": "Critical unsupported, unconfigured, or unknown claims."
+        },
+        {
+          "topicId": "L1_INCIDENT_PAGE_DRILLDOWN",
+          "definition": "Immediate incident and bounded drill-down."
+        }
+      ]
+    },
+    {
+      "level": 2,
+      "levelId": "L2_INVENTORY_DEPENDENCY_GRAPH",
+      "title": "Inventory and dependency graph",
+      "topics": [
+        {
+          "topicId": "L2_EXPECTED_DISCOVERED_INSTRUMENTED_POSTURE",
+          "definition": "Expected, discovered, instrumented, current, stale, silent, and missing posture."
+        },
+        {
+          "topicId": "L2_STARTUP_RUNTIME_DEPENDENCIES",
+          "definition": "Startup and runtime dependency identities."
+        },
+        {
+          "topicId": "L2_BLOCKED_DEGRADED_EDGES",
+          "definition": "Blocked and degraded dependency edges."
+        },
+        {
+          "topicId": "L2_COMPONENT_IDENTITY_DENOMINATOR_COUNTS",
+          "definition": "Component identity, owner, version, release, and exact denominator counts."
+        }
+      ]
+    },
+    {
+      "level": 3,
+      "levelId": "L3_AUTOMATION_RESILIENCE",
+      "title": "Automation and resilience",
+      "topics": [
+        {
+          "topicId": "L3_RETRY_CIRCUIT_QUARANTINE_REPAIR",
+          "definition": "Retry, circuit, quarantine, and repair state."
+        },
+        {
+          "topicId": "L3_PROGRESS_CADENCE_COOLDOWN_ATTEMPTS",
+          "definition": "Progress, cadence, cooldown, attempts used, and attempt budget."
+        },
+        {
+          "topicId": "L3_DEADLINE_LEASE_CANCELLATION_LATE_RESULT",
+          "definition": "Deadline, lease, cancellation, and late-result handling."
+        },
+        {
+          "topicId": "L3_ROLLBACK_FALLBACK_READINESS",
+          "definition": "Rollback, fallback, and recovery readiness."
+        },
+        {
+          "topicId": "L3_SLO_ERROR_BUDGET_TRENDS",
+          "definition": "SLO, error-budget, resource, backpressure, and trend state."
+        },
+        {
+          "topicId": "L3_SENTINEL_PAGING_RECEIPTS",
+          "definition": "Independent sentinel, paging, and receipt evidence."
+        }
+      ]
+    },
+    {
+      "level": 4,
+      "levelId": "L4_MONEY_DECISION_LIFECYCLE",
+      "title": "Money and decision lifecycle",
+      "topics": [
+        {
+          "topicId": "L4_EVIDENCE_TO_PNL_CHAIN",
+          "definition": "Evidence through decision, action lifecycle, reconciliation, and PnL."
+        },
+        {
+          "topicId": "L4_PREDICTED_REALIZED_ECONOMICS",
+          "definition": "Predicted and realized economics with costs and liabilities."
+        },
+        {
+          "topicId": "L4_AMBIGUITY_ABSTENTION_VERSIONING",
+          "definition": "Ambiguity, abstention, rejection, and model or policy versioning."
+        }
+      ]
+    },
+    {
+      "level": 5,
+      "levelId": "L5_INCIDENT_FORENSIC_DRILLDOWN",
+      "title": "Incident and forensic drill-down",
+      "topics": [
+        {
+          "topicId": "L5_TIMELINE_CORRELATION_TRACE",
+          "definition": "Bounded timeline, correlation, and trace."
+        },
+        {
+          "topicId": "L5_ASSUMPTION_CLAIM_CAUSALITY",
+          "definition": "Assumption, claim, and causal-dependency evidence."
+        },
+        {
+          "topicId": "L5_BOUNDED_EVIDENCE_IMMUTABLE_REFS",
+          "definition": "Bounded raw evidence and immutable references."
+        },
+        {
+          "topicId": "L5_REPAIR_PROPOSALS_APPROVALS",
+          "definition": "Repair proposals and approval evidence."
+        },
+        {
+          "topicId": "L5_DEPLOYMENT_AGENT_PROVENANCE",
+          "definition": "Deployment revision and agent provenance."
+        },
+        {
+          "topicId": "L5_COUNTEREXAMPLE_FAILURE_ATLAS",
+          "definition": "Counterexample and registered failure-atlas evidence."
+        },
+        {
+          "topicId": "L5_CORRECTIVE_ACTIONS",
+          "definition": "Corrective actions, results, and proof of recovery."
+        }
+      ]
+    }
+  ]
+}

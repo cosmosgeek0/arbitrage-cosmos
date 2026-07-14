@@ -1,0 +1,1942 @@
+{
+  "schemaVersion": "historical-series.v1",
+  "nowMs": 4000,
+  "releaseSha": "1111111111111111111111111111111111111111",
+  "catalogVerificationMaximumAgeMs": 1500,
+  "catalogBinding": {
+    "result": "PASS",
+    "catalogId": "s5-observability-catalog-fixture",
+    "catalogRevision": 2,
+    "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+    "releaseSha": "1111111111111111111111111111111111111111",
+    "verifierOwnerId": "S5_OBSERVABILITY_VERIFIER",
+    "evidenceRefId": "evidence:s5-slo-catalog-complete",
+    "verifiedAtMs": 3500
+  },
+  "viewWindowPolicy": {
+    "policyId": "s5-historical-view-window.v1",
+    "revision": 1,
+    "startMs": 1000,
+    "endMs": 3000
+  },
+  "series": [
+    {
+      "seriesId": "historical-series:source-age-percentiles:r2",
+      "seriesSha256": "0535462911dbc6235daaa5a847c2948e5e28d35e6b4c36a87dba508736ee5ca8",
+      "metricId": "source-age-percentiles",
+      "family": "SOURCE_AGE_PERCENTILES",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "INTELLIGENCE_RUNTIME",
+      "unit": "milliseconds",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": null,
+        "rateKind": null,
+        "rateNumeratorCount": null,
+        "rateDenominatorCount": null,
+        "rateDenominatorMs": null,
+        "capacity": null
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:source-age-percentiles:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:source-age-percentiles",
+        "materialEventId": "material-event:source-age-percentiles",
+        "correlationId": "correlation:source-age-percentiles",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "INTELLIGENCE_RUNTIME",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:source-age-percentiles:4",
+          "evidence:source-age-percentiles:1",
+          "evidence:source-age-percentiles:3",
+          "evidence:source-age-percentiles:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:source-age-percentiles:4",
+          "evidenceId": "evidence:source-age-percentiles:4",
+          "observedAtMs": 3000,
+          "value": 10
+        },
+        {
+          "sampleId": "sample:source-age-percentiles:1",
+          "evidenceId": "evidence:source-age-percentiles:1",
+          "observedAtMs": 1000,
+          "value": 40
+        },
+        {
+          "sampleId": "sample:source-age-percentiles:3",
+          "evidenceId": "evidence:source-age-percentiles:3",
+          "observedAtMs": 2400,
+          "value": 20
+        },
+        {
+          "sampleId": "sample:source-age-percentiles:2",
+          "evidenceId": "evidence:source-age-percentiles:2",
+          "observedAtMs": 1800,
+          "value": 30
+        }
+      ]
+    },
+    {
+      "seriesId": "historical-series:processing-age-percentiles:r2",
+      "seriesSha256": "5f6deb79e7e7546ef6a6214a668a3b258e32447077be1049fb2f5b6b339d2810",
+      "metricId": "processing-age-percentiles",
+      "family": "PROCESSING_AGE_PERCENTILES",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "I08_SUPERVISOR",
+      "unit": "milliseconds",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": null,
+        "rateKind": null,
+        "rateNumeratorCount": null,
+        "rateDenominatorCount": null,
+        "rateDenominatorMs": null,
+        "capacity": null
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:processing-age-percentiles:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:processing-age-percentiles",
+        "materialEventId": "material-event:processing-age-percentiles",
+        "correlationId": "correlation:processing-age-percentiles",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "I08_SUPERVISOR",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:processing-age-percentiles:4",
+          "evidence:processing-age-percentiles:1",
+          "evidence:processing-age-percentiles:3",
+          "evidence:processing-age-percentiles:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:processing-age-percentiles:4",
+          "evidenceId": "evidence:processing-age-percentiles:4",
+          "observedAtMs": 3000,
+          "value": 5
+        },
+        {
+          "sampleId": "sample:processing-age-percentiles:1",
+          "evidenceId": "evidence:processing-age-percentiles:1",
+          "observedAtMs": 1000,
+          "value": 2
+        },
+        {
+          "sampleId": "sample:processing-age-percentiles:3",
+          "evidenceId": "evidence:processing-age-percentiles:3",
+          "observedAtMs": 2400,
+          "value": 4
+        },
+        {
+          "sampleId": "sample:processing-age-percentiles:2",
+          "evidenceId": "evidence:processing-age-percentiles:2",
+          "observedAtMs": 1800,
+          "value": 3
+        }
+      ]
+    },
+    {
+      "seriesId": "historical-series:cross-source-skew:r2",
+      "seriesSha256": "ea863da7de56698ed40c44759416693fa6a13055559a2a606a0a1e71c035b731",
+      "metricId": "cross-source-skew",
+      "family": "CROSS_SOURCE_SKEW",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "INTELLIGENCE_RUNTIME",
+      "unit": "milliseconds",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": null,
+        "rateKind": null,
+        "rateNumeratorCount": null,
+        "rateDenominatorCount": null,
+        "rateDenominatorMs": null,
+        "capacity": null
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:cross-source-skew:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:cross-source-skew",
+        "materialEventId": "material-event:cross-source-skew",
+        "correlationId": "correlation:cross-source-skew",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "INTELLIGENCE_RUNTIME",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:cross-source-skew:4",
+          "evidence:cross-source-skew:1",
+          "evidence:cross-source-skew:3",
+          "evidence:cross-source-skew:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:cross-source-skew:4",
+          "evidenceId": "evidence:cross-source-skew:4",
+          "observedAtMs": 3000,
+          "value": 5
+        },
+        {
+          "sampleId": "sample:cross-source-skew:1",
+          "evidenceId": "evidence:cross-source-skew:1",
+          "observedAtMs": 1000,
+          "value": 5
+        },
+        {
+          "sampleId": "sample:cross-source-skew:3",
+          "evidenceId": "evidence:cross-source-skew:3",
+          "observedAtMs": 2400,
+          "value": 5
+        },
+        {
+          "sampleId": "sample:cross-source-skew:2",
+          "evidenceId": "evidence:cross-source-skew:2",
+          "observedAtMs": 1800,
+          "value": 5
+        }
+      ]
+    },
+    {
+      "seriesId": "historical-series:queue-depth-backpressure:r2",
+      "seriesSha256": "d9c0461cf5d00cad8884dcd0b343c19f29d1d015a9b9b3df4660c5f55eff1560",
+      "metricId": "queue-depth-backpressure",
+      "family": "QUEUE_DEPTH_BACKPRESSURE",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "I08_SUPERVISOR",
+      "unit": "events",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "UTILIZATION"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": null,
+        "rateKind": null,
+        "rateNumeratorCount": null,
+        "rateDenominatorCount": null,
+        "rateDenominatorMs": null,
+        "capacity": 1000000
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:queue-depth-backpressure:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:queue-depth-backpressure",
+        "materialEventId": "material-event:queue-depth-backpressure",
+        "correlationId": "correlation:queue-depth-backpressure",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "I08_SUPERVISOR",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:queue-depth-backpressure:4",
+          "evidence:queue-depth-backpressure:1",
+          "evidence:queue-depth-backpressure:3",
+          "evidence:queue-depth-backpressure:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:queue-depth-backpressure:4",
+          "evidenceId": "evidence:queue-depth-backpressure:4",
+          "observedAtMs": 3000,
+          "value": 7
+        },
+        {
+          "sampleId": "sample:queue-depth-backpressure:1",
+          "evidenceId": "evidence:queue-depth-backpressure:1",
+          "observedAtMs": 1000,
+          "value": 4
+        },
+        {
+          "sampleId": "sample:queue-depth-backpressure:3",
+          "evidenceId": "evidence:queue-depth-backpressure:3",
+          "observedAtMs": 2400,
+          "value": 6
+        },
+        {
+          "sampleId": "sample:queue-depth-backpressure:2",
+          "evidenceId": "evidence:queue-depth-backpressure:2",
+          "observedAtMs": 1800,
+          "value": 5
+        }
+      ]
+    },
+    {
+      "seriesId": "historical-series:dropped-coalesced-events:r2",
+      "seriesSha256": "6eb308fa271a5bd717e0e4d1355f3c94f8942a042498d673bf71693b62625428",
+      "metricId": "dropped-coalesced-events",
+      "family": "DROPPED_COALESCED_EVENTS",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "TELEMETRY_OWNER",
+      "unit": "events",
+      "statistics": [
+        "COUNT",
+        "RATE"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": 26,
+        "rateKind": "PER_TIME",
+        "rateNumeratorCount": 26,
+        "rateDenominatorCount": null,
+        "rateDenominatorMs": 2000,
+        "capacity": null
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:dropped-coalesced-events:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:dropped-coalesced-events",
+        "materialEventId": "material-event:dropped-coalesced-events",
+        "correlationId": "correlation:dropped-coalesced-events",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "TELEMETRY_OWNER",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:dropped-coalesced-events:4",
+          "evidence:dropped-coalesced-events:1",
+          "evidence:dropped-coalesced-events:3",
+          "evidence:dropped-coalesced-events:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:dropped-coalesced-events:4",
+          "evidenceId": "evidence:dropped-coalesced-events:4",
+          "observedAtMs": 3000,
+          "value": 8
+        },
+        {
+          "sampleId": "sample:dropped-coalesced-events:1",
+          "evidenceId": "evidence:dropped-coalesced-events:1",
+          "observedAtMs": 1000,
+          "value": 5
+        },
+        {
+          "sampleId": "sample:dropped-coalesced-events:3",
+          "evidenceId": "evidence:dropped-coalesced-events:3",
+          "observedAtMs": 2400,
+          "value": 7
+        },
+        {
+          "sampleId": "sample:dropped-coalesced-events:2",
+          "evidenceId": "evidence:dropped-coalesced-events:2",
+          "observedAtMs": 1800,
+          "value": 6
+        }
+      ]
+    },
+    {
+      "seriesId": "historical-series:reconciliation-gap:r2",
+      "seriesSha256": "afa5e59d7cd6e3164ec355ebc97dde0e25bc3aed492ef204efb974fbd8310f2b",
+      "metricId": "reconciliation-gap",
+      "family": "RECONCILIATION_GAP",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "FOUNDATION_RECONCILIATION",
+      "unit": "milliseconds",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": null,
+        "rateKind": null,
+        "rateNumeratorCount": null,
+        "rateDenominatorCount": null,
+        "rateDenominatorMs": null,
+        "capacity": null
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:reconciliation-gap:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:reconciliation-gap",
+        "materialEventId": "material-event:reconciliation-gap",
+        "correlationId": "correlation:reconciliation-gap",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "FOUNDATION_RECONCILIATION",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:reconciliation-gap:4",
+          "evidence:reconciliation-gap:1",
+          "evidence:reconciliation-gap:3",
+          "evidence:reconciliation-gap:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:reconciliation-gap:4",
+          "evidenceId": "evidence:reconciliation-gap:4",
+          "observedAtMs": 3000,
+          "value": 9
+        },
+        {
+          "sampleId": "sample:reconciliation-gap:1",
+          "evidenceId": "evidence:reconciliation-gap:1",
+          "observedAtMs": 1000,
+          "value": 6
+        },
+        {
+          "sampleId": "sample:reconciliation-gap:3",
+          "evidenceId": "evidence:reconciliation-gap:3",
+          "observedAtMs": 2400,
+          "value": 8
+        },
+        {
+          "sampleId": "sample:reconciliation-gap:2",
+          "evidenceId": "evidence:reconciliation-gap:2",
+          "observedAtMs": 1800,
+          "value": 7
+        }
+      ]
+    },
+    {
+      "seriesId": "historical-series:ambiguity-duration:r2",
+      "seriesSha256": "804c1e61bcf79947ff273ee6492c7c781a390232bef2fd437cadd2a917b25c36",
+      "metricId": "ambiguity-duration",
+      "family": "AMBIGUITY_DURATION",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "FOUNDATION_RECONCILIATION",
+      "unit": "milliseconds",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": null,
+        "rateKind": null,
+        "rateNumeratorCount": null,
+        "rateDenominatorCount": null,
+        "rateDenominatorMs": null,
+        "capacity": null
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:ambiguity-duration:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:ambiguity-duration",
+        "materialEventId": "material-event:ambiguity-duration",
+        "correlationId": "correlation:ambiguity-duration",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "FOUNDATION_RECONCILIATION",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:ambiguity-duration:4",
+          "evidence:ambiguity-duration:1",
+          "evidence:ambiguity-duration:3",
+          "evidence:ambiguity-duration:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:ambiguity-duration:4",
+          "evidenceId": "evidence:ambiguity-duration:4",
+          "observedAtMs": 3000,
+          "value": 10
+        },
+        {
+          "sampleId": "sample:ambiguity-duration:1",
+          "evidenceId": "evidence:ambiguity-duration:1",
+          "observedAtMs": 1000,
+          "value": 7
+        },
+        {
+          "sampleId": "sample:ambiguity-duration:3",
+          "evidenceId": "evidence:ambiguity-duration:3",
+          "observedAtMs": 2400,
+          "value": 9
+        },
+        {
+          "sampleId": "sample:ambiguity-duration:2",
+          "evidenceId": "evidence:ambiguity-duration:2",
+          "observedAtMs": 1800,
+          "value": 8
+        }
+      ]
+    },
+    {
+      "seriesId": "historical-series:automatic-recovery-result-rate:r2",
+      "seriesSha256": "697b1612e5437baa0266ce1f601c6fe4b4dd8b46beda4a2b80d2d60e270d8ea0",
+      "metricId": "automatic-recovery-result-rate",
+      "family": "AUTOMATIC_RECOVERY_RESULT_RATE",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "CONTROL_PLANE",
+      "unit": "ratio",
+      "statistics": [
+        "COUNT",
+        "RATE"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": 4,
+        "rateKind": "RATIO",
+        "rateNumeratorCount": 2,
+        "rateDenominatorCount": 4,
+        "rateDenominatorMs": null,
+        "capacity": null
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:automatic-recovery-result-rate:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:automatic-recovery-result-rate",
+        "materialEventId": "material-event:automatic-recovery-result-rate",
+        "correlationId": "correlation:automatic-recovery-result-rate",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "CONTROL_PLANE",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:automatic-recovery-result-rate:4",
+          "evidence:automatic-recovery-result-rate:1",
+          "evidence:automatic-recovery-result-rate:3",
+          "evidence:automatic-recovery-result-rate:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:automatic-recovery-result-rate:4",
+          "evidenceId": "evidence:automatic-recovery-result-rate:4",
+          "observedAtMs": 3000,
+          "value": 1
+        },
+        {
+          "sampleId": "sample:automatic-recovery-result-rate:1",
+          "evidenceId": "evidence:automatic-recovery-result-rate:1",
+          "observedAtMs": 1000,
+          "value": 0
+        },
+        {
+          "sampleId": "sample:automatic-recovery-result-rate:3",
+          "evidenceId": "evidence:automatic-recovery-result-rate:3",
+          "observedAtMs": 2400,
+          "value": 0
+        },
+        {
+          "sampleId": "sample:automatic-recovery-result-rate:2",
+          "evidenceId": "evidence:automatic-recovery-result-rate:2",
+          "observedAtMs": 1800,
+          "value": 1
+        }
+      ]
+    },
+    {
+      "seriesId": "historical-series:execution-cost:r2",
+      "seriesSha256": "333be20027defbcb1385f80487073113faa179a256e7874130e101e9fb73b934",
+      "metricId": "execution-cost",
+      "family": "EXECUTION_COST",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "CAPITAL_SUPERVISION",
+      "unit": "quote-asset",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "SUM"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": null,
+        "rateKind": null,
+        "rateNumeratorCount": null,
+        "rateDenominatorCount": null,
+        "rateDenominatorMs": null,
+        "capacity": null
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:execution-cost:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:execution-cost",
+        "materialEventId": "material-event:execution-cost",
+        "correlationId": "correlation:execution-cost",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "CAPITAL_SUPERVISION",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:execution-cost:4",
+          "evidence:execution-cost:1",
+          "evidence:execution-cost:3",
+          "evidence:execution-cost:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:execution-cost:4",
+          "evidenceId": "evidence:execution-cost:4",
+          "observedAtMs": 3000,
+          "value": "4.000000000000000001"
+        },
+        {
+          "sampleId": "sample:execution-cost:1",
+          "evidenceId": "evidence:execution-cost:1",
+          "observedAtMs": 1000,
+          "value": "1.000000000000000001"
+        },
+        {
+          "sampleId": "sample:execution-cost:3",
+          "evidenceId": "evidence:execution-cost:3",
+          "observedAtMs": 2400,
+          "value": "3.000000000000000001"
+        },
+        {
+          "sampleId": "sample:execution-cost:2",
+          "evidenceId": "evidence:execution-cost:2",
+          "observedAtMs": 1800,
+          "value": "2.000000000000000001"
+        }
+      ]
+    },
+    {
+      "seriesId": "historical-series:slippage:r2",
+      "seriesSha256": "5651061f186d98acffc87fd893cf65f308c2e844a97ddfb51ace822f277a6670",
+      "metricId": "slippage",
+      "family": "SLIPPAGE",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "CAPITAL_SUPERVISION",
+      "unit": "basis-points",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": null,
+        "rateKind": null,
+        "rateNumeratorCount": null,
+        "rateDenominatorCount": null,
+        "rateDenominatorMs": null,
+        "capacity": null
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:slippage:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:slippage",
+        "materialEventId": "material-event:slippage",
+        "correlationId": "correlation:slippage",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "CAPITAL_SUPERVISION",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:slippage:4",
+          "evidence:slippage:1",
+          "evidence:slippage:3",
+          "evidence:slippage:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:slippage:4",
+          "evidenceId": "evidence:slippage:4",
+          "observedAtMs": 3000,
+          "value": 13
+        },
+        {
+          "sampleId": "sample:slippage:1",
+          "evidenceId": "evidence:slippage:1",
+          "observedAtMs": 1000,
+          "value": 10
+        },
+        {
+          "sampleId": "sample:slippage:3",
+          "evidenceId": "evidence:slippage:3",
+          "observedAtMs": 2400,
+          "value": 12
+        },
+        {
+          "sampleId": "sample:slippage:2",
+          "evidenceId": "evidence:slippage:2",
+          "observedAtMs": 1800,
+          "value": 11
+        }
+      ]
+    },
+    {
+      "seriesId": "historical-series:funding:r2",
+      "seriesSha256": "912032064b9da1540b1b5962cacdb5da7a69ccbb50dd0507abfb57e563c91136",
+      "metricId": "funding",
+      "family": "FUNDING",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "CAPITAL_SUPERVISION",
+      "unit": "quote-asset",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "SUM"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": null,
+        "rateKind": null,
+        "rateNumeratorCount": null,
+        "rateDenominatorCount": null,
+        "rateDenominatorMs": null,
+        "capacity": null
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:funding:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:funding",
+        "materialEventId": "material-event:funding",
+        "correlationId": "correlation:funding",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "CAPITAL_SUPERVISION",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:funding:4",
+          "evidence:funding:1",
+          "evidence:funding:3",
+          "evidence:funding:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:funding:4",
+          "evidenceId": "evidence:funding:4",
+          "observedAtMs": 3000,
+          "value": "1.4"
+        },
+        {
+          "sampleId": "sample:funding:1",
+          "evidenceId": "evidence:funding:1",
+          "observedAtMs": 1000,
+          "value": "-2.5"
+        },
+        {
+          "sampleId": "sample:funding:3",
+          "evidenceId": "evidence:funding:3",
+          "observedAtMs": 2400,
+          "value": "0.2"
+        },
+        {
+          "sampleId": "sample:funding:2",
+          "evidenceId": "evidence:funding:2",
+          "observedAtMs": 1800,
+          "value": "-0.1"
+        }
+      ]
+    },
+    {
+      "seriesId": "historical-series:borrow-interest:r2",
+      "seriesSha256": "68f712176b1be2c93c2d6ecd2c905daff8c0969f643db3ff2268ef7d80458df2",
+      "metricId": "borrow-interest",
+      "family": "BORROW_INTEREST",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "CAPITAL_SUPERVISION",
+      "unit": "quote-asset",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "SUM"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": null,
+        "rateKind": null,
+        "rateNumeratorCount": null,
+        "rateDenominatorCount": null,
+        "rateDenominatorMs": null,
+        "capacity": null
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:borrow-interest:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:borrow-interest",
+        "materialEventId": "material-event:borrow-interest",
+        "correlationId": "correlation:borrow-interest",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "CAPITAL_SUPERVISION",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:borrow-interest:4",
+          "evidence:borrow-interest:1",
+          "evidence:borrow-interest:3",
+          "evidence:borrow-interest:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:borrow-interest:4",
+          "evidenceId": "evidence:borrow-interest:4",
+          "observedAtMs": 3000,
+          "value": "4.04"
+        },
+        {
+          "sampleId": "sample:borrow-interest:1",
+          "evidenceId": "evidence:borrow-interest:1",
+          "observedAtMs": 1000,
+          "value": "1.01"
+        },
+        {
+          "sampleId": "sample:borrow-interest:3",
+          "evidenceId": "evidence:borrow-interest:3",
+          "observedAtMs": 2400,
+          "value": "3.03"
+        },
+        {
+          "sampleId": "sample:borrow-interest:2",
+          "evidenceId": "evidence:borrow-interest:2",
+          "observedAtMs": 1800,
+          "value": "2.02"
+        }
+      ]
+    },
+    {
+      "seriesId": "historical-series:market-impact:r2",
+      "seriesSha256": "d0335604fc9b55db8652e7a26e8f0fdb9e442e3fa94bf72a31a8db3a46c26818",
+      "metricId": "market-impact",
+      "family": "MARKET_IMPACT",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "CAPITAL_SUPERVISION",
+      "unit": "basis-points",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": null,
+        "rateKind": null,
+        "rateNumeratorCount": null,
+        "rateDenominatorCount": null,
+        "rateDenominatorMs": null,
+        "capacity": null
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:market-impact:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:market-impact",
+        "materialEventId": "material-event:market-impact",
+        "correlationId": "correlation:market-impact",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "CAPITAL_SUPERVISION",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:market-impact:4",
+          "evidence:market-impact:1",
+          "evidence:market-impact:3",
+          "evidence:market-impact:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:market-impact:4",
+          "evidenceId": "evidence:market-impact:4",
+          "observedAtMs": 3000,
+          "value": 16
+        },
+        {
+          "sampleId": "sample:market-impact:1",
+          "evidenceId": "evidence:market-impact:1",
+          "observedAtMs": 1000,
+          "value": 13
+        },
+        {
+          "sampleId": "sample:market-impact:3",
+          "evidenceId": "evidence:market-impact:3",
+          "observedAtMs": 2400,
+          "value": 15
+        },
+        {
+          "sampleId": "sample:market-impact:2",
+          "evidenceId": "evidence:market-impact:2",
+          "observedAtMs": 1800,
+          "value": 14
+        }
+      ]
+    },
+    {
+      "seriesId": "historical-series:incident-frequency:r2",
+      "seriesSha256": "c478449ade7b8df3f0a81ddcd36f02c16c01713b86957c20bec0cdc6cb576b3e",
+      "metricId": "incident-frequency",
+      "family": "INCIDENT_FREQUENCY",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "I08_SUPERVISOR",
+      "unit": "incidents",
+      "statistics": [
+        "COUNT",
+        "RATE"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": 62,
+        "rateKind": "PER_TIME",
+        "rateNumeratorCount": 62,
+        "rateDenominatorCount": null,
+        "rateDenominatorMs": 2000,
+        "capacity": null
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:incident-frequency:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:incident-frequency",
+        "materialEventId": "material-event:incident-frequency",
+        "correlationId": "correlation:incident-frequency",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "I08_SUPERVISOR",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:incident-frequency:4",
+          "evidence:incident-frequency:1",
+          "evidence:incident-frequency:3",
+          "evidence:incident-frequency:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:incident-frequency:4",
+          "evidenceId": "evidence:incident-frequency:4",
+          "observedAtMs": 3000,
+          "value": 17
+        },
+        {
+          "sampleId": "sample:incident-frequency:1",
+          "evidenceId": "evidence:incident-frequency:1",
+          "observedAtMs": 1000,
+          "value": 14
+        },
+        {
+          "sampleId": "sample:incident-frequency:3",
+          "evidenceId": "evidence:incident-frequency:3",
+          "observedAtMs": 2400,
+          "value": 16
+        },
+        {
+          "sampleId": "sample:incident-frequency:2",
+          "evidenceId": "evidence:incident-frequency:2",
+          "observedAtMs": 1800,
+          "value": 15
+        }
+      ]
+    },
+    {
+      "seriesId": "historical-series:recurring-failed-invariants:r2",
+      "seriesSha256": "7a0081faad449aea768f88189e652ed44b0f32063313bf3cc60fb28a5719c03a",
+      "metricId": "recurring-failed-invariants",
+      "family": "RECURRING_FAILED_INVARIANTS",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "I08_SUPERVISOR",
+      "unit": "invariant-failures",
+      "statistics": [
+        "COUNT",
+        "RATE"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": 66,
+        "rateKind": "PER_TIME",
+        "rateNumeratorCount": 66,
+        "rateDenominatorCount": null,
+        "rateDenominatorMs": 2000,
+        "capacity": null
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:recurring-failed-invariants:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:recurring-failed-invariants",
+        "materialEventId": "material-event:recurring-failed-invariants",
+        "correlationId": "correlation:recurring-failed-invariants",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "I08_SUPERVISOR",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:recurring-failed-invariants:4",
+          "evidence:recurring-failed-invariants:1",
+          "evidence:recurring-failed-invariants:3",
+          "evidence:recurring-failed-invariants:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:recurring-failed-invariants:4",
+          "evidenceId": "evidence:recurring-failed-invariants:4",
+          "observedAtMs": 3000,
+          "value": 18
+        },
+        {
+          "sampleId": "sample:recurring-failed-invariants:1",
+          "evidenceId": "evidence:recurring-failed-invariants:1",
+          "observedAtMs": 1000,
+          "value": 15
+        },
+        {
+          "sampleId": "sample:recurring-failed-invariants:3",
+          "evidenceId": "evidence:recurring-failed-invariants:3",
+          "observedAtMs": 2400,
+          "value": 17
+        },
+        {
+          "sampleId": "sample:recurring-failed-invariants:2",
+          "evidenceId": "evidence:recurring-failed-invariants:2",
+          "observedAtMs": 1800,
+          "value": 16
+        }
+      ]
+    },
+    {
+      "seriesId": "historical-series:cpu-budget:r2",
+      "seriesSha256": "6f8a948c9a9975281a9a9e3903c78171d015fbbe8136d86d1e395f72b70dfe5b",
+      "metricId": "cpu-budget",
+      "family": "CPU_BUDGET",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "I00_OPERATIONS",
+      "unit": "percent",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "UTILIZATION"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": null,
+        "rateKind": null,
+        "rateNumeratorCount": null,
+        "rateDenominatorCount": null,
+        "rateDenominatorMs": null,
+        "capacity": 100
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:cpu-budget:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:cpu-budget",
+        "materialEventId": "material-event:cpu-budget",
+        "correlationId": "correlation:cpu-budget",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "I00_OPERATIONS",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:cpu-budget:4",
+          "evidence:cpu-budget:1",
+          "evidence:cpu-budget:3",
+          "evidence:cpu-budget:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:cpu-budget:4",
+          "evidenceId": "evidence:cpu-budget:4",
+          "observedAtMs": 3000,
+          "value": 40
+        },
+        {
+          "sampleId": "sample:cpu-budget:1",
+          "evidenceId": "evidence:cpu-budget:1",
+          "observedAtMs": 1000,
+          "value": 10
+        },
+        {
+          "sampleId": "sample:cpu-budget:3",
+          "evidenceId": "evidence:cpu-budget:3",
+          "observedAtMs": 2400,
+          "value": 30
+        },
+        {
+          "sampleId": "sample:cpu-budget:2",
+          "evidenceId": "evidence:cpu-budget:2",
+          "observedAtMs": 1800,
+          "value": 20
+        }
+      ]
+    },
+    {
+      "seriesId": "historical-series:memory-budget:r2",
+      "seriesSha256": "2bb4e9e043d0e2fcac9b62c909400800aa3f7545ee54bd446a04cdfb04c6a11c",
+      "metricId": "memory-budget",
+      "family": "MEMORY_BUDGET",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "I00_OPERATIONS",
+      "unit": "bytes",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "UTILIZATION"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": null,
+        "rateKind": null,
+        "rateNumeratorCount": null,
+        "rateDenominatorCount": null,
+        "rateDenominatorMs": null,
+        "capacity": 1000000
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:memory-budget:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:memory-budget",
+        "materialEventId": "material-event:memory-budget",
+        "correlationId": "correlation:memory-budget",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "I00_OPERATIONS",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:memory-budget:4",
+          "evidence:memory-budget:1",
+          "evidence:memory-budget:3",
+          "evidence:memory-budget:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:memory-budget:4",
+          "evidenceId": "evidence:memory-budget:4",
+          "observedAtMs": 3000,
+          "value": 20
+        },
+        {
+          "sampleId": "sample:memory-budget:1",
+          "evidenceId": "evidence:memory-budget:1",
+          "observedAtMs": 1000,
+          "value": 17
+        },
+        {
+          "sampleId": "sample:memory-budget:3",
+          "evidenceId": "evidence:memory-budget:3",
+          "observedAtMs": 2400,
+          "value": 19
+        },
+        {
+          "sampleId": "sample:memory-budget:2",
+          "evidenceId": "evidence:memory-budget:2",
+          "observedAtMs": 1800,
+          "value": 18
+        }
+      ]
+    },
+    {
+      "seriesId": "historical-series:disk-budget:r2",
+      "seriesSha256": "495f06c79884f2ee389cca8761866ae8472d71f517cca8496885096af58c34b1",
+      "metricId": "disk-budget",
+      "family": "DISK_BUDGET",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "I00_OPERATIONS",
+      "unit": "bytes",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "UTILIZATION"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": null,
+        "rateKind": null,
+        "rateNumeratorCount": null,
+        "rateDenominatorCount": null,
+        "rateDenominatorMs": null,
+        "capacity": 1000000
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:disk-budget:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:disk-budget",
+        "materialEventId": "material-event:disk-budget",
+        "correlationId": "correlation:disk-budget",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "I00_OPERATIONS",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:disk-budget:4",
+          "evidence:disk-budget:1",
+          "evidence:disk-budget:3",
+          "evidence:disk-budget:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:disk-budget:4",
+          "evidenceId": "evidence:disk-budget:4",
+          "observedAtMs": 3000,
+          "value": 21
+        },
+        {
+          "sampleId": "sample:disk-budget:1",
+          "evidenceId": "evidence:disk-budget:1",
+          "observedAtMs": 1000,
+          "value": 18
+        },
+        {
+          "sampleId": "sample:disk-budget:3",
+          "evidenceId": "evidence:disk-budget:3",
+          "observedAtMs": 2400,
+          "value": 20
+        },
+        {
+          "sampleId": "sample:disk-budget:2",
+          "evidenceId": "evidence:disk-budget:2",
+          "observedAtMs": 1800,
+          "value": 19
+        }
+      ]
+    },
+    {
+      "seriesId": "historical-series:wal-budget:r2",
+      "seriesSha256": "8721295e0c797577595303fe8687b901f045dbcbae7b8144cc4eee2a6eb5612c",
+      "metricId": "wal-budget",
+      "family": "WAL_BUDGET",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "EXISTING_LEDGER",
+      "unit": "bytes",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "UTILIZATION"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": null,
+        "rateKind": null,
+        "rateNumeratorCount": null,
+        "rateDenominatorCount": null,
+        "rateDenominatorMs": null,
+        "capacity": 1000000
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:wal-budget:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:wal-budget",
+        "materialEventId": "material-event:wal-budget",
+        "correlationId": "correlation:wal-budget",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "EXISTING_LEDGER",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:wal-budget:4",
+          "evidence:wal-budget:1",
+          "evidence:wal-budget:3",
+          "evidence:wal-budget:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:wal-budget:4",
+          "evidenceId": "evidence:wal-budget:4",
+          "observedAtMs": 3000,
+          "value": 22
+        },
+        {
+          "sampleId": "sample:wal-budget:1",
+          "evidenceId": "evidence:wal-budget:1",
+          "observedAtMs": 1000,
+          "value": 19
+        },
+        {
+          "sampleId": "sample:wal-budget:3",
+          "evidenceId": "evidence:wal-budget:3",
+          "observedAtMs": 2400,
+          "value": 21
+        },
+        {
+          "sampleId": "sample:wal-budget:2",
+          "evidenceId": "evidence:wal-budget:2",
+          "observedAtMs": 1800,
+          "value": 20
+        }
+      ]
+    },
+    {
+      "seriesId": "historical-series:api-rate-budget:r2",
+      "seriesSha256": "070f9aa96708d9311ec3e200d93d1c8a2e06230b3c4e891c486b55b28ec1f400",
+      "metricId": "api-rate-budget",
+      "family": "API_RATE_BUDGET",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "EXCHANGE_GATEWAY",
+      "unit": "request-weight",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "UTILIZATION"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": null,
+        "rateKind": null,
+        "rateNumeratorCount": null,
+        "rateDenominatorCount": null,
+        "rateDenominatorMs": null,
+        "capacity": 1000000
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:api-rate-budget:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:api-rate-budget",
+        "materialEventId": "material-event:api-rate-budget",
+        "correlationId": "correlation:api-rate-budget",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "EXCHANGE_GATEWAY",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:api-rate-budget:4",
+          "evidence:api-rate-budget:1",
+          "evidence:api-rate-budget:3",
+          "evidence:api-rate-budget:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:api-rate-budget:4",
+          "evidenceId": "evidence:api-rate-budget:4",
+          "observedAtMs": 3000,
+          "value": 23
+        },
+        {
+          "sampleId": "sample:api-rate-budget:1",
+          "evidenceId": "evidence:api-rate-budget:1",
+          "observedAtMs": 1000,
+          "value": 20
+        },
+        {
+          "sampleId": "sample:api-rate-budget:3",
+          "evidenceId": "evidence:api-rate-budget:3",
+          "observedAtMs": 2400,
+          "value": 22
+        },
+        {
+          "sampleId": "sample:api-rate-budget:2",
+          "evidenceId": "evidence:api-rate-budget:2",
+          "observedAtMs": 1800,
+          "value": 21
+        }
+      ]
+    },
+    {
+      "seriesId": "historical-series:telemetry-budget:r2",
+      "seriesSha256": "93b347f7719c647e9a8fe7f54205f70c0afb15a80c6907a4075f50938f43d210",
+      "metricId": "telemetry-budget",
+      "family": "TELEMETRY_BUDGET",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "TELEMETRY_OWNER",
+      "unit": "events",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "UTILIZATION"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": null,
+        "rateKind": null,
+        "rateNumeratorCount": null,
+        "rateDenominatorCount": null,
+        "rateDenominatorMs": null,
+        "capacity": 1000000
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:telemetry-budget:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:telemetry-budget",
+        "materialEventId": "material-event:telemetry-budget",
+        "correlationId": "correlation:telemetry-budget",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "TELEMETRY_OWNER",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:telemetry-budget:4",
+          "evidence:telemetry-budget:1",
+          "evidence:telemetry-budget:3",
+          "evidence:telemetry-budget:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:telemetry-budget:4",
+          "evidenceId": "evidence:telemetry-budget:4",
+          "observedAtMs": 3000,
+          "value": 24
+        },
+        {
+          "sampleId": "sample:telemetry-budget:1",
+          "evidenceId": "evidence:telemetry-budget:1",
+          "observedAtMs": 1000,
+          "value": 21
+        },
+        {
+          "sampleId": "sample:telemetry-budget:3",
+          "evidenceId": "evidence:telemetry-budget:3",
+          "observedAtMs": 2400,
+          "value": 23
+        },
+        {
+          "sampleId": "sample:telemetry-budget:2",
+          "evidenceId": "evidence:telemetry-budget:2",
+          "observedAtMs": 1800,
+          "value": 22
+        }
+      ]
+    },
+    {
+      "seriesId": "historical-series:token-budget:r2",
+      "seriesSha256": "1b07d7f2ffe3f4fe0a928bab452f1b434b428a099f00b5b76c545dda6aa06800",
+      "metricId": "token-budget",
+      "family": "TOKEN_BUDGET",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "DIAGNOSTIC_PLANE",
+      "unit": "tokens",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "UTILIZATION"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": null,
+        "rateKind": null,
+        "rateNumeratorCount": null,
+        "rateDenominatorCount": null,
+        "rateDenominatorMs": null,
+        "capacity": 1000000
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:token-budget:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:token-budget",
+        "materialEventId": "material-event:token-budget",
+        "correlationId": "correlation:token-budget",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "DIAGNOSTIC_PLANE",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:token-budget:4",
+          "evidence:token-budget:1",
+          "evidence:token-budget:3",
+          "evidence:token-budget:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:token-budget:4",
+          "evidenceId": "evidence:token-budget:4",
+          "observedAtMs": 3000,
+          "value": 25
+        },
+        {
+          "sampleId": "sample:token-budget:1",
+          "evidenceId": "evidence:token-budget:1",
+          "observedAtMs": 1000,
+          "value": 22
+        },
+        {
+          "sampleId": "sample:token-budget:3",
+          "evidenceId": "evidence:token-budget:3",
+          "observedAtMs": 2400,
+          "value": 24
+        },
+        {
+          "sampleId": "sample:token-budget:2",
+          "evidenceId": "evidence:token-budget:2",
+          "observedAtMs": 1800,
+          "value": 23
+        }
+      ]
+    },
+    {
+      "seriesId": "historical-series:cost-budget:r2",
+      "seriesSha256": "7fb59f7b7c8e823cca31fc0e60387c2060df12f0a640ba831d26321cba0ca83e",
+      "metricId": "cost-budget",
+      "family": "COST_BUDGET",
+      "catalogId": "s5-observability-catalog-fixture",
+      "catalogRevision": 2,
+      "catalogSha256": "6324cbd3de42014cabf54deb0ab07d54c466b9879ff340d368326d23008a4a1f",
+      "releaseSha": "1111111111111111111111111111111111111111",
+      "ownerId": "I00_OPERATIONS",
+      "unit": "quote-asset",
+      "statistics": [
+        "P50",
+        "P95",
+        "P99",
+        "SUM",
+        "UTILIZATION"
+      ],
+      "maximumSeriesPoints": 1024,
+      "retentionWindowMs": 604800000,
+      "freshnessPolicy": {
+        "policyId": "s5-historical-current.v1",
+        "revision": 1,
+        "maximumCurrentAgeMs": 1500
+      },
+      "coherencePolicy": {
+        "policyId": "s5-historical-coherence.v1",
+        "revision": 1,
+        "maximumSampleGapMs": 1000
+      },
+      "coherenceState": "COHERENT",
+      "statisticContext": {
+        "countTotal": null,
+        "rateKind": null,
+        "rateNumeratorCount": null,
+        "rateDenominatorCount": null,
+        "rateDenominatorMs": null,
+        "capacity": "1000000"
+      },
+      "sourceTruthLabel": "SYNTHETIC_ONLY",
+      "windowId": "historical-window:cost-budget:1000-3000",
+      "startMs": 1000,
+      "endMs": 3000,
+      "evidenceBinding": {
+        "catalogEvidenceRefId": "evidence:s5-slo-catalog-complete",
+        "seriesEvidenceId": "evidence-series:cost-budget",
+        "materialEventId": "material-event:cost-budget",
+        "correlationId": "correlation:cost-budget",
+        "releaseSha": "1111111111111111111111111111111111111111",
+        "ownerId": "I00_OPERATIONS",
+        "observedAtMs": 3200,
+        "sampleEvidenceIds": [
+          "evidence:cost-budget:4",
+          "evidence:cost-budget:1",
+          "evidence:cost-budget:3",
+          "evidence:cost-budget:2"
+        ]
+      },
+      "samples": [
+        {
+          "sampleId": "sample:cost-budget:4",
+          "evidenceId": "evidence:cost-budget:4",
+          "observedAtMs": 3000,
+          "value": "4.04"
+        },
+        {
+          "sampleId": "sample:cost-budget:1",
+          "evidenceId": "evidence:cost-budget:1",
+          "observedAtMs": 1000,
+          "value": "1.01"
+        },
+        {
+          "sampleId": "sample:cost-budget:3",
+          "evidenceId": "evidence:cost-budget:3",
+          "observedAtMs": 2400,
+          "value": "3.03"
+        },
+        {
+          "sampleId": "sample:cost-budget:2",
+          "evidenceId": "evidence:cost-budget:2",
+          "observedAtMs": 1800,
+          "value": "2.02"
+        }
+      ]
+    }
+  ]
+}

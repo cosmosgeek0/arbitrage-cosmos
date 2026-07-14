@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "artifactState": "DRAFT_ONLY",
+  "targetArtifact": "TELEMETRY_COVERAGE_MATRIX.md",
+  "columns": [
+    "Subject Kind/ID",
+    "Metric",
+    "Structured Log",
+    "Ledger/Material Event",
+    "Trace",
+    "Incident",
+    "Freshness/Hysteresis",
+    "Missing-Data Law",
+    "Severity",
+    "Cockpit Surface",
+    "Repair/Control",
+    "Fixture",
+    "Proof"
+  ],
+  "rows": [
+    {
+      "rowId": "S5_RELEASE_BOUND_EXPECTED_MANIFEST",
+      "status": "DRAFT",
+      "integrationState": "DIRECTOR_MOUNT_REQUIRED",
+      "values": {
+        "Subject Kind/ID": "CLAIM/RELEASE_BOUND_EXPECTED_MANIFEST",
+        "Metric": "Expected, required-enabled, discovered, instrumented, current, stale, silent, unavailable, and missing counts over the manifest denominator",
+        "Structured Log": "PENDING_OWNER_MOUNT: accepted telemetry-owner inventory observations",
+        "Ledger/Material Event": "Manifest/release mismatch and any required-item gap remain material truth evidence",
+        "Trace": "Accepted release SHA plus last complete correlation-trace reference",
+        "Incident": "PENDING_OWNER_MOUNT: canonical mismatch or completeness incident",
+        "Freshness/Hysteresis": "Injected observationMaximumAgeMs; no refresh-time or hysteresis fabrication",
+        "Missing-Data Law": "Missing expected items remain in the denominator and evaluate FAIL or UNKNOWN; never zero or green",
+        "Severity": "CANONICAL_OWNER_DERIVED",
+        "Cockpit Surface": "dashboard | control-room | health",
+        "Repair/Control": "No packet action; existing owner control or runbook only",
+        "Fixture": "fixtures/productAssurance/systemic/observability/cases/release-manifest-healthy.json",
+        "Proof": "test/productAssurance/systemic/observability/release-manifest.test.mjs"
+      }
+    },
+    {
+      "rowId": "S5_EVENT_STAGE_WINDOW_CONSERVATION",
+      "status": "DRAFT",
+      "integrationState": "DIRECTOR_MOUNT_REQUIRED",
+      "values": {
+        "Subject Kind/ID": "INVARIANT/EVENT_STAGE_WINDOW_CONSERVATION",
+        "Metric": "Exactly one accounting record per stable logical event ID, stage ID, and accounting window",
+        "Structured Log": "PENDING_OWNER_MOUNT: bounded stage transitions and disposition reasons",
+        "Ledger/Material Event": "Material evidence is never sampled; duplicates, replay, export gaps, and incidents remain explicit",
+        "Trace": "Stable logical event ID plus canonical correlation and reconciliation references",
+        "Incident": "Visible evidence-gap or unresolved-incident identity when conservation cannot pass",
+        "Freshness/Hysteresis": "Closed accounting window evaluated against an injected clock",
+        "Missing-Data Law": "Missing expected tuple is UNKNOWN; duplicate or unexpected tuple is FAIL",
+        "Severity": "CANONICAL_OWNER_DERIVED",
+        "Cockpit Surface": "health | logs-ledger | notifications",
+        "Repair/Control": "No packet mutation; canonical reconciliation/recovery owner only",
+        "Fixture": "fixtures/productAssurance/systemic/observability/cases/conservation-replay-balanced.json",
+        "Proof": "test/productAssurance/systemic/observability/conservation.test.mjs"
+      }
+    },
+    {
+      "rowId": "S5_PANEL_CONTRACT_REGISTRY",
+      "status": "DRAFT",
+      "integrationState": "DIRECTOR_MOUNT_REQUIRED",
+      "values": {
+        "Subject Kind/ID": "CLAIM/MACHINE_CHECKABLE_PANEL_CONTRACT",
+        "Metric": "Twenty closed contracts covering exactly the eighteen accepted I00 section 15 SurfaceIds",
+        "Structured Log": "PENDING_OWNER_MOUNT: canonical supervisor projection observations",
+        "Ledger/Material Event": "Tested controls require before/after and ledger evidence; non-controls remain read-only",
+        "Trace": "Incident, trace, and evidence drill-down paths declared by every contract",
+        "Incident": "Panel reason codes retain exact blocker and owner escalation",
+        "Freshness/Hysteresis": "Per-contract evidence and independent-proof maximum ages use injected time",
+        "Missing-Data Law": "UNKNOWN remains null/textual; stale, silent, missing, synthetic, or incomplete denominators cannot render green",
+        "Severity": "DISPLAY_RULE_DERIVED_FROM_CANONICAL_AXES",
+        "Cockpit Surface": "all 18 accepted existing surfaces; no new page",
+        "Repair/Control": "Only existing tested SET_KILL_SWITCH binding; every other packet projection is read-only",
+        "Fixture": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json",
+        "Proof": "test/productAssurance/systemic/cockpit/contract-and-projection.test.mjs"
+      }
+    },
+    {
+      "rowId": "S5_SLO_AND_HISTORICAL_TRENDS",
+      "status": "DRAFT",
+      "integrationState": "DIRECTOR_MOUNT_REQUIRED",
+      "values": {
+        "Subject Kind/ID": "SLO/SAFETY_TRUTH_AND_AVAILABILITY",
+        "Metric": "Versioned SLO result, p50/p95/p99, good-event percentage, error-budget burn, and historical window trend",
+        "Structured Log": "PENDING_OWNER_MOUNT: accepted metric and window observations",
+        "Ledger/Material Event": "Safety/truth breach emits evidence and recommended posture without mutation authority",
+        "Trace": "Release-bound SLO definition/version and window identity",
+        "Incident": "PENDING_OWNER_MOUNT: canonical SLO-breach incident and paging receipt",
+        "Freshness/Hysteresis": "Closed fixed-duration windows, evidence age, sample minimum, and release binding",
+        "Missing-Data Law": "Missing category/window/sample evidence is UNKNOWN; no interpolation or fabricated zero",
+        "Severity": "CANONICAL_OWNER_DERIVED",
+        "Cockpit Surface": "dashboard | health | control-room | notifications | logs-ledger",
+        "Repair/Control": "Evidence-only recommendation; never blocks independently safe risk reduction",
+        "Fixture": "fixtures/productAssurance/systemic/observability/cases/slo-trend-history.json",
+        "Proof": "test/productAssurance/systemic/observability/slo-trend.test.mjs"
+      }
+    },
+    {
+      "rowId": "S5_REGISTERED_AND_OUT_OF_BAND_DETECTION",
+      "status": "DRAFT",
+      "integrationState": "DIRECTOR_MOUNT_REQUIRED",
+      "values": {
+        "Subject Kind/ID": "INVARIANT/REGISTERED_FAILURE_DETECTION_PATH",
+        "Metric": "Registered detector, telemetry, browser, matching SLO, and independent dead-path proof connectivity",
+        "Structured Log": "PENDING_OWNER_MOUNT: registered failure detector output",
+        "Ledger/Material Event": "Detection and recovery proof receipt",
+        "Trace": "Registered failure ID and detector-to-surface correlation path",
+        "Incident": "PENDING_OWNER_MOUNT: canonical failure/page identity",
+        "Freshness/Hysteresis": "Five seconds only for an explicitly registered 5000ms connected path; dead app/host/tunnel uses out-of-band SLO",
+        "Missing-Data Law": "Any missing detector, telemetry, browser, SLO, or out-of-band proof path rejects the claim",
+        "Severity": "REGISTERED_FAILURE_POLICY_DERIVED",
+        "Cockpit Surface": "dashboard | health | notifications",
+        "Repair/Control": "No packet repair; existing watchdog and canonical recovery owners only",
+        "Fixture": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json",
+        "Proof": "test/productAssurance/systemic/cockpit/contract-and-projection.test.mjs"
+      }
+    }
+  ]
+}

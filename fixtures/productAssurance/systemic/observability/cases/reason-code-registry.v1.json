@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "reason-code-registry.v1",
+  "registryId": "s5-conservation-stage-reasons",
+  "registryRevision": 1,
+  "registrySha256": "b7566667d11bd720663ede56d0f3405fbf45cd53b2c71abd8e231dc2fbe1bc68",
+  "entries": [
+    { "code": "DROP_CONFLICT", "allowedContexts": ["TRANSITION"] },
+    { "code": "DUPLICATE_RECONCILED", "allowedContexts": ["TRANSITION", "DISPOSITION"] },
+    { "code": "DUPLICATE_REPLAY", "allowedContexts": ["TRANSITION"] },
+    { "code": "MATERIAL_DROP_ATTEMPT", "allowedContexts": ["TRANSITION", "DISPOSITION"] },
+    { "code": "PROCESSING_LATE", "allowedContexts": ["TRANSITION", "DISPOSITION"] },
+    { "code": "UNRESOLVED_EXPORT_ACK", "allowedContexts": ["TRANSITION", "DISPOSITION"] }
+  ]
+}

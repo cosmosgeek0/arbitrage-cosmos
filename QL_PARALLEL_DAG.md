@@ -31,7 +31,7 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 | A-CORE IP-ASSURANCE | ~/Desktop/ip-assurance | ip-assurance-20260713 | 9785c93 | CORE_SCAFFOLD_READY (08a0a09) — full READY after director fan-in |
 | A-HAZARD S1 | ~/Desktop/ip-assur-hazard | ip-assur-hazard-20260713 | 9785c93 | HAZARD_PRESTAGE_READY (ab33b37, D-LAUNCH-10 resealed) |
 | A-FORMAL S3 | ~/Desktop/ip-assur-formal | ip-assur-formal-20260713 | 9785c93 | BLOCKED receipt sealed a0c7b6e (root-egress finding, D-LAUNCH-22; exit-127 was hydration artifact — S3 content GREEN 7/7 exhaustive, 43/43 net-deny) — OUT of candidate by ordering law; S3-DEEPEN COMPLETE — FORMAL_DEEPENED_RESEALED b491893 (M08-M13 over frozen L; D-LAUNCH-23); PARKED, first post-landing re-admission |
-| S2 actionEvidence (wave 14) | ~/Desktop/ip-assur-action | ip-assur-action-20260714 | current-main at cut | WORKING — IP_ASSURANCE §3 envelope; POST-LANDING donor, never enters candidate (D-LAUNCH-22.3) |
+| S2 actionEvidence (wave 14) | ~/Desktop/ip-assur-action | ip-assur-action-20260714 | current-main at cut | ACTION_EVIDENCE_PRESTAGE_READY ACCEPTED (ca30adf, 87/87 net-deny; D-LAUNCH-25) — PARKED, post-landing admission set |
 | PRE-VERIFY (non-donor) | ~/Desktop/preverify | preverify-20260714 | 0bbf23c | PREVERIFY_READY ACCEPTED (0b566d6; D-LAUNCH-21); UNPARKED for wave 15 LANDING-DOCS (D-LAUNCH-24) — drafting ARCHITECTURE Part II + capability map for the landing commit; still NON-DONOR |
 | A-COCKPIT S5 | ~/Desktop/ip-assur-cockpit | ip-assur-cockpit-20260713 | 9785c93 | COCKPIT_PRESTAGE_READY (d4ff9c9) |
 | A-AGENT S6 | ~/Desktop/ip-assur-agent | ip-assur-agent-20260713 | 9785c93 | AGENT_PRESTAGE_READY (97e87bd, D-LAUNCH-13 taxonomy) |

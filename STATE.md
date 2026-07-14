@@ -1,6 +1,6 @@
 # STATE.md — what is true right now
 
-**Current checkpoint:** 2026-07-14 · Phase 2 accepted A-CORE scaffold integrated after the receipted L15 merge on `i00-product-assembly-20260713`
+**Current checkpoint:** 2026-07-14 · Phase 2 accepted A-CORE merge `3ee0eda6b0da01b6fae441c684fa53829cab15be` receipted after L15 on `i00-product-assembly-20260713`
 **Law:** any landed change that alters project state must update this file in the same commit. This file wins on "what is the current state"; `ARCHITECTURE.md` wins on "how it is designed"; `MISSION.md` wins on "why".
 
 ## What this is

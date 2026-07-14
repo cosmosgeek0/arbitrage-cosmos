@@ -2,7 +2,7 @@
 
 Schema version: `I00_PRODUCT_BUILD_STATE_V1`
 
-Updated: `2026-07-14T05:06:19Z`
+Updated: `2026-07-14T05:07:32Z`
 
 ## Identity
 
@@ -10,14 +10,14 @@ Updated: `2026-07-14T05:06:19Z`
 | --- | --- |
 | Canonical Main base SHA | Live `current-main` and `origin/current-main` are `7383fd89477ed0b3e677e53c57c35d76ac34bbd8`; exact canonical ancestry is integrated at `ce8d79a751c886dff388fa8f3f2fa6fb3f0414ee` without writing Main |
 | Integration branch/worktree | `i00-product-assembly-20260713` at `/Users/cosmosgeek/Desktop/i00-assembly` |
-| Latest integration merge | L15 infrastructure `35672dcc448d2ca55b17c24344fb413b4d1e14a7`; tree `d0adf837268074167de66383902c08eb604d6559` |
-| Latest integration receipt | `docs/archive/i00-phase2/L15_INFRA_INTEGRATION_RECEIPT.md` |
+| Latest integration merge | A-CORE `3ee0eda6b0da01b6fae441c684fa53829cab15be`; tree `cb1d785f69c2b1d36fc11d88446acc64cf53a33d` |
+| Latest integration receipt | `docs/archive/i00-phase2/A_CORE_INTEGRATION_RECEIPT.md` |
 | Verified acceptance implementation | Historical prestage implementation `a2be4865d0d003d1dedd38c351b4e8ccf6033c2d`; Phase 1 handoff HEAD `9bf531ccca203ca66bad39787a0930fd608807a7` |
 | Phase | `FINAL_INTEGRATION / PHASE_2_FRESH_INTEGRATOR` |
-| Status | `A_CORE_INTEGRATED / FULL_GATE_GREEN` |
+| Status | `A_CORE_INTEGRATED_AND_RECEIPTED / FULL_GATE_GREEN` |
 | Active writer | Fresh Role 2 integrator; exclusive shared write/merge authority is limited to this integration branch, never `current-main` |
 | Protected untracked inputs | The five owner directives remain intentional read-only untracked inputs at their D-LAUNCH-6 hashes, not partial implementation; the worktree is otherwise clean after the final seal |
-| Current Phase 2 landed state | Accepted F-BRIDGE, SI-RECON, Q, dashboard-equivalent, L15, and A-CORE donors are integrated serially; A-CORE contributes its exact dormant production scaffold, closure evidence, and 68-row insertion inventory; focused, deterministic, and full repository gates pass |
+| Current Phase 2 landed state | Accepted F-BRIDGE, SI-RECON, Q, dashboard-equivalent, L15, and A-CORE donors are integrated serially; A-CORE merge `3ee0eda6b0da01b6fae441c684fa53829cab15be` contributes its exact dormant production scaffold, closure evidence, and 68-row insertion inventory; focused, deterministic, and full repository gates pass |
 
 ## Accepted inputs
 
@@ -93,7 +93,7 @@ Updated: `2026-07-14T05:06:19Z`
 
 Current A-CORE integration blocker: **none**. The accepted scaffold remains dormant and does not upgrade WAITING/UNKNOWN seams or overall assurance readiness. The current branch is a serial integration checkpoint, not `INTEGRATION_CANDIDATE_READY` and not `INTEGRATED_ACCEPTED`.
 
-Next exact task: seal the A-CORE receipt, then integrate A-HAZARD, A-COCKPIT, A-AGENT, and A-STABILITY one at a time with focused plus repository-wide gates and immutable receipts. A-FORMAL, A-CASE, and any L tip lacking a clean final `LANE_READY` receipt remain refused. After donor fan-in, perform the already-recorded shared production composition, persistence, route, cockpit-mount, runtime/browser, ops-preflight, and real-adapter acceptance work.
+Next exact task: integrate A-HAZARD, A-COCKPIT, A-AGENT, and A-STABILITY one at a time with focused plus repository-wide gates and immutable receipts. A-FORMAL, A-CASE, and any L tip lacking a clean final `LANE_READY` receipt remain refused. After donor fan-in, perform the already-recorded shared production composition, persistence, route, cockpit-mount, runtime/browser, ops-preflight, and real-adapter acceptance work.
 
 Next combined command after accepted Q/L adapters replace every fixture seam:
 
@@ -167,4 +167,4 @@ Current counts: expected accepted donors `14`; discovered exact tips `14`; recei
 | L lane | `9b0d4ad534644273c28d24fec2e18b17717f1167`; state generation 16, L13 issued; eight partial untracked L13 implementation/request paths | No L13/L16/L17/final receipt and no exact `L LANE_READY`; refuse and integrate last only after a clean immutable reseal |
 | A-ACTION-EVIDENCE / S2 | No branch, worktree, or accepted receipt; A-CORE marks the seam `WAITING` | Not a discovered donor; preserve as `NOT_CONFIGURED`/missing evidence rather than fabricate one |
 
-The next serial order is: seal A-CORE, then integrate A-HAZARD, A-COCKPIT, A-AGENT, and A-STABILITY one at a time; hold A-FORMAL and A-CASE; integrate L last only after a clean `LANE_READY` receipt exists. The dashboard and L15 rows are closed and must not be repeated. Every new donor fan-in gets focused and repository-wide gates plus its own immutable integration receipt before the next donor.
+The next serial order is: integrate A-HAZARD, A-COCKPIT, A-AGENT, and A-STABILITY one at a time; hold A-FORMAL and A-CASE; integrate L last only after a clean `LANE_READY` receipt exists. A-CORE, dashboard, and L15 are closed and must not be repeated. Every new donor fan-in gets focused and repository-wide gates plus its own immutable integration receipt before the next donor.

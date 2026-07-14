@@ -17,10 +17,10 @@ source_truth: SYNTHETIC_ONLY
 runtime_claim_closure: NOT_PERMITTED
 frozen_l_donor_commit: df6b472993ca9659ce09cf5f72004981c6835f0d
 frozen_l_donor_tree: 1add5ee43fea623509c20d0990ec9efac2543fc4
-packet_checkpoint_status: FORMAL_DEEPENING_BATCH_02_PASS_PENDING_RESEAL
-batch_02_content_commit: PENDING
-batch_02_content_tree: PENDING
-batch_02_receipt: PENDING
+packet_checkpoint_status: FORMAL_DEEPENED_RESEALED
+batch_02_content_commit: 10a3fa94d14229c6e6864f2d1ef097f3682fc2b3
+batch_02_content_tree: a429308c0074c70d7e12e4af57b2c71aa2df085e
+batch_02_receipt: fixtures/productAssurance/systemic/formal/receipts/D_LAUNCH_22_FORMAL_DEEPENING_BATCH_02.md@sha256:054a31e1ec012506ae5aad31f577369e639957bf9da7a970c3b014f030af84d0
 ```
 
 ## Bounded explicit-state result

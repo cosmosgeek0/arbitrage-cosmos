@@ -44,8 +44,11 @@ exact coverage of all 144 reachable M08-M13 transition-conformance rows.
 The M01-M07 finite envelopes are unchanged in this deepening batch: growth is
 zero states and zero transitions. Safe retrofitting was not cheap because it
 would alter already-sealed abstraction semantics. The frozen-L scenarios are
-represented explicitly by M08-M13 instead. Batch 2 content, receipt, and exact
-commit identities remain pending until the reseal commit is created.
+represented explicitly by M08-M13 instead. Batch 2 content is bound to commit
+`10a3fa94d14229c6e6864f2d1ef097f3682fc2b3` and tree
+`a429308c0074c70d7e12e4af57b2c71aa2df085e`; its immutable receipt is
+`receipts/D_LAUNCH_22_FORMAL_DEEPENING_BATCH_02.md` at SHA-256
+`054a31e1ec012506ae5aad31f577369e639957bf9da7a970c3b014f030af84d0`.
 
 The batch-2 audit also made the finite envelopes stricter: a flat failed Volume
 gate is `BLOCKED` with an absent action, each TLA+ module has a one-cut guard,

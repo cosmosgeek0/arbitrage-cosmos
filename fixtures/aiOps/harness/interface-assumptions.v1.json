@@ -1,0 +1,126 @@
+{
+  "schemaVersion": "AIOPS_A5_INTERFACE_ASSUMPTIONS_V1",
+  "shadowStatus": "SHADOW_SPECULATIVE",
+  "baseSha": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+  "directiveSha256": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+  "bindingState": "UNFINISHED_INTERFACES_NOT_AUTHORITY",
+  "assumptions": [
+    {
+      "assumptionId": "A5-ASSUME-001",
+      "lane": "I00",
+      "objectType": "AcceptedBase",
+      "state": "UNFINISHED",
+      "assumedShape": "The supplied base is a shadow source only and is not INTEGRATED_ACCEPTED.",
+      "replacementTrigger": "Port into a fresh worktree from the accepted SHA and rerun the full lane loop.",
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-ASSUME-002",
+      "lane": "I00",
+      "objectType": "IncidentOwner",
+      "state": "NOT_CONFIGURED",
+      "assumedShape": "Incident identity and incident transitions are fixture-local because the Product runtime exposes no configured incident owner.",
+      "replacementTrigger": "Rebind to the accepted incident owner contract.",
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-ASSUME-003",
+      "lane": "A1",
+      "objectType": "PolicyApprovalActionContracts",
+      "state": "SHADOW_SPECULATIVE",
+      "assumedShape": "Strict fixture envelopes model PolicyDecision, AgentPermissionProfile, AgentBudgetPolicy, ApprovalRequest, ApprovalReceipt, ActionEnvelope, ControlChangeSet, AgentGuardrailTripEvent, and BreakGlassRecoveryReceipt.",
+      "replacementTrigger": "Replace with the accepted A1 schema and classification manifest without widening authority.",
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-ASSUME-004",
+      "lane": "A2",
+      "objectType": "EvidenceCaseWorkflowContracts",
+      "state": "SHADOW_SPECULATIVE",
+      "assumedShape": "Strict fixture envelopes model IncidentEvidenceBundle, AgentCase, DurableWorkflowCheckpoint, and DiagnosticReport.",
+      "replacementTrigger": "Replace with accepted A2 event, evidence, budget, case, queue, DLQ, and checkpoint schemas.",
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-ASSUME-005",
+      "lane": "A3",
+      "objectType": "ProviderToolDeliveryContracts",
+      "state": "SHADOW_SPECULATIVE",
+      "assumedShape": "Strict fixture envelopes model AgentProviderDescriptor, ToolCapabilityDescriptor, ProviderCallback, TypedToolOutput, CredentialProxyRequest, VerificationReceipt, CanaryReceipt, RollbackReceipt, ProviderUsageReceipt, and AgentAuditProjection.",
+      "replacementTrigger": "Replace with accepted A3 provider, broker, credential, audit, delivery, canary, rollback, and verifier schemas.",
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-ASSUME-006",
+      "lane": "A2",
+      "objectType": "DurableStorageAdapters",
+      "state": "ABSENT_AT_BASE",
+      "assumedShape": "No AI case, inbox, outbox, DLQ, attempt, effect, usage, approval, or workflow tables are mounted; the existing Ledger remains sole durable owner.",
+      "replacementTrigger": "Use only accepted narrow Ledger adapters after port.",
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-ASSUME-007",
+      "lane": "I00",
+      "objectType": "CanonicalEventKind",
+      "state": "ABSENT_AT_BASE",
+      "assumedShape": "No AI operations material-event kind exists in the canonical trace enum.",
+      "replacementTrigger": "Consume the owner-added event kind after accepted integration.",
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-ASSUME-008",
+      "lane": "I00",
+      "objectType": "ControlRegistry",
+      "state": "AI_OPS_NAMESPACE_ABSENT",
+      "assumedShape": "Only the existing Product controls are canonical; this artifact creates no AI_OPS registry or controls.",
+      "replacementTrigger": "Read accepted owner-managed AI_OPS entries after port.",
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-ASSUME-009",
+      "lane": "I00",
+      "objectType": "ExternalOwners",
+      "state": "ABSENT_OR_UNPROVEN",
+      "assumedShape": "Independent sentinel, notification delivery, WORM audit export, credential proxy, release canary, rollback, approval, and independent verifier mounts are not acceptance-proven at this base.",
+      "replacementTrigger": "Rerun against real accepted owner interfaces with independent readback.",
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-ASSUME-010",
+      "lane": "A3",
+      "objectType": "ProviderState",
+      "state": "DIRECTIVE_BOUND",
+      "assumedShape": "Provider state is exactly NOT_CONFIGURED, SUBSCRIPTION_CODEX_WORKER, SUBSCRIPTION_CLAUDE_CODE_WORKER, API_CONFIGURED, or DIAGNOSTIC_PLANE_UNAVAILABLE; provider health is separate.",
+      "replacementTrigger": "Reconcile with accepted A3 enum and reject semantic drift.",
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-ASSUME-011",
+      "lane": "A5",
+      "objectType": "TestMount",
+      "state": "ABSENT_AT_BASE",
+      "assumedShape": "Root npm test and npm run test:all do not discover test/aiOps/harness.",
+      "replacementTrigger": "Canonical package owner mounts the focused suite through AIOPS-IR-TEST-MOUNT-026.",
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-ASSUME-012",
+      "lane": "A5",
+      "objectType": "EvidenceBoundary",
+      "state": "POST_PORT_REQUIRED",
+      "assumedShape": "This artifact proves deterministic contract, fault, replay, security, budget, and canary simulation only; real integration, runtime restart, browser, load or soak, external sentinel, notification, and WORM readback remain unclaimed.",
+      "replacementTrigger": "Run the entire accepted-lane acceptance loop after port.",
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-ASSUME-013",
+      "lane": "I00",
+      "objectType": "OperationalFailureAtlas",
+      "state": "ABSENT_AT_BASE",
+      "assumedShape": "The release-bound Operational Failure Atlas catalog is not present; this campaign does not substitute for its owner-controlled publication.",
+      "replacementTrigger": "Link accepted catalog IDs during port and rerun coverage checks.",
+      "authorityCreated": false
+    }
+  ]
+}

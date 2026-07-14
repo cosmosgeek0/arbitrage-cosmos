@@ -417,8 +417,8 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 
 ## Exact next task
 
-Rerun the full corrected-tree L12 gates after the chaos-proof upgrade, freeze
-the implementation commit and immutable receipt, then proceed without pause to
+Seal the immutable L12 receipt against the verified frozen implementation,
+write the immediate L12 acceptance-state seal, then proceed without pause to
 L13 §21-§23 lane-side evidence adapters. Stop only on a new precise `BLOCKED`
 or final `L LANE_READY`.
 

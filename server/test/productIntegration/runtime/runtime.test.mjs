@@ -606,7 +606,7 @@ test('nested synthetic owner evidence forces the persistent label while account 
   assert.equal(unknownAccount.surfaces.borrow.truthLabel, 'UNKNOWN');
 });
 
-test('supervisor trace index cannot exceed the requested embedded bound', async () => {
+test('supervisor trace index preserves the exact last-200 embedded bound', async () => {
   const correlationId = 'cor_trace_1';
   const base = makeRead();
   const oversizedTrace = Object.freeze({
@@ -644,7 +644,12 @@ test('supervisor trace index cannot exceed the requested embedded bound', async 
     }),
     clock: { nowMs: () => T0 },
   });
-  await assert.rejects(service.readSupervisor(), (error) => error?.code === 'TRACE_SOURCE_INVALID');
+  const envelope = await service.readSupervisor();
+  assert.equal(envelope.traces.length, 1);
+  assert.equal(envelope.traces[0].correlationId, correlationId);
+  assert.equal(envelope.traces[0].truncated, true);
+  assert.equal(envelope.traces[0].completeness, 'TRUNCATED');
+  assert.equal(envelope.traces[0].stages[0].referenceId, 'projection-trace-201');
 });
 
 test('Product supervisor reuses one canonical snapshot for ops and embedded traces', async () => {

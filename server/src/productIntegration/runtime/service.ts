@@ -26,6 +26,8 @@ function checkedNow(options: Readonly<ProductRuntimeOptions>): number {
   return nowMs;
 }
 
+const PRODUCT_SUPERVISOR_EMBEDDED_TRACE_LIMIT = 200;
+
 export class ProductIntegrationRuntimeService {
   private readonly options: Readonly<ProductRuntimeOptions>;
 
@@ -109,11 +111,14 @@ export class ProductIntegrationRuntimeService {
         // The supervisor already carries the canonical bounded trace index.
         // Re-reading the trace port would rebuild System truth and could mix a
         // later trace cut into this envelope.
-        const sourceTrace = traceByCorrelationId(snapshot.traceIndex, correlationId);
-        if (sourceTrace) {
-          if (sourceTrace.events.length > 200) {
-            throw new ProductRuntimeError('TRACE_SOURCE_INVALID', 'Trace owner exceeded the requested bound.', 503);
-          }
+        const indexedTrace = traceByCorrelationId(snapshot.traceIndex, correlationId);
+        if (indexedTrace) {
+          const selectedEvents = indexedTrace.events.slice(-PRODUCT_SUPERVISOR_EMBEDDED_TRACE_LIMIT);
+          const sourceTrace = Object.freeze({
+            ...indexedTrace,
+            events: Object.freeze(selectedEvents),
+            truncated: indexedTrace.truncated || selectedEvents.length < indexedTrace.events.length,
+          });
           traces.push(projectProductCorrelationTrace(correlationId, sourceTrace));
         }
       }

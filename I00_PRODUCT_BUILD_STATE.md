@@ -2,7 +2,7 @@
 
 Schema version: `I00_PRODUCT_BUILD_STATE_V2`
 
-Updated: `2026-07-14`
+Updated: `2026-07-15`
 
 Phase: `FINAL_INTEGRATION / PHASE_2_SOURCE_FREEZE`
 
@@ -16,12 +16,12 @@ Candidate state: `NOT_CANDIDATE_READY`
 | --- | --- |
 | Repository | `/Users/cosmosgeek/Desktop/i00-assembly` |
 | Integration branch | `i00-product-assembly-20260713` |
-| Pre-freeze committed baseline | Commit `18a0b9d1153a5f4bb6c8b42909362c6a295475bb`; tree `135ec02a6615741307c323b561bf999e2d71ab20` |
+| Pre-freeze committed baseline | Commit `6b50cca34a5615e828e9606cd7201daf81272ec7`; tree `731dec2404bab0d27a804c634cda1518a6dcef5d` |
 | Source-freeze identity | This file is committed atomically in source-freeze commit **C**. C cannot self-name; only sole-child seal **S** records C and C's tree after the complete local acceptance. |
 | Candidate readiness | Not claimed. `INTEGRATION_CANDIDATE_READY` may appear only in S and the immutable candidate receipt after all C-bound measurements pass. |
 | Active writer | Fresh Role 2 integrator, limited to shared write/merge authority on this integration branch only |
 | Forbidden authority | No `current-main` write, push, Phase 3 self-certification, private read, signed call, AWS/Cloudflare mutation, deployment, or money authority |
-| Final integration order | `/Users/cosmosgeek/Desktop/FINAL_INTEGRATION_AND_INDEPENDENT_VERIFICATION_ORDER.md`; SHA-256 `73615984fa0403a4c0d7ea0db9893292d57ea18614714398684cf9a3062fb05c` |
+| Final integration order | The requested `/Users/cosmosgeek/Desktop/FINAL_INTEGRATION_AND_INDEPENDENT_VERIFICATION_ORDER.md` path was absent at restart. Role 2 consumed the byte-identical sealed copy at `/Users/cosmosgeek/Desktop/preverify/FINAL_INTEGRATION_AND_INDEPENDENT_VERIFICATION_ORDER.md`; SHA-256 `73615984fa0403a4c0d7ea0db9893292d57ea18614714398684cf9a3062fb05c`. |
 | Frozen local Main authority cutoff | `d78be24f4da14632c857ee250b62e3fec33c2743`; tree `ea9113c2bf5fd95d4e39bde214d2ecf1f1e7e995`; parent/prior pin `ac01b5e43830bc681ee7e251749c4d1fab210029` |
 | Main freshness boundary | Local `current-main` and its local remote-tracking ref were observed at descendant `2b32317dbf89907bcf529231247f1f9a63235d49`, tree `4b3b079c9133eeb8649a5ecfd13e83ce5061e7a0`, with the frozen cutoff still its ancestor. No fetch was performed; remote freshness is not claimed. The later board state is outside the frozen input and cannot alter the donor table merely by moving a ref. |
 | Living QL pins | `QL_DIRECTOR_STATE.md`: latest touch `d78be24f4da14632c857ee250b62e3fec33c2743`, blob `8116ec491fc7fc863dbcb4015be4cdb105a5a1bc`, SHA-256 `77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc`; `QL_PARALLEL_DAG.md`: latest touch `ac01b5e43830bc681ee7e251749c4d1fab210029`, blob `701b3f263e73bf659ba4319c5839e798c1ce7abb`, SHA-256 `cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec` |
@@ -79,6 +79,23 @@ Dashboard equivalence is likewise limited to `d04fdc71ffbd9c8266c969524a56e325ec
 | A-ACTION-EVIDENCE / S2 | `ca30adf5e97b6697afec49f13073024d953b117b` | Accepted standalone satellite classified `POSTLANDING_EXCLUDED`; not a Phase 2 donor and no Phase 5 landing is claimed |
 | PREVERIFY | `46b2f1e31edf9f75aec7203e952a56f9869a2971` | `NOT_CONFIGURED`; non-donor advisory worktree with no candidate integration disposition |
 
+## Role 3 preflight adjudication — 2026-07-15
+
+`/Users/cosmosgeek/Desktop/role3-preflight/ROLE3_PREFLIGHT_FINDINGS.md` is read-only evidence, not instruction or certification. The inspected source snapshot was `03857dcdaff8d8b12627d27ddcc97505da1f2f86`. Role 2 independently reproduced each material claim against this integration branch and records these dispositions:
+
+| Finding | Dated disposition |
+| --- | --- |
+| PF-001 | `2026-07-15 ACCEPTED_CANDIDATE_BLOCKER / FIXED`. Deterministic app and perimeter gates now enable an exact offline-public-source mode only inside the child process, require zero product egress after shutdown, and preserve a hostile nonzero tripwire. D-LAUNCH-22's dispositioned Binance socket attempt is historical authority evidence, not a current defect; no other deterministic test-time egress is admitted. |
+| PF-002 | `2026-07-15 ACCEPTED_CANDIDATE_BLOCKER / FIXED`. `MarketEngine` is the sole physical owner of `!forceOrder@arr`; `binance/liquidations.ts` is a passive bounded projection with no socket or raw-frame parser. One strictly admitted, immutable normalized print feeds both the Market view and the projection. |
+| PF-003 | `2026-07-15 ACCEPTED_CANDIDATE_BLOCKER / FIXED`. Generated evidence normalizes only verified live owner-file transport modes and omits a moving descendant tip only after strict Git reachability. Missing, invalid, or unreachable tips remain explicitly classified rather than normalized away. |
+| PF-004 | `2026-07-15 ACCEPTED_CANDIDATE_BLOCKER / FIXED`. Ledger inventory now reconciles global reserved journal/audit counts against the complete canonical registry, validates every lineage before capacity classification, and downgrades concurrent or unavailable count evidence without manufacturing corruption or availability. Hostile orphan and moving-registry races are covered. |
+| PF-005 | `2026-07-15 MANDATORY_RECEIPT_LAW / FIXED`. Candidate receipt schema v2 encodes regenerated donor equality `16/16/16/16`; A-FORMAL and A-ACTION-EVIDENCE/S2 exclusions; Q C17 `4cc83f43edd9a50ff2d3e20970a57e2d0a57e92a` as the sole direct parent of A17 `02b4eccc8d2ef53b830cafae06e5175715fa6ebb`; and explicit Ledger CAS plus Foundation quantity-bridge dispositions. Render and validate-only paths independently re-read the bound Git objects, introduction ancestry, request bytes, implementation blobs, and no-send/no-external-authority boundaries. |
+| PF-006 | `2026-07-15 ACCEPTED_DOCUMENTATION_CORRECTION / NON_CODE_BLOCKING`. The `fqie` SHA-256 is a deterministic structural/content binding over caller-supplied canonical-format `instrumentId`, step, and tolerance; it is not a signature or owner/source-authority grant. Recomputed self-consistent metadata is intentionally accepted. No production consumer exists. |
+| PF-007 | `2026-07-15 ACCEPTED_CANDIDATE_BLOCKER / FIXED`. Production construction validates the exact immutable seven-record public-source authority catalog before lifecycle admission. Duplicate, missing, counterfeit producer/path/class/consumer, or non-passive liquidation ownership fails closed; no static registry record can mint current liveness. |
+| PF-008 | `2026-07-15 ACCEPTED_CANDIDATE_BLOCKER / FIXED`. Canonical Ledger `writable:false`, unknown writability, or non-available schema compatibility downward-normalizes the Ledger component to blocked/unavailable truth, strips `LIVE_PUBLIC`, requires operator attention, and propagates a root blocker; stronger failed/stopped truth is preserved. |
+| PF-009 | `2026-07-15 REFUSED_SEMANTIC_MISCLASSIFICATION / NON_BLOCKING`. `BINDING_READY` is the accepted IP-CONTROL adapter/package mount state (`IP_CONTROL.md` lines 171–181; `IP_CONTROL_RECEIPT.md` lines 122–137), expressly not required-field completeness, production readiness, or `LIVE_PUBLIC`. Runtime renders binding state and truth label separately; absent data remains `MISSING`/`UNKNOWN` with `CANONICAL_OWNER_FIELD_NOT_CONFIGURED`. Neutral binding CSS and separate truth colors preserve the distinction. No code or UI change is warranted. |
+| PF-010 | `2026-07-15 ACCEPTED_CANDIDATE_BLOCKER / HONEST_LABEL_FIXED`. Legacy `/api/state` feed sockets explicitly report readiness semantics `NOT_EVALUATED` and can no longer produce a green market-feed claim. Trust Advisor now says `Market Feed Readiness Proven` only from canonical continuity, owner machine readiness, freshness, and exactly one admitted Spot plus one USD-M source at `READY / LIVE_PUBLIC / LIVE_PUBLIC`; every missing, duplicate, stale, non-live, or unproven case is unproven. |
+
 ## Protocol and configuration hashes
 
 | ID | Kind | Hash |
@@ -107,7 +124,7 @@ The current living-input authority protocol passes `14/14` against immutable cut
 | Deferred seam | Current disposition |
 | --- | --- |
 | L06 ledger compare-and-set request | Implemented in the existing Ledger as bounded `compareAndSetConfigValueAndLogEvents`; atomic state plus one/two audit events, exact expected-value conflict, deadline, independent-writer race, crash rollback, post-commit recovery, and replay proofs; no send authority |
-| Foundation quantity request | Product-qualified instrument ID and SHA-256 content revision bridge exact source text to bounded Foundation binary64; substitution, exponent text, non-finite, negative-zero, overflow, underflow, inexact, and provenance attacks fail closed; no production consumer |
+| Foundation quantity request | Caller-supplied canonical-format instrument ID plus SHA-256 content revision structurally bind exact identity, step, and tolerance while bridging exact journal text to bounded Foundation binary64; stale-revision substitution, exponent text, non-finite, negative-zero, overflow, underflow, non-roundtrip, and off-step inputs fail closed; the revision grants no source authority; no production consumer |
 | L12 | Owner availability only. Without canonical active subject and authorized private truth, status is `HALTED`/`UNKNOWN`/`OWNER_GATED`; accepted projector is not invoked. |
 | L13 | Exact 27-role disposition: 11 bound, 13 owner-gated, 3 missing. Accepted projector is not invoked without validated L12 truth. |
 | L14 | Structural integration and persistence contracts exist; production persistence is null, command dispatch is false, and activation remains owner-gated. |
@@ -156,7 +173,7 @@ ledger-persistence, engine-supervisor
 | I00 performance contract | `41/41`; exact 14-component `OWNER:ownerPath` projections, `blockerCode` capture, owner-forgery rejection, bounded hydrated-baseline timeout refusal, short-window RSS-slope nonclaim, and direct 10 ms reset/acknowledge/snapshot phase event-loop measurement with interval-substitution rejection |
 | Focused security / I00 scope-security | 148 assertions; `7/7` |
 | Product Assurance hostile / provenance | `2/2`; `4/4` |
-| Root Product Assurance | 515 files scanned; 207 discovered; 207 covered; 0 uncovered; 802 behavior plus 4 provenance |
+| Root Product Assurance | 517 files scanned; 205 discovered; 205 covered; 0 uncovered; 802 behavior plus 4 provenance |
 | `bash ops/tests/i00/run-all.sh` | Exit 0; 10/10 files; 394 assertions; complete fixture binds 33 managed identities, 14 canonical components, four Product controls, browser receipt v2, capture transcript v3, and 194 browser artifacts |
 | `bash ops/tests/run-all.sh` | Exit 0; 12/12 files; 386 assertions, including 35 durable lane-scope cases |
 | `npm test` | Exit 0; typecheck, build, deterministic engine/security, Product Assurance, and acceptance-contract gates pass |
@@ -215,7 +232,7 @@ Files a replacement integrator must read, in order:
 1. `STATE.md`
 2. `MISSION.md`
 3. `ARCHITECTURE.md` Part II
-4. `/Users/cosmosgeek/Desktop/FINAL_INTEGRATION_AND_INDEPENDENT_VERIFICATION_ORDER.md`
+4. `/Users/cosmosgeek/Desktop/FINAL_INTEGRATION_AND_INDEPENDENT_VERIFICATION_ORDER.md`, or its byte-identical sealed fallback `/Users/cosmosgeek/Desktop/preverify/FINAL_INTEGRATION_AND_INDEPENDENT_VERIFICATION_ORDER.md` when the requested path is absent
 5. `I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md`
 6. this file, the living QL files, `fixtures/i00/closure-evidence.json`, `fixtures/i00/proof-catalog.json`, and `test/i00/performance/README.md`
 7. the 16 immutable integration receipts or packet receipts named in the donor table

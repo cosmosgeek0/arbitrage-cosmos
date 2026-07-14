@@ -381,6 +381,45 @@ function mergeFoundationStatus(
   };
 }
 
+function projectLedgerCapabilityTruth(
+  component: Readonly<SystemComponentSnapshot>,
+  ledger: Readonly<SystemLedgerSummary>,
+): Readonly<SystemComponentSnapshot> {
+  if (component.componentId !== 'ledger-persistence'
+      || component.readiness === 'FAILED'
+      || component.readiness === 'STOPPED') return component;
+
+  const blockerCodes = new Set(component.blockerCodes);
+  let blocked = false;
+  if (ledger.writable === false) {
+    blockerCodes.add('LEDGER_NOT_WRITABLE');
+    blocked = true;
+  } else if (ledger.writable === null) {
+    blockerCodes.add('LEDGER_WRITABILITY_UNKNOWN');
+    blocked = true;
+  }
+
+  const schemaUnavailable = ledger.schemaCompatibilityState !== 'AVAILABLE';
+  if (schemaUnavailable) {
+    blockerCodes.add(`LEDGER_SCHEMA_COMPATIBILITY_${ledger.schemaCompatibilityState}`);
+    if (ledger.schemaCompatibilityReason !== null) blockerCodes.add(ledger.schemaCompatibilityReason);
+    blocked = true;
+  }
+  if (!blocked) return component;
+
+  return Object.freeze({
+    ...component,
+    releaseStatuses: Object.freeze(component.releaseStatuses.filter((status) => status !== 'LIVE_PUBLIC')),
+    phase: 'BLOCKED',
+    readiness: 'BLOCKED',
+    truthLabel: 'UNAVAILABLE',
+    authority: 'UNAVAILABLE',
+    completeness: 'UNAVAILABLE',
+    blockerCodes: Object.freeze([...blockerCodes]),
+    operatorAttentionRequired: true,
+  });
+}
+
 function cloneStrategy(summary: SystemStrategyRuntimeSummary, truthLabel: SystemTruthLabel): Readonly<SystemStrategyRuntimeSummary> {
   return Object.freeze({ ...summary, truthLabel });
 }
@@ -503,7 +542,8 @@ export function buildSystemSupervisorProjection(
 
     const components = SYSTEM_COMPONENT_IDS.map((componentId) => {
       const source = sourceComponentMap.get(componentId) as Readonly<SystemComponentSnapshot>;
-      const normalized = normalizeComponentTruth(mergeFoundationStatus(source, input.runtime), input.nowMs);
+      const truthNormalized = normalizeComponentTruth(mergeFoundationStatus(source, input.runtime), input.nowMs);
+      const normalized = projectLedgerCapabilityTruth(truthNormalized, input.summaries.ledger);
       const outputIssues = validateSystemComponentSnapshot(normalized);
       if (outputIssues.length > 0) {
         throw new TypeError(`${componentId} projection violates the integration contract: ${outputIssues.map((issue) => `${issue.path}:${issue.code}`).join(', ')}`);

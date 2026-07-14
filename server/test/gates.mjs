@@ -175,6 +175,7 @@ const actionPatterns = [
   /asset\/transfer/i,
 ];
 let noWithdrawFeature = true;
+const liquidationTransportOwners = [];
 const scanDir = (dir) => {
   for (const f of readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, f.name);
@@ -185,6 +186,9 @@ const scanDir = (dir) => {
         noWithdrawFeature = false;
         console.log(`    withdrawal-action pattern found in ${p}`);
       }
+      for (const _match of txt.matchAll(/wss:\/\/fstream\.binance\.com\/market\/ws\/!forceOrder@arr/g)) {
+        liquidationTransportOwners.push(p);
+      }
     }
   }
 };
@@ -193,6 +197,9 @@ scanDir('server/src');
 check('no withdrawal/transfer-out feature in source', noWithdrawFeature);
 
 const serverIndex = readFileSync('server/src/index.ts', 'utf8');
+const marketEngineSource = readFileSync('server/src/engine/marketData.ts', 'utf8');
+const liquidationProjectionSource = readFileSync('server/src/binance/liquidations.ts', 'utf8');
+const productionFactorySource = readFileSync('server/src/systemIntegration/production/factory.ts', 'utf8');
 check(
   'declared Binance keys never request withdrawal or universal-transfer permission',
   !/permissions\s*:\s*\{[^}]*withdrawals\s*:\s*true/si.test(serverIndex)
@@ -224,8 +231,14 @@ check(
   !/ledger\.on\(\s*['"]event['"][\s\S]{0,200}type:\s*['"]event['"]/.test(serverIndex)
 );
 check(
-  'startup admits the existing liquidation owner only through the managed market lifecycle',
-  /marketAuxiliary:\s*Object\.freeze\(\{[\s\S]*?start:\s*\(\)\s*=>\s*startLiquidationCollector[\s\S]*?stop:\s*\(\)\s*=>\s*stopLiquidationCollector/.test(serverIndex) &&
+  'MarketEngine is the sole physical liquidation producer and production admission runs before lifecycle construction',
+  liquidationTransportOwners.length === 1 &&
+    liquidationTransportOwners[0] === 'server/src/engine/marketData.ts' &&
+    (marketEngineSource.match(/wss:\/\/fstream\.binance\.com\/market\/ws\/!forceOrder@arr/g) ?? []).length === 1 &&
+    !/(?:from\s+['"]ws['"]|new\s+WebSocket|wss:\/\/)/.test(liquidationProjectionSource) &&
+    !/(?:ForceOrder|ingestFrame|!forceOrder@arr|BinanceStream|socketFactory|last-filled quantity|cumulative filled quantity)/.test(liquidationProjectionSource) &&
+    !/marketAuxiliary|startLiquidationCollector|stopLiquidationCollector/.test(serverIndex) &&
+    /const\s+sourceRegistry\s*=\s*admitProductionSourceRegistry\([^;]+;[\s\S]*?new\s+MarketLifecyclePort/.test(productionFactorySource) &&
     /server\.listen\([\s\S]*?startServerTimers\(\);/.test(serverIndex) &&
     !/admitMarketOwnedAuxiliaries|stopMarketOwnedAuxiliaries/.test(serverIndex) &&
     !/startNewsRefreshLoop|primeIconStartTimer|initialRefreshTimer|warmProfileStartTimer/.test(serverIndex)
@@ -237,7 +250,11 @@ check(
     !/\bscanner\.(?:tick|statusOf|proposals|watchingCount|dismiss)\s*\(/.test(serverIndex) &&
     !/\b(?:scannerTimer|runScannerTick)\b/.test(serverIndex)
 );
-check('liquidation lifecycle has no independent admission timer', !/liquidationCollectorStarted/.test(serverIndex));
+check(
+  'passive liquidation projection has no independent admission timer or transport',
+  !/liquidationCollectorStarted/.test(serverIndex) &&
+    !/(?:socketFactory|WebSocket|wss:\/\/)/.test(liquidationProjectionSource),
+);
 check(
   'production mounts fail-closed managed runtime-effect owner readback',
   /readControlRuntimeEffect:\s*\([^)]*effectId[^)]*mutation[^)]*\)\s*=>\s*\{[\s\S]*?readManagedControlRuntimeEffect\(effectId, mutation, readManaged\(\)\)/.test(serverIndex)
@@ -286,6 +303,7 @@ const child = spawn(process.execPath, ['--import', './server/test/private-egress
     NOTIFICATION_AWS_INGEST_TOKEN: 'sentinel-aws-notification-token-not-a-secret',
     PRIVATE_EGRESS_SENTINEL_FILE: privateEgressSentinel,
     NETWORK_EGRESS_SENTINEL_FILE: networkEgressSentinel,
+    I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES: '1',
   },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
@@ -876,14 +894,14 @@ check(
     (secRes.headers.get('content-security-policy') ?? '').includes('coincap.io')
 );
 
+await stopChild(child);
 const blockedPublicEgress = existsSync(networkEgressSentinel)
   ? readFileSync(networkEgressSentinel, 'utf8').trim().split('\n').filter(Boolean)
   : [];
 check(
-  'all deterministic-gate public network calls are blocked before transport',
-  blockedPublicEgress.length > 0 &&
-    blockedPublicEgress.every((line) => /^EXTERNAL_NETWORK_REQUEST [a-z0-9.-]+\//.test(line)),
-  `${blockedPublicEgress.length} blocked before transport: ${blockedPublicEgress.slice(0, 8).join(', ')}`
+  'deterministic application gates attempt zero external public network calls over the complete child lifetime',
+  blockedPublicEgress.length === 0,
+  `${blockedPublicEgress.length} prohibited attempts: ${blockedPublicEgress.slice(0, 8).join(', ')}`
 );
 
 const failed = results.filter((r) => !r.pass);

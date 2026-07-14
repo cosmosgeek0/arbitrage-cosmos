@@ -5,8 +5,8 @@
   "generatedAtUtc": "2026-07-14T11:33:45Z",
   "base": {
     "branch": "i00-product-assembly-20260713",
-    "head": "18a0b9d1153a5f4bb6c8b42909362c6a295475bb",
-    "tree": "135ec02a6615741307c323b561bf999e2d71ab20",
+    "head": "6b50cca34a5615e828e9606cd7201daf81272ec7",
+    "tree": "731dec2404bab0d27a804c634cda1518a6dcef5d",
     "donorEquality": "16/16/16/16",
     "candidateCommit": null
   },
@@ -74,7 +74,9 @@
     { "id": "NO_INTEGRATION_SOCKET", "scope": "server/src/systemIntegration", "pattern": "new\\s+WebSocket|from\\s+['\"]ws['\"]|wss://", "expectedHits": 0 },
     { "id": "NO_INTEGRATION_DATABASE", "scope": "server/src/systemIntegration", "pattern": "better-sqlite3|new\\s+Database", "expectedHits": 0 },
     { "id": "NO_BROWSER_PRIVATE_BINANCE", "scope": "web/src", "pattern": "X-MBX-APIKEY|/sapi/v1/|/fapi/v1/order|/api/v3/order", "expectedHits": 0 },
-    { "id": "NO_IP_PROOF_PRODUCTION_IMPORT", "scope": "server/test/i00Acceptance", "pattern": "from\\s+['\"][^'\"]*(?:server/src|web/src|packages/edge-protocol)[^'\"]*['\"]", "expectedHits": 0 }
+    { "id": "NO_IP_PROOF_PRODUCTION_IMPORT", "scope": "server/test/i00Acceptance", "pattern": "from\\s+['\"][^'\"]*(?:server/src|web/src|packages/edge-protocol)[^'\"]*['\"]", "expectedHits": 0 },
+    { "id": "ONE_PHYSICAL_USDM_LIQUIDATION_TRANSPORT_URL", "scope": "server/src", "pattern": "wss://fstream\\.binance\\.com/market/ws/!forceOrder@arr", "expectedHits": 1 },
+    { "id": "NO_LIQUIDATION_PROJECTION_TRANSPORT_OR_RAW_FRAME", "scope": "server/src/binance/liquidations.ts", "pattern": "new\\s+WebSocket|from\\s+['\"]ws['\"]|wss://|!forceOrder@arr|ForceOrder|ingestFrame|BinanceStream|socketFactory|last-filled quantity|cumulative filled quantity", "expectedHits": 0 }
   ],
   "knownConflicts": [
     { "id": "LEGACY_LIVE_ROUTE", "path": "server/src/index.ts", "needle": "app.post('/api/live'", "classification": "RESOLVED_RETIRED_TOMBSTONE", "resolutionState": "RESOLVED", "evidence": "fixtures/i00/baseline-route-migration.json", "impact": "registered only as a fail-closed LIVE_EXECUTION_NOT_IMPLEMENTED tombstone with zero production consumers" },

@@ -315,6 +315,7 @@ test('canonical supervisor preserves only relationally valid Ledger schema compa
   assert.equal(projectedFailure.ok, true);
   assert.equal(projectedFailure.value.summaries.ledger.truthLabel, 'UNAVAILABLE');
   assert.equal(projectedFailure.value.summaries.ledger.currentSchemaVersion, null);
+  assert.equal(projectedFailure.value.components.find((component) => component.componentId === 'ledger-persistence').readiness, 'BLOCKED');
 
   const hostileMutations = [
     (ledger) => { ledger.rollbackFloor = 2; },
@@ -337,6 +338,54 @@ test('canonical supervisor preserves only relationally valid Ledger schema compa
     const hostile = projectionInput();
     mutate(hostile.summaries.ledger);
     assert.equal(buildSystemSupervisorProjection(hostile).ok, false);
+  }
+});
+
+test('Ledger capability truth downwardly blocks component, posture, roots, and dependency edges', () => {
+  const green = project();
+  assert.equal(green.components.find((component) => component.componentId === 'ledger-persistence').readiness, 'READY');
+
+  for (const writable of [false, null]) {
+    const input = projectionInput();
+    input.summaries.ledger.writable = writable;
+    const snapshot = project(input);
+    const ledger = snapshot.components.find((component) => component.componentId === 'ledger-persistence');
+    assert.equal(ledger.readiness, 'BLOCKED');
+    assert.equal(ledger.phase, 'BLOCKED');
+    assert.equal(ledger.truthLabel, 'UNAVAILABLE');
+    assert.equal(ledger.releaseStatuses.includes('LIVE_PUBLIC'), false);
+    assert.equal(ledger.authority, 'UNAVAILABLE');
+    assert.equal(ledger.completeness, 'UNAVAILABLE');
+    assert.ok(ledger.blockerCodes.includes(writable === false ? 'LEDGER_NOT_WRITABLE' : 'LEDGER_WRITABILITY_UNKNOWN'));
+    assert.equal(snapshot.overallPosture, 'BLOCKED');
+    assert.equal(snapshot.firstRootBlockerComponentId, 'ledger-persistence');
+    assert.ok(snapshot.rootBlockerComponentIds.includes('ledger-persistence'));
+    assert.ok(snapshot.operatorAttentionComponentIds.includes('ledger-persistence'));
+    assert.equal(
+      snapshot.edges.filter((edge) => edge.from === 'ledger-persistence' && edge.required).every((edge) => edge.state === 'BLOCKED'),
+      true,
+    );
+  }
+
+  for (const schemaCompatibilityState of ['UNAVAILABLE', 'MALFORMED', 'MISMATCH']) {
+    const input = projectionInput();
+    Object.assign(input.summaries.ledger, {
+      truthLabel: 'UNAVAILABLE',
+      schemaCompatibilityState,
+      schemaCompatibilityReason: `LEDGER_SCHEMA_${schemaCompatibilityState}`,
+      currentSchemaVersion: null,
+      rollbackFloor: null,
+    });
+    const snapshot = project(input);
+    const ledger = snapshot.components.find((component) => component.componentId === 'ledger-persistence');
+    assert.equal(ledger.readiness, 'BLOCKED');
+    assert.equal(ledger.truthLabel, 'UNAVAILABLE');
+    assert.equal(ledger.authority, 'UNAVAILABLE');
+    assert.equal(ledger.completeness, 'UNAVAILABLE');
+    assert.ok(ledger.blockerCodes.includes(`LEDGER_SCHEMA_COMPATIBILITY_${schemaCompatibilityState}`));
+    assert.ok(ledger.blockerCodes.includes(`LEDGER_SCHEMA_${schemaCompatibilityState}`));
+    assert.equal(snapshot.overallPosture, 'BLOCKED');
+    assert.equal(snapshot.firstRootBlockerComponentId, 'ledger-persistence');
   }
 });
 

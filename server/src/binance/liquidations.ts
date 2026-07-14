@@ -1,9 +1,9 @@
-/* Liquidation collector — Binance publishes no liquidation history, so the
- * cockpit records its own truth from the public !forceOrder@arr stream. A SELL
+/* Passive liquidation projection. Binance publishes no liquidation history,
+ * so the cockpit retains a bounded local view of frames delivered by the
+ * canonical MarketEngine owner. This module never creates a transport. A SELL
  * force order closes a LONG position; BUY closes a SHORT. */
 import fs from 'node:fs';
 import path from 'node:path';
-import WebSocket, { type ClientOptions, type RawData } from 'ws';
 
 const DISK = path.resolve(process.cwd(), process.env.LIQ_CACHE ?? 'data/liquidations.json');
 const FIVE_MIN = 5 * 60_000;
@@ -12,17 +12,7 @@ const KEEP_5M_MS = 48 * HOUR;
 const KEEP_1H_MS = 90 * 24 * HOUR;
 const BINANCE_EPOCH_MS = Date.UTC(2017, 0, 1);
 const MAX_SYMBOLS = 4_096;
-const MAX_FRAME_EVENTS = 128;
-const MAX_RECENT_EVENT_KEYS = 10_000;
-const RECENT_EVENT_TTL_MS = HOUR;
-const DEFAULT_RETRY_BASE_MS = 1_000;
-const DEFAULT_RETRY_MAX_MS = 30_000;
-const DEFAULT_STABLE_CONNECTION_MS = 60_000;
 const DEFAULT_MAINTENANCE_MS = 5 * 60_000;
-const DEFAULT_LIVENESS_CHECK_MS = 30_000;
-const DEFAULT_STALE_AFTER_MS = 90_000;
-const DEFAULT_MAX_LIFETIME_MS = 23 * HOUR;
-const DEFAULT_MAX_PAYLOAD_BYTES = 64 * 1024;
 const MAX_CACHE_BYTES = 32 * 1024 * 1024;
 const MAX_SERIALIZED_BUCKET_ROWS = 250_000;
 const MAX_M5_BUCKETS_PER_SYMBOL = Math.ceil(KEEP_5M_MS / FIVE_MIN) + 2;
@@ -39,48 +29,20 @@ interface SymbolBook {
   h1: Record<string, Bucket>;
 }
 
-interface ForceOrderMsg {
-  e?: string;
-  E?: number;
-  o?: {
-    s?: string;
-    S?: string;
-    q?: string;
-    z?: string;
-    l?: string;
-    ap?: string;
-    T?: number;
-  };
-}
-
-type SocketFactory = (url: string, options: ClientOptions) => WebSocket;
-
-export interface LiquidationCollectorOptions {
-  socketFactory?: SocketFactory;
-  retryBaseMs?: number;
-  retryMaxMs?: number;
-  stableConnectionMs?: number;
+export interface LiquidationProjectionOptions {
   maintenanceMs?: number;
-  livenessCheckMs?: number;
-  staleAfterMs?: number;
-  maxLifetimeMs?: number;
-  maxPayloadBytes?: number;
-  random?: () => number;
-  isKnownSymbol?: (symbol: string) => boolean;
 }
 
-interface CollectorRuntimeOptions {
-  socketFactory: SocketFactory;
-  retryBaseMs: number;
-  retryMaxMs: number;
-  stableConnectionMs: number;
+interface ProjectionRuntimeOptions {
   maintenanceMs: number;
-  livenessCheckMs: number;
-  staleAfterMs: number;
-  maxLifetimeMs: number;
-  maxPayloadBytes: number;
-  random: () => number;
-  isKnownSymbol?: (symbol: string) => boolean;
+}
+
+export interface LiquidationProjectionPrint {
+  readonly symbol: string;
+  readonly side: 'LONG' | 'SHORT';
+  readonly notionalUsd: number;
+  readonly eventTimeMs: number;
+  readonly sourceEventKey: string;
 }
 
 function positiveInt(value: number | undefined, fallback: number): number {
@@ -236,9 +198,6 @@ function prune(): void {
     }
     if (!Object.keys(book.m5).length && !Object.keys(book.h1).length) books.delete(symbol);
   }
-  for (const [key, seenAt] of recentEventKeys) {
-    if (now - seenAt > RECENT_EVENT_TTL_MS) recentEventKeys.delete(key);
-  }
 }
 
 function record(symbol: string, side: 'long' | 'short', usd: number, ts: number): void {
@@ -257,34 +216,15 @@ function record(symbol: string, side: 'long' | 'short', usd: number, ts: number)
   eventsSeen++;
 }
 
-const recentEventKeys = new Map<string, number>();
-let ws: WebSocket | null = null;
-let reconnectTimer: NodeJS.Timeout | null = null;
-let heartbeatTimer: NodeJS.Timeout | null = null;
-let lifeTimer: NodeJS.Timeout | null = null;
-let stableTimer: NodeJS.Timeout | null = null;
 let maintenanceTimer: NodeJS.Timeout | null = null;
 let stopped = true;
 let generation = 0;
-let retryMs = DEFAULT_RETRY_BASE_MS;
 let lastActivityAt = 0;
-let runtimeOptions: CollectorRuntimeOptions | null = null;
+let runtimeOptions: ProjectionRuntimeOptions | null = null;
 
-function normalizeOptions(options: LiquidationCollectorOptions): CollectorRuntimeOptions {
-  const retryBaseMs = positiveInt(options.retryBaseMs, DEFAULT_RETRY_BASE_MS);
-  const livenessCheckMs = positiveInt(options.livenessCheckMs, DEFAULT_LIVENESS_CHECK_MS);
+function normalizeOptions(options: LiquidationProjectionOptions): ProjectionRuntimeOptions {
   return {
-    socketFactory: options.socketFactory ?? ((url, wsOptions) => new WebSocket(url, wsOptions)),
-    retryBaseMs,
-    retryMaxMs: Math.max(retryBaseMs, positiveInt(options.retryMaxMs, DEFAULT_RETRY_MAX_MS)),
-    stableConnectionMs: positiveInt(options.stableConnectionMs, DEFAULT_STABLE_CONNECTION_MS),
     maintenanceMs: positiveInt(options.maintenanceMs, DEFAULT_MAINTENANCE_MS),
-    livenessCheckMs,
-    staleAfterMs: Math.max(livenessCheckMs, positiveInt(options.staleAfterMs, DEFAULT_STALE_AFTER_MS)),
-    maxLifetimeMs: positiveInt(options.maxLifetimeMs, DEFAULT_MAX_LIFETIME_MS),
-    maxPayloadBytes: positiveInt(options.maxPayloadBytes, DEFAULT_MAX_PAYLOAD_BYTES),
-    random: options.random ?? Math.random,
-    isKnownSymbol: options.isKnownSymbol,
   };
 }
 
@@ -292,176 +232,35 @@ function isActive(owner: number): boolean {
   return !stopped && generation === owner;
 }
 
-function isCurrent(owner: number, socket: WebSocket): boolean {
-  return isActive(owner) && ws === socket;
-}
-
-function closeSocket(socket: WebSocket, terminate: boolean): void {
-  try {
-    if (terminate || socket.readyState === WebSocket.CONNECTING) socket.terminate();
-    else if (socket.readyState === WebSocket.OPEN) socket.close(1000, 'liquidation stream recycle');
-  } catch {
-    // Generation ownership prevents reuse even if a close implementation fails.
-  }
-}
-
-function clearConnectionTimers(): void {
-  if (heartbeatTimer) clearInterval(heartbeatTimer);
-  if (lifeTimer) clearTimeout(lifeTimer);
-  if (stableTimer) clearTimeout(stableTimer);
-  heartbeatTimer = null;
-  lifeTimer = null;
-  stableTimer = null;
-}
-
-function clearAllTimers(): void {
-  clearConnectionTimers();
-  if (reconnectTimer) clearTimeout(reconnectTimer);
+function clearMaintenanceTimer(): void {
   if (maintenanceTimer) clearInterval(maintenanceTimer);
-  reconnectTimer = null;
   maintenanceTimer = null;
 }
 
-function scheduleReconnect(owner: number): void {
-  const options = runtimeOptions;
-  if (!options || !isActive(owner) || reconnectTimer) return;
-  const random = Math.min(1, Math.max(0, options.random()));
-  const delay = Math.max(1, Math.floor(retryMs * (0.8 + random * 0.4)));
-  retryMs = Math.min(options.retryMaxMs, retryMs * 2);
-  reconnectTimer = setTimeout(() => {
-    reconnectTimer = null;
-    if (isActive(owner)) connect(owner);
-  }, delay);
-  reconnectTimer.unref?.();
-}
-
-function symbolIsAllowed(symbol: string, options: CollectorRuntimeOptions): boolean {
-  if (!/^[A-Z0-9]{5,20}$/.test(symbol)) return false;
-  if (!options.isKnownSymbol) return true;
-  try {
-    return options.isKnownSymbol(symbol);
-  } catch {
-    return false;
-  }
-}
-
-function onForceOrder(value: unknown, options: CollectorRuntimeOptions): void {
-  if (!isRecord(value)) return;
-  const message = value as unknown as ForceOrderMsg;
-  const order = message.o;
-  if (!order || typeof order.s !== 'string' || !symbolIsAllowed(order.s, options)) return;
-  if (order.S !== 'BUY' && order.S !== 'SELL') return;
-  // Binance defines `l` as the last-filled quantity and `z` as the cumulative
-  // filled quantity. Counting `z` on each snapshot can count earlier fills
-  // again, so an event without a valid last-fill quantity is not recordable.
-  const qty = Number(order.l);
-  const price = Number(order.ap);
-  const ts = Number(order.T ?? message.E);
+function onCanonicalPrint(print: Readonly<LiquidationProjectionPrint>): void {
+  if (!/^[A-Z0-9]{1,32}$/.test(print.symbol)
+      || (print.side !== 'LONG' && print.side !== 'SHORT')
+      || typeof print.sourceEventKey !== 'string'
+      || print.sourceEventKey.length < 1
+      || print.sourceEventKey.length > 256) return;
+  const usd = print.notionalUsd;
+  const ts = print.eventTimeMs;
   const now = Date.now();
   if (
-    !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price) || price <= 0 ||
+    !Number.isFinite(usd) || usd <= 0 ||
     !Number.isSafeInteger(ts) || ts < now - HOUR || ts > now + 60_000
   ) return;
-  const usd = qty * price;
-  if (!Number.isFinite(usd) || usd <= 0) return;
 
-  const eventKey = `${order.s}:${order.S}:${ts}:${qty}:${price}`;
-  if (recentEventKeys.has(eventKey)) return;
-  recentEventKeys.set(eventKey, now);
-  while (recentEventKeys.size > MAX_RECENT_EVENT_KEYS) {
-    const oldest = recentEventKeys.keys().next().value as string | undefined;
-    if (oldest === undefined) break;
-    recentEventKeys.delete(oldest);
-  }
-  record(order.s, order.S === 'SELL' ? 'long' : 'short', usd, ts);
+  lastActivityAt = now;
+  record(print.symbol, print.side === 'LONG' ? 'long' : 'short', usd, ts);
 }
 
-function connect(owner: number): void {
-  const options = runtimeOptions;
-  if (!options || !isActive(owner) || ws) return;
-  wsState = 'connecting';
-  let socket: WebSocket;
-  try {
-    socket = options.socketFactory(
-      'wss://fstream.binance.com/market/ws/!forceOrder@arr',
-      {
-        handshakeTimeout: 10_000,
-        maxPayload: options.maxPayloadBytes,
-        perMessageDeflate: false,
-      },
-    );
-  } catch {
-    wsState = 'down';
-    scheduleReconnect(owner);
-    return;
-  }
-  ws = socket;
-
-  socket.on('open', () => {
-    if (!isCurrent(owner, socket)) {
-      closeSocket(socket, true);
-      return;
-    }
-    lastActivityAt = Date.now();
-    wsState = 'live';
-    clearConnectionTimers();
-    stableTimer = setTimeout(() => {
-      if (isCurrent(owner, socket)) retryMs = options.retryBaseMs;
-    }, options.stableConnectionMs);
-    stableTimer.unref?.();
-    lifeTimer = setTimeout(() => {
-      if (isCurrent(owner, socket)) closeSocket(socket, false);
-    }, options.maxLifetimeMs);
-    lifeTimer.unref?.();
-    heartbeatTimer = setInterval(() => {
-      if (!isCurrent(owner, socket)) return;
-      if (Date.now() - lastActivityAt > options.staleAfterMs) closeSocket(socket, true);
-    }, options.livenessCheckMs);
-    heartbeatTimer.unref?.();
-  });
-
-  const noteActivity = () => {
-    if (isCurrent(owner, socket)) lastActivityAt = Date.now();
-  };
-  socket.on('ping', noteActivity);
-  socket.on('pong', noteActivity);
-
-  socket.on('message', (raw: RawData, isBinary: boolean) => {
-    if (!isCurrent(owner, socket)) return;
-    lastActivityAt = Date.now();
-    if (isBinary) return;
-    let decoded: unknown;
-    try {
-      decoded = JSON.parse(raw.toString());
-    } catch {
-      return;
-    }
-    if (isRecord(decoded) && decoded.data !== undefined) decoded = decoded.data;
-    const events = Array.isArray(decoded) ? decoded.slice(0, MAX_FRAME_EVENTS) : [decoded];
-    for (const event of events) onForceOrder(event, options);
-  });
-
-  socket.on('error', () => {
-    if (isCurrent(owner, socket)) closeSocket(socket, true);
-  });
-
-  socket.on('close', () => {
-    if (!isCurrent(owner, socket)) return;
-    ws = null;
-    clearConnectionTimers();
-    wsState = 'down';
-    scheduleReconnect(owner);
-  });
-}
-
-export function startLiquidationCollector(options: LiquidationCollectorOptions = {}): void {
+export function startLiquidationProjection(options: LiquidationProjectionOptions = {}): void {
   if (!stopped) return;
   stopped = false;
   runtimeOptions = normalizeOptions(options);
-  retryMs = runtimeOptions.retryBaseMs;
   wsState = 'connecting';
   const owner = ++generation;
-  connect(owner);
   maintenanceTimer = setInterval(() => {
     if (!isActive(owner)) return;
     prune();
@@ -470,17 +269,25 @@ export function startLiquidationCollector(options: LiquidationCollectorOptions =
   maintenanceTimer.unref?.();
 }
 
-export function stopLiquidationCollector(): void {
+export function observeLiquidationSourceStatus(status: 'connecting' | 'open' | 'closed'): void {
+  if (stopped) return;
+  wsState = status === 'open' ? 'live' : status === 'connecting' ? 'connecting' : 'down';
+  if (status === 'open') lastActivityAt = Date.now();
+}
+
+export function ingestLiquidationPrint(print: Readonly<LiquidationProjectionPrint>): void {
+  if (stopped || runtimeOptions === null || !isRecord(print)) return;
+  onCanonicalPrint(print);
+}
+
+export function stopLiquidationProjection(): void {
   if (stopped) {
     void flushLiquidationCache();
     return;
   }
   stopped = true;
   ++generation;
-  clearAllTimers();
-  const socket = ws;
-  ws = null;
-  if (socket) closeSocket(socket, true);
+  clearMaintenanceTimer();
   wsState = 'down';
   runtimeOptions = null;
   prune();

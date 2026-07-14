@@ -9,6 +9,7 @@ import test from 'node:test';
 import { BinanceStream } from '../src/binance/ws.ts';
 import { UserStream } from '../src/binance/userStream.ts';
 import { BookStreamHub } from '../src/services/bookStream.ts';
+import { MarketEngine } from '../src/engine/marketData.ts';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -409,85 +410,86 @@ test('BookStreamHub bounds feeds, validates payloads, deduplicates trades, and e
   assert.equal(handles.length, 2, 'messages cannot reopen feeds after hub stop');
 });
 
-test('liquidation collector is restart-safe, bounded, and rejects malformed or duplicate events', async () => {
+test('passive liquidation projection is restart-safe, bounded, and rejects malformed canonical prints', async () => {
   const cacheDir = mkdtempSync(path.join(tmpdir(), 'cosmos-liq-stream-test-'));
   process.env.LIQ_CACHE = path.join(cacheDir, 'liquidations.json');
   const module = await import(`../src/binance/liquidations.ts?test=${Date.now()}`);
-  const sockets = [];
   const options = {
-    socketFactory: (_url, wsOptions) => {
-      assert.equal(wsOptions.perMessageDeflate, false);
-      assert.equal(wsOptions.maxPayload, 64 * 1024);
-      const socket = new FakeSocket();
-      sockets.push(socket);
-      return socket;
-    },
-    retryBaseMs: 5,
-    retryMaxMs: 10,
-    stableConnectionMs: 30,
     maintenanceMs: 5_000,
-    livenessCheckMs: 1_000,
-    staleAfterMs: 2_000,
-    maxLifetimeMs: 5_000,
-    random: () => 0.5,
-    isKnownSymbol: (symbol) => symbol === 'BTCUSDT',
   };
 
-  module.startLiquidationCollector(options);
-  module.startLiquidationCollector(options);
-  assert.equal(sockets.length, 1, 'collector start is idempotent');
-  sockets[0].open();
+  module.startLiquidationProjection(options);
+  const firstGeneration = module.liquidationStats().generation;
+  module.startLiquidationProjection(options);
+  assert.equal(module.liquidationStats().generation, firstGeneration, 'projection start is idempotent');
+  assert.equal(module.liquidationStats().state, 'connecting');
+  module.observeLiquidationSourceStatus('open');
+  assert.equal(module.liquidationStats().state, 'live');
   const timestamp = Date.now();
-  sockets[0].message({ o: { s: 'ETHUSDT', S: 'SELL', l: '1', z: '1', ap: '100', T: timestamp } });
-  sockets[0].message({ o: { s: 'BTCUSDT', S: 'SELL', l: '1', z: '1', ap: '100', T: timestamp - 2 * 60 * 60_000 } });
-  const valid = { e: 'forceOrder', E: timestamp, o: { s: 'BTCUSDT', S: 'SELL', l: '0.5', z: '0.5', q: '1', ap: '100', T: timestamp } };
-  sockets[0].message(valid);
-  sockets[0].message(valid);
-  sockets[0].message({
-    e: 'forceOrder',
-    E: timestamp + 1,
-    o: { s: 'BTCUSDT', S: 'SELL', l: '0.25', z: '0.75', q: '1', ap: '100', T: timestamp + 1 },
-  });
-  sockets[0].message({
-    e: 'forceOrder',
-    E: timestamp + 2,
-    o: { s: 'BTCUSDT', S: 'SELL', z: '1', q: '1', ap: '100', T: timestamp + 2 },
-  });
-  assert.equal(module.liquidationStats().events, 2, 'unknown, stale, duplicate, and last-fill-less events are rejected');
+  const valid = { symbol: 'BTCUSDT', side: 'LONG', notionalUsd: 50, eventTimeMs: timestamp, sourceEventKey: 'BTCUSDT:SELL:first' };
+  module.ingestLiquidationPrint({ ...valid, symbol: 'bad-symbol' });
+  module.ingestLiquidationPrint({ ...valid, eventTimeMs: timestamp - 2 * 60 * 60_000, sourceEventKey: 'stale' });
+  module.ingestLiquidationPrint(valid);
+  module.ingestLiquidationPrint({ ...valid, notionalUsd: 75, eventTimeMs: timestamp + 1, sourceEventKey: 'BTCUSDT:SELL:second' });
+  module.ingestLiquidationPrint({ ...valid, notionalUsd: Number.NaN, sourceEventKey: 'invalid' });
+  assert.equal(module.liquidationStats().events, 2, 'malformed and stale canonical prints are rejected');
   const series = module.liquidationSeries('BTCUSDT', 5 * 60_000);
   assert.equal(
     series.points.reduce((sum, point) => sum + point.long, 0),
-    75,
-    'cumulative filled quantity is not counted again on later snapshots',
+    125,
+    'canonical completed-order notionals are retained exactly once',
   );
 
-  sockets[0].remoteClose();
-  await sleep(8);
-  assert.equal(sockets.length, 2, 'collector retries a first short session at the base delay');
-  sockets[1].open();
-  sockets[1].remoteClose();
-  await sleep(8);
-  assert.equal(sockets.length, 2, 'collector does not reset backoff merely because TCP opened');
-  await sleep(6);
-  assert.equal(sockets.length, 3, 'collector preserves exponential backoff across short sessions');
-  sockets[2].open();
-  await sleep(35);
-  sockets[2].remoteClose();
-  await sleep(8);
-  assert.equal(sockets.length, 4, 'collector resets backoff after a stable session');
-
-  module.stopLiquidationCollector();
-  await module.flushLiquidationCache();
-  const countAtStop = sockets.length;
-  await sleep(20);
-  assert.equal(sockets.length, countAtStop, 'collector retry cannot fire after stop');
+  module.observeLiquidationSourceStatus('closed');
   assert.equal(module.liquidationStats().state, 'down');
+  module.stopLiquidationProjection();
+  await module.flushLiquidationCache();
+  assert.equal(module.liquidationStats().state, 'down');
+  assert.equal(module.liquidationStats().running, false);
+  module.ingestLiquidationPrint({ ...valid, eventTimeMs: timestamp + 3, sourceEventKey: 'late' });
+  assert.equal(module.liquidationStats().events, 2, 'stopped projections reject late owner frames');
   const persisted = JSON.parse(readFileSync(process.env.LIQ_CACHE, 'utf8'));
   assert.equal(persisted.books.BTCUSDT !== undefined, true, 'stop flushes the last valid in-memory buckets');
   assert.equal(statSync(process.env.LIQ_CACHE).size <= 32 * 1024 * 1024, true, 'serialized cache stays inside its byte budget');
 
-  module.startLiquidationCollector(options);
-  assert.equal(sockets.length, countAtStop + 1, 'collector can be explicitly started as a new generation');
-  module.stopLiquidationCollector();
+  module.startLiquidationProjection(options);
+  assert.equal(module.liquidationStats().generation, firstGeneration + 2, 'projection can be explicitly started as a new generation');
+  module.stopLiquidationProjection();
   await module.flushLiquidationCache();
+});
+
+test('MarketEngine normalizes force-order snapshots once and both liquidation views stay equal', async () => {
+  const projected = [];
+  const engine = new MarketEngine(
+    { logEvent() {} },
+    async () => ({
+      pairs: [{ symbol: 'BTCUSDT', base: 'BTC' }],
+      filters: new Map([['BTCUSDT', {
+        symbol: 'BTCUSDT', base: 'BTC', quote: 'USDT', status: 'TRADING',
+        stepSize: 0.001, minQty: 0.001, tickSize: 0.01, minNotional: 5,
+      }]]),
+    }),
+    {
+      start() {}, stop() {}, observeSourceStatus() {},
+      ingestPrint(print) { projected.push(print); },
+    },
+  );
+  await engine.init();
+  const timestamp = Date.now();
+  const first = { e: 'forceOrder', E: timestamp, ps: 'BTCUSDT', st: 1, o: { s: 'BTCUSDT', S: 'SELL', X: 'FILLED', l: '0.5', z: '1.5', q: '1.5', ap: '100', T: timestamp } };
+  engine.onForceOrders([
+    first,
+    first,
+    { ...first, o: { ...first.o, ap: '101' } },
+    { e: 'forceOrder', E: timestamp + 1, ps: 'BTCUSDT', st: 1, o: { s: 'BTCUSDT', S: 'SELL', X: 'FILLED', l: '0.25', z: '0.75', q: '0.75', ap: '100', T: timestamp + 1 } },
+    { e: 'forceOrder', E: timestamp + 2, ps: 'BTCUSDT', st: 1, o: { s: 'BTCUSDT', S: 'SELL', X: 'PARTIALLY_FILLED', z: '1', q: '1', ap: '100', T: timestamp + 2 } },
+    { e: 'forceOrder', E: timestamp + 3, ps: 'BTCUSDT', o: { s: 'BTCUSDT', S: 'SELL', X: 'FILLED', l: '1', z: '1', q: '1', ap: '100', T: timestamp + 3 } },
+    { e: 'forceOrder', E: timestamp + 4, ps: 'BTCUSDT', st: 2, o: { s: 'BTCUSDT', S: 'SELL', X: 'FILLED', l: '1', z: '1', q: '1', ap: '100', T: timestamp + 4 } },
+  ]);
+  assert.equal(projected.length, 2);
+  assert.equal(projected.reduce((sum, print) => sum + print.notionalUsd, 0), 225);
+  const row = engine.rows().find((candidate) => candidate.symbol === 'BTCUSDT');
+  assert.equal(row.liquidations15mUsd, 225);
+  assert.equal(row.longLiquidations15mUsd, 225);
+  assert.equal(row.shortLiquidations15mUsd, null);
 });

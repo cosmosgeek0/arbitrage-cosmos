@@ -16,6 +16,7 @@ import {
 import {
   ACCEPTANCE_PLAN,
   EXPECTED_CANDIDATE_LIMITATIONS,
+  EXPECTED_DIRECTOR_DISPOSITIONS,
   EXPECTED_ACCEPTED_DONORS,
   Q_ARCHIVE_REQUIRED_FILES,
   Q_DONOR_ARCHIVE_ARGS,
@@ -31,6 +32,7 @@ import {
   validateSealEvidencePathBinding,
   validateWorkingSealPathSet,
 } from './local-acceptance.mjs';
+import { EXPECTED_EXCLUSIONS } from '../donor-equality.mjs';
 
 const CANDIDATE = 'a'.repeat(40);
 const CANDIDATE_TREE = 'b'.repeat(40);
@@ -154,11 +156,13 @@ function donorProofFixture() {
       acceptanceReceipts: [],
       integration: {},
     })),
-    exclusions: [
-      { id: 'A-FORMAL', excluded: true },
-      { id: 'A-ACTION-EVIDENCE-S2', excluded: true },
-      { id: 'PREVERIFY', excluded: true },
-    ],
+    exclusions: EXPECTED_EXCLUSIONS.map((entry) => ({
+      id: entry.id,
+      tip: { sha: entry.tipSha, observedTree: entry.treeSha },
+      worktree: { ...entry.worktree },
+      disposition: entry.disposition,
+      excluded: true,
+    })),
     failures: [],
   };
   return { ...body, proofSha256: sha256(JSON.stringify(body)) };
@@ -616,6 +620,8 @@ test('candidate Markdown receipt strictly binds donor, protocol, measured, manif
   );
   assert.equal(EXPECTED_ACCEPTED_DONORS.length, 16);
   assert.equal(validate(fixture.document).passed, true);
+  assert.deepEqual(fixture.document.directorDispositions, EXPECTED_DIRECTOR_DISPOSITIONS);
+  assert.equal(fixture.document.donorEquality.proof, '16/16/16/16');
 
   const forgedDonor = structuredClone(fixture.document);
   forgedDonor.donors[0].tipSha = 'f'.repeat(40);
@@ -660,6 +666,26 @@ test('candidate Markdown receipt strictly binds donor, protocol, measured, manif
   const forgedProtocol = structuredClone(fixture.document);
   forgedProtocol.protocolAndConfigHashes[0].hash = DIGEST;
   assert.ok(validate(forgedProtocol).semanticFailures.includes('CANDIDATE_RECEIPT_PROTOCOL_HASHES_INVALID'));
+
+  const forgedQAncestry = structuredClone(fixture.document);
+  forgedQAncestry.directorDispositions.qC17ToA17.c17Commit = 'f'.repeat(40);
+  assert.ok(validate(forgedQAncestry).semanticFailures.includes('CANDIDATE_RECEIPT_DIRECTOR_DISPOSITIONS_INVALID'));
+
+  const omittedMoneyDisposition = structuredClone(fixture.document);
+  omittedMoneyDisposition.directorDispositions.moneyPaths.pop();
+  assert.ok(validate(omittedMoneyDisposition).semanticFailures.includes('CANDIDATE_RECEIPT_DIRECTOR_DISPOSITIONS_INVALID'));
+
+  const forgedLedgerRequestHash = structuredClone(fixture.document);
+  forgedLedgerRequestHash.directorDispositions.moneyPaths[0].requestSha256 = DIGEST;
+  assert.ok(validate(forgedLedgerRequestHash).semanticFailures.includes('CANDIDATE_RECEIPT_DIRECTOR_DISPOSITIONS_INVALID'));
+
+  const forgedQuantityDisposition = structuredClone(fixture.document);
+  forgedQuantityDisposition.directorDispositions.moneyPaths[1].disposition = 'PRODUCTION_CONSUMER_AUTHORIZED';
+  assert.ok(validate(forgedQuantityDisposition).semanticFailures.includes('CANDIDATE_RECEIPT_DIRECTOR_DISPOSITIONS_INVALID'));
+
+  const forgedDirectorEquality = structuredClone(fixture.document);
+  forgedDirectorEquality.directorDispositions.donorEquality = '16/16/16/15';
+  assert.ok(validate(forgedDirectorEquality).semanticFailures.includes('CANDIDATE_RECEIPT_DIRECTOR_LAW_INCOMPLETE'));
 
   const staleCandidate = structuredClone(fixture.document);
   staleCandidate.candidate.commit = 'f'.repeat(40);
@@ -780,8 +806,8 @@ test('candidate Markdown receipt refuses malformed, duplicate, secret-bearing, o
   const validateText = (text) => validateIntegrationCandidateReceiptMarkdown(text, fixture.expected);
 
   const duplicateField = validText.replace(
-    '  "schemaVersion": "i00.integration-candidate-receipt.v1",',
-    '  "schemaVersion": "forged",\n  "schemaVersion": "i00.integration-candidate-receipt.v1",',
+    '  "schemaVersion": "i00.integration-candidate-receipt.v2",',
+    '  "schemaVersion": "forged",\n  "schemaVersion": "i00.integration-candidate-receipt.v2",',
   );
   assert.ok(validateText(duplicateField).semanticFailures.includes('CANDIDATE_RECEIPT_JSON_NOT_CANONICAL'));
 

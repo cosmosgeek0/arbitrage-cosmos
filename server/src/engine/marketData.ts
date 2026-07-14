@@ -44,6 +44,7 @@ interface ForceOrderUpdate {
   e?: string;
   E?: number;
   st?: number;
+  ps?: string;
   o?: {
     s: string;
     S: 'BUY' | 'SELL';
@@ -52,6 +53,7 @@ interface ForceOrderUpdate {
     ap?: string;
     l?: string;
     z?: string;
+    X?: string;
     T?: number;
   };
 }
@@ -60,6 +62,21 @@ interface LiquidationPrint {
   ts: number;
   side: 'LONG' | 'SHORT';
   notional: number;
+}
+
+export interface CanonicalMarketLiquidationPrint {
+  readonly symbol: string;
+  readonly side: 'LONG' | 'SHORT';
+  readonly notionalUsd: number;
+  readonly eventTimeMs: number;
+  readonly sourceEventKey: string;
+}
+
+export interface MarketLiquidationProjectionPort {
+  start(): void;
+  stop(): void;
+  observeSourceStatus(status: FeedStatus): void;
+  ingestPrint(print: Readonly<CanonicalMarketLiquidationPrint>): void;
 }
 
 const SPARK_CAP = 150; // sampled every 20s ≈ last 50 minutes
@@ -117,6 +134,7 @@ export class MarketEngine {
   constructor(
     private readonly ledger: Ledger,
     private readonly fetchUniverse: () => Promise<ExchangeUniverse> = fetchExchangeUniverse,
+    private readonly liquidationProjection?: MarketLiquidationProjectionPort,
   ) {}
 
   get pairCount(): number {
@@ -182,6 +200,7 @@ export class MarketEngine {
     const generation = ++this.generation;
     const onStatus = (name: string, status: FeedStatus) => {
       if (!this.isActive(generation)) return;
+      if (name === 'futures-liquidations') this.liquidationProjection?.observeSourceStatus(status);
       const prev = this.feeds[name];
       this.feeds[name] = status;
       if (prev !== status && status !== 'connecting') {
@@ -206,15 +225,17 @@ export class MarketEngine {
     const liquidationStream = new BinanceStream(
       'futures-liquidations',
       'wss://fstream.binance.com/market/ws/!forceOrder@arr',
-      (data) => this.onForceOrders(data, generation),
+      (data) => this.onLiquidationFrame(data, generation),
       onStatus
     );
 
     this.streams = [spotStream, markStream, liquidationStream];
     try {
+      this.liquidationProjection?.start();
       for (const stream of this.streams) stream.start();
     } catch (error) {
       for (const stream of this.streams) stream.stop();
+      this.liquidationProjection?.stop();
       this.streams = [];
       this.running = false;
       ++this.generation;
@@ -260,6 +281,7 @@ export class MarketEngine {
     ++this.generation;
     for (const s of this.streams) s.stop();
     this.streams = [];
+    this.liquidationProjection?.stop();
     if (this.sampler) clearInterval(this.sampler);
     if (this.oiTimer) clearInterval(this.oiTimer);
     this.sampler = null;
@@ -359,8 +381,12 @@ export class MarketEngine {
     }
   }
 
-  private onForceOrders(data: unknown, generation: number): void {
+  private onLiquidationFrame(data: unknown, generation: number): void {
     if (!this.isActive(generation)) return;
+    this.onForceOrders(data);
+  }
+
+  private onForceOrders(data: unknown): void {
     const payload = (data && typeof data === 'object' && 'data' in data ? (data as { data: unknown }).data : data) as unknown;
     const updates = (Array.isArray(payload) ? payload : [payload]).slice(0, 1_000);
     const now = Date.now();
@@ -368,22 +394,37 @@ export class MarketEngine {
       if (!raw || typeof raw !== 'object') continue;
       const ev = raw as ForceOrderUpdate;
       const o = ev.o;
-      if (!o || !validSymbol(o.s) || !this.features.has(o.s) || (o.S !== 'BUY' && o.S !== 'SELL')) continue;
-      if (ev.st !== undefined && ev.st !== 1) continue;
-      const qty = Number(o.z ?? o.l ?? o.q);
-      const price = Number(o.ap ?? o.p);
-      if (!(qty > 0) || !(price > 0)) continue;
-      const ts = Number(o.T ?? ev.E ?? Date.now());
-      if (!validEventTime(ts, now, LIQUIDATION_WINDOW_MS)) continue;
+      if (ev.e !== 'forceOrder' || ev.st !== 1 || !o || !validSymbol(o.s)
+          || ev.ps !== o.s || !this.features.has(o.s)
+          || (o.S !== 'BUY' && o.S !== 'SELL') || o.X !== 'FILLED') continue;
+      // Conservatively admit completed liquidation-order snapshots only. The
+      // executed notional is accumulated filled quantity `z` multiplied by
+      // average fill price `ap`; `l` is only the final fill.
+      const qty = Number(o.z);
+      const price = Number(o.ap);
+      const originalQty = Number(o.q);
+      if (!(qty > 0) || !(price > 0) || !(originalQty > 0) || qty > originalQty) continue;
+      const ts = Number(o.T);
+      if (!validEventTime(ev.E, now, LIQUIDATION_WINDOW_MS)
+          || !validEventTime(ts, now, LIQUIDATION_WINDOW_MS)
+          || Number(ev.E) < ts) continue;
       const previousTs = this.liquidationUpdatedAt.get(o.s);
-      if (previousTs !== undefined && ts < previousTs) continue;
+      if (previousTs !== undefined && ts <= previousTs) continue;
       const notional = qty * price;
       if (!positive(notional)) continue;
       const side = o.S === 'SELL' ? 'LONG' : 'SHORT';
+      const sourceEventKey = `${o.s}:${ev.ps}:${ev.E}:${ts}:${o.S}:${originalQty}:${qty}:${price}`;
       const rows = this.liquidations.get(o.s) ?? [];
       rows.push({ ts, side, notional });
       this.liquidations.set(o.s, this.pruneLiquidations(rows));
       this.liquidationUpdatedAt.set(o.s, ts);
+      this.liquidationProjection?.ingestPrint(Object.freeze({
+        symbol: o.s,
+        side,
+        notionalUsd: notional,
+        eventTimeMs: ts,
+        sourceEventKey,
+      }));
     }
   }
 

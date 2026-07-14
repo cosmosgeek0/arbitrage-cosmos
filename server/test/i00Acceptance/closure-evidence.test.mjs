@@ -4,7 +4,12 @@ import path from 'node:path';
 import { test } from 'node:test';
 
 import { discoverOperationalPageIds, evaluateLoadShedding, measureResourceHarness, readJson, readText, ROOT, sha256 } from './harness.mjs';
-import { buildMachineEvidence, evidenceDigest, renderReports } from '../../../test/i00/render-reports.mjs';
+import {
+  buildMachineEvidence,
+  evidenceDigest,
+  normalizeMachineEvidenceAuthority,
+  renderReports,
+} from '../../../test/i00/render-reports.mjs';
 import { verifyReceiptProvenance } from '../../../test/i00/git-provenance.mjs';
 
 const catalog = readJson('fixtures/i00/proof-catalog.json');
@@ -269,6 +274,60 @@ test('generated Markdown reports are byte-identical to machine evidence renderin
   for (const [relativePath, expected] of Object.entries(reports)) {
     assert.equal(readFileSync(path.join(ROOT, relativePath), 'utf8'), expected, relativePath);
   }
+});
+
+test('machine evidence is stable across protected-owner transport modes and moving descendant tips', () => {
+  const row = (evidenceMode) => ({ path: 'IP_PROOF.md', evidenceMode, passed: true });
+  const authority = (evidenceMode, liveSourceTip) => normalizeMachineEvidenceAuthority({
+    frozenInputs: [row(evidenceMode)],
+    historicalFrozenInputs: [row(evidenceMode)],
+    livingDirectorInputAcceptance: {
+      sourceCutoffCommit: 'd78be24f4da14632c857ee250b62e3fec33c2743',
+      sourceTip: 'd78be24f4da14632c857ee250b62e3fec33c2743',
+      liveSourceTip,
+      cutoffReachable: true,
+      directiveResults: [row(evidenceMode)],
+      passed: true,
+    },
+  });
+  assert.deepEqual(
+    authority('LIVE_OWNER_FILE', '1'.repeat(40)),
+    authority('SEALED_CANDIDATE_HASH', '2'.repeat(40)),
+  );
+  assert.equal(authority('LIVE_OWNER_FILE', '1'.repeat(40)).livingDirectorInputAcceptance.liveSourceTip, undefined);
+  assert.equal(
+    authority('LIVE_OWNER_FILE', '1'.repeat(40)).livingDirectorInputAcceptance.liveSourceTipDisposition,
+    'MOVING_REF_DESCENDANT_OBSERVED_NOT_SEALED',
+  );
+  assert.equal(
+    authority('INVENTED', '1'.repeat(40)).frozenInputs[0].evidenceMode,
+    'INVENTED',
+    'invalid modes are never normalized into accepted evidence',
+  );
+  const unreachable = normalizeMachineEvidenceAuthority({
+    frozenInputs: [row('LIVE_OWNER_FILE')],
+    historicalFrozenInputs: [row('LIVE_OWNER_FILE')],
+    livingDirectorInputAcceptance: {
+      sourceCutoffCommit: 'd78be24f4da14632c857ee250b62e3fec33c2743',
+      sourceTip: 'd78be24f4da14632c857ee250b62e3fec33c2743',
+      liveSourceTip: '3'.repeat(40),
+      cutoffReachable: false,
+      directiveResults: [row('LIVE_OWNER_FILE')],
+      passed: false,
+    },
+  }).livingDirectorInputAcceptance;
+  assert.equal(unreachable.liveSourceTip, '3'.repeat(40));
+  assert.equal(unreachable.liveSourceTipDisposition, 'MOVING_REF_REACHABILITY_UNPROVEN');
+  const missingTip = normalizeMachineEvidenceAuthority({
+    frozenInputs: [],
+    historicalFrozenInputs: [],
+    livingDirectorInputAcceptance: {
+      cutoffReachable: true,
+      directiveResults: [],
+      passed: false,
+    },
+  }).livingDirectorInputAcceptance;
+  assert.equal(missingTip.liveSourceTipDisposition, 'MOVING_REF_TIP_UNAVAILABLE_OR_INVALID');
 });
 
 test('current machine evidence is input-driven for both legal candidate phases and historical IP-PROOF evidence stays historical', () => {

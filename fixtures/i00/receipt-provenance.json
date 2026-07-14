@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "verificationBase": "18a0b9d1153a5f4bb6c8b42909362c6a295475bb",
+  "verificationBase": "6b50cca34a5615e828e9606cd7201daf81272ec7",
   "items": [
     { "sha": "b272049b1e482ff75de27fbdaece7be5a7bbcc5d", "claimType": "NAMED_IN_RECEIPT", "receiptPath": "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md", "receiptSha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162", "expectedNeedle": "b272049b1e482ff75de27fbdaece7be5a7bbcc5d", "ancestorRequired": true },
     { "sha": "3340f75270049de96846d153672b91f065844eef", "claimType": "NAMED_IN_RECEIPT", "receiptPath": "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md", "receiptSha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162", "expectedNeedle": "3340f75270049de96846d153672b91f065844eef", "ancestorRequired": true },

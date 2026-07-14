@@ -80,6 +80,14 @@ export class LiveEdgeMutationJournalAdapterError extends Error {
 
 export interface LiveEdgeMutationJournalLedgerPort {
   getConfigValue(key: string): string | null;
+  /** Canonical Ledger count capability; absence is represented as unavailable, never inferred. */
+  countEvents?(
+    kind?: string,
+    symbol?: string,
+    q?: string,
+    since?: number,
+    until?: number,
+  ): number;
   compareAndSetConfigValueAndLogEvents?(
     key: string,
     expectedValue: string | null,
@@ -500,6 +508,61 @@ export class LiveEdgeMutationJournalPersistenceAdapter {
     }
   }
 
+  #assertGlobalReservedEventEquality(
+    registry: Readonly<MutationJournalRegistry>,
+    expectedRegistryValue: string | null,
+  ): void {
+    const expectedCount = registry.journals.reduce(
+      (count, journal) => count + journal.snapshot.journalVersion,
+      0,
+    );
+    if (typeof this.#ledger.countEvents !== 'function') {
+      throw new LiveEdgeMutationJournalAdapterError(
+        'PERSISTENCE_UNAVAILABLE',
+        'canonical Ledger reserved-event count readback is unavailable',
+      );
+    }
+    let journalCount: number;
+    let auditCount: number;
+    try {
+      journalCount = this.#ledger.countEvents(LIVE_EDGE_MUTATION_JOURNAL_EVENT_KIND);
+      auditCount = this.#ledger.countEvents(LIVE_EDGE_MUTATION_JOURNAL_AUDIT_EVENT_KIND);
+    } catch {
+      throw new LiveEdgeMutationJournalAdapterError(
+        'PERSISTENCE_UNAVAILABLE',
+        'canonical Ledger reserved-event count readback is unavailable',
+      );
+    }
+    if (!Number.isSafeInteger(journalCount) || journalCount < 0
+      || !Number.isSafeInteger(auditCount) || auditCount < 0
+      || journalCount !== expectedCount
+      || auditCount !== expectedCount) {
+      // The Ledger commits config plus both reserved rows atomically, but this
+      // read-only proof spans multiple calls. A legitimate independent writer
+      // may advance that atomic state between them. Never mislabel proven ref
+      // movement as durable corruption; the caller can safely retry later.
+      let currentRegistryValue: string | null;
+      try {
+        currentRegistryValue = this.#ledger.getConfigValue(LIVE_EDGE_MUTATION_JOURNAL_CONFIG_KEY);
+      } catch {
+        throw new LiveEdgeMutationJournalAdapterError(
+          'PERSISTENCE_UNAVAILABLE',
+          'canonical Ledger registry stability readback is unavailable',
+        );
+      }
+      if (currentRegistryValue !== expectedRegistryValue) {
+        throw new LiveEdgeMutationJournalAdapterError(
+          'PERSISTENCE_UNAVAILABLE',
+          'canonical Ledger registry advanced during reserved-event validation',
+        );
+      }
+      throw new LiveEdgeMutationJournalAdapterError(
+        'PERSISTENCE_CORRUPT',
+        'mutation-journal reserved Ledger rows do not equal the canonical registry',
+      );
+    }
+  }
+
   #reconstructSnapshotLineage(
     configuredSnapshot: Readonly<MutationJournalSnapshot>,
     requestedVersion: number,
@@ -623,24 +686,48 @@ export class LiveEdgeMutationJournalPersistenceAdapter {
 
   #validateRegistryLineages(
     registry: Readonly<MutationJournalRegistry>,
+    registryValue: string | null,
     targetMutationId: string,
     targetVersion: number | null,
   ): Readonly<PersistedMutationJournal> | null {
-    let target: Readonly<PersistedMutationJournal> | null = null;
-    let targetFound = false;
-    for (const journal of registry.journals) {
-      const isTarget = journal.mutationId === targetMutationId;
-      const persisted = this.#reconstructSnapshotLineage(
-        journal.snapshot,
-        isTarget && targetVersion !== null ? targetVersion : journal.snapshot.journalVersion,
-      );
-      if (isTarget) {
-        targetFound = true;
-        target = persisted;
+    try {
+      let target: Readonly<PersistedMutationJournal> | null = null;
+      let targetFound = false;
+      for (const journal of registry.journals) {
+        const isTarget = journal.mutationId === targetMutationId;
+        const persisted = this.#reconstructSnapshotLineage(
+          journal.snapshot,
+          isTarget && targetVersion !== null ? targetVersion : journal.snapshot.journalVersion,
+        );
+        if (isTarget) {
+          targetFound = true;
+          target = persisted;
+        }
       }
+      if (!targetFound) this.#assertNoOrphanEvents(targetMutationId);
+      this.#assertGlobalReservedEventEquality(registry, registryValue);
+      return target;
+    } catch (error) {
+      if (error instanceof LiveEdgeMutationJournalAdapterError
+          && error.code === 'PERSISTENCE_CORRUPT') {
+        let currentRegistryValue: string | null;
+        try {
+          currentRegistryValue = this.#ledger.getConfigValue(LIVE_EDGE_MUTATION_JOURNAL_CONFIG_KEY);
+        } catch {
+          throw new LiveEdgeMutationJournalAdapterError(
+            'PERSISTENCE_UNAVAILABLE',
+            'canonical Ledger registry stability readback is unavailable',
+          );
+        }
+        if (currentRegistryValue !== registryValue) {
+          throw new LiveEdgeMutationJournalAdapterError(
+            'PERSISTENCE_UNAVAILABLE',
+            'canonical Ledger registry advanced during lineage validation',
+          );
+        }
+      }
+      throw error;
     }
-    if (!targetFound) this.#assertNoOrphanEvents(targetMutationId);
-    return target;
   }
 
   #readVersion(
@@ -650,13 +737,13 @@ export class LiveEdgeMutationJournalPersistenceAdapter {
     const loaded = this.#loadRegistry();
     const current = findSnapshot(loaded.registry, mutationId);
     if (current === null) {
-      this.#validateRegistryLineages(loaded.registry, mutationId, null);
+      this.#validateRegistryLineages(loaded.registry, loaded.serialized, mutationId, null);
       return null;
     }
     if (!Number.isSafeInteger(journalVersion)
       || journalVersion < 1
       || journalVersion > current.journalVersion) return null;
-    return this.#validateRegistryLineages(loaded.registry, mutationId, journalVersion);
+    return this.#validateRegistryLineages(loaded.registry, loaded.serialized, mutationId, journalVersion);
   }
 
   read(mutationId: string): Readonly<PersistedMutationJournal> | null {
@@ -665,6 +752,7 @@ export class LiveEdgeMutationJournalPersistenceAdapter {
     const current = findSnapshot(loaded.registry, mutationId);
     return this.#validateRegistryLineages(
       loaded.registry,
+      loaded.serialized,
       mutationId,
       current?.journalVersion ?? null,
     );
@@ -678,23 +766,7 @@ export class LiveEdgeMutationJournalPersistenceAdapter {
   inspectInventory(): Readonly<LiveEdgeMutationJournalInventory> {
     const loaded = this.#loadRegistry();
     if (loaded.registry.journals.length === 0) {
-      let journalEvents: readonly Readonly<LedgerEventRecord>[];
-      let auditEvents: readonly Readonly<LedgerEventRecord>[];
-      try {
-        journalEvents = this.#ledger.recentEvents(1, LIVE_EDGE_MUTATION_JOURNAL_EVENT_KIND);
-        auditEvents = this.#ledger.recentEvents(1, LIVE_EDGE_MUTATION_JOURNAL_AUDIT_EVENT_KIND);
-      } catch {
-        throw new LiveEdgeMutationJournalAdapterError(
-          'PERSISTENCE_UNAVAILABLE',
-          'canonical Ledger inventory readback is unavailable',
-        );
-      }
-      if (journalEvents.length > 0 || auditEvents.length > 0) {
-        throw new LiveEdgeMutationJournalAdapterError(
-          'PERSISTENCE_CORRUPT',
-          'mutation-journal Ledger events exist without the canonical registry',
-        );
-      }
+      this.#assertGlobalReservedEventEquality(loaded.registry, loaded.serialized);
       return Object.freeze({
         state: 'EMPTY',
         journalCount: 0,
@@ -717,6 +789,7 @@ export class LiveEdgeMutationJournalPersistenceAdapter {
       entryCount += persisted.snapshot.entries.length;
       highestJournalVersion = Math.max(highestJournalVersion, persisted.snapshot.journalVersion);
     }
+    this.#assertGlobalReservedEventEquality(loaded.registry, loaded.serialized);
     return Object.freeze({
       state: 'AVAILABLE',
       journalCount: loaded.registry.journals.length,
@@ -809,6 +882,20 @@ export class LiveEdgeMutationJournalPersistenceAdapter {
       return failedAcknowledgement(request, 'FAILED', 'PERSISTENCE_UNAVAILABLE');
     }
     const prior = findSnapshot(loaded.registry, request.mutationId);
+    try {
+      this.#validateRegistryLineages(
+        loaded.registry,
+        loaded.serialized,
+        request.mutationId,
+        prior?.journalVersion ?? null,
+      );
+    } catch (error) {
+      if (error instanceof LiveEdgeMutationJournalAdapterError
+        && error.code === 'PERSISTENCE_CORRUPT') {
+        return failedAcknowledgement(request, 'FAILED', 'PERSISTENCE_CORRUPT');
+      }
+      return failedAcknowledgement(request, 'FAILED', 'PERSISTENCE_UNAVAILABLE');
+    }
     const next = applyMutationAppendRequest(prior, request);
     if (next === null) return this.#classifyWithoutWrite(request, prior);
 
@@ -827,19 +914,6 @@ export class LiveEdgeMutationJournalPersistenceAdapter {
     }
     if (serializedNext === null) {
       return failedAcknowledgement(request, 'CAPACITY_EXHAUSTED', 'CAPACITY_EXHAUSTED');
-    }
-    try {
-      this.#validateRegistryLineages(
-        loaded.registry,
-        request.mutationId,
-        prior?.journalVersion ?? null,
-      );
-    } catch (error) {
-      if (error instanceof LiveEdgeMutationJournalAdapterError
-        && error.code === 'PERSISTENCE_CORRUPT') {
-        return failedAcknowledgement(request, 'FAILED', 'PERSISTENCE_CORRUPT');
-      }
-      return failedAcknowledgement(request, 'FAILED', 'PERSISTENCE_UNAVAILABLE');
     }
     let nowMs: number;
     try {

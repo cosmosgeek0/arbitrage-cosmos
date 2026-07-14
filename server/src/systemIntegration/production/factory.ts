@@ -54,10 +54,10 @@ import {
   validUtcOrNull,
   weakestTemporalFact,
 } from './temporal.js';
+import { admitProductionSourceRegistry } from './sourceAdmission.js';
 import type {
   ProductionBasisConnectionStatus,
   ProductionBasisRuntimePort,
-  ProductionMarketAuxiliaryLifecyclePort,
   ProductionMarketEnginePort,
   ProductionMarketRow,
   ProductionStrategySnapshot,
@@ -137,13 +137,6 @@ function validateFactoryInput(input: Readonly<ProductionSystemIntegrationInput>)
       if (typeof (value as unknown as Record<string, unknown>)[method] !== 'function') {
         throw new TypeError(`${name}.${method} is required`);
       }
-    }
-  }
-  if (input.marketAuxiliary !== undefined) {
-    if (!input.marketAuxiliary || typeof input.marketAuxiliary !== 'object'
-        || typeof input.marketAuxiliary.start !== 'function'
-        || typeof input.marketAuxiliary.stop !== 'function') {
-      throw new TypeError('marketAuxiliary requires start and stop lifecycle methods');
     }
   }
 }
@@ -923,7 +916,6 @@ class MarketLifecyclePort {
   constructor(
     private readonly market: ProductionMarketEnginePort,
     private readonly evidence: MarketEvidenceReader,
-    private readonly auxiliary?: ProductionMarketAuxiliaryLifecyclePort,
   ) {}
 
   readState = (): Readonly<LifecycleReadState> => Object.freeze({
@@ -941,9 +933,7 @@ class MarketLifecyclePort {
     this.evidence.beginGeneration();
     try {
       this.market.start();
-      this.auxiliary?.start();
     } catch (error) {
-      try { this.auxiliary?.stop(); } catch { /* preserve the first startup failure */ }
       try { this.market.stop(); } catch { /* preserve the first startup failure */ }
       this.evidence.stop();
       throw error;
@@ -955,11 +945,6 @@ class MarketLifecyclePort {
 
   stop(): void {
     let failure: unknown = null;
-    try {
-      this.auxiliary?.stop();
-    } catch (error) {
-      failure = error;
-    }
     try {
       this.market.stop();
     } catch (error) {
@@ -1132,6 +1117,7 @@ export function createProductionSystemIntegrationPorts(
   input: Readonly<ProductionSystemIntegrationInput>,
 ): Readonly<ProductionSystemIntegrationPorts> {
   validateFactoryInput(input);
+  const sourceRegistry = admitProductionSourceRegistry(input.clock);
   const maxAgeMs = publicSourceMaxAgeMs(input.sourceMaxAgeMs);
 
   let marketLifecycle: MarketLifecyclePort;
@@ -1141,7 +1127,7 @@ export function createProductionSystemIntegrationPorts(
     maxAgeMs,
     () => marketLifecycle.readState(),
   );
-  marketLifecycle = new MarketLifecyclePort(input.market, evidence, input.marketAuxiliary);
+  marketLifecycle = new MarketLifecyclePort(input.market, evidence);
   const publicIntelligence = new PublicIntelligenceLifecycle(
     input.clock,
     input.market,
@@ -1241,5 +1227,5 @@ export function createProductionSystemIntegrationPorts(
     },
   });
 
-  return Object.freeze({ runtimes, components, summaries });
+  return Object.freeze({ sourceRegistry, runtimes, components, summaries });
 }

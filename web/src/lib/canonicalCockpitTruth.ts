@@ -33,6 +33,12 @@ export interface CanonicalRefreshTargetPosture {
   readonly reason: string;
 }
 
+export interface CanonicalMarketFeedReadinessPresentation {
+  readonly proven: boolean;
+  readonly label: 'Market Feed Readiness Proven' | 'Market Feed Readiness Unproven';
+  readonly detail: string;
+}
+
 const OUTAGE_LIFECYCLES = new Set<ProductComponentProjection['observedLifecycle']>([
   'FAILED',
   'BLOCKED',
@@ -104,6 +110,55 @@ export function canonicalComponentPresentation(
     return Object.freeze({ status: 'operational', tone: 'ok', statusLabel: 'Live Public', stateLabel, lifecycle, capability, truthLabel });
   }
   return Object.freeze({ status: 'degraded', tone: 'warn', statusLabel: nonLiveLabel, stateLabel, lifecycle, capability, truthLabel });
+}
+
+/**
+ * Market-feed readiness is canonical supervisor truth, never a transport-open
+ * inference from the legacy cockpit socket map.
+ */
+export function canonicalMarketFeedReadinessPresentation({
+  continuity,
+  machineReady,
+  dataFreshness,
+  components,
+}: {
+  readonly continuity: ProductBindingContinuity;
+  readonly machineReady: FiveSecondOwnerView['machineReady'];
+  readonly dataFreshness: FiveSecondOwnerView['dataFreshness'];
+  readonly components: readonly Readonly<ProductComponentProjection>[];
+}): Readonly<CanonicalMarketFeedReadinessPresentation> {
+  const unproven = (detail: string): Readonly<CanonicalMarketFeedReadinessPresentation> => Object.freeze({
+    proven: false,
+    label: 'Market Feed Readiness Unproven',
+    detail,
+  });
+
+  if (continuity !== 'PROVEN') return unproven(`Canonical product continuity is ${continuity}.`);
+  if (machineReady !== 'YES') return unproven(`Canonical owner machine readiness is ${machineReady}.`);
+  if (dataFreshness === null) return unproven('Canonical owner data freshness is unavailable.');
+
+  const sourceIds = ['public-spot-source', 'public-usdm-source'] as const;
+  const sources = sourceIds.map((componentId) => ({
+    componentId,
+    matches: components.filter((component) => component.componentId === componentId),
+  }));
+  const invalidCardinality = sources.find(({ matches }) => matches.length !== 1);
+  if (invalidCardinality) {
+    return unproven(`Canonical ${invalidCardinality.componentId} cardinality is ${invalidCardinality.matches.length}; expected exactly one.`);
+  }
+
+  for (const { componentId, matches } of sources) {
+    const posture = canonicalComponentPresentation(matches[0], continuity);
+    if (posture.status !== 'operational') {
+      return unproven(`Canonical ${componentId} is ${posture.stateLabel}.`);
+    }
+  }
+
+  return Object.freeze({
+    proven: true,
+    label: 'Market Feed Readiness Proven',
+    detail: `Canonical Spot and USD-M sources are READY · LIVE PUBLIC · LIVE PUBLIC; owner freshness ${dataFreshness}.`,
+  });
 }
 
 export function canonicalStrategyRuntimePresentation(

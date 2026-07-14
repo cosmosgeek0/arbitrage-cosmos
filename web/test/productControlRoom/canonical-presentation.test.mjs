@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   canonicalComponentPresentation,
   canonicalKillSwitchEngagePosture,
+  canonicalMarketFeedReadinessPresentation,
   canonicalRefreshTargetPosture,
   canonicalStrategyRuntimePresentation,
   canonicalWatchmanOverallPresentation,
@@ -147,6 +148,49 @@ test('Trust Advisor derives its overall tone from canonical posture and cannot g
   assert.match(advisorSource, /advisorOverallPresentation\.status === 'outage'[\s\S]*\? 'bad'/);
   assert.match(advisorSource, /advisorOverallPresentation\.status !== 'operational'[\s\S]*\? 'warn'/);
   assert.doesNotMatch(advisorSource, /machineReady\s*===\s*['"]YES['"]/);
+});
+
+test('Trust Advisor proves market feeds only from the exact canonical source pair and owner freshness', async () => {
+  const liveSource = (componentId) => component({
+    componentId,
+    capability: 'LIVE_PUBLIC',
+    truthLabel: 'LIVE_PUBLIC',
+  });
+  const inputs = {
+    continuity: 'PROVEN',
+    machineReady: 'YES',
+    dataFreshness: '2s stale',
+    components: [liveSource('public-spot-source'), liveSource('public-usdm-source')],
+  };
+  assert.deepEqual(canonicalMarketFeedReadinessPresentation(inputs), {
+    proven: true,
+    label: 'Market Feed Readiness Proven',
+    detail: 'Canonical Spot and USD-M sources are READY · LIVE PUBLIC · LIVE PUBLIC; owner freshness 2s stale.',
+  });
+
+  for (const hostile of [
+    { ...inputs, continuity: 'BACKFILL' },
+    { ...inputs, machineReady: 'UNKNOWN' },
+    { ...inputs, dataFreshness: null },
+    { ...inputs, components: [inputs.components[0]] },
+    { ...inputs, components: [...inputs.components, inputs.components[0]] },
+    { ...inputs, components: [component({ componentId: 'public-spot-source' }), inputs.components[1]] },
+    { ...inputs, components: [inputs.components[0], liveSource('public-usdm-source'), liveSource('public-usdm-source')] },
+  ]) {
+    const posture = canonicalMarketFeedReadinessPresentation(hostile);
+    assert.equal(posture.proven, false);
+    assert.equal(posture.label, 'Market Feed Readiness Unproven');
+  }
+
+  const source = await readFile(new URL('../../src/components/Header.tsx', import.meta.url), 'utf8');
+  const start = source.indexOf('const advisorMarketFeedReadiness');
+  const end = source.indexOf('const advScore', start);
+  assert.notEqual(start, -1);
+  assert.notEqual(end, -1);
+  const advisorSource = source.slice(start, end);
+  assert.match(advisorSource, /canonicalMarketFeedReadinessPresentation\(\{[\s\S]*continuity: productBinding\.continuity,[\s\S]*machineReady: productSnapshot\.ownerView\.machineReady,[\s\S]*dataFreshness: productSnapshot\.ownerView\.dataFreshness,[\s\S]*components: productSnapshot\.components,/);
+  assert.match(advisorSource, /advisorMarketFeedReadiness\.proven[\s\S]*sev: 'pass'/);
+  assert.doesNotMatch(advisorSource, /feedsOk|state\?\.feeds|Market feeds live/i);
 });
 
 test('premium topbar keeps all six measured roles in empty, action, and preference states', async () => {

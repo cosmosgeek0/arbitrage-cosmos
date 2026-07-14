@@ -1121,13 +1121,40 @@ for (const options of [
     }),
     expectedState: 'MALFORMED',
   },
+  {
+    schemaReadback: Object.freeze({
+      state: 'MISMATCH', currentSchemaVersion: null, rollbackFloor: null,
+      reasonCode: 'LEDGER_SCHEMA_VERSION_MISMATCH',
+    }),
+    expectedState: 'MISMATCH',
+  },
 ]) {
   test(`supervisor withholds Ledger schema numbers for ${options.expectedState} capability truth`, () => {
     const f = fixture(options);
-    const ledger = f.app.supervisor().summaries.ledger;
-    assert.equal(ledger.truthLabel, 'UNAVAILABLE');
-    assert.equal(ledger.schemaCompatibilityState, options.expectedState);
-    assert.equal(ledger.currentSchemaVersion, null);
-    assert.equal(ledger.rollbackFloor, null);
+    const supervisor = f.app.supervisor();
+    const summary = supervisor.summaries.ledger;
+    const component = supervisor.components.find((entry) => entry.componentId === 'ledger-persistence');
+    assert.equal(summary.truthLabel, 'UNAVAILABLE');
+    assert.equal(summary.schemaCompatibilityState, options.expectedState);
+    assert.equal(summary.currentSchemaVersion, null);
+    assert.equal(summary.rollbackFloor, null);
+    assert.notEqual(component.readiness, 'READY');
+    assert.equal(component.truthLabel, 'UNAVAILABLE');
+    assert.ok(supervisor.rootBlockerComponentIds.includes('ledger-persistence'));
   });
 }
+
+test('canonical application supervisor cannot publish READY after Ledger becomes non-writable', async () => {
+  const f = fixture({ externalKill: false });
+  assert.equal(f.app.start().ok, true);
+  await drive(f, 8);
+  f.ledger.setWritable(false);
+
+  const supervisor = f.app.supervisor();
+  const ledger = supervisor.components.find((entry) => entry.componentId === 'ledger-persistence');
+  assert.equal(supervisor.summaries.ledger.writable, false);
+  assert.equal(ledger.readiness, 'BLOCKED');
+  assert.ok(ledger.blockerCodes.includes('LEDGER_NOT_WRITABLE'));
+  assert.equal(supervisor.overallPosture, 'BLOCKED');
+  assert.ok(supervisor.rootBlockerComponentIds.includes('ledger-persistence'));
+});

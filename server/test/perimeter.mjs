@@ -154,6 +154,7 @@ test('HTTP and WebSocket perimeter fails closed while preserving local operation
       LIQ_CACHE: path.join(dataDir, 'liquidations.json'),
       SKIP_DOTENV: '1',
       NETWORK_EGRESS_SENTINEL_FILE: networkSentinel,
+      I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES: '1',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -265,13 +266,11 @@ test('HTTP and WebSocket perimeter fails closed while preserving local operation
     assert.equal(await closed, 1012);
     const exited = await waitForExit(child);
     assert.equal(exited.code, 0, logs);
-    assert.equal(existsSync(networkSentinel), true);
-    const blockedStartupEgress = readFileSync(networkSentinel, 'utf8').trim().split('\n');
-    assert.equal(blockedStartupEgress.length, 2);
-    assert.deepEqual(new Set(blockedStartupEgress), new Set([
-      'EXTERNAL_NETWORK_REQUEST api.binance.com/api/v3/exchangeInfo',
-      'EXTERNAL_NETWORK_REQUEST fapi.binance.com/fapi/v1/exchangeInfo',
-    ]));
+    assert.equal(
+      existsSync(networkSentinel),
+      false,
+      'the application child must attempt zero external public network calls over its complete lifetime',
+    );
   } finally {
     if (!childFinished(child)) {
       child.kill('SIGTERM');

@@ -120,6 +120,44 @@ export function renderReports(evidence) {
   });
 }
 
+const PROTECTED_OWNER_EVIDENCE_MODES = new Set(['LIVE_OWNER_FILE', 'SEALED_CANDIDATE_HASH']);
+
+function stableOwnerEvidence(row) {
+  if (!row || typeof row !== 'object' || !PROTECTED_OWNER_EVIDENCE_MODES.has(row.evidenceMode)) return row;
+  return { ...row, evidenceMode: 'PROTECTED_OWNER_SHA256_VERIFIED' };
+}
+
+/**
+ * Normalize only environment transport facts after strict source verification.
+ * The protected owner bytes and the living cutoff remain exact; whether those
+ * bytes arrived from an owner file or a sealed candidate hash, and the current
+ * descendant tip of a deliberately moving ref, are not candidate evidence.
+ */
+export function normalizeMachineEvidenceAuthority({
+  frozenInputs,
+  historicalFrozenInputs,
+  livingDirectorInputAcceptance,
+}) {
+  const { liveSourceTip, ...stableAcceptance } = livingDirectorInputAcceptance;
+  const descendantObserved = stableAcceptance.cutoffReachable === true
+    && typeof liveSourceTip === 'string'
+    && /^[0-9a-f]{40}$/u.test(liveSourceTip);
+  return {
+    frozenInputs: frozenInputs.map(stableOwnerEvidence),
+    historicalFrozenInputs: historicalFrozenInputs.map(stableOwnerEvidence),
+    livingDirectorInputAcceptance: {
+      ...stableAcceptance,
+      ...(descendantObserved ? {} : { liveSourceTip }),
+      liveSourceTipDisposition: descendantObserved
+        ? 'MOVING_REF_DESCENDANT_OBSERVED_NOT_SEALED'
+        : typeof liveSourceTip === 'string' && /^[0-9a-f]{40}$/u.test(liveSourceTip)
+          ? 'MOVING_REF_REACHABILITY_UNPROVEN'
+          : 'MOVING_REF_TIP_UNAVAILABLE_OR_INVALID',
+      directiveResults: stableAcceptance.directiveResults.map(stableOwnerEvidence),
+    },
+  };
+}
+
 export function buildMachineEvidence() {
   const catalog = readJson('fixtures/i00/proof-catalog.json');
   const closure = readJson('fixtures/i00/closure-evidence.json');
@@ -131,7 +169,11 @@ export function buildMachineEvidence() {
   const authority = runAuthorityScan(catalog);
   const historicalFrozenInputs = historicalFrozenInputScan(catalog);
   const effectiveInputs = effectiveFrozenInputScan(catalog, livingInputAcceptance);
-  const frozenInputs = effectiveInputs.acceptedInputs;
+  const normalizedAuthority = normalizeMachineEvidenceAuthority({
+    frozenInputs: effectiveInputs.acceptedInputs,
+    historicalFrozenInputs,
+    livingDirectorInputAcceptance: effectiveInputs.acceptance,
+  });
   const routes = routeContractScan(catalog);
   return {
     schemaVersion: 2,
@@ -165,9 +207,9 @@ export function buildMachineEvidence() {
       provenanceItems: receiptProvenance.items.length,
       phase2Donors: closure.acceptedEvidence.filter((row) => row.phase2Donor).length,
     },
-    frozenInputs,
-    historicalFrozenInputs,
-    livingDirectorInputAcceptance: effectiveInputs.acceptance,
+    frozenInputs: normalizedAuthority.frozenInputs,
+    historicalFrozenInputs: normalizedAuthority.historicalFrozenInputs,
+    livingDirectorInputAcceptance: normalizedAuthority.livingDirectorInputAcceptance,
     authority,
     routes,
     scenarios,

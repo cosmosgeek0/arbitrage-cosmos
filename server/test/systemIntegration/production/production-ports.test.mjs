@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  PRODUCTION_SOURCE_REGISTRY_RECORDS,
   createProductionSystemIntegrationPorts,
+  validateProductionSourceRegistryRecords,
 } from '../../../dist/systemIntegration/production/index.js';
 import {
   SourceObservationTracker,
@@ -62,8 +64,6 @@ function createWorld() {
     marketInit: 0,
     marketStart: 0,
     marketStop: 0,
-    marketAuxiliaryStart: 0,
-    marketAuxiliaryStop: 0,
     basisStart: 0,
     basisStop: 0,
     volumeStart: 0,
@@ -123,10 +123,6 @@ function createWorld() {
   const ports = createProductionSystemIntegrationPorts({
     clock,
     market,
-    marketAuxiliary: {
-      start() { calls.marketAuxiliaryStart += 1; },
-      stop() { calls.marketAuxiliaryStop += 1; },
-    },
     basis,
     volume,
     sourceMaxAgeMs: 10_000,
@@ -164,8 +160,6 @@ test('factory construction is inert and exposes only passive public source proje
     marketInit: 0,
     marketStart: 0,
     marketStop: 0,
-    marketAuxiliaryStart: 0,
-    marketAuxiliaryStop: 0,
     basisStart: 0,
     basisStop: 0,
     volumeStart: 0,
@@ -182,6 +176,62 @@ test('factory construction is inert and exposes only passive public source proje
   assert.equal(world.ports.components['intelligence-runtime'], undefined);
   assert.equal(world.ports.components['market-intelligence'], undefined);
   assert.equal(world.ports.components['capital-supervision'], undefined);
+  assert.equal(world.ports.sourceRegistry.records.length, 7);
+  assert.equal(Object.isFrozen(world.ports.sourceRegistry), true);
+  assert.deepEqual(
+    world.ports.sourceRegistry.records.map((record) => record.semanticStream).sort(),
+    PRODUCTION_SOURCE_REGISTRY_RECORDS.map((record) => record.semanticStream).sort(),
+  );
+});
+
+test('production source admission rejects duplicate, incomplete, or counterfeit ownership before lifecycle use', () => {
+  const clock = new ManualClock();
+  const duplicate = [
+    ...PRODUCTION_SOURCE_REGISTRY_RECORDS,
+    { ...PRODUCTION_SOURCE_REGISTRY_RECORDS[6], sourceId: 'competing-usdm-liquidation' },
+  ];
+  const inert = {
+    feeds: {}, pairCount: 0,
+    async init() { throw new Error('must remain inert'); },
+    start() { throw new Error('must remain inert'); },
+    stop() { throw new Error('must remain inert'); },
+    allRows() { return []; },
+    priceUpdatedAt() { return null; },
+    markEventTimestamp() { return null; },
+  };
+  const strategy = {
+    async start() { throw new Error('must remain inert'); },
+    stop() { throw new Error('must remain inert'); },
+    connectionStatus() { throw new Error('must remain inert'); },
+    integrationSnapshot() { throw new Error('must remain inert'); },
+  };
+  assert.throws(
+    () => validateProductionSourceRegistryRecords(clock, duplicate),
+    /DUPLICATE_SEMANTIC_PRODUCER/,
+  );
+  assert.throws(
+    () => validateProductionSourceRegistryRecords(clock, PRODUCTION_SOURCE_REGISTRY_RECORDS.slice(0, -1)),
+    /SOURCE_REGISTRY_INCOMPLETE/,
+  );
+  for (const mutation of [
+    (row) => ({ ...row, endpointClass: 'REST' }),
+    (row) => ({ ...row, consumers: ['engine-supervisor'] }),
+    (row) => ({ ...row, physicalProducer: { ...row.physicalProducer, producerId: 'CounterfeitRuntime' } }),
+    (row) => ({ ...row, physicalProducer: { ...row.physicalProducer, ownerPath: 'server/src/binance/liquidations.ts' } }),
+  ]) {
+    const counterfeit = structuredClone(PRODUCTION_SOURCE_REGISTRY_RECORDS);
+    counterfeit[6] = mutation(counterfeit[6]);
+    assert.throws(
+      () => validateProductionSourceRegistryRecords(clock, counterfeit),
+      /SOURCE_REGISTRY_CANONICAL_MISMATCH/,
+    );
+  }
+  const input = { clock, market: inert, basis: strategy, volume: strategy };
+  const ignoredLegacyOverride = createProductionSystemIntegrationPorts({
+    ...input,
+    sourceRegistryRecords: duplicate,
+  });
+  assert.deepEqual(ignoredLegacyOverride.sourceRegistry.records, PRODUCTION_SOURCE_REGISTRY_RECORDS);
 });
 
 test('empty uninitialized market cannot claim source or universe readiness', async () => {
@@ -492,8 +542,6 @@ test('restart ownership calls each existing runtime once and requires post-resta
     marketInit: 1,
     marketStart: 2,
     marketStop: 1,
-    marketAuxiliaryStart: 2,
-    marketAuxiliaryStop: 1,
     basisStart: 1,
     basisStop: 1,
     volumeStart: 1,

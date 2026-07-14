@@ -14,7 +14,9 @@ import {
   PRODUCT_RUNTIME_CONTROL_EXPECTATIONS,
   PROTECTED_OWNER_DIRECTIVES,
   REQUIRED_LIMITATIONS,
+  evaluateBound,
 } from '../../../../test/i00/performance/contract.mjs';
+import { BASELINE_LIVE_COMPONENT_IDS } from '../../../../test/i00/performance/local-proxy-soak.mjs';
 import { computeGitSourceFreeze } from '../../../i00/complete-acceptance-receipt.mjs';
 
 const [sourceRootArg, receiptPathArg, headSha, treeSha] = process.argv.slice(2);
@@ -464,6 +466,8 @@ const browserBytes = Buffer.from(`${JSON.stringify(browser, null, 2)}\n`);
 writeFileSync(path.join(sourceRoot, browserRelative), browserBytes);
 
 const metricSummary = (value = 1) => ({ count: 2, min: value, p50: value, p95: value, p99: value, max: value, mean: value });
+const singletonMetricSummary = (value = 1) => ({ count: 1, min: value, p50: value, p95: value, p99: value, max: value, mean: value });
+const baselineLiveComponentIds = new Set(BASELINE_LIVE_COMPONENT_IDS);
 const managedInventory = {
   schemaVersion: 'i00-managed-inventory.v1',
   expectedIdentityCount: I00_MANAGED_INVENTORY_EXPECTATIONS.length,
@@ -491,9 +495,9 @@ const managedInventory = {
 const canonicalComponents = CANONICAL_SYSTEM_COMPONENT_IDS.map((componentId, index) => ({
   componentId,
   owner: CANONICAL_SYSTEM_COMPONENT_OWNERS[index],
-  observedLifecycle: 'BLOCKED',
-  capability: 'UNAVAILABLE',
-  blocker: 'SIMULATION_FIXTURE_HAS_NO_LIVE_MANAGED_RUNTIME',
+  observedLifecycle: baselineLiveComponentIds.has(componentId) ? 'READY' : 'BLOCKED',
+  capability: baselineLiveComponentIds.has(componentId) ? 'LIVE_PUBLIC' : 'UNAVAILABLE',
+  blocker: baselineLiveComponentIds.has(componentId) ? null : 'SIMULATION_FIXTURE_HAS_NO_LIVE_MANAGED_RUNTIME',
 }));
 const productControls = PRODUCT_RUNTIME_CONTROL_EXPECTATIONS.map((expected) => ({
   ...expected,
@@ -544,7 +548,7 @@ const performancePhase = (phaseId, bootGeneration, startValue, unclean = false) 
   },
   process: {
     samples: 2, cpuOneCorePercent: metricSummary(), cpuHostPercent: metricSummary(), rssBytes: metricSummary(100),
-    heapUsedBytes: metricSummary(50), eventLoopP95Ms: metricSummary(), eventLoopP99Ms: metricSummary(), eventLoopMaxMs: metricSummary(), rssSlopeBytesPerHour: 0,
+    heapUsedBytes: metricSummary(50), eventLoopP95Ms: singletonMetricSummary(), eventLoopP99Ms: metricSummary(), eventLoopMaxMs: singletonMetricSummary(), rssSlopeBytesPerHour: 0,
   },
   storage: {
     preLaunch: { databaseBytes: 100, walBytes: phaseId === 'POST_CRASH_RECOVERY' ? 32 : 0, shmBytes: phaseId === 'POST_CRASH_RECOVERY' ? 16 : 0 },
@@ -579,10 +583,16 @@ const performancePhase = (phaseId, bootGeneration, startValue, unclean = false) 
     stdoutSha256: SHA, stderrSha256: SHA, telemetrySha256: SHA, logOverflow: false, passed: true,
   },
 });
-const performanceChecks = Object.values(LOCAL_PROXY_SLOS).map((bound, index) => ({
-  metric: `metric-${index}`, unit: bound.unit, observed: 1, soft: bound.soft, hard: bound.hard,
-  status: 'PASS', reason: 'Measured value is within the bound.',
-}));
+const performanceChecks = [
+  evaluateBound('host.cpu.percent.p95', 1, LOCAL_PROXY_SLOS.cpuHostPercent),
+  evaluateBound('node.event_loop_lag_ms.p99', 1, LOCAL_PROXY_SLOS.eventLoopLagMs),
+  evaluateBound('process.rss_bytes.max', 100, LOCAL_PROXY_SLOS.rssBytes),
+  evaluateBound('soak.rss_slope_bytes_per_hour.max', 0, LOCAL_PROXY_SLOS.rssSlopeBytesPerHour),
+  evaluateBound('storage.wal_bytes.max', 32, LOCAL_PROXY_SLOS.walBytes),
+  evaluateBound('api.http_latency_ms.p95', 1, LOCAL_PROXY_SLOS.httpP95Ms),
+  evaluateBound('api.unexpected_percent', 0, LOCAL_PROXY_SLOS.httpUnexpectedPercent),
+  evaluateBound('api.response_bytes_per_second', 100 / 3, LOCAL_PROXY_SLOS.apiBytesPerSecond),
+];
 const performance = {
   schemaVersion: 'i00.local-proxy-performance.v1', truthClass: 'LOCAL_PROXY_MEASURED',
   runId: 'fixture-performance-run', createdAtUtc: '2026-07-12T23:57:30.000Z',

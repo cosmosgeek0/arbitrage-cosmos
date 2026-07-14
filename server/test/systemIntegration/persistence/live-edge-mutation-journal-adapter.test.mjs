@@ -174,6 +174,7 @@ test('post-commit listener and return-path failure recover the exact committed p
     let injected = false;
     const postCommitFailurePort = {
       getConfigValue: (...args) => ledger.getConfigValue(...args),
+      countEvents: (...args) => ledger.countEvents(...args),
       recentEvents: (...args) => ledger.recentEvents(...args),
       compareAndSetConfigValueAndLogEvents(...args) {
         const result = ledger.compareAndSetConfigValueAndLogEvents(...args);
@@ -220,6 +221,7 @@ test('two independently opened adapters serialize the whole registry and a same-
     let winnerAcknowledgement = null;
     const interleavingPort = {
       getConfigValue: (...args) => secondLedger.getConfigValue(...args),
+      countEvents: (...args) => secondLedger.countEvents(...args),
       recentEvents: (...args) => secondLedger.recentEvents(...args),
       compareAndSetConfigValueAndLogEvents(...args) {
         if (!interleaved) {
@@ -425,6 +427,7 @@ test('an unrelated mutation winning the fixed-registry CAS yields version confli
     let winnerAcknowledgement = null;
     const interleavingPort = {
       getConfigValue: (...args) => secondLedger.getConfigValue(...args),
+      countEvents: (...args) => secondLedger.countEvents(...args),
       recentEvents: (...args) => secondLedger.recentEvents(...args),
       compareAndSetConfigValueAndLogEvents(...args) {
         if (!interleaved) {
@@ -540,25 +543,130 @@ test('corrupt, noncanonical, secret-bearing, and unavailable persistence fail cl
   }
 });
 
+test('reserved-event count capability absence, failure, or malformed values fail closed', () => {
+  const serialized = canonicalPersistenceJson(registryFromSnapshots([]));
+  for (const countEvents of [undefined, () => { throw new Error('unavailable'); }]) {
+    const adapter = new LiveEdgeMutationJournalPersistenceAdapter({
+      getConfigValue: () => serialized,
+      recentEvents: () => [],
+      ...(countEvents ? { countEvents } : {}),
+    });
+    assert.throws(
+      () => adapter.inspectInventory(),
+      (error) => error instanceof LiveEdgeMutationJournalAdapterError
+        && error.code === 'PERSISTENCE_UNAVAILABLE',
+    );
+  }
+  for (const invalidCount of [Number.NaN, -1, 0.5]) {
+    const adapter = new LiveEdgeMutationJournalPersistenceAdapter({
+      getConfigValue: () => serialized,
+      recentEvents: () => [],
+      countEvents: () => invalidCount,
+    });
+    assert.throws(
+      () => adapter.inspectInventory(),
+      (error) => error instanceof LiveEdgeMutationJournalAdapterError
+        && error.code === 'PERSISTENCE_CORRUPT',
+    );
+  }
+});
+
+test('independent atomic writer movement is unavailable, never falsely labeled corrupt, and a retry converges', () => {
+  const dataDir = tempDataDir('cosmos-live-edge-independent-writer-');
+  const ledger = new Ledger(dataDir);
+  try {
+    const clock = Object.freeze({ nowMs: () => T + 2 });
+    const independent = new LiveEdgeMutationJournalPersistenceAdapter(ledger, clock);
+    appendAndRead(independent, prepareInitialMutationAppend(canonicalInput(70)));
+    const winner = prepareInitialMutationAppend(canonicalInput(71));
+    const loser = prepareInitialMutationAppend(canonicalInput(72));
+    let interleaved = false;
+    const racing = new LiveEdgeMutationJournalPersistenceAdapter({
+      getConfigValue: (...args) => ledger.getConfigValue(...args),
+      recentEvents: (...args) => ledger.recentEvents(...args),
+      countEvents: (...args) => {
+        if (!interleaved) {
+          interleaved = true;
+          assert.equal(independent.append(winner.request).disposition, 'COMMITTED_NEW');
+        }
+        return ledger.countEvents(...args);
+      },
+      compareAndSetConfigValueAndLogEvents: (...args) => ledger.compareAndSetConfigValueAndLogEvents(...args),
+    }, clock);
+
+    const raced = racing.append(loser.request);
+    assert.equal(raced.disposition, 'FAILED');
+    assert.equal(raced.failureCode, 'PERSISTENCE_UNAVAILABLE');
+    assert.notEqual(raced.failureCode, 'PERSISTENCE_CORRUPT');
+    assert.equal(racing.append(loser.request).disposition, 'COMMITTED_NEW');
+    assert.equal(racing.inspectInventory().journalCount, 3);
+  } finally {
+    ledger.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('registry movement during lineage or orphan reads downgrades transient contradictions to unavailable', () => {
+  const dataDir = tempDataDir('cosmos-live-edge-lineage-race-');
+  const ledger = new Ledger(dataDir);
+  try {
+    const clock = Object.freeze({ nowMs: () => T + 2 });
+    const independent = new LiveEdgeMutationJournalPersistenceAdapter(ledger, clock);
+    appendAndRead(independent, prepareInitialMutationAppend(canonicalInput(73)));
+    const winner = prepareInitialMutationAppend(canonicalInput(74));
+    let interleaved = false;
+    const racing = new LiveEdgeMutationJournalPersistenceAdapter({
+      getConfigValue: (...args) => ledger.getConfigValue(...args),
+      recentEvents: (...args) => {
+        if (!interleaved) {
+          interleaved = true;
+          assert.equal(independent.append(winner.request).disposition, 'COMMITTED_NEW');
+        }
+        return ledger.recentEvents(...args);
+      },
+      countEvents: (...args) => ledger.countEvents(...args),
+      compareAndSetConfigValueAndLogEvents: (...args) => ledger.compareAndSetConfigValueAndLogEvents(...args),
+    }, clock);
+
+    const raced = racing.append(winner.request);
+    assert.equal(raced.disposition, 'FAILED');
+    assert.equal(raced.failureCode, 'PERSISTENCE_UNAVAILABLE');
+    assert.notEqual(raced.failureCode, 'PERSISTENCE_CORRUPT');
+    assert.equal(racing.append(winner.request).disposition, 'IDEMPOTENT_REPLAY');
+    assert.equal(racing.inspectInventory().journalCount, 2);
+  } finally {
+    ledger.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
 test('hard registry count capacity refuses the 65th journal without eviction or events', () => {
   const dataDir = tempDataDir('cosmos-live-edge-count-capacity-');
   const ledger = new Ledger(dataDir);
   try {
-    const snapshots = Array.from(
-      { length: LIVE_EDGE_MUTATION_JOURNAL_REGISTRY_LIMITS.maximumJournals },
-      (_, index) => prepareInitialMutationAppend(canonicalInput(100 + index)).nextSnapshot,
-    );
-    const serialized = canonicalPersistenceJson(registryFromSnapshots(snapshots));
-    assert.ok(Buffer.byteLength(serialized, 'utf8') < LIVE_EDGE_MUTATION_JOURNAL_REGISTRY_LIMITS.maximumSerializedBytes);
-    ledger.setConfigValue(LIVE_EDGE_MUTATION_JOURNAL_CONFIG_KEY, serialized);
     const adapter = new LiveEdgeMutationJournalPersistenceAdapter(ledger);
+    for (let index = 0; index < LIVE_EDGE_MUTATION_JOURNAL_REGISTRY_LIMITS.maximumJournals; index += 1) {
+      appendAndRead(adapter, prepareInitialMutationAppend(canonicalInput(100 + index)));
+    }
+    const serialized = ledger.getConfigValue(LIVE_EDGE_MUTATION_JOURNAL_CONFIG_KEY);
+    assert.ok(serialized);
+    assert.ok(Buffer.byteLength(serialized, 'utf8') < LIVE_EDGE_MUTATION_JOURNAL_REGISTRY_LIMITS.maximumSerializedBytes);
+    assert.equal(adapter.inspectInventory().state, 'AVAILABLE');
     const overflow = prepareInitialMutationAppend(canonicalInput(1_000));
     const acknowledgement = adapter.append(overflow.request);
     assert.equal(acknowledgement.disposition, 'CAPACITY_EXHAUSTED');
     assert.equal(acknowledgement.failureCode, 'CAPACITY_EXHAUSTED');
     assert.equal(ledger.getConfigValue(LIVE_EDGE_MUTATION_JOURNAL_CONFIG_KEY), serialized);
-    assert.equal(ledger.countEvents(), 0);
+    assert.equal(ledger.countEvents(), LIVE_EDGE_MUTATION_JOURNAL_REGISTRY_LIMITS.maximumJournals * 2);
     assert.equal(JSON.parse(serialized).journals.length, 64);
+
+    const firstMutationId = JSON.parse(serialized).journals[0].mutationId;
+    const duplicateRows = ledger.recentEvents(2, undefined, firstMutationId);
+    ledger.logEventsAtomically(duplicateRows.map(({ kind, symbol, data }) => ({ kind, symbol, data })));
+    const corruptCapacity = adapter.append(prepareInitialMutationAppend(canonicalInput(1_001)).request);
+    assert.equal(corruptCapacity.disposition, 'FAILED');
+    assert.equal(corruptCapacity.failureCode, 'PERSISTENCE_CORRUPT');
+    assert.equal(corruptCapacity.appendedCount, 0);
   } finally {
     ledger.close();
     rmSync(dataDir, { recursive: true, force: true });
@@ -570,30 +678,28 @@ test('aggregate 512 KiB registry capacity refuses growth without unsafe eviction
   const ledger = new Ledger(dataDir);
   try {
     const persistedJournals = [];
+    const adapter = new LiveEdgeMutationJournalPersistenceAdapter(ledger);
     for (let index = 0; index < 59; index += 1) {
-      const initial = persist(prepareInitialMutationAppend(canonicalInput(
+      const initial = appendAndRead(adapter, prepareInitialMutationAppend(canonicalInput(
         200 + index,
         `assessment:bxxx${index.toString(36)}`,
       )));
       persistedJournals.push(index < 58
-        ? persist(preparePreflightMutationAppend(initial, T + 1))
+        ? appendAndRead(adapter, preparePreflightMutationAppend(initial, T + 1))
         : initial);
     }
-    const serialized = canonicalPersistenceJson(
-      registryFromSnapshots(persistedJournals.map((current) => current.snapshot)),
-    );
+    const serialized = ledger.getConfigValue(LIVE_EDGE_MUTATION_JOURNAL_CONFIG_KEY);
+    assert.ok(serialized);
     const bytesBefore = Buffer.byteLength(serialized, 'utf8');
     assert.ok(bytesBefore < LIVE_EDGE_MUTATION_JOURNAL_REGISTRY_LIMITS.maximumSerializedBytes);
     assert.ok(bytesBefore > LIVE_EDGE_MUTATION_JOURNAL_REGISTRY_LIMITS.maximumSerializedBytes - 2_000);
-    ledger.setConfigValue(LIVE_EDGE_MUTATION_JOURNAL_CONFIG_KEY, serialized);
-
     const growth = preparePreflightMutationAppend(persistedJournals[58], T + 1);
-    const adapter = new LiveEdgeMutationJournalPersistenceAdapter(ledger);
+    assert.equal(adapter.inspectInventory().state, 'AVAILABLE');
     const acknowledgement = adapter.append(growth.request);
     assert.equal(acknowledgement.disposition, 'CAPACITY_EXHAUSTED');
     assert.equal(acknowledgement.failureCode, 'CAPACITY_EXHAUSTED');
     assert.equal(ledger.getConfigValue(LIVE_EDGE_MUTATION_JOURNAL_CONFIG_KEY), serialized);
-    assert.equal(ledger.countEvents(), 0);
+    assert.equal(ledger.countEvents(), (59 + 58) * 2);
   } finally {
     ledger.close();
     rmSync(dataDir, { recursive: true, force: true });
@@ -726,6 +832,57 @@ test('orphan recovery rows without the fixed registry key block a replacement in
   }
 });
 
+test('unregistered reserved rows poison inventory, configured reads, and every later append', () => {
+  const primaryDir = tempDataDir('cosmos-live-edge-primary-registry-');
+  const donorDir = tempDataDir('cosmos-live-edge-orphan-donor-');
+  const primaryLedger = new Ledger(primaryDir);
+  const donorLedger = new Ledger(donorDir);
+  try {
+    const clock = Object.freeze({ nowMs: () => T + 2 });
+    const adapter = new LiveEdgeMutationJournalPersistenceAdapter(primaryLedger, clock);
+    const configured = prepareInitialMutationAppend(canonicalInput(9));
+    const current = appendAndRead(adapter, configured);
+
+    const donorAdapter = new LiveEdgeMutationJournalPersistenceAdapter(donorLedger, clock);
+    const orphan = prepareInitialMutationAppend(canonicalInput(10));
+    appendAndRead(donorAdapter, orphan);
+    const orphanRows = donorLedger.recentEvents(10, undefined, orphan.request.mutationId)
+      .sort((left, right) => left.id - right.id);
+    assert.equal(orphanRows.length, 2);
+    primaryLedger.logEventsAtomically(orphanRows.map(({ kind, symbol, data }) => ({
+      kind,
+      symbol,
+      data,
+    })));
+    const countBefore = primaryLedger.countEvents();
+
+    for (const read of [
+      () => adapter.inspectInventory(),
+      () => adapter.read(configured.request.mutationId),
+      () => adapter.read(orphan.request.mutationId),
+    ]) {
+      assert.throws(
+        read,
+        (error) => error instanceof LiveEdgeMutationJournalAdapterError
+          && error.code === 'PERSISTENCE_CORRUPT',
+      );
+    }
+
+    const acknowledgement = adapter.append(
+      preparePreflightMutationAppend(current, T + 1).request,
+    );
+    assert.equal(acknowledgement.disposition, 'FAILED');
+    assert.equal(acknowledgement.failureCode, 'PERSISTENCE_CORRUPT');
+    assert.equal(acknowledgement.appendedCount, 0);
+    assert.equal(primaryLedger.countEvents(), countBefore);
+  } finally {
+    primaryLedger.close();
+    donorLedger.close();
+    rmSync(primaryDir, { recursive: true, force: true });
+    rmSync(donorDir, { recursive: true, force: true });
+  }
+});
+
 test('a donor-valid future receipt time is rejected before CAS and cannot become a false post-commit failure', () => {
   const dataDir = tempDataDir();
   const ledger = new Ledger(dataDir);
@@ -775,6 +932,7 @@ test('adapter source has no network, exchange, signer, money, retry, or authorit
     assert.doesNotMatch(source, forbidden);
   }
   assert.match(source, /compareAndSetConfigValueAndLogEvents/);
+  assert.match(source, /countEvents/);
   assert.match(source, /applyMutationAppendRequest\(prior, request\)/);
   assert.match(source, /confirmMutationAppend/);
   assert.match(source, /reconstructPersistedMutationJournal/);

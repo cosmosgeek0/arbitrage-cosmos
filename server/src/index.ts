@@ -4,7 +4,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import WebSocket, { WebSocketServer } from 'ws';
-import { MarketEngine } from './engine/marketData.js';
+import { MarketEngine, type MarketLiquidationProjectionPort } from './engine/marketData.js';
 import { Ledger } from './ledger.js';
 import { loadConfig, saveConfig } from './config.js';
 import {
@@ -28,7 +28,14 @@ import { type BinanceClient, keyPosture, rateLimit } from './binance/client.js';
 import { resolveIcons, STOCK_TOKENS } from './binance/icons.js';
 import { tokenProfile, warmAllProfiles, profileWarmStatus } from './binance/profile.js';
 import { fetchMoneyFlow, FLOW_WINDOWS } from './binance/moneyflow.js';
-import { startLiquidationCollector, stopLiquidationCollector, liquidationSeries, liquidationStats } from './binance/liquidations.js';
+import {
+  ingestLiquidationPrint,
+  liquidationSeries,
+  liquidationStats,
+  observeLiquidationSourceStatus,
+  startLiquidationProjection,
+  stopLiquidationProjection,
+} from './binance/liquidations.js';
 import { AccountService } from './services/account.js';
 import { RiskService } from './services/risk.js';
 import { OrderService } from './services/orders.js';
@@ -135,7 +142,12 @@ Object.assign(config, {
     liveOrders: 'blocked',
   },
 });
-const engine = new MarketEngine(ledger);
+const engine = new MarketEngine(ledger, undefined, Object.freeze({
+  start: () => startLiquidationProjection(),
+  stop: () => stopLiquidationProjection(),
+  observeSourceStatus: (status) => observeLiquidationSourceStatus(status),
+  ingestPrint: (print) => ingestLiquidationPrint(print),
+} satisfies MarketLiquidationProjectionPort));
 const LEGACY_SCANNER_STATE = 'RETIRED' as const;
 const NO_ACTIVE_LEGACY_PROPOSALS: readonly [] = Object.freeze([]);
 
@@ -177,12 +189,6 @@ const systemIntegrationScheduler = createNodeRepeatingScheduler();
 const systemIntegrationProduction = createProductionSystemIntegrationPorts({
   clock: systemIntegrationClock,
   market: engine,
-  marketAuxiliary: Object.freeze({
-    start: () => startLiquidationCollector({
-      isKnownSymbol: (symbol) => engine.filters.has(symbol),
-    }),
-    stop: () => stopLiquidationCollector(),
-  }),
   basis: basisRuntime,
   volume: volumeRuntime,
 });

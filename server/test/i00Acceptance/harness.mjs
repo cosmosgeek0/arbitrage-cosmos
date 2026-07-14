@@ -118,7 +118,7 @@ export function runAuthorityScan(catalog) {
         if (!/(?:new\s+WebSocket|new\s+WebSocketServer|from\s+['"]ws['"]|wss:\/\/)/.test(lines[index])) continue;
         const classification = file.startsWith('server/src/systemIntegration/') ? 'FORBIDDEN_IN_COMPOSER'
           : file === 'server/src/engine/marketData.ts' || /server\/src\/services\/(?:volumeRuntime|basisRuntime)\.ts/.test(file)
-            || file === 'server/src/binance/liquidations.ts' ? 'ACCEPTED_EXISTING_PHYSICAL_PRODUCER'
+            ? 'ACCEPTED_EXISTING_PHYSICAL_PRODUCER'
             : file === 'server/src/services/bookStream.ts' || file === 'web/src/pages/TokenDetail.tsx' ? 'UI_LOCAL_EXCEPTION_REVIEW'
               : file.startsWith('server/src/intelligenceRuntime/') ? 'CANONICAL_RUNTIME_OR_MANUAL_SMOKE'
                 : file === 'server/src/binance/userStream.ts' ? 'PRIVATE_TRUTH_LEGACY_REVIEW'

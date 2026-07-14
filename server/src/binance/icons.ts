@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { deterministicOfflinePublicSourcesEnabled } from './publicSourceMode.js';
 
 /**
  * Server-side token-icon resolver (technique adopted from CG Signal Lab, ported
@@ -215,6 +216,7 @@ async function drain(): Promise<void> {
 /** Known logo URLs for the requested bases; unknown ones queue for background
  * resolution and appear on a later call. */
 export function resolveIcons(bases: string[]): Record<string, string> {
+  if (deterministicOfflinePublicSourcesEnabled()) return {};
   const now = Date.now();
   const out: Record<string, string> = {};
   for (const base of bases) {

@@ -40,6 +40,7 @@ import {
 import { validatePerformanceDocument } from './local-proxy-soak.mjs';
 import {
   EXPECTED_DONOR_ROWS,
+  EXPECTED_EXCLUSIONS,
   verifyDonorEquality,
 } from '../donor-equality.mjs';
 
@@ -155,11 +156,11 @@ const GENERATED_REPORT_PATHS = Object.freeze([
   'OFFICIAL_INTERFACE_MATRIX.md',
   'integration/reports/i00-proof-evidence.json',
 ]);
-const CANDIDATE_RECEIPT_SCHEMA_VERSION = 'i00.integration-candidate-receipt.v1';
+const CANDIDATE_RECEIPT_SCHEMA_VERSION = 'i00.integration-candidate-receipt.v2';
 const CANDIDATE_RECEIPT_MAX_BYTES = 512 * 1024;
 const CANDIDATE_RECEIPT_TITLE = '# I00 Phase 2 Integration Candidate Receipt\n\n';
-const CANDIDATE_RECEIPT_BLOCK_BEGIN = '<!-- I00_INTEGRATION_CANDIDATE_RECEIPT_V1_BEGIN -->\n```json\n';
-const CANDIDATE_RECEIPT_BLOCK_END = '\n```\n<!-- I00_INTEGRATION_CANDIDATE_RECEIPT_V1_END -->';
+const CANDIDATE_RECEIPT_BLOCK_BEGIN = '<!-- I00_INTEGRATION_CANDIDATE_RECEIPT_V2_BEGIN -->\n```json\n';
+const CANDIDATE_RECEIPT_BLOCK_END = '\n```\n<!-- I00_INTEGRATION_CANDIDATE_RECEIPT_V2_END -->';
 const CANDIDATE_RECEIPT_TERMINAL = '\n\nINTEGRATION_CANDIDATE_READY\nPARKED_READ_ONLY\nINDEPENDENT_VERIFICATION_REQUIRED\n';
 const CANDIDATE_TERMINAL_STATE = Object.freeze([
   'INTEGRATION_CANDIDATE_READY',
@@ -217,6 +218,61 @@ export const EXPECTED_CANDIDATE_LIMITATIONS = Object.freeze([
   Object.freeze({ id: 'A_ACTION_EVIDENCE_S2', status: 'POSTLANDING_EXCLUDED', reason: 'POST_LANDING_ONLY_EXCLUDED; ACCEPTED_POST_LANDING_TIP_ca30adf5e97b6697afec49f13073024d953b117b' }),
   Object.freeze({ id: 'PREVERIFY_WORKTREE', status: 'NOT_CONFIGURED', reason: 'NON_DONOR_WORKTREE_EXCLUDED_FROM_PHASE_2_CANDIDATE; TIP_46b2f1e31edf9f75aec7203e952a56f9869a2971; NO_INTEGRATION_DISPOSITION' }),
 ]);
+export const EXPECTED_DIRECTOR_DISPOSITIONS = Object.freeze({
+  donorEquality: '16/16/16/16',
+  postLandingExclusions: Object.freeze([
+    Object.freeze({
+      id: 'A-FORMAL',
+      tipSha: 'b491893416006cf529aef02e5dd4a25d6475e7b8',
+      treeSha: 'c48e7ddb5572a01190cf94cef2b2426a8df2f056',
+      disposition: 'POSTLANDING_EXCLUDED',
+    }),
+    Object.freeze({
+      id: 'A-ACTION-EVIDENCE-S2',
+      tipSha: 'ca30adf5e97b6697afec49f13073024d953b117b',
+      treeSha: '1637f682c97d8fcbd4cd955afe0e48542bcb90d3',
+      disposition: 'POSTLANDING_EXCLUDED',
+    }),
+  ]),
+  qC17ToA17: Object.freeze({
+    c17Commit: '4cc83f43edd9a50ff2d3e20970a57e2d0a57e92a',
+    c17Tree: '1aec7711f64419d50770d9c515d012173e982240',
+    a17Commit: '02b4eccc8d2ef53b830cafae06e5175715fa6ebb',
+    a17Tree: '5c86cebf0966cedd7ba01c56a01704b4f7bd0224',
+    relationship: 'C17_DIRECT_PARENT_OF_A17',
+    acceptanceReceiptPath: 'quant/RECEIPTS/Q17_ACCEPTANCE.md',
+    acceptanceReceiptSha256: '9cfa0356228d7f48674df2d9db523f0f0d53dab1a4e4255b6ba9676e463ec5dc',
+  }),
+  moneyPaths: Object.freeze([
+    Object.freeze({
+      id: 'LEDGER_CAS',
+      requestOriginCommit: 'a288657d98d6aa8615abd11879e2a097189a3be3',
+      requestPath: 'live-edge-receipts/patches/L06-canonical-ledger-cas.request.md',
+      requestGitBlob: '494cfc87083103b345e82e11726b8c89d09d07b6',
+      requestSha256: '79740ff5ef2951e96b5e3ea26acdc4aa786425ca3341335e55cef23d230c4f6f',
+      disposition: 'IMPLEMENTED_EXISTING_LEDGER_NO_SEND_AUTHORITY',
+      implementationPaths: Object.freeze([
+        'server/src/ledger.ts',
+        'server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts',
+      ]),
+      sendAuthorized: false,
+      externalActionAuthorization: 'NONE',
+    }),
+    Object.freeze({
+      id: 'FOUNDATION_QUANTITY_BRIDGE',
+      requestOriginCommit: 'a288657d98d6aa8615abd11879e2a097189a3be3',
+      requestPath: 'live-edge-receipts/patches/L06-foundation-quantity-bridge.request.md',
+      requestGitBlob: '697abdc548f3975247244062a79bc176c797be2d',
+      requestSha256: '9db092975a34c001f04412ef94644078009f90e5efc62ed258ced00aa38c4cb0',
+      disposition: 'IMPLEMENTED_CONTRACT_NO_AUTHORIZED_PRODUCTION_CONSUMER',
+      implementationPaths: Object.freeze([
+        'server/src/systemIntegration/adapters/foundationQuantityBridge.ts',
+      ]),
+      sendAuthorized: false,
+      externalActionAuthorization: 'NONE',
+    }),
+  ]),
+});
 export const EXPECTED_ACCEPTED_DONORS = Object.freeze([
   Object.freeze({ id: 'F-BRIDGE', tipSha: 'a0c0c2e5ef3180aa720488463643433cefeb65e5', treeSha: 'b29f0b50841ae921b0a0dfa65b71d224d6a7b5ec', integrationMethod: 'MERGE_ANCESTRY', integrationCommit: '0670f533840f415b612fb290d2c944f94af50d82', acceptanceReceiptSha256s: Object.freeze(['e01a614d89755553e5e86db657b8f2ed804060b68f8088c3f34b9c27d76bbba4']), integrationReceiptSha256: '2cdd156ba4510f49e9b192795aea756afbea55ee359e41e33ff15f4bc65810f9' }),
   Object.freeze({ id: 'SI-RECON', tipSha: 'f03ed786a8c5cab50ef27ad33026a74f79f7df87', treeSha: 'c88cb7a566daf858e73cebc77122409e96d0ffcd', integrationMethod: 'MERGE_ANCESTRY', integrationCommit: 'ba965fb0fbb5e10819d5a704e99153892fe94031', acceptanceReceiptSha256s: Object.freeze(['a0ac1bd8da362999e93d0b10094a4791f900e2a245e66b115a78128030574585']), integrationReceiptSha256: 'a36a0d67b4efdc47dfd03f47bed243d445cc9e5156d66d33924a6fff860fc4f1' }),
@@ -371,6 +427,7 @@ async function loadSealedCandidateEvidence(options, environment) {
       || donorProof.candidate?.tree !== topology.candidateTreeSha) {
     throw new Error(`DONOR_EQUALITY_PROOF_BLOCKED:${donorProof.failures.join(',')}`);
   }
+  const directorDispositions = await verifyDirectorDispositionGit(environment, topology.candidateSha, donorProof);
   const candidateManifest = await sourceManifest(environment, topology.candidateSha);
   const proofCatalog = await validateProofCatalogSealBinding(environment, topology.candidateSha, topology.sealHeadSha);
   const limitationSource = await validateCandidateLimitationsAtRevision(environment, topology.sealHeadSha);
@@ -406,6 +463,7 @@ async function loadSealedCandidateEvidence(options, environment) {
   return Object.freeze({
     topology,
     donorProof,
+    directorDispositions,
     candidateManifest,
     proofCatalog,
     limitationSource,
@@ -437,6 +495,7 @@ export async function renderCandidateReceiptFromWorkingSealEvidence(options) {
         || donorProof.candidate?.tree !== source.treeSha) {
       throw new Error(`DONOR_EQUALITY_PROOF_BLOCKED:${donorProof.failures.join(',')}`);
     }
+    const directorDispositions = await verifyDirectorDispositionGit(environment, options.candidateSha, donorProof);
     const candidateManifest = await sourceManifest(environment, options.candidateSha);
     const proofCatalog = await validateProofCatalogWorkingSeal(environment, options.candidateSha);
     const limitationSource = validateCandidateLimitationsFromWorkingSeal();
@@ -469,6 +528,7 @@ export async function renderCandidateReceiptFromWorkingSealEvidence(options) {
       candidateSha: options.candidateSha,
       candidateTreeSha: source.treeSha,
       donorProof,
+      directorDispositions,
       performanceReceipt,
       browserReceipt,
       completeReceipt,
@@ -489,13 +549,14 @@ export async function validateCompleteEvidence(options) {
   try {
     const evidence = await loadSealedCandidateEvidence(options, environment);
     const {
-      topology, donorProof, candidateManifest, proofCatalog, performanceReceipt, browserReceipt,
+      topology, donorProof, directorDispositions, candidateManifest, proofCatalog, performanceReceipt, browserReceipt,
       completeReceipt, allowedEvidencePaths, frozenEvidence, source, limitationSource,
     } = evidence;
     const candidateReceipt = await validateIntegrationCandidateReceiptAtRevision(environment, topology.sealHeadSha, {
       candidateSha: topology.candidateSha,
       candidateTreeSha: topology.candidateTreeSha,
       donorProof,
+      directorDispositions,
       performanceReceipt,
       browserReceipt,
       completeReceipt,
@@ -739,6 +800,93 @@ function hasExactKeys(value, keys) {
 
 function exactJson(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+export function deriveDirectorDispositionsFromDonorProof(donorProof) {
+  const countOrder = ['expected', 'discovered', 'accepted', 'integrated'];
+  const donorEquality = countOrder.map((key) => donorProof?.counts?.[key]).join('/');
+  const postLandingExclusions = Array.isArray(donorProof?.exclusions)
+    ? donorProof.exclusions
+      .filter((entry) => entry?.id === 'A-FORMAL' || entry?.id === 'A-ACTION-EVIDENCE-S2')
+      .map((entry) => ({
+        id: entry.id,
+        tipSha: entry.tip?.sha,
+        treeSha: entry.tip?.observedTree,
+        disposition: entry.disposition,
+      }))
+    : [];
+  if (donorProof?.status !== 'PASS'
+      || donorEquality !== '16/16/16/16'
+      || !exactJson(postLandingExclusions, EXPECTED_DIRECTOR_DISPOSITIONS.postLandingExclusions)) {
+    throw new Error('DIRECTOR_DISPOSITIONS_DONOR_PROOF_INVALID');
+  }
+  return Object.freeze({
+    donorEquality,
+    postLandingExclusions: Object.freeze(postLandingExclusions.map((entry) => Object.freeze({ ...entry }))),
+    qC17ToA17: structuredClone(EXPECTED_DIRECTOR_DISPOSITIONS.qC17ToA17),
+    moneyPaths: structuredClone(EXPECTED_DIRECTOR_DISPOSITIONS.moneyPaths),
+  });
+}
+
+/** Independently re-read every PF-005 pinned Git object before receipt use. */
+export async function verifyDirectorDispositionGit(environment, candidateSha, donorProof) {
+  if (typeof candidateSha !== 'string' || !/^[0-9a-f]{40}$/u.test(candidateSha)) {
+    throw new Error('DIRECTOR_DISPOSITIONS_CANDIDATE_INVALID');
+  }
+  const derived = deriveDirectorDispositionsFromDonorProof(donorProof);
+  const q = derived.qC17ToA17;
+  const [c17Type, a17Type, c17Meta, a17Meta, qReceiptBlob, qReceiptBytes] = await Promise.all([
+    gitOutput(['cat-file', '-t', q.c17Commit], environment),
+    gitOutput(['cat-file', '-t', q.a17Commit], environment),
+    gitOutput(['show', '-s', '--format=%T %P', q.c17Commit], environment),
+    gitOutput(['show', '-s', '--format=%T %P', q.a17Commit], environment),
+    gitOutput(['rev-parse', `${q.a17Commit}:${q.acceptanceReceiptPath}`], environment),
+    gitOutput(['show', `${q.a17Commit}:${q.acceptanceReceiptPath}`], environment),
+  ]);
+  const c17Fields = c17Meta.toString('utf8').trim().split(/\s+/u);
+  const a17Fields = a17Meta.toString('utf8').trim().split(/\s+/u);
+  if (c17Type.toString('utf8').trim() !== 'commit'
+      || a17Type.toString('utf8').trim() !== 'commit'
+      || c17Fields[0] !== q.c17Tree
+      || !exactJson(a17Fields, [q.a17Tree, q.c17Commit])
+      || qReceiptBlob.toString('utf8').trim() !== '3dad68c9dc52e97aadaec173930388e3404769e7'
+      || sha256(qReceiptBytes) !== q.acceptanceReceiptSha256) {
+    throw new Error('DIRECTOR_DISPOSITIONS_Q_ANCESTRY_INVALID');
+  }
+
+  const requiredChain = [
+    'a288657d98d6aa8615abd11879e2a097189a3be3',
+    '3e2cc9882aa05bb2ad38cc495c7f55534a7a4146',
+    'df6b472993ca9659ce09cf5f72004981c6835f0d',
+    'ec82bc51d5311dfb3f505216bfb3fa41733f038c',
+    candidateSha,
+  ];
+  for (let index = 0; index < requiredChain.length - 1; index += 1) {
+    await gitOutput(['merge-base', '--is-ancestor', requiredChain[index], requiredChain[index + 1]], environment);
+  }
+  for (const moneyPath of derived.moneyPaths) {
+    const [originType, requestType, requestBlob, requestBytes, introduction] = await Promise.all([
+      gitOutput(['cat-file', '-t', moneyPath.requestOriginCommit], environment),
+      gitOutput(['cat-file', '-t', `${moneyPath.requestOriginCommit}:${moneyPath.requestPath}`], environment),
+      gitOutput(['rev-parse', `${moneyPath.requestOriginCommit}:${moneyPath.requestPath}`], environment),
+      gitOutput(['show', `${moneyPath.requestOriginCommit}:${moneyPath.requestPath}`], environment),
+      gitOutput(['diff-tree', '--no-commit-id', '--name-status', '-r', moneyPath.requestOriginCommit, '--', moneyPath.requestPath], environment),
+    ]);
+    if (originType.toString('utf8').trim() !== 'commit'
+        || requestType.toString('utf8').trim() !== 'blob'
+        || requestBlob.toString('utf8').trim() !== moneyPath.requestGitBlob
+        || sha256(requestBytes) !== moneyPath.requestSha256
+        || introduction.toString('utf8').trim() !== `A\t${moneyPath.requestPath}`) {
+      throw new Error(`DIRECTOR_DISPOSITIONS_${moneyPath.id}_REQUEST_INVALID`);
+    }
+    for (const implementationPath of moneyPath.implementationPaths) {
+      const implementationType = await gitOutput(['cat-file', '-t', `${candidateSha}:${implementationPath}`], environment);
+      if (implementationType.toString('utf8').trim() !== 'blob') {
+        throw new Error(`DIRECTOR_DISPOSITIONS_${moneyPath.id}_IMPLEMENTATION_INVALID`);
+      }
+    }
+  }
+  return derived;
 }
 
 function exactUtcTimestamp(value) {
@@ -2969,8 +3117,13 @@ export function buildIntegrationCandidateReceiptDocument({
   limitationSource,
   sourceManifest: sealedSourceManifest,
   evidenceManifest: sealedEvidenceManifest,
+  directorDispositions = deriveDirectorDispositionsFromDonorProof(donorProof),
   limitations = EXPECTED_CANDIDATE_LIMITATIONS,
 }) {
+  const derivedDirectorDispositions = deriveDirectorDispositionsFromDonorProof(donorProof);
+  if (!exactJson(directorDispositions, derivedDirectorDispositions)) {
+    throw new Error('DIRECTOR_DISPOSITIONS_EVIDENCE_MISMATCH');
+  }
   return {
     schemaVersion: CANDIDATE_RECEIPT_SCHEMA_VERSION,
     receiptPath: CANDIDATE_RECEIPT_PATH,
@@ -2996,6 +3149,7 @@ export function buildIntegrationCandidateReceiptDocument({
       integrationReceiptSha256: entry.integrationReceiptSha256,
     })),
     donorProof: structuredClone(donorProof),
+    directorDispositions: structuredClone(directorDispositions),
     protocolAndConfigHashes: EXPECTED_PROTOCOL_AND_CONFIG_HASHES.map((entry) => ({ ...entry })),
     measurements: candidateReceiptMeasurements(performanceReceipt, browserReceipt, completeReceipt),
     managedComponentInventory: candidateManagedComponentInventory(performanceReceipt),
@@ -3200,7 +3354,7 @@ function candidateDonorProofShapeValid(proof, candidate) {
 function candidateReceiptShapeValid(document) {
   if (!hasExactKeys(document, [
     'schemaVersion', 'receiptPath', 'candidate', 'donorEquality', 'donors', 'donorProof',
-    'protocolAndConfigHashes', 'measurements', 'managedComponentInventory', 'controlInventory',
+    'directorDispositions', 'protocolAndConfigHashes', 'measurements', 'managedComponentInventory', 'controlInventory',
     'manifests', 'limitationSource', 'limitations', 'externalBoundary', 'externalActions', 'selfCertification',
     'verification', 'terminalState',
   ])) return false;
@@ -3211,6 +3365,9 @@ function candidateReceiptShapeValid(document) {
     'acceptanceReceiptSha256s', 'integrationReceiptSha256',
   ]))) return false;
   if (!candidateDonorProofShapeValid(document.donorProof, document.candidate)) return false;
+  if (!hasExactKeys(document.directorDispositions, [
+    'donorEquality', 'postLandingExclusions', 'qC17ToA17', 'moneyPaths',
+  ])) return false;
   if (!Array.isArray(document.protocolAndConfigHashes)
       || document.protocolAndConfigHashes.some((entry) => !hasExactKeys(entry, ['id', 'kind', 'hash']))) return false;
   if (!hasExactKeys(document.measurements, ['completeAcceptance', 'browser', 'performance', 'restart'])) return false;
@@ -3277,6 +3434,36 @@ export function validateIntegrationCandidateReceiptMarkdown(text, expected) {
       || !exactJson(document.donors, EXPECTED_ACCEPTED_DONORS)) failures.push('CANDIDATE_RECEIPT_DONOR_INVENTORY_INVALID');
   if (!candidateDonorProofShapeValid(document.donorProof, document.candidate)
       || !exactJson(document.donorProof, expected.donorProof)) failures.push('CANDIDATE_RECEIPT_DONOR_PROOF_INVALID');
+  let expectedDirectorDispositions = null;
+  try {
+    expectedDirectorDispositions = expected.directorDispositions
+      ?? deriveDirectorDispositionsFromDonorProof(expected.donorProof);
+  } catch {
+    expectedDirectorDispositions = null;
+  }
+  if (!exactJson(document.directorDispositions, expectedDirectorDispositions)) {
+    failures.push('CANDIDATE_RECEIPT_DIRECTOR_DISPOSITIONS_INVALID');
+  }
+  const expectedExclusions = EXPECTED_EXCLUSIONS
+    .filter((entry) => entry.id === 'A-FORMAL' || entry.id === 'A-ACTION-EVIDENCE-S2')
+    .map(({ id, tipSha, treeSha, disposition }) => ({ id, tipSha, treeSha, disposition }));
+  const donorExclusions = Array.isArray(document.donorProof?.exclusions)
+    ? document.donorProof.exclusions
+      .filter((entry) => entry?.id === 'A-FORMAL' || entry?.id === 'A-ACTION-EVIDENCE-S2')
+      .map((entry) => ({
+        id: entry.id,
+        tipSha: entry.tip?.sha,
+        treeSha: entry.tip?.observedTree,
+        disposition: entry.disposition,
+      }))
+    : [];
+  if (document.donorEquality?.proof !== '16/16/16/16'
+      || document.directorDispositions?.donorEquality !== '16/16/16/16'
+      || !exactJson(document.directorDispositions?.postLandingExclusions, expectedExclusions)
+      || !exactJson(donorExclusions, expectedExclusions)
+      || !validateCandidateReceiptLimitations(document.limitations)) {
+    failures.push('CANDIDATE_RECEIPT_DIRECTOR_LAW_INCOMPLETE');
+  }
   if (!exactJson(document.protocolAndConfigHashes, EXPECTED_PROTOCOL_AND_CONFIG_HASHES)) failures.push('CANDIDATE_RECEIPT_PROTOCOL_HASHES_INVALID');
   const expectedMeasurements = candidateReceiptMeasurements(
     expected.performanceReceipt,

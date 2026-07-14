@@ -8,7 +8,7 @@ import { curateNotifications, groupNotifications, notificationEnabled } from '..
 import { fireRefresh } from '../lib/refresh';
 import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import { type ProductBindingContinuity, type ProductComponentProjection } from '../lib/productIntegration';
-import { canonicalComponentPresentation, canonicalRefreshTargetPosture, canonicalWatchmanOverallPresentation } from '../lib/canonicalCockpitTruth';
+import { canonicalComponentPresentation, canonicalMarketFeedReadinessPresentation, canonicalRefreshTargetPosture, canonicalWatchmanOverallPresentation } from '../lib/canonicalCockpitTruth';
 import { ACCENTS, CURRENCIES, DATA_CADENCE_DEFAULTS, MARKET_PING_CHOICES, type AccentKey, type DataCadenceKey, type NotificationRuleKey } from '../lib/prefs';
 import { openOverlay, useOverlay } from '../lib/overlay';
 import { TokenIcon } from './TokenIcon';
@@ -1548,8 +1548,6 @@ function SharedTopBar() {
   const accountAvatar = accountProfile.avatar ?? DEFAULT_PROFILE_LOGO;
   const accountTone = 'off';
   const accountSub = 'OWNER GATED · NOT CONFIGURED';
-  const feeds = state?.feeds ?? {}; const feedList = Object.entries(feeds);
-  const feedsOk = feedList.length > 0 && feedList.every(([, s]) => s === 'open');
   const events = state?.events ?? [];
   const zone = ZONES.find((z) => z.id === prefs.clockZone) ?? ZONES[0];
   const activeClock = clockParts(zone.id, now);
@@ -1719,6 +1717,18 @@ function SharedTopBar() {
       components: productSnapshot.components,
     })
     : { status: 'outage' as const, label: 'Supervisor Unavailable' };
+  const advisorMarketFeedReadiness = productSnapshot
+    ? canonicalMarketFeedReadinessPresentation({
+      continuity: productBinding.continuity,
+      machineReady: productSnapshot.ownerView.machineReady,
+      dataFreshness: productSnapshot.ownerView.dataFreshness,
+      components: productSnapshot.components,
+    })
+    : {
+      proven: false,
+      label: 'Market Feed Readiness Unproven' as const,
+      detail: 'Canonical product supervisor snapshot is unavailable.',
+    };
   const advRaw: ({ sev: Sev; name: string; detail: string; page?: Page } | null)[] = [
     !productSnapshot
       ? { sev: 'action', name: 'Product supervisor unavailable', detail: 'Canonical control truth is unavailable; the cockpit remains fail-closed.', page: 'control-room' }
@@ -1737,7 +1747,9 @@ function SharedTopBar() {
       ? { sev: 'pass', name: 'Kill switch truth proven', detail: 'Canonical owner is wired live and effective posture is CLEAR.' }
       : { sev: 'invest', name: 'Kill switch fail-closed', detail: killSwitchControl?.disabledReason ?? killSwitchControl?.wiringState ?? 'Canonical kill-switch truth is unavailable.', page: 'control-room' },
     !connected ? { sev: 'invest', name: 'Cockpit socket offline', detail: 'Reconnecting.', page: 'system' } : null,
-    !feedsOk ? { sev: 'invest', name: 'Market feed degraded', detail: 'A stream is not open.', page: 'system' } : { sev: 'pass', name: 'Market feeds live', detail: `${Object.keys(feeds).length} open.` },
+    advisorMarketFeedReadiness.proven
+      ? { sev: 'pass', name: advisorMarketFeedReadiness.label, detail: advisorMarketFeedReadiness.detail }
+      : { sev: 'invest', name: advisorMarketFeedReadiness.label, detail: advisorMarketFeedReadiness.detail, page: 'system' },
     { sev: 'pass', name: 'Live execution blocked', detail: 'LIVE_EXECUTION_NOT_IMPLEMENTED; no signed, test-order, or money-moving port is mounted.' },
     { sev: 'pass', name: 'Private adapter owner-gated', detail: 'Private exchange reads and credentials are NOT_CONFIGURED in this candidate.' },
   ];

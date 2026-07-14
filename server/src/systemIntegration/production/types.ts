@@ -11,6 +11,7 @@ import type {
   UtcClock,
 } from '../composition/types.js';
 import type { QAdvisoryObservationBinding } from '../adapters/qAdvisory.js';
+import type { SystemSourceRegistrySnapshot } from '../contracts/types.js';
 
 export type ProductionFeedStatus = 'connecting' | 'open' | 'closed';
 
@@ -39,16 +40,6 @@ export interface ProductionMarketEnginePort {
   allRows(): readonly Readonly<ProductionMarketRow>[];
   priceUpdatedAt(symbol: string): number | null;
   markEventTimestamp(symbol: string): number | null;
-}
-
-/**
- * Narrow lifecycle seam for an already-owned public market auxiliary. The
- * integration root may start and stop it with the market graph, but cannot
- * construct its socket, read its cache, or claim authority over its records.
- */
-export interface ProductionMarketAuxiliaryLifecyclePort {
-  start(): void;
-  stop(): void;
 }
 
 export interface ProductionStrategySnapshot {
@@ -92,7 +83,6 @@ export interface ProductionVolumeRuntimePort {
 export interface ProductionSystemIntegrationInput {
   readonly clock: UtcClock;
   readonly market: ProductionMarketEnginePort;
-  readonly marketAuxiliary?: ProductionMarketAuxiliaryLifecyclePort;
   readonly basis: ProductionBasisRuntimePort;
   readonly volume: ProductionVolumeRuntimePort;
   /** Read-only existing L01/Q evidence; omitted binds accepted ABSTAIN_UNKNOWN. */
@@ -102,6 +92,7 @@ export interface ProductionSystemIntegrationInput {
 }
 
 export interface ProductionSystemIntegrationPorts {
+  readonly sourceRegistry: Readonly<SystemSourceRegistrySnapshot>;
   readonly runtimes: CoreRuntimePorts;
   /** Only existing public Spot/USD-M projections are wired by this factory. */
   readonly components: ApplicationComponentReadPorts;

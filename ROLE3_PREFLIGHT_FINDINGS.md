@@ -19,7 +19,7 @@ The inspected source object is fixed independently of this findings commit:
 | Git | `2.50.1` |
 | Date / timezone | `2026-07-14`, `Asia/Kolkata` |
 
-Only this file was written. No source file, sibling worktree, integration worktree, ref, merge, or remote was modified.
+Only this file was written. No source file, sibling worktree, integration worktree, merge, or remote was modified. The assigned `role3-preflight-20260715` branch ref advanced only through findings-file commits; no other ref was changed.
 
 ### Controlling inputs reconstructed before inspection
 
@@ -27,10 +27,12 @@ Only this file was written. No source file, sibling worktree, integration worktr
 | --- | --- | --- | --- |
 | Final integration and independent-verification order | `/Users/cosmosgeek/Desktop/preverify/FINAL_INTEGRATION_AND_INDEPENDENT_VERIFICATION_ORDER.md` | `73615984fa0403a4c0d7ea0db9893292d57ea18614714398684cf9a3062fb05c` | Exact Git-backed donor equality; no duplicate authority/lifecycle; clean-install complete tests; reproducible findings only; scout does not repair. |
 | Post-I00 AI operations activation, §0 | `/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md:17` | `cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195` | Until an immutable accepted landing exists, inventory/collision mapping is read-only and shared seams are untouched. |
-| Main director state, D-LAUNCH-1 through D-LAUNCH-29 | `/Users/cosmosgeek/Desktop/Main/QL_DIRECTOR_STATE.md` | `db90f7165ec577e19bab0dd4abca29b647ffb7b2d5be677c9b7f4faa5de80878`; D-LAUNCH-29 cutoff | D-LAUNCH-19 candidate-receipt obligations; D-LAUNCH-20 denominator law; D-LAUNCH-22 one known socket-attempt disposition; D-LAUNCH-27 any other egress/private/signed attempt boundary; D-LAUNCH-29 findings-file-only scout role. A later D-LAUNCH entry was outside the requested cutoff. |
+| Main director state, requested cutoff through D-LAUNCH-29 | `/Users/cosmosgeek/Desktop/Main/QL_DIRECTOR_STATE.md` | `db90f7165ec577e19bab0dd4abca29b647ffb7b2d5be677c9b7f4faa5de80878`; D-LAUNCH-29 cutoff | D-LAUNCH-19 candidate-receipt obligations; D-LAUNCH-20 denominator law; D-LAUNCH-22 one known socket-attempt disposition; D-LAUNCH-27 any other egress/private/signed attempt boundary; D-LAUNCH-29 findings-file-only scout role. A later D-LAUNCH entry was outside the requested cutoff. |
 | AI-Ops authority resolution receipt | `/Users/cosmosgeek/Desktop/Main/AI_OPS_AUTHORITY_RESOLUTION_RECEIPT.md` | `51d9343f747c7f652bbcd53137b06dec2f760268a9799ea57fbe077eaef898f0` | Named authorities resolve to real repository objects; no dummy owner; pre-landing posture remains read-only. |
 
 The final-order document is not present in source commit `03857dc`; it was consumed from the immutable preverify evidence path above. The two protected owner directives are also absent from this clean scout worktree by design; their accepted sealed SHA-256 fallbacks were used by the repository proof code.
+
+Main's durable state has no D-LAUNCH-3 heading: it goes from D-LAUNCH-2 to D-LAUNCH-4, whose text refers backward to D-LAUNCH-3. The omitted ruling is independently reconstructible as the Q-lane transfer to the Fable lead at commit `cf37df4af0ef3724f8f3a145c6be3cdcc84799c0`; `quant/RECEIPTS/Q04_ACCEPTANCE.md:13`, `quant/RECEIPTS/Q05.md:24`, and `quant/RECEIPTS/Q06_ACCEPTANCE.md:13` bind later accepted work to that ruling. This is a durable-state stanza omission, not a donor ancestry or receipt-hash mismatch.
 
 ## Ranked likely acceptance blockers
 
@@ -67,7 +69,7 @@ EXTERNAL_NETWORK_REQUEST fapi.binance.com/fapi/v1/exchangeInfo
 
 Both false-green assertions were introduced by `9e233798e159d369e180825b9289dea1799a4563` (`git blame -L 268,274 server/test/perimeter.mjs` and `git blame -L 879,886 server/test/gates.mjs`).
 
-The 13 observed attempts are:
+The tripwire observed the count `13` and printed the first eight identities. The remaining five identities below are source-traced in the routes exercised by the same gate; the gate deleted the sentinel after printing only its first eight rows, so identities 9–13 are inferred rather than directly printed:
 
 1. startup Spot exchange info;
 2. startup USD-M exchange info;
@@ -77,11 +79,11 @@ The 13 observed attempts are:
 6. USD-M 24-hour ticker;
 7. Spot depth;
 8. Spot trades;
-9. futures klines;
-10. funding history;
-11. Spot time;
-12. Spot klines;
-13. CoinGecko icon search.
+9. futures klines (source-traced);
+10. funding history (source-traced);
+11. Spot time (source-traced);
+12. Spot klines (source-traced);
+13. CoinGecko icon search (source-traced).
 
 The tripwire prints only the first eight, so items 9–13 were mapped from the exercised route lines and exact REST/icon call sites. A repeated Spot detail quote is suppressed by the negative cache and does not create a fourteenth attempt.
 
@@ -198,14 +200,20 @@ Observed: exit `1`, `45/46`, with the ten differences above. Expected: exit `0`,
 
 **Actual.** `LiveEdgeMutationJournalPersistenceAdapter.inspectInventory()` performs a global orphan check only when `registry.journals.length === 0` (`server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts:678-708`). When at least one valid registry row exists, lines 710-729 reconstruct only configured IDs and do not discover unrelated reserved-kind rows. `#assertNoOrphanEvents` exists at lines 493-500 but is not invoked globally in that branch.
 
-A valid configured journal plus a copied orphan journal/audit pair returned:
+A valid configured journal plus a copied orphan journal/audit pair returned this exact material object:
 
 ```json
 {
-  "state": "AVAILABLE",
-  "journalCount": 1,
-  "entryCount": 1,
-  "reconstructionProven": true,
+  "inventoryAfterOrphan": {
+    "state": "AVAILABLE",
+    "journalCount": 1,
+    "entryCount": 1,
+    "highestJournalVersion": 1,
+    "reconstructionProven": true,
+    "persistenceOwner": "SYSTEM_INTEGRATION_LEDGER",
+    "sendAuthorized": false,
+    "externalActionAuthorization": "NONE"
+  },
   "followOn": "COMMITTED_NEW",
   "directOrphanRead": "PERSISTENCE_CORRUPT:mutation-journal Ledger events exist without their canonical registry snapshot"
 }

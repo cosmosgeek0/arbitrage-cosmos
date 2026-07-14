@@ -30,7 +30,9 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 | F-BRIDGE canonical execution | ~/Desktop/f-bridge | f-bridge-execution-20260713 | 24ac894 | ACCEPTED (1e9d28a) + MERGED to current-main c900907 (24/24 foundation, npm test green) |
 | A-CORE IP-ASSURANCE | ~/Desktop/ip-assurance | ip-assurance-20260713 | 9785c93 | CORE_SCAFFOLD_READY (08a0a09) — full READY after director fan-in |
 | A-HAZARD S1 | ~/Desktop/ip-assur-hazard | ip-assur-hazard-20260713 | 9785c93 | HAZARD_PRESTAGE_READY (ab33b37, D-LAUNCH-10 resealed) |
-| A-FORMAL S3 | ~/Desktop/ip-assur-formal | ip-assur-formal-20260713 | 9785c93 | REFUSED BY INTEGRATOR (D-LAUNCH-20): BLOCKED_NO_NETWORK_BOUNDARY_VIOLATED at 89c783b (root npm test exit 127) — documented-OUT of candidate; repair worker = wave 13, NON-CANDIDATE, post-landing re-entry only |
+| A-FORMAL S3 | ~/Desktop/ip-assur-formal | ip-assur-formal-20260713 | 9785c93 | BLOCKED receipt sealed a0c7b6e (root-egress finding, D-LAUNCH-22; exit-127 was hydration artifact — S3 content GREEN 7/7 exhaustive, 43/43 net-deny) — OUT of candidate by ordering law; S3-DEEPEN WORKING (wave 14); post-landing re-entry |
+| S2 actionEvidence (wave 14) | ~/Desktop/ip-assur-action | ip-assur-action-20260714 | current-main at cut | WORKING — IP_ASSURANCE §3 envelope; POST-LANDING donor, never enters candidate (D-LAUNCH-22.3) |
+| PRE-VERIFY (non-donor) | ~/Desktop/preverify | preverify-20260714 | 0bbf23c | PREVERIFY_READY ACCEPTED (0b566d6, pushed; D-LAUNCH-21) — advisory evidence for Role 3 + landing; PARKED read-only |
 | A-COCKPIT S5 | ~/Desktop/ip-assur-cockpit | ip-assur-cockpit-20260713 | 9785c93 | COCKPIT_PRESTAGE_READY (d4ff9c9) |
 | A-AGENT S6 | ~/Desktop/ip-assur-agent | ip-assur-agent-20260713 | 9785c93 | AGENT_PRESTAGE_READY (97e87bd, D-LAUNCH-13 taxonomy) |
 | A-STABILITY S8 | ~/Desktop/ip-assur-stability | ip-assur-stability-20260713 | 9785c93 | STABILITY_PRESTAGE_READY (d35674e) |

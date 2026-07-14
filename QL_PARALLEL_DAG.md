@@ -36,7 +36,7 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 | A-COCKPIT S5 | ~/Desktop/ip-assur-cockpit | ip-assur-cockpit-20260713 | 9785c93 | COCKPIT_PRESTAGE_READY (d4ff9c9) |
 | A-AGENT S6 | ~/Desktop/ip-assur-agent | ip-assur-agent-20260713 | 9785c93 | AGENT_PRESTAGE_READY (97e87bd, D-LAUNCH-13 taxonomy) |
 | A-STABILITY S8 | ~/Desktop/ip-assur-stability | ip-assur-stability-20260713 | 9785c93 | STABILITY_PRESTAGE_READY (d35674e) |
-| S2 actionEvidence satellite | (never cut) | — | — | RULED NOT_CONFIGURED (D-LAUNCH-20): not a donor, never fabricated; building it pre-landing is FORBIDDEN (frozen inventory) |
+| S2 actionEvidence satellite | (superseded row) | — | — | D-LAUNCH-20 NOT_CONFIGURED ruling superseded by D-LAUNCH-22.3/25 — built as post-landing donor, see "S2 actionEvidence (wave 14)" row above; candidate still excludes it |
 | S4 assuranceCase satellite | ~/Desktop/ip-assur-case | ip-assur-case-20260713 | c57610c | RESEALED b4d8a44 + INTEGRATED by Role-2 (merge 86ee3b5, 41/41 blobs exact) |
 
 | SI-RECON ruling | ~/Desktop/si-recon | si-recon-ruling-20260714 | e25fd5d | ACCEPTED ruling A + MERGED to current-main c43262a (SI 180/180, npm test green) |

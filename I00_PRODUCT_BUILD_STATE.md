@@ -108,3 +108,10 @@ Work that must not be repeated: do not re-fan-in the four accepted IP packets; d
 ## Director board sync (D-LAUNCH-10, 2026-07-13)
 
 Live board/worktrees/owners are maintained in Main QL_PARALLEL_DAG.md + QL_DIRECTOR_STATE.md (MERGE RUNBOOK + D-LAUNCH-1..10 log; current-main 55e008f). Q frozen 02b4ecc. L: L00-L08+L08.1/2+L10+L14 merged; L09 PARKED on F-BRIDGE (D-LAUNCH-9); L11 acceptance in flight. IP: 4 packets prestage-ready; assurance A-CORE + 5 satellites in flight with D-LAUNCH-10 ownership exclusions. Fan-in remains director-serial with changed-path ownership scans before every merge.
+
+## DIRECTOR_HANDOFF_READY (Phase 1, FINAL_INTEGRATION_AND_INDEPENDENT_VERIFICATION_ORDER, 2026-07-14)
+
+Canonical current-main: a4a8ebd (see Main). Integration worktree: this one (i00-product-assembly-20260713, four ip-* fan-ins done). ACCEPTED DONOR TABLE (branch = tip = receipt-sealed):
+quant-edge-research-factory-20260712 = 02b4ecc (Q LANE_READY, 3011 pass) · dashboard-shell-20260712 = 6925015 · l15-deploy-infra-20260712 = 2cec412 · ip-runtime = 8058ab8 · ip-control = 56c47da · ip-ops = 6bfd543 · ip-proof = 23e985c · ip-assurance = 08a0a09 (CORE_SCAFFOLD_READY) · ip-assur-hazard = ab33b37 · ip-assur-formal = 89c783b · ip-assur-cockpit = d4ff9c9 · ip-assur-agent = 97e87bd · ip-assur-stability = d35674e · si-recon + f-bridge ALREADY MERGED into current-main (c43262a, c900907).
+PENDING (integrate LAST, only when sealed): L lane live-execution-control-proof-20260712 (finale running toward LANE_READY) · ip-assur-case S4 (reseal pending D-LAUNCH-16 exemption).
+Deferred shared decisions for integrator: two L patch requests (ledger compare-and-set, quantity bridge) in live-edge-receipts/patches/ + all *_INSERTION_REQUEST rows. Rules: QL_DIRECTOR_STATE.md (D-LAUNCH-1..16) + QL_PARALLEL_DAG.md in Main are authoritative. Work that must NOT be repeated: any lane/shard/packet build; all merges already on lane branches/current-main. Old director retains ONLY Phase-5 landing authority; shared write/merge authority on this integration branch is RELINQUISHED to Role 2 upon its DIRECTOR_AUTHORITY_ACCEPTED record.

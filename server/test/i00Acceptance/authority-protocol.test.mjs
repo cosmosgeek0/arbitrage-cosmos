@@ -95,8 +95,8 @@ test('historical packet pins remain immutable while D-LAUNCH-7 accepts living di
   assert.match(effective.acceptance.sourceTip, /^[a-f0-9]{40}$/);
   assert.equal(effective.acceptance.rulingCommit, 'bdb29e37fb9b152aa1b7e1063ca892cd405c6245');
   assert.deepEqual(effective.acceptance.livingResults.map((entry) => [entry.path, entry.latestCommit, entry.observedSha256]), [
-    ['QL_DIRECTOR_STATE.md', '7ff1fd05584779672690f5058a01b1de573b4ccd', 'b4a81f58fb0c2f701f1c761a8cce0b7e032854d9b52f2ce4fc400ac849765ec2'],
-    ['QL_PARALLEL_DAG.md', '5aa6c34e20d00ce5963c2d0e848d5dd6183775a4', 'f6802f2e6236622c8f2d4b7bf2a5dda049f90aa553522034d929ca6a6e15a110'],
+    ['QL_DIRECTOR_STATE.md', 'bf262c08984cf05cb84425e850b187af5f8adf03', '4d7753412a7b57f7e5e6a512427562db85a1d678ce90ed950223c90ef180c90b'],
+    ['QL_PARALLEL_DAG.md', '0bbf23c06c60c1a4553422f099d8b242f13b6dc5', '4e44e60837fa0b08039e398732d3830940078db8b08fe889b28ce6bc85a8e0ad'],
   ]);
   assert(effective.acceptedInputs.filter((entry) => entry.acceptanceMode === 'LATEST_CURRENT_MAIN_TOUCH')
     .every((entry) => entry.historicalPacketPassed === false && entry.historicalPacketPinPreserved));

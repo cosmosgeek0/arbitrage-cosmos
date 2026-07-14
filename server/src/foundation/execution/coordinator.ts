@@ -713,7 +713,8 @@ export class ExecutionCoordinator {
       typeof cumulative !== 'number' ||
       !Number.isFinite(cumulative) ||
       cumulative <= 0 ||
-      cumulative > request.leg.quantity
+      cumulative > request.leg.quantity ||
+      (outcome.kind === 'CANCELLED' && cumulative >= request.leg.quantity)
     ) {
       const failure = this.failure(
         `submit:${request.phase}:${request.leg.key}`,
@@ -728,6 +729,19 @@ export class ExecutionCoordinator {
       if (!ambiguous.ok) return ambiguous;
       const unresolved = this.emitAt(nowMs, 'LEG_AMBIGUITY_UNRESOLVED', { ...details, failure });
       return unresolved.ok ? this.failureResult(failure) : unresolved;
+    }
+    if (outcome.kind === 'CANCELLED') {
+      const partial = this.emitAt(nowMs, 'LEG_PARTIALLY_FILLED', {
+        ...details,
+        venueOrderId: outcome.venueOrderId,
+        cumulativeFilledQuantity: cumulative,
+      });
+      if (!partial.ok) return partial;
+      return this.emitAt(nowMs, 'LEG_CANCELLED', {
+        ...details,
+        venueOrderId: outcome.venueOrderId,
+        cumulativeFilledQuantity: cumulative,
+      });
     }
     const eventType = outcome.kind === 'FILLED' ? 'LEG_FILLED' : 'LEG_PARTIALLY_FILLED';
     return this.emitAt(nowMs, eventType, {

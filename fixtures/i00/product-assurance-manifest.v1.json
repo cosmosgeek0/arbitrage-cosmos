@@ -18,9 +18,9 @@
   "operationScan": {
     "schemaVersion": "production-operation-scan.v1",
     "scriptPath": "test/productAssurance/production-operation-scan.mjs",
-    "filesScanned": 386,
-    "discovered": 143,
-    "covered": 143,
+    "filesScanned": 495,
+    "discovered": 198,
+    "covered": 198,
     "uncovered": 0
   },
   "donors": [

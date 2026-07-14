@@ -245,6 +245,7 @@ export type SubmissionOutcome =
   | { readonly kind: 'ACKNOWLEDGED'; readonly venueOrderId: string | null }
   | { readonly kind: 'PARTIALLY_FILLED'; readonly venueOrderId: string | null; readonly cumulativeFilledQuantity: number }
   | { readonly kind: 'FILLED'; readonly venueOrderId: string | null; readonly cumulativeFilledQuantity: number }
+  | { readonly kind: 'CANCELLED'; readonly venueOrderId: string | null; readonly cumulativeFilledQuantity: number }
   | { readonly kind: 'REJECTED'; readonly failure: PortFailure }
   | { readonly kind: 'AMBIGUOUS'; readonly failure: PortFailure };
 

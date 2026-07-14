@@ -1,0 +1,13 @@
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -25,6 +25,8 @@
+     "test:engine": "npm run build -w server && npm run test:engine:built",
+     "test:focused:built": "node server/test/financial-safety.mjs && node server/test/storage-aws-hardening.mjs && node --test --test-concurrency=1 server/test/access.mjs server/test/binance-client.mjs server/test/legacy-scanner.mjs server/test/loans.mjs server/test/network-cache.mjs && node --import tsx --test --test-concurrency=1 server/test/stream-lifecycle.mjs && node --test --test-concurrency=1 server/test/perimeter.mjs",
+     "test:focused": "npm run build -w server && npm run test:focused:built",
+-    "test:deterministic:built": "npm run test:engine:built && npm run test:focused:built",
++    "test:edge-protocol:built": "node packages/edge-protocol-tests/protocol.test.mjs",
++    "test:live-edge:built": "node --test --test-concurrency=1 --test-reporter=spec \"server/test/liveEdge/**/*.test.mjs\"",
++    "test:deterministic:built": "npm run test:engine:built && npm run test:focused:built && npm run test:edge-protocol:built && npm run test:live-edge:built",
+     "test:server:built": "npm run test:deterministic:built",
+     "test:server": "npm run build && npm run test:server:built",

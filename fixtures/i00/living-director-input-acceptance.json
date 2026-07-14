@@ -12,16 +12,16 @@
     {
       "path": "QL_DIRECTOR_STATE.md",
       "historicalPacketSha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
-      "observedLatestCommit": "7ff1fd05584779672690f5058a01b1de573b4ccd",
-      "observedGitBlob": "0537a84b7608acffd1c4208b0aba2201e8c7fce4",
-      "observedSha256": "b4a81f58fb0c2f701f1c761a8cce0b7e032854d9b52f2ce4fc400ac849765ec2"
+      "observedLatestCommit": "bf262c08984cf05cb84425e850b187af5f8adf03",
+      "observedGitBlob": "673cda935da1617803233a8adbd3d97c606c7572",
+      "observedSha256": "4d7753412a7b57f7e5e6a512427562db85a1d678ce90ed950223c90ef180c90b"
     },
     {
       "path": "QL_PARALLEL_DAG.md",
       "historicalPacketSha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546",
-      "observedLatestCommit": "5aa6c34e20d00ce5963c2d0e848d5dd6183775a4",
-      "observedGitBlob": "3d0a28e55c90504773cd887de2d969422dd57936",
-      "observedSha256": "f6802f2e6236622c8f2d4b7bf2a5dda049f90aa553522034d929ca6a6e15a110"
+      "observedLatestCommit": "0bbf23c06c60c1a4553422f099d8b242f13b6dc5",
+      "observedGitBlob": "678c84c937188acbb6a031c1ea2f02847e447050",
+      "observedSha256": "4e44e60837fa0b08039e398732d3830940078db8b08fe889b28ce6bc85a8e0ad"
     }
   ],
   "ownerDirectives": [

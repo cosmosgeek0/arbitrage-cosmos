@@ -4,7 +4,7 @@ import path from 'node:path';
 import { run } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { scanProductionOperations } from '../productAssurance/production-operation-scan.mjs';
+import { scanIntegratedProductionOperations } from './product-assurance-operation-overlay.mjs';
 import {
   validateProductAssuranceManifest,
   verifyProductAssuranceDonors,
@@ -109,7 +109,7 @@ async function main() {
     throw new Error(`PRODUCT_ASSURANCE_EFFECTIVE_BEHAVIOR_TOTAL:${effectiveBehaviorPasses}`);
   }
 
-  const operationReport = scanProductionOperations();
+  const operationReport = scanIntegratedProductionOperations();
   const operationVerification = verifyProductAssuranceOperationReport(manifest, operationReport);
   if (!operationVerification.passed) throw new Error('PRODUCT_ASSURANCE_OPERATION_SCAN_INVALID');
 

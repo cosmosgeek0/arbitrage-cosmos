@@ -2,33 +2,33 @@
 
 Schema version: `I00_PRODUCT_BUILD_STATE_V1`
 
-Updated: `2026-07-14T07:31:21Z`
+Updated: `2026-07-14T08:05:53Z`
 
 ## Identity
 
 | Field | Current truth |
 | --- | --- |
-| Canonical Main base SHA | Live `current-main` and `origin/current-main` are `7383fd89477ed0b3e677e53c57c35d76ac34bbd8`; exact canonical ancestry is integrated at `ce8d79a751c886dff388fa8f3f2fa6fb3f0414ee` without writing Main |
+| Canonical Main base SHA | Exact canonical snapshot `7383fd89477ed0b3e677e53c57c35d76ac34bbd8` is integrated at `ce8d79a751c886dff388fa8f3f2fa6fb3f0414ee`; live local/remote-tracking `current-main` is now descendant `bf262c08984cf05cb84425e850b187af5f8adf03` and remains untouched by this session |
 | Integration branch/worktree | `i00-product-assembly-20260713` at `/Users/cosmosgeek/Desktop/i00-assembly` |
-| Latest integration merge | A-CASE/S4 `86ee3b5f81c73c64eccf1d10b14a1f3bdf8a4bf1`; tree `db4708ef5bdd261f4493885a770aa3ff670bf674` |
-| Latest integration receipt | `docs/archive/i00-phase2/A_CASE_INTEGRATION_RECEIPT.md` |
-| Latest conditional donor audit | `docs/archive/i00-phase2/CONDITIONAL_DONOR_REAUDIT_RECEIPT.md` preserves the prior snapshot; its L refusal is superseded by exact eligible tip `df6b472993ca9659ce09cf5f72004981c6835f0d`, while the A-FORMAL refusal remains current |
+| Latest integration merge | The merge commit containing this state update is the exact required last-donor L merge: first parent pre-L implementation `139d2cf07ffd3167bd54a3c14c0fc6671c2f02e9`, second parent exact L tip `df6b472993ca9659ce09cf5f72004981c6835f0d`; its SHA and tree are intentionally deferred to the separate immutable receipt commit |
+| Latest integration receipt | `docs/archive/i00-phase2/A_CASE_INTEGRATION_RECEIPT.md` remains the latest previously sealed receipt; the separate immutable L integration receipt is the immediate post-merge seal and will bind the merge SHA/tree |
+| Latest conditional donor audit | `docs/archive/i00-phase2/CONDITIONAL_DONOR_REAUDIT_RECEIPT.md` preserves the prior snapshot; its L refusal is superseded by the exact final merge recorded here, while the A-FORMAL refusal remains current |
 | Verified acceptance implementation | Historical prestage implementation `a2be4865d0d003d1dedd38c351b4e8ccf6033c2d`; Phase 1 handoff HEAD `9bf531ccca203ca66bad39787a0930fd608807a7` |
 | Phase | `FINAL_INTEGRATION / PHASE_2_FRESH_INTEGRATOR` |
-| Status | `PRE_L_SHARED_SPINE_IMPLEMENTED_FOCUSED_PROVED / L_VERIFIED_ELIGIBLE_PENDING_REQUIRED_LAST_MERGE / FINAL_ACCEPTANCE_PENDING` |
+| Status | `FINAL_L_DONOR_INTEGRATED / 16_WAY_DONOR_EQUALITY / REPOSITORY_GATES_GREEN / L_SHARED_WIRING_AND_FINAL_ACCEPTANCE_PENDING` |
 | Active writer | Fresh Role 2 integrator; exclusive shared write/merge authority is limited to this integration branch, never `current-main` |
-| Protected untracked inputs | The five I00 owner directives remain intentional read-only untracked inputs at their D-LAUNCH-6 hashes and are not part of the shared implementation; the eligible L worktree separately contains exactly two protected owner directives and no tracked dirt |
-| Current Phase 2 landed state | All 15 donors in the currently counted accepted set are integrated serially by exact ancestry or receipted equivalence; the coherent pre-L serial spine now implements Product runtime/routes, cockpit mount, seven-table persistence, durable cursor, CAS, quantity and health bridges, dependency startup, no-money/private/AWS retirement, and the root assurance harness. Focused gates pass; full current-tree acceptance is pending |
+| Protected untracked inputs | The five I00 owner directives remain intentional read-only untracked inputs at their D-LAUNCH-6 hashes and are not part of the shared implementation; the exact L donor worktree separately contains exactly two protected owner directives and no tracked dirt |
+| Current Phase 2 landed state | The merge commit containing this update integrates exact clean L tip `df6b472993ca9659ce09cf5f72004981c6835f0d` last onto the coherent pre-L spine, so expected = discovered = receipt-accepted = integrated is `16/16/16/16` when it lands. The exact integration overlay preserves A-CORE scanner bytes, pins accepted L source hashes/site sets, covers `198/198` operations, and passes Product Assurance `802+4`, `npm test`, `npm run test:all`, and I00 proof `36/36`. Remaining L shared wiring, final source-freeze rerun, runtime/browser acceptance, and candidate sealing are pending |
 
 ## Accepted inputs
 
 | Input | Accepted immutable or living evidence | Current use |
 | --- | --- | --- |
 | Q lane | `02b4eccc8d2ef53b830cafae06e5175715fa6ebb`; Q17 acceptance receipt SHA-256 `9cfa0356228d7f48674df2d9db523f0f0d53dab1a4e4255b6ba9676e463ec5dc`; exact `Q LANE_READY — PARKED` | Integrated by merge ancestry at `042dc9897d04bed2b0de3043cbdcbac408251412`; advisory `ABSTAIN_UNKNOWN`; production transport/mount still `NOT_CONFIGURED` |
-| L lane | Tip `df6b472993ca9659ce09cf5f72004981c6835f0d`, tree `1add5ee43fea623509c20d0990ec9efac2543fc4`; `LIVE_EDGE_RECEIPT.md` SHA-256 `0b95db6e0ae8777d3e3bebb1a510561c7dfc9dcba963bd02fbc91025dd784fe2`; L17 acceptance SHA-256 `f23e078fdd1cf8d64585c01b677817d4d4efa3a08f9c4933acae09b399ce2381`; no tracked dirt and only two protected owner directives | `VERIFIED_ELIGIBLE_PENDING_REQUIRED_LAST_MERGE`; remains unwired and unintegrated until the pre-L shared-spine commit is sealed and this exact donor is merged last |
+| L lane | Tip `df6b472993ca9659ce09cf5f72004981c6835f0d`, tree `1add5ee43fea623509c20d0990ec9efac2543fc4`; `LIVE_EDGE_RECEIPT.md` SHA-256 `0b95db6e0ae8777d3e3bebb1a510561c7dfc9dcba963bd02fbc91025dd784fe2`; L17 acceptance SHA-256 `f23e078fdd1cf8d64585c01b677817d4d4efa3a08f9c4933acae09b399ce2381`; donor has no tracked dirt and only two protected owner directives | Integrated as the exact second parent of the merge commit containing this update and therefore the required last donor; remaining canonical shared wiring and candidate acceptance are pending |
 | Dashboard donor | `692501587617d4880303fbd747d93e63c376f088`; donor receipt SHA-256 `878cc578d88f38ca3bf8edce554b2cb258b4e9309718854f7ba18c33cb50b968`; Phase 2 equivalence receipt in `docs/archive/i00-phase2/DASHBOARD_EQUIVALENCE_VALIDATION_RECEIPT.md` | Integrated by exact 21-file Git-tree equivalence through IP-CONTROL; canonical provider and page bindings are mounted in the pre-L shared spine; browser ship-gate proof remains pending |
 | Infrastructure donor | `2cec412927fa2f64f05a0b2774b18e45f8ce4fa5`; work `9a82d4715c73ebe4156638c2bf5e8a2c02373bbf`; immutable receipt SHA-256 `d5159d60419faf11b153557ce830a0d563c723a1b6d74bf7af8fd0517edc7293` | Integrated as artifact-only Git ancestry; not installed, deployed, configured, or externally exercised |
-| Product Assurance core | `08a0a09780727e2b4ba59017b5701998abe29b77`; receipt SHA-256 `93b1f6283d48ddeadf9b7205e47f3ccfc698d4f79f98b8e82ecad1d7aa4a302e`; exact `CORE_SCAFFOLD_READY` | Integrated and composed with the root assurance discovery harness; the source-frozen final denominator and complete assurance rerun remain pending, so no overall assurance-ready claim is made |
+| Product Assurance core | `08a0a09780727e2b4ba59017b5701998abe29b77`; receipt SHA-256 `93b1f6283d48ddeadf9b7205e47f3ccfc698d4f79f98b8e82ecad1d7aa4a302e`; exact `CORE_SCAFFOLD_READY` | Integrated through an overlay that preserves exact A-CORE scanner bytes and pins accepted L source hashes/site sets; current denominator is 495 files / 198 discovered / 198 covered / 0 uncovered. Final post-wiring source-freeze rerun remains pending, so no overall assurance-ready claim is made |
 | Assurance hazard satellite | `ab33b3712cddd67c3ec91cfa1dd232c75226cd9f`; D-LAUNCH-10 audit receipt SHA-256 `ecfca4e7d60d9dca3b07e4e21d4595ebb234dab421924f14226cf39f8a9c85ea`; exact `HAZARD_PRESTAGE_READY` | Integrated fixture/evidence packet; serial-spine bindings are applied through canonical owners while draft evidence remains non-authoritative |
 | Assurance cockpit satellite | `d4ff9c94c9fec9477481223c4b33d8f671a34f6d`; receipt SHA-256 `b75055388f99632f2dc5ebb87d92b6d969f666397014e89a616a6e262f0650dd`; exact `COCKPIT_PRESTAGE_READY` | Integrated fixture-only cockpit/observability packet; requested route/panel bindings are mounted through canonical Product owners and still cannot mint live green |
 | Assurance agent satellite | `97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437`; receipt SHA-256 `c237939f112a41abfb83508ed57e5783a9344cc3cb76e02003ca64487831a92c`; exact `AGENT_PRESTAGE_READY` | Integrated deterministic diagnostic-only packet; root-harness discovery and serial-spine bindings are implemented without widening authority |
@@ -38,7 +38,7 @@ Updated: `2026-07-14T07:31:21Z`
 | Authority map | Accepted base `87af78285a4b11bc8ca98c4cc9b3bb4a551d2537`; current `ARCHITECTURE.md` SHA-256 `beb8be8baefe2faa78356e2dc44983735b855535c21cd5f0172a8e1e3fa665db` | Canonical one-owner law; no ownership shift in this task |
 | D-LAUNCH-6 owner directives | Parent `9d7a36da…e5ef5`; IP-RUNTIME `6e93016e…65810`; IP-CONTROL `5e57bf1d…7278`; IP-OPS `2af83489…779`; IP-PROOF `e59d516b…93b6` | All five present, byte-verified, read-only, and intentionally untracked |
 | D-LAUNCH-7 ruling | `bdb29e37fb9b152aa1b7e1063ca892cd405c6245:QL_DIRECTOR_STATE.md` | Authorizes only the two QL director files as living state at their latest `current-main` path commits |
-| Living QL state | At `current-main` `7383fd89477ed0b3e677e53c57c35d76ac34bbd8`: state blob `0537a84b7608acffd1c4208b0aba2201e8c7fce4`, SHA-256 `b4a81f58fb0c2f701f1c761a8cce0b7e032854d9b52f2ce4fc400ac849765ec2`; DAG blob `3d0a28e55c90504773cd887de2d969422dd57936`, SHA-256 `f6802f2e6236622c8f2d4b7bf2a5dda049f90aa553522034d929ca6a6e15a110` | D-LAUNCH-1..17 audited; packet-era pins stay unchanged and final real-adapter re-pin remains required |
+| Living QL state | At live `current-main` `bf262c08984cf05cb84425e850b187af5f8adf03`: state latest-touch `bf262c08984cf05cb84425e850b187af5f8adf03`, blob `673cda935da1617803233a8adbd3d97c606c7572`, SHA-256 `4d7753412a7b57f7e5e6a512427562db85a1d678ce90ed950223c90ef180c90b`; DAG latest-touch `0bbf23c06c60c1a4553422f099d8b242f13b6dc5`, blob `678c84c937188acbb6a031c1ea2f02847e447050`, SHA-256 `4e44e60837fa0b08039e398732d3830940078db8b08fe889b28ce6bc85a8e0ad` | D-LAUNCH-1..17 audited; I00 proof re-pins these current Main objects and classifies L documentary source facts at `36/36`; final candidate source-freeze rerun remains required after shared wiring |
 
 ## Accepted component matrix
 
@@ -57,8 +57,8 @@ Updated: `2026-07-14T07:31:21Z`
 | Q lane | No live/edge/champion claim | Exact donor archive: focused `384/384` at 96.50%; accumulated `3,011` plus six documented skips; integrated D-LAUNCH-1 provenance `14/14` | Runtime transport and product mount `NOT_CONFIGURED`; accepted posture remains advisory `ABSTAIN_UNKNOWN` |
 | Product Control Room | No browser-accepted claim | Exact accepted donor subtree is mounted through one canonical provider into the real Control Room route and shared pages; focused suite `44/44`; current web typecheck/build pass | Browser route sweep, computed-style/overflow/theme checks, restart continuity, and final ship gate remain pending |
 | Operations | No deployment claim | Exact accepted L15 `ops/live/**` tree plus 17 exact donor test paths; network-free operational suite passes 11/11 files and 347 assertions; previously accepted IP-OPS tests remain additive under `ops/tests/i00/**` | AWS, EC2, Cloudflare, DNS, Secrets Manager, systemd, target SQLite, capacity/soak, installed watchdog, and release readback not configured/proved |
-| Product Assurance | No live/overall-ready claim | A-CORE and satellites remain exact; production UI bindings and root harness discovery are implemented while explicit WAITING/UNKNOWN seams remain | Final source-frozen denominator and complete harness rerun are pending; S2 remains absent, A-FORMAL remains blocked, and overall `ASSURANCE_PRESTAGE_READY` is not claimed |
-| Closure proof | No candidate/real-runtime acceptance claim | I00 harness `33/33`; effective frozen inputs `14/14`; reports remain generated and byte-identical | Raw historical scan intentionally remains `12/14`; exact L final tip exists but is not yet merged; empirical runtime/restart/browser proof remains pending |
+| Product Assurance | No live/overall-ready claim | Exact integration overlay preserves A-CORE scanner bytes, pins accepted L source hashes/site sets, scans 495 files, covers `198/198` discovered operations with 0 uncovered, and passes `802` behavior plus `4` provenance | Final source-freeze rerun after remaining L wiring is pending; A-FORMAL remains blocked and overall readiness is not claimed |
+| Closure proof | No candidate/real-runtime acceptance claim | I00 proof `36/36` after re-pinning current Main QL objects and classifying L documentary source facts; reports remain generated and byte-identical | Final source-freeze, empirical runtime/restart/browser proof, and candidate receipt remain pending |
 | Money/private/cloud authority | None | Validate-only and public/local evidence only; built-app hostile gates prove zero prohibited egress | Money mutations return `LIVE_EXECUTION_NOT_IMPLEMENTED`; private reads are static `NOT_CONFIGURED`; AWS is static `OWNER_GATED`; ambient credentialed clients, private streams, and cloud runners are not constructed |
 
 ## Verification
@@ -66,7 +66,7 @@ Updated: `2026-07-14T07:31:21Z`
 | Command | Measured result |
 | --- | --- |
 | `npm ci` | Task 1: exit 0; 229 installed, 232 audited, 0 vulnerabilities |
-| `node test/i00/render-reports.mjs --write && node test/i00/run.mjs` | Exit 0; `33/33`; generated reports and canonical machine evidence agree |
+| `node test/i00/render-reports.mjs --write && node test/i00/run.mjs` | Exit 0; `36/36` after re-pinning current Main QL objects and classifying L documentary source facts; generated reports and canonical machine evidence agree |
 | Effective / historical frozen-input scans | `14/14` effective pass; raw packet scan `12/14`, preserving only the two expected historical QL mismatches |
 | `node packages/edge-protocol-tests/protocol.test.mjs` | Exit 0; `22/22` |
 | Exact Q donor archive, focused Q17 | Exit 0; `384/384`; 96.50% combined branch coverage |
@@ -79,6 +79,12 @@ Updated: `2026-07-14T07:31:21Z`
 | Focused health/CAS/operator/persistence/quantity bundle | Exit 0; `36/36`; standalone persistence `38/38` and focused health/quantity `15/15` |
 | Server boundary suites | Exit 0; `69/69` plus `146/146`, covering no-money, no-private, no-AWS and fail-closed startup boundaries |
 | `npm run test:app:built` | Exit 0; `73/73`, including process-only health, fail-closed readiness, zero prohibited egress, money/private/AWS retirement, startup, and WebSocket checks |
+| L06 focused gate | Exit 0; `79/79` |
+| L12 focused gate | Exit 0; `21/21` |
+| L13 focused gate | Exit 0; `37/37` |
+| L14 focused gate | Exit 0; `38/38` |
+| Full LiveEdge suite | Exit 0; `1,618/1,618`; duration `447743.267792ms` |
+| Post-merge owner gates | Protocol `22/22`; Foundation Control `97/97`; System Integration controls/restart/routes `9/9` |
 | Dashboard donor/current subtree comparison | Exact `d3d899db3b0395532a3cf12b2304e91a2ce528ce`; 21/21 feature files equivalent; stale root donor note explicitly superseded by `IP_CONTROL_MOUNT_REQUEST.md` |
 | `bash ops/tests/run-all.sh` | Exit 0; 11/11 test files passed; 347 assertions; network-free except loopback harnesses; unauthorized network benchmark modes refused |
 | A-CORE server build and behavior | Exit 0; server build passed; `32/32` Product Assurance scaffold tests |
@@ -92,9 +98,9 @@ Updated: `2026-07-14T07:31:21Z`
 | Ops template/schema suite | Exit 0; 50 assertions; packet-local `run-all.sh` is not a fan-in gate because its scope guard intentionally rejects assembled-tree paths |
 | `npm run typecheck` | Exit 0 on the current pre-L shared-spine tree; server and web passed |
 | `npm run build` | Exit 0 on the current pre-L shared-spine tree; web built 1,878 modules; advisory chunk-size warning only |
-| `npm test` | Previous post-fan-in baseline passed `377/377`; current pre-L shared-spine rerun remains pending and is not claimed here |
-| `npm run test:all` | Previous post-fan-in baseline passed; current pre-L shared-spine rerun remains pending and is not claimed here |
-| Root Product Assurance harness | Discovery and manifest wiring implemented; final source-frozen production-file/site denominator and complete harness result remain pending |
+| `npm test` | Exit 0 on the exact integration overlay |
+| `npm run test:all` | Exit 0 on the exact integration overlay |
+| Root Product Assurance harness | Exit 0; exact A-CORE scanner bytes preserved; accepted L source hashes/site sets pinned; 495 files scanned, 198 discovered, 198 covered, 0 uncovered; `802` behavior plus `4` provenance |
 | Scope and patch checks | Final-seal staged inventory exit 0, `4/4`; resumed delta accepted; `git diff --check` clean; pure `verifyScopePaths([])` remains fail-closed |
 
 ## Runtime and authorization measurements
@@ -108,9 +114,9 @@ Updated: `2026-07-14T07:31:21Z`
 
 ## Current blocker and resume
 
-Current counted accepted-donor equality remains expected = discovered = receipt-accepted = integrated = `15`. L is now exact, clean, receipt-sealed and acceptance-sealed at `df6b472993ca9659ce09cf5f72004981c6835f0d`, but it is `VERIFIED_ELIGIBLE_PENDING_REQUIRED_LAST_MERGE` and is not counted as integrated. When that exact donor is merged last, the expected accepted set becomes `16` and equality must be re-proven as `16/16/16/16`. A-FORMAL remains terminally blocked. This is a pre-L shared-spine checkpoint, not `INTEGRATION_CANDIDATE_READY` and not `INTEGRATED_ACCEPTED`.
+The merge commit containing this state update has pre-L commit `139d2cf07ffd3167bd54a3c14c0fc6671c2f02e9` as first parent and exact clean L tip `df6b472993ca9659ce09cf5f72004981c6835f0d` as second parent, making L the required last donor and proving expected = discovered = receipt-accepted = integrated = `16/16/16/16` when the merge lands. Its separate immutable receipt commit will bind the resulting merge SHA/tree. A-FORMAL remains terminally blocked. Product Assurance is green at `198/198` with `802+4`; `npm test`, `npm run test:all`, and I00 proof `36/36` pass. Remaining L shared wiring, the final post-wiring source-freeze rerun, runtime/browser acceptance, and complete local acceptance remain open. This is not `INTEGRATION_CANDIDATE_READY` and not `INTEGRATED_ACCEPTED`.
 
-Next exact task: seal the coherent pre-L shared-spine implementation, merge exact L tip `df6b472993ca9659ce09cf5f72004981c6835f0d` last and receipt it, then run complete current-tree `npm test`, `npm run test:all`, final source-frozen Product Assurance, deterministic scenarios, dependency startup/restart/readback, reconciliation, browser ship gate, and candidate sealing. Preserve A-FORMAL as blocked and do not self-certify.
+Next exact task: land this exact last-donor merge and seal its SHA/tree in a separate immutable receipt; complete the remaining L canonical shared wiring; freeze and rerun the final assurance/repository gates; then run deterministic scenarios, dependency startup/restart/readback, reconciliation, browser ship gate, and candidate sealing. Preserve A-FORMAL as blocked and do not self-certify.
 
 Next combined command after accepted Q/L adapters replace every fixture seam:
 
@@ -173,15 +179,15 @@ The immutable donor is the committed branch object, never the donor worktree con
 | A-AGENT | `97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437` | `c237939f112a41abfb83508ed57e5783a9344cc3cb76e02003ca64487831a92c` | 20 paths; path-set SHA-256 `11a0a317f05371d5a9378776cc0d7343a5d4a622c5f19dce2c2f6dbe8a5d6b27` | Yes, merge `251d901e2a38c7b3b9634ab1728098655f0104bb`; 20/20 blobs exact |
 | A-STABILITY | `d35674e7f9621320c35e0bc0270efd515cc64dbd` | `b26f902d90fb82633ac8532d5aa82169801ded3ec6d7bcf3477737a64eab2168` | 19 paths; path-set SHA-256 `84b18ffcfd1893442eedacad74d4ef94823a4f5d846a1a5362e859ed6c5cc117` | Yes, merge `332208e64fb9b54ef2b6320c7609e53833da469f`; 19/19 blobs exact |
 | A-CASE / S4 | `b4d8a446cb4cd6e77e7fbaf38f927b7513dc316c` | `05369b8aa403a4fae6b86143ddcb7d61551d5996838c92b9bc4aba79401a3550` | 41 paths; path-set SHA-256 `cf1c711e8688e5d00382b244566d210f5eabbfad30d622ae49a33b6380d358cc` | Yes, merge `86ee3b5f81c73c64eccf1d10b14a1f3bdf8a4bf1`; 41/41 blobs exact |
+| L lane | `df6b472993ca9659ce09cf5f72004981c6835f0d`; tree `1add5ee43fea623509c20d0990ec9efac2543fc4` | L17 acceptance SHA-256 `f23e078fdd1cf8d64585c01b677817d4d4efa3a08f9c4933acae09b399ce2381`; root receipt SHA-256 `0b95db6e0ae8777d3e3bebb1a510561c7dfc9dcba963bd02fbc91025dd784fe2` | Donor worktree has zero tracked dirt and exactly two protected owner directives; immutable tree and receipt chain are exact | No at transfer; Yes as the exact second parent of the merge commit containing this state update, after pre-L first parent `139d2cf07ffd3167bd54a3c14c0fc6671c2f02e9`; separate receipt commit will bind merge SHA/tree |
 
-Current counts remain expected accepted donors `15`; discovered exact tips `15`; receipt-accepted `15`; integrated by ancestry or receipted equivalence `15`. The required equality remains proven for the currently counted accepted set. The exact L donor below is eligible but intentionally excluded until its required last merge; at that merge the expected accepted set becomes `16` and all four counts must be re-proven. Candidate readiness is not claimed until that merge and complete local acceptance also pass.
+When the merge commit containing this update lands, current counts are expected accepted donors `16`; discovered exact tips `16`; receipt-accepted `16`; integrated by ancestry or receipted equivalence `16`. The exact last-donor parent relationship above proves the required `16/16/16/16` equality; the separate immutable receipt commit will bind the resulting merge SHA/tree. Candidate readiness is not claimed until remaining L shared wiring, final source-freeze rerun, runtime/browser checks, and complete local acceptance also pass.
 
-### Eligible pending required last merge, blocked, or not-yet-existing donors
+### Blocked or not-yet-existing donors
 
 | Expected future item | Discovered truth | Ruling |
 | --- | --- | --- |
 | A-FORMAL | `89c783bd9e55ce83c21ed1181757122d88e4c980`; D-LAUNCH-10 reseal SHA-256 `d693696aa339d490ef58fee2bf4c833ce660d6a265391c5363079b32d62a165f` | `BLOCKED_NO_NETWORK_BOUNDARY_VIOLATED`; root `npm test` exit 127; the handoff/board ready label is incorrect; refuse |
-| L lane | `df6b472993ca9659ce09cf5f72004981c6835f0d`; tree `1add5ee43fea623509c20d0990ec9efac2543fc4`; `LIVE_EDGE_RECEIPT.md` SHA-256 `0b95db6e0ae8777d3e3bebb1a510561c7dfc9dcba963bd02fbc91025dd784fe2`; L17 acceptance SHA-256 `f23e078fdd1cf8d64585c01b677817d4d4efa3a08f9c4933acae09b399ce2381`; no tracked dirt and exactly two protected directives | `VERIFIED_ELIGIBLE_PENDING_REQUIRED_LAST_MERGE`; do not partially copy or count as integrated before the exact last merge |
 | A-ACTION-EVIDENCE / S2 | No branch, worktree, or accepted receipt; A-CORE marks the seam `WAITING` | Not a discovered donor; preserve as `NOT_CONFIGURED`/missing evidence rather than fabricate one |
 
-The currently counted 15-donor sequence remains complete. The pre-L shared serial spine is implemented and focused-proved; L is now eligible for its required exact last merge, while A-FORMAL remains blocked. Prior closed rows must not be repeated. Full current-tree acceptance and candidate readiness remain pending.
+The 16-donor sequence is complete in the merge commit containing this update, with L integrated exactly last; A-FORMAL remains blocked. Prior closed rows must not be repeated. Repository gates and the current integration assurance overlay are green; remaining L shared wiring, final source-freeze rerun, runtime/browser acceptance, and candidate readiness remain pending.

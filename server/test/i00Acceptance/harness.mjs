@@ -117,6 +117,7 @@ export function runAuthorityScan(catalog) {
                   : file === 'server/src/binance/ws.ts' ? 'TRANSPORT_LIBRARY'
                     : file === 'web/src/store.tsx' ? 'LOCAL_OPERATOR_DELIVERY'
                       : file.startsWith('server/src/intelligenceFoundation/') ? 'DECLARATIVE_SOURCE_FACTS'
+                        : file === 'server/src/liveEdge/adapters/binanceContracts/manifest.ts' ? 'ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS'
                         : file === 'server/src/index.ts' ? 'LEGACY_APP_DELIVERY'
                           : 'UNCLASSIFIED';
         transportCandidates.push({ file, line: index + 1, classification });

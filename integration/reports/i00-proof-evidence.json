@@ -26,7 +26,7 @@
     "scenarios": 22,
     "authorityConcepts": 13,
     "semanticStreams": 6,
-    "transportCandidates": 38,
+    "transportCandidates": 95,
     "provenanceItems": 11
   },
   "frozenInputs": [
@@ -72,10 +72,10 @@
       "historicalPacketPassed": false,
       "historicalPacketPinPreserved": true,
       "acceptedSourceRef": "current-main",
-      "acceptedSourceTip": "7383fd89477ed0b3e677e53c57c35d76ac34bbd8",
-      "acceptedLatestCommit": "7ff1fd05584779672690f5058a01b1de573b4ccd",
-      "acceptedGitBlob": "0537a84b7608acffd1c4208b0aba2201e8c7fce4",
-      "acceptedSha256": "b4a81f58fb0c2f701f1c761a8cce0b7e032854d9b52f2ce4fc400ac849765ec2"
+      "acceptedSourceTip": "bf262c08984cf05cb84425e850b187af5f8adf03",
+      "acceptedLatestCommit": "bf262c08984cf05cb84425e850b187af5f8adf03",
+      "acceptedGitBlob": "673cda935da1617803233a8adbd3d97c606c7572",
+      "acceptedSha256": "4d7753412a7b57f7e5e6a512427562db85a1d678ce90ed950223c90ef180c90b"
     },
     {
       "path": "QL_PARALLEL_DAG.md",
@@ -87,10 +87,10 @@
       "historicalPacketPassed": false,
       "historicalPacketPinPreserved": true,
       "acceptedSourceRef": "current-main",
-      "acceptedSourceTip": "7383fd89477ed0b3e677e53c57c35d76ac34bbd8",
-      "acceptedLatestCommit": "5aa6c34e20d00ce5963c2d0e848d5dd6183775a4",
-      "acceptedGitBlob": "3d0a28e55c90504773cd887de2d969422dd57936",
-      "acceptedSha256": "f6802f2e6236622c8f2d4b7bf2a5dda049f90aa553522034d929ca6a6e15a110"
+      "acceptedSourceTip": "bf262c08984cf05cb84425e850b187af5f8adf03",
+      "acceptedLatestCommit": "0bbf23c06c60c1a4553422f099d8b242f13b6dc5",
+      "acceptedGitBlob": "678c84c937188acbb6a031c1ea2f02847e447050",
+      "acceptedSha256": "4e44e60837fa0b08039e398732d3830940078db8b08fe889b28ce6bc85a8e0ad"
     },
     {
       "path": "quant/DIRECTIVE_INPUTS.lock",
@@ -262,7 +262,7 @@
     "ruling": "D-LAUNCH-7",
     "mode": "LATEST_CURRENT_MAIN_TOUCH",
     "sourceRef": "current-main",
-    "sourceTip": "7383fd89477ed0b3e677e53c57c35d76ac34bbd8",
+    "sourceTip": "bf262c08984cf05cb84425e850b187af5f8adf03",
     "rulingCommit": "bdb29e37fb9b152aa1b7e1063ca892cd405c6245",
     "structuralChecks": {
       "schemaVersion": true,
@@ -282,9 +282,9 @@
       {
         "path": "QL_DIRECTOR_STATE.md",
         "historicalPacketSha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
-        "latestCommit": "7ff1fd05584779672690f5058a01b1de573b4ccd",
-        "observedGitBlob": "0537a84b7608acffd1c4208b0aba2201e8c7fce4",
-        "observedSha256": "b4a81f58fb0c2f701f1c761a8cce0b7e032854d9b52f2ce4fc400ac849765ec2",
+        "latestCommit": "bf262c08984cf05cb84425e850b187af5f8adf03",
+        "observedGitBlob": "673cda935da1617803233a8adbd3d97c606c7572",
+        "observedSha256": "4d7753412a7b57f7e5e6a512427562db85a1d678ce90ed950223c90ef180c90b",
         "safePath": true,
         "historicalPinValid": true,
         "latestCommitReachable": true,
@@ -294,9 +294,9 @@
       {
         "path": "QL_PARALLEL_DAG.md",
         "historicalPacketSha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546",
-        "latestCommit": "5aa6c34e20d00ce5963c2d0e848d5dd6183775a4",
-        "observedGitBlob": "3d0a28e55c90504773cd887de2d969422dd57936",
-        "observedSha256": "f6802f2e6236622c8f2d4b7bf2a5dda049f90aa553522034d929ca6a6e15a110",
+        "latestCommit": "0bbf23c06c60c1a4553422f099d8b242f13b6dc5",
+        "observedGitBlob": "678c84c937188acbb6a031c1ea2f02847e447050",
+        "observedSha256": "4e44e60837fa0b08039e398732d3830940078db8b08fe889b28ce6bc85a8e0ad",
         "safePath": true,
         "historicalPinValid": true,
         "latestCommitReachable": true,
@@ -483,7 +483,7 @@
       },
       {
         "file": "server/src/index.ts",
-        "line": 3521,
+        "line": 3142,
         "classification": "LEGACY_APP_DELIVERY"
       },
       {
@@ -577,6 +577,291 @@
         "classification": "CANONICAL_RUNTIME_OR_MANUAL_SMOKE"
       },
       {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 44,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 104,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 146,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 167,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 188,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 327,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 358,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 494,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 495,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 526,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 622,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 650,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 678,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 750,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 772,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 794,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1070,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1078,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1086,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1093,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1107,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1115,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1123,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1130,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1137,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1144,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1152,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1272,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1300,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1307,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1326,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1333,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1340,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1347,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1354,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1361,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1368,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1375,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1702,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1708,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1758,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1760,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1761,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1764,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1765,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1767,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1769,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1770,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1774,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1775,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1776,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1778,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1780,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1782,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1784,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1791,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceContracts/manifest.ts",
+        "line": 1793,
+        "classification": "ACCEPTED_L_DOCUMENTARY_SOURCE_FACTS"
+      },
+      {
         "file": "server/src/services/bookStream.ts",
         "line": 1,
         "classification": "UI_LOCAL_EXCEPTION_REVIEW"
@@ -603,7 +888,7 @@
       },
       {
         "file": "web/src/store.tsx",
-        "line": 297,
+        "line": 304,
         "classification": "LOCAL_OPERATOR_DELIVERY"
       }
     ],
@@ -2599,49 +2884,49 @@
         "concept": "semantic-source",
         "declaration": "type SourceLogoEntry",
         "file": "server/src/index.ts",
-        "line": 84
+        "line": 80
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function runScannerTick",
+        "file": "server/src/index.ts",
+        "line": 210
       },
       {
         "concept": "ledger-authority",
         "declaration": "function pruneEphemeralLedgerEvents",
         "file": "server/src/index.ts",
-        "line": 299
-      },
-      {
-        "concept": "control-authority",
-        "declaration": "function sendAwsControlError",
-        "file": "server/src/index.ts",
-        "line": 769
+        "line": 218
       },
       {
         "concept": "semantic-source",
         "declaration": "type MarketSourceSnapshot",
         "file": "server/src/index.ts",
-        "line": 1696
+        "line": 1466
       },
       {
         "concept": "semantic-source",
         "declaration": "function marketSources",
         "file": "server/src/index.ts",
-        "line": 1705
+        "line": 1475
       },
       {
         "concept": "semantic-source",
         "declaration": "function cachedSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2168
+        "line": 1872
       },
       {
         "concept": "semantic-source",
         "declaration": "function rememberSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2180
+        "line": 1884
       },
       {
         "concept": "semantic-source",
         "declaration": "function loadSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2190
+        "line": 1894
       },
       {
         "concept": "semantic-source",
@@ -3355,49 +3640,1195 @@
         "concept": "ledger-authority",
         "declaration": "interface LedgerEvent",
         "file": "server/src/ledger.ts",
-        "line": 52
+        "line": 85
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerEventInput",
         "file": "server/src/ledger.ts",
-        "line": 79
+        "line": 112
       },
       {
         "concept": "ledger-authority",
         "declaration": "type LedgerConfigCompareAndSetResult",
         "file": "server/src/ledger.ts",
-        "line": 85
+        "line": 118
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerProductOperatorEventRecord",
         "file": "server/src/ledger.ts",
-        "line": 96
+        "line": 129
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerProductOperatorEventPage",
         "file": "server/src/ledger.ts",
-        "line": 106
+        "line": 139
       },
       {
         "concept": "ledger-authority",
         "declaration": "class Ledger",
         "file": "server/src/ledger.ts",
-        "line": 235
+        "line": 351
       },
       {
         "concept": "ledger-authority",
         "declaration": "function plainLedgerRecord",
         "file": "server/src/ledger.ts",
-        "line": 1388
+        "line": 2346
       },
       {
         "concept": "ledger-authority",
         "declaration": "function exactLedgerFields",
         "file": "server/src/ledger.ts",
-        "line": 1394
+        "line": 2352
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "type BinanceDataSource",
+        "file": "server/src/liveEdge/adapters/binanceContracts/types.ts",
+        "line": 209
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "type BinanceSourceContentDigestScope",
+        "file": "server/src/liveEdge/adapters/binanceContracts/types.ts",
+        "line": 218
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface BinanceOfficialSourceRecord",
+        "file": "server/src/liveEdge/adapters/binanceContracts/types.ts",
+        "line": 222
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "type BinanceOfficialSourceRecord",
+        "file": "server/src/liveEdge/adapters/binanceContracts/validate.ts",
+        "line": 40
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function canonicalizeBinanceSourceEvidence",
+        "file": "server/src/liveEdge/adapters/binanceContracts/validate.ts",
+        "line": 355
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function fingerprintBinanceSourceEvidence",
+        "file": "server/src/liveEdge/adapters/binanceContracts/validate.ts",
+        "line": 379
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function validOfficialSourceUrl",
+        "file": "server/src/liveEdge/adapters/binanceContracts/validate.ts",
+        "line": 411
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function validSourceContentUrl",
+        "file": "server/src/liveEdge/adapters/binanceContracts/validate.ts",
+        "line": 442
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function validateSource",
+        "file": "server/src/liveEdge/adapters/binanceContracts/validate.ts",
+        "line": 817
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type MarginRiskLifecycleState",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/lifecycleBinding.ts",
+        "line": 13
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface PrivateLifecycleSourceIdentity",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/lifecycleBinding.ts",
+        "line": 45
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type MarginRiskEventKind",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/marginLifecycle.ts",
+        "line": 47
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type MarginRiskRouteClass",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/marginLifecycle.ts",
+        "line": 48
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type MarginRiskRouteContractId",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/marginLifecycle.ts",
+        "line": 49
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type MarginRiskLeaseContractId",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/marginLifecycle.ts",
+        "line": 52
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type MarginRiskLifecyclePhase",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/marginLifecycle.ts",
+        "line": 65
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type MarginRiskContinuityPosture",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/marginLifecycle.ts",
+        "line": 72
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface MarginRiskRecentEventMarker",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/marginLifecycle.ts",
+        "line": 75
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface MarginRiskLifecycleState",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/marginLifecycle.ts",
+        "line": 86
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type MarginRiskLifecycleEvent",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/marginLifecycle.ts",
+        "line": 147
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type MarginRiskLifecycleRejectReason",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/marginLifecycle.ts",
+        "line": 204
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type MarginRiskLifecycleReducerResult",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/marginLifecycle.ts",
+        "line": 221
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function createMarginRiskRealmBoundRevision",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/marginLifecycle.ts",
+        "line": 366
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function replayMarginRiskMarkers",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/marginLifecycle.ts",
+        "line": 586
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function validateMarginRiskLifecycleState",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/marginLifecycle.ts",
+        "line": 598
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function createInitialMarginRiskLifecycleState",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/marginLifecycle.ts",
+        "line": 842
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function reduceMarginRiskLifecycle",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/marginLifecycle.ts",
+        "line": 914
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function nullableOrEmptyVenueToken",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/normalize.ts",
+        "line": 487
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function nullableExchangeIntegerId",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/normalize.ts",
+        "line": 508
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface DerivePrivateTruthSourceCutRevisionInput",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/projection.ts",
+        "line": 174
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function privateTruthSourceCutRevision",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/projection.ts",
+        "line": 816
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function derivePrivateTruthSourceCutRevision",
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/projection.ts",
+        "line": 836
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "interface BinanceRateReservationEvent",
+        "file": "server/src/liveEdge/adapters/binanceSignedKernel/rateBudget.ts",
+        "line": 84
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "interface BinanceRateReservationDecision",
+        "file": "server/src/liveEdge/adapters/binanceSignedKernel/rateBudget.ts",
+        "line": 148
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "function assertReservationEvent",
+        "file": "server/src/liveEdge/adapters/binanceSignedKernel/rateBudget.ts",
+        "line": 483
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function normalizeJournalQuantity",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/exact.ts",
+        "line": 18
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function compareJournalQuantities",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/exact.ts",
+        "line": 26
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function maximumJournalQuantity",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/exact.ts",
+        "line": 33
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function sumJournalQuantities",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/exact.ts",
+        "line": 44
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "type CreateMutationJournalInput",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/journal.ts",
+        "line": 67
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "type MutationJournalEntry",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/journal.ts",
+        "line": 83
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "type MutationJournalSnapshot",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/journal.ts",
+        "line": 84
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "type PersistedMutationJournal",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/journal.ts",
+        "line": 91
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function optionalVenueOrderId",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/journal.ts",
+        "line": 266
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function requiredVenueOrderId",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/journal.ts",
+        "line": 273
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function validateFoundationOwnerSource",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/journal.ts",
+        "line": 2892
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function validatePersistedMutationJournal",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/journal.ts",
+        "line": 3452
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function validateMutationJournalSnapshot",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/journal.ts",
+        "line": 3511
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function reconstructPersistedMutationJournal",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/journal.ts",
+        "line": 3519
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "type CapitalEvidenceDimension",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/section7.ts",
+        "line": 37
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "interface CapitalEvidenceDimensionInput",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/section7.ts",
+        "line": 39
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "interface CapitalEvidenceCandidate",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/section7.ts",
+        "line": 45
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function requireJournalMilestone",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/section7.ts",
+        "line": 201
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "function buildCapitalEvidenceCandidate",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/section7.ts",
+        "line": 207
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "type JournalJson",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/types.ts",
+        "line": 119
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface CreateMutationJournalInput",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/types.ts",
+        "line": 186
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface MutationJournalEntry",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/types.ts",
+        "line": 372
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface MutationJournalSnapshot",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/types.ts",
+        "line": 411
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface PersistedMutationJournal",
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/types.ts",
+        "line": 485
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "type BinanceRateReservationDecision",
+        "file": "server/src/liveEdge/adapters/exchangeTwin/ownerEvidence.ts",
+        "line": 18
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function evaluateExchangeTwinInstrumentPreflight",
+        "file": "server/src/liveEdge/adapters/exchangeTwin/ownerEvidence.ts",
+        "line": 58
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function evaluateExchangeTwinSpotOrderTifPreflight",
+        "file": "server/src/liveEdge/adapters/exchangeTwin/ownerEvidence.ts",
+        "line": 81
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "function evaluateExchangeTwinRateReservation",
+        "file": "server/src/liveEdge/adapters/exchangeTwin/ownerEvidence.ts",
+        "line": 106
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function evaluateExchangeTwinRateReservation",
+        "file": "server/src/liveEdge/adapters/exchangeTwin/ownerEvidence.ts",
+        "line": 106
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function evaluateExchangeTwinMutationSnapshot",
+        "file": "server/src/liveEdge/adapters/exchangeTwin/ownerEvidence.ts",
+        "line": 117
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function bindExchangeTwinRequestSemanticEvidence",
+        "file": "server/src/liveEdge/adapters/exchangeTwin/ownerEvidence.ts",
+        "line": 255
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function validateExchangeTwinRequestSemanticEvidence",
+        "file": "server/src/liveEdge/adapters/exchangeTwin/ownerEvidence.ts",
+        "line": 355
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "type TwinVenueStatus",
+        "file": "server/src/liveEdge/adapters/exchangeTwin/twin.ts",
+        "line": 41
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function createExchangeTwinState",
+        "file": "server/src/liveEdge/adapters/exchangeTwin/twin.ts",
+        "line": 1138
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function reduceExchangeTwinEvent",
+        "file": "server/src/liveEdge/adapters/exchangeTwin/twin.ts",
+        "line": 2474
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function runExchangeTwinScenario",
+        "file": "server/src/liveEdge/adapters/exchangeTwin/twin.ts",
+        "line": 2482
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function checkpointExchangeTwin",
+        "file": "server/src/liveEdge/adapters/exchangeTwin/twin.ts",
+        "line": 2525
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function restoreExchangeTwin",
+        "file": "server/src/liveEdge/adapters/exchangeTwin/twin.ts",
+        "line": 2538
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function compareExchangeTwinOutcome",
+        "file": "server/src/liveEdge/adapters/exchangeTwin/twin.ts",
+        "line": 2606
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "type TwinVenueStatus",
+        "file": "server/src/liveEdge/adapters/exchangeTwin/types.ts",
+        "line": 36
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "type TwinVenueArrivalEvent",
+        "file": "server/src/liveEdge/adapters/exchangeTwin/types.ts",
+        "line": 244
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type ExposureRecoveryProjectionInput",
+        "file": "server/src/liveEdge/adapters/exposureRecoveryProjection/projection.ts",
+        "line": 13
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type L12SupervisorSnapshot",
+        "file": "server/src/liveEdge/adapters/exposureRecoveryProjection/projection.ts",
+        "line": 18
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function validateRisk",
+        "file": "server/src/liveEdge/adapters/exposureRecoveryProjection/projection.ts",
+        "line": 227
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function validateControl",
+        "file": "server/src/liveEdge/adapters/exposureRecoveryProjection/projection.ts",
+        "line": 263
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function validateExposure",
+        "file": "server/src/liveEdge/adapters/exposureRecoveryProjection/projection.ts",
+        "line": 289
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "function validateCapital",
+        "file": "server/src/liveEdge/adapters/exposureRecoveryProjection/projection.ts",
+        "line": 328
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function deriveExposureRecoverySnapshotRevision",
+        "file": "server/src/liveEdge/adapters/exposureRecoveryProjection/projection.ts",
+        "line": 789
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function projectExposureRecoverySnapshot",
+        "file": "server/src/liveEdge/adapters/exposureRecoveryProjection/projection.ts",
+        "line": 794
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function validateExposureRecoverySnapshot",
+        "file": "server/src/liveEdge/adapters/exposureRecoveryProjection/projection.ts",
+        "line": 820
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type L12ControlAction",
+        "file": "server/src/liveEdge/adapters/exposureRecoveryProjection/types.ts",
+        "line": 34
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface L12RiskRecheckEvidence",
+        "file": "server/src/liveEdge/adapters/exposureRecoveryProjection/types.ts",
+        "line": 113
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface L12ControlAdmissionEvidence",
+        "file": "server/src/liveEdge/adapters/exposureRecoveryProjection/types.ts",
+        "line": 127
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface L12ControlPostureEvidence",
+        "file": "server/src/liveEdge/adapters/exposureRecoveryProjection/types.ts",
+        "line": 133
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface L12ExposureVector",
+        "file": "server/src/liveEdge/adapters/exposureRecoveryProjection/types.ts",
+        "line": 142
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "interface L12CapitalEconomicsEvidence",
+        "file": "server/src/liveEdge/adapters/exposureRecoveryProjection/types.ts",
+        "line": 160
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface ExposureRecoveryProjectionInput",
+        "file": "server/src/liveEdge/adapters/exposureRecoveryProjection/types.ts",
+        "line": 303
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface L12SupervisorSnapshot",
+        "file": "server/src/liveEdge/adapters/exposureRecoveryProjection/types.ts",
+        "line": 321
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type L12SupervisorSnapshot",
+        "file": "server/src/liveEdge/adapters/machineGraphEvidence/projection.ts",
+        "line": 12
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type MachineGraphControlStateEvidence",
+        "file": "server/src/liveEdge/adapters/machineGraphEvidence/projection.ts",
+        "line": 27
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type MachineGraphControlEvidence",
+        "file": "server/src/liveEdge/adapters/machineGraphEvidence/projection.ts",
+        "line": 28
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function validateControlState",
+        "file": "server/src/liveEdge/adapters/machineGraphEvidence/projection.ts",
+        "line": 474
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function validateControl",
+        "file": "server/src/liveEdge/adapters/machineGraphEvidence/projection.ts",
+        "line": 509
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type MachineGraphControlAction",
+        "file": "server/src/liveEdge/adapters/machineGraphEvidence/types.ts",
+        "line": 81
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface MachineGraphControlStateEvidence",
+        "file": "server/src/liveEdge/adapters/machineGraphEvidence/types.ts",
+        "line": 332
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface MachineGraphControlEvidence",
+        "file": "server/src/liveEdge/adapters/machineGraphEvidence/types.ts",
+        "line": 354
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function validateReconciliationSource",
+        "file": "server/src/liveEdge/adapters/normalBasis/evidence.ts",
+        "line": 269
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface NormalBasisFoundationReconciliationSourceView",
+        "file": "server/src/liveEdge/adapters/normalBasis/types.ts",
+        "line": 439
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type ReverseBasisExposure",
+        "file": "server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts",
+        "line": 23
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "type ReverseBasisTicket",
+        "file": "server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts",
+        "line": 38
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function validateTicket",
+        "file": "server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts",
+        "line": 448
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function computeExposure",
+        "file": "server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts",
+        "line": 1161
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function deriveReverseBasisExposureRevision",
+        "file": "server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts",
+        "line": 1184
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "interface ReverseBasisTicket",
+        "file": "server/src/liveEdge/adapters/reverseBasisLifecycle/types.ts",
+        "line": 158
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface ReverseBasisExposure",
+        "file": "server/src/liveEdge/adapters/reverseBasisLifecycle/types.ts",
+        "line": 363
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function deriveVolumeRiskContextRevision",
+        "file": "server/src/liveEdge/adapters/volumeLifecycle/lifecycle.ts",
+        "line": 308
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function planRiskReduction",
+        "file": "server/src/liveEdge/adapters/volumeLifecycle/lifecycle.ts",
+        "line": 1910
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlCommand",
+        "file": "server/src/liveEdge/controls/adapter.ts",
+        "line": 8
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlCommandLookup",
+        "file": "server/src/liveEdge/controls/adapter.ts",
+        "line": 25
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlCommandReceipt",
+        "file": "server/src/liveEdge/controls/adapter.ts",
+        "line": 26
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlPlaneSnapshot",
+        "file": "server/src/liveEdge/controls/adapter.ts",
+        "line": 27
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlPreviewRequest",
+        "file": "server/src/liveEdge/controls/adapter.ts",
+        "line": 28
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlPreviewResult",
+        "file": "server/src/liveEdge/controls/adapter.ts",
+        "line": 29
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlReasonCode",
+        "file": "server/src/liveEdge/controls/adapter.ts",
+        "line": 30
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlSubmissionResult",
+        "file": "server/src/liveEdge/controls/adapter.ts",
+        "line": 31
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type DurableControlAction",
+        "file": "server/src/liveEdge/controls/adapter.ts",
+        "line": 32
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type DurableControlAdapterDependencies",
+        "file": "server/src/liveEdge/controls/adapter.ts",
+        "line": 33
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type DurableControlPreview",
+        "file": "server/src/liveEdge/controls/adapter.ts",
+        "line": 34
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type PreviewRiskWitnessV1",
+        "file": "server/src/liveEdge/controls/adapter.ts",
+        "line": 35
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function mapFoundationControlFailure",
+        "file": "server/src/liveEdge/controls/adapter.ts",
+        "line": 158
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "class DurableControlCommandAdapter",
+        "file": "server/src/liveEdge/controls/adapter.ts",
+        "line": 173
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlEventAppendAcknowledgement",
+        "file": "server/src/liveEdge/controls/integrity.ts",
+        "line": 7
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlEventAppendRequest",
+        "file": "server/src/liveEdge/controls/integrity.ts",
+        "line": 8
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type DurableControlAction",
+        "file": "server/src/liveEdge/controls/integrity.ts",
+        "line": 9
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type DurableControlEvent",
+        "file": "server/src/liveEdge/controls/integrity.ts",
+        "line": 10
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type DurableControlPreview",
+        "file": "server/src/liveEdge/controls/integrity.ts",
+        "line": 11
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlEventDraft",
+        "file": "server/src/liveEdge/controls/integrity.ts",
+        "line": 15
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ConfirmControlAppendResult",
+        "file": "server/src/liveEdge/controls/integrity.ts",
+        "line": 21
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function buildControlEvent",
+        "file": "server/src/liveEdge/controls/integrity.ts",
+        "line": 83
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function prepareControlEventAppend",
+        "file": "server/src/liveEdge/controls/integrity.ts",
+        "line": 90
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function confirmControlEventAppend",
+        "file": "server/src/liveEdge/controls/integrity.ts",
+        "line": 120
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type DurableControlActionType",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 34
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlReasonCode",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 78
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface RiskBoundDeclarationV1",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 110
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type DurableControlAction",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 248
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface ControlPreviewRequest",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 268
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface ControlPlaneSnapshot",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 287
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "interface ExchangeTruthSnapshotV1",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 301
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface PreviewRiskWitnessV1",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 312
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface DurableControlPreview",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 321
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface ControlSubmissionRequest",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 339
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface ControlCommandReceipt",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 345
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlPreviewResult",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 363
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlSubmissionResult",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 364
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface ControlEventBase",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 366
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface ControlIntentCommittedEvent",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 381
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface ControlAppliedEvent",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 389
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface ControlAwarenessRecordedEvent",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 396
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface ControlRejectedEvent",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 404
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type DurableControlEvent",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 413
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface ControlEventAppendRequest",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 419
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface ControlEventAppendAcknowledgement",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 430
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlCommandLookup",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 458
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface ControlCommandRejectionReceipt",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 484
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface CanonicalControlPersistencePort",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 500
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface CanonicalControlStatePort",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 519
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "interface ExchangeTruthPort",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 523
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface RiskOwnerDecision",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 527
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface RiskOwnerPort",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 536
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface CanonicalControlOwnerPort",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 567
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface FoundationControlPlanePort",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 588
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface DurableControlAdapterDependencies",
+        "file": "server/src/liveEdge/controls/types.ts",
+        "line": 603
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlCommandLookup",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 14
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlCommandRejectionReceipt",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 15
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlCommandReceipt",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 16
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlEventAppendAcknowledgement",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 17
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlPlaneSnapshot",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 18
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlPreviewRequest",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 19
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlReasonCode",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 20
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControlSubmissionRequest",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 21
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type DurableControlAction",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 22
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type DurableControlPreview",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 23
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "type ExchangeTruthSnapshotV1",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 24
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type PreviewRiskWitnessV1",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 26
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type RiskBoundDeclarationV1",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 27
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type RiskOwnerDecision",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 28
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function validateRiskBound",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 160
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function validateDurableControlAction",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 189
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function validateRiskWitness",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 387
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function validateControlPlaneSnapshot",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 449
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function validateExchangeTruth",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 469
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function validateControlReceipt",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 526
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function validateLedgerEventIdTuple",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 555
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function validateControlRejectionReceipt",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 585
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function validateRiskDecision",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 608
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function isRiskCheckedAction",
+        "file": "server/src/liveEdge/controls/validation.ts",
+        "line": 698
       },
       {
         "concept": "semantic-source",
@@ -3847,7 +5278,7 @@
         "concept": "control-authority",
         "declaration": "function buildProductRuntimeSupervisorEnvelope",
         "file": "server/src/productIntegration/runtime/projection.ts",
-        "line": 300
+        "line": 361
       },
       {
         "concept": "control-authority",
@@ -3871,49 +5302,49 @@
         "concept": "semantic-source",
         "declaration": "interface ProductRuntimeMaterialSourceRecord",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 23
+        "line": 24
       },
       {
         "concept": "semantic-source",
         "declaration": "interface ProductRuntimeMaterialSourcePage",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 32
+        "line": 33
       },
       {
         "concept": "control-authority",
         "declaration": "interface ProductRuntimeControlPreview",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 82
+        "line": 83
       },
       {
         "concept": "control-authority",
         "declaration": "type ProductRuntimeControlResultStatus",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 108
+        "line": 109
       },
       {
         "concept": "control-authority",
         "declaration": "interface ProductRuntimeControlResult",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 115
+        "line": 116
       },
       {
         "concept": "control-authority",
         "declaration": "type ProductRuntimeControlWiringState",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 189
+        "line": 208
       },
       {
         "concept": "control-authority",
         "declaration": "interface ProductRuntimeControlRegistryEntry",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 192
+        "line": 211
       },
       {
         "concept": "control-authority",
         "declaration": "interface ProductRuntimeSupervisorEnvelope",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 300
+        "line": 319
       },
       {
         "concept": "control-authority",
@@ -4537,43 +5968,43 @@
         "concept": "control-authority",
         "declaration": "interface ControlPersistenceActor",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 225
+        "line": 234
       },
       {
         "concept": "control-authority",
         "declaration": "interface ControlPersistenceCommit",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 231
+        "line": 240
       },
       {
         "concept": "control-authority",
         "declaration": "interface ControlRejectionAudit",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 241
+        "line": 250
       },
       {
         "concept": "control-authority",
         "declaration": "type ControlPersistenceResult",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 256
+        "line": 265
       },
       {
         "concept": "control-authority",
         "declaration": "type ControlRejectionPersistenceResult",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 262
+        "line": 271
       },
       {
         "concept": "control-authority",
         "declaration": "interface StoredControlReceipt",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 266
+        "line": 275
       },
       {
         "concept": "ledger-authority",
         "declaration": "class SystemLedgerPersistenceAdapter",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 643
+        "line": 652
       },
       {
         "concept": "capital-authority",
@@ -4609,19 +6040,19 @@
         "concept": "ledger-authority",
         "declaration": "interface LedgerPersistencePort",
         "file": "server/src/systemIntegration/persistence/types.ts",
-        "line": 69
+        "line": 235
       },
       {
         "concept": "capital-authority",
         "declaration": "interface PersistedReservationReference",
         "file": "server/src/systemIntegration/persistence/types.ts",
-        "line": 122
+        "line": 309
       },
       {
         "concept": "control-authority",
         "declaration": "interface PersistedControlRejectionReceipt",
         "file": "server/src/systemIntegration/persistence/types.ts",
-        "line": 189
+        "line": 376
       },
       {
         "concept": "semantic-source",
@@ -4878,6 +6309,51 @@
         "file": "server/src/index.ts",
         "line": 9,
         "target": "./ledger.js"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceInstrumentSpecs/exact.ts",
+        "line": 10,
+        "target": "../../../capitalFoundation/contracts/decimal.js"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceInstrumentSpecs/types.ts",
+        "line": 1,
+        "target": "../../../intelligenceRuntime/universe/index.js"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binancePrivateTruth/exact.ts",
+        "line": 6,
+        "target": "../../../capitalFoundation/contracts/decimal.js"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/durableMutationJournal/exact.ts",
+        "line": 6,
+        "target": "../../../capitalFoundation/contracts/decimal.js"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/edgeProtocol/client.ts",
+        "line": 4,
+        "target": "../../../intelligenceRuntime/contracts/index.js"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/edgeProtocol/schemaValidator.ts",
+        "line": 3,
+        "target": "../../../intelligenceRuntime/contracts/boundedJson.js"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/exchangeTwin/exact.ts",
+        "line": 12,
+        "target": "../../../capitalFoundation/contracts/decimal.js"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/executionPolicy/exact.ts",
+        "line": 9,
+        "target": "../../../capitalFoundation/contracts/decimal.js"
+      },
+      {
+        "file": "server/src/liveEdge/integration/assessmentBridge.ts",
+        "line": 7,
+        "target": "../../intelligenceRuntime/lifecycle/queue.js"
       },
       {
         "file": "server/src/services/account.ts",
@@ -11149,5 +12625,5 @@
       "gate": "IP-OPS accepted; no external mutation"
     }
   ],
-  "evidenceSha256": "9c77044ddccaeb83d2a47e6a6b0d52dd4c8b265b32b61c8d28702ec24ac4b448"
+  "evidenceSha256": "8d1f07f112b1c536bf8363491af73e5ba1ad70cd2b6843f0569e50458bf1b002"
 }

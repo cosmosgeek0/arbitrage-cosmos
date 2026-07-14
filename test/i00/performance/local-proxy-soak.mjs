@@ -487,7 +487,7 @@ async function requestSnapshot(origin, label, testedSha) {
       owner: component?.owner ?? null,
       observedLifecycle: component?.observedLifecycle ?? null,
       capability: component?.capability ?? null,
-      blocker: component?.blocker ?? null,
+      blocker: component?.blockerCode ?? null,
     })) : null;
     productControls = Array.isArray(parsed?.controls) ? parsed.controls.map((control) => ({
       controlId: control?.controlId ?? null,

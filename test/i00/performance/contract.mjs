@@ -92,10 +92,20 @@ export const I00_MANAGED_INVENTORY_EXPECTATIONS = Object.freeze([
 ]);
 
 export const CANONICAL_SYSTEM_COMPONENT_OWNERS = Object.freeze([
-  'INTELLIGENCE_RUNTIME', 'INTELLIGENCE_RUNTIME', 'AUDITED_APP', 'INTELLIGENCE_RUNTIME',
-  'MARKET_INTELLIGENCE', 'Q_INFERENCE', 'BASIS_ENGINE', 'VOLUME_ENGINE',
-  'CAPITAL_SUPERVISION', 'BACKEND_FOUNDATION_RISK', 'BACKEND_FOUNDATION_EXECUTION',
-  'BACKEND_FOUNDATION_RECONCILIATION', 'EXISTING_LEDGER', 'SYSTEM_INTEGRATION',
+  'INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime',
+  'INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime',
+  'AUDITED_APP:server/src/engine/marketData.ts',
+  'INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime',
+  'MARKET_INTELLIGENCE:server/src/intelligenceFoundation',
+  'Q_INFERENCE:quant/src/quant_edge/inference',
+  'BASIS_ENGINE:server/src/engine/basis',
+  'VOLUME_ENGINE:server/src/engine/volume',
+  'CAPITAL_SUPERVISION:server/src/capitalFoundation',
+  'BACKEND_FOUNDATION_RISK:server/src/foundation/risk',
+  'BACKEND_FOUNDATION_EXECUTION:server/src/foundation/execution',
+  'BACKEND_FOUNDATION_RECONCILIATION:server/src/foundation/reconciliation',
+  'EXISTING_LEDGER:server/src/ledger.ts',
+  'SYSTEM_INTEGRATION:server/src/systemIntegration',
 ]);
 
 export const PRODUCT_RUNTIME_CONTROL_EXPECTATIONS = Object.freeze([

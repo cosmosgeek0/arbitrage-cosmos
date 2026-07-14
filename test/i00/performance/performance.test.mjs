@@ -941,6 +941,25 @@ test('performance semantics reject canonical component omission, identity forger
   }
 });
 
+test('performance canonical component owners bind exact authority and owner path', () => {
+  assert.deepEqual(CANONICAL_SYSTEM_COMPONENT_OWNERS, [
+    'INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime',
+    'INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime',
+    'AUDITED_APP:server/src/engine/marketData.ts',
+    'INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime',
+    'MARKET_INTELLIGENCE:server/src/intelligenceFoundation',
+    'Q_INFERENCE:quant/src/quant_edge/inference',
+    'BASIS_ENGINE:server/src/engine/basis',
+    'VOLUME_ENGINE:server/src/engine/volume',
+    'CAPITAL_SUPERVISION:server/src/capitalFoundation',
+    'BACKEND_FOUNDATION_RISK:server/src/foundation/risk',
+    'BACKEND_FOUNDATION_EXECUTION:server/src/foundation/execution',
+    'BACKEND_FOUNDATION_RECONCILIATION:server/src/foundation/reconciliation',
+    'EXISTING_LEDGER:server/src/ledger.ts',
+    'SYSTEM_INTEGRATION:server/src/systemIntegration',
+  ]);
+});
+
 test('performance semantics reject product-control omission and exact-row forgeries including authority', () => {
   const cases = [
     ['product control omission', (controls) => controls.splice(0, 1)],

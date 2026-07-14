@@ -40,7 +40,10 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 | S4 assuranceCase satellite | ~/Desktop/ip-assur-case | ip-assur-case-20260713 | c57610c | RESEALED b4d8a44 + INTEGRATED by Role-2 (merge 86ee3b5, 41/41 blobs exact) |
 
 | AIOPS-PRESTAGE (non-donor) | ~/Desktop/aiops-prestage | aiops-prestage-20260714 | d78be24 | WORKING (wave 17) — reuse inventory + collision map + targets/identity drafts; WAITING_INTEGRATED_ACCEPTED gate |
-| AIOPS A1–A5 + EGRESS-PATCH | (cut at INTEGRATED_ACCEPTED) | aiops-a1..a5-<date>, egress patch | accepted SHA | ARMED — blocks in WORKER_PROMPTS wave 17; launch = 6 concurrent chats after landing |
+| AIOPS SHADOW A1–A5 | ~/Desktop/aiops-shadow-a1..a5 | aiops-shadow-a1..a5-20260715 | 03857dc | WORKING (wave 18, D-LAUNCH-29) — SHADOW_SPECULATIVE, no acceptance status; PORT + full rerun at INTEGRATED_ACCEPTED |
+| ROLE3-PREFLIGHT | ~/Desktop/role3-preflight | role3-preflight-20260715 | 03857dc | WORKING (wave 18) — read-only scout, findings only, no verdict |
+| C-SHARDS 1–6 | (cut at C freeze) | read-only at exact C | C | ARMED (wave 19) — acceptance battery sharded; receipts feed Role 3 |
+| EGRESS-PATCH | (cut after landing) | from landed main | INTEGRATED_ACCEPTED | ARMED — wave 17 block |
 
 | SI-RECON ruling | ~/Desktop/si-recon | si-recon-ruling-20260714 | e25fd5d | ACCEPTED ruling A + MERGED to current-main c43262a (SI 180/180, npm test green) |
 

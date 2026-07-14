@@ -39,7 +39,7 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 | S2 actionEvidence satellite | (superseded row) | — | — | D-LAUNCH-20 NOT_CONFIGURED ruling superseded by D-LAUNCH-22.3/25 — built as post-landing donor, see "S2 actionEvidence (wave 14)" row above; candidate still excludes it |
 | S4 assuranceCase satellite | ~/Desktop/ip-assur-case | ip-assur-case-20260713 | c57610c | RESEALED b4d8a44 + INTEGRATED by Role-2 (merge 86ee3b5, 41/41 blobs exact) |
 
-| AIOPS-PRESTAGE (non-donor) | ~/Desktop/aiops-prestage | aiops-prestage-20260714 | d78be24 | WORKING (wave 17) — reuse inventory + collision map + targets/identity drafts; WAITING_INTEGRATED_ACCEPTED gate |
+| AIOPS-PRESTAGE (non-donor) | ~/Desktop/aiops-prestage | aiops-prestage-20260714 | d78be24 | AIOPS_PRESTAGE_READY ACCEPTED (08e0bea, pushed; D-LAUNCH-30) — collision map ratified for port phase; reuse inventory + insertion registry = integrator reading; PARKED |
 | AIOPS SHADOW A1–A5 | ~/Desktop/aiops-shadow-a1..a5 | aiops-shadow-a1..a5-20260715 | 03857dc | WORKING (wave 18, D-LAUNCH-29) — SHADOW_SPECULATIVE, no acceptance status; PORT + full rerun at INTEGRATED_ACCEPTED |
 | ROLE3-PREFLIGHT | ~/Desktop/role3-preflight | role3-preflight-20260715 | 03857dc | WORKING (wave 18) — read-only scout, findings only, no verdict |
 | C-SHARDS 1–6 | (cut at C freeze) | read-only at exact C | C | ARMED (wave 19) — acceptance battery sharded; receipts feed Role 3 |

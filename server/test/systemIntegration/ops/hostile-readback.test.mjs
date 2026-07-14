@@ -332,6 +332,40 @@ test('canonical ops readback emits the exact nine-key shape with a ten-minute UT
   assert.equal(Date.parse(projected.validUntilUtc) - Date.parse(projected.observedAtUtc), 600_000);
 });
 
+test('an explicit supervisor cut is validated in place while freeze and identity truth remain fresh', async () => {
+  let supervisorReads = 0;
+  let freezeReads = 0;
+  let identityReads = 0;
+  const service = opsReadback({
+    readSupervisor: () => {
+      supervisorReads += 1;
+      return supervisor();
+    },
+    deploymentFreeze: {
+      read: () => {
+        freezeReads += 1;
+        return freezeProjection(false);
+      },
+    },
+    readBlockingIdentityReferences: () => {
+      identityReads += 1;
+      return [];
+    },
+  });
+  const supplied = supervisor();
+  const first = await service.read(supplied);
+  assert.equal(supervisorReads, 0);
+  assert.equal(freezeReads, 1);
+  assert.equal(identityReads, 1);
+  assert.equal(first.exposureState, 'NONE');
+
+  const stale = await service.read(supervisor({ evaluatedAtMs: NOW - 30_001 }));
+  assert.equal(supervisorReads, 0);
+  assert.equal(freezeReads, 2);
+  assert.equal(identityReads, 1);
+  assertUnknownTruth(stale);
+});
+
 test('stale, future, throwing, and structurally hostile supervisor truth fails closed', async () => {
   const malformed = supervisor();
   malformed.summaries.reconciliation = {

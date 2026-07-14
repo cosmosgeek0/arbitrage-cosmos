@@ -4,6 +4,7 @@ import { buildProductRuntimeSupervisorEnvelope } from './projection.js';
 import { isProductRuntimeTraceId, projectProductCorrelationTrace } from './trace.js';
 import { evaluateCanonicalOpsIntakeGate } from '../../systemIntegration/ops/index.js';
 import type { BootReleaseReadback } from '../../systemIntegration/persistence/index.js';
+import { traceByCorrelationId } from '../../systemIntegration/supervisor/index.js';
 import {
   PRODUCT_RUNTIME_MAX_QUERY_LIMIT,
   ProductRuntimeError,
@@ -90,7 +91,7 @@ export class ProductIntegrationRuntimeService {
         );
       }
       const snapshot = await this.options.read.supervisor();
-      const opsReadback = await this.options.read.opsReadback();
+      const opsReadback = await this.options.read.opsReadback(snapshot);
       let bootReleaseReadback: Readonly<BootReleaseReadback> | null = null;
       if (typeof this.options.read.bootReleaseReadback === 'function') {
         try {
@@ -105,7 +106,10 @@ export class ProductIntegrationRuntimeService {
       const correlationIds = [...new Set(snapshot.recentCorrelatedDecisions.map((event) => event.correlationId))].slice(0, 4);
       const traces: Readonly<ProductRuntimeCorrelationTrace>[] = [];
       for (const correlationId of correlationIds) {
-        const sourceTrace = await this.options.read.trace(correlationId, 200);
+        // The supervisor already carries the canonical bounded trace index.
+        // Re-reading the trace port would rebuild System truth and could mix a
+        // later trace cut into this envelope.
+        const sourceTrace = traceByCorrelationId(snapshot.traceIndex, correlationId);
         if (sourceTrace) {
           if (sourceTrace.events.length > 200) {
             throw new ProductRuntimeError('TRACE_SOURCE_INVALID', 'Trace owner exceeded the requested bound.', 503);

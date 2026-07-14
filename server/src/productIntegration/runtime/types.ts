@@ -90,7 +90,7 @@ export interface ProductRuntimeReadPorts {
   applicationStartOk(): boolean | Promise<boolean>;
   applicationStartFailureCodes?(): readonly string[] | Promise<readonly string[]>;
   supervisor(): Readonly<SystemSupervisorReadModel> | Promise<Readonly<SystemSupervisorReadModel>>;
-  opsReadback():
+  opsReadback(supervisor: Readonly<SystemSupervisorReadModel>):
     | Readonly<CanonicalSupervisorOpsReadback>
     | Promise<Readonly<CanonicalSupervisorOpsReadback>>;
   bootReleaseReadback?():

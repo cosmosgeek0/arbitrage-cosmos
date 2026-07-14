@@ -26,7 +26,9 @@ export interface CanonicalSupervisorOpsReadback {
 }
 
 export interface CanonicalSupervisorOpsReadPort {
-  read(): Readonly<CanonicalSupervisorOpsReadback> | Promise<Readonly<CanonicalSupervisorOpsReadback>>;
+  read(supervisorCut?: Readonly<SystemSupervisorReadModel>):
+    | Readonly<CanonicalSupervisorOpsReadback>
+    | Promise<Readonly<CanonicalSupervisorOpsReadback>>;
 }
 
 export interface CanonicalSupervisorOpsClock {

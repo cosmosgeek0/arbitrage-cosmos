@@ -45,6 +45,7 @@ import {
   deriveI00MeaningfulAdvanceEvidence,
   projectI00Health,
 } from './systemIntegration/application/health.js';
+import type { SystemSupervisorReadModel } from './systemIntegration/supervisor/index.js';
 import {
   createNodeRepeatingScheduler,
   createSystemUtcClock,
@@ -205,9 +206,9 @@ const canonicalOwnerEvidence = createCanonicalOwnerEvidenceReadPort({
   liveEdgeControl: liveEdgeControlBinding,
 });
 let canonicalOpsReadback: CanonicalSupervisorOpsReadPort | null = null;
-function readCanonicalOps() {
+function readCanonicalOps(supervisorCut?: Readonly<SystemSupervisorReadModel>) {
   if (canonicalOpsReadback === null) throw new TypeError('canonical operations truth is not bound');
-  return canonicalOpsReadback.read();
+  return canonicalOpsReadback.read(supervisorCut);
 }
 const canonicalOpsReadPort: CanonicalSupervisorOpsReadPort = Object.freeze({
   read: readCanonicalOps,
@@ -292,7 +293,7 @@ const productIntegrationRead: ProductRuntimeReadPorts = Object.freeze({
   applicationStartOk: () => canonicalApplicationStartOk,
   applicationStartFailureCodes: () => canonicalApplicationStartFailureCodes,
   supervisor: () => systemIntegration.supervisor(),
-  opsReadback: readCanonicalOps,
+  opsReadback: (supervisor: Readonly<SystemSupervisorReadModel>) => readCanonicalOps(supervisor),
   bootReleaseReadback: () => bootReleasePersistence.readback(),
   events: ({ afterCursor, limit }: Readonly<{ afterCursor: string; limit: number }>) => (
     ledger.readProductOperatorEventPage(afterCursor, limit)

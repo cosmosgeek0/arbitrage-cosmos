@@ -606,28 +606,116 @@ test('nested synthetic owner evidence forces the persistent label while account 
   assert.equal(unknownAccount.surfaces.borrow.truthLabel, 'UNKNOWN');
 });
 
-test('supervisor trace owner cannot exceed the requested embedded bound', async () => {
+test('supervisor trace index cannot exceed the requested embedded bound', async () => {
   const correlationId = 'cor_trace_1';
   const base = makeRead();
+  const oversizedTrace = Object.freeze({
+    correlationId,
+    evaluatedAtMs: T0,
+    truncated: true,
+    events: Object.freeze(Array.from({ length: 201 }, (_, index) => (
+      traceEvent(`trace-${index + 1}`, index + 1, 'SOURCE', 'public-spot-source', correlationId)
+    ))),
+  });
   const snapshot = makeSupervisor({
     recentCorrelatedDecisions: Object.freeze([Object.freeze({ correlationId })]),
+    traceIndex: Object.freeze({
+      evaluatedAtMs: T0,
+      entries: Object.freeze([Object.freeze({
+        correlationId,
+        firstOccurredAtMs: T0 - 1_000,
+        lastOccurredAtMs: T0 - 800,
+        componentIds: Object.freeze(['public-spot-source']),
+        truthLabels: Object.freeze(['LIVE_PUBLIC']),
+        eventCount: oversizedTrace.events.length,
+        failureCount: 0,
+        snapshot: oversizedTrace,
+      })]),
+      totalInputEvents: oversizedTrace.events.length,
+      uniqueEventCount: oversizedTrace.events.length,
+      duplicateEventCount: 0,
+      truncated: true,
+    }),
   });
   const service = createProductIntegrationRuntime({
     read: Object.freeze({
       ...base,
       supervisor: () => snapshot,
-      trace: () => Object.freeze({
-        correlationId,
-        evaluatedAtMs: T0,
-        truncated: true,
-        events: Object.freeze(Array.from({ length: 201 }, (_, index) => (
-          traceEvent(`trace-${index + 1}`, index + 1, 'SOURCE', 'public-spot-source', correlationId)
-        ))),
-      }),
     }),
     clock: { nowMs: () => T0 },
   });
   await assert.rejects(service.readSupervisor(), (error) => error?.code === 'TRACE_SOURCE_INVALID');
+});
+
+test('Product supervisor reuses one canonical snapshot for ops and embedded traces', async () => {
+  const correlationId = 'cor_trace_1';
+  const event = traceEvent('trace-shared-cut', 1, 'SOURCE', 'public-spot-source', correlationId);
+  const trace = Object.freeze({
+    correlationId,
+    evaluatedAtMs: T0,
+    truncated: false,
+    events: Object.freeze([event]),
+  });
+  const source = makeSupervisor();
+  const snapshot = makeSupervisor({
+    recentCorrelatedDecisions: Object.freeze([Object.freeze({
+      eventId: event.id,
+      correlationId,
+      componentId: event.componentId,
+      kind: event.kind,
+      occurredAtMs: event.occurredAtMs,
+      truthLabel: event.truthLabel,
+      ownerId: event.ownerId,
+      canonicalProjectionId: event.canonicalProjectionId,
+      revisionDigest: event.revisionDigest,
+      failureCode: null,
+      referenceIds: event.referenceIds,
+    })]),
+    traceIndex: Object.freeze({
+      ...source.traceIndex,
+      entries: Object.freeze([Object.freeze({
+        correlationId,
+        firstOccurredAtMs: event.occurredAtMs,
+        lastOccurredAtMs: event.occurredAtMs,
+        componentIds: Object.freeze([event.componentId]),
+        truthLabels: Object.freeze([event.truthLabel]),
+        eventCount: 1,
+        failureCount: 0,
+        snapshot: trace,
+      })]),
+      totalInputEvents: 1,
+      uniqueEventCount: 1,
+    }),
+  });
+  const base = makeRead();
+  let supervisorReads = 0;
+  let opsCut = null;
+  let tracePortReads = 0;
+  const service = createProductIntegrationRuntime({
+    read: Object.freeze({
+      ...base,
+      supervisor: () => {
+        supervisorReads += 1;
+        return snapshot;
+      },
+      opsReadback: (received) => {
+        opsCut = received;
+        return makeOpsReadback();
+      },
+      trace: () => {
+        tracePortReads += 1;
+        return trace;
+      },
+    }),
+    clock: { nowMs: () => T0 },
+  });
+  const envelope = await service.readSupervisor();
+  assert.equal(supervisorReads, 1);
+  assert.equal(opsCut, snapshot);
+  assert.equal(tracePortReads, 0);
+  assert.equal(envelope.traces.length, 1);
+  assert.equal(envelope.traces[0].correlationId, correlationId);
+  assert.equal(envelope.traces[0].stages[0].referenceId, event.canonicalProjectionId);
 });
 
 test('an owner that lacks any durability gate leaves every affected control disabled', async () => {

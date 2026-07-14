@@ -307,7 +307,9 @@ class CanonicalOpsReadbackService implements CanonicalSupervisorOpsReadPort {
     this.maximumSupervisorAgeMs = options.maximumSupervisorAgeMs ?? DEFAULT_MAXIMUM_SUPERVISOR_AGE_MS;
   }
 
-  async read(): Promise<Readonly<CanonicalSupervisorOpsReadback>> {
+  async read(
+    supervisorCut?: Readonly<SystemSupervisorReadModel>,
+  ): Promise<Readonly<CanonicalSupervisorOpsReadback>> {
     let freezeProjection: unknown = null;
     try { freezeProjection = this.options.deploymentFreeze.read(); } catch { /* UNKNOWN */ }
     const nowMs = this.options.clock.nowMs();
@@ -318,7 +320,13 @@ class CanonicalOpsReadbackService implements CanonicalSupervisorOpsReadPort {
 
     let supervisor: Readonly<SystemSupervisorReadModel> | null = null;
     try {
-      const candidate = await this.options.readSupervisor();
+      // A caller that already owns one canonical supervisor cut may bind ops
+      // truth to that exact cut. Freeze-marker and identity truth are still
+      // read fresh below; an explicitly supplied malformed/stale cut fails
+      // closed and never falls back to a later supervisor observation.
+      const candidate = supervisorCut === undefined
+        ? await this.options.readSupervisor()
+        : supervisorCut;
       if (currentSupervisor(candidate, nowMs, this.maximumSupervisorAgeMs)) supervisor = candidate;
     } catch { /* fail closed below */ }
 

@@ -2,7 +2,10 @@
 
 State: **CASE_IMPLEMENTED_AWAITING_FULL_LOOP**
 
-This interim state records only that the packet-local implementation and focused tests exist. It grants no runtime, supervisor, Risk, Capital, execution, Control, persistence, repair, deployment, external-configuration, or acceptance authority.
+This interim state records only that the packet-local implementation exists and
+its semantics remain clean. It grants no runtime, supervisor, Risk, Capital,
+execution, Control, persistence, repair, deployment, external-configuration,
+or acceptance authority.
 
 ## Identity
 
@@ -12,6 +15,10 @@ This interim state records only that the packet-local implementation and focused
 | Required base | `c57610cb5f7d56efb61e53ae27057fbe92a6a2f6` |
 | Implementation commit | `2f20acddcfbaba8db042fab024443924f7dee7d3` |
 | Implementation tree | `eeea49d412bf886c422cc2f5d79246f6f3320883` |
+| Original blocked seal | `be320e3c8614e237314b9ea39d385347c07924e3` |
+| Director repair merge tested | `2d840599c716b5da8f5c42a272fc2232792f868c` |
+| Repaired `current-main` parent | `f72c531f766d3f8ffa52e0f0e3fc77ef8345913b` |
+| Upstream SI ruling A | `c43262af78b43de0ac5ec819e82f04af60f1f255` |
 | Accepted S1 input | `ip-assur-hazard-20260713` at `ab33b3712cddd67c3ec91cfa1dd232c75226cd9f` |
 | Truth label | `SYNTHETIC_ONLY` |
 | Authority effect | `NONE` |
@@ -27,10 +34,26 @@ This interim state records only that the packet-local implementation and focused
 
 ## Verification and terminal blocker
 
-- Exact committed-byte S4 suite: `233/233` passed; all 32 packet/test `.mjs` files passed syntax checks.
-- `npm test`: exit `0` after typecheck, build, deterministic engines, financial-safety, storage/config/AWS, focused Node, stream, and perimeter gates.
-- `npm run test:all`: exit `1`; the final system-integration family passed `179/180` and failed `server/test/systemIntegration/verticalSlice/authority.scenarios.test.mjs:521` because actual `DIVERGED` did not equal expected `PARTIAL`.
-- The same isolated test fails `28/29` after rebuilding exact required base `c57610cb5f7d56efb61e53ae27057fbe92a6a2f6`; S4 changed no server, web, or package byte.
-- Final adversarial reviews are clean on S4 semantics, expiry/transitive invalidation, graph-wide independence, canonical statements, bounds, and the render-neutral no-authority view.
+- The original repository blocker is resolved upstream: on exact repaired merge
+  `2d840599c716b5da8f5c42a272fc2232792f868c`, `npm run test:all` exits `0`
+  and System Integration passes `180/180`.
+- All `32` packet/test `.mjs` files pass syntax checks.
+- The S4 focused suite now reports `232/233`, exit `1`. Its only failure is the
+  mandatory path-scope assertion in `purity-scope.test.mjs:35`.
+- That assertion compares assigned base `c57610c...` through the director's
+  two-parent repair merge, so it reports exactly five director-owned repaired-
+  baseline paths. The S4 test subtree is unchanged from implementation commit
+  `2f20acd...`, and the merge changed no S4 byte from blocked seal
+  `be320e3...`.
+- The corrected direct audit from repaired parent `f72c531...` to the tested
+  merge contains `39` paths and `0` outside the two exclusive S4 roots, but the
+  mandatory checked assertion remains red and cannot be waived by this shard.
+- Final adversarial reviews remain clean on S4 semantics, expiry/transitive
+  invalidation, graph-wide independence, canonical statements, bounds, and the
+  render-neutral no-authority view.
 
-Terminal loop outcome: **BLOCKED_BASELINE_TEST_ALL_FAILURE**. `CASE_PRESTAGE_READY` is not claimed. Repair belongs to the existing system-integration owner and is outside both S4 exclusive write roots. See `receipts/CASE_BLOCKED_RECEIPT.md`.
+Terminal loop outcome: **BLOCKED_DIRECTOR_MERGE_SCOPE_GUARD**.
+`CASE_PRESTAGE_READY` is not claimed. Merge-triggered scope-guard repair belongs
+to the director under the documented Q08/Q15 pattern. See
+`receipts/CASE_REBASE_SCOPE_BLOCKED_RECEIPT.md`; the original
+`receipts/CASE_BLOCKED_RECEIPT.md` remains immutable historical evidence.

@@ -1,0 +1,91 @@
+{
+  "schema": "AI_OPS_A3_UNFINISHED_INTERFACE_DEPENDENCES_V1",
+  "shadowStatus": "SHADOW_SPECULATIVE",
+  "authorityGranted": false,
+  "dependences": [
+    {
+      "dependenceId": "A1-CANONICAL-CONTRACTS",
+      "state": "UNFINISHED_I00_INTERFACE",
+      "requiredInterface": "Accepted exact-five-state, provider, model, identity, permission, budget and tool contracts",
+      "shadowBehavior": "Local adapter projections only; PORT must replace or prove exact compatibility"
+    },
+    {
+      "dependenceId": "A2-CASE-WORKFLOW-EVIDENCE",
+      "state": "UNFINISHED_I00_INTERFACE",
+      "requiredInterface": "Canonical case, evidence, workflow generation, inbox, outbox, DLQ, attempt and budget ports",
+      "shadowBehavior": "Typed identifiers are carried but no case or queue owner is created"
+    },
+    {
+      "dependenceId": "LEDGER-ATOMIC-DEDUP-AUDIT",
+      "state": "UNFINISHED_I00_INTERFACE",
+      "requiredInterface": "Atomic replay and semantic callback reservations, job audit, usage, effect and retention durability",
+      "shadowBehavior": "Injected port only; store unavailability denies acknowledgement"
+    },
+    {
+      "dependenceId": "RAW-WEBHOOK-ROUTE-AUTH",
+      "state": "UNFINISHED_I00_INTERFACE",
+      "requiredInterface": "Owner-authenticated raw-body route that preserves bytes and invokes admission before parsing",
+      "shadowBehavior": "Pure callback admission function only; no route or middleware"
+    },
+    {
+      "dependenceId": "WORKLOAD-IDENTITY-SANDBOX",
+      "state": "UNFINISHED_I00_INTERFACE",
+      "requiredInterface": "Accepted S6 workload identity and external sandbox bindings plus OS-enforced filesystem and network isolation",
+      "shadowBehavior": "Separate NOT_CONFIGURED identity rows and declarative plans only"
+    },
+    {
+      "dependenceId": "CREDENTIAL-BROKER-EGRESS-PROXY",
+      "state": "UNFINISHED_I00_INTERFACE",
+      "requiredInterface": "Owner-managed opaque credential injection and exact-route outbound proxy",
+      "shadowBehavior": "All routes disabled; only obviously synthetic invalid references accepted as fixture shape"
+    },
+    {
+      "dependenceId": "CONTROL-APPROVAL-AUTHORITY",
+      "state": "UNFINISHED_I00_INTERFACE",
+      "requiredInterface": "Canonical kill, provider activation, permission, budget, approval and revocation decisions",
+      "shadowBehavior": "No control is created and no admission result grants authority"
+    },
+    {
+      "dependenceId": "STATE-DIALECT-ADAPTER",
+      "state": "UNFINISHED_I00_INTERFACE",
+      "requiredInterface": "Explicit adapter from command section 2 configuration state to Product Assurance READY, NOT_CONFIGURED, UNAVAILABLE and BUDGET_EXHAUSTED posture",
+      "shadowBehavior": "Axes remain separate; no cast or READY projection"
+    },
+    {
+      "dependenceId": "INDEPENDENT-SENTINEL-AUDIT",
+      "state": "UNFINISHED_I00_INTERFACE",
+      "requiredInterface": "Independently administered sentinel and append-only audit delivery with readback",
+      "shadowBehavior": "No sentinel or audit sink is created"
+    },
+    {
+      "dependenceId": "CANONICAL-POLICY-VERIFIER",
+      "state": "UNFINISHED_I00_INTERFACE",
+      "requiredInterface": "Opaque canonical-owner verification result plus authenticated expiring one-shot hook-binding reservation binding principal, provider, model, run, session, canonical worktree, tool, input, resource, budgets, approval, policy revision and hard denials",
+      "shadowBehavior": "Typed verified-evidence projection only; every shipped tool remains disabled, the Claude hook unconditionally denies as HOOK_BINDING_VERIFIER_NOT_CONFIGURED, and no local policy becomes authority"
+    },
+    {
+      "dependenceId": "CALLBACK-VALIDATION-AUDIT",
+      "state": "UNFINISHED_I00_INTERFACE",
+      "requiredInterface": "Atomic durable receipt for every accepted, duplicate, delayed, conflicted, malformed or authentication-rejected delivery",
+      "shadowBehavior": "Authenticated accepted and duplicate fixture deliveries model audit receipts; pre-authentication rejection persistence awaits the canonical audit owner"
+    },
+    {
+      "dependenceId": "PROVIDER-ROUTE-QUALIFICATION",
+      "state": "UNFINISHED_I00_INTERFACE",
+      "requiredInterface": "Per-role pinned model and CLI version, prompt, policy, schema, tool parity, retention, region, eval, budget, circuit and emergency-reserve qualification",
+      "shadowBehavior": "All posture fields are UNKNOWN_BLOCKED or UNQUALIFIED and no route activates"
+    },
+    {
+      "dependenceId": "SIGNED-CONTEXT-PROMPT-MANIFEST",
+      "state": "UNFINISHED_I00_INTERFACE",
+      "requiredInterface": "Canonical signed context manifest binding static-system hash, dynamic-context hash, evidence-bundle hash, phase, stop condition, prompt revision, retrieval bound, tool-depth bound, iteration bound and output-byte bound",
+      "shadowBehavior": "Provider requests carry prompt, evidence and policy revisions plus token and deadline bounds; tool requests and signed policy evidence cross-bind evidence-bundle and revision identities; descriptors bind input and output bytes. No signed context-manifest owner is created and activation remains denied"
+    },
+    {
+      "dependenceId": "ISOLATED-WORKTREE-RUNNER",
+      "state": "UNFINISHED_I00_INTERFACE",
+      "requiredInterface": "Owner-created dedicated disposable clone plus signed canonical source/common-dir/parent realpath evidence, locked detached worktree, process sandbox, resource ceiling and artifact retention",
+      "shadowBehavior": "Class-C command plan only; caller-asserted or unresolved paths are rejected, runner remains NOT_CONFIGURED and Main writes, merge, push and deployment stay denied"
+    }
+  ]
+}

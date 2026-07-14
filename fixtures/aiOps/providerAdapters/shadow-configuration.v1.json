@@ -1,0 +1,75 @@
+{
+  "schema": "AI_OPS_A3_SHADOW_CONFIGURATION_V1",
+  "shadowStatus": "SHADOW_SPECULATIVE",
+  "authorityGranted": false,
+  "providerActivation": "FORBIDDEN",
+  "exactConfigurationStates": [
+    "NOT_CONFIGURED",
+    "SUBSCRIPTION_CODEX_WORKER",
+    "SUBSCRIPTION_CLAUDE_CODE_WORKER",
+    "API_CONFIGURED",
+    "DIAGNOSTIC_PLANE_UNAVAILABLE"
+  ],
+  "identityRows": [
+    {
+      "identityId": "aiops-runtime-diagnostician",
+      "role": "RUNTIME_DIAGNOSTICIAN",
+      "state": "NOT_CONFIGURED"
+    },
+    {
+      "identityId": "aiops-engineering-repair-worker",
+      "role": "ENGINEERING_REPAIR_WORKER",
+      "state": "NOT_CONFIGURED"
+    },
+    {
+      "identityId": "aiops-independent-verifier",
+      "role": "INDEPENDENT_VERIFIER",
+      "state": "NOT_CONFIGURED"
+    },
+    {
+      "identityId": "aiops-research-trade-context-advisor",
+      "role": "RESEARCH_TRADE_CONTEXT_ADVISOR",
+      "state": "NOT_CONFIGURED"
+    }
+  ],
+  "providerTemplates": [
+    {
+      "provider": "CODEX_CLI",
+      "state": "NOT_CONFIGURED",
+      "authentication": "EXTERNAL_TRUSTED_PRIVATE_RUNNER_ONLY",
+      "modelBinding": "I00_PINNED_MODEL_ID_REQUIRED",
+      "cliVersionBinding": "I00_PINNED_CLI_VERSION_REQUIRED",
+      "retentionZdrPosture": "UNKNOWN_BLOCKED",
+      "storeBehavior": "UNKNOWN_BLOCKED",
+      "backgroundModeCompatibility": "UNKNOWN_BLOCKED",
+      "region": "UNKNOWN_BLOCKED",
+      "schemaToolParity": "UNQUALIFIED",
+      "evalQualification": "UNQUALIFIED",
+      "budgetState": "NOT_CONFIGURED",
+      "emergencyReserve": "NOT_CONFIGURED",
+      "activationAllowed": false
+    },
+    {
+      "provider": "CLAUDE_CODE_CLI",
+      "state": "NOT_CONFIGURED",
+      "authentication": "EXTERNAL_TRUSTED_PRIVATE_RUNNER_ONLY",
+      "modelBinding": "I00_PINNED_MODEL_ID_REQUIRED",
+      "cliVersionBinding": "I00_PINNED_CLI_VERSION_REQUIRED",
+      "retentionZdrPosture": "UNKNOWN_BLOCKED",
+      "storeBehavior": "UNKNOWN_BLOCKED",
+      "backgroundModeCompatibility": "UNKNOWN_BLOCKED",
+      "region": "UNKNOWN_BLOCKED",
+      "schemaToolParity": "UNQUALIFIED",
+      "evalQualification": "UNQUALIFIED",
+      "budgetState": "NOT_CONFIGURED",
+      "emergencyReserve": "NOT_CONFIGURED",
+      "activationAllowed": false
+    }
+  ],
+  "syntheticCredentialReferences": [
+    "TEST_ONLY_INVALID_CREDENTIAL_REFERENCE_CODEX_DO_NOT_USE",
+    "TEST_ONLY_INVALID_CREDENTIAL_REFERENCE_CLAUDE_DO_NOT_USE"
+  ],
+  "networkPolicy": "TOTAL_DENY_IN_TESTS",
+  "effectSemantics": "EFFECT_UNKNOWN"
+}

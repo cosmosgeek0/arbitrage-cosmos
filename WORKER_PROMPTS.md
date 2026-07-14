@@ -1,0 +1,180 @@
+# WORKER_PROMPTS.md — copy-paste blocks for owner chats (director-maintained)
+
+Rule: one block = one chat = one folder. Director appends/replaces blocks at every event; check the top entry's date. Board truth: QL_PARALLEL_DAG.md.
+
+## ACTIVE WAVE 9 (2026-07-14, post SI-RECON) — run: L09-ACCEPT + S4. Everything else done.
+
+### L09-ACCEPT — folder /Users/cosmosgeek/Desktop/l09-normal-basis
+```text
+L09 acceptance resume (D-LAUNCH-15 complete; `git log --oneline -2` shows director rebase of current-main c43262a with SI-RECON ruling A — SI stop RESOLVED, suite green on merged base). Correction 73030fa intact (34 paths reviewed per L09-007). ONLY the acceptance loop remains: rerun full D-LAUNCH-12 gates on the rebased tree (focused + accumulated liveEdge + foundation + protocol + npm test + full repo incl. systemIntegration — expect ALL green) + final independent review → acceptance commit → receipt → record accepted SHA. No new implementation, no shared files, no push. Stop only at L09 ACCEPTED or precise BLOCKED.
+```
+
+### S4 — folder /Users/cosmosgeek/Desktop/ip-assur-case
+```text
+You are the S4 shard builder (D-LAUNCH-13 packet law; verify branch ip-assur-case-20260713, HEAD c57610c; read `git show c57610c:IP_ASSURANCE.md` §7 + dedup matrix). Build ONLY amendment §5 (S4): derived read-only assurance claim graph — claim nodes with owner/subclaims/assumptions/evidence IDs, producer≠verifier and common-mode independence law, §5.3 mandatory claims, §5.4 expiry + transitive invalidation with UNKNOWN propagation. Consume ACCEPTED S1 contracts read-only from branch ip-assur-hazard-20260713 (ab33b37). Exclusive: fixtures/productAssurance/systemic/assuranceCase/** + test/productAssurance/systemic/assuranceCase/**. D-LAUNCH-10 satellite discipline applies. Full loop → reseal. Stop at CASE_PRESTAGE_READY or BLOCKED.
+```
+
+## HISTORICAL WAVE 8 (2026-07-13, D-LAUNCH-13) — resumes: A-CORE, A-AGENT, A-STABILITY, A-COCKPIT (+ L09 D-LAUNCH-12 block below)
+
+### A-AGENT resume — folder /Users/cosmosgeek/Desktop/ip-assur-agent
+```text
+Resume under D-LAUNCH-13: your CLASS_TAXONOMY_OWNER_LAW_MISSING blocker is cleared — the exact Class A-D taxonomy + nine-point promotion evidence law is now folded into IP_ASSURANCE.md §7.1 on current-main commit c57610c (read it read-only: `git show c57610c:IP_ASSURANCE.md`; packet sha256 now starts 49dcd690275f). Implement the owner-defined trigger/shadow/bounds/demotion projection against that law, rerun focused + repository gates, emit packet-local receipt, reseal. Stop at AGENT_PRESTAGE_READY or BLOCKED.
+```
+
+### A-STABILITY resume — folder /Users/cosmosgeek/Desktop/ip-assur-stability
+```text
+Resume: your emergency-checkpoint repair commit 65ac643 stands. Complete your own recovery receipt steps: rerun every focused + repository gate, final read-only adversarial review, add the immutable acceptance receipt, reseal. Stop at STABILITY_PRESTAGE_READY or BLOCKED.
+```
+
+### A-COCKPIT resume — folder /Users/cosmosgeek/Desktop/ip-assur-cockpit
+```text
+Resume from the wip emergency checkpoint 44f900d (32 uncommitted files): audit them, keep what survives, commit the surviving base, then continue your S5 work under all D-LAUNCH-10 bounds. Full loop, reseal. Stop at COCKPIT_PRESTAGE_READY or BLOCKED.
+```
+
+### A-CORE resume — folder /Users/cosmosgeek/Desktop/ip-assurance
+```text
+Resume under D-LAUNCH-13 (read rulings: `git -C /Users/cosmosgeek/Desktop/Main log -1 --format=%H -- QL_DIRECTOR_STATE.md`, and the updated packet law `git show c57610c:IP_ASSURANCE.md`). Your three blockers are dispositioned: (1) core hardening repairs AUTHORIZED — exact owner/release/subject/digest tuple binding with hostile substitution proofs, and fix the unreachable SILENT branch (absent input must not pre-convert to UNAVAILABLE); (2) one-concept/one-owner ADJUDICATED — reduce every surface overlapping satellite/runtime owners (assurance-case, action-evidence, governance, coverage, rate-budget) to adapter boundaries or WAITING seams consuming the owner contract; remove duplicate-authority implementations yourself; (3) newsContext.ts:2302 dynamic fetch DISPOSITIONED as PURE_READ / KEEP_CANONICAL owned by the existing service — register it with observed semantics + an I00 insertion-request row; do NOT touch the service file. Then regenerate twice with byte-identity, rerun the complete evidence loop (expect ops scan 143/143 mapped), seal receipts. Your terminal word before director fan-in is CORE_SCAFFOLD_READY (full ASSURANCE_PRESTAGE_READY only after fan-in). Stop there or at a new precise BLOCKED.
+```
+
+## L09 FINAL RESUME (2026-07-13, post F-BRIDGE merge)
+
+### L09-FINAL — folder /Users/cosmosgeek/Desktop/l09-normal-basis
+```text
+L09 shard final resume (D-LAUNCH-11). Verify: branch l09-normal-basis-20260712; `git log --oneline -3` shows the director rebase merging current-main c900907 with the accepted F-BRIDGE canonical execution seams (both prior canonical gaps from L09-003 items 1 & 2 are now FIXED in server/src/foundation/execution/**). Your remaining work is the SHARD-SIDE items 3 & 4 from live-edge-receipts/DECISIONS/L09-003-INDEPENDENT-VERIFICATION-BLOCKERS.md: (3) stop fabricating proposal/mandate/reservation identities and the local fill-ratio reconciliation shortcut — consume canonical Foundation reconciliation + the now-available hydration seam, prove state from an owner checkpoint (not caller-shaped rev_* objects), preserve full plan/phase/leg/client-order/reason/revision lineage in recovery recommendations; (4) bind exact mutation identity (request sequence, request ID, intent fingerprint, sanitized-request hash, private-projection revision, reconciliation revision) — no inherited sequence 0 / constant. Implement only in server/src/liveEdge/adapters/normalBasis/** + server/test/liveEdge/normalBasis/**. Now that the canonical seams exist, your partial-fill and cold-restart tests must exercise the REAL Foundation seams (no in-memory pre-crash observation shortcut). Full evidenced loop → acceptance → record SHA. All prior laws; no shared files (F-BRIDGE already fixed Foundation); no push. Stop only at L09 ACCEPTED or BLOCKED.
+```
+
+## MID-RUN AMENDMENTS (2026-07-13, D-LAUNCH-10 — paste into ALREADY-RUNNING chats)
+
+### AMEND-A (paste into the A-CORE chat, folder ip-assurance)
+```text
+Director ownership amendment (D-LAUNCH-10): your write territory EXCLUDES all satellite-owned subtrees — fixtures/productAssurance/systemic/{hazard,actionEvidence,formal,assuranceCase,cockpit,observability,agentBoundary,stability}/** and all matching test/productAssurance/systemic/**. You canonically own server/src/productAssurance/**, server/test/productAssurance/**, and non-satellite packet-general fixtures/productAssurance/{generated,receipts,fixtures-root}/**. If you already wrote any satellite path, revert your own copies now and note it. Build dependency-independent base scaffolding freely; any production projection consuming systemic contracts WAITS until those fixture contracts are accepted+merged+frozen by the director. Do not claim full ASSURANCE_PRESTAGE_READY before that; an interim CORE_SCAFFOLD_READY checkpoint is acceptable.
+```
+
+### AMEND-S (paste into EACH of the 5 satellite chats)
+```text
+Director discipline amendment (D-LAUNCH-10): implement ONLY your dedup-matrix rows classified MISSING or narrow EXTENDED. REUSED = reference/insertion-draft evidence only, never rebuilt. REJECTED = forbidden. EXTERNAL_CONFIGURATION = report-only rows, never fabricated implementation. No production evaluator code, no shared files — unchanged. Note this in your state file and continue.
+```
+
+## ACTIVE WAVE 7 (2026-07-13) — MAX PARALLEL: resume L09 + L11, run block 11 (A-CORE) + blocks 12–16 = up to 8 chats. S2/S4 satellites unlock later (S4 after S1 contracts; S2 after L freeze).
+
+### 17. F-BRIDGE canonical execution seams — folder /Users/cosmosgeek/Desktop/f-bridge
+```text
+You are the canonical Foundation execution bridge builder (D-LAUNCH-9; verify `git -C /Users/cosmosgeek/Desktop/Main log -1 --format=%H -- QL_DIRECTOR_STATE.md`). Branch f-bridge-execution-20260713. This is AUDITED CANONICAL CODE — be surgical and additive-first. FIRST read the sealed decision live-edge-receipts/DECISIONS/L09-003-INDEPENDENT-VERIFICATION-BLOCKERS.md and blocked receipt in the l09-normal-basis worktree (branch l09-normal-basis-20260712, sealed HEAD 9069475f). Fix EXACTLY two canonical gaps in server/src/foundation/execution/**: (1) an accepted lifecycle seam so a still-working OPENING leg's partials are refreshed/cancelled/finalized BEFORE or WHILE the dependent hedge leg is sized — no silent exposure drift after hedge sizing; deterministic, injected-port driven; (2) a cold-restart hydration/reconciliation path: restoring a checkpoint with legs in SUBMITTING (or any pre-ack state) must perform owner-defined lookup/reconciliation before progression, with no reliance on pre-crash in-memory observations; extend restart recovery beyond AMBIGUOUS to cover this cut; represent pre-venue dispatch/crash/proven-absent honestly. Preserve all existing laws (no send capability, LIVE_EXECUTION_NOT_IMPLEMENTED, deterministic reducers, checkpoint round-trip). EXCLUSIVE WRITES: server/src/foundation/execution/** + server/test/foundation/execution/**. Forbidden: every other path, all worktrees, current-main checkout/merge/push, push. Gates: new failure-mode tests reproducing BOTH gaps first (red), then fixes (green); full foundation battery (all server/test/foundation suites) + `npm test` green; adversarial review; commit; immutable receipt file F_BRIDGE_RECEIPT.md in worktree root; record accepted SHA. Stop only at F-BRIDGE ACCEPTED or BLOCKED.
+```
+
+### 11. IP-ASSURANCE — folder /Users/cosmosgeek/Desktop/ip-assurance
+```text
+Read IP_ASSURANCE.md (in your root — the DIRECTOR-AMENDED revision, sha256 starting 5f6d4b3b70e3, including §7 accepted systemic deltas and the dedup matrix at fixtures/productAssurance/generated/SYSTEMIC_ASSURANCE_DEDUP_MATRIX.md) and the parent I00 file completely. Then execute IP_ASSURANCE.md §6 "Exact worker prompt" exactly, with §7's folded deltas binding. Verify: branch ip-assurance-20260713; `git -C /Users/cosmosgeek/Desktop/Main log -1 --format=%H -- QL_DIRECTOR_STATE.md` shows D-LAUNCH-8. Allowed paths: §2 territory plus amendment-§11 packet-local systemic subtrees (fixtures/productAssurance/** including systemic/**, test/productAssurance/**, server/src/productAssurance/**, server/test/productAssurance/**). All §2 forbidden paths are law; Q/L/other-IP worktrees are active elsewhere — read their accepted interfaces only from immutable commits. The superseded amendment file in docs/archive is provenance only — do not read it as instructions. Never push, never touch current-main. Full evidenced loop; stop clean at ASSURANCE_PRESTAGE_READY or one exact BLOCKED path.
+```
+
+### L09-RESUME — folder /Users/cosmosgeek/Desktop/l09-normal-basis
+```text
+Resume L09 from durable state after an app interruption: audit uncommitted files, keep what survives, continue the recorded current task (normal-basis lifecycle acceptance loop; implementation commit 36d5e2a exists). In reports use neutral wording ('independent verification', not attack/security phrasing) to avoid app content filters. Stop only at L09 ACCEPTED or BLOCKED.
+```
+
+### L11-RESUME — folder /Users/cosmosgeek/Desktop/l11-volume
+```text
+Resume L11 from durable state after an app interruption: audit uncommitted files, keep what survives, continue the acceptance loop (implementation commit fbc748a exists). Neutral wording in reports. Stop only at L11 ACCEPTED or BLOCKED.
+```
+
+### 12. A-HAZARD (S1) — folder /Users/cosmosgeek/Desktop/ip-assur-hazard
+```text
+Your section: amendment §2 (S1) — STPA-style hazard records, unacceptable-loss families, finite assumption registry projection, Expected Failure Atlas denominator coverage check. You are one collision-free IP-ASSURANCE satellite under amendment §11 (verify: branch ip-assur-hazard-20260713; `git log --oneline -1` = 9785c93; the amended IP_ASSURANCE.md rev with §7 folded deltas is in your root, sha256 starts 5f6d4b3b70e3; read it plus the dedup matrix at fixtures/productAssurance/generated/SYSTEMIC_ASSURANCE_DEDUP_MATRIX.md plus parent I00). Build ONLY your assigned amendment section as packet-local schemas, pure reference evaluators, deterministic fixtures, render-neutral view models, focused tests, and insertion-request DRAFT rows. EXCLUSIVE WRITES: fixtures/productAssurance/systemic/hazard/** + test/productAssurance/systemic/hazard/** — put your receipts, state notes, and generated-row drafts INSIDE your own subtree (never fixtures/productAssurance/receipts/** or generated/** shared files, never another satellite's subtree). No production evaluator code (server/src/productAssurance is the core worker's), no Q/L/other-IP paths, no shared files, no root artifacts, no current-main, no push, no network/secrets/external systems; tests deterministic and clock-injected. The archived amendment in docs/archive is provenance — your binding text is IP_ASSURANCE.md §7 plus the amendment section it accepts for you. Full evidenced loop -> commit -> immutable receipt in your subtree. Stop at HAZARD_PRESTAGE_READY or one exact BLOCKED path.
+```
+
+### 13. A-FORMAL (S3) — folder /Users/cosmosgeek/Desktop/ip-assur-formal
+```text
+Your section: amendment §4 (S3) — the 7 bounded protocol models (TLA+/PlusCal or explicit-state equivalent WITHOUT new package installs; if no toolchain exists, write model sources + a tooling insertion-request draft and prove properties with deterministic explicit-state simulation tests in the existing runtimes), §4.3 properties, §4.4 counterexample triage, §4.5 conformance-mapping law. You are one collision-free IP-ASSURANCE satellite under amendment §11 (verify: branch ip-assur-formal-20260713; `git log --oneline -1` = 9785c93; the amended IP_ASSURANCE.md rev with §7 folded deltas is in your root, sha256 starts 5f6d4b3b70e3; read it plus the dedup matrix at fixtures/productAssurance/generated/SYSTEMIC_ASSURANCE_DEDUP_MATRIX.md plus parent I00). Build ONLY your assigned amendment section as packet-local schemas, pure reference evaluators, deterministic fixtures, render-neutral view models, focused tests, and insertion-request DRAFT rows. EXCLUSIVE WRITES: fixtures/productAssurance/systemic/formal/** + test/productAssurance/systemic/formal/** — put your receipts, state notes, and generated-row drafts INSIDE your own subtree (never fixtures/productAssurance/receipts/** or generated/** shared files, never another satellite's subtree). No production evaluator code (server/src/productAssurance is the core worker's), no Q/L/other-IP paths, no shared files, no root artifacts, no current-main, no push, no network/secrets/external systems; tests deterministic and clock-injected. The archived amendment in docs/archive is provenance — your binding text is IP_ASSURANCE.md §7 plus the amendment section it accepts for you. Full evidenced loop -> commit -> immutable receipt in your subtree. Stop at FORMAL_PRESTAGE_READY or one exact BLOCKED path.
+```
+
+### 14. A-COCKPIT (S5) — folder /Users/cosmosgeek/Desktop/ip-assur-cockpit
+```text
+Your section: amendment §6 (S5) — release-bound expected-manifest law, conservation accounting per (event,stage,window), machine-checkable panel contract, five-level hierarchy as projections into existing I00 §15 surfaces, SLO/trend law. docs/DASHBOARD_TRUTH.md and DESIGN.md bind view-model truth semantics. You are one collision-free IP-ASSURANCE satellite under amendment §11 (verify: branch ip-assur-cockpit-20260713; `git log --oneline -1` = 9785c93; the amended IP_ASSURANCE.md rev with §7 folded deltas is in your root, sha256 starts 5f6d4b3b70e3; read it plus the dedup matrix at fixtures/productAssurance/generated/SYSTEMIC_ASSURANCE_DEDUP_MATRIX.md plus parent I00). Build ONLY your assigned amendment section as packet-local schemas, pure reference evaluators, deterministic fixtures, render-neutral view models, focused tests, and insertion-request DRAFT rows. EXCLUSIVE WRITES: fixtures/productAssurance/systemic/cockpit/** + fixtures/productAssurance/systemic/observability/** + matching test/productAssurance/systemic/{cockpit,observability}/** — put your receipts, state notes, and generated-row drafts INSIDE your own subtree (never fixtures/productAssurance/receipts/** or generated/** shared files, never another satellite's subtree). No production evaluator code (server/src/productAssurance is the core worker's), no Q/L/other-IP paths, no shared files, no root artifacts, no current-main, no push, no network/secrets/external systems; tests deterministic and clock-injected. The archived amendment in docs/archive is provenance — your binding text is IP_ASSURANCE.md §7 plus the amendment section it accepts for you. Full evidenced loop -> commit -> immutable receipt in your subtree. Stop at COCKPIT_PRESTAGE_READY or one exact BLOCKED path.
+```
+
+### 15. A-AGENT (S6) — folder /Users/cosmosgeek/Desktop/ip-assur-agent
+```text
+Your section: amendment §7 (S6) NARROW EXTENSIONS ONLY (base §3.9 hierarchy is REUSED — do not rebuild it): deny-by-default external sandbox binding schema, trace privacy/independent append-only retention fixtures, Class A–D self-correction promotion law, §7.6 repair-evidence law, §7.7 corpus governance, plus handoff-§4 residuals: diagnostic-plane kill-control insertion draft, provider workload-identity lifecycle, diagnostic-worker cockpit fields. All provider calls are deterministic stubs; NOT_CONFIGURED is valid. You are one collision-free IP-ASSURANCE satellite under amendment §11 (verify: branch ip-assur-agent-20260713; `git log --oneline -1` = 9785c93; the amended IP_ASSURANCE.md rev with §7 folded deltas is in your root, sha256 starts 5f6d4b3b70e3; read it plus the dedup matrix at fixtures/productAssurance/generated/SYSTEMIC_ASSURANCE_DEDUP_MATRIX.md plus parent I00). Build ONLY your assigned amendment section as packet-local schemas, pure reference evaluators, deterministic fixtures, render-neutral view models, focused tests, and insertion-request DRAFT rows. EXCLUSIVE WRITES: fixtures/productAssurance/systemic/agentBoundary/** + test/productAssurance/systemic/agentBoundary/** — put your receipts, state notes, and generated-row drafts INSIDE your own subtree (never fixtures/productAssurance/receipts/** or generated/** shared files, never another satellite's subtree). No production evaluator code (server/src/productAssurance is the core worker's), no Q/L/other-IP paths, no shared files, no root artifacts, no current-main, no push, no network/secrets/external systems; tests deterministic and clock-injected. The archived amendment in docs/archive is provenance — your binding text is IP_ASSURANCE.md §7 plus the amendment section it accepts for you. Full evidenced loop -> commit -> immutable receipt in your subtree. Stop at AGENT_PRESTAGE_READY or one exact BLOCKED path.
+```
+
+### 16. A-STABILITY (S8) — folder /Users/cosmosgeek/Desktop/ip-assur-stability
+```text
+Your section: amendment §9 (S8) — cancellation/deadline/lease semantics fixtures, repair/control-loop contract rows extending RELIABILITY_POLICY_REGISTRY (as drafts in your subtree), oscillation/no-progress/quarantine law, cost/resource circuit evidence without any throttling authority. You are one collision-free IP-ASSURANCE satellite under amendment §11 (verify: branch ip-assur-stability-20260713; `git log --oneline -1` = 9785c93; the amended IP_ASSURANCE.md rev with §7 folded deltas is in your root, sha256 starts 5f6d4b3b70e3; read it plus the dedup matrix at fixtures/productAssurance/generated/SYSTEMIC_ASSURANCE_DEDUP_MATRIX.md plus parent I00). Build ONLY your assigned amendment section as packet-local schemas, pure reference evaluators, deterministic fixtures, render-neutral view models, focused tests, and insertion-request DRAFT rows. EXCLUSIVE WRITES: fixtures/productAssurance/systemic/stability/** + test/productAssurance/systemic/stability/** — put your receipts, state notes, and generated-row drafts INSIDE your own subtree (never fixtures/productAssurance/receipts/** or generated/** shared files, never another satellite's subtree). No production evaluator code (server/src/productAssurance is the core worker's), no Q/L/other-IP paths, no shared files, no root artifacts, no current-main, no push, no network/secrets/external systems; tests deterministic and clock-injected. The archived amendment in docs/archive is provenance — your binding text is IP_ASSURANCE.md §7 plus the amendment section it accepts for you. Full evidenced loop -> commit -> immutable receipt in your subtree. Stop at STABILITY_PRESTAGE_READY or one exact BLOCKED path.
+```
+
+## HISTORICAL WAVE 6 (2026-07-13, D-LAUNCH-8) — running: L09, L11 (resumes). NEW: block 11. Q LANE_READY frozen.
+
+### 17. F-BRIDGE canonical execution seams — folder /Users/cosmosgeek/Desktop/f-bridge
+```text
+You are the canonical Foundation execution bridge builder (D-LAUNCH-9; verify `git -C /Users/cosmosgeek/Desktop/Main log -1 --format=%H -- QL_DIRECTOR_STATE.md`). Branch f-bridge-execution-20260713. This is AUDITED CANONICAL CODE — be surgical and additive-first. FIRST read the sealed decision live-edge-receipts/DECISIONS/L09-003-INDEPENDENT-VERIFICATION-BLOCKERS.md and blocked receipt in the l09-normal-basis worktree (branch l09-normal-basis-20260712, sealed HEAD 9069475f). Fix EXACTLY two canonical gaps in server/src/foundation/execution/**: (1) an accepted lifecycle seam so a still-working OPENING leg's partials are refreshed/cancelled/finalized BEFORE or WHILE the dependent hedge leg is sized — no silent exposure drift after hedge sizing; deterministic, injected-port driven; (2) a cold-restart hydration/reconciliation path: restoring a checkpoint with legs in SUBMITTING (or any pre-ack state) must perform owner-defined lookup/reconciliation before progression, with no reliance on pre-crash in-memory observations; extend restart recovery beyond AMBIGUOUS to cover this cut; represent pre-venue dispatch/crash/proven-absent honestly. Preserve all existing laws (no send capability, LIVE_EXECUTION_NOT_IMPLEMENTED, deterministic reducers, checkpoint round-trip). EXCLUSIVE WRITES: server/src/foundation/execution/** + server/test/foundation/execution/**. Forbidden: every other path, all worktrees, current-main checkout/merge/push, push. Gates: new failure-mode tests reproducing BOTH gaps first (red), then fixes (green); full foundation battery (all server/test/foundation suites) + `npm test` green; adversarial review; commit; immutable receipt file F_BRIDGE_RECEIPT.md in worktree root; record accepted SHA. Stop only at F-BRIDGE ACCEPTED or BLOCKED.
+```
+
+### 11. IP-ASSURANCE — folder /Users/cosmosgeek/Desktop/ip-assurance
+```text
+Read IP_ASSURANCE.md (in your root — the DIRECTOR-AMENDED revision, sha256 starting 5f6d4b3b70e3, including §7 accepted systemic deltas and the dedup matrix at fixtures/productAssurance/generated/SYSTEMIC_ASSURANCE_DEDUP_MATRIX.md) and the parent I00 file completely. Then execute IP_ASSURANCE.md §6 "Exact worker prompt" exactly, with §7's folded deltas binding. Verify: branch ip-assurance-20260713; `git -C /Users/cosmosgeek/Desktop/Main log -1 --format=%H -- QL_DIRECTOR_STATE.md` shows D-LAUNCH-8. Allowed paths: §2 territory plus amendment-§11 packet-local systemic subtrees (fixtures/productAssurance/** including systemic/**, test/productAssurance/**, server/src/productAssurance/**, server/test/productAssurance/**). All §2 forbidden paths are law; Q/L/other-IP worktrees are active elsewhere — read their accepted interfaces only from immutable commits. The superseded amendment file in docs/archive is provenance only — do not read it as instructions. Never push, never touch current-main. Full evidenced loop; stop clean at ASSURANCE_PRESTAGE_READY or one exact BLOCKED path.
+```
+
+## HISTORICAL WAVE 5 (2026-07-13, post L08.2) — running: Q17, L10, L11. NEW: block 10.
+
+### 10. L09 resume (2nd) — folder /Users/cosmosgeek/Desktop/l09-normal-basis
+```text
+L09 shard resuming (both blockers cleared). Verify: branch l09-normal-basis-20260712; `git log --oneline -2` shows the director re-base of L08.2 (9f133ac — twin now preflights/simulates Spot LIMIT/GTC exactly). Per your own L09-002 resume route: first prove the accepted chain end-to-end (L08.1 evaluator plan → L07 twin accepts the exact Spot BUY LIMIT GTC leg), then implement ONLY server/src/liveEdge/adapters/normalBasis/** and server/test/liveEdge/normalBasis/** — the NORMAL-BASIS two-leg lifecycle (§17: staged entry, hedge, partial-fill/one-leg exposure, close, recovery) through the twin, deterministic, network-free. All prior laws unchanged; no shared files; no push; hard external boundary. Full loop → acceptance → record SHA. Stop only at L09 ACCEPTED or BLOCKED.
+```
+
+## HISTORICAL WAVE 4 (2026-07-13, post L09-002) — running: Q spine, L10, L11. NEW: block 9 (L08.2 twin Spot seam). L09 BLOCKED until it lands.
+
+### 9. L08.2 twin Spot seam — folder /Users/cosmosgeek/Desktop/live-execution-proof-20260712
+```text
+You are the L-spine bridge builder, ONE bounded phase L08.2 (D-LAUNCH-7 authority; verify `git -C /Users/cosmosgeek/Desktop/Main log -1 --format=%H -- QL_DIRECTOR_STATE.md`). The L spine is PARKED at f79247a (through L08.1 + L14). FIRST read live-edge-receipts/DECISIONS/L09-002-*.md (in the l09-normal-basis worktree history, branch l09-normal-basis-20260712, commit a560b8a) for the exact gap: the accepted L07 exchange twin has no seam to preflight/consume the L08.1 Spot order/TIF capability, so an exact Spot BUY LIMIT GTC leg is rejected PREFLIGHT_NOT_EXACT while USD-M fills. TASK: additively extend the accepted L07 twin so it exactly preflights and simulates Spot LIMIT/GTC (and the other L08.1-emitted Spot order types/TIFs) with the same rigor it already applies to USD-M — no send capability, deterministic, network-free, no new authority. Stay in lane exclusive paths (§3.3; shared files → patch requests). Full evidenced loop → accept as L08.2 with immutable receipt → record accepted SHA prominently in LIVE_EXECUTION_BUILD_STATE.md → PARK. Director then re-bases L09/L10/L11. Standing laws + hard external boundary unchanged; never push. Stop only at L08.2 ACCEPTED or BLOCKED.
+```
+
+## HISTORICAL WAVE 3 (2026-07-13, post L08.1) — running: Q spine, L10, L11. NEW: block 8.
+
+### 8. L09 resume — folder /Users/cosmosgeek/Desktop/l09-normal-basis
+```text
+L09 shard resuming (D-LAUNCH-7; bridge landed). Verify: branch l09-normal-basis-20260712; `git log --oneline -2` shows the director re-base merge of L08.1 (f79247a — Spot order/TIF bridge accepted). Your blocker is CLEARED per your own resume condition: first prove the accepted L08.1 evaluator emits a non-sendable ordered normal-Basis plan; then implement ONLY server/src/liveEdge/adapters/normalBasis/** and matching server/test/liveEdge/normalBasis/** proofs — the NORMAL-BASIS two-leg lifecycle of §17 (staged entry, hedge, partial-fill/one-leg exposure, close, recovery) through the L07 twin, network-free. All prior L09 laws unchanged (exclusive paths, no shared files, no other worktrees, no push, hard external boundary). Full loop → acceptance → record SHA. Stop only at L09 ACCEPTED or BLOCKED.
+```
+
+## HISTORICAL WAVE 2 (2026-07-13, post D-LAUNCH-7) — currently running: Q spine (Q16), L10, L11. NEW blocks below: 6 + 7. L09 stays BLOCKED until the bridge lands. Old wave blocks 1-5 are historical.
+
+### 6. L-BRIDGE (L08.1) — folder /Users/cosmosgeek/Desktop/live-execution-proof-20260712
+```text
+You are the L-spine bridge builder (D-LAUNCH-7; verify `git show HEAD -- QL_DIRECTOR_STATE.md` on current-main via `git -C /Users/cosmosgeek/Desktop/Main log -1`). The L spine is PARKED at 4ae270a (L00-L08 + L14 accepted); you own this worktree for ONE bounded phase: L08.1 — the Spot order/TIF capability bridge. FIRST read live-edge-receipts/DECISIONS/L09-001-NORMAL-BASIS-BLOCKER.md and the L09 blocker receipt in the l09-normal-basis worktree history (branch l09-normal-basis-20260712, commit e315ef5) for the exact gap. Implement additively within lane exclusive paths (§3.3): extend the accepted L04 instrument/filter registry and L08 order-policy evaluator so the evaluator emits a non-sendable ordered normal-Basis plan including Spot order-type/TIF validation — no new authority, no shared files (patch requests instead), no send capability of any kind. Full evidenced loop -> accept as L08.1 with immutable receipt -> record the accepted SHA prominently in LIVE_EXECUTION_BUILD_STATE.md -> PARK. The director then re-bases L09/L10/L11. Standing laws + hard external boundary unchanged; never push. Stop only at L08.1 ACCEPTED or BLOCKED.
+```
+
+### 7. I00-VERIFY resume — folder /Users/cosmosgeek/Desktop/i00-assembly
+```text
+I00-VERIFY resuming (D-LAUNCH-7). The five owner directives (I00 parent + IP_RUNTIME/CONTROL/OPS/PROOF) are now in your worktree root; the frozen-input gate must treat QL_DIRECTOR_STATE.md / QL_PARALLEL_DAG.md as LIVING director state accepted at their latest current-main commit (D-LAUNCH-7 ruling; verify `git -C /Users/cosmosgeek/Desktop/Main log -1 --format=%H -- QL_DIRECTOR_STATE.md`) — do NOT overwrite historical IP-PROOF receipt hashes; add an I00-level acceptance record instead. Resume from I00_PRODUCT_BUILD_STATE.md: clear the frozen-input blocker with that ruling, finish remaining Task 1/Task 2 items, commit + receipts + state. No push, no current-main, no other worktrees. Stop at I00_PRESTAGE_VERIFIED or a precise new blocker.
+```
+
+## HISTORICAL WAVE 1 — run all 5 concurrently
+
+### 1. Q spine — folder /Users/cosmosgeek/Desktop/quant-edge-research-20260712
+```text
+Q-lane spine resuming (D-LAUNCH-2/5; verify `git show 1fec867 -- QL_PARALLEL_DAG.md`). Verify: branch quant-edge-research-factory-20260712; HEAD 3ed8e38; `cd quant && .venv/bin/python -m pytest -q` ~2,455 passing. RESUME FROM DURABLE STATE; record Q13 (06f0a8f) + Q15 (e69f687) merges in a new state generation. Execute Q16 (inference service + generated protocol kit; deterministic hashes; protocol 22/22; loopback/UDS; ABSTAIN_UNKNOWN fail-closed) then Q17 (end-to-end proof, benchmark, final receipt). Full evidenced loop each, self-accepted. quant/** only; frozen registry/protocol read-only; no Main/other worktrees/push; network-free tests; advisory-only. Limit → commit+receipt+stop clean; same message resumes. Stop only at BLOCKED or LANE_READY then park.
+```
+
+### 2. L09 — folder /Users/cosmosgeek/Desktop/l09-normal-basis
+```text
+L09 shard builder (D-LAUNCH-5; verify `git show 1fec867 -- QL_PARALLEL_DAG.md`). Verify: branch l09-normal-basis-20260712, HEAD 4ae270a (L00–L08 + L14 available read-only). Execute ONLY the NORMAL-BASIS two-leg lifecycle of LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md §17 (root; derive your §7 module path, record it, keep exclusive): staged entry, hedge, partial-fill/one-leg exposure, close, recovery — proven through the L07 twin, network-free. Exclusive: own module dirs under server/src/liveEdge/** + matching tests + live-edge-receipts/*/L09*. Forbidden: reverse-basis/volume paths, shared files (patch requests instead), other worktrees, current-main, push, all external actions. Full loop → acceptance → record SHA. Stop only at L09 ACCEPTED or BLOCKED.
+```
+
+### 3. L10 — folder /Users/cosmosgeek/Desktop/l10-reverse-basis
+```text
+L10 shard builder (D-LAUNCH-5; verify `git show 1fec867 -- QL_PARALLEL_DAG.md`). Verify: branch l10-reverse-basis-20260712, HEAD 4ae270a. Execute ONLY the REVERSE-BASIS lifecycle of LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md §17 (root; derive §7 module path, keep exclusive): verified borrow identity, principal/accrued interest, collateral, repay status, residual-liability law (never "closed" while liability/open order/ambiguity/unmatched fill remains; missing borrow truth fails closed), staged entry/hedge/close/recovery via the L07 twin, network-free. Exclusive: own module dirs under server/src/liveEdge/** + tests + live-edge-receipts/*/L10*. Forbidden: normal-basis/volume paths, shared files (patch requests), other worktrees, current-main, push; NO Margin calls ever — borrow truth from injected fixtures only. Full loop → acceptance → record SHA. Stop only at L10 ACCEPTED or BLOCKED.
+```
+
+### 4. L11 — folder /Users/cosmosgeek/Desktop/l11-volume
+```text
+L11 shard builder (D-LAUNCH-5; verify `git show 1fec867 -- QL_PARALLEL_DAG.md`). Verify: branch l11-volume-20260712, HEAD 4ae270a. Execute ONLY the VOLUME DIRECTIONAL lifecycle of LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md §18 (root; derive §7 module path, keep exclusive): staged directional entry under advisory gating (launch §7 — Volume cannot silently gain live authority), time-stop/loss/trailing policy revisions, one-position/no-repeat limits, exhaustion/reversal exits, recovery hooks — via the L07 twin, network-free. Exclusive: own module dirs under server/src/liveEdge/** + tests + live-edge-receipts/*/L11*. Forbidden: basis paths, shared files (patch requests), other worktrees, current-main, push, all external actions. Full loop → acceptance → record SHA. Stop only at L11 ACCEPTED or BLOCKED.
+```
+
+### 5. I00-VERIFY — folder /Users/cosmosgeek/Desktop/i00-assembly
+```text
+I00-VERIFY worker (D-LAUNCH-6; verify `git show 1fec867 -- QL_PARALLEL_DAG.md`). Verify: branch i00-product-assembly-20260713 with four ip-* fan-in merges. TASK 1: `npm ci`; `npm test`; every packet suite (server/test/productIntegration/**, web/test/productControlRoom/**, `bash ops/tests/i00/test-templates-and-schemas.sh`, `node test/i00/verify-scope.mjs`, protocol 22/22); `npm run typecheck` + `npm run build`. Fix ONLY fan-in fallout (paths/scaffolding) — never production semantics or Q/L code; needed shared edits become patch-request files + BLOCKED. TASK 2: pre-populate evidence-backed MISSION_COVERAGE_MATRIX.md, AUTONOMY_CLOSURE_REPORT.md, NO_TERMINAL_DEPENDENCY_REPORT.md, RESOURCE_AND_BACKPRESSURE_REPORT.md, OFFICIAL_INTERFACE_MATRIX.md (every row cites path/SHA/receipt; unknown stays UNKNOWN). Commit per task + I00_VERIFY_RECEIPT.md + I00_PRODUCT_BUILD_STATE.md (per I00 §6). No push, no current-main, no other worktrees. Stop at I00_PRESTAGE_VERIFIED or BLOCKED.
+```
+
+## Event → next action (director fills)
+- L09/L10/L11 ACCEPTED → director merges serially, then appends "L spine L12→L13→L16→L17" block here.
+- Q LANE_READY → director audit, then Q lane frozen.
+- All lanes + I00_PRESTAGE_VERIFIED → director runs real I00 integration (shared wiring, mount, combined acceptance, land, push).

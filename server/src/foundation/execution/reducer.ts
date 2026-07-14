@@ -26,6 +26,14 @@ import {
 } from './types.js';
 
 const EPSILON = 1e-12;
+const AMBIGUITY_RESOLUTIONS = new Set([
+  'ACKNOWLEDGED',
+  'PARTIALLY_FILLED',
+  'FILLED',
+  'CANCELLED',
+  'REJECTED',
+  'PROVEN_ABSENT',
+]);
 
 const BASE_EVENT_KEYS = ['eventId', 'planId', 'sequence', 'occurredAtMs', 'type'] as const;
 const EVENT_DETAIL_KEYS: Readonly<Record<ExecutionEvent['type'], readonly string[]>> = Object.freeze({
@@ -54,6 +62,7 @@ const EVENT_DETAIL_KEYS: Readonly<Record<ExecutionEvent['type'], readonly string
   CLOSING_STARTED: [],
   RECONCILIATION_STARTED: [],
   RECONCILIATION_RESOLVED: ['reconciliationOutcome', 'failure'],
+  RESTART_RECOVERY_BLOCKED: ['phase', 'legKey', 'failure'],
   NAKED_DURATION_EXPIRED: [],
   PLAN_CANCELLED: [],
   PLAN_FAILED: ['failure'],
@@ -74,6 +83,7 @@ const PAPER_ONLY_EVENT_TYPES = new Set<ExecutionEvent['type']>([
   'CLOSING_STARTED',
   'RECONCILIATION_STARTED',
   'RECONCILIATION_RESOLVED',
+  'RESTART_RECOVERY_BLOCKED',
   'NAKED_DURATION_EXPIRED',
 ]);
 
@@ -459,9 +469,35 @@ export function reduceExecutionEvent(
         !Number.isFinite(event.submittedQuantity) ||
         event.submittedQuantity <= 0
       ) return reject('INVALID_EVENT');
+      const target = (event.phase === 'OPEN' ? openingLegs : closingLegs)[event.legKey];
+      if (target.lifecycle !== 'VALIDATED') return reject('INVALID_LEG_TRANSITION');
+      if (
+        event.phase === 'OPEN' &&
+        lifecycle !== 'OPENING' &&
+        lifecycle !== 'ONE_LEG_EXPOSED'
+      ) return reject('INVALID_PLAN_TRANSITION');
       const maximum = event.phase === 'OPEN'
-        ? openingLegs[event.legKey].definition.quantity
-        : openingLegs[event.legKey].cumulativeFilledQuantity - closingLegs[event.legKey].cumulativeFilledQuantity;
+        ? target.definition.quantity
+        : openingLegs[event.legKey].cumulativeFilledQuantity - target.cumulativeFilledQuantity;
+      if (event.phase === 'OPEN') {
+        const index = state.plan.openingOrder.indexOf(event.legKey);
+        if (index < 0) return reject('INVALID_LEG_TRANSITION');
+        if (index > 0) {
+          const predecessor = openingLegs[state.plan.openingOrder[index - 1]];
+          if (
+            (predecessor.lifecycle !== 'FILLED' && predecessor.lifecycle !== 'CANCELLED') ||
+            predecessor.cumulativeFilledQuantity <= EPSILON
+          ) return reject('INVALID_LEG_TRANSITION');
+          const expectedQuantity = target.definition.quantity * (
+            predecessor.cumulativeFilledQuantity / predecessor.definition.quantity
+          );
+          if (
+            !Number.isFinite(expectedQuantity) ||
+            expectedQuantity <= 0 ||
+            Math.abs(event.submittedQuantity - expectedQuantity) > EPSILON
+          ) return reject('INVALID_LEG_TRANSITION');
+        }
+      }
       if (
         event.submittedQuantity > maximum + EPSILON ||
         !updateLeg(event.phase, event.legKey, 'SUBMITTING', { submittedQuantity: event.submittedQuantity })
@@ -484,7 +520,7 @@ export function reduceExecutionEvent(
         : openingLegs[event.legKey].cumulativeFilledQuantity;
       if (
         !validateFillQuantity(leg, event.cumulativeFilledQuantity, false, maximum) ||
-        !updateLeg(event.phase, event.legKey, 'PARTIALLY_FILLED', {
+        !updateLeg(event.phase, event.legKey, leg.lifecycle === 'CANCEL_PENDING' ? 'CANCEL_PENDING' : 'PARTIALLY_FILLED', {
           cumulativeFilledQuantity: event.cumulativeFilledQuantity,
           venueOrderId: event.venueOrderId ?? leg.venueOrderId,
         })
@@ -494,6 +530,7 @@ export function reduceExecutionEvent(
     case 'LEG_FILLED': {
       if (!validLegTarget(event)) return reject('INVALID_EVENT');
       const leg = (event.phase === 'OPEN' ? openingLegs : closingLegs)[event.legKey];
+      if (leg.lifecycle === 'FILLED') return reject('INVALID_LEG_TRANSITION');
       const maximum = event.phase === 'OPEN'
         ? leg.definition.quantity
         : openingLegs[event.legKey].cumulativeFilledQuantity;
@@ -508,6 +545,8 @@ export function reduceExecutionEvent(
     }
     case 'LEG_REJECTED': {
       if (!validLegTarget(event) || !isStructuredFailure(event.failure)) return reject('INVALID_EVENT');
+      const leg = (event.phase === 'OPEN' ? openingLegs : closingLegs)[event.legKey];
+      if (leg.lifecycle === 'REJECTED') return reject('INVALID_LEG_TRANSITION');
       if (!updateLeg(event.phase, event.legKey, 'REJECTED', { lastFailure: event.failure })) {
         return reject('INVALID_LEG_TRANSITION');
       }
@@ -526,6 +565,9 @@ export function reduceExecutionEvent(
       if (!validLegTarget(event) || event.ambiguityResolution === undefined) return reject('INVALID_EVENT');
       const leg = (event.phase === 'OPEN' ? openingLegs : closingLegs)[event.legKey];
       const resolution = event.ambiguityResolution;
+      if (leg.lifecycle !== 'AMBIGUOUS' || !AMBIGUITY_RESOLUTIONS.has(resolution)) {
+        return reject('INVALID_LEG_TRANSITION');
+      }
       const maximum = event.phase === 'OPEN'
         ? leg.definition.quantity
         : openingLegs[event.legKey].cumulativeFilledQuantity;
@@ -538,16 +580,42 @@ export function reduceExecutionEvent(
       if (resolution === 'CANCELLED' && !validCancellationCumulative(leg, event.cumulativeFilledQuantity, maximum)) {
         return reject('INVALID_EVENT');
       }
-      if (resolution === 'REJECTED' && !isStructuredFailure(event.failure)) return reject('INVALID_EVENT');
-      if (!updateLeg(event.phase, event.legKey, resolution, {
+      if (
+        (resolution === 'ACKNOWLEDGED' || resolution === 'REJECTED') &&
+        event.cumulativeFilledQuantity !== undefined
+      ) return reject('INVALID_EVENT');
+      if (
+        resolution !== 'REJECTED' &&
+        resolution !== 'PROVEN_ABSENT' &&
+        event.failure !== undefined
+      ) return reject('INVALID_EVENT');
+      if (
+        resolution === 'PROVEN_ABSENT' &&
+        (
+          !isStructuredFailure(event.failure) ||
+          event.venueOrderId !== undefined ||
+          event.cumulativeFilledQuantity !== undefined ||
+          leg.venueOrderId !== null ||
+          leg.cumulativeFilledQuantity > EPSILON
+        )
+      ) return reject('INVALID_EVENT');
+      if ((resolution === 'REJECTED' || resolution === 'PROVEN_ABSENT') && !isStructuredFailure(event.failure)) {
+        return reject('INVALID_EVENT');
+      }
+      const resolvedLifecycle = resolution === 'PROVEN_ABSENT' ? 'REJECTED' : resolution;
+      if (!updateLeg(event.phase, event.legKey, resolvedLifecycle, {
         cumulativeFilledQuantity:
           resolution === 'PARTIALLY_FILLED' || resolution === 'FILLED' || resolution === 'CANCELLED'
             ? (event.cumulativeFilledQuantity as number)
             : leg.cumulativeFilledQuantity,
         venueOrderId: event.venueOrderId ?? leg.venueOrderId,
-        lastFailure: resolution === 'REJECTED' ? (event.failure as StructuredFailure) : leg.lastFailure,
+        lastFailure:
+          resolution === 'REJECTED' || resolution === 'PROVEN_ABSENT'
+            ? (event.failure as StructuredFailure)
+            : leg.lastFailure,
+        lastAmbiguityResolution: resolution,
       })) return reject('INVALID_LEG_TRANSITION');
-      if (resolution === 'REJECTED' && event.failure) failures.push(event.failure);
+      if ((resolution === 'REJECTED' || resolution === 'PROVEN_ABSENT') && event.failure) failures.push(event.failure);
       break;
     }
     case 'LEG_AMBIGUITY_UNRESOLVED': {
@@ -572,6 +640,7 @@ export function reduceExecutionEvent(
     case 'LEG_CANCELLED': {
       if (!validLegTarget(event)) return reject('INVALID_EVENT');
       const leg = (event.phase === 'OPEN' ? openingLegs : closingLegs)[event.legKey];
+      if (leg.lifecycle === 'CANCELLED') return reject('INVALID_LEG_TRANSITION');
       const maximum = event.phase === 'OPEN'
         ? leg.definition.quantity
         : openingLegs[event.legKey].cumulativeFilledQuantity;
@@ -623,6 +692,15 @@ export function reduceExecutionEvent(
       if (!setLifecycle(event.reconciliationOutcome)) return reject('INVALID_PLAN_TRANSITION');
       break;
     }
+    case 'RESTART_RECOVERY_BLOCKED': {
+      if (
+        !validLegTarget(event) ||
+        !isStructuredFailure(event.failure) ||
+        !setLifecycle('RECOVERY_REQUIRED')
+      ) return reject('INVALID_PLAN_TRANSITION');
+      failures.push(event.failure);
+      break;
+    }
     case 'NAKED_DURATION_EXPIRED': {
       if (
         state.exposedSinceMs === null ||
@@ -654,7 +732,8 @@ export function reduceExecutionEvent(
     const safelyHedged = isSafelyHedged(projected);
     const anyFill = openingLegs.SPOT.cumulativeFilledQuantity > EPSILON || openingLegs.PERP.cumulativeFilledQuantity > EPSILON;
     const rejectedAfterAmbiguity =
-      event.type === 'LEG_AMBIGUITY_RESOLVED' && event.ambiguityResolution === 'REJECTED';
+      event.type === 'LEG_AMBIGUITY_RESOLVED' &&
+      (event.ambiguityResolution === 'REJECTED' || event.ambiguityResolution === 'PROVEN_ABSENT');
     if (safelyHedged && lifecycle !== 'RECOVERY_REQUIRED' && lifecycle !== 'FAILED') {
       if (!setLifecycle('HEDGED_OPEN')) return reject('INVALID_PLAN_TRANSITION');
     } else if (anyFill && lifecycle !== 'RECOVERY_REQUIRED' && lifecycle !== 'FAILED') {
@@ -670,7 +749,8 @@ export function reduceExecutionEvent(
 
   if (event.phase === 'CLOSE' && event.type.startsWith('LEG_')) {
     const rejectedAfterAmbiguity =
-      event.type === 'LEG_AMBIGUITY_RESOLVED' && event.ambiguityResolution === 'REJECTED';
+      event.type === 'LEG_AMBIGUITY_RESOLVED' &&
+      (event.ambiguityResolution === 'REJECTED' || event.ambiguityResolution === 'PROVEN_ABSENT');
     if (
       (event.type === 'LEG_REJECTED' || event.type === 'LEG_AMBIGUITY_UNRESOLVED' || rejectedAfterAmbiguity) &&
       lifecycle !== 'RECOVERY_REQUIRED' &&

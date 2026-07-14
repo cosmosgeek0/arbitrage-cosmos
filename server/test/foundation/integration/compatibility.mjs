@@ -392,19 +392,75 @@ try {
       venueOrderId: 'paper-partial-spot',
       cumulativeFilledQuantity: 0.4,
     })
-    .queueSubmission('OPEN:PERP', {
+    .queueLookup('OPEN:SPOT',
+      {
+        kind: 'FOUND',
+        status: 'PARTIALLY_FILLED',
+        venueOrderId: 'paper-partial-spot',
+        cumulativeFilledQuantity: 0.6,
+      },
+      {
+        kind: 'FOUND',
+        status: 'PARTIALLY_FILLED',
+        venueOrderId: 'paper-partial-spot',
+        cumulativeFilledQuantity: 0.65,
+      },
+      {
+        kind: 'FOUND',
+        status: 'CANCELLED',
+        venueOrderId: 'paper-partial-spot',
+        cumulativeFilledQuantity: 0.7,
+      },
+    )
+    .queueSubmission('OPEN:PERP', (request) => ({
       kind: 'FILLED',
       venueOrderId: 'paper-scaled-perp',
-      cumulativeFilledQuantity: 0.4,
-    });
+      cumulativeFilledQuantity: request.leg.quantity,
+    }));
   const partialCoordinator = createExecutionCoordinator(executionPlanInput(canonicalProposal), partialClock, partialPorts);
   authorizeFakeRisk(partialPorts, partialCoordinator);
   requireOk(await partialCoordinator.preflight(), 'partial-fill preflight');
-  const partialResult = await partialCoordinator.open();
-  const partialRecovery = recommendExecutionRecovery(partialCoordinator.snapshot(), T0 + 100);
-  check('8 first-leg partial fill never claims fully hedged completion', partialResult.ok && partialCoordinator.snapshot().lifecycle === 'ONE_LEG_EXPOSED');
-  check('8 second leg is scaled to evidence-backed first fill', partialPorts.calls.some((call) => call.method === 'submitPaper' && call.request.leg.key === 'PERP' && call.request.leg.quantity === 0.4));
-  check('8 partial remainder has explicit risk-reducing recovery', partialRecovery.some((item) => item.action === 'CANCEL_REMAINDER' || item.action === 'HEDGE_RESIDUAL'));
+  requireOk(partialCoordinator.beginOpen(), 'partial-fill begin open');
+  requireOk(await partialCoordinator.submitNextOpeningLeg(), 'partial-fill first leg');
+  const workingPartial = await partialCoordinator.submitNextOpeningLeg();
+  const workingPartialState = partialCoordinator.snapshot();
+  const partialRecovery = recommendExecutionRecovery(workingPartialState, T0 + 100);
+  const hedgeWhileWorking = partialPorts.calls.some((call) => call.method === 'submitPaper' && call.request.leg.key === 'PERP');
+  const laterWorkingPartial = await partialCoordinator.submitNextOpeningLeg();
+  const laterWorkingState = partialCoordinator.snapshot();
+  const hedgeBeforeTerminal = partialPorts.calls.some((call) => call.method === 'submitPaper' && call.request.leg.key === 'PERP');
+  const finalizedPartial = await partialCoordinator.submitNextOpeningLeg();
+  const finalizedPartialState = partialCoordinator.snapshot();
+  const terminalLookupIndex = partialPorts.calls.reduce(
+    (latest, call, index) => call.method === 'lookupByClientOrderId' && call.request.leg.key === 'SPOT' ? index : latest,
+    -1,
+  );
+  const dependentHedgeIndex = partialPorts.calls.findIndex((call) => call.method === 'submitPaper' && call.request.leg.key === 'PERP');
+  check('8 lookup terminalization precedes the dependent hedge', terminalLookupIndex >= 0 && dependentHedgeIndex > terminalLookupIndex);
+  check(
+    '8 still-working partial blocks the hedge and retains explicit risk-reducing recovery',
+    !workingPartial.ok
+      && workingPartial.failure.code === 'OPENING_REMAINDER_FINALIZATION_REQUIRED'
+      && workingPartialState.openingLegs.SPOT.lifecycle === 'CANCEL_PENDING'
+      && workingPartialState.openingLegs.SPOT.cumulativeFilledQuantity === 0.6
+      && !laterWorkingPartial.ok
+      && laterWorkingPartial.failure.code === 'WORKING_ORDER_FINALIZATION_PENDING'
+      && laterWorkingState.openingLegs.SPOT.lifecycle === 'CANCEL_PENDING'
+      && laterWorkingState.openingLegs.SPOT.cumulativeFilledQuantity === 0.65
+      && !hedgeWhileWorking
+      && !hedgeBeforeTerminal
+      && partialRecovery.some((item) => item.action === 'CANCEL_REMAINDER' || item.action === 'HEDGE_RESIDUAL')
+      && partialRecovery.every((item) => item.riskEffect !== 'RISK_INCREASING'),
+  );
+  check(
+    '8 terminal final fill sizes the exact dependent hedge',
+    finalizedPartial.ok
+      && finalizedPartialState.openingLegs.SPOT.lifecycle === 'CANCELLED'
+      && finalizedPartialState.openingLegs.SPOT.cumulativeFilledQuantity === 0.7
+      && finalizedPartialState.openingLegs.PERP.cumulativeFilledQuantity === 0.7
+      && finalizedPartialState.lifecycle === 'HEDGED_OPEN'
+      && partialPorts.calls.some((call) => call.method === 'submitPaper' && call.request.leg.key === 'PERP' && call.request.leg.quantity === 0.7),
+  );
 
   markInjection(9);
   const secondRejectClock = new ManualClock(T0 + 100);
@@ -468,11 +524,34 @@ try {
   requireOk(beforeRestart.beginOpen(), 'restart begin open');
   requireOk(await beforeRestart.submitNextOpeningLeg(), 'restart first leg');
   const checkpoint = beforeRestart.checkpoint();
-  const restoredResult = restoreExecutionCoordinator(checkpoint, restartClock, restartPorts);
+  const coldRestartPorts = new FakeExecutionPorts(restartClock)
+    .queueLookup('OPEN:SPOT', {
+      kind: 'FOUND',
+      status: 'FILLED',
+      venueOrderId: 'paper-OPEN-SPOT',
+      cumulativeFilledQuantity: 1,
+    });
+  coldRestartPorts.reconciliations.push({ kind: 'ONE_LEG_EXPOSED' });
+  const restoredResult = restoreExecutionCoordinator(checkpoint, restartClock, coldRestartPorts);
   check('11 checkpoint restores the exact aggregate', restoredResult.ok && restoredResult.coordinator.snapshot().stateRevisionId === beforeRestart.snapshot().stateRevisionId);
   const restored = restoredResult.ok ? restoredResult.coordinator : null;
   const resumed = restored === null ? null : await restored.submitNextOpeningLeg();
-  check('11 restart resumes at leg two without replaying leg one', resumed?.ok === true && restored.snapshot().lifecycle === 'HEDGED_OPEN' && restartPorts.calls.filter((call) => call.method === 'submitPaper' && call.request.leg.key === 'SPOT').length === 1);
+  const restartLookupIndex = coldRestartPorts.calls.findIndex((call) => call.method === 'lookupByClientOrderId' && call.request.leg.key === 'SPOT');
+  const restartReconcileIndex = coldRestartPorts.calls.findIndex((call) => call.method === 'reconcile');
+  const restartHedgeIndex = coldRestartPorts.calls.findIndex((call) => call.method === 'submitPaper' && call.request.leg.key === 'PERP');
+  check(
+    '11 fresh restart orders owner lookup then reconciliation then dependent hedge',
+    resumed?.ok === true
+      && restored.snapshot().lifecycle === 'HEDGED_OPEN'
+      && restartLookupIndex >= 0
+      && restartReconcileIndex > restartLookupIndex
+      && restartHedgeIndex > restartReconcileIndex,
+  );
+  check(
+    '11 fresh restart never resubmits the first leg',
+    restartPorts.calls.filter((call) => call.method === 'submitPaper' && call.request.leg.key === 'SPOT').length === 1
+      && !coldRestartPorts.calls.some((call) => call.method === 'submitPaper' && call.request.leg.key === 'SPOT'),
+  );
 
   markInjection(12);
   const deadlineClock = new ManualClock(T0 + 100);
@@ -605,7 +684,7 @@ try {
   check('test attempted no wall-clock timer', timerAttempts === 0);
   check('test attempted no ambient randomness', randomAttempts === 0);
   check('fake execution boundary has no live order method', !Object.getOwnPropertyNames(FakeExecutionPorts.prototype).some((name) => /live|placeOrder|withdraw|transfer/i.test(name)));
-  check('all order-like calls use submitPaper', [ports, rejectedRiskPorts, firstRejectPorts, partialPorts, secondRejectPorts, ambiguousPorts, restartPorts, deadlinePorts, missingRiskPorts, mismatchedRiskPorts, expiredRiskPorts].every((fake) => fake.calls.filter((call) => call.method.startsWith('submit')).every((call) => call.method === 'submitPaper')));
+  check('all order-like calls use submitPaper', [ports, rejectedRiskPorts, firstRejectPorts, partialPorts, secondRejectPorts, ambiguousPorts, restartPorts, coldRestartPorts, deadlinePorts, missingRiskPorts, mismatchedRiskPorts, expiredRiskPorts].every((fake) => fake.calls.filter((call) => call.method.startsWith('submit')).every((call) => call.method === 'submitPaper')));
 } finally {
   globalThis.fetch = originalFetch;
   Date.now = originalDateNow;

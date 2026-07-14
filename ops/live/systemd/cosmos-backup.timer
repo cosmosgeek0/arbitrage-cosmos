@@ -1,0 +1,15 @@
+# ops/live/systemd/cosmos-backup.timer — hourly state store backup.
+# Adjust OnCalendar to the owner's backup policy at activation time; the
+# staleness alarm threshold (BACKUP_MAX_AGE_HOURS in cosmos-watchdog.env)
+# must stay comfortably above this cadence.
+
+[Unit]
+Description=Run the cosmos backup hourly
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

@@ -2,7 +2,7 @@
 
 Schema version: `I00_PRODUCT_BUILD_STATE_V1`
 
-Updated: `2026-07-14T04:57:20Z`
+Updated: `2026-07-14T05:01:36Z`
 
 ## Identity
 
@@ -14,10 +14,10 @@ Updated: `2026-07-14T04:57:20Z`
 | Latest integration receipt | `docs/archive/i00-phase2/DASHBOARD_EQUIVALENCE_VALIDATION_RECEIPT.md` |
 | Verified acceptance implementation | Historical prestage implementation `a2be4865d0d003d1dedd38c351b4e8ccf6033c2d`; Phase 1 handoff HEAD `9bf531ccca203ca66bad39787a0930fd608807a7` |
 | Phase | `FINAL_INTEGRATION / PHASE_2_FRESH_INTEGRATOR` |
-| Status | `DASHBOARD_EQUIVALENCE_VALIDATED / FULL_GATE_GREEN` |
+| Status | `L15_INFRA_INTEGRATED / FULL_GATE_GREEN` |
 | Active writer | Fresh Role 2 integrator; exclusive shared write/merge authority is limited to this integration branch, never `current-main` |
 | Protected untracked inputs | The five owner directives remain intentional read-only untracked inputs at their D-LAUNCH-6 hashes, not partial implementation; the worktree is otherwise clean after the final seal |
-| Current Phase 2 landed state | F-BRIDGE is integrated at `0670f533840f415b612fb290d2c944f94af50d82`; SI-RECON at `ba965fb0fbb5e10819d5a704e99153892fe94031`; Q at `042dc9897d04bed2b0de3043cbdcbac408251412`; the dashboard's 21-file donor subtree is exact by receipted IP-CONTROL equivalence; focused, deterministic, and full repository gates pass |
+| Current Phase 2 landed state | F-BRIDGE, SI-RECON, Q, dashboard-equivalent, and accepted L15 infrastructure are integrated serially; L15 contributes its exact 31-file `ops/live/**` tree and 17 byte-identical donor-owned `ops/tests/**` paths with its root wiring note archived under `docs/archive/i00-phase2/`; focused, deterministic, and full repository gates pass |
 
 ## Accepted inputs
 
@@ -26,7 +26,7 @@ Updated: `2026-07-14T04:57:20Z`
 | Q lane | `02b4eccc8d2ef53b830cafae06e5175715fa6ebb`; Q17 acceptance receipt SHA-256 `9cfa0356228d7f48674df2d9db523f0f0d53dab1a4e4255b6ba9676e463ec5dc`; exact `Q LANE_READY — PARKED` | Integrated by merge ancestry at `042dc9897d04bed2b0de3043cbdcbac408251412`; advisory `ABSTAIN_UNKNOWN`; production transport/mount still `NOT_CONFIGURED` |
 | L lane | Latest discovered tip `9b0d4ad534644273c28d24fec2e18b17717f1167` is only L12/L13-issued with partial untracked L13 work; no final `LIVE_EDGE_RECEIPT.md` or `L LANE_READY` exists | Refused until a clean immutable L17 receipt-sealed tip exists; private truth, journal, ticket, reconciliation, recovery, and signed validation remain absent |
 | Dashboard donor | `692501587617d4880303fbd747d93e63c376f088`; donor receipt SHA-256 `878cc578d88f38ca3bf8edce554b2cb258b4e9309718854f7ba18c33cb50b968`; Phase 2 equivalence receipt in `docs/archive/i00-phase2/DASHBOARD_EQUIVALENCE_VALIDATION_RECEIPT.md` | Integrated by exact 21-file Git-tree equivalence through IP-CONTROL; director mount still required |
-| Infrastructure donor | `2cec412927fa2f64f05a0b2774b18e45f8ce4fa5`; work `9a82d4715c73ebe4156638c2bf5e8a2c02373bbf`; receipt evidence in `IP_OPS_RECEIPT.md` | Adapted artifact-only; not deployed or configured |
+| Infrastructure donor | `2cec412927fa2f64f05a0b2774b18e45f8ce4fa5`; work `9a82d4715c73ebe4156638c2bf5e8a2c02373bbf`; immutable receipt SHA-256 `d5159d60419faf11b153557ce830a0d563c723a1b6d74bf7af8fd0517edc7293` | Integrated as artifact-only Git ancestry; not installed, deployed, configured, or externally exercised |
 | Q/L protocol | Commit `73e1a1ff7daa48df8dac45713fc5f106842edafc`; document SHA-256 `951fdbb5f347f900c61e60055f90cf2e1e1e743b75b7dc733652acb8d43353a1`; schema SHA-256 `229af0ff13d600c7d305c6deb7f57b61bdb6f8a35f6f2349d91f5ab1b4972f1c` | Frozen v1, `22/22` conformance |
 | Authority map | Accepted base `87af78285a4b11bc8ca98c4cc9b3bb4a551d2537`; current `ARCHITECTURE.md` SHA-256 `beb8be8baefe2faa78356e2dc44983735b855535c21cd5f0172a8e1e3fa665db` | Canonical one-owner law; no ownership shift in this task |
 | D-LAUNCH-6 owner directives | Parent `9d7a36da…e5ef5`; IP-RUNTIME `6e93016e…65810`; IP-CONTROL `5e57bf1d…7278`; IP-OPS `2af83489…779`; IP-PROOF `e59d516b…93b6` | All five present, byte-verified, read-only, and intentionally untracked |
@@ -49,7 +49,7 @@ Updated: `2026-07-14T04:57:20Z`
 | Product Integration | No new live claim | 76 deterministic contract/adapter/lifecycle/supervisor tests pass | No production barrel, composition, routes, persistence, startup, or Q/L final adapters |
 | Q lane | No live/edge/champion claim | Exact donor archive: focused `384/384` at 96.50%; accumulated `3,011` plus six documented skips; integrated D-LAUNCH-1 provenance `14/14` | Runtime transport and product mount `NOT_CONFIGURED`; accepted posture remains advisory `ABSTAIN_UNKNOWN` |
 | Product Control Room | No new live or visible claim | Exact accepted donor subtree `d3d899db3b0395532a3cf12b2304e91a2ce528ce`; 18 contract/fixture/binding tests pass | No App/Header/store/page mount; Control Room real route remains missing |
-| Operations | No deployment claim | Template/schema suite passes 50 assertions; historical packet receipt retains its isolated 651-assertion proof | AWS, EC2, Cloudflare, DNS, Secrets Manager, systemd, target SQLite, capacity/soak, watchdog, and release readback not configured/proved |
+| Operations | No deployment claim | Exact accepted L15 `ops/live/**` tree plus 17 exact donor test paths; network-free operational suite passes 11/11 files and 347 assertions; previously accepted IP-OPS tests remain additive under `ops/tests/i00/**` | AWS, EC2, Cloudflare, DNS, Secrets Manager, systemd, target SQLite, capacity/soak, installed watchdog, and release readback not configured/proved |
 | Closure proof | No real-adapter claim | I00 harness `33/33`; effective frozen inputs `14/14`; reports remain generated and byte-identical | Raw historical scan intentionally remains `12/14`, with the two packet-era QL mismatches preserved; Q/L final tips and empirical/runtime proof absent |
 | Money authority | None | Validate-only and fixture evidence only | Private/signed/canary/live paths remain absent or owner-gated; `LIVE_EXECUTION_NOT_IMPLEMENTED` enforced |
 
@@ -68,6 +68,7 @@ Updated: `2026-07-14T04:57:20Z`
 | Product Integration suite | Exit 0; `76/76` |
 | Product Control Room suite | Exit 0; `18/18` |
 | Dashboard donor/current subtree comparison | Exact `d3d899db3b0395532a3cf12b2304e91a2ce528ce`; 21/21 feature files equivalent; stale root donor note explicitly superseded by `IP_CONTROL_MOUNT_REQUEST.md` |
+| `bash ops/tests/run-all.sh` | Exit 0; 11/11 test files passed; 347 assertions; network-free except loopback harnesses; unauthorized network benchmark modes refused |
 | Ops template/schema suite | Exit 0; 50 assertions; packet-local `run-all.sh` is not a fan-in gate because its scope guard intentionally rejects assembled-tree paths |
 | `npm run typecheck` | Exit 0; server and web passed |
 | `npm run build` | Exit 0; server and web passed; existing Vite chunk-size warning only |
@@ -86,9 +87,9 @@ Updated: `2026-07-14T04:57:20Z`
 
 ## Current blocker and resume
 
-Current dashboard equivalence blocker: **none**. Its exact donor subtree remains intact through accepted IP-CONTROL ancestry, while the stale root donor note is explicitly superseded by the controlling mount request. The current branch is a serial integration checkpoint, not `INTEGRATION_CANDIDATE_READY` and not `INTEGRATED_ACCEPTED`.
+Current L15 integration blocker: **none**. The accepted artifact trees are integrated without installation or external activation; its wiring note is retained as archived evidence rather than a competing root document. The current branch is a serial integration checkpoint, not `INTEGRATION_CANDIDATE_READY` and not `INTEGRATED_ACCEPTED`.
 
-Next exact task: integrate accepted L15 infrastructure, then A-CORE, A-HAZARD, A-COCKPIT, A-AGENT, and A-STABILITY one at a time with focused plus repository-wide gates and immutable receipts. A-FORMAL, A-CASE, and the incomplete L lane remain refused. After donor fan-in, perform the already-recorded shared production composition, persistence, route, cockpit-mount, runtime/browser, ops-preflight, and real-adapter acceptance work.
+Next exact task: integrate A-CORE, A-HAZARD, A-COCKPIT, A-AGENT, and A-STABILITY one at a time with focused plus repository-wide gates and immutable receipts. A-FORMAL, A-CASE, and any L tip lacking a clean final `LANE_READY` receipt remain refused. After donor fan-in, perform the already-recorded shared production composition, persistence, route, cockpit-mount, runtime/browser, ops-preflight, and real-adapter acceptance work.
 
 Next combined command after accepted Q/L adapters replace every fixture seam:
 
@@ -151,7 +152,7 @@ The immutable donor is the committed branch object, never the donor worktree con
 | A-AGENT | `97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437` | `c237939f112a41abfb83508ed57e5783a9344cc3cb76e02003ca64487831a92c` | 20 paths; path-set SHA-256 `11a0a317f05371d5a9378776cc0d7343a5d4a622c5f19dce2c2f6dbe8a5d6b27` | No |
 | A-STABILITY | `d35674e7f9621320c35e0bc0270efd515cc64dbd` | `b26f902d90fb82633ac8532d5aa82169801ded3ec6d7bcf3477737a64eab2168` | 19 paths; path-set SHA-256 `84b18ffcfd1893442eedacad74d4ef94823a4f5d846a1a5362e859ed6c5cc117` | No |
 
-Current counts: expected accepted donors `14`; discovered exact tips `14`; receipt-accepted `14`; integrated by ancestry or receipted equivalence `8`. The required equality is **not yet claimed**; it becomes a candidate gate only when all 14 accepted donors are receipted as integrated.
+Current counts: expected accepted donors `14`; discovered exact tips `14`; receipt-accepted `14`; integrated by ancestry or receipted equivalence `9`. The required equality is **not yet claimed**; it becomes a candidate gate only when all accepted donors are receipted as integrated.
 
 ### Refused, blocked, or not-yet-existing donors
 
@@ -162,4 +163,4 @@ Current counts: expected accepted donors `14`; discovered exact tips `14`; recei
 | L lane | `9b0d4ad534644273c28d24fec2e18b17717f1167`; state generation 16, L13 issued; eight partial untracked L13 implementation/request paths | No L13/L16/L17/final receipt and no exact `L LANE_READY`; refuse and integrate last only after a clean immutable reseal |
 | A-ACTION-EVIDENCE / S2 | No branch, worktree, or accepted receipt; A-CORE marks the seam `WAITING` | Not a discovered donor; preserve as `NOT_CONFIGURED`/missing evidence rather than fabricate one |
 
-The next serial order is: preserve the dashboard as its receipted equivalent and later perform only the controlling IP-CONTROL mount; integrate L15; integrate A-CORE then A-HAZARD, A-COCKPIT, A-AGENT, and A-STABILITY one at a time; hold A-FORMAL and A-CASE; integrate L last only after a clean `LANE_READY` receipt exists. Every new donor fan-in gets focused and repository-wide gates plus its own immutable integration receipt before the next donor.
+The next serial order is: integrate A-CORE then A-HAZARD, A-COCKPIT, A-AGENT, and A-STABILITY one at a time; hold A-FORMAL and A-CASE; integrate L last only after a clean `LANE_READY` receipt exists. The dashboard and L15 rows are closed and must not be repeated. Every new donor fan-in gets focused and repository-wide gates plus its own immutable integration receipt before the next donor.

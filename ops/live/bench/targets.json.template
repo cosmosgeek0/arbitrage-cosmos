@@ -1,0 +1,14 @@
+{
+  "note": "Placeholder benchmark targets for latency-bench.mjs (amendment L-B). Fill with the exchange's documented public REST/WS endpoints at the owner-authorized run. Do not assume the exchange's matching location and do not hard-code a region: benchmark every feasible candidate region and decide through a reviewed deployment decision with rollback proof.",
+  "samplesPerTarget": 20,
+  "timeoutMs": 10000,
+  "targets": [
+    { "label": "REPLACE_ME_PRIMARY_REST", "url": "https://REPLACE_ME_EXCHANGE_REST_HOST/REPLACE_ME_PING_PATH" },
+    { "label": "REPLACE_ME_MARKET_DATA_WS_HANDSHAKE", "url": "https://REPLACE_ME_EXCHANGE_WS_HOST/" }
+  ],
+  "candidateRegions": [
+    "REPLACE_ME_REGION_CANDIDATE_A",
+    "REPLACE_ME_REGION_CANDIDATE_B",
+    "REPLACE_ME_REGION_CANDIDATE_C"
+  ]
+}

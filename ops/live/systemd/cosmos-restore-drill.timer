@@ -1,0 +1,12 @@
+# ops/live/systemd/cosmos-restore-drill.timer — weekly isolated restore test.
+
+[Unit]
+Description=Run the cosmos isolated restore drill weekly
+
+[Timer]
+OnCalendar=weekly
+Persistent=true
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target

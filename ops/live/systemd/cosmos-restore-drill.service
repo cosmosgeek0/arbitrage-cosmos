@@ -1,0 +1,29 @@
+# ops/live/systemd/cosmos-restore-drill.service — isolated restore test.
+#
+# Fired by cosmos-restore-drill.timer. Restores the newest backup into a
+# throwaway directory and verifies it (§24.2: periodic restore test against
+# an isolated copy, never the production state store). Runs as cosmos; it
+# has no privileged action at all.
+
+[Unit]
+Description=Cosmos periodic isolated restore drill
+
+[Service]
+Type=oneshot
+User=cosmos
+Group=cosmos
+EnvironmentFile=/etc/cosmos/cosmos-backup.env
+ExecStart=/usr/local/lib/cosmos-ops/bin/restore-drill.sh --env-file /etc/cosmos/cosmos-backup.env
+
+# --- hardening ---
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/backups/cosmos
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX
+UMask=0077
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cosmos-restore-drill

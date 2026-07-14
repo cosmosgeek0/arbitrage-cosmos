@@ -2,17 +2,17 @@
 
 Schema version: 1
 
-Generation: 24
+Generation: 25
 
 Program: `LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H`
 
 Current phase: `L17`
 
-Phase status: `RECEIPT_SEALED_PENDING_ACCEPTANCE`
+Phase status: `LANE_READY`
 
-Lane status: `L_SPINE_FINALE_ACTIVE`
+Lane status: `LANE_READY`
 
-Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`, `L06`, `L07`, `L08`, `L08.1`, `L08.2`, `L09`, `L10`, `L11`, `L12`, `L13`, `L14`, `L16`; `L15` is accepted on its satellite and awaits I00 fan-in.
+Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`, `L06`, `L07`, `L08`, `L08.1`, `L08.2`, `L09`, `L10`, `L11`, `L12`, `L13`, `L14`, `L16`, `L17`; `L15` is accepted on its satellite and awaits I00 fan-in.
 
 ## D-LAUNCH-16 RESUME AND WORKER SCOPE BASELINE
 
@@ -30,9 +30,10 @@ Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`, `L06`, `L07`, `L08`, 
 - L09, L10 and L11 are merged on this lineage. L14 is already accepted. L15 is
   accepted on satellite commit `2cec412927fa2f64f05a0b2774b18e45f8ce4fa5`
   and is not reimplemented here.
-- Active unchanged finale: §19/§20 L12, §21-§23 L13 lane-side, L16 honest
-  authorization/deployment proof, L17 final fault/readiness gate, then
-  `LIVE_EDGE_RECEIPT.md` and exact `L LANE_READY` or a new precise `BLOCKED`.
+- Completed L spine: §19/§20 L12, §21-§23 L13 lane-side, L16 honest
+  authorization/deployment classification and L17 final worker/fault evidence
+  are receipt-sealed and accepted locally. Only the post-acceptance strict gate
+  and exact `L LANE_READY` handoff remain; I00 owns all later fan-in.
 
 ## Git identity
 
@@ -154,6 +155,14 @@ Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`, `L06`, `L07`, `L08`, 
   `2244123f6f2fedc553db1a6a892c9d3de3a599bbd8ae48b5eaee29451f8d5ffe`.
 - L17 exact implementation-phase aggregate SHA-256:
   `c9d00395d61b3209d4f231a550f0fc1b31f914d8e4b1f4f4b4530b3bc22054b7`.
+- L17 root immutable receipt commit:
+  `9a5f3fc58cb9587717bf7f6853bcdd77c74ba1c6`.
+- L17 root immutable receipt tree:
+  `550b95339d150405afa051a6c536009eab4caf07`.
+- L17 root immutable receipt blob:
+  `befcc4c216baba0460985b37b8085e043b012a97`.
+- L17 root immutable receipt SHA-256:
+  `0b95db6e0ae8777d3e3bebb1a510561c7dfc9dcba963bd02fbc91025dd784fe2`.
 - L09-002 source blocker commit:
   `a560b8ac84820e5edc15c5f36727368ecc9c9442`; decision blob
   `caa3df4ce16fdae168c298d0bb64e29e976e76b4`, SHA-256
@@ -180,8 +189,10 @@ Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`, `L06`, `L07`, `L08`, 
 - Preceding accepted receipt:
   `live-edge-receipts/RECEIPTS/L16.md`.
 - L16 implementation status: `ACCEPTED_BUILT_AND_TESTED_UNWIRED`.
-- L17 implementation status: `RECEIPT_SEALED_PENDING_ACCEPTANCE`.
-- Required shape: one hostile-tested D-LAUNCH-16 worker-only scope gate, one
+- L17 implementation status: `ACCEPTED_BUILT_AND_TESTED_UNWIRED`.
+- L17 immutable receipt: `LIVE_EDGE_RECEIPT.md`, accepted through
+  `live-edge-receipts/RECEIPTS/L17_ACCEPTANCE.md`.
+- Accepted shape: one hostile-tested D-LAUNCH-16 worker-only scope gate, one
   pure final evidence adapter and one exact final receipt. Local
   `LANE_READY` must remain distinct from combined, integrated, deployed,
   private, trade-ready or live acceptance.
@@ -213,17 +224,18 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 
 ## Working-tree checkpoint
 
-- This checkpoint seals `LIVE_EDGE_RECEIPT.md` against implementation commit
-  `25d364e5b9862abf24d918740d6b781f558390c7`, tree
-  `69e27343b31ac395a5c774c93e04b6335b1bc8e7`, snapshot
-  `l17_1e982dfbc440a97f0e91d4e9a5065ce6` and the exact strict-gate counts.
-  The separate immutable acceptance record is still pending; no local
-  `LANE_READY` claim exists yet.
+- This checkpoint accepts `LIVE_EDGE_RECEIPT.md` through
+  `live-edge-receipts/RECEIPTS/L17_ACCEPTANCE.md`. The local L lane is
+  `LANE_READY_BUILT_AND_TESTED_UNWIRED`; the adapter remains synthetic,
+  injected/unattested, non-sendable and without readiness authority or proof.
+- The containing acceptance commit is intentionally absent from its own
+  record. The final post-commit strict scope gate must show only the two
+  protected untracked directive inputs.
 - Expected untracked preserved owner inputs: `DIRECTOR_Q_L_TWO_LANE_LAUNCH.md`, `LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md`.
 - Worker scope is measured from director merge
   `3a8e17be71d21df14f6b236a563cb0595f9eb824`; director-imported history is
   excluded by D-LAUNCH-16.
-- Active writer: L-lane lead only. Independent reviews are read-only.
+- Active writer: none after the final strict gate; director I00 owns fan-in.
 - The two owner-supplied directive inputs remain untracked and preserved.
 
 ## Canonical reuse
@@ -320,17 +332,19 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
   capability and unsupported-arithmetic gaps cannot promote. The ordinary
   verified snapshot keeps filter admission `UNPROVEN`. Exact receipt:
   `live-edge-receipts/RECEIPTS/L16.md`.
-- L17 receipt sealed pending acceptance: one hardened worker-only scope gate selects the
+- L17 accepted lane-ready: one hardened worker-only scope gate selects the
   latest qualifying first-parent two-parent exact `director:` merge and checks
   every later worker commit, every parent of a worker merge and every worktree
   path against the exact allowlist. One pure final evidence adapter binds the
   accepted L12/L13/L16 and L15 identities, the 35-assertion gate contract and
   measured local command evidence, and classifies the exact closed 18-subject
-  catalog plus four exact operational non-performance facts. Its output is injected and unattested,
+  catalog plus four exact operational non-performance facts. Its output is
+  injected and unattested,
   `LOCAL_GATE_EVIDENCE_COMPLETE`, `PENDING_IMMUTABLE_RECEIPT_ACCEPTANCE`,
   `SYNTHETIC_ONLY`, non-sendable and without readiness authority or proof.
-  `LIVE_EDGE_RECEIPT.md` seals the exact implementation, snapshot, hashes and
-  verification counts without changing that adapter posture.
+  `LIVE_EDGE_RECEIPT.md` plus `RECEIPTS/L17_ACCEPTANCE.md` establish only the
+  durable local built/tested/unwired disposition without changing that adapter
+  posture.
 - Synthetic only: capital mandate and reconciliation/execution fixtures.
 - Unavailable in canonical convergence: authenticated production private
   acquisition, signed validation, exchange-observed live fills/reconciliation,
@@ -515,6 +529,7 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 - L12 is accepted `LANE_READY` / `BUILT_AND_TESTED` / `UNWIRED` and must not be repeated.
 - L13 is accepted `LANE_READY` / `BUILT_AND_TESTED` / `UNWIRED` and must not be repeated.
 - L14 is accepted `LANE_READY` / `BUILT_AND_TESTED` / `UNWIRED` on this lane's ancestry and must not be repeated.
+- L17 is accepted `LANE_READY` / `BUILT_AND_TESTED` / `UNWIRED` and must not be repeated.
 - L15 is accepted on its deployment/infrastructure satellite and must not be
   reimplemented in the spine; director I00 owns fan-in.
 - D0011 records both L06 shared-owner requests as director-resolved `DEFERRED_TO_I00`; they do not block injected-port L06 and authorize no shared edits.
@@ -522,15 +537,14 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 - Production Basis/Volume assessment ingress, production component identity/policy binding, package scripts and supervisor/API projection remain director-owned.
 - D-LAUNCH-16 resolves the prior false scope blocker. The latest qualifying
   director merge is the gate baseline; L09-L11 are present as canonical
-  imported history and exempt from §3.3. L12/L13/L16 are accepted; L17 is
-  verified and receipt-sealed, and awaits only its separate acceptance seal.
+  imported history and exempt from §3.3. L12/L13/L16/L17 are accepted. No L
+  implementation remains; director I00 owns combined fan-in.
 
 ## Exact next task
 
-Commit the non-self-referential final receipt, record its exact commit/tree/blob
-and raw SHA-256 in `RECEIPTS/L17_ACCEPTANCE.md`, accept the local built/tested/
-unwired lane, then rerun the strict final scope gate. Stop only on a new precise
-`BLOCKED` or final `L LANE_READY`.
+Run the strict final scope gate on the containing acceptance commit, report its
+exact counts, and stop at `L LANE_READY`. Director I00 owns any combined Q/L
+fan-in, integration, deployment or external action after this handoff.
 
 ## Files to re-read on resume
 
@@ -541,6 +555,7 @@ unwired lane, then rerun the strict final scope gate. Stop only on a new precise
 - `live-edge-receipts/DECISIONS/D0019-l17-worker-scope-and-final-evidence.md`
 - `live-edge-receipts/RECEIPTS/L16.md`
 - `LIVE_EDGE_RECEIPT.md`
+- `live-edge-receipts/RECEIPTS/L17_ACCEPTANCE.md`
 - `server/src/liveEdge/adapters/externalProofEvidence/index.ts`
 - `server/src/liveEdge/adapters/finalLaneEvidence/index.ts`
 - `ops/tests/lane-worker-scope-gate.sh`
@@ -558,10 +573,10 @@ unwired lane, then rerun the strict final scope gate. Stop only on a new precise
 
 ## Work not to repeat unless inputs changed
 
-- Do not repeat accepted L00/L01/L02/L03/L04/L05/L06/L07/L08/L08.1/L08.2/L09/L10/L11/L12/L13/L14/L15/L16 work, broad
+- Do not repeat accepted L00/L01/L02/L03/L04/L05/L06/L07/L08/L08.1/L08.2/L09/L10/L11/L12/L13/L14/L15/L16/L17 work, broad
   source discovery, canonical owner/code/test inventory or launch-hash
   investigation.
 - Do not rebuild L09/L10/L11 or the L15 satellite.
 - Do not edit frozen protocol or shared production/package files.
-- Do not repeat L16. Execute only the issued L17 worker-scope and final-evidence
-  work under the unchanged authority boundary.
+- Do not repeat L16 or L17. The L worker stops after the final strict gate;
+  combined fan-in belongs to director I00.

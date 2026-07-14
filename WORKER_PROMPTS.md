@@ -2,6 +2,40 @@
 
 Rule: one block = one chat = one folder. Director appends/replaces blocks at every event; check the top entry's date. Board truth: QL_PARALLEL_DAG.md.
 
+## ACTIVE WAVE 9 (2026-07-14, post SI-RECON) — run: L09-ACCEPT + S4. Everything else done.
+
+### L09-ACCEPT — folder /Users/cosmosgeek/Desktop/l09-normal-basis
+```text
+L09 acceptance resume (D-LAUNCH-15 complete; `git log --oneline -2` shows director rebase of current-main c43262a with SI-RECON ruling A — SI stop RESOLVED, suite green on merged base). Correction 73030fa intact (34 paths reviewed per L09-007). ONLY the acceptance loop remains: rerun full D-LAUNCH-12 gates on the rebased tree (focused + accumulated liveEdge + foundation + protocol + npm test + full repo incl. systemIntegration — expect ALL green) + final independent review → acceptance commit → receipt → record accepted SHA. No new implementation, no shared files, no push. Stop only at L09 ACCEPTED or precise BLOCKED.
+```
+
+### S4 — folder /Users/cosmosgeek/Desktop/ip-assur-case
+```text
+You are the S4 shard builder (D-LAUNCH-13 packet law; verify branch ip-assur-case-20260713, HEAD c57610c; read `git show c57610c:IP_ASSURANCE.md` §7 + dedup matrix). Build ONLY amendment §5 (S4): derived read-only assurance claim graph — claim nodes with owner/subclaims/assumptions/evidence IDs, producer≠verifier and common-mode independence law, §5.3 mandatory claims, §5.4 expiry + transitive invalidation with UNKNOWN propagation. Consume ACCEPTED S1 contracts read-only from branch ip-assur-hazard-20260713 (ab33b37). Exclusive: fixtures/productAssurance/systemic/assuranceCase/** + test/productAssurance/systemic/assuranceCase/**. D-LAUNCH-10 satellite discipline applies. Full loop → reseal. Stop at CASE_PRESTAGE_READY or BLOCKED.
+```
+
+## HISTORICAL WAVE 8 (2026-07-13, D-LAUNCH-13) — resumes: A-CORE, A-AGENT, A-STABILITY, A-COCKPIT (+ L09 D-LAUNCH-12 block below)
+
+### A-AGENT resume — folder /Users/cosmosgeek/Desktop/ip-assur-agent
+```text
+Resume under D-LAUNCH-13: your CLASS_TAXONOMY_OWNER_LAW_MISSING blocker is cleared — the exact Class A-D taxonomy + nine-point promotion evidence law is now folded into IP_ASSURANCE.md §7.1 on current-main commit c57610c (read it read-only: `git show c57610c:IP_ASSURANCE.md`; packet sha256 now starts 49dcd690275f). Implement the owner-defined trigger/shadow/bounds/demotion projection against that law, rerun focused + repository gates, emit packet-local receipt, reseal. Stop at AGENT_PRESTAGE_READY or BLOCKED.
+```
+
+### A-STABILITY resume — folder /Users/cosmosgeek/Desktop/ip-assur-stability
+```text
+Resume: your emergency-checkpoint repair commit 65ac643 stands. Complete your own recovery receipt steps: rerun every focused + repository gate, final read-only adversarial review, add the immutable acceptance receipt, reseal. Stop at STABILITY_PRESTAGE_READY or BLOCKED.
+```
+
+### A-COCKPIT resume — folder /Users/cosmosgeek/Desktop/ip-assur-cockpit
+```text
+Resume from the wip emergency checkpoint 44f900d (32 uncommitted files): audit them, keep what survives, commit the surviving base, then continue your S5 work under all D-LAUNCH-10 bounds. Full loop, reseal. Stop at COCKPIT_PRESTAGE_READY or BLOCKED.
+```
+
+### A-CORE resume — folder /Users/cosmosgeek/Desktop/ip-assurance
+```text
+Resume under D-LAUNCH-13 (read rulings: `git -C /Users/cosmosgeek/Desktop/Main log -1 --format=%H -- QL_DIRECTOR_STATE.md`, and the updated packet law `git show c57610c:IP_ASSURANCE.md`). Your three blockers are dispositioned: (1) core hardening repairs AUTHORIZED — exact owner/release/subject/digest tuple binding with hostile substitution proofs, and fix the unreachable SILENT branch (absent input must not pre-convert to UNAVAILABLE); (2) one-concept/one-owner ADJUDICATED — reduce every surface overlapping satellite/runtime owners (assurance-case, action-evidence, governance, coverage, rate-budget) to adapter boundaries or WAITING seams consuming the owner contract; remove duplicate-authority implementations yourself; (3) newsContext.ts:2302 dynamic fetch DISPOSITIONED as PURE_READ / KEEP_CANONICAL owned by the existing service — register it with observed semantics + an I00 insertion-request row; do NOT touch the service file. Then regenerate twice with byte-identity, rerun the complete evidence loop (expect ops scan 143/143 mapped), seal receipts. Your terminal word before director fan-in is CORE_SCAFFOLD_READY (full ASSURANCE_PRESTAGE_READY only after fan-in). Stop there or at a new precise BLOCKED.
+```
+
 ## L09 FINAL RESUME (2026-07-13, post F-BRIDGE merge)
 
 ### L09-FINAL — folder /Users/cosmosgeek/Desktop/l09-normal-basis

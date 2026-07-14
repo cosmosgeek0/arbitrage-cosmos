@@ -28,14 +28,16 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 | I00-VERIFY | ~/Desktop/i00-assembly | i00-product-assembly-20260713 | 1fec867 | I00_PRESTAGE_VERIFIED (635ad83) — awaits director real-adapter I00 after lanes |
 
 | F-BRIDGE canonical execution | ~/Desktop/f-bridge | f-bridge-execution-20260713 | 24ac894 | ACCEPTED (1e9d28a) + MERGED to current-main c900907 (24/24 foundation, npm test green) |
-| A-CORE IP-ASSURANCE | ~/Desktop/ip-assurance | ip-assurance-20260713 | 9785c93 | WORKING (ownership excludes satellite subtrees per D-LAUNCH-10) |
+| A-CORE IP-ASSURANCE | ~/Desktop/ip-assurance | ip-assurance-20260713 | 9785c93 | CORE_SCAFFOLD_READY (08a0a09) — full READY after director fan-in |
 | A-HAZARD S1 | ~/Desktop/ip-assur-hazard | ip-assur-hazard-20260713 | 9785c93 | HAZARD_PRESTAGE_READY (ab33b37, D-LAUNCH-10 resealed) |
 | A-FORMAL S3 | ~/Desktop/ip-assur-formal | ip-assur-formal-20260713 | 9785c93 | FORMAL_PRESTAGE_READY (89c783b, D-LAUNCH-10 resealed) |
-| A-COCKPIT S5 | ~/Desktop/ip-assur-cockpit | ip-assur-cockpit-20260713 | 9785c93 | WORKING |
-| A-AGENT S6 | ~/Desktop/ip-assur-agent | ip-assur-agent-20260713 | 9785c93 | WORKING |
-| A-STABILITY S8 | ~/Desktop/ip-assur-stability | ip-assur-stability-20260713 | 9785c93 | WORKING |
+| A-COCKPIT S5 | ~/Desktop/ip-assur-cockpit | ip-assur-cockpit-20260713 | 9785c93 | COCKPIT_PRESTAGE_READY (d4ff9c9) |
+| A-AGENT S6 | ~/Desktop/ip-assur-agent | ip-assur-agent-20260713 | 9785c93 | AGENT_PRESTAGE_READY (97e87bd, D-LAUNCH-13 taxonomy) |
+| A-STABILITY S8 | ~/Desktop/ip-assur-stability | ip-assur-stability-20260713 | 9785c93 | STABILITY_PRESTAGE_READY (d35674e) |
 | S2 actionEvidence satellite | (cut after L lane freeze) | — | — | WAITING (dependency law §11) |
-| S4 assuranceCase satellite | (cut after S1 contracts accepted) | — | — | WAITING |
+| S4 assuranceCase satellite | ~/Desktop/ip-assur-case | ip-assur-case-20260713 | c57610c | READY |
+
+| SI-RECON ruling | ~/Desktop/si-recon | si-recon-ruling-20260714 | e25fd5d | ACCEPTED ruling A + MERGED to current-main c43262a (SI 180/180, npm test green) |
 
 ## Frozen merge/integration order (mechanical)
 

@@ -59,6 +59,8 @@ function createWorld() {
     marketInit: 0,
     marketStart: 0,
     marketStop: 0,
+    marketAuxiliaryStart: 0,
+    marketAuxiliaryStop: 0,
     basisStart: 0,
     basisStop: 0,
     volumeStart: 0,
@@ -118,6 +120,10 @@ function createWorld() {
   const ports = createProductionSystemIntegrationPorts({
     clock,
     market,
+    marketAuxiliary: {
+      start() { calls.marketAuxiliaryStart += 1; },
+      stop() { calls.marketAuxiliaryStop += 1; },
+    },
     basis,
     volume,
     sourceMaxAgeMs: 10_000,
@@ -155,6 +161,8 @@ test('factory construction is inert and exposes only passive public source proje
     marketInit: 0,
     marketStart: 0,
     marketStop: 0,
+    marketAuxiliaryStart: 0,
+    marketAuxiliaryStop: 0,
     basisStart: 0,
     basisStop: 0,
     volumeStart: 0,
@@ -163,7 +171,11 @@ test('factory construction is inert and exposes only passive public source proje
   assert.deepEqual(Object.keys(world.ports.components).sort(), [
     'public-spot-source',
     'public-usdm-source',
+    'q-inference',
   ]);
+  const q = world.ports.components['q-inference'].readComponentSnapshot();
+  assert.equal(q.readiness, 'STOPPED');
+  assert.ok(q.releaseStatuses.includes('NOT_CONFIGURED'));
   assert.equal(world.ports.components['intelligence-runtime'], undefined);
   assert.equal(world.ports.components['market-intelligence'], undefined);
   assert.equal(world.ports.components['capital-supervision'], undefined);
@@ -211,6 +223,59 @@ test('public Spot and USD-M become LIVE_PUBLIC only with connected fresh raw eve
     [source.truthLabel, source.universeSymbols, source.spotCoveredSymbols, source.usdMCoveredSymbols],
     ['LIVE_PUBLIC', 1, 1, 1],
   );
+});
+
+test('accepted public owners drive UniverseGraph and IntelligenceRuntimeBridge readiness without Q', async () => {
+  const world = createWorld();
+  world.market.rows = [{
+    symbol: 'BTCUSDT',
+    base: 'BTC',
+    hasSpot: true,
+    hasPerp: true,
+    perpMark: 60_000,
+    perpIndexPrice: 59_990,
+  }];
+  await startMarket(world);
+  world.market.feeds['spot-miniticker'] = 'open';
+  world.market.feeds['futures-markprice'] = 'open';
+  world.spot.set('BTCUSDT', START - 250);
+  world.usdm.set('BTCUSDT', START - 200);
+
+  await world.ports.runtimes.intelligenceRuntime.start();
+  const universe = world.ports.runtimes.intelligenceRuntime.health(world.ctx());
+  assert.equal(universe.running, true);
+  assert.equal(universe.timestamp.sourceTimeMs, START - 250);
+
+  await world.ports.runtimes.marketIntelligence.start();
+  const intelligence = world.ports.runtimes.marketIntelligence.health(world.ctx());
+  assert.equal(intelligence.running, true);
+  assert.equal(intelligence.timestamp.sourceTimeMs, START - 200);
+  await world.ports.runtimes.q.start();
+  assert.equal(world.ports.runtimes.q.health(world.ctx()).fatal.code, 'CHAMPION_UNAVAILABLE');
+
+  world.clock.now = START + 1_000;
+  world.spot.set('BTCUSDT', START + 900);
+  world.usdm.set('BTCUSDT', START + 950);
+  const advanced = world.ports.runtimes.marketIntelligence.health(world.ctx());
+  assert.equal(advanced.timestamp.sourceTimeMs, START + 950);
+  assert.ok(advanced.timestamp.receivedAtMs >= intelligence.timestamp.receivedAtMs);
+});
+
+test('denied or disconnected public owners cannot admit intelligence readiness', async () => {
+  const world = createWorld();
+  world.market.rows = [{
+    symbol: 'BTCUSDT', base: 'BTC', hasSpot: true, hasPerp: true,
+    perpMark: 60_000, perpIndexPrice: 59_990,
+  }];
+  await startMarket(world);
+  world.market.feeds['spot-miniticker'] = 'closed';
+  world.market.feeds['futures-markprice'] = 'closed';
+  world.spot.set('BTCUSDT', START - 100);
+  world.usdm.set('BTCUSDT', START - 90);
+  await world.ports.runtimes.intelligenceRuntime.start();
+  await world.ports.runtimes.marketIntelligence.start();
+  assert.equal(world.ports.runtimes.intelligenceRuntime.health(world.ctx()).timestamp, null);
+  assert.equal(world.ports.runtimes.marketIntelligence.health(world.ctx()).timestamp, null);
 });
 
 test('disconnected transport never emits READY or LIVE_PUBLIC despite a fresh cached event', async () => {
@@ -283,6 +348,8 @@ test('restart ownership calls each existing runtime once and requires post-resta
     marketInit: 1,
     marketStart: 2,
     marketStop: 1,
+    marketAuxiliaryStart: 2,
+    marketAuxiliaryStop: 1,
     basisStart: 1,
     basisStop: 1,
     volumeStart: 1,

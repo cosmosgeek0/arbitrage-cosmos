@@ -9,6 +9,7 @@ import {
   evaluateEvidenceSemantics,
   evaluateMessage,
   frozenInputScan,
+  historicalFrozenInputScan,
   readJson,
   readText,
   routeContractScan,
@@ -80,8 +81,12 @@ test('Q directive-lock transition rejects third hashes extra row drift and malfo
   }
 });
 
-test('historical packet pins remain immutable while D-LAUNCH-7 accepts living director state', () => {
-  const historical = frozenInputScan(catalog);
+test('final D-LAUNCH-7 repin accepts exact current-main objects while historical packet pins stay immutable', () => {
+  const finalInputs = frozenInputScan(catalog);
+  assert.equal(finalInputs.length, 14);
+  assert(finalInputs.every((result) => result.passed), JSON.stringify(finalInputs.filter((result) => !result.passed)));
+
+  const historical = historicalFrozenInputScan(catalog);
   assert.equal(historical.length, 14);
   assert.equal(historical.filter((result) => result.passed).length, 12);
   assert.deepEqual(historical.filter((result) => !result.passed).map((result) => result.path), [
@@ -90,23 +95,34 @@ test('historical packet pins remain immutable while D-LAUNCH-7 accepts living di
   ]);
 
   const effective = effectiveFrozenInputScan(catalog, livingInputAcceptance);
+  assert.equal(effective.acceptance.structurePassed, true, JSON.stringify(effective.acceptance));
+  assert.equal(effective.acceptance.rulingVerified, true, JSON.stringify(effective.acceptance));
   assert.equal(effective.acceptance.passed, true, JSON.stringify(effective.acceptance));
   assert(effective.acceptedInputs.every((result) => result.passed), JSON.stringify(effective.acceptedInputs.filter((result) => !result.passed)));
-  assert.match(effective.acceptance.sourceTip, /^[a-f0-9]{40}$/);
+  assert.equal(effective.acceptance.sourceTip, 'd78be24f4da14632c857ee250b62e3fec33c2743');
+  assert.equal(effective.acceptance.sourceCutoffCommit, 'd78be24f4da14632c857ee250b62e3fec33c2743');
+  assert.equal(effective.acceptance.cutoffExists, true);
+  assert.equal(effective.acceptance.cutoffReachable, true);
   assert.equal(effective.acceptance.rulingCommit, 'bdb29e37fb9b152aa1b7e1063ca892cd405c6245');
-  assert.deepEqual(effective.acceptance.livingResults.map((entry) => [entry.path, entry.latestCommit, entry.observedSha256]), [
-    ['QL_DIRECTOR_STATE.md', 'bf262c08984cf05cb84425e850b187af5f8adf03', '4d7753412a7b57f7e5e6a512427562db85a1d678ce90ed950223c90ef180c90b'],
-    ['QL_PARALLEL_DAG.md', '0bbf23c06c60c1a4553422f099d8b242f13b6dc5', '4e44e60837fa0b08039e398732d3830940078db8b08fe889b28ce6bc85a8e0ad'],
+  assert(effective.acceptance.directiveResults.every((entry) => entry.sealedSha256 === entry.expectedSha256));
+  assert(effective.acceptance.directiveResults.every((entry) => ['LIVE_OWNER_FILE', 'SEALED_CANDIDATE_HASH'].includes(entry.evidenceMode)));
+  assert.deepEqual(effective.acceptance.livingResults.map((entry) => [entry.path, entry.latestCommit, entry.observedGitBlob, entry.observedSha256]), [
+    ['QL_DIRECTOR_STATE.md', 'd78be24f4da14632c857ee250b62e3fec33c2743', '8116ec491fc7fc863dbcb4015be4cdb105a5a1bc', '77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc'],
+    ['QL_PARALLEL_DAG.md', 'ac01b5e43830bc681ee7e251749c4d1fab210029', '701b3f263e73bf659ba4319c5839e798c1ce7abb', 'cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec'],
   ]);
+  assert(effective.acceptance.livingResults.every((entry) => entry.observationMatches && entry.passed));
   assert(effective.acceptedInputs.filter((entry) => entry.acceptanceMode === 'LATEST_CURRENT_MAIN_TOUCH')
-    .every((entry) => entry.historicalPacketPassed === false && entry.historicalPacketPinPreserved));
+    .every((entry) => entry.historicalPacketPassed === false && entry.historicalPacketPinPreserved && entry.finalRepinPassed && entry.passed));
 });
 
 test('D-LAUNCH-7 acceptance fails closed on policy path provenance observation or directive tampering', () => {
   const cases = [
     { ...livingInputAcceptance, ruling: 'D-LAUNCH-6' },
     { ...livingInputAcceptance, sourceRef: 'HEAD' },
+    { ...livingInputAcceptance, sourceCutoffCommit: '0'.repeat(40) },
     { ...livingInputAcceptance, rulingCommit: '0'.repeat(40) },
+    { ...livingInputAcceptance, finalRealAdapterRepinRequired: true },
+    { ...livingInputAcceptance, finalRealAdapterRepinCompleted: false },
     { ...livingInputAcceptance, livingDirectorInputs: livingInputAcceptance.livingDirectorInputs.map((entry, index) => index === 0 ? { ...entry, path: 'STATE.md' } : entry) },
     { ...livingInputAcceptance, livingDirectorInputs: livingInputAcceptance.livingDirectorInputs.map((entry, index) => index === 0 ? { ...entry, observedLatestCommit: '0'.repeat(40) } : entry) },
     { ...livingInputAcceptance, livingDirectorInputs: livingInputAcceptance.livingDirectorInputs.map((entry, index) => index === 1 ? { ...entry, observedGitBlob: '0'.repeat(40) } : entry) },
@@ -116,15 +132,19 @@ test('D-LAUNCH-7 acceptance fails closed on policy path provenance observation o
   for (const document of cases) assert.equal(effectiveFrozenInputScan(catalog, document).acceptance.passed, false);
 });
 
-test('one owner and producer registry passes scoped duplicate-authority rules', () => {
+test('one owner and producer registry passes scoped rules with conflicts classified from evidence', () => {
   const scan = runAuthorityScan(catalog);
   assert.equal(scan.authorityConcepts, 13);
   assert.equal(scan.semanticStreams, 6);
   assert(scan.scanPassed, JSON.stringify(scan.rules.filter((rule) => !rule.passed)));
-  assert.equal(scan.authorityConverged, false);
-  assert(scan.unresolvedConflictCount >= 5);
+  assert.equal(scan.authorityConverged, true);
+  assert.equal(scan.unresolvedConflictCount, 0);
+  assert.equal(scan.conflictClassificationPassed, true);
   assert.equal(scan.conflicts.filter((conflict) => conflict.observed).length, 4);
-  assert(scan.conflicts.every((conflict) => conflict.classification !== 'RESOLVED_BY_IP_PROOF'));
+  assert.equal(scan.conflicts.filter((conflict) => conflict.resolutionState === 'RESOLVED').length, 4);
+  assert.deepEqual(scan.conflicts.filter((conflict) => conflict.resolutionState === 'LIMITATION').map((conflict) => conflict.id), [
+    'Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED',
+  ]);
   assert.deepEqual(scan.boundaryFindings, []);
   assert(scan.transportCandidates.length > 0);
   assert.deepEqual(scan.unclassifiedTransportCandidates, []);
@@ -192,11 +212,13 @@ test('truth labels distinguish live synthetic replay and unknown without upgradi
 
 test('canonical system-integration route contract is present without registering routes here', () => {
   const routes = routeContractScan(catalog);
-  assert.equal(routes.length, 11);
+  assert.equal(routes.length, 14);
   assert.deepEqual(
     routes.map(({ method, route }) => `${method} ${route}`),
     [
       'GET /api/system-integration/supervisor',
+      'GET /api/system-integration/ops/readback',
+      'GET /api/system-integration/ops/intake-gate',
       'GET /api/system-integration/graph',
       'GET /api/system-integration/events',
       'GET /api/system-integration/controls',
@@ -206,6 +228,7 @@ test('canonical system-integration route contract is present without registering
       'GET /api/product-integration/v1/material-events',
       'GET /api/product-integration/v1/traces/:correlationId',
       'POST /api/product-integration/v1/commands/preview',
+      'GET /api/product-integration/v1/commands/:commandId/result',
       'POST /api/product-integration/v1/commands',
     ],
   );

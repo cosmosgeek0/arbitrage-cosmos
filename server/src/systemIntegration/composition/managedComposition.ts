@@ -16,6 +16,8 @@ import type {
   ManagedCompositionOptions,
   ManagedCompositionReadSnapshot,
   ManagedDrainOutcome,
+  ManagedRestartCommandIdentity,
+  ManagedRestartCompletionReadback,
   ScheduledTask,
 } from './types.js';
 
@@ -56,6 +58,7 @@ export class ManagedRuntimeComposition implements ManagedCompositionControl {
   private resolveDrain: ((snapshot: Readonly<ManagedCompositionReadSnapshot>) => void) | null = null;
   private lastDriveAtMs: number | null = null;
   private driverFailureCode: string | null = null;
+  private pauseAfterStart = false;
 
   constructor(private readonly options: ManagedCompositionOptions) {
     if (!options || typeof options.clock?.nowMs !== 'function') {
@@ -104,6 +107,13 @@ export class ManagedRuntimeComposition implements ManagedCompositionControl {
     return this.issue('START');
   }
 
+  startPaused(): CommandResult {
+    this.pauseAfterStart = true;
+    const command = this.start();
+    if (!command.ok) this.pauseAfterStart = false;
+    return command;
+  }
+
   validate(): CommandResult {
     this.ensureDriver();
     return this.issue('VALIDATE');
@@ -134,18 +144,32 @@ export class ManagedRuntimeComposition implements ManagedCompositionControl {
 
   driveOnce(): Readonly<ManagedCompositionReadSnapshot> {
     const nowMs = this.options.clock.nowMs();
-    const status = this.supervisor.tick(nowMs);
+    this.supervisor.tick(nowMs);
     this.lastDriveAtMs = nowMs;
+    this.advancePauseAfterStart(nowMs);
+    const status = this.supervisor.snapshot();
     this.abortUnownedAfterTerminal(status.phase, status.commandCorrelationId);
     this.advanceDrain(nowMs);
     return this.read();
   }
 
   drain(): Promise<Readonly<ManagedCompositionReadSnapshot>> {
-    if (this.drainPromise !== null) return this.drainPromise;
+    if (this.drainPromise !== null && (!this.drainCompleted || this.drainOutcome === 'CLEAN')) {
+      return this.drainPromise;
+    }
+    // A failed physical stop is recoverable only by an explicit later drain
+    // call after the failing owner has been repaired. Reset attempt-local
+    // bookkeeping, never the supervisor's failure history or driver failure.
+    this.drainPromise = null;
+    this.resolveDrain = null;
     this.acceptingCommands = false;
     this.draining = true;
+    this.drainCompleted = false;
+    this.drainTimedOut = false;
     this.drainOutcome = 'IN_PROGRESS';
+    this.drainFailureCode = null;
+    this.stopIssuedForDrain = false;
+    this.pauseAfterStart = false;
     this.drainStartedAtMs = this.options.clock.nowMs();
     this.ensureDriver();
     this.drainPromise = new Promise((resolve) => {
@@ -179,6 +203,46 @@ export class ManagedRuntimeComposition implements ManagedCompositionControl {
     });
   }
 
+  /**
+   * Read one edge-triggered restart from the canonical supervisor itself.
+   * Stable RUNNING posture is insufficient: success must retain the exact
+   * accepted command revision, target generation, and correlated transition.
+   */
+  readRestartCompletion(
+    identity: Readonly<ManagedRestartCommandIdentity>,
+  ): ManagedRestartCompletionReadback {
+    if (!identity || typeof identity !== 'object'
+      || typeof identity.correlationId !== 'string' || identity.correlationId.length === 0
+      || !Number.isSafeInteger(identity.revision) || identity.revision < 0
+      || !Number.isSafeInteger(identity.targetGeneration) || identity.targetGeneration < 1) {
+      return 'UNKNOWN';
+    }
+    const snapshot = this.supervisor.snapshot();
+    if (snapshot.revision !== identity.revision) return 'UNKNOWN';
+    if (snapshot.commandCorrelationId !== null) {
+      const generationIsExpected = snapshot.generation === identity.targetGeneration
+        || snapshot.generation + 1 === identity.targetGeneration;
+      return snapshot.commandCorrelationId === identity.correlationId && generationIsExpected
+        ? 'PENDING'
+        : 'UNKNOWN';
+    }
+    if (snapshot.generation !== identity.targetGeneration) return 'UNKNOWN';
+
+    const transitions = this.supervisor.transitionHistory()
+      .filter((entry) => entry.correlationId === identity.correlationId);
+    if (transitions.length === 0) return 'UNKNOWN';
+    if (snapshot.desiredState === 'RUNNING'
+      && (snapshot.phase === 'RUNNING' || snapshot.phase === 'DEGRADED')
+      && transitions.some((entry) => entry.to === 'RUNNING' || entry.to === 'DEGRADED')) {
+      return 'APPLIED';
+    }
+    if ((snapshot.phase === 'FAILED' || snapshot.phase === 'BLOCKED')
+      && transitions.some((entry) => entry.to === snapshot.phase)) {
+      return 'FAILED';
+    }
+    return 'UNKNOWN';
+  }
+
   private ensureDriver(): void {
     if (this.driverTask !== null || this.drainCompleted) return;
     this.driverTask = this.options.scheduler.scheduleEvery(this.tickIntervalMs, () => {
@@ -188,6 +252,24 @@ export class ManagedRuntimeComposition implements ManagedCompositionControl {
         this.handleDriverFailure();
       }
     });
+  }
+
+  private advancePauseAfterStart(nowMs: number): void {
+    if (!this.pauseAfterStart || this.draining) return;
+    const status = this.supervisor.snapshot();
+    if (status.commandCorrelationId !== null) return;
+    if (status.phase === 'PAUSED') {
+      this.pauseAfterStart = false;
+      return;
+    }
+    if (status.phase === 'RUNNING' || status.phase === 'DEGRADED') {
+      const pause = this.issueAt('PAUSE', nowMs);
+      if (!pause.ok) this.pauseAfterStart = false;
+      return;
+    }
+    if (status.phase === 'FAILED' || status.phase === 'BLOCKED' || status.phase === 'STOPPED') {
+      this.pauseAfterStart = false;
+    }
   }
 
   private issueAt(command: ControlCommand, nowMs: number): CommandResult {
@@ -215,7 +297,6 @@ export class ManagedRuntimeComposition implements ManagedCompositionControl {
       this.stopIssuedForDrain = true;
       const result = this.issueAt('STOP', nowMs);
       if (!result.ok) {
-        this.driverFailureCode = result.failure.code;
         this.drainFailureCode = result.failure.code;
         this.forceStopAllReverse();
         this.completeDrain();

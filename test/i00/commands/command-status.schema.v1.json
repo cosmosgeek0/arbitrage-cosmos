@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "i00.command-status.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "status", "mutationPerformed"],
+  "properties": {
+    "schemaVersion": { "const": "i00.command-status.v1" },
+    "status": {
+      "enum": [
+        "OWNER_GATED",
+        "NOT_CONFIGURED",
+        "BLOCKED",
+        "PLAN_VALID_NO_EXECUTION"
+      ]
+    },
+    "mutationPerformed": { "const": false },
+    "capability": { "type": "string", "minLength": 1 },
+    "operation": { "type": "string", "minLength": 1 },
+    "reasonCode": { "type": "string", "minLength": 1 },
+    "detail": { "type": "string", "minLength": 1 },
+    "safetyClass": { "type": "string", "minLength": 1 },
+    "executable": { "type": "string", "minLength": 1 },
+    "arguments": { "type": "array", "items": { "type": "string" } },
+    "childEnvironmentKeys": { "type": "array", "items": { "type": "string" } }
+  }
+}

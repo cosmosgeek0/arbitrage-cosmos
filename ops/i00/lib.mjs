@@ -75,6 +75,16 @@ export function requireKeys(value, keys, label) {
   }
 }
 
+export function requireExactKeys(value, keys, label) {
+  requireKeys(value, keys, label);
+  const expected = [...keys].sort();
+  const actual = Object.keys(value).sort();
+  if (actual.length !== expected.length
+      || actual.some((key, index) => key !== expected[index])) {
+    fail(`${label} has an unexpected field set`);
+  }
+}
+
 export function hasPlaceholder(value) {
   return /REPLACE_ME|CHANGEME|example\.com|000000000000/.test(String(value));
 }

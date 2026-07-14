@@ -152,6 +152,13 @@ export interface FiveSecondOwnerView {
   readonly revisions: Readonly<ProductRevisionSet>;
 }
 
+/** Render the canonical owner verdict; the browser never derives readiness. */
+export function productMachineReadinessTone(
+  machineReady: FiveSecondOwnerView['machineReady'],
+): 'ok' | 'warn' {
+  return machineReady === 'YES' ? 'ok' : 'warn';
+}
+
 export interface ProductComponentProjection {
   readonly componentId: string;
   readonly owner: string;
@@ -330,6 +337,28 @@ export interface ProductSurfaceDatum {
   readonly unavailableReason: string | null;
 }
 
+export interface CanonicalSupervisorOpsReadback {
+  readonly source: 'CANONICAL_SUPERVISOR_READBACK';
+  readonly observedAtUtc: string;
+  readonly validUntilUtc: string;
+  readonly deploymentFrozen: boolean | 'UNKNOWN';
+  readonly exposureState: 'NONE' | 'ACTIVE' | 'AMBIGUOUS' | 'RECOVERY_REQUIRED' | 'UNKNOWN';
+  readonly ambiguityState: 'NONE' | 'AMBIGUOUS' | 'UNKNOWN';
+  readonly recoveryState: 'NONE' | 'RECOVERY_REQUIRED' | 'UNKNOWN';
+  readonly currentSchemaVersion: number | null;
+  readonly rollbackFloor: number | null;
+}
+
+export interface CanonicalOpsIntakeInterlock {
+  readonly source: 'CANONICAL_OPS_INTAKE_INTERLOCK';
+  readonly state: 'OPS_INTERLOCK_CLEAR' | 'OPS_INTERLOCK_BLOCKED';
+  readonly blocksNewEntries: boolean;
+  readonly externalActionAuthorization: 'NONE';
+  readonly evaluatedAtUtc: string;
+  readonly readbackValidUntilUtc: string | null;
+  readonly reasonCodes: readonly string[];
+}
+
 export interface ProductSupervisorEnvelope<TDashboard = unknown> {
   readonly schemaVersion: typeof PRODUCT_SUPERVISOR_SCHEMA;
   readonly revision: string;
@@ -337,6 +366,8 @@ export interface ProductSupervisorEnvelope<TDashboard = unknown> {
   readonly evaluatedAtMs: number;
   readonly truthLabel: ProductTruthLabel;
   readonly persistentSyntheticLabel: boolean;
+  readonly opsReadback: Readonly<CanonicalSupervisorOpsReadback>;
+  readonly opsIntakeInterlock: Readonly<CanonicalOpsIntakeInterlock>;
   readonly ownerView: Readonly<FiveSecondOwnerView>;
   readonly dashboard: TDashboard;
   readonly components: readonly Readonly<ProductComponentProjection>[];
@@ -440,7 +471,7 @@ const SURFACE_SOURCES: Readonly<Record<SurfaceId, string>> = Object.freeze({
 
 export const REQUIRED_SURFACE_EVIDENCE: Readonly<Record<SurfaceId, readonly string[]>> = Object.freeze({
   dashboard: Object.freeze(['overall-posture', 'startup', 'revisions', 'mode', 'capital', 'pnl-drawdown', 'pipeline-counts', 'active-objects', 'root-blocker', 'attention', 'strategy-q', 'material-decisions']),
-  'control-room': Object.freeze(['machine-graph', 'dependency-edges', 'boot-timeline', 'control-registry', 'revision-conflicts', 'async-progress', 'before-after', 'config-history', 'authority', 'correlation', 'emergency-controls']),
+  'control-room': Object.freeze(['machine-graph', 'dependency-edges', 'boot-timeline', 'control-registry', 'revision-conflicts', 'async-progress', 'before-after', 'config-history', 'authority', 'correlation', 'emergency-controls', 'deployment-frozen', 'exposure-state', 'ambiguity-state', 'recovery-state', 'ledger-schema-compatibility', 'ops-interlock']),
   account: Object.freeze(['spot-truth', 'usdm-truth', 'margin-truth', 'balances-equity-collateral', 'available-capital', 'permissions-modes', 'orders-positions', 'liabilities-interest', 'freshness-completeness', 'reconciliation', 'foreign-manual']),
   markets: Object.freeze(['basis', 'wake-up', 'flow', 'liquidity', 'derivatives', 'data-quality', 'candidate-focus', 'source-freshness', 'q-assessment']),
   token: Object.freeze(['first-change', 'evidence-timeline', 'spot-perp-leadership', 'market-context', 'candidate-focus', 'q-model', 'strategy-decisions', 'conflicts-missing', 'ticket-position', 'outcome']),
@@ -454,7 +485,7 @@ export const REQUIRED_SURFACE_EVIDENCE: Readonly<Record<SurfaceId, readonly stri
   fills: Object.freeze(['fill-identities', 'quantities', 'fees-spread-slippage', 'reconciliation', 'correlation']),
   pnl: Object.freeze(['directional', 'basis-convergence', 'funding', 'borrow-interest', 'fees', 'spread', 'slippage', 'one-leg-exposure', 'execution-recovery-error', 'net-result']),
   risk: Object.freeze(['envelope-revision', 'utilization-reservations', 'gross-net-unhedged', 'concentration', 'loss-drawdown', 'stale-data', 'liquidity-impact', 'ambiguity-recovery', 'gate-decisions', 'halt-posture']),
-  health: Object.freeze(['lifecycle-capability', 'heartbeat-advance', 'source-event-processing-age', 'queue-drop-backpressure', 'reconnect-error', 'rest-latency-budget', 'q-latency-queue', 'db-ledger', 'host-runtime', 'backup-release-watchdog', 'root-blocker-action']),
+  health: Object.freeze(['lifecycle-capability', 'heartbeat-advance', 'source-event-processing-age', 'queue-drop-backpressure', 'reconnect-error', 'rest-latency-budget', 'q-latency-queue', 'db-ledger', 'host-runtime', 'backup-release-watchdog', 'root-blocker-action', 'deployment-frozen', 'exposure-state', 'ambiguity-state', 'recovery-state', 'ledger-schema-compatibility', 'ops-interlock']),
   'logs-ledger': Object.freeze(['event-class-severity', 'component-strategy-symbol', 'correlation', 'fingerprint', 'bounded-pagination', 'saved-filters', 'trace', 'redaction', 'retention', 'raw-debug']),
   notifications: Object.freeze(['fingerprint-dedup', 'causal-group', 'root-cause', 'severity-capital', 'first-last-count', 'state', 'owner-action', 'routing', 'correlation', 'silence-ack', 'recovery-proof']),
 });
@@ -729,6 +760,26 @@ export function buildFixtureBinding<TDashboard>(
     evaluatedAtMs: session.nowMs,
     truthLabel: 'SYNTHETIC_ONLY',
     persistentSyntheticLabel: true,
+    opsReadback: Object.freeze({
+      source: 'CANONICAL_SUPERVISOR_READBACK',
+      observedAtUtc: new Date(Math.floor(session.nowMs / 1_000) * 1_000).toISOString().replace('.000Z', 'Z'),
+      validUntilUtc: new Date(Math.floor(session.nowMs / 1_000) * 1_000 + 10 * 60_000).toISOString().replace('.000Z', 'Z'),
+      deploymentFrozen: 'UNKNOWN',
+      exposureState: 'UNKNOWN',
+      ambiguityState: 'UNKNOWN',
+      recoveryState: 'UNKNOWN',
+      currentSchemaVersion: null,
+      rollbackFloor: null,
+    }),
+    opsIntakeInterlock: Object.freeze({
+      source: 'CANONICAL_OPS_INTAKE_INTERLOCK',
+      state: 'OPS_INTERLOCK_BLOCKED',
+      blocksNewEntries: true,
+      externalActionAuthorization: 'NONE',
+      evaluatedAtUtc: new Date(Math.floor(session.nowMs / 1_000) * 1_000).toISOString().replace('.000Z', 'Z'),
+      readbackValidUntilUtc: new Date(Math.floor(session.nowMs / 1_000) * 1_000 + 10 * 60_000).toISOString().replace('.000Z', 'Z'),
+      reasonCodes: Object.freeze(['SYNTHETIC_ONLY']),
+    }),
     ownerView,
     dashboard,
     components: scenario.components,
@@ -1073,6 +1124,12 @@ function buildFixtureSurfaceEvidence(
     'heartbeat-advance': scenario.freshness,
     'source-event-processing-age': scenario.freshness,
     'root-blocker-action': scenario.blocker,
+    'deployment-frozen': 'UNKNOWN_FROZEN',
+    'exposure-state': 'UNKNOWN',
+    'ambiguity-state': 'UNKNOWN',
+    'recovery-state': 'UNKNOWN',
+    'ledger-schema-compatibility': null,
+    'ops-interlock': 'OPS_INTERLOCK_BLOCKED',
     'bounded-pagination': 'CURSOR BOUNDED · LIMIT 200',
     fingerprint: `fixture:${scenario.eventComponent}:${scenario.eventKind}`,
     'fingerprint-dedup': `${scenario.incidents.length} grouped incident(s)`,
@@ -1257,6 +1314,7 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
   if (typeof value.evaluatedAtMs !== 'number' || !Number.isFinite(value.evaluatedAtMs)) errors.push('PRODUCT_EVALUATED_AT_INVALID');
   if (!isProductTruthLabel(value.truthLabel)) errors.push('PRODUCT_TRUTH_LABEL_INVALID');
   if (typeof value.persistentSyntheticLabel !== 'boolean') errors.push('SYNTHETIC_LABEL_INVALID');
+  errors.push(...validateCanonicalOpsEnvelope(value.opsReadback, value.opsIntakeInterlock, value.evaluatedAtMs));
   const syntheticScan = scanSyntheticTruth(value);
   if (!syntheticScan.complete) errors.push('SYNTHETIC_TRUTH_SCAN_OUT_OF_BOUNDS');
   if (syntheticScan.found && value.persistentSyntheticLabel !== true) errors.push('SYNTHETIC_LABEL_NOT_PERSISTENT');
@@ -1430,6 +1488,28 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
       }
     }
   }
+  if (isRecord(value.opsReadback) && isRecord(value.opsIntakeInterlock) && isRecord(value.surfaces)) {
+    const expectedOpsEvidence: Readonly<Record<string, string | null>> = Object.freeze({
+      'deployment-frozen': value.opsReadback.deploymentFrozen === true ? 'FROZEN'
+        : value.opsReadback.deploymentFrozen === false ? 'NOT_FROZEN' : 'UNKNOWN_FROZEN',
+      'exposure-state': typeof value.opsReadback.exposureState === 'string' ? value.opsReadback.exposureState : null,
+      'ambiguity-state': typeof value.opsReadback.ambiguityState === 'string' ? value.opsReadback.ambiguityState : null,
+      'recovery-state': typeof value.opsReadback.recoveryState === 'string' ? value.opsReadback.recoveryState : null,
+      'ledger-schema-compatibility': typeof value.opsReadback.currentSchemaVersion === 'number'
+        && typeof value.opsReadback.rollbackFloor === 'number'
+        ? `CURRENT ${value.opsReadback.currentSchemaVersion} · ROLLBACK FLOOR ${value.opsReadback.rollbackFloor}`
+        : null,
+      'ops-interlock': typeof value.opsIntakeInterlock.state === 'string' ? value.opsIntakeInterlock.state : null,
+    });
+    for (const surfaceId of ['control-room', 'health']) {
+      const surface = value.surfaces[surfaceId];
+      if (!isRecord(surface) || !Array.isArray(surface.evidence)) continue;
+      for (const [fieldId, expected] of Object.entries(expectedOpsEvidence)) {
+        const datum = surface.evidence.find((entry) => isRecord(entry) && entry.fieldId === fieldId);
+        if (!isRecord(datum) || datum.value !== expected) errors.push(`OPS_SURFACE_EVIDENCE_MISMATCH:${surfaceId}:${fieldId}`);
+      }
+    }
+  }
   if (!isRecord(value.materialEvents)) errors.push('MATERIAL_EVENTS_MISSING');
   else errors.push(...validateMaterialEventPage(String(value.materialEvents.requestedAfterCursor ?? ''), value.materialEvents, 'TAIL_BOOTSTRAP'));
   if (isRecord(value.ownerView) && isRecord(value.materialEvents)
@@ -1445,7 +1525,24 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
     if (value.ownerView.unresolvedRecovery !== null && value.ownerView.unresolvedRecovery !== 'NONE' && isRecord(reconciliation) && reconciliation.blocksNewExposure !== true) errors.push('OWNER_DASHBOARD_RECOVERY_MISMATCH');
     const dashboardReady = value.dashboard.overallPosture === 'READY';
     const ownerReady = value.ownerView.machineReady === 'YES';
-    if (dashboardReady !== ownerReady) errors.push('OWNER_DASHBOARD_READINESS_MISMATCH');
+    const health = isRecord(value.surfaces) && isRecord(value.surfaces.health)
+      ? value.surfaces.health
+      : null;
+    const advance = health && Array.isArray(health.evidence)
+      ? health.evidence.find((datum) => isRecord(datum) && datum.fieldId === 'heartbeat-advance')
+      : null;
+    const meaningfulAdvancePublished = isRecord(advance)
+      && typeof advance.value === 'string'
+      && advance.value.length > 0
+      && advance.unavailableReason === null
+      && !['UNKNOWN', 'MISSING', 'UNAVAILABLE', 'NOT_CONFIGURED', 'BLOCKED'].includes(String(advance.truthLabel))
+      && isRecord(value.dashboard)
+      && health?.evaluatedAtMs === value.dashboard.evaluatedAtMs;
+    if (ownerReady && !meaningfulAdvancePublished) errors.push('OWNER_MEANINGFUL_ADVANCE_REQUIRED');
+    if ((ownerReady && !dashboardReady)
+      || (dashboardReady && meaningfulAdvancePublished && !ownerReady)) {
+      errors.push('OWNER_DASHBOARD_READINESS_MISMATCH');
+    }
   }
   return Object.freeze(Array.from(new Set(errors)));
 }
@@ -1587,10 +1684,32 @@ function validateDashboardSummaries(value: Record<string, unknown>): readonly st
     || !fieldsAreStringOrNull(reconciliation, ['recommendation', 'checkpointId'])
     || !isFiniteNumberOrNull(reconciliation.evaluatedAtMs) || !isStringArray(reconciliation.reasonCodes)) errors.push('DASHBOARD_SUMMARY_INVALID:reconciliation');
   const ledger = value.ledger;
-  if (!isRecord(ledger) || !isSystemTruthLabel(ledger.truthLabel)
-    || !(ledger.writable === null || typeof ledger.writable === 'boolean')
-    || !fieldsAreStringOrNull(ledger, ['lastEventId', 'checkpointRevision'])
-    || !fieldsAreNullableNumbers(ledger, ['lastPersistedAtMs', 'recentTraceCount', 'lastCleanShutdownAtMs'])) errors.push('DASHBOARD_SUMMARY_INVALID:ledger');
+  if (!isRecord(ledger)) {
+    errors.push('DASHBOARD_SUMMARY_INVALID:ledger');
+  } else {
+    const schemaState = ledger.schemaCompatibilityState;
+    const schemaReason = ledger.schemaCompatibilityReason;
+    const schemaAvailable = schemaState === 'AVAILABLE'
+      && Number.isSafeInteger(ledger.currentSchemaVersion)
+      && Number(ledger.currentSchemaVersion) >= 1
+      && Number.isSafeInteger(ledger.rollbackFloor)
+      && Number(ledger.rollbackFloor) >= 0
+      && Number(ledger.rollbackFloor) <= Number(ledger.currentSchemaVersion)
+      && schemaReason === null;
+    const schemaFailed = ['UNAVAILABLE', 'MALFORMED', 'MISMATCH'].includes(String(schemaState))
+      && ledger.currentSchemaVersion === null
+      && ledger.rollbackFloor === null
+      && typeof schemaReason === 'string'
+      && /^[A-Z][A-Z0-9_]{0,127}$/.test(schemaReason)
+      && ledger.truthLabel === 'UNAVAILABLE';
+    if (!isSystemTruthLabel(ledger.truthLabel)
+      || !(ledger.writable === null || typeof ledger.writable === 'boolean')
+      || (!schemaAvailable && !schemaFailed)
+      || !fieldsAreStringOrNull(ledger, ['lastEventId', 'checkpointRevision'])
+      || !fieldsAreNullableNumbers(ledger, ['lastPersistedAtMs', 'recentTraceCount', 'lastCleanShutdownAtMs'])) {
+      errors.push('DASHBOARD_SUMMARY_INVALID:ledger');
+    }
+  }
   return errors;
 }
 
@@ -1678,6 +1797,78 @@ function scanSyntheticTruth(value: unknown): Readonly<{ found: boolean; complete
 
 function isFiniteNumberOrNull(value: unknown): value is number | null {
   return value === null || (typeof value === 'number' && Number.isFinite(value));
+}
+
+function exactUtcSeconds(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value)) return false;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed)
+    && new Date(parsed).toISOString().replace('.000Z', 'Z') === value;
+}
+
+function exactRecordKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
+  const actual = Object.keys(value).sort();
+  const sortedExpected = [...expected].sort();
+  return actual.length === sortedExpected.length
+    && actual.every((key, index) => key === sortedExpected[index]);
+}
+
+function validateCanonicalOpsEnvelope(
+  readbackValue: unknown,
+  interlockValue: unknown,
+  evaluatedAtValue: unknown,
+): readonly string[] {
+  const errors: string[] = [];
+  if (!isRecord(readbackValue) || !exactRecordKeys(readbackValue, [
+    'source', 'observedAtUtc', 'validUntilUtc', 'deploymentFrozen', 'exposureState',
+    'ambiguityState', 'recoveryState', 'currentSchemaVersion', 'rollbackFloor',
+  ])) return Object.freeze(['OPS_READBACK_INVALID']);
+  if (readbackValue.source !== 'CANONICAL_SUPERVISOR_READBACK'
+      || !exactUtcSeconds(readbackValue.observedAtUtc)
+      || !exactUtcSeconds(readbackValue.validUntilUtc)
+      || ![true, false, 'UNKNOWN'].includes(readbackValue.deploymentFrozen as boolean | string)
+      || !['NONE', 'ACTIVE', 'AMBIGUOUS', 'RECOVERY_REQUIRED', 'UNKNOWN'].includes(String(readbackValue.exposureState))
+      || !['NONE', 'AMBIGUOUS', 'UNKNOWN'].includes(String(readbackValue.ambiguityState))
+      || !['NONE', 'RECOVERY_REQUIRED', 'UNKNOWN'].includes(String(readbackValue.recoveryState))) {
+    errors.push('OPS_READBACK_INVALID');
+  }
+  const schemaAvailable = Number.isSafeInteger(readbackValue.currentSchemaVersion)
+    && (readbackValue.currentSchemaVersion as number) >= 1
+    && Number.isSafeInteger(readbackValue.rollbackFloor)
+    && (readbackValue.rollbackFloor as number) >= 0
+    && (readbackValue.rollbackFloor as number) <= (readbackValue.currentSchemaVersion as number);
+  if (!schemaAvailable && !(readbackValue.currentSchemaVersion === null && readbackValue.rollbackFloor === null)) {
+    errors.push('OPS_SCHEMA_COMPATIBILITY_INVALID');
+  }
+  if (exactUtcSeconds(readbackValue.observedAtUtc) && exactUtcSeconds(readbackValue.validUntilUtc)
+      && typeof evaluatedAtValue === 'number' && Number.isFinite(evaluatedAtValue)) {
+    const observedAtMs = Date.parse(readbackValue.observedAtUtc);
+    const validUntilMs = Date.parse(readbackValue.validUntilUtc);
+    const leaseMs = validUntilMs - observedAtMs;
+    if (observedAtMs > evaluatedAtValue || evaluatedAtValue - observedAtMs > 30_000
+        || validUntilMs <= evaluatedAtValue || leaseMs < 5 * 60_000 || leaseMs > 60 * 60_000) {
+      errors.push('OPS_READBACK_NOT_CURRENT');
+    }
+  }
+  if (!isRecord(interlockValue) || !exactRecordKeys(interlockValue, [
+    'source', 'state', 'blocksNewEntries', 'externalActionAuthorization', 'evaluatedAtUtc',
+    'readbackValidUntilUtc', 'reasonCodes',
+  ])) return Object.freeze([...new Set([...errors, 'OPS_INTERLOCK_INVALID'])]);
+  const blocked = interlockValue.state === 'OPS_INTERLOCK_BLOCKED';
+  if (interlockValue.source !== 'CANONICAL_OPS_INTAKE_INTERLOCK'
+      || !['OPS_INTERLOCK_CLEAR', 'OPS_INTERLOCK_BLOCKED'].includes(String(interlockValue.state))
+      || interlockValue.blocksNewEntries !== blocked
+      || interlockValue.externalActionAuthorization !== 'NONE'
+      || !exactUtcSeconds(interlockValue.evaluatedAtUtc)
+      || interlockValue.readbackValidUntilUtc !== readbackValue.validUntilUtc
+      || !Array.isArray(interlockValue.reasonCodes)
+      || interlockValue.reasonCodes.length > 32
+      || interlockValue.reasonCodes.some((code) => typeof code !== 'string' || !/^[A-Z][A-Z0-9_]{0,99}$/.test(code))
+      || new Set(interlockValue.reasonCodes).size !== interlockValue.reasonCodes.length
+      || (blocked ? interlockValue.reasonCodes.length === 0 : interlockValue.reasonCodes.length !== 0)) {
+    errors.push('OPS_INTERLOCK_INVALID');
+  }
+  return Object.freeze([...new Set(errors)]);
 }
 
 function isNonnegativeNumberOrNull(value: unknown): value is number | null {

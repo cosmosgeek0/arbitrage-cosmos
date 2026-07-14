@@ -1,10 +1,57 @@
 import type { SystemTraceEvent, SystemTraceSnapshot } from '../../systemIntegration/contracts/types.js';
 import type { SystemSupervisorReadModel } from '../../systemIntegration/supervisor/types.js';
+import type {
+  CanonicalOpsIntakeInterlock,
+  CanonicalSupervisorOpsReadback,
+} from '../../systemIntegration/ops/index.js';
+import type { BootReleaseReadback } from '../../systemIntegration/persistence/index.js';
 
 export const PRODUCT_RUNTIME_SUPERVISOR_SCHEMA = 'product-supervisor.v1' as const;
 export const PRODUCT_RUNTIME_COMMAND_SCHEMA = 'product-command.v1' as const;
 export const PRODUCT_RUNTIME_CURSOR_SCHEMA = 'material-cursor.v1' as const;
+export const PRODUCT_RUNTIME_MANAGED_INVENTORY_SCHEMA = 'i00-managed-inventory.v1' as const;
 export const PRODUCT_RUNTIME_MAX_QUERY_LIMIT = 500;
+
+/**
+ * Exact I00 section 8 expected inventory. These are product roles, not an
+ * alternative System Integration component graph.
+ */
+export const I00_MANAGED_COMPONENT_IDENTITIES = Object.freeze([
+  'operator-auth',
+  'configuration-authority',
+  'ledger-persistence',
+  'database',
+  'clock-sync',
+  'spot-public-source',
+  'usdm-public-source',
+  'spot-private-truth',
+  'usdm-private-truth',
+  'margin-private-truth',
+  'instrument-filter-registry',
+  'universe',
+  'evidence-attention-runtime',
+  'q-inference',
+  'basis-engine',
+  'volume-engine',
+  'opportunity-authority',
+  'capital-supervision',
+  'risk-gate',
+  'execution-hand',
+  'normal-basis-coordinator',
+  'reverse-basis-coordinator',
+  'volume-position-lifecycle',
+  'reconciliation',
+  'exposure-position-recovery',
+  'outcome-feedback',
+  'machine-supervisor',
+  'api-read-model',
+  'notification-incident-router',
+  'web-cockpit',
+  'backup-restore',
+  'external-watchdog',
+  'cloudflare-tunnel-access',
+] as const);
+export type I00ManagedComponentIdentity = (typeof I00_MANAGED_COMPONENT_IDENTITIES)[number];
 
 export type ProductRuntimeTruthLabel =
   | 'LIVE_PUBLIC' | 'WIRED' | 'BUILT_AND_TESTED' | 'IMPORTED'
@@ -40,7 +87,15 @@ export interface ProductRuntimeMaterialSourcePage {
 }
 
 export interface ProductRuntimeReadPorts {
+  applicationStartOk(): boolean | Promise<boolean>;
+  applicationStartFailureCodes?(): readonly string[] | Promise<readonly string[]>;
   supervisor(): Readonly<SystemSupervisorReadModel> | Promise<Readonly<SystemSupervisorReadModel>>;
+  opsReadback():
+    | Readonly<CanonicalSupervisorOpsReadback>
+    | Promise<Readonly<CanonicalSupervisorOpsReadback>>;
+  bootReleaseReadback?():
+    | Readonly<BootReleaseReadback>
+    | Promise<Readonly<BootReleaseReadback>>;
   events(input: Readonly<{ afterCursor: string; limit: number }>):
     | Readonly<ProductRuntimeMaterialSourcePage>
     | Promise<Readonly<ProductRuntimeMaterialSourcePage>>;
@@ -125,6 +180,29 @@ export interface ProductRuntimeControlResult {
   readonly synthetic: boolean;
 }
 
+export interface ProductRuntimeCommandResultIdentity {
+  readonly commandId: string;
+  readonly idempotencyKey: string;
+  readonly controlId: string;
+}
+
+export type ProductRuntimeCommandResultReadback =
+  | Readonly<{
+      readonly state: 'NOT_FOUND';
+      readonly result: null;
+      readonly failureCode: null;
+    }>
+  | Readonly<{
+      readonly state: 'PENDING' | 'TERMINAL';
+      readonly result: Readonly<ProductRuntimeControlResult>;
+      readonly failureCode: null;
+    }>
+  | Readonly<{
+      readonly state: 'FAIL_CLOSED';
+      readonly result: Readonly<ProductRuntimeControlResult> | null;
+      readonly failureCode: string;
+    }>;
+
 export interface ProductRuntimeCommandIntent {
   readonly controlId: string;
   readonly backendCommandId: ProductRuntimeSafeBackendCommand;
@@ -144,6 +222,9 @@ export interface ProductRuntimeCommandOwnerPort {
     request: Readonly<ProductRuntimeCommandRequest>;
     intent: Readonly<ProductRuntimeCommandIntent>;
   }>): Promise<Readonly<ProductRuntimeControlResult>>;
+  readResult(
+    identity: Readonly<ProductRuntimeCommandResultIdentity>,
+  ): Promise<Readonly<ProductRuntimeCommandResultReadback>>;
 }
 
 export interface ProductRuntimeOptions {
@@ -261,6 +342,44 @@ export interface ProductRuntimeComponentProjection {
   readonly truthLabel: ProductRuntimeTruthLabel;
 }
 
+export type ProductRuntimeManagedInventoryState =
+  | 'EVIDENCE_PRESENT' | 'OWNER_GATED' | 'NOT_CONFIGURED' | 'MISSING';
+
+export interface ProductRuntimeManagedInventoryEvidenceRef {
+  readonly source: 'PRODUCT_RUNTIME_COMPONENT_PROJECTION';
+  readonly componentId: string;
+  readonly componentProjectionIndex: number;
+}
+
+/**
+ * A role-to-owner reference. `evidence` reuses canonical Product component
+ * projection indexes and is null whenever exact owner evidence is absent.
+ * Lifecycle/capability truth remains present only in the top-level canonical
+ * `components` array.
+ */
+export interface ProductRuntimeManagedInventoryEntry {
+  readonly identity: I00ManagedComponentIdentity;
+  readonly owner: string;
+  readonly canonicalComponentIds: readonly string[];
+  readonly inventoryState: ProductRuntimeManagedInventoryState;
+  readonly evidence: readonly Readonly<ProductRuntimeManagedInventoryEvidenceRef>[] | null;
+  readonly reasonCode: string | null;
+}
+
+export interface ProductRuntimeManagedInventoryProjection {
+  readonly schemaVersion: typeof PRODUCT_RUNTIME_MANAGED_INVENTORY_SCHEMA;
+  readonly expectedIdentityCount: 33;
+  readonly mappedIdentityCount: number;
+  readonly evidencePresentCount: number;
+  readonly ownerGatedCount: number;
+  readonly notConfiguredCount: number;
+  readonly missingCount: number;
+  readonly canonicalComponentCount: number;
+  readonly referencedCanonicalComponentCount: number;
+  readonly observedCanonicalComponentCount: number;
+  readonly entries: readonly Readonly<ProductRuntimeManagedInventoryEntry>[];
+}
+
 export interface ProductRuntimeDependencyEdge {
   readonly fromComponentId: string;
   readonly toComponentId: string;
@@ -323,9 +442,12 @@ export interface ProductRuntimeSupervisorEnvelope {
   readonly evaluatedAtMs: number;
   readonly truthLabel: ProductRuntimeTruthLabel;
   readonly persistentSyntheticLabel: boolean;
+  readonly opsReadback: Readonly<CanonicalSupervisorOpsReadback>;
+  readonly opsIntakeInterlock: Readonly<CanonicalOpsIntakeInterlock>;
   readonly ownerView: Readonly<ProductRuntimeOwnerView>;
   readonly dashboard: Readonly<SystemSupervisorReadModel>;
   readonly components: readonly Readonly<ProductRuntimeComponentProjection>[];
+  readonly managedInventory: Readonly<ProductRuntimeManagedInventoryProjection>;
   readonly dependencyEdges: readonly Readonly<ProductRuntimeDependencyEdge>[];
   readonly controls: readonly Readonly<ProductRuntimeControlRegistryEntry>[];
   readonly traces: readonly Readonly<ProductRuntimeCorrelationTrace>[];

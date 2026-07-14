@@ -1,0 +1,169 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import {
+  EXPECTED_DONOR_ROWS,
+  collectDonorEqualityEvidence,
+  evaluateDonorEquality,
+  verifyDonorEquality,
+} from '../donor-equality.mjs';
+
+const OBSERVATION = collectDonorEqualityEvidence({ candidateRef: 'HEAD' });
+
+function hostile(mutator) {
+  const copy = structuredClone(OBSERVATION);
+  mutator(copy);
+  return evaluateDonorEquality(copy);
+}
+
+function assertBlocked(proof, failure) {
+  assert.equal(proof.status, 'BLOCKED');
+  assert.ok(proof.failures.includes(failure), `${failure}: ${proof.failures.join(', ')}`);
+}
+
+test('Git-backed donor proof measures exact 16/16/16/16 equality', () => {
+  const proof = evaluateDonorEquality(OBSERVATION);
+  assert.equal(proof.status, 'PASS');
+  assert.deepEqual(proof.counts, {
+    expected: 16,
+    discovered: 16,
+    accepted: 16,
+    integrated: 16,
+  });
+  assert.deepEqual(proof.exactSets.expected, EXPECTED_DONOR_ROWS.map((entry) => entry.id));
+  assert.deepEqual(proof.exactSets.expected, proof.exactSets.discovered);
+  assert.deepEqual(proof.exactSets.expected, proof.exactSets.accepted);
+  assert.deepEqual(proof.exactSets.expected, proof.exactSets.integrated);
+  assert.equal(proof.donors.reduce((sum, donor) => sum + donor.acceptanceReceipts.length, 0), 17);
+  assert.equal(proof.donors.length, 16);
+  assert.deepEqual(proof.failures, []);
+  assert.match(proof.proofSha256, /^[a-f0-9]{64}$/);
+  assert.equal(evaluateDonorEquality(OBSERVATION).proofSha256, proof.proofSha256);
+});
+
+test('required-last L proof pins exact merge, first parent, donor, and no later merge', () => {
+  const proof = evaluateDonorEquality(OBSERVATION);
+  assert.deepEqual(proof.requiredLast, {
+    merge: 'ec82bc51d5311dfb3f505216bfb3fa41733f038c',
+    firstParent: '139d2cf07ffd3167bd54a3c14c0fc6671c2f02e9',
+    donor: 'df6b472993ca9659ce09cf5f72004981c6835f0d',
+    noLaterMerge: true,
+  });
+  const lane = proof.donors.find((donor) => donor.id === 'L-LANE');
+  assert.deepEqual(lane.integration.observedParents, [
+    proof.requiredLast.firstParent,
+    proof.requiredLast.donor,
+  ]);
+  assert.equal(lane.integration.methodProof.donorIsSecondParent, true);
+});
+
+test('dashboard is accepted only by exact 21-file equivalence at its sealed cut', () => {
+  const proof = evaluateDonorEquality(OBSERVATION);
+  const dashboard = proof.donors.find((donor) => donor.id === 'DASHBOARD-SHELL');
+  assert.equal(dashboard.integration.method, 'RECEIPTED_EQUIVALENCE');
+  assert.equal(dashboard.integration.methodProof.donorFileCount, 21);
+  assert.equal(dashboard.integration.methodProof.cutFileCount, 21);
+  assert.equal(dashboard.integration.methodProof.exactEntries, true);
+  assert.equal(dashboard.integration.methodProof.donorTipAncestorOfCandidate, false);
+
+  const wrongCut = hostile((value) => {
+    value.donors.find((donor) => donor.id === 'DASHBOARD-SHELL').integration.methodProof.cutSubtree = '0'.repeat(40);
+  });
+  assertBlocked(wrongCut, 'DASHBOARD-SHELL_EQUIVALENCE_CUT_INVALID');
+});
+
+test('wrong donor object, missing ID, and extra donor fail closed', () => {
+  const wrongTree = hostile((value) => {
+    value.donors[0].tip.observedTree = '0'.repeat(40);
+  });
+  assertBlocked(wrongTree, 'F-BRIDGE_DONOR_OBJECT_INVALID');
+
+  const wrongType = hostile((value) => {
+    value.donors[0].tip.objectType = 'tree';
+  });
+  assertBlocked(wrongType, 'F-BRIDGE_DONOR_OBJECT_INVALID');
+
+  const missing = hostile((value) => {
+    value.donors.pop();
+  });
+  assertBlocked(missing, 'DONOR_ID_SET_INVALID');
+  assert.ok(missing.failures.includes('L-LANE_MISSING'));
+
+  const extra = hostile((value) => {
+    value.donors.push({ id: 'UNRECEIPTED-EXTRA' });
+  });
+  assertBlocked(extra, 'DONOR_ID_SET_INVALID');
+});
+
+test('wrong merge parent, extra phase merge, or post-L merge fail closed', () => {
+  const wrongParent = hostile((value) => {
+    value.donors.find((donor) => donor.id === 'Q-LANE').integration.observedParents[1] = '0'.repeat(40);
+  });
+  assertBlocked(wrongParent, 'Q-LANE_INTEGRATION_OBJECT_INVALID');
+
+  const extraPhaseMerge = hostile((value) => {
+    value.mergeWindow.observedSequence.splice(-1, 0, '1'.repeat(40));
+  });
+  assertBlocked(extraPhaseMerge, 'PHASE2_MERGE_SEQUENCE_INVALID');
+
+  const postL = hostile((value) => {
+    value.mergeWindow.laterMerges.push('2'.repeat(40));
+  });
+  assertBlocked(postL, 'POST_L_DONOR_MERGE_DETECTED');
+});
+
+test('altered acceptance or integration receipt hash fails closed', () => {
+  const acceptance = hostile((value) => {
+    value.donors.find((donor) => donor.id === 'A-CORE').acceptanceReceipts[0].observedSha256 = '0'.repeat(64);
+  });
+  assertBlocked(acceptance, 'A-CORE_ACCEPTANCE_RECEIPT_INVALID');
+
+  const integration = hostile((value) => {
+    value.donors.find((donor) => donor.id === 'L15-INFRASTRUCTURE').integration.receipt.worktreeSha256 = '0'.repeat(64);
+  });
+  assertBlocked(integration, 'L15-INFRASTRUCTURE_INTEGRATION_RECEIPT_INVALID');
+});
+
+test('dirty, partial, or wrong-head donor worktree fails closed', () => {
+  const dirty = hostile((value) => {
+    value.donors.find((donor) => donor.id === 'IP-OPS').worktree.trackedChanges.push(' M ops/i00/lib.mjs');
+  });
+  assertBlocked(dirty, 'IP-OPS_WORKTREE_DIRTY_OR_PARTIAL');
+
+  const partial = hostile((value) => {
+    value.donors.find((donor) => donor.id === 'A-STABILITY').worktree.observedUntracked.push('partial/new-source.mjs');
+  });
+  assertBlocked(partial, 'A-STABILITY_WORKTREE_DIRTY_OR_PARTIAL');
+
+  const wrongHead = hostile((value) => {
+    value.donors.find((donor) => donor.id === 'SI-RECON').worktree.observedHead = '0'.repeat(40);
+  });
+  assertBlocked(wrongHead, 'SI-RECON_WORKTREE_IDENTITY_INVALID');
+});
+
+test('A-FORMAL, S2, and preverify must remain explicit non-ancestors', () => {
+  const proof = evaluateDonorEquality(OBSERVATION);
+  assert.deepEqual(proof.exclusions.map(({ id, disposition, excluded }) => ({ id, disposition, excluded })), [
+    { id: 'A-FORMAL', disposition: 'POSTLANDING_EXCLUDED', excluded: true },
+    { id: 'A-ACTION-EVIDENCE-S2', disposition: 'POSTLANDING_EXCLUDED', excluded: true },
+    { id: 'PREVERIFY', disposition: 'NON_DONOR_NOT_CONFIGURED', excluded: true },
+  ]);
+
+  const smuggled = hostile((value) => {
+    value.exclusions.find((entry) => entry.id === 'A-FORMAL').tip.ancestorOfCandidate = true;
+  });
+  assertBlocked(smuggled, 'A-FORMAL_EXCLUSION_PROOF_INVALID');
+});
+
+test('caller-supplied expected table cannot weaken or reorder donor law', () => {
+  const weakened = structuredClone(EXPECTED_DONOR_ROWS);
+  weakened.pop();
+  assertBlocked(evaluateDonorEquality(OBSERVATION, { expectedRows: weakened }), 'CALLER_EXPECTED_DONOR_TABLE_MISMATCH');
+
+  const reordered = structuredClone(EXPECTED_DONOR_ROWS);
+  [reordered[0], reordered[1]] = [reordered[1], reordered[0]];
+  assertBlocked(evaluateDonorEquality(OBSERVATION, { expectedRows: reordered }), 'CALLER_EXPECTED_DONOR_TABLE_MISMATCH');
+
+  const direct = verifyDonorEquality({ candidateRef: 'HEAD', expectedRows: weakened });
+  assertBlocked(direct, 'CALLER_EXPECTED_DONOR_TABLE_MISMATCH');
+});

@@ -2,10 +2,14 @@ import { buildProductRuntimeControlRegistry, parseProductRuntimeCommandRequest, 
 import { isProductRuntimeCursor, isProductRuntimeRowCursor, projectProductMaterialEventPage } from './events.js';
 import { buildProductRuntimeSupervisorEnvelope } from './projection.js';
 import { isProductRuntimeTraceId, projectProductCorrelationTrace } from './trace.js';
+import { evaluateCanonicalOpsIntakeGate } from '../../systemIntegration/ops/index.js';
+import type { BootReleaseReadback } from '../../systemIntegration/persistence/index.js';
 import {
   PRODUCT_RUNTIME_MAX_QUERY_LIMIT,
   ProductRuntimeError,
   type ProductRuntimeCommandRequest,
+  type ProductRuntimeCommandResultIdentity,
+  type ProductRuntimeCommandResultReadback,
   type ProductRuntimeControlPreview,
   type ProductRuntimeControlResult,
   type ProductRuntimeCorrelationTrace,
@@ -25,9 +29,11 @@ export class ProductIntegrationRuntimeService {
   private readonly options: Readonly<ProductRuntimeOptions>;
 
   constructor(options: Readonly<ProductRuntimeOptions>) {
-    if (!options || typeof options.read?.supervisor !== 'function' || typeof options.read?.events !== 'function'
+    if (!options || typeof options.read?.applicationStartOk !== 'function'
+        || typeof options.read?.supervisor !== 'function' || typeof options.read?.opsReadback !== 'function'
+        || typeof options.read?.events !== 'function'
         || typeof options.read?.trace !== 'function' || typeof options.clock?.nowMs !== 'function') {
-      throw new TypeError('ProductIntegrationRuntimeService requires injected supervisor, events, traces, and clock ports.');
+      throw new TypeError('ProductIntegrationRuntimeService requires injected application-start, supervisor, ops readback, events, traces, and clock ports.');
     }
     this.options = options;
   }
@@ -61,9 +67,40 @@ export class ProductIntegrationRuntimeService {
   }
 
   async readSupervisor(): Promise<Readonly<ProductRuntimeSupervisorEnvelope>> {
-    const nowMs = checkedNow(this.options);
     try {
+      const applicationStartOk = await this.options.read.applicationStartOk();
+      if (typeof applicationStartOk !== 'boolean') {
+        throw new ProductRuntimeError(
+          'APPLICATION_START_STATE_INVALID',
+          'Canonical application-start evidence is malformed.',
+          503,
+        );
+      }
+      const applicationStartFailureCodes = typeof this.options.read.applicationStartFailureCodes === 'function'
+        ? await this.options.read.applicationStartFailureCodes()
+        : Object.freeze([]);
+      if (!Array.isArray(applicationStartFailureCodes)
+          || applicationStartFailureCodes.some((code) => (
+            typeof code !== 'string' || !/^[A-Z][A-Z0-9_]{0,127}$/.test(code)
+          ))) {
+        throw new ProductRuntimeError(
+          'APPLICATION_START_STATE_INVALID',
+          'Canonical application-start failure evidence is malformed.',
+          503,
+        );
+      }
       const snapshot = await this.options.read.supervisor();
+      const opsReadback = await this.options.read.opsReadback();
+      let bootReleaseReadback: Readonly<BootReleaseReadback> | null = null;
+      if (typeof this.options.read.bootReleaseReadback === 'function') {
+        try {
+          bootReleaseReadback = await this.options.read.bootReleaseReadback();
+        } catch {
+          // Release provenance is optional read evidence. Failure withholds all
+          // revision values without hiding the canonical supervisor or ops gate.
+          bootReleaseReadback = null;
+        }
+      }
       const materialEvents = await this.readSupervisorMaterialTail();
       const correlationIds = [...new Set(snapshot.recentCorrelatedDecisions.map((event) => event.correlationId))].slice(0, 4);
       const traces: Readonly<ProductRuntimeCorrelationTrace>[] = [];
@@ -76,8 +113,25 @@ export class ProductIntegrationRuntimeService {
           traces.push(projectProductCorrelationTrace(correlationId, sourceTrace));
         }
       }
+      const nowMs = checkedNow(this.options);
+      const opsIntakeInterlock = evaluateCanonicalOpsIntakeGate(opsReadback, nowMs);
+      if (opsIntakeInterlock.reasonCodes.some((code) => (
+        code === 'CANONICAL_OPS_READBACK_INVALID'
+        || code === 'CANONICAL_OPS_READBACK_NOT_CURRENT'
+      ))) {
+        throw new ProductRuntimeError(
+          'OPS_READBACK_UNAVAILABLE',
+          'Canonical operations readback is malformed, stale, or unavailable.',
+          503,
+        );
+      }
       return buildProductRuntimeSupervisorEnvelope({
+        applicationStartOk,
+        applicationStartFailureCodes: Object.freeze([...applicationStartFailureCodes]),
         snapshot,
+        opsReadback,
+        opsIntakeInterlock,
+        bootReleaseReadback,
         materialEvents,
         traces: Object.freeze(traces),
         nowMs,
@@ -151,6 +205,28 @@ export class ProductIntegrationRuntimeService {
     }
     const registry = buildProductRuntimeControlRegistry(snapshot, this.options.commandOwner);
     return submitProductRuntimeControl({ registry, owner: this.options.commandOwner, request, nowMs, operator });
+  }
+
+  async readCommandResult(
+    identity: Readonly<ProductRuntimeCommandResultIdentity>,
+  ): Promise<Readonly<ProductRuntimeCommandResultReadback>> {
+    if (!this.options.commandOwner || typeof this.options.commandOwner.readResult !== 'function') {
+      throw new ProductRuntimeError('COMMAND_RESULT_NOT_CONFIGURED', 'The canonical command-result owner is not configured.', 409);
+    }
+    let readback: Readonly<ProductRuntimeCommandResultReadback>;
+    try {
+      readback = await this.options.commandOwner.readResult(identity);
+    } catch {
+      throw new ProductRuntimeError('COMMAND_RESULT_OWNER_UNAVAILABLE', 'The canonical command-result owner is unavailable.', 503);
+    }
+    if (!readback || !['NOT_FOUND', 'PENDING', 'TERMINAL', 'FAIL_CLOSED'].includes(readback.state)
+      || (readback.state === 'NOT_FOUND' && (readback.result !== null || readback.failureCode !== null))
+      || (['PENDING', 'TERMINAL'].includes(readback.state) && (readback.result === null || readback.failureCode !== null))
+      || (readback.state === 'FAIL_CLOSED'
+        && (typeof readback.failureCode !== 'string' || !/^[A-Z][A-Z0-9_]{0,127}$/.test(readback.failureCode)))) {
+      throw new ProductRuntimeError('COMMAND_RESULT_OWNER_INVALID', 'The canonical command-result owner returned invalid evidence.', 503);
+    }
+    return readback;
   }
 }
 

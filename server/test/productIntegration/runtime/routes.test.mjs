@@ -96,6 +96,105 @@ test('frozen product-integration v1 routes enforce identity, exact paths, and qu
 
     const noContentType = await request('/api/product-integration/v1/commands', { method: 'POST', body: '{}' });
     assert.equal(noContentType.status, 415);
+
+    const commandId = `sysctrl_${'a'.repeat(64)}`;
+    const resultQuery = `idempotencyKey=product.result.lookup.0001&controlId=global.safe-mode.read-only`;
+    const unauthenticatedResult = await request(
+      `/api/product-integration/v1/commands/${commandId}/result?${resultQuery}`,
+      { headers: { 'x-test-no-operator': '1' } },
+    );
+    assert.equal(unauthenticatedResult.status, 401);
+    const hostileResultQuery = await request(
+      `/api/product-integration/v1/commands/${commandId}/result?${resultQuery}&url=https://evil.example`,
+    );
+    assert.equal(hostileResultQuery.status, 400);
+    assert.equal((await hostileResultQuery.json()).code, 'INVALID_COMMAND_RESULT_QUERY');
+    const malformedResult = await request(
+      `/api/product-integration/v1/commands/not-a-command/result?${resultQuery}`,
+    );
+    assert.equal(malformedResult.status, 400);
+    const unconfiguredResult = await request(
+      `/api/product-integration/v1/commands/${commandId}/result?${resultQuery}`,
+    );
+    assert.equal(unconfiguredResult.status, 409);
+    assert.equal((await unconfiguredResult.json()).code, 'COMMAND_RESULT_NOT_CONFIGURED');
+  } finally {
+    await close(server);
+  }
+});
+
+test('command-result route preserves NOT_FOUND, PENDING, terminal, and fail-closed owner states', { concurrency: false }, async () => {
+  const result = (identity, status) => Object.freeze({
+    commandId: identity.commandId,
+    controlId: identity.controlId,
+    status,
+    before: '{"revision":0}',
+    after: '{"revision":1}',
+    receiptId: 'ledger-event:7',
+    correlationId: 'product.control.test',
+    completedAtMs: T0,
+    synthetic: false,
+  });
+  const commandOwner = Object.freeze({
+    capability: Object.freeze({
+      ownerId: 'systemIntegration.canonical-control-service',
+      supportedBackendCommandIds: Object.freeze(['SET_SAFE_MODE', 'SET_KILL_SWITCH', 'SET_INTAKE_PAUSED', 'RESTART_COMPONENT']),
+      serverDerivedActor: true,
+      durableIdempotency: true,
+      revisionCompareAndSet: true,
+      durableReceipts: true,
+      managedRestartComponentId: 'engine-supervisor',
+    }),
+    async preview() { throw new Error('not used'); },
+    async submit() { throw new Error('not used'); },
+    async readResult(identity) {
+      if (identity.idempotencyKey.includes('.pending.')) {
+        return Object.freeze({ state: 'PENDING', result: result(identity, 'ACCEPTED_ASYNC'), failureCode: null });
+      }
+      if (identity.idempotencyKey.includes('.terminal.')) {
+        return Object.freeze({ state: 'TERMINAL', result: result(identity, 'APPLIED'), failureCode: null });
+      }
+      if (identity.idempotencyKey.includes('.uncertain.')) {
+        return Object.freeze({ state: 'FAIL_CLOSED', result: result(identity, 'FAILED_ATTENTION_REQUIRED'), failureCode: 'COMMAND_RUNTIME_PUBLICATION_UNKNOWN' });
+      }
+      if (identity.idempotencyKey.includes('.forged.')) {
+        return Object.freeze({ state: 'FAIL_CLOSED', result: null, failureCode: 'COMMAND_RESULT_IDENTITY_MISMATCH' });
+      }
+      return Object.freeze({ state: 'NOT_FOUND', result: null, failureCode: null });
+    },
+  });
+  const service = createProductIntegrationRuntime({
+    read: makeRead(), clock: { nowMs: () => T0 }, commandOwner,
+  });
+  const app = express();
+  app.use((_, res, next) => {
+    res.locals.operator = { id: 'local-operator', email: null, source: 'loopback' };
+    next();
+  });
+  app.use('/api/product-integration', createProductIntegrationRuntimeRouter(service));
+  const server = http.createServer(app);
+  const base = await listen(server);
+  const commandId = `sysctrl_${'b'.repeat(64)}`;
+  const get = (key) => fetch(
+    `${base}/api/product-integration/v1/commands/${commandId}/result?idempotencyKey=${key}&controlId=global.safe-mode.read-only`,
+    { signal: AbortSignal.timeout(5_000) },
+  );
+  try {
+    const pending = await get('result.pending.0001');
+    assert.equal(pending.status, 202);
+    assert.equal((await pending.json()).status, 'ACCEPTED_ASYNC');
+    const terminal = await get('result.terminal.0001');
+    assert.equal(terminal.status, 200);
+    assert.equal((await terminal.json()).status, 'APPLIED');
+    const absent = await get('result.absent.0001');
+    assert.equal(absent.status, 404);
+    assert.equal((await absent.json()).code, 'COMMAND_RESULT_NOT_FOUND');
+    const uncertain = await get('result.uncertain.0001');
+    assert.equal(uncertain.status, 503);
+    assert.equal((await uncertain.json()).status, 'FAILED_ATTENTION_REQUIRED');
+    const forged = await get('result.forged.0001');
+    assert.equal(forged.status, 404);
+    assert.equal((await forged.json()).code, 'COMMAND_RESULT_NOT_FOUND');
   } finally {
     await close(server);
   }

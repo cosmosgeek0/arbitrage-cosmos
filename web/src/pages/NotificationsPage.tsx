@@ -12,7 +12,9 @@ import {
   IconWifi,
 } from '../components/Icons';
 import { PillSelect } from '../components/PillSelect';
+import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import { liveAge } from '../format';
+import { canonicalComponentPresentation, canonicalStrategyRuntimePresentation } from '../lib/canonicalCockpitTruth';
 import { fetchJson } from '../lib/http';
 import { curateNotifications, groupNotifications, notificationEnabled, type CuratedNotification } from '../lib/notifications';
 import { createSettledPoll } from '../lib/polling';
@@ -36,10 +38,6 @@ interface RoutingSnapshot {
   sources: Record<'bot' | 'execution' | 'aws', ConnectorState>;
   destinations: Record<'inApp' | 'email' | 'telegram' | 'whatsapp' | 'awsSns', ConnectorState>;
   policy: { transitionsOnly: boolean; repeatWindowMinutes: number; rawLogsExcluded: boolean };
-}
-
-interface RuntimeSnapshot {
-  status?: { running?: boolean; streamState?: string; bookState?: string; lastError?: string | null };
 }
 
 const RULES: { key: NotificationRuleKey; label: string; short: string }[] = [
@@ -123,6 +121,7 @@ function statusLabel(item: CuratedNotification): string {
 
 export function NotificationsPage() {
   const { prefs, updatePref } = useStore();
+  const { binding: productBinding } = useProductControlRoomContext();
   const zone = prefs.clockZone && prefs.clockZone !== 'local' ? prefs.clockZone : undefined;
   const today = dayKey(new Date(), zone);
   const [events, setEvents] = useState<LedgerEvent[]>([]);
@@ -134,10 +133,7 @@ export function NotificationsPage() {
   const [draftRules, setDraftRules] = useState<NotificationRules>(() => prefs.alerts);
   const [seen, setSeen] = useState(() => Number(localStorage.getItem('cosmos-notif-seen') || 0));
   const [routing, setRouting] = useState<RoutingSnapshot>(EMPTY_ROUTING);
-  const [basisRuntime, setBasisRuntime] = useState<RuntimeSnapshot | null>(null);
-  const [volumeRuntime, setVolumeRuntime] = useState<RuntimeSnapshot | null>(null);
   const [routingFailed, setRoutingFailed] = useState(false);
-  const [runtimeFailed, setRuntimeFailed] = useState(false);
   const cursorRef = useRef(0);
 
   useEffect(() => setSelectedDay(dayKey(new Date(), zone)), [zone]);
@@ -198,37 +194,15 @@ export function NotificationsPage() {
   }, []);
 
   useEffect(() => {
-    const poll = createSettledPoll<[
-      PromiseSettledResult<RoutingSnapshot>,
-      PromiseSettledResult<RuntimeSnapshot>,
-      PromiseSettledResult<RuntimeSnapshot>,
-    ]>({
+    const poll = createSettledPoll<RoutingSnapshot>({
       intervalMs: 10_000,
-      request: (signal) => Promise.allSettled([
-        fetchJson<RoutingSnapshot>('/api/notification-routing', { cache: 'no-store', signal }),
-        fetchJson<RuntimeSnapshot>('/api/engine/basis', { cache: 'no-store', signal }),
-        fetchJson<RuntimeSnapshot>('/api/engine/volume', { cache: 'no-store', signal }),
-      ]) as Promise<[
-        PromiseSettledResult<RoutingSnapshot>,
-        PromiseSettledResult<RuntimeSnapshot>,
-        PromiseSettledResult<RuntimeSnapshot>,
-      ]>,
-      onSuccess: ([routingResult, basisResult, volumeResult]) => {
-        if (routingResult.status === 'fulfilled') {
-          setRouting(failClosedRouting(routingResult.value));
-          setRoutingFailed(false);
-        } else setRoutingFailed(true);
-        if (basisResult.status === 'fulfilled') setBasisRuntime(basisResult.value);
-        else setBasisRuntime(null);
-        if (volumeResult.status === 'fulfilled') setVolumeRuntime(volumeResult.value);
-        else setVolumeRuntime(null);
-        setRuntimeFailed(basisResult.status === 'rejected' || volumeResult.status === 'rejected');
+      request: (signal) => fetchJson<RoutingSnapshot>('/api/notification-routing', { cache: 'no-store', signal }),
+      onSuccess: (next) => {
+        setRouting(failClosedRouting(next));
+        setRoutingFailed(false);
       },
       onError: () => {
         setRoutingFailed(true);
-        setRuntimeFailed(true);
-        setBasisRuntime(null);
-        setVolumeRuntime(null);
       },
     });
     poll.start();
@@ -269,10 +243,24 @@ export function NotificationsPage() {
   const groupedCount = Math.max(0, curatedRaw.length - notifications.length);
   const excludedCount = Math.max(0, events.length - curatedRaw.length);
 
-  const enginesOnline = [basisRuntime?.status?.running, volumeRuntime?.status?.running].filter(Boolean).length;
-  const enginesKnown = !runtimeFailed && basisRuntime !== null && volumeRuntime !== null;
-  const botState = runtimeFailed ? 'Unavailable' : enginesKnown ? 'Public Runtime' : 'UNKNOWN';
-  const botTone = runtimeFailed ? 'bad' : enginesKnown ? 'good' : 'warn';
+  const productSnapshot = productBinding.snapshot;
+  const basisComponent = productSnapshot?.components.find((component) => component.componentId === 'basis-engine');
+  const volumeComponent = productSnapshot?.components.find((component) => component.componentId === 'volume-engine');
+  const basisPosture = canonicalComponentPresentation(basisComponent, productBinding.continuity);
+  const volumePosture = canonicalComponentPresentation(volumeComponent, productBinding.continuity);
+  const runtimePresentation = canonicalStrategyRuntimePresentation(basisComponent, volumeComponent, productBinding.continuity);
+  const botState = runtimePresentation.label;
+  const botTone = runtimePresentation.tone === 'ok' ? 'good' : runtimePresentation.tone;
+  const botDetail = productSnapshot
+    ? `Basis ${basisPosture.lifecycle} / ${basisPosture.capability} / ${basisPosture.truthLabel} · Volume ${volumePosture.lifecycle} / ${volumePosture.capability} / ${volumePosture.truthLabel}`
+    : productBinding.error ?? 'Canonical Product supervisor truth is unavailable';
+  const routingSourceAvailable = (key: keyof RoutingSnapshot['sources'], connector: ConnectorState) => (
+    !routingFailed
+    && connector.available
+    && (key !== 'bot' || runtimePresentation.tone === 'ok')
+  );
+  const availableRoutingSourceCount = (Object.entries(routing.sources) as [keyof RoutingSnapshot['sources'], ConnectorState][])
+    .filter(([key, connector]) => routingSourceAvailable(key, connector)).length;
   const executionState = 'OWNER_GATED';
   const latestAction = enabled.find((item) => item.needsAction);
 
@@ -300,9 +288,9 @@ export function NotificationsPage() {
       </header>
 
       <section className="notifx-command" aria-label="Notification Control Summary">
-        <div><span>Bot</span><strong className={botTone}><i />{botState}</strong><em>{runtimeFailed ? 'Latest public runtime checks failed' : enginesKnown ? 'Public engine status observed' : 'Runtime status is not yet known'}</em></div>
+        <div><span>Bot</span><strong className={botTone}><i />{botState}</strong><em>{botDetail}</em></div>
         <div><span>Execution</span><strong>{executionState}</strong><em>LIVE_EXECUTION_NOT_IMPLEMENTED</em></div>
-        <div><span>Engines</span><strong>{runtimeFailed ? 'Unavailable' : enginesKnown ? `${enginesOnline} / 2 Online` : 'Checking'}</strong><em>{!runtimeFailed && enginesOnline === 2 ? 'Basis and volume are online' : runtimeFailed ? 'Latest runtime checks failed' : 'Runtime status is being verified'}</em></div>
+        <div><span>Engines</span><strong>{runtimePresentation.livePublicCount} / 2 Live Public</strong><em>Canonical lifecycle, capability, and truth · continuity {productBinding.continuity}</em></div>
         <div className={latestAction ? 'attention' : ''}><span>Attention</span><strong>{latestAction ? latestAction.title : 'Incident State UNKNOWN'}</strong><em>{latestAction ? latestAction.subject : 'No current intervention was observed; this is not an all-clear'}</em></div>
       </section>
 
@@ -372,12 +360,20 @@ export function NotificationsPage() {
 
         <div className="notifx-routing-grid">
           <section className="notifx-connector-group">
-            <header><div><span>Sources</span><h3>Signals Into The Inbox</h3></div><em>{routingFailed ? 'Status Unavailable' : `${Object.values(routing.sources).filter((item) => item.available).length} Available · gated sources excluded`}</em></header>
-            {(Object.entries(routing.sources) as [keyof RoutingSnapshot['sources'], ConnectorState][]).map(([key, connector]) => <article key={key}>
-              <span className="notifx-connector-icon">{connectorIcon(key)}</span>
-              <span><b>{connector.label}</b><em>{connector.detail}</em>{connector.endpoint && <small>{connector.endpoint}</small>}</span>
-              <strong className={!routingFailed && connector.available ? 'ready' : 'waiting'}><i />{routingFailed ? 'Unavailable' : connector.available ? 'Available' : key === 'execution' || key === 'aws' ? 'OWNER_GATED' : 'Not Configured'}</strong>
-            </article>)}
+            <header><div><span>Sources</span><h3>Signals Into The Inbox</h3></div><em>{routingFailed ? 'Status Unavailable' : `${availableRoutingSourceCount} Available · gated sources excluded`}</em></header>
+            {(Object.entries(routing.sources) as [keyof RoutingSnapshot['sources'], ConnectorState][]).map(([key, connector]) => {
+              const available = routingSourceAvailable(key, connector);
+              const sourceStatus = routingFailed
+                ? 'Unavailable'
+                : key === 'bot'
+                  ? connector.available ? botState : 'Not Configured'
+                  : key === 'execution' || key === 'aws' ? 'OWNER_GATED' : available ? 'Available' : 'Not Configured';
+              return <article key={key}>
+                <span className="notifx-connector-icon">{connectorIcon(key)}</span>
+                <span><b>{connector.label}</b><em>{connector.detail}</em>{connector.endpoint && <small>{connector.endpoint}</small>}</span>
+                <strong className={available ? 'ready' : 'waiting'}><i />{sourceStatus}</strong>
+              </article>;
+            })}
           </section>
 
           <section className="notifx-connector-group">

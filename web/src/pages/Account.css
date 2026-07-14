@@ -132,9 +132,9 @@
 .accountx-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  min-height: 128px;
-  padding: 12px 14px;
+  gap: 0;
+  min-height: 102px;
+  padding: 0;
   border-bottom: 1px solid var(--line-2);
   background: var(--panel);
 }
@@ -144,19 +144,20 @@
   align-content: center;
   gap: 5px;
   min-width: 0;
-  min-height: 104px;
-  padding: 12px;
-  border: 1px solid var(--line-2);
-  border-radius: 10px;
-  background: var(--panel);
+  min-height: 0;
+  padding: 17px 18px;
+  border-right: 1px solid var(--line-2);
 }
 
-.accountx-summary span {
+.accountx-summary article:last-child { border-right: 0; }
+
+.accountx-summary article > span {
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 480;
-  line-height: 15px;
-  letter-spacing: 0;
+  font-size: 10.5px;
+  font-weight: 560;
+  line-height: 14px;
+  letter-spacing: .055em;
+  text-transform: uppercase;
 }
 
 .accountx-summary .accountx-estimated-label {
@@ -178,11 +179,11 @@
   font: inherit;
 }
 
-.accountx-summary strong {
+.accountx-summary article > strong {
   overflow: hidden;
   color: var(--text);
   font-size: 18px;
-  font-weight: 470;
+  font-weight: 510;
   line-height: 23px;
   letter-spacing: -.012em;
   text-overflow: ellipsis;
@@ -852,6 +853,9 @@ button.accountx-wallet-row:focus-visible {
 
 @container (max-width: 1120px) {
   .accountx-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .accountx-summary article { border-right: 1px solid var(--line-2); }
+  .accountx-summary article:nth-child(2n) { border-right: 0; }
+  .accountx-summary article:nth-child(n + 3) { border-top: 1px solid var(--line-2); }
 }
 
 @container (max-width: 900px) {
@@ -870,6 +874,8 @@ button.accountx-wallet-row:focus-visible {
 
 @container (max-width: 620px) {
   .accountx-summary { grid-template-columns: minmax(0, 1fr); }
+  .accountx-summary article { border-right: 0; }
+  .accountx-summary article:nth-child(n + 2) { border-top: 1px solid var(--line-2); }
   .accountx-identity { width: 100%; }
   .accountx-spot-change { display: none; }
   .accountx-equity { padding-right: 12px; padding-left: 12px; }

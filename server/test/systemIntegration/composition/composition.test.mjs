@@ -77,6 +77,7 @@ function fixture(options = {}) {
       startCalls: 0,
       stopCalls: 0,
       validateCalls: 0,
+      stopMode,
     };
     const port = {
       validate() {
@@ -98,7 +99,7 @@ function fixture(options = {}) {
       stop() {
         state.stopCalls += 1;
         log.push(`stop:${name}`);
-        if (stopMode === 'throw') throw new Error('hidden fake stop error');
+        if (state.stopMode === 'throw') throw new Error('hidden fake stop error');
         state.running = false;
       },
       health(ctx) {
@@ -179,12 +180,30 @@ function fixture(options = {}) {
       };
     },
   };
+  const intelligenceRuntime = runtime(
+    'intelligence-runtime',
+    options.intelligenceRuntimeStartMode,
+    options.intelligenceRuntimeStopMode,
+  );
+  const marketIntelligence = runtime(
+    'market-intelligence',
+    options.marketIntelligenceStartMode,
+    options.marketIntelligenceStopMode,
+  );
   const basis = runtime('basis', options.basisStartMode, options.basisStopMode);
   const volume = runtime('volume', options.volumeStartMode, options.volumeStopMode);
+  const q = options.includeQ ? runtime('q', options.qStartMode, options.qStopMode) : null;
   const composition = createManagedRuntimeComposition({
     clock,
     scheduler,
-    ports: { market, basis: basis.port, volume: volume.port },
+    ports: {
+      market,
+      intelligenceRuntime: intelligenceRuntime.port,
+      marketIntelligence: marketIntelligence.port,
+      ...(q === null ? {} : { q: q.port }),
+      basis: basis.port,
+      volume: volume.port,
+    },
     readEnvironment: () => ({
       privateKeysAvailable: false,
       killSwitchEngaged: true,
@@ -200,7 +219,14 @@ function fixture(options = {}) {
     clock,
     scheduler,
     log,
-    states: { market: marketState, basis: basis.state, volume: volume.state },
+    states: {
+      market: marketState,
+      intelligenceRuntime: intelligenceRuntime.state,
+      marketIntelligence: marketIntelligence.state,
+      q: q?.state ?? null,
+      basis: basis.state,
+      volume: volume.state,
+    },
   };
 }
 
@@ -215,7 +241,7 @@ async function flushAndDrive(f, count = 1) {
 async function startReady(f) {
   const result = f.composition.start();
   assert.equal(result.ok, true);
-  await flushAndDrive(f, 3);
+  await flushAndDrive(f, 8);
   assert.equal(f.composition.read().supervisor.phase, 'RUNNING');
   return result;
 }
@@ -227,21 +253,114 @@ test('cold start validates and starts in dependency order without arbitrary slee
 
   assert.deepEqual(f.composition.read().componentOrder, [
     'market-universe',
+    'intelligence-runtime',
+    'market-intelligence',
     'basis-engine',
     'volume-engine',
   ]);
-  assert.deepEqual(f.log.slice(0, 7), [
+  assert.deepEqual(f.log.slice(0, 11), [
     'validate:market',
+    'validate:intelligence-runtime',
+    'validate:market-intelligence',
     'validate:basis',
     'validate:volume',
     'init:market',
     'start:market',
+    'start:intelligence-runtime',
+    'start:market-intelligence',
     'start:basis',
     'start:volume',
   ]);
   assert.equal(f.scheduler.scheduleCalls, 1);
   assert.equal(f.scheduler.activeCount, 1);
   assert.equal(f.composition.read().supervisor.runMode, 'INTELLIGENCE');
+});
+
+test('required Market Intelligence startup failure blocks both strategy runtimes', async () => {
+  const f = fixture({ marketIntelligenceStartMode: 'rejected' });
+  assert.equal(f.composition.start().ok, true);
+  await flushAndDrive(f, 8);
+
+  const snapshot = f.composition.read();
+  assert.equal(snapshot.supervisor.phase, 'FAILED');
+  assert.equal(snapshot.supervisor.lastError?.code, 'MARKET_INTELLIGENCE_START_REJECTED');
+  assert.equal(
+    snapshot.supervisor.components.find((row) => row.name === 'market-intelligence')?.phase,
+    'FAILED',
+  );
+  assert.equal(f.states.basis.startCalls, 0);
+  assert.equal(f.states.volume.startCalls, 0);
+  assert.equal(f.states.basis.running, false);
+  assert.equal(f.states.volume.running, false);
+  assert.equal(f.states.marketIntelligence.stopCalls, 1);
+  assert.equal(f.states.intelligenceRuntime.running, false);
+  assert.equal(f.states.market.running, false);
+  assert.deepEqual(snapshot.remainingOwnedComponentIds, []);
+});
+
+test('configured Q advisory mount is attempted after Market Intelligence and before deterministic engines', async () => {
+  const f = fixture({ includeQ: true });
+  assert.equal(f.composition.start().ok, true);
+  await flushAndDrive(f, 10);
+
+  assert.deepEqual(f.composition.read().componentOrder, [
+    'market-universe',
+    'intelligence-runtime',
+    'market-intelligence',
+    'q-inference',
+    'basis-engine',
+    'volume-engine',
+  ]);
+  assert.deepEqual(f.log.slice(0, 13), [
+    'validate:market',
+    'validate:intelligence-runtime',
+    'validate:market-intelligence',
+    'validate:q',
+    'validate:basis',
+    'validate:volume',
+    'init:market',
+    'start:market',
+    'start:intelligence-runtime',
+    'start:market-intelligence',
+    'start:q',
+    'start:basis',
+    'start:volume',
+  ]);
+  assert.equal(f.composition.read().supervisor.phase, 'RUNNING');
+});
+
+test('unavailable Q startup degrades only its advisory branch and engines continue', async () => {
+  const f = fixture({ includeQ: true, qStartMode: 'rejected' });
+  assert.equal(f.composition.start().ok, true);
+  await flushAndDrive(f, 10);
+
+  const snapshot = f.composition.read().supervisor;
+  assert.equal(snapshot.phase, 'DEGRADED');
+  assert.equal(snapshot.components.find((row) => row.name === 'q-inference')?.phase, 'DEGRADED');
+  assert.equal(snapshot.components.find((row) => row.name === 'basis-engine')?.phase, 'RUNNING');
+  assert.equal(snapshot.components.find((row) => row.name === 'volume-engine')?.phase, 'RUNNING');
+  assert.equal(f.states.q.running, false);
+  assert.equal(f.states.q.stopCalls, 1);
+  assert.equal(f.states.basis.running, true);
+  assert.equal(f.states.volume.running, true);
+});
+
+test('incompatible or stale Q evidence never stops deterministic engines', async () => {
+  for (const fatalCode of ['PROTOCOL_SCHEMA_MISMATCH', 'Q_ADVISORY_STALE']) {
+    const f = fixture({ includeQ: true });
+    assert.equal(f.composition.start().ok, true);
+    await flushAndDrive(f, 10);
+    f.states.q.fatalCode = fatalCode;
+    await flushAndDrive(f, 1);
+
+    const snapshot = f.composition.read().supervisor;
+    assert.equal(snapshot.phase, 'DEGRADED');
+    assert.equal(snapshot.components.find((row) => row.name === 'q-inference')?.phase, 'DEGRADED');
+    assert.equal(snapshot.components.find((row) => row.name === 'basis-engine')?.phase, 'RUNNING');
+    assert.equal(snapshot.components.find((row) => row.name === 'volume-engine')?.phase, 'RUNNING');
+    assert.equal(f.states.basis.stopCalls, 0);
+    assert.equal(f.states.volume.stopCalls, 0);
+  }
 });
 
 test('optional Basis fatal evidence degrades without erasing Volume', async () => {
@@ -266,7 +385,7 @@ test('safely quiesced optional startup failure does not roll back the sibling en
   const f = fixture({ basisStartMode: 'rejected' });
   const result = f.composition.start();
   assert.equal(result.ok, true);
-  await flushAndDrive(f, 3);
+  await flushAndDrive(f, 8);
 
   const snapshot = f.composition.read();
   assert.equal(snapshot.supervisor.phase, 'DEGRADED');
@@ -304,10 +423,18 @@ test('required Market fatal evidence reverse-quiesces every owned runtime and pr
   const failed = f.composition.read();
   assert.equal(failed.supervisor.phase, 'FAILED');
   assert.equal(failed.supervisor.lastError?.code, 'MARKET_SYNTHETIC_FATAL');
-  assert.deepEqual(f.log, ['stop:volume', 'stop:basis', 'stop:market']);
+  assert.deepEqual(f.log, [
+    'stop:volume',
+    'stop:basis',
+    'stop:market-intelligence',
+    'stop:intelligence-runtime',
+    'stop:market',
+  ]);
   assert.deepEqual(failed.remainingOwnedComponentIds, []);
   assert.equal(failed.adapters.every((row) => row.ownsUnderlyingRuntime === false), true);
   assert.equal(f.states.market.running, false);
+  assert.equal(f.states.intelligenceRuntime.running, false);
+  assert.equal(f.states.marketIntelligence.running, false);
   assert.equal(f.states.basis.running, false);
   assert.equal(f.states.volume.running, false);
 });
@@ -317,7 +444,7 @@ test('outer Foundation timeout aborts a Promise-started runtime not admitted to 
   const result = f.composition.start();
   assert.equal(result.ok, true);
 
-  await flushAndDrive(f); // Market init settles; market starts; Basis becomes pending.
+  await flushAndDrive(f, 4); // Required public-intelligence chain settles; Basis remains pending.
   assert.equal(f.states.basis.running, true);
   assert.equal(f.composition.read().supervisor.phase, 'STARTING');
   f.clock.advance(5);
@@ -328,6 +455,8 @@ test('outer Foundation timeout aborts a Promise-started runtime not admitted to 
   assert.equal(snapshot.supervisor.lastError?.code, 'COMPONENT_START_TIMEOUT');
   assert.deepEqual(snapshot.supervisor.components.filter((row) => row.phase === 'RUNNING'), []);
   assert.equal(f.states.market.running, false);
+  assert.equal(f.states.intelligenceRuntime.running, false);
+  assert.equal(f.states.marketIntelligence.running, false);
   assert.equal(f.states.basis.running, false);
   assert.equal(f.states.basis.stopCalls, 1);
   assert.equal(snapshot.adapters.find((row) => row.componentId === 'basis-engine')?.abortCount, 1);
@@ -339,7 +468,13 @@ test('graceful drain uses exact reverse dependency order and stops the driver', 
   f.log.length = 0;
 
   const drained = await f.composition.drain();
-  assert.deepEqual(f.log, ['stop:volume', 'stop:basis', 'stop:market']);
+  assert.deepEqual(f.log, [
+    'stop:volume',
+    'stop:basis',
+    'stop:market-intelligence',
+    'stop:intelligence-runtime',
+    'stop:market',
+  ]);
   assert.equal(drained.supervisor.phase, 'STOPPED');
   assert.equal(drained.drainCompleted, true);
   assert.equal(drained.drainTimedOut, false);
@@ -368,8 +503,39 @@ test('throwing stop exposes failed drain and retained ownership instead of claim
     drained.adapters.find((row) => row.componentId === 'volume-engine')?.ownsUnderlyingRuntime,
     true,
   );
-  assert.deepEqual(f.log, ['stop:volume', 'stop:basis', 'stop:market', 'stop:volume']);
+  assert.deepEqual(f.log, [
+    'stop:volume',
+    'stop:basis',
+    'stop:market-intelligence',
+    'stop:intelligence-runtime',
+    'stop:market',
+    'stop:volume',
+  ]);
   assert.equal(drained.driverRunning, false);
+});
+
+test('repaired stop owner can retry a failed drain to zero ownership and clean idempotent closure', async () => {
+  const f = fixture({ volumeStopMode: 'throw' });
+  await startReady(f);
+  const firstPromise = f.composition.drain();
+  const failed = await firstPromise;
+  assert.equal(failed.drainOutcome, 'FAILED');
+  assert.deepEqual(failed.remainingOwnedComponentIds, ['volume-engine']);
+
+  f.states.volume.stopMode = 'resolved';
+  const retryPromise = f.composition.drain();
+  assert.notEqual(retryPromise, firstPromise);
+  const repaired = await retryPromise;
+  assert.equal(repaired.drainOutcome, 'CLEAN');
+  assert.equal(repaired.cleanShutdown, true);
+  assert.equal(repaired.driverFailureCode, null);
+  assert.deepEqual(repaired.remainingOwnedComponentIds, []);
+  const stopCalls = f.states.volume.stopCalls;
+
+  const replay = f.composition.drain();
+  assert.equal(replay, retryPromise);
+  assert.deepEqual(await replay, repaired);
+  assert.equal(f.states.volume.stopCalls, stopCalls);
 });
 
 test('managed Market init timeout invalidates late atomic commit and a fresh generation can commit', async () => {
@@ -419,6 +585,8 @@ test('managed Market init timeout invalidates late atomic commit and a fresh gen
         stop: () => marketEngine.stop(),
         health: () => ({ running: false, heartbeatAt: null, timestamp: null, fatal: null }),
       },
+      intelligenceRuntime: neverStartedStrategy,
+      marketIntelligence: neverStartedStrategy,
       basis: neverStartedStrategy,
       volume: neverStartedStrategy,
     },
@@ -458,6 +626,8 @@ test('driver, START, and drain are idempotent at their established state', async
   const first = await startReady(f);
   const starts = {
     market: f.states.market.startCalls,
+    intelligenceRuntime: f.states.intelligenceRuntime.startCalls,
+    marketIntelligence: f.states.marketIntelligence.startCalls,
     basis: f.states.basis.startCalls,
     volume: f.states.volume.startCalls,
   };
@@ -469,6 +639,8 @@ test('driver, START, and drain are idempotent at their established state', async
   assert.deepEqual(
     {
       market: f.states.market.startCalls,
+      intelligenceRuntime: f.states.intelligenceRuntime.startCalls,
+      marketIntelligence: f.states.marketIntelligence.startCalls,
       basis: f.states.basis.startCalls,
       volume: f.states.volume.startCalls,
     },
@@ -482,6 +654,8 @@ test('driver, START, and drain are idempotent at their established state', async
   const drained = await firstDrain;
   assert.equal(drained.supervisor.phase, 'STOPPED');
   assert.equal(f.states.market.stopCalls, 1);
+  assert.equal(f.states.intelligenceRuntime.stopCalls, 1);
+  assert.equal(f.states.marketIntelligence.stopCalls, 1);
   assert.equal(f.states.basis.stopCalls, 1);
   assert.equal(f.states.volume.stopCalls, 1);
 });

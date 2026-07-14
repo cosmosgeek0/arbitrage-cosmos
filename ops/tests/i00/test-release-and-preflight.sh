@@ -16,6 +16,7 @@ RELEASE="$(assemble_fixture_release "$TEST_TMP/release" "$SHA")"
 assert_file "$RELEASE/release.json"
 assert_file "$RELEASE/artifact-manifest.json"
 assert_file "$RELEASE/server/dist/index.js"
+assert_file "$RELEASE/server/dist/ledger.js"
 assert_file "$RELEASE/web/dist/index.html"
 assert_file "$RELEASE/node_modules/fake-runtime/package.json"
 VALID="$(node "$I00_ROOT/bin/validate-release.mjs" --release "$RELEASE" --allow-simulation)"
@@ -25,8 +26,15 @@ assert_contains "$(cat "$RELEASE/release.json")" '"activationState": "NOT_DEPLOY
 assert_contains "$(cat "$RELEASE/release.json")" '"serverDistDigestSha256"'
 assert_contains "$(cat "$RELEASE/release.json")" '"webDistDigestSha256"'
 assert_contains "$(cat "$RELEASE/artifact-manifest.json")" '"testedBuildOutputs"'
+assert_contains "$(cat "$RELEASE/artifact-manifest.json")" '"ledgerCompatibility"'
 assert_contains "$(cat "$RELEASE/release.json")" '"status": "SIMULATION_ONLY_NOT_ATTESTED"'
 assert_eq "$(node -e 'const v=require(process.argv[1]);process.stdout.write(v.releaseId)' "$RELEASE/release.json")" "i00-$SHA"
+assert_eq "$(node -e 'const v=require(process.argv[1]);process.stdout.write(String(v.schemaVersion))' "$RELEASE/release.json")" 1
+assert_eq "$(node -e 'const v=require(process.argv[1]);process.stdout.write(String(v.rollbackFloor))' "$RELEASE/release.json")" 1
+assert_eq "$(node -e 'const v=require(process.argv[1]);process.stdout.write(String(v.rollbackBarrier))' "$RELEASE/release.json")" true
+assert_eq "$(node -e 'const v=require(process.argv[1]);process.stdout.write(v.compatibilitySource)' "$RELEASE/release.json")" server/dist/ledger.js
+assert_eq "$(node -e 'const v=require(process.argv[1]);process.stdout.write(v.compatibilitySourceSha256)' "$RELEASE/release.json")" "$(shasum -a 256 "$RELEASE/server/dist/ledger.js" | awk '{print $1}')"
+assert_failure_contains 'caller overrides are forbidden' node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$TEST_TMP/release/source" --runtime-deps "$TEST_TMP/release/deps" --output-root "$TEST_TMP/release/caller-override" --tested-sha "$SHA" --tested-receipt "$TEST_TMP/release/tested.json" --built-at-utc 2026-07-13T00:00:00Z --schema-version 7 --config-revision c --model-revision m --simulation-source
 INSTALLED_I00="$SIMULATION_ROOT/installed-i00"
 INSTALL_OUT="$("$I00_ROOT/bin/install-ops-bundle.sh" --release "$RELEASE" --destination "$INSTALLED_I00" --simulation --simulation-root "$SIMULATION_ROOT")"
 assert_contains "$INSTALL_OUT" OPS_BUNDLE_INSTALLED_NO_SERVICE_MUTATION
@@ -43,39 +51,48 @@ make_release_inputs "$PROD_ROOT/source" "$PROD_ROOT/deps" "$SHA" "$PROD_ROOT/tes
 git -C "$PROD_ROOT/source" init -q
 git -C "$PROD_ROOT/source" config user.name 'I00 fixture builder'
 git -C "$PROD_ROOT/source" config user.email 'i00-fixture@example.invalid'
-git -C "$PROD_ROOT/source" add .
+git -C "$PROD_ROOT/source" add . \
+  ':!test/i00/performance/evidence' \
+  ':!I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md' \
+  ':!IP_CONTROL.md' ':!IP_OPS.md' ':!IP_PROOF.md' ':!IP_RUNTIME.md'
 git -C "$PROD_ROOT/source" commit -q -m 'fixture production source'
 PROD_SHA="$(git -C "$PROD_ROOT/source" rev-parse HEAD)"
 PROD_TREE="$(git -C "$PROD_ROOT/source" rev-parse 'HEAD^{tree}')"
-node -e '
-  const fs=require("fs"), path=process.argv[1], sha=process.argv[2], tree=process.argv[3];
-  const value=JSON.parse(fs.readFileSync(path,"utf8"));
-  value.testedSha=sha; value.sourceTree=tree;
-  fs.writeFileSync(path,`${JSON.stringify(value,null,2)}\n`);
-' "$PROD_ROOT/tested.json" "$PROD_SHA" "$PROD_TREE"
-node --input-type=module - "$PROD_ROOT/tested.json" "$PROD_ROOT/build-attestation.json" "$PROD_ROOT/build-attestation.sig" "$PROD_ROOT/build-public.pem" "$PROD_ROOT/ephemeral-private.pem" <<'NODE'
+node "$TEST_DIR/fixtures/make-complete-acceptance.mjs" "$PROD_ROOT/source" "$PROD_ROOT/tested.json" "$PROD_SHA" "$PROD_TREE" >/dev/null
+node --input-type=module - "$PROD_ROOT/tested.json" "$PROD_ROOT/source" "$PROD_ROOT/deps" "$PROD_ROOT/build-attestation.json" "$PROD_ROOT/build-attestation.sig" "$PROD_ROOT/build-public.pem" "$PROD_ROOT/ephemeral-private.pem" <<'NODE'
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
-const [receiptPath, attestationPath, signaturePath, publicKeyPath, privateKeyPath] = process.argv.slice(2);
+import { lstatSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+const [receiptPath, sourceRoot, depsRoot, attestationPath, signaturePath, publicKeyPath, privateKeyPath] = process.argv.slice(2);
+const fileSha = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
+const listFiles = (root, relative = '') => readdirSync(path.join(root, relative)).sort().flatMap((name) => {
+  const next = relative ? `${relative}/${name}` : name;
+  return lstatSync(path.join(root, next)).isDirectory() ? listFiles(root, next) : [next];
+});
+const treeDigest = (root) => {
+  const hash = createHash('sha256');
+  for (const file of listFiles(root)) hash.update(file).update('\0').update(fileSha(path.join(root, file))).update('\n');
+  return hash.digest('hex');
+};
 const receiptBytes = readFileSync(receiptPath);
 const receipt = JSON.parse(receiptBytes);
 const attestation = {
   schemaVersion: 1,
   attestationType: 'I00_PRODUCTION_BUILD_V1',
-  testedSha: receipt.testedSha,
-  sourceTree: receipt.sourceTree,
+  testedSha: receipt.source.headSha,
+  sourceTree: receipt.source.treeSha,
   testedReceiptSha256: createHash('sha256').update(receiptBytes).digest('hex'),
-  packageLockSha256: receipt.packageLockSha256,
-  runtimeDepsDigestSha256: receipt.runtimeDepsDigestSha256,
-  serverDistDigestSha256: receipt.serverDistDigestSha256,
-  webDistDigestSha256: receipt.webDistDigestSha256,
+  packageLockSha256: fileSha(path.join(sourceRoot, 'package-lock.json')),
+  runtimeDepsDigestSha256: treeDigest(depsRoot),
+  serverDistDigestSha256: treeDigest(path.join(sourceRoot, 'server/dist')),
+  webDistDigestSha256: treeDigest(path.join(sourceRoot, 'web/dist')),
   requiredCommands: [
     { command: 'npm test', exitCode: 0 },
     { command: 'npm run test:all', exitCode: 0 },
     { command: 'bash ops/tests/i00/run-all.sh', exitCode: 0 },
   ],
-  testsCompletedAtUtc: receipt.completedAtUtc,
+  testsCompletedAtUtc: receipt.endedAtUtc,
   buildCompletedAtUtc: '2026-07-13T00:01:00Z',
   builderIdentity: 'ci://i00-fixture/release-builder',
 };
@@ -86,9 +103,13 @@ writeFileSync(signaturePath, `${sign(null, bytes, privateKey).toString('base64')
 writeFileSync(publicKeyPath, publicKey.export({ type: 'spki', format: 'pem' }), { mode: 0o600 });
 writeFileSync(privateKeyPath, privateKey.export({ type: 'pkcs8', format: 'pem' }), { mode: 0o600 });
 NODE
-PROD_ASSEMBLE=(node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$PROD_ROOT/source" --runtime-deps "$PROD_ROOT/deps" --output-root "$PROD_ROOT/releases" --tested-sha "$PROD_SHA" --tested-receipt "$PROD_ROOT/tested.json" --built-at-utc 2026-07-13T00:01:00Z --schema-version 7 --config-revision config-fixture --model-revision UNAVAILABLE --build-attestation "$PROD_ROOT/build-attestation.json" --build-attestation-signature "$PROD_ROOT/build-attestation.sig" --build-attestation-public-key "$PROD_ROOT/build-public.pem")
-assert_failure node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$PROD_ROOT/source" --runtime-deps "$PROD_ROOT/deps" --output-root "$PROD_ROOT/missing-proof" --tested-sha "$PROD_SHA" --tested-receipt "$PROD_ROOT/tested.json" --built-at-utc 2026-07-13T00:01:00Z --schema-version 7 --config-revision c --model-revision m
-assert_success "${PROD_ASSEMBLE[@]}"
+PROD_ASSEMBLE=(node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$PROD_ROOT/source" --runtime-deps "$PROD_ROOT/deps" --output-root "$PROD_ROOT/releases" --tested-sha "$PROD_SHA" --tested-receipt "$PROD_ROOT/tested.json" --built-at-utc 2026-07-13T00:01:00Z --config-revision config-fixture --model-revision UNAVAILABLE --build-attestation "$PROD_ROOT/build-attestation.json" --build-attestation-signature "$PROD_ROOT/build-attestation.sig" --build-attestation-public-key "$PROD_ROOT/build-public.pem")
+assert_failure node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$PROD_ROOT/source" --runtime-deps "$PROD_ROOT/deps" --output-root "$PROD_ROOT/missing-proof" --tested-sha "$PROD_SHA" --tested-receipt "$PROD_ROOT/tested.json" --built-at-utc 2026-07-13T00:01:00Z --config-revision c --model-revision m
+set +e
+PROD_ASSEMBLE_OUTPUT="$("${PROD_ASSEMBLE[@]}" 2>&1)"; PROD_ASSEMBLE_RC=$?
+set -e
+[ "$PROD_ASSEMBLE_RC" -eq 0 ] || fail_test "production assembly failed: $PROD_ASSEMBLE_OUTPUT"
+pass_assertion
 PROD_RELEASE="$PROD_ROOT/releases/i00-$PROD_SHA"
 assert_failure node "$I00_ROOT/bin/validate-release.mjs" --release "$PROD_RELEASE"
 assert_success node "$I00_ROOT/bin/validate-release.mjs" --release "$PROD_RELEASE" --trusted-build-public-key "$PROD_ROOT/build-public.pem"
@@ -108,7 +129,7 @@ writeFileSync(process.argv[3], `${sign(null, bytes, privateKey).toString('base64
 writeFileSync(process.argv[4], publicKey.export({ type: 'spki', format: 'pem' }));
 NODE
 assert_failure node "$I00_ROOT/bin/validate-release.mjs" --release "$PROD_RELEASE" --trusted-build-public-key "$PROD_ROOT/rogue-public.pem"
-assert_failure node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$PROD_ROOT/source" --runtime-deps "$PROD_ROOT/deps" --output-root "$PROD_ROOT/forged-out" --tested-sha "$PROD_SHA" --tested-receipt "$PROD_ROOT/tested.json" --built-at-utc 2026-07-13T00:01:00Z --schema-version 7 --config-revision c --model-revision m --build-attestation "$PROD_ROOT/build-attestation.json" --build-attestation-signature "$PROD_ROOT/forged.sig" --build-attestation-public-key "$PROD_ROOT/build-public.pem"
+assert_failure node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$PROD_ROOT/source" --runtime-deps "$PROD_ROOT/deps" --output-root "$PROD_ROOT/forged-out" --tested-sha "$PROD_SHA" --tested-receipt "$PROD_ROOT/tested.json" --built-at-utc 2026-07-13T00:01:00Z --config-revision c --model-revision m --build-attestation "$PROD_ROOT/build-attestation.json" --build-attestation-signature "$PROD_ROOT/forged.sig" --build-attestation-public-key "$PROD_ROOT/build-public.pem"
 
 node --input-type=module - "$PROD_ROOT/build-attestation.json" "$PROD_ROOT/mismatched-attestation.json" "$PROD_ROOT/mismatched-attestation.sig" "$PROD_ROOT/ephemeral-private.pem" <<'NODE'
 import { createPrivateKey, sign } from 'node:crypto';
@@ -121,7 +142,7 @@ const key = createPrivateKey(readFileSync(privateKeyPath, 'utf8'));
 writeFileSync(attestationPath, bytes);
 writeFileSync(signaturePath, `${sign(null, bytes, key).toString('base64')}\n`);
 NODE
-assert_failure node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$PROD_ROOT/source" --runtime-deps "$PROD_ROOT/deps" --output-root "$PROD_ROOT/mismatch-out" --tested-sha "$PROD_SHA" --tested-receipt "$PROD_ROOT/tested.json" --built-at-utc 2026-07-13T00:01:00Z --schema-version 7 --config-revision c --model-revision m --build-attestation "$PROD_ROOT/mismatched-attestation.json" --build-attestation-signature "$PROD_ROOT/mismatched-attestation.sig" --build-attestation-public-key "$PROD_ROOT/build-public.pem"
+assert_failure node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$PROD_ROOT/source" --runtime-deps "$PROD_ROOT/deps" --output-root "$PROD_ROOT/mismatch-out" --tested-sha "$PROD_SHA" --tested-receipt "$PROD_ROOT/tested.json" --built-at-utc 2026-07-13T00:01:00Z --config-revision c --model-revision m --build-attestation "$PROD_ROOT/mismatched-attestation.json" --build-attestation-signature "$PROD_ROOT/mismatched-attestation.sig" --build-attestation-public-key "$PROD_ROOT/build-public.pem"
 
 cp -R "$PROD_RELEASE" "$PROD_ROOT/cryptographically-forged"
 node -e '
@@ -161,36 +182,139 @@ assert_failure node "$I00_ROOT/bin/validate-release.mjs" --release "$TEST_TMP/ma
 cp -R "$RELEASE" "$TEST_TMP/mode-tampered"
 chmod -x "$TEST_TMP/mode-tampered/ops/i00/bin/install-ops-bundle.sh"
 assert_failure node "$I00_ROOT/bin/validate-release.mjs" --release "$TEST_TMP/mode-tampered" --allow-simulation
-node -e 'const fs=require("fs");const p=process.argv[1];const v=require(p);v.gitDirty=true;fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/release/tested.json"
-assert_failure node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$TEST_TMP/release/source" --runtime-deps "$TEST_TMP/release/deps" --output-root "$TEST_TMP/dirty-out" --tested-sha "$SHA" --tested-receipt "$TEST_TMP/release/tested.json" --built-at-utc 2026-07-13T00:00:00Z --schema-version 7 --config-revision c --model-revision m --simulation-source
+cp -R "$RELEASE" "$TEST_TMP/donor-verifier-tampered"
+printf '\n// post-assembly tamper\n' >> "$TEST_TMP/donor-verifier-tampered/test/i00/donor-equality.mjs"
+assert_failure node "$I00_ROOT/bin/validate-release.mjs" --release "$TEST_TMP/donor-verifier-tampered" --allow-simulation
 
-note "tested build-output digests reject post-receipt mutation before destination creation"
-make_release_inputs "$TEST_TMP/server-mutation/source" "$TEST_TMP/server-mutation/deps" "$SHA" "$TEST_TMP/server-mutation/tested.json"
-printf '\n// post-test mutation\n' >> "$TEST_TMP/server-mutation/source/server/dist/index.js"
-assert_failure node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$TEST_TMP/server-mutation/source" --runtime-deps "$TEST_TMP/server-mutation/deps" --output-root "$TEST_TMP/server-mutation/out" --tested-sha "$SHA" --tested-receipt "$TEST_TMP/server-mutation/tested.json" --built-at-utc 2026-07-13T00:00:00Z --schema-version 7 --config-revision c --model-revision m --simulation-source
-assert_not_file "$TEST_TMP/server-mutation/out/i00-$SHA"
-make_release_inputs "$TEST_TMP/web-mutation/source" "$TEST_TMP/web-mutation/deps" "$SHA" "$TEST_TMP/web-mutation/tested.json"
-printf '\n<!-- post-test mutation -->\n' >> "$TEST_TMP/web-mutation/source/web/dist/index.html"
-assert_failure node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$TEST_TMP/web-mutation/source" --runtime-deps "$TEST_TMP/web-mutation/deps" --output-root "$TEST_TMP/web-mutation/out" --tested-sha "$SHA" --tested-receipt "$TEST_TMP/web-mutation/tested.json" --built-at-utc 2026-07-13T00:00:00Z --schema-version 7 --config-revision c --model-revision m --simulation-source
-assert_not_file "$TEST_TMP/web-mutation/out/i00-$SHA"
+assert_semantic_release_forgery() {
+  local kind="$1" expected="$2" root="$TEST_TMP/semantic-release-forgery-$1"
+  cp -R "$RELEASE" "$root"
+  node --input-type=module - "$root" "$kind" <<'NODE'
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+const [root, kind] = process.argv.slice(2);
+const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
+const read = (relative) => JSON.parse(readFileSync(path.join(root, relative), 'utf8'));
+const write = (relative, value) => {
+  const bytes = Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
+  writeFileSync(path.join(root, relative), bytes);
+  return { bytes, sha256: sha(bytes) };
+};
+const release = read('release.json');
+const complete = read(release.testedReceipt);
+const evidence = release.acceptanceEvidence;
+const evidenceRelative = kind === 'browser' ? evidence.browserReceipt : evidence.performanceReceipt;
+const document = read(evidenceRelative);
+if (kind === 'browser') document.truthChecks.noFalseGreen = false;
+else document.continuity.uncleanRecoveryProven = false;
+const reboundEvidence = write(evidenceRelative, document);
+const descriptor = kind === 'browser' ? complete.browserReceipt : complete.performanceReceipt;
+descriptor.sha256 = reboundEvidence.sha256;
+descriptor.byteLength = reboundEvidence.bytes.length;
+if (kind === 'browser') {
+  const entry = complete.sourceFreeze.evidence.entries.find((candidate) => candidate.relativePath === descriptor.relativePath);
+  entry.sha256 = descriptor.sha256;
+  entry.byteLength = descriptor.byteLength;
+  complete.sourceFreeze.evidence.sha256 = sha(JSON.stringify(complete.sourceFreeze.evidence.entries));
+  complete.steps[8].stdoutSha256 = descriptor.sha256;
+  complete.steps[8].stdoutBytes = descriptor.byteLength;
+  complete.steps[9].initialEvidence = structuredClone(complete.sourceFreeze.evidence);
+  complete.steps[9].finalInitialEvidence = structuredClone(complete.sourceFreeze.evidence);
+} else {
+  const performanceEvidence = complete.steps[9].performanceEvidence;
+  performanceEvidence.entries[0].sha256 = descriptor.sha256;
+  performanceEvidence.entries[0].byteLength = descriptor.byteLength;
+  performanceEvidence.sha256 = sha(JSON.stringify(performanceEvidence.entries));
+}
+const reboundComplete = write(release.testedReceipt, complete);
+release.testedReceiptSha256 = reboundComplete.sha256;
+if (kind === 'browser') release.acceptanceEvidence.browserReceiptSha256 = reboundEvidence.sha256;
+else release.acceptanceEvidence.performanceReceiptSha256 = reboundEvidence.sha256;
+const releaseBytes = write('release.json', release);
+const manifest = read('artifact-manifest.json');
+manifest.acceptanceEvidence = structuredClone(release.acceptanceEvidence);
+for (const [relative, digest] of [
+  [release.testedReceipt, reboundComplete.sha256],
+  [evidenceRelative, reboundEvidence.sha256],
+  ['release.json', releaseBytes.sha256],
+]) manifest.files.find((entry) => entry.path === relative).sha256 = digest;
+write('artifact-manifest.json', manifest);
+NODE
+  assert_failure_contains "$expected" node "$I00_ROOT/bin/validate-release.mjs" --release "$root" --allow-simulation
+}
+assert_semantic_release_forgery browser 'canonical browser acceptance validation failed'
+assert_semantic_release_forgery performance 'canonical performance acceptance validation failed'
+
+cat > "$TEST_TMP/label-exit-forgery.json" <<JSON
+{"schemaVersion":1,"status":"PASS","testedSha":"$SHA","gitDirty":false,"commands":[{"command":"npm test","exitCode":0},{"command":"npm run test:all","exitCode":0},{"command":"bash ops/tests/i00/run-all.sh","exitCode":0},{"command":"npm run test:i00:complete","exitCode":0}]}
+JSON
+assert_failure_contains 'complete local-acceptance receipt' node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$TEST_TMP/release/source" --runtime-deps "$TEST_TMP/release/deps" --output-root "$TEST_TMP/label-forgery-out" --tested-sha "$SHA" --tested-receipt "$TEST_TMP/label-exit-forgery.json" --built-at-utc 2026-07-13T00:00:00Z --config-revision c --model-revision m --simulation-source
+
+note "complete acceptance identity, exact step set, boundary, and evidence bindings reject hostile forgeries"
+assert_acceptance_forgery() {
+  local name="$1" mutation="$2" expected="$3" root="$TEST_TMP/acceptance-forgery-$1"
+  make_release_inputs "$root/source" "$root/deps" "$SHA" "$root/tested.json"
+  node -e "$mutation" "$root/tested.json" "$root/source"
+  assert_failure_contains "$expected" node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$root/source" --runtime-deps "$root/deps" --output-root "$root/out" --tested-sha "$SHA" --tested-receipt "$root/tested.json" --built-at-utc 2026-07-13T00:00:00Z --config-revision c --model-revision m --simulation-source
+  assert_not_file "$root/out/i00-$SHA"
+}
+assert_acceptance_forgery missing-step 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.steps.splice(3,1);fs.writeFileSync(p,JSON.stringify(v));' 'exactly 11 measured step results'
+assert_acceptance_forgery command-label 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.steps[2].command=["npm","run","looks-green"];fs.writeFileSync(p,JSON.stringify(v));' 'root_test command is invalid'
+assert_acceptance_forgery candidate-sha 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.source.headSha="b".repeat(40);fs.writeFileSync(p,JSON.stringify(v));' 'candidate SHA/tree mismatch'
+assert_acceptance_forgery external-boundary 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.externalBoundary.signedCalls="PASS";fs.writeFileSync(p,JSON.stringify(v));' 'external boundary truth is invalid'
+assert_acceptance_forgery browser-bytes 'const fs=require("fs"),path=require("path"),p=process.argv[1],root=process.argv[2],v=JSON.parse(fs.readFileSync(p));fs.appendFileSync(path.join(root,v.browserReceipt.relativePath)," ");' 'browser acceptance bytes do not match'
+assert_acceptance_forgery browser-artifact-count 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.browserReceipt.artifactCount=193;fs.writeFileSync(p,JSON.stringify(v));' 'browserReceipt.artifactCount is invalid'
+assert_acceptance_forgery missing-owner-directive-hash 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));delete v.sourceFreeze.protectedOwnerDirectives[0].sha256;fs.writeFileSync(p,JSON.stringify(v));' 'sourceFreeze.protectedOwnerDirectives[0]'
+assert_acceptance_forgery altered-owner-directive-hash 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.sourceFreeze.protectedOwnerDirectives[0].sha256="0".repeat(64);fs.writeFileSync(p,JSON.stringify(v));' 'sourceFreeze protected inputs do not match source truth'
+
+note "release assembly requires the complete canonical validator dependency graph"
+make_release_inputs "$TEST_TMP/missing-donor-verifier/source" "$TEST_TMP/missing-donor-verifier/deps" "$SHA" "$TEST_TMP/missing-donor-verifier/tested.json"
+rm "$TEST_TMP/missing-donor-verifier/source/test/i00/donor-equality.mjs"
+assert_failure_contains 'release input missing test/i00/donor-equality.mjs' node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$TEST_TMP/missing-donor-verifier/source" --runtime-deps "$TEST_TMP/missing-donor-verifier/deps" --output-root "$TEST_TMP/missing-donor-verifier/out" --tested-sha "$SHA" --tested-receipt "$TEST_TMP/missing-donor-verifier/tested.json" --built-at-utc 2026-07-13T00:00:00Z --config-revision c --model-revision m --simulation-source
+assert_not_file "$TEST_TMP/missing-donor-verifier/out/i00-$SHA"
+make_release_inputs "$TEST_TMP/missing-verifier-helper/source" "$TEST_TMP/missing-verifier-helper/deps" "$SHA" "$TEST_TMP/missing-verifier-helper/tested.json"
+rm "$TEST_TMP/missing-verifier-helper/source/test/i00/verify-scope.mjs"
+assert_failure_contains 'release input missing test/i00/verify-scope.mjs' node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$TEST_TMP/missing-verifier-helper/source" --runtime-deps "$TEST_TMP/missing-verifier-helper/deps" --output-root "$TEST_TMP/missing-verifier-helper/out" --tested-sha "$SHA" --tested-receipt "$TEST_TMP/missing-verifier-helper/tested.json" --built-at-utc 2026-07-13T00:00:00Z --config-revision c --model-revision m --simulation-source
+assert_not_file "$TEST_TMP/missing-verifier-helper/out/i00-$SHA"
+
+note "compiled Ledger is the sole release compatibility authority"
+assert_bad_compatibility() {
+  local name="$1" schema="$2" floor="$3" expected="$4" root="$TEST_TMP/compatibility-$1"
+  make_release_inputs "$root/source" "$root/deps" "$SHA" "$root/tested.json"
+  printf 'export const LEDGER_SCHEMA_VERSION = %s;\nexport const LEDGER_ROLLBACK_FLOOR = %s;\n' "$schema" "$floor" > "$root/source/server/dist/ledger.js"
+  assert_failure_contains "$expected" node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$root/source" --runtime-deps "$root/deps" --output-root "$root/out" --tested-sha "$SHA" --tested-receipt "$root/tested.json" --built-at-utc 2026-07-13T00:00:00Z --config-revision c --model-revision m --simulation-source
+  assert_not_file "$root/out/i00-$SHA"
+}
+assert_bad_compatibility floor-ahead 1 2 'compatibility range is invalid'
+assert_bad_compatibility intermediate-floor 2 1 'not representable by the accepted donor contract'
+assert_bad_compatibility unsafe-integer 9007199254740992 0 'exceeds Number.MAX_SAFE_INTEGER'
+cp -R "$RELEASE" "$TEST_TMP/compatibility-rewritten"
+node -e 'const fs=require("fs"),p=process.argv[1],v=require(p);v.rollbackFloor=0;v.rollbackBarrier=false;fs.writeFileSync(p,`${JSON.stringify(v,null,2)}\n`);' "$TEST_TMP/compatibility-rewritten/release.json"
+assert_failure_contains 'does not match the tested compiled Ledger' node "$I00_ROOT/bin/validate-release.mjs" --release "$TEST_TMP/compatibility-rewritten" --allow-simulation
 
 note "deployment preflight freezes on disk, recovery, and migration ambiguity"
 cat > "$TEST_TMP/host.json" <<'JSON'
 {"source":"TARGET_HOST_OWNER_READBACK","account":"simulation-account","targetHost":"fixture-host.internal","environment":"simulation","freeBytes":10000000,"backupReserveBytes":1000,"sqliteVersion":"3.53.3","evidenceSha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","observedAtUtc":"2026-07-13T00:00:00Z"}
 JSON
 cat > "$TEST_TMP/supervisor.json" <<'JSON'
-{"source":"CANONICAL_SUPERVISOR_READBACK","observedAtUtc":"2026-07-13T00:00:00Z","validUntilUtc":"2026-07-13T00:10:00Z","deploymentFrozen":false,"exposureState":"NONE","ambiguityState":"NONE","recoveryState":"NONE","currentSchemaVersion":7,"rollbackFloor":5}
+{"source":"CANONICAL_SUPERVISOR_READBACK","observedAtUtc":"2026-07-13T00:00:00Z","validUntilUtc":"2026-07-13T00:10:00Z","deploymentFrozen":false,"exposureState":"NONE","ambiguityState":"NONE","recoveryState":"NONE","currentSchemaVersion":1,"rollbackFloor":1}
 JSON
 PREFLIGHT=(node "$I00_ROOT/bin/preflight.mjs" --release "$RELEASE" --host "$TEST_TMP/host.json" --supervisor "$TEST_TMP/supervisor.json" --mode deploy --now 2026-07-13T00:01:00Z --max-host-age-sec 300 --max-supervisor-age-sec 120 --required-supervisor-window-sec 130)
 assert_success "${PREFLIGHT[@]}"
+node -e 'const fs=require("fs"),p=process.argv[1],v=require(p);v.callerAssertion=true;fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/supervisor.json"
+assert_failure_contains 'unexpected field set' "${PREFLIGHT[@]}"
+cat > "$TEST_TMP/supervisor.json" <<'JSON'
+{"source":"CANONICAL_SUPERVISOR_READBACK","observedAtUtc":"2026-07-13T00:00:00Z","validUntilUtc":"2026-07-13T00:10:00Z","deploymentFrozen":false,"exposureState":"NONE","ambiguityState":"NONE","recoveryState":"NONE","currentSchemaVersion":1,"rollbackFloor":1}
+JSON
 node -e 'const fs=require("fs");const p=process.argv[1];const v=require(p);v.recoveryState="RECOVERY_REQUIRED";fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/supervisor.json"
 assert_failure "${PREFLIGHT[@]}"
 node -e 'const fs=require("fs"),p=process.argv[1],v=require(p);v.observedAtUtc="2026-07-12T23:00:00Z";v.validUntilUtc="2026-07-13T00:10:00Z";fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/supervisor.json"
 assert_failure "${PREFLIGHT[@]}"
-node -e 'const fs=require("fs");const p=process.argv[1];const v=require(p);v.recoveryState="NONE";v.observedAtUtc="2026-07-13T00:00:00Z";v.rollbackFloor=8;fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/supervisor.json"
+node -e 'const fs=require("fs");const p=process.argv[1];const v=require(p);v.recoveryState="NONE";v.observedAtUtc="2026-07-13T00:00:00Z";v.rollbackFloor=2;fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/supervisor.json"
 PREFLIGHT[9]=rollback
 assert_failure "${PREFLIGHT[@]}"
-node -e 'const fs=require("fs");const p=process.argv[1];const v=require(p);v.rollbackFloor=5;fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/supervisor.json"
+node -e 'const fs=require("fs");const p=process.argv[1];const v=require(p);v.rollbackFloor=1;fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/supervisor.json"
 node -e 'const fs=require("fs");const p=process.argv[1];const v=require(p);v.freeBytes=100;fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/host.json"
 PREFLIGHT[9]=deploy
 assert_failure "${PREFLIGHT[@]}"
@@ -205,7 +329,7 @@ for mutation in exposure ambiguity frozen; do
   ' "$TEST_TMP/supervisor.json" "$mutation"
   assert_failure "${PREFLIGHT[@]}"
   cat > "$TEST_TMP/supervisor.json" <<'JSON'
-{"source":"CANONICAL_SUPERVISOR_READBACK","observedAtUtc":"2026-07-13T00:00:00Z","validUntilUtc":"2026-07-13T00:10:00Z","deploymentFrozen":false,"exposureState":"NONE","ambiguityState":"NONE","recoveryState":"NONE","currentSchemaVersion":7,"rollbackFloor":5}
+{"source":"CANONICAL_SUPERVISOR_READBACK","observedAtUtc":"2026-07-13T00:00:00Z","validUntilUtc":"2026-07-13T00:10:00Z","deploymentFrozen":false,"exposureState":"NONE","ambiguityState":"NONE","recoveryState":"NONE","currentSchemaVersion":1,"rollbackFloor":1}
 JSON
 done
 node -e 'const fs=require("fs");const p=process.argv[1];const v=require(p);v.validUntilUtc="2026-07-13T00:01:30Z";fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/supervisor.json"
@@ -213,7 +337,7 @@ assert_failure "${PREFLIGHT[@]}"
 
 note "unbound non-Git release source is refused without simulation marking"
 make_release_inputs "$TEST_TMP/unbound/source" "$TEST_TMP/unbound/deps" "$SHA" "$TEST_TMP/unbound/tested.json"
-assert_failure node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$TEST_TMP/unbound/source" --runtime-deps "$TEST_TMP/unbound/deps" --output-root "$TEST_TMP/unbound/out" --tested-sha "$SHA" --tested-receipt "$TEST_TMP/unbound/tested.json" --built-at-utc 2026-07-13T00:00:00Z --schema-version 7 --config-revision c --model-revision m
+assert_failure node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$TEST_TMP/unbound/source" --runtime-deps "$TEST_TMP/unbound/deps" --output-root "$TEST_TMP/unbound/out" --tested-sha "$SHA" --tested-receipt "$TEST_TMP/unbound/tested.json" --built-at-utc 2026-07-13T00:00:00Z --config-revision c --model-revision m
 
 note "WAL-reset-safe SQLite versions are exact"
 assert_success node "$I00_ROOT/bin/verify-sqlite-version.mjs" --version '3.53.3 fixture'

@@ -57,12 +57,14 @@ scenario(1, 'clean cold start reaches managed readiness in dependency order', as
   const started = await world.startCompositionReady(composed);
   assertScenario('SC-01', 'COMPOSITION_START_ACCEPTED', started.ok === true);
   assertScenarioEqual('SC-01', 'SUPERVISOR_RUNNING', composed.composition.read().supervisor.phase, 'RUNNING');
-  assertScenarioDeepEqual('SC-01', 'DEPENDENCY_ORDER', composed.log.slice(0, 7), [
-    'validate:market', 'validate:basis', 'validate:volume',
-    'init:market', 'start:market', 'start:basis', 'start:volume',
+  assertScenarioDeepEqual('SC-01', 'DEPENDENCY_ORDER', composed.log.slice(0, 11), [
+    'validate:market', 'validate:intelligence-runtime', 'validate:market-intelligence',
+    'validate:basis', 'validate:volume',
+    'init:market', 'start:market', 'start:intelligence-runtime', 'start:market-intelligence',
+    'start:basis', 'start:volume',
   ]);
   assertScenarioDeepEqual('SC-01', 'MANAGED_COMPONENT_ORDER', composed.composition.read().componentOrder, [
-    'market-universe', 'basis-engine', 'volume-engine',
+    'market-universe', 'intelligence-runtime', 'market-intelligence', 'basis-engine', 'volume-engine',
   ]);
   assertScenarioEqual('SC-01', 'ONE_DRIVER', composed.scheduler.snapshot().activeTaskCount, 1);
 });
@@ -586,13 +588,15 @@ scenario(30, 'graceful shutdown closes transports and persists final checkpoints
   composed.log.length = 0;
   const drained = await composed.composition.drain();
   assertScenarioDeepEqual('SC-30', 'REVERSE_DEPENDENCY_SHUTDOWN', composed.log, [
-    'stop:volume', 'stop:basis', 'stop:market',
+    'stop:volume', 'stop:basis', 'stop:market-intelligence', 'stop:intelligence-runtime', 'stop:market',
   ]);
   assertScenarioEqual('SC-30', 'CLEAN_DRAIN', drained.drainOutcome, 'CLEAN');
   assertScenarioEqual('SC-30', 'DRIVER_STOPPED', drained.driverRunning, false);
   assertScenarioEqual('SC-30', 'SCHEDULER_CLOSED', composed.scheduler.snapshot().activeTaskCount, 0);
   assertScenario('SC-30', 'TRANSPORTS_CLOSED_ONCE', [
     composed.states.market.stopCalls,
+    composed.states.intelligenceRuntime.stopCalls,
+    composed.states.marketIntelligence.stopCalls,
     composed.states.basis.stopCalls,
     composed.states.volume.stopCalls,
   ].every((count) => count === 1));
@@ -605,6 +609,8 @@ scenario(30, 'graceful shutdown closes transports and persists final checkpoints
     clean: true,
     componentStates: [
       { componentId: 'market-universe', desiredState: 'STOPPED', generation: 1 },
+      { componentId: 'intelligence-runtime', desiredState: 'STOPPED', generation: 1 },
+      { componentId: 'market-intelligence', desiredState: 'STOPPED', generation: 1 },
       { componentId: 'basis-engine', desiredState: 'STOPPED', generation: 1 },
       { componentId: 'volume-engine', desiredState: 'STOPPED', generation: 1 },
     ],

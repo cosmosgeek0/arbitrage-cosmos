@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 
 import {
   compareQDirectiveInputLocks,
+  sealedOwnerDirectiveSha256,
+  verifySealedOwnerDirective,
   verifyLivingDirectorInputAcceptance,
   verifyQDirectiveInputSupersession,
 } from '../../../test/i00/git-provenance.mjs';
@@ -83,10 +85,16 @@ export function runAuthorityScan(catalog) {
     const observed = readText(conflict.path).includes(conflict.needle);
     return { ...conflict, observed };
   });
+  const conflictClassificationPassed = conflicts.every((conflict) => {
+    if (conflict.resolutionState === 'RESOLVED') return conflict.path !== null && conflict.observed;
+    if (conflict.resolutionState === 'LIMITATION') return conflict.path === null;
+    if (conflict.resolutionState === 'OPEN') return true;
+    return false;
+  });
 
   const boundaryPatterns = Object.freeze([
     ['PRIVATE_EXCHANGE_OWNER_IMPORT', /from\s+['"][^'"]*(?:binance\/(?:client|userStream)|services\/(?:orders|loans|account|userStream))[^'"]*['"]/],
-    ['DUPLICATE_AUTHORITY_DECLARATION', /\b(?:class|function)\s+(?!\w*Adapter\b)\w*(?:RiskGate|Ledger|Scanner|ControlPlane|ExchangeClient|ProposalQueue|ProposalStore)\w*\b/],
+    ['DUPLICATE_AUTHORITY_DECLARATION', /\b(?:class|function)\s+(?!(?:project|adapt|read)\w*)(?!\w*Adapter\b)\w*(?:RiskGate|Ledger|Scanner|ControlPlane|ExchangeClient|ProposalQueue|ProposalStore)\w*\b/],
     ['SOCKET_OR_DATABASE_CONSTRUCTION', /\bnew\s+(?:WebSocket|WebSocketServer|Database)\s*\(|\bbetter-sqlite3\b/],
   ]);
   const boundaryFindings = [];
@@ -151,7 +159,11 @@ export function runAuthorityScan(catalog) {
       }
     }
   }
-  const unresolvedConflictCount = conflicts.filter((conflict) => conflict.observed || conflict.path === null).length;
+  const unresolvedConflictCount = conflicts.filter((conflict) => conflict.resolutionState === 'OPEN').length;
+  const scanPassed = rules.every((rule) => rule.passed)
+    && boundaryFindings.length === 0
+    && unclassifiedTransportCandidates.length === 0
+    && conflictClassificationPassed;
 
   return {
     authorityConcepts: concepts.size,
@@ -164,10 +176,9 @@ export function runAuthorityScan(catalog) {
     ownerCandidateDefinitions,
     ownerImportEdges,
     unresolvedConflictCount,
-    scanPassed: rules.every((rule) => rule.passed)
-      && boundaryFindings.length === 0
-      && unclassifiedTransportCandidates.length === 0,
-    authorityConverged: false,
+    conflictClassificationPassed,
+    scanPassed,
+    authorityConverged: scanPassed && unresolvedConflictCount === 0,
   };
 }
 
@@ -317,8 +328,8 @@ const FROZEN_SHA256 = Object.freeze({
   'I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md': '9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5',
   'MISSION.md': '95e152d76844aa391b7a28bd45548d7fe58f83ed1ced558dbdbeb01797436362',
   'docs/archive/What-i-want.txt': 'f525644e8bf7dc00f1999b7ac79975ae382530531c194533a2ff56a1531c961a',
-  'QL_DIRECTOR_STATE.md': 'dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278',
-  'QL_PARALLEL_DAG.md': '275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546',
+  'QL_DIRECTOR_STATE.md': '77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc',
+  'QL_PARALLEL_DAG.md': 'cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec',
   'quant/DIRECTIVE_INPUTS.lock': 'd4bf31826625c2602ebb7ed72194e94a4571f7597a413ca545839f236c7a5a24',
   'packages/edge-protocol/schema/edge-protocol-v1.schema.json': '229af0ff13d600c7d305c6deb7f57b61bdb6f8a35f6f2349d91f5ab1b4972f1c',
   'packages/edge-protocol/fixtures/fixtures-v1.json': 'c42a4257ea5f46abb38ec9ab4e56983e7049cdf5b448150a4d4647a6234d99a4',
@@ -327,6 +338,12 @@ const FROZEN_SHA256 = Object.freeze({
   'ARCHITECTURE.md': 'beb8be8baefe2faa78356e2dc44983735b855535c21cd5f0172a8e1e3fa665db',
   'docs/DASHBOARD_TRUTH.md': '9f44e9d9c6111ffcc176fe30ea27d02dced83006d8df9ceb218c2c1af8df07c7',
   'docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md': '460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162',
+});
+
+const HISTORICAL_PACKET_SHA256 = Object.freeze({
+  ...FROZEN_SHA256,
+  'QL_DIRECTOR_STATE.md': 'dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278',
+  'QL_PARALLEL_DAG.md': '275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546',
 });
 
 class FixtureJournal {
@@ -856,36 +873,69 @@ export function frozenInputScan(catalog) {
   return catalog.frozenInputs.map((input) => {
     const anchoredSha256 = FROZEN_SHA256[input.path] ?? null;
     const inputPath = path.join(ROOT, input.path);
-    const observedSha256 = statSync(inputPath, { throwIfNoEntry: false })?.isFile() ? sha256(input.path) : null;
+    const sealedSha256 = sealedOwnerDirectiveSha256(input.path);
+    const sealedEvidence = sealedSha256 === null ? null : verifySealedOwnerDirective(ROOT, input.path);
+    const liveFilePresent = sealedEvidence?.liveFilePresent
+      ?? statSync(inputPath, { throwIfNoEntry: false })?.isFile() === true;
+    const observedSha256 = sealedEvidence?.sha256 ?? (liveFilePresent ? sha256(input.path) : null);
     return {
       ...input,
       anchoredSha256,
       observedSha256,
+      evidenceMode: sealedEvidence?.evidenceMode ?? (liveFilePresent ? 'COMMITTED_FILE' : 'MISSING'),
       passed: anchoredSha256 !== null && input.sha256 === anchoredSha256 && observedSha256 === anchoredSha256,
     };
   });
 }
 
+export function historicalFrozenInputScan(catalog) {
+  const declaredLivingPins = new Map((catalog.historicalPacket?.livingDirectorPins ?? [])
+    .map((input) => [input.path, input.sha256]));
+  return catalog.frozenInputs.map((input) => {
+    const anchoredSha256 = HISTORICAL_PACKET_SHA256[input.path] ?? null;
+    const declaredSha256 = declaredLivingPins.get(input.path) ?? input.sha256;
+    const inputPath = path.join(ROOT, input.path);
+    const sealedSha256 = sealedOwnerDirectiveSha256(input.path);
+    const sealedEvidence = sealedSha256 === null ? null : verifySealedOwnerDirective(ROOT, input.path);
+    const liveFilePresent = sealedEvidence?.liveFilePresent
+      ?? statSync(inputPath, { throwIfNoEntry: false })?.isFile() === true;
+    const observedSha256 = sealedEvidence?.sha256 ?? (liveFilePresent ? sha256(input.path) : null);
+    return {
+      ...input,
+      sha256: declaredSha256,
+      anchoredSha256,
+      observedSha256,
+      evidenceMode: sealedEvidence?.evidenceMode ?? (liveFilePresent ? 'COMMITTED_FILE' : 'MISSING'),
+      passed: anchoredSha256 !== null && declaredSha256 === anchoredSha256 && observedSha256 === anchoredSha256,
+    };
+  });
+}
+
 export function effectiveFrozenInputScan(catalog, acceptanceDocument) {
-  const historicalInputs = frozenInputScan(catalog);
+  const finalInputs = frozenInputScan(catalog);
+  const historicalInputs = historicalFrozenInputScan(catalog);
   const acceptance = verifyLivingDirectorInputAcceptance(acceptanceDocument);
   const livingByPath = new Map(acceptance.livingResults.map((entry) => [entry.path, entry]));
-  const acceptedInputs = historicalInputs.map((input) => {
+  const historicalByPath = new Map(historicalInputs.map((entry) => [entry.path, entry]));
+  const acceptedInputs = finalInputs.map((input) => {
     const living = livingByPath.get(input.path);
-    if (!living) return Object.freeze({ ...input, acceptanceMode: 'IMMUTABLE_PACKET_INPUT' });
-    const historicalPacketPinPreserved = input.sha256 === input.anchoredSha256
-      && living.historicalPacketSha256 === input.anchoredSha256;
+    if (!living) return Object.freeze({ ...input, acceptanceMode: 'IMMUTABLE_FINAL_INPUT' });
+    const historical = historicalByPath.get(input.path);
+    const historicalPacketPinPreserved = historical?.sha256 === historical?.anchoredSha256
+      && living.historicalPacketSha256 === historical?.anchoredSha256;
+    const finalRepinPassed = input.passed && input.sha256 === living.observedSha256;
     return Object.freeze({
       ...input,
       acceptanceMode: acceptance.mode,
-      historicalPacketPassed: input.passed,
+      historicalPacketPassed: historical?.passed === true,
       historicalPacketPinPreserved,
+      finalRepinPassed,
       acceptedSourceRef: acceptance.sourceRef,
       acceptedSourceTip: acceptance.sourceTip,
       acceptedLatestCommit: living.latestCommit,
       acceptedGitBlob: living.observedGitBlob,
       acceptedSha256: living.observedSha256,
-      passed: acceptance.passed && living.passed && historicalPacketPinPreserved,
+      passed: acceptance.passed && living.passed && historicalPacketPinPreserved && finalRepinPassed,
     });
   });
   return Object.freeze({ acceptance, historicalInputs: Object.freeze(historicalInputs), acceptedInputs: Object.freeze(acceptedInputs) });

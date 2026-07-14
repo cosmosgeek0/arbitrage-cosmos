@@ -474,7 +474,7 @@ const unavailable: DashboardFixture = {
       risk: { truthLabel: 'UNKNOWN', latestVerdict: 'UNAVAILABLE', latestVerdictAtMs: null, latestVerdictId: null, rejectionCount: null, reasonCodes: [] },
       execution: { truthLabel: 'UNKNOWN', planId: null, planLifecycle: null, coordinatorState: 'UNKNOWN', legCount: null, recoveryState: null, lastTransitionAtMs: null },
       reconciliation: { truthLabel: 'UNKNOWN', status: 'UNKNOWN', blocksNewExposure: true, recommendation: null, checkpointId: null, evaluatedAtMs: null, reasonCodes: [] },
-      ledger: { truthLabel: 'UNKNOWN', writable: null, lastEventId: null, lastPersistedAtMs: null, checkpointRevision: null, recentTraceCount: null, lastCleanShutdownAtMs: null },
+      ledger: { truthLabel: 'UNAVAILABLE', writable: null, schemaCompatibilityState: 'UNAVAILABLE', schemaCompatibilityReason: 'LEDGER_SCHEMA_COMPATIBILITY_READBACK_UNAVAILABLE', currentSchemaVersion: null, rollbackFloor: null, lastEventId: null, lastPersistedAtMs: null, checkpointRevision: null, recentTraceCount: null, lastCleanShutdownAtMs: null },
     },
     recentCorrelatedDecisions: [],
   }),

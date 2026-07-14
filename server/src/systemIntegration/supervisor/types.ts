@@ -14,6 +14,7 @@ import type {
   SystemComponentId,
   SystemTruthLabel,
 } from '../contracts/constants.js';
+import type { LedgerSchemaCompatibilityState } from '../persistence/types.js';
 
 export const SYSTEM_OVERALL_POSTURES = Object.freeze([
   'STOPPED',
@@ -140,6 +141,10 @@ export interface SystemReconciliationSummary {
 export interface SystemLedgerSummary {
   readonly truthLabel: SystemTruthLabel;
   readonly writable: boolean | null;
+  readonly schemaCompatibilityState: LedgerSchemaCompatibilityState;
+  readonly schemaCompatibilityReason: string | null;
+  readonly currentSchemaVersion: number | null;
+  readonly rollbackFloor: number | null;
   readonly lastEventId: string | null;
   readonly lastPersistedAtMs: number | null;
   readonly checkpointRevision: string | null;

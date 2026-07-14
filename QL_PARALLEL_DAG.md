@@ -14,7 +14,7 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 | Q15 registry shard | ~/Desktop/q15-registry | q15-registry-20260712 | f756f3b | ACCEPTED + MERGED (2,342 pass) |
 | L15 deploy-infra satellite | ~/Desktop/l15-infra | l15-deploy-infra-20260712 | 0f2bb88 | ACCEPTED (2cec412; 347 assertions) — merge at integration |
 | Q11 survival | ~/Desktop/q11-survival | q11-survival-20260712 | 8a5dd09 | ACCEPTED + MERGED (2,182 pass with Q14) |
-| L spine L00–L08 | live-execution-proof-20260712 | live-execution-control-proof-20260712 | 73e1a1f | L00–L08 + L08.1 + L08.2 (9f133ac) + L14 ACCEPTED; ALL SHARDS MERGED (L09/L10/L11/L14) + current-main synced; spine running FINALE to LANE_READY; Codex left auditable uncommitted L06 work; TWO director decisions DEFERRED to I00: ledger compare-and-set primitive + Foundation quantity-bridge contract (see live-edge-receipts/patches/) |
+| L spine L00–L08 | live-execution-proof-20260712 | live-execution-control-proof-20260712 | 73e1a1f | L00–L08 + L08.1 + L08.2 (9f133ac) + L14 ACCEPTED; ALL SHARDS MERGED (L09/L10/L11/L14) + current-main synced; L LANE_READY / BUILT_AND_TESTED_UNWIRED (df6b472) — donor ready; Codex left auditable uncommitted L06 work; TWO director decisions DEFERRED to I00: ledger compare-and-set primitive + Foundation quantity-bridge contract (see live-edge-receipts/patches/) |
 | L14 controls shard | ~/Desktop/l14-controls | l14-controls-20260712 | 39ebd98 | ACCEPTED + MERGED (51/51 liveEdge suites) |
 | L09 normal-basis shard | ~/Desktop/l09-normal-basis | l09-normal-basis-20260712 | rebased on c900907 | ACCEPTED (10cb9d2) + MERGED onto lane (72/72 liveEdge, foundation green) |
 | L10 reverse-basis shard | ~/Desktop/l10-reverse-basis | l10-reverse-basis-20260712 | 4ae270a | ACCEPTED + MERGED (63/63 liveEdge suites) |
@@ -25,17 +25,19 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 | IP-OPS packet | ~/Desktop/ip-ops | ip-ops-20260713 | 420cc83 | OPS_READY — fan-in at I00 spine |
 | IP-PROOF packet | ~/Desktop/ip-proof | ip-proof-20260713 | 420cc83 | PROOF_PRESTAGE_READY (23e985c) — fan-in at I00 spine |
 
-| I00-VERIFY | ~/Desktop/i00-assembly | i00-product-assembly-20260713 | 1fec867 | I00_PRESTAGE_VERIFIED (635ad83) — awaits director real-adapter I00 after lanes |
+| I00-VERIFY | ~/Desktop/i00-assembly | i00-product-assembly-20260713 | 1fec867 | ROLE-2 INTEGRATOR ACTIVE — past final L merge (ec82bc5, L exactly LAST, 16/16/16/16 regenerated inventory per D-LAUNCH-20); remaining: L shared wiring, source-freeze rerun, runtime/browser acceptance, candidate seal → INTEGRATION_CANDIDATE_READY |
 
 | F-BRIDGE canonical execution | ~/Desktop/f-bridge | f-bridge-execution-20260713 | 24ac894 | ACCEPTED (1e9d28a) + MERGED to current-main c900907 (24/24 foundation, npm test green) |
 | A-CORE IP-ASSURANCE | ~/Desktop/ip-assurance | ip-assurance-20260713 | 9785c93 | CORE_SCAFFOLD_READY (08a0a09) — full READY after director fan-in |
 | A-HAZARD S1 | ~/Desktop/ip-assur-hazard | ip-assur-hazard-20260713 | 9785c93 | HAZARD_PRESTAGE_READY (ab33b37, D-LAUNCH-10 resealed) |
-| A-FORMAL S3 | ~/Desktop/ip-assur-formal | ip-assur-formal-20260713 | 9785c93 | FORMAL_PRESTAGE_READY (89c783b, D-LAUNCH-10 resealed) |
+| A-FORMAL S3 | ~/Desktop/ip-assur-formal | ip-assur-formal-20260713 | 9785c93 | BLOCKED receipt sealed a0c7b6e (root-egress finding, D-LAUNCH-22; exit-127 was hydration artifact — S3 content GREEN 7/7 exhaustive, 43/43 net-deny) — OUT of candidate by ordering law; S3-DEEPEN COMPLETE — FORMAL_DEEPENED_RESEALED b491893 (M08-M13 over frozen L; D-LAUNCH-23); PARKED, first post-landing re-admission |
+| S2 actionEvidence (wave 14) | ~/Desktop/ip-assur-action | ip-assur-action-20260714 | current-main at cut | ACTION_EVIDENCE_PRESTAGE_READY ACCEPTED (ca30adf, 87/87 net-deny; D-LAUNCH-25) — PARKED, post-landing admission set |
+| PRE-VERIFY (non-donor) | ~/Desktop/preverify | preverify-20260714 | 0bbf23c | PREVERIFY_READY ACCEPTED (0b566d6; D-LAUNCH-21); LANDING_DOCS_READY ACCEPTED (46b2f1e, pushed; D-LAUNCH-26) — full landing-docs pack ready (STATE/ARCH-II/capability/root-deltas drafts); RE-PARKED read-only, NON-DONOR |
 | A-COCKPIT S5 | ~/Desktop/ip-assur-cockpit | ip-assur-cockpit-20260713 | 9785c93 | COCKPIT_PRESTAGE_READY (d4ff9c9) |
 | A-AGENT S6 | ~/Desktop/ip-assur-agent | ip-assur-agent-20260713 | 9785c93 | AGENT_PRESTAGE_READY (97e87bd, D-LAUNCH-13 taxonomy) |
 | A-STABILITY S8 | ~/Desktop/ip-assur-stability | ip-assur-stability-20260713 | 9785c93 | STABILITY_PRESTAGE_READY (d35674e) |
-| S2 actionEvidence satellite | (cut after L lane freeze) | — | — | WAITING (dependency law §11) |
-| S4 assuranceCase satellite | ~/Desktop/ip-assur-case | ip-assur-case-20260713 | c57610c | READY |
+| S2 actionEvidence satellite | (superseded row) | — | — | D-LAUNCH-20 NOT_CONFIGURED ruling superseded by D-LAUNCH-22.3/25 — built as post-landing donor, see "S2 actionEvidence (wave 14)" row above; candidate still excludes it |
+| S4 assuranceCase satellite | ~/Desktop/ip-assur-case | ip-assur-case-20260713 | c57610c | RESEALED b4d8a44 + INTEGRATED by Role-2 (merge 86ee3b5, 41/41 blobs exact) |
 
 | SI-RECON ruling | ~/Desktop/si-recon | si-recon-ruling-20260714 | e25fd5d | ACCEPTED ruling A + MERGED to current-main c43262a (SI 180/180, npm test green) |
 

@@ -21,12 +21,30 @@ test('production shell owns one frozen product client, provider, durable cursor,
   assert.match(app, /readDurableMaterialCursor\(\)/);
   assert.doesNotMatch(app, /DURABLE_RESUME_CURSOR|initialMaterialCursor=\{"0"\}/);
   assert.match(app, /page === 'control-room' && <ProductControlRoomRoute \/>/);
+  assert.match(app, /useProductControlRoomContext\(\)/);
+  for (const attribute of [
+    'data-i00-product-binding-state',
+    'data-i00-product-revision',
+    'data-i00-product-digest',
+    'data-i00-product-evaluated-at-ms',
+    'data-i00-product-truth-label',
+    'data-i00-product-persistent-synthetic',
+    'data-i00-product-continuity',
+    'data-i00-product-machine-ready',
+    'data-i00-product-trade-ready',
+    'data-i00-product-effective-mode',
+    'data-i00-product-tested-commit',
+    'data-i00-product-schema-revision',
+  ]) assert.match(app, new RegExp(attribute));
   assert.doesNotMatch(app, /FixtureProductControlRoom|fixtureBinding|preview\/main/);
 });
 
 test('all eighteen mount contracts are registered once without legacy convergence summaries', async () => {
   assert.equal(SURFACE_MOUNT_CONTRACTS.length, 18);
   assert.equal(new Set(SURFACE_MOUNT_CONTRACTS.map((entry) => entry.surfaceId)).size, 18);
+  for (const contract of SURFACE_MOUNT_CONTRACTS) {
+    assert.doesNotMatch(contract.insertionAnchor, /\bMISSING\b|must add|must pass/i);
+  }
 
   const mounts = new Map([
     ['pages/Dashboard.tsx', 'dashboard'],
@@ -58,6 +76,68 @@ test('all eighteen mount contracts are registered once without legacy convergenc
   }
 });
 
+test('bottom-up pages keep native summaries ahead of canonical surface bands', async () => {
+  const surfaces = [
+    ['pages/SystemHealth.tsx', 'healthx-summary', 'health', 'healthx-alert'],
+    ['pages/Risk.tsx', 'riskx-summary', 'risk', 'riskx-section'],
+    ['pages/Opportunities.tsx', 'opportunityx-summary', 'opportunities', 'opportunityx-filters'],
+    ['pages/VolumeScanner.tsx', 'volx-summary', 'volume', 'volx-filters'],
+    ['pages/Strategies.tsx', 'volx-summary', 'basis', 'volx-filters'],
+    ['pages/Dashboard.tsx', 'dcx-summary', 'dashboard', 'dcx-section'],
+  ];
+
+  for (const [path, summaryClass, surfaceId, nextClass] of surfaces) {
+    const source = await read(path);
+    const summaryIndex = source.indexOf(`className="${summaryClass}"`);
+    const adapterIndex = source.indexOf(`<ProductSurfaceAdapter surfaceId="${surfaceId}" />`);
+    const nextIndex = source.indexOf(`className="${nextClass}`, adapterIndex);
+    assert.ok(summaryIndex >= 0, `${path} must retain its native summary`);
+    assert.ok(adapterIndex > summaryIndex, `${path} must append ${surfaceId} after its native summary`);
+    assert.ok(nextIndex > adapterIndex, `${path} must mount ${surfaceId} before the next native section`);
+  }
+});
+
+test('account and dashboard summary typography and hairlines retain the measured ship-gate contract', async () => {
+  const [accountCss, dashboardCss] = await Promise.all([
+    read('pages/Account.css'),
+    read('pages/Dashboard.css'),
+  ]);
+  const rule = (source, selector) => {
+    const marker = `${selector} {`;
+    const start = source.indexOf(marker);
+    assert.ok(start >= 0, `missing CSS rule ${selector}`);
+    const end = source.indexOf('}', start + marker.length);
+    assert.ok(end > start, `unterminated CSS rule ${selector}`);
+    return source.slice(start + marker.length, end);
+  };
+
+  const accountBand = rule(accountCss, '.accountx-summary');
+  assert.match(accountBand, /gap:\s*0;/);
+  assert.match(accountBand, /min-height:\s*102px;/);
+  assert.match(accountBand, /padding:\s*0;/);
+  assert.match(accountBand, /background:\s*var\(--panel\);/);
+
+  const accountTile = rule(accountCss, '.accountx-summary article');
+  assert.match(accountTile, /min-height:\s*0;/);
+  assert.match(accountTile, /padding:\s*17px 18px;/);
+  assert.match(accountTile, /border-right:\s*1px solid var\(--line-2\);/);
+  assert.doesNotMatch(accountTile, /(?:^|\s)border\s*:|border-radius\s*:|background\s*:/);
+
+  const accountLabel = rule(accountCss, '.accountx-summary article > span');
+  assert.match(accountLabel, /font-size:\s*10\.5px;/);
+  assert.match(accountLabel, /font-weight:\s*560;/);
+  assert.match(accountLabel, /line-height:\s*14px;/);
+  assert.match(accountLabel, /letter-spacing:\s*\.055em;/);
+  assert.match(accountLabel, /text-transform:\s*uppercase;/);
+  assert.match(rule(accountCss, '.accountx-summary article > strong'), /font-size:\s*18px;[\s\S]*font-weight:\s*510;/);
+  assert.match(accountCss, /\.accountx-summary article:nth-child\(n \+ 3\)\s*\{\s*border-top:\s*1px solid var\(--line-2\);\s*\}/);
+  assert.match(accountCss, /\.accountx-summary article:nth-child\(n \+ 2\)\s*\{\s*border-top:\s*1px solid var\(--line-2\);\s*\}/);
+
+  assert.match(rule(dashboardCss, '.dcx-summary > .dcx-summary-cell > span'), /letter-spacing:\s*\.055em;/);
+  assert.match(rule(dashboardCss, '.dcx-summary > .dcx-summary-cell > strong'), /font-weight:\s*510;/);
+  assert.match(rule(dashboardCss, '.dcx-summary,\n.dcx-performance-summary'), /min-height:\s*102px;/);
+});
+
 test('account routes are controlled and header consumes read-only product truth', async () => {
   const [app, account, store, header] = await Promise.all([
     read('App.tsx'),
@@ -81,8 +161,28 @@ test('account routes are controlled and header consumes read-only product truth'
   assert.match(header, /killSwitchControl\?\.wiringState === 'WIRED_LIVE'/);
   assert.match(header, /killSwitchState\.trim\(\)\.toUpperCase\(\) === 'CLEAR'/);
   assert.match(header, /const convergenceKillOn = !killSwitchClearProven/);
+  assert.match(header, /const convergenceTone = 'warn'/);
+  assert.doesNotMatch(header, /productMachineReadinessTone/);
+  assert.doesNotMatch(header, /dashboard\.overallPosture/);
   assert.match(header, /intakeTone/);
   assert.doesNotMatch(header, /useSystemIntegration|mutateSystemControl|SystemControlMutation/);
+});
+
+test('mobile shell preserves the canonical non-green execution identity', async () => {
+  const css = await read('styles.css');
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.hdr-right > \.smenu-bar\.topbar-suite-v4\s*\{[\s\S]*display:\s*inline-flex !important;/);
+  assert.match(css, /\.hdr-right > \.smenu-bar\.topbar-suite-v4 > button\[data-topbar-key="power"\]\s*\{[\s\S]*display:\s*inline-flex !important;/);
+});
+
+test('dashboard and health read the shared Product snapshot without a legacy health poll', async () => {
+  for (const path of ['pages/Dashboard.tsx', 'pages/SystemHealth.tsx']) {
+    const source = await read(path);
+    assert.match(source, /useProductControlRoomContext/);
+    assert.doesNotMatch(source, /\/api\/system(?!-integration)/);
+  }
+  const health = await read('pages/SystemHealth.tsx');
+  assert.match(health, /binding\.refresh\(\)/);
+  assert.match(health, /ownerView\.machineReady/);
 });
 
 test('product mount uses live trace reads and structurally omits donor action surfaces', async () => {

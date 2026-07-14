@@ -431,7 +431,7 @@
   white-space: nowrap;
 }
 .newsx-headline > a:hover { color: var(--accent-ink); }
-.newsx-type { color: var(--text-2); font-size: 11.5px; font-weight: 450; }
+.newsx-type { color: var(--text-2); font-size: 11.5px; font-weight: 420; }
 .newsx-open { display: grid; place-items: center; color: var(--muted); }
 .newsx-day-body { animation: newsxDayEnter 180ms ease-out; }
 .newsx-row.fresh { animation: lixArrival 800ms ease-out; }
@@ -779,7 +779,7 @@
 .logx-page .lg-time { padding-left: 12px; color: var(--text-2); font-size: 12px; font-weight: 440; }
 .logx-page .lg-main { padding-right: 18px; font-size: 13.25px; line-height: 19px; }
 .logx-page .lg-main b { font-weight: 470; }
-.logx-page .lg-main em { font-weight: 420; }
+.logx-page .lg-main em { font-size: 11.5px; font-weight: 420; }
 .logx-page .lg-sym { padding-right: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .logx-page .lg-src { padding-right: 12px; color: var(--text-2); font-size: 11.5px; font-weight: 450; }
 .logx-page .lg-status { padding-right: 12px; color: var(--text-2); font-size: 11.5px; font-weight: 450; text-align: left; }

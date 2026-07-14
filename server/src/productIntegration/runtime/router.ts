@@ -43,7 +43,9 @@ function exactBody(value: unknown, keys: readonly string[]): value is Record<str
 export function createProductIntegrationRuntimeRouter(service: ProductIntegrationRuntimeService): express.Router {
   if (!service || typeof service.readSupervisor !== 'function' || typeof service.readMaterialEvents !== 'function'
       || typeof service.readTrace !== 'function' || typeof service.previewCommand !== 'function'
-      || typeof service.submitCommand !== 'function') throw new TypeError('A ProductIntegrationRuntimeService is required.');
+      || typeof service.submitCommand !== 'function' || typeof service.readCommandResult !== 'function') {
+    throw new TypeError('A ProductIntegrationRuntimeService is required.');
+  }
   const router = express.Router();
   router.use((_req, res, next) => {
     const verified = operator(res.locals.operator);
@@ -112,6 +114,43 @@ export function createProductIntegrationRuntimeRouter(service: ProductIntegratio
       expectedRevision: req.body.expectedRevision,
       operator: res.locals.productRuntimeOperator as Readonly<ProductRuntimeOperator>,
     }));
+  }));
+
+  router.get('/v1/commands/:commandId/result', asyncRoute(async (req, res) => {
+    if (!exactQuery(req, ['idempotencyKey', 'controlId'])) {
+      res.status(400).json({ ok: false, code: 'INVALID_COMMAND_RESULT_QUERY', error: 'Command-result query contains unsupported fields.' });
+      return;
+    }
+    const commandId = req.params.commandId;
+    const idempotencyKey = queryString(req.query.idempotencyKey);
+    const controlId = queryString(req.query.controlId);
+    if (!/^sysctrl_[a-f0-9]{64}$/.test(commandId)
+      || idempotencyKey === null || !/^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/.test(idempotencyKey)
+      || controlId === null || !/^[a-z0-9][a-z0-9.-]{0,159}$/.test(controlId)) {
+      res.status(400).json({ ok: false, code: 'INVALID_COMMAND_RESULT_QUERY', error: 'Exact bounded commandId, idempotencyKey, and controlId are required.' });
+      return;
+    }
+    const readback = await service.readCommandResult(Object.freeze({ commandId, idempotencyKey, controlId }));
+    if (readback.state === 'NOT_FOUND') {
+      res.status(404).json({ ok: false, code: 'COMMAND_RESULT_NOT_FOUND', error: 'No durable command receipt was found.' });
+      return;
+    }
+    if (readback.state === 'FAIL_CLOSED') {
+      if (readback.result !== null) {
+        res.status(503).json(readback.result);
+        return;
+      }
+      const identityMismatch = readback.failureCode === 'COMMAND_RESULT_IDENTITY_MISMATCH';
+      res.status(identityMismatch ? 404 : 503).json({
+        ok: false,
+        code: identityMismatch ? 'COMMAND_RESULT_NOT_FOUND' : readback.failureCode,
+        error: identityMismatch
+          ? 'No durable command receipt was found.'
+          : 'Durable command-result evidence is unavailable or invalid.',
+      });
+      return;
+    }
+    res.status(readback.state === 'PENDING' ? 202 : 200).json(readback.result);
   }));
 
   router.post('/v1/commands', asyncRoute(async (req, res) => {

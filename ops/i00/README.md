@@ -29,6 +29,18 @@ readback exists.
   incomplete Access/operator identity.
 - Deployment freezes on exposure, ambiguity, recovery, schema incompatibility,
   insufficient disk, missing canonical readback, or unsafe SQLite.
+- Production donor environments are normalized to numeric loopback, an enabled
+  candidate probe, exact `/health/live /health/ready` gates, and canonical
+  deploy-frozen/money-ready marker paths; caller weakening is rejected.
+- Release `schemaVersion`, `rollbackFloor`, and `rollbackBarrier` are derived
+  from the tested `server/dist/ledger.js` exports and reverified from the
+  release-local compiled artifact. Caller compatibility overrides are refused.
+- `bin/exposure-from-app.mjs` performs one bounded read-only GET against the
+  exact numeric-loopback `/api/system-integration/ops/readback` contract. Any
+  transport, status, body, schema, freshness, or lease failure prints only
+  `UNKNOWN`. Production sanitization binds `EXPOSURE_CMD` to the release-installed
+  helper and derives its readback URL from the canonical app origin. The
+  server-side producer remains `NOT_CONFIGURED` until mounted.
 
 ## Local proof
 

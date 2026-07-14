@@ -7,6 +7,8 @@ import { calVal, flag, type CalItem } from '../lib/calendar';
 import { curateNotifications, groupNotifications, notificationEnabled } from '../lib/notifications';
 import { fireRefresh } from '../lib/refresh';
 import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
+import { type ProductBindingContinuity, type ProductComponentProjection } from '../lib/productIntegration';
+import { canonicalComponentPresentation, canonicalRefreshTargetPosture, canonicalWatchmanOverallPresentation } from '../lib/canonicalCockpitTruth';
 import { ACCENTS, CURRENCIES, DATA_CADENCE_DEFAULTS, MARKET_PING_CHOICES, type AccentKey, type DataCadenceKey, type NotificationRuleKey } from '../lib/prefs';
 import { openOverlay, useOverlay } from '../lib/overlay';
 import { TokenIcon } from './TokenIcon';
@@ -416,6 +418,7 @@ function AccountSheet() {
   return (
     <div className="ops-sheet ops-account-sheet account-sheet-v3">
       <OpsSheetHeader
+        className="account-v3-head"
         icon={<PopupSourceMark tone="#778292"><ApiKeyIdentityMark size={26} /></PopupSourceMark>}
         title="Account Details"
         subtitle="Private account truth is outside this candidate"
@@ -721,8 +724,7 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
 }
 
 export function Sidebar() {
-  const { state, page, setPage } = useStore();
-  const proposals = state?.proposals.length ?? 0;
+  const { page, setPage } = useStore();
 
   return (
     <aside className="snav">
@@ -853,197 +855,8 @@ function AlertsMenu() {
 }
 
 // ---- data health ---------------------------------------------------------------
-interface SystemLite {
-  restLatencyMs: number | null;
-  serverTimeDiffMs: number | null;
-  usedWeight1m: number | null;
-  usedWeightTs?: number | null;
-  feeds?: Record<string, string>;
-  dbOk?: boolean;
-  lastScannerTickTs?: number | null;
-  lastOrdersSyncTs?: number | null;
-  cfUser?: string | null;
-  cfIp?: string | null;
-  cfCountry?: string | null;
-  cfRay?: string | null;
-  connections?: {
-    basis?: {
-      running: boolean;
-      bookState: 'fresh' | 'stale';
-      markState: 'fresh' | 'stale';
-      lastBookTs: number | null;
-      lastMarkTs: number | null;
-      lastError: string | null;
-    };
-    volume?: {
-      running: boolean;
-      streamState: 'starting' | 'open' | 'connecting' | 'degraded';
-      streamConnections: number;
-      openConnections: number;
-      bookState: 'fresh' | 'stale';
-      lastBookTs: number | null;
-      lastTradeTs: number | null;
-    };
-    news?: {
-      fetchedAt: number | null;
-      sources: number;
-      live: number;
-      delayed: number;
-      errors: number;
-      items: number;
-      refreshing: boolean;
-    };
-    calendar?: { fetchedAt: number | null; items: number; refreshing: boolean };
-    fx?: { fetchedAt: number | null; currencies: number; refreshing: boolean };
-    watchman?: {
-      assessedAt: number;
-      status: 'operational' | 'degraded' | 'outage';
-      summary: { operational: number; degraded: number; outage: number; required: number; total: number; sourceCoverage: number; liveSources: number };
-      components: Array<{
-        id: string;
-        label: string;
-        group: 'control_path' | 'binance' | 'bot' | 'sources' | 'infrastructure';
-        status: 'operational' | 'degraded' | 'outage' | 'planned';
-        detail: string;
-        value: string;
-        required: boolean;
-        updatedAt: number | null;
-        latencyMs?: number | null;
-        resetTarget?: 'market' | 'runtime' | 'news' | 'calendar' | 'fx';
-      }>;
-      recentTransitions: Array<{ ts: number; componentId: string; label: string; from: string; to: string; detail: string }>;
-      lastReset: { ts: number; target: string; ok: boolean; durationMs: number } | null;
-      browserObservation: { status: 'operational' | 'degraded' | 'outage'; rttMs: number; socketConnected: boolean; observedAt: number } | null;
-    };
-    planned?: Record<string, { ready: boolean; configured: boolean; state: string; reason: string }>;
-  };
-}
 function msLabel(v: number | null | undefined): string {
   return v === null || v === undefined || !isFinite(v) ? '—' : `${Math.round(v)} ms`;
-}
-function DataHealthMenu() {
-  const { state, connected } = useStore();
-  const { open, setOpen, ref } = useMenu<HTMLDivElement>();
-  const [sys, setSys] = useState<SystemLite | null>(null);
-  const [srv, setSrv] = useState<{ news: boolean; cal: boolean; fx: boolean }>({ news: false, cal: false, fx: false });
-
-  useEffect(() => {
-    if (!open) return;
-    let alive = true;
-    void fetch('/api/system').then((r) => (r.ok ? r.json() : null)).then((s) => alive && s && setSys(s as SystemLite)).catch(() => undefined);
-    const probe = (u: string, k: 'news' | 'cal' | 'fx') =>
-      fetch(u).then((r) => alive && setSrv((p) => ({ ...p, [k]: r.ok }))).catch(() => alive && setSrv((p) => ({ ...p, [k]: false })));
-    void probe('/api/news-context', 'news');
-    void probe('/api/calendar', 'cal');
-    void probe('/api/fx', 'fx');
-    return () => {
-      alive = false;
-    };
-  }, [open]);
-
-  const feeds = state?.feeds ?? {};
-  const feedsOk = Object.values(feeds).length > 0 && Object.values(feeds).every((s) => s === 'open');
-  const lat = sys?.restLatencyMs ?? null;
-  const grade = !connected ? 'bad' : !feedsOk ? 'warn' : 'ok';
-  const sources: { name: string; ok: boolean; detail: string }[] = [
-    { name: 'Binance market feed', ok: connected && feedsOk, detail: `${Object.keys(feeds).length} streams · ${msLabel(lat)}` },
-    { name: 'Binance announcements', ok: srv.news, detail: srv.news ? 'reachable' : 'checking / down' },
-    { name: 'Economic calendar', ok: srv.cal, detail: srv.cal ? 'reachable' : 'checking / down' },
-    { name: 'FX rates', ok: srv.fx, detail: srv.fx ? 'reachable' : 'checking / down' },
-  ];
-  return (
-    <div className="menu-wrap" ref={ref}>
-      <button className={`hdr-ic tint-data grade-${grade} ${open ? 'on' : ''}`} onClick={() => setOpen(!open)} title="Data health" aria-label="Data health">
-        <IconDatabase size={18} />
-      </button>
-      {open && (
-        <div className="menu-pop right dh-pop">
-          <div className="np-head">
-            <span className={`np-title ${grade}`}><LiveDot ok={grade !== 'bad'} /> Data health</span>
-            <span className="np-sub">source: Binance</span>
-          </div>
-          {sources.map((s) => (
-            <div key={s.name} className="dh-row">
-              <span className={`dh-dot ${s.ok ? 'ok' : 'bad'}`} />
-              <span className="dh-name">{s.name}</span>
-              <span className={`dh-detail ${s.ok ? '' : 'muted'}`}>{s.detail}</span>
-            </div>
-          ))}
-          <div className="dh-params">
-            <div className="menu-head">Parameters</div>
-            <div className="np-row"><span className="k">Clock drift</span><span className="v num">{msLabel(sys?.serverTimeDiffMs)}</span></div>
-            <div className="np-row"><span className="k">Rate weight · 1m</span><span className="v num">{sys?.usedWeight1m ?? '—'}</span></div>
-            <div className="np-row"><span className="k">Pairs scanned</span><span className="v num">{state?.scanner.pairs ?? '—'}</span></div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---- network / signal -----------------------------------------------------------
-// Real Wi-Fi glyph: a base dot + three arcs. When healthy, the arcs light up in
-// sequence from the inner (lowest) curve out to the top curve, then repeat — the
-// classic "connecting" wave. Degraded = amber, offline = only the dot.
-// Global [data-motion="reduced"] freezes it fully lit.
-function WifiSignal({ grade }: { grade: string }) {
-  return (
-    <span className={`wifi-sig ${grade}`} aria-hidden>
-      <svg viewBox="0 0 22 18" width="19" height="16">
-        <path className="wa a3" d="M2 6.2A15 15 0 0 1 20 6.2" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
-        <path className="wa a2" d="M5 9.6A10 10 0 0 1 17 9.6" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
-        <path className="wa a1" d="M8 13A5 5 0 0 1 14 13" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
-        <circle className="wa a0" cx="11" cy="15.6" r="1.5" fill="currentColor" />
-      </svg>
-    </span>
-  );
-}
-
-function NetworkStatus() {
-  const { state, connected } = useStore();
-  const { open, setOpen, ref } = useMenu<HTMLDivElement>();
-  const [sys, setSys] = useState<SystemLite | null>(null);
-  useEffect(() => {
-    let alive = true;
-    const load = () => fetch('/api/system').then((r) => (r.ok ? r.json() : null)).then((s) => alive && s && setSys(s as SystemLite)).catch(() => undefined);
-    void load();
-    const t = setInterval(load, 5000);
-    return () => {
-      alive = false;
-      clearInterval(t);
-    };
-  }, []);
-  const feeds = state?.feeds ?? {};
-  const feedList = Object.entries(feeds);
-  const feedsOk = feedList.length > 0 && feedList.every(([, s]) => s === 'open');
-  const lat = sys?.restLatencyMs ?? null;
-  const latHigh = lat !== null && lat > 900;
-  const grade = !connected ? 'bad' : !feedsOk || latHigh ? 'warn' : 'ok';
-  const latTone = lat === null ? '' : lat < 400 ? 'ok' : lat < 900 ? 'warn' : 'bad';
-  const brief = !connected ? 'offline' : msLabel(lat);
-  return (
-    <div className="menu-wrap" ref={ref}>
-      <button className={`net-btn wifi ${grade} ${open ? 'on' : ''}`} onClick={() => setOpen(!open)} title="Network & signal" aria-label={`Network status — ${brief}`}>
-        <WifiSignal grade={grade} />
-      </button>
-      {open && (
-        <div className="menu-pop right net-pop">
-          <div className="np-head">
-            <span className={`np-title ${grade}`}><span className="net-dot" />{!connected ? 'Signal offline' : grade === 'ok' ? 'Signal healthy' : 'Signal degraded'}</span>
-            <span className="np-lat num">{brief}</span>
-          </div>
-          <div className="np-row"><span className="k">Binance REST latency</span><span className={`v num ${latTone}`}>{msLabel(lat)}</span></div>
-          <div className="np-row"><span className="k">Clock drift</span><span className="v num">{msLabel(sys?.serverTimeDiffMs)}</span></div>
-          <div className="np-row"><span className="k">Cockpit link</span><span className={`v ${connected ? 'ok' : 'bad'}`}>{connected ? 'live' : 'reconnecting'}</span></div>
-          {feedList.map(([name, s]) => (
-            <div key={name} className="np-row"><span className="k">{name}</span><span className={`v ${s === 'open' ? 'ok' : 'warn'}`}>{s}</span></div>
-          ))}
-          <div className="np-row"><span className="k">User stream</span><span className="v">{state?.binance.userStream ?? '—'}</span></div>
-          <div className="np-row"><span className="k">Rate weight · 1m</span><span className="v num">{sys?.usedWeight1m ?? '—'}</span></div>
-        </div>
-      )}
-    </div>
-  );
 }
 
 // ---- notifications (cockpit-only, from the ledger) --------------------------------
@@ -1269,6 +1082,7 @@ function TopPanelHeader({
 type OpsTone = 'ok' | 'warn' | 'bad' | 'idle' | 'accent';
 
 function OpsSheetHeader({
+  className,
   icon,
   title,
   subtitle,
@@ -1276,6 +1090,7 @@ function OpsSheetHeader({
   action,
   tone = 'idle',
 }: {
+  className?: string;
   icon: ReactNode;
   title: string;
   subtitle: ReactNode;
@@ -1284,11 +1099,16 @@ function OpsSheetHeader({
   tone?: OpsTone;
 }) {
   return (
-    <header className="ops-sheet-head">
+    <header className={`ops-sheet-head${className ? ` ${className}` : ''}`}>
       <span className="ops-sheet-icon">{icon}</span>
       <span className="ops-sheet-title"><b>{title}</b><em>{subtitle}</em></span>
       {action !== undefined
-        ? <span className="ops-sheet-action">{action}</span>
+        ? (
+          <span className="ops-sheet-trailing">
+            {status !== undefined && <span className={`ops-sheet-status ${tone}`}><i />{status}</span>}
+            <span className="ops-sheet-action">{action}</span>
+          </span>
+        )
         : status !== undefined && <span className={`ops-sheet-status ${tone}`}><i />{status}</span>}
     </header>
   );
@@ -1830,9 +1650,9 @@ function SharedTopBar() {
   const intakeTone = productSnapshot && productBinding.continuity === 'PROVEN'
     && intakeControl?.wiringState === 'WIRED_LIVE' && intakeOpen ? 'ok' : 'warn';
   const convergenceModeLabel = productSnapshot?.ownerView.effectiveMode.replaceAll('_', ' ') ?? 'Unavailable';
-  const convergenceTone = !productSnapshot || productBinding.continuity !== 'PROVEN' || !killSwitchClearProven
-    ? 'warn'
-    : productSnapshot.ownerView.machineReady === 'YES' ? 'ok' : 'warn';
+  // The canonical Product contract deliberately withholds trade readiness.
+  // Execution identity therefore remains non-green regardless of machine health.
+  const convergenceTone = 'warn';
   const convergenceSub = productBinding.error
     ?? productSnapshot?.ownerView.topRootBlocker
     ?? (productSnapshot
@@ -1891,6 +1711,14 @@ function SharedTopBar() {
   const compactNotifEvents = compactNotifications;
   const compactNotifGroups = compactNotifications.slice(0, 7);
   const notifTone = compactNotifications.some((item) => item.severity === 'critical') ? 'hot' : unread > 0 ? 'live' : compactNotifications.length > 0 ? 'armed' : alertsOn > 0 ? 'armed' : 'idle';
+  const advisorOverallPresentation = productSnapshot
+    ? canonicalWatchmanOverallPresentation({
+      continuity: productBinding.continuity,
+      machineReady: productSnapshot.ownerView.machineReady,
+      effectiveMode: productSnapshot.ownerView.effectiveMode,
+      components: productSnapshot.components,
+    })
+    : { status: 'outage' as const, label: 'Supervisor Unavailable' };
   const advRaw: ({ sev: Sev; name: string; detail: string; page?: Page } | null)[] = [
     !productSnapshot
       ? { sev: 'action', name: 'Product supervisor unavailable', detail: 'Canonical control truth is unavailable; the cockpit remains fail-closed.', page: 'control-room' }
@@ -1898,11 +1726,13 @@ function SharedTopBar() {
     productSnapshot && productBinding.continuity !== 'PROVEN'
       ? { sev: 'action', name: 'Supervisor continuity unproven', detail: `Material continuity is ${productBinding.continuity}; last-known state cannot authorize a green posture.`, page: 'control-room' }
       : null,
-    productSnapshot && productBinding.continuity === 'PROVEN' && productSnapshot.ownerView.machineReady === 'YES'
-      ? { sev: 'pass', name: 'Canonical machine readiness', detail: `${productSnapshot.truthLabel} · revision ${productSnapshot.revision}.` }
-      : productSnapshot
-        ? { sev: 'invest', name: 'Machine not ready', detail: productSnapshot.ownerView.topRootBlocker ?? 'Canonical supervisor reports machine readiness NO.', page: 'control-room' }
-        : null,
+    productSnapshot && productBinding.continuity === 'PROVEN'
+      ? advisorOverallPresentation.status === 'operational'
+        ? { sev: 'pass', name: 'Canonical operating posture', detail: `${advisorOverallPresentation.label} · ${productSnapshot.truthLabel} · revision ${productSnapshot.revision}.` }
+        : advisorOverallPresentation.status === 'outage'
+          ? { sev: 'action', name: 'Canonical operating posture blocked', detail: productSnapshot.ownerView.topRootBlocker ?? `${advisorOverallPresentation.label} · effective mode ${productSnapshot.ownerView.effectiveMode}.`, page: 'control-room' }
+          : { sev: 'invest', name: 'Canonical operating posture limited', detail: `${advisorOverallPresentation.label} · effective mode ${productSnapshot.ownerView.effectiveMode}; non-live capability cannot authorize a green posture.`, page: 'control-room' }
+      : null,
     killSwitchClearProven
       ? { sev: 'pass', name: 'Kill switch truth proven', detail: 'Canonical owner is wired live and effective posture is CLEAR.' }
       : { sev: 'invest', name: 'Kill switch fail-closed', detail: killSwitchControl?.disabledReason ?? killSwitchControl?.wiringState ?? 'Canonical kill-switch truth is unavailable.', page: 'control-room' },
@@ -1914,7 +1744,11 @@ function SharedTopBar() {
   const advChecks = advRaw.filter(Boolean) as { sev: Sev; name: string; detail: string; page?: Page }[];
   const advA = advChecks.filter((c) => c.sev === 'action'); const advI = advChecks.filter((c) => c.sev === 'invest'); const advP = advChecks.filter((c) => c.sev === 'pass');
   const advAtt = [...advA, ...advI];
-  const advTone = advA.length ? 'bad' : advI.length ? 'warn' : 'ok';
+  const advTone = advA.length || advisorOverallPresentation.status === 'outage'
+    ? 'bad'
+    : advI.length || advisorOverallPresentation.status !== 'operational'
+      ? 'warn'
+      : 'ok';
   const advScore = advChecks.length ? Math.round((advP.length / advChecks.length) * 100) : 100;
   const advCode = advTone === 'bad' ? 'ACT' : advTone === 'warn' ? 'REV' : 'OK';
   const openAdvisorDetail = (checks: typeof advChecks, fallback: Page) => {
@@ -2659,7 +2493,15 @@ function SharedTopBar() {
                   tone={item.severity === 'critical' ? 'bad' : item.severity === 'resolved' ? 'ok' : 'idle'}
                   onClick={openNotificationCenter}
                 />
-              )) : <div className="ops-empty-state"><IconBell size={18} /><b>Inbox clear</b><em>Only owner-relevant alerts appear here. Full telemetry stays in Logs.</em></div>}
+              )) : (
+                <OpsRow
+                  icon={<IconBell size={15} />}
+                  title="Inbox Clear"
+                  detail="Only owner-relevant alerts appear here. Full telemetry stays in Logs."
+                  value="Clear"
+                  tone="ok"
+                />
+              )}
             </div>
           </div>
         );
@@ -2744,13 +2586,13 @@ function SharedTopBar() {
             />
             <div className="ops-choice-stack" role="radiogroup" aria-label="Basis display unit">
               <button type="button" role="radio" aria-checked={!basisIsBps && !basisIsDecimal} className={!basisIsBps && !basisIsDecimal ? 'selected' : ''} onClick={() => updatePref('basisUnit', 'pct')} data-testid="basis-unit-pct">
-                <span className="ops-choice-mark">%</span><span><b>Percent</b><em>Percentage-Point Display · +0.042%</em></span>{!basisIsBps && !basisIsDecimal && <IconCheck size={15} />}
+                <span className="ops-choice-mark">%</span><span><b>Percent</b><em>Percentage-Point Display · +0.042%</em></span><span className="ops-row-value">PCT</span>{!basisIsBps && !basisIsDecimal && <IconCheck size={15} />}
               </button>
               <button type="button" role="radio" aria-checked={basisIsBps} className={basisIsBps ? 'selected' : ''} onClick={() => updatePref('basisUnit', 'bps')} data-testid="basis-unit-bps">
-                <span className="ops-choice-mark">bp</span><span><b>Basis Points</b><em>Trading-Desk Display · +4.2 bps</em></span>{basisIsBps && <IconCheck size={15} />}
+                <span className="ops-choice-mark">bp</span><span><b>Basis Points</b><em>Trading-Desk Display · +4.2 bps</em></span><span className="ops-row-value">BPS</span>{basisIsBps && <IconCheck size={15} />}
               </button>
               <button type="button" role="radio" aria-checked={basisIsDecimal} className={basisIsDecimal ? 'selected' : ''} onClick={() => updatePref('basisUnit', 'decimal')} data-testid="basis-unit-decimal">
-                <span className="ops-choice-mark">0.0</span><span><b>Decimal Rate</b><em>Calculation Ratio · +0.00042</em></span>{basisIsDecimal && <IconCheck size={15} />}
+                <span className="ops-choice-mark">0.0</span><span><b>Decimal Rate</b><em>Calculation Ratio · +0.00042</em></span><span className="ops-row-value">DEC</span>{basisIsDecimal && <IconCheck size={15} />}
               </button>
             </div>
             <div className="ops-section-label ops-basis-conversion-label"><span>Quick Conversion</span><em>Rate Applied To $1</em></div>
@@ -2814,7 +2656,11 @@ function SharedTopBar() {
                 <button key={mode.id} type="button" role="radio" aria-checked={prefs.motion === mode.id} className={prefs.motion === mode.id ? 'selected' : ''} onClick={() => updatePref('motion', mode.id)} data-testid={`appearance-motion-${mode.id}`}>{mode.label}</button>
               ))}
             </div>
-            <div className="ops-note-row ops-appearance-note"><IconPulse size={15} /><span><b>Reduced Motion Keeps Data Live</b><em>Animations stop; prices, polling, and timestamps continue.</em></span></div>
+            <div className="ops-row ops-appearance-note">
+              <span className="ops-row-icon idle"><IconPulse size={15} /></span>
+              <span className="ops-row-copy"><b>Current Presentation</b><em>{prefs.theme} theme · {prefs.motion} motion</em></span>
+              <span className="ops-row-value">{appearanceZoom}%</span>
+            </div>
           </div>
         );
       }
@@ -2936,6 +2782,7 @@ type WatchmanComponent = {
   label: string;
   group: WatchmanGroup;
   status: WatchmanStatus;
+  statusLabel: string;
   detail: string;
   value: string;
   required: boolean;
@@ -2976,9 +2823,31 @@ function watchmanGroupIcon(group: WatchmanGroup): ReactNode {
   return <IconShield size={17} />;
 }
 
+function canonicalWatchmanGroup(componentId: string): WatchmanGroup {
+  if (componentId === 'public-spot-source' || componentId === 'public-usdm-source') return 'binance';
+  if (componentId === 'market-universe' || componentId.includes('intelligence')) return 'sources';
+  if (componentId === 'basis-engine' || componentId === 'volume-engine') return 'bot';
+  return 'control_path';
+}
+
+function canonicalWatchmanComponent(component: Readonly<ProductComponentProjection>, continuity: ProductBindingContinuity): WatchmanComponent {
+  const posture = canonicalComponentPresentation(component, continuity);
+  return {
+    id: component.componentId,
+    label: component.componentId.replaceAll('-', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()),
+    group: canonicalWatchmanGroup(component.componentId),
+    status: posture.status,
+    statusLabel: posture.statusLabel,
+    detail: `${component.owner} · Lifecycle ${component.observedLifecycle} · Capability ${component.capability} · Truth ${component.truthLabel}${component.blockerCode ? ` · ${component.blockerCode}` : ''}`,
+    value: component.observedLifecycle.replaceAll('_', ' '),
+    required: component.capability !== 'NOT_CONFIGURED',
+    updatedAt: component.lastAdvanceAtMs ?? component.heartbeatAtMs,
+  };
+}
+
 export function RefreshDock() {
-  const { connected, refresh, prefs, updatePref } = useStore();
-  const [sys, setSys] = useState<SystemLite | null>(null);
+  const { connected, prefs, updatePref } = useStore();
+  const { binding } = useProductControlRoomContext();
   const [appRtt, setAppRtt] = useState<number | null>(null);
   const [st, setSt] = useState<'idle' | 'spin' | 'ok' | 'err'>('idle');
   const [open, setOpen] = useState(false);
@@ -2994,7 +2863,7 @@ export function RefreshDock() {
   const pingHealthNow = useCallback(async (): Promise<number | null> => {
     const t0 = performance.now();
     try {
-      const response = await fetch('/api/health', { cache: 'no-store' });
+      const response = await fetch('/health/live', { cache: 'no-store' });
       if (!response.ok) throw new Error();
       const next = performance.now() - t0;
       setAppRtt(next);
@@ -3010,32 +2879,19 @@ export function RefreshDock() {
     }
   }, [connected]);
 
-  const loadSystemNow = useCallback(async (): Promise<SystemLite | null> => {
-    try {
-      const response = await fetch('/api/system', { cache: 'no-store' });
-      const next = response.ok ? ((await response.json()) as SystemLite) : null;
-      if (next) setSys(next);
-      return next;
-    } catch {
-      return null;
-    }
-  }, []);
-
   useEffect(() => {
     void pingHealthNow();
-    void loadSystemNow();
     const timer = window.setInterval(() => {
       void pingHealthNow();
-      void loadSystemNow();
     }, 5_000);
     return () => window.clearInterval(timer);
-  }, [loadSystemNow, pingHealthNow]);
+  }, [pingHealthNow]);
 
   useEffect(() => {
     if (!open) return;
     void pingHealthNow();
-    void loadSystemNow();
-  }, [loadSystemNow, open, pingHealthNow]);
+    void binding.refresh();
+  }, [binding.refresh, open, pingHealthNow]);
 
   useEffect(() => {
     if (!open) return;
@@ -3070,8 +2926,10 @@ export function RefreshDock() {
     window.setTimeout(() => setCadenceReset(false), 1800);
   };
 
-  const backendWatchman = sys?.connections?.watchman;
-  const effectiveLastResetTs = lastRefreshTs ?? backendWatchman?.lastReset?.ts ?? null;
+  const productSnapshot = binding.snapshot;
+  const productBindingContinuity = binding.continuity;
+  const canonicalComponents = (productSnapshot?.components ?? []).map((component) => canonicalWatchmanComponent(component, productBindingContinuity));
+  const effectiveLastResetTs = lastRefreshTs;
   const browserStatus: WatchmanStatus = !connected || appRtt === null
     ? 'outage'
     : appRtt >= 800
@@ -3084,9 +2942,10 @@ export function RefreshDock() {
     label: 'Browser / Website Session',
     group: 'control_path',
     status: browserStatus,
-    detail: `Cockpit state socket ${connected ? 'live' : 'reconnecting'} · direct /api/health round trip`,
+    statusLabel: watchmanStatusLabel(browserStatus),
+    detail: `Cockpit state socket ${connected ? 'live' : 'reconnecting'} · direct /health/live liveness round trip`,
     value: appRtt === null ? 'Offline' : msLabel(appRtt),
-    required: true,
+    required: false,
     updatedAt: Date.now(),
     latencyMs: appRtt,
   };
@@ -3099,6 +2958,7 @@ export function RefreshDock() {
       label: 'Private Account Adapter',
       group: 'binance',
       status: 'planned',
+      statusLabel: 'Not Configured',
       detail: 'OWNER_GATED · NOT_CONFIGURED · no signed account reads are mounted',
       value: 'OWNER GATED',
       required: false,
@@ -3109,24 +2969,27 @@ export function RefreshDock() {
       label: 'AWS Runner',
       group: 'infrastructure',
       status: 'planned',
+      statusLabel: 'Not Configured',
       detail: 'OWNER_GATED · NOT_CONFIGURED · no probe, command, deployment, or console path is mounted',
       value: 'OWNER GATED',
       required: false,
       updatedAt: null,
     },
   ];
-  const backendComponents = (backendWatchman?.components ?? [])
-    .filter((component) => component.id !== 'binance-account' && component.id !== 'aws-runner');
-  const components: WatchmanComponent[] = [browserComponent, ...backendComponents, ...ownerGatedComponents];
-  const requiredComponents = components.filter((component) => component.required && component.status !== 'planned');
-  const operationalCount = requiredComponents.filter((component) => component.status === 'operational').length;
-  const degradedCount = requiredComponents.filter((component) => component.status === 'degraded').length;
-  const outageCount = requiredComponents.filter((component) => component.status === 'outage').length;
-  const overallStatus: WatchmanStatus = outageCount > 0 ? 'outage' : degradedCount > 0 ? 'degraded' : 'operational';
-  const activeProblems = components.filter((component) => component.required && (component.status === 'degraded' || component.status === 'outage'));
+  const components: WatchmanComponent[] = [browserComponent, ...canonicalComponents, ...ownerGatedComponents];
+  const overallPresentation = productSnapshot
+    ? canonicalWatchmanOverallPresentation({
+      continuity: binding.continuity,
+      machineReady: productSnapshot.ownerView.machineReady,
+      effectiveMode: productSnapshot.ownerView.effectiveMode,
+      components: productSnapshot.components,
+    })
+    : { status: 'outage' as const, label: 'Canonical Truth Unavailable' };
+  const overallStatus: WatchmanStatus = overallPresentation.status;
   const sourceComponents = components.filter((component) => component.group === 'sources');
   const infrastructureComponents = components.filter((component) => component.group === 'infrastructure');
-  const chainIds = ['browser-session', 'control-api', 'strategy-runtimes', 'market-streams', 'binance-account', 'aws-runner'];
+  const sourceCoverage = productSnapshot?.dashboard.summaries.sourceCoverage;
+  const chainIds = ['browser-session', 'engine-supervisor', 'market-universe', 'public-usdm-source', 'binance-account', 'aws-runner'];
   const pathComponents = chainIds.map((id) => components.find((component) => component.id === id)).filter((component): component is WatchmanComponent => Boolean(component));
   const finish = (ok: boolean, issues: string[], ts: number) => {
     setLastRefreshTs(ts);
@@ -3135,32 +2998,10 @@ export function RefreshDock() {
     window.setTimeout(() => setSt('idle'), ok ? 1500 : 2400);
   };
 
-  const run = async () => {
-    if (busy.current) return;
-    busy.current = true;
-    setTargetBusy('all');
-    setSt('spin');
-    const startedAt = Date.now();
-    let result: { ok: boolean; issues: string[]; ts?: number };
-    try {
-      result = await refresh();
-    } catch {
-      result = { ok: false, issues: ['Connection reset failed'], ts: Date.now() };
-    }
-    const [health, system] = await Promise.all([pingHealthNow(), loadSystemNow()]);
-    if (health == null) result.issues.push('Browser health probe failed');
-    if (!system) result.issues.push('System inventory probe failed');
-    const wait = Math.max(0, 2150 - (Date.now() - startedAt));
-    window.setTimeout(() => {
-      finish(result.issues.length === 0, result.issues, result.ts ?? Date.now());
-      setTargetBusy(null);
-      busy.current = false;
-    }, wait);
-  };
-
   const runTarget = async (target: ConnectionResetTarget) => {
-    if (target === 'all') {
-      await run();
+    const targetPosture = canonicalRefreshTargetPosture(target);
+    if (!targetPosture.actionAllowed) {
+      finish(false, [`${targetPosture.statusLabel} · ${targetPosture.reason}`], Date.now());
       return;
     }
     if (busy.current) return;
@@ -3185,7 +3026,7 @@ export function RefreshDock() {
     } catch {
       issues = [`${target} reset failed`];
     }
-    await Promise.all([pingHealthNow(), loadSystemNow()]);
+    await Promise.all([pingHealthNow(), binding.refresh()]);
     const wait = Math.max(0, 2150 - (Date.now() - startedAt));
     window.setTimeout(() => {
       finish(ok && issues.length === 0, issues, ts);
@@ -3194,45 +3035,51 @@ export function RefreshDock() {
     }, wait);
   };
 
-  const overallLabel = watchmanStatusLabel(overallStatus);
+  const overallLabel = overallPresentation.label;
   const label = st === 'spin' ? 'Recovery Running' : st === 'ok' ? 'Connections Recovered' : st === 'err' ? 'Recovery Needs Review' : `Connection Watchman · ${overallLabel}`;
   const groupedConnections = (Object.keys(watchmanGroupLabel) as WatchmanGroup[]).map((group) => ({
     group,
     rows: components.filter((component) => component.group === group),
   })).filter((section) => section.rows.length > 0);
-  const resetControls: Array<{ target: ConnectionResetTarget; label: string; detail: string }> = [
-    { target: 'all', label: 'Mounted Connections', detail: 'Rebuild public and local connections; owner-gated adapters remain excluded' },
-    { target: 'market', label: 'Market Network', detail: 'Rebuild Binance public sockets' },
-    { target: 'runtime', label: 'Bot Runtimes', detail: 'Restart Basis and Volume engines' },
+  const resetControls = [
+    { target: 'all' as const, label: 'Mounted Connections', detail: 'CONTROL_PREVIEW_REQUIRED · managed-runtime recovery requires canonical preview and receipt' },
+    { target: 'market' as const, label: 'Market Network', detail: 'CONTROL_PREVIEW_REQUIRED · the compatibility route cannot rebuild market runtimes' },
+    { target: 'runtime' as const, label: 'Bot Runtimes', detail: 'CONTROL_PREVIEW_REQUIRED · engine restart is owned by canonical Product controls' },
     { target: 'news', label: 'News Sources', detail: 'Refresh every configured source adapter' },
     { target: 'calendar', label: 'Calendar', detail: 'Rebuild the economic-event cache' },
     { target: 'fx', label: 'FX Rates', detail: 'Refresh display-currency references' },
-  ];
+  ].map((control) => ({ ...control, posture: canonicalRefreshTargetPosture(control.target as ConnectionResetTarget) }));
   const cadenceControls: Array<{ key: DataCadenceKey; target: Exclude<ConnectionResetTarget, 'all'>; label: string; detail: string }> = [
-    { key: 'market', target: 'market', label: 'Market Prices', detail: 'Prices, breadth, and market rows' },
+    { key: 'market', target: 'market', label: 'Market Prices', detail: 'Polling cadence only · refresh is CONTROL_PREVIEW_REQUIRED' },
     { key: 'news', target: 'news', label: 'News Context', detail: 'Feed fallback and new-item context' },
     { key: 'calendar', target: 'calendar', label: 'Calendar', detail: 'Macro releases and value changes' },
   ];
   const selectedRecovery = resetControls.find((control) => control.target === recoveryTarget) ?? resetControls[0];
-  const recoveryOptions = resetControls.map((control) => ({ id: control.target, label: control.label }));
+  const recoveryOptions = resetControls.map((control) => ({
+    id: control.target,
+    label: control.posture.actionAllowed ? control.label : `${control.label} · Preview Required`,
+  }));
 
-  const renderComponentRow = (component: WatchmanComponent) => (
-    <div key={component.id} className={`watchman-component status-${component.status}`}>
-      <span className="watchman-component-icon">{watchmanGroupIcon(component.group)}<i /></span>
-      <span className="watchman-component-copy"><b>{component.label}</b><em>{component.detail}</em></span>
-      <span className="watchman-component-value"><b>{component.value}</b><em>{watchmanStatusLabel(component.status)}</em></span>
-      {component.resetTarget ? (
-        <button
-          type="button"
-          disabled={busy.current || component.status === 'planned'}
-          className={targetBusy === component.resetTarget ? 'busy' : ''}
-          onClick={() => void runTarget(component.resetTarget!)}
-          aria-label={`Recover ${component.label}`}
-          title={`Recover ${component.label}`}
-        ><IconRefresh size={14} /></button>
-      ) : <span className="watchman-component-spacer" />}
-    </div>
-  );
+  const renderComponentRow = (component: WatchmanComponent) => {
+    const resetPosture = component.resetTarget ? canonicalRefreshTargetPosture(component.resetTarget) : null;
+    return (
+      <div key={component.id} className={`watchman-component status-${component.status}`}>
+        <span className="watchman-component-icon">{watchmanGroupIcon(component.group)}<i /></span>
+        <span className="watchman-component-copy"><b>{component.label}</b><em>{component.detail}</em></span>
+        <span className="watchman-component-value"><b>{component.value}</b><em>{component.statusLabel}</em></span>
+        {component.resetTarget && resetPosture ? (
+          <button
+            type="button"
+            disabled={busy.current || component.status === 'planned' || !resetPosture.actionAllowed}
+            className={targetBusy === component.resetTarget ? 'busy' : ''}
+            onClick={() => void runTarget(component.resetTarget!)}
+            aria-label={resetPosture.actionAllowed ? `Recover ${component.label}` : `${component.label} ${resetPosture.statusLabel}`}
+            title={resetPosture.actionAllowed ? `Recover ${component.label}` : `${resetPosture.statusLabel} · ${resetPosture.reason}`}
+          ><IconRefresh size={14} /></button>
+        ) : <span className="watchman-component-spacer" />}
+      </div>
+    );
+  };
 
   return (
     <div className={`rdock rdock-control watchman-dock ${open ? 'open' : ''}`} ref={rootRef}>
@@ -3247,11 +3094,11 @@ export function RefreshDock() {
           </header>
 
           <div className="rdock-summary watchman-summary" aria-label="Connection Summary">
-            <span><em>Required Healthy</em><b>{operationalCount}/{requiredComponents.length}</b><small>{outageCount ? `${outageCount} outage` : degradedCount ? `${degradedCount} degraded` : 'No lag detected'}</small></span>
+            <span><em>Machine Ready</em><b>{productSnapshot?.ownerView.machineReady ?? 'UNKNOWN'}</b><small>{productSnapshot?.ownerView.topRootBlocker ?? 'Canonical owner verdict'}</small></span>
             <span><em>Browser RTT</em><b>{appRtt == null ? '—' : msLabel(appRtt)}</b><small>Direct control API probe</small></span>
-            <span><em>Source Coverage</em><b>{backendWatchman?.summary.liveSources ?? 0}/{backendWatchman?.summary.sourceCoverage ?? 0}</b><small>News adapters live</small></span>
-            <span><em>Active Incidents</em><b>{activeProblems.length}</b><small>{outageCount ? `${outageCount} outage` : 'Transition-only alerts'}</small></span>
-            <span><em>Last Recovery</em><b>{effectiveLastResetTs ? timeAgo(effectiveLastResetTs) : 'Not Run'}</b><small>{lastRefreshIssues.length || backendWatchman?.lastReset?.ok === false ? 'Needs review' : backendWatchman?.lastReset ? `${backendWatchman.lastReset.target} · ${backendWatchman.lastReset.durationMs} ms` : 'Manual recovery'}</small></span>
+            <span><em>Binding Continuity</em><b>{binding.continuity}</b><small>{binding.error ?? productSnapshot?.ownerView.dataFreshness ?? 'No freshness claim'}</small></span>
+            <span><em>Ops Interlock</em><b>{productSnapshot?.opsIntakeInterlock.state ?? 'UNKNOWN'}</b><small>{productSnapshot?.opsIntakeInterlock.reasonCodes[0] ?? 'Canonical readback'}</small></span>
+            <span><em>Recovery State</em><b>{productSnapshot?.opsReadback.recoveryState ?? 'UNKNOWN'}</b><small>{effectiveLastResetTs ? `Last manual recovery ${timeAgo(effectiveLastResetTs)}` : 'No local recovery run'}</small></span>
           </div>
 
           <div className="rdock-view-tabs" role="tablist" aria-label="Connection Control View">
@@ -3265,7 +3112,7 @@ export function RefreshDock() {
               <div className="watchman-overview">
                 <div className="watchman-overview-control-grid">
                   <section className="watchman-path-section">
-                    <div className="watchman-section-head"><span><b>Connection Path</b><em>Current evidence by owner</em></span><strong>{backendWatchman?.assessedAt ? `Assessed ${timeAgo(backendWatchman.assessedAt)}` : 'Connecting'}</strong></div>
+                    <div className="watchman-section-head"><span><b>Connection Path</b><em>Current evidence by owner</em></span><strong>{productSnapshot?.evaluatedAtMs ? `Assessed ${timeAgo(productSnapshot.evaluatedAtMs)}` : 'Connecting'}</strong></div>
                     <div className="watchman-path" aria-label="Monitored connection path">
                       {pathComponents.map((component) => (
                         <div className={`watchman-path-node status-${component.status}`} key={component.id}>
@@ -3274,7 +3121,7 @@ export function RefreshDock() {
                             <b>{component.label.replace('Binance ', '').replace('Browser / Website Session', 'Browser')}</b>
                             <em>{component.detail}</em>
                           </span>
-                          <span className="watchman-path-value"><b>{component.value}</b><em>{watchmanStatusLabel(component.status)}</em></span>
+                          <span className="watchman-path-value"><b>{component.value}</b><em>{component.statusLabel}</em></span>
                         </div>
                       ))}
                     </div>
@@ -3300,10 +3147,10 @@ export function RefreshDock() {
                           <button
                             className={`watchman-cadence-refresh ${targetBusy === control.target ? 'busy' : ''}`}
                             type="button"
-                            disabled={busy.current}
+                            disabled={busy.current || !canonicalRefreshTargetPosture(control.target).actionAllowed}
                             onClick={() => void runTarget(control.target)}
-                            aria-label={`Refresh ${control.label}`}
-                            title={`Refresh ${control.label}`}
+                            aria-label={canonicalRefreshTargetPosture(control.target).actionAllowed ? `Refresh ${control.label}` : `${control.label} CONTROL_PREVIEW_REQUIRED`}
+                            title={canonicalRefreshTargetPosture(control.target).actionAllowed ? `Refresh ${control.label}` : canonicalRefreshTargetPosture(control.target).reason}
                           ><IconRefresh size={14} /></button>
                         </div>
                       ))}
@@ -3328,8 +3175,8 @@ export function RefreshDock() {
               <div className="watchman-sources-view">
                 <div className="watchman-source-hero">
                   <span><IconNewspaper size={22} /></span>
-                  <span><b>{backendWatchman?.summary.liveSources ?? 0} Live Sources</b><em>Adapters are rolled up by service so hundreds of feeds remain operable without an unreadable wall.</em></span>
-                  <strong>{backendWatchman?.summary.sourceCoverage ?? 0} Tracked</strong>
+                  <span><b>{sourceComponents.length} Canonical Source Owners</b><em>Exact Product Integration owner projections; no legacy watchman aggregate.</em></span>
+                  <strong>{sourceCoverage?.universeSymbols ?? 'UNKNOWN'} Symbols</strong>
                 </div>
                 <section>
                   <div className="watchman-section-head"><span><b>Market Intelligence Sources</b><em>Grouped upstream coverage and cache health</em></span><strong>{sourceComponents.length}</strong></div>
@@ -3359,8 +3206,14 @@ export function RefreshDock() {
               buttonClassName="watchman-recovery-trigger"
               menuClassName="watchman-recovery-menu opens-up"
             />
-            <button className={targetBusy === recoveryTarget ? 'busy' : ''} type="button" disabled={busy.current} onClick={() => void runTarget(recoveryTarget)}>
-              <IconRefresh size={15} /><span>{targetBusy === recoveryTarget ? 'Recovering' : 'Run Recovery'}</span>
+            <button
+              className={targetBusy === recoveryTarget ? 'busy' : ''}
+              type="button"
+              disabled={busy.current || !selectedRecovery.posture.actionAllowed}
+              onClick={() => void runTarget(recoveryTarget)}
+              title={selectedRecovery.posture.reason}
+            >
+              <IconRefresh size={15} /><span>{targetBusy === recoveryTarget ? 'Refreshing' : selectedRecovery.posture.actionLabel}</span>
             </button>
           </footer>
         </section>

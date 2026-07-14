@@ -1,4 +1,5 @@
 import type {
+  SystemControlMutation,
   SystemControlState,
   SystemTraceEvent,
 } from '../contracts/types.js';
@@ -24,6 +25,7 @@ export const SYSTEM_PERSISTENCE_LIMITS = Object.freeze({
   maximumExecutions: 256,
   maximumReconciliations: 256,
   maximumIdempotencyReceipts: 512,
+  maximumLiveEdgeControlEvents: 256,
   maximumControlRejections: 512,
   maximumTraceIndexEntries: 1_024,
   maximumReasonCodes: 32,
@@ -61,7 +63,7 @@ export type LedgerConfigCompareAndSetResult =
     }
   | {
       readonly committed: false;
-      readonly reason: 'VERSION_CONFLICT';
+      readonly reason: 'VERSION_CONFLICT' | 'DEADLINE_EXCEEDED';
       readonly currentValue: string | null;
     };
 
@@ -219,6 +221,28 @@ export interface ProductBootReleasePersistenceInput {
   readonly audit: Readonly<ProductPersistenceAuditRecord>;
 }
 
+/**
+ * Bounded, validated readback of the existing Ledger boot/release table.
+ * This is evidence only: a non-null deployed commit never authorizes or
+ * performs a release switch.
+ */
+export interface ProductBootReleaseRecord {
+  readonly operationId: string;
+  readonly operationType: string;
+  readonly generation: number;
+  readonly testedCommit: string | null;
+  readonly deployedCommit: string | null;
+  readonly configRevision: string | null;
+  readonly schemaRevision: string;
+  readonly modelRevision: string | null;
+  readonly startedAtMs: number;
+  readonly completedAtMs: number | null;
+  readonly clean: boolean | null;
+  readonly blockerCode: string | null;
+  readonly correlationId: string;
+  readonly ledgerEventId: number;
+}
+
 export type ProductPersistenceMutationResult =
   | {
       readonly disposition: 'COMMITTED_NEW' | 'IDEMPOTENT_REPLAY';
@@ -231,6 +255,24 @@ export type ProductPersistenceMutationResult =
       readonly currentRevision: string | null;
     };
 
+export type LedgerSchemaCompatibilityState =
+  | 'AVAILABLE'
+  | 'UNAVAILABLE'
+  | 'MALFORMED'
+  | 'MISMATCH';
+
+/**
+ * Durable schema-compatibility truth owned by the canonical Ledger. Numeric
+ * values are publishable only when the metadata row and SQLite user_version
+ * agree; every other state is deliberately null-valued.
+ */
+export interface LedgerSchemaCompatibilityReadback {
+  readonly state: LedgerSchemaCompatibilityState;
+  readonly currentSchemaVersion: number | null;
+  readonly rollbackFloor: number | null;
+  readonly reasonCode: string | null;
+}
+
 /** Structural port implemented by the existing Ledger. No second store exists. */
 export interface LedgerPersistencePort {
   getConfigValue(key: string): string | null;
@@ -240,6 +282,7 @@ export interface LedgerPersistencePort {
     expectedValue: string | null,
     nextValue: string,
     records: readonly LedgerEventInputRecord[],
+    commitBeforeMs?: number,
   ): LedgerConfigCompareAndSetResult;
   setConfigValueAndLogEvent(
     key: string,
@@ -280,6 +323,10 @@ export interface LedgerPersistencePort {
   compareAndSetProductBootReleaseRevision?(
     input: Readonly<ProductBootReleasePersistenceInput>,
   ): ProductPersistenceMutationResult;
+  readProductBootReleaseRevisions?(
+    limit?: number,
+  ): readonly Readonly<ProductBootReleaseRecord>[];
+  readSchemaCompatibility?(): Readonly<LedgerSchemaCompatibilityReadback>;
   probeWritable?(force?: boolean): boolean;
 }
 
@@ -359,6 +406,60 @@ export interface PersistedRestartTruth {
   readonly observedAtMs: number | null;
 }
 
+/**
+ * Canonical ordinary-stop truth projected by the supervisor/ops owner. `NONE`
+ * is deliberately stronger than an empty identity query: that owner may emit
+ * it only when reconciliation is current and canonical zero exposure is
+ * proven. System Integration consumes this projection without recomputing it.
+ */
+export interface CanonicalOrdinaryDrainTruth {
+  readonly source: 'CANONICAL_SUPERVISOR_READBACK';
+  readonly observedAtUtc: string;
+  readonly validUntilUtc: string;
+  readonly exposureState: 'NONE' | 'ACTIVE' | 'AMBIGUOUS' | 'RECOVERY_REQUIRED' | 'UNKNOWN';
+  readonly ambiguityState: 'NONE' | 'AMBIGUOUS' | 'UNKNOWN';
+  readonly recoveryState: 'NONE' | 'RECOVERY_REQUIRED' | 'UNKNOWN';
+}
+
+/**
+ * Mechanical process-local capability posture, never an account/exchange
+ * balance claim. `PROVEN_ABSENT` requires proof that no signed/test/private
+ * mutation port is mounted and no unresolved local mutation history is hidden
+ * outside the canonical blocking-reference read.
+ */
+export type LocalMutationAuthorityPosture =
+  | 'PROVEN_ABSENT'
+  | 'PRESENT'
+  | 'AMBIGUOUS'
+  | 'UNKNOWN';
+
+/**
+ * Narrow lifecycle-truth seam. It owns no storage and may only supply owner
+ * projections for persistence and ordinary-stop admission.
+ */
+export interface SystemLifecycleTruthReadPort {
+  readRestartTruth?(nowMs: number): Readonly<PersistedRestartTruth>;
+  readLocalMutationAuthority?(): LocalMutationAuthorityPosture;
+  readOrdinaryDrainTruth?(): (
+    Readonly<CanonicalOrdinaryDrainTruth>
+    | Promise<Readonly<CanonicalOrdinaryDrainTruth>>
+  );
+  /**
+   * Owner-supplied readback for a durable runtime effect identity after an
+   * application-process restart. Missing, throwing, or malformed evidence is
+   * always consumed as UNKNOWN and therefore can never authorize reissue.
+   */
+  readControlRuntimeEffect?(
+    effectId: string,
+    mutation: Readonly<SystemControlMutation>,
+  ): (
+    'APPLIED'
+    | 'NOT_APPLIED'
+    | 'UNKNOWN'
+    | Promise<'APPLIED' | 'NOT_APPLIED' | 'UNKNOWN'>
+  );
+}
+
 export interface PersistedIdempotencyReceipt {
   readonly idempotencyKey: string;
   readonly requestDigest: string;
@@ -366,6 +467,35 @@ export interface PersistedIdempotencyReceipt {
   readonly recordedAtMs: number;
   readonly checkpointRevision: number;
   readonly receipt: SystemJsonValue;
+}
+
+export interface PersistedControlRuntimePublicationReference {
+  readonly effectId: string;
+  readonly idempotencyKey: string;
+  readonly requestDigest: string;
+  readonly correlationId: string;
+  readonly generation: number;
+  readonly state: 'PENDING' | 'UNKNOWN';
+}
+
+/**
+ * Explicit L14 control-journal storage inside the one canonical System
+ * Integration checkpoint. This is not a second command store: it is the
+ * typed persisted projection consumed by the accepted L14 persistence port.
+ */
+export interface PersistedLiveEdgeControlEvent {
+  readonly storageKey: string;
+  readonly storageKind: 'JOURNAL' | 'PRE_INTENT_AUDIT';
+  readonly commandId: string;
+  readonly eventId: string;
+  readonly idempotencyKey: string;
+  readonly appendRequestDigest: string;
+  readonly journalVersion: number;
+  readonly previousHeadDigest: string | null;
+  readonly headDigest: string;
+  readonly event: SystemJsonValue;
+  readonly occurredAtMs: number;
+  readonly checkpointRevision: number;
 }
 
 /**
@@ -422,6 +552,7 @@ export interface SystemIntegrationCheckpointState {
   readonly dryRunExecutions: readonly Readonly<PersistedDryRunExecutionReference>[];
   readonly reconciliations: readonly Readonly<PersistedReconciliationReference>[];
   readonly idempotencyReceipts: readonly Readonly<PersistedIdempotencyReceipt>[];
+  readonly liveEdgeControlEvents: readonly Readonly<PersistedLiveEdgeControlEvent>[];
   readonly controlRejections: readonly Readonly<PersistedControlRejectionReceipt>[];
   readonly traceIndex: readonly Readonly<PersistedTraceIndexEntry>[];
   readonly restartTruth: Readonly<PersistedRestartTruth>;

@@ -75,6 +75,46 @@ test('existing Ledger atomically commits checkpoint plus audit before changing a
   }
 });
 
+test('missing checkpoint CAS fails closed without invoking the unconditional legacy write', () => {
+  const dataDir = tempDataDir();
+  const ledger = new Ledger(dataDir);
+  let unconditionalWrites = 0;
+  try {
+    const missingCasPort = new Proxy(ledger, {
+      get(target, property) {
+        if (property === 'compareAndSetConfigValueAndLogEvents') return undefined;
+        if (property === 'setConfigValueAndLogEvent') {
+          return (...args) => {
+            unconditionalWrites += 1;
+            return target.setConfigValueAndLogEvent(...args);
+          };
+        }
+        const value = Reflect.get(target, property, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+    const adapter = new SystemLedgerPersistenceAdapter(missingCasPort);
+    const loaded = adapter.load(T0, 'ledger.missing-cas.load');
+    assert.equal(loaded.ok, true);
+    assert.equal(loaded.source, 'EMPTY');
+
+    const failed = adapter.persistStartup({
+      startedAtMs: T0 + 1,
+      correlationId: 'ledger.missing-cas.start',
+    });
+    assert.equal(failed.ok, false);
+    assert.equal(failed.code, 'PERSISTENCE_WRITE_FAILED');
+    assert.match(failed.message, /lacks checkpoint compare-and-set capability/);
+    assert.equal(unconditionalWrites, 0);
+    assert.equal(ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY), null);
+    assert.equal(ledger.recentEvents(100, SYSTEM_PERSISTENCE_EVENT_KIND).length, 0);
+    assert.equal(adapter.currentState().value.revision, 0);
+  } finally {
+    ledger.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
 test('corrupt durable checkpoints fail closed and post-commit listener failure is reconciled from Ledger truth', () => {
   const corruptDir = tempDataDir();
   const corruptLedger = new Ledger(corruptDir);

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { lstatSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { fail, hasPlaceholder, isUtc, listRegularFiles, parseArgs, readJson, requireKeys } from '../lib.mjs';
+import { fail, hasPlaceholder, isUtc, listRegularFiles, parseArgs, readJson, requireExactKeys } from '../lib.mjs';
 
 const args = parseArgs(process.argv.slice(2));
 for (const key of ['release', 'host', 'supervisor', 'mode', 'now', 'max-host-age-sec', 'max-supervisor-age-sec', 'required-supervisor-window-sec']) {
@@ -12,8 +12,8 @@ if (!['deploy', 'rollback'].includes(args.mode)) fail('--mode must be deploy or 
 const release = readJson(resolve(args.release, 'release.json'), 'release.json');
 const host = readJson(args.host, 'host preflight');
 const supervisor = readJson(args.supervisor, 'supervisor readback');
-requireKeys(host, ['source', 'account', 'targetHost', 'environment', 'freeBytes', 'backupReserveBytes', 'sqliteVersion', 'evidenceSha256', 'observedAtUtc'], 'host preflight');
-requireKeys(supervisor, ['source', 'observedAtUtc', 'validUntilUtc', 'deploymentFrozen', 'exposureState', 'ambiguityState', 'recoveryState', 'currentSchemaVersion', 'rollbackFloor'], 'supervisor readback');
+requireExactKeys(host, ['source', 'account', 'targetHost', 'environment', 'freeBytes', 'backupReserveBytes', 'sqliteVersion', 'evidenceSha256', 'observedAtUtc'], 'host preflight');
+requireExactKeys(supervisor, ['source', 'observedAtUtc', 'validUntilUtc', 'deploymentFrozen', 'exposureState', 'ambiguityState', 'recoveryState', 'currentSchemaVersion', 'rollbackFloor'], 'supervisor readback');
 const nowMs = Date.parse(args.now);
 const hostObservedMs = Date.parse(host.observedAtUtc);
 const supervisorObservedMs = Date.parse(supervisor.observedAtUtc);
@@ -43,8 +43,18 @@ if (supervisor.deploymentFrozen !== false) fail('canonical supervisor reports de
 if (supervisor.exposureState !== 'NONE') fail(`deployment freezes on exposureState=${supervisor.exposureState}`);
 if (supervisor.ambiguityState !== 'NONE') fail(`deployment freezes on ambiguityState=${supervisor.ambiguityState}`);
 if (supervisor.recoveryState !== 'NONE') fail(`deployment freezes on recoveryState=${supervisor.recoveryState}`);
-if (!Number.isInteger(supervisor.currentSchemaVersion) || !Number.isInteger(supervisor.rollbackFloor)) {
-  fail('canonical schema readback must contain integer currentSchemaVersion and rollbackFloor');
+if (!Number.isSafeInteger(supervisor.currentSchemaVersion) || supervisor.currentSchemaVersion < 0
+    || !Number.isSafeInteger(supervisor.rollbackFloor) || supervisor.rollbackFloor < 0
+    || supervisor.rollbackFloor > supervisor.currentSchemaVersion) {
+  fail('canonical schema readback must contain a safe currentSchemaVersion >= rollbackFloor >= 0');
+}
+if (!Number.isSafeInteger(release.schemaVersion) || release.schemaVersion < 0
+    || !Number.isSafeInteger(release.rollbackFloor) || release.rollbackFloor < 0
+    || release.rollbackFloor > release.schemaVersion
+    || (release.rollbackFloor !== 0 && release.rollbackFloor !== release.schemaVersion)
+    || typeof release.rollbackBarrier !== 'boolean'
+    || release.rollbackBarrier !== (release.rollbackFloor > 0)) {
+  fail('candidate release Ledger compatibility is invalid');
 }
 if (release.schemaVersion < supervisor.rollbackFloor) {
   fail(`candidate schema ${release.schemaVersion} is below rollback floor ${supervisor.rollbackFloor}`);

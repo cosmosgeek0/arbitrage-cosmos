@@ -19,9 +19,13 @@ import type {
   ManagedCompositionReadSnapshot,
   RuntimeHealthEvidence,
 } from '../composition/types.js';
-import type { SystemIntegrationCheckpointState } from '../persistence/types.js';
+import type {
+  LedgerSchemaCompatibilityReadback,
+  SystemIntegrationCheckpointState,
+} from '../persistence/types.js';
 import {
   dependenciesFor,
+  type SystemLedgerSummary,
   type SystemSupervisorSummaries,
 } from '../supervisor/index.js';
 import type { ValidateOnlyRunSnapshot } from '../verticalSlice/types.js';
@@ -77,6 +81,12 @@ const COMPONENT_METADATA: Readonly<Record<SystemComponentId, ComponentMetadata>>
     unavailableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'NOT_CONFIGURED'),
     supportedControls: Object.freeze([]),
   }),
+  'q-inference': Object.freeze({
+    owner: 'Q_INFERENCE', ownerPath: 'quant/src/quant_edge/inference',
+    availableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'NOT_CONFIGURED'),
+    unavailableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'NOT_CONFIGURED'),
+    supportedControls: Object.freeze([]),
+  }),
   'basis-engine': Object.freeze({
     owner: 'BASIS_ENGINE', ownerPath: 'server/src/engine/basis',
     availableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'WIRED'),
@@ -129,6 +139,8 @@ const COMPONENT_METADATA: Readonly<Record<SystemComponentId, ComponentMetadata>>
 
 const PHYSICAL_COMPONENT_IDS = Object.freeze([
   'market-universe',
+  'intelligence-runtime',
+  'market-intelligence',
   'basis-engine',
   'volume-engine',
 ] as const);
@@ -488,10 +500,69 @@ function unavailableStrategy() {
   });
 }
 
+type ProjectedLedgerSchemaCompatibility = Pick<
+  SystemLedgerSummary,
+  'schemaCompatibilityState' | 'schemaCompatibilityReason' | 'currentSchemaVersion' | 'rollbackFloor'
+>;
+
+function projectLedgerSchemaCompatibility(
+  input: Readonly<LedgerSchemaCompatibilityReadback> | null | undefined,
+): Readonly<ProjectedLedgerSchemaCompatibility> {
+  const malformed = (): Readonly<ProjectedLedgerSchemaCompatibility> => Object.freeze({
+    schemaCompatibilityState: 'MALFORMED',
+    schemaCompatibilityReason: 'LEDGER_SCHEMA_COMPATIBILITY_READBACK_MALFORMED',
+    currentSchemaVersion: null,
+    rollbackFloor: null,
+  });
+  if (input === null) {
+    return Object.freeze({
+      schemaCompatibilityState: 'UNAVAILABLE',
+      schemaCompatibilityReason: 'LEDGER_SCHEMA_COMPATIBILITY_READBACK_UNAVAILABLE',
+      currentSchemaVersion: null,
+      rollbackFloor: null,
+    });
+  }
+  try {
+    if (typeof input !== 'object' || Array.isArray(input)
+        || Object.getPrototypeOf(input) !== Object.prototype
+        || Object.getOwnPropertySymbols(input).length !== 0) return malformed();
+    const actualKeys = Object.keys(input).sort();
+    const expectedKeys = ['currentSchemaVersion', 'reasonCode', 'rollbackFloor', 'state'];
+    if (actualKeys.length !== expectedKeys.length
+        || actualKeys.some((key, index) => key !== expectedKeys[index])) return malformed();
+    const validState = ['AVAILABLE', 'UNAVAILABLE', 'MALFORMED', 'MISMATCH'].includes(input.state);
+    const validReason = input.reasonCode === null
+      || (typeof input.reasonCode === 'string' && /^[A-Z][A-Z0-9_]{0,127}$/.test(input.reasonCode));
+    const validAvailable = input.state === 'AVAILABLE'
+      && Number.isSafeInteger(input.currentSchemaVersion)
+      && (input.currentSchemaVersion as number) >= 1
+      && Number.isSafeInteger(input.rollbackFloor)
+      && (input.rollbackFloor as number) >= 0
+      && (input.rollbackFloor as number) <= (input.currentSchemaVersion as number)
+      && input.reasonCode === null;
+    const validFailure = input.state !== 'AVAILABLE'
+      && input.currentSchemaVersion === null
+      && input.rollbackFloor === null
+      && typeof input.reasonCode === 'string'
+      && validReason;
+    if (!validState || (!validAvailable && !validFailure)) return malformed();
+    return Object.freeze({
+      schemaCompatibilityState: input.state,
+      schemaCompatibilityReason: input.reasonCode,
+      currentSchemaVersion: validAvailable ? input.currentSchemaVersion : null,
+      rollbackFloor: validAvailable ? input.rollbackFloor : null,
+    });
+  } catch {
+    return malformed();
+  }
+}
+
 export function defaultApplicationSummaries(
   checkpoint: Readonly<SystemIntegrationCheckpointState> | null,
   ledgerWritable: boolean | null,
+  ledgerSchemaCompatibility: Readonly<LedgerSchemaCompatibilityReadback> | null = null,
 ): Readonly<SystemSupervisorSummaries> {
+  const schemaCompatibility = projectLedgerSchemaCompatibility(ledgerSchemaCompatibility);
   return Object.freeze({
     sourceCoverage: Object.freeze({
       truthLabel: 'UNAVAILABLE', universeSymbols: null, spotCoveredSymbols: null,
@@ -525,8 +596,11 @@ export function defaultApplicationSummaries(
       reasonCodes: Object.freeze(['RECONCILIATION_TRUTH_UNAVAILABLE']),
     }),
     ledger: Object.freeze({
-      truthLabel: checkpoint ? 'RECORDED_REPLAY' : 'UNAVAILABLE',
+      truthLabel: checkpoint && schemaCompatibility.schemaCompatibilityState === 'AVAILABLE'
+        ? 'RECORDED_REPLAY'
+        : 'UNAVAILABLE',
       writable: ledgerWritable,
+      ...schemaCompatibility,
       lastEventId: null,
       lastPersistedAtMs: checkpoint?.lastShutdown?.stoppedAtMs ?? checkpoint?.lastStartup?.startedAtMs ?? null,
       checkpointRevision: checkpoint ? String(checkpoint.revision) : null,

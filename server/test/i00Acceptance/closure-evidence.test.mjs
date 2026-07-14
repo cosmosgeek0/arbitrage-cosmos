@@ -17,8 +17,24 @@ const BINDING_CATEGORY_IDS = Object.freeze([
   'I15-PRIVATE-ACCOUNT', 'I15-SPOT-SIGNED', 'I15-USDM-SIGNED', 'I15-MARGIN', 'I15-RECONCILIATION', 'I15-COCKPIT',
   'I00-PAGES', 'I00-CONTROL-SEED',
 ]);
+const CLOSURE_PHASES = Object.freeze({
+  NOT_CANDIDATE_READY: Object.freeze({
+    productVerdict: 'PENDING_MEASUREMENT',
+    measurementStatus: 'PENDING_MEASUREMENT',
+    receiptsRequired: false,
+  }),
+  INTEGRATION_CANDIDATE_READY: Object.freeze({
+    productVerdict: 'LOCAL_ACCEPTANCE_MEASURED',
+    measurementStatus: 'LOCAL_MEASURED_PASS',
+    receiptsRequired: true,
+  }),
+});
 
-test('mission coverage rows are complete unique and fixture-safe', () => {
+function closurePhase() {
+  return CLOSURE_PHASES[closure.candidateState];
+}
+
+test('mission coverage rows are complete, unique, and match the legal source-freeze or sealed-candidate phase', () => {
   const ids = new Set();
   for (const row of closure.requirements) {
     assert(!ids.has(row.id), `duplicate ${row.id}`);
@@ -28,7 +44,7 @@ test('mission coverage rows are complete unique and fixture-safe', () => {
       assert(row[field].length > 0, `${row.id}.${field}`);
     }
     assert(STATUS.has(row.status), `${row.id}.status=${row.status}`);
-    assert(!['WIRED', 'VISIBLE', 'DEPLOYED_PROVED', 'LIVE_OBSERVED'].includes(row.status), `${row.id} fixture false-green`);
+    assert(!['DEPLOYED_PROVED', 'LIVE_OBSERVED'].includes(row.status), `${row.id} unmeasured false-green`);
     if (row.sha !== null) assert(/^[a-f0-9]{40}$/.test(row.sha), `${row.id}.sha`);
     if (row.status !== 'LOCAL_PROVED' && row.blocker === null) throw new Error(`${row.id} missing blocker`);
   }
@@ -38,6 +54,18 @@ test('mission coverage rows are complete unique and fixture-safe', () => {
   assert(ids.has('Q-CLOSURE-01'));
   assert(ids.has('L-CLOSURE-01'));
   for (const id of BINDING_CATEGORY_IDS) assert(ids.has(id), `missing binding category ${id}`);
+  const phase = closurePhase();
+  assert(phase, `unsupported candidate state ${closure.candidateState}`);
+  assert.equal(closure.productVerdict, phase.productVerdict);
+  const measurements = Object.values(closure.measurements);
+  assert.equal(measurements.length, 4);
+  assert(measurements.every((row) => row.status === phase.measurementStatus));
+  if (phase.receiptsRequired) {
+    assert(measurements.every((row) => typeof row.receipt === 'string'
+      && row.receipt.startsWith('test/i00/performance/evidence/')));
+  } else {
+    assert(measurements.every((row) => row.receipt === null));
+  }
 });
 
 test('accepted evidence references full SHAs and existing receipts', () => {
@@ -45,6 +73,17 @@ test('accepted evidence references full SHAs and existing receipts', () => {
   const verified = verifyReceiptProvenance(provenance);
   assert.equal(verified.passed, true, JSON.stringify(verified.results.filter((result) => !result.passed)));
   assert.equal(provenance.items.length, closure.acceptedEvidence.length);
+  const phase2Donors = closure.acceptedEvidence.filter((row) => row.phase2Donor);
+  assert(phase2Donors.length > 0);
+  assert.equal(closure.donorEquality.status, 'PROVED');
+  for (const field of ['expected', 'discovered', 'accepted', 'integrated']) {
+    assert.equal(closure.donorEquality[field], phase2Donors.length, `donorEquality.${field}`);
+  }
+  assert.equal(provenance.verificationBase, catalog.base.head);
+  assert.deepEqual(
+    provenance.items.filter((item) => !item.ancestorRequired).map((item) => item.sha),
+    ['692501587617d4880303fbd747d93e63c376f088'],
+  );
   for (const evidence of closure.acceptedEvidence) {
     assert(/^[a-f0-9]{40}$/.test(evidence.sha), evidence.name);
     assert(statSync(path.join(ROOT, evidence.receipt), { throwIfNoEntry: false }), evidence.receipt);
@@ -60,7 +99,7 @@ test('autonomy no-terminal resource interface and no-surprises inventories are e
   assert.equal(closure.autonomy.length, 20);
   assert.equal(new Set(closure.autonomy.map((row) => row.layer)).size, 20);
   assert.equal(closure.terminalOperations.length, 21);
-  const terminalClasses = new Set(['MOVED_TO_AUTHENTICATED_CONTROL', 'INTENTIONALLY_OWNER_RUNBOOK', 'EXTERNAL_OWNER_ACTION', 'DEFECT', 'NOT_SUPPORTED']);
+  const terminalClasses = new Set(['MOVED_TO_AUTHENTICATED_CONTROL', 'INTENTIONALLY_OWNER_RUNBOOK', 'EXTERNAL_OWNER_ACTION', 'DEFECT', 'NOT_SUPPORTED', 'PENDING_MEASUREMENT', 'OWNER_GATED']);
   assert(closure.terminalOperations.every((row) => terminalClasses.has(row.classification)));
   assert.equal(closure.resourceMetrics.length, 19);
   assert.deepEqual(closure.resourcePriority.map((row) => row.tier), ['P0', 'P1', 'P2', 'P3', 'P4']);
@@ -74,6 +113,33 @@ test('autonomy no-terminal resource interface and no-surprises inventories are e
   assert(closure.interfaces.every((row) => !/pin (?:endpoint|per accepted|exact)/i.test(row.limitsWeights)));
   assert.equal(closure.noSurprises.length, 9);
   assert(closure.noSurprises.every((row) => row.evidenceRowCompleteness === 'COMPLETE' && row.productVerdict !== 'PROVED'));
+  const allowedLimitationStatuses = new Set(['NOT_CONFIGURED', 'OWNER_GATED', 'UNKNOWN']);
+  assert.equal(
+    new Set(closure.knownLimitations.map((row) => row.id)).size,
+    closure.knownLimitations.length,
+    'known limitation IDs must be unique',
+  );
+  assert(closure.knownLimitations.every((row) => allowedLimitationStatuses.has(row.status)));
+  assert(closure.knownLimitations.every((row) => typeof row.reason === 'string' && row.reason.length > 0));
+  const limitations = new Map(closure.knownLimitations.map((row) => [row.id, row]));
+  for (const id of [
+    'PRIVATE_SIGNED_EXCHANGE',
+    'Q_PRODUCTION_TRANSPORT',
+    'LIVE_EXECUTION',
+    'DEPLOYMENT_TARGET',
+    'L12_ACTIVE_SUBJECT_PRIVATE_TRUTH',
+    'L13_ACCEPTED_PROJECTOR',
+    'L14_PRODUCTION_ACTIVATION',
+    'FOUNDATION_QUANTITY_PRODUCTION_CONSUMER',
+    'MANAGED_RESTART_EFFECT',
+    'PRODUCTION_CAPACITY',
+    'PRODUCT_ASSURANCE_PRODUCTION_PROJECTION',
+  ]) {
+    assert(limitations.has(id), `missing non-green boundary ${id}`);
+    assert.notEqual(limitations.get(id).status, 'LOCAL_PROVED');
+  }
+  assert.match(limitations.get('A_FORMAL').reason, /POST_LANDING_EXCLUDED_BY_L_LAST_ORDERING/);
+  assert.match(limitations.get('A_ACTION_EVIDENCE_S2').reason, /POST_LANDING_ONLY_EXCLUDED/);
 });
 
 test('dated official-interface facts pin the selected Spot SBE user-data and margin contracts', () => {
@@ -119,7 +185,7 @@ test('resource measurement plan computes quantiles breaches and P0-first load sh
   assert(shedding.every((decision) => decision.materialLoss.P0 === 0 && decision.materialLoss.P1 === 0));
 });
 
-test('page capability and control matrices stay machine-checkable and synthetic', () => {
+test('page capability and control matrices separate historical fixtures from current source closure', () => {
   assert.equal(catalog.pages.length, 21);
   assert.deepEqual(catalog.pages.map((row) => row.pageId).sort(), discoverOperationalPageIds());
   assert.deepEqual(
@@ -131,20 +197,33 @@ test('page capability and control matrices stay machine-checkable and synthetic'
   assert.equal(catalog.capabilities.length, 10);
   assert.equal(catalog.controls.length, 14);
   assert(catalog.capabilities.every((row) => row.fixtureState === 'SYNTHETIC_ONLY'));
+  assert(catalog.capabilities.every((row) => typeof row.closureState === 'string' && row.closureState.length > 0));
   assert(catalog.pages.every((row) => row.blocker && row.errorBehavior));
+  assert(catalog.pages.every((row) => typeof row.closureState === 'string' && row.closureState.length > 0));
   assert(catalog.pages.every((row) => ['SYNTHETIC_ONLY', 'NOT_CONFIGURED', 'BASE_REALITY_UNVERIFIED'].includes(row.fixtureState)));
   assert(catalog.controls.every((row) => row.bounded === true && row.moneyIncreasing === false));
   const controlFields = [
     'id', 'command', 'group', 'label', 'explanation', 'owner', 'targetTypes', 'payloadSchema', 'safeBounds', 'defaultValue',
     'semantics', 'effect', 'requiredPosture', 'confirmation', 'expiryMs', 'reversible', 'previewProvider', 'invariants', 'telemetry', 'wiringState',
+    'runtimeControlId', 'closureState',
   ];
   for (const control of catalog.controls) {
     for (const field of controlFields) assert.notEqual(control[field], undefined, `${control.id}.${field}`);
-    assert(control.wiringState === 'WIRED_FIXTURE' || control.wiringState === 'OWNER_GATED'
-      || control.wiringState.startsWith('PENDING_BACKEND:') || control.wiringState.startsWith('UNAVAILABLE:'));
+    assert(control.wiringState === 'WIRED_SOURCE' || control.wiringState.startsWith('OWNER_GATED:')
+      || control.wiringState.startsWith('NOT_CONFIGURED:'));
   }
+  const wired = catalog.controls.filter((row) => row.wiringState === 'WIRED_SOURCE');
+  assert.deepEqual(wired.map((row) => row.id).sort(), ['CTRL-INTAKE', 'CTRL-KILL', 'CTRL-MODE', 'CTRL-RESTART']);
+  assert.deepEqual(wired.map((row) => row.runtimeControlId).sort(), [
+    'component.engine-supervisor.restart', 'global.intake.pause', 'global.kill-switch.engage', 'global.safe-mode.read-only',
+  ]);
+  assert(wired.every((row) => row.reversible === false && row.closureState === 'SOURCE_BUILT_RUNTIME_MEASUREMENT_PENDING'));
+  assert.equal(catalog.controls.find((row) => row.id === 'CTRL-KILL').payloadSchema, '{engaged:true}');
+  assert.equal(catalog.controls.find((row) => row.id === 'CTRL-MODE').payloadSchema, '{safeMode:READ_ONLY}');
+  assert.equal(catalog.controls.find((row) => row.id === 'CTRL-INTAKE').payloadSchema, '{paused:true}');
+  assert.equal(catalog.controls.find((row) => row.id === 'CTRL-RESTART').payloadSchema, '{componentId:engine-supervisor}');
   assert.deepEqual(catalog.requiredAbsentSurfaces, []);
-  assert.equal(catalog.canonicalRoutes.length, 11);
+  assert.equal(catalog.canonicalRoutes.length, 14);
   assert.deepEqual(
     catalog.canonicalRoutes
       .filter((route) => route.route.startsWith('/api/product-integration'))
@@ -154,43 +233,78 @@ test('page capability and control matrices stay machine-checkable and synthetic'
       'GET /api/product-integration/v1/material-events',
       'GET /api/product-integration/v1/traces/:correlationId',
       'POST /api/product-integration/v1/commands/preview',
+      'GET /api/product-integration/v1/commands/:commandId/result',
       'POST /api/product-integration/v1/commands',
     ],
   );
+  const commandResultRoute = catalog.canonicalRoutes.find((route) => route.route === '/api/product-integration/v1/commands/:commandId/result');
+  assert.deepEqual(commandResultRoute, {
+    method: 'GET',
+    route: '/api/product-integration/v1/commands/:commandId/result',
+    sourceNeedle: "router.get('/v1/commands/:commandId/result'",
+    operatorIdentity: 'SERVER_DERIVED_AUTHENTICATED',
+    owner: 'systemIntegration.canonical-control-service',
+    queryKeys: ['idempotencyKey', 'controlId'],
+    identityContract: {
+      commandId: 'sysctrl_[a-f0-9]{64}',
+      idempotencyKey: '[A-Za-z0-9][A-Za-z0-9._:-]{7,127}',
+      controlId: '[a-z0-9][a-z0-9.-]{0,159}',
+    },
+    responseStates: {
+      TERMINAL: 200,
+      PENDING: 202,
+      NOT_FOUND_OR_IDENTITY_MISMATCH: 404,
+      OWNER_NOT_CONFIGURED: 409,
+      FAIL_CLOSED_OR_OWNER_UNAVAILABLE_OR_INVALID: 503,
+    },
+    proofState: 'SOURCE_BUILT_FOCUSED_PROVED',
+    acceptanceBlocker: 'RUNTIME_CONTROL_MEASUREMENT_PENDING; RUNTIME_BROWSER_MEASUREMENT_PENDING',
+  });
+  assert(catalog.pages.find((page) => page.pageId === 'control-room').canonicalApi
+    .includes('/api/product-integration/v1/commands/:commandId/result'));
 });
 
 test('generated Markdown reports are byte-identical to machine evidence rendering', () => {
-  const reports = renderReports({ ...closure, generatedAtUtc: '2026-07-13T00:00:00Z' });
+  const reports = renderReports(closure);
   for (const [relativePath, expected] of Object.entries(reports)) {
     assert.equal(readFileSync(path.join(ROOT, relativePath), 'utf8'), expected, relativePath);
   }
 });
 
-test('machine report is canonical and self-digesting', () => {
-  const actual = JSON.parse(readFileSync(path.join(ROOT, 'integration/reports/i00-proof-evidence.json'), 'utf8'));
-  const expected = buildMachineEvidence();
-  assert.deepEqual({ ...actual, evidenceSha256: undefined }, { ...expected, evidenceSha256: undefined });
-  assert.equal(actual.evidenceSha256, evidenceDigest(expected));
-  assert.equal(actual.targetState, 'PROOF_PRESTAGE_READY');
-  assert.equal(actual.productVerdict, 'AWAITING_REAL_ADAPTERS');
-  assert(actual.frozenInputs.every((input) => input.passed));
-  assert.equal(actual.historicalFrozenInputs.filter((input) => input.passed).length, 12);
-  assert.deepEqual(actual.historicalFrozenInputs.filter((input) => !input.passed).map((input) => input.path), [
+test('current machine evidence is input-driven for both legal candidate phases and historical IP-PROOF evidence stays historical', () => {
+  const current = buildMachineEvidence();
+  const phase = closurePhase();
+  assert(phase);
+  assert.equal(current.targetState, 'CANDIDATE_SOURCE_FROZEN');
+  assert.equal(current.productVerdict, phase.productVerdict);
+  assert.equal(current.candidateState, closure.candidateState);
+  assert.equal(current.counts.phase2Donors, closure.acceptedEvidence.filter((row) => row.phase2Donor).length);
+  assert.equal(current.counts.provenanceItems, readJson('fixtures/i00/receipt-provenance.json').items.length);
+  assert(current.frozenInputs.every((input) => input.passed), JSON.stringify(current.frozenInputs.filter((input) => !input.passed)));
+  assert.equal(current.historicalFrozenInputs.filter((input) => input.passed).length, 12);
+  assert.deepEqual(current.historicalFrozenInputs.filter((input) => !input.passed).map((input) => input.path), [
     'QL_DIRECTOR_STATE.md',
     'QL_PARALLEL_DAG.md',
   ]);
-  assert.equal(actual.livingDirectorInputAcceptance.passed, true);
-  assert.equal(actual.livingDirectorInputAcceptance.ruling, 'D-LAUNCH-7');
-  assert.equal(actual.livingDirectorInputAcceptance.mode, 'LATEST_CURRENT_MAIN_TOUCH');
-  assert.equal(actual.livingDirectorInputAcceptance.directiveResults.length, 5);
-  assert(actual.authority.scanPassed);
-  assert.equal(actual.authority.authorityConverged, false);
-  assert(actual.authority.unresolvedConflictCount > 0);
-  assert(actual.receiptProvenanceVerification.passed);
-  assert(actual.routes.every((route) => route.observed));
+  assert.equal(current.livingDirectorInputAcceptance.passed, true);
+  assert(current.authority.scanPassed);
+  assert.equal(current.authority.authorityConverged, true);
+  assert.equal(current.authority.unresolvedConflictCount, 0);
+  assert(current.receiptProvenanceVerification.passed);
+  assert(current.routes.every((route) => route.observed));
+  assert(Object.values(current.measurements).every((row) => row.status === phase.measurementStatus));
+
+  const actual = JSON.parse(readFileSync(path.join(ROOT, 'integration/reports/i00-proof-evidence.json'), 'utf8'));
+  const { evidenceSha256: actualDigest, ...actualBody } = actual;
+  assert.deepEqual(actualBody, current);
+  assert.equal(actualDigest, evidenceDigest(current));
+  assert.equal(actual.packet, 'I00_PHASE2_CLOSURE');
+  assert.equal(actual.targetState, 'CANDIDATE_SOURCE_FROZEN');
+  assert.equal(catalog.historicalPacket.machineEvidenceGitObject, '23e985c17b9b860fee26be397fa05b26f3daf8f2:integration/reports/i00-proof-evidence.json');
+  assert.equal(catalog.historicalPacket.machineEvidenceSha256, '3d132f701f9de90e0f9260a3e4f0b86d55459f14306abd5cf7d6a1968a013c64');
 });
 
-test('ready seal records implementation identity receipt hashes and exact next integration command', () => {
+test('historical IP-PROOF seal remains immutable historical packet evidence', () => {
   const state = readText('IP_PROOF_STATE.md');
   const receipt = readText('IP_PROOF_RECEIPT.md');
   for (const document of [state, receipt]) {

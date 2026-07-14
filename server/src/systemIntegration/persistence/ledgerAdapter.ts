@@ -38,6 +38,7 @@ import {
   type LedgerEventRecord,
   type LedgerPersistencePort,
   type PersistedCommitReceipt,
+  type PersistedControlRuntimePublicationReference,
   type PersistedControlRejectionReceipt,
   type PersistedRestartTruth,
   type PersistedTraceEventRecord,
@@ -51,6 +52,7 @@ import {
   type TraceAppendReceipt,
   type TraceQuery,
   type ProductBootReleasePersistenceInput,
+  type ProductBootReleaseRecord,
   type ProductCommandPersistenceInput,
   type ProductConfigRevisionPersistenceInput,
   type ProductDesiredStatePersistenceInput,
@@ -112,6 +114,10 @@ function sameJson(left: unknown, right: unknown): boolean {
   } catch {
     return false;
   }
+}
+
+function requiresRuntimePublication(command: unknown): boolean {
+  return command === 'RESTART_COMPONENT' || command === 'SET_COMPONENT_STATE';
 }
 
 function checkpointChecksum(serialized: string): string {
@@ -247,6 +253,19 @@ export interface ControlPersistenceCommit {
   readonly code: string;
 }
 
+export type ControlRuntimePublicationState = 'NOT_REQUIRED' | 'PENDING' | 'PUBLISHED' | 'UNKNOWN';
+
+export interface ControlRuntimePublicationCommit {
+  readonly idempotencyKey: string;
+  readonly requestDigest: string;
+  readonly correlationId: string;
+  readonly occurredAtMs: number;
+}
+
+export type ControlRuntimePublicationResult =
+  | { readonly kind: 'PUBLISHED' }
+  | { readonly kind: 'IDEMPOTENT_REPLAY' };
+
 export interface ControlRejectionAudit {
   readonly dedupeKey: string;
   readonly idempotencyKey: string | null;
@@ -263,8 +282,17 @@ export interface ControlRejectionAudit {
 }
 
 export type ControlPersistenceResult =
-  | { readonly kind: 'COMMITTED'; readonly receipt: Readonly<SystemControlMutationReceipt> }
-  | { readonly kind: 'IDEMPOTENT_REPLAY'; readonly requestDigest: string; readonly receipt: Readonly<SystemControlMutationReceipt> }
+  | {
+      readonly kind: 'COMMITTED';
+      readonly receipt: Readonly<SystemControlMutationReceipt>;
+      readonly runtimePublication: ControlRuntimePublicationState;
+    }
+  | {
+      readonly kind: 'IDEMPOTENT_REPLAY';
+      readonly requestDigest: string;
+      readonly receipt: Readonly<SystemControlMutationReceipt>;
+      readonly runtimePublication: ControlRuntimePublicationState;
+    }
   | { readonly kind: 'IDEMPOTENCY_CONFLICT'; readonly requestDigest: string }
   | { readonly kind: 'REVISION_CONFLICT'; readonly current: Readonly<SystemControlState> };
 
@@ -277,9 +305,11 @@ interface StoredControlReceipt extends Record<string, SystemJsonValue> {
   readonly applied: boolean;
   readonly code: string;
   readonly command: string;
+  readonly mutation: SystemJsonValue;
   readonly actorIdDigest: string;
   readonly actorSource: 'loopback' | 'cloudflare-access';
   readonly reasonDigest: string;
+  readonly runtimePublication: ControlRuntimePublicationState;
   readonly before: SystemJsonValue;
   readonly after: SystemJsonValue;
 }
@@ -667,21 +697,42 @@ export class SystemLedgerPersistenceAdapter {
 
   private withProductIdentityRestartBarrier(
     base: Readonly<RestartBarrierProjection>,
+    state: Readonly<SystemIntegrationCheckpointState>,
   ): Readonly<RestartBarrierProjection> {
-    if (typeof this.ledger.readProductBlockingIdentityReferences !== 'function') return base;
     const reasonCodes = new Set(base.reasonCodes);
-    try {
-      const references = this.ledger.readProductBlockingIdentityReferences(
-        SYSTEM_PERSISTENCE_LIMITS.maximumAuthorityReferences,
-      );
-      if (references.length === 0) return base;
-      reasonCodes.add('UNRESOLVED_PRODUCT_IDENTITY_REFERENCES');
-      for (const referenceType of [...new Set(references.map((reference) => reference.referenceType))].sort()) {
-        reasonCodes.add(`UNRESOLVED_PRODUCT_IDENTITY_REFERENCE_${referenceType}`);
+    let blocked = false;
+    if (typeof this.ledger.readProductBlockingIdentityReferences !== 'function') {
+      reasonCodes.add('PRODUCT_IDENTITY_REFERENCE_READ_UNAVAILABLE');
+      blocked = true;
+    } else {
+      try {
+        const references = this.ledger.readProductBlockingIdentityReferences(
+          SYSTEM_PERSISTENCE_LIMITS.maximumAuthorityReferences,
+        );
+        if (references.length > 0) {
+          blocked = true;
+          reasonCodes.add('UNRESOLVED_PRODUCT_IDENTITY_REFERENCES');
+          for (const referenceType of [...new Set(references.map((reference) => reference.referenceType))].sort()) {
+            reasonCodes.add(`UNRESOLVED_PRODUCT_IDENTITY_REFERENCE_${referenceType}`);
+          }
+        }
+      } catch {
+        reasonCodes.add('PRODUCT_IDENTITY_REFERENCE_READ_FAILED');
+        blocked = true;
       }
-    } catch {
-      reasonCodes.add('PRODUCT_IDENTITY_REFERENCE_READ_FAILED');
     }
+    const pendingPublications = this.controlRuntimePublicationReferences(state);
+    if (pendingPublications === null) {
+      blocked = true;
+      reasonCodes.add('CONTROL_RUNTIME_PUBLICATION_READ_FAILED');
+    } else if (pendingPublications.length > 0) {
+      blocked = true;
+      reasonCodes.add('CONTROL_COMMITTED_RUNTIME_PENDING');
+      if (pendingPublications.some((entry) => entry.state === 'UNKNOWN')) {
+        reasonCodes.add('CONTROL_RUNTIME_PUBLICATION_EFFECT_UNKNOWN');
+      }
+    }
+    if (!blocked) return base;
     return Object.freeze({
       ...base,
       canOpenOrIncrease: false,
@@ -712,7 +763,7 @@ export class SystemLedgerPersistenceAdapter {
           ok: true,
           source: 'EMPTY',
           state,
-          barrier: this.withProductIdentityRestartBarrier(evaluateRestartBarrier(state, nowMs)),
+          barrier: this.withProductIdentityRestartBarrier(evaluateRestartBarrier(state, nowMs), state),
         };
       }
       const decoded = decodeSystemCheckpoint(serialized);
@@ -734,7 +785,7 @@ export class SystemLedgerPersistenceAdapter {
         ok: true,
         source: 'CHECKPOINT',
         state: decoded.value,
-        barrier: this.withProductIdentityRestartBarrier(evaluateRestartBarrier(decoded.value, nowMs)),
+        barrier: this.withProductIdentityRestartBarrier(evaluateRestartBarrier(decoded.value, nowMs), decoded.value),
       };
     } catch (error) {
       const message = errorMessage(error, 'existing Ledger could not read the integration checkpoint');
@@ -760,7 +811,10 @@ export class SystemLedgerPersistenceAdapter {
     const current = this.currentState();
     if (!current.ok) return current;
     if (!validUtcMillis(nowMs)) return failed('INVALID_PERSISTENCE_REQUEST', 'restart barrier time is invalid');
-    return { ok: true, value: this.withProductIdentityRestartBarrier(evaluateRestartBarrier(current.value, nowMs)) };
+    return {
+      ok: true,
+      value: this.withProductIdentityRestartBarrier(evaluateRestartBarrier(current.value, nowMs), current.value),
+    };
   }
 
   private productPersistenceWriteReady(): PersistenceResult<true> {
@@ -872,6 +926,22 @@ export class SystemLedgerPersistenceAdapter {
     );
   }
 
+  readProductBootReleaseRevisions(
+    limit = 20,
+  ): PersistenceResult<readonly Readonly<ProductBootReleaseRecord>[]> {
+    if (typeof this.ledger.readProductBootReleaseRevisions !== 'function') {
+      return failed('PERSISTENCE_READ_FAILED', 'existing Ledger lacks product boot/release read capability');
+    }
+    try {
+      return { ok: true, value: this.ledger.readProductBootReleaseRevisions(limit) };
+    } catch (error) {
+      if (error instanceof TypeError || error instanceof RangeError) {
+        return failed('INVALID_PERSISTENCE_REQUEST', 'product boot/release query is invalid');
+      }
+      return failed('PERSISTENCE_READ_FAILED', errorMessage(error, 'product boot/release query failed'));
+    }
+  }
+
   private findAuditEvent(checkpointRevision: number, checkpointDigest?: string): LedgerEventRecord | null {
     try {
       const events = this.ledger.recentEvents(
@@ -944,45 +1014,38 @@ export class SystemLedgerPersistenceAdapter {
       if (this.ledger.probeWritable && !this.ledger.probeWritable(true)) {
         return failed('PERSISTENCE_WRITE_FAILED', 'existing Ledger is not writable');
       }
-      let event: LedgerEventRecord;
-      if (typeof this.ledger.compareAndSetConfigValueAndLogEvents === 'function') {
-        const result = this.ledger.compareAndSetConfigValueAndLogEvents(
-          SYSTEM_PERSISTENCE_CONFIG_KEY,
-          this.loadedSerializedValue,
-          serialized,
-          [{
-            kind: SYSTEM_PERSISTENCE_EVENT_KIND,
-            symbol: null,
-            data,
-          }],
-        );
-        if (!result.committed) {
-          this.refreshAfterCompareAndSetConflict(result.currentValue);
-          return failed(
-            'CHECKPOINT_REVISION_CONFLICT',
-            this.loadFailure
-              ? 'durable checkpoint changed and its current value failed closed validation'
-              : 'durable checkpoint changed after this adapter loaded it',
-          );
-        }
-        const committedEvent = result.events[0];
-        if (!committedEvent) {
-          const readback = this.findAuditEvent(nextState.revision, checksum);
-          if (!readback) {
-            return failed('PERSISTENCE_WRITE_FAILED', 'existing Ledger committed without a readable persistence audit event');
-          }
-          event = readback;
-        } else {
-          event = committedEvent;
-        }
-      } else {
-        event = this.ledger.setConfigValueAndLogEvent(
-          SYSTEM_PERSISTENCE_CONFIG_KEY,
-          serialized,
-          SYSTEM_PERSISTENCE_EVENT_KIND,
-          null,
+      if (typeof this.ledger.compareAndSetConfigValueAndLogEvents !== 'function') {
+        return failed('PERSISTENCE_WRITE_FAILED', 'existing Ledger lacks checkpoint compare-and-set capability');
+      }
+      const result = this.ledger.compareAndSetConfigValueAndLogEvents(
+        SYSTEM_PERSISTENCE_CONFIG_KEY,
+        this.loadedSerializedValue,
+        serialized,
+        [{
+          kind: SYSTEM_PERSISTENCE_EVENT_KIND,
+          symbol: null,
           data,
+        }],
+      );
+      if (!result.committed) {
+        this.refreshAfterCompareAndSetConflict(result.currentValue);
+        return failed(
+          'CHECKPOINT_REVISION_CONFLICT',
+          this.loadFailure
+            ? 'durable checkpoint changed and its current value failed closed validation'
+            : 'durable checkpoint changed after this adapter loaded it',
         );
+      }
+      const committedEvent = result.events[0];
+      let event: LedgerEventRecord;
+      if (!committedEvent) {
+        const readback = this.findAuditEvent(nextState.revision, checksum);
+        if (!readback) {
+          return failed('PERSISTENCE_WRITE_FAILED', 'existing Ledger committed without a readable persistence audit event');
+        }
+        event = readback;
+      } else {
+        event = committedEvent;
       }
       this.stateValue = cloneCheckpointState(nextState);
       this.loadedSerializedValue = serialized;
@@ -1496,7 +1559,10 @@ export class SystemLedgerPersistenceAdapter {
     });
     if (committed.ok) {
       this.finalShutdownReceipt = committed.value;
-      this.sealed = true;
+      // An unclean checkpoint is durable evidence, not permission to make the
+      // adapter permanently unwritable. A repaired bounded drain may
+      // supersede it with a clean checkpoint; only that clean proof seals.
+      this.sealed = input.clean;
     }
     return committed;
   }
@@ -1519,9 +1585,66 @@ export class SystemLedgerPersistenceAdapter {
     });
   }
 
+  private controlRuntimePublicationFromStored(
+    stored: Readonly<{ receipt: SystemJsonValue }>,
+  ): ControlRuntimePublicationState | null {
+    if (!isRecord(stored.receipt) || stored.receipt.kind !== 'CONTROL_MUTATION') return null;
+    if (['NOT_REQUIRED', 'PENDING', 'PUBLISHED', 'UNKNOWN'].includes(String(stored.receipt.runtimePublication))) {
+      return stored.receipt.runtimePublication as ControlRuntimePublicationState;
+    }
+    // Pre-marker restart receipts are conservatively recoverable work. Other
+    // historical controls never required this runtime publication protocol.
+    return stored.receipt.applied === true && requiresRuntimePublication(stored.receipt.command)
+      ? 'UNKNOWN'
+      : 'NOT_REQUIRED';
+  }
+
+  private controlRuntimePublicationReferences(
+    state: Readonly<SystemIntegrationCheckpointState>,
+  ): readonly Readonly<PersistedControlRuntimePublicationReference>[] | null {
+    const references: PersistedControlRuntimePublicationReference[] = [];
+    for (const stored of state.idempotencyReceipts) {
+      if (!isRecord(stored.receipt)
+        || stored.receipt.kind !== 'CONTROL_MUTATION'
+        || stored.receipt.applied !== true
+        || !requiresRuntimePublication(stored.receipt.command)) continue;
+      const publication = this.controlRuntimePublicationFromStored(stored);
+      if (publication === null || !isRecord(stored.receipt.after)) return null;
+      if (publication === 'PUBLISHED') continue;
+      const generation = stored.receipt.after.generation;
+      const revision = stored.receipt.after.revision;
+      if (!Number.isSafeInteger(generation) || Number(generation) < 0
+        || !Number.isSafeInteger(revision) || Number(revision) < 0) return null;
+      references.push(Object.freeze({
+        effectId: `${stored.idempotencyKey}:${revision}:${generation}`,
+        idempotencyKey: stored.idempotencyKey,
+        requestDigest: stored.requestDigest,
+        correlationId: stored.correlationId,
+        generation: Number(generation),
+        state: publication === 'PENDING' ? 'PENDING' : 'UNKNOWN',
+      }));
+    }
+    return Object.freeze(references.sort((left, right) => left.effectId.localeCompare(right.effectId, 'en')));
+  }
+
+  readPendingControlRuntimePublications(): PersistenceResult<
+    readonly Readonly<PersistedControlRuntimePublicationReference>[]
+  > {
+    const current = this.currentState();
+    if (!current.ok) return current;
+    const references = this.controlRuntimePublicationReferences(current.value);
+    return references === null
+      ? failed('PERSISTENCE_CORRUPT', 'persisted control runtime publication evidence is invalid')
+      : { ok: true, value: references };
+  }
+
   async findControlMutation(idempotencyKey: string): Promise<Readonly<{
     requestDigest: string;
+    correlationId: string;
+    recordedAtMs: number;
+    mutation: Readonly<SystemControlMutation> | null;
     receipt: Readonly<SystemControlMutationReceipt>;
+    runtimePublication: ControlRuntimePublicationState;
   }> | null> {
     if (!IDEMPOTENCY_KEY.test(idempotencyKey)) return null;
     const current = this.currentState();
@@ -1529,7 +1652,23 @@ export class SystemLedgerPersistenceAdapter {
     const stored = current.value.idempotencyReceipts.find((entry) => entry.idempotencyKey === idempotencyKey);
     if (!stored) return null;
     const receipt = this.controlReceiptFromStored(stored);
-    return receipt ? Object.freeze({ requestDigest: stored.requestDigest, receipt }) : null;
+    const runtimePublication = this.controlRuntimePublicationFromStored(stored);
+    const mutation = isRecord(stored.receipt)
+      && stored.receipt.kind === 'CONTROL_MUTATION'
+      && isRecord(stored.receipt.mutation)
+      && (SYSTEM_CONTROL_COMMANDS as readonly unknown[]).includes(stored.receipt.mutation.command)
+      ? Object.freeze({ ...stored.receipt.mutation }) as unknown as Readonly<SystemControlMutation>
+      : null;
+    return receipt && runtimePublication
+      ? Object.freeze({
+          requestDigest: stored.requestDigest,
+          correlationId: stored.correlationId,
+          recordedAtMs: stored.recordedAtMs,
+          mutation,
+          receipt,
+          runtimePublication,
+        })
+      : null;
   }
 
   async commitControlMutation(commit: Readonly<ControlPersistenceCommit>): Promise<ControlPersistenceResult> {
@@ -1543,8 +1682,14 @@ export class SystemLedgerPersistenceAdapter {
         return { kind: 'IDEMPOTENCY_CONFLICT', requestDigest: existing.requestDigest };
       }
       const receipt = this.controlReceiptFromStored(existing);
-      if (!receipt) throw new Error('persisted control receipt is invalid');
-      return { kind: 'IDEMPOTENT_REPLAY', requestDigest: existing.requestDigest, receipt };
+      const runtimePublication = this.controlRuntimePublicationFromStored(existing);
+      if (!receipt || !runtimePublication) throw new Error('persisted control receipt is invalid');
+      return {
+        kind: 'IDEMPOTENT_REPLAY',
+        requestDigest: existing.requestDigest,
+        receipt,
+        runtimePublication,
+      };
     }
     if (commit.request.expectedRevision !== current.value.control.revision
       || !sameJson(commit.before, current.value.control)) {
@@ -1570,9 +1715,13 @@ export class SystemLedgerPersistenceAdapter {
       applied: commit.applied,
       code: commit.code,
       command: commit.request.mutation.command,
+      mutation: commit.request.mutation as unknown as SystemJsonValue,
       actorIdDigest: persistenceDigest(commit.actor.id),
       actorSource: commit.actor.source,
       reasonDigest: persistenceDigest(commit.request.reason),
+      runtimePublication: commit.applied && requiresRuntimePublication(commit.request.mutation.command)
+        ? 'PENDING'
+        : 'NOT_REQUIRED',
       before: commit.before as unknown as SystemJsonValue,
       after: commit.after as unknown as SystemJsonValue,
     };
@@ -1639,9 +1788,73 @@ export class SystemLedgerPersistenceAdapter {
       after: commit.after,
       ledgerEventId: applied.value.ledgerEventId,
     });
+    const runtimePublication = storedReceipt.runtimePublication;
     return applied.value.replayed
-      ? { kind: 'IDEMPOTENT_REPLAY', requestDigest: commit.requestDigest, receipt }
-      : { kind: 'COMMITTED', receipt };
+      ? { kind: 'IDEMPOTENT_REPLAY', requestDigest: commit.requestDigest, receipt, runtimePublication }
+      : { kind: 'COMMITTED', receipt, runtimePublication };
+  }
+
+  async markControlRuntimePublished(
+    commit: Readonly<ControlRuntimePublicationCommit>,
+  ): Promise<ControlRuntimePublicationResult> {
+    if (!IDEMPOTENCY_KEY.test(commit.idempotencyKey)
+      || !DIGEST.test(commit.requestDigest)
+      || !CORRELATION_ID.test(commit.correlationId)
+      || !validUtcMillis(commit.occurredAtMs)) {
+      throw new TypeError('control runtime publication commit is invalid');
+    }
+    const current = this.currentState();
+    if (!current.ok) throw new Error(current.message);
+    const index = current.value.idempotencyReceipts.findIndex(
+      (entry) => entry.idempotencyKey === commit.idempotencyKey,
+    );
+    if (index < 0) throw new Error('persisted control mutation is unavailable');
+    const stored = current.value.idempotencyReceipts[index];
+    if (stored.requestDigest !== commit.requestDigest) throw new Error('persisted control mutation digest conflicts');
+    const publication = this.controlRuntimePublicationFromStored(stored);
+    if (publication === null || !isRecord(stored.receipt)
+      || stored.receipt.applied !== true
+      || !requiresRuntimePublication(stored.receipt.command)) {
+      throw new Error('persisted control mutation does not require runtime publication');
+    }
+    if (publication === 'PUBLISHED') return { kind: 'IDEMPOTENT_REPLAY' };
+    if (publication !== 'PENDING' && publication !== 'UNKNOWN') {
+      throw new Error('persisted control runtime publication state is invalid');
+    }
+
+    const nextReceipts = current.value.idempotencyReceipts.map((entry, entryIndex) => entryIndex === index
+      ? Object.freeze({
+          ...entry,
+          receipt: Object.freeze({
+            ...(entry.receipt as Readonly<Record<string, SystemJsonValue>>),
+            runtimePublication: 'PUBLISHED',
+          }),
+        })
+      : entry);
+    const nextState: SystemIntegrationCheckpointState = {
+      ...current.value,
+      revision: current.value.revision + 1,
+      idempotencyReceipts: nextReceipts,
+    };
+    const trace = traceForCheckpoint({
+      idPrefix: 'control.runtime-published',
+      sequence: nextState.revision,
+      componentId: 'engine-supervisor',
+      correlationId: commit.correlationId,
+      occurredAtMs: commit.occurredAtMs,
+      kind: 'CONTROL',
+      machinePhase: 'RUNNING',
+      ownerId: null,
+      referenceIds: [commit.idempotencyKey],
+    });
+    const marked = this.commitCheckpoint(nextState, {
+      auditKind: 'TRANSITION',
+      correlationId: commit.correlationId,
+      occurredAtMs: commit.occurredAtMs,
+      traceEvent: trace,
+    });
+    if (!marked.ok) throw new Error(`${marked.code}: ${marked.message}`);
+    return { kind: 'PUBLISHED' };
   }
 
   async recordControlRejection(audit: Readonly<ControlRejectionAudit>): Promise<ControlRejectionPersistenceResult> {

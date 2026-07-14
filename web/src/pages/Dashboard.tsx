@@ -16,11 +16,15 @@ import {
 } from 'lucide-react';
 import { EquityChart, PerfChart, type PerfDay } from '../components/PerfChart';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
+import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import { TokenIcon } from '../components/TokenIcon';
+import {
+  canonicalComponentPresentation,
+  canonicalStrategyRuntimePresentation,
+} from '../lib/canonicalCockpitTruth';
 import { useRefreshSignal } from '../lib/refresh';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createSettledPoll } from '../lib/polling';
-import type { BasisSnapshot } from '../lib/basisRuntime';
 import { useStore, type Page } from '../store';
 import { fmtMoney, fmtPrice, signClass, timeAgo } from '../format';
 import type { LedgerEvent } from '../types';
@@ -45,7 +49,7 @@ interface PnlData {
   realizedByDay: PerfDay[];
   realizedBySymbol: { symbol: string; usd: number }[];
   feesByAsset: { asset: string; amount: number }[];
-  integrity: { complete: boolean; reasons: string[] };
+  integrity: { state: 'COMPLETE' | 'PARTIAL' | 'UNKNOWN'; complete: boolean; reasons: string[] };
 }
 
 interface EquityHistory {
@@ -53,52 +57,6 @@ interface EquityHistory {
   reconstructedBefore: number | null;
   reconstruction?: { complete: boolean; reasons: string[] };
   fetchedAt: number | null;
-}
-
-interface VolumeRow {
-  symbol: string;
-  base: string;
-  state: 'IDLE' | 'WATCHING' | 'FOCUS' | 'PROPOSED' | 'REJECTED' | 'ACTIVE' | 'COOLDOWN';
-  decisionKind: 'ignore' | 'watch' | 'focus' | 'proposal' | 'reject' | 'warming';
-  rejectCode: string | null;
-  reason: string;
-  decisionTs: number | null;
-  volumeMultiple: Record<string, number | null | undefined>;
-}
-
-interface VolumeSnapshot {
-  updatedAt: number;
-  status: {
-    running: boolean;
-    streamState: 'starting' | 'connecting' | 'open' | 'degraded';
-    streamConnections: number;
-    openConnections: number;
-    bookState: 'fresh' | 'stale';
-    universeSize: number;
-    eligibleSize: number;
-    observedSymbols: number;
-    baselineReady: number;
-    baselineTotal: number;
-    watching: number;
-    focused: number;
-    openProposals: number;
-    lastTradeTs: number | null;
-    lastBookTs: number | null;
-    tradeMessages: number;
-    source: string;
-    bookSource: string;
-    baselineSource: string;
-  };
-  rows: VolumeRow[];
-}
-
-interface SystemSnapshot {
-  ok: boolean;
-  dbOk: boolean;
-  restLatencyMs: number | null;
-  serverTimeDiffMs: number | null;
-  usedWeight1m: number | null;
-  uptimeSec: number;
 }
 
 interface RuntimeRow {
@@ -162,71 +120,34 @@ function sourceAge(updatedAt: number | null): string {
   return updatedAt ? timeAgo(updatedAt) : 'Unavailable';
 }
 
+function sumKnown(values: readonly (number | null | undefined)[]): number | null {
+  return values.every(finite) ? values.reduce<number>((sum, value) => sum + (value as number), 0) : null;
+}
+
+function latestKnown(values: readonly (number | null | undefined)[]): number | null {
+  const known = values.filter(finite);
+  return known.length ? Math.max(...known) : null;
+}
+
 function useDashboardSources(refreshTick: number) {
-  const [basis, setBasis] = useState<Source<BasisSnapshot>>(source);
-  const [volume, setVolume] = useState<Source<VolumeSnapshot>>(source);
   const [pnl, setPnl] = useState<Source<PnlData>>(source);
-  const [system, setSystem] = useState<Source<SystemSnapshot>>(source);
   const history: Source<EquityHistory> = {
     data: null,
     error: 'NOT_CONFIGURED · private balance history is not mounted',
   };
 
   useEffect(() => {
-    const commit = <T,>(
-      result: PromiseSettledResult<T>,
-      setter: React.Dispatch<React.SetStateAction<Source<T>>>,
-    ) => {
-      if (result.status === 'fulfilled') setter({ data: result.value, error: null });
-      else setter((current) => ({ data: current.data, error: apiErrorMessage(result.reason, 'Source unavailable') }));
-    };
-    const fast = createSettledPoll<[PromiseSettledResult<BasisSnapshot>, PromiseSettledResult<VolumeSnapshot>]>({
-      intervalMs: 2_000,
-      request: (signal) => Promise.allSettled([
-        fetchJson<BasisSnapshot>('/api/engine/basis', { cache: 'no-store', signal }),
-        fetchJson<VolumeSnapshot>('/api/engine/volume', { cache: 'no-store', signal }),
-      ]) as Promise<[PromiseSettledResult<BasisSnapshot>, PromiseSettledResult<VolumeSnapshot>]>,
-      onSuccess: ([basisResult, volumeResult]) => {
-        commit(basisResult, setBasis);
-        commit(volumeResult, setVolume);
-      },
-      onError: (error) => {
-        const message = apiErrorMessage(error, 'Source unavailable');
-        setBasis((current) => ({ data: current.data, error: message }));
-        setVolume((current) => ({ data: current.data, error: message }));
-      },
-    });
-    const slow = createSettledPoll<[
-      PromiseSettledResult<PnlData>,
-      PromiseSettledResult<SystemSnapshot>,
-    ]>({
+    const slow = createSettledPoll<PnlData>({
       intervalMs: 30_000,
-      request: (signal) => Promise.allSettled([
-        fetchJson<PnlData>('/api/pnl', { cache: 'no-store', signal }),
-        fetchJson<SystemSnapshot>('/api/system', { cache: 'no-store', signal }),
-      ]) as Promise<[
-        PromiseSettledResult<PnlData>,
-        PromiseSettledResult<SystemSnapshot>,
-      ]>,
-      onSuccess: ([pnlResult, systemResult]) => {
-        commit(pnlResult, setPnl);
-        commit(systemResult, setSystem);
-      },
-      onError: (error) => {
-        const message = apiErrorMessage(error, 'Source unavailable');
-        setPnl((current) => ({ data: current.data, error: message }));
-        setSystem((current) => ({ data: current.data, error: message }));
-      },
+      request: (signal) => fetchJson<PnlData>('/api/pnl', { cache: 'no-store', signal }),
+      onSuccess: (next) => setPnl({ data: next, error: null }),
+      onError: (error) => setPnl({ data: null, error: apiErrorMessage(error, 'PnL truth unavailable') }),
     });
-    fast.start();
     slow.start();
-    return () => {
-      fast.stop();
-      slow.stop();
-    };
+    return slow.stop;
   }, [refreshTick]);
 
-  return { basis, volume, pnl, history, system };
+  return { pnl, history };
 }
 
 function StatusMark({ tone }: { tone: Tone }) {
@@ -244,7 +165,8 @@ function Metric({ label, value, detail, tone = 'idle' }: { label: string; value:
 }
 
 export function Dashboard() {
-  const { state, connected, setPage } = useStore();
+  const { state, setPage } = useStore();
+  const { binding: productBinding } = useProductControlRoomContext();
   const [refreshTick, setRefreshTick] = useState(0);
   const [range, setRange] = useState<RangeId>('1M');
   useRefreshSignal(() => setRefreshTick((value) => value + 1));
@@ -285,13 +207,32 @@ export function Dashboard() {
   }, [historyPoints]);
   const historyCoverage = 'NOT_CONFIGURED · private balance history is not mounted';
 
-  const basis = sources.basis.data;
-  const volume = sources.volume.data;
-  const system = sources.system.data;
-  const basisLive = Boolean(!sources.basis.error && basis?.status.running && basis.status.bookState === 'fresh' && basis.status.markState === 'fresh' && !basis.status.lastError);
-  const volumeLive = Boolean(!sources.volume.error && volume?.status.running && volume.status.streamState === 'open' && volume.status.bookState === 'fresh');
-  const feedsOpen = state ? Object.values(state.feeds).length > 0 && Object.values(state.feeds).every((feed) => feed === 'open') : false;
-  const ledgerReady = !sources.system.error && system?.dbOk === true;
+  const productSnapshot = productBinding.snapshot;
+  const dashboard = productSnapshot?.dashboard;
+  const ledger = dashboard?.summaries.ledger;
+  const componentById = (componentId: string) => productSnapshot?.components.find((component) => component.componentId === componentId);
+  const spotSource = componentById('public-spot-source');
+  const usdMSource = componentById('public-usdm-source');
+  const basisComponent = componentById('basis-engine');
+  const volumeComponent = componentById('volume-engine');
+  const spotPosture = canonicalComponentPresentation(spotSource, productBinding.continuity);
+  const usdMPosture = canonicalComponentPresentation(usdMSource, productBinding.continuity);
+  const basisPosture = canonicalComponentPresentation(basisComponent, productBinding.continuity);
+  const volumePosture = canonicalComponentPresentation(volumeComponent, productBinding.continuity);
+  const runtimePresentation = canonicalStrategyRuntimePresentation(basisComponent, volumeComponent, productBinding.continuity);
+  const basisStrategy = dashboard?.summaries.strategies.basis;
+  const volumeStrategy = dashboard?.summaries.strategies.volume;
+  const publicSourceTone: Tone = [spotPosture, usdMPosture].some((posture) => posture.tone === 'bad')
+    ? 'bad'
+    : [spotPosture, usdMPosture].every((posture) => posture.tone === 'ok') ? 'ok' : 'warn';
+  const publicSourceDetail = [spotSource, usdMSource].filter(Boolean).map((component) => (
+    `${component!.componentId} · ${component!.observedLifecycle} · ${component!.capability} · ${component!.truthLabel}`
+  )).join(' / ') || 'UNKNOWN · canonical public-source components are unavailable';
+  const ledgerReady = Boolean(
+    productBinding.continuity === 'PROVEN'
+    && ledger?.writable === true
+    && ledger.schemaCompatibilityState === 'AVAILABLE',
+  );
 
   const integrityChecks: IntegrityCheck[] = [
     {
@@ -301,23 +242,29 @@ export function Dashboard() {
     },
     {
       label: 'Public Market Feeds',
-      detail: feedsOpen ? `${Object.keys(state?.feeds ?? {}).length} Streams Open` : 'One Or More Streams Down',
-      tone: feedsOpen ? 'ok' : 'bad',
+      detail: publicSourceDetail,
+      tone: publicSourceTone,
     },
     {
       label: 'Basis Runtime',
-      detail: basisLive ? `${basis?.status.dataQualityPassing ?? 0}/${basis?.status.universeSize ?? 0} Quality Passing` : sources.basis.error ?? basis?.status.lastError ?? 'Starting',
-      tone: basisLive ? 'ok' : sources.basis.error ? 'bad' : 'warn',
+      detail: basisComponent
+        ? `${basisComponent.observedLifecycle} · ${basisComponent.capability} · ${basisComponent.truthLabel}${basisComponent.blockerCode ? ` · ${basisComponent.blockerCode}` : ''}`
+        : 'UNKNOWN · canonical Basis component is unavailable',
+      tone: basisPosture.tone,
     },
     {
       label: 'Volume Runtime',
-      detail: volumeLive ? `${volume?.status.baselineReady ?? 0}/${volume?.status.baselineTotal ?? 0} Baselines Ready` : sources.volume.error ?? 'Starting',
-      tone: volumeLive ? 'ok' : sources.volume.error ? 'bad' : 'warn',
+      detail: volumeComponent
+        ? `${volumeComponent.observedLifecycle} · ${volumeComponent.capability} · ${volumeComponent.truthLabel}${volumeComponent.blockerCode ? ` · ${volumeComponent.blockerCode}` : ''}`
+        : 'UNKNOWN · canonical Volume component is unavailable',
+      tone: volumePosture.tone,
     },
     {
       label: 'Ledger Database',
-      detail: ledgerReady ? 'Writable' : system ? 'Unavailable' : 'Checking',
-      tone: ledgerReady ? 'ok' : system ? 'bad' : 'warn',
+      detail: ledgerReady
+        ? `Writable · schema ${ledger?.currentSchemaVersion ?? 'UNKNOWN'}`
+        : ledger?.schemaCompatibilityReason ?? productBinding.error ?? 'UNKNOWN · canonical Ledger evidence unavailable',
+      tone: ledgerReady ? 'ok' : 'bad',
     },
     {
       label: 'API Key Posture',
@@ -326,54 +273,36 @@ export function Dashboard() {
     },
   ];
   const passingChecks = integrityChecks.filter((check) => check.tone === 'ok').length;
-  const publicRuntimeLive = connected && feedsOpen && basisLive && volumeLive && ledgerReady;
-
-  const topBasis = useMemo(() => {
-    if (!basis) return null;
-    return [...basis.rows]
-      .filter((row) => finite(row.netEdgePct) && row.decisionKind !== 'ignore')
-      .sort((left, right) => (right.netEdgePct ?? -Infinity) - (left.netEdgePct ?? -Infinity))[0] ?? null;
-  }, [basis]);
-
-  const topVolume = useMemo(() => {
-    if (!volume) return null;
-    const rank = (row: VolumeRow) => row.state === 'PROPOSED' ? 5 : row.state === 'FOCUS' ? 4 : row.state === 'WATCHING' ? 3 : row.decisionKind === 'reject' ? 2 : 1;
-    return [...volume.rows].sort((left, right) => {
-      const stateRank = rank(right) - rank(left);
-      if (stateRank) return stateRank;
-      return Number(right.volumeMultiple['5s'] ?? 0) - Number(left.volumeMultiple['5s'] ?? 0);
-    })[0] ?? null;
-  }, [volume]);
 
   const runtimeRows: RuntimeRow[] = [
     {
       id: 'basis',
       name: 'Basis Engine',
-      source: basis?.status.bookSource ?? 'Binance Spot + USD-M Books',
-      tone: basisLive ? 'ok' : sources.basis.error ? 'bad' : 'warn',
-      state: basisLive ? 'Live' : sources.basis.error ? 'Unavailable' : 'Starting',
-      intake: basis ? `${basis.status.universeSize} Pairs` : '—',
-      coverage: basis ? `${basis.status.dataQualityPassing}/${basis.status.universeSize}` : '—',
-      watching: basis ? basis.status.watching : '—',
-      focused: basis ? basis.status.focused : '—',
-      proposals: basis ? basis.status.openProposals : '—',
-      constraint: basis ? (basis.status.borrowBlocked ? `${basis.status.borrowBlocked} Borrow Blocked` : topBasis?.reason ?? 'No Active Constraint') : 'UNKNOWN',
-      updatedAt: basis?.updatedAt ?? null,
+      source: basisComponent?.owner.split(':')[0] ?? 'Canonical owner unavailable',
+      tone: basisPosture.tone,
+      state: basisPosture.statusLabel,
+      intake: basisComponent?.capability.replaceAll('_', ' ') ?? 'UNKNOWN',
+      coverage: basisComponent?.truthLabel.replaceAll('_', ' ') ?? 'UNKNOWN',
+      watching: basisStrategy?.candidateCount ?? 'UNKNOWN',
+      focused: 'UNKNOWN',
+      proposals: basisStrategy?.proposalCount ?? 'UNKNOWN',
+      constraint: basisComponent?.blockerCode ?? 'Private Borrow NOT_CONFIGURED · blocker UNKNOWN',
+      updatedAt: latestKnown([basisComponent?.lastAdvanceAtMs, basisComponent?.heartbeatAtMs, basisStrategy?.lastDecisionAtMs]),
       page: 'strategies',
     },
     {
       id: 'volume',
       name: 'Volume Engine',
-      source: volume?.status.source ?? 'Binance Aggregate Trades',
-      tone: volumeLive ? 'ok' : sources.volume.error ? 'bad' : 'warn',
-      state: volumeLive ? 'Live' : sources.volume.error ? 'Unavailable' : 'Starting',
-      intake: volume ? `${volume.status.observedSymbols}/${volume.status.eligibleSize}` : '—',
-      coverage: volume ? `${volume.status.baselineReady}/${volume.status.baselineTotal}` : '—',
-      watching: volume ? volume.status.watching : '—',
-      focused: volume ? volume.status.focused : '—',
-      proposals: volume ? volume.status.openProposals : '—',
-      constraint: volume ? (topVolume?.rejectCode ? titleCase(topVolume.rejectCode) : topVolume?.reason ?? 'No Verified Wakeup') : 'UNKNOWN',
-      updatedAt: volume?.updatedAt ?? null,
+      source: volumeComponent?.owner.split(':')[0] ?? 'Canonical owner unavailable',
+      tone: volumePosture.tone,
+      state: volumePosture.statusLabel,
+      intake: volumeComponent?.capability.replaceAll('_', ' ') ?? 'UNKNOWN',
+      coverage: volumeComponent?.truthLabel.replaceAll('_', ' ') ?? 'UNKNOWN',
+      watching: volumeStrategy?.candidateCount ?? 'UNKNOWN',
+      focused: 'UNKNOWN',
+      proposals: volumeStrategy?.proposalCount ?? 'UNKNOWN',
+      constraint: volumeComponent?.blockerCode ?? 'UNKNOWN · canonical blocker not published',
+      updatedAt: latestKnown([volumeComponent?.lastAdvanceAtMs, volumeComponent?.heartbeatAtMs, volumeStrategy?.lastDecisionAtMs]),
       page: 'volume',
     },
   ];
@@ -392,14 +321,20 @@ export function Dashboard() {
       .slice(0, 6);
   }, [state?.events]);
 
-  const pnlDays = sources.pnl.data?.realizedByDay ?? [];
-  const realizedTotal = pnlDays.reduce((sum, day) => sum + day.usd, 0);
+  const pnlTruthState = sources.pnl.data?.integrity.state ?? 'UNKNOWN';
+  const pnlEvidenceAvailable = pnlTruthState !== 'UNKNOWN';
+  const pnlDays = pnlEvidenceAvailable ? sources.pnl.data?.realizedByDay ?? [] : [];
+  const realizedTotal = pnlEvidenceAvailable
+    ? pnlDays.reduce((sum, day) => sum + day.usd, 0)
+    : null;
   const winningDays = pnlDays.filter((day) => day.usd > 0);
   const losingDays = pnlDays.filter((day) => day.usd < 0);
   const grossProfit = winningDays.reduce((sum, day) => sum + day.usd, 0);
   const grossLoss = Math.abs(losingDays.reduce((sum, day) => sum + day.usd, 0));
   const dailyProfitFactor = grossLoss > 0 ? grossProfit / grossLoss : winningDays.length ? Infinity : null;
-  const usdtFees = sources.pnl.data?.feesByAsset.find((fee) => fee.asset === 'USDT')?.amount ?? 0;
+  const usdtFees = pnlEvidenceAvailable
+    ? sources.pnl.data?.feesByAsset.find((fee) => fee.asset === 'USDT')?.amount ?? 0
+    : null;
 
   const controlState = {
     label: 'OWNER_GATED',
@@ -407,11 +342,9 @@ export function Dashboard() {
     tone: 'warn' as Tone,
   };
 
-  const queueCount = basis && volume
-    ? basis.status.watching + basis.status.focused + volume.status.watching + volume.status.focused
-    : null;
-  const proposalCount = basis && volume ? basis.status.openProposals + volume.status.openProposals : null;
-  const latestUpdate = Math.max(basis?.updatedAt ?? 0, volume?.updatedAt ?? 0);
+  const queueCount = sumKnown([basisStrategy?.candidateCount, volumeStrategy?.candidateCount]);
+  const proposalCount = sumKnown([basisStrategy?.proposalCount, volumeStrategy?.proposalCount]);
+  const latestUpdate = productSnapshot?.evaluatedAtMs ?? 0;
 
   if (!state) {
     return (
@@ -434,7 +367,7 @@ export function Dashboard() {
             <span className="dcx-source-mark"><img className="dcx-page-mark" src="/dashboard-blocks.png" alt="" aria-hidden="true" /></span>
             <span className="dcx-title-content">
               <h1>Dashboard</h1>
-              <span className={`dcx-live ${publicRuntimeLive ? 'active' : 'degraded'}`}><i aria-hidden="true" />{publicRuntimeLive ? 'Public Runtime Live' : 'Review Required'}</span>
+              <span className={`dcx-live ${runtimePresentation.tone === 'ok' ? 'active' : 'degraded'}`}><i aria-hidden="true" />{runtimePresentation.label}</span>
               <span className="dcx-updated">{latestUpdate ? `Updated ${timeAgo(latestUpdate)}` : 'Connecting Sources'}</span>
             </span>
           </div>
@@ -443,8 +376,6 @@ export function Dashboard() {
             <button type="button" onClick={() => open('risk')}><ShieldCheck size={14} />Risk</button>
           </div>
         </header>
-
-        <ProductSurfaceAdapter surfaceId="dashboard" />
 
         <div className="dcx-summary" aria-label="Executive Summary">
           <Metric
@@ -464,6 +395,8 @@ export function Dashboard() {
           <Metric label="Engine Queue" value={queueCount === null ? 'UNKNOWN' : String(queueCount)} detail={proposalCount === null ? 'Proposal count unavailable' : `${proposalCount} Open Proposals`} tone={queueCount === null ? 'warn' : queueCount ? 'warn' : 'idle'} />
           <Metric label="Execution Authority" value={controlState.label} detail={controlState.detail} tone={controlState.tone} />
         </div>
+
+        <ProductSurfaceAdapter surfaceId="dashboard" />
 
         <section className="dcx-section dcx-capital-section">
           <header className="dcx-section-head">
@@ -507,13 +440,13 @@ export function Dashboard() {
 
         <section className="dcx-section dcx-runtime-section">
           <header className="dcx-section-head">
-            <span><b>Strategy Runtime</b><small>Live Engine Stages · Intake To Proposal</small></span>
-            <em>{runtimeRows.filter((row) => row.tone === 'ok').length}/{runtimeRows.length} Engines Live</em>
+            <span><b>Strategy Runtime</b><small>Canonical Lifecycle · Capability · Truth</small></span>
+            <em>{runtimePresentation.livePublicCount}/{runtimeRows.length} Engines Live Public</em>
           </header>
           <div className="dcx-runtime-scroll">
             <div className="dcx-runtime-canvas" role="table" aria-label="Strategy Runtime">
               <div className="dcx-runtime-header" role="row">
-                <span role="columnheader">Engine</span><span role="columnheader">Intake</span><span role="columnheader">Coverage</span><span role="columnheader">Watching</span><span role="columnheader">Focused</span><span role="columnheader">Proposals</span><span role="columnheader">Primary Constraint</span><span role="columnheader">Updated</span>
+                <span role="columnheader">Engine</span><span role="columnheader">Capability</span><span role="columnheader">Truth</span><span role="columnheader">Candidates</span><span role="columnheader">Focused</span><span role="columnheader">Proposals</span><span role="columnheader">Primary Constraint</span><span role="columnheader">Updated</span>
               </div>
               {runtimeRows.map((row) => (
                 <button className="dcx-runtime-row" type="button" role="row" key={row.id} onClick={() => open(row.page)}>
@@ -522,12 +455,12 @@ export function Dashboard() {
                     <span><b>{row.name}</b><small>{row.source}</small></span>
                     <em className={row.tone}><i />{row.state}</em>
                   </span>
-                  <span className="dcx-runtime-value" role="cell"><b>{row.intake}</b><small>Source Universe</small></span>
-                  <span className="dcx-runtime-value" role="cell"><b>{row.coverage}</b><small>{row.id === 'basis' ? 'Quality Passing' : 'Baselines Ready'}</small></span>
-                  <span className="dcx-runtime-value" role="cell"><b>{row.watching}</b><small>Near Gate</small></span>
-                  <span className="dcx-runtime-value" role="cell"><b>{row.focused}</b><small>Deep Checks</small></span>
-                  <span className="dcx-runtime-value" role="cell"><b>{row.proposals}</b><small>All Gates Passed</small></span>
-                  <span className="dcx-runtime-constraint" role="cell"><b>{row.constraint}</b><small>{row.id === 'basis' ? (basis ? `${basis.status.verifiedBorrow} Borrow Verified` : 'Borrow state UNKNOWN') : (volume ? `${volume.status.tradeMessages.toLocaleString()} Trade Messages` : 'Trade count UNKNOWN')}</small></span>
+                  <span className="dcx-runtime-value" role="cell"><b>{row.intake}</b><small>Canonical Capability</small></span>
+                  <span className="dcx-runtime-value" role="cell"><b>{row.coverage}</b><small>Canonical Truth</small></span>
+                  <span className="dcx-runtime-value" role="cell"><b>{row.watching}</b><small>Canonical Candidates</small></span>
+                  <span className="dcx-runtime-value" role="cell"><b>{row.focused}</b><small>Not Published</small></span>
+                  <span className="dcx-runtime-value" role="cell"><b>{row.proposals}</b><small>Canonical Proposals</small></span>
+                  <span className="dcx-runtime-constraint" role="cell"><b>{row.constraint}</b><small>{row.id === 'basis' ? 'Private Borrow NOT_CONFIGURED · UNKNOWN' : 'Canonical Component Blocker'}</small></span>
                   <span className="dcx-runtime-open" role="cell"><b>{sourceAge(row.updatedAt)}</b><ChevronRight size={14} /></span>
                 </button>
               ))}
@@ -542,19 +475,19 @@ export function Dashboard() {
             </header>
             <div className="dcx-attention-list">
               <button type="button" onClick={() => open('loans')}>
-                <StatusMark tone={!basis ? 'idle' : basis.status.borrowBlocked ? 'warn' : 'ok'} />
-                <span><b>Borrow Verification</b><small>{!basis ? 'Borrow state UNKNOWN' : basis.status.borrowBlocked ? `${basis.status.borrowBlocked} Reverse-Basis Decisions Blocked` : 'No Borrow Blocker In The Current Runtime'}</small></span>
-                <em>{basis ? `${basis.status.verifiedBorrow} Verified` : 'UNKNOWN'}</em><ChevronRight size={14} />
+                <StatusMark tone="warn" />
+                <span><b>Borrow Verification</b><small>NOT_CONFIGURED · private inventory, rate, and maximum-borrowable truth are owner gated</small></span>
+                <em>UNKNOWN</em><ChevronRight size={14} />
               </button>
               <button type="button" onClick={() => open('strategies')}>
-                <StatusMark tone={topBasis ? (topBasis.decisionKind === 'proposal' ? 'ok' : 'warn') : 'idle'} />
-                <span><b>{topBasis ? `${topBasis.base} Basis Decision` : 'Basis Decision Queue'}</b><small>{topBasis?.reason ?? 'No Basis Decision Above The Watch Gate'}</small></span>
-                <em className={finite(topBasis?.netEdgePct) ? signClass(topBasis?.netEdgePct ?? 0) : ''}>{finite(topBasis?.netEdgePct) ? `${(topBasis?.netEdgePct ?? 0) > 0 ? '+' : ''}${topBasis?.netEdgePct.toFixed(2)}%` : '—'}</em><ChevronRight size={14} />
+                <StatusMark tone={basisPosture.tone} />
+                <span><b>Basis Decision Queue</b><small>{basisComponent?.blockerCode ?? `${basisComponent?.truthLabel ?? 'UNKNOWN'} · ${basisStrategy?.sourceRevision ?? 'source revision UNKNOWN'}`}</small></span>
+                <em>{basisStrategy?.proposalCount ?? 'UNKNOWN'} Proposals</em><ChevronRight size={14} />
               </button>
               <button type="button" onClick={() => open('volume')}>
-                <StatusMark tone={topVolume ? (topVolume.state === 'PROPOSED' ? 'ok' : topVolume.state === 'FOCUS' ? 'warn' : 'idle') : 'idle'} />
-                <span><b>{topVolume ? `${topVolume.base} Volume Decision` : 'Volume Decision Queue'}</b><small>{topVolume?.reason ?? 'No Volume Decision Above The Watch Gate'}</small></span>
-                <em>{topVolume?.state ? titleCase(topVolume.state.toLowerCase()) : '—'}</em><ChevronRight size={14} />
+                <StatusMark tone={volumePosture.tone} />
+                <span><b>Volume Decision Queue</b><small>{volumeComponent?.blockerCode ?? `${volumeComponent?.truthLabel ?? 'UNKNOWN'} · ${volumeStrategy?.sourceRevision ?? 'source revision UNKNOWN'}`}</small></span>
+                <em>{volumeStrategy?.proposalCount ?? 'UNKNOWN'} Proposals</em><ChevronRight size={14} />
               </button>
               <button type="button" onClick={() => open('risk')}>
                 <StatusMark tone="warn" />
@@ -588,27 +521,27 @@ export function Dashboard() {
         <section className="dcx-section dcx-performance">
           <header className="dcx-section-head">
             <span>
-              <b>{sources.pnl.data?.integrity.complete === false ? 'Partial Strategy Performance' : 'Validated Strategy Performance'}</b>
-              <small title={sources.pnl.data?.integrity.reasons.join(' · ') || undefined}>{sources.pnl.data?.integrity.complete === false ? 'Missing Cost Basis Or Fee Valuation · Review Fill Coverage' : 'Closed Ledger Round-Trips Only · Account Balance Movement Is Excluded'}</small>
+              <b>{pnlTruthState === 'UNKNOWN' ? 'Strategy Performance Unavailable' : pnlTruthState === 'PARTIAL' ? 'Partial Strategy Performance' : 'Validated Strategy Performance'}</b>
+              <small title={sources.pnl.data?.integrity.reasons.join(' · ') || undefined}>{pnlTruthState === 'UNKNOWN' ? sources.pnl.error ?? 'UNKNOWN · no durable PnL evidence is available' : pnlTruthState === 'PARTIAL' ? 'Missing Cost Basis Or Fee Valuation · Review Fill Coverage' : 'Closed Ledger Round-Trips Only · Account Balance Movement Is Excluded'}</small>
             </span>
-            <em>{pnlDays.length} Realized Day{pnlDays.length === 1 ? '' : 's'}</em>
+            <em>{pnlTruthState === 'UNKNOWN' ? 'UNKNOWN' : `${pnlDays.length} Realized Day${pnlDays.length === 1 ? '' : 's'}`}</em>
           </header>
-          {pnlDays.length ? (
+          {pnlEvidenceAvailable && pnlDays.length > 0 && realizedTotal !== null ? (
             <>
               <div className="dcx-performance-summary">
-                <Metric label={sources.pnl.data?.integrity.complete === false ? 'Partial Realized PnL' : 'Realized PnL'} value={`${realizedTotal > 0 ? '+' : ''}${fmtPrice(realizedTotal)}`} detail={sources.pnl.data?.integrity.complete === false ? 'Incomplete Basis' : 'Ledgered Closed Fills'} tone={sources.pnl.data?.integrity.complete === false ? 'warn' : realizedTotal >= 0 ? 'ok' : 'bad'} />
+                <Metric label={pnlTruthState === 'PARTIAL' ? 'Partial Realized PnL' : 'Realized PnL'} value={`${realizedTotal > 0 ? '+' : ''}${fmtPrice(realizedTotal)}`} detail={pnlTruthState === 'PARTIAL' ? 'Incomplete Basis' : 'Ledgered Closed Fills'} tone={pnlTruthState === 'PARTIAL' ? 'warn' : realizedTotal >= 0 ? 'ok' : 'bad'} />
                 <Metric label="Trading Days" value={String(pnlDays.length)} detail="With Realized PnL" />
                 <Metric label="Winning Days" value={String(winningDays.length)} detail={`${pnlDays.length ? ((winningDays.length / pnlDays.length) * 100).toFixed(0) : 0}% Day Win Rate`} />
                 <Metric label="Losing Days" value={String(losingDays.length)} detail="Closed-Day Outcomes" />
                 <Metric label="Daily Profit Factor" value={dailyProfitFactor === null ? '—' : dailyProfitFactor === Infinity ? '∞' : dailyProfitFactor.toFixed(2)} detail="Gross Winning Days / Losing Days" />
-                <Metric label="USDT Fees" value={fmtPrice(usdtFees)} detail="Recorded Fee Asset" />
+                <Metric label="USDT Fees" value={usdtFees === null ? 'UNKNOWN' : fmtPrice(usdtFees)} detail="Recorded Fee Asset" />
               </div>
               {pnlDays.length >= 2 ? <div className="dcx-performance-chart"><PerfChart days={pnlDays} /></div> : null}
             </>
           ) : (
             <div className="dcx-empty-performance">
               <BarChart3 size={20} />
-              <span><b>Performance Reporting Is Waiting For The First Closed Round-Trip</b><small>Trade PnL, win rate, profit factor, and drawdown remain unreported until the ledger has real closed outcomes. No account snapshot is used as a substitute.</small></span>
+              <span><b>{pnlEvidenceAvailable ? 'Performance Reporting Is Waiting For The First Closed Round-Trip' : 'Performance Evidence Is Unavailable'}</b><small>{pnlEvidenceAvailable ? 'Trade PnL, win rate, profit factor, and drawdown remain unreported until the ledger has real closed outcomes. No account snapshot is used as a substitute.' : 'NOT_CONFIGURED · unavailable private/account truth is not converted into validated zero PnL.'}</small></span>
               <button type="button" onClick={() => open('account')}>Review Fills <ChevronRight size={14} /></button>
             </div>
           )}
@@ -616,7 +549,9 @@ export function Dashboard() {
 
         <footer className="dcx-source-footer">
           <span><Database size={13} />Sources: Public Market Streams, Engine Snapshots, SQLite Ledger · Private Account NOT_CONFIGURED</span>
-          <span>{system ? `${system.restLatencyMs ?? '—'} ms REST · ${system.usedWeight1m ?? '—'} Weight / Min · ${Math.round(system.uptimeSec / 60)} Min Uptime` : 'System Source Checking'}</span>
+          <span>{productSnapshot
+            ? `${productSnapshot.revision} · Machine ${productSnapshot.ownerView.machineReady} · ${productSnapshot.opsIntakeInterlock.state}`
+            : `Product Integration ${productBinding.continuity}`}</span>
         </footer>
       </section>
     </div>

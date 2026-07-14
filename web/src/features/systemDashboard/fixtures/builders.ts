@@ -201,6 +201,10 @@ export function makeSummaries(now: number, overrides: DeepPartialSummaries = {})
     ledger: {
       truthLabel: 'LIVE_PUBLIC',
       writable: true,
+      schemaCompatibilityState: 'AVAILABLE',
+      schemaCompatibilityReason: null,
+      currentSchemaVersion: 1,
+      rollbackFloor: 1,
       lastEventId: 'evt-90311',
       lastPersistedAtMs: now - 2 * SECOND,
       checkpointRevision: 'ledger-ckpt-902',

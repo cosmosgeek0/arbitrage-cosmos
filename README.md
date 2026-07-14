@@ -21,12 +21,27 @@ Private Binance account cockpit and arbitrage/intelligence operating machine, op
 ```bash
 npm ci                    # install (Node 22, npm workspaces)
 npm test                  # deterministic CI lane: typecheck, build, engines, safety
-npm run test:all          # every suite in the repository (the full battery)
+npm run test:all          # full Node/TypeScript repository suite
+npm run test:i00:complete                    # print the bounded command/evidence plan only
+npm run test:i00:complete -- --plan          # explicitly print the bounded command/evidence plan only
+npm run test:i00:complete -- --run --q-venv /absolute/path/to/accepted-q-venv --browser-receipt test/i00/performance/evidence/browser/<browser-receipt>.json
+npm run test:i00:complete -- --validate-only --candidate-sha <candidate-commit> --performance-receipt test/i00/performance/evidence/<performance-receipt>.json --browser-receipt test/i00/performance/evidence/browser/<browser-receipt>.json --complete-receipt test/i00/performance/evidence/<complete-receipt>.json
 npm run test:integration  # boots the built app; live public-market gates
 npm run build             # server tsc + web vite production build
 npm run start             # run the built server
 npm run dev -w web        # web dev server
+npm run validate:config -- --env /absolute/path/to/i00.env
+npm run smoke:public      # public-only, keyless source smoke
+npm run smoke:private-read # OWNER_GATED, data-only exit 2 in this integration boundary
+npm run smoke:signed-test  # OWNER_GATED, data-only exit 2 in this integration boundary
 ```
+
+The stable operations entrypoints are `npm run backup`, `npm run restore:test`,
+`npm run release:preflight`, `npm run deploy:preflight`, and
+`npm run rollback:preflight`. They require explicit absolute inputs after `--`.
+Backup and restore are restricted to marked local simulation/isolated paths;
+release, deploy, and rollback commands perform validation only. None invokes a
+service switch, systemd, AWS, deployment, private exchange access, or signed calls.
 
 ## Hard laws
 
@@ -36,15 +51,14 @@ npm run dev -w web        # web dev server
 - Every financial intent and outcome is ledgered, including unknown outcomes.
 - Manual money mutations (if ever enabled) fail closed behind account, permission, control-mode, kill-switch, live-arm, risk, and confirmation gates.
 
-## Safe local Binance setup
+## Keyless local boundary
 
-The cockpit reads account state from a **server-side** Binance key. Without one it boots into an honest disconnected state; with one it shows real balances, permissions, orders, and fills. Keys never touch the browser.
-
-1. On Binance create a **System generated** HMAC API key with **Enable Reading only** (Spot/Margin Trading OFF, Withdrawals OFF, Universal Transfer OFF). Optionally IP-restrict it.
-2. Copy `.env.example` → `.env`; set `BINANCE_API_KEY` / `BINANCE_API_SECRET`. `.env` is gitignored.
-3. `npm run build && npm run start` (or `npm run dev`). The UI shows only a masked key fingerprint.
-
-Default persisted posture is halted: kill switch on, live mode off, money controls blocked.
+This integration candidate deliberately constructs no private or signed Binance
+client. Local startup is public-only and keyless: account balances, permissions,
+orders, fills, borrow truth, and private reconciliation remain
+`NOT_CONFIGURED`/`OWNER_GATED`. Do not add credentials to exercise this Phase 2
+candidate. Default persisted posture is halted, live execution is absent, and
+all money controls remain blocked.
 
 ## Operator access boundary
 

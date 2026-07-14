@@ -183,8 +183,6 @@ export function Strategies() {
           </label>
         </header>
 
-        <ProductSurfaceAdapter surfaceId="basis" />
-
         <div className="volx-summary" aria-label="Basis Summary">
           <div className="volx-summary-cell">
             <span>Eligible Pairs</span>
@@ -207,6 +205,8 @@ export function Strategies() {
             <small>Unknown borrow is blocked, never inferred</small>
           </div>
         </div>
+
+        <ProductSurfaceAdapter surfaceId="basis" />
 
         <div className="volx-filters">
           <div className="volx-segments" role="tablist" aria-label="Basis Views">

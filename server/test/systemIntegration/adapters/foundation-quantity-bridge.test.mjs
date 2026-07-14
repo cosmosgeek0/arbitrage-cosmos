@@ -4,17 +4,30 @@ import test from 'node:test';
 
 import {
   FOUNDATION_QUANTITY_BRIDGE_SCHEMA,
+  FOUNDATION_QUANTITY_INSTRUMENT_EVIDENCE_SCHEMA,
   compareJournalToFoundationQuantity,
+  deriveFoundationQuantityInstrumentEvidenceRevision,
 } from '../../../dist/systemIntegration/adapters/foundationQuantityBridge.js';
 
+const INSTRUMENT_ID = 'SPOT:BTCUSDT';
+
 function bridge(overrides = {}) {
-  return compareJournalToFoundationQuantity({
+  const input = {
     exactJournalQuantity: '0.1',
     foundationQuantity: 0.1,
+    instrumentId: INSTRUMENT_ID,
     instrumentStep: '0.1',
     instrumentTolerance: '0.00000000000000001',
     ...overrides,
-  });
+  };
+  if (!Object.hasOwn(overrides, 'instrumentEvidenceRevision')) {
+    input.instrumentEvidenceRevision = deriveFoundationQuantityInstrumentEvidenceRevision(
+      input.instrumentId,
+      input.instrumentStep,
+      input.instrumentTolerance,
+    );
+  }
+  return compareJournalToFoundationQuantity(input);
 }
 
 test('is reachable through both the adapter and System Integration public barrels', async () => {
@@ -24,17 +37,35 @@ test('is reachable through both the adapter and System Integration public barrel
   ]);
   assert.equal(adapterBarrel.compareJournalToFoundationQuantity, compareJournalToFoundationQuantity);
   assert.equal(systemIntegrationBarrel.compareJournalToFoundationQuantity, compareJournalToFoundationQuantity);
+  assert.equal(
+    adapterBarrel.deriveFoundationQuantityInstrumentEvidenceRevision,
+    deriveFoundationQuantityInstrumentEvidenceRevision,
+  );
+  assert.equal(
+    systemIntegrationBarrel.deriveFoundationQuantityInstrumentEvidenceRevision,
+    deriveFoundationQuantityInstrumentEvidenceRevision,
+  );
   assert.equal(adapterBarrel.FOUNDATION_QUANTITY_BRIDGE_SCHEMA, FOUNDATION_QUANTITY_BRIDGE_SCHEMA);
   assert.equal(systemIntegrationBarrel.FOUNDATION_QUANTITY_BRIDGE_SCHEMA, FOUNDATION_QUANTITY_BRIDGE_SCHEMA);
+  assert.equal(
+    adapterBarrel.FOUNDATION_QUANTITY_INSTRUMENT_EVIDENCE_SCHEMA,
+    FOUNDATION_QUANTITY_INSTRUMENT_EVIDENCE_SCHEMA,
+  );
 });
 
 test('retains both originals in a closed immutable exact comparison', () => {
   const input = {
     exactJournalQuantity: '0.5',
     foundationQuantity: 0.5,
+    instrumentId: INSTRUMENT_ID,
     instrumentStep: '0.1',
     instrumentTolerance: '0.0001',
   };
+  input.instrumentEvidenceRevision = deriveFoundationQuantityInstrumentEvidenceRevision(
+    input.instrumentId,
+    input.instrumentStep,
+    input.instrumentTolerance,
+  );
   const result = compareJournalToFoundationQuantity(input);
   assert.deepEqual(result, {
     schema: FOUNDATION_QUANTITY_BRIDGE_SCHEMA,
@@ -47,8 +78,10 @@ test('retains both originals in a closed immutable exact comparison', () => {
     foundationCanonicalDecimal: '0.5',
     foundationExactDecimal: '0.5',
     absoluteDifference: '0',
+    instrumentId: INSTRUMENT_ID,
     instrumentStep: '0.1',
     instrumentTolerance: '0.0001',
+    instrumentEvidenceRevision: input.instrumentEvidenceRevision,
     journalStepAlignment: 'ALIGNED',
     stepToleranceRelation: 'UNAMBIGUOUS',
   });
@@ -117,6 +150,8 @@ test('valid mismatch returns evidence only and exposes no action semantics', () 
     'foundationCanonicalDecimal',
     'foundationExactDecimal',
     'foundationQuantity',
+    'instrumentEvidenceRevision',
+    'instrumentId',
     'instrumentStep',
     'instrumentTolerance',
     'journalStepAlignment',
@@ -126,6 +161,33 @@ test('valid mismatch returns evidence only and exposes no action semantics', () 
     'toleranceDirection',
     'version',
   ]);
+});
+
+test('content revision rejects instrument identity, step, or tolerance substitution', () => {
+  const instrumentStep = '0.1';
+  const instrumentTolerance = '0.00000000000000001';
+  const instrumentEvidenceRevision = deriveFoundationQuantityInstrumentEvidenceRevision(
+    INSTRUMENT_ID,
+    instrumentStep,
+    instrumentTolerance,
+  );
+  assert.match(instrumentEvidenceRevision, /^fqie_[0-9a-f]{64}$/);
+
+  for (const substitution of [
+    { instrumentId: 'USD_M_PERPETUAL:BTCUSDT' },
+    { instrumentStep: '0.01' },
+    { instrumentTolerance: '0.000000000000000001' },
+  ]) {
+    assert.throws(
+      () => bridge({ ...substitution, instrumentEvidenceRevision }),
+      /INSTRUMENT_EVIDENCE_REVISION_MISMATCH/,
+      JSON.stringify(substitution),
+    );
+  }
+  assert.throws(
+    () => bridge({ instrumentId: 'BTCUSDT', instrumentEvidenceRevision }),
+    /INSTRUMENT_ID_INVALID/,
+  );
 });
 
 test('rejects exponent text and exponent-form Foundation projections', () => {
@@ -227,8 +289,14 @@ test('input is closed data and comparison is deterministic and import-pure', asy
   let getterCalls = 0;
   const accessor = {
     foundationQuantity: 0.1,
+    instrumentId: INSTRUMENT_ID,
     instrumentStep: '0.1',
     instrumentTolerance: '0.01',
+    instrumentEvidenceRevision: deriveFoundationQuantityInstrumentEvidenceRevision(
+      INSTRUMENT_ID,
+      '0.1',
+      '0.01',
+    ),
   };
   Object.defineProperty(accessor, 'exactJournalQuantity', {
     enumerable: true,

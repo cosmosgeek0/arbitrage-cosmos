@@ -12,10 +12,16 @@ import { setBasisUnit, setDisplayUtc, setFxRate } from './format';
 import { fireRefresh } from './lib/refresh';
 import { ApiRequestError, fetchJson, type ApiFailure } from './lib/http';
 import { createSettledPoll } from './lib/polling';
+import { readDurableMaterialCursor } from './lib/productIntegration/useProductControlRoomBinding';
+import {
+  WEB_SOCKET_CLOSE_DIAGNOSTIC_ID,
+  snapshotTrustedWebSocketCloseEvent,
+  webSocketCloseDiagnosticAttributes,
+  type WebSocketCloseDiagnostic,
+} from './lib/webSocketCloseDiagnostic';
 import type {
   AppConfig,
   MarketRow,
-  PreviewResult,
   ServerState,
 } from './types';
 
@@ -76,14 +82,14 @@ interface Store {
   setPaletteOpen: (v: boolean) => void;
   toggleWatch: (symbol: string) => Promise<ApiFailure | null>;
   saveConfig: (patch: Partial<AppConfig>) => Promise<AppConfig | null>;
-  preview: (intent: Record<string, unknown>) => Promise<PreviewResult | null>;
 }
 
 const StoreContext = createContext<Store | null>(null);
 
 // ---- live order-book stream (Token Detail) -------------------------------
-// Rides the same /ws socket as state broadcasts. One symbol at a time; the
-// server opens a Binance depth20@100ms + aggTrade stream while subscribed.
+// Rides the same /ws socket as canonical invalidations and material-event
+// pages. One symbol at a time; the server opens a Binance depth20@100ms +
+// aggTrade stream while subscribed.
 export type LiveBookMsg =
   | { type: 'book'; symbol: string; bids: [string, string][]; asks: [string, string][]; ts: number }
   | { type: 'btrades'; symbol: string; trades: { id: number; price: number; qty: number; time: number; isBuyerMaker: boolean }[] };
@@ -145,6 +151,21 @@ function isConfigAcknowledgement(value: unknown): value is AppConfig {
   );
 }
 
+function isCanonicalSupervisorDeltaMessage(value: unknown): value is Readonly<{
+  type: 'canonical-supervisor-delta';
+  payload: Readonly<{ schemaVersion: 'canonical-supervisor-delta.v1'; revision: string }>;
+}> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const message = value as Record<string, unknown>;
+  if (message.type !== 'canonical-supervisor-delta'
+      || !message.payload || typeof message.payload !== 'object' || Array.isArray(message.payload)) return false;
+  const payload = message.payload as Record<string, unknown>;
+  return payload.schemaVersion === 'canonical-supervisor-delta.v1'
+    && typeof payload.revision === 'string'
+    && payload.revision.length > 0
+    && payload.revision.length <= 256;
+}
+
 function failClosedConfig(config: AppConfig): AppConfig {
   return {
     ...config,
@@ -167,12 +188,31 @@ function failClosedConfig(config: AppConfig): AppConfig {
   };
 }
 
-function failClosedState(serverState: ServerState): ServerState {
+export function failClosedState(serverState: ServerState): ServerState {
   const config = failClosedConfig(serverState.config);
+  // A compatibility payload without the canonical control snapshot is not
+  // evidence that the kill is clear. Treat missing or malformed truth as halt.
+  const canonicalKillEngaged = serverState.canonicalSupervisor?.control?.killSwitchEngaged !== false;
+  const hasCompletePrivateAccountReadback = serverState.account != null && Array.isArray(serverState.positions);
+  const privateAccountTruth = !serverState.binance.keysPresent || serverState.privateAccountTruth === 'NOT_CONFIGURED'
+    ? 'NOT_CONFIGURED'
+    : serverState.privateAccountTruth === 'AVAILABLE' && hasCompletePrivateAccountReadback
+      ? 'AVAILABLE'
+      : 'UNAVAILABLE';
+  const privateOrderTruth = privateAccountTruth !== 'AVAILABLE'
+    ? privateAccountTruth
+    : serverState.privateOrderTruth === 'AVAILABLE' && Array.isArray(serverState.openOrders)
+      ? 'AVAILABLE'
+      : 'UNAVAILABLE';
   return {
     ...serverState,
-    mode: config.killSwitch ? 'HALTED' : 'MANUAL',
+    mode: config.killSwitch || canonicalKillEngaged ? 'HALTED' : 'MANUAL',
     config,
+    privateAccountTruth,
+    privateOrderTruth,
+    account: privateAccountTruth === 'AVAILABLE' ? serverState.account : null,
+    positions: privateAccountTruth === 'AVAILABLE' ? serverState.positions : null,
+    openOrders: privateOrderTruth === 'AVAILABLE' ? serverState.openOrders : null,
   };
 }
 
@@ -213,6 +253,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [detailSymbol, setDetailSymbol] = useState(() => localStorage.getItem('cosmos-detail-symbol') || 'BTCUSDT');
   const [dataNonce, setDataNonce] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [webSocketCloseDiagnostic, setWebSocketCloseDiagnostic] = useState<WebSocketCloseDiagnostic | null>(null);
   const [, bumpFx] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<(() => void) | null>(null);
@@ -265,13 +306,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    void fetchJson<ServerState>('/api/state')
-      .then((s) => setState(failClosedState(s)))
-      .catch(() => undefined);
-
     let closed = false;
     let retry: number | null = null;
     let generation = 0;
+    let stateRefreshInFlight = false;
+    let stateRefreshQueued = false;
+    let stateRefreshController: AbortController | null = null;
+    const requestCompatibilityState = () => {
+      if (closed) return;
+      if (stateRefreshInFlight) {
+        stateRefreshQueued = true;
+        return;
+      }
+      stateRefreshInFlight = true;
+      const controller = new AbortController();
+      stateRefreshController = controller;
+      void fetchJson<ServerState>('/api/state', { cache: 'no-store', signal: controller.signal })
+        .then((snapshot) => {
+          if (!closed && !controller.signal.aborted) setState(failClosedState(snapshot));
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (stateRefreshController === controller) stateRefreshController = null;
+          stateRefreshInFlight = false;
+          if (!closed && stateRefreshQueued) {
+            stateRefreshQueued = false;
+            requestCompatibilityState();
+          }
+        });
+    };
+    requestCompatibilityState();
     const clearRetry = () => {
       if (retry !== null) window.clearTimeout(retry);
       retry = null;
@@ -301,7 +365,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       closeCurrent();
       const socketGeneration = ++generation;
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      const ws = new WebSocket(`${proto}://${location.host}/ws`);
+      const socketUrl = new URL(`${proto}://${location.host}/ws`);
+      const durableCursor = readDurableMaterialCursor();
+      if (durableCursor.state === 'VALID') socketUrl.searchParams.set('afterCursor', durableCursor.cursor);
+      const ws = new WebSocket(socketUrl.toString());
       wsRef.current = ws;
       liveWs = ws;
       ws.onopen = () => {
@@ -312,17 +379,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ws.onmessage = (msg) => {
         if (closed || socketGeneration !== generation || wsRef.current !== ws) return;
         try {
-          const data = JSON.parse(msg.data as string) as { type: string; payload: unknown };
-          if (data.type === 'state') setState(failClosedState(data.payload as ServerState));
-          else if (data.type === 'book' || data.type === 'btrades') {
+          const data: unknown = JSON.parse(msg.data as string);
+          if (isCanonicalSupervisorDeltaMessage(data)) requestCompatibilityState();
+          else if (data && typeof data === 'object'
+              && ((data as { type?: unknown }).type === 'book' || (data as { type?: unknown }).type === 'btrades')) {
             for (const fn of liveBookListeners) fn(data as unknown as LiveBookMsg);
           }
+          // Material-event cursor consumption stays with the existing Product
+          // Control Room binding; this compatibility store never advances it.
         } catch {
           // ignore
         }
       };
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         if (closed || socketGeneration !== generation || wsRef.current !== ws) return;
+        setWebSocketCloseDiagnostic(snapshotTrustedWebSocketCloseEvent(event, socketGeneration));
         wsRef.current = null;
         if (liveWs === ws) liveWs = null;
         setConnected(false);
@@ -345,6 +416,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       closed = true;
       generation += 1;
       clearRetry();
+      stateRefreshController?.abort();
+      stateRefreshController = null;
+      stateRefreshQueued = false;
       reconnectRef.current = null;
       closeCurrent();
       setConnected(false);
@@ -395,20 +469,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return config;
   }, []);
 
-  // In-place public/local recovery for the bottom Connection Control: rebuild
-  // the managed market runtime and browser socket, then fan a refresh signal to
-  // page-owned public sources. Private account recovery is intentionally absent.
+  // Read-only browser snapshot refresh retained for compatibility consumers.
+  // It never calls the managed-runtime /api/refresh targets: those require the
+  // canonical Product preview/digest/revision/receipt protocol.
   const refresh = useCallback(async (): Promise<RefreshResult> => {
     const issues: string[] = [];
-    let health: RefreshResult | null = null;
-    try {
-      const result = await post<RefreshResult>('/api/refresh', { target: 'market' });
-      health = result.data;
-      setMutationError(result.error);
-      if (!health) issues.push(result.error?.message ?? 'Server refresh request failed');
-    } catch {
-      issues.push('Server refresh request failed');
-    }
     try {
       const s = await fetchJson<ServerState>('/api/state');
       setState(failClosedState(s));
@@ -425,16 +490,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     } catch {
       issues.push('Market refresh failed');
     }
-    // A reset is explicit: rebuild the browser's cockpit socket too, then
-    // re-attach any active token book subscription on open.
+    // Rebuild only the browser's cockpit socket, then re-attach any active
+    // token-book subscription. No server runtime is restarted here.
     reconnectRef.current?.();
     setDataNonce((n) => n + 1);
     fireRefresh();
-    if (health?.issues?.length) for (const i of health.issues) issues.push(i);
     return {
       ok: issues.length === 0,
       issues,
-      ts: health?.ts ?? Date.now(),
+      ts: Date.now(),
     };
   }, []);
 
@@ -474,14 +538,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       [state, saveConfig]
     ),
     saveConfig,
-    preview: useCallback(async (intent) => {
-      const result = await post<PreviewResult>('/api/trade/preview', intent);
-      setMutationError(result.error);
-      return result.data;
-    }, []),
   };
 
-  return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
+  return (
+    <StoreContext.Provider value={store}>
+      {children}
+      <span
+        id={WEB_SOCKET_CLOSE_DIAGNOSTIC_ID}
+        hidden
+        aria-hidden="true"
+        {...webSocketCloseDiagnosticAttributes(webSocketCloseDiagnostic)}
+      />
+    </StoreContext.Provider>
+  );
 }
 
 export function useStore(): Store {

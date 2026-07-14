@@ -1,42 +1,37 @@
 #!/usr/bin/env node
 import { cpSync, existsSync, lstatSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { relative, resolve, sep } from 'node:path';
 import {
-  fail, isFullSha, isUtc, listRegularFiles, parseArgs, readJson, requireKeys,
+  fail, isFullSha, isUtc, listRegularFiles, parseArgs, readJson,
   sha256File, treeDigest,
 } from '../lib.mjs';
+import {
+  COMPLETE_ACCEPTANCE_STEP_COUNT, validateCompleteAcceptanceReceipt, validateGitSourceFreeze,
+} from '../complete-acceptance-receipt.mjs';
+import { validateCanonicalAcceptanceEvidence } from '../canonical-acceptance-validation.mjs';
+import { readCompiledLedgerCompatibility } from '../ledger-compatibility.mjs';
 import { expectedBuildAttestation, verifyBuildAttestation } from './verify-build-attestation.mjs';
 
 const args = parseArgs(process.argv.slice(2), new Set(['rollback-barrier', 'simulation-source']));
-for (const key of ['source-root', 'runtime-deps', 'output-root', 'tested-sha', 'tested-receipt', 'built-at-utc', 'schema-version', 'config-revision', 'model-revision']) {
+if (args['schema-version'] !== undefined || args['rollback-floor'] !== undefined || args['rollback-barrier'] === true) {
+  fail('release compatibility is derived from the tested compiled Ledger; caller overrides are forbidden');
+}
+for (const key of ['source-root', 'runtime-deps', 'output-root', 'tested-sha', 'tested-receipt', 'built-at-utc', 'config-revision', 'model-revision']) {
   if (!args[key]) fail(`--${key} is required`);
 }
 if (!isFullSha(args['tested-sha'])) fail('--tested-sha must be a full lowercase Git SHA');
 if (!isUtc(args['built-at-utc'])) fail('--built-at-utc must be exact UTC seconds (YYYY-MM-DDTHH:MM:SSZ)');
-if (!/^\d+$/.test(args['schema-version'])) fail('--schema-version must be a non-negative integer');
 
 const source = resolve(args['source-root']);
 const runtimeDeps = resolve(args['runtime-deps']);
 const outputRoot = resolve(args['output-root']);
 const testedReceiptPath = resolve(args['tested-receipt']);
 const testedReceipt = readJson(testedReceiptPath, 'tested receipt');
-requireKeys(testedReceipt, [
-  'schemaVersion', 'status', 'testedSha', 'gitDirty', 'commands', 'completedAtUtc',
-  'sourceTree', 'packageLockSha256', 'runtimeDepsDigestSha256',
-  'serverDistDigestSha256', 'webDistDigestSha256',
-], 'tested receipt');
-if (testedReceipt.status !== 'PASS' || testedReceipt.testedSha !== args['tested-sha'] || testedReceipt.gitDirty !== false) {
-  fail('tested receipt must be PASS, clean, and match --tested-sha');
-}
-const requiredCommands = ['npm test', 'npm run test:all', 'bash ops/tests/i00/run-all.sh'];
-if (!Array.isArray(testedReceipt.commands)
-    || requiredCommands.some((command) => !testedReceipt.commands.some((entry) => entry?.command === command && entry?.exitCode === 0))) {
-  fail('tested receipt must contain the exact successful repository and I00 commands');
-}
 
 const required = [
   'server/dist/index.js',
+  'server/dist/ledger.js',
   'web/dist/index.html',
   'server/package.json',
   'package.json',
@@ -46,43 +41,103 @@ const required = [
   'ops/live/bin/rollback.sh',
   'ops/i00/donor-contract.json',
   'ops/i00/bin/install-ops-bundle.sh',
+  'test/i00/donor-equality.mjs',
+  'test/i00/verify-scope.mjs',
+  'test/i00/scope-security.mjs',
+  'test/i00/performance/contract.mjs',
+  'test/i00/performance/local-acceptance.mjs',
+  'test/i00/performance/local-proxy-soak.mjs',
+  'test/i00/performance/app-probe.mjs',
+  'test/i00/performance/schema.v1.json',
+  'test/i00/performance/browser-receipt.schema.v2.json',
+  'test/i00/performance/browser-measurement.schema.v1.json',
+  'test/i00/performance/browser-capture.schema.v3.json',
+  'test/i00/performance/browser-restart-measurement.schema.v1.json',
 ];
 for (const relative of required) {
   if (!existsSync(resolve(source, relative))) fail(`release input missing ${relative}`);
+}
+let releaseCompatibility;
+try {
+  releaseCompatibility = readCompiledLedgerCompatibility(source);
+} catch (error) {
+  fail(`compiled Ledger compatibility is invalid: ${error.message}`);
 }
 if (!existsSync(runtimeDeps) || listRegularFiles(runtimeDeps).length === 0) {
   fail('--runtime-deps must be a non-empty, prebuilt dependency directory');
 }
 const packageLockSha256 = sha256File(resolve(source, 'package-lock.json'));
-const testedReceiptSha256 = sha256File(testedReceiptPath);
 const runtimeDepsDigestSha256 = treeDigest(runtimeDeps);
 const serverDistDigestSha256 = treeDigest(resolve(source, 'server/dist'));
 const webDistDigestSha256 = treeDigest(resolve(source, 'web/dist'));
-if (testedReceipt.packageLockSha256 !== packageLockSha256
-    || testedReceipt.runtimeDepsDigestSha256 !== runtimeDepsDigestSha256
-    || testedReceipt.serverDistDigestSha256 !== serverDistDigestSha256
-    || testedReceipt.webDistDigestSha256 !== webDistDigestSha256) {
-  fail('tested receipt does not bind the lockfile, runtime dependencies, and exact build-output trees');
-}
 
 let sourceTree;
 let sourceVerification;
 if (args['simulation-source'] === true) {
-  sourceTree = 'SIMULATION_FIXTURE';
+  sourceTree = testedReceipt?.source?.treeSha;
+  if (!isFullSha(sourceTree)) fail('complete local-acceptance receipt must identify a full candidate tree SHA');
   sourceVerification = 'SIMULATION_ONLY';
-  if (testedReceipt.sourceTree !== sourceTree) fail('simulation receipt sourceTree mismatch');
 } else {
   try {
     const head = execFileSync('git', ['-C', source, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-    const status = execFileSync('git', ['-C', source, 'status', '--porcelain', '--untracked-files=all'], { encoding: 'utf8' }).trim();
     sourceTree = execFileSync('git', ['-C', source, 'rev-parse', 'HEAD^{tree}'], { encoding: 'utf8' }).trim();
-    if (head !== args['tested-sha'] || status !== '' || testedReceipt.sourceTree !== sourceTree) {
-      fail('source worktree is not the exact clean tested SHA/tree');
-    }
+    if (head !== args['tested-sha']) fail('source worktree is not the exact tested SHA/tree');
   } catch (error) {
     fail(`source Git binding failed: ${error.message}`);
   }
   sourceVerification = 'GIT_EXACT_CLEAN';
+}
+
+const acceptance = validateCompleteAcceptanceReceipt({
+  receiptPath: testedReceiptPath,
+  expectedSha: args['tested-sha'],
+  expectedTree: sourceTree,
+  evidenceRoot: source,
+  verifyReferencedArtifacts: true,
+  builtAtUtc: args['built-at-utc'],
+});
+const testedReceiptSha256 = acceptance.receiptSha256;
+await validateCanonicalAcceptanceEvidence({
+  receipt: acceptance.receipt,
+  receiptPath: acceptance.receiptPath,
+  browserPath: acceptance.browserPath,
+  performancePath: acceptance.performancePath,
+  artifactRoot: source,
+  expectedSha: args['tested-sha'],
+  expectedTree: sourceTree,
+});
+if (sourceVerification === 'GIT_EXACT_CLEAN') {
+  validateGitSourceFreeze({ sourceRoot: source, revision: args['tested-sha'], receipt: acceptance.receipt });
+  const allowedUntracked = new Set([
+    acceptance.receipt.browserReceipt.relativePath,
+    acceptance.receipt.performanceReceipt.relativePath,
+    ...acceptance.receipt.browserReceipt.artifacts.map((artifact) => artifact.relativePath),
+    ...acceptance.receipt.source.protectedOwnerDirectives.map((entry) => entry.path),
+  ]);
+  const receiptRelative = relative(source, testedReceiptPath);
+  if (receiptRelative !== '..' && !receiptRelative.startsWith(`..${sep}`)) allowedUntracked.add(receiptRelative.split(sep).join('/'));
+  let statusRecords;
+  try {
+    statusRecords = execFileSync('git', ['-C', source, 'status', '--porcelain=v1', '-z', '--untracked-files=all'], { encoding: 'utf8' })
+      .split('\0')
+      .filter(Boolean);
+  } catch (error) {
+    fail(`source Git status binding failed: ${error.message}`);
+  }
+  for (const record of statusRecords) {
+    const status = record.slice(0, 2);
+    const relativePath = record.slice(3);
+    if (status !== '??' || !allowedUntracked.has(relativePath)) {
+      fail(`source worktree contains unbound state: ${status}:${relativePath}`);
+    }
+  }
+  for (const directive of acceptance.receipt.source.protectedOwnerDirectives) {
+    const absolute = resolve(source, directive.path);
+    if (!existsSync(absolute) || lstatSync(absolute).isSymbolicLink() || !lstatSync(absolute).isFile()
+        || sha256File(absolute) !== directive.sha256) {
+      fail(`source protected owner directive is missing or hash-mismatched: ${directive.path}`);
+    }
+  }
 }
 
 const attestationArgs = [
@@ -108,7 +163,7 @@ if (sourceVerification === 'SIMULATION_ONLY') {
     runtimeDepsDigestSha256,
     serverDistDigestSha256,
     webDistDigestSha256,
-    testsCompletedAtUtc: testedReceipt.completedAtUtc,
+    testsCompletedAtUtc: acceptance.receipt.endedAtUtc,
     buildCompletedAtUtc: args['built-at-utc'],
     builderIdentity: attestation.builderIdentity,
   });
@@ -144,13 +199,29 @@ try {
   cpSync(resolve(source, 'ops/i00'), resolve(staging, 'ops/i00'), { recursive: true, errorOnExist: true });
   cpSync(resolve(source, 'ops/templates/i00'), resolve(staging, 'ops/templates/i00'), { recursive: true, errorOnExist: true });
   cpSync(resolve(source, 'ops/docs/i00'), resolve(staging, 'ops/docs/i00'), { recursive: true, errorOnExist: true });
+  mkdirSync(resolve(staging, 'test/i00/performance'), { recursive: true });
+  for (const relative of ['donor-equality.mjs', 'verify-scope.mjs', 'scope-security.mjs']) {
+    cpSync(resolve(source, 'test/i00', relative), resolve(staging, 'test/i00', relative));
+  }
+  for (const relative of [
+    'contract.mjs', 'local-acceptance.mjs', 'local-proxy-soak.mjs', 'app-probe.mjs',
+    'schema.v1.json', 'browser-receipt.schema.v2.json', 'browser-measurement.schema.v1.json',
+    'browser-capture.schema.v3.json', 'browser-restart-measurement.schema.v1.json',
+  ]) cpSync(resolve(source, 'test/i00/performance', relative), resolve(staging, 'test/i00/performance', relative));
+  for (const artifact of acceptance.receipt.browserReceipt.artifacts) {
+    const destinationPath = resolve(staging, artifact.relativePath);
+    mkdirSync(resolve(destinationPath, '..'), { recursive: true });
+    cpSync(resolve(source, artifact.relativePath), destinationPath);
+  }
   cpSync(runtimeDeps, resolve(staging, 'node_modules'), { recursive: true, errorOnExist: true });
   if (treeDigest(resolve(staging, 'server/dist')) !== serverDistDigestSha256
       || treeDigest(resolve(staging, 'web/dist')) !== webDistDigestSha256) {
     throw new Error('copied build-output trees do not match the tested receipt');
   }
   mkdirSync(resolve(staging, 'receipts'), { recursive: true });
-  cpSync(testedReceiptPath, resolve(staging, 'receipts/tested.json'));
+  cpSync(testedReceiptPath, resolve(staging, 'receipts/complete-local-acceptance.json'));
+  cpSync(acceptance.browserPath, resolve(staging, 'receipts/local-browser-acceptance.json'));
+  cpSync(acceptance.performancePath, resolve(staging, 'receipts/local-proxy-performance.json'));
   if (sourceVerification === 'GIT_EXACT_CLEAN') {
     cpSync(resolve(args['build-attestation']), resolve(staging, buildAttestation.attestation));
     cpSync(resolve(args['build-attestation-signature']), resolve(staging, buildAttestation.signature));
@@ -158,16 +229,29 @@ try {
   }
 
   const release = {
-    schemaVersion: Number(args['schema-version']),
+    schemaVersion: releaseCompatibility.schemaVersion,
+    rollbackFloor: releaseCompatibility.rollbackFloor,
+    rollbackBarrier: releaseCompatibility.rollbackBarrier,
+    compatibilitySource: releaseCompatibility.compatibilitySource,
+    compatibilitySourceSha256: releaseCompatibility.compatibilitySourceSha256,
     releaseId,
     gitSha: args['tested-sha'],
     testedSha: args['tested-sha'],
     builtAtUtc: args['built-at-utc'],
-    rollbackBarrier: Boolean(args['rollback-barrier']),
     configRevision: args['config-revision'],
     modelRevision: args['model-revision'],
-    testedReceipt: 'receipts/tested.json',
+    testedReceipt: 'receipts/complete-local-acceptance.json',
     testedReceiptSha256,
+    acceptanceEvidence: {
+      truthClass: acceptance.receipt.truthClass,
+      candidateSha: args['tested-sha'],
+      candidateTree: sourceTree,
+      requiredStepCount: COMPLETE_ACCEPTANCE_STEP_COUNT,
+      browserReceipt: 'receipts/local-browser-acceptance.json',
+      browserReceiptSha256: acceptance.browserSha256,
+      performanceReceipt: 'receipts/local-proxy-performance.json',
+      performanceReceiptSha256: acceptance.performanceSha256,
+    },
     runtimeDependencies: 'BUNDLED_PREBUILT',
     runtimeDepsDigestSha256,
     packageLockSha256,
@@ -189,6 +273,8 @@ try {
       serverDistDigestSha256,
       webDistDigestSha256,
     },
+    acceptanceEvidence: release.acceptanceEvidence,
+    ledgerCompatibility: releaseCompatibility,
     buildAttestation,
     files: files.map((file) => ({
       path: file,

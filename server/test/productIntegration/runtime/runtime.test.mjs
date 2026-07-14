@@ -2,13 +2,44 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
+  I00_MANAGED_COMPONENT_IDENTITIES,
   PRODUCT_RUNTIME_TRACE_STAGES,
   buildProductRuntimeSupervisorEnvelope,
   createProductIntegrationRuntime,
   projectProductCorrelationTrace,
   projectProductMaterialEventPage,
 } from '../../../dist/productIntegration/runtime/index.js';
-import { T0, makeRead, makeRecords, makeSupervisor, traceEvent } from './testSupport.mjs';
+import {
+  T0,
+  makeBootReleaseReadback,
+  makeOpsInterlock,
+  makeOpsReadback,
+  makeRead,
+  makeRecords,
+  makeSupervisor,
+  traceEvent,
+} from './testSupport.mjs';
+
+const OPS_PROJECTION = Object.freeze({
+  applicationStartOk: true,
+  opsReadback: makeOpsReadback(),
+  opsIntakeInterlock: makeOpsInterlock(),
+});
+
+test('Product readiness consumes the exact canonical application-start result', async () => {
+  const service = createProductIntegrationRuntime({
+    read: makeRead({
+      applicationStartOk: false,
+      applicationStartFailureCodes: ['BOOT_RELEASE_READ_FAILED'],
+    }),
+    clock: { nowMs: () => T0 },
+  });
+  const envelope = await service.readSupervisor();
+  assert.equal(envelope.dashboard.overallPosture, 'READY');
+  assert.equal(envelope.ownerView.machineReady, 'UNKNOWN');
+  assert.equal(envelope.ownerView.topRootBlocker, 'BOOT_RELEASE_READ_FAILED');
+  assert.equal(envelope.ownerView.tradeReady, 'NO');
+});
 
 test('production runtime barrel is fixture-free and supervisor envelope is exact and non-money', async () => {
   const source = await readFile(new URL('../../../src/productIntegration/index.ts', import.meta.url), 'utf8');
@@ -18,8 +49,17 @@ test('production runtime barrel is fixture-free and supervisor envelope is exact
   assert.equal(envelope.schemaVersion, 'product-supervisor.v1');
   assert.equal(envelope.ownerView.machineReady, 'YES');
   assert.equal(envelope.ownerView.tradeReady, 'NO');
+  assert.deepEqual(envelope.opsReadback, makeOpsReadback());
+  assert.equal(envelope.opsIntakeInterlock.state, 'OPS_INTERLOCK_CLEAR');
+  assert.equal(envelope.opsIntakeInterlock.blocksNewEntries, false);
+  assert.equal(envelope.opsIntakeInterlock.externalActionAuthorization, 'NONE');
   assert.equal(envelope.dashboard.overallPosture, 'READY');
-  assert.equal(envelope.components.length, 13);
+  assert.deepEqual({
+    state: envelope.dashboard.summaries.ledger.schemaCompatibilityState,
+    current: envelope.dashboard.summaries.ledger.currentSchemaVersion,
+    floor: envelope.dashboard.summaries.ledger.rollbackFloor,
+  }, { state: 'AVAILABLE', current: 1, floor: 1 });
+  assert.equal(envelope.components.length, 14);
   assert.equal(Object.keys(envelope.surfaces).length, 18);
   assert.equal(envelope.surfaces.dashboard.bindingState, 'BINDING_READY');
   assert.equal(envelope.surfaces.account.bindingState, 'BLOCKED_BACKEND');
@@ -27,12 +67,28 @@ test('production runtime barrel is fixture-free and supervisor envelope is exact
   assert.equal(envelope.surfaces.borrow.truthLabel, 'NOT_CONFIGURED');
   assert.equal(envelope.surfaces.notifications.truthLabel, 'NOT_CONFIGURED');
   assert.equal(envelope.surfaces.notifications.bindingState, 'BLOCKED_BACKEND');
+  for (const surfaceId of ['control-room', 'health']) {
+    const evidence = Object.fromEntries(envelope.surfaces[surfaceId].evidence.map((datum) => [datum.fieldId, datum]));
+    assert.equal(evidence['deployment-frozen'].value, 'NOT_FROZEN');
+    assert.equal(evidence['exposure-state'].value, 'NONE');
+    assert.equal(evidence['ambiguity-state'].value, 'NONE');
+    assert.equal(evidence['recovery-state'].value, 'NONE');
+    assert.equal(evidence['ledger-schema-compatibility'].value, 'CURRENT 1 · ROLLBACK FLOOR 1');
+    assert.equal(evidence['ops-interlock'].value, 'OPS_INTERLOCK_CLEAR');
+  }
   assert.equal(envelope.ownerView.unresolvedRecovery, null);
-  assert.ok(envelope.components.every((component) => component.lastAdvanceAtMs === null));
+  assert.equal(envelope.ownerView.topRootBlocker, null);
+  assert.deepEqual(
+    envelope.components.filter((component) => component.lastAdvanceAtMs !== null).map((component) => ({
+      componentId: component.componentId,
+      lastAdvanceAtMs: component.lastAdvanceAtMs,
+    })),
+    [{ componentId: 'public-usdm-source', lastAdvanceAtMs: T0 - 1_000 }],
+  );
   const advanceEvidence = envelope.surfaces.health.evidence.find((datum) => datum.fieldId === 'heartbeat-advance');
-  assert.equal(advanceEvidence.value, null);
-  assert.equal(advanceEvidence.truthLabel, 'UNKNOWN');
-  assert.equal(advanceEvidence.unavailableReason, 'CANONICAL_MEANINGFUL_ADVANCE_NOT_PUBLISHED');
+  assert.equal(advanceEvidence.value, `public-usdm-source · ${T0 - 1_000}`);
+  assert.equal(advanceEvidence.truthLabel, 'BUILT_AND_TESTED');
+  assert.equal(advanceEvidence.unavailableReason, null);
   assert.deepEqual(envelope.incidentAvailability, {
     state: 'NOT_CONFIGURED', truthLabel: 'NOT_CONFIGURED', blocker: 'INCIDENT_OWNER_NOT_CONFIGURED',
   });
@@ -55,6 +111,235 @@ test('production runtime barrel is fixture-free and supervisor envelope is exact
   assert.ok(envelope.controls.every((control) => control.preview === null && control.disabledReason === 'COMMAND_OWNER_NOT_CONFIGURED'));
 });
 
+test('I00 managed inventory reconciles all 33 roles without widening the 14-component supervisor', async () => {
+  const service = createProductIntegrationRuntime({ read: makeRead(), clock: { nowMs: () => T0 } });
+  const envelope = await service.readSupervisor();
+  const inventory = envelope.managedInventory;
+  const expectedI00IdentitySequence = [
+    'operator-auth',
+    'configuration-authority',
+    'ledger-persistence',
+    'database',
+    'clock-sync',
+    'spot-public-source',
+    'usdm-public-source',
+    'spot-private-truth',
+    'usdm-private-truth',
+    'margin-private-truth',
+    'instrument-filter-registry',
+    'universe',
+    'evidence-attention-runtime',
+    'q-inference',
+    'basis-engine',
+    'volume-engine',
+    'opportunity-authority',
+    'capital-supervision',
+    'risk-gate',
+    'execution-hand',
+    'normal-basis-coordinator',
+    'reverse-basis-coordinator',
+    'volume-position-lifecycle',
+    'reconciliation',
+    'exposure-position-recovery',
+    'outcome-feedback',
+    'machine-supervisor',
+    'api-read-model',
+    'notification-incident-router',
+    'web-cockpit',
+    'backup-restore',
+    'external-watchdog',
+    'cloudflare-tunnel-access',
+  ];
+
+  assert.equal(inventory.schemaVersion, 'i00-managed-inventory.v1');
+  assert.deepEqual({
+    expected: inventory.expectedIdentityCount,
+    mapped: inventory.mappedIdentityCount,
+    evidencePresent: inventory.evidencePresentCount,
+    ownerGated: inventory.ownerGatedCount,
+    notConfigured: inventory.notConfiguredCount,
+    missing: inventory.missingCount,
+    canonical: inventory.canonicalComponentCount,
+    referencedCanonical: inventory.referencedCanonicalComponentCount,
+    observedCanonical: inventory.observedCanonicalComponentCount,
+  }, {
+    expected: 33,
+    mapped: 14,
+    evidencePresent: 14,
+    ownerGated: 13,
+    notConfigured: 3,
+    missing: 3,
+    canonical: 14,
+    referencedCanonical: 14,
+    observedCanonical: 14,
+  });
+  assert.equal(envelope.components.length, 14);
+  assert.deepEqual(I00_MANAGED_COMPONENT_IDENTITIES, expectedI00IdentitySequence);
+  assert.deepEqual(inventory.entries.map((entry) => entry.identity), expectedI00IdentitySequence);
+  assert.equal(new Set(inventory.entries.map((entry) => entry.identity)).size, 33);
+  assert.deepEqual(
+    [...new Set(inventory.entries.flatMap((entry) => entry.canonicalComponentIds))].sort(),
+    envelope.components.map((component) => component.componentId).sort(),
+  );
+
+  for (const entry of inventory.entries) {
+    if (entry.inventoryState === 'EVIDENCE_PRESENT') {
+      assert.equal(entry.reasonCode, null);
+      assert.equal(entry.evidence.length, entry.canonicalComponentIds.length);
+      entry.canonicalComponentIds.forEach((componentId, index) => {
+        const canonical = envelope.components.find((component) => component.componentId === componentId);
+        assert.deepEqual(entry.evidence[index], {
+          source: 'PRODUCT_RUNTIME_COMPONENT_PROJECTION',
+          componentId,
+          componentProjectionIndex: envelope.components.indexOf(canonical),
+        });
+        assert.strictEqual(envelope.components[entry.evidence[index].componentProjectionIndex], canonical);
+      });
+    } else {
+      assert.deepEqual(entry.canonicalComponentIds, []);
+      assert.equal(entry.evidence, null);
+      assert.match(entry.reasonCode, /^[A-Z][A-Z0-9_]+$/);
+    }
+  }
+
+  const privateTruth = inventory.entries.filter((entry) => entry.identity.endsWith('-private-truth'));
+  assert.equal(privateTruth.length, 3);
+  assert.ok(privateTruth.every((entry) => entry.inventoryState === 'OWNER_GATED' && entry.evidence === null));
+  const qInventory = inventory.entries.find((entry) => entry.identity === 'q-inference');
+  const qCanonical = envelope.components.find((component) => component.componentId === 'q-inference');
+  assert.strictEqual(envelope.components[qInventory.evidence[0].componentProjectionIndex], qCanonical);
+  assert.equal(envelope.components[qInventory.evidence[0].componentProjectionIndex].truthLabel, qCanonical.truthLabel);
+});
+
+test('managed inventory withholds partial or duplicate canonical evidence instead of false-green coverage', () => {
+  const source = makeSupervisor();
+  const page = projectProductMaterialEventPage('0', 200, makeRead().events({ afterCursor: '0', limit: 200 }));
+
+  const missingMarketIntelligence = buildProductRuntimeSupervisorEnvelope({
+    ...OPS_PROJECTION,
+    snapshot: makeSupervisor({
+      components: Object.freeze(source.components.filter((component) => component.componentId !== 'market-intelligence')),
+    }),
+    materialEvents: page,
+    traces: [],
+    nowMs: T0,
+  });
+  const attention = missingMarketIntelligence.managedInventory.entries.find(
+    (entry) => entry.identity === 'evidence-attention-runtime',
+  );
+  assert.deepEqual(attention.canonicalComponentIds, ['intelligence-runtime', 'market-intelligence']);
+  assert.equal(attention.inventoryState, 'MISSING');
+  assert.equal(attention.evidence, null);
+  assert.equal(attention.reasonCode, 'CANONICAL_COMPONENT_EVIDENCE_MISSING');
+  assert.deepEqual({
+    evidencePresent: missingMarketIntelligence.managedInventory.evidencePresentCount,
+    missing: missingMarketIntelligence.managedInventory.missingCount,
+    observedCanonical: missingMarketIntelligence.managedInventory.observedCanonicalComponentCount,
+  }, { evidencePresent: 13, missing: 4, observedCanonical: 13 });
+
+  const q = source.components.find((component) => component.componentId === 'q-inference');
+  const duplicatedQ = buildProductRuntimeSupervisorEnvelope({
+    ...OPS_PROJECTION,
+    snapshot: makeSupervisor({ components: Object.freeze([...source.components, q]) }),
+    materialEvents: page,
+    traces: [],
+    nowMs: T0,
+  });
+  const qInventory = duplicatedQ.managedInventory.entries.find((entry) => entry.identity === 'q-inference');
+  assert.equal(qInventory.inventoryState, 'MISSING');
+  assert.equal(qInventory.evidence, null);
+  assert.equal(qInventory.reasonCode, 'CANONICAL_COMPONENT_EVIDENCE_DUPLICATED');
+  assert.equal(duplicatedQ.managedInventory.mappedIdentityCount, 14);
+  assert.equal(duplicatedQ.managedInventory.evidencePresentCount, 13);
+  assert.equal(duplicatedQ.managedInventory.missingCount, 4);
+  assert.equal(duplicatedQ.managedInventory.observedCanonicalComponentCount, 13);
+});
+
+test('Product revisions project only current canonical boot identity without changing schema ownership', async () => {
+  const service = createProductIntegrationRuntime({
+    read: makeRead({ bootReleaseReadback: makeBootReleaseReadback() }),
+    clock: { nowMs: () => T0 },
+  });
+  const envelope = await service.readSupervisor();
+  assert.deepEqual(envelope.ownerView.revisions, {
+    testedCommit: 'a'.repeat(40),
+    deployedCommit: 'b'.repeat(40),
+    modelRevision: 'model.champion.4',
+    configRevision: 'config.release.17',
+    schemaRevision: 'product-supervisor.v1',
+  });
+  assert.deepEqual({
+    currentSchemaVersion: envelope.opsReadback.currentSchemaVersion,
+    rollbackFloor: envelope.opsReadback.rollbackFloor,
+  }, { currentSchemaVersion: 1, rollbackFloor: 1 });
+});
+
+test('boot identity corruption, stale lifecycle, and read failure withhold every release claim', async () => {
+  const invalidReadbacks = [
+    makeBootReleaseReadback({}, { state: 'UNAVAILABLE', latest: null, history: Object.freeze([]) }),
+    makeBootReleaseReadback({ lifecycleState: 'CRASH_PENDING' }),
+    makeBootReleaseReadback({ identityState: 'UNKNOWN' }),
+    makeBootReleaseReadback({ testedCommit: 'A'.repeat(40) }),
+    makeBootReleaseReadback({ schemaRevision: 'UNKNOWN' }),
+  ];
+  for (const bootReleaseReadback of invalidReadbacks) {
+    const service = createProductIntegrationRuntime({
+      read: makeRead({ bootReleaseReadback }),
+      clock: { nowMs: () => T0 },
+    });
+    const envelope = await service.readSupervisor();
+    assert.deepEqual(envelope.ownerView.revisions, {
+      testedCommit: null,
+      deployedCommit: null,
+      modelRevision: null,
+      configRevision: null,
+      schemaRevision: 'product-supervisor.v1',
+    });
+  }
+
+  const base = makeRead();
+  const failedRead = createProductIntegrationRuntime({
+    read: Object.freeze({
+      ...base,
+      bootReleaseReadback: () => { throw new Error('readback unavailable'); },
+    }),
+    clock: { nowMs: () => T0 },
+  });
+  assert.equal((await failedRead.readSupervisor()).ownerView.revisions.testedCommit, null);
+});
+
+test('a tested commit never fabricates an absent deployed commit', async () => {
+  const readback = makeBootReleaseReadback({
+    deployedCommit: null,
+    identityState: 'PARTIAL',
+    identityIssues: Object.freeze(['DEPLOYED_COMMIT_UNKNOWN']),
+  });
+  const service = createProductIntegrationRuntime({
+    read: makeRead({ bootReleaseReadback: readback }),
+    clock: { nowMs: () => T0 },
+  });
+  const revisions = (await service.readSupervisor()).ownerView.revisions;
+  assert.equal(revisions.testedCommit, 'a'.repeat(40));
+  assert.equal(revisions.deployedCommit, null);
+});
+
+test('Product supervisor rejects stale or malformed ops readback instead of hiding the cockpit interlock', async () => {
+  for (const opsReadback of [
+    makeOpsReadback({ observedAtUtc: new Date(T0 - 60_000).toISOString().replace('.000Z', 'Z') }),
+    Object.freeze({ ...makeOpsReadback(), unexpected: true }),
+  ]) {
+    const base = makeRead();
+    const service = createProductIntegrationRuntime({
+      read: Object.freeze({ ...base, opsReadback: () => opsReadback }),
+      clock: { nowMs: () => T0 },
+    });
+    await assert.rejects(
+      service.readSupervisor(),
+      (error) => error?.code === 'OPS_READBACK_UNAVAILABLE' && error?.status === 503,
+    );
+  }
+});
+
 test('generic control revisions never masquerade as canonical config provenance', () => {
   const source = makeSupervisor();
   const page = projectProductMaterialEventPage('0', 200, makeRead().events({ afterCursor: '0', limit: 200 }));
@@ -62,36 +347,41 @@ test('generic control revisions never masquerade as canonical config provenance'
     const snapshot = makeSupervisor({
       control: Object.freeze({ ...source.control, revision }),
     });
-    const envelope = buildProductRuntimeSupervisorEnvelope({ snapshot, materialEvents: page, traces: [], nowMs: T0 });
+    const envelope = buildProductRuntimeSupervisorEnvelope({ ...OPS_PROJECTION, snapshot, materialEvents: page, traces: [], nowMs: T0 });
     assert.equal(envelope.dashboard.control.revision, revision);
     assert.equal(envelope.ownerView.revisions.configRevision, null);
   }
 });
 
-test('Product preserves canonical readiness and UNKNOWN without creating a second posture owner', () => {
+test('supervisor READY with unavailable canonical public advance cannot mint Product machine readiness', () => {
   const source = makeSupervisor();
-  const components = source.components.map((component) => component.componentId === 'market-intelligence'
-    ? Object.freeze({ ...component, truthLabel: 'UNKNOWN' }) : component);
+  const components = source.components.map((component) => {
+    if (component.componentId === 'market-intelligence') return Object.freeze({ ...component, truthLabel: 'UNKNOWN' });
+    if (component.componentId === 'public-spot-source' || component.componentId === 'public-usdm-source') {
+      return Object.freeze({ ...component, sourceTimestamp: null, freshness: null });
+    }
+    return component;
+  });
   const snapshot = makeSupervisor({ components: Object.freeze(components), overallPosture: 'READY' });
   const page = projectProductMaterialEventPage('0', 200, makeRead().events({ afterCursor: '0', limit: 200 }));
-  const envelope = buildProductRuntimeSupervisorEnvelope({ snapshot, materialEvents: page, traces: [], nowMs: T0 });
-  assert.equal(envelope.ownerView.machineReady, 'YES');
+  const envelope = buildProductRuntimeSupervisorEnvelope({ ...OPS_PROJECTION, snapshot, materialEvents: page, traces: [], nowMs: T0 });
+  assert.equal(envelope.ownerView.machineReady, 'UNKNOWN');
   assert.equal(envelope.ownerView.tradeReady, 'NO');
   assert.equal(envelope.dashboard.overallPosture, 'READY');
   const intelligence = envelope.components.find((component) => component.componentId === 'market-intelligence');
   assert.equal(intelligence.truthLabel, 'UNKNOWN');
   assert.equal(intelligence.capability, 'UNKNOWN');
-  assert.equal(envelope.ownerView.topRootBlocker, null);
+  assert.equal(envelope.ownerView.topRootBlocker, 'MEANINGFUL_ADVANCE_NOT_SUPPLIED');
 
   const unknownSnapshot = makeSupervisor({ truthLabel: 'UNKNOWN', overallPosture: 'BLOCKED' });
-  const unknown = buildProductRuntimeSupervisorEnvelope({ snapshot: unknownSnapshot, materialEvents: page, traces: [], nowMs: T0 });
+  const unknown = buildProductRuntimeSupervisorEnvelope({ ...OPS_PROJECTION, snapshot: unknownSnapshot, materialEvents: page, traces: [], nowMs: T0 });
   assert.equal(unknown.truthLabel, 'UNKNOWN');
   assert.equal(unknown.surfaces.dashboard.truthLabel, 'UNKNOWN');
   assert.equal(unknown.surfaces.dashboard.summary, 'Dashboard owner evidence is unknown.');
   assert.equal(unknown.surfaces.dashboard.blocker, 'CANONICAL_OWNER_UNKNOWN');
 
   const unavailableSnapshot = makeSupervisor({ truthLabel: 'UNAVAILABLE', overallPosture: 'BLOCKED' });
-  const unavailable = buildProductRuntimeSupervisorEnvelope({ snapshot: unavailableSnapshot, materialEvents: page, traces: [], nowMs: T0 });
+  const unavailable = buildProductRuntimeSupervisorEnvelope({ ...OPS_PROJECTION, snapshot: unavailableSnapshot, materialEvents: page, traces: [], nowMs: T0 });
   assert.equal(unavailable.truthLabel, 'UNAVAILABLE');
   assert.equal(unavailable.surfaces.dashboard.truthLabel, 'UNAVAILABLE');
   assert.equal(unavailable.surfaces.dashboard.bindingState, 'BLOCKED_BACKEND');
@@ -107,6 +397,7 @@ test('public-source freshness is unknown unless both canonical source owners are
   const page = projectProductMaterialEventPage('0', 200, makeRead().events({ afterCursor: '0', limit: 200 }));
   for (const components of [withoutSources, onlySpot]) {
     const envelope = buildProductRuntimeSupervisorEnvelope({
+      ...OPS_PROJECTION,
       snapshot: makeSupervisor({ components }), materialEvents: page, traces: [], nowMs: T0,
     });
     assert.equal(envelope.ownerView.dataFreshness, null);
@@ -148,7 +439,7 @@ test('material cursor projection proves contiguous pages and fails closed on ret
     requestedAfterCursor: '0', retainedFromCursor: '1', highWaterCursor: '2', continuity: 'PROVEN', truncated: false,
     items: [makeRecords()[0]],
   });
-  const prefixEnvelope = buildProductRuntimeSupervisorEnvelope({ snapshot: makeSupervisor(), materialEvents: prefix, traces: [], nowMs: T0 });
+  const prefixEnvelope = buildProductRuntimeSupervisorEnvelope({ ...OPS_PROJECTION, snapshot: makeSupervisor(), materialEvents: prefix, traces: [], nowMs: T0 });
   assert.equal(prefix.hasMore, true);
   assert.equal(prefixEnvelope.ownerView.latestMaterialChange, null);
 });
@@ -289,7 +580,7 @@ test('nested synthetic owner evidence forces the persistent label while account 
   });
   const snapshot = makeSupervisor({ summaries, truthLabel: 'DRY_RUN' });
   const page = projectProductMaterialEventPage('0', 10, makeRead().events({ afterCursor: '0', limit: 10 }));
-  const envelope = buildProductRuntimeSupervisorEnvelope({ snapshot, materialEvents: page, traces: [], nowMs: T0 });
+  const envelope = buildProductRuntimeSupervisorEnvelope({ ...OPS_PROJECTION, snapshot, materialEvents: page, traces: [], nowMs: T0 });
   assert.equal(envelope.truthLabel, 'BUILT_AND_TESTED');
   assert.equal(envelope.persistentSyntheticLabel, true);
   assert.equal(envelope.surfaces.account.truthLabel, 'SYNTHETIC_ONLY');
@@ -304,6 +595,7 @@ test('nested synthetic owner evidence forces the persistent label while account 
     }),
   });
   const unknownAccount = buildProductRuntimeSupervisorEnvelope({
+    ...OPS_PROJECTION,
     snapshot: makeSupervisor({ summaries: unknownAccountSummaries }),
     materialEvents: page,
     traces: [],
@@ -350,4 +642,16 @@ test('an owner that lacks any durability gate leaves every affected control disa
   const service = createProductIntegrationRuntime({ read: makeRead(), clock: { nowMs: () => T0 }, commandOwner });
   const envelope = await service.readSupervisor();
   assert.ok(envelope.controls.every((control) => control.wiringState === 'UNAVAILABLE:DURABLE_RECEIPTS_NOT_PROVEN'));
+
+  const noReadbackOwner = {
+    ...commandOwner,
+    capability: Object.freeze({ ...commandOwner.capability, durableReceipts: true }),
+  };
+  const noReadbackService = createProductIntegrationRuntime({
+    read: makeRead(), clock: { nowMs: () => T0 }, commandOwner: noReadbackOwner,
+  });
+  const noReadbackEnvelope = await noReadbackService.readSupervisor();
+  assert.ok(noReadbackEnvelope.controls.every((control) => (
+    control.wiringState === 'UNAVAILABLE:DURABLE_RESULT_READBACK_NOT_PROVEN'
+  )));
 });

@@ -1,101 +1,93 @@
 # STATE.md — what is true right now
 
-**Current checkpoint:** 2026-07-14 · exact required-last L merge `ec82bc51d5311dfb3f505216bfb3fa41733f038c` is integrated and sealed by `docs/archive/i00-phase2/L_LANE_INTEGRATION_RECEIPT.md` (SHA-256 `198af74b4f0931123a41d6b0a94b1bbcd6890813986d981bd39e95ba486c296b`); expected = discovered = receipt-accepted = integrated is 16/16/16/16; repository gates and the integration assurance overlay are green; A-FORMAL remains blocked; remaining L shared wiring, final source-freeze rerun, runtime/browser acceptance, and candidate sealing remain pending
-**Law:** any landed change that alters project state must update this file in the same commit. This file wins on "what is the current state"; `ARCHITECTURE.md` wins on "how it is designed"; `MISSION.md` wins on "why".
+**Phase:** `FINAL_INTEGRATION / PHASE_2_SOURCE_FREEZE`
 
-## What this is
+**Status:** `CANDIDATE_SOURCE_FROZEN / LOCAL_ACCEPTANCE_PENDING / NOT_SELF_VERIFIED`
 
-A private Binance arbitrage/intelligence operating machine ("Cosmos Arbitrage Control Room"): full-universe surveillance, Basis (spot–perp divergence) and Volume (dormant-token wakeup) strategy engines, evidence/attention intelligence, capital supervision, risk, dry-run execution, ledger, and an operator cockpit — composed into **one observable validate-only system**. It cannot move money: live execution returns `LIVE_EXECUTION_NOT_IMPLEMENTED` (tripwire-tested), there are no withdrawal/transfer routes, and no signed/private exchange call exists in the composed runtime.
+**Candidate state:** `NOT_CANDIDATE_READY`
 
-## Git truth
+This file is committed atomically with the Phase 2 source-freeze commit, called **C**. C cannot name its own commit SHA or tree hash. The sole-child evidence seal, called **S**, records C, C's tree, the complete local-acceptance evidence, and the immutable candidate receipt. Until S exists and validates, neither `INTEGRATION_CANDIDATE_READY` nor independent verification is claimed.
 
-- Remote: `git@github.com:cosmosgeek0/arbitrage-cosmos.git` · this integration session has not written or pushed `current-main`; live local/remote-tracking `current-main` is now `bf262c08984cf05cb84425e850b187af5f8adf03` and descends from the integrated `7383fd89477ed0b3e677e53c57c35d76ac34bbd8` snapshot.
-- The Phase 2 branch contains the exact canonical Main director-state ancestry through `7383fd89477ed0b3e677e53c57c35d76ac34bbd8`; that synchronization changes only `QL_DIRECTOR_STATE.md`, `QL_PARALLEL_DAG.md`, and `WORKER_PROMPTS.md` relative to the preceding accepted SI tree.
-- Accepted Q donor `02b4eccc8d2ef53b830cafae06e5175715fa6ebb` is a merge parent and its 504 `quant/**` donor paths remain exact. The shared target retains canonical D-LAUNCH-1 lock blob `d1ebc3b6ddeae9f0b92520f9ca1bc5a3270430d5` rather than regressing to the historical Q snapshot blob `cf414da3b46d46d1807f4c04939c7ee1121f5895`; `fixtures/i00/q-directive-input-supersession.json` plus the Git provenance gate proves the sole authorized transition.
-- Accepted dashboard donor `692501587617d4880303fbd747d93e63c376f088` is integrated by exact IP-CONTROL equivalence: the donor and current `web/src/features/systemDashboard/**` trees are both `d3d899db3b0395532a3cf12b2304e91a2ce528ce` (21/21 files). Its stale root `DASH_INTEGRATION_NOTES.md` is explicitly superseded by `IP_CONTROL_MOUNT_REQUEST.md`; the shared-spine implementation now mounts the canonical Product Control provider and bindings into the application.
-- Accepted L15 donor `2cec412927fa2f64f05a0b2774b18e45f8ce4fa5` is integrated by exact Git ancestry. Its 31-file `ops/live/**` tree remains exactly `584163858a0333cb1ccb9eff756e91a851b1cb71`; all 17 donor-owned `ops/tests/**` paths remain byte-identical while the enclosing target tree also retains previously accepted `ops/tests/i00/**`. Its root integration note is archived byte-identically at `docs/archive/i00-phase2/L15_OPS_INTEGRATION_NOTES.md` to preserve root-document law.
-- Accepted A-CORE donor `08a0a09780727e2b4ba59017b5701998abe29b77` is integrated by exact Git ancestry with 36 donor paths. The integration overlay preserves the accepted A-CORE scanner bytes exactly while pinning the accepted L source hashes and operation-site sets; the current scan is 495 files / 198 discovered / 198 covered / 0 uncovered. The final source-freeze rerun after remaining shared wiring is still pending, and `CORE_SCAFFOLD_READY` is not relabeled as overall assurance readiness.
-- Accepted A-HAZARD donor `ab33b3712cddd67c3ec91cfa1dd232c75226cd9f` is integrated by exact Git ancestry with 24 donor paths. Its systemic hazard fixtures remain evidence-only; serial-spine bindings are applied through canonical owners while all insertion evidence remains explicitly `DRAFT` and non-authoritative.
-- Accepted A-COCKPIT donor `d4ff9c94c9fec9477481223c4b33d8f671a34f6d` is integrated by exact Git ancestry with 53 donor paths. Its cockpit/observability evidence remains fixture-only and cannot mint live green; the serial spine fulfills the mount requests through canonical Product owners without widening fixture authority.
-- Accepted A-AGENT donor `97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437` is integrated by exact Git ancestry with 20 byte-identical donor paths. Its immutable donor-tip suite passes `111/111`; on the accumulated branch, 109/109 integration-safe behavior checks pass and the two donor-context branch/path assertions are replaced by exact Git-object provenance rather than weakened.
-- Accepted A-STABILITY donor `d35674e7f9621320c35e0bc0270efd515cc64dbd` is integrated by exact Git ancestry with 19 byte-identical donor paths. Its immutable donor-tip suite passes `212/212`; on the accumulated branch, 211/211 integration-safe behavior checks pass and the sole donor-context branch/path assertion is replaced by exact Git-object provenance. Resource ownership remains `UNKNOWN`.
-- Accepted A-CASE/S4 donor `b4d8a446cb4cd6e77e7fbaf38f927b7513dc316c` is integrated by exact Git ancestry with 41 byte-identical donor paths. Its immutable donor-tip suite passes `233/233`; on the accumulated branch, 231/231 integration-safe behavior checks pass and the two lane-context assertions are replaced by exact Git ancestry/path proof. The projection remains `SYNTHETIC_ONLY` with `authorityEffect=NONE`.
-- A-CASE/S4 accepted tip `b4d8a446cb4cd6e77e7fbaf38f927b7513dc316c` is integrated and receipted with exact `CASE_PRESTAGE_READY`; all 41 donor paths remain byte-identical.
-- The former L refusal snapshot is superseded by exact clean donor tip `df6b472993ca9659ce09cf5f72004981c6835f0d`, tree `1add5ee43fea623509c20d0990ec9efac2543fc4`, `LIVE_EDGE_RECEIPT.md` SHA-256 `0b95db6e0ae8777d3e3bebb1a510561c7dfc9dcba963bd02fbc91025dd784fe2`, and L17 acceptance SHA-256 `f23e078fdd1cf8d64585c01b677817d4d4efa3a08f9c4933acae09b399ce2381`. Its worktree has no tracked dirt and exactly two protected owner directives. Required-last merge `ec82bc51d5311dfb3f505216bfb3fa41733f038c`, tree `7192a94883f6ac43d0c7d06b2a0f24275a7feef8`, has pre-L commit `139d2cf07ffd3167bd54a3c14c0fc6671c2f02e9` first and that exact L donor second; `docs/archive/i00-phase2/L_LANE_INTEGRATION_RECEIPT.md` seals it. L is integrated but its remaining shared wiring and candidate acceptance are pending. A-FORMAL tip `89c783bd9e55ce83c21ed1181757122d88e4c980` remains `BLOCKED_NO_NETWORK_BOUNDARY_VIOLATED`.
-- Milestone tags (all pushed): `sprint-foundation-final`, `sprint-intelligence-final`, `sprint-runtime-final`, `sprint-capital-final`, `sprint-convergence-final`.
-- Milestone commits on `current-main`: audited baseline `b272049` → organs round 1 `c4ae7a9` → organs round 2 `87af782` → convergence `b58e64e`.
-- Feature branches preserved on origin as recovery points (`market-intelligence-main-20260711`, `backend-foundation-parallel-20260711-070056`, `live-intelligence-runtime-main-20260711`, `capital-supervision-main-20260711`, `system-convergence-vertical-slice-20260711`, `engine-overdrive`, `engine-volume-overdrive`).
-- Workspace: canonical Main is `/Users/cosmosgeek/Desktop/Main`; the sole Phase 2 shared writer is `/Users/cosmosgeek/Desktop/i00-assembly` on `i00-product-assembly-20260713`. Donor worktrees are immutable recovery/audit points and are never bulk-copied.
-- `.env`, `data/`, `dist/`, `node_modules/` are never tracked. Keys are server-side only.
+**Law:** this file wins on current product state; `ARCHITECTURE.md` Part II wins on ownership; `MISSION.md` wins on purpose. State is evidence, not a chronological diary.
 
-## Component status (release labels are cumulative; see ARCHITECTURE.md)
+## Product posture
 
-| Component | Status |
+Cosmos Arbitrage Control Room is one local, observable, validate-only product assembled from the accepted Q, L, dashboard, infrastructure, IP, and Product Assurance donors. Existing Basis and Volume engines remain the only strategy authorities; the existing Ledger remains the only durable-history owner; Foundation/System Integration remain the control, risk, dry-run execution, reconciliation, lifecycle, and supervisor owners. Product Integration composes and projects those owners without creating a second scanner, ledger, command plane, socket, or strategy.
+
+No money path exists in the composed product. Live/test orders, borrow/repay, leverage or margin mutation, transfer, withdrawal, private exchange reads, signed calls, AWS/Cloudflare mutation, deployment, and push were not authorized or exercised. `LIVE_EXECUTION_NOT_IMPLEMENTED` remains enforced.
+
+## Git, authority, and frozen inputs
+
+- Integration worktree: `/Users/cosmosgeek/Desktop/i00-assembly`; branch: `i00-product-assembly-20260713`.
+- Pre-freeze committed baseline: `18a0b9d1153a5f4bb6c8b42909362c6a295475bb`; tree `135ec02a6615741307c323b561bf999e2d71ab20`.
+- Role 2 accepted exclusive shared write/merge authority on this branch only in commit `c1266f24c464a49ef1657e2549b06d7a90d6cac7`. It has no authority over `current-main`, push, Phase 3 certification, private/signed/cloud activity, deployment, or money.
+- The frozen local Main authority cutoff is `d78be24f4da14632c857ee250b62e3fec33c2743`, tree `ea9113c2bf5fd95d4e39bde214d2ecf1f1e7e995`, parent `ac01b5e43830bc681ee7e251749c4d1fab210029`. The local `current-main` and local remote-tracking ref were observed there at cutoff; no fetch was performed and no remote-freshness claim is made.
+- The living authority pins are: `QL_DIRECTOR_STATE.md` blob `8116ec491fc7fc863dbcb4015be4cdb105a5a1bc`, SHA-256 `77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc`; `QL_PARALLEL_DAG.md` blob `701b3f263e73bf659ba4319c5839e798c1ce7abb`, SHA-256 `cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec`. D-LAUNCH-27 pre-stages the future Role 3 block but remains trigger-locked; it changes no donor or D-LAUNCH-1..17 acceptance fact.
+- Five owner directives remain protected untracked inputs and are excluded from C: `I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md`, `IP_RUNTIME.md`, `IP_CONTROL.md`, `IP_OPS.md`, and `IP_PROOF.md`. Their exact hashes are recorded in `I00_PRODUCT_BUILD_STATE.md`.
+- The final integration order is SHA-256 `73615984fa0403a4c0d7ea0db9893292d57ea18614714398684cf9a3062fb05c`.
+
+## Donor closure
+
+Expected = discovered = receipt-accepted = integrated is exactly **16/16/16/16**. The Git-backed table, donor trees, acceptance hashes, integration commits, and integration-receipt hashes are in `I00_PRODUCT_BUILD_STATE.md`.
+
+- The required-last donor remains L: merge `ec82bc51d5311dfb3f505216bfb3fa41733f038c`, with pre-L spine `139d2cf07ffd3167bd54a3c14c0fc6671c2f02e9` as first parent and exact L tip `df6b472993ca9659ce09cf5f72004981c6835f0d` as second parent. `docs/archive/i00-phase2/L_LANE_INTEGRATION_RECEIPT.md` has SHA-256 `198af74b4f0931123a41d6b0a94b1bbcd6890813986d981bd39e95ba486c296b`.
+- Donor equality is proved at each recorded integration cut. It is not a claim that later authorized shared-spine work stayed byte-identical to every donor.
+- Dashboard equality is specifically limited to cut `d04fdc71ffbd9c8266c969524a56e325ec68b1f8`, where 21/21 donor feature files were equivalent. The current dashboard has intentionally evolved under the accepted IP-CONTROL mount requests; current byte equality is not claimed.
+- A-FORMAL `b491893416006cf529aef02e5dd4a25d6475e7b8` and A-ACTION-EVIDENCE/S2 `ca30adf5e97b6697afec49f13073024d953b117b` are accepted standalone branches classified `POSTLANDING_EXCLUDED` by the L-last ordering law; no Phase 5 landing is claimed. PREVERIFY `46b2f1e31edf9f75aec7203e952a56f9869a2971` is a non-donor. None changes the 16-donor denominator.
+
+## Integrated source truth
+
+| Area | Current source truth | Honest boundary |
+| --- | --- | --- |
+| Managed product inventory | Exact 33 I00 identities: 14 `EVIDENCE_PRESENT`, 13 `OWNER_GATED`, 3 `NOT_CONFIGURED`, 3 `MISSING`; all 14 canonical System component IDs are referenced without widening the graph | A mapped identity is owner evidence, not automatic liveness; Q production transport, private truth, and external ops remain separately unavailable |
+| Controls | Four exact fail-closed Product controls are source-wired: enter `READ_ONLY`, engage kill, pause intake, and request restart of `engine-supervisor`; the complete catalog contains 14 entries | All reverse, broader, private, recovery, configuration, capital, strategy, focus, and incident mutations remain disabled, `NOT_CONFIGURED`, or `OWNER_GATED` |
+| Persistence | Existing Ledger owns the L06 compare-and-set primitive, command/idempotency receipts, operator-event cursor, identity graph, incidents, and boot/release evidence | No second database or file store; production L14 owners remain null/owner-gated |
+| Quantity bridge | Product-qualified instrument identity plus content-derived SHA-256 revision bridges exact source quantity to bounded Foundation binary64, rejecting substitution and lossy/invalid values | No authorized production consumer; `NOT_CONFIGURED` |
+| L12/L13/L14 | L12 owner availability is fail-closed; L13 exposes 27 roles as 11 bound, 13 owner-gated, 3 missing; L14 is structurally integrated | No canonical active subject/private truth, no accepted projector invocation, no production persistence instance, no dispatch |
+| Runtime/API | Dependency-driven startup, 14 canonical System/Product routes, durable material events, trace APIs, and exact command-result readback are source-built | Complete runtime/start/restart/reconciliation measurement remains pending |
+| Restart truth | A restart publishes terminal success only for the exact supervisor correlation, accepted revision, target generation, and correlated `RUNNING`/`DEGRADED` transition; active, failed, or boot-lost work stays pending/attention-required; exact replay does not reissue | The managed restart effect is owner-gated in the keyless campaign |
+| WebSocket | Canonical `/ws` emits supervisor deltas and seven-field durable material pages; retention gaps require backfill; raw logs/metrics are not broadcast | Browser continuity and actual CloseEvent 1012 proof remain pending |
+| Cockpit | The accepted dashboard donor is mounted in the existing app through the canonical Product provider; shared pages render canonical owner truth and unsupported controls remain non-functional | Six-run browser acceptance, computed styles, overflow, themes, restart continuity, and no-false-green proof remain pending |
+| Product Assurance | Current manifest covers 515 files, 207 discovered operation sites, 207 covered, 0 uncovered; behavior is 802 and provenance is 4 | Production assurance projection is not configured; no overall/live assurance-ready label |
+
+## Source-freeze verification already measured
+
+These are focused source results, not the complete C-bound local acceptance:
+
+| Command or suite | Measured result |
 | --- | --- |
-| Audited product (services, Binance owners, ledger, cockpit) | LIVE_PUBLIC (keyless, public-only posture) |
-| Basis engine + Volume engine (`server/src/engine/**`) | LIVE_PUBLIC — sole strategy authorities |
-| Backend Foundation (`server/src/foundation/**`) | WIRED via adapters; accepted F-BRIDGE `a0c0c2e5ef3180aa720488463643433cefeb65e5` hardens terminalization and restart recovery; execution coordinator remains dry-run only; USD-M test-order boundary dormant/NOT wired |
-| Market Intelligence (`server/src/intelligenceFoundation/**`) | WIRED as evidence substrate |
-| Intelligence Runtime (`server/src/intelligenceRuntime/**`) | WIRED for composed public sources; continuous effectful feed = next work |
-| Quant Edge research/inference donor (`quant/**`) | IMPORTED — exact accepted Q `LANE_READY` snapshot; advisory `ABSTAIN_UNKNOWN`, no accepted champion, no money authority; production transport/mount still NOT_CONFIGURED |
-| Capital Supervision (`server/src/capitalFoundation/**`) | WIRED read/advisory; reservation authority UNAVAILABLE (needs real account truth) |
-| System Integration (`server/src/systemIntegration/**`) | WIRED — composition root, supervisor, authenticated APIs, controls, vertical slice; accepted SI-RECON `f03ed786a8c5cab50ef27ad33026a74f79f7df87` preserves `DIVERGED` for contradictory working-order truth |
-| Product Integration (`server/src/productIntegration/**`) | PRE-L WIRED / FOCUSED_PROVED — canonical routes, supervisor projection, durable material-event cursor and trace/control seams are mounted; no command owner is configured and complete runtime/restart acceptance is pending |
-| Deployment/operations artifacts (`ops/live/**`, `ops/tests/**`) | IMPORTED — exact accepted L15 templates and network-free proof; no installation, AWS/Cloudflare mutation, deployment, or target readback |
-| Product persistence (`server/src/ledger.ts`, System Integration adapter) | PRE-L WIRED / FOCUSED_PROVED — seven Product tables, durable material events, generic Ledger compare-and-set, command/config/reference/incident/boot seams, and exact quantity bridge are implemented |
-| Product Assurance core (`server/src/productAssurance/**`) | COMPOSED / LOCAL_PROVED — exact A-CORE scanner bytes preserved; accepted L source/site identities pinned; 495 files, 198/198 operations covered, 0 uncovered; Product Assurance `802` behavior plus `4` provenance pass; final post-wiring source-freeze rerun remains pending |
-| Product Control Room (`web/src/features/productControlRoom/**`) | PRE-L MOUNTED / FOCUSED_PROVED — one canonical provider binds the real route and shared page surfaces; browser ship-gate proof remains pending |
-| Operator modes | READ_ONLY / ADVISORY / VALIDATE_ONLY only; kill switch fail-closed for new risk |
-| Live execution / private or signed calls / borrow / transfer / AWS runner | MISSING or OWNER_GATED by design — production startup and routes are mechanically retired or fail closed; no ambient credential or cloud client is constructed |
+| Root typecheck and build | Exit 0; server/web pass; Vite 1,880 modules; advisory large-chunk warning only |
+| Product Integration | `108/108` |
+| Product Control | `72/72` |
+| System Integration | `372/372` after restart-terminalization hardening |
+| L06 / L12 / L13 / L14 | `79/79`; `21/21`; `37/37`; `38/38` |
+| Foundation quantity bridge / Ledger CAS | `12/12`; `9/9`, including independent-writer race, crash rollback, recovery, and replay proofs |
+| Living-input authority protocol | `14/14` against immutable D-LAUNCH-27 cutoff `d78be24f4da14632c857ee250b62e3fec33c2743` |
+| I00 proof / command / acceptance contracts | `46/46`; `28/28`; `32/32` |
+| Security and I00 scope-security | `148` focused security assertions; `7/7` scope-security |
+| Root Product Assurance | 515 files; 207/207 discovered/covered; 0 uncovered; 802 behavior plus 4 provenance |
+| `bash ops/tests/i00/run-all.sh` | Exit 0; 10/10 files; 394 assertions |
+| `bash ops/tests/run-all.sh` | Exit 0; 12/12 files; 386 assertions including the 35-case durable lane-scope gate |
+| `npm test` | Exit 0; typecheck, build, deterministic engine/security, Product Assurance, and acceptance-contract gates pass |
+| `npm run test:all` | Exit 0; all configured family suites pass, including the 1,618-test live-edge campaign |
+| Diff hygiene | `git diff --check` exit 0 at the latest source audit |
 
-## Verification (Phase 2 exact final-donor merge checkpoint, 2026-07-14)
+The final C-bound `npm test`, `npm run test:all`, generated-report parity, deterministic scenarios, runtime startup, restart/reconciliation, performance campaign, and browser sweep are not claimed here. Their exact commands, exit states, durations, byte counts, output hashes, inventory readback, limitations, and evidence paths belong only in S and its immutable candidate receipt.
 
-```bash
-npm run test:foundation  # exit 0; all 24 sorted files passed at the F-BRIDGE cut
-npm run typecheck        # exit 0; current pre-L server and web trees
-npm run build            # exit 0; current pre-L server and web trees; web built 1,878 modules with advisory chunk warning only
-npm run test:app:built   # exit 0; 73/73 hostile built-app gates
-npm test                 # exit 0 on the exact integration overlay
-npm run test:all         # exit 0 on the exact integration overlay
-node --test --test-concurrency=1 --test-reporter=spec server/test/i00Acceptance/authority-protocol.test.mjs  # 14/14
-# Current Product Integration suite: 89/89. Product Control Room: 44/44. Full System Integration: 218/218.
-# Focused health/CAS/operator/persistence/quantity bundle: 36/36. Persistence suite: 38/38.
-# Server boundary proofs: 69/69 plus 146/146; focused health/quantity proof: 15/15.
-# Post-merge L gates: L06 79/79; L12 21/21; L13 37/37; L14 38/38; LiveEdge 1,618/1,618 in 447743.267792ms.
-# Post-merge owner gates: protocol 22/22; Foundation Control 97/97; SI controls/restart/routes 9/9.
-# Product Assurance: 495 files; 198 discovered; 198 covered; 0 uncovered; 802 behavior + 4 provenance.
-# I00 proof: 36/36 after re-pinning current Main QL objects and classifying L documentary source facts.
-bash ops/tests/run-all.sh  # exit 0; 11/11 files; 347 assertions; network-free except loopback harnesses
-node --test --test-concurrency=1 --test-reporter=spec "server/test/productAssurance/**/*.test.mjs"  # 32/32
-node test/i00/product-assurance-operation-overlay.mjs --fail-on-uncovered  # 198/198; zero uncovered; exact accepted-L source/site pins
-node --test --test-concurrency=1 --test-reporter=spec "test/productAssurance/systemic/hazard/**/*.test.mjs"  # 69/69
-node --test --test-concurrency=1 test/productAssurance/systemic/cockpit/*.test.mjs  # 50/50
-node --test --test-concurrency=1 test/productAssurance/systemic/observability/*.test.mjs  # 100/100
-# Exact A-AGENT donor tip: 111/111. Integration-safe behavior with immutable branch/path context proofs replaced by Git-object provenance: 109/109.
-# Exact A-STABILITY donor tip: 212/212. Integration-safe behavior with immutable branch/path context proof replaced by Git-object provenance: 211/211.
-# Exact A-CASE/S4 donor tip: 233/233. Integration-safe behavior with immutable branch/lane context proofs replaced by Git-object provenance: 231/231.
-# From a clean git archive of exact Q donor 02b4eccc with only its pinned .venv linked:
-PYTHONPATH=src .venv/bin/python -m pytest tests/q17 -q --cov=quant_edge.final_proof --cov-branch --cov-report=term  # 384/384; 96.50%
-PYTHONPATH=src .venv/bin/python -m pytest -q --tb=short  # 3,011 passed; 6 documented shard-only skips
-```
+## Known limitations
 
-F-BRIDGE focused proof is green: execution `173/173`, execution import purity `30/30`, compatibility `131/131`, reconciliation `75/75`. SI-RECON focused proof is `29/29`. Q is green only in the immutable donor view: focused `384/384` at `96.50%` and accumulated `3,011` plus six documented skips. Running Q17 against the combined target correctly produces `366 passed / 18 failed / 93.70%` because its immutable proof freezes the historical 1,568-byte directive lock; this is recorded diagnostic evidence, never reported as a green target-tree Q17 gate. The integration-owned provenance suite proves the exact D-LAUNCH-1 external supersession `14/14`. L15's complete network-free operational suite passes `11/11` files and 347 assertions. The exact final L merge passes L06 `79/79`, L12 `21/21`, L13 `37/37`, L14 `38/38`, full LiveEdge `1,618/1,618` in `447743.267792ms`, protocol `22/22`, Foundation Control `97/97`, and SI controls/restart/routes `9/9`. A-CORE passes `32/32`; A-HAZARD passes `69/69`; A-COCKPIT passes `50/50` plus observability `100/100`; A-AGENT passes `111/111` at its immutable tip and `109/109` integration-safe behavior checks; A-STABILITY passes `212/212` at its immutable tip and `211/211` integration-safe behavior checks; S4 passes `233/233` at its immutable tip and `231/231` integration-safe behavior checks. The exact integration overlay preserves A-CORE scanner bytes and pins accepted L source hashes/site sets: 495 files scanned, 198 operations discovered, 198 covered, 0 uncovered; Product Assurance passes `802` behavior plus `4` provenance. Current shared-spine evidence also retains Product Integration `89/89`, Product Control Room `44/44`, System Integration `218/218`, focused health/CAS/operator/persistence/quantity `36/36`, persistence `38/38`, boundary `69/69` plus `146/146`, built-app hostile gates `73/73`, typecheck/build, `npm test`, and `npm run test:all` at exit 0. I00 proof passes `36/36` after re-pinning current Main QL objects and classifying L documentary source facts. Remaining L shared wiring, the final post-wiring source-freeze rerun, runtime restart/readback, browser ship gate, and candidate receipt are still pending. The SI corrected expectation remains `DIVERGED`, not a weakened `PARTIAL` claim.
+- `NOT_CONFIGURED`: live execution, private/signed exchange boundary, Q production transport, Foundation quantity production consumer, Product Assurance production projection, and PREVERIFY candidate admission.
+- `OWNER_GATED`: deployment target, L12 active-subject/private truth, L13 accepted projector, L14 production activation, and managed restart effect.
+- `UNKNOWN`: production capacity.
+- `POSTLANDING_EXCLUDED`: A-FORMAL and A-ACTION-EVIDENCE/S2.
 
-## What is genuinely live vs not
+The exact reason-coded list is in `I00_PRODUCT_BUILD_STATE.md` and `fixtures/i00/closure-evidence.json`. Unknown, missing, stale, synthetic, blocked, and owner-gated states never become green.
 
-- **Implemented local public path:** Spot/USD-M acquisition, universe, Basis, Volume, supervisor and Product routes, seven-table SQLite Product persistence with durable cursors, and mounted cockpit truth surfaces. Final runtime/restart/browser acceptance is not yet claimed.
-- **Dry-run/synthetic:** capital mandate fixture → Foundation risk → sealed validate-only two-leg coordinator → reconciliation fixtures.
-- **Unavailable (honest gaps):** production capital/account truth; private reads; signed validation; exchange reconciliation against real fills; a canonical Product command owner; AWS/deployment; live execution. These remain `NOT_CONFIGURED`, `OWNER_GATED`, `UNKNOWN`, or mechanically blocked rather than fabricated green.
+## Next exact transition
 
-## Next build families (in order)
+1. Regenerate closure reports from the proved D-LAUNCH-27 living pins and complete the final source gates.
+2. Create C with every intended tracked source/config/test/doc change and none of the five protected directives.
+3. From exact C, run the complete I00 local acceptance, including the deterministic scenarios, dependency startup, actual restart/reconciliation, performance campaign, and six-run browser/no-false-green sweep.
+4. If and only if every measurement passes, create sole-child S with the immutable `INTEGRATION_CANDIDATE_READY` receipt, then park read-only for a different Role 3 session.
 
-1. Complete the integrated L donor's remaining canonical shared wiring and focused owner proofs without creating a duplicate owner.
-2. Freeze the final post-wiring source set and rerun the exact Product Assurance denominator plus repository gates.
-3. Run deterministic scenarios, dependency-driven runtime startup/restart/readback, reconciliation, and the complete browser ship gate.
-4. Seal `INTEGRATION_CANDIDATE_READY` only after all measured local acceptance passes; park read-only for independent Phase 3 verification and do not self-certify.
-5. Preserve A-FORMAL as blocked and external/private/signed/AWS/deployment/money work as `OWNER_GATED` outside this branch's authority.
-
-## Documentation map
-
-Root (one file, one purpose): `README.md` quickstart/access · `MISSION.md` why and the edge hypotheses · `STATE.md` this file · `ARCHITECTURE.md` structure + canonical authority map · `AGENTS.md` rules for any coding agent · `DIRECTOR.md` how sprints are directed · `DESIGN.md` UI system + locked baselines.
-History (evidence, superseded blueprints, sprint directives, receipts, research notes, the owner's original vision dump): `docs/archive/` — see its README. Receipts of future sprints go there too, with this file updated to point at the newest.
+Role 2 may not certify its own candidate. No current-main write, push, deployment, private/signed call, or money action is part of this transition.

@@ -154,7 +154,7 @@ export class BoundedInMemoryLedger extends EventEmitter {
     return this.#commitEvent(event);
   }
 
-  compareAndSetConfigValueAndLogEvents(key, expectedValue, nextValue, records) {
+  compareAndSetConfigValueAndLogEvents(key, expectedValue, nextValue, records, commitBeforeMs) {
     this.#assertWritable();
     if (expectedValue !== null && typeof expectedValue !== 'string') {
       throw new TypeError('compare-and-set expected value must be a string or null');
@@ -166,6 +166,10 @@ export class BoundedInMemoryLedger extends EventEmitter {
     }
     if (!Array.isArray(records) || records.length < 1 || records.length > CONFIG_CAS_EVENT_BATCH_MAX) {
       throw new RangeError('compare-and-set event batch must contain between 1 and 2 records');
+    }
+    if (commitBeforeMs !== undefined
+      && (!Number.isSafeInteger(commitBeforeMs) || commitBeforeMs < 0)) {
+      throw new TypeError('compare-and-set commitBeforeMs must be a non-negative safe integer');
     }
     this.#validateConfigValue(key, nextValue, false);
     const ts = this.#clock.nowMs();
@@ -196,6 +200,9 @@ export class BoundedInMemoryLedger extends EventEmitter {
     if (currentValue !== expectedValue) {
       return Object.freeze({ committed: false, reason: 'VERSION_CONFLICT', currentValue });
     }
+    if (commitBeforeMs !== undefined && ts >= commitBeforeMs) {
+      return Object.freeze({ committed: false, reason: 'DEADLINE_EXCEEDED', currentValue });
+    }
     this.#validateConfigValue(key, nextValue);
     if (this.#events.length + records.length > this.#maximumEvents) {
       throw new RangeError('memory-ledger event capacity exceeded');
@@ -203,6 +210,18 @@ export class BoundedInMemoryLedger extends EventEmitter {
     this.#config.set(key, nextValue);
     for (const event of events) this.#commitEvent(event);
     return Object.freeze({ committed: true, events: Object.freeze(events) });
+  }
+
+  /**
+   * This test-only Ledger has no Product identity-reference table. Expose that
+   * absence as an explicit, successfully read empty owner projection so tests
+   * cannot rely on the production adapter's missing-capability behavior.
+   */
+  readProductBlockingIdentityReferences(limit = 1_000) {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1_000) {
+      throw new RangeError('product identity reference limit must be 1-1000');
+    }
+    return Object.freeze([]);
   }
 
   recentEvents(

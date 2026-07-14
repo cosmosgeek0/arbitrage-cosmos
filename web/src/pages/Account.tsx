@@ -151,7 +151,7 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
   }, [prefs.dataCadence?.account, refreshTick]);
 
   const historyPoints: { ts: number; v: number }[] = [];
-  const openOrders: OpenOrderRow[] = [];
+  const [openOrders] = useState<OpenOrderRow[] | null>(null);
   const visibleFills = fills;
 
   const toggleMask = () => {
@@ -278,7 +278,7 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
               <header className="accountx-data-view-head"><span><b>Open Orders</b><small>OWNER_GATED · private order reads are not mounted</small></span><em>UNKNOWN</em></header>
               <div className="accountx-table-scroll"><table className="accountx-table orders">
                 <thead><tr><th className="l">Order</th><th>Price</th><th>Quantity</th><th>Filled</th><th>Status</th><th>Age</th></tr></thead>
-                <tbody>{openOrders.map((order: OpenOrderRow) => (
+                <tbody>{openOrders?.map((order: OpenOrderRow) => (
                   <tr key={`${order.symbol}-${order.orderId}`}>
                     <td className="l"><span className="accountx-order"><TokenIcon symbol={order.symbol} size={36} /><span><b>{order.symbol}</b><small><em className={order.side === 'BUY' ? 'up' : 'down'}>{order.side}</em> · {order.type}</small></span></span></td>
                     <td><b>{fmtPrice(order.price)}</b><small>Limit Price</small></td>
@@ -289,7 +289,7 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
                   </tr>
                 ))}</tbody>
               </table>
-              {openOrders.length === 0 && <div className="accountx-empty"><b>Open Orders Not Configured</b><span>This surface does not poll a private order endpoint; absence is not interpreted as zero.</span></div>}
+              {openOrders === null && <div className="accountx-empty"><b>Open Orders Not Configured</b><span>This surface does not poll a private order endpoint; absence is not interpreted as zero.</span></div>}
               </div>
             </section>
           )}

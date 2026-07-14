@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import { EventEmitter } from 'node:events';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import type { SystemTraceEvent } from './systemIntegration/contracts/types.js';
@@ -13,6 +13,7 @@ import {
   PRODUCT_IDENTITY_REFERENCE_TYPES,
   PRODUCT_IDENTITY_RESOLUTION_STATES,
   type ProductBootReleasePersistenceInput,
+  type ProductBootReleaseRecord,
   type ProductCommandPersistenceInput,
   type ProductConfigRevisionPersistenceInput,
   type ProductDesiredStatePersistenceInput,
@@ -21,6 +22,7 @@ import {
   type ProductIncidentPersistenceInput,
   type ProductPersistenceAuditRecord,
   type ProductPersistenceMutationResult,
+  type LedgerSchemaCompatibilityReadback,
   type SystemJsonValue,
 } from './systemIntegration/persistence/types.js';
 
@@ -76,6 +78,14 @@ const PRODUCT_BLOCKING_REFERENCE_TYPES = Object.freeze([
   'LIABILITY',
   'RECOVERY_CAMPAIGN',
 ] as const);
+export const LEDGER_SCHEMA_VERSION = 1;
+// The integrated checkpoint writer adds a closed-schema field that the prior
+// exact-key decoder cannot read. Once this runtime owns the Ledger, schema 1
+// is therefore the first honest non-rollback floor.
+export const LEDGER_ROLLBACK_FLOOR = 1;
+const LEDGER_SCHEMA_COMPATIBILITY_TABLE = 'ledger_schema_compatibility';
+const LEGACY_JOURNAL_COMPATIBILITY_FILE = 'journal-compat.json';
+const LEGACY_JOURNAL_COMPATIBILITY_MAX_BYTES = 4 * 1_024;
 const SQLITE_MAX_ROWID = 9_223_372_036_854_775_807n;
 const SQLITE_CURSOR = /^(0|[1-9][0-9]{0,18})$/;
 const SIX_HOURS_MS = 6 * 60 * 60 * 1_000;
@@ -122,7 +132,7 @@ export type LedgerConfigCompareAndSetResult =
     }
   | {
       readonly committed: false;
-      readonly reason: 'VERSION_CONFLICT';
+      readonly reason: 'VERSION_CONFLICT' | 'DEADLINE_EXCEEDED';
       readonly currentValue: string | null;
     };
 
@@ -143,6 +153,94 @@ export interface LedgerProductOperatorEventPage {
   readonly continuity: 'PROVEN' | 'GAP' | 'UNPROVEN';
   readonly truncated: boolean;
   readonly items: readonly Readonly<LedgerProductOperatorEventRecord>[];
+}
+
+interface LedgerSchemaCompatibilityRow {
+  readonly singleton: unknown;
+  readonly current_schema_version: unknown;
+  readonly rollback_floor: unknown;
+}
+
+interface LegacyJournalCompatibility {
+  readonly dataSchema: number;
+  readonly rollbackFloor: number;
+}
+
+function failedSchemaCompatibility(
+  state: Exclude<LedgerSchemaCompatibilityReadback['state'], 'AVAILABLE'>,
+  reasonCode: string,
+): Readonly<LedgerSchemaCompatibilityReadback> {
+  return Object.freeze({
+    state,
+    currentSchemaVersion: null,
+    rollbackFloor: null,
+    reasonCode,
+  });
+}
+
+function availableSchemaCompatibility(
+  currentSchemaVersion: number,
+  rollbackFloor: number,
+): Readonly<LedgerSchemaCompatibilityReadback> {
+  return Object.freeze({
+    state: 'AVAILABLE',
+    currentSchemaVersion,
+    rollbackFloor,
+    reasonCode: null,
+  });
+}
+
+function canonicalLegacyUtc(value: unknown): value is string {
+  if (typeof value !== 'string'
+      || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value)) return false;
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return false;
+  const normalized = value.length === 20 ? `${value.slice(0, -1)}.000Z` : value;
+  return new Date(parsed).toISOString() === normalized;
+}
+
+function readLegacyJournalCompatibility(dataDir: string): LegacyJournalCompatibility | null {
+  const markerPath = path.join(dataDir, LEGACY_JOURNAL_COMPATIBILITY_FILE);
+  if (!existsSync(markerPath)) return null;
+  const bytes = readFileSync(markerPath);
+  if (bytes.byteLength < 2 || bytes.byteLength > LEGACY_JOURNAL_COMPATIBILITY_MAX_BYTES) {
+    throw new Error('LEDGER_LEGACY_SCHEMA_COMPATIBILITY_MALFORMED');
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(bytes.toString('utf8')) as unknown;
+  } catch {
+    throw new Error('LEDGER_LEGACY_SCHEMA_COMPATIBILITY_MALFORMED');
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)
+      || Object.getPrototypeOf(parsed) !== Object.prototype
+      || Object.getOwnPropertySymbols(parsed).length !== 0) {
+    throw new Error('LEDGER_LEGACY_SCHEMA_COMPATIBILITY_MALFORMED');
+  }
+  const record = parsed as Record<string, unknown>;
+  const actualKeys = Object.keys(record).sort();
+  const expectedKeys = ['dataSchema', 'rollbackFloor', 'updatedAtUtc', 'updatedBy'].sort();
+  if (actualKeys.length !== expectedKeys.length
+      || actualKeys.some((key, index) => key !== expectedKeys[index])) {
+    throw new Error('LEDGER_LEGACY_SCHEMA_COMPATIBILITY_MALFORMED');
+  }
+  const { dataSchema, rollbackFloor, updatedAtUtc, updatedBy } = record;
+  if (!Number.isSafeInteger(dataSchema) || (dataSchema as number) < 0
+      || !Number.isSafeInteger(rollbackFloor) || (rollbackFloor as number) < 0
+      || (rollbackFloor as number) > (dataSchema as number)
+      || !canonicalLegacyUtc(updatedAtUtc)
+      || typeof updatedBy !== 'string'
+      || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(updatedBy)) {
+    throw new Error('LEDGER_LEGACY_SCHEMA_COMPATIBILITY_MALFORMED');
+  }
+  if ((dataSchema as number) > LEDGER_SCHEMA_VERSION
+      || (rollbackFloor as number) > LEDGER_SCHEMA_VERSION) {
+    throw new Error('LEDGER_SCHEMA_VERSION_UNSUPPORTED_NEWER');
+  }
+  return Object.freeze({
+    dataSchema: dataSchema as number,
+    rollbackFloor: rollbackFloor as number,
+  });
 }
 
 export interface FillRow {
@@ -357,9 +455,32 @@ export class Ledger extends EventEmitter {
     super();
     mkdirSync(dataDir, { recursive: true });
     this.db = new Database(path.join(dataDir, 'cosmos.db'));
-    this.db.pragma('journal_mode = WAL');
-    this.db.pragma('foreign_keys = ON');
-    this.db.exec(`
+    try {
+      const startupSchemaVersion = this.db.pragma('user_version', { simple: true }) as unknown;
+      if (!Number.isSafeInteger(startupSchemaVersion) || (startupSchemaVersion as number) < 0) {
+        throw new Error('LEDGER_SCHEMA_VERSION_MALFORMED');
+      }
+      if ((startupSchemaVersion as number) > LEDGER_SCHEMA_VERSION) {
+        throw new Error('LEDGER_SCHEMA_VERSION_UNSUPPORTED_NEWER');
+      }
+      const legacyCompatibility = startupSchemaVersion === 0
+        ? readLegacyJournalCompatibility(dataDir)
+        : null;
+
+      this.db.pragma('journal_mode = WAL');
+      this.db.pragma('foreign_keys = ON');
+      this.db.exec(`
+      CREATE TABLE IF NOT EXISTS ledger_schema_compatibility (
+        singleton INTEGER NOT NULL PRIMARY KEY CHECK(singleton = 1),
+        current_schema_version INTEGER NOT NULL CHECK(
+          typeof(current_schema_version) = 'integer' AND current_schema_version >= 1
+        ),
+        rollback_floor INTEGER NOT NULL CHECK(
+          typeof(rollback_floor) = 'integer'
+          AND rollback_floor >= 0
+          AND rollback_floor <= current_schema_version
+        )
+      );
       CREATE TABLE IF NOT EXISTS events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         ts INTEGER NOT NULL,
@@ -564,19 +685,57 @@ export class Ledger extends EventEmitter {
       CREATE INDEX IF NOT EXISTS idx_fills_ts ON fills (ts DESC);
       CREATE INDEX IF NOT EXISTS idx_browser_sessions_last_seen ON browser_sessions (last_seen DESC);
     `);
-    const browserSessionColumns = new Set(
-      (this.db.prepare('PRAGMA table_info(browser_sessions)').all() as { name: string }[]).map((column) => column.name),
-    );
-    if (!browserSessionColumns.has('device')) this.db.exec('ALTER TABLE browser_sessions ADD COLUMN device TEXT');
-    if (!browserSessionColumns.has('model')) this.db.exec('ALTER TABLE browser_sessions ADD COLUMN model TEXT');
-    // `local` was a display placeholder from the first telemetry version, not
-    // a real address. New sessions persist the actual socket/proxy/edge IP.
-    this.db.prepare("DELETE FROM browser_sessions WHERE ip = 'local'").run();
-    // July 2026 identity migration: the former raw 16-char IP+UA ids collapsed
-    // separate devices behind one NAT. New ids are explicitly versioned as
-    // device-token (`d_`) or privacy fallback (`f_`) records.
-    this.db.prepare("DELETE FROM browser_sessions WHERE id NOT GLOB 'd_*' AND id NOT GLOB 'f_*'").run();
-    this.trimBrowserSessions(Date.now());
+      if (startupSchemaVersion === 0) {
+        const initializeCompatibility = this.db.transaction(() => {
+          const existingRows = this.db.prepare(`
+            SELECT singleton, current_schema_version, rollback_floor
+            FROM ${LEDGER_SCHEMA_COMPATIBILITY_TABLE}
+            LIMIT 2
+          `).all();
+          if (existingRows.length !== 0) {
+            throw new Error('LEDGER_SCHEMA_COMPATIBILITY_LEGACY_COLLISION');
+          }
+          const rollbackFloor = Math.max(
+            legacyCompatibility?.rollbackFloor ?? 0,
+            LEDGER_ROLLBACK_FLOOR,
+          );
+          this.db.prepare(`
+            INSERT INTO ${LEDGER_SCHEMA_COMPATIBILITY_TABLE}
+              (singleton, current_schema_version, rollback_floor)
+            VALUES (1, ?, ?)
+          `).run(LEDGER_SCHEMA_VERSION, rollbackFloor);
+          this.db.pragma(`user_version = ${LEDGER_SCHEMA_VERSION}`);
+        });
+        initializeCompatibility.immediate();
+      }
+
+      const compatibility = this.readSchemaCompatibility();
+      if (compatibility.state !== 'AVAILABLE') {
+        throw new Error(compatibility.reasonCode ?? 'LEDGER_SCHEMA_COMPATIBILITY_UNAVAILABLE');
+      }
+
+      const browserSessionColumns = new Set(
+        (this.db.prepare('PRAGMA table_info(browser_sessions)').all() as { name: string }[]).map((column) => column.name),
+      );
+      if (!browserSessionColumns.has('device')) this.db.exec('ALTER TABLE browser_sessions ADD COLUMN device TEXT');
+      if (!browserSessionColumns.has('model')) this.db.exec('ALTER TABLE browser_sessions ADD COLUMN model TEXT');
+      // `local` was a display placeholder from the first telemetry version, not
+      // a real address. New sessions persist the actual socket/proxy/edge IP.
+      this.db.prepare("DELETE FROM browser_sessions WHERE ip = 'local'").run();
+      // July 2026 identity migration: the former raw 16-char IP+UA ids collapsed
+      // separate devices behind one NAT. New ids are explicitly versioned as
+      // device-token (`d_`) or privacy fallback (`f_`) records.
+      this.db.prepare("DELETE FROM browser_sessions WHERE id NOT GLOB 'd_*' AND id NOT GLOB 'f_*'").run();
+      this.trimBrowserSessions(Date.now());
+    } catch (error) {
+      this.closed = true;
+      try {
+        if (this.db.open) this.db.close();
+      } catch {
+        // Preserve the exact startup compatibility failure.
+      }
+      throw error;
+    }
   }
 
   logEvent(kind: string, symbol?: string | null, data?: unknown): LedgerEvent {
@@ -1921,10 +2080,17 @@ export class Ledger extends EventEmitter {
           currentLedgerEventId === null ? null : String(currentLedgerEventId),
         );
       }
-      if (existing && (input.generation < existing.generation
+      if (existing && (input.operationType !== existing.operation_type
+        || input.generation !== existing.generation
+        || input.testedCommit !== existing.tested_commit
+        || input.deployedCommit !== existing.deployed_commit
+        || input.configRevision !== existing.config_revision
+        || input.schemaRevision !== existing.schema_revision
+        || input.modelRevision !== existing.model_revision
         || input.startedAtMs !== existing.started_at_ms
+        || input.correlationId !== existing.correlation_id
         || input.completedAtMs === null && existing.completed_at_ms !== null)) {
-        throw new TypeError('product boot/release transition cannot regress durable evidence');
+        throw new TypeError('product boot/release transition cannot rewrite its durable CAS identity');
       }
       const event = this.appendProductPersistenceAudit(audit);
       this.db.prepare(`
@@ -1967,6 +2133,74 @@ export class Ledger extends EventEmitter {
       return frozenProductPersistenceResult('COMMITTED_NEW', event, String(event.id));
     });
     return this.publishProductPersistenceResult(commit.immediate());
+  }
+
+  /**
+   * Reads a bounded newest-first view of boot/release evidence. Every row and
+   * its referenced audit event are validated before any value is published.
+   */
+  readProductBootReleaseRevisions(
+    limit = 20,
+  ): readonly Readonly<ProductBootReleaseRecord>[] {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > PRODUCT_PERSISTENCE_QUERY_MAX) {
+      throw new RangeError(`product boot/release limit must be 1-${PRODUCT_PERSISTENCE_QUERY_MAX}`);
+    }
+    const rows = this.db.prepare(`
+      SELECT * FROM product_boot_release_revisions
+      ORDER BY generation DESC, started_at_ms DESC, operation_id DESC
+      LIMIT ?
+    `).all(limit) as ProductBootReleaseDbRow[];
+    return Object.freeze(rows.map((row) => {
+      assertProductIdentifier(row.operation_id, 'durable product boot/release operationId');
+      assertProductDomainState(row.operation_type, 'durable product boot/release operationType');
+      assertProductNonNegativeInteger(row.generation, 'durable product boot/release generation');
+      for (const [label, value] of [
+        ['testedCommit', row.tested_commit],
+        ['deployedCommit', row.deployed_commit],
+      ] as const) {
+        if (value !== null && !PRODUCT_COMMIT.test(value)) {
+          throw new Error(`durable product boot/release ${label} is invalid`);
+        }
+      }
+      assertProductOptionalIdentifier(row.config_revision, 'durable product boot/release configRevision');
+      assertProductIdentifier(row.schema_revision, 'durable product boot/release schemaRevision');
+      assertProductOptionalIdentifier(row.model_revision, 'durable product boot/release modelRevision');
+      assertProductUtcMillis(row.started_at_ms, 'durable product boot/release startedAtMs');
+      if (row.completed_at_ms !== null) {
+        assertProductUtcMillis(row.completed_at_ms, 'durable product boot/release completedAtMs');
+        if (row.completed_at_ms < row.started_at_ms) {
+          throw new Error('durable product boot/release completion precedes start');
+        }
+      }
+      if (row.clean !== null && row.clean !== 0 && row.clean !== 1) {
+        throw new Error('durable product boot/release clean state is invalid');
+      }
+      if (row.completed_at_ms === null && row.clean !== null) {
+        throw new Error('durable product boot/release pending row claims a clean state');
+      }
+      if (row.blocker_code !== null) {
+        assertProductDomainState(row.blocker_code, 'durable product boot/release blockerCode');
+      }
+      assertProductIdentifier(row.correlation_id, 'durable product boot/release correlationId');
+      assertProductPositiveInteger(row.ledger_event_id, 'durable product boot/release ledgerEventId');
+      this.readProductPersistenceAudit(row.ledger_event_id);
+      return Object.freeze({
+        operationId: row.operation_id,
+        operationType: row.operation_type,
+        generation: row.generation,
+        testedCommit: row.tested_commit,
+        deployedCommit: row.deployed_commit,
+        configRevision: row.config_revision,
+        schemaRevision: row.schema_revision,
+        modelRevision: row.model_revision,
+        startedAtMs: row.started_at_ms,
+        completedAtMs: row.completed_at_ms,
+        clean: row.clean === null ? null : row.clean === 1,
+        blockerCode: row.blocker_code,
+        correlationId: row.correlation_id,
+        ledgerEventId: row.ledger_event_id,
+      } satisfies ProductBootReleaseRecord);
+    }));
   }
 
   /**
@@ -2116,6 +2350,7 @@ export class Ledger extends EventEmitter {
     expectedValue: string | null,
     nextValue: string,
     records: readonly LedgerEventInput[],
+    commitBeforeMs?: number,
   ): LedgerConfigCompareAndSetResult {
     if (typeof key !== 'string' || !CONFIG_CAS_KEY.test(key)) {
       throw new TypeError('invalid compare-and-set config key');
@@ -2133,6 +2368,10 @@ export class Ledger extends EventEmitter {
     }
     if (!Array.isArray(records) || records.length < 1 || records.length > CONFIG_CAS_EVENT_BATCH_MAX) {
       throw new RangeError('compare-and-set event batch must contain between 1 and 2 records');
+    }
+    if (commitBeforeMs !== undefined
+      && (!Number.isSafeInteger(commitBeforeMs) || commitBeforeMs < 0)) {
+      throw new TypeError('compare-and-set commitBeforeMs must be a non-negative safe integer');
     }
 
     const prepared = records.map((record) => {
@@ -2187,6 +2426,9 @@ export class Ledger extends EventEmitter {
       }
 
       const ts = Date.now();
+      if (commitBeforeMs !== undefined && ts >= commitBeforeMs) {
+        return Object.freeze({ committed: false as const, reason: 'DEADLINE_EXCEEDED' as const, currentValue });
+      }
       this.db
         .prepare('INSERT INTO config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
         .run(key, nextValue);
@@ -2225,15 +2467,38 @@ export class Ledger extends EventEmitter {
     const result = commit.immediate();
     if (!result.committed) return result;
 
+    const cloneCommittedEvent = (event: Readonly<LedgerEvent>, index: number): LedgerEvent => ({
+      id: event.id,
+      ts: event.ts,
+      kind: prepared[index].kind,
+      symbol: prepared[index].symbol,
+      data: prepared[index].serialized === null
+        ? null
+        : JSON.parse(prepared[index].serialized) as unknown,
+    });
+    const exactResult: LedgerConfigCompareAndSetResult = Object.freeze({
+      committed: true as const,
+      events: Object.freeze(result.events.map((event, index) => Object.freeze(
+        cloneCommittedEvent(event, index),
+      ))),
+    });
+
     let listenerFailed = false;
-    for (const event of result.events) {
-      try {
-        this.emit('event', event);
-      } catch {
-        listenerFailed = true;
+    for (const [index, event] of result.events.entries()) {
+      // EventEmitter publishes synchronously and normally shares one argument
+      // object across every listener. Snapshot its raw listeners to preserve
+      // order/once semantics, but give each listener a fresh parse of the
+      // committed JSON so one consumer cannot corrupt a later consumer or the
+      // value returned to the caller.
+      for (const listener of this.rawListeners('event')) {
+        try {
+          listener.call(this, cloneCommittedEvent(event, index));
+        } catch {
+          listenerFailed = true;
+        }
       }
     }
-    if (!listenerFailed) return result;
+    if (!listenerFailed) return exactResult;
 
     // The transaction has already committed. Exact readback prevents a
     // listener exception from being returned as a write failure that could
@@ -2281,18 +2546,59 @@ export class Ledger extends EventEmitter {
       // The commit result remains authoritative even if diagnostic readback is
       // unavailable after a listener mutates or closes its surrounding app.
     }
-    return Object.freeze({
-      committed: true as const,
-      events: Object.freeze(result.events.map((event, index) => Object.freeze({
-        id: event.id,
-        ts: event.ts,
-        kind: prepared[index].kind,
-        symbol: prepared[index].symbol,
-        data: prepared[index].serialized === null
-          ? null
-          : JSON.parse(prepared[index].serialized) as unknown,
-      } satisfies LedgerEvent))),
-    });
+    return exactResult;
+  }
+
+  /**
+   * Reads the durable schema/rollback contract owned by this Ledger. The
+   * values are intentionally withheld unless the singleton row, SQLite
+   * user_version, and this runtime's supported schema agree exactly.
+   */
+  readSchemaCompatibility(): Readonly<LedgerSchemaCompatibilityReadback> {
+    if (this.closed || !this.db.open) {
+      return failedSchemaCompatibility('UNAVAILABLE', 'LEDGER_SCHEMA_COMPATIBILITY_UNAVAILABLE');
+    }
+    let userVersion: unknown;
+    let rows: LedgerSchemaCompatibilityRow[];
+    try {
+      userVersion = this.db.pragma('user_version', { simple: true }) as unknown;
+      rows = this.db.prepare(`
+        SELECT singleton, current_schema_version, rollback_floor
+        FROM ${LEDGER_SCHEMA_COMPATIBILITY_TABLE}
+        ORDER BY singleton
+        LIMIT 2
+      `).all() as LedgerSchemaCompatibilityRow[];
+    } catch {
+      return failedSchemaCompatibility('MALFORMED', 'LEDGER_SCHEMA_COMPATIBILITY_QUERY_FAILED');
+    }
+    if (!Number.isSafeInteger(userVersion) || (userVersion as number) < 0) {
+      return failedSchemaCompatibility('MALFORMED', 'LEDGER_SCHEMA_USER_VERSION_MALFORMED');
+    }
+    if (rows.length !== 1) {
+      return failedSchemaCompatibility('MALFORMED', 'LEDGER_SCHEMA_COMPATIBILITY_ROW_COUNT_INVALID');
+    }
+    const row = rows[0];
+    if (row.singleton !== 1
+        || !Number.isSafeInteger(row.current_schema_version)
+        || (row.current_schema_version as number) < 1
+        || !Number.isSafeInteger(row.rollback_floor)
+        || (row.rollback_floor as number) < 0) {
+      return failedSchemaCompatibility('MALFORMED', 'LEDGER_SCHEMA_COMPATIBILITY_ROW_MALFORMED');
+    }
+    const currentSchemaVersion = row.current_schema_version as number;
+    const rollbackFloor = row.rollback_floor as number;
+    if (rollbackFloor > currentSchemaVersion) {
+      return failedSchemaCompatibility('MISMATCH', 'LEDGER_ROLLBACK_FLOOR_EXCEEDS_CURRENT_SCHEMA');
+    }
+    if ((userVersion as number) > LEDGER_SCHEMA_VERSION
+        || currentSchemaVersion > LEDGER_SCHEMA_VERSION) {
+      return failedSchemaCompatibility('MISMATCH', 'LEDGER_SCHEMA_VERSION_UNSUPPORTED_NEWER');
+    }
+    if ((userVersion as number) !== currentSchemaVersion
+        || currentSchemaVersion !== LEDGER_SCHEMA_VERSION) {
+      return failedSchemaCompatibility('MISMATCH', 'LEDGER_SCHEMA_VERSION_MISMATCH');
+    }
+    return availableSchemaCompatibility(currentSchemaVersion, rollbackFloor);
   }
 
   /**
@@ -2334,12 +2640,34 @@ export class Ledger extends EventEmitter {
     }
   }
 
+  /**
+   * Forces the WAL into the main database under FULL synchronous durability.
+   * The clean boot marker is trustworthy only when every frame was
+   * checkpointed without a busy reader/writer.
+   */
+  flushForCleanShutdown(): boolean {
+    if (this.closed || !this.db.open) return false;
+    try {
+      this.db.pragma('synchronous = FULL');
+      const rows = this.db.pragma('wal_checkpoint(FULL)') as unknown;
+      if (!Array.isArray(rows) || rows.length !== 1) return false;
+      const row = rows[0] as Record<string, unknown>;
+      return Number.isSafeInteger(row.busy)
+        && row.busy === 0
+        && Number.isSafeInteger(row.log)
+        && Number.isSafeInteger(row.checkpointed)
+        && row.log === row.checkpointed;
+    } catch {
+      return false;
+    }
+  }
+
   close(): void {
     if (this.closed) return;
+    if (this.db.open) this.db.close();
     this.closed = true;
     this.healthProbeCache = null;
     this.removeAllListeners();
-    if (this.db.open) this.db.close();
   }
 }
 

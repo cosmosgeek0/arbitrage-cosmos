@@ -10,13 +10,19 @@ import type {
   CoreRuntimePorts,
   UtcClock,
 } from '../composition/types.js';
+import type { QAdvisoryObservationBinding } from '../adapters/qAdvisory.js';
 
 export type ProductionFeedStatus = 'connecting' | 'open' | 'closed';
 
 export interface ProductionMarketRow {
   readonly symbol: string;
+  readonly base?: string;
   readonly hasSpot: boolean;
   readonly hasPerp: boolean;
+  readonly perpMark?: number | null;
+  readonly perpIndexPrice?: number | null;
+  readonly fundingRate?: number | null;
+  readonly nextFundingTime?: number | null;
 }
 
 /**
@@ -33,6 +39,16 @@ export interface ProductionMarketEnginePort {
   allRows(): readonly Readonly<ProductionMarketRow>[];
   priceUpdatedAt(symbol: string): number | null;
   markEventTimestamp(symbol: string): number | null;
+}
+
+/**
+ * Narrow lifecycle seam for an already-owned public market auxiliary. The
+ * integration root may start and stop it with the market graph, but cannot
+ * construct its socket, read its cache, or claim authority over its records.
+ */
+export interface ProductionMarketAuxiliaryLifecyclePort {
+  start(): void;
+  stop(): void;
 }
 
 export interface ProductionStrategySnapshot {
@@ -76,8 +92,11 @@ export interface ProductionVolumeRuntimePort {
 export interface ProductionSystemIntegrationInput {
   readonly clock: UtcClock;
   readonly market: ProductionMarketEnginePort;
+  readonly marketAuxiliary?: ProductionMarketAuxiliaryLifecyclePort;
   readonly basis: ProductionBasisRuntimePort;
   readonly volume: ProductionVolumeRuntimePort;
+  /** Read-only existing L01/Q evidence; omitted binds accepted ABSTAIN_UNKNOWN. */
+  readonly qAdvisory?: QAdvisoryObservationBinding | null;
   /** One freshness law for existing public market observations. */
   readonly sourceMaxAgeMs?: number;
 }

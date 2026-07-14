@@ -1124,9 +1124,11 @@ What makes it useful:
 
 What makes it useful:
 
-- Market Ping and Data Health no longer exist in the topbar. Their four real
-  browser-polling controls and every source-health check live in the single
-  bottom-right `RefreshDock` Connection Watchman.
+- Market Ping and Data Health no longer exist in the topbar. Their browser-local
+  snapshot/socket controls and every source-health check live in the single
+  bottom-right `RefreshDock` Connection Watchman. A visible control is enabled
+  only when its canonical owner is mounted; a legacy route returning
+  `CONTROL_PREVIEW_REQUIRED` is not a usable recovery control.
 - The launcher uses the owner's supplied solid-blue two-arrow refresh identity,
   reconstructed as code-native SVG with the same separated arrows. The visible
   mark is 68px inside a 76px target — about 30% larger than the previous 52px
@@ -1147,8 +1149,12 @@ What makes it useful:
 - Live rows come from current evidence: browser RTT/socket; server control API; public market
   streams; Binance REST latency/clock/rate weight; account sync; Basis and
   Volume runtimes; News; Calendar; FX; Ledger DB; optional user-stream fallback.
-  Per-row controls call real reset targets. The outer control calls `all` and
-  also rebuilds the browser WebSocket.
+  News, Calendar, and FX may call their exact public-only refresh owners.
+  Browser snapshot refresh and WebSocket rebuild remain browser-local. Managed
+  `all`, `market`, `runtime`, and `account` resets stay visible but disabled and
+  labelled `CONTROL_PREVIEW_REQUIRED`/`OWNER_GATED` until a canonical preview,
+  commit, and readback path exists; they must never fall through to the retired
+  legacy refresh mutation.
 - `GET /api/system.connections.watchman` owns the component inventory and
   summary. AWS Runner and Cloudflare remain visibly Planned/Not Configured
   until prerequisites exist. The always-available in-app notification route is
@@ -1162,9 +1168,11 @@ What makes it useful:
   and `10s`. News and Calendar must honor the selected value; never present a
   cadence that the mounted page silently ignores.
 - Controls must not repeat recovery as cards or per-view footers. One persistent
-  Recovery Target selector owns `all/market/runtime/account/news/calendar/fx`
-  and one equal-height `Run Recovery` action calls the existing backend. That
-  console stays visible at the bottom of Overview, Connections, and Sources.
+  Recovery Target selector presents `all/market/runtime/account/news/calendar/fx`;
+  only the exact public-only `news/calendar/fx` targets may enable `Run
+  Recovery`. Managed targets remain an honest disabled boundary until their
+  canonical control owner is wired. That console stays visible at the bottom of
+  Overview, Connections, and Sources.
   The target and action are balanced `182×42` controls with 12px separation.
   Every Overview cadence row is 64px with a `112×38` selector and a distinct
   34px targeted refresh action; Defaults is a restrained `86×28` header action.

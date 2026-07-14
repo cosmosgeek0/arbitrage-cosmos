@@ -230,8 +230,6 @@ export function VolumeScanner() {
           </label>
         </header>
 
-        <ProductSurfaceAdapter surfaceId="volume" />
-
         <div className="volx-summary" aria-label="Volume Summary">
           <div className="volx-summary-cell">
             <span>Observed Symbols</span>
@@ -254,6 +252,8 @@ export function VolumeScanner() {
             <small>{snapshot?.status.openProposals ? 'Volume proposals in engine' : 'No verified wakeup staged'}</small>
           </div>
         </div>
+
+        <ProductSurfaceAdapter surfaceId="volume" />
 
         <div className="volx-filters">
           <div className="volx-segments" role="tablist" aria-label="Volume Views">

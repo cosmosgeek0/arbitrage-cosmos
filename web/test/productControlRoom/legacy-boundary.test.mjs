@@ -4,6 +4,8 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
+import { failClosedState } from '../../src/store.tsx';
+
 const SOURCE_ROOT = fileURLToPath(new URL('../../src/', import.meta.url));
 
 async function read(relativePath) {
@@ -28,6 +30,8 @@ test('the web source tree contains no legacy private, money-moving, cancel, or A
     '/api/live',
     '/api/trade/test',
     '/api/trade/send',
+    '/api/trade/preview',
+    '/api/kill',
     '/api/orders/cancel',
     '/api/orders/cancel-all',
     '/api/orders/history',
@@ -48,10 +52,10 @@ test('the web source tree contains no legacy private, money-moving, cancel, or A
   }
 });
 
-test('the shared store exposes validate-only preview but no legacy execution capability', async () => {
+test('the shared store structurally omits legacy preview and execution capabilities', async () => {
   const store = await read('store.tsx');
-  assert.match(store, /preview:\s*\(intent:/);
-  assert.match(store, /\/api\/trade\/preview/);
+  assert.doesNotMatch(store, /preview:\s*\(intent:/);
+  assert.doesNotMatch(store, /\/api\/trade\/preview/);
   for (const capability of ['setLive', 'testOrder', 'sendLive', 'cancelOrder', 'cancelAll', 'importFills', 'approveProposal']) {
     assert.doesNotMatch(store, new RegExp(`\\b${capability}\\b`));
   }
@@ -120,8 +124,7 @@ test('account recovery and notification routing cannot reintroduce private or AW
   ]);
   assert.doesNotMatch(header, /target:\s*['"]account['"]/);
   assert.doesNotMatch(header, /Signed Account/);
-  assert.match(store, /\/api\/refresh', \{ target: 'market' \}/);
-  assert.doesNotMatch(store, /\/api\/refresh', \{ target: 'all' \}/);
+  assert.doesNotMatch(store, /(?:post|fetch)(?:<[^>]+>)?\('\/api\/refresh'/);
   assert.doesNotMatch(store, /binanceConnected\??:|keysPresent\??:/);
   assert.doesNotMatch(notifications, /execution:\s*\{\s*available:\s*true/);
   assert.doesNotMatch(notifications, /aws:\s*\{\s*available:\s*true/);
@@ -141,4 +144,150 @@ test('shared ledger summaries declassify legacy money and private-account events
   assert.match(eventText, /Historical legacy execution setting/);
   assert.match(eventText, /ignored by this candidate/);
   assert.match(eventText, /not current connection evidence/);
+});
+
+test('keyless and unavailable account payloads cannot become zero positions or orders in the shared store', () => {
+  const config = {
+    killSwitch: false,
+    liveTradingEnabled: true,
+    fundsLocked: false,
+    automationPaused: false,
+    controlModes: { funds: 'allowed', borrowing: 'allowed', automation: 'allowed', liveOrders: 'allowed' },
+    borrowGuard: { enabled: false, newBorrowPaused: false, repayOnly: false },
+  };
+  const account = { totalUsdt: 0, availableUsdt: 0, entries: [] };
+  const hostileKeyless = failClosedState({
+    config,
+    mode: 'MANUAL',
+    binance: { keysPresent: false },
+    privateAccountTruth: 'AVAILABLE',
+    privateOrderTruth: 'AVAILABLE',
+    account,
+    positions: [],
+    openOrders: [],
+  });
+  assert.equal(hostileKeyless.privateAccountTruth, 'NOT_CONFIGURED');
+  assert.equal(hostileKeyless.privateOrderTruth, 'NOT_CONFIGURED');
+  assert.equal(hostileKeyless.account, null);
+  assert.equal(hostileKeyless.positions, null);
+  assert.equal(hostileKeyless.openOrders, null);
+
+  const keyOnlyWithoutReadback = failClosedState({
+    config,
+    mode: 'MANUAL',
+    binance: { keysPresent: true },
+    privateAccountTruth: 'AVAILABLE',
+    privateOrderTruth: 'AVAILABLE',
+    account: null,
+    positions: [],
+    openOrders: [],
+  });
+  assert.equal(keyOnlyWithoutReadback.privateAccountTruth, 'UNAVAILABLE');
+  assert.equal(keyOnlyWithoutReadback.privateOrderTruth, 'UNAVAILABLE');
+  assert.equal(keyOnlyWithoutReadback.account, null);
+  assert.equal(keyOnlyWithoutReadback.positions, null);
+  assert.equal(keyOnlyWithoutReadback.openOrders, null);
+
+  const unavailable = failClosedState({
+    config,
+    mode: 'MANUAL',
+    binance: { keysPresent: true },
+    privateAccountTruth: 'UNAVAILABLE',
+    privateOrderTruth: 'AVAILABLE',
+    account,
+    positions: [],
+    openOrders: [],
+  });
+  assert.equal(unavailable.account, null);
+  assert.equal(unavailable.privateOrderTruth, 'UNAVAILABLE');
+  assert.equal(unavailable.positions, null);
+  assert.equal(unavailable.openOrders, null);
+
+  const orderUnavailable = failClosedState({
+    config,
+    mode: 'MANUAL',
+    binance: { keysPresent: true },
+    privateAccountTruth: 'AVAILABLE',
+    privateOrderTruth: 'UNAVAILABLE',
+    account,
+    positions: [],
+    openOrders: [],
+  });
+  assert.equal(orderUnavailable.account, account);
+  assert.deepEqual(orderUnavailable.positions, []);
+  assert.equal(orderUnavailable.openOrders, null);
+
+  const configuredZero = failClosedState({
+    config,
+    mode: 'MANUAL',
+    binance: { keysPresent: true },
+    privateAccountTruth: 'AVAILABLE',
+    privateOrderTruth: 'AVAILABLE',
+    account,
+    positions: [],
+    openOrders: [],
+  });
+  assert.equal(configuredZero.privateAccountTruth, 'AVAILABLE');
+  assert.deepEqual(configuredZero.positions, []);
+  assert.deepEqual(configuredZero.openOrders, []);
+  assert.equal(configuredZero.account, account);
+});
+
+test('legacy liveness and PnL surfaces cannot imply semantic readiness or validated zero', async () => {
+  const [header, dashboard, pnl, account, types] = await Promise.all([
+    read('components/Header.tsx'),
+    read('pages/Dashboard.tsx'),
+    read('pages/Pnl.tsx'),
+    read('pages/Account.tsx'),
+    read('types.ts'),
+  ]);
+  assert.match(header, /fetch\('\/health\/live'/);
+  assert.doesNotMatch(header, /fetch\('\/api\/health'/);
+  assert.match(header, /direct \/health\/live liveness round trip/);
+  assert.match(types, /positions:\s*PositionEntry\[\]\s*\|\s*null/);
+  assert.match(types, /openOrders:\s*OpenOrderRow\[\]\s*\|\s*null/);
+  assert.match(account, /useState<OpenOrderRow\[\]\s*\|\s*null>\(null\)/);
+  assert.match(dashboard, /pnlTruthState === 'UNKNOWN' \? 'Strategy Performance Unavailable'/);
+  assert.match(dashboard, /unavailable private\/account truth is not converted into validated zero PnL/);
+  assert.match(pnl, /setData\(null\)/);
+  assert.match(pnl, /data !== null && data\.integrity\.state !== 'UNKNOWN'/);
+  assert.match(pnl, /does not convert an unavailable durable outcome read into a zero-PnL claim/);
+});
+
+test('internal cockpit consumers use the Product provider instead of the system compatibility route', async () => {
+  const paths = [
+    'components/Header.tsx',
+    'pages/Dashboard.tsx',
+    'pages/SystemHealth.tsx',
+  ];
+  for (const path of paths) {
+    const source = await read(path);
+    assert.doesNotMatch(source, /\/api\/system(?!-integration)/, `${path} consumes the legacy system compatibility route`);
+    assert.match(source, /useProductControlRoomContext/, `${path} does not consume the shared Product provider`);
+  }
+  const health = await read('pages/SystemHealth.tsx');
+  assert.match(health, /ownerView\.machineReady/);
+  assert.match(health, /<ProductSurfaceAdapter surfaceId="health" \/>/);
+  assert.doesNotMatch(health, /latencyState|driftState|feedState|worstState/);
+});
+
+test('retired legacy scanner renders as an idle read-only tombstone across shared surfaces', async () => {
+  const [opportunities, header, health, types] = await Promise.all([
+    read('pages/Opportunities.tsx'),
+    read('components/Header.tsx'),
+    read('pages/SystemHealth.tsx'),
+    read('types.ts'),
+  ]);
+
+  assert.match(types, /state:\s*'RETIRED'/);
+  assert.match(opportunities, /Legacy Scanner Retired/);
+  assert.match(opportunities, /No new legacy proposals or mutations are accepted/);
+  assert.match(opportunities, /Basis and Volume own strategy decisions/);
+  assert.match(opportunities, /className="opportunityx-live idle"/);
+  assert.doesNotMatch(opportunities, /\/api\/proposals\//);
+  assert.doesNotMatch(opportunities, /Confirm Dismiss|>Dismiss<|approveProposal|reject\s*=|pendingDismiss/);
+  assert.doesNotMatch(opportunities, /opportunityx-live ['"]\s*\+|opportunityx-live active/);
+
+  assert.doesNotMatch(header, /legacyScannerState|lastScannerTickTs|Pairs scanned/);
+  assert.doesNotMatch(health, /legacyScannerState|lastScannerTickTs|latest scanner tick|Scanner ticks exist|scanner proposals/);
 });

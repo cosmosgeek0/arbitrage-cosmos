@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { pathToFileURL } from 'node:url';
 
 import { Ledger } from '../../../dist/ledger.js';
 import { BoundedInMemoryLedger } from '../fixtures/memory-ledger.mjs';
@@ -64,6 +66,49 @@ test('Ledger CAS atomically commits an exact config value and bounded event pair
   }
 });
 
+test('Ledger CAS enforces the exact commit timestamp deadline before any config or event write', () => {
+  const dataDir = tempDataDir();
+  const ledger = new Ledger(dataDir);
+  const originalNow = Date.now;
+  try {
+    const deadline = 2_000_000_000_000;
+    Date.now = () => deadline - 1;
+    const prior = '{"revision":1}';
+    const beforeDeadline = ledger.compareAndSetConfigValueAndLogEvents(
+      CONFIG_KEY,
+      null,
+      prior,
+      records('before-deadline'),
+      deadline,
+    );
+    assert.equal(beforeDeadline.committed, true);
+    assert.deepEqual(beforeDeadline.events.map((event) => event.ts), [deadline - 1, deadline - 1]);
+
+    const countBeforeRefusal = ledger.countEvents();
+    Date.now = () => deadline;
+    const atDeadline = ledger.compareAndSetConfigValueAndLogEvents(
+      CONFIG_KEY,
+      prior,
+      '{"revision":2}',
+      records('at-deadline'),
+      deadline,
+    );
+    assert.deepEqual(atDeadline, {
+      committed: false,
+      reason: 'DEADLINE_EXCEEDED',
+      currentValue: prior,
+    });
+    assert.equal(ledger.getConfigValue(CONFIG_KEY), prior);
+    assert.equal(ledger.countEvents(), countBeforeRefusal);
+    assert.equal(ledger.recentEvents(10, JOURNAL_KIND, MUTATION_ID).length, 1);
+    assert.equal(ledger.recentEvents(10, AUDIT_KIND, MUTATION_ID).length, 1);
+  } finally {
+    Date.now = originalNow;
+    ledger.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
 test('independently opened Ledger writers compare durable state and the stale writer appends zero rows', () => {
   const dataDir = tempDataDir();
   const first = new Ledger(dataDir);
@@ -103,6 +148,76 @@ test('independently opened Ledger writers compare durable state and the stale wr
   } finally {
     first.close();
     second.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('SIGKILL before transaction commit leaves no checkpoint, journal, or audit row', { timeout: 15_000 }, async () => {
+  const dataDir = tempDataDir();
+  const ledgerModuleUrl = pathToFileURL(path.resolve('server/dist/ledger.js')).href;
+  const childSource = `
+    import { Ledger } from ${JSON.stringify(ledgerModuleUrl)};
+    const ledger = new Ledger(process.env.COSMOS_CAS_CRASH_DATA_DIR);
+    ledger.db.function('hold_before_cas_event', () => {
+      process.stdout.write('CAS_TRANSACTION_OPEN\\n');
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 60_000);
+      return 0;
+    });
+    ledger.db.exec("CREATE TRIGGER hold_before_cas_event_insert BEFORE INSERT ON events WHEN NEW.kind = '${JOURNAL_KIND}' BEGIN SELECT hold_before_cas_event(); END;");
+    ledger.compareAndSetConfigValueAndLogEvents(
+      ${JSON.stringify(CONFIG_KEY)},
+      null,
+      '{"revision":1,"crash":"before-commit"}',
+      ${JSON.stringify(records('power-loss'))},
+    );
+  `;
+  let child = null;
+  try {
+    child = spawn(process.execPath, ['--input-type=module', '--eval', childSource], {
+      env: { ...process.env, COSMOS_CAS_CRASH_DATA_DIR: dataDir },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stderr = '';
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    const close = new Promise((resolve, reject) => {
+      child.once('error', reject);
+      child.once('close', (code, signal) => resolve({ code, signal }));
+    });
+    await new Promise((resolve, reject) => {
+      let stdout = '';
+      const timeout = setTimeout(() => reject(new Error(`CAS crash fixture did not enter transaction: ${stderr}`)), 10_000);
+      child.stdout.setEncoding('utf8');
+      child.stdout.on('data', (chunk) => {
+        stdout += chunk;
+        if (!stdout.includes('CAS_TRANSACTION_OPEN')) return;
+        clearTimeout(timeout);
+        resolve();
+      });
+      child.once('error', (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      });
+      child.once('close', (code, signal) => {
+        if (stdout.includes('CAS_TRANSACTION_OPEN')) return;
+        clearTimeout(timeout);
+        reject(new Error(`CAS crash fixture closed before transaction hold: ${code}/${signal}: ${stderr}`));
+      });
+    });
+    assert.equal(child.kill('SIGKILL'), true);
+    assert.deepEqual(await close, { code: null, signal: 'SIGKILL' });
+
+    const reopened = new Ledger(dataDir);
+    try {
+      assert.equal(reopened.getConfigValue(CONFIG_KEY), null);
+      assert.equal(reopened.recentEvents(10, JOURNAL_KIND, MUTATION_ID).length, 0);
+      assert.equal(reopened.recentEvents(10, AUDIT_KIND, MUTATION_ID).length, 0);
+      assert.equal(reopened.countEvents(), 0);
+    } finally {
+      reopened.close();
+    }
+  } finally {
+    if (child !== null && child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
     rmSync(dataDir, { recursive: true, force: true });
   }
 });
@@ -174,6 +289,61 @@ test('post-commit listener failure is swallowed and returns exact durable readba
   }
 });
 
+test('nonthrowing mutating listeners cannot alter later listeners or the returned durable events', () => {
+  const dataDir = tempDataDir();
+  const ledger = new Ledger(dataDir);
+  try {
+    const firstListenerEvents = [];
+    const laterListenerEvents = [];
+    ledger.on('event', (event) => {
+      firstListenerEvents.push(event);
+      event.kind = 'hostile.listener.mutation';
+      event.data.schema = 'HOSTILE_MUTATION';
+      event.data.seed = 'hostile-mutation';
+    });
+    ledger.on('event', (event) => {
+      laterListenerEvents.push(event);
+    });
+
+    const committed = ledger.compareAndSetConfigValueAndLogEvents(
+      CONFIG_KEY,
+      null,
+      '{"revision":1,"listener":"isolated"}',
+      records('listener-isolation'),
+    );
+    assert.equal(committed.committed, true);
+    assert.deepEqual(firstListenerEvents.map((event) => event.kind), [
+      'hostile.listener.mutation',
+      'hostile.listener.mutation',
+    ]);
+    assert.deepEqual(laterListenerEvents.map((event) => event.kind), [JOURNAL_KIND, AUDIT_KIND]);
+    assert.deepEqual(laterListenerEvents.map((event) => event.data.seed), [
+      'listener-isolation',
+      'listener-isolation',
+    ]);
+    assert.deepEqual(committed.events.map((event) => event.kind), [JOURNAL_KIND, AUDIT_KIND]);
+    assert.deepEqual(committed.events.map((event) => event.data.seed), [
+      'listener-isolation',
+      'listener-isolation',
+    ]);
+    assert.notEqual(firstListenerEvents[0], laterListenerEvents[0]);
+    assert.notEqual(firstListenerEvents[0].data, laterListenerEvents[0].data);
+    assert.notEqual(laterListenerEvents[0], committed.events[0]);
+    assert.notEqual(laterListenerEvents[0].data, committed.events[0].data);
+    assert.deepEqual(
+      ledger.recentEvents(10, JOURNAL_KIND, MUTATION_ID)[0].data,
+      { schema: 'TEST_JOURNAL_V1', seed: 'listener-isolation' },
+    );
+    assert.deepEqual(
+      ledger.recentEvents(10, AUDIT_KIND, MUTATION_ID)[0].data,
+      { schema: 'TEST_AUDIT_V1', seed: 'listener-isolation' },
+    );
+  } finally {
+    ledger.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
 test('Ledger CAS rejects unbounded batches, payloads, values, and symbols before writing', () => {
   const dataDir = tempDataDir();
   const ledger = new Ledger(dataDir);
@@ -218,6 +388,16 @@ test('Ledger CAS rejects unbounded batches, payloads, values, and symbols before
       ),
       /event data exceeds/,
     );
+    assert.throws(
+      () => ledger.compareAndSetConfigValueAndLogEvents(
+        CONFIG_KEY,
+        null,
+        '{}',
+        records(),
+        -1,
+      ),
+      /commitBeforeMs/,
+    );
     assert.equal(ledger.getConfigValue(CONFIG_KEY), null);
     assert.equal(ledger.countEvents(), 0);
   } finally {
@@ -259,4 +439,30 @@ test('bounded memory Ledger mirrors CAS conflict and all-or-none capacity semant
   );
   assert.equal(bounded.getConfigValue(CONFIG_KEY), null);
   assert.equal(bounded.countEvents(), 0);
+
+  const deadlineClock = new ManualClock(2_100_000_000_000);
+  const deadlineLedger = new BoundedInMemoryLedger(deadlineClock, { maximumEvents: 4 });
+  const beforeDeadline = deadlineLedger.compareAndSetConfigValueAndLogEvents(
+    CONFIG_KEY,
+    null,
+    '{"revision":1}',
+    records('memory-before-deadline'),
+    deadlineClock.nowMs() + 1,
+  );
+  assert.equal(beforeDeadline.committed, true);
+  deadlineClock.advance(1);
+  const atDeadline = deadlineLedger.compareAndSetConfigValueAndLogEvents(
+    CONFIG_KEY,
+    '{"revision":1}',
+    '{"revision":2}',
+    records('memory-at-deadline'),
+    deadlineClock.nowMs(),
+  );
+  assert.deepEqual(atDeadline, {
+    committed: false,
+    reason: 'DEADLINE_EXCEEDED',
+    currentValue: '{"revision":1}',
+  });
+  assert.equal(deadlineLedger.getConfigValue(CONFIG_KEY), '{"revision":1}');
+  assert.equal(deadlineLedger.countEvents(), 2);
 });

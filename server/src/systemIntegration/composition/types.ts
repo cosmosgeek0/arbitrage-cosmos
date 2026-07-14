@@ -45,14 +45,37 @@ export interface StrategyRuntimePort extends CommonRuntimePort {
   start(): Promise<void>;
 }
 
+/** Optional Q/L01 observation mount. It has no strategy or money authority. */
+export interface QAdvisoryRuntimePort extends CommonRuntimePort {
+  start(): Promise<void>;
+}
+
+/**
+ * Directional lifecycle over accepted IntelligenceRuntime/IntelligenceFoundation
+ * owners. It owns no source transport, strategy, proposal, or money authority.
+ */
+export interface IntelligenceRuntimePort extends CommonRuntimePort {
+  start(): Promise<void>;
+}
+
 export interface CoreRuntimePorts {
   readonly market: MarketRuntimePort;
+  readonly intelligenceRuntime: IntelligenceRuntimePort;
+  readonly marketIntelligence: IntelligenceRuntimePort;
+  readonly q?: QAdvisoryRuntimePort;
   readonly basis: StrategyRuntimePort;
   readonly volume: StrategyRuntimePort;
 }
 
 export type AdapterStartState = 'IDLE' | 'PENDING' | 'RESOLVED' | 'REJECTED';
 export type ManagedDrainOutcome = 'NOT_REQUESTED' | 'IN_PROGRESS' | 'CLEAN' | 'FAILED' | 'TIMED_OUT';
+export type ManagedRestartCompletionReadback = 'PENDING' | 'APPLIED' | 'FAILED' | 'UNKNOWN';
+
+export interface ManagedRestartCommandIdentity {
+  readonly correlationId: string;
+  readonly revision: number;
+  readonly targetGeneration: number;
+}
 
 export interface ManagedAdapterSnapshot {
   readonly componentId: SystemComponentId;
@@ -95,10 +118,15 @@ export interface ManagedCompositionOptions {
 
 export interface ManagedCompositionControl {
   start(): CommandResult;
+  /** Boot the graph and converge to PAUSED before claiming that posture. */
+  startPaused(): CommandResult;
   validate(): CommandResult;
   restart(): CommandResult;
   issue(command: ControlCommandRequest['command']): CommandResult;
   driveOnce(): Readonly<ManagedCompositionReadSnapshot>;
   drain(): Promise<Readonly<ManagedCompositionReadSnapshot>>;
   read(): Readonly<ManagedCompositionReadSnapshot>;
+  readRestartCompletion(
+    identity: Readonly<ManagedRestartCommandIdentity>,
+  ): ManagedRestartCompletionReadback;
 }

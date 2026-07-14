@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "i00.browser-measurement.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "capturedAtUtc", "source", "kind", "subjectId", "theme", "viewport", "frameRect", "panelMetrics", "roles", "documentOverflowX", "surfaceOverflowX", "footerBarCount", "passed"],
+  "properties": {
+    "schemaVersion": { "const": "i00.browser-measurement.v1" },
+    "capturedAtUtc": { "type": "string", "minLength": 20, "maxLength": 40 },
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["headSha", "treeSha", "appOrigin", "captureProvenance", "captureSessionId", "captureTranscriptPath", "captureTranscriptSha256"],
+      "properties": {
+        "headSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "treeSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "appOrigin": { "type": "string", "pattern": "^http://(?:127\\.0\\.0\\.1|localhost):[0-9]{1,5}$" },
+        "captureProvenance": { "const": "IN_APP_BROWSER_MCP" },
+        "captureSessionId": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{8,160}$" },
+        "captureTranscriptPath": { "type": "string", "pattern": "^test/i00/performance/evidence/browser/[A-Za-z0-9._@/-]+\\.json$" },
+        "captureTranscriptSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "kind": { "enum": ["BOTTOM_UP_PAGE", "TOPBAR_PANEL"] },
+    "subjectId": { "type": "string", "pattern": "^[a-z0-9-]{2,80}$" },
+    "theme": { "enum": ["LIGHT", "DARK"] },
+    "viewport": {
+      "type": "object", "additionalProperties": false,
+      "required": ["width", "height", "zoom"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 320, "maximum": 7680 },
+        "height": { "type": "integer", "minimum": 480, "maximum": 4320 },
+        "zoom": { "enum": [1, 1.25] }
+      }
+    },
+    "frameRect": {
+      "type": "object", "additionalProperties": false,
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "number", "minimum": 0, "maximum": 7680 },
+        "y": { "type": "number", "minimum": 0, "maximum": 4320 },
+        "width": { "type": "number", "minimum": 1, "maximum": 7680 },
+        "height": { "type": "number", "minimum": 1, "maximum": 100000 }
+      }
+    },
+    "panelMetrics": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["shellWidthPx", "shellHeightPx", "headerHeightPx"],
+      "properties": {
+        "shellWidthPx": { "type": "number", "minimum": 1, "maximum": 1000 },
+        "shellHeightPx": { "type": "number", "minimum": 1, "maximum": 2000 },
+        "headerHeightPx": { "type": "number", "minimum": 1, "maximum": 400 }
+      }
+    },
+    "roles": {
+      "type": "array", "minItems": 6, "maxItems": 6,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["role", "selector", "state", "computed"],
+        "properties": {
+          "role": { "enum": ["frame", "title", "summary-label", "summary-value", "row-primary", "row-secondary", "header-title", "header-subtitle", "right-value", "status"] },
+          "selector": { "type": ["string", "null"], "minLength": 1, "maxLength": 300 },
+          "state": { "enum": ["MEASURED", "NOT_APPLICABLE"] },
+          "computed": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "required": ["display", "fontFamily", "fontSizePx", "fontWeight", "lineHeightPx", "color", "letterSpacingPx", "borderRadiusPx", "borderWidthPx", "overflowX", "overflowY", "fontVariantNumeric", "textTransform"],
+            "properties": {
+              "display": { "type": "string", "minLength": 1, "maxLength": 80 },
+              "fontFamily": { "type": "string", "minLength": 1, "maxLength": 300 },
+              "fontSizePx": { "type": "number", "minimum": 0, "maximum": 200 },
+              "fontWeight": { "type": "integer", "minimum": 1, "maximum": 1000 },
+              "lineHeightPx": { "type": "number", "minimum": 0, "maximum": 400 },
+              "color": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "letterSpacingPx": { "type": "number", "minimum": -20, "maximum": 100 },
+              "borderRadiusPx": { "type": "number", "minimum": 0, "maximum": 1000 },
+              "borderWidthPx": { "type": "number", "minimum": 0, "maximum": 100 },
+              "overflowX": { "type": "string", "minLength": 1, "maxLength": 40 },
+              "overflowY": { "type": "string", "minLength": 1, "maxLength": 40 },
+              "fontVariantNumeric": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "textTransform": { "type": "string", "minLength": 1, "maxLength": 40 }
+            }
+          }
+        }
+      }
+    },
+    "documentOverflowX": { "type": "number", "minimum": 0, "maximum": 100000 },
+    "surfaceOverflowX": { "type": "number", "minimum": 0, "maximum": 100000 },
+    "footerBarCount": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "passed": { "const": true }
+  }
+}

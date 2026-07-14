@@ -6,6 +6,7 @@ import type {
   SystemTraceSnapshot,
 } from '../contracts/types.js';
 import type { SystemControlService } from '../controls/service.js';
+import type { CanonicalSupervisorOpsReadPort } from '../ops/types.js';
 
 export interface SystemIntegrationEventQuery {
   readonly limit: number;
@@ -51,4 +52,5 @@ export interface SystemIntegrationRouterOptions {
   readonly read: SystemIntegrationReadPort;
   readonly controls: SystemControlService;
   readonly clock: SystemIntegrationRouteClock;
+  readonly opsReadback: CanonicalSupervisorOpsReadPort;
 }

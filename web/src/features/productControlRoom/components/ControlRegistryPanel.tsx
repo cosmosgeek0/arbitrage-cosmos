@@ -7,6 +7,7 @@ import {
   type ProductControlRegistryEntry,
   type ProductControlResult,
 } from '../../../lib/productIntegration';
+import { canonicalKillSwitchEngagePosture } from '../../../lib/canonicalCockpitTruth';
 import { PillSelect } from '../../../components/PillSelect';
 
 export interface ControlRegistryPanelProps {
@@ -135,15 +136,16 @@ export function ControlRegistryPanel({ controls, busy, allowFixtureControls = fa
           const functional = control.wiringState === 'WIRED_LIVE'
             ? safeLiveCommand
             : allowFixtureControls && control.wiringState === 'WIRED_FIXTURE';
-          const actionable = functional && control.disabledReason === null;
-          const disabledReason = workingMessage ?? control.disabledReason ?? (!functional
+          const emergency = control.controlId === 'global.kill-switch.engage';
+          const emergencyPosture = emergency ? canonicalKillSwitchEngagePosture(control) : null;
+          const emergencyEngaged = emergencyPosture?.engaged === true;
+          const actionable = functional
+            && control.disabledReason === null
+            && (emergencyPosture?.actionAllowed ?? true);
+          const disabledReason = workingMessage ?? emergencyPosture?.disabledReason ?? control.disabledReason ?? (!functional
             ? (control.wiringState === 'WIRED_LIVE' && !safeLiveCommand ? 'COMMAND_OUTSIDE_IP_CONTROL_NON_MONEY_ALLOWLIST' : `${control.wiringState} is not functional in this route.`)
             : control.confirmationText);
-          const emergency = control.controlId === 'global.kill-switch.engage';
-          const emergencyEngaged = emergency && control.currentEffectiveValue.includes('ENGAGED');
-          const buttonLabel = emergency
-            ? (control.currentEffectiveValue.includes('ENGAGED') ? 'Preview Resume' : 'Preview STOP BOT')
-            : `Preview ${control.label}`;
+          const buttonLabel = emergencyPosture?.buttonLabel ?? `Preview ${control.label}`;
           return (
             <article className={`pcr-control${emergency ? ' pcr-emergency-control' : ''}${emergencyEngaged ? ' engaged' : ''}`} key={control.controlId} aria-label={control.label}>
               <div className="pcr-control-head">

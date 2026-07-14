@@ -212,7 +212,18 @@ test('matches independent ordered §22 role, §23 metric, and alarm oracles', ()
 });
 
 test('matches the actual canonical System Integration and L14 owner catalogs', () => {
-  assert.deepEqual(CANONICAL_SYSTEM_COMPONENT_IDS, SYSTEM_COMPONENT_IDS);
+  // I00 added one advisory-only q-inference component after the immutable L13
+  // donor cut. Preserve the donor catalog bytes and prove that this is the
+  // sole integration-owned extension; QUANT_BRIDGE remains OWNER_GATED until
+  // an accepted production Q inference owner is configured.
+  assert.deepEqual(
+    CANONICAL_SYSTEM_COMPONENT_IDS,
+    SYSTEM_COMPONENT_IDS.filter((componentId) => componentId !== 'q-inference'),
+  );
+  assert.deepEqual(
+    SYSTEM_COMPONENT_IDS.filter((componentId) => !CANONICAL_SYSTEM_COMPONENT_IDS.includes(componentId)),
+    ['q-inference'],
+  );
   assert.deepEqual(MACHINE_GRAPH_CONTROL_ACTIONS, DURABLE_CONTROL_ACTION_TYPES);
 });
 

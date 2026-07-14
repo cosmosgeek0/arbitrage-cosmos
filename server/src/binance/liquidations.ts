@@ -115,7 +115,9 @@ function sanitizeBuckets(value: unknown, keepMs: number, now: number): Record<st
 const books = new Map<string, SymbolBook>();
 let recordingSince = Date.now();
 let eventsSeen = 0;
-let wsState: 'connecting' | 'live' | 'down' = 'connecting';
+// Construction is inert. `connecting` is truthful only after the managed
+// market lifecycle explicitly starts this owner.
+let wsState: 'connecting' | 'live' | 'down' = 'down';
 let persistTimer: NodeJS.Timeout | null = null;
 let persistDirty = false;
 let persistSequence = 0;
@@ -517,6 +519,22 @@ export function liquidationSeries(symbol: string, bucketMs: number): { since: nu
   return { since: recordingSince, state: wsState, points };
 }
 
-export function liquidationStats(): { state: string; since: number; symbols: number; events: number } {
-  return { state: wsState, since: recordingSince, symbols: books.size, events: eventsSeen };
+export function liquidationStats(): {
+  state: 'connecting' | 'live' | 'down';
+  running: boolean;
+  generation: number;
+  since: number;
+  symbols: number;
+  events: number;
+  lastActivityAt: number | null;
+} {
+  return {
+    state: wsState,
+    running: !stopped,
+    generation,
+    since: recordingSince,
+    symbols: books.size,
+    events: eventsSeen,
+    lastActivityAt: lastActivityAt > 0 ? lastActivityAt : null,
+  };
 }

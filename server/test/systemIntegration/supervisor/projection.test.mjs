@@ -31,8 +31,8 @@ function project(input = projectionInput()) {
 
 test('projection emits every canonical node and deterministic dependency edge', () => {
   const snapshot = project();
-  assert.equal(snapshot.components.length, 13);
-  assert.equal(new Set(snapshot.components.map((node) => node.componentId)).size, 13);
+  assert.equal(snapshot.components.length, 14);
+  assert.equal(new Set(snapshot.components.map((node) => node.componentId)).size, 14);
   assert.equal(snapshot.edges.length, SYSTEM_TOPOLOGY_EDGES.length);
   assert.equal(snapshot.schemaVersion, 1);
   assert.equal(snapshot.control.generation, 1);
@@ -289,6 +289,57 @@ test('projection rejects missing nodes and non-finite counts', () => {
   assert.equal(invalidResult.ok, false);
 });
 
+test('canonical supervisor preserves only relationally valid Ledger schema compatibility truth', () => {
+  const snapshot = project();
+  assert.deepEqual({
+    state: snapshot.summaries.ledger.schemaCompatibilityState,
+    reason: snapshot.summaries.ledger.schemaCompatibilityReason,
+    current: snapshot.summaries.ledger.currentSchemaVersion,
+    floor: snapshot.summaries.ledger.rollbackFloor,
+  }, {
+    state: 'AVAILABLE', reason: null, current: 1, floor: 1,
+  });
+  const serialized = JSON.parse(serializeSystemSupervisorSnapshot(snapshot));
+  assert.equal(serialized.summaries.ledger.currentSchemaVersion, 1);
+  assert.equal(serialized.summaries.ledger.rollbackFloor, 1);
+
+  const validFailure = projectionInput();
+  Object.assign(validFailure.summaries.ledger, {
+    truthLabel: 'UNAVAILABLE',
+    schemaCompatibilityState: 'MISMATCH',
+    schemaCompatibilityReason: 'LEDGER_SCHEMA_VERSION_MISMATCH',
+    currentSchemaVersion: null,
+    rollbackFloor: null,
+  });
+  const projectedFailure = buildSystemSupervisorProjection(validFailure);
+  assert.equal(projectedFailure.ok, true);
+  assert.equal(projectedFailure.value.summaries.ledger.truthLabel, 'UNAVAILABLE');
+  assert.equal(projectedFailure.value.summaries.ledger.currentSchemaVersion, null);
+
+  const hostileMutations = [
+    (ledger) => { ledger.rollbackFloor = 2; },
+    (ledger) => { ledger.currentSchemaVersion = Number.MAX_SAFE_INTEGER + 1; },
+    (ledger) => { ledger.schemaCompatibilityReason = 'SHOULD_BE_NULL'; },
+    (ledger) => { ledger.schemaCompatibilityState = 'INVENTED'; },
+    (ledger) => { delete ledger.currentSchemaVersion; },
+    (ledger) => Object.assign(ledger, {
+      truthLabel: 'UNAVAILABLE', schemaCompatibilityState: 'MISMATCH',
+      schemaCompatibilityReason: 'LEDGER_SCHEMA_VERSION_MISMATCH',
+      currentSchemaVersion: 1, rollbackFloor: 1,
+    }),
+    (ledger) => Object.assign(ledger, {
+      truthLabel: 'LIVE_PUBLIC', schemaCompatibilityState: 'UNAVAILABLE',
+      schemaCompatibilityReason: 'LEDGER_SCHEMA_COMPATIBILITY_UNAVAILABLE',
+      currentSchemaVersion: null, rollbackFloor: null,
+    }),
+  ];
+  for (const mutate of hostileMutations) {
+    const hostile = projectionInput();
+    mutate(hostile.summaries.ledger);
+    assert.equal(buildSystemSupervisorProjection(hostile).ok, false);
+  }
+});
+
 test('projection rejects malformed runtime, lifecycle, and freshness boundary facts', () => {
   const invalidRunMode = projectionInput({ runtime: { runMode: 'LIVE' } });
   assert.equal(buildSystemSupervisorProjection(invalidRunMode).ok, false);
@@ -355,7 +406,7 @@ test('supervisor and trace serialization are deterministic, JSON-plain, and boun
   const first = serializeSystemSupervisorSnapshot(snapshot);
   const second = serializeSystemSupervisorSnapshot(snapshot);
   assert.equal(first, second);
-  assert.equal(JSON.parse(first).components.length, 13);
+  assert.equal(JSON.parse(first).components.length, 14);
   const trace = serializeSystemTraceIndex(snapshot.traceIndex);
   assert.equal(JSON.parse(trace).entries.length, 1);
 });

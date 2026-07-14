@@ -156,6 +156,10 @@ export interface SystemSupervisorSummaries {
   ledger: {
     truthLabel: SystemTruthLabel;
     writable: boolean | null;
+    schemaCompatibilityState: 'AVAILABLE' | 'UNAVAILABLE' | 'MALFORMED' | 'MISMATCH';
+    schemaCompatibilityReason: string | null;
+    currentSchemaVersion: number | null;
+    rollbackFloor: number | null;
     lastEventId: string | null;
     lastPersistedAtMs: number | null;
     checkpointRevision: string | null;

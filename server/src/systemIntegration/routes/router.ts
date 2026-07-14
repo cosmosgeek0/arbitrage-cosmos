@@ -3,6 +3,7 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import type { OperatorIdentity } from '../../security/access.js';
 import type { SystemControlActor } from '../controls/types.js';
 import type { SystemControlMutationRequest } from '../contracts/types.js';
+import { evaluateCanonicalOpsIntakeGate } from '../ops/intakeGate.js';
 import { parseControlBody, parseEventQuery, TRACE_ID_PATTERN } from './validation.js';
 import type { SystemIntegrationRouterOptions } from './types.js';
 
@@ -79,7 +80,8 @@ export function createSystemIntegrationRouter(options: SystemIntegrationRouterOp
     || typeof options.controls?.auditRejectedRequest !== 'function'
     || typeof options.controls?.snapshot !== 'function'
     || typeof options.clock?.nowMs !== 'function'
-  ) throw new TypeError('createSystemIntegrationRouter requires injected read, control, and clock ports.');
+    || typeof options.opsReadback?.read !== 'function'
+  ) throw new TypeError('createSystemIntegrationRouter requires injected read, control, clock, and ops readback ports.');
 
   const router = express.Router();
   router.use((_req, res, next) => {
@@ -95,6 +97,19 @@ export function createSystemIntegrationRouter(options: SystemIntegrationRouterOp
   router.get('/supervisor', asyncRoute(async (req, res) => {
     if (rejectReadQuery(req, res)) return;
     try { res.json(await options.read.supervisor()); } catch { readError(res); }
+  }));
+
+  router.get('/ops/readback', asyncRoute(async (req, res) => {
+    if (rejectReadQuery(req, res)) return;
+    try { res.json(await options.opsReadback.read()); } catch { readError(res); }
+  }));
+
+  router.get('/ops/intake-gate', asyncRoute(async (req, res) => {
+    if (rejectReadQuery(req, res)) return;
+    try {
+      const readback = await options.opsReadback.read();
+      res.json(evaluateCanonicalOpsIntakeGate(readback, options.clock.nowMs()));
+    } catch { readError(res); }
   }));
 
   router.get('/graph', asyncRoute(async (req, res) => {

@@ -5,7 +5,6 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import WebSocket, { WebSocketServer } from 'ws';
 import { MarketEngine } from './engine/marketData.js';
-import { Scanner } from './engine/scanner.js';
 import { Ledger } from './ledger.js';
 import { loadConfig, saveConfig } from './config.js';
 import {
@@ -36,19 +35,50 @@ import { OrderService } from './services/orders.js';
 import { BookStreamHub } from './services/bookStream.js';
 import { BasisRuntime } from './services/basisRuntime.js';
 import { VolumeRuntime } from './services/volumeRuntime.js';
-import { createSystemIntegrationApplication } from './systemIntegration/application/index.js';
-import { projectI00Health } from './systemIntegration/application/health.js';
-import { createNodeRepeatingScheduler, createSystemUtcClock } from './systemIntegration/composition/index.js';
+import {
+  createSystemIntegrationApplication,
+  OrdinaryShutdownAdmission,
+} from './systemIntegration/application/index.js';
+import { createCanonicalOwnerEvidenceReadPort } from './systemIntegration/adapters/index.js';
+import type { SystemControlMutation } from './systemIntegration/contracts/index.js';
+import {
+  deriveI00MeaningfulAdvanceEvidence,
+  projectI00Health,
+} from './systemIntegration/application/health.js';
+import {
+  createNodeRepeatingScheduler,
+  createSystemUtcClock,
+  readManagedControlRuntimeEffect,
+  type ManagedCompositionReadSnapshot,
+} from './systemIntegration/composition/index.js';
+import {
+  createSystemBootReleasePersistenceAdapter,
+  createLiveEdgeControlProductionBinding,
+  finalizeSystemBootReleaseCleanShutdown,
+  LiveEdgeMutationJournalPersistenceAdapter,
+} from './systemIntegration/persistence/index.js';
 import { createProductionSystemIntegrationPorts } from './systemIntegration/production/index.js';
 import { createSystemIntegrationRouter } from './systemIntegration/routes/index.js';
 import {
+  createCanonicalSupervisorOpsReadback,
+  createDeploymentFreezeReader,
+  type CanonicalSupervisorOpsReadPort,
+} from './systemIntegration/ops/index.js';
+import { createNodeDeploymentFreezeFileSystem } from './services/deploymentFreezeFileSystem.js';
+import {
+  PRODUCT_RUNTIME_MATERIAL_DELIVERY_PAGE_LIMIT,
   createProductIntegrationRuntime,
   createProductIntegrationRuntimeRouter,
+  isProductRuntimeCursor,
+  parseProductRuntimeMaterialDeliveryAfterCursor,
+  projectProductRuntimeSupervisorDelta,
+  projectProductRuntimeMaterialDeliveryPage,
   type ProductRuntimeReadPorts,
 } from './productIntegration/runtime/index.js';
+import { createProductRuntimeSystemControlCommandOwner } from './productIntegration/runtime/systemControlCommandOwner.js';
 import { getNewsContext, newsContextStatus, refreshNewsContextNow, scoreNewsImpact, subscribeNewsContext } from './services/newsContext.js';
 import { OperatorAccess } from './security/access.js';
-import type { AppConfig, ControlMode, ExecutionControlModes, OrderIntent } from './types.js';
+import type { AppConfig } from './types.js';
 
 // Minimal .env loader (no dependency). Never logs values.
 // SKIP_DOTENV lets the gates harness boot deterministically keyless, ignoring
@@ -71,7 +101,7 @@ loadDotEnv();
 
 const PORT = Number(process.env.PORT ?? 8080);
 const HOST = process.env.HOST ?? '127.0.0.1';
-const TICK_MS = 2_000;
+const CANONICAL_DELIVERY_MS = 2_000;
 const SOURCE_LOGO_TTL_MS = 24 * 60 * 60 * 1000;
 const SOURCE_LOGO_MAX_BYTES = 256 * 1024;
 const DIRECT_SOURCE_LOGOS: Record<string, string> = {
@@ -105,21 +135,84 @@ Object.assign(config, {
   },
 });
 const engine = new MarketEngine(ledger);
-const scanner = new Scanner(config, ledger);
+const LEGACY_SCANNER_STATE = 'RETIRED' as const;
+const NO_ACTIVE_LEGACY_PROPOSALS: readonly [] = Object.freeze([]);
+
+function legacyScannerSnapshot() {
+  return Object.freeze({
+    state: LEGACY_SCANNER_STATE,
+    // Retain the compatibility shape while making its non-authoritative
+    // posture explicit. `pairs` is the current market-universe size, not a
+    // claim that the retired scanner processed those pairs.
+    pairs: engine.pairCount,
+    watching: 0,
+    lastTickTs: null,
+    grossThresholdPct: null,
+  });
+}
 const basisRuntime = new BasisRuntime(ledger, () => config, () => engine.allRows().map((row) => ({
   ...row,
   markUpdatedAt: engine.markEventTimestamp(row.symbol),
 })));
 const volumeRuntime = new VolumeRuntime(ledger, () => config, () => engine.allRows());
 let shuttingDown = false;
+const ordinaryShutdownAdmission = new OrdinaryShutdownAdmission();
 const systemIntegrationClock = createSystemUtcClock();
+const bootReleasePersistence = createSystemBootReleasePersistenceAdapter({
+  ledger,
+  clock: systemIntegrationClock,
+  environment: Object.freeze({
+    testedSha: process.env.I00_TESTED_SHA,
+    deployedSha: process.env.I00_DEPLOYED_SHA,
+    configRevision: process.env.I00_CONFIG_REVISION,
+    modelRevision: process.env.I00_MODEL_REVISION,
+  }),
+});
+const bootReleaseStart = bootReleasePersistence.start();
+if (!bootReleaseStart.ok) {
+  console.error('boot/release persistence started fail-closed:', bootReleaseStart.code);
+}
 const systemIntegrationScheduler = createNodeRepeatingScheduler();
 const systemIntegrationProduction = createProductionSystemIntegrationPorts({
   clock: systemIntegrationClock,
   market: engine,
+  marketAuxiliary: Object.freeze({
+    start: () => startLiquidationCollector({
+      isKnownSymbol: (symbol) => engine.filters.has(symbol),
+    }),
+    stop: () => stopLiquidationCollector(),
+  }),
   basis: basisRuntime,
   volume: volumeRuntime,
 });
+const liveEdgeMutationJournal = new LiveEdgeMutationJournalPersistenceAdapter(
+  ledger,
+  systemIntegrationClock,
+);
+// L14 is structurally bound to the one Ledger/control composition seam, but
+// activation remains OWNER_GATED: this runtime has no canonical numeric
+// configuration revision owner and APPLY_CONFIGURATION is deliberately
+// rejected by System Integration. Never substitute the string app/config or
+// checkpoint revision for that independent L14 contract.
+const liveEdgeControlBinding = createLiveEdgeControlProductionBinding({
+  ledger,
+  clock: systemIntegrationClock,
+});
+const canonicalOwnerEvidence = createCanonicalOwnerEvidenceReadPort({
+  clock: systemIntegrationClock,
+  components: systemIntegrationProduction.components,
+  mutationJournal: liveEdgeMutationJournal,
+  liveEdgeControl: liveEdgeControlBinding,
+});
+let canonicalOpsReadback: CanonicalSupervisorOpsReadPort | null = null;
+function readCanonicalOps() {
+  if (canonicalOpsReadback === null) throw new TypeError('canonical operations truth is not bound');
+  return canonicalOpsReadback.read();
+}
+const canonicalOpsReadPort: CanonicalSupervisorOpsReadPort = Object.freeze({
+  read: readCanonicalOps,
+});
+let readManagedRuntimeForControlEffect: (() => Readonly<ManagedCompositionReadSnapshot>) | null = null;
 const systemIntegration = createSystemIntegrationApplication({
   ledger,
   clock: systemIntegrationClock,
@@ -127,6 +220,20 @@ const systemIntegration = createSystemIntegrationApplication({
   runtimes: systemIntegrationProduction.runtimes,
   components: systemIntegrationProduction.components,
   summaries: systemIntegrationProduction.summaries,
+  traces: canonicalOwnerEvidence,
+  lifecycleTruth: Object.freeze({
+    readLocalMutationAuthority,
+    readOrdinaryDrainTruth: readCanonicalOps,
+    readControlRuntimeEffect: (effectId: string, mutation: Readonly<SystemControlMutation>) => {
+      const readManaged = readManagedRuntimeForControlEffect;
+      if (readManaged === null) return 'UNKNOWN';
+      try {
+        return readManagedControlRuntimeEffect(effectId, mutation, readManaged());
+      } catch {
+        return 'UNKNOWN';
+      }
+    },
+  }),
   // Convergence never treats ambient credentials as an execution capability.
   // The audited application kill remains an independent, stricter outer gate.
   readEnvironment: () => ({
@@ -135,8 +242,37 @@ const systemIntegration = createSystemIntegrationApplication({
     borrowTruthPresent: false,
   }),
 });
-const systemIntegrationStart = systemIntegration.start();
-if (!systemIntegrationStart.ok) {
+readManagedRuntimeForControlEffect = () => systemIntegration.managedRuntime();
+function configuredDeploymentFreezeMarkerPath(): string | null {
+  const stateDirectory = String(process.env.I00_OPS_STATE_DIR ?? '');
+  const markerPath = String(process.env.I00_DEPLOY_FROZEN_MARKER ?? '');
+  if (
+    !stateDirectory
+    || !markerPath
+    || stateDirectory.trim() !== stateDirectory
+    || markerPath.trim() !== markerPath
+    || !path.isAbsolute(stateDirectory)
+    || !path.isAbsolute(markerPath)
+    || path.normalize(stateDirectory) !== stateDirectory
+    || path.normalize(markerPath) !== markerPath
+    || stateDirectory === path.parse(stateDirectory).root
+    || markerPath !== path.join(stateDirectory, 'deploy-frozen.json')
+  ) return null;
+  return markerPath;
+}
+const deploymentFreezeReadback = createDeploymentFreezeReader({
+  markerPath: configuredDeploymentFreezeMarkerPath(),
+  clock: systemIntegrationClock,
+  fileSystem: createNodeDeploymentFreezeFileSystem(),
+});
+canonicalOpsReadback = createCanonicalSupervisorOpsReadback({
+  clock: systemIntegrationClock,
+  readSupervisor: () => systemIntegration.supervisor(),
+  readBlockingIdentityReferences: (limit) => ledger.readProductBlockingIdentityReferences(limit),
+  deploymentFreeze: deploymentFreezeReadback,
+});
+const systemIntegrationStart = bootReleaseStart.ok ? systemIntegration.start() : null;
+if (systemIntegrationStart !== null && !systemIntegrationStart.ok) {
   console.error(
     'system integration started fail-closed:',
     systemIntegrationStart.persistenceFailureCode
@@ -145,8 +281,19 @@ if (!systemIntegrationStart.ok) {
         : 'APPLICATION_START_FAILED'),
   );
 }
+const canonicalApplicationStartOk = bootReleaseStart.ok && systemIntegrationStart?.ok === true;
+const canonicalApplicationStartFailureCodes = Object.freeze([
+  ...(systemIntegrationStart === null
+    ? ['SYSTEM_INTEGRATION_NOT_STARTED']
+    : !systemIntegrationStart.ok ? ['SYSTEM_INTEGRATION_START_FAILED'] : []),
+  ...(!bootReleaseStart.ok ? [bootReleaseStart.code] : []),
+]);
 const productIntegrationRead: ProductRuntimeReadPorts = Object.freeze({
+  applicationStartOk: () => canonicalApplicationStartOk,
+  applicationStartFailureCodes: () => canonicalApplicationStartFailureCodes,
   supervisor: () => systemIntegration.supervisor(),
+  opsReadback: readCanonicalOps,
+  bootReleaseReadback: () => bootReleasePersistence.readback(),
   events: ({ afterCursor, limit }: Readonly<{ afterCursor: string; limit: number }>) => (
     ledger.readProductOperatorEventPage(afterCursor, limit)
   ),
@@ -164,8 +311,9 @@ const productIntegrationRead: ProductRuntimeReadPorts = Object.freeze({
 const productIntegrationRuntime = createProductIntegrationRuntime({
   read: productIntegrationRead,
   clock: systemIntegrationClock,
-  // No command owner is injected until an accepted donor proves durable
-  // idempotency, revision CAS, receipts, and managed restart authority.
+  commandOwner: createProductRuntimeSystemControlCommandOwner({
+    controls: systemIntegration.controls,
+  }),
 });
 
 // Phase 2 has no accepted signed/private exchange adapter. Keep the legacy
@@ -174,6 +322,20 @@ function unavailablePrivateBinanceClient(): BinanceClient | null {
   return null;
 }
 const client = unavailablePrivateBinanceClient();
+function readLocalMutationAuthority(): 'PROVEN_ABSENT' | 'PRESENT' | 'AMBIGUOUS' | 'UNKNOWN' {
+  try {
+    // This is process-local capability truth only. It never claims that the
+    // external account is flat; canonical ops readback carries that separate
+    // UNKNOWN/NONE/ACTIVE posture.
+    if (client !== null) return 'PRESENT';
+    if (ledger.unresolvedOrderRequests(1).length > 0 || ledger.unresolvedLoanMutations().length > 0) {
+      return 'AMBIGUOUS';
+    }
+    return 'PROVEN_ABSENT';
+  } catch {
+    return 'UNKNOWN';
+  }
+}
 const account = new AccountService(client, ledger, (s) => engine.priceOf(s));
 const risk = new RiskService(config, ledger);
 const orders = new OrderService(
@@ -203,17 +365,7 @@ console.log(
   `cosmos control room: managed market graph booting, signed/private exchange adapter NOT_CONFIGURED, listening ${HOST}:${PORT}`
 );
 
-let scannerTimer: NodeJS.Timeout | null = null;
-let liquidationCollectorStarted = false;
 let eventRetentionTimer: NodeJS.Timeout | null = null;
-
-function runScannerTick(): void {
-  try {
-    scanner.tick(engine.rows());
-  } catch (err) {
-    console.error('scanner tick failed:', err);
-  }
-}
 
 function pruneEphemeralLedgerEvents(maxBatches = 1): void {
   try {
@@ -234,14 +386,45 @@ function mode(): string {
   return config.liveTradingEnabled ? 'LIVE_ARMED' : 'MANUAL';
 }
 
-function buildState() {
-  const eq = account.keysPresent ? account.equity() : null;
-  const dayOpen = account.keysPresent ? account.dayOpenEquity() : null;
-  const dailyLossPolicy = account.keysPresent ? account.dailyLossPolicy() : null;
+function privateAccountTruthState(): 'AVAILABLE' | 'UNAVAILABLE' | 'NOT_CONFIGURED' {
+  if (!account.keysPresent) return 'NOT_CONFIGURED';
+  // Key presence is configuration only. Availability requires a successful,
+  // current authorized balance readback; a stale prior success is unavailable.
+  return account.connected && account.lastSyncTs !== null && account.lastError === null && account.equity().sourceFresh
+    ? 'AVAILABLE'
+    : 'UNAVAILABLE';
+}
+
+function privateOrderTruthState(
+  accountTruth: 'AVAILABLE' | 'UNAVAILABLE' | 'NOT_CONFIGURED',
+): 'AVAILABLE' | 'UNAVAILABLE' | 'NOT_CONFIGURED' {
+  if (accountTruth !== 'AVAILABLE') return accountTruth;
+  const syncedAt = orders.lastOrdersSyncTs;
+  const ageMs = syncedAt === null ? Number.POSITIVE_INFINITY : Date.now() - syncedAt;
+  return Number.isFinite(ageMs) && ageMs >= -1_000 && ageMs <= 60_000
+    ? 'AVAILABLE'
+    : 'UNAVAILABLE';
+}
+
+function buildState(canonicalSupervisor: ReturnType<typeof systemIntegration.supervisor>) {
+  const privateAccountTruth = privateAccountTruthState();
+  const hasPrivateReadback = privateAccountTruth === 'AVAILABLE';
+  const privateOrderTruth = privateOrderTruthState(privateAccountTruth);
+  const eq = hasPrivateReadback ? account.equity() : null;
+  const dayOpen = hasPrivateReadback ? account.dayOpenEquity() : null;
+  const dailyLossPolicy = hasPrivateReadback ? account.dailyLossPolicy() : null;
   const staleMs = config.staleOrderMaxMin * 60 * 1000;
   return {
+    schemaVersion: 'legacy.state.compatibility.v2' as const,
+    stateClass: 'COMPATIBILITY_VIEW' as const,
+    readinessSemantics: 'NOT_EVALUATED' as const,
+    canonicalReadinessEndpoint: '/health/ready' as const,
+    canonicalSupervisorEndpoint: '/api/system-integration/supervisor' as const,
+    canonicalSupervisor,
     now: Date.now(),
-    mode: mode(),
+    mode: config.killSwitch || canonicalSupervisor.control.killSwitchEngaged ? 'HALTED' as const : 'MANUAL' as const,
+    privateAccountTruth,
+    privateOrderTruth,
     binance: {
       keysPresent: account.keysPresent,
       connected: account.connected,
@@ -273,28 +456,27 @@ function buildState() {
           entries: eq.entries,
         }
       : null,
-    positions: account.keysPresent ? account.positions() : [],
-    openOrders: orders.openOrdersCache.map((o) => ({
-      symbol: o.symbol,
-      orderId: o.orderId,
-      clientOrderId: o.clientOrderId ?? null,
-      side: o.side,
-      type: o.type,
-      price: Number(o.price),
-      origQty: Number(o.origQty),
-      executedQty: Number(o.executedQty),
-      status: o.status,
-      time: o.time,
-      stale: Date.now() - o.time > staleMs,
-    })),
+    // A configured account with no positions is the empty array. A runtime
+    // with no private-account owner is unknown, not a zero-position account.
+    positions: hasPrivateReadback ? account.positions() : null,
+    openOrders: privateOrderTruth === 'AVAILABLE'
+      ? orders.openOrdersCache.map((o) => ({
+          symbol: o.symbol,
+          orderId: o.orderId,
+          clientOrderId: o.clientOrderId ?? null,
+          side: o.side,
+          type: o.type,
+          price: Number(o.price),
+          origQty: Number(o.origQty),
+          executedQty: Number(o.executedQty),
+          status: o.status,
+          time: o.time,
+          stale: Date.now() - o.time > staleMs,
+        }))
+      : null,
     recentFills: ledger.listFills(20),
-    proposals: scanner.proposals(),
-    scanner: {
-      pairs: engine.pairCount,
-      watching: scanner.watchingCount(),
-      lastTickTs: scanner.lastTickTs,
-      grossThresholdPct: scanner.grossThresholdPct,
-    },
+    proposals: NO_ACTIVE_LEGACY_PROPOSALS,
+    scanner: legacyScannerSnapshot(),
     risk: {
       dailyNotionalUsedUsd: risk.dailyNotionalUsedUsd(),
       lastOrderTs: risk.lastOrderTs(),
@@ -332,16 +514,58 @@ app.use((_req, res, next) => {
   }
   next();
 });
+app.use((req, res, next) => {
+  const phase = ordinaryShutdownAdmission.phase();
+  const recoveryControlEnvelope = req.method === 'POST' && (
+    req.path === '/api/system-integration/controls'
+    || req.path === '/api/product-integration/v1/commands/preview'
+    || req.path === '/api/product-integration/v1/commands'
+  );
+  if (phase === 'OPEN'
+      || ['GET', 'HEAD', 'OPTIONS'].includes(req.method)
+      || (phase === 'RECOVERY_ONLY' && recoveryControlEnvelope)) {
+    next();
+    return;
+  }
+  res.setHeader('Connection', 'close');
+  res.status(503).json({
+    ok: false,
+    code: phase === 'RECOVERY_ONLY' ? 'SHUTDOWN_RECOVERY_ONLY' : 'SHUTDOWN_IN_PROGRESS',
+    error: phase === 'RECOVERY_ONLY'
+      ? 'Only bounded canonical recovery controls remain admitted after ordinary drain refusal.'
+      : 'Mutating intake is closed while ordinary shutdown is being evaluated.',
+  });
+});
 app.use(express.json({ limit: '192kb', strict: true }));
+app.use((req, res, next) => {
+  if (ordinaryShutdownAdmission.admitsMutation(req.method, req.path, req.body)) {
+    next();
+    return;
+  }
+  res.setHeader('Connection', 'close');
+  res.status(503).json({
+    ok: false,
+    code: ordinaryShutdownAdmission.phase() === 'RECOVERY_ONLY'
+      ? 'SHUTDOWN_RECOVERY_ONLY'
+      : 'SHUTDOWN_IN_PROGRESS',
+    error: 'The requested mutation is outside the bounded ordinary-shutdown recovery surface.',
+  });
+});
 
 function sendI00Health(
   res: express.Response,
   kind: 'LIVE' | 'READY' | 'TRADE_READY',
 ): void {
   try {
-    // No canonical owner currently supplies last-meaningful-advance evidence.
-    // READY therefore stays fail-closed until that owner contract is mounted.
-    const projection = projectI00Health(kind, systemIntegration.supervisor(), systemIntegrationStart.ok, null);
+    const supervisor = systemIntegration.supervisor();
+    const meaningfulAdvance = deriveI00MeaningfulAdvanceEvidence(supervisor);
+    const projection = projectI00Health(
+      kind,
+      supervisor,
+      canonicalApplicationStartOk,
+      meaningfulAdvance,
+      canonicalApplicationStartFailureCodes,
+    );
     res.status(projection.ok ? 200 : 503).json(projection);
   } catch {
     const processResponsive = kind === 'LIVE';
@@ -393,12 +617,53 @@ function sendLiveExecutionNotImplemented(res: express.Response, operation: strin
   });
 }
 
-function sendNotConfigured(res: express.Response, capability: string): void {
+function sendLegacyScannerRetired(res: express.Response, operation: string): void {
+  res.status(410).json({
+    ok: false,
+    available: false,
+    code: 'RETIRED',
+    state: LEGACY_SCANNER_STATE,
+    error: 'The legacy proposal scanner is permanently retired; Basis and Volume are the strategy authorities.',
+    operation,
+  });
+}
+
+function sendNotConfigured(
+  res: express.Response,
+  capability: string,
+  nullFields: readonly string[] = [],
+): void {
+  const unavailableFields: Record<string, null> = {};
+  for (const field of nullFields) unavailableFields[field] = null;
   res.status(503).json({
     ok: false,
     available: false,
     code: 'NOT_CONFIGURED',
+    state: 'NOT_CONFIGURED',
+    truthState: 'UNAVAILABLE',
+    value: null,
+    ...unavailableFields,
     error: 'Private exchange access is not configured in this runtime.',
+    capability,
+  });
+}
+
+function sendUnavailable(
+  res: express.Response,
+  capability: string,
+  nullFields: readonly string[] = [],
+): void {
+  const unavailableFields: Record<string, null> = {};
+  for (const field of nullFields) unavailableFields[field] = null;
+  res.status(503).json({
+    ok: false,
+    available: false,
+    code: 'UNAVAILABLE',
+    state: 'UNAVAILABLE',
+    truthState: 'UNAVAILABLE',
+    value: null,
+    ...unavailableFields,
+    error: 'Private exchange truth has no valid authorized readback.',
     capability,
   });
 }
@@ -465,6 +730,7 @@ app.use('/api/system-integration', createSystemIntegrationRouter({
   read: systemIntegration.read,
   controls: systemIntegration.controls,
   clock: systemIntegrationClock,
+  opsReadback: canonicalOpsReadPort,
 }));
 app.use('/api/product-integration', createProductIntegrationRuntimeRouter(productIntegrationRuntime));
 
@@ -692,7 +958,13 @@ app.get('/api/sessions', (req, res) => {
 });
 
 app.get('/api/health', (_req, res) => {
+  // Legacy compatibility for low-cost process and browser RTT checks only.
+  // Semantic readiness is owned exclusively by /health/ready.
   res.json({
+    schemaVersion: 'legacy.process-liveness.v1',
+    healthClass: 'PROCESS_LIVENESS_COMPATIBILITY',
+    readinessSemantics: 'NOT_EVALUATED',
+    canonicalReadinessEndpoint: '/health/ready',
     ok: true,
     uptimeSec: Math.round(process.uptime()),
     pairs: engine.pairCount,
@@ -704,7 +976,26 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.get('/api/state', (_req, res) => {
-  res.json(buildState());
+  runAsync(res, async () => {
+    try {
+      const stateSupervisor = await systemIntegration.supervisor();
+      res.json(buildState(stateSupervisor));
+    } catch {
+      res.status(503).json({
+        ok: false,
+        available: false,
+        code: 'CANONICAL_SUPERVISOR_UNAVAILABLE',
+        state: 'UNAVAILABLE',
+        schemaVersion: 'legacy.state.compatibility.v2',
+        stateClass: 'COMPATIBILITY_VIEW',
+        readinessSemantics: 'NOT_EVALUATED',
+        canonicalReadinessEndpoint: '/health/ready',
+        canonicalSupervisorEndpoint: '/api/system-integration/supervisor',
+        canonicalSupervisor: null,
+        error: 'Canonical supervisor truth is unavailable; no legacy state fallback is published.',
+      });
+    }
+  });
 });
 
 function integerQuery(
@@ -1369,7 +1660,7 @@ function startEquityHistoryRefresh(): Promise<EquityHistorySnapshot> {
 }
 
 app.get('/api/equity-history', (_req, res) => {
-  sendNotConfigured(res, 'PRIVATE_EQUITY_HISTORY');
+  sendNotConfigured(res, 'PRIVATE_EQUITY_HISTORY', ['rows']);
 });
 
 type EarnSnapshot = { ts: number; rows: { asset: string; amount: number; apr: number }[] };
@@ -1406,7 +1697,7 @@ function startEarnRefresh(): Promise<EarnSnapshot> {
 }
 
 app.get('/api/earn', (_req, res) => {
-  sendNotConfigured(res, 'PRIVATE_EARN_POSITIONS');
+  sendNotConfigured(res, 'PRIVATE_EARN_POSITIONS', ['rows']);
 });
 
 // Account-wide wallet totals from Binance's signed wallet-balance endpoint.
@@ -1460,7 +1751,7 @@ async function refreshWalletBalances(force = false): Promise<WalletBalanceSnapsh
 
 app.get('/api/wallet-balances', (_req, res) => {
   res.setHeader('Cache-Control', 'private, no-store, max-age=0');
-  sendNotConfigured(res, 'PRIVATE_WALLET_BALANCES');
+  sendNotConfigured(res, 'PRIVATE_WALLET_BALANCES', ['rows']);
 });
 
 type MarketSourceSnapshot = {
@@ -1520,7 +1811,7 @@ app.get('/api/markets', (_req, res) => {
               : ('SHORT_SPOT_LONG_PERP' as const);
         return {
           ...r,
-          status: r.hasPerp ? scanner.statusOf(r.symbol) : ('idle' as const),
+          status: 'idle' as const,
           spark: engine.sparkOf(r.symbol, 36),
           spotBid: spotBook?.bidPrice ?? null,
           spotAsk: spotBook?.askPrice ?? null,
@@ -1572,7 +1863,7 @@ app.get('/api/market/detail', (req, res) => {
     }
     const row = engine
       .allRows()
-      .map((r) => ({ ...r, status: r.hasPerp ? scanner.statusOf(r.symbol) : ('idle' as const) }))
+      .map((r) => ({ ...r, status: 'idle' as const }))
       .find((r) => r.symbol === symbol);
     let book = null;
     try {
@@ -1621,6 +1912,13 @@ app.get('/api/orders/history', (_req, res) => {
 });
 
 app.get('/api/pnl', (_req, res) => {
+  const accountTruth = privateAccountTruthState();
+  if (accountTruth !== 'AVAILABLE') {
+    const fields = ['realizedByDay', 'realizedBySymbol', 'feesByAsset', 'equitySnapshots', 'integrity'];
+    if (accountTruth === 'NOT_CONFIGURED') sendNotConfigured(res, 'PRIVATE_ACCOUNT_PNL', fields);
+    else sendUnavailable(res, 'PRIVATE_ACCOUNT_PNL', fields);
+    return;
+  }
   const { realizedByDay, realizedBySymbol, feesByAsset, feeUsdByDay, incompleteByDay } = account.pnl();
   const days = [...realizedByDay.entries()]
     .map(([day, usd]) => ({ day, usd }))
@@ -1648,21 +1946,29 @@ app.get('/api/pnl', (_req, res) => {
     .filter((s) => s.complete && s.totalUsdt !== null)
     .map(({ ts, totalUsdt }) => ({ ts, totalUsdt }))
     .reverse();
+  const integrityComplete = integrity.length > 0 && integrity.every((row) => row.complete);
+  const integrityReasons = [...new Set(integrity.flatMap((row) => row.reasons))];
+  if (integrity.length === 0) integrityReasons.push('NO_DURABLE_PNL_EVIDENCE');
   res.json({
     realizedByDay: days,
     realizedBySymbol: bySymbol,
     feesByAsset: fees,
     equitySnapshots: snapshots,
     integrity: {
-      complete: integrity.every((row) => row.complete),
-      reasons: [...new Set(integrity.flatMap((row) => row.reasons))],
+      state: integrity.length === 0 ? 'UNKNOWN' : integrityComplete ? 'COMPLETE' : 'PARTIAL',
+      complete: integrityComplete,
+      reasons: integrityReasons,
       days: integrity,
     },
   });
 });
 
 app.get('/api/signals', (_req, res) => {
-  res.json({ active: scanner.proposals(), recent: ledger.listSignals({ limit: 50 }) });
+  res.json({
+    legacyScannerState: LEGACY_SCANNER_STATE,
+    active: NO_ACTIVE_LEGACY_PROPOSALS,
+    recent: ledger.listSignals({ limit: 50 }),
+  });
 });
 
 app.get('/api/engine/volume', (_req, res) => {
@@ -1673,34 +1979,12 @@ app.get('/api/engine/basis', (_req, res) => {
   res.json(basisRuntime.snapshot());
 });
 
-app.post('/api/proposals/:id/approve', (req, res) => {
-  const id = Number(req.params.id);
-  const p = scanner.proposals().find((x) => x.id === id);
-  if (!p) {
-    res.status(404).json({ error: 'proposal not active' });
-    return;
-  }
-  // Approving NEVER sends an order. It returns a prefilled manual ticket.
-  const intent: OrderIntent = {
-    symbol: p.symbol,
-    side: p.side === 'SHORT_PERP_LONG_SPOT' ? 'BUY' : 'SELL', // the SPOT leg of the basis trade
-    type: 'LIMIT',
-    price: p.spotPrice ?? undefined,
-    source: 'proposal',
-  };
-  ledger.logEvent('manual_action', p.symbol, { action: 'approve_proposal', proposalId: id, intent });
-  res.json({ intent, note: 'Prefilled ticket for the SPOT leg. The perp leg is not automated in v0.' });
+app.post('/api/proposals/:id/approve', (_req, res) => {
+  sendLegacyScannerRetired(res, 'LEGACY_PROPOSAL_APPROVE');
 });
 
-app.post('/api/proposals/:id/reject', (req, res) => {
-  const id = Number(req.params.id);
-  const ok = scanner.dismiss(id);
-  if (!ok) {
-    res.status(404).json({ error: 'proposal not active' });
-    return;
-  }
-  ledger.logEvent('manual_action', null, { action: 'reject_proposal', proposalId: id });
-  res.json({ ok: true });
+app.post('/api/proposals/:id/reject', (_req, res) => {
+  sendLegacyScannerRetired(res, 'LEGACY_PROPOSAL_REJECT');
 });
 
 // Token icon manifest: resolved real logo URLs (CoinGecko) for the requested
@@ -2109,15 +2393,23 @@ app.get('/api/symbol/context', (req, res) => {
     return;
   }
   const base = symbol.replace(/USDT$/, '');
-  const eq = account.keysPresent ? account.equity() : null;
+  const accountTruthState = privateAccountTruthState();
+  const orderTruthState = privateOrderTruthState(accountTruthState);
+  const eq = accountTruthState === 'AVAILABLE' ? account.equity() : null;
   const baseBal = eq?.entries.find((e) => e.asset === base);
   res.json({
-    openOrders: orders.openOrdersCache.filter((o) => o.symbol === symbol),
+    orderTruthState,
+    openOrders: orderTruthState === 'AVAILABLE'
+      ? orders.openOrdersCache.filter((o) => o.symbol === symbol)
+      : null,
     fills: ledger.listFills(20, symbol),
     signals: ledger.listSignalsForSymbol(symbol, 10),
-    balances: {
+    accountTruthState,
+    // Configured absence is an observed zero. Unconfigured account truth is
+    // null so callers cannot turn missing private data into a flat balance.
+    balances: eq === null ? null : {
       base: baseBal ? baseBal.free + baseBal.locked : 0,
-      usdtFree: eq?.availableUsdt ?? null,
+      usdtFree: eq.availableUsdt,
     },
     allowlisted: config.allowedSymbols.includes(symbol),
     blocklisted: config.blockedSymbols.includes(symbol),
@@ -2175,6 +2467,14 @@ function connectionWatchmanSnapshot(
   const now = Date.now();
   const feedStates = Object.values(engine.feeds);
   const openFeeds = feedStates.filter((state) => state === 'open').length;
+  const liquidation = liquidationStats();
+  const marketStreamStatus: WatchmanStatus = liquidation.state === 'down'
+    ? 'outage'
+    : feedStates.length === 0 || liquidation.state !== 'live'
+      ? 'degraded'
+      : openFeeds === feedStates.length
+        ? 'operational'
+        : openFeeds === 0 ? 'outage' : 'degraded';
   const basis = basisRuntime.connectionStatus();
   const volume = volumeRuntime.connectionStatus();
   const news = newsContextStatus();
@@ -2217,9 +2517,10 @@ function connectionWatchmanSnapshot(
     },
     {
       id: 'market-streams', label: 'Binance Market Streams', group: 'binance',
-      status: feedStates.length === 0 ? 'degraded' : openFeeds === feedStates.length ? 'operational' : openFeeds === 0 ? 'outage' : 'degraded',
-      detail: 'Spot book, USD-M mark price, and liquidation stream sockets',
-      value: `${openFeeds}/${feedStates.length} open`, required: true, updatedAt: now, resetTarget: 'market',
+      status: marketStreamStatus,
+      detail: `Spot book and USD-M mark feeds ${openFeeds}/${feedStates.length} open · liquidation ${liquidation.state}`,
+      value: `${openFeeds}/${feedStates.length} feeds · Liq ${liquidation.state}`, required: true,
+      updatedAt: liquidation.lastActivityAt, resetTarget: 'market',
     },
     {
       id: 'binance-rest', label: 'Binance REST / Clock', group: 'binance',
@@ -2352,6 +2653,25 @@ app.get('/api/system', (req, res) => {
         timeSync = null;
       }
     }
+    let systemSupervisor: ReturnType<typeof systemIntegration.supervisor>;
+    try {
+      systemSupervisor = await systemIntegration.supervisor();
+    } catch {
+      res.status(503).json({
+        ok: false,
+        available: false,
+        code: 'CANONICAL_SUPERVISOR_UNAVAILABLE',
+        state: 'UNAVAILABLE',
+        schemaVersion: 'legacy.system.compatibility.v2',
+        healthClass: 'LEGACY_OBSERVABILITY_COMPATIBILITY',
+        readinessSemantics: 'NOT_EVALUATED',
+        canonicalReadinessEndpoint: '/health/ready',
+        canonicalSupervisorEndpoint: '/api/system-integration/supervisor',
+        canonicalSupervisor: null,
+        error: 'Canonical supervisor truth is unavailable; no legacy health fallback is published.',
+      });
+      return;
+    }
     const dbOk = ledger.probeWritable();
     const awsStatus = {
       configured: false,
@@ -2365,7 +2685,14 @@ app.get('/api/system', (req, res) => {
     const notificationRouting = notificationRoutingSnapshot();
     const watchman = connectionWatchmanSnapshot(dbOk, awsStatus, notificationRouting, Boolean(req.headers['cf-ray']));
     res.json({
+      schemaVersion: 'legacy.system.compatibility.v2',
+      healthClass: 'LEGACY_OBSERVABILITY_COMPATIBILITY',
+      readinessSemantics: 'NOT_EVALUATED',
+      canonicalReadinessEndpoint: '/health/ready',
+      canonicalSupervisorEndpoint: '/api/system-integration/supervisor',
+      canonicalSupervisor: systemSupervisor,
       ok: true,
+      okSemantics: 'TRANSPORT_ONLY',
       uptimeSec: Math.round((Date.now() - bootTs) / 1000),
       version: '1.1.0',
       env: process.env.NODE_ENV ?? 'production',
@@ -2388,12 +2715,14 @@ app.get('/api/system', (req, res) => {
       usedWeight1m: rateLimit.ts > 0 ? rateLimit.usedWeight1m : null,
       usedWeightTs: rateLimit.ts || null,
       binanceCooldownUntil: rateLimit.cooldownUntil > Date.now() ? rateLimit.cooldownUntil : null,
-      lastScannerTickTs: scanner.lastTickTs,
+      legacyScannerState: LEGACY_SCANNER_STATE,
+      lastScannerTickTs: null,
       lastOrdersSyncTs: orders.lastOrdersSyncTs,
       dbOk,
       connections: {
         basis: basisRuntime.connectionStatus(),
         volume: volumeRuntime.connectionStatus(),
+        liquidations: liquidationStats(),
         news: newsContextStatus(),
         calendar: {
           fetchedAt: calCache?.at ?? null,
@@ -2427,8 +2756,8 @@ app.get('/api/system', (req, res) => {
           },
         },
       },
-      killSwitch: config.killSwitch,
-      liveTradingEnabled: config.liveTradingEnabled,
+      killSwitch: config.killSwitch || systemSupervisor.control.killSwitchEngaged,
+      liveTradingEnabled: false,
       cfUser: operatorAccess.operator(req)?.email ?? null,
       // Real edge session facts from Cloudflare (present in prod; null on localhost).
       cfIp: (req.headers['cf-connecting-ip'] as string | undefined) ?? null,
@@ -2566,8 +2895,9 @@ type ConnectionRefreshTarget = 'all' | 'market' | 'runtime' | 'account' | 'news'
 const CONNECTION_REFRESH_TARGETS = new Set<ConnectionRefreshTarget>(['all', 'market', 'runtime', 'account', 'news', 'calendar', 'fx']);
 let connectionRefreshBusy = false;
 
-// On-demand connection control is limited to public and local runtimes. Private
-// account refresh remains an explicit unavailable capability.
+// Public information refresh remains available, but managed-runtime restart is
+// accepted only through the canonical Product preview/digest/revision/receipt
+// owner. This compatibility route must never become a second restart path.
 app.post('/api/refresh', (req, res) => {
   runAsync(res, async () => {
     const rawTarget = (req.body as { target?: unknown } | null)?.target;
@@ -2581,14 +2911,23 @@ app.post('/api/refresh', (req, res) => {
       sendNotConfigured(res, 'PRIVATE_ACCOUNT_REFRESH');
       return;
     }
+    if (target === 'all' || target === 'market' || target === 'runtime') {
+      res.status(409).json({
+        ok: false,
+        code: 'CONTROL_PREVIEW_REQUIRED',
+        issues: ['Managed-runtime restart requires the canonical Product control preview and durable command receipt.'],
+        target,
+        ts: Date.now(),
+      });
+      return;
+    }
     if (connectionRefreshBusy) {
       res.status(409).json({ ok: false, issues: ['A connection reset is already running'], target, ts: Date.now() });
       return;
     }
     connectionRefreshBusy = true;
-    // An intentional restart briefly closes sockets by design. Do not promote
-    // those expected transitions as outages; keep monitoring and resume alerts
-    // after the recovery has had time to converge.
+    // Bounded public refresh work can temporarily delay source observations;
+    // keep monitoring and resume alerts after its short convergence window.
     watchmanSuppressUntil = Date.now() + 60_000;
     const startedAt = Date.now();
     const issues: string[] = [];
@@ -2606,46 +2945,26 @@ app.post('/api/refresh', (req, res) => {
     };
 
     try {
-      if (target === 'all' || target === 'market') {
-        await runStep('managed-runtime', () => {
-          const restarted = systemIntegration.restartManagedRuntime();
-          if (!restarted.ok) throw new Error(restarted.code);
-          return `Managed Market/Basis/Volume restart accepted at generation ${restarted.composition.supervisor.generation}`;
-        });
-      } else if (target === 'runtime') {
-        await runStep('managed-runtime', () => {
-          const restarted = systemIntegration.restartManagedRuntime();
-          if (!restarted.ok) throw new Error(restarted.code);
-          return `Dependency-root Market/Basis/Volume restart accepted at generation ${restarted.composition.supervisor.generation}`;
-        });
-      }
-
-      if (target === 'all') {
-        const detail = 'NOT_CONFIGURED: private account refresh is not mounted';
-        issues.push(`account-data: ${detail}`);
-        steps.push({ key: 'account-data', ok: false, durationMs: 0, detail });
-      }
-
-      if (target === 'all' || target === 'news') {
+      if (target === 'news') {
         await runStep('news-context', async () => {
           const payload = await refreshNewsContextNow();
           return `${payload.sources.length} source states refreshed`;
         });
       }
-      if (target === 'all' || target === 'calendar') {
+      if (target === 'calendar') {
         await runStep('economic-calendar', async () => {
           if (!(await startCalendarRefresh())) throw new Error('Economic calendar refresh failed');
           return `${calCache?.items.length ?? 0} events cached`;
         });
       }
-      if (target === 'all' || target === 'fx') {
+      if (target === 'fx') {
         await runStep('fx-rates', async () => {
           await refreshFx();
           return `${fxCache ? Object.keys(fxCache.rates).length : 0} currencies cached`;
         });
       }
 
-      broadcast({ type: 'state', payload: buildState() });
+      void publishCanonicalWebSocketUpdates();
       const feedVals = Object.values(engine.feeds);
       const feedsOk = feedVals.length > 0 && feedVals.every((status) => status === 'open');
       if (account.keysPresent && !account.connected) {
@@ -2708,341 +3027,134 @@ app.get('/api/config', (_req, res) => {
   res.json(config);
 });
 
-const NUMERIC_KEYS: (keyof AppConfig)[] = [
-  'feesPct',
-  'minNetBasisPct',
-  'persistTicks',
-  'minQuoteVolume24h',
-  'maxOrderNotionalUsd',
-  'maxDailyNotionalUsd',
-  'maxDailyLossUsd',
-  'maxOpenOrders',
-  'cooldownSec',
-  'staleOrderMaxMin',
-];
-const NUMERIC_RULES: Partial<Record<keyof AppConfig, { minimum: number; maximum: number; integer?: boolean }>> = {
-  feesPct: { minimum: 0, maximum: 10 },
-  minNetBasisPct: { minimum: 0, maximum: 100 },
-  persistTicks: { minimum: 1, maximum: 10_000, integer: true },
-  minQuoteVolume24h: { minimum: 0, maximum: 1_000_000_000_000 },
-  maxOrderNotionalUsd: { minimum: 0.01, maximum: 1_000_000_000 },
-  maxDailyNotionalUsd: { minimum: 0.01, maximum: 10_000_000_000 },
-  maxDailyLossUsd: { minimum: 0.01, maximum: 1_000_000_000 },
-  maxOpenOrders: { minimum: 1, maximum: 10_000, integer: true },
-  cooldownSec: { minimum: 0, maximum: 86_400, integer: true },
-  staleOrderMaxMin: { minimum: 1, maximum: 43_200, integer: true },
-};
-const LIST_KEYS: (keyof AppConfig)[] = ['allowedSymbols', 'blockedSymbols', 'watchlist'];
-const BOOLEAN_KEYS: (keyof AppConfig)[] = ['killSwitch', 'liveTradingEnabled', 'fundsLocked', 'automationPaused'];
-const COIN_RE = /^[A-Z0-9]{1,20}$/;
-const CONTROL_MODE_VALUES = new Set<ControlMode>(['blocked', 'paused', 'allowed']);
-
-function parseCoinList(v: unknown, max = 40): string[] | null {
-  if (!Array.isArray(v)) return null;
-  if (v.length > max || !v.every((x) => typeof x === 'string' && COIN_RE.test(x))) return null;
-  const rows = v as string[];
-  return [...new Set(rows)];
-}
-
-function financialArmingFields(body: Record<string, unknown>): string[] {
-  const fields: string[] = [];
-  if (body.liveTradingEnabled === true) fields.push('liveTradingEnabled');
-  if (body.fundsLocked === false) fields.push('fundsLocked');
-  if (body.borrowGuard && typeof body.borrowGuard === 'object' && !Array.isArray(body.borrowGuard)) {
-    const guard = body.borrowGuard as Record<string, unknown>;
-    if (guard.enabled === false) fields.push('borrowGuard.enabled');
-    if (guard.newBorrowPaused === false) fields.push('borrowGuard.newBorrowPaused');
-    if (guard.repayOnly === false) fields.push('borrowGuard.repayOnly');
-  }
-  if (body.controlModes && typeof body.controlModes === 'object' && !Array.isArray(body.controlModes)) {
-    const modes = body.controlModes as Record<string, unknown>;
-    for (const key of ['funds', 'borrowing', 'liveOrders'] as const) {
-      if (modes[key] !== undefined && modes[key] !== 'blocked') fields.push(`controlModes.${key}`);
-    }
-  }
-  return fields;
-}
-
 app.post('/api/config', (req, res) => {
-  const body = req.body as Record<string, unknown>;
-  const armingFields = financialArmingFields(body);
-  if (armingFields.length > 0) {
-    res.status(409).json({
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    res.status(400).json({
       ok: false,
-      code: 'LIVE_EXECUTION_NOT_IMPLEMENTED',
-      error: 'Financial controls cannot be armed in this runtime.',
-      fields: armingFields,
+      code: 'INVALID_CONFIG',
+      error: 'Display configuration must be one plain JSON object.',
     });
     return;
   }
-  const patch: Record<string, unknown> = {}; // applied to config
-  const logPatch: Record<string, unknown> = {}; // written to the ledger (no image bytes)
-  const invalidFields: string[] = [];
-  const nextControlModes: ExecutionControlModes = { ...config.controlModes };
-  const touchedControlModes = new Set<keyof ExecutionControlModes>();
-  for (const key of NUMERIC_KEYS) {
-    const v = body[key];
-    if (v === undefined) continue;
-    const rule = NUMERIC_RULES[key]!;
-    if (
-      typeof v === 'number'
-      && Number.isFinite(v)
-      && v >= rule.minimum
-      && v <= rule.maximum
-      && (!rule.integer || Number.isSafeInteger(v))
-    ) {
-      patch[key] = v;
-      logPatch[key] = v;
-    } else invalidFields.push(String(key));
-  }
-  for (const key of LIST_KEYS) {
-    const v = body[key];
-    if (v === undefined) continue;
-    if (Array.isArray(v) && v.length <= 500 && v.every((x) => typeof x === 'string' && /^[A-Z0-9]{4,20}$/.test(x))) {
-      patch[key] = [...new Set(v)];
-      logPatch[key] = patch[key];
-    } else invalidFields.push(String(key));
-  }
-  for (const key of BOOLEAN_KEYS) {
-    const v = body[key];
-    if (v === undefined) continue;
-    if (typeof v === 'boolean') {
-      patch[key] = v;
-      logPatch[key] = v;
-    } else invalidFields.push(String(key));
-  }
-  if (typeof body.fundsLocked === 'boolean') {
-    nextControlModes.funds = body.fundsLocked ? 'blocked' : 'allowed';
-    touchedControlModes.add('funds');
-  }
-  if (typeof body.automationPaused === 'boolean') {
-    nextControlModes.automation = body.automationPaused ? 'paused' : 'allowed';
-    touchedControlModes.add('automation');
-  }
-  if (typeof body.liveTradingEnabled === 'boolean') {
-    nextControlModes.liveOrders = 'blocked';
-    touchedControlModes.add('liveOrders');
-  }
-  if (body.borrowGuard !== undefined && (!body.borrowGuard || typeof body.borrowGuard !== 'object' || Array.isArray(body.borrowGuard))) {
-    invalidFields.push('borrowGuard');
-  } else if (body.borrowGuard && typeof body.borrowGuard === 'object') {
-    const g = body.borrowGuard as Record<string, unknown>;
-    const cur = config.borrowGuard;
-    const next = { ...cur };
-    for (const key of ['enabled', 'newBorrowPaused', 'repayOnly', 'requireLiveCatalog'] as const) {
-      if (g[key] !== undefined && typeof g[key] !== 'boolean') invalidFields.push(`borrowGuard.${key}`);
-    }
-    if (g.requireLiveCatalog === false) invalidFields.push('borrowGuard.requireLiveCatalog');
-    if (g.maxLtvPct !== undefined && (typeof g.maxLtvPct !== 'number' || !Number.isFinite(g.maxLtvPct) || g.maxLtvPct < 10 || g.maxLtvPct > 90)) invalidFields.push('borrowGuard.maxLtvPct');
-    if (g.maxAprPct !== undefined && (typeof g.maxAprPct !== 'number' || !Number.isFinite(g.maxAprPct) || g.maxAprPct < 0 || g.maxAprPct > 200)) invalidFields.push('borrowGuard.maxAprPct');
-    if (g.maxBorrowNotionalUsd !== undefined && (typeof g.maxBorrowNotionalUsd !== 'number' || !Number.isFinite(g.maxBorrowNotionalUsd) || g.maxBorrowNotionalUsd < 0.01 || g.maxBorrowNotionalUsd > 10_000_000)) invalidFields.push('borrowGuard.maxBorrowNotionalUsd');
-    if (typeof g.enabled === 'boolean') next.enabled = g.enabled;
-    if (typeof g.newBorrowPaused === 'boolean') next.newBorrowPaused = g.newBorrowPaused;
-    if (typeof g.repayOnly === 'boolean') next.repayOnly = g.repayOnly;
-    next.requireLiveCatalog = true;
-    if (typeof g.maxLtvPct === 'number' && Number.isFinite(g.maxLtvPct) && g.maxLtvPct >= 10 && g.maxLtvPct <= 90) next.maxLtvPct = g.maxLtvPct;
-    if (typeof g.maxAprPct === 'number' && Number.isFinite(g.maxAprPct) && g.maxAprPct >= 0 && g.maxAprPct <= 200) next.maxAprPct = g.maxAprPct;
-    if (typeof g.maxBorrowNotionalUsd === 'number' && Number.isFinite(g.maxBorrowNotionalUsd) && g.maxBorrowNotionalUsd >= 0.01 && g.maxBorrowNotionalUsd <= 10_000_000) next.maxBorrowNotionalUsd = g.maxBorrowNotionalUsd;
-    const allowedCollateralCoins = parseCoinList(g.allowedCollateralCoins, 12);
-    const blockedLoanCoins = parseCoinList(g.blockedLoanCoins, 40);
-    if (g.allowedCollateralCoins !== undefined && allowedCollateralCoins === null) invalidFields.push('borrowGuard.allowedCollateralCoins');
-    if (g.blockedLoanCoins !== undefined && blockedLoanCoins === null) invalidFields.push('borrowGuard.blockedLoanCoins');
-    if (allowedCollateralCoins) next.allowedCollateralCoins = allowedCollateralCoins;
-    if (blockedLoanCoins) next.blockedLoanCoins = blockedLoanCoins;
-    patch.borrowGuard = next;
-    logPatch.borrowGuard = {
-      enabled: next.enabled,
-      newBorrowPaused: next.newBorrowPaused,
-      repayOnly: next.repayOnly,
-      maxLtvPct: next.maxLtvPct,
-      maxAprPct: next.maxAprPct,
-      maxBorrowNotionalUsd: next.maxBorrowNotionalUsd,
-      requireLiveCatalog: next.requireLiveCatalog,
-      allowedCollateralCoins: next.allowedCollateralCoins,
-      blockedLoanCoins: next.blockedLoanCoins,
-    };
-    nextControlModes.borrowing = !next.newBorrowPaused && !next.repayOnly
-      ? 'allowed'
-      : next.repayOnly
-        ? 'blocked'
-        : 'paused';
-    touchedControlModes.add('borrowing');
-  }
-  if (body.controlModes !== undefined && (!body.controlModes || typeof body.controlModes !== 'object' || Array.isArray(body.controlModes))) {
-    invalidFields.push('controlModes');
-  } else if (body.controlModes && typeof body.controlModes === 'object') {
-    const incoming = body.controlModes as Record<string, unknown>;
-    for (const key of ['funds', 'borrowing', 'automation', 'liveOrders'] as const) {
-      const value = incoming[key];
-      if (typeof value === 'string' && CONTROL_MODE_VALUES.has(value as ControlMode)) {
-        nextControlModes[key] = value as ControlMode;
-        touchedControlModes.add(key);
-      } else if (value !== undefined) invalidFields.push(`controlModes.${key}`);
-    }
-  }
-  if (touchedControlModes.size > 0) {
-    patch.controlModes = nextControlModes;
-    logPatch.controlModes = nextControlModes;
-    if (touchedControlModes.has('funds')) {
-      patch.fundsLocked = nextControlModes.funds !== 'allowed';
-      logPatch.fundsLocked = patch.fundsLocked;
-    }
-    if (touchedControlModes.has('automation')) {
-      patch.automationPaused = nextControlModes.automation !== 'allowed';
-      logPatch.automationPaused = patch.automationPaused;
-    }
-    if (touchedControlModes.has('liveOrders')) {
-      patch.liveTradingEnabled = nextControlModes.liveOrders === 'allowed';
-      logPatch.liveTradingEnabled = patch.liveTradingEnabled;
-    }
-    if (touchedControlModes.has('borrowing')) {
-      const nextGuard = {
-        ...config.borrowGuard,
-        ...((patch.borrowGuard && typeof patch.borrowGuard === 'object') ? patch.borrowGuard as AppConfig['borrowGuard'] : {}),
-        enabled: true,
-        newBorrowPaused: nextControlModes.borrowing !== 'allowed',
-        repayOnly: nextControlModes.borrowing === 'blocked',
-      };
-      patch.borrowGuard = nextGuard;
-      logPatch.borrowGuard = {
-        enabled: nextGuard.enabled,
-        newBorrowPaused: nextGuard.newBorrowPaused,
-        repayOnly: nextGuard.repayOnly,
-        maxLtvPct: nextGuard.maxLtvPct,
-        maxAprPct: nextGuard.maxAprPct,
-        maxBorrowNotionalUsd: nextGuard.maxBorrowNotionalUsd,
-        requireLiveCatalog: nextGuard.requireLiveCatalog,
-        allowedCollateralCoins: nextGuard.allowedCollateralCoins,
-        blockedLoanCoins: nextGuard.blockedLoanCoins,
-      };
-    }
-  }
-  // owner profile: short name + small data-URL avatar (server-side, follows the box)
-  if (body.profile !== undefined && (!body.profile || typeof body.profile !== 'object' || Array.isArray(body.profile))) {
-    invalidFields.push('profile');
-  } else if (body.profile && typeof body.profile === 'object') {
-    const p = body.profile as Record<string, unknown>;
-    if (p.name !== undefined && typeof p.name !== 'string') invalidFields.push('profile.name');
-    if (p.avatar !== undefined && p.avatar !== null && (typeof p.avatar !== 'string' || !/^data:image\/(png|jpeg|webp);base64,/.test(p.avatar) || p.avatar.length > 160_000)) invalidFields.push('profile.avatar');
-    const name = typeof p.name === 'string' ? p.name.slice(0, 40) : config.profile.name;
-    const avatar =
-      p.avatar === null
-        ? null
-        : typeof p.avatar === 'string' && /^data:image\/(png|jpeg|webp);base64,/.test(p.avatar) && p.avatar.length <= 160_000
-          ? p.avatar
-          : config.profile.avatar;
-    patch.profile = { name, avatar };
-    logPatch.profile = { name, avatar: avatar ? '(image set)' : null };
-  }
-  // custom governance rules (recorded + ledgered; strict ones feed the risk gate at live-mode wiring)
-  if (Array.isArray(body.customRules)) {
-    const scopes = new Set(['orders', 'symbols', 'strategy', 'hours', 'general']);
-    const effects = new Set(['allow', 'block', 'limit']);
-    const rules = (body.customRules as Record<string, unknown>[])
-      .filter((r) => r && typeof r === 'object')
-      .slice(0, 50)
-      .map((r, i) => ({
-        id: String(r.id ?? '').slice(0, 40) || `rule_${Date.now()}_${i}`,
-        name: String(r.name ?? '').slice(0, 80),
-        scope: scopes.has(String(r.scope)) ? (String(r.scope) as AppConfig['customRules'][number]['scope']) : 'general',
-        effect: effects.has(String(r.effect)) ? (String(r.effect) as AppConfig['customRules'][number]['effect']) : 'block',
-        note: String(r.note ?? '').slice(0, 240),
-        strict: r.strict === true,
-        createdAt: typeof r.createdAt === 'number' ? r.createdAt : Date.now(),
-      }))
-      .filter((r) => r.name.length > 0);
-    patch.customRules = rules;
-    logPatch.customRules = rules.map((r) => `${r.effect}:${r.name}${r.strict ? ' (strict)' : ''}`);
-  } else if (body.customRules !== undefined) {
-    invalidFields.push('customRules');
-  }
-  if (invalidFields.length > 0) {
-    res.status(400).json({ code: 'INVALID_CONFIG', error: 'Configuration contains invalid fields.', fields: [...new Set(invalidFields)] });
+  const body = req.body as Record<string, unknown>;
+  const requestedFields = Object.keys(body);
+  const operationalFields = requestedFields.filter((field) => field !== 'profile' && field !== 'watchlist');
+  if (operationalFields.length > 0) {
+    res.status(409).json({
+      ok: false,
+      code: 'CONTROL_PREVIEW_REQUIRED',
+      error: 'Operational strategy, risk, automation, and execution policy is owned by canonical controls.',
+      fields: operationalFields.sort(),
+      canonicalPreviewEndpoint: '/api/product-integration/v1/commands/preview',
+      canonicalCommandEndpoint: '/api/product-integration/v1/commands',
+    });
     return;
   }
-  const requestedGuard = patch.borrowGuard && typeof patch.borrowGuard === 'object'
-    ? patch.borrowGuard as AppConfig['borrowGuard']
-    : config.borrowGuard;
-  const requestedModes = patch.controlModes && typeof patch.controlModes === 'object'
-    ? patch.controlModes as ExecutionControlModes
-    : config.controlModes;
-  patch.liveTradingEnabled = false;
-  patch.fundsLocked = true;
-  patch.borrowGuard = {
-    ...requestedGuard,
-    enabled: true,
-    newBorrowPaused: true,
-    repayOnly: true,
-  };
-  patch.controlModes = {
-    ...requestedModes,
-    funds: 'blocked',
-    borrowing: 'blocked',
-    liveOrders: 'blocked',
-  };
-  Object.assign(logPatch, {
-    liveTradingEnabled: false,
-    fundsLocked: true,
-    borrowGuard: patch.borrowGuard,
-    controlModes: patch.controlModes,
-  });
-  const nextConfig = { ...config, ...patch } as AppConfig;
-  saveConfig(ledger, nextConfig);
-  Object.assign(config, nextConfig);
-  ledger.logEvent('config_change', null, logPatch);
+  if (requestedFields.length === 0) {
+    res.status(400).json({
+      ok: false,
+      code: 'INVALID_CONFIG',
+      error: 'At least one display-only field is required.',
+    });
+    return;
+  }
+
+  const displayPatch: Partial<AppConfig> = {};
+  const displayAudit: Record<string, unknown> = {};
+  const invalidDisplayFields: string[] = [];
+  if (body.watchlist !== undefined) {
+    if (Array.isArray(body.watchlist)
+        && body.watchlist.length <= 500
+        && body.watchlist.every((value) => typeof value === 'string' && /^[A-Z0-9]{4,20}$/.test(value))) {
+      displayPatch.watchlist = [...new Set(body.watchlist as string[])];
+      displayAudit.watchlist = displayPatch.watchlist;
+    } else {
+      invalidDisplayFields.push('watchlist');
+    }
+  }
+  if (body.profile !== undefined) {
+    if (!body.profile || typeof body.profile !== 'object' || Array.isArray(body.profile)) {
+      invalidDisplayFields.push('profile');
+    } else {
+      const profile = body.profile as Record<string, unknown>;
+      const profileKeys = Object.keys(profile);
+      if (profileKeys.some((key) => key !== 'name' && key !== 'avatar')) {
+        invalidDisplayFields.push('profile');
+      }
+      if (profile.name !== undefined && (
+        typeof profile.name !== 'string'
+        || profile.name.length > 40
+        || /[\u0000-\u001f\u007f]/.test(profile.name)
+      )) invalidDisplayFields.push('profile.name');
+      if (profile.avatar !== undefined && profile.avatar !== null && (
+        typeof profile.avatar !== 'string'
+        || !/^data:image\/(png|jpeg|webp);base64,/.test(profile.avatar)
+        || profile.avatar.length > 160_000
+      )) invalidDisplayFields.push('profile.avatar');
+      if (invalidDisplayFields.length === 0) {
+        const nextProfile = {
+          name: typeof profile.name === 'string' ? profile.name : config.profile.name,
+          avatar: profile.avatar === null
+            ? null
+            : typeof profile.avatar === 'string' ? profile.avatar : config.profile.avatar,
+        };
+        displayPatch.profile = nextProfile;
+        displayAudit.profile = { name: nextProfile.name, avatar: nextProfile.avatar ? '(image set)' : null };
+      }
+    }
+  }
+  if (invalidDisplayFields.length > 0) {
+    res.status(400).json({
+      ok: false,
+      code: 'INVALID_CONFIG',
+      error: 'Display configuration contains invalid fields.',
+      fields: [...new Set(invalidDisplayFields)].sort(),
+    });
+    return;
+  }
+  const nextDisplayConfig = { ...config, ...displayPatch } as AppConfig;
+  saveConfig(ledger, nextDisplayConfig);
+  Object.assign(config, nextDisplayConfig);
+  ledger.logEvent('display_config_change', null, displayAudit);
   res.json(config);
+  return;
 });
 
-app.post('/api/kill', (req, res) => {
-  const on = (req.body as Record<string, unknown>).on;
-  if (typeof on !== 'boolean') {
-    res.status(400).json({ error: 'kill switch requires a boolean on value' });
-    return;
-  }
-  const nextConfig = { ...config, killSwitch: on };
-  saveConfig(ledger, nextConfig);
-  Object.assign(config, nextConfig);
-  ledger.logEvent('manual_action', null, { action: 'kill_switch', on: config.killSwitch });
-  res.json({ killSwitch: config.killSwitch });
+app.post('/api/kill', (_req, res) => {
+  res.status(410).json({
+    ok: false,
+    available: false,
+    code: 'RETIRED',
+    state: 'RETIRED',
+    operation: 'LEGACY_KILL_SWITCH',
+    canonicalPreviewEndpoint: '/api/product-integration/v1/commands/preview',
+    canonicalCommandEndpoint: '/api/product-integration/v1/commands',
+    supportedCanonicalAction: 'KILL_SWITCH_ENGAGE_ONLY',
+    error: 'The legacy config kill endpoint is retired; use the canonical Product Integration control lifecycle.',
+  });
 });
 
 app.post('/api/live', (_req, res) => {
   sendLiveExecutionNotImplemented(res, 'LIVE_TRADING_ARM');
 });
 
-function parseIntent(body: Record<string, unknown>): OrderIntent | null {
-  if (typeof body.symbol !== 'string') return null;
-  const symbol = body.symbol;
-  const side = body.side === 'SELL' ? 'SELL' : body.side === 'BUY' ? 'BUY' : null;
-  const type = body.type === 'LIMIT' ? 'LIMIT' : body.type === 'MARKET' ? 'MARKET' : null;
-  if (!/^[A-Z0-9]{4,20}$/.test(symbol) || !side || !type) return null;
-  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined);
-  for (const value of [body.quantity, body.quoteQty, body.price]) {
-    if (value !== undefined && num(value) === undefined) return null;
-  }
-  if (body.quantity !== undefined && body.quoteQty !== undefined) return null;
-  if (body.timeInForce !== undefined && !['GTC', 'IOC', 'FOK'].includes(String(body.timeInForce))) return null;
-  if (body.source !== undefined && body.source !== 'manual' && body.source !== 'proposal') return null;
-  const tif = body.timeInForce === 'IOC' ? 'IOC' : body.timeInForce === 'FOK' ? 'FOK' : 'GTC';
-  return {
-    symbol,
-    side,
-    type,
-    quantity: num(body.quantity),
-    quoteQty: num(body.quoteQty),
-    price: num(body.price),
-    timeInForce: tif,
-    source: body.source === 'proposal' ? 'proposal' : 'manual',
-  };
-}
-
-app.post('/api/trade/preview', (req, res) => {
-  const intent = parseIntent(req.body as Record<string, unknown>);
-  if (!intent) {
-    res.status(400).json({ error: 'invalid order intent' });
-    return;
-  }
-  res.json(orders.preview(intent));
+app.post('/api/trade/preview', (_req, res) => {
+  res.status(503).json({
+    ok: false,
+    available: false,
+    code: 'NOT_CONFIGURED',
+    state: 'NOT_CONFIGURED',
+    truthState: 'UNAVAILABLE',
+    value: null,
+    capability: 'CANONICAL_TRADE_INTENT_PREVIEW',
+    missingAuthorities: [
+      'CANONICAL_CAPITAL_POLICY',
+      'CANONICAL_RISK_POLICY',
+      'CANONICAL_EXECUTION_TICKET',
+    ],
+    barrier: 'LIVE_EXECUTION_NOT_IMPLEMENTED',
+    error: 'Canonical Capital, Risk, and execution-ticket authority is not mounted for trade-intent preview.',
+  });
 });
 
 app.post('/api/trade/test', (_req, res) => {
@@ -3149,11 +3261,18 @@ const WS_MAX_CLIENTS = 64;
 const WS_MAX_CLIENTS_PER_IP = 8;
 const WS_MAX_PENDING_UPGRADES = 16;
 const WS_MAX_BUFFERED_BYTES = 512 * 1024;
+const WS_MAX_OUTBOUND_MESSAGE_BYTES = 512 * 1024;
 const WS_MESSAGES_PER_WINDOW = 30;
 const WS_MESSAGE_WINDOW_MS = 10_000;
 const wsClientIp = new WeakMap<WebSocket, string>();
 const wsAlive = new WeakMap<WebSocket, boolean>();
 const wsMessageRate = new WeakMap<WebSocket, { startedAt: number; count: number }>();
+type WebSocketDeliveryState = {
+  afterCursor: string;
+  lastSupervisorKey: string | null;
+  blockedMaterialPageKey: string | null;
+};
+const wsDeliveryState = new WeakMap<WebSocket, WebSocketDeliveryState>();
 let pendingWsUpgrades = 0;
 const pendingWsUpgradeSockets = new Set<import('node:stream').Duplex>();
 
@@ -3181,7 +3300,7 @@ server.on('upgrade', (request, socket, head) => {
   // A raw upgrade socket can emit before `ws` owns it. Keep that failure
   // contained for the entire underlying socket lifetime.
   socket.on('error', () => undefined);
-  if (shuttingDown) {
+  if (!ordinaryShutdownAdmission.admitsNewWebSocket()) {
     rejectUpgrade(socket, 503, 'WebSocket service is shutting down.');
     return;
   }
@@ -3204,7 +3323,7 @@ server.on('upgrade', (request, socket, head) => {
   pendingWsUpgradeSockets.add(socket);
   void operatorAccess.verify(request, { websocket: true })
     .then((verification) => {
-      if (shuttingDown || socket.destroyed) {
+      if (!ordinaryShutdownAdmission.admitsNewWebSocket() || socket.destroyed) {
         rejectUpgrade(socket, 503, 'WebSocket service is shutting down.');
         return;
       }
@@ -3222,7 +3341,7 @@ server.on('upgrade', (request, socket, head) => {
         return;
       }
       wss.handleUpgrade(request, socket, head, (ws) => {
-        if (shuttingDown) {
+        if (!ordinaryShutdownAdmission.admitsNewWebSocket()) {
           ws.close(1012, 'service restart');
           return;
         }
@@ -3239,7 +3358,17 @@ server.on('upgrade', (request, socket, head) => {
 
 // Live order-book/trade fan-out (public market data only, symbol-validated).
 const bookHub = new BookStreamHub((s) => engine.filters.has(s));
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, request) => {
+  const afterCursor = parseProductRuntimeMaterialDeliveryAfterCursor(request.url);
+  if (afterCursor === null) {
+    ws.close(1008, 'invalid material cursor');
+    return;
+  }
+  wsDeliveryState.set(ws, {
+    afterCursor,
+    lastSupervisorKey: null,
+    blockedMaterialPageKey: null,
+  });
   wsAlive.set(ws, true);
   ws.on('error', () => {
     bookHub.drop(ws);
@@ -3258,7 +3387,26 @@ wss.on('connection', (ws) => {
       return;
     }
     try {
-      bookHub.handleMessage(ws, JSON.parse(buf.toString()));
+      const decoded: unknown = JSON.parse(buf.toString());
+      if (decoded !== null && typeof decoded === 'object' && !Array.isArray(decoded)) {
+        const record = decoded as Record<string, unknown>;
+        if (record.type === 'resume-material-events') {
+          if (!isProductRuntimeCursor(record.afterCursor)) {
+            ws.close(1008, 'invalid material cursor');
+            return;
+          }
+          const delivery = wsDeliveryState.get(ws);
+          if (!delivery) {
+            ws.close(1011, 'canonical delivery unavailable');
+            return;
+          }
+          delivery.afterCursor = record.afterCursor;
+          delivery.blockedMaterialPageKey = null;
+          void publishCanonicalWebSocketUpdates();
+          return;
+        }
+      }
+      bookHub.handleMessage(ws, decoded);
     } catch {
       ws.close(1007, 'invalid message');
     }
@@ -3266,65 +3414,118 @@ wss.on('connection', (ws) => {
   ws.on('close', () => bookHub.drop(ws));
 });
 
-function broadcast(msg: unknown): void {
-  const s = JSON.stringify(msg);
-  for (const c of wss.clients) {
-    if (c.bufferedAmount > WS_MAX_BUFFERED_BYTES) {
-      c.close(1013, 'slow consumer');
-      continue;
-    }
-    if (c.readyState === WebSocket.OPEN) c.send(s, (error) => {
-      if (error && c.readyState === WebSocket.OPEN) c.close(1011, 'send failed');
-    });
-  }
-}
-
-let websocketHeartbeatTimer: NodeJS.Timeout | null = null;
-let stateBroadcastTimer: NodeJS.Timeout | null = null;
-
-function marketOwnerReadyForAuxiliaries(): boolean {
-  if (!systemIntegrationStart.ok || shuttingDown) return false;
+function sendBoundedWebSocketJson(client: WebSocket, message: unknown): boolean {
+  if (client.readyState !== WebSocket.OPEN) return false;
+  let serialized: string;
   try {
-    const market = systemIntegration.supervisor().components.find(
-      (component) => component.componentId === 'market-universe',
-    );
-    return market?.desiredState === 'RUNNING'
-      && market.phase === 'RUNNING'
-      && market.readiness === 'READY';
+    serialized = JSON.stringify(message);
   } catch {
+    client.close(1011, 'canonical serialization failed');
+    return false;
+  }
+  const messageBytes = Buffer.byteLength(serialized);
+  if (messageBytes > WS_MAX_OUTBOUND_MESSAGE_BYTES) {
+    client.close(1009, 'canonical message exceeds bound');
+    return false;
+  }
+  if (client.bufferedAmount > WS_MAX_BUFFERED_BYTES
+      || client.bufferedAmount + messageBytes > WS_MAX_BUFFERED_BYTES) {
+    client.close(1013, 'slow consumer');
+    return false;
+  }
+  try {
+    client.send(serialized, (error) => {
+      if (error && client.readyState === WebSocket.OPEN) client.close(1011, 'send failed');
+    });
+    return true;
+  } catch {
+    if (client.readyState === WebSocket.OPEN) client.close(1011, 'send failed');
     return false;
   }
 }
 
-function admitMarketOwnedAuxiliaries(): void {
-  if (!marketOwnerReadyForAuxiliaries()) return;
-  if (scannerTimer === null) {
-    runScannerTick();
-    scannerTimer = setInterval(runScannerTick, TICK_MS);
-  }
-  if (!liquidationCollectorStarted) {
-    startLiquidationCollector();
-    liquidationCollectorStarted = true;
-  }
-}
+let websocketHeartbeatTimer: NodeJS.Timeout | null = null;
+let canonicalDeliveryTimer: NodeJS.Timeout | null = null;
+let canonicalDeliveryInFlight = false;
 
-function stopMarketOwnedAuxiliaries(): void {
-  if (scannerTimer !== null) {
-    clearInterval(scannerTimer);
-    scannerTimer = null;
-  }
-  if (liquidationCollectorStarted) {
-    stopLiquidationCollector();
-    liquidationCollectorStarted = false;
+async function publishCanonicalWebSocketUpdates(): Promise<void> {
+  if (canonicalDeliveryInFlight || shuttingDown) return;
+  const clients = [...wss.clients].filter((client) => client.readyState === WebSocket.OPEN);
+  if (clients.length === 0) return;
+  canonicalDeliveryInFlight = true;
+  try {
+    const supervisor = await productIntegrationRuntime.readSupervisor();
+    const supervisorDelta = projectProductRuntimeSupervisorDelta(supervisor);
+    const supervisorKey = JSON.stringify(supervisorDelta);
+    for (const client of clients) {
+      const delivery = wsDeliveryState.get(client);
+      if (!delivery) {
+        client.close(1011, 'canonical delivery unavailable');
+        continue;
+      }
+      if (delivery.lastSupervisorKey !== supervisorKey && sendBoundedWebSocketJson(client, {
+        type: 'canonical-supervisor-delta',
+        payload: supervisorDelta,
+      })) {
+        delivery.lastSupervisorKey = supervisorKey;
+      }
+    }
+
+    await Promise.all(clients.map(async (client) => {
+      if (client.readyState !== WebSocket.OPEN) return;
+      const delivery = wsDeliveryState.get(client);
+      if (!delivery) return;
+      try {
+        const page = await productIntegrationRuntime.readMaterialEvents(
+          delivery.afterCursor,
+          PRODUCT_RUNTIME_MATERIAL_DELIVERY_PAGE_LIMIT,
+        );
+        const projected = projectProductRuntimeMaterialDeliveryPage(delivery.afterCursor, page);
+        const blockedPageKey = projected.continuity === 'CONTINUOUS'
+          ? null
+          : [
+              projected.afterCursor,
+              projected.nextCursor,
+              projected.continuity,
+              projected.missingFromCursor,
+              projected.missingToCursor,
+              projected.hasMore,
+            ].join('|');
+        if (blockedPageKey !== null && delivery.blockedMaterialPageKey === blockedPageKey) return;
+        if (projected.events.length === 0 && projected.continuity === 'CONTINUOUS') return;
+        if (!sendBoundedWebSocketJson(client, {
+          type: 'material-event-page',
+          payload: projected,
+        })) return;
+        if (projected.continuity === 'CONTINUOUS') {
+          delivery.afterCursor = projected.nextCursor;
+          delivery.blockedMaterialPageKey = null;
+        } else {
+          delivery.blockedMaterialPageKey = blockedPageKey;
+        }
+      } catch {
+        if (client.readyState === WebSocket.OPEN) client.close(1011, 'canonical event read failed');
+      }
+    }));
+  } catch {
+    safeLogEvent('error_event', null, {
+      source: 'server.canonical_websocket_delivery',
+      message: 'Canonical supervisor delivery failed closed.',
+    });
+    for (const client of clients) {
+      if (client.readyState === WebSocket.OPEN) client.close(1011, 'canonical supervisor read failed');
+    }
+  } finally {
+    canonicalDeliveryInFlight = false;
   }
 }
 
 function startServerTimers(): void {
-  if (websocketHeartbeatTimer !== null || stateBroadcastTimer !== null || eventRetentionTimer !== null) return;
+  if (websocketHeartbeatTimer !== null || canonicalDeliveryTimer !== null || eventRetentionTimer !== null) return;
 
   // Listener ownership exists before background work is admitted. Product
-  // operator events remain bounded pull-only truth; raw Ledger events are not
-  // exposed on the legacy WebSocket.
+  // operator events remain dedicated-cursor truth; raw Ledger events and
+  // metrics are never exposed on the application WebSocket.
   pruneEphemeralLedgerEvents(5);
   eventRetentionTimer = setInterval(() => pruneEphemeralLedgerEvents(1), 10 * 60_000);
   websocketHeartbeatTimer = setInterval(() => {
@@ -3337,47 +3538,101 @@ function startServerTimers(): void {
       try { client.ping(); } catch { client.terminate(); }
     }
   }, 30_000);
-  stateBroadcastTimer = setInterval(() => {
-    admitMarketOwnedAuxiliaries();
-    try {
-      broadcast({ type: 'state', payload: buildState() });
-    } catch (error) {
-      safeLogEvent('error_event', null, {
-        source: 'server.state_broadcast',
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }, TICK_MS);
-  admitMarketOwnedAuxiliaries();
+  canonicalDeliveryTimer = setInterval(() => {
+    void publishCanonicalWebSocketUpdates();
+  }, CANONICAL_DELIVERY_MS);
+  void publishCanonicalWebSocketUpdates();
 }
 
-server.listen(PORT, HOST, () => {
-  startServerTimers();
-  console.log(`cosmos control room listening on http://${HOST}:${PORT}`);
-});
+if (canonicalApplicationStartOk) {
+  server.listen(PORT, HOST, () => {
+    startServerTimers();
+    console.log(`cosmos control room listening on http://${HOST}:${PORT}`);
+  });
+} else {
+  console.error(
+    'control-room listener not admitted because durable boot failed:',
+    canonicalApplicationStartFailureCodes.join(',') || 'APPLICATION_START_FAILED',
+  );
+}
 server.on('error', (error) => {
   console.error('control-room listener failed:', error instanceof Error ? error.message : String(error));
-  void gracefulShutdown('SIGTERM').finally(() => process.exit(1));
+  void gracefulShutdown('SIGTERM').then(
+    (outcome) => {
+      if (outcome === 'SHUTDOWN_REFUSED') {
+        console.error('listener failure shutdown refused; recovery supervision remains active');
+        return;
+      }
+      process.exit(1);
+    },
+    () => process.exit(1),
+  );
 });
 
-let shutdownPromise: Promise<void> | null = null;
+type GracefulShutdownOutcome = 'SHUTDOWN_COMPLETE' | 'SHUTDOWN_REFUSED' | 'SHUTDOWN_FAILED';
+let shutdownPromise: Promise<GracefulShutdownOutcome> | null = null;
 
-function gracefulShutdown(signal: NodeJS.Signals): Promise<void> {
+function gracefulShutdown(signal: NodeJS.Signals): Promise<GracefulShutdownOutcome> {
   if (shutdownPromise) return shutdownPromise;
   const current = (async () => {
+    ordinaryShutdownAdmission.beginDrainEvaluation();
+    console.log(`received ${signal}; mutating intake closed, checking ordinary-drain safety`);
+    const control = systemIntegration.controlState();
+    if (!control.intakePaused) {
+      const requestedAtMs = systemIntegrationClock.nowMs();
+      let paused;
+      try {
+        paused = await systemIntegration.controls.mutate({
+          idempotencyKey: `shutdown-intake-${control.revision}`,
+          expectedRevision: control.revision,
+          reason: 'Close new strategy intake before ordinary shutdown drain.',
+          requestedAtMs,
+          correlationId: `shutdown-intake-${requestedAtMs}`,
+          mutation: Object.freeze({ command: 'SET_INTAKE_PAUSED', paused: true }),
+        }, Object.freeze({ id: 'system:ordinary-shutdown', email: null, source: 'loopback' }));
+      } catch (error) {
+        console.error(
+          'ordinary shutdown refused; durable intake halt evaluation failed:',
+          error instanceof Error ? error.message : String(error),
+        );
+        ordinaryShutdownAdmission.refuseDrain();
+        return 'SHUTDOWN_REFUSED' as const;
+      }
+      if (!paused.ok || !paused.value.after.intakePaused) {
+        console.error('ordinary shutdown refused; durable intake halt was not proven');
+        ordinaryShutdownAdmission.refuseDrain();
+        return 'SHUTDOWN_REFUSED' as const;
+      }
+    }
+    let drained;
+    try {
+      drained = await systemIntegration.drain();
+    } catch (error) {
+      console.error(
+        'ordinary shutdown refused; canonical drain evaluation failed:',
+        error instanceof Error ? error.message : String(error),
+      );
+      ordinaryShutdownAdmission.refuseDrain();
+      return 'SHUTDOWN_REFUSED' as const;
+    }
+    if (!drained.ledgerCloseMayProceed) {
+      console.error(
+        'ordinary shutdown refused; recovery supervision remains active:',
+        drained.blockerCodes.join(',') || drained.disposition,
+      );
+      ordinaryShutdownAdmission.refuseDrain();
+      return 'SHUTDOWN_REFUSED' as const;
+    }
+    ordinaryShutdownAdmission.beginIrreversibleClose();
     shuttingDown = true;
-    console.log(`received ${signal}; draining control-room services`);
-
-    for (const timer of [eventRetentionTimer, websocketHeartbeatTimer, stateBroadcastTimer]) {
+    console.log(`ordinary drain accepted for ${signal}; closing control-room services`);
+    for (const timer of [eventRetentionTimer, websocketHeartbeatTimer, canonicalDeliveryTimer]) {
       if (timer) clearInterval(timer);
     }
     eventRetentionTimer = null;
     websocketHeartbeatTimer = null;
-    stateBroadcastTimer = null;
-    stopMarketOwnedAuxiliaries();
-
+    canonicalDeliveryTimer = null;
     bookHub.stop();
-    const systemIntegrationDrain = systemIntegration.drain();
     for (const socket of pendingWsUpgradeSockets) {
       rejectUpgrade(socket, 503, 'WebSocket service is shutting down.');
       socket.destroy();
@@ -3406,30 +3661,33 @@ function gracefulShutdown(signal: NodeJS.Signals): Promise<void> {
     await Promise.all([httpClosed, websocketClosed]);
     clearTimeout(deadline);
 
-    try {
-      const drained = await systemIntegrationDrain;
-      if (!drained.ok) {
-        console.error('system integration drain failed:', drained.persistenceFailureCode ?? drained.composition.drainFailureCode ?? 'DRAIN_FAILED');
-      }
-    } catch (error) {
-      console.error('system integration drain failed:', error instanceof Error ? error.message : String(error));
-    }
-
-    try {
-      (ledger as Ledger & { close?: () => void }).close?.();
-    } catch (error) {
-      console.error('ledger close failed:', error instanceof Error ? error.message : String(error));
+    const finalization = finalizeSystemBootReleaseCleanShutdown(bootReleasePersistence, ledger);
+    if (!finalization.ok) {
+      console.error('control-room shutdown failed after listener closure:', finalization.code);
+      return 'SHUTDOWN_FAILED' as const;
     }
     console.log('control-room shutdown complete');
+    return 'SHUTDOWN_COMPLETE' as const;
   })();
   shutdownPromise = current;
+  void current.then(
+    (outcome) => {
+      if (outcome === 'SHUTDOWN_REFUSED' && shutdownPromise === current) shutdownPromise = null;
+    },
+    () => {
+      if (shutdownPromise === current) shutdownPromise = null;
+    },
+  );
   return current;
 }
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.once(signal, () => {
+  process.on(signal, () => {
     void gracefulShutdown(signal)
-      .then(() => process.exit(0))
+      .then((outcome) => {
+        if (outcome === 'SHUTDOWN_COMPLETE') process.exit(0);
+        if (outcome === 'SHUTDOWN_FAILED') process.exit(1);
+      })
       .catch((error) => {
         console.error('graceful shutdown failed:', error instanceof Error ? error.message : String(error));
         process.exit(1);

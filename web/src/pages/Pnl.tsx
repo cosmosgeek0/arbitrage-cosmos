@@ -16,6 +16,7 @@ interface PnlData {
   feesByAsset: { asset: string; amount: number }[];
   equitySnapshots: { ts: number; totalUsdt: number }[];
   integrity: {
+    state: 'COMPLETE' | 'PARTIAL' | 'UNKNOWN';
     complete: boolean;
     reasons: string[];
     days: { day: string; complete: boolean; reasons: string[]; feeUsd: number; netUsd: number }[];
@@ -92,7 +93,10 @@ export function Pnl() {
       onSuccess: ([pnlResult, fillsResult]) => {
         const failures: string[] = [];
         if (pnlResult.status === 'fulfilled') setData(pnlResult.value);
-        else failures.push(`PnL: ${apiErrorMessage(pnlResult.reason)}`);
+        else {
+          setData(null);
+          failures.push(`PnL: ${apiErrorMessage(pnlResult.reason)}`);
+        }
         if (fillsResult.status === 'fulfilled') setFills(fillsResult.value);
         else failures.push(`Fills: ${apiErrorMessage(fillsResult.reason)}`);
         setLoadError(failures.length ? failures.join(' · ') : null);
@@ -102,13 +106,14 @@ export function Pnl() {
     return poll.stop;
   }, [refreshTick, prefs.dataCadence?.account]);
 
-  const days = data?.realizedByDay ?? [];
-  const symbols = data?.realizedBySymbol ?? [];
-  const fees = data?.feesByAsset ?? [];
+  const pnlEvidenceAvailable = data !== null && data.integrity.state !== 'UNKNOWN';
+  const days = pnlEvidenceAvailable ? data.realizedByDay : [];
+  const symbols = pnlEvidenceAvailable ? data.realizedBySymbol : [];
+  const fees = pnlEvidenceAvailable ? data.feesByAsset : [];
   const fillRows = fills ?? [];
   const todayKey = new Date().toISOString().slice(0, 10);
-  const realizedToday = data?.realizedByDay.find((d) => d.day === todayKey)?.usd ?? null;
-  const totalRealized = data ? sum(days.map((d) => d.usd)) : null;
+  const realizedToday = pnlEvidenceAvailable ? data.realizedByDay.find((d) => d.day === todayKey)?.usd ?? null : null;
+  const totalRealized = pnlEvidenceAvailable ? sum(days.map((d) => d.usd)) : null;
   const wins = days.filter((d) => d.usd > 0).length;
   const losses = days.filter((d) => d.usd < 0).length;
   const quoteTraded = fills ? sum(fillRows.map((f) => f.quoteQty)) : null;
@@ -122,12 +127,12 @@ export function Pnl() {
           <span className={`v ${realizedToday === null ? '' : signClass(realizedToday)}`}>
             <Num value={realizedToday}>{realizedToday === null ? '—' : fmtPrice(realizedToday)}</Num>
           </span>
-          <span className="s">{data ? 'Durable ledger evidence only' : 'Outcome truth unavailable'}</span>
+          <span className="s">{pnlEvidenceAvailable ? 'Durable ledger evidence only' : 'Outcome truth unavailable'}</span>
         </div>
         <div className="hp-stat">
-          <span className="k">{data === null ? 'Realized Evidence' : data.integrity.complete === false ? 'Partial Realized' : 'Realized All-Time'}</span>
+          <span className="k">{!pnlEvidenceAvailable ? 'Realized Evidence' : data.integrity.state === 'PARTIAL' ? 'Partial Realized' : 'Realized All-Time'}</span>
           <span className={`v ${totalRealized === null ? '' : signClass(totalRealized)}`}>{totalRealized === null ? '—' : fmtPrice(totalRealized)}</span>
-          <span className="s" title={data?.integrity.reasons.join(' · ') || undefined}>{data === null ? 'Unknown until the durable outcome read responds' : data.integrity.complete === false ? 'Incomplete cost or fee basis' : `${days.length} PnL day${days.length === 1 ? '' : 's'} · ${wins}W / ${losses}L`}</span>
+          <span className="s" title={data?.integrity.reasons.join(' · ') || undefined}>{!pnlEvidenceAvailable ? 'UNKNOWN · private/account outcome truth is not configured' : data.integrity.state === 'PARTIAL' ? 'Incomplete cost or fee basis' : `${days.length} PnL day${days.length === 1 ? '' : 's'} · ${wins}W / ${losses}L`}</span>
         </div>
         <div className="hp-stat">
           <span className="k">Equity change</span>
@@ -154,6 +159,8 @@ export function Pnl() {
         <span className="pnl-lens-note">
           {loadError
             ? `Unavailable or stale · ${loadError}`
+            : !pnlEvidenceAvailable
+              ? 'UNKNOWN · private/account outcome truth is not configured'
             : lens === 'realized'
             ? 'avg-cost from ledgered fills'
             : lens === 'equity'
@@ -170,17 +177,17 @@ export function Pnl() {
               ? fills && quoteTraded !== null ? `${fmtMoney(quoteTraded)} traded · ${fills.length} fills` : 'Local Fill Evidence Unavailable'
               : lens === 'equity'
                 ? 'NOT_CONFIGURED'
-                : data ? feeText(fees) : 'UNKNOWN'}
+                : pnlEvidenceAvailable ? feeText(fees) : 'UNKNOWN'}
           </span>
         </div>
 
         {lens === 'realized' && (
           <div className="pnl-chart-pad">
-            {data ? (
+            {pnlEvidenceAvailable ? (
               <>
                 {curve.length > 1 ? (
                   <div className="pnl-curve">
-                    <SparkArea values={curve} color={(totalRealized ?? 0) >= 0 ? 'var(--up)' : 'var(--down)'} dots endDot />
+                    <SparkArea values={curve} color={totalRealized !== null && totalRealized < 0 ? 'var(--down)' : 'var(--up)'} dots endDot />
                   </div>
                 ) : null}
                 <DayBars days={days} />
@@ -205,8 +212,8 @@ export function Pnl() {
           <div className="pnl-costs">
             <div>
               <span className="k">Commissions</span>
-              <b>{data ? feeText(fees) : 'Unknown'}</b>
-              <em>{data ? fees.length ? 'from recorded fills' : 'no commissions in the available durable evidence' : 'durable commission evidence unavailable'}</em>
+              <b>{pnlEvidenceAvailable ? feeText(fees) : 'Unknown'}</b>
+              <em>{pnlEvidenceAvailable ? fees.length ? 'from recorded fills' : 'no commissions in the available durable evidence' : 'durable commission evidence unavailable'}</em>
             </div>
             <div>
               <span className="k">Funding</span>
@@ -230,7 +237,7 @@ export function Pnl() {
           </div>
           {symbols.length === 0 ? (
             <div className="lg-empty-pad">
-              <Empty title={data ? 'No Closed Symbol PnL' : 'Symbol Attribution Is Unavailable'}>{data ? 'No durable fill evidence currently closes inventory with a verified cost basis.' : 'The app will not infer empty attribution while the outcome read is unavailable.'}</Empty>
+              <Empty title={pnlEvidenceAvailable ? 'No Closed Symbol PnL' : 'Symbol Attribution Is Unavailable'}>{pnlEvidenceAvailable ? 'No durable fill evidence currently closes inventory with a verified cost basis.' : 'The app will not infer empty attribution while the outcome read is unavailable.'}</Empty>
             </div>
           ) : (
             <div className="hp-table-wrap">

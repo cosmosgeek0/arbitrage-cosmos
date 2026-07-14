@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "i00.in-app-browser-mcp-capture.v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "captureProvenance", "observationContract", "sessionId", "capturedAtUtc", "source", "captures", "routeObservations", "passed"],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "gitSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "timestamp": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{3})?Z$" },
+    "routeId": { "enum": ["dashboard", "control-room", "account", "wallets", "markets", "detail", "loans", "execution", "orders", "positions", "fills", "pnl", "strategies", "volume", "opportunities", "risk", "ledger", "system", "notifications", "news", "calendar"] },
+    "logicalPath": { "enum": ["/dashboard", "/control-room", "/account", "/wallets", "/markets", "/detail/BTCUSDT", "/loans", "/execution", "/orders", "/positions", "/fills", "/pnl", "/strategies", "/volume", "/opportunities", "/risk", "/ledger", "/system", "/notifications", "/news", "/calendar"] },
+    "rect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "width", "height", "clientRectCount", "display", "visibility", "opacity", "hidden", "ariaHidden"],
+      "properties": {
+        "x": { "type": "number", "minimum": -100000, "maximum": 100000 },
+        "y": { "type": "number", "minimum": -100000, "maximum": 100000 },
+        "width": { "type": "number", "minimum": 0, "maximum": 100000 },
+        "height": { "type": "number", "minimum": 0, "maximum": 100000 },
+        "clientRectCount": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "display": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "visibility": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
+        "hidden": { "type": "boolean" },
+        "ariaHidden": { "type": ["string", "null"], "maxLength": 40 }
+      }
+    },
+    "rawApi": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observedAtUtc", "monotonicMs", "method", "origin", "path", "status", "redirected", "contentType", "byteLength", "bodyUtf8", "bodySha256"],
+      "properties": {
+        "observedAtUtc": { "$ref": "#/$defs/timestamp" },
+        "monotonicMs": { "type": "number", "minimum": 0, "maximum": 1000000000000000 },
+        "method": { "const": "GET" },
+        "origin": { "type": "string", "pattern": "^http://(?:127\\.0\\.0\\.1|localhost):[0-9]{1,5}$" },
+        "path": { "const": "/api/product-integration/v1/supervisor" },
+        "status": { "const": 200 },
+        "redirected": { "const": false },
+        "contentType": { "type": "string", "pattern": "^application/json(?:; ?charset=utf-8)?$" },
+        "byteLength": { "type": "integer", "minimum": 2, "maximum": 2097152 },
+        "bodyUtf8": { "type": "string", "minLength": 2, "maxLength": 2097152 },
+        "bodySha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "consoleEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timestampUtc", "level", "message"],
+      "properties": {
+        "timestampUtc": { "$ref": "#/$defs/timestamp" },
+        "level": { "const": "error" },
+        "message": { "type": "string", "minLength": 1, "maxLength": 20000 }
+      }
+    },
+    "consoleQuery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "levels", "limit", "startedAtMs", "endedAtMs", "returnedCount", "entries"],
+      "properties": {
+        "method": { "const": "IN_APP_BROWSER_MCP_DEV_LOGS" },
+        "levels": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "const": "error" } },
+        "limit": { "const": 1000 },
+        "startedAtMs": { "type": "number", "minimum": 0, "maximum": 1000000000000000 },
+        "endedAtMs": { "type": "number", "minimum": 0, "maximum": 1000000000000000 },
+        "returnedCount": { "type": "integer", "minimum": 0, "maximum": 999 },
+        "entries": { "type": "array", "maxItems": 999, "items": { "$ref": "#/$defs/consoleEntry" } }
+      }
+    },
+    "routeDom": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frameSelector", "frameMatchCount", "frameClassName", "frameAriaLabel", "frame", "attributes", "powerSelector", "powerMatchCount", "power", "powerTitle", "powerAriaLabel", "indicatorSelector", "indicatorMatchCount", "indicator", "indicatorClassName"],
+      "properties": {
+        "frameSelector": { "const": ".app-page-frame" },
+        "frameMatchCount": { "const": 1 },
+        "frameClassName": { "type": "string", "minLength": 3, "maxLength": 400 },
+        "frameAriaLabel": { "type": "string", "minLength": 3, "maxLength": 240 },
+        "frame": { "$ref": "#/$defs/rect" },
+        "attributes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["bindingState", "revision", "digest", "evaluatedAtMs", "truthLabel", "persistentSynthetic", "continuity", "machineReady", "tradeReady", "effectiveMode", "testedCommit", "schemaRevision"],
+          "properties": {
+            "bindingState": { "enum": ["LOADING", "BLOCKED", "UNAVAILABLE", "OBSERVED"] },
+            "revision": { "type": "string", "minLength": 1, "maxLength": 240 },
+            "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+            "evaluatedAtMs": { "type": "string", "pattern": "^(?:0|[1-9][0-9]{0,15})$" },
+            "truthLabel": { "enum": ["LIVE_PUBLIC", "WIRED", "BUILT_AND_TESTED", "IMPORTED", "SYNTHETIC_ONLY", "BLOCKED", "NOT_CONFIGURED", "UNAVAILABLE", "MISSING", "UNKNOWN"] },
+            "persistentSynthetic": { "enum": ["true", "false", "null"] },
+            "continuity": { "enum": ["UNPROVEN", "BACKFILL", "PROVEN", "BLOCKED"] },
+            "machineReady": { "enum": ["YES", "NO", "UNKNOWN"] },
+            "tradeReady": { "enum": ["YES", "NO", "UNKNOWN"] },
+            "effectiveMode": { "enum": ["READ_ONLY", "ADVISORY", "VALIDATE_ONLY", "BLOCKED", "UNKNOWN"] },
+            "testedCommit": { "type": "string", "pattern": "^(?:null|[a-f0-9]{40})$" },
+            "schemaRevision": { "enum": ["product-supervisor.v1", "null"] }
+          }
+        },
+        "powerSelector": { "const": "[data-topbar-key=\"power\"]" },
+        "powerMatchCount": { "const": 1 },
+        "power": { "$ref": "#/$defs/rect" },
+        "powerTitle": { "type": "string", "minLength": 3, "maxLength": 240 },
+        "powerAriaLabel": { "type": "string", "minLength": 3, "maxLength": 240 },
+        "indicatorSelector": { "const": ".execution-control-trigger-core" },
+        "indicatorMatchCount": { "const": 1 },
+        "indicator": { "$ref": "#/$defs/rect" },
+        "indicatorClassName": { "type": "string", "minLength": 3, "maxLength": 400 }
+      }
+    },
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sequence", "captureKey", "screenshotPath", "screenshotSha256", "width", "height", "screenshotMode", "derived"],
+      "properties": {
+        "sequence": { "type": "integer", "minimum": 1, "maximum": 146 },
+        "captureKey": { "type": "string", "minLength": 3, "maxLength": 240 },
+        "screenshotPath": { "type": "string", "pattern": "^test/i00/performance/evidence/browser/[A-Za-z0-9._@/-]+\\.png$" },
+        "screenshotSha256": { "$ref": "#/$defs/sha256" },
+        "width": { "type": "integer", "minimum": 1, "maximum": 7680 },
+        "height": { "type": "integer", "minimum": 1, "maximum": 4320 },
+        "screenshotMode": { "enum": ["FULL_VIEWPORT_ROUTE", "FULL_VIEWPORT_WITH_OPEN_PANEL"] },
+        "derived": { "const": false }
+      }
+    },
+    "routeObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observationOrdinal", "observationKey", "captureKey", "runKey", "routeId", "logicalPath", "clockDomain", "startedAtMs", "domReadAtMs", "screenshotAtMs", "endedAtMs", "apiBefore", "apiAfter", "dom", "consoleBefore", "consoleAfter"],
+      "properties": {
+        "observationOrdinal": { "type": "integer", "minimum": 1, "maximum": 126 },
+        "observationKey": { "type": "string", "pattern": "^(?:390x844@1|1600x900@1|2940x1200@1\\.25)-(?:LIGHT|DARK):(?:dashboard|control-room|account|wallets|markets|detail|loans|execution|orders|positions|fills|pnl|strategies|volume|opportunities|risk|ledger|system|notifications|news|calendar)$" },
+        "captureKey": { "type": "string", "pattern": "^(?:390x844@1|1600x900@1|2940x1200@1\\.25)-(?:LIGHT|DARK):(?:dashboard|control-room|account|wallets|markets|detail|loans|execution|orders|positions|fills|pnl|strategies|volume|opportunities|risk|ledger|system|notifications|news|calendar)$" },
+        "runKey": { "type": "string", "pattern": "^(?:390x844@1|1600x900@1|2940x1200@1\\.25)-(?:LIGHT|DARK)$" },
+        "routeId": { "$ref": "#/$defs/routeId" },
+        "logicalPath": { "$ref": "#/$defs/logicalPath" },
+        "clockDomain": { "const": "NODE_MONOTONIC_MS" },
+        "startedAtMs": { "type": "number", "minimum": 0, "maximum": 1000000000000000 },
+        "domReadAtMs": { "type": "number", "minimum": 0, "maximum": 1000000000000000 },
+        "screenshotAtMs": { "type": "number", "minimum": 0, "maximum": 1000000000000000 },
+        "endedAtMs": { "type": "number", "minimum": 0, "maximum": 1000000000000000 },
+        "apiBefore": { "$ref": "#/$defs/rawApi" },
+        "apiAfter": { "$ref": "#/$defs/rawApi" },
+        "dom": { "$ref": "#/$defs/routeDom" },
+        "consoleBefore": { "$ref": "#/$defs/consoleQuery" },
+        "consoleAfter": { "$ref": "#/$defs/consoleQuery" }
+      }
+    }
+  },
+  "properties": {
+    "schemaVersion": { "const": "i00.in-app-browser-mcp-capture.v3" },
+    "captureProvenance": { "const": "IN_APP_BROWSER_MCP" },
+    "observationContract": { "const": "I00_BROWSER_ROUTE_TRUTH_RECOMPUTE_V1" },
+    "sessionId": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{8,160}$" },
+    "capturedAtUtc": { "$ref": "#/$defs/timestamp" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["headSha", "treeSha", "appOrigin"],
+      "properties": {
+        "headSha": { "$ref": "#/$defs/gitSha" },
+        "treeSha": { "$ref": "#/$defs/gitSha" },
+        "appOrigin": { "type": "string", "pattern": "^http://(?:127\\.0\\.0\\.1|localhost):[0-9]{1,5}$" }
+      }
+    },
+    "captures": { "type": "array", "minItems": 146, "maxItems": 146, "items": { "$ref": "#/$defs/capture" } },
+    "routeObservations": { "type": "array", "minItems": 126, "maxItems": 126, "items": { "$ref": "#/$defs/routeObservation" } },
+    "passed": { "const": true }
+  }
+}

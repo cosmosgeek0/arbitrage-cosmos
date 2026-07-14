@@ -7,10 +7,17 @@ external authorization described in `IP_OPS_ACTIVATION_REQUEST.md`.
 ## Release preparation (local/CI, no host mutation)
 
 1. Check out the exact accepted integration SHA with a clean worktree.
-2. Run `npm test`, `npm run test:all`, and the complete I00 acceptance command.
+2. Run `npm run test:i00:complete`. It runs `npm test`, `npm run test:all`, the
+   accepted Q donor gate, both operations suites, and the candidate-bound local
+   runtime/performance/browser evidence checks in the fixed local order. Use
+   `--plan` for a no-execution preview or `--validate-only` to validate already
+   generated evidence; neither mode is a substitute for the successful full run.
 3. Produce a JSON tested receipt with the exact full SHA/tree, clean status,
-   exact three required commands and real exit codes, lockfile hash, prepared
-   runtime-dependency tree hash, and UTC completion time.
+   exact measured nested commands and real exit codes (including `npm test`,
+   `npm run test:all`, `bash ops/tests/i00/run-all.sh`, and
+   `npm run test:i00:complete`), lockfile hash, prepared runtime-dependency tree
+   hash, candidate-bound runtime/performance/browser receipt hashes, and UTC
+   completion time.
 4. Produce prebuilt Linux runtime dependencies using the pinned lockfile in a
    controlled build environment. Do not install dependencies on the target
    during the switch.

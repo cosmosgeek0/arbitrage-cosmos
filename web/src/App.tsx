@@ -19,7 +19,11 @@ import { SystemHealth } from './pages/SystemHealth';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { News } from './pages/News';
 import { CalendarPage } from './pages/CalendarPage';
-import { ProductControlRoomProvider, ProductControlRoomRoute } from './features/productControlRoom';
+import {
+  ProductControlRoomProvider,
+  ProductControlRoomRoute,
+  useProductControlRoomContext,
+} from './features/productControlRoom';
 import {
   createHttpProductIntegrationTransport,
   createProductIntegrationClient,
@@ -43,8 +47,17 @@ const durableResumeCursor = readDurableMaterialCursor();
 
 function Shell() {
   const { page, detailSymbol, prefs } = useStore();
+  const { binding: productBinding } = useProductControlRoomContext();
   const mainRef = useRef<HTMLElement | null>(null);
   const framePage = page === 'detail' ? 'detail' : page;
+  const productSnapshot = productBinding.snapshot;
+  const productBindingState = productBinding.loading
+    ? 'LOADING'
+    : productBinding.error !== null
+      ? 'BLOCKED'
+      : productSnapshot === null
+        ? 'UNAVAILABLE'
+        : 'OBSERVED';
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0, left: 0 });
@@ -58,7 +71,22 @@ function Shell() {
         <div className="app-main">
           {prefs.tape && <Tape />}
           <main ref={mainRef} className={`app-page-main page-${framePage}`}>
-            <section className={`app-page-frame frame-${framePage}`} aria-label={`${framePage} workspace`}>
+            <section
+              className={`app-page-frame frame-${framePage}`}
+              aria-label={`${framePage} workspace`}
+              data-i00-product-binding-state={productBindingState}
+              data-i00-product-revision={productSnapshot?.revision ?? 'null'}
+              data-i00-product-digest={productSnapshot?.digest ?? 'null'}
+              data-i00-product-evaluated-at-ms={productSnapshot?.evaluatedAtMs ?? 'null'}
+              data-i00-product-truth-label={productSnapshot?.truthLabel ?? 'UNAVAILABLE'}
+              data-i00-product-persistent-synthetic={productSnapshot === null ? 'null' : String(productSnapshot.persistentSyntheticLabel)}
+              data-i00-product-continuity={productBinding.continuity}
+              data-i00-product-machine-ready={productSnapshot?.ownerView.machineReady ?? 'UNKNOWN'}
+              data-i00-product-trade-ready={productSnapshot?.ownerView.tradeReady ?? 'UNKNOWN'}
+              data-i00-product-effective-mode={productSnapshot?.ownerView.effectiveMode ?? 'UNKNOWN'}
+              data-i00-product-tested-commit={productSnapshot?.ownerView.revisions.testedCommit ?? 'null'}
+              data-i00-product-schema-revision={productSnapshot?.ownerView.revisions.schemaRevision ?? 'null'}
+            >
               <ErrorBoundary resetKey={`${page}-${detailSymbol}`} label={page}>
                 {page === 'dashboard' && <Dashboard />}
                 {page === 'control-room' && <ProductControlRoomRoute />}

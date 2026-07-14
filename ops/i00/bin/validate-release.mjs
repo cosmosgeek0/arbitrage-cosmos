@@ -2,9 +2,15 @@
 import { existsSync, lstatSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  fail, isFullSha, isUtc, listRegularFiles, parseArgs, readJson, requireKeys, sha256File,
+  fail, isFullSha, isUtc, listRegularFiles, parseArgs, readJson, requireExactKeys, sha256File,
   treeDigest,
 } from '../lib.mjs';
+import {
+  COMPLETE_ACCEPTANCE_STEP_COUNT, COMPLETE_ACCEPTANCE_TRUTH,
+  validateCompleteAcceptanceReceipt,
+} from '../complete-acceptance-receipt.mjs';
+import { validateCanonicalAcceptanceEvidence } from '../canonical-acceptance-validation.mjs';
+import { assertReleaseMatchesCompiledLedger } from '../ledger-compatibility.mjs';
 import {
   assertTrustedBuildPublicKey, expectedBuildAttestation, verifyBuildAttestation,
 } from './verify-build-attestation.mjs';
@@ -14,22 +20,35 @@ if (!args.release) fail('--release is required');
 const root = resolve(args.release);
 const release = readJson(resolve(root, 'release.json'), 'release.json');
 const manifest = readJson(resolve(root, 'artifact-manifest.json'), 'artifact-manifest.json');
-requireKeys(release, [
+const releaseKeys = [
   'releaseId', 'gitSha', 'testedSha', 'builtAtUtc', 'schemaVersion', 'rollbackBarrier',
-  'configRevision', 'modelRevision', 'testedReceipt', 'testedReceiptSha256',
+  'rollbackFloor', 'compatibilitySource', 'compatibilitySourceSha256',
+  'configRevision', 'modelRevision', 'testedReceipt', 'testedReceiptSha256', 'acceptanceEvidence',
   'activationState', 'sourceTree', 'sourceVerification', 'packageLockSha256',
   'runtimeDepsDigestSha256', 'serverDistDigestSha256', 'webDistDigestSha256',
-  'buildAttestation',
-], 'release.json');
+  'runtimeDependencies', 'buildAttestation',
+];
+requireExactKeys(release, releaseKeys, 'release.json');
 if (!isFullSha(release.gitSha) || release.gitSha !== release.testedSha) fail('release SHA fields must be one identical full Git SHA');
 if (release.releaseId !== `i00-${release.testedSha}`) fail('releaseId must be keyed by the full tested SHA');
 if (!isUtc(release.builtAtUtc)) fail('release builtAtUtc is invalid');
-if (!Number.isInteger(release.schemaVersion) || release.schemaVersion < 0) fail('release schemaVersion is invalid');
-if (typeof release.rollbackBarrier !== 'boolean') fail('release rollbackBarrier must be boolean');
+if (!Number.isSafeInteger(release.schemaVersion) || release.schemaVersion < 0
+    || !Number.isSafeInteger(release.rollbackFloor) || release.rollbackFloor < 0
+    || release.rollbackFloor > release.schemaVersion) {
+  fail('release Ledger compatibility range is invalid');
+}
+if (release.rollbackFloor !== 0 && release.rollbackFloor !== release.schemaVersion) {
+  fail('release rollbackFloor cannot be represented by the accepted donor contract');
+}
+if (typeof release.rollbackBarrier !== 'boolean'
+    || release.rollbackBarrier !== (release.rollbackFloor > 0)) {
+  fail('release rollbackBarrier does not match its Ledger rollback floor');
+}
+if (release.runtimeDependencies !== 'BUNDLED_PREBUILT') fail('release runtime dependency posture is invalid');
 if (release.activationState !== 'NOT_DEPLOYED') fail('artifact creation must not claim deployment');
-if (release.testedReceipt !== 'receipts/tested.json') fail('release testedReceipt path is not canonical');
+if (release.testedReceipt !== 'receipts/complete-local-acceptance.json') fail('release testedReceipt path is not canonical');
 if (release.sourceVerification === 'SIMULATION_ONLY') {
-  if (args['allow-simulation'] !== true || release.sourceTree !== 'SIMULATION_FIXTURE') {
+  if (args['allow-simulation'] !== true || !isFullSha(release.sourceTree)) {
     fail('simulation release is forbidden without --allow-simulation');
   }
 } else if (release.sourceVerification !== 'GIT_EXACT_CLEAN' || !/^[0-9a-f]{40}$/.test(release.sourceTree)) {
@@ -37,34 +56,60 @@ if (release.sourceVerification === 'SIMULATION_ONLY') {
 }
 
 for (const relative of [
-  'server/dist/index.js', 'web/dist/index.html', 'server/package.json', 'package.json',
+  'server/dist/index.js', 'server/dist/ledger.js', 'web/dist/index.html', 'server/package.json', 'package.json',
   'package-lock.json', 'node_modules', 'ops/live/RECEIPT.md', 'ops/live/bin/deploy.sh',
   'ops/live/bin/rollback.sh', 'ops/i00/donor-contract.json',
   'ops/i00/bin/install-ops-bundle.sh',
 ]) {
   if (!existsSync(resolve(root, relative))) fail(`release payload missing ${relative}`);
 }
+let compiledCompatibility;
+try {
+  compiledCompatibility = assertReleaseMatchesCompiledLedger(release, root);
+} catch (error) {
+  fail(`release compatibility verification failed: ${error.message}`);
+}
 const testedPath = resolve(root, release.testedReceipt);
 if (sha256File(testedPath) !== release.testedReceiptSha256) fail('tested receipt digest mismatch');
-const tested = readJson(testedPath, 'tested receipt');
-requireKeys(tested, ['schemaVersion', 'commands', 'completedAtUtc'], 'tested receipt');
-if (tested.status !== 'PASS' || tested.testedSha !== release.testedSha || tested.gitDirty !== false) {
-  fail('embedded tested receipt does not prove this clean SHA');
+requireExactKeys(release.acceptanceEvidence, [
+  'truthClass', 'candidateSha', 'candidateTree', 'requiredStepCount',
+  'browserReceipt', 'browserReceiptSha256', 'performanceReceipt',
+  'performanceReceiptSha256',
+], 'release acceptanceEvidence');
+if (release.acceptanceEvidence.truthClass !== COMPLETE_ACCEPTANCE_TRUTH
+    || release.acceptanceEvidence.candidateSha !== release.testedSha
+    || release.acceptanceEvidence.candidateTree !== release.sourceTree
+    || release.acceptanceEvidence.requiredStepCount !== COMPLETE_ACCEPTANCE_STEP_COUNT
+    || release.acceptanceEvidence.browserReceipt !== 'receipts/local-browser-acceptance.json'
+    || release.acceptanceEvidence.performanceReceipt !== 'receipts/local-proxy-performance.json') {
+  fail('release acceptanceEvidence identity or canonical paths are invalid');
 }
-const requiredCommands = ['npm test', 'npm run test:all', 'bash ops/tests/i00/run-all.sh'];
-if (tested.schemaVersion !== 1 || !isUtc(tested.completedAtUtc)
-    || Date.parse(tested.completedAtUtc) > Date.parse(release.builtAtUtc)
-    || !Array.isArray(tested.commands)
-    || requiredCommands.some((command) => !tested.commands.some((entry) => entry?.command === command && entry?.exitCode === 0))) {
-  fail('embedded tested receipt lacks exact successful commands or valid chronology');
+for (const field of ['browserReceiptSha256', 'performanceReceiptSha256']) {
+  if (!/^[0-9a-f]{64}$/.test(release.acceptanceEvidence[field])) fail(`release acceptanceEvidence.${field} is invalid`);
 }
-if (tested.sourceTree !== release.sourceTree
-    || tested.packageLockSha256 !== release.packageLockSha256
-    || tested.runtimeDepsDigestSha256 !== release.runtimeDepsDigestSha256
-    || tested.serverDistDigestSha256 !== release.serverDistDigestSha256
-    || tested.webDistDigestSha256 !== release.webDistDigestSha256) {
-  fail('embedded tested receipt does not match release provenance digests');
+const acceptance = validateCompleteAcceptanceReceipt({
+  receiptPath: testedPath,
+  expectedSha: release.testedSha,
+  expectedTree: release.sourceTree,
+  browserPath: resolve(root, release.acceptanceEvidence.browserReceipt),
+  performancePath: resolve(root, release.acceptanceEvidence.performanceReceipt),
+  builtAtUtc: release.builtAtUtc,
+});
+const tested = acceptance.receipt;
+if (acceptance.receiptSha256 !== release.testedReceiptSha256
+    || acceptance.browserSha256 !== release.acceptanceEvidence.browserReceiptSha256
+    || acceptance.performanceSha256 !== release.acceptanceEvidence.performanceReceiptSha256) {
+  fail('release acceptanceEvidence hashes do not match the validated local-acceptance bytes');
 }
+await validateCanonicalAcceptanceEvidence({
+  receipt: tested,
+  receiptPath: testedPath,
+  browserPath: acceptance.browserPath,
+  performancePath: acceptance.performancePath,
+  artifactRoot: root,
+  expectedSha: release.testedSha,
+  expectedTree: release.sourceTree,
+});
 
 if (release.sourceVerification === 'SIMULATION_ONLY') {
   if (JSON.stringify(release.buildAttestation) !== JSON.stringify({ status: 'SIMULATION_ONLY_NOT_ATTESTED' })) {
@@ -75,14 +120,9 @@ if (release.sourceVerification === 'SIMULATION_ONLY') {
     'status', 'algorithm', 'builderIdentity', 'attestation', 'attestationSha256',
     'signature', 'signatureSha256', 'publicKey', 'publicKeySha256',
   ];
-  requireKeys(release.buildAttestation, [
+  requireExactKeys(release.buildAttestation, [
     ...attestationKeys,
   ], 'release buildAttestation');
-  const actualAttestationKeys = Object.keys(release.buildAttestation).sort();
-  if (actualAttestationKeys.length !== attestationKeys.length
-      || actualAttestationKeys.some((key, index) => key !== [...attestationKeys].sort()[index])) {
-    fail('release buildAttestation has an unexpected field set');
-  }
   if (release.buildAttestation.status !== 'VERIFIED_ED25519'
       || release.buildAttestation.algorithm !== 'Ed25519') {
     fail('production release lacks verified Ed25519 provenance');
@@ -115,7 +155,7 @@ if (release.sourceVerification === 'SIMULATION_ONLY') {
     runtimeDepsDigestSha256: release.runtimeDepsDigestSha256,
     serverDistDigestSha256: release.serverDistDigestSha256,
     webDistDigestSha256: release.webDistDigestSha256,
-    testsCompletedAtUtc: tested.completedAtUtc,
+    testsCompletedAtUtc: tested.endedAtUtc,
     buildCompletedAtUtc: release.builtAtUtc,
     builderIdentity: release.buildAttestation.builderIdentity,
   });
@@ -130,9 +170,25 @@ if (release.sourceVerification === 'SIMULATION_ONLY') {
   }
 }
 
-requireKeys(manifest, ['schemaVersion', 'releaseId', 'testedSha', 'testedBuildOutputs', 'buildAttestation', 'files'], 'artifact manifest');
-requireKeys(manifest.testedBuildOutputs, ['serverDistDigestSha256', 'webDistDigestSha256'], 'artifact manifest.testedBuildOutputs');
+requireExactKeys(manifest, [
+  'schemaVersion', 'releaseId', 'testedSha', 'testedBuildOutputs',
+  'acceptanceEvidence', 'ledgerCompatibility', 'buildAttestation', 'files',
+], 'artifact manifest');
+requireExactKeys(manifest.testedBuildOutputs, ['serverDistDigestSha256', 'webDistDigestSha256'], 'artifact manifest.testedBuildOutputs');
+requireExactKeys(manifest.ledgerCompatibility, [
+  'schemaVersion', 'rollbackFloor', 'rollbackBarrier',
+  'compatibilitySource', 'compatibilitySourceSha256',
+], 'artifact manifest.ledgerCompatibility');
+if (manifest.schemaVersion !== 1) fail('artifact manifest schemaVersion must be 1');
 if (manifest.releaseId !== release.releaseId || manifest.testedSha !== release.testedSha) fail('artifact manifest identity mismatch');
+if (JSON.stringify(manifest.acceptanceEvidence) !== JSON.stringify(release.acceptanceEvidence)) {
+  fail('artifact manifest acceptance evidence does not match release provenance');
+}
+for (const key of Object.keys(compiledCompatibility)) {
+  if (manifest.ledgerCompatibility[key] !== compiledCompatibility[key]) {
+    fail(`artifact manifest Ledger compatibility ${key} mismatch`);
+  }
+}
 if (JSON.stringify(manifest.buildAttestation) !== JSON.stringify(release.buildAttestation)) {
   fail('artifact manifest build attestation does not match release provenance');
 }

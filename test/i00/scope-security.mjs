@@ -46,6 +46,40 @@ const EXECUTABLE_RULES = Object.freeze([
   ['PRIVATE_ENDPOINT_LITERAL', /['"](?:https:\/\/api\.binance\.com)?\/(?:api\/v3\/order|fapi\/v1\/order|sapi\/v1\/margin\/borrow-repay)['"]/],
 ]);
 
+const PERFORMANCE_HARNESS_EXECUTABLE_ALLOWLIST = new Map([
+  ['test/i00/performance/app-probe.mjs', new Set([
+    'ENVIRONMENT_READ', 'TIMER_OR_RANDOM',
+  ])],
+  ['test/i00/performance/local-proxy-soak.mjs', new Set([
+    'CHILD_PROCESS', 'EGRESS_PRIMITIVE', 'ENVIRONMENT_READ',
+    'NODE_NETWORK_IMPORT', 'TIMER_OR_RANDOM',
+  ])],
+  ['test/i00/performance/local-acceptance.mjs', new Set([
+    'CHILD_PROCESS', 'ENVIRONMENT_READ', 'TIMER_OR_RANDOM',
+  ])],
+]);
+
+const COMMAND_LAYER_EXECUTABLE_ALLOWLIST = new Map([
+  ['test/i00/commands/command-contracts.test.mjs', new Set([
+    'CHILD_PROCESS',
+    // The hostile source-token assertion names an egress primitive; it never executes egress.
+    'EGRESS_PRIMITIVE',
+    'ENVIRONMENT_READ',
+  ])],
+  ['test/i00/commands/complete-entrypoint.test.mjs', new Set([
+    'CHILD_PROCESS',
+  ])],
+  ['test/i00/commands/release-receipt-contract.test.mjs', new Set([
+    'CHILD_PROCESS',
+  ])],
+  ['test/i00/complete-acceptance.mjs', new Set([
+    'CHILD_PROCESS',
+  ])],
+  ['test/i00/ops-command.mjs', new Set([
+    'CHILD_PROCESS',
+  ])],
+]);
+
 export function scanExecutableSnippet(source) {
   const findings = [];
   for (const [code, pattern] of EXECUTABLE_RULES) if (pattern.test(source)) findings.push(code);
@@ -104,6 +138,8 @@ export function scanOwnedFiles() {
     const content = readFileSync(path.join(ROOT, file), 'utf8');
     if (/\.(?:js|mjs|cjs|ts|tsx)$/.test(file) && !mutationFixtures.has(file)) {
       for (const code of scanExecutableSnippet(content)) {
+        if (PERFORMANCE_HARNESS_EXECUTABLE_ALLOWLIST.get(file)?.has(code)) continue;
+        if (COMMAND_LAYER_EXECUTABLE_ALLOWLIST.get(file)?.has(code)) continue;
         if (file === 'test/i00/render-reports.mjs' && code === 'ENVIRONMENT_READ') continue;
         if ((file === 'test/i00/git-provenance.mjs' || file === 'test/i00/verify-scope.mjs') && code === 'CHILD_PROCESS') continue;
         executableFindings.push({ code, file });

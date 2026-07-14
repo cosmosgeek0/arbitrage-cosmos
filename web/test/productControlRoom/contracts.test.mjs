@@ -11,6 +11,7 @@ import {
   buildFixtureBinding,
   createFixtureSession,
   isFunctionalWiringState,
+  productMachineReadinessTone,
   productTraceHasSyntheticEvidence,
   validateMaterialEventPage,
   validateProductCorrelationTrace,
@@ -397,12 +398,81 @@ test('incident availability prevents an empty array from becoming false all-clea
   assert.ok(validateProductSupervisorEnvelope(falseAvailable).includes('INCIDENT_AVAILABILITY_TRUTH_MISMATCH'));
 });
 
-test('owner machine readiness is equivalent to dashboard READY posture in both directions', () => {
+test('owner machine readiness requires dashboard READY plus published advance evidence', () => {
   const ready = buildProductControlRoomFixture(createFixtureSession('HEALTHY_OBSERVE', 'ready-map', NOW));
   assert.ok(validateProductSupervisorEnvelope({ ...ready, ownerView: { ...ready.ownerView, machineReady: 'NO' } }).includes('OWNER_DASHBOARD_READINESS_MISMATCH'));
   const degraded = buildProductControlRoomFixture(createFixtureSession('DEGRADED_STALE_SOURCES', 'degraded-map', NOW));
   assert.ok(validateProductSupervisorEnvelope({ ...degraded, ownerView: { ...degraded.ownerView, machineReady: 'YES' } }).includes('OWNER_DASHBOARD_READINESS_MISMATCH'));
   assert.ok(validateProductSupervisorEnvelope({ ...ready, ownerView: { ...ready.ownerView, tradeReady: 'YES' } }).includes('OWNER_TRADE_READY_INVALID'));
+});
+
+test('browser accepts only fail-closed relational Ledger schema compatibility truth', () => {
+  const snapshot = buildProductControlRoomFixture(createFixtureSession('HEALTHY_OBSERVE', 'ledger-schema', NOW));
+  const ledger = snapshot.dashboard.summaries.ledger;
+  assert.deepEqual({
+    state: ledger.schemaCompatibilityState,
+    current: ledger.currentSchemaVersion,
+    floor: ledger.rollbackFloor,
+  }, { state: 'AVAILABLE', current: 1, floor: 1 });
+  assert.deepEqual(validateProductSupervisorEnvelope(snapshot), []);
+
+  const withLedger = (next) => ({
+    ...snapshot,
+    dashboard: {
+      ...snapshot.dashboard,
+      summaries: { ...snapshot.dashboard.summaries, ledger: { ...ledger, ...next } },
+    },
+  });
+  for (const hostile of [
+    { rollbackFloor: 2 },
+    { currentSchemaVersion: 1.5 },
+    { schemaCompatibilityReason: 'SHOULD_BE_NULL' },
+    { schemaCompatibilityState: 'MISMATCH', schemaCompatibilityReason: 'LEDGER_SCHEMA_VERSION_MISMATCH', currentSchemaVersion: 1, rollbackFloor: 1, truthLabel: 'UNAVAILABLE' },
+    { schemaCompatibilityState: 'UNAVAILABLE', schemaCompatibilityReason: 'LEDGER_SCHEMA_COMPATIBILITY_UNAVAILABLE', currentSchemaVersion: null, rollbackFloor: null, truthLabel: 'LIVE_PUBLIC' },
+  ]) {
+    assert.ok(validateProductSupervisorEnvelope(withLedger(hostile)).includes('DASHBOARD_SUMMARY_INVALID:ledger'));
+  }
+  const unavailable = withLedger({
+    truthLabel: 'UNAVAILABLE',
+    schemaCompatibilityState: 'UNAVAILABLE',
+    schemaCompatibilityReason: 'LEDGER_SCHEMA_COMPATIBILITY_UNAVAILABLE',
+    currentSchemaVersion: null,
+    rollbackFloor: null,
+  });
+  assert.equal(validateProductSupervisorEnvelope(unavailable).includes('DASHBOARD_SUMMARY_INVALID:ledger'), false);
+});
+
+test('READY posture with null meaningful advance cannot validate YES or render header green', () => {
+  const ready = buildProductControlRoomFixture(createFixtureSession('HEALTHY_OBSERVE', 'null-advance', NOW));
+  const health = ready.surfaces.health;
+  const withoutAdvance = {
+    ...ready,
+    surfaces: {
+      ...ready.surfaces,
+      health: {
+        ...health,
+        evidence: health.evidence.map((datum) => datum.fieldId === 'heartbeat-advance' ? {
+          ...datum,
+          value: null,
+          truthLabel: 'UNKNOWN',
+          unavailableReason: 'CANONICAL_MEANINGFUL_ADVANCE_NOT_PUBLISHED',
+        } : datum),
+      },
+    },
+  };
+  assert.ok(validateProductSupervisorEnvelope(withoutAdvance).includes('OWNER_MEANINGFUL_ADVANCE_REQUIRED'));
+  const conservative = {
+    ...withoutAdvance,
+    ownerView: {
+      ...withoutAdvance.ownerView,
+      machineReady: 'UNKNOWN',
+      topRootBlocker: 'CANONICAL_MEANINGFUL_ADVANCE_NOT_PUBLISHED',
+    },
+  };
+  assert.equal(validateProductSupervisorEnvelope(conservative).includes('OWNER_MEANINGFUL_ADVANCE_REQUIRED'), false);
+  assert.equal(productMachineReadinessTone(conservative.ownerView.machineReady), 'warn');
+  assert.equal(productMachineReadinessTone('NO'), 'warn');
+  assert.equal(productMachineReadinessTone('YES'), 'ok');
 });
 
 test('owner latest material change is unavailable until the material page reaches high water', () => {

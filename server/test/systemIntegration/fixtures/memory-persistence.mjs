@@ -60,6 +60,10 @@ export class InMemoryControlPersistence {
     this.#failure = error;
   }
 
+  async findControlMutation(key) {
+    return this.#receipts.get(key) ?? null;
+  }
+
   async commitControlMutation(commit) {
     if (this.#failure !== null) {
       const failure = this.#failure;
@@ -75,7 +79,12 @@ export class InMemoryControlPersistence {
     if (prior !== undefined) {
       this.#recordJournal({ operation: 'IDEMPOTENT_LOOKUP', idempotencyKey: key, replayed: true });
       return prior.requestDigest === digest
-        ? Object.freeze({ kind: 'IDEMPOTENT_REPLAY', requestDigest: prior.requestDigest, receipt: prior.receipt })
+        ? Object.freeze({
+            kind: 'IDEMPOTENT_REPLAY',
+            requestDigest: prior.requestDigest,
+            receipt: prior.receipt,
+            runtimePublication: prior.runtimePublication,
+          })
         : Object.freeze({ kind: 'IDEMPOTENCY_CONFLICT', requestDigest: prior.requestDigest });
     }
     if (commit.request.expectedRevision !== this.#current.revision) {
@@ -113,10 +122,32 @@ export class InMemoryControlPersistence {
       after: frozenAfter,
       ledgerEventId: event.id,
     });
+    const runtimePublication = commit.applied
+      && ['RESTART_COMPONENT', 'SET_COMPONENT_STATE'].includes(commit.request.mutation.command)
+      ? 'PENDING'
+      : 'NOT_REQUIRED';
     this.#current = receipt.after;
-    this.#receipts.set(key, Object.freeze({ requestDigest: digest, receipt }));
+    this.#receipts.set(key, Object.freeze({ requestDigest: digest, receipt, runtimePublication }));
     this.#recordJournal({ operation: 'COMMITTED', idempotencyKey: key, replayed: false, ledgerEventId: event.id });
-    return Object.freeze({ kind: 'COMMITTED', receipt });
+    return Object.freeze({ kind: 'COMMITTED', receipt, runtimePublication });
+  }
+
+  async markControlRuntimePublished(commit) {
+    const prior = this.#receipts.get(commit.idempotencyKey);
+    if (prior === undefined || prior.requestDigest !== commit.requestDigest) {
+      throw new Error('CONTROL_RUNTIME_PUBLICATION_IDENTITY_MISMATCH');
+    }
+    if (prior.runtimePublication === 'PUBLISHED') {
+      return Object.freeze({ kind: 'IDEMPOTENT_REPLAY' });
+    }
+    if (prior.runtimePublication !== 'PENDING' && prior.runtimePublication !== 'UNKNOWN') {
+      throw new Error('CONTROL_RUNTIME_PUBLICATION_NOT_REQUIRED');
+    }
+    this.#receipts.set(commit.idempotencyKey, Object.freeze({
+      ...prior,
+      runtimePublication: 'PUBLISHED',
+    }));
+    return Object.freeze({ kind: 'PUBLISHED' });
   }
 
   snapshot() {

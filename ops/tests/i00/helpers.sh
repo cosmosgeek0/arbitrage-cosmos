@@ -42,41 +42,33 @@ materialize_donor() {
 
 make_release_inputs() {
   local source="$1" deps="$2" sha="$3" receipt="$4"
-  local package_lock_sha deps_digest server_dist_digest web_dist_digest
-  mkdir -p "$source/server/dist" "$source/web/dist" "$deps/fake-runtime"
+  local tree=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  mkdir -p "$source/server/dist" "$source/web/dist" \
+    "$deps/fake-runtime" "$deps/better-sqlite3" "$deps/ws"
   printf 'console.log("fixture server");\n' > "$source/server/dist/index.js"
+  printf 'export const LEDGER_SCHEMA_VERSION = 1;\nexport const LEDGER_ROLLBACK_FLOOR = 1;\n' > "$source/server/dist/ledger.js"
   printf '<!doctype html><title>fixture</title>\n' > "$source/web/dist/index.html"
   printf '{"name":"fixture","private":true}\n' > "$source/package.json"
   printf '{"name":"fixture","lockfileVersion":3}\n' > "$source/package-lock.json"
   printf '{"name":"fixture-server","type":"module"}\n' > "$source/server/package.json"
   printf '{"name":"fake-runtime"}\n' > "$deps/fake-runtime/package.json"
+  printf '{"name":"better-sqlite3","version":"0.0.0-fixture","main":"index.cjs"}\n' > "$deps/better-sqlite3/package.json"
+  printf 'module.exports = function FixtureDatabase() { throw new Error("FIXTURE_DATABASE_NOT_EXECUTABLE"); };\n' > "$deps/better-sqlite3/index.cjs"
+  printf '{"name":"ws","version":"0.0.0-fixture","main":"index.cjs"}\n' > "$deps/ws/package.json"
+  printf 'module.exports = class FixtureWebSocket {};\n' > "$deps/ws/index.cjs"
   git -C "$REPO_ROOT" archive "$DONOR_SHA" ops/live | tar -x -C "$source"
   mkdir -p "$source/ops/templates" "$source/ops/docs"
   cp -R "$REPO_ROOT/ops/i00" "$source/ops/i00"
   cp -R "$REPO_ROOT/ops/templates/i00" "$source/ops/templates/i00"
   cp -R "$REPO_ROOT/ops/docs/i00" "$source/ops/docs/i00"
-  package_lock_sha="$(shasum -a 256 "$source/package-lock.json" | awk '{print $1}')"
-  deps_digest="$(node --input-type=module -e 'import {pathToFileURL} from "node:url"; const {treeDigest}=await import(pathToFileURL(process.argv[1]).href); process.stdout.write(treeDigest(process.argv[2]));' "$I00_ROOT/lib.mjs" "$deps")"
-  server_dist_digest="$(node --input-type=module -e 'import {pathToFileURL} from "node:url"; const {treeDigest}=await import(pathToFileURL(process.argv[1]).href); process.stdout.write(treeDigest(process.argv[2]));' "$I00_ROOT/lib.mjs" "$source/server/dist")"
-  web_dist_digest="$(node --input-type=module -e 'import {pathToFileURL} from "node:url"; const {treeDigest}=await import(pathToFileURL(process.argv[1]).href); process.stdout.write(treeDigest(process.argv[2]));' "$I00_ROOT/lib.mjs" "$source/web/dist")"
-  node -e '
-    const fs = require("fs");
-    const [path, sha, packageLockSha256, runtimeDepsDigestSha256, serverDistDigestSha256, webDistDigestSha256] = process.argv.slice(1);
-    fs.writeFileSync(path, JSON.stringify({
-      schemaVersion: 1, status: "PASS", testedSha: sha, gitDirty: false,
-      commands: [
-        { command: "npm test", exitCode: 0 },
-        { command: "npm run test:all", exitCode: 0 },
-        { command: "bash ops/tests/i00/run-all.sh", exitCode: 0 }
-      ],
-      completedAtUtc: "2026-07-13T00:00:00Z",
-      sourceTree: "SIMULATION_FIXTURE",
-      packageLockSha256,
-      runtimeDepsDigestSha256,
-      serverDistDigestSha256,
-      webDistDigestSha256
-    }, null, 2) + "\n");
-  ' "$receipt" "$sha" "$package_lock_sha" "$deps_digest" "$server_dist_digest" "$web_dist_digest"
+  mkdir -p "$source/test/i00/performance"
+  for file in donor-equality.mjs verify-scope.mjs scope-security.mjs; do
+    cp "$REPO_ROOT/test/i00/$file" "$source/test/i00/$file"
+  done
+  for file in contract.mjs local-acceptance.mjs local-proxy-soak.mjs app-probe.mjs schema.v1.json browser-receipt.schema.v2.json browser-measurement.schema.v1.json browser-capture.schema.v3.json browser-restart-measurement.schema.v1.json; do
+    cp "$REPO_ROOT/test/i00/performance/$file" "$source/test/i00/performance/$file"
+  done
+  node "$TEST_DIR/fixtures/make-complete-acceptance.mjs" "$source" "$receipt" "$sha" "$tree" >/dev/null
 }
 
 assemble_fixture_release() {
@@ -89,7 +81,6 @@ assemble_fixture_release() {
     --tested-sha "$sha" \
     --tested-receipt "$root/tested.json" \
     --built-at-utc 2026-07-13T00:00:00Z \
-    --schema-version 7 \
     --config-revision config-fixture \
     --model-revision UNAVAILABLE \
     --simulation-source >/dev/null

@@ -1,11 +1,9 @@
-import { useRef, useState } from 'react';
 import { IconBook } from '../components/Icons';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import { TokenIcon } from '../components/TokenIcon';
-import { Seg } from '../components/px';
-import { fmtDateTime, fmtMoney, fmtPrice, timeAgo } from '../format';
+import { fmtDateTime, fmtMoney, timeAgo } from '../format';
 import { useStore } from '../store';
-import type { AppConfig, LedgerEvent, PreviewResult, RiskCheck } from '../types';
+import type { AppConfig, LedgerEvent } from '../types';
 import './Risk.css';
 
 type LimitKey =
@@ -15,8 +13,6 @@ type LimitKey =
   | 'maxOpenOrders'
   | 'cooldownSec'
   | 'staleOrderMaxMin';
-
-type LimitDraft = Partial<Record<LimitKey, string>>;
 
 type GateCondition = {
   id: string;
@@ -42,29 +38,6 @@ const LIMIT_FIELDS: {
   { key: 'staleOrderMaxMin', label: 'Stale Order Age', unit: 'Min', min: 1, step: '1', reason: 'Advisory age threshold for supplied order evidence.' },
 ];
 
-const RISK_CHECK_LABELS: Record<string, string> = {
-  risk_config_valid: 'Risk Configuration',
-  order_intent_valid: 'Order Intent',
-  kill_switch_off: 'Kill Switch',
-  funds_access_unlocked: 'Funds Access',
-  automation_running: 'Automation',
-  live_trading_enabled: 'Legacy Live Setting',
-  symbol_allowed: 'Allowlist',
-  symbol_not_blocked: 'Blocklist',
-  symbol_blocked: 'Blocklist',
-  notional_known: 'Order Notional',
-  max_order_notional: 'Per-Order Notional',
-  max_daily_notional: 'Daily Notional',
-  daily_notional_state_known: 'Daily Notional State',
-  daily_loss_limit: 'Daily Loss',
-  daily_loss_basis_known: 'Daily Loss Basis',
-  max_daily_loss: 'Daily Loss',
-  max_open_orders: 'Open Orders',
-  cooldown: 'Cooldown',
-  exchange_filters: 'Exchange Filters',
-  stale_order: 'Stale Order',
-};
-
 const STAGE_LABELS: Record<string, string> = {
   risk_decision: 'Risk Decision',
   preview: 'Validate Only',
@@ -73,34 +46,9 @@ const STAGE_LABELS: Record<string, string> = {
   order_response: 'Order Response',
 };
 
-function sanitizeSymbol(raw: string): string {
-  return raw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
-}
-
-function uniqueSymbols(list: string[]): string[] {
-  return [...new Set(list.map(sanitizeSymbol).filter((symbol) => symbol.length >= 4))];
-}
-
 function configNumber(config: AppConfig, key: LimitKey): number {
   const value = config[key];
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
-}
-
-function limitValue(config: AppConfig, draft: LimitDraft, key: LimitKey): string {
-  return draft[key] ?? String(configNumber(config, key));
-}
-
-function parseLimitDraft(draft: LimitDraft): Partial<AppConfig> {
-  const patch: Partial<AppConfig> = {};
-  const integerKeys = new Set<LimitKey>(['maxOpenOrders', 'cooldownSec', 'staleOrderMaxMin']);
-  for (const field of LIMIT_FIELDS) {
-    if (draft[field.key] === undefined) continue;
-    const value = Number(draft[field.key]);
-    if (Number.isFinite(value) && (!integerKeys.has(field.key) || Number.isInteger(value))) {
-      (patch as Record<LimitKey, number>)[field.key] = value;
-    }
-  }
-  return patch;
 }
 
 function sentenceCase(value: string): string {
@@ -121,10 +69,6 @@ function cleanRiskText(value: string): string {
       .replace(/\border response\b/g, 'order response')
       .replace(/\brisk decision\b/g, 'risk decision'),
   );
-}
-
-function riskCheckLabel(name: string): string {
-  return RISK_CHECK_LABELS[name] ?? sentenceCase(name.replace(/_/g, ' '));
 }
 
 function stageLabel(stage: string): string {
@@ -156,50 +100,8 @@ function utilization(value: number | null, limit: number): number {
   return Math.max(0, Math.min(100, (value / limit) * 100));
 }
 
-function RiskCheckTable({ checks }: { checks: RiskCheck[] }) {
-  if (checks.length === 0) {
-    return <div className="riskx-empty">The server returned no individual gate checks.</div>;
-  }
-
-  return (
-    <div className="riskx-check-table" role="table" aria-label="Validate-Only Checks">
-      <div className="riskx-check-head" role="row">
-        <span role="columnheader">Check</span>
-        <span role="columnheader">Result</span>
-        <span role="columnheader">Server Detail</span>
-      </div>
-      {checks.map((check) => (
-        <div className="riskx-check-row" role="row" key={check.name}>
-          <strong role="cell">{riskCheckLabel(check.name)}</strong>
-          <span role="cell" className={'riskx-result ' + (check.pass ? 'clear' : 'blocked')}>
-            <i aria-hidden="true" />
-            {check.pass ? 'Advisory Pass' : 'Advisory Fail'}
-          </span>
-          <span role="cell" className="riskx-detail" title={cleanRiskText(check.detail)}>
-            {cleanRiskText(check.detail)}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export function Risk() {
-  const { state, saveConfig, preview, setPage } = useStore();
-  const [draft, setDraft] = useState<LimitDraft>({});
-  const [allowInput, setAllowInput] = useState('');
-  const [blockInput, setBlockInput] = useState('');
-  const [probeSymbol, setProbeSymbol] = useState('BTCUSDT');
-  const [probeNotional, setProbeNotional] = useState('10');
-  const [probeSide, setProbeSide] = useState<'BUY' | 'SELL'>('BUY');
-  const [probeResult, setProbeResult] = useState<PreviewResult | null>(null);
-  const [probeBusy, setProbeBusy] = useState(false);
-  const [probeError, setProbeError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [policyBusy, setPolicyBusy] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const probeGeneration = useRef(0);
+  const { state, setPage } = useStore();
 
   if (!state) {
     return (
@@ -329,16 +231,6 @@ export function Risk() {
   const posture = 'halted';
   const postureLabel = 'Execution OWNER_GATED';
 
-  const dirtyLimitKeys = LIMIT_FIELDS.filter((field) => draft[field.key] !== undefined);
-  const invalidLimitKeys = LIMIT_FIELDS.filter((field) => {
-    const raw = draft[field.key];
-    if (raw === undefined) return false;
-    const value = Number(raw);
-    const requiresInteger = field.key === 'maxOpenOrders' || field.key === 'cooldownSec' || field.key === 'staleOrderMaxMin';
-    return raw.trim() === '' || !Number.isFinite(value) || value < field.min || (requiresInteger && !Number.isInteger(value));
-  });
-  const canSaveLimits = dirtyLimitKeys.length > 0 && invalidLimitKeys.length === 0;
-
   const rejections = [...state.events]
     .filter((event) => event.kind === 'risk_decision' && riskDecisionData(event).allowed === false)
     .sort((left, right) => right.ts - left.ts)
@@ -346,79 +238,6 @@ export function Risk() {
 
   const lastOrderText = state.risk.lastOrderTs ? timeAgo(state.risk.lastOrderTs) : 'No Order Yet';
   const lastOrderDetail = state.risk.lastOrderTs ? fmtDateTime(state.risk.lastOrderTs) : 'No order response is present in the ledger.';
-
-  const patchList = async (key: 'allowedSymbols' | 'blockedSymbols', list: string[]): Promise<boolean> => {
-    if (policyBusy) return false;
-    setPolicyBusy(true);
-    setSaveError(null);
-    try {
-      const next = await saveConfig({ [key]: uniqueSymbols(list) });
-      if (next) return true;
-      setSaveError('The server did not acknowledge the symbol-policy change.');
-      return false;
-    } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'The symbol-policy change failed.');
-      return false;
-    } finally {
-      setPolicyBusy(false);
-    }
-  };
-
-  const saveDraft = async () => {
-    if (!canSaveLimits || saving) return;
-    setSaving(true);
-    setSaved(false);
-    setSaveError(null);
-    try {
-      const next = await saveConfig(parseLimitDraft(draft));
-      if (!next) {
-        setSaveError('The server did not acknowledge the risk-limit change. Your draft was kept.');
-        return;
-      }
-      setDraft({});
-      setSaved(true);
-    } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'The risk-limit change failed. Your draft was kept.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const runProbe = async () => {
-    const symbol = sanitizeSymbol(probeSymbol);
-    const amount = Number(probeNotional);
-    setProbeError(null);
-    setProbeResult(null);
-
-    if (!/^[A-Z0-9]{4,20}$/.test(symbol)) {
-      setProbeError('Enter a valid Binance symbol such as BTCUSDT.');
-      return;
-    }
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setProbeError('Enter a positive USDT notional.');
-      return;
-    }
-
-    const generation = ++probeGeneration.current;
-    setProbeBusy(true);
-    try {
-      const result = await preview({ symbol, side: probeSide, type: 'MARKET', quoteQty: amount });
-      if (generation !== probeGeneration.current) return;
-      if (!result) {
-        setProbeError('The server did not return a validate-only result.');
-        return;
-      }
-
-      setProbeResult(result);
-      if (result.errors.length > 0) setProbeError(result.errors.map(cleanRiskText).join(' / '));
-    } catch (error) {
-      if (generation === probeGeneration.current) {
-        setProbeError(error instanceof Error ? error.message : 'The validate-only check failed.');
-      }
-    } finally {
-      if (generation === probeGeneration.current) setProbeBusy(false);
-    }
-  };
 
   return (
     <div className="container page riskx-page">
@@ -434,10 +253,6 @@ export function Risk() {
           </div>
 
         </header>
-
-        <ProductSurfaceAdapter surfaceId="risk" />
-
-        {saveError ? <div className="riskx-probe-error" role="alert">{saveError}</div> : null}
 
         <div className="riskx-summary" aria-label="Risk Summary">
           <div className="riskx-summary-cell">
@@ -463,6 +278,8 @@ export function Risk() {
             <small>{lastOrderText} · {lastOrderDetail}</small>
           </div>
         </div>
+
+        <ProductSurfaceAdapter surfaceId="risk" />
 
         <section className="riskx-section">
           <header className="riskx-section-head">
@@ -533,33 +350,10 @@ export function Risk() {
           <header className="riskx-section-head">
             <div>
               <h2>Limits</h2>
-              <p>Local validate-only policy inputs. Saving them grants no execution authority.</p>
+              <p>Read-only compatibility snapshot. Canonical Product controls own every operational risk-policy change.</p>
             </div>
             <div className="riskx-section-actions">
-              {saved && dirtyLimitKeys.length === 0 ? <span className="riskx-saved"><i aria-hidden="true" />Saved</span> : null}
-              {dirtyLimitKeys.length > 0 ? (
-                <>
-                  <button
-                    type="button"
-                    className="riskx-button"
-                    onClick={() => {
-                      setDraft({});
-                      setSaved(false);
-                    }}
-                  >
-                    Discard
-                  </button>
-                  <button
-                    type="button"
-                    className="riskx-button primary"
-                    disabled={!canSaveLimits || saving}
-                    title={invalidLimitKeys.length ? 'Fix: ' + invalidLimitKeys.map((field) => field.label).join(', ') : 'Save server limits'}
-                    onClick={saveDraft}
-                  >
-                    {saving ? 'Saving…' : 'Save Changes'}
-                  </button>
-                </>
-              ) : null}
+              <span className="riskx-result blocked"><i aria-hidden="true" />CONTROL_PREVIEW_REQUIRED</span>
             </div>
           </header>
           <div className="riskx-limit-table" role="table" aria-label="Risk Limits">
@@ -569,27 +363,23 @@ export function Risk() {
               <span role="columnheader">Current Value</span>
             </div>
             {LIMIT_FIELDS.map((field) => {
-              const dirty = draft[field.key] !== undefined;
-              const invalid = invalidLimitKeys.some((candidate) => candidate.key === field.key);
               return (
-                <label className={'riskx-limit-row' + (dirty ? ' dirty' : '')} role="row" key={field.key}>
+                <label className="riskx-limit-row" role="row" key={field.key}>
                   <strong role="cell">
                     {field.label}
-                    {dirty ? <i aria-label="Unsaved change" /> : null}
                   </strong>
                   <span role="cell" className="riskx-detail">{field.reason}</span>
                   <span role="cell" className="riskx-limit-input">
                     <input
-                      className={invalid ? 'invalid' : ''}
                       aria-label={field.label}
+                      aria-readonly="true"
                       type="number"
                       min={field.min}
                       step={field.step}
-                      value={limitValue(config, draft, field.key)}
-                      onChange={(event) => {
-                        setSaved(false);
-                        setDraft({ ...draft, [field.key]: event.target.value });
-                      }}
+                      value={String(configNumber(config, field.key))}
+                      readOnly
+                      disabled
+                      title="OWNER_GATED · CONTROL_PREVIEW_REQUIRED"
                     />
                     <em>{field.unit}</em>
                   </span>
@@ -603,8 +393,9 @@ export function Risk() {
           <header className="riskx-section-head">
             <div>
               <h2>Symbol Policy</h2>
-              <p>Local advisory policy for validate-only intent; an explicit block always wins.</p>
+              <p>Read-only advisory truth. Symbol-policy mutation is OWNER_GATED and requires the canonical control-preview protocol.</p>
             </div>
+            <span className="riskx-result blocked"><i aria-hidden="true" />CONTROL_PREVIEW_REQUIRED</span>
           </header>
 
           <div className="riskx-policy-row">
@@ -612,40 +403,18 @@ export function Risk() {
               <strong>Allowed Symbols</strong>
               <span>{config.allowedSymbols.length ? String(config.allowedSymbols.length) + ' symbols can enter validation.' : 'No symbol can enter validation.'}</span>
             </div>
-            <div className="riskx-symbol-entry">
-              <input
-                aria-label="Add Allowed Symbol"
-                placeholder="BTCUSDT"
-                value={allowInput}
-                onChange={(event) => setAllowInput(sanitizeSymbol(event.target.value))}
-                spellCheck={false}
-              />
-              <button
-                type="button"
-                className="riskx-button primary"
-                disabled={policyBusy || allowInput.length < 4 || config.allowedSymbols.includes(allowInput)}
-                onClick={async () => {
-                  if (await patchList('allowedSymbols', [...config.allowedSymbols, allowInput])) setAllowInput('');
-                }}
-              >
-                Allow
-              </button>
-            </div>
+            <span className="riskx-result blocked">OWNER_GATED</span>
           </div>
           <div className="riskx-symbol-list" aria-label="Allowed Symbols">
             {config.allowedSymbols.length ? config.allowedSymbols.map((symbol) => (
-              <button
-                type="button"
+              <span
                 key={symbol}
                 className="riskx-symbol-chip"
-                disabled={policyBusy}
-                title={'Remove ' + symbol + ' from allowed symbols'}
-                onClick={() => void patchList('allowedSymbols', config.allowedSymbols.filter((candidate) => candidate !== symbol))}
+                title={symbol + ' is recorded in the read-only allowlist'}
               >
                 <TokenIcon symbol={symbol} size={18} />
                 <span>{symbol}</span>
-                <b aria-hidden="true">×</b>
-              </button>
+              </span>
             )) : <span className="riskx-policy-empty">Allowlist Empty</span>}
           </div>
 
@@ -654,114 +423,22 @@ export function Risk() {
               <strong>Blocked Symbols</strong>
               <span>{config.blockedSymbols.length ? String(config.blockedSymbols.length) + ' symbols are explicitly blocked.' : 'No symbol-specific blocks are active.'}</span>
             </div>
-            <div className="riskx-symbol-entry">
-              <input
-                aria-label="Add Blocked Symbol"
-                placeholder="DOGEUSDT"
-                value={blockInput}
-                onChange={(event) => setBlockInput(sanitizeSymbol(event.target.value))}
-                spellCheck={false}
-              />
-              <button
-                type="button"
-                className="riskx-button danger"
-                disabled={policyBusy || blockInput.length < 4 || config.blockedSymbols.includes(blockInput)}
-                onClick={async () => {
-                  if (await patchList('blockedSymbols', [...config.blockedSymbols, blockInput])) setBlockInput('');
-                }}
-              >
-                Block
-              </button>
-            </div>
+            <span className="riskx-result blocked">OWNER_GATED</span>
           </div>
           <div className="riskx-symbol-list" aria-label="Blocked Symbols">
             {config.blockedSymbols.length ? config.blockedSymbols.map((symbol) => (
-              <button
-                type="button"
+              <span
                 key={symbol}
                 className="riskx-symbol-chip blocked"
-                disabled={policyBusy}
-                title={'Remove ' + symbol + ' from blocked symbols'}
-                onClick={() => void patchList('blockedSymbols', config.blockedSymbols.filter((candidate) => candidate !== symbol))}
+                title={symbol + ' is recorded in the read-only blocklist'}
               >
                 <TokenIcon symbol={symbol} size={18} />
                 <span>{symbol}</span>
-                <b aria-hidden="true">×</b>
-              </button>
+              </span>
             )) : <span className="riskx-policy-empty">No Blocks</span>}
           </div>
         </section>
 
-        <section className="riskx-section riskx-probe-section">
-          <header className="riskx-section-head">
-            <div>
-              <h2>Validate Only</h2>
-              <p>Evaluates hypothetical intent. No signed call, private read, borrow, transfer, or order is possible.</p>
-            </div>
-            {probeResult ? (
-              <span className={'riskx-probe-state ' + (probeResult.risk.allowed ? 'clear' : 'blocked')}>
-                <i aria-hidden="true" />
-                {probeResult.risk.allowed ? 'Advisory Pass' : 'Advisory Reject'}
-              </span>
-            ) : null}
-          </header>
-
-          <div className="riskx-probe-form">
-            <label>
-              <span>Symbol</span>
-              <input value={probeSymbol} onChange={(event) => setProbeSymbol(sanitizeSymbol(event.target.value))} spellCheck={false} />
-            </label>
-            <label>
-              <span>Side</span>
-              <Seg
-                value={probeSide}
-                options={[
-                  { id: 'BUY', label: 'Buy' },
-                  { id: 'SELL', label: 'Sell' },
-                ]}
-                onChange={setProbeSide}
-              />
-            </label>
-            <label>
-              <span>Notional</span>
-              <span className="riskx-notional-input">
-                <input type="number" min="0" step="0.01" value={probeNotional} onChange={(event) => setProbeNotional(event.target.value)} />
-                <em>USDT</em>
-              </span>
-            </label>
-            <button type="button" className="riskx-button primary riskx-probe-button" disabled={probeBusy} onClick={runProbe}>
-              {probeBusy ? 'Checking…' : 'Run Validate-Only Check'}
-            </button>
-          </div>
-
-          {probeError ? <div className="riskx-probe-error">{probeError}</div> : null}
-          {probeResult ? (
-            <div className="riskx-probe-result">
-              <div className="riskx-probe-summary">
-                <span className="riskx-probe-asset">
-                  <TokenIcon symbol={probeResult.symbol} size={28} />
-                  <span>
-                    <strong>{probeResult.symbol}</strong>
-                    <small>{probeResult.side === 'BUY' ? 'Buy' : 'Sell'} · Market</small>
-                  </span>
-                </span>
-                <span>
-                  <small>Estimated Notional</small>
-                  <strong>{fmtMoney(probeResult.estNotionalUsd)}</strong>
-                </span>
-                <span>
-                  <small>Effective Price</small>
-                  <strong>{fmtPrice(probeResult.effectivePrice)}</strong>
-                </span>
-                <span>
-                  <small>Quantity</small>
-                  <strong>{probeResult.quantity === null ? 'Unavailable' : String(probeResult.quantity)}</strong>
-                </span>
-              </div>
-              <RiskCheckTable checks={probeResult.risk.checks} />
-            </div>
-          ) : null}
-        </section>
       </section>
 
     </div>

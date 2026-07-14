@@ -4,18 +4,22 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  OWNER_DIRECTIVE_PATHS,
+  sealedOwnerDirectiveSha256,
+  verifySealedOwnerDirective,
+} from './sealed-owner-evidence.mjs';
+
+export {
+  sealedOwnerDirectiveSha256,
+  verifySealedOwnerDirective,
+} from './sealed-owner-evidence.mjs';
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const FULL_SHA = /^[a-f0-9]{40}$/;
 const SHA256 = /^[a-f0-9]{64}$/;
 const SAFE_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._/-]+$/;
 const LIVING_DIRECTOR_PATHS = Object.freeze(['QL_DIRECTOR_STATE.md', 'QL_PARALLEL_DAG.md']);
-const OWNER_DIRECTIVE_PATHS = Object.freeze([
-  'I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md',
-  'IP_RUNTIME.md',
-  'IP_CONTROL.md',
-  'IP_OPS.md',
-  'IP_PROOF.md',
-]);
 
 function git(args, encoding = 'utf8') {
   return execFileSync('git', args, { cwd: ROOT, encoding, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -224,9 +228,11 @@ export function verifyLivingDirectorInputAcceptance(document) {
     ruling: document?.ruling === 'D-LAUNCH-7',
     mode: document?.mode === 'LATEST_CURRENT_MAIN_TOUCH',
     sourceRef: typeof document?.sourceRef === 'string' && document.sourceRef === 'current-main',
+    sourceCutoffCommit: FULL_SHA.test(document?.sourceCutoffCommit ?? ''),
     rulingCommit: FULL_SHA.test(document?.rulingCommit ?? ''),
     historicalPacketPinsPreserved: document?.historicalPacketPinsPreserved === true,
-    finalRealAdapterRepinRequired: document?.finalRealAdapterRepinRequired === true,
+    finalRealAdapterRepinRequired: document?.finalRealAdapterRepinRequired === false,
+    finalRealAdapterRepinCompleted: document?.finalRealAdapterRepinCompleted === true,
     assemblyCopiesRejected: document?.acceptAssemblyWorkingTreeCopies === false,
     livingPathSet: Array.isArray(document?.livingDirectorInputs)
       && sameMembers(document.livingDirectorInputs.map((entry) => entry.path), LIVING_DIRECTOR_PATHS),
@@ -234,7 +240,11 @@ export function verifyLivingDirectorInputAcceptance(document) {
       && sameMembers(document.ownerDirectives.map((entry) => entry.path), OWNER_DIRECTIVE_PATHS),
   });
   const structurePassed = Object.values(structuralChecks).every(Boolean);
-  const sourceTip = structuralChecks.sourceRef ? safeGit(['rev-parse', document.sourceRef])?.trim() ?? null : null;
+  const liveSourceTip = structuralChecks.sourceRef ? safeGit(['rev-parse', document.sourceRef])?.trim() ?? null : null;
+  const sourceTip = structuralChecks.sourceCutoffCommit ? document.sourceCutoffCommit : null;
+  const cutoffExists = sourceTip !== null && gitExitZero(['cat-file', '-e', `${sourceTip}^{commit}`]);
+  const cutoffReachable = cutoffExists && liveSourceTip !== null
+    && gitExitZero(['merge-base', '--is-ancestor', sourceTip, liveSourceTip]);
   const rulingExists = structuralChecks.rulingCommit && gitExitZero(['cat-file', '-e', `${document.rulingCommit}^{commit}`]);
   const rulingReachable = rulingExists && sourceTip !== null
     && gitExitZero(['merge-base', '--is-ancestor', document.rulingCommit, sourceTip]);
@@ -248,7 +258,7 @@ export function verifyLivingDirectorInputAcceptance(document) {
     const observedFieldsValid = FULL_SHA.test(entry.observedLatestCommit ?? '')
       && FULL_SHA.test(entry.observedGitBlob ?? '') && SHA256.test(entry.observedSha256 ?? '');
     const latestCommit = safePath && sourceTip !== null
-      ? safeGit(['log', '-1', '--format=%H', document.sourceRef, '--', entry.path])?.trim() || null
+      ? safeGit(['log', '-1', '--format=%H', sourceTip, '--', entry.path])?.trim() || null
       : null;
     const latestCommitReachable = latestCommit !== null && sourceTip !== null
       && gitExitZero(['merge-base', '--is-ancestor', latestCommit, sourceTip]);
@@ -269,7 +279,7 @@ export function verifyLivingDirectorInputAcceptance(document) {
       historicalPinValid,
       latestCommitReachable,
       observationMatches,
-      passed: structurePassed && rulingVerified && safePath && historicalPinValid
+      passed: structurePassed && cutoffReachable && rulingVerified && safePath && historicalPinValid
         && latestCommitReachable && observationMatches,
     });
   });
@@ -277,19 +287,25 @@ export function verifyLivingDirectorInputAcceptance(document) {
   const directiveResults = (Array.isArray(document?.ownerDirectives) ? document.ownerDirectives : []).map((entry) => {
     const safePath = OWNER_DIRECTIVE_PATHS.includes(entry.path) && SAFE_PATH.test(entry.path);
     const expectedSha256Valid = SHA256.test(entry.sha256 ?? '');
-    const absolute = safePath ? path.join(ROOT, entry.path) : null;
-    let observedSha256 = null;
+    const sealedSha256 = safePath ? sealedOwnerDirectiveSha256(entry.path) : null;
+    let evidence = null;
+    let evidenceError = null;
     try {
-      observedSha256 = absolute === null ? null : digest(readFileSync(absolute));
-    } catch {
-      observedSha256 = null;
+      evidence = safePath ? verifySealedOwnerDirective(ROOT, entry.path) : null;
+    } catch (error) {
+      evidenceError = error instanceof Error ? error.message : String(error);
     }
     return Object.freeze({
       path: entry.path,
       expectedSha256: entry.sha256,
-      observedSha256,
+      sealedSha256,
+      observedSha256: evidence?.sha256 ?? null,
+      evidenceMode: evidence?.evidenceMode ?? 'MISSING',
+      evidenceError,
       safePath,
-      passed: structurePassed && safePath && expectedSha256Valid && observedSha256 === entry.sha256,
+      passed: structurePassed && safePath && expectedSha256Valid
+        && sealedSha256 === entry.sha256
+        && evidence?.sha256 === sealedSha256,
     });
   });
 
@@ -298,14 +314,18 @@ export function verifyLivingDirectorInputAcceptance(document) {
     ruling: document?.ruling ?? null,
     mode: document?.mode ?? null,
     sourceRef: document?.sourceRef ?? null,
+    sourceCutoffCommit: document?.sourceCutoffCommit ?? null,
     sourceTip,
+    liveSourceTip,
+    cutoffExists,
+    cutoffReachable,
     rulingCommit: document?.rulingCommit ?? null,
     structuralChecks,
     structurePassed,
     rulingVerified,
     livingResults: Object.freeze(livingResults),
     directiveResults: Object.freeze(directiveResults),
-    passed: structurePassed && rulingVerified
+    passed: structurePassed && cutoffReachable && rulingVerified
       && livingResults.length === LIVING_DIRECTOR_PATHS.length && livingResults.every((entry) => entry.passed)
       && directiveResults.length === OWNER_DIRECTIVE_PATHS.length && directiveResults.every((entry) => entry.passed),
   });

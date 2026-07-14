@@ -324,6 +324,23 @@ function validateSummaries(summaries: SystemSupervisorSummaries): void {
 
   const ledger = summaries.ledger;
   if (ledger.writable !== null && typeof ledger.writable !== 'boolean') throw new TypeError('ledger.writable is invalid');
+  if (!['AVAILABLE', 'UNAVAILABLE', 'MALFORMED', 'MISMATCH'].includes(ledger.schemaCompatibilityState)) {
+    throw new TypeError('ledger.schemaCompatibilityState is invalid');
+  }
+  if (ledger.schemaCompatibilityState === 'AVAILABLE') {
+    if (!Number.isSafeInteger(ledger.currentSchemaVersion) || (ledger.currentSchemaVersion as number) < 1
+        || !Number.isSafeInteger(ledger.rollbackFloor) || (ledger.rollbackFloor as number) < 0
+        || (ledger.rollbackFloor as number) > (ledger.currentSchemaVersion as number)
+        || ledger.schemaCompatibilityReason !== null) {
+      throw new TypeError('ledger schema compatibility available shape is invalid');
+    }
+  } else if (ledger.currentSchemaVersion !== null
+      || ledger.rollbackFloor !== null
+      || typeof ledger.schemaCompatibilityReason !== 'string'
+      || !CODE_PATTERN.test(ledger.schemaCompatibilityReason)
+      || ledger.truthLabel !== 'UNAVAILABLE') {
+    throw new TypeError('ledger schema compatibility failure shape is invalid');
+  }
   optionalString('ledger.lastEventId', ledger.lastEventId, 256);
   optionalTimestamp('ledger.lastPersistedAtMs', ledger.lastPersistedAtMs);
   optionalString('ledger.checkpointRevision', ledger.checkpointRevision, 256);

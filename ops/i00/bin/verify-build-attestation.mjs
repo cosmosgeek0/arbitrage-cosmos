@@ -53,6 +53,12 @@ function equalJson(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function isMeasuredUtc(value) {
+  return typeof value === 'string'
+    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value)
+    && Number.isFinite(Date.parse(value));
+}
+
 export function expectedBuildAttestation({
   testedSha,
   sourceTree,
@@ -121,7 +127,7 @@ export function verifyBuildAttestation({
   if (!equalJson(attestation.requiredCommands, REQUIRED_BUILD_COMMANDS)) {
     fail('build attestation requiredCommands must be the exact ordered successful command set');
   }
-  if (!isUtc(attestation.testsCompletedAtUtc) || !isUtc(attestation.buildCompletedAtUtc)
+  if (!isMeasuredUtc(attestation.testsCompletedAtUtc) || !isUtc(attestation.buildCompletedAtUtc)
       || Date.parse(attestation.testsCompletedAtUtc) > Date.parse(attestation.buildCompletedAtUtc)) {
     fail('build attestation UTC chronology is invalid');
   }

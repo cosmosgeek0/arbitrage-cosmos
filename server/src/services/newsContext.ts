@@ -2205,6 +2205,14 @@ async function fetchText(url: string, init?: RequestInit): Promise<string> {
 
 type ExpectedBody = 'json' | 'html' | 'xml';
 
+/** Pure policy seam: this service performs public, read-only GETs only. */
+export function normalizeNewsContextRequestMethod(method: unknown): 'GET' {
+  if (method !== undefined && (typeof method !== 'string' || method.length === 0 || method.toUpperCase() !== 'GET')) {
+    throw new Error('News context upstream requests are GET-only');
+  }
+  return 'GET';
+}
+
 function fetchHostAllowlist(): Set<string> {
   if (configuredFetchHosts) return configuredFetchHosts;
   const hosts = new Set<string>([
@@ -2292,6 +2300,7 @@ async function readBoundedText(res: Response): Promise<string> {
 }
 
 async function fetchBodyOnce(urlValue: string, init: RequestInit | undefined, expected: ExpectedBody): Promise<string> {
+  const method = normalizeNewsContextRequestMethod((init as { method?: unknown } | undefined)?.method);
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
   const onCallerAbort = (): void => ctrl.abort();
@@ -2301,6 +2310,7 @@ async function fetchBodyOnce(urlValue: string, init: RequestInit | undefined, ex
     for (let redirects = 0; redirects <= 3; redirects += 1) {
       const res = await fetch(current, {
         ...init,
+        method,
         headers: {
           'User-Agent': USER_AGENT,
           'Accept-Language': 'en-US,en;q=0.9',
@@ -2348,6 +2358,9 @@ function retryableFetchError(err: unknown): boolean {
 }
 
 async function fetchBodyWithRetry(urlValue: string, init: RequestInit | undefined, expected: ExpectedBody): Promise<string> {
+  // Reject before URL/cache/single-flight handling so a hostile method cannot
+  // join an already-running GET or create policy state without owner approval.
+  normalizeNewsContextRequestMethod((init as { method?: unknown } | undefined)?.method);
   const url = validateFetchUrl(urlValue);
   const accept = new Headers(init?.headers).get('accept') ?? '';
   const key = `${expected}:${url.toString()}:${accept.slice(0, 256)}`;

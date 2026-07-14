@@ -47,7 +47,7 @@ cat > "$TEST_TMP/host.json" <<'JSON'
 {"source":"TARGET_HOST_OWNER_READBACK","account":"simulation-account","targetHost":"fixture-host.internal","environment":"simulation","freeBytes":10000000,"backupReserveBytes":1000,"sqliteVersion":"3.53.3","evidenceSha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","observedAtUtc":"2026-07-13T00:00:00Z"}
 JSON
 cat > "$TEST_TMP/supervisor.json" <<'JSON'
-{"source":"CANONICAL_SUPERVISOR_READBACK","observedAtUtc":"2026-07-13T00:00:45Z","validUntilUtc":"2026-07-13T00:10:00Z","deploymentFrozen":false,"exposureState":"NONE","ambiguityState":"NONE","recoveryState":"NONE","currentSchemaVersion":7,"rollbackFloor":5}
+{"source":"CANONICAL_SUPERVISOR_READBACK","observedAtUtc":"2026-07-13T00:00:45Z","validUntilUtc":"2026-07-13T00:10:00Z","deploymentFrozen":false,"exposureState":"NONE","ambiguityState":"NONE","recoveryState":"NONE","currentSchemaVersion":1,"rollbackFloor":1}
 JSON
 cat > "$TEST_TMP/env" <<EOF
 COSMOS_ROOT=$SIMULATION_ROOT/target
@@ -115,7 +115,7 @@ for mutation in exposure ambiguity recovery frozen; do
   assert_failure "${COMMON_ENV[@]}" "$INSTALLED_I00/bin/release-switch.sh" --release "$RELEASE_B" "${SWITCH_COMMON[@]}"
   assert_eq "$(readlink "$SIMULATION_ROOT/target/current")" "$CURRENT_BEFORE"
   cat > "$TEST_TMP/supervisor.json" <<'JSON'
-{"source":"CANONICAL_SUPERVISOR_READBACK","observedAtUtc":"2026-07-13T00:00:45Z","validUntilUtc":"2026-07-13T00:10:00Z","deploymentFrozen":false,"exposureState":"NONE","ambiguityState":"NONE","recoveryState":"NONE","currentSchemaVersion":7,"rollbackFloor":5}
+{"source":"CANONICAL_SUPERVISOR_READBACK","observedAtUtc":"2026-07-13T00:00:45Z","validUntilUtc":"2026-07-13T00:10:00Z","deploymentFrozen":false,"exposureState":"NONE","ambiguityState":"NONE","recoveryState":"NONE","currentSchemaVersion":1,"rollbackFloor":1}
 JSON
 done
 

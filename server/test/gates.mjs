@@ -10,6 +10,10 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import {
+  deriveI00MeaningfulAdvanceEvidence,
+  projectI00Health,
+} from '../dist/systemIntegration/application/health.js';
 
 const HOST = '127.0.0.1';
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -220,17 +224,41 @@ check(
   !/ledger\.on\(\s*['"]event['"][\s\S]{0,200}type:\s*['"]event['"]/.test(serverIndex)
 );
 check(
-  'startup admits only market-owned auxiliaries from canonical lifecycle truth',
-  /component\.componentId\s*===\s*['"]market-universe['"]/.test(serverIndex) &&
-    /market\.readiness\s*===\s*['"]READY['"]/.test(serverIndex) &&
+  'startup admits the existing liquidation owner only through the managed market lifecycle',
+  /marketAuxiliary:\s*Object\.freeze\(\{[\s\S]*?start:\s*\(\)\s*=>\s*startLiquidationCollector[\s\S]*?stop:\s*\(\)\s*=>\s*stopLiquidationCollector/.test(serverIndex) &&
     /server\.listen\([\s\S]*?startServerTimers\(\);/.test(serverIndex) &&
+    !/admitMarketOwnedAuxiliaries|stopMarketOwnedAuxiliaries/.test(serverIndex) &&
     !/startNewsRefreshLoop|primeIconStartTimer|initialRefreshTimer|warmProfileStartTimer/.test(serverIndex)
+);
+check(
+  'legacy proposal Scanner has no production import, construction, tick, status, or mutation reachability',
+  !/from\s+['"]\.\/engine\/scanner\.js['"]/.test(serverIndex) &&
+    !/\bnew\s+Scanner\s*\(/.test(serverIndex) &&
+    !/\bscanner\.(?:tick|statusOf|proposals|watchingCount|dismiss)\s*\(/.test(serverIndex) &&
+    !/\b(?:scannerTimer|runScannerTick)\b/.test(serverIndex)
+);
+check('liquidation lifecycle has no independent admission timer', !/liquidationCollectorStarted/.test(serverIndex));
+check(
+  'production mounts fail-closed managed runtime-effect owner readback',
+  /readControlRuntimeEffect:\s*\([^)]*effectId[^)]*mutation[^)]*\)\s*=>\s*\{[\s\S]*?readManagedControlRuntimeEffect\(effectId, mutation, readManaged\(\)\)/.test(serverIndex)
+    && /if\s*\(readManaged\s*===\s*null\)\s*return\s*['"]UNKNOWN['"]/.test(serverIndex)
+);
+check(
+  'PnL integrity cannot become complete through vacuous every on an empty evidence set',
+  /const\s+integrityComplete\s*=\s*integrity\.length\s*>\s*0\s*&&\s*integrity\.every/.test(serverIndex) &&
+    /integrity\.length\s*===\s*0\)\s*integrityReasons\.push\(['"]NO_DURABLE_PNL_EVIDENCE['"]\)/.test(serverIndex)
+);
+check(
+  'private account and order availability require fresh authorized readbacks, not key presence',
+  /function\s+privateAccountTruthState[\s\S]*?account\.equity\(\)\.sourceFresh[\s\S]*?['"]AVAILABLE['"]/.test(serverIndex) &&
+    /function\s+privateOrderTruthState[\s\S]*?orders\.lastOrdersSyncTs[\s\S]*?ageMs\s*<=\s*60_000[\s\S]*?['"]AVAILABLE['"]/.test(serverIndex)
 );
 
 // ---------- boot server ----------
 console.log('\nBooting server (hostile ambient credentials, isolated data dir)…');
 const dataDir = mkdtempSync(path.join(tmpdir(), 'cosmos-gates-'));
 const privateEgressSentinel = path.join(dataDir, 'private-egress-attempts.log');
+const networkEgressSentinel = path.join(dataDir, 'network-egress-attempts.log');
 const child = spawn(process.execPath, ['--import', './server/test/private-egress-tripwire.mjs', 'server/dist/index.js'], {
   // Synthetic credentials are deliberate: the runtime must remain keyless and
   // owner-gated even if every common ambient credential source is populated.
@@ -257,6 +285,7 @@ const child = spawn(process.execPath, ['--import', './server/test/private-egress
     AWS_CONTROL_VALIDATE_COMMAND: 'true',
     NOTIFICATION_AWS_INGEST_TOKEN: 'sentinel-aws-notification-token-not-a-secret',
     PRIVATE_EGRESS_SENTINEL_FILE: privateEgressSentinel,
+    NETWORK_EGRESS_SENTINEL_FILE: networkEgressSentinel,
   },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
@@ -272,7 +301,7 @@ let booted = false;
 while (Date.now() < deadline) {
   if (spawnError || childFinished(child)) break;
   try {
-    const { body } = await get('/api/health');
+    const { body } = await get('/health/live');
     if (body?.ok) {
       booted = true;
       break;
@@ -288,31 +317,76 @@ if (!booted) {
   throw new Error(`app did not boot${spawnError ? `: ${spawnError.message}` : `: ${bootLog.slice(-500)}`}`);
 }
 
-// wait for a BTC price so notional estimation works
-const priceDeadline = Date.now() + 90_000;
-let priced = false;
-while (Date.now() < priceDeadline) {
-  const { body } = await get('/api/market/quote?symbol=BTCUSDT');
-  if (body?.last) {
-    priced = true;
-    break;
-  }
-  await new Promise((r) => setTimeout(r, 1000));
-}
-check('market data flows (BTC price)', priced, priced ? '' : bootLog.slice(-1_000));
+const isolatedQuote = await get('/api/market/quote?symbol=BTCUSDT');
+check(
+  'deterministic gate keeps public market truth unavailable without external egress',
+  isolatedQuote.status === 200 &&
+    isolatedQuote.body?.last === null &&
+    isolatedQuote.body?.book === null &&
+    isolatedQuote.body?.tradable === false
+);
 
 const health = (await get('/api/health')).body;
 check('keys absent → keysPresent=false', health.keysPresent === false);
 check('fresh boot mode is HALTED', health.mode === 'HALTED');
+check(
+  'legacy /api/health is explicitly process-liveness compatibility and never semantic readiness',
+  health.healthClass === 'PROCESS_LIVENESS_COMPATIBILITY' &&
+    health.readinessSemantics === 'NOT_EVALUATED' &&
+    health.canonicalReadinessEndpoint === '/health/ready' &&
+    health.ready === undefined
+);
 
 const state = (await get('/api/state')).body;
+check(
+  'legacy state is an explicit compatibility view of one canonical supervisor snapshot',
+  state.schemaVersion === 'legacy.state.compatibility.v2' &&
+    state.stateClass === 'COMPATIBILITY_VIEW' &&
+    state.readinessSemantics === 'NOT_EVALUATED' &&
+    state.canonicalReadinessEndpoint === '/health/ready' &&
+    state.canonicalSupervisorEndpoint === '/api/system-integration/supervisor' &&
+    state.canonicalSupervisor?.evaluatedAtMs <= state.now &&
+    state.mode === (state.config?.killSwitch || state.canonicalSupervisor?.control?.killSwitchEngaged ? 'HALTED' : 'MANUAL')
+);
 check('disconnected state: account is null', state.account === null);
+check(
+  'unconfigured private truth is null rather than a zero-position account',
+  state.privateAccountTruth === 'NOT_CONFIGURED' &&
+    state.privateOrderTruth === 'NOT_CONFIGURED' &&
+    state.positions === null &&
+    state.openOrders === null
+);
 check('disconnected state: binance.connected=false', state.binance.connected === false);
 check(
   'ambient Binance credentials cannot create a private runtime posture',
   state.binance.keysPresent === false && state.binance.userStream === 'off' && state.binance.keyFingerprint === null
 );
 check('state includes config/risk/events', !!state.config && !!state.risk && Array.isArray(state.events));
+check(
+  'legacy scanner compatibility state is explicit RETIRED with no active proposals or tick evidence',
+  state.scanner?.state === 'RETIRED' &&
+    state.scanner?.watching === 0 &&
+    state.scanner?.lastTickTs === null &&
+    Array.isArray(state.proposals) &&
+    state.proposals.length === 0
+);
+
+const proposalMutationEventsBefore = (await get('/api/events?kind=manual_action&limit=100')).body;
+const retiredProposalMutations = [
+  await post('/api/proposals/123/approve', {}),
+  await post('/api/proposals/123/reject', {}),
+];
+const proposalMutationEventsAfter = (await get('/api/events?kind=manual_action&limit=100')).body;
+check(
+  'legacy proposal approve and reject are permanent 410 RETIRED tombstones with zero Ledger mutation',
+  retiredProposalMutations.every((response) => (
+    response.status === 410 &&
+    response.body?.code === 'RETIRED' &&
+    response.body?.state === 'RETIRED' &&
+    response.body?.available === false
+  )) &&
+    JSON.stringify(proposalMutationEventsAfter) === JSON.stringify(proposalMutationEventsBefore)
+);
 const tradeReady = await get('/health/trade-ready');
 const processLive = await get('/health/live');
 check(
@@ -320,12 +394,75 @@ check(
   processLive.status === 200 && processLive.body?.ok === true
 );
 const dependencyReady = await get('/health/ready');
+const readinessSupervisor = (await get('/api/system-integration/supervisor')).body;
+const canonicalAdvanceOwnerIds = new Set(['public-usdm-source', 'market-universe']);
+const sameCutAdvance = deriveI00MeaningfulAdvanceEvidence(readinessSupervisor);
+const hostileReadiness = (kind) => {
+  const hostile = structuredClone(readinessSupervisor);
+  if (kind === 'WRONG_OWNER') {
+    const canonicalOwner = hostile.components.find((component) => canonicalAdvanceOwnerIds.has(component.componentId));
+    const wrongOwner = hostile.components.find((component) => component.componentId === 'basis-engine');
+    if (canonicalOwner && wrongOwner) {
+      Object.assign(wrongOwner, {
+        truthLabel: canonicalOwner.truthLabel,
+        authority: canonicalOwner.authority,
+        completeness: canonicalOwner.completeness,
+        desiredState: canonicalOwner.desiredState,
+        phase: canonicalOwner.phase,
+        readiness: canonicalOwner.readiness,
+        sourceTimestamp: structuredClone(canonicalOwner.sourceTimestamp),
+        freshness: structuredClone(canonicalOwner.freshness),
+        lastSuccessAtMs: hostile.evaluatedAtMs,
+      });
+    }
+    hostile.components = hostile.components.filter((component) => !canonicalAdvanceOwnerIds.has(component.componentId));
+  } else {
+    hostile.components = hostile.components.map((component) => {
+      if (!canonicalAdvanceOwnerIds.has(component.componentId)) return component;
+      component.lastSuccessAtMs = hostile.evaluatedAtMs;
+      if (kind === 'UNKNOWN') {
+        component.truthLabel = 'UNKNOWN';
+        component.authority = 'UNAVAILABLE';
+      } else if (component.freshness) {
+        component.freshness.state = 'STALE';
+        component.freshness.ageMs = (component.sourceTimestamp?.maxAgeMs ?? 1) + 1;
+      }
+      return component;
+    });
+  }
+  const advance = deriveI00MeaningfulAdvanceEvidence(hostile);
+  return { advance, projection: projectI00Health('READY', hostile, true, advance) };
+};
+const staleReadiness = hostileReadiness('STALE');
+const unknownReadiness = hostileReadiness('UNKNOWN');
+const wrongOwnerReadiness = hostileReadiness('WRONG_OWNER');
+const advanceProjectionSource = readFileSync('server/src/systemIntegration/application/health.ts', 'utf8');
+const advanceProjectionBody = advanceProjectionSource.slice(
+  advanceProjectionSource.indexOf('export function deriveI00MeaningfulAdvanceEvidence'),
+  advanceProjectionSource.indexOf('function unique'),
+);
+const readinessAdvanceChecks = {
+  endpointContract: dependencyReady.body?.kind === 'READY'
+    && typeof dependencyReady.body?.ok === 'boolean'
+    && dependencyReady.status === (dependencyReady.body.ok ? 200 : 503)
+    && (dependencyReady.body.ok || dependencyReady.body.reasonCodes?.length > 0),
+  noSyntheticAdvance: sameCutAdvance === null,
+  noCanonicalOwnerClaim: dependencyReady.body?.meaningfulAdvanceOwnerComponentId === null,
+  noObservedAtClaim: dependencyReady.body?.lastMeaningfulAdvanceAtMs === null,
+  noAgeClaim: dependencyReady.body?.meaningfulAdvanceAgeMs === null,
+  advanceFailureNamed: dependencyReady.body?.reasonCodes?.includes('MEANINGFUL_ADVANCE_NOT_SUPPLIED'),
+  hostileFailClosed: [staleReadiness, unknownReadiness, wrongOwnerReadiness].every(({ advance, projection }) => (
+    advance === null
+    && projection.ok === false
+    && projection.reasonCodes.includes('MEANINGFUL_ADVANCE_NOT_SUPPLIED')
+  )),
+  noAmbientProgress: !/(?:Date\.now|performance\.now|setTimeout|setInterval|setImmediate|queueMicrotask)\s*\(/.test(advanceProjectionBody),
+};
+const readinessAdvancePassed = Object.values(readinessAdvanceChecks).every(Boolean);
 check(
-  'canonical readiness fails closed without owner-supplied meaningful advance',
-  dependencyReady.status === 503 &&
-    dependencyReady.body?.ok === false &&
-    dependencyReady.body?.lastMeaningfulAdvanceAtMs === null &&
-    dependencyReady.body?.reasonCodes?.includes('MEANINGFUL_ADVANCE_NOT_SUPPLIED')
+  'canonical readiness fails closed without external source truth and rejects stale, unknown, wrong-owner, or inferred progress',
+  readinessAdvancePassed,
+  readinessAdvancePassed ? '' : JSON.stringify({ readinessAdvanceChecks, dependencyReady }),
 );
 check(
   'canonical trade readiness preserves the live-execution barrier',
@@ -364,18 +501,25 @@ check(
     multiDeviceSessions.sessions[0]?.current === true,
 );
 
-// oversized order must be rejected by risk
-const big = (await post('/api/trade/preview', { symbol: 'BTCUSDT', side: 'BUY', type: 'MARKET', quoteQty: 100 })).body;
-const bigNotional = big?.risk?.checks?.find((c) => c.name === 'max_order_notional');
-check('risk rejects oversized order', bigNotional?.pass === false, bigNotional?.detail);
-
-// tiny order passes the notional check (other checks may still fail — that's correct)
-const tiny = (await post('/api/trade/preview', { symbol: 'BTCUSDT', side: 'BUY', type: 'MARKET', quoteQty: 10 })).body;
-const tinyNotional = tiny?.risk?.checks?.find((c) => c.name === 'max_order_notional');
-check('risk allows tiny valid order (notional check)', tinyNotional?.pass === true, tinyNotional?.detail);
-check('preview validates Binance filters', tiny?.filters?.minNotional !== undefined);
-check('kill switch blocks in risk checks', tiny?.risk?.checks?.find((c) => c.name === 'kill_switch_off')?.pass === false);
-check('empty allowlist blocks symbol', tiny?.risk?.checks?.find((c) => c.name === 'symbol_allowed')?.pass === false);
+const previewIntentsBefore = (await get('/api/events?kind=order_intent&limit=10')).body;
+const previewDecisionsBefore = (await get('/api/events?kind=risk_decision&limit=10')).body;
+const legacyPreview = await post('/api/trade/preview', {
+  symbol: 'BTCUSDT', side: 'BUY', type: 'MARKET', quoteQty: 100,
+});
+const previewIntentsAfter = (await get('/api/events?kind=order_intent&limit=10')).body;
+const previewDecisionsAfter = (await get('/api/events?kind=risk_decision&limit=10')).body;
+check(
+  'legacy trade preview is structurally unavailable without canonical Capital, Risk, and ticket owners',
+  legacyPreview.status === 503 &&
+    legacyPreview.body?.code === 'NOT_CONFIGURED' &&
+    legacyPreview.body?.truthState === 'UNAVAILABLE' &&
+    legacyPreview.body?.value === null &&
+    legacyPreview.body?.barrier === 'LIVE_EXECUTION_NOT_IMPLEMENTED' &&
+    legacyPreview.body?.missingAuthorities?.includes?.('CANONICAL_EXECUTION_TICKET') &&
+    legacyPreview.body?.risk === undefined &&
+    JSON.stringify(previewIntentsAfter) === JSON.stringify(previewIntentsBefore) &&
+    JSON.stringify(previewDecisionsAfter) === JSON.stringify(previewDecisionsBefore)
+);
 
 const send = await post('/api/trade/send', { symbol: 'BTCUSDT', side: 'BUY', type: 'MARKET', quoteQty: 10, confirmSymbol: 'BTCUSDT' });
 check(
@@ -388,19 +532,17 @@ check(
   testOrder.status === 410 && testOrder.body?.code === 'LIVE_EXECUTION_NOT_IMPLEMENTED'
 );
 
-// config persistence
-await post('/api/config', { maxOrderNotionalUsd: 15 });
+// Legacy config is display-only. Operational policy belongs to canonical
+// revisioned controls and cannot mutate through this compatibility route.
+const cfgBeforeOperationalBypass = (await get('/api/config')).body;
+const operationalConfig = await post('/api/config', { maxOrderNotionalUsd: 15 });
 const cfg = (await get('/api/config')).body;
 check(
-  'config saves while financial posture remains sealed',
-  cfg?.maxOrderNotionalUsd === 15 &&
-    cfg?.liveTradingEnabled === false &&
-    cfg?.fundsLocked === true &&
-    cfg?.controlModes?.funds === 'blocked' &&
-    cfg?.controlModes?.borrowing === 'blocked' &&
-    cfg?.controlModes?.liveOrders === 'blocked' &&
-    cfg?.borrowGuard?.newBorrowPaused === true &&
-    cfg?.borrowGuard?.repayOnly === true
+  'legacy config rejects operational policy with zero side effect',
+  operationalConfig.status === 409 &&
+    operationalConfig.body?.code === 'CONTROL_PREVIEW_REQUIRED' &&
+    operationalConfig.body?.fields?.includes?.('maxOrderNotionalUsd') &&
+    JSON.stringify(cfg) === JSON.stringify(cfgBeforeOperationalBypass)
 );
 
 const hostileConfig = await post('/api/config', {
@@ -410,62 +552,131 @@ const hostileConfig = await post('/api/config', {
   controlModes: { funds: 'allowed', borrowing: 'allowed', liveOrders: 'allowed' },
 });
 check(
-  'config arming request fails closed',
+  'config arming request is owner-gated before any legacy mutation',
   hostileConfig.status === 409 &&
-    hostileConfig.body?.code === 'LIVE_EXECUTION_NOT_IMPLEMENTED' &&
-    hostileConfig.body?.fields?.includes?.('controlModes.liveOrders')
+    hostileConfig.body?.code === 'CONTROL_PREVIEW_REQUIRED' &&
+    hostileConfig.body?.fields?.includes?.('controlModes') &&
+    JSON.stringify((await get('/api/config')).body) === JSON.stringify(cfgBeforeOperationalBypass)
 );
 const safeConfig = await post('/api/config', {
   controlModes: { funds: 'blocked', borrowing: 'blocked', automation: 'paused', liveOrders: 'blocked' },
 });
-check('safe non-financial config remains writable', safeConfig.status === 200 && safeConfig.body?.controlModes?.automation === 'paused');
+check(
+  'even risk-reducing operational config requires canonical preview and receipt',
+  safeConfig.status === 409 && safeConfig.body?.code === 'CONTROL_PREVIEW_REQUIRED'
+);
+const displayConfig = await post('/api/config', { watchlist: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'] });
+check(
+  'non-operational display watchlist remains writable and bounded',
+  displayConfig.status === 200 && displayConfig.body?.watchlist?.includes?.('SOLUSDT')
+);
 
-// Kill can disengage while the separate live-execution barrier remains sealed.
-await post('/api/kill', { on: false });
-let h = (await get('/api/health')).body;
-check('kill off → mode MANUAL', h.mode === 'MANUAL');
+const legacyKillConfigBefore = (await get('/api/config')).body;
+const legacyKillEventsBefore = (await get('/api/events?kind=manual_action&limit=10')).body;
+const retiredKillOff = await post('/api/kill', { on: false });
+const retiredKillOn = await post('/api/kill', { on: true });
+const legacyKillConfigAfter = (await get('/api/config')).body;
+const legacyKillEventsAfter = (await get('/api/events?kind=manual_action&limit=10')).body;
+check(
+  'legacy kill is a retired zero-side-effect tombstone pointing at the canonical Product lifecycle',
+  [retiredKillOff, retiredKillOn].every((response) => (
+    response.status === 410 &&
+    response.body?.code === 'RETIRED' &&
+    response.body?.state === 'RETIRED' &&
+    response.body?.canonicalPreviewEndpoint === '/api/product-integration/v1/commands/preview' &&
+    response.body?.canonicalCommandEndpoint === '/api/product-integration/v1/commands' &&
+    response.body?.supportedCanonicalAction === 'KILL_SWITCH_ENGAGE_ONLY'
+  )) &&
+    JSON.stringify(legacyKillConfigAfter) === JSON.stringify(legacyKillConfigBefore) &&
+    JSON.stringify(legacyKillEventsAfter) === JSON.stringify(legacyKillEventsBefore)
+);
+const healthBeforeLiveArm = (await get('/api/health')).body;
 const liveArm = await post('/api/live', { on: true });
-h = (await get('/api/health')).body;
+const healthAfterLiveArm = (await get('/api/health')).body;
 check('direct live arm is retired', liveArm.status === 410 && liveArm.body?.code === 'LIVE_EXECUTION_NOT_IMPLEMENTED');
-check('failed live arm leaves mode MANUAL and live orders blocked', h.mode === 'MANUAL' && (await get('/api/config')).body?.controlModes?.liveOrders === 'blocked');
-await post('/api/kill', { on: true });
-h = (await get('/api/health')).body;
-check('kill switch overrides → HALTED', h.mode === 'HALTED');
+check(
+  'failed live arm preserves prior compatibility mode and leaves live orders blocked',
+  healthAfterLiveArm.mode === healthBeforeLiveArm.mode &&
+    (await get('/api/config')).body?.controlModes?.liveOrders === 'blocked'
+);
 
-// ledger must have recorded all of the above
-const intents = (await get('/api/events?kind=order_intent&limit=10')).body;
-const decisions = (await get('/api/events?kind=risk_decision&limit=10')).body;
-const manual = (await get('/api/events?kind=manual_action&limit=10')).body;
-const cfgEv = (await get('/api/events?kind=config_change&limit=10')).body;
-check('ledger records order intents', Array.isArray(intents) && intents.length >= 2);
-check('ledger records risk decisions', Array.isArray(decisions) && decisions.length >= 2);
-check('ledger records kill actions but no live-arm mutation', Array.isArray(manual) && manual.length >= 2 && !manual.some((event) => event?.data?.action === 'live_trading'));
-check('ledger records config changes', Array.isArray(cfgEv) && cfgEv.length >= 1);
+// The remaining display-only configuration path must remain auditable.
+const cfgEv = (await get('/api/events?kind=display_config_change&limit=10')).body;
+check('ledger records display configuration changes', Array.isArray(cfgEv) && cfgEv.length >= 1);
 
 // remaining API surface renders data
 check('fills endpoint responds', Array.isArray((await get('/api/fills')).body));
-check('pnl endpoint responds', !!(await get('/api/pnl')).body?.realizedByDay);
-check('signals endpoint responds', !!(await get('/api/signals')).body);
+const pnlResponse = await get('/api/pnl');
+check(
+  'keyless PnL is explicitly NOT_CONFIGURED and cannot publish empty complete evidence',
+  pnlResponse.status === 503 &&
+    pnlResponse.body?.code === 'NOT_CONFIGURED' &&
+    pnlResponse.body?.truthState === 'UNAVAILABLE' &&
+    pnlResponse.body?.realizedByDay === null &&
+    pnlResponse.body?.realizedBySymbol === null &&
+    pnlResponse.body?.feesByAsset === null &&
+    pnlResponse.body?.equitySnapshots === null &&
+    pnlResponse.body?.integrity === null
+);
+const signals = (await get('/api/signals')).body;
+check(
+  'signals endpoint keeps historical Ledger reads while active legacy proposals stay retired',
+  signals?.legacyScannerState === 'RETIRED' &&
+    Array.isArray(signals?.active) &&
+    signals.active.length === 0 &&
+    Array.isArray(signals?.recent)
+);
 
-const mkts = (await get('/api/markets')).body;
-check('markets endpoint returns all pairs', Array.isArray(mkts?.rows) && mkts.rows.length > 300, `${mkts?.rows?.length ?? 0} rows`);
-check('markets rows carry spark arrays', Array.isArray(mkts?.rows?.[0]?.spark));
+const marketsResponse = await get('/api/markets');
+const mkts = marketsResponse.body;
+check(
+  'markets endpoint reports unavailable public sources without fabricating universe rows',
+  marketsResponse.status === 200 &&
+    mkts?.dataSources?.spotBookTicker === 'unavailable' &&
+    mkts?.dataSources?.futuresBookTicker === 'unavailable' &&
+    mkts?.dataSources?.futures24hTicker === 'unavailable' &&
+    Array.isArray(mkts?.rows) &&
+    mkts.rows.length === 0
+);
+check('retired legacy scanner cannot publish compatibility market rows without source truth', mkts?.rows?.length === 0);
 
-const detail = (await get('/api/market/detail?symbol=BTCUSDT')).body;
-check('market detail responds', detail?.row?.symbol === 'BTCUSDT' && detail?.filters !== null);
+const detailResponse = await get('/api/market/detail?symbol=BTCUSDT');
+const detail = detailResponse.body;
+check(
+  'market detail keeps unavailable public facts null',
+  detailResponse.status === 200 &&
+    detail?.row === null &&
+    detail?.book === null &&
+    detail?.filters === null &&
+    detail?.last === null &&
+    detail?.change24hPct === null
+);
 
 const walletBalanceResponse = await get('/api/wallet-balances');
+const equityHistoryResponse = await get('/api/equity-history');
+const earnResponse = await get('/api/earn');
 check(
   'wallet balance aggregate is never browser/proxy cached',
   /private/i.test(walletBalanceResponse.headers.get('cache-control') ?? '')
     && /no-store/i.test(walletBalanceResponse.headers.get('cache-control') ?? '')
 );
+check(
+  'unconfigured balance and holding routes publish null UNAVAILABLE truth, never empty rows',
+  [walletBalanceResponse, equityHistoryResponse, earnResponse].every((response) => (
+    response.status === 503 &&
+    response.body?.code === 'NOT_CONFIGURED' &&
+    response.body?.truthState === 'UNAVAILABLE' &&
+    response.body?.rows === null &&
+    response.body?.value === null
+  ))
+);
 
 const privateReadResponses = [
   await post('/api/fills/import', { symbol: 'BTCUSDT' }),
-  await get('/api/equity-history'),
-  await get('/api/earn'),
+  equityHistoryResponse,
+  earnResponse,
   walletBalanceResponse,
+  pnlResponse,
   await get('/api/loans'),
   await post('/api/loans/refresh', {}),
   await get('/api/orders/history?symbol=BTCUSDT'),
@@ -493,38 +704,72 @@ check(
 );
 check('local order-recovery evidence remains read-only', (await get('/api/orders/recovery')).status === 200);
 
-const depthB = (await get('/api/market/depth?symbol=BTCUSDT')).body;
-check('depth endpoint returns book', Array.isArray(depthB?.bids) && depthB.bids.length > 5 && Array.isArray(depthB?.asks));
-
-const tradesB = (await get('/api/market/trades?symbol=BTCUSDT')).body;
-check('trades endpoint returns prints', Array.isArray(tradesB) && tradesB.length > 5 && tradesB[0].price > 0);
-
-const futK = (await get('/api/klines?symbol=BTCUSDT&interval=5m&limit=50&market=futures')).body;
-check('futures klines for basis chart', Array.isArray(futK) && futK.length > 10);
-
-const fundH = (await get('/api/funding/history?symbol=BTCUSDT')).body;
-check('funding history responds', Array.isArray(fundH) && fundH.length > 10);
+const unavailablePublicResponses = [
+  await get('/api/market/depth?symbol=BTCUSDT'),
+  await get('/api/market/trades?symbol=BTCUSDT'),
+  await get('/api/klines?symbol=BTCUSDT&interval=5m&limit=50&market=futures'),
+  await get('/api/funding/history?symbol=BTCUSDT'),
+];
+check(
+  'public depth, trades, futures klines, and funding routes fail closed at the deterministic network boundary',
+  unavailablePublicResponses.every((response) => (
+    response.status === 502 &&
+    typeof response.body?.error === 'string' &&
+    /unavailable/i.test(response.body.error) &&
+    !/https?:\/\//i.test(response.body.error)
+  ))
+);
 
 const fundX = (await get('/api/funding/extremes')).body;
-check('funding extremes responds', Array.isArray(fundX?.positive) && Array.isArray(fundX?.negative));
+check(
+  'funding extremes cannot fabricate rows without public source truth',
+  Array.isArray(fundX?.positive) && fundX.positive.length === 0 &&
+    Array.isArray(fundX?.negative) && fundX.negative.length === 0
+);
 
 const sctx = (await get('/api/symbol/context?symbol=BTCUSDT')).body;
-check('symbol context responds', Array.isArray(sctx?.openOrders) && Array.isArray(sctx?.fills) && Array.isArray(sctx?.signals));
+check('symbol context responds', Array.isArray(sctx?.fills) && Array.isArray(sctx?.signals));
+check(
+  'symbol context keeps unconfigured balances and private orders null instead of fabricating zero',
+  sctx?.accountTruthState === 'NOT_CONFIGURED' &&
+    sctx?.orderTruthState === 'NOT_CONFIGURED' &&
+    sctx?.balances === null &&
+    sctx?.openOrders === null
+);
 
 const sys = (await get('/api/system')).body;
 check('system health responds', sys?.ok === true && typeof sys.uptimeSec === 'number' && sys.dbOk === true);
+check(
+  'legacy system is transport-only compatibility with one canonical supervisor snapshot',
+  sys?.schemaVersion === 'legacy.system.compatibility.v2' &&
+    sys?.healthClass === 'LEGACY_OBSERVABILITY_COMPATIBILITY' &&
+    sys?.readinessSemantics === 'NOT_EVALUATED' &&
+    sys?.okSemantics === 'TRANSPORT_ONLY' &&
+    sys?.canonicalReadinessEndpoint === '/health/ready' &&
+    sys?.canonicalSupervisorEndpoint === '/api/system-integration/supervisor' &&
+    typeof sys?.canonicalSupervisor?.evaluatedAtMs === 'number' &&
+    sys?.killSwitch === (sys?.canonicalSupervisor?.control?.killSwitchEngaged || legacyKillConfigAfter?.killSwitch === true)
+);
+check('system health exposes RETIRED legacy scanner state without tick evidence', sys?.legacyScannerState === 'RETIRED' && sys?.lastScannerTickTs === null);
 const browserObservation = await post('/api/connections/browser-observation', { rttMs: 24, socketConnected: true });
 check('browser connection observation is sanitized and accepted', browserObservation.status === 200 && browserObservation.body?.observation?.status === 'operational');
 check(
   'connection inventory exposes live, cached, and planned source truth',
-  typeof sys?.connections?.basis?.running === 'boolean' &&
+    typeof sys?.connections?.basis?.running === 'boolean' &&
     typeof sys?.connections?.volume?.streamConnections === 'number' &&
+    sys?.connections?.liquidations?.running === false &&
+    sys?.connections?.liquidations?.state === 'down' &&
     typeof sys?.connections?.news?.sources === 'number' &&
     typeof sys?.connections?.calendar?.items === 'number' &&
     typeof sys?.connections?.fx?.currencies === 'number' &&
     typeof sys?.connections?.watchman?.summary?.required === 'number' &&
     Array.isArray(sys?.connections?.watchman?.components) &&
-    sys.connections.watchman.components.some((component) => component.id === 'market-streams' && component.resetTarget === 'market') &&
+    sys.connections.watchman.components.some((component) => (
+      component.id === 'market-streams' &&
+      component.resetTarget === 'market' &&
+      component.status !== 'operational' &&
+      /liquidation down/.test(component.detail ?? '')
+    )) &&
     sys.connections.watchman.components.some((component) => component.id === 'user-stream' && component.status === 'planned' && /NOT_CONFIGURED/.test(component.detail ?? '')) &&
     sys.connections.watchman.components.some((component) => component.id === 'aws-runner' && component.status === 'planned') &&
     sys?.connections?.planned?.awsRunner?.configured === false &&
@@ -593,8 +838,13 @@ check(
     secRes.headers.get('referrer-policy') === 'no-referrer'
 );
 
-const volK = (await get('/api/klines?symbol=BTCUSDT&interval=5m&limit=50&field=volume')).body;
-check('volume klines respond', Array.isArray(volK) && volK.length > 10 && volK[0].v >= 0);
+const volumeKlinesResponse = await get('/api/klines?symbol=BTCUSDT&interval=5m&limit=50&field=volume');
+check(
+  'volume klines fail closed without external source truth',
+  volumeKlinesResponse.status === 502 &&
+    /unavailable/i.test(volumeKlinesResponse.body?.error ?? '') &&
+    !/https?:\/\//i.test(volumeKlinesResponse.body?.error ?? '')
+);
 
 const volumeRuntime = (await get('/api/engine/volume')).body;
 check(
@@ -624,6 +874,16 @@ check(
   'CSP allows coingecko + coincap image hosts',
   (secRes.headers.get('content-security-policy') ?? '').includes('coingecko.com') &&
     (secRes.headers.get('content-security-policy') ?? '').includes('coincap.io')
+);
+
+const blockedPublicEgress = existsSync(networkEgressSentinel)
+  ? readFileSync(networkEgressSentinel, 'utf8').trim().split('\n').filter(Boolean)
+  : [];
+check(
+  'all deterministic-gate public network calls are blocked before transport',
+  blockedPublicEgress.length > 0 &&
+    blockedPublicEgress.every((line) => /^EXTERNAL_NETWORK_REQUEST [a-z0-9.-]+\//.test(line)),
+  `${blockedPublicEgress.length} blocked before transport: ${blockedPublicEgress.slice(0, 8).join(', ')}`
 );
 
 const failed = results.filter((r) => !r.pass);

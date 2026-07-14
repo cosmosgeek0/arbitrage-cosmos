@@ -3,5 +3,7 @@ export * from './events.js';
 export * from './trace.js';
 export * from './controls.js';
 export * from './projection.js';
+export * from './managedInventory.js';
 export * from './service.js';
 export * from './router.js';
+export * from './materialDelivery.js';

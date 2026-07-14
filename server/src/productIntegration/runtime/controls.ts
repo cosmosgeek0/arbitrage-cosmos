@@ -32,6 +32,7 @@ function ownerBlocker(
   if (!capability.durableIdempotency) return 'DURABLE_IDEMPOTENCY_NOT_PROVEN';
   if (!capability.revisionCompareAndSet) return 'REVISION_CAS_NOT_PROVEN';
   if (!capability.durableReceipts) return 'DURABLE_RECEIPTS_NOT_PROVEN';
+  if (typeof owner.readResult !== 'function') return 'DURABLE_RESULT_READBACK_NOT_PROVEN';
   if (!Array.isArray(capability.supportedBackendCommandIds)
       || capability.supportedBackendCommandIds.some((value) => !PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS.includes(value))) {
     return 'COMMAND_OWNER_CAPABILITY_INVALID';
@@ -243,8 +244,7 @@ export async function submitProductRuntimeControl(input: Readonly<{
   if (input.request.expiresAtMs <= input.nowMs) throw new ProductRuntimeError('EXPIRED', 'Command preview has expired.', 409);
   if (input.request.backendCommandId !== control.backendCommandId
       || input.request.targetType !== control.targetType || input.request.targetId !== control.targetId
-      || input.request.currentRevision !== control.currentStateRevision
-      || input.request.expectedRevision !== control.currentStateRevision
+      || input.request.currentRevision !== input.request.expectedRevision
       || !samePayload(input.request.payload, control.payload)) {
     throw new ProductRuntimeError('REJECTED_STALE_REVISION', 'Command is not bound to the current registered control.', 409);
   }

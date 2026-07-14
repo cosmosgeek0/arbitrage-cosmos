@@ -12,6 +12,7 @@ import {
   type SystemIntegrationCheckpointState,
 } from './types.js';
 import { canonicalPersistenceJson, cloneCheckpointState, persistenceDigest, validateCheckpointState } from './codec.js';
+import { countPendingLiveEdgeControlIntents } from './liveEdgeControlCheckpoint.js';
 
 const MAX_UTC_MS = 4_102_444_800_000;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/;
@@ -77,6 +78,7 @@ export function createInitialCheckpointState(
     dryRunExecutions: [],
     reconciliations: [],
     idempotencyReceipts: [],
+    liveEdgeControlEvents: [],
     controlRejections: [],
     traceIndex: [],
     restartTruth: {
@@ -114,6 +116,9 @@ export function evaluateRestartBarrier(
   const issues = validateCheckpointState(state);
   if (issues.length > 0) return failClosedRestartBarrier(nowMs, 'CHECKPOINT_INVALID');
   const reasons = new Set<string>();
+  if ((countPendingLiveEdgeControlIntents(state.liveEdgeControlEvents) ?? 0) > 0) {
+    reasons.add('PENDING_LIVE_EDGE_CONTROL_INTENT');
+  }
   if (state.lastStartup === null || state.lastStartup.generation !== state.generation) reasons.add('STARTUP_NOT_RECORDED');
   if (state.restartTruth.publicSourceTruth !== 'FRESH') reasons.add(`PUBLIC_SOURCE_TRUTH_${state.restartTruth.publicSourceTruth}`);
   if (state.restartTruth.accountTruth !== 'FRESH') reasons.add(`ACCOUNT_TRUTH_${state.restartTruth.accountTruth}`);

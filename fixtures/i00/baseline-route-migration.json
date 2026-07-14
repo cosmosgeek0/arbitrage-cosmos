@@ -1,0 +1,380 @@
+{
+  "schemaVersion": "i00.baseline-route-migration.v1",
+  "authority": {
+    "directivePath": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+    "directiveSection": "2A. July-11 baseline-specific migration checklist",
+    "registrationOwnerPath": "server/src/index.ts"
+  },
+  "classificationVocabulary": [
+    "KEEP_CANONICAL",
+    "ADAPT_TO_NEW_AUTHORITY",
+    "COMPATIBILITY_ALIAS",
+    "RESTRICT",
+    "RETIRE"
+  ],
+  "migrationResponseVocabulary": [
+    "ALREADY_FIXED",
+    "ADAPTED_IN_I00",
+    "RETIRED",
+    "INTENTIONALLY_BLOCKED"
+  ],
+  "consumerScan": {
+    "mode": "CONSERVATIVE_STATIC_ROUTE_LITERAL_REFERENCES",
+    "roots": [
+      "server/src",
+      "web/src"
+    ],
+    "extensions": [
+      ".cjs",
+      ".js",
+      ".mjs",
+      ".ts",
+      ".tsx"
+    ],
+    "registrationExclusion": "EXPRESS_DECLARATION_LINE_ONLY"
+  },
+  "routes": [
+    {
+      "route": "/api/state",
+      "methods": ["GET"],
+      "classification": "ADAPT_TO_NEW_AUTHORITY",
+      "canonicalOwner": "SYSTEM_INTEGRATION_SUPERVISOR",
+      "replacement": "/api/product-integration/v1/supervisor",
+      "migrationResponse": "ADAPTED_IN_I00",
+      "reasonCode": "EXPLICIT_COMPATIBILITY_VIEW_EMBEDS_ONE_FRESH_CANONICAL_SUPERVISOR_SNAPSHOT",
+      "consumerRequirement": "PINNED_PRODUCTION_CONSUMERS",
+      "registrations": [
+        { "method": "GET", "path": "server/src/index.ts", "needle": "app.get('/api/state'", "expectedOccurrences": 1 }
+      ],
+      "sourceFacts": [
+        { "path": "server/src/index.ts", "needle": "const stateSupervisor = await systemIntegration.supervisor();", "expectedOccurrences": 1 },
+        { "path": "server/src/index.ts", "needle": "res.json(buildState(stateSupervisor))", "expectedOccurrences": 1 },
+        { "path": "server/src/index.ts", "needle": "stateClass: 'COMPATIBILITY_VIEW' as const", "expectedOccurrences": 1 }
+      ],
+      "productionConsumers": [
+        { "path": "web/src/store.tsx", "occurrences": 2 }
+      ]
+    },
+    {
+      "route": "/api/system",
+      "methods": ["GET"],
+      "classification": "ADAPT_TO_NEW_AUTHORITY",
+      "canonicalOwner": "SYSTEM_INTEGRATION_SUPERVISOR",
+      "replacement": "/api/system-integration/supervisor",
+      "migrationResponse": "ADAPTED_IN_I00",
+      "reasonCode": "TRANSPORT_ONLY_COMPATIBILITY_VIEW_EMBEDS_ONE_FRESH_CANONICAL_SUPERVISOR_SNAPSHOT",
+      "consumerRequirement": "ZERO_PRODUCTION_CONSUMERS",
+      "registrations": [
+        { "method": "GET", "path": "server/src/index.ts", "needle": "app.get('/api/system'", "expectedOccurrences": 1 }
+      ],
+      "sourceFacts": [
+        { "path": "server/src/index.ts", "needle": "systemSupervisor = await systemIntegration.supervisor();", "expectedOccurrences": 1 },
+        { "path": "server/src/index.ts", "needle": "okSemantics: 'TRANSPORT_ONLY'", "expectedOccurrences": 1 },
+        { "path": "server/src/index.ts", "needle": "canonicalSupervisor: systemSupervisor", "expectedOccurrences": 1 }
+      ],
+      "productionConsumers": []
+    },
+    {
+      "route": "/api/events",
+      "methods": ["GET"],
+      "classification": "KEEP_CANONICAL",
+      "canonicalOwner": "LEDGER",
+      "replacement": null,
+      "migrationResponse": "ALREADY_FIXED",
+      "reasonCode": "EXISTING_LEDGER_REMAINS_DURABLE_HISTORY_OWNER",
+      "consumerRequirement": "PINNED_PRODUCTION_CONSUMERS",
+      "registrations": [
+        { "method": "GET", "path": "server/src/index.ts", "needle": "app.get('/api/events'", "expectedOccurrences": 1 }
+      ],
+      "sourceFacts": [
+        { "path": "server/src/index.ts", "needle": "ledger.recentEvents(limit, filters.kind", "expectedOccurrences": 1 }
+      ],
+      "productionConsumers": [
+        { "path": "web/src/components/Header.tsx", "occurrences": 3 },
+        { "path": "web/src/pages/LedgerPage.tsx", "occurrences": 1 },
+        { "path": "web/src/pages/NotificationsPage.tsx", "occurrences": 3 }
+      ]
+    },
+    {
+      "route": "/api/config",
+      "methods": ["GET", "POST"],
+      "classification": "RESTRICT",
+      "canonicalOwner": "AUDITED_APP_DISPLAY_CONFIG_WITH_CANONICAL_CONTROL_BOUNDARY",
+      "replacement": "/api/system-integration/controls",
+      "migrationResponse": "ADAPTED_IN_I00",
+      "reasonCode": "DISPLAY_ONLY_CONFIG_AND_OPERATIONAL_FIELDS_REQUIRE_CANONICAL_CONTROL_PREVIEW",
+      "consumerRequirement": "PINNED_PRODUCTION_CONSUMERS",
+      "registrations": [
+        { "method": "GET", "path": "server/src/index.ts", "needle": "app.get('/api/config'", "expectedOccurrences": 1 },
+        { "method": "POST", "path": "server/src/index.ts", "needle": "app.post('/api/config'", "expectedOccurrences": 1 }
+      ],
+      "sourceFacts": [
+        { "path": "server/src/index.ts", "needle": "const operationalFields = requestedFields.filter((field) => field !== 'profile' && field !== 'watchlist');", "expectedOccurrences": 1 },
+        { "path": "server/src/index.ts", "needle": "error: 'Operational strategy, risk, automation, and execution policy is owned by canonical controls.'", "expectedOccurrences": 1 },
+        { "path": "server/src/index.ts", "needle": "ledger.logEvent('display_config_change', null, displayAudit)", "expectedOccurrences": 1 }
+      ],
+      "productionConsumers": [
+        { "path": "web/src/store.tsx", "occurrences": 1 }
+      ]
+    },
+    {
+      "route": "/api/engine/basis",
+      "methods": ["GET"],
+      "classification": "KEEP_CANONICAL",
+      "canonicalOwner": "BASIS_RUNTIME",
+      "replacement": null,
+      "migrationResponse": "ALREADY_FIXED",
+      "reasonCode": "EXISTING_BASIS_ENGINE_REMAINS_STRATEGY_OWNER",
+      "consumerRequirement": "PINNED_PRODUCTION_CONSUMERS",
+      "registrations": [
+        { "method": "GET", "path": "server/src/index.ts", "needle": "app.get('/api/engine/basis'", "expectedOccurrences": 1 }
+      ],
+      "sourceFacts": [
+        { "path": "server/src/index.ts", "needle": "res.json(basisRuntime.snapshot())", "expectedOccurrences": 1 }
+      ],
+      "productionConsumers": [
+        { "path": "web/src/pages/Loans.tsx", "occurrences": 1 },
+        { "path": "web/src/pages/Strategies.tsx", "occurrences": 1 },
+        { "path": "web/src/pages/TokenDetail.tsx", "occurrences": 1 }
+      ]
+    },
+    {
+      "route": "/api/engine/volume",
+      "methods": ["GET"],
+      "classification": "KEEP_CANONICAL",
+      "canonicalOwner": "VOLUME_RUNTIME",
+      "replacement": null,
+      "migrationResponse": "ALREADY_FIXED",
+      "reasonCode": "EXISTING_VOLUME_ENGINE_REMAINS_STRATEGY_OWNER",
+      "consumerRequirement": "PINNED_PRODUCTION_CONSUMERS",
+      "registrations": [
+        { "method": "GET", "path": "server/src/index.ts", "needle": "app.get('/api/engine/volume'", "expectedOccurrences": 1 }
+      ],
+      "sourceFacts": [
+        { "path": "server/src/index.ts", "needle": "res.json(volumeRuntime.snapshot())", "expectedOccurrences": 1 }
+      ],
+      "productionConsumers": [
+        { "path": "web/src/pages/VolumeScanner.tsx", "occurrences": 1 }
+      ]
+    },
+    {
+      "route": "/api/markets",
+      "methods": ["GET"],
+      "classification": "KEEP_CANONICAL",
+      "canonicalOwner": "PUBLIC_MARKET_UNIVERSE_ADAPTER",
+      "replacement": null,
+      "migrationResponse": "ALREADY_FIXED",
+      "reasonCode": "ONE_EXISTING_PUBLIC_MARKET_PATH_FEEDS_CONSUMERS",
+      "consumerRequirement": "PINNED_PRODUCTION_CONSUMERS",
+      "registrations": [
+        { "method": "GET", "path": "server/src/index.ts", "needle": "app.get('/api/markets'", "expectedOccurrences": 1 }
+      ],
+      "sourceFacts": [
+        { "path": "server/src/index.ts", "needle": "const { spotBookRes, perpBookRes, perp24hRes } = await marketSources()", "expectedOccurrences": 1 }
+      ],
+      "productionConsumers": [
+        { "path": "web/src/store.tsx", "occurrences": 2 }
+      ]
+    },
+    {
+      "route": "/api/market/detail",
+      "methods": ["GET"],
+      "classification": "KEEP_CANONICAL",
+      "canonicalOwner": "FOCUSED_PUBLIC_MARKET_DETAIL_ADAPTER",
+      "replacement": null,
+      "migrationResponse": "ALREADY_FIXED",
+      "reasonCode": "BOUNDED_VIEWED_SYMBOL_PUBLIC_DETAIL_ONLY",
+      "consumerRequirement": "PINNED_PRODUCTION_CONSUMERS",
+      "registrations": [
+        { "method": "GET", "path": "server/src/index.ts", "needle": "app.get('/api/market/detail'", "expectedOccurrences": 1 }
+      ],
+      "sourceFacts": [
+        { "path": "server/src/index.ts", "needle": "watchlisted: config.watchlist.includes(symbol)", "expectedOccurrences": 1 }
+      ],
+      "productionConsumers": []
+    },
+    {
+      "route": "/api/wallet-balances",
+      "methods": ["GET"],
+      "classification": "RESTRICT",
+      "canonicalOwner": "FUTURE_ACCEPTED_PRIVATE_TRUTH_ADAPTER",
+      "replacement": "/api/product-integration/v1/supervisor",
+      "migrationResponse": "ADAPTED_IN_I00",
+      "reasonCode": "PRIVATE_WALLET_TRUTH_NOT_CONFIGURED_AND_NEVER_ZERO_FILLED",
+      "consumerRequirement": "PINNED_PRODUCTION_CONSUMERS",
+      "registrations": [
+        { "method": "GET", "path": "server/src/index.ts", "needle": "app.get('/api/wallet-balances'", "expectedOccurrences": 1 }
+      ],
+      "sourceFacts": [
+        { "path": "server/src/index.ts", "needle": "sendNotConfigured(res, 'PRIVATE_WALLET_BALANCES'", "expectedOccurrences": 1 }
+      ],
+      "productionConsumers": []
+    },
+    {
+      "route": "/api/loans",
+      "methods": ["GET"],
+      "classification": "RESTRICT",
+      "canonicalOwner": "FUTURE_ACCEPTED_MARGIN_TRUTH_ADAPTER",
+      "replacement": "/api/product-integration/v1/supervisor",
+      "migrationResponse": "ADAPTED_IN_I00",
+      "reasonCode": "PRIVATE_MARGIN_TRUTH_NOT_CONFIGURED_AND_MUTATIONS_TOMBSTONED",
+      "consumerRequirement": "PINNED_PRODUCTION_CONSUMERS",
+      "registrations": [
+        { "method": "GET", "path": "server/src/index.ts", "needle": "app.get('/api/loans'", "expectedOccurrences": 1 }
+      ],
+      "sourceFacts": [
+        { "path": "server/src/index.ts", "needle": "sendNotConfigured(res, 'PRIVATE_LOAN_STATE')", "expectedOccurrences": 1 },
+        { "path": "server/src/index.ts", "needle": "sendLiveExecutionNotImplemented(res, 'LOAN_BORROW')", "expectedOccurrences": 1 },
+        { "path": "server/src/index.ts", "needle": "sendLiveExecutionNotImplemented(res, 'LOAN_REPAY')", "expectedOccurrences": 1 }
+      ],
+      "productionConsumers": []
+    },
+    {
+      "route": "/api/orders/history",
+      "methods": ["GET"],
+      "classification": "RESTRICT",
+      "canonicalOwner": "FUTURE_ACCEPTED_ORDER_TRUTH_ADAPTER",
+      "replacement": "/api/product-integration/v1/supervisor",
+      "migrationResponse": "ADAPTED_IN_I00",
+      "reasonCode": "PRIVATE_ORDER_HISTORY_NOT_CONFIGURED_AND_NEVER_EMPTY_FILLED",
+      "consumerRequirement": "PINNED_PRODUCTION_CONSUMERS",
+      "registrations": [
+        { "method": "GET", "path": "server/src/index.ts", "needle": "app.get('/api/orders/history'", "expectedOccurrences": 1 }
+      ],
+      "sourceFacts": [
+        { "path": "server/src/index.ts", "needle": "sendNotConfigured(res, 'PRIVATE_ORDER_HISTORY')", "expectedOccurrences": 1 }
+      ],
+      "productionConsumers": []
+    },
+    {
+      "route": "/api/pnl",
+      "methods": ["GET"],
+      "classification": "RESTRICT",
+      "canonicalOwner": "LEDGER_OUTCOME_WITH_PRIVATE_ACCOUNT_TRUTH",
+      "replacement": "/api/product-integration/v1/supervisor",
+      "migrationResponse": "ADAPTED_IN_I00",
+      "reasonCode": "PNL_UNAVAILABLE_UNTIL_PRIVATE_ACCOUNT_TRUTH_IS_AVAILABLE",
+      "consumerRequirement": "PINNED_PRODUCTION_CONSUMERS",
+      "registrations": [
+        { "method": "GET", "path": "server/src/index.ts", "needle": "app.get('/api/pnl'", "expectedOccurrences": 1 }
+      ],
+      "sourceFacts": [
+        { "path": "server/src/index.ts", "needle": "sendNotConfigured(res, 'PRIVATE_ACCOUNT_PNL'", "expectedOccurrences": 1 }
+      ],
+      "productionConsumers": [
+        { "path": "web/src/pages/Dashboard.tsx", "occurrences": 1 },
+        { "path": "web/src/pages/Pnl.tsx", "occurrences": 1 }
+      ]
+    },
+    {
+      "route": "/api/trade/preview",
+      "methods": ["POST"],
+      "classification": "RESTRICT",
+      "canonicalOwner": "FUTURE_ACCEPTED_CAPITAL_RISK_TICKET_CHAIN",
+      "replacement": null,
+      "migrationResponse": "ADAPTED_IN_I00",
+      "reasonCode": "CANONICAL_TRADE_PREVIEW_OWNER_CHAIN_NOT_MOUNTED_AND_LEGACY_ORDER_SERVICE_FORBIDDEN",
+      "consumerRequirement": "ZERO_PRODUCTION_CONSUMERS",
+      "registrations": [
+        { "method": "POST", "path": "server/src/index.ts", "needle": "app.post('/api/trade/preview'", "expectedOccurrences": 1 }
+      ],
+      "sourceFacts": [
+        { "path": "server/src/index.ts", "needle": "capability: 'CANONICAL_TRADE_INTENT_PREVIEW'", "expectedOccurrences": 1 },
+        { "path": "server/src/index.ts", "needle": "'CANONICAL_EXECUTION_TICKET'", "expectedOccurrences": 1 }
+      ],
+      "productionConsumers": []
+    },
+    {
+      "route": "/api/trade/test",
+      "methods": ["POST"],
+      "classification": "RETIRE",
+      "canonicalOwner": "NONE",
+      "replacement": null,
+      "migrationResponse": "RETIRED",
+      "reasonCode": "TEST_ORDER_PATH_FORBIDDEN_TOMBSTONE_ONLY",
+      "consumerRequirement": "ZERO_PRODUCTION_CONSUMERS",
+      "registrations": [
+        { "method": "POST", "path": "server/src/index.ts", "needle": "app.post('/api/trade/test'", "expectedOccurrences": 1 }
+      ],
+      "sourceFacts": [
+        { "path": "server/src/index.ts", "needle": "sendLiveExecutionNotImplemented(res, 'TEST_ORDER')", "expectedOccurrences": 1 }
+      ],
+      "productionConsumers": []
+    },
+    {
+      "route": "/api/trade/send",
+      "methods": ["POST"],
+      "classification": "RETIRE",
+      "canonicalOwner": "NONE",
+      "replacement": null,
+      "migrationResponse": "RETIRED",
+      "reasonCode": "LIVE_ORDER_SEND_FORBIDDEN_TOMBSTONE_ONLY",
+      "consumerRequirement": "ZERO_PRODUCTION_CONSUMERS",
+      "registrations": [
+        { "method": "POST", "path": "server/src/index.ts", "needle": "app.post('/api/trade/send'", "expectedOccurrences": 1 }
+      ],
+      "sourceFacts": [
+        { "path": "server/src/index.ts", "needle": "sendLiveExecutionNotImplemented(res, 'LIVE_ORDER_SEND')", "expectedOccurrences": 1 }
+      ],
+      "productionConsumers": []
+    },
+    {
+      "route": "/api/kill",
+      "methods": ["POST"],
+      "classification": "RETIRE",
+      "canonicalOwner": "SYSTEM_INTEGRATION_CONTROL_VIA_PRODUCT_LIFECYCLE",
+      "replacement": "/api/product-integration/v1/commands",
+      "migrationResponse": "RETIRED",
+      "reasonCode": "LEGACY_CONFIG_KILL_RETIRED_WITH_CANONICAL_PRODUCT_CONTROL_LIFECYCLE_MOUNTED",
+      "consumerRequirement": "ZERO_PRODUCTION_CONSUMERS",
+      "registrations": [
+        { "method": "POST", "path": "server/src/index.ts", "needle": "app.post('/api/kill'", "expectedOccurrences": 1 }
+      ],
+      "sourceFacts": [
+        { "path": "server/src/index.ts", "needle": "operation: 'LEGACY_KILL_SWITCH'", "expectedOccurrences": 1 },
+        { "path": "server/src/index.ts", "needle": "supportedCanonicalAction: 'KILL_SWITCH_ENGAGE_ONLY'", "expectedOccurrences": 1 }
+      ],
+      "productionConsumers": []
+    },
+    {
+      "route": "/api/live",
+      "methods": ["POST"],
+      "classification": "RETIRE",
+      "canonicalOwner": "NONE",
+      "replacement": null,
+      "migrationResponse": "RETIRED",
+      "reasonCode": "LIVE_TRADING_ARM_FORBIDDEN_TOMBSTONE_ONLY",
+      "consumerRequirement": "ZERO_PRODUCTION_CONSUMERS",
+      "registrations": [
+        { "method": "POST", "path": "server/src/index.ts", "needle": "app.post('/api/live'", "expectedOccurrences": 1 }
+      ],
+      "sourceFacts": [
+        { "path": "server/src/index.ts", "needle": "sendLiveExecutionNotImplemented(res, 'LIVE_TRADING_ARM')", "expectedOccurrences": 1 }
+      ],
+      "productionConsumers": []
+    },
+    {
+      "route": "/api/aws-control/*",
+      "methods": ["GET", "POST", "PUT"],
+      "classification": "RESTRICT",
+      "canonicalOwner": "I00_OPS_OWNER_GATED_RUNBOOK",
+      "replacement": null,
+      "migrationResponse": "ADAPTED_IN_I00",
+      "reasonCode": "AWS_CHANNEL_OWNER_GATED_AND_NOT_A_PRODUCT_CONTROL_PLANE",
+      "consumerRequirement": "PINNED_PRODUCTION_CONSUMERS",
+      "registrations": [
+        { "method": "GET", "path": "server/src/index.ts", "needle": "app.get('/api/aws-control/status'", "expectedOccurrences": 1 },
+        { "method": "POST", "path": "server/src/index.ts", "needle": "app.post('/api/aws-control/gates'", "expectedOccurrences": 1 },
+        { "method": "POST", "path": "server/src/index.ts", "needle": "app.post('/api/aws-control/command'", "expectedOccurrences": 1 },
+        { "method": "GET", "path": "server/src/index.ts", "needle": "app.get('/api/aws-control/runner'", "expectedOccurrences": 1 },
+        { "method": "PUT", "path": "server/src/index.ts", "needle": "app.put('/api/aws-control/runner'", "expectedOccurrences": 1 }
+      ],
+      "sourceFacts": [
+        { "path": "server/src/index.ts", "needle": "sendOwnerGated(res, 'AWS_CONTROL_STATUS')", "expectedOccurrences": 1 },
+        { "path": "server/src/index.ts", "needle": "sendOwnerGated(res, 'AWS_CONTROL_COMMAND')", "expectedOccurrences": 1 },
+        { "path": "server/src/index.ts", "needle": "sendOwnerGated(res, 'AWS_RUNNER_SOURCE_MUTATION')", "expectedOccurrences": 1 }
+      ],
+      "productionConsumers": []
+    }
+  ]
+}

@@ -2,6 +2,67 @@ import { SYSTEM_COMPONENT_IDS } from '../../../dist/systemIntegration/contracts/
 
 export const T0 = 1_800_000_000_000;
 
+export function makeOpsReadback(overrides = {}) {
+  return Object.freeze({
+    source: 'CANONICAL_SUPERVISOR_READBACK',
+    observedAtUtc: new Date(T0).toISOString().replace('.000Z', 'Z'),
+    validUntilUtc: new Date(T0 + 10 * 60_000).toISOString().replace('.000Z', 'Z'),
+    deploymentFrozen: false,
+    exposureState: 'NONE',
+    ambiguityState: 'NONE',
+    recoveryState: 'NONE',
+    currentSchemaVersion: 1,
+    rollbackFloor: 1,
+    ...overrides,
+  });
+}
+
+export function makeOpsInterlock(overrides = {}) {
+  return Object.freeze({
+    source: 'CANONICAL_OPS_INTAKE_INTERLOCK',
+    state: 'OPS_INTERLOCK_CLEAR',
+    blocksNewEntries: false,
+    externalActionAuthorization: 'NONE',
+    evaluatedAtUtc: new Date(T0).toISOString().replace('.000Z', 'Z'),
+    readbackValidUntilUtc: new Date(T0 + 10 * 60_000).toISOString().replace('.000Z', 'Z'),
+    reasonCodes: Object.freeze([]),
+    ...overrides,
+  });
+}
+
+export function makeBootReleaseReadback(recordOverrides = {}, readbackOverrides = {}) {
+  const latest = Object.freeze({
+    operationId: 'system.application.boot.g7',
+    operationType: 'APPLICATION_BOOT',
+    generation: 7,
+    testedCommit: 'a'.repeat(40),
+    deployedCommit: 'b'.repeat(40),
+    configRevision: 'config.release.17',
+    schemaRevision: '1',
+    modelRevision: 'model.champion.4',
+    startedAtMs: T0 - 5_000,
+    completedAtMs: null,
+    clean: null,
+    blockerCode: null,
+    correlationId: 'system-boot-g7',
+    ledgerEventId: 71,
+    lifecycleState: 'ACTIVE',
+    identityState: 'AVAILABLE',
+    identityIssues: Object.freeze([]),
+    deploymentMutationAuthority: 'NONE',
+    ...recordOverrides,
+  });
+  return Object.freeze({
+    source: 'SYSTEM_INTEGRATION_LEDGER_BOOT_RELEASE',
+    state: 'AVAILABLE',
+    latest,
+    history: Object.freeze([latest]),
+    crashPendingOperationIds: Object.freeze([]),
+    reasonCodes: Object.freeze([]),
+    ...readbackOverrides,
+  });
+}
+
 function component(componentId, index) {
   const publicSource = componentId === 'public-spot-source' || componentId === 'public-usdm-source';
   return Object.freeze({
@@ -17,8 +78,21 @@ function component(componentId, index) {
     readiness: 'READY',
     authority: publicSource ? 'LIVE_PUBLIC' : 'DERIVED_LIVE',
     completeness: 'COMPLETE',
-    sourceTimestamp: publicSource ? Object.freeze({ sourceTimeMs: T0 - 1_000, receivedAtMs: T0 - 900, maxAgeMs: 5_000 }) : null,
-    freshness: publicSource ? Object.freeze({ state: 'FRESH', ageMs: 1_000, evaluatedAt: T0 }) : null,
+    sourceTimestamp: publicSource ? Object.freeze({
+      sourceTimeMs: T0 - 1_000,
+      receivedAtMs: T0 - 900,
+      maxAgeMs: 5_000,
+      authority: 'LIVE_PUBLIC',
+      completeness: 'COMPLETE',
+      sourceId: `test.${componentId}`,
+    }) : null,
+    freshness: publicSource ? Object.freeze({
+      state: 'FRESH',
+      ageMs: 900,
+      basis: 'SOURCE_TIME',
+      effectiveAuthority: 'LIVE_PUBLIC',
+      evaluatedAt: T0 - 100,
+    }) : null,
     lastReceiveAtMs: T0 - 800 - index,
     lastProcessAtMs: T0 - 700 - index,
     lastSuccessAtMs: T0 - 500 - index,
@@ -69,7 +143,7 @@ export function makeSupervisor(overrides = {}) {
       risk: Object.freeze({ truthLabel: 'DRY_RUN', latestVerdict: 'UNAVAILABLE', latestVerdictAtMs: null, latestVerdictId: null, rejectionCount: 0, reasonCodes: Object.freeze(['LIVE_EXECUTION_NOT_IMPLEMENTED']) }),
       execution: Object.freeze({ truthLabel: 'DRY_RUN', mode: 'VALIDATE_ONLY', barrier: 'LIVE_EXECUTION_NOT_IMPLEMENTED', planId: null, planLifecycle: null, coordinatorState: 'VALIDATE_ONLY', legCount: 0, recoveryState: null, lastTransitionAtMs: null }),
       reconciliation: Object.freeze({ truthLabel: 'DRY_RUN', status: 'EXACT', blocksNewExposure: false, recommendation: null, checkpointId: 'recon-1', evaluatedAtMs: T0 - 500, reasonCodes: Object.freeze([]) }),
-      ledger: Object.freeze({ truthLabel: 'DRY_RUN', writable: true, lastEventId: 'evt-2', lastPersistedAtMs: T0 - 100, checkpointRevision: 'ledger-1', recentTraceCount: 2, lastCleanShutdownAtMs: null }),
+      ledger: Object.freeze({ truthLabel: 'DRY_RUN', writable: true, schemaCompatibilityState: 'AVAILABLE', schemaCompatibilityReason: null, currentSchemaVersion: 1, rollbackFloor: 1, lastEventId: 'evt-2', lastPersistedAtMs: T0 - 100, checkpointRevision: 'ledger-1', recentTraceCount: 2, lastCleanShutdownAtMs: null }),
     }),
     traceIndex: Object.freeze({ evaluatedAtMs: T0, entries: Object.freeze([]), totalInputEvents: 2, uniqueEventCount: 2, duplicateEventCount: 0, truncated: false }),
     recentCorrelatedDecisions: Object.freeze([]),
@@ -97,9 +171,12 @@ export function makeRecords() {
   ]);
 }
 
-export function makeRead({ supervisor = makeSupervisor(), records = makeRecords(), traceEvents = makeRecords().map((record) => record.event) } = {}) {
-  return Object.freeze({
+export function makeRead({ applicationStartOk = true, applicationStartFailureCodes = [], supervisor = makeSupervisor(), records = makeRecords(), traceEvents = makeRecords().map((record) => record.event), bootReleaseReadback } = {}) {
+  const read = {
+    applicationStartOk: () => applicationStartOk,
+    applicationStartFailureCodes: () => applicationStartFailureCodes,
     supervisor: () => supervisor,
+    opsReadback: () => makeOpsReadback(),
     events({ afterCursor, limit }) {
       const after = BigInt(afterCursor);
       const selected = records.filter((record) => BigInt(record.cursor) > after).slice(0, limit);
@@ -116,5 +193,8 @@ export function makeRead({ supervisor = makeSupervisor(), records = makeRecords(
       if (correlationId !== 'cor_trace_1') return null;
       return Object.freeze({ correlationId, evaluatedAtMs: T0, events: Object.freeze(traceEvents.slice(0, limit)), truncated: false });
     },
-  });
+  };
+  return Object.freeze(bootReleaseReadback === undefined
+    ? read
+    : { ...read, bootReleaseReadback: () => bootReleaseReadback });
 }

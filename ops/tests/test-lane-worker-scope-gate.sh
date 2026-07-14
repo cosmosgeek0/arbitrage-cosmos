@@ -6,9 +6,10 @@ readonly EXPECTED_BRANCH='live-execution-control-proof-20260712'
 readonly PRODUCTION_ANCHOR='3a8e17be71d21df14f6b236a563cb0595f9eb824'
 readonly PROTECTED_LAUNCH='DIRECTOR_Q_L_TWO_LANE_LAUNCH.md'
 readonly PROTECTED_DIRECTIVE='LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md'
+readonly TEST_PROTECTED_LAUNCH_SHA256='cd0c247bbb59ed230c86dde21f9ecabd390c33730219b69144000aa8bccaeb56'
+readonly TEST_PROTECTED_DIRECTIVE_SHA256='2a174f35cded53c2f537476c05d9633af54d09e0ed5558010a1e82216bb92a28'
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-repo_root=$(cd "$script_dir/../.." && pwd)
 gate_source="$script_dir/lane-worker-scope-gate.sh"
 
 tmp_root=$(mktemp -d '/tmp/lane-worker-scope-tests.XXXXXX')
@@ -66,7 +67,10 @@ install_gate() {
   local anchor="$2"
 
   mkdir -p "$repo/ops/tests"
-  sed "s/$PRODUCTION_ANCHOR/$anchor/g" "$gate_source" \
+  sed -e "s/$PRODUCTION_ANCHOR/$anchor/g" \
+    -e "s/26b1d5ce118982b4b3ba64b44b7fb3e88b0b7ded26a818a775a65bffaa0f2c06/$TEST_PROTECTED_LAUNCH_SHA256/g" \
+    -e "s/40de1feb6678d8741bd38f7538b2c6f25304c0f64195a596961fdb2539a3b037/$TEST_PROTECTED_DIRECTIVE_SHA256/g" \
+    "$gate_source" \
     > "$repo/ops/tests/lane-worker-scope-gate.sh"
   chmod +x "$repo/ops/tests/lane-worker-scope-gate.sh"
   printf 'tracked fixture\n' > "$repo/ops/tests/fixture.txt"
@@ -76,8 +80,8 @@ install_gate() {
 
 copy_protected_inputs() {
   local repo="$1"
-  cp "$repo_root/$PROTECTED_LAUNCH" "$repo/$PROTECTED_LAUNCH"
-  cp "$repo_root/$PROTECTED_DIRECTIVE" "$repo/$PROTECTED_DIRECTIVE"
+  printf '%s\n' 'synthetic scope-gate launch fixture' > "$repo/$PROTECTED_LAUNCH"
+  printf '%s\n' 'synthetic scope-gate directive fixture' > "$repo/$PROTECTED_DIRECTIVE"
 }
 
 template_repo="$tmp_root/template"

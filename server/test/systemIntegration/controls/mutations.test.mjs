@@ -40,6 +40,7 @@ class FakePersistence {
     this.nextEventId = 1;
     this.failLookup = false;
     this.failCommit = false;
+    this.failMark = false;
   }
 
   async findControlMutation(key) {
@@ -76,8 +77,26 @@ class FakePersistence {
     });
     this.state = receipt.after;
     this.commits.push(commit);
-    this.records.set(commit.request.idempotencyKey, { requestDigest: commit.requestDigest, receipt });
-    return { kind: 'COMMITTED', receipt };
+    const runtimePublication = commit.applied && ['RESTART_COMPONENT', 'SET_COMPONENT_STATE'].includes(commit.request.mutation.command)
+      ? 'PENDING'
+      : 'NOT_REQUIRED';
+    this.records.set(commit.request.idempotencyKey, {
+      requestDigest: commit.requestDigest,
+      receipt,
+      runtimePublication,
+    });
+    return { kind: 'COMMITTED', receipt, runtimePublication };
+  }
+
+  async markControlRuntimePublished(commit) {
+    if (this.failMark) throw new Error('deterministic publication marker failure');
+    const existing = this.records.get(commit.idempotencyKey);
+    if (!existing || existing.requestDigest !== commit.requestDigest) {
+      throw new Error('deterministic publication marker mismatch');
+    }
+    if (existing.runtimePublication === 'PUBLISHED') return { kind: 'IDEMPOTENT_REPLAY' };
+    existing.runtimePublication = 'PUBLISHED';
+    return { kind: 'PUBLISHED' };
   }
 }
 
@@ -85,7 +104,10 @@ class FakeComposition {
   constructor() {
     this.inspections = [];
     this.published = [];
+    this.publishCalls = 0;
     this.failInspection = false;
+    this.failPublication = false;
+    this.publicationEvidence = new Map();
     this.desired = new Map([
       ['basis-engine', 'RUNNING'],
       ['engine-supervisor', 'RUNNING'],
@@ -124,10 +146,25 @@ class FakeComposition {
   }
 
   async publishCommitted(controlRequest, _actor, receipt) {
+    this.publishCalls += 1;
+    const effectId = `${controlRequest.idempotencyKey}:${receipt.after.revision}:${receipt.after.generation}`;
+    if (this.failPublication) {
+      this.publicationEvidence.set(effectId, 'NOT_APPLIED');
+      throw new Error('deterministic runtime publication failure');
+    }
     this.published.push({ controlRequest, receipt });
+    if (['RESTART_COMPONENT', 'SET_COMPONENT_STATE'].includes(controlRequest.mutation.command)) {
+      this.publicationEvidence.set(effectId, 'APPLIED');
+    }
     if (receipt.applied && controlRequest.mutation.command === 'SET_COMPONENT_STATE') {
       this.desired.set(controlRequest.mutation.componentId, controlRequest.mutation.desiredState);
     }
+  }
+
+  inspectCommittedPublication(controlRequest, receipt) {
+    return this.publicationEvidence.get(
+      `${controlRequest.idempotencyKey}:${receipt.after.revision}:${receipt.after.generation}`,
+    ) ?? 'UNKNOWN';
   }
 }
 
@@ -195,6 +232,138 @@ test('persistence lookup or commit failure cannot mutate in-memory control state
   assert.equal(committed.failure.code, 'CONTROL_PERSISTENCE_UNAVAILABLE');
   assert.strictEqual(commitWorld.service.snapshot(), commitBefore);
   assert.equal(commitWorld.composition.published.length, 0);
+});
+
+test('committed restart publication failure stays pending and exact replay retries only proven-not-applied effect', async () => {
+  const { service, persistence, composition } = world();
+  const restart = request('restart.pending.0001', 0, {
+    command: 'RESTART_COMPONENT', componentId: 'basis-engine',
+  });
+  composition.failPublication = true;
+
+  const first = await service.mutate(restart, ACTOR);
+  assert.equal(first.ok, false);
+  assert.equal(first.failure.code, 'CONTROL_COMMITTED_RUNTIME_PENDING');
+  assert.equal(first.failure.retryable, true);
+  assert.equal(service.snapshot().revision, 1);
+  assert.equal(service.snapshot().generation, 2);
+  assert.equal(persistence.commits.length, 1);
+  assert.equal(persistence.records.get(restart.idempotencyKey).runtimePublication, 'PENDING');
+  assert.equal(composition.publishCalls, 1);
+
+  composition.failPublication = false;
+  const replay = await service.mutate(restart, ACTOR);
+  assert.equal(replay.ok, true);
+  assert.equal(replay.value.after.generation, 2);
+  assert.equal(persistence.commits.length, 1);
+  assert.equal(persistence.records.get(restart.idempotencyKey).runtimePublication, 'PUBLISHED');
+  assert.equal(composition.publishCalls, 2);
+
+  const completedReplay = await service.mutate(restart, ACTOR);
+  assert.equal(completedReplay.ok, true);
+  assert.equal(composition.publishCalls, 2, 'published restart must not be reissued');
+});
+
+test('failed durable publication marker never causes a blind restart reissue', async () => {
+  const { service, persistence, composition } = world();
+  const restart = request('restart.mark.0001', 0, {
+    command: 'RESTART_COMPONENT', componentId: 'basis-engine',
+  });
+  persistence.failMark = true;
+
+  const first = await service.mutate(restart, ACTOR);
+  assert.equal(first.ok, false);
+  assert.equal(first.failure.code, 'CONTROL_COMMITTED_RUNTIME_PENDING');
+  assert.equal(composition.publishCalls, 1);
+  assert.equal(persistence.records.get(restart.idempotencyKey).runtimePublication, 'PENDING');
+
+  persistence.failMark = false;
+  const replay = await service.mutate(restart, ACTOR);
+  assert.equal(replay.ok, true);
+  assert.equal(composition.publishCalls, 1, 'APPLIED readback must mark without reissuing');
+  assert.equal(persistence.records.get(restart.idempotencyKey).runtimePublication, 'PUBLISHED');
+});
+
+test('application-process restart keeps unknown committed effect pending until canonical absence is proven', async () => {
+  const firstWorld = world();
+  const restart = request('restart.process.0001', 0, {
+    command: 'RESTART_COMPONENT', componentId: 'basis-engine',
+  });
+  firstWorld.composition.failPublication = true;
+  const first = await firstWorld.service.mutate(restart, ACTOR);
+  assert.equal(first.ok, false);
+  assert.equal(first.failure.code, 'CONTROL_COMMITTED_RUNTIME_PENDING');
+
+  const afterRestartComposition = new FakeComposition();
+  const afterRestartService = new SystemControlService({
+    initialState: firstWorld.persistence.state,
+    persistence: firstWorld.persistence,
+    composition: afterRestartComposition,
+  });
+  const unknownReplay = await afterRestartService.mutate(restart, ACTOR);
+  assert.equal(unknownReplay.ok, false);
+  assert.equal(unknownReplay.failure.code, 'CONTROL_COMMITTED_RUNTIME_PENDING');
+  assert.equal(afterRestartComposition.publishCalls, 0);
+
+  const effectId = `${restart.idempotencyKey}:${firstWorld.persistence.state.revision}:${firstWorld.persistence.state.generation}`;
+  afterRestartComposition.publicationEvidence.set(effectId, 'NOT_APPLIED');
+  const provenAbsentReplay = await afterRestartService.mutate(restart, ACTOR);
+  assert.equal(provenAbsentReplay.ok, true);
+  assert.equal(afterRestartComposition.publishCalls, 1);
+  assert.equal(firstWorld.persistence.records.get(restart.idempotencyKey).runtimePublication, 'PUBLISHED');
+});
+
+test('committed component-state command failure retries only after NOT_APPLIED readback', async () => {
+  const { service, persistence, composition } = world();
+  const pause = request('state.pending.0001', 0, {
+    command: 'SET_COMPONENT_STATE', componentId: 'basis-engine', desiredState: 'PAUSED',
+  });
+  composition.failPublication = true;
+
+  const first = await service.mutate(pause, ACTOR);
+  assert.equal(first.ok, false);
+  assert.equal(first.failure.code, 'CONTROL_COMMITTED_RUNTIME_PENDING');
+  assert.equal(persistence.records.get(pause.idempotencyKey).runtimePublication, 'PENDING');
+  assert.equal(composition.desired.get('basis-engine'), 'RUNNING');
+
+  composition.failPublication = false;
+  const replay = await service.mutate(pause, ACTOR);
+  assert.equal(replay.ok, true);
+  assert.equal(composition.desired.get('basis-engine'), 'PAUSED');
+  assert.equal(composition.publishCalls, 2);
+  assert.equal(persistence.records.get(pause.idempotencyKey).runtimePublication, 'PUBLISHED');
+});
+
+test('component-state marker failure and process restart remain pending without effect readback', async () => {
+  const firstWorld = world();
+  const pause = request('state.mark.crash.0001', 0, {
+    command: 'SET_COMPONENT_STATE', componentId: 'basis-engine', desiredState: 'PAUSED',
+  });
+  firstWorld.persistence.failMark = true;
+  const first = await firstWorld.service.mutate(pause, ACTOR);
+  assert.equal(first.ok, false);
+  assert.equal(first.failure.code, 'CONTROL_COMMITTED_RUNTIME_PENDING');
+  assert.equal(firstWorld.composition.desired.get('basis-engine'), 'PAUSED');
+
+  firstWorld.persistence.failMark = false;
+  const afterRestartComposition = new FakeComposition();
+  const afterRestartService = new SystemControlService({
+    initialState: firstWorld.persistence.state,
+    persistence: firstWorld.persistence,
+    composition: afterRestartComposition,
+  });
+  const unknownReplay = await afterRestartService.mutate(pause, ACTOR);
+  assert.equal(unknownReplay.ok, false);
+  assert.equal(unknownReplay.failure.code, 'CONTROL_COMMITTED_RUNTIME_PENDING');
+  assert.equal(afterRestartComposition.publishCalls, 0);
+
+  const effectId = `${pause.idempotencyKey}:${firstWorld.persistence.state.revision}:${firstWorld.persistence.state.generation}`;
+  afterRestartComposition.publicationEvidence.set(effectId, 'NOT_APPLIED');
+  const reconciled = await afterRestartService.mutate(pause, ACTOR);
+  assert.equal(reconciled.ok, true);
+  assert.equal(afterRestartComposition.publishCalls, 1);
+  assert.equal(afterRestartComposition.desired.get('basis-engine'), 'PAUSED');
+  assert.equal(firstWorld.persistence.records.get(pause.idempotencyKey).runtimePublication, 'PUBLISHED');
 });
 
 test('kill switch drains intake, blocks resume and risk increase, and release never resumes silently', async () => {

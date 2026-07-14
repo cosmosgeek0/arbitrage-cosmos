@@ -207,7 +207,7 @@ test('[SC-29] legitimate synthetic sources and validate-only decisions remain ex
 test('[SC-29] VALIDATE_ONLY permission does not manufacture observed dry-run truth', () => {
   const unavailable = Object.fromEntries([
     'public-spot-source', 'public-usdm-source', 'market-universe', 'intelligence-runtime',
-    'market-intelligence', 'basis-engine', 'volume-engine', 'capital-supervision',
+    'market-intelligence', 'q-inference', 'basis-engine', 'volume-engine', 'capital-supervision',
     'multileg-risk', 'execution-coordinator-validate-only', 'reconciliation',
     'ledger-persistence', 'engine-supervisor',
   ].map((componentId) => [componentId, {

@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "i00.local-browser-acceptance.v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "truthClass", "capturedAtUtc", "source", "runs", "restart", "truthChecks", "bottomUpAudit", "topbarAudit", "limitations", "passed"],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "evidencePath": { "type": "string", "pattern": "^test/i00/performance/evidence/browser/[A-Za-z0-9._@/-]+\\.(?:png|json)$" },
+    "bottomUpThemeMeasurement": {
+      "type": "object", "additionalProperties": false,
+      "required": ["frameX", "frameY", "frameWidth", "frameHeight", "measurementPath", "measurementSha256", "overflowFailures", "screenshotPath", "screenshotSha256"],
+      "properties": {
+        "frameX": { "type": "number", "minimum": 0, "maximum": 7680 },
+        "frameY": { "type": "number", "minimum": 0, "maximum": 4320 },
+        "frameWidth": { "type": "number", "minimum": 1, "maximum": 7680 },
+        "frameHeight": { "type": "number", "minimum": 1, "maximum": 100000 },
+        "measurementPath": { "$ref": "#/$defs/evidencePath" },
+        "measurementSha256": { "$ref": "#/$defs/sha256" },
+        "overflowFailures": { "const": 0 },
+        "screenshotPath": { "$ref": "#/$defs/evidencePath" },
+        "screenshotSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "bottomUpEntry": {
+      "type": "object", "additionalProperties": false,
+      "required": ["pageId", "path", "light", "dark"],
+      "properties": {
+        "pageId": { "enum": ["calendar", "news", "health", "logs", "risk", "opportunities", "volume", "basis", "markets", "token", "borrow", "account", "dashboard"] },
+        "path": { "enum": ["/calendar", "/news", "/system", "/ledger", "/risk", "/opportunities", "/volume", "/strategies", "/markets", "/detail/BTCUSDT", "/loans", "/account", "/dashboard"] },
+        "light": { "$ref": "#/$defs/bottomUpThemeMeasurement" },
+        "dark": { "$ref": "#/$defs/bottomUpThemeMeasurement" }
+      }
+    },
+    "topbarEntry": {
+      "type": "object", "additionalProperties": false,
+      "required": ["panelId", "triggerKey", "shellWidthPx", "shellHeightPx", "headerHeightPx", "screenshotMode", "truthStateChecked", "controlsChecked", "overflowFailures", "footerBarCount", "lightMeasurementPath", "lightMeasurementSha256", "darkMeasurementPath", "darkMeasurementSha256", "lightScreenshotPath", "lightScreenshotSha256", "darkScreenshotPath", "darkScreenshotSha256"],
+      "properties": {
+        "panelId": { "enum": ["clock", "aws-runner", "api-keys", "trust-advisor", "notifications", "execution-control", "currency", "basis-units", "appearance", "account-details"] },
+        "triggerKey": { "enum": ["clock", "shell", "apikey", "advisor", "notif", "power", "currency", "basisu", "appearance", "account"] },
+        "shellWidthPx": { "const": 398 },
+        "shellHeightPx": { "const": 486 },
+        "headerHeightPx": { "enum": [70, 84] },
+        "screenshotMode": { "const": "FULL_VIEWPORT_WITH_OPEN_PANEL" },
+        "truthStateChecked": { "const": true },
+        "controlsChecked": { "const": true },
+        "overflowFailures": { "const": 0 },
+        "footerBarCount": { "const": 0 },
+        "lightMeasurementPath": { "$ref": "#/$defs/evidencePath" },
+        "lightMeasurementSha256": { "$ref": "#/$defs/sha256" },
+        "darkMeasurementPath": { "$ref": "#/$defs/evidencePath" },
+        "darkMeasurementSha256": { "$ref": "#/$defs/sha256" },
+        "lightScreenshotPath": { "$ref": "#/$defs/evidencePath" },
+        "lightScreenshotSha256": { "$ref": "#/$defs/sha256" },
+        "darkScreenshotPath": { "$ref": "#/$defs/evidencePath" },
+        "darkScreenshotSha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  },
+  "properties": {
+    "schemaVersion": { "const": "i00.local-browser-acceptance.v2" },
+    "truthClass": { "const": "LOCAL_BROWSER_MEASURED" },
+    "capturedAtUtc": { "type": "string", "minLength": 20, "maxLength": 40 },
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["headSha", "treeSha", "appOrigin", "captureProvenance", "captureSessionId", "captureTranscriptPath", "captureTranscriptSha256"],
+      "properties": {
+        "headSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "treeSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "appOrigin": { "type": "string", "pattern": "^http://(?:127\\.0\\.0\\.1|localhost):[0-9]{1,5}$" },
+        "captureProvenance": { "const": "IN_APP_BROWSER_MCP" },
+        "captureSessionId": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{8,160}$" },
+        "captureTranscriptPath": { "$ref": "#/$defs/evidencePath" },
+        "captureTranscriptSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "runs": {
+      "type": "array", "minItems": 6, "maxItems": 6,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["runKey", "theme", "width", "height", "zoom", "reducedMotionChecked", "sourceTimestampsChecked", "stateLabelsChecked", "controlMappingsChecked", "routes"],
+        "properties": {
+          "runKey": { "type": "string", "pattern": "^(?:390x844@1|1600x900@1|2940x1200@1.25)-(?:LIGHT|DARK)$" },
+          "theme": { "enum": ["LIGHT", "DARK"] },
+          "width": { "type": "integer", "minimum": 320, "maximum": 7680 },
+          "height": { "type": "integer", "minimum": 480, "maximum": 4320 },
+          "zoom": { "enum": [1, 1.25] },
+          "reducedMotionChecked": { "const": true },
+          "sourceTimestampsChecked": { "const": true },
+          "stateLabelsChecked": { "const": true },
+          "controlMappingsChecked": { "const": true },
+          "routes": {
+            "type": "array", "minItems": 21, "maxItems": 21,
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["routeId", "path", "rendered", "sourceTimestampState", "stateLabelState", "controlMappingState", "consoleErrors", "overflowFailures", "controlFailures", "screenshotPath", "screenshotSha256"],
+              "properties": {
+                "routeId": { "enum": ["dashboard", "control-room", "account", "wallets", "markets", "detail", "loans", "execution", "orders", "positions", "fills", "pnl", "strategies", "volume", "opportunities", "risk", "ledger", "system", "notifications", "news", "calendar"] },
+                "path": { "enum": ["/dashboard", "/control-room", "/account", "/wallets", "/markets", "/detail/BTCUSDT", "/loans", "/execution", "/orders", "/positions", "/fills", "/pnl", "/strategies", "/volume", "/opportunities", "/risk", "/ledger", "/system", "/notifications", "/news", "/calendar"] },
+                "rendered": { "const": true },
+                "sourceTimestampState": { "enum": ["MEASURED", "NOT_APPLICABLE"] },
+                "stateLabelState": { "const": "CANONICAL_COMPARED" },
+                "controlMappingState": { "enum": ["CANONICAL_COMPARED", "NO_CONTROL_ON_SURFACE"] },
+                "consoleErrors": { "const": 0 },
+                "overflowFailures": { "const": 0 },
+                "controlFailures": { "const": 0 },
+                "screenshotPath": { "$ref": "#/$defs/evidencePath" },
+                "screenshotSha256": { "$ref": "#/$defs/sha256" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "restart": {
+      "type": "object", "additionalProperties": false,
+      "required": ["performed", "measurementPath", "measurementSha256"],
+      "properties": {
+        "performed": { "const": true },
+        "measurementPath": { "$ref": "#/$defs/evidencePath" },
+        "measurementSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "truthChecks": {
+      "type": "object", "additionalProperties": false,
+      "required": ["canonicalApiCompared", "sourceTimestampsChecked", "stateLabelsChecked", "controlMappingsChecked", "canonicalNonGreenRendered", "noFalseGreen", "fakeControlsFound"],
+      "properties": {
+        "canonicalApiCompared": { "const": true },
+        "sourceTimestampsChecked": { "const": true },
+        "stateLabelsChecked": { "const": true },
+        "controlMappingsChecked": { "const": true },
+        "canonicalNonGreenRendered": { "const": true },
+        "noFalseGreen": { "const": true },
+        "fakeControlsFound": { "const": 0 }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["capability", "status", "reason"],
+        "properties": {
+          "capability": { "type": "string", "minLength": 3, "maxLength": 160 },
+          "status": { "enum": ["NOT_CONFIGURED", "OWNER_GATED", "UNKNOWN"] },
+          "reason": { "type": "string", "minLength": 3, "maxLength": 500 }
+        }
+      }
+    },
+    "bottomUpAudit": {
+      "type": "object", "additionalProperties": false,
+      "required": ["order", "themes", "sharedStyleCorrectionOccurred", "restartedAtCalendarAfterCorrection", "entries", "passed"],
+      "properties": {
+        "order": { "type": "array", "minItems": 13, "maxItems": 13, "items": { "type": "string" } },
+        "themes": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "enum": ["LIGHT", "DARK"] } },
+        "sharedStyleCorrectionOccurred": { "type": "boolean" },
+        "restartedAtCalendarAfterCorrection": { "type": "boolean" },
+        "entries": { "type": "array", "minItems": 13, "maxItems": 13, "items": { "$ref": "#/$defs/bottomUpEntry" } },
+        "passed": { "const": true }
+      }
+    },
+    "topbarAudit": {
+      "type": "object", "additionalProperties": false,
+      "required": ["order", "themes", "entries", "passed"],
+      "properties": {
+        "order": { "type": "array", "minItems": 10, "maxItems": 10, "items": { "type": "string" } },
+        "themes": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "enum": ["LIGHT", "DARK"] } },
+        "entries": { "type": "array", "minItems": 10, "maxItems": 10, "items": { "$ref": "#/$defs/topbarEntry" } },
+        "passed": { "const": true }
+      }
+    },
+    "passed": { "const": true }
+  }
+}

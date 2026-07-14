@@ -5,6 +5,8 @@
  * This module compares values only. It has no reconciliation, execution,
  * retry, fill, persistence, transport, or lifecycle capability.
  */
+import { createHash } from 'node:crypto';
+
 import {
   compareExactDecimals,
   divideExactDecimals,
@@ -14,9 +16,12 @@ import {
   type ExactDecimal,
   type NonNegativeDecimal,
 } from '../../capitalFoundation/contracts/decimal.js';
+import { canonicalJson } from '../../foundation/contracts/index.js';
 
 export const FOUNDATION_QUANTITY_BRIDGE_SCHEMA =
   'cosmos.system-integration.foundation-quantity-comparison.v1' as const;
+export const FOUNDATION_QUANTITY_INSTRUMENT_EVIDENCE_SCHEMA =
+  'cosmos.system-integration.foundation-quantity-instrument-evidence.v1' as const;
 
 export type FoundationQuantityComparison =
   | 'EXACT_BINARY_VALUE'
@@ -40,10 +45,14 @@ export interface FoundationQuantityBridgeInput {
   readonly exactJournalQuantity: string;
   /** Original Foundation binary64 quantity; retained unchanged in the result. */
   readonly foundationQuantity: number;
+  /** Canonical product-qualified instrument token, for example SPOT:BTCUSDT. */
+  readonly instrumentId: string;
   /** Exact positive instrument quantity increment. */
   readonly instrumentStep: string;
   /** Exact non-negative absolute tolerance; must be strictly below half-step. */
   readonly instrumentTolerance: string;
+  /** Content revision binding instrument identity, step, and tolerance. */
+  readonly instrumentEvidenceRevision: string;
 }
 
 export interface FoundationQuantityComparisonResult {
@@ -59,8 +68,10 @@ export interface FoundationQuantityComparisonResult {
   /** Exact base-10 expansion of the binary64 value, derived from its bits. */
   readonly foundationExactDecimal: string;
   readonly absoluteDifference: string;
+  readonly instrumentId: string;
   readonly instrumentStep: string;
   readonly instrumentTolerance: string;
+  readonly instrumentEvidenceRevision: string;
   readonly journalStepAlignment: 'ALIGNED';
   readonly stepToleranceRelation: 'UNAMBIGUOUS';
 }
@@ -68,14 +79,18 @@ export interface FoundationQuantityComparisonResult {
 const INPUT_FIELDS = Object.freeze([
   'exactJournalQuantity',
   'foundationQuantity',
+  'instrumentId',
   'instrumentStep',
   'instrumentTolerance',
+  'instrumentEvidenceRevision',
 ] as const);
 const ZERO = '0' as NonNegativeDecimal;
 const TWO = '2' as NonNegativeDecimal;
 const MAX_SAFE = '9007199254740991' as NonNegativeDecimal;
 const FRACTION_MASK = (1n << 52n) - 1n;
 const EXPONENT_MASK = 0x7ffn;
+const INSTRUMENT_ID = /^(?:SPOT|USD_M_PERPETUAL|MARGIN):[A-Z0-9][A-Z0-9._-]{0,63}$/u;
+const INSTRUMENT_EVIDENCE_REVISION = /^fqie_[0-9a-f]{64}$/u;
 
 function failType(code: string, detail: string): never {
   throw new TypeError(`${code}: ${detail}`);
@@ -113,9 +128,24 @@ function closedInput(value: Readonly<FoundationQuantityBridgeInput>): Foundation
   return {
     exactJournalQuantity: read('exactJournalQuantity'),
     foundationQuantity: read('foundationQuantity'),
+    instrumentId: read('instrumentId'),
     instrumentStep: read('instrumentStep'),
     instrumentTolerance: read('instrumentTolerance'),
+    instrumentEvidenceRevision: read('instrumentEvidenceRevision'),
   };
+}
+
+function instrumentIdInput(value: unknown): string {
+  if (typeof value !== 'string'
+    || value.length > 96
+    || value !== value.normalize('NFC').toUpperCase()
+    || !INSTRUMENT_ID.test(value)) {
+    return failType(
+      'INSTRUMENT_ID_INVALID',
+      'instrumentId must be one canonical product-qualified instrument token',
+    );
+  }
+  return value;
 }
 
 function exactInput(value: unknown, label: string): NonNegativeDecimal {
@@ -135,6 +165,27 @@ function exactInput(value: unknown, label: string): NonNegativeDecimal {
     return failType('EXACT_DECIMAL_NON_CANONICAL', `${label} must already be canonical`);
   }
   return normalized;
+}
+
+/**
+ * Content-addresses the exact quantity-filter facts. This is a deterministic
+ * structural binding, not a signature or a source-authority grant.
+ */
+export function deriveFoundationQuantityInstrumentEvidenceRevision(
+  instrumentIdValue: unknown,
+  instrumentStepValue: unknown,
+  instrumentToleranceValue: unknown,
+): string {
+  const instrumentId = instrumentIdInput(instrumentIdValue);
+  const instrumentStep = exactInput(instrumentStepValue, 'instrumentStep');
+  const instrumentTolerance = exactInput(instrumentToleranceValue, 'instrumentTolerance');
+  const material = canonicalJson({
+    schema: FOUNDATION_QUANTITY_INSTRUMENT_EVIDENCE_SCHEMA,
+    instrumentId,
+    instrumentStep,
+    instrumentTolerance,
+  });
+  return `fqie_${createHash('sha256').update(material, 'utf8').digest('hex')}`;
 }
 
 function boundedSafeDecimal(value: NonNegativeDecimal, label: string): void {
@@ -287,8 +338,22 @@ export function compareJournalToFoundationQuantity(
 ): Readonly<FoundationQuantityComparisonResult> {
   const source = closedInput(input);
   const exactJournalQuantity = exactInput(source.exactJournalQuantity, 'exactJournalQuantity');
+  const instrumentId = instrumentIdInput(source.instrumentId);
   const instrumentStep = exactInput(source.instrumentStep, 'instrumentStep');
   const instrumentTolerance = exactInput(source.instrumentTolerance, 'instrumentTolerance');
+  const instrumentEvidenceRevision = source.instrumentEvidenceRevision;
+  if (typeof instrumentEvidenceRevision !== 'string'
+    || !INSTRUMENT_EVIDENCE_REVISION.test(instrumentEvidenceRevision)
+    || instrumentEvidenceRevision !== deriveFoundationQuantityInstrumentEvidenceRevision(
+      instrumentId,
+      instrumentStep,
+      instrumentTolerance,
+    )) {
+    return failType(
+      'INSTRUMENT_EVIDENCE_REVISION_MISMATCH',
+      'instrument evidence revision must bind the exact identity, step, and tolerance',
+    );
+  }
   boundedSafeDecimal(exactJournalQuantity, 'journal quantity');
   proveJournalRoundTrip(exactJournalQuantity);
   proveStepAndTolerance(exactJournalQuantity, instrumentStep, instrumentTolerance);
@@ -328,8 +393,10 @@ export function compareJournalToFoundationQuantity(
     foundationCanonicalDecimal: foundation.canonicalDecimal,
     foundationExactDecimal: foundation.exactDecimal,
     absoluteDifference: delta.absolute,
-    instrumentStep: source.instrumentStep,
-    instrumentTolerance: source.instrumentTolerance,
+    instrumentId,
+    instrumentStep,
+    instrumentTolerance,
+    instrumentEvidenceRevision,
     journalStepAlignment: 'ALIGNED' as const,
     stepToleranceRelation: 'UNAMBIGUOUS' as const,
   });

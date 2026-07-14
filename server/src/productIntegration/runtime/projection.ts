@@ -2,8 +2,18 @@ import { createHash } from 'node:crypto';
 import type { SystemComponentSnapshot } from '../../systemIntegration/contracts/types.js';
 import type { SystemTruthLabel } from '../../systemIntegration/contracts/constants.js';
 import type { SystemSupervisorReadModel } from '../../systemIntegration/supervisor/types.js';
+import type {
+  CanonicalOpsIntakeInterlock,
+  CanonicalSupervisorOpsReadback,
+} from '../../systemIntegration/ops/index.js';
+import type { BootReleaseReadback } from '../../systemIntegration/persistence/index.js';
+import {
+  deriveI00MeaningfulAdvanceEvidence,
+  projectI00Health,
+} from '../../systemIntegration/application/health.js';
 import { buildProductRuntimeControlRegistry } from './controls.js';
 import { productTruthLabel } from './events.js';
+import { buildProductRuntimeManagedInventory } from './managedInventory.js';
 import {
   PRODUCT_RUNTIME_SUPERVISOR_SCHEMA,
   type ProductRuntimeCapability,
@@ -22,7 +32,7 @@ import {
 
 const SURFACE_EVIDENCE = Object.freeze({
   dashboard: ['overall-posture', 'startup', 'revisions', 'mode', 'capital', 'pnl-drawdown', 'pipeline-counts', 'active-objects', 'root-blocker', 'attention', 'strategy-q', 'material-decisions'],
-  'control-room': ['machine-graph', 'dependency-edges', 'boot-timeline', 'control-registry', 'revision-conflicts', 'async-progress', 'before-after', 'config-history', 'authority', 'correlation', 'emergency-controls'],
+  'control-room': ['machine-graph', 'dependency-edges', 'boot-timeline', 'control-registry', 'revision-conflicts', 'async-progress', 'before-after', 'config-history', 'authority', 'correlation', 'emergency-controls', 'deployment-frozen', 'exposure-state', 'ambiguity-state', 'recovery-state', 'ledger-schema-compatibility', 'ops-interlock'],
   account: ['spot-truth', 'usdm-truth', 'margin-truth', 'balances-equity-collateral', 'available-capital', 'permissions-modes', 'orders-positions', 'liabilities-interest', 'freshness-completeness', 'reconciliation', 'foreign-manual'],
   markets: ['basis', 'wake-up', 'flow', 'liquidity', 'derivatives', 'data-quality', 'candidate-focus', 'source-freshness', 'q-assessment'],
   token: ['first-change', 'evidence-timeline', 'spot-perp-leadership', 'market-context', 'candidate-focus', 'q-model', 'strategy-decisions', 'conflicts-missing', 'ticket-position', 'outcome'],
@@ -36,7 +46,7 @@ const SURFACE_EVIDENCE = Object.freeze({
   fills: ['fill-identities', 'quantities', 'fees-spread-slippage', 'reconciliation', 'correlation'],
   pnl: ['directional', 'basis-convergence', 'funding', 'borrow-interest', 'fees', 'spread', 'slippage', 'one-leg-exposure', 'execution-recovery-error', 'net-result'],
   risk: ['envelope-revision', 'utilization-reservations', 'gross-net-unhedged', 'concentration', 'loss-drawdown', 'stale-data', 'liquidity-impact', 'ambiguity-recovery', 'gate-decisions', 'halt-posture'],
-  health: ['lifecycle-capability', 'heartbeat-advance', 'source-event-processing-age', 'queue-drop-backpressure', 'reconnect-error', 'rest-latency-budget', 'q-latency-queue', 'db-ledger', 'host-runtime', 'backup-release-watchdog', 'root-blocker-action'],
+  health: ['lifecycle-capability', 'heartbeat-advance', 'source-event-processing-age', 'queue-drop-backpressure', 'reconnect-error', 'rest-latency-budget', 'q-latency-queue', 'db-ledger', 'host-runtime', 'backup-release-watchdog', 'root-blocker-action', 'deployment-frozen', 'exposure-state', 'ambiguity-state', 'recovery-state', 'ledger-schema-compatibility', 'ops-interlock'],
   'logs-ledger': ['event-class-severity', 'component-strategy-symbol', 'correlation', 'fingerprint', 'bounded-pagination', 'saved-filters', 'trace', 'redaction', 'retention', 'raw-debug'],
   notifications: ['fingerprint-dedup', 'causal-group', 'root-cause', 'severity-capital', 'first-last-count', 'state', 'owner-action', 'routing', 'correlation', 'silence-ack', 'recovery-proof'],
 } as const);
@@ -110,6 +120,7 @@ function components(
   snapshot: Readonly<SystemSupervisorReadModel>,
   nowMs: number,
 ): readonly Readonly<ProductRuntimeComponentProjection>[] {
+  const meaningfulAdvance = deriveI00MeaningfulAdvanceEvidence(snapshot);
   return Object.freeze(snapshot.components.map((component) => {
     const root = snapshot.rootCauses.find((candidate) => candidate.componentId === component.componentId
       || candidate.affectedComponentIds.includes(component.componentId));
@@ -122,9 +133,9 @@ function components(
       observedLifecycle: recovery ? 'RECOVERY_REQUIRED' : observedLifecycle(component),
       capability: capability(component),
       heartbeatAtMs: component.lastSuccessAtMs,
-      // System Integration does not yet expose a distinct canonical meaningful-
-      // advance timestamp. A successful health sample is not promoted into one.
-      lastAdvanceAtMs: null,
+      lastAdvanceAtMs: component.componentId === meaningfulAdvance?.ownerComponentId
+        ? meaningfulAdvance.observedAtMs
+        : null,
       sourceAgeMs: component.freshness?.ageMs ?? age(nowMs, component.sourceTimestamp?.sourceTimeMs ?? null),
       eventAgeMs: age(nowMs, component.lastReceiveAtMs),
       processingAgeMs: age(nowMs, component.lastProcessAtMs),
@@ -160,9 +171,58 @@ function freshness(snapshot: Readonly<SystemSupervisorReadModel>): string | null
   return `${Math.max(...sources.map((component) => component.freshness!.ageMs!))}ms max public-source age`;
 }
 
+const FULL_GIT_SHA = /^[0-9a-f]{40}$/;
+const RELEASE_REVISION = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/;
+const UNRESOLVED_RELEASE_REVISION = /REPLACE_ME|CHANGEME|example\.com|000000000000|^(?:UNKNOWN|UNAVAILABLE|NOT_CONFIGURED)$/i;
+
+function validReleaseRevision(value: string | null): string | null {
+  return value !== null
+    && RELEASE_REVISION.test(value)
+    && !UNRESOLVED_RELEASE_REVISION.test(value)
+    ? value
+    : null;
+}
+
+function releaseRevisions(
+  readback: Readonly<BootReleaseReadback> | null | undefined,
+): Readonly<Pick<ProductRuntimeOwnerView['revisions'],
+  'testedCommit' | 'deployedCommit' | 'configRevision' | 'modelRevision'>> {
+  const latest = readback?.source === 'SYSTEM_INTEGRATION_LEDGER_BOOT_RELEASE'
+    && readback.state === 'AVAILABLE'
+    ? readback.latest
+    : null;
+  const testedCommit = latest?.lifecycleState === 'ACTIVE'
+    && latest.identityState !== 'UNKNOWN'
+    && latest.deploymentMutationAuthority === 'NONE'
+    && FULL_GIT_SHA.test(latest.testedCommit ?? '')
+    && validReleaseRevision(latest.schemaRevision) !== null
+    ? latest.testedCommit
+    : null;
+  if (testedCommit === null) {
+    return Object.freeze({
+      testedCommit: null,
+      deployedCommit: null,
+      configRevision: null,
+      modelRevision: null,
+    });
+  }
+  return Object.freeze({
+    testedCommit,
+    // A tested commit never becomes a deployed claim by fallback.
+    deployedCommit: FULL_GIT_SHA.test(latest!.deployedCommit ?? '')
+      ? latest!.deployedCommit
+      : null,
+    configRevision: validReleaseRevision(latest!.configRevision),
+    modelRevision: validReleaseRevision(latest!.modelRevision),
+  });
+}
+
 function ownerView(
   snapshot: Readonly<SystemSupervisorReadModel>,
   materialEvents: Readonly<ProductRuntimeMaterialEventPage>,
+  applicationStartOk: boolean,
+  applicationStartFailureCodes: readonly string[],
+  bootReleaseReadback?: Readonly<BootReleaseReadback> | null,
 ): Readonly<ProductRuntimeOwnerView> {
   const recovery = snapshot.summaries.execution.recoveryState
     ?? (snapshot.summaries.reconciliation.blocksNewExposure
@@ -172,12 +232,24 @@ function ownerView(
     && !materialEvents.hasMore
     && materialEvents.nextCursor === materialEvents.highWaterCursor;
   const latest = atHighWater ? materialEvents.items.at(-1) : undefined;
-  const ready = snapshot.overallPosture === 'READY';
+  const supervisorPostureReady = snapshot.overallPosture === 'READY';
+  const meaningfulAdvance = deriveI00MeaningfulAdvanceEvidence(snapshot);
+  const readiness = projectI00Health(
+    'READY',
+    snapshot,
+    applicationStartOk,
+    meaningfulAdvance,
+    applicationStartFailureCodes,
+  );
+  const machineReady: ProductRuntimeOwnerView['machineReady'] = readiness.ok
+    ? 'YES'
+    : supervisorPostureReady ? 'UNKNOWN' : 'NO';
+  const revisions = releaseRevisions(bootReleaseReadback);
   return Object.freeze({
     // A successfully evaluated authenticated Product read proves this process
-    // answered. Whole-machine readiness remains the canonical supervisor fact.
+    // answered. Whole-machine readiness remains the canonical health contract.
     processAlive: 'YES',
-    machineReady: ready ? 'YES' : 'NO',
+    machineReady,
     tradeReady: 'NO',
     desiredMode: snapshot.control.safeMode,
     effectiveMode: snapshot.control.killSwitchEngaged ? 'BLOCKED' : snapshot.control.safeMode,
@@ -185,19 +257,22 @@ function ownerView(
     unresolvedRecovery: recovery,
     dataFreshness: freshness(snapshot),
     topRootBlocker: snapshot.firstRootBlockerComponentId
-      ?? (ready ? null : `CANONICAL_SUPERVISOR_${snapshot.overallPosture}`),
+      ?? (machineReady === 'UNKNOWN'
+        ? readiness.reasonCodes[0] ?? 'CANONICAL_READINESS_NOT_PROVEN'
+        : machineReady === 'YES'
+          ? null
+        : `CANONICAL_SUPERVISOR_${snapshot.overallPosture}`),
     activeOpportunity: null,
     activeTicket: null,
     activePosition: null,
     latestMaterialChange: latest ? `${latest.kind}:${latest.eventId}` : null,
     revisions: Object.freeze({
-      testedCommit: null,
-      deployedCommit: null,
-      modelRevision: null,
-      // The generic System control-state revision also advances for posture and
-      // lifecycle mutations. It is not a canonical configuration-owner
-      // revision and must not be relabelled as one.
-      configRevision: null,
+      testedCommit: revisions.testedCommit,
+      deployedCommit: revisions.deployedCommit,
+      modelRevision: revisions.modelRevision,
+      configRevision: revisions.configRevision,
+      // This is the Product envelope contract revision. Ledger schema truth
+      // remains separately owned by the canonical ops readback.
       schemaRevision: PRODUCT_RUNTIME_SUPERVISOR_SCHEMA,
     }),
   });
@@ -239,12 +314,84 @@ function surfaceTruth(surfaceId: keyof typeof SURFACE_EVIDENCE, snapshot: Readon
   return productTruthLabel(snapshot.truthLabel);
 }
 
+const OPS_SURFACE_FIELDS = new Set([
+  'deployment-frozen',
+  'exposure-state',
+  'ambiguity-state',
+  'recovery-state',
+  'ledger-schema-compatibility',
+  'ops-interlock',
+]);
+
+function opsInterlockTruth(interlock: Readonly<CanonicalOpsIntakeInterlock>): ProductRuntimeTruthLabel {
+  if (!interlock.blocksNewEntries) return 'WIRED';
+  return interlock.reasonCodes.some((code) => (
+    code.includes('UNKNOWN')
+    || code.includes('INVALID')
+    || code.includes('NOT_CURRENT')
+    || code.includes('UNAVAILABLE')
+  )) ? 'UNKNOWN' : 'BLOCKED';
+}
+
+function opsDatum(
+  fieldId: string,
+  readback: Readonly<CanonicalSupervisorOpsReadback>,
+  interlock: Readonly<CanonicalOpsIntakeInterlock>,
+): Readonly<Pick<ProductRuntimeSurfaceDatum, 'value' | 'truthLabel' | 'canonicalSource' | 'unavailableReason'>> | null {
+  if (!OPS_SURFACE_FIELDS.has(fieldId)) return null;
+  let value: string | null;
+  let truthLabel: ProductRuntimeTruthLabel;
+  let unavailableReason: string | null = null;
+  if (fieldId === 'deployment-frozen') {
+    value = readback.deploymentFrozen === true ? 'FROZEN'
+      : readback.deploymentFrozen === false ? 'NOT_FROZEN' : 'UNKNOWN_FROZEN';
+    truthLabel = readback.deploymentFrozen === true ? 'BLOCKED'
+      : readback.deploymentFrozen === false ? 'WIRED' : 'UNKNOWN';
+    unavailableReason = readback.deploymentFrozen === 'UNKNOWN' ? 'DEPLOYMENT_FREEZE_STATE_UNKNOWN'
+      : readback.deploymentFrozen ? 'DEPLOYMENT_FROZEN' : null;
+  } else if (fieldId === 'exposure-state') {
+    value = readback.exposureState;
+    truthLabel = readback.exposureState === 'NONE' ? 'WIRED'
+      : readback.exposureState === 'UNKNOWN' ? 'UNKNOWN' : 'BLOCKED';
+    unavailableReason = readback.exposureState === 'NONE' ? null : `EXPOSURE_${readback.exposureState}`;
+  } else if (fieldId === 'ambiguity-state') {
+    value = readback.ambiguityState;
+    truthLabel = readback.ambiguityState === 'NONE' ? 'WIRED'
+      : readback.ambiguityState === 'UNKNOWN' ? 'UNKNOWN' : 'BLOCKED';
+    unavailableReason = readback.ambiguityState === 'NONE' ? null : `AMBIGUITY_${readback.ambiguityState}`;
+  } else if (fieldId === 'recovery-state') {
+    value = readback.recoveryState;
+    truthLabel = readback.recoveryState === 'NONE' ? 'WIRED'
+      : readback.recoveryState === 'UNKNOWN' ? 'UNKNOWN' : 'BLOCKED';
+    unavailableReason = readback.recoveryState === 'NONE' ? null : `RECOVERY_${readback.recoveryState}`;
+  } else if (fieldId === 'ledger-schema-compatibility') {
+    const available = readback.currentSchemaVersion !== null && readback.rollbackFloor !== null;
+    value = available
+      ? `CURRENT ${readback.currentSchemaVersion} · ROLLBACK FLOOR ${readback.rollbackFloor}`
+      : null;
+    truthLabel = available ? 'WIRED' : 'UNKNOWN';
+    unavailableReason = available ? null : 'LEDGER_SCHEMA_COMPATIBILITY_UNKNOWN';
+  } else {
+    value = interlock.state;
+    truthLabel = opsInterlockTruth(interlock);
+    unavailableReason = interlock.reasonCodes[0] ?? null;
+  }
+  return Object.freeze({
+    value,
+    truthLabel,
+    canonicalSource: `canonicalSupervisorOpsReadback:${fieldId}`,
+    unavailableReason,
+  });
+}
+
 function surfaces(
   snapshot: Readonly<SystemSupervisorReadModel>,
   dashboard: Readonly<SystemSupervisorReadModel>,
   view: Readonly<ProductRuntimeOwnerView>,
   materialEvents: Readonly<ProductRuntimeMaterialEventPage>,
   controlCount: number,
+  opsReadback: Readonly<CanonicalSupervisorOpsReadback>,
+  opsIntakeInterlock: Readonly<CanonicalOpsIntakeInterlock>,
 ): Readonly<Record<string, Readonly<ProductRuntimeSurfaceProjection>>> {
   const known: Readonly<Record<string, string | null>> = Object.freeze({
     'overall-posture': dashboard.overallPosture,
@@ -266,8 +413,10 @@ function surfaces(
     reconciliation: snapshot.summaries.reconciliation.status,
     'halt-posture': snapshot.control.killSwitchEngaged ? 'ENGAGED' : 'CLEAR',
     'lifecycle-capability': `${snapshot.components.length} owner projections`,
-    // System Integration has no distinct canonical meaningful-advance fact.
-    'heartbeat-advance': null,
+    'heartbeat-advance': (() => {
+      const advance = deriveI00MeaningfulAdvanceEvidence(snapshot);
+      return advance ? `${advance.ownerComponentId} · ${advance.observedAtMs}` : null;
+    })(),
     'source-event-processing-age': view.dataFreshness,
     'db-ledger': snapshot.summaries.ledger.writable === null ? null : snapshot.summaries.ledger.writable ? 'WRITABLE' : 'NOT_WRITABLE',
     'root-blocker-action': view.topRootBlocker,
@@ -276,7 +425,10 @@ function surfaces(
   });
   const result: Record<string, Readonly<ProductRuntimeSurfaceProjection>> = {};
   for (const surfaceId of Object.keys(SURFACE_EVIDENCE) as (keyof typeof SURFACE_EVIDENCE)[]) {
-    const truthLabel = surfaceTruth(surfaceId, snapshot);
+    const baseTruthLabel = surfaceTruth(surfaceId, snapshot);
+    const truthLabel = (surfaceId === 'control-room' || surfaceId === 'health')
+      ? weakestSurfaceTruth([baseTruthLabel, opsInterlockTruth(opsIntakeInterlock)])
+      : baseTruthLabel;
     const blocked = truthLabel === 'MISSING' || truthLabel === 'NOT_CONFIGURED'
       || truthLabel === 'UNAVAILABLE' || truthLabel === 'UNKNOWN';
     const blockedSummary = truthLabel === 'UNKNOWN'
@@ -294,6 +446,14 @@ function surfaces(
           ? 'CANONICAL_OWNER_UNAVAILABLE'
           : 'CANONICAL_OWNER_NOT_CONFIGURED';
     const evidence = SURFACE_EVIDENCE[surfaceId].map((fieldId) => {
+      const canonicalOpsDatum = opsDatum(fieldId, opsReadback, opsIntakeInterlock);
+      if (canonicalOpsDatum) {
+        return Object.freeze({
+          fieldId,
+          label: fieldId.replaceAll('-', ' '),
+          ...canonicalOpsDatum,
+        } satisfies ProductRuntimeSurfaceDatum);
+      }
       const value = Object.prototype.hasOwnProperty.call(known, fieldId) ? known[fieldId]! : null;
       const meaningfulAdvanceUnknown = fieldId === 'heartbeat-advance' && value === null;
       return Object.freeze({
@@ -359,19 +519,40 @@ function hasSyntheticEvidence(input: Readonly<{
 }
 
 export function buildProductRuntimeSupervisorEnvelope(input: Readonly<{
+  applicationStartOk: boolean;
+  applicationStartFailureCodes?: readonly string[];
   snapshot: Readonly<SystemSupervisorReadModel>;
+  opsReadback: Readonly<CanonicalSupervisorOpsReadback>;
+  opsIntakeInterlock: Readonly<CanonicalOpsIntakeInterlock>;
+  bootReleaseReadback?: Readonly<BootReleaseReadback> | null;
   materialEvents: Readonly<ProductRuntimeMaterialEventPage>;
   traces: readonly Readonly<ProductRuntimeCorrelationTrace>[];
   nowMs: number;
   commandOwner?: Readonly<ProductRuntimeCommandOwnerPort>;
 }>): Readonly<ProductRuntimeSupervisorEnvelope> {
   if (!Number.isFinite(input.nowMs)) throw new TypeError('nowMs must be injected finite UTC milliseconds');
+  if (typeof input.applicationStartOk !== 'boolean') throw new TypeError('applicationStartOk must be an injected boolean');
   const dashboard = cloneDashboard(input.snapshot);
   const projectedComponents = components(input.snapshot, input.nowMs);
+  const managedInventory = buildProductRuntimeManagedInventory(projectedComponents);
   const projectedEdges = edges(input.snapshot);
   const controls = buildProductRuntimeControlRegistry(input.snapshot, input.commandOwner);
-  const view = ownerView(input.snapshot, input.materialEvents);
-  const projectedSurfaces = surfaces(input.snapshot, dashboard, view, input.materialEvents, controls.length);
+  const view = ownerView(
+    input.snapshot,
+    input.materialEvents,
+    input.applicationStartOk,
+    input.applicationStartFailureCodes ?? Object.freeze([]),
+    input.bootReleaseReadback,
+  );
+  const projectedSurfaces = surfaces(
+    input.snapshot,
+    dashboard,
+    view,
+    input.materialEvents,
+    controls.length,
+    input.opsReadback,
+    input.opsIntakeInterlock,
+  );
   const revision = `system-${input.snapshot.revision}-runtime-${input.snapshot.runtimeGeneration}-control-${input.snapshot.controlGeneration}`;
   const body = {
     schemaVersion: PRODUCT_RUNTIME_SUPERVISOR_SCHEMA,
@@ -379,9 +560,15 @@ export function buildProductRuntimeSupervisorEnvelope(input: Readonly<{
     evaluatedAtMs: input.nowMs,
     truthLabel: productTruthLabel(input.snapshot.truthLabel),
     persistentSyntheticLabel: hasSyntheticEvidence(input),
+    opsReadback: Object.freeze({ ...input.opsReadback }),
+    opsIntakeInterlock: Object.freeze({
+      ...input.opsIntakeInterlock,
+      reasonCodes: Object.freeze([...input.opsIntakeInterlock.reasonCodes]),
+    }),
     ownerView: view,
     dashboard,
     components: projectedComponents,
+    managedInventory,
     dependencyEdges: projectedEdges,
     controls,
     traces: Object.freeze([...input.traces]),

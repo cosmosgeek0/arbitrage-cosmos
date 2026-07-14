@@ -2,7 +2,14 @@
 
 Rule: one block = one chat = one folder. Director appends/replaces blocks at every event; check the top entry's date. Board truth: QL_PARALLEL_DAG.md.
 
-## ACTIVE WAVE 9 (2026-07-14, post SI-RECON) — run: L09-ACCEPT + S4. Everything else done.
+## ACTIVE WAVE 10 (2026-07-14) — FINAL BUILDER RUN: L-spine finale. (S4 reseal continues if not done.)
+
+### L-SPINE-FINALE — folder /Users/cosmosgeek/Desktop/live-execution-proof-20260712
+```text
+You are the L-lane lead builder for the FINAL spine phases (D-LAUNCH-2/4 laws; verify branch live-execution-control-proof-20260712; `git log --oneline -3` shows director merges of accepted L09 + current-main sync incl. F-BRIDGE/SI-RECON; liveEdge 72/72 + foundation green at your base). L00–L11 + L14 are ACCEPTED AND MERGED. RESUME FROM DURABLE STATE (LIVE_EXECUTION_BUILD_STATE.md, receipts). Execute CONTINUOUSLY to lane completion per LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md: the remaining phases in directive order (capital/risk/approval integration §19 → exposure/recovery supervisor §20 → Control Room/machine-graph adapters §22 + observability §23 lane-side work → L16 proof → L17 readiness; L15 satellite already ACCEPTED, L14 merged — do not redo). Full evidenced loop per phase, self-accepted; docs/DASHBOARD_TRUTH.md binds cockpit truth; §3.3 exclusive paths; shared files = patch requests only; TWO deferred I00 patch requests remain queued (ledger CAS + quantity bridge) — do not implement them. Hard external boundary unchanged. Usage limit → commit+receipt+stop clean; same message resumes. Stop only at BLOCKED or L LANE_READY: full lane acceptance gate, final receipt (LIVE_EDGE_RECEIPT.md), frozen HEAD — then park for director audit + serial I00 fan-in.
+```
+
+## HISTORICAL WAVE 9 (2026-07-14, post SI-RECON) — run: L09-ACCEPT + S4. Everything else done.
 
 ### L09-ACCEPT — folder /Users/cosmosgeek/Desktop/l09-normal-basis
 ```text

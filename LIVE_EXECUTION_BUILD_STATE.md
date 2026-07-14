@@ -2,13 +2,13 @@
 
 Schema version: 1
 
-Generation: 17
+Generation: 18
 
 Program: `LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H`
 
 Current phase: `L13`
 
-Phase status: `VERIFIED_PENDING_RECEIPT`
+Phase status: `RECEIPT_SEALED_PENDING_ACCEPTANCE`
 
 Lane status: `L_SPINE_FINALE_ACTIVE`
 
@@ -116,6 +116,12 @@ Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`, `L06`, `L07`, `L08`, 
   `6adb4b0b65744410036f74fc29d9af082cc4f02d`
 - L12 immutable receipt SHA-256:
   `15fcaf2d2cf90ca534c4c26ef59560b10b6a4e2549a71ad6d02c7c4abbe8f7b6`
+- L13 implementation commit:
+  `2bd645364091684e106770df7f68fa7b720c7c0b`.
+- L13 implementation tree:
+  `c278f58a65b99e3b4c17c3afdd6adfadfe8ccc26`.
+- L13 source/test aggregate SHA-256:
+  `995e9f1044bd1717e5d6a9b3a64a0d253ad8fa399f1897005398874589263284`.
 - L09-002 source blocker commit:
   `a560b8ac84820e5edc15c5f36727368ecc9c9442`; decision blob
   `caa3df4ce16fdae168c298d0bb64e29e976e76b4`, SHA-256
@@ -141,7 +147,8 @@ Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`, `L06`, `L07`, `L08`, 
 - Path: `live-edge-receipts/TASKS/L13.md`.
 - Preceding accepted receipt:
   `live-edge-receipts/RECEIPTS/L12.md`.
-- L13 implementation status: `VERIFIED_PENDING_RECEIPT`.
+- L13 implementation status: `RECEIPT_SEALED_PENDING_ACCEPTANCE` at
+  `live-edge-receipts/RECEIPTS/L13.md`.
 - Required shape: one pure 27-role/18-control/36-metric/13-alarm owner-evidence
   adapter, with no graph, health, alarm, control, persistence or action
   authority.

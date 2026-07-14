@@ -2,6 +2,13 @@
 
 Rule: one block = one chat = one folder. Director appends/replaces blocks at every event; check the top entry's date. Board truth: QL_PARALLEL_DAG.md.
 
+## ACTIVE WAVE 15 (2026-07-14, D-LAUNCH-24) — one more parallel chat: LANDING-DOCS in the freed PRE-VERIFY chat.
+
+### LANDING-DOCS — SAME chat/folder as PRE-VERIFY: /Users/cosmosgeek/Desktop/preverify
+```text
+Director unparks your worktree for ONE more NON-DONOR advisory task (D-LAUNCH-24; branch preverify-20260714, HEAD 0b566d6; same laws as before: write only here, read-only toward everything else, never push, never merge, nothing you produce enters the candidate). TASK: pre-draft the landing-commit documentation so the director's Phase-5 landing is mechanical. The landing commit must update root ARCHITECTURE.md Part II (System Authority Map) and the capability map — draft them now. DELIVERABLES (commit + extend PREVERIFY_RECEIPT.md): (1) ARCHITECTURE_PART_II_LANDING_DRAFT.md — the amended authority map: one row per concept-owner, adding/adjusting owners introduced by the 16 integrated donors (liveEdge families: exchange twin, order policy, basis/volume lifecycles, durable controls, recovery supervisor; productAssurance systemic families S1-S8 incl. qCoverage; quant advisory factory boundary — advisory, never authority; IP-RUNTIME/CONTROL/OPS/PROOF surfaces; dashboard shell mount; edge-protocol ownership). Derive owners from donor receipts and the integration branch READ-ONLY via git show against i00-product-assembly-20260713 (it is ACTIVE — never write or checkout there; expect drift until candidate freeze and mark the draft DRAFT-UNTIL-CANDIDATE-SHA). Preserve the existing one-concept-one-owner format exactly. (2) CAPABILITY_MAP_LANDING_DRAFT.md — the QL_DIRECTOR_STATE-style capability map rewritten post-integration: LIVE_PUBLIC / WIRED / VALIDATE_ONLY / SYNTHETIC / UNWIRED-DORMANT / MISSING-BY-DESIGN buckets with exact component names, honest labels (BUILT_AND_TESTED_UNWIRED where true, LIVE_EXECUTION_NOT_IMPLEMENTED untouched). (3) ROOT_DOCS_DELTA_NOTES.md — bullet deltas (if any) README.md and MISSION.md need at landing (one file per purpose law; no new root docs). Deterministic, zero network, no secrets. Usage limit → commit+receipt+stop clean; same message resumes. Stop at LANDING_DOCS_READY or precise BLOCKED.
+```
+
 ## ACTIVE WAVE 14 (2026-07-14, D-LAUNCH-22) — RUN BOTH NOW in parallel with the integrator. Full queue below so nothing needs re-asking.
 
 ### S3-DEEPEN — SAME chat/folder as the A-FORMAL repair worker: /Users/cosmosgeek/Desktop/ip-assur-formal

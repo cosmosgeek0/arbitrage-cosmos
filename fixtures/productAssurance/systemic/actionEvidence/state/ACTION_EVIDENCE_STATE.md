@@ -8,7 +8,12 @@
 - Scope: `fixtures/productAssurance/systemic/actionEvidence/**` and `test/productAssurance/systemic/actionEvidence/**` only
 - Candidate relation: `NON_CANDIDATE_POST_LANDING_DONOR`
 - Re-entry: `POST_LANDING_DIRECTOR_CONTROLLED_ONLY`
-- Packet status: `IMPLEMENTED_AWAITING_RECEIPT_SEAL`
+- Packet status: `ACTION_EVIDENCE_PRESTAGE_READY`
+- Accepted implementation commit: `4eaf9bd28e5d76ad26ca081c74eb2cedb3a087fc`
+- Accepted implementation root tree: `d3f3281da07301244dc99516ab497ec812480e89`
+- Accepted fixture tree: `55a658046e18095e7d147971a905e69bea2b137d`
+- Accepted test tree: `fc66a628865c546c5c5b5b03e6efec19b4b48302`
+- Receipt: `fixtures/productAssurance/systemic/actionEvidence/receipts/ACTION_EVIDENCE_PRESTAGE_RECEIPT.md`
 - Immutable authority input: `c57610cb5f7d56efb61e53ae27057fbe92a6a2f6`
 - Frozen core input: `08a0a09780727e2b4ba59017b5701998abe29b77`
 - Frozen S1 input: `ab33b3712cddd67c3ec91cfa1dd232c75226cd9f`
@@ -23,4 +28,4 @@
 - Secrets and money paths: 0
 - Merge, push, assembly signaling, other-worktree writes: 0
 
-The packet cannot approve, block, rank, authorize, restore, widen, send, dispatch, or execute any action. Final acceptance requires a clean scoped diff, the exact focused suite under total network deny, and a packet-local immutable receipt referencing the implementation commit.
+The packet cannot approve, block, rank, authorize, restore, widen, send, dispatch, or execute any action. The scoped prestage acceptance is sealed by the packet-local receipt above. It is not part of the frozen candidate, cannot signal assembly, and cannot re-enter until after landing and director-recorded `INTEGRATED_ACCEPTED`. Root `STATE.md` remains intentionally untouched under the exclusive-path directive.

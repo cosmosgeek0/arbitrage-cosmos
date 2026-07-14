@@ -2,17 +2,17 @@
 
 Schema version: 1
 
-Generation: 21
+Generation: 22
 
 Program: `LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H`
 
-Current phase: `L16`
+Current phase: `L17`
 
-Phase status: `RECEIPT_SEALED_PENDING_ACCEPTANCE`
+Phase status: `ISSUED`
 
 Lane status: `L_SPINE_FINALE_ACTIVE`
 
-Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`, `L06`, `L07`, `L08`, `L08.1`, `L08.2`, `L09`, `L10`, `L11`, `L12`, `L13`, `L14`; `L15` is accepted on its satellite and awaits I00 fan-in.
+Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`, `L06`, `L07`, `L08`, `L08.1`, `L08.2`, `L09`, `L10`, `L11`, `L12`, `L13`, `L14`, `L16`; `L15` is accepted on its satellite and awaits I00 fan-in.
 
 ## D-LAUNCH-16 RESUME AND WORKER SCOPE BASELINE
 
@@ -136,6 +136,14 @@ Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`, `L06`, `L07`, `L08`, 
   `3ba07e8fad103c1594e3a3784a3af2c2537ad026`.
 - L16 source/test aggregate SHA-256:
   `2f018bc4eed477c8cbc3b3c858586bc1ac141ceab7a12b078ec55173d82cd473`.
+- L16 immutable receipt commit:
+  `7b831ad56bddbef65c928cc65d3dc7f05cb895da`.
+- L16 immutable receipt tree:
+  `eb41551bed9fcff058296592c52b2589162c96ec`.
+- L16 immutable receipt blob:
+  `c31c5ecb845deb1295e35ba4381158d6e35e1fdb`.
+- L16 immutable receipt SHA-256:
+  `5c7143da75bfe409569e4e169e71d9817e8a315227a18843f335983605a7a0ac`.
 - L09-002 source blocker commit:
   `a560b8ac84820e5edc15c5f36727368ecc9c9442`; decision blob
   `caa3df4ce16fdae168c298d0bb64e29e976e76b4`, SHA-256
@@ -158,15 +166,15 @@ Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`, `L06`, `L07`, `L08`, 
 
 ## Exact current task
 
-- Path: `live-edge-receipts/TASKS/L16.md`.
+- Path: `live-edge-receipts/TASKS/L17.md`.
 - Preceding accepted receipt:
-  `live-edge-receipts/RECEIPTS/L13.md`.
-- L13 implementation status: `ACCEPTED_BUILT_AND_TESTED_UNWIRED`.
-- L16 implementation status: `RECEIPT_SEALED_PENDING_ACCEPTANCE`; its focused,
-  accumulated and repository gates pass and `RECEIPTS/L16.md` is sealed.
-- Required shape: one pure L12→L13 lineage and external-proof classification
-  adapter that binds exact L15 satellite evidence while preventing any local,
-  synthetic, infrastructure or receipt fact from becoming deployed/live truth.
+  `live-edge-receipts/RECEIPTS/L16.md`.
+- L16 implementation status: `ACCEPTED_BUILT_AND_TESTED_UNWIRED`.
+- L17 implementation status: `ISSUED`.
+- Required shape: one hostile-tested D-LAUNCH-16 worker-only scope gate, one
+  pure final evidence adapter and one exact final receipt. Local
+  `LANE_READY` must remain distinct from combined, integrated, deployed,
+  private, trade-ready or live acceptance.
 
 ## Frozen input hashes
 
@@ -195,11 +203,9 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 
 ## Working-tree checkpoint
 
-- This checkpoint contains the L16 source under
-  `server/src/liveEdge/adapters/externalProofEvidence/**`, its five focused
-  test files, D0018, the verified task, `RECEIPTS/L16.md` and these two mutable
-  manifests. Receipt acceptance is intentionally a later non-self-referential
-  commit.
+- This checkpoint accepts the immutable L16 receipt and issues L17 through
+  `TASKS/L17.md`, D0019 and `RECEIPTS/L16_ACCEPTANCE.md`. L17 implementation
+  begins only after this checkpoint is committed.
 - Expected untracked preserved owner inputs: `DIRECTOR_Q_L_TWO_LANE_LAUNCH.md`, `LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md`.
 - Worker scope is measured from director merge
   `3a8e17be71d21df14f6b236a563cb0595f9eb824`; director-imported history is
@@ -292,14 +298,15 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
   Integration persistence, L08-dependent owner wiring and production dispatch
   remain deferred to I00. The existing Foundation Control Plane lifecycle seam
   is the only adapted dispatch seam.
-- L16 receipt sealed pending acceptance: one pure external-proof classifier replays the
+- L16 accepted lane-ready: one pure external-proof classifier replays the
   full accepted L13 validator against the original L12 snapshot, classifies an
   exact closed 17-subject catalog through the exact 10-kind mapping, binds the
   accepted L15 satellite identities and keeps every external/readiness/action
   authority false or `NONE`. `FILTER_BLOCKED` requires a current exact L04
   owner replay with genuine filter arithmetic; owner, source, reference,
   capability and unsupported-arithmetic gaps cannot promote. The ordinary
-  verified snapshot keeps filter admission `UNPROVEN`.
+  verified snapshot keeps filter admission `UNPROVEN`. Exact receipt:
+  `live-edge-receipts/RECEIPTS/L16.md`.
 - Synthetic only: capital mandate and reconciliation/execution fixtures.
 - Unavailable in canonical convergence: authenticated production private
   acquisition, signed validation, exchange-observed live fills/reconciliation,
@@ -482,22 +489,23 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 - Production Basis/Volume assessment ingress, production component identity/policy binding, package scripts and supervisor/API projection remain director-owned.
 - D-LAUNCH-16 resolves the prior false scope blocker. The latest qualifying
   director merge is the gate baseline; L09-L11 are present as canonical
-  imported history and exempt from §3.3. L12/L13 are accepted; L16 is verified
-  pending its immutable receipt and has no new blocker.
+  imported history and exempt from §3.3. L12/L13/L16 are accepted; L17 is
+  issued with no new blocker.
 
 ## Exact next task
 
-Accept the sealed immutable L16 receipt, issue L17, then execute the final
-worker-scope, fault and readiness gate without pause. Stop only on a new
-precise `BLOCKED` or final `L LANE_READY`.
+Execute L17's final worker-scope, fault and readiness evidence gate without
+pause. Seal the non-self-referential final receipt and acceptance state. Stop
+only on a new precise `BLOCKED` or final `L LANE_READY`.
 
 ## Files to re-read on resume
 
 - `MISSION.md`
 - `ARCHITECTURE.md` Part II
 - `LIVE_EXECUTION_BUILD_STATE.md`
-- `live-edge-receipts/TASKS/L16.md`
-- `live-edge-receipts/DECISIONS/D0018-l16-external-proof-classification.md`
+- `live-edge-receipts/TASKS/L17.md`
+- `live-edge-receipts/DECISIONS/D0019-l17-worker-scope-and-final-evidence.md`
+- `live-edge-receipts/RECEIPTS/L16.md`
 - `server/src/liveEdge/adapters/externalProofEvidence/index.ts`
 - `live-edge-receipts/DIRECTIVE_INPUTS.lock`
 - `live-edge-receipts/DECISIONS/D0002-director-launch-digest-acceptance.md`
@@ -513,10 +521,10 @@ precise `BLOCKED` or final `L LANE_READY`.
 
 ## Work not to repeat unless inputs changed
 
-- Do not repeat accepted L00/L01/L02/L03/L04/L05/L06/L07/L08/L08.1/L08.2/L09/L10/L11/L12/L13/L14/L15 work, broad
+- Do not repeat accepted L00/L01/L02/L03/L04/L05/L06/L07/L08/L08.1/L08.2/L09/L10/L11/L12/L13/L14/L15/L16 work, broad
   source discovery, canonical owner/code/test inventory or launch-hash
   investigation.
 - Do not rebuild L09/L10/L11 or the L15 satellite.
 - Do not edit frozen protocol or shared production/package files.
-- Do not repeat the verified L16 implementation; seal its receipt and continue
-  to L17 under the unchanged authority boundary.
+- Do not repeat L16. Execute only the issued L17 worker-scope and final-evidence
+  work under the unchanged authority boundary.

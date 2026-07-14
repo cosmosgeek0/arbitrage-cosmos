@@ -314,6 +314,46 @@ test('market intelligence fails closed when USD-M disconnects with fresh cached 
   assert.equal(world.ports.runtimes.intelligenceRuntime.health(world.ctx()).timestamp.sourceTimeMs, START - 250);
 });
 
+test('sibling intelligence probes share exactly one same-step refresh and never a later call', async () => {
+  const world = createWorld();
+  const originalAllRows = world.market.allRows;
+  let allRowsReads = 0;
+  world.market.allRows = function countedAllRows() {
+    allRowsReads += 1;
+    return originalAllRows.call(this);
+  };
+  world.market.rows = [{
+    symbol: 'BTCUSDT', base: 'BTC', hasSpot: true, hasPerp: true,
+    perpMark: 60_000, perpIndexPrice: 59_990,
+  }];
+  await startMarket(world);
+  world.market.feeds['spot-miniticker'] = 'open';
+  world.market.feeds['futures-markprice'] = 'open';
+  world.spot.set('BTCUSDT', START - 250);
+  world.usdm.set('BTCUSDT', START - 200);
+  await world.ports.runtimes.intelligenceRuntime.start();
+  await world.ports.runtimes.marketIntelligence.start();
+
+  const sameStep = world.ctx();
+  assert.equal(world.ports.runtimes.intelligenceRuntime.health(sameStep).timestamp.sourceTimeMs, START - 250);
+  assert.equal(world.ports.runtimes.marketIntelligence.health(sameStep).timestamp.sourceTimeMs, START - 200);
+  assert.equal(allRowsReads, 3);
+
+  assert.equal(world.ports.runtimes.marketIntelligence.health(sameStep).timestamp.sourceTimeMs, START - 200);
+  assert.equal(allRowsReads, 4);
+
+  world.ports.runtimes.intelligenceRuntime.health(sameStep);
+  const differentStep = { ...sameStep, correlationId: 'different-production-step' };
+  assert.equal(world.ports.runtimes.marketIntelligence.health(differentStep).timestamp.sourceTimeMs, START - 200);
+  assert.equal(allRowsReads, 6);
+
+  world.ports.runtimes.intelligenceRuntime.stop();
+  await world.ports.runtimes.intelligenceRuntime.start();
+  await world.ports.runtimes.marketIntelligence.start();
+  assert.equal(world.ports.runtimes.marketIntelligence.health(sameStep).timestamp.sourceTimeMs, START - 200);
+  assert.equal(allRowsReads, 8);
+});
+
 test('intelligence projection uses one supervisor-step clock for receipt and freshness truth', async () => {
   const world = createWorld();
   let clockReads = 0;

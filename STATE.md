@@ -64,7 +64,7 @@ These are focused source results, not the complete C-bound local acceptance:
 | Foundation quantity bridge / Ledger CAS | `12/12`; `9/9`, including independent-writer race, crash rollback, recovery, and replay proofs |
 | Living-input authority protocol | `14/14` against immutable D-LAUNCH-27 cutoff `d78be24f4da14632c857ee250b62e3fec33c2743` |
 | I00 proof / command / acceptance contracts | `46/46`; `28/28`; `34/34` |
-| Production runtime temporal/restart focus | `15/15`; hostile advancing-clock, projection-cadence, stale-source, USD-M disconnect, and concurrent clock-regression proofs; same-data dirty-cache replay restored all seven required public/engine owners to `READY / LIVE_PUBLIC` with Q `ABSTAIN_UNKNOWN` and honest safety degradation |
+| Production runtime temporal/restart focus | `16/16`; exact-step sibling refresh handoff plus hostile advancing-clock, projection-cadence, stale-source, USD-M disconnect, and concurrent clock-regression proofs; same-data dirty-cache replay restored all seven required public/engine owners to `READY / LIVE_PUBLIC` with Q `ABSTAIN_UNKNOWN` and honest safety degradation |
 | Intelligence Runtime bridge focus | `23/23`; oversized failure batches retain the exact comparator-defined survivors with one bounded eviction pass |
 | I00 performance contract | `41/41`, including exact canonical `OWNER:ownerPath` binding, owner-forgery rejection, bounded hydrated-baseline timeout refusal, short-window RSS-slope nonclaim, and a direct 10 ms reset/acknowledge/snapshot phase event-loop histogram that rejects interval substitution |
 | Security and I00 scope-security | `148` focused security assertions; `7/7` scope-security |

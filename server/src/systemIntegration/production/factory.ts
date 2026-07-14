@@ -405,6 +405,13 @@ interface IntelligenceRefresh {
   readonly usdmTimestamp: Readonly<SourcedTimestamp> | null;
 }
 
+interface IntelligenceRefreshHandoff {
+  readonly nowMs: number;
+  readonly generation: number;
+  readonly correlationId: string;
+  readonly value: Readonly<IntelligenceRefresh>;
+}
+
 function marketInstrument(
   row: Readonly<ProductionMarketRow>,
   productFamily: 'SPOT' | 'USD_M_PERPETUAL',
@@ -639,6 +646,7 @@ class PublicIntelligenceLifecycle {
   private lastProjectedUsdmTimestamp: Readonly<SourcedTimestamp> | null = null;
   private lastUniverseReady = false;
   private lastEvidenceReady = false;
+  private siblingRefreshHandoff: Readonly<IntelligenceRefreshHandoff> | null = null;
 
   constructor(
     private readonly clock: ProductionSystemIntegrationInput['clock'],
@@ -669,18 +677,29 @@ class PublicIntelligenceLifecycle {
 
   startIntelligence(): Promise<void> {
     if (!this.runtimeActive) throw new TypeError('market intelligence requires the intelligence runtime');
+    this.siblingRefreshHandoff = null;
     this.intelligenceActive = true;
     return Promise.resolve();
   }
 
   stopIntelligence(): void {
     this.intelligenceActive = false;
+    this.siblingRefreshHandoff = null;
     this.lastEvidenceReady = false;
   }
 
   runtimeHealth(ctx: ComponentStepContext): Readonly<RuntimeHealthEvidence> {
     if (!this.runtimeActive) return frozenHealth(false, null, null);
     const refreshed = this.refresh(ctx);
+    // The canonical supervisor probes the runtime immediately before its
+    // intelligence sibling. Hand off exactly one same-step result so that pair
+    // observes one market cut without creating a cross-step cache.
+    this.siblingRefreshHandoff = Object.freeze({
+      nowMs: ctx.nowMs,
+      generation: ctx.generation,
+      correlationId: ctx.correlationId,
+      value: refreshed,
+    });
     return frozenHealth(
       true,
       refreshed.universeReady ? refreshed.spotTimestamp : null,
@@ -692,7 +711,14 @@ class PublicIntelligenceLifecycle {
 
   intelligenceHealth(ctx: ComponentStepContext): Readonly<RuntimeHealthEvidence> {
     if (!this.intelligenceActive) return frozenHealth(false, null, null);
-    const refreshed = this.refresh(ctx);
+    const handoff = this.siblingRefreshHandoff;
+    this.siblingRefreshHandoff = null;
+    const refreshed = handoff !== null
+        && handoff.nowMs === ctx.nowMs
+        && handoff.generation === ctx.generation
+        && handoff.correlationId === ctx.correlationId
+      ? handoff.value
+      : this.refresh(ctx);
     return frozenHealth(
       true,
       refreshed.universeReady && refreshed.evidenceReady ? refreshed.usdmTimestamp : null,
@@ -703,6 +729,7 @@ class PublicIntelligenceLifecycle {
   }
 
   private resetGenerationProjection(): void {
+    this.siblingRefreshHandoff = null;
     this.lastProjectionKey = null;
     this.lastProjectionAtMs = null;
     this.lastProjectedSpotTimestamp = null;

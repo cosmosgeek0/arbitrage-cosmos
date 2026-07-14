@@ -2,6 +2,13 @@
 
 Rule: one block = one chat = one folder. Director appends/replaces blocks at every event; check the top entry's date. Board truth: QL_PARALLEL_DAG.md.
 
+## ACTIVE WAVE 13 (2026-07-14, D-LAUNCH-20) — third parallel chat: A-FORMAL repair (NON-CANDIDATE).
+
+### A-FORMAL-REPAIR — NEW session, folder /Users/cosmosgeek/Desktop/ip-assur-formal
+```text
+You are the A-FORMAL (S3) REPAIR worker (D-LAUNCH-20; verify branch ip-assur-formal-20260713, HEAD 89c783b). CONTEXT: the Role-2 integrator refused this donor — root `npm test` exits 127 on your tree (ruled BLOCKED_NO_NETWORK_BOUNDARY_VIOLATED); the board's old "ready" label was wrong. Your ONE job: make the full repository gate pass honestly on this tree from a clean install, within S3 scope only. HARD BOUNDARIES: you are NON-CANDIDATE work — an integration candidate is being frozen WITHOUT you; you must NOT touch, signal, or attempt to enter i00-assembly or any other worktree/branch; never push; never merge; write only inside this worktree. Steps: (1) reproduce: fresh `npm ci` (or documented equivalent) + root `npm test` — record the exact exit-127 failure (which binary/script is missing or reaching for the network). (2) Diagnose: exit 127 = command not found — likely a test/script dependency that violates the no-network determinism law (AGENTS.md) or a missing devDependency your packet introduced. (3) Fix INSIDE your S3 exclusive paths (fixtures/productAssurance/systemic/formal/** + test/productAssurance/systemic/formal/** + your packet files per D-LAUNCH-10 narrowing); if the root cause is OUTSIDE your scope, do NOT fix it — write a precise patch request + BLOCKED receipt instead. (4) Prove: clean-room rerun — fresh install, root `npm test` exit 0, your focused S3 suite green, zero network access during tests. (5) Reseal: acceptance receipt with exact SHAs/counts + commit. Your repaired tip re-enters ONLY via a director-controlled post-landing wave — state this in your receipt. Deterministic, no secrets, no external actions. Usage limit → commit+receipt+stop clean; same message resumes. Stop at FORMAL_REPAIRED_RESEALED or precise BLOCKED.
+```
+
 ## ACTIVE WAVE 12 (2026-07-14) — parallel with the running integrator: PRE-VERIFY pack.
 
 ### PRE-VERIFY — NEW session, folder /Users/cosmosgeek/Desktop/preverify

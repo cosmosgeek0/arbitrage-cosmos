@@ -15,7 +15,7 @@ formal_tooling_status: TLA_TOOLING_NOT_CONFIGURED
 authority: SUPPORTING_EVIDENCE_ONLY
 source_truth: SYNTHETIC_ONLY
 runtime_claim_closure: NOT_PERMITTED
-packet_terminal_status: BLOCKED_NO_NETWORK_BOUNDARY_VIOLATED
+packet_terminal_status: BLOCKED_ROOT_TEST_EXTERNAL_EGRESS_OUTSIDE_S3_SCOPE
 ```
 
 ## Bounded explicit-state result
@@ -99,21 +99,33 @@ negative_controls_detected: 7 / 7
 tla_sources: 7
 tlc_configs: 7
 tla_execution: NOT_RUN — TLA_TOOLING_NOT_CONFIGURED
-npm_test: BLOCKED exit 127 — sh: tsc: command not found
-package_install: NOT_AUTHORIZED_AND_NOT_PERFORMED
+historical_unhydrated_npm_test: BLOCKED exit 127 — sh: tsc: command not found
+clean_install: PASS exit 0 — npm ci added 229 packages, audited 232, vulnerabilities 0
+toolchain: node 22.23.1 / npm 10.9.8 / typescript 5.9.3
+npm_test: PASS exit 0 — typecheck, build, 377 reported checks
+npm_test_network_qualification: BLOCKED — effectful child attempts external Binance WebSockets
+externally_denied_npm_test: PASS exit 0 — external outbound denied, loopback allowed
+plain_diagnostic_network_proof: UNAVAILABLE — no egress monitor was installed
 ```
 
-The root `npm test` failure occurs before this packet is discovered: the server
-typecheck cannot start because the worktree has no installed `tsc`. The focused
-dependency-free Node suite is green; the director-owned insertion request must
-wire it into the combined harness after dependencies/tooling are provisioned by
-an authorized owner.
+The old exit 127 is reproduced only by an unhydrated dependency tree. It does
+not reproduce after the required clean install: TypeScript is already declared
+by both workspaces and locked with its `tsc` binary. S3 introduced no package or
+lockfile change.
+
+The clean root gate is nevertheless not acceptable as a zero-network proof.
+Its perimeter test spawns the full server, whose startup unconditionally begins
+external public-market WebSockets. Those failures are contained, so the test
+can stay green after an egress attempt. A macOS sandboxed rerun exited 0 while
+denying external outbound traffic and allowing loopback; that proves blocking,
+not zero attempted egress. The exact owner patch is recorded in
+`drafts/D_LAUNCH_20_ROOT_TEST_OFFLINE_PATCH_REQUEST.DRAFT.md`.
 
 ## Boundary and limitations
 
-- Artifact semantics and deterministic tests are clean, but the packet cannot
-  claim `FORMAL_PRESTAGE_READY` because the no-network process boundary was
-  violated once by a discarded delegated lookup.
+- The S3 focused suite is intrinsically network-free and passes 43/43 under a
+  full external-network deny. The root gate is not intrinsically network-free,
+  so this packet cannot claim `FORMAL_REPAIRED_RESEALED`.
 - No production evaluator, command path, risk gate, exchange call, money path,
   secret, timer, socket, filesystem access, package change, or external-system
   mutation exists in the packet runtime modules.
@@ -123,6 +135,10 @@ an authorized owner.
 - One interrupted read-only research subagent performed a discarded web lookup
   before the no-network boundary was reasserted. No result was written, used,
   or incorporated into packet decisions; all implementation evidence is local.
+- The immutable prior BLOCKED receipts remain historical truth and are not
+  rewritten by D-LAUNCH-20.
+- The shared root/perimeter/startup repair is outside S3 and must be completed
+  by its canonical owner, followed by a director-controlled post-landing wave.
 - The protected untracked parent I00 input remains outside this packet and must
   not be staged by this satellite.
 

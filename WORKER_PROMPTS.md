@@ -2,7 +2,19 @@
 
 Rule: one block = one chat = one folder. Director appends/replaces blocks at every event; check the top entry's date. Board truth: QL_PARALLEL_DAG.md.
 
-## ACTIVE WAVE 10 (2026-07-14) — FINAL BUILDER RUN: L-spine finale. (S4 reseal continues if not done.)
+## ACTIVE WAVE 11 (2026-07-14, D-LAUNCH-17) — run NOW in parallel with L-spine: S4-UNBLOCK + ROLE-2 INTEGRATOR.
+
+### S4-UNBLOCK — paste into the S4 chat (folder ip-assur-case)
+```text
+Director ruling D-LAUNCH-16 applies to you too: your scope gate flagged the DIRECTOR's own rebase merge — director merge commits ("director:" prefix, two-parent) are canonical history, EXEMPT from your allowlist. Gate baseline = latest director merge; only YOUR commits after it must satisfy your paths. Rerun test:all (green expected), write sibling acceptance receipt, reseal. Stop at CASE_PRESTAGE_READY or precise BLOCKED.
+```
+
+### ROLE-2 INTEGRATOR — NEW high-capability session, folder /Users/cosmosgeek/Desktop/i00-assembly
+```text
+You are the FRESH INTEGRATOR (Role 2) under FINAL_INTEGRATION_AND_INDEPENDENT_VERIFICATION_ORDER.md Phase 2 (file is on the owner Desktop; its law is also summarized in I00_PRODUCT_BUILD_STATE.md here). Read FIRST: I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md (root), I00_PRODUCT_BUILD_STATE.md (DIRECTOR_HANDOFF_READY section = your donor table), and in /Users/cosmosgeek/Desktop/Main: QL_DIRECTOR_STATE.md (D-LAUNCH-1..17) + QL_PARALLEL_DAG.md. Verify repo path/branch (i00-product-assembly-20260713)/HEAD/ancestry/worktrees/donor SHAs from git. Record DIRECTOR_AUTHORITY_ACCEPTED in I00_PRODUCT_BUILD_STATE.md (commit it) — you then hold shared write/merge authority on THIS integration branch only (never current-main, never push). Build the exact Git-backed donor table (expected=discovered=accepted=integrated must be proven). INTEGRATE ONE DONOR AT A TIME per the order's Integration Law, focused tests + repo-wide commands after each, immutable receipt per donor. Order: remaining accepted donors first (Q lane, dash-shell, l15-infra, all assurance branches incl. A-CORE fan-in with its production scaffold); the L lane branch integrates LAST and ONLY when its LANE_READY receipt exists (S4 likewise only when resealed) — refuse dirty/partial donors. Then perform the shared wiring the packets deferred: apply insertion requests + the two L patch requests (ledger compare-and-set primitive, Foundation quantity bridge) as the I00 §7 serial spine owner; mount the dashboard donor into the app per IP-CONTROL mount requests; dependency-driven startup per I00 §8. Then run the COMPLETE I00 local acceptance (build, full tests incl. test:all, deterministic scenarios, runtime startup, browser checks, restart/reconciliation, cockpit no-false-green). Finish EXACTLY per Phase 2: immutable candidate commit + INTEGRATION_CANDIDATE_READY receipt (candidate SHA, tree hash, all donor/receipt/protocol hashes, measured results, NOT_CONFIGURED/OWNER_GATED/UNKNOWN list), then PARK read-only — you may NOT certify your own candidate; a different session verifies. Hard external boundary unchanged (no private reads/signed calls/AWS/deploy/push). Usage limit → commit+receipt+stop clean; same message resumes.
+```
+
+## HISTORICAL WAVE 10 (2026-07-14) — FINAL BUILDER RUN: L-spine finale. (S4 reseal continues if not done.)
 
 ### L-SPINE-FINALE — folder /Users/cosmosgeek/Desktop/live-execution-proof-20260712
 ```text

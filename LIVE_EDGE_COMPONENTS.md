@@ -191,6 +191,15 @@ history canonical and exempt from the worker allowlist.
 | Durable control-command value adapter | `server/src/liveEdge/controls/**` | `BUILT_AND_TESTED` | `LANE_READY_UNWIRED` | Validates bounded injected command/journal values and adapts only the existing Foundation Control Plane lifecycle seam; canonical Ledger/System Integration persistence and production dispatch remain I00-owned |
 | Offline control proofs | `server/test/liveEdge/controls/**` | focused `38/38` at acceptance | test-only | Proves integrity, journal, risk and hostile command behavior without creating a second control owner or performing an external action |
 
+## L16 delta
+
+| Component | Path | Lane build proof | Integration state | Authority / limitation |
+| --- | --- | --- | --- | --- |
+| Closed external-proof classifier | `server/src/liveEdge/adapters/externalProofEvidence/**` | `BUILT_AND_TESTED`; focused `21/21` | `VERIFIED_UNWIRED`; receipt pending | Covers the exact 17 subjects and derives only the exact 10 evidence-kind classifications. All deploy/private/live/readiness/money/action flags remain false or `NONE`; ordinary filter admission remains `UNPROVEN` |
+| L12 to L13 lineage binding | `projection.ts`, `types.ts` | full accepted L13 validator replayed against the original full L12 snapshot | compact immutable lineage only | Retains only source identities and negative authority posture; it does not copy or recompute graph, metric, alarm, control, Capital, recovery or readiness truth |
+| Canonical filter and L15 satellite proof boundary | `projection.ts`, `types.ts` | exact L04 owner replay; exact L15 commit/tree/work/blob/raw-SHA/347 assertion binding | arithmetic rejection evidence or `ACCEPTED_SATELLITE_ONLY` | `FILTER_BLOCKED` requires current genuine price/grid/quantity/notional arithmetic and excludes owner/capability/reference/revision/precision gaps. L15 remains never merged, wired, deployed, live or ready |
+| Offline external-proof tests | `server/test/liveEdge/externalProofEvidence/**` | focused `21/21`; accumulated LiveEdge `1,595/1,595` | test-only | Proves exact catalogs, eight local gates, L12/L13 lineage, all L15 identities, canonical 257-instrument owner capacity, false-green rejection, deep freeze, bounds, secret safety and inert imports; network-free |
+
 ## Director-owned integration still required
 
 - owner-approved Basis/Volume advisory intake;
@@ -235,6 +244,9 @@ durable control adapter; none is promoted to canonical production wiring here.
 
 ## Explicitly absent
 
+- an external runner, credential access, public/private runtime reader,
+  deployment or restart authority, readiness authority, signed/test/live order,
+  borrow/repay path or other money-action path in L16;
 - private account reads, signed/test/live orders and exchange mutations;
 - automatic capital changes or an assessment-to-order path;
 - deployment, restart, AWS, Cloudflare or Secrets mutations;

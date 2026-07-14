@@ -12,6 +12,7 @@ const contracts = await loadContracts();
 const testDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(testDirectory, '../../..');
 const fixtureDirectory = resolve(repositoryRoot, 'fixtures/aiOps/contracts');
+const receiptDirectory = resolve(fixtureDirectory, 'receipts');
 const sourceDirectory = resolve(repositoryRoot, 'server/src/aiOps/contracts');
 
 const resourceIdsByClassifiedPath = new Map();
@@ -89,6 +90,7 @@ const fixtureNames = [
   'decision-log-design.synthetic.v1.json', 'control-insertion-requests.v1.json',
   'insertion-requests.v1.json', 'unfinished-interfaces.v1.json',
 ];
+const receiptNames = ['AI_OPS_REUSE_AND_GAP_RECEIPT.md', 'SHADOW_ARTIFACT_READY_RECEIPT.md'];
 
 const staticArtifactsByFixture = {
   'entry-inventory.v1.json': contracts.AI_OPS_ARTIFACTS.entryInventory,
@@ -263,6 +265,7 @@ test('fixtures and contracts contain no secret-shaped material or real credentia
   const paths = [
     ...(await readdir(sourceDirectory)).filter((name) => name.endsWith('.ts')).map((name) => resolve(sourceDirectory, name)),
     ...fixtureNames.map((name) => resolve(fixtureDirectory, name)),
+    ...receiptNames.map((name) => resolve(receiptDirectory, name)),
   ];
   const secretPatterns = [
     /-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----/,
@@ -278,7 +281,8 @@ test('fixtures and contracts contain no secret-shaped material or real credentia
   assert.doesNotMatch(serializedMatrix, /credentialValue|apiKey|accessToken|refreshToken/i);
 });
 
-test('fixture directory contains only the generator and the exact generated artifact set before receipt sealing', async () => {
+test('fixture directory contains only the generator, receipts and exact generated artifact set', async () => {
   const actual = (await readdir(fixtureDirectory)).sort();
-  assert.deepEqual(actual, ['generate-artifacts.mjs', ...fixtureNames].sort());
+  assert.deepEqual(actual, ['generate-artifacts.mjs', 'receipts', ...fixtureNames].sort());
+  assert.deepEqual((await readdir(receiptDirectory)).sort(), receiptNames.sort());
 });

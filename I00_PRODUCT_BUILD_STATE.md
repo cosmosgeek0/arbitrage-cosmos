@@ -2,7 +2,7 @@
 
 Schema version: `I00_PRODUCT_BUILD_STATE_V1`
 
-Updated: `2026-07-14T05:25:42Z`
+Updated: `2026-07-14T05:29:50Z`
 
 ## Identity
 
@@ -10,14 +10,14 @@ Updated: `2026-07-14T05:25:42Z`
 | --- | --- |
 | Canonical Main base SHA | Live `current-main` and `origin/current-main` are `7383fd89477ed0b3e677e53c57c35d76ac34bbd8`; exact canonical ancestry is integrated at `ce8d79a751c886dff388fa8f3f2fa6fb3f0414ee` without writing Main |
 | Integration branch/worktree | `i00-product-assembly-20260713` at `/Users/cosmosgeek/Desktop/i00-assembly` |
-| Latest integration merge | A-STABILITY `332208e64fb9b54ef2b6320c7609e53833da469f`; tree `b776b00591e853d1ed6acd9fbdef99fc9f06b2b8` |
-| Latest integration receipt | `docs/archive/i00-phase2/A_STABILITY_INTEGRATION_RECEIPT.md` |
+| Latest integration merge | A-CASE/S4 `86ee3b5f81c73c64eccf1d10b14a1f3bdf8a4bf1`; tree `db4708ef5bdd261f4493885a770aa3ff670bf674` |
+| Latest integration receipt | `docs/archive/i00-phase2/A_CASE_INTEGRATION_RECEIPT.md` |
 | Verified acceptance implementation | Historical prestage implementation `a2be4865d0d003d1dedd38c351b4e8ccf6033c2d`; Phase 1 handoff HEAD `9bf531ccca203ca66bad39787a0930fd608807a7` |
 | Phase | `FINAL_INTEGRATION / PHASE_2_FRESH_INTEGRATOR` |
-| Status | `A_STABILITY_INTEGRATED_AND_RECEIPTED / FULL_GATE_GREEN` |
+| Status | `A_CASE_INTEGRATED_AND_RECEIPTED / ACCEPTED_DONOR_EQUALITY_PROVEN / FULL_GATE_GREEN` |
 | Active writer | Fresh Role 2 integrator; exclusive shared write/merge authority is limited to this integration branch, never `current-main` |
 | Protected untracked inputs | The five owner directives remain intentional read-only untracked inputs at their D-LAUNCH-6 hashes, not partial implementation; the worktree is otherwise clean after the final seal |
-| Current Phase 2 landed state | Accepted F-BRIDGE, SI-RECON, Q, dashboard-equivalent, L15, A-CORE, A-HAZARD, A-COCKPIT, A-AGENT, and A-STABILITY donors are integrated serially; A-STABILITY merge `332208e64fb9b54ef2b6320c7609e53833da469f` preserves all 19 packet blobs and its UNKNOWN resource-owner boundary; focused, deterministic, and full repository gates pass |
+| Current Phase 2 landed state | All 15 currently accepted donors are integrated serially by exact ancestry or receipted equivalence; S4 merge `86ee3b5f81c73c64eccf1d10b14a1f3bdf8a4bf1` preserves all 41 packet blobs and its read-only `authorityEffect=NONE` boundary; focused, deterministic, and full repository gates pass |
 
 ## Accepted inputs
 
@@ -32,7 +32,7 @@ Updated: `2026-07-14T05:25:42Z`
 | Assurance cockpit satellite | `d4ff9c94c9fec9477481223c4b33d8f671a34f6d`; receipt SHA-256 `b75055388f99632f2dc5ebb87d92b6d969f666397014e89a616a6e262f0650dd`; exact `COCKPIT_PRESTAGE_READY` | Integrated as fixture-only cockpit/observability packet; production route/panel mount remains `DIRECTOR_MOUNT_REQUIRED` |
 | Assurance agent satellite | `97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437`; receipt SHA-256 `c237939f112a41abfb83508ed57e5783a9344cc3cb76e02003ca64487831a92c`; exact `AGENT_PRESTAGE_READY` | Integrated as deterministic diagnostic-only packet; three draft insertion rows and root-harness wiring remain pending |
 | Assurance stability satellite | `d35674e7f9621320c35e0bc0270efd515cc64dbd`; receipt SHA-256 `b26f902d90fb82633ac8532d5aa82169801ded3ec6d7bcf3477737a64eab2168`; exact `STABILITY_PRESTAGE_READY` | Integrated as deterministic render-neutral packet; draft insertions remain pending and resource ownership remains `UNKNOWN` |
-| Assurance case satellite | `b4d8a446cb4cd6e77e7fbaf38f927b7513dc316c`; acceptance receipt SHA-256 `05369b8aa403a4fae6b86143ddcb7d61551d5996838c92b9bc4aba79401a3550`; exact `CASE_PRESTAGE_READY` | Newly resealed after the Phase 2 transfer; accepted for serial integration after A-STABILITY and before any eligible L tip |
+| Assurance case satellite | `b4d8a446cb4cd6e77e7fbaf38f927b7513dc316c`; acceptance receipt SHA-256 `05369b8aa403a4fae6b86143ddcb7d61551d5996838c92b9bc4aba79401a3550`; exact `CASE_PRESTAGE_READY` | Integrated as read-only `SYNTHETIC_ONLY` assurance projection; draft production insertion remains pending and authority effect remains none |
 | Q/L protocol | Commit `73e1a1ff7daa48df8dac45713fc5f106842edafc`; document SHA-256 `951fdbb5f347f900c61e60055f90cf2e1e1e743b75b7dc733652acb8d43353a1`; schema SHA-256 `229af0ff13d600c7d305c6deb7f57b61bdb6f8a35f6f2349d91f5ab1b4972f1c` | Frozen v1, `22/22` conformance |
 | Authority map | Accepted base `87af78285a4b11bc8ca98c4cc9b3bb4a551d2537`; current `ARCHITECTURE.md` SHA-256 `beb8be8baefe2faa78356e2dc44983735b855535c21cd5f0172a8e1e3fa665db` | Canonical one-owner law; no ownership shift in this task |
 | D-LAUNCH-6 owner directives | Parent `9d7a36da…e5ef5`; IP-RUNTIME `6e93016e…65810`; IP-CONTROL `5e57bf1d…7278`; IP-OPS `2af83489…779`; IP-PROOF `e59d516b…93b6` | All five present, byte-verified, read-only, and intentionally untracked |
@@ -56,7 +56,7 @@ Updated: `2026-07-14T05:25:42Z`
 | Q lane | No live/edge/champion claim | Exact donor archive: focused `384/384` at 96.50%; accumulated `3,011` plus six documented skips; integrated D-LAUNCH-1 provenance `14/14` | Runtime transport and product mount `NOT_CONFIGURED`; accepted posture remains advisory `ABSTAIN_UNKNOWN` |
 | Product Control Room | No new live or visible claim | Exact accepted donor subtree `d3d899db3b0395532a3cf12b2304e91a2ce528ce`; 18 contract/fixture/binding tests pass | No App/Header/store/page mount; Control Room real route remains missing |
 | Operations | No deployment claim | Exact accepted L15 `ops/live/**` tree plus 17 exact donor test paths; network-free operational suite passes 11/11 files and 347 assertions; previously accepted IP-OPS tests remain additive under `ops/tests/i00/**` | AWS, EC2, Cloudflare, DNS, Secrets Manager, systemd, target SQLite, capacity/soak, installed watchdog, and release readback not configured/proved |
-| Product Assurance | No live/overall-ready claim | A-CORE `32/32`; operation registry `143/143`; A-HAZARD `69/69`; A-COCKPIT `50/50`; observability `100/100`; A-AGENT integration-safe `109/109`; A-STABILITY donor-tip `212/212` plus integration-safe `211/211`; explicit WAITING/UNKNOWN seams | Root test-harness discovery, newly accepted S4, production UI mount/owner bindings, and overall `ASSURANCE_PRESTAGE_READY` remain absent |
+| Product Assurance | No live/overall-ready claim | A-CORE `32/32`; operation registry `143/143`; A-HAZARD `69/69`; A-COCKPIT `50/50`; observability `100/100`; A-AGENT integration-safe `109/109`; A-STABILITY integration-safe `211/211`; S4 donor-tip `233/233` plus integration-safe `231/231`; explicit WAITING/UNKNOWN seams | Root test-harness discovery, production UI mount/owner bindings, absent S2, blocked Formal, and overall `ASSURANCE_PRESTAGE_READY` remain absent |
 | Closure proof | No real-adapter claim | I00 harness `33/33`; effective frozen inputs `14/14`; reports remain generated and byte-identical | Raw historical scan intentionally remains `12/14`, with the two packet-era QL mismatches preserved; Q/L final tips and empirical/runtime proof absent |
 | Money authority | None | Validate-only and fixture evidence only | Private/signed/canary/live paths remain absent or owner-gated; `LIVE_EXECUTION_NOT_IMPLEMENTED` enforced |
 
@@ -83,6 +83,7 @@ Updated: `2026-07-14T05:25:42Z`
 | A-COCKPIT observability suite | Exit 0; `100/100`; conservation, release-manifest, SLO, history, and reason-code proofs |
 | A-AGENT immutable donor focused suite | Exit 0; `111/111`; accumulated-tree exact command is intentionally `109/111` because two tests bind donor branch/path context; integration-safe behavior is `109/109` and Git-object provenance passes |
 | A-STABILITY immutable donor focused suite | Exit 0; `212/212`; accumulated-tree exact command is intentionally `211/212` because one test binds donor branch/path context; integration-safe behavior is `211/211` and Git-object provenance passes |
+| A-CASE/S4 immutable donor focused suite | Exit 0; `233/233`; accumulated-tree exact command is intentionally `231/233` because two tests bind donor branch/lane history; integration-safe behavior is `231/231` and Git-object provenance passes |
 | Ops template/schema suite | Exit 0; 50 assertions; packet-local `run-all.sh` is not a fan-in gate because its scope guard intentionally rejects assembled-tree paths |
 | `npm run typecheck` | Exit 0; server and web passed |
 | `npm run build` | Exit 0; server and web passed; existing Vite chunk-size warning only |
@@ -101,9 +102,9 @@ Updated: `2026-07-14T05:25:42Z`
 
 ## Current blocker and resume
 
-Current A-STABILITY integration blocker: **none**. Its accepted packet remains render-neutral with resource ownership explicitly `UNKNOWN`; no production resource owner, repair activation, control/effect authority, live green, or overall assurance readiness is claimed. The current branch is a serial integration checkpoint, not `INTEGRATION_CANDIDATE_READY` and not `INTEGRATED_ACCEPTED`.
+Current S4 integration blocker: **none**. Its accepted packet remains read-only `SYNTHETIC_ONLY` with `authorityEffect=NONE`; no production owner, control/effect authority, live green, or overall assurance readiness is claimed. The current branch is a serial integration checkpoint with accepted-donor equality proven, not `INTEGRATION_CANDIDATE_READY` and not `INTEGRATED_ACCEPTED`.
 
-Next exact task: integrate newly resealed A-CASE/S4 with focused plus repository-wide gates and an immutable receipt. A-FORMAL and the dirty L tip lacking a clean final `LANE_READY` receipt remain refused. After donor fan-in, perform the already-recorded shared production composition, persistence, route, cockpit-mount, runtime/browser, ops-preflight, and real-adapter acceptance work.
+Next exact task: re-audit the moving L tip and A-FORMAL receipt; integrate L last only if its worktree is clean and an exact immutable `L LANE_READY` receipt exists. Otherwise preserve both refusals and begin the recorded shared production composition, persistence, route, cockpit-mount, root-harness, runtime/browser, ops-preflight, and real-adapter acceptance work.
 
 Next combined command after accepted Q/L adapters replace every fixture seam:
 
@@ -165,9 +166,9 @@ The immutable donor is the committed branch object, never the donor worktree con
 | A-COCKPIT | `d4ff9c94c9fec9477481223c4b33d8f671a34f6d` | `b75055388f99632f2dc5ebb87d92b6d969f666397014e89a616a6e262f0650dd` | 53 paths; path-set SHA-256 `870d23aebb1d60b12eabb91364a134b97569dc21ba4345618282b1355d39e01d` | No |
 | A-AGENT | `97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437` | `c237939f112a41abfb83508ed57e5783a9344cc3cb76e02003ca64487831a92c` | 20 paths; path-set SHA-256 `11a0a317f05371d5a9378776cc0d7343a5d4a622c5f19dce2c2f6dbe8a5d6b27` | Yes, merge `251d901e2a38c7b3b9634ab1728098655f0104bb`; 20/20 blobs exact |
 | A-STABILITY | `d35674e7f9621320c35e0bc0270efd515cc64dbd` | `b26f902d90fb82633ac8532d5aa82169801ded3ec6d7bcf3477737a64eab2168` | 19 paths; path-set SHA-256 `84b18ffcfd1893442eedacad74d4ef94823a4f5d846a1a5362e859ed6c5cc117` | Yes, merge `332208e64fb9b54ef2b6320c7609e53833da469f`; 19/19 blobs exact |
-| A-CASE / S4 | `b4d8a446cb4cd6e77e7fbaf38f927b7513dc316c` | `05369b8aa403a4fae6b86143ddcb7d61551d5996838c92b9bc4aba79401a3550` | 41 paths; path-set SHA-256 `cf1c711e8688e5d00382b244566d210f5eabbfad30d622ae49a33b6380d358cc` | No; newly accepted by exact `CASE_PRESTAGE_READY` reseal after authority transfer |
+| A-CASE / S4 | `b4d8a446cb4cd6e77e7fbaf38f927b7513dc316c` | `05369b8aa403a4fae6b86143ddcb7d61551d5996838c92b9bc4aba79401a3550` | 41 paths; path-set SHA-256 `cf1c711e8688e5d00382b244566d210f5eabbfad30d622ae49a33b6380d358cc` | Yes, merge `86ee3b5f81c73c64eccf1d10b14a1f3bdf8a4bf1`; 41/41 blobs exact |
 
-Current counts: expected accepted donors `15`; discovered exact tips `15`; receipt-accepted `15`; integrated by ancestry or receipted equivalence `14`. The required equality is **not yet claimed**; it becomes a candidate gate only when all accepted donors are receipted as integrated.
+Current counts: expected accepted donors `15`; discovered exact tips `15`; receipt-accepted `15`; integrated by ancestry or receipted equivalence `15`. The required equality is proven for the currently accepted donor set. Candidate readiness is not claimed until shared wiring and complete local acceptance also pass.
 
 ### Refused, blocked, or not-yet-existing donors
 
@@ -177,4 +178,4 @@ Current counts: expected accepted donors `15`; discovered exact tips `15`; recei
 | L lane | `13e5e3f4695c926bae513d3f254e4924970d36df`; state remains L16 issued and donor worktree contains four untracked donor-owned L16 paths | No final receipt and no exact `L LANE_READY`; dirty/partial donor is refused and may integrate last only after a clean immutable reseal |
 | A-ACTION-EVIDENCE / S2 | No branch, worktree, or accepted receipt; A-CORE marks the seam `WAITING` | Not a discovered donor; preserve as `NOT_CONFIGURED`/missing evidence rather than fabricate one |
 
-The next serial order is: integrate newly accepted A-CASE/S4; hold A-FORMAL; integrate L last only after a clean `LANE_READY` receipt exists. Prior closed rows must not be repeated. Every new donor fan-in gets focused and repository-wide gates plus its own immutable integration receipt before the next donor.
+The accepted donor sequence is complete. Re-audit A-FORMAL and L; hold A-FORMAL unless a superseding accepted receipt exists, and integrate L last only after a clean immutable `LANE_READY` receipt exists. Prior closed rows must not be repeated.

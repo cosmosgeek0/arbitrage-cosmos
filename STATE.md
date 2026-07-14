@@ -1,6 +1,6 @@
 # STATE.md — what is true right now
 
-**Current checkpoint:** 2026-07-14 · Phase 2 accepted A-STABILITY merge `332208e64fb9b54ef2b6320c7609e53833da469f` receipted after A-AGENT on `i00-product-assembly-20260713`
+**Current checkpoint:** 2026-07-14 · Phase 2 accepted A-CASE/S4 merge `86ee3b5f81c73c64eccf1d10b14a1f3bdf8a4bf1` receipted after A-STABILITY; all 15 currently accepted donors now integrated on `i00-product-assembly-20260713`
 **Law:** any landed change that alters project state must update this file in the same commit. This file wins on "what is the current state"; `ARCHITECTURE.md` wins on "how it is designed"; `MISSION.md` wins on "why".
 
 ## What this is
@@ -19,6 +19,7 @@ A private Binance arbitrage/intelligence operating machine ("Cosmos Arbitrage Co
 - Accepted A-COCKPIT donor `d4ff9c94c9fec9477481223c4b33d8f671a34f6d` is integrated by exact Git ancestry with 53 donor paths. Its cockpit/observability evidence is fixture-only and all production mount rows remain `DIRECTOR_MOUNT_REQUIRED`; it cannot mint live green.
 - Accepted A-AGENT donor `97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437` is integrated by exact Git ancestry with 20 byte-identical donor paths. Its immutable donor-tip suite passes `111/111`; on the accumulated branch, 109/109 integration-safe behavior checks pass and the two donor-context branch/path assertions are replaced by exact Git-object provenance rather than weakened.
 - Accepted A-STABILITY donor `d35674e7f9621320c35e0bc0270efd515cc64dbd` is integrated by exact Git ancestry with 19 byte-identical donor paths. Its immutable donor-tip suite passes `212/212`; on the accumulated branch, 211/211 integration-safe behavior checks pass and the sole donor-context branch/path assertion is replaced by exact Git-object provenance. Resource ownership remains `UNKNOWN`.
+- Accepted A-CASE/S4 donor `b4d8a446cb4cd6e77e7fbaf38f927b7513dc316c` is integrated by exact Git ancestry with 41 byte-identical donor paths. Its immutable donor-tip suite passes `233/233`; on the accumulated branch, 231/231 integration-safe behavior checks pass and the two lane-context assertions are replaced by exact Git ancestry/path proof. The projection remains `SYNTHETIC_ONLY` with `authorityEffect=NONE`.
 - A-CASE/S4 advanced to accepted tip `b4d8a446cb4cd6e77e7fbaf38f927b7513dc316c` with exact `CASE_PRESTAGE_READY`; it is now queued after A-STABILITY. A-FORMAL remains blocked and the current L worktree remains dirty/partial without `LANE_READY`.
 - Milestone tags (all pushed): `sprint-foundation-final`, `sprint-intelligence-final`, `sprint-runtime-final`, `sprint-capital-final`, `sprint-convergence-final`.
 - Milestone commits on `current-main`: audited baseline `b272049` → organs round 1 `c4ae7a9` → organs round 2 `87af782` → convergence `b58e64e`.
@@ -43,7 +44,7 @@ A private Binance arbitrage/intelligence operating machine ("Cosmos Arbitrage Co
 | Operator modes | READ_ONLY / ADVISORY / VALIDATE_ONLY only; kill switch fail-closed for new risk |
 | Live execution / signed calls / borrow / transfer | MISSING by design — mechanically blocked |
 
-## Verification (Phase 2 through accepted A-STABILITY integration, 2026-07-14)
+## Verification (Phase 2 through accepted A-CASE/S4 integration, 2026-07-14)
 
 ```bash
 npm run test:foundation  # exit 0; all 24 sorted files passed at the F-BRIDGE cut
@@ -59,12 +60,13 @@ node --test --test-concurrency=1 test/productAssurance/systemic/cockpit/*.test.m
 node --test --test-concurrency=1 test/productAssurance/systemic/observability/*.test.mjs  # 100/100
 # Exact A-AGENT donor tip: 111/111. Integration-safe behavior with immutable branch/path context proofs replaced by Git-object provenance: 109/109.
 # Exact A-STABILITY donor tip: 212/212. Integration-safe behavior with immutable branch/path context proof replaced by Git-object provenance: 211/211.
+# Exact A-CASE/S4 donor tip: 233/233. Integration-safe behavior with immutable branch/lane context proofs replaced by Git-object provenance: 231/231.
 # From a clean git archive of exact Q donor 02b4eccc with only its pinned .venv linked:
 PYTHONPATH=src .venv/bin/python -m pytest tests/q17 -q --cov=quant_edge.final_proof --cov-branch --cov-report=term  # 384/384; 96.50%
 PYTHONPATH=src .venv/bin/python -m pytest -q --tb=short  # 3,011 passed; 6 documented shard-only skips
 ```
 
-F-BRIDGE focused proof is green: execution `173/173`, execution import purity `30/30`, compatibility `131/131`, reconciliation `75/75`. SI-RECON focused proof is `29/29`. Q is green only in the immutable donor view: focused `384/384` at `96.50%` and accumulated `3,011` plus six documented skips. Running Q17 against the combined target correctly produces `366 passed / 18 failed / 93.70%` because its immutable proof freezes the historical 1,568-byte directive lock; this is recorded diagnostic evidence, never reported as a green target-tree Q17 gate. The integration-owned provenance suite proves the exact D-LAUNCH-1 external supersession `14/14`. Dashboard donor equivalence is exact at Git-tree level and its focused Product Control Room contract suite passes `18/18`. L15's complete network-free operational suite passes `11/11` files and 347 assertions. A-CORE passes `32/32` and registers 143/143 operations; A-HAZARD passes `69/69`; A-COCKPIT passes `50/50` plus observability `100/100`; A-AGENT passes `111/111` at its immutable tip and `109/109` integration-safe behavior checks; A-STABILITY passes `212/212` at its immutable tip and `211/211` integration-safe behavior checks. Their exact accumulated-branch commands retain only the immutable donor-context failures, each replaced by merge/blob/path provenance. Root `npm test`, protocol `22/22`, and `npm run test:all` all pass; the complete root gate reports System Integration `180/180`. Product Assurance satellite tests are still outside root-script discovery until the serial spine wires the harness; this omission is explicit, not a green claim. The SI corrected expectation remains `DIVERGED`, not a weakened `PARTIAL` claim.
+F-BRIDGE focused proof is green: execution `173/173`, execution import purity `30/30`, compatibility `131/131`, reconciliation `75/75`. SI-RECON focused proof is `29/29`. Q is green only in the immutable donor view: focused `384/384` at `96.50%` and accumulated `3,011` plus six documented skips. Running Q17 against the combined target correctly produces `366 passed / 18 failed / 93.70%` because its immutable proof freezes the historical 1,568-byte directive lock; this is recorded diagnostic evidence, never reported as a green target-tree Q17 gate. The integration-owned provenance suite proves the exact D-LAUNCH-1 external supersession `14/14`. Dashboard donor equivalence is exact at Git-tree level and its focused Product Control Room contract suite passes `18/18`. L15's complete network-free operational suite passes `11/11` files and 347 assertions. A-CORE passes `32/32` and registers 143/143 operations; A-HAZARD passes `69/69`; A-COCKPIT passes `50/50` plus observability `100/100`; A-AGENT passes `111/111` at its immutable tip and `109/109` integration-safe behavior checks; A-STABILITY passes `212/212` at its immutable tip and `211/211` integration-safe behavior checks; S4 passes `233/233` at its immutable tip and `231/231` integration-safe behavior checks. Their accumulated-branch commands retain only immutable donor-context failures, each replaced by merge/blob/path provenance. Root `npm test`, protocol `22/22`, and `npm run test:all` all pass; the complete root gate reports System Integration `180/180`. Product Assurance satellite tests are still outside root-script discovery until the serial spine wires the harness; this omission is explicit, not a green claim. The SI corrected expectation remains `DIVERGED`, not a weakened `PARTIAL` claim.
 
 ## What is genuinely live vs not
 
@@ -74,7 +76,7 @@ F-BRIDGE focused proof is green: execution `173/173`, execution import purity `3
 
 ## Next build families (in order)
 
-1. Finish remaining accepted Phase 2 donor fan-in with newly resealed A-CASE/S4. Keep A-FORMAL and any dirty or unsealed L lane refused at their exact blockers.
+1. Re-audit A-FORMAL and L after accepted-donor fan-in; integrate L last only if a clean immutable `LANE_READY` receipt exists, otherwise preserve exact refusals.
 2. Apply the accepted shared insertion requests through the existing System Integration/Ledger/Foundation owners; mount the Q protocol client and dashboard without creating duplicate truth or lifecycle owners.
 3. Complete authenticated private account truth (Spot/USD-M/Margin balances, liabilities, permissions, fees, funding, borrow capacity, freshness) only from an accepted donor; otherwise retain `NOT_CONFIGURED`.
 4. Prove dependency-driven startup, runtime readback, browser truth, restart/reconciliation, and complete I00 local acceptance.

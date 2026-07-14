@@ -13,6 +13,14 @@ const sharedStylesOwner = realpathSync(resolve(repoRoot, 'web/src/styles.css'));
 const buildOnlyPreviewEntry = realpathSync(resolve(sourceRoot, 'preview/main.tsx'));
 const allowedRoots = [sourceRoot, fixtureRoot, testRoot];
 const allowedExternalDependencies = new Set(['lucide-react', 'react', 'react-dom/client']);
+const allowedReceiptResearchHosts = new Set([
+  'cheatsheetseries.owasp.org',
+  'csrc.nist.gov',
+  'docs.aws.amazon.com',
+  'nodejs.org',
+  'opentelemetry.io',
+  'www.w3.org',
+]);
 const resolvableExtensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json', '.css'];
 const executableExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']);
 
@@ -181,11 +189,11 @@ test('every static, side-effect, dynamic, re-export, and require reference resol
   }
 });
 
-test('lane source and JSON fixtures contain no secret, live host, provider SDK, signed call, or money-path invocation', () => {
+test('lane source, fixture JSON, and shadow receipts contain no secret, live host, provider SDK, signed call, or money-path invocation', () => {
   // Test files are intentionally excluded so the proof regex literals cannot match themselves.
   const artifacts = [
     ...walk(sourceRoot).filter((path) => ['.ts', '.tsx', '.css', '.html'].includes(extname(path))),
-    ...walk(fixtureRoot).filter((path) => extname(path) === '.json'),
+    ...walk(fixtureRoot).filter((path) => ['.json', '.md'].includes(extname(path))),
   ];
   const forbidden = [
     [/\b(?:sk-[A-Za-z0-9_-]{12,}|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk_live_[A-Za-z0-9]{12,})\b/u, 'secret-shaped token'],
@@ -207,7 +215,8 @@ test('lane source and JSON fixtures contain no secret, live host, provider SDK, 
     }
     for (const match of source.matchAll(/\b(?:https?|wss?):\/\/[^\s'"`<>]+/giu)) {
       const url = new URL(match[0].replace(/[),.;]+$/u, ''));
-      assert.ok(url.hostname.endsWith('.invalid'), `live URL: ${relative(repoRoot, path)} -> ${url.hostname}`);
+      const allowedResearchCitation = extname(path) === '.md' && allowedReceiptResearchHosts.has(url.hostname);
+      assert.ok(url.hostname.endsWith('.invalid') || allowedResearchCitation, `live URL: ${relative(repoRoot, path)} -> ${url.hostname}`);
     }
   }
 

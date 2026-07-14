@@ -2,7 +2,7 @@
 
 Schema version: `I00_PRODUCT_BUILD_STATE_V1`
 
-Updated: `2026-07-14T05:13:14Z`
+Updated: `2026-07-14T05:14:23Z`
 
 ## Identity
 
@@ -10,14 +10,14 @@ Updated: `2026-07-14T05:13:14Z`
 | --- | --- |
 | Canonical Main base SHA | Live `current-main` and `origin/current-main` are `7383fd89477ed0b3e677e53c57c35d76ac34bbd8`; exact canonical ancestry is integrated at `ce8d79a751c886dff388fa8f3f2fa6fb3f0414ee` without writing Main |
 | Integration branch/worktree | `i00-product-assembly-20260713` at `/Users/cosmosgeek/Desktop/i00-assembly` |
-| Latest integration merge | A-HAZARD `bfb813ba1c15a23c7f4f0bff6a8da2f13d5c2729`; tree `7eed3e5336354c03455282b9ee3421c7d90a0a92` |
-| Latest integration receipt | `docs/archive/i00-phase2/A_HAZARD_INTEGRATION_RECEIPT.md` |
+| Latest integration merge | A-COCKPIT `0204687d8c65875c99d17ae7bee1c61707f0be0f`; tree `317994f194899f0edfe170d2dcab4386280b9489` |
+| Latest integration receipt | `docs/archive/i00-phase2/A_COCKPIT_INTEGRATION_RECEIPT.md` |
 | Verified acceptance implementation | Historical prestage implementation `a2be4865d0d003d1dedd38c351b4e8ccf6033c2d`; Phase 1 handoff HEAD `9bf531ccca203ca66bad39787a0930fd608807a7` |
 | Phase | `FINAL_INTEGRATION / PHASE_2_FRESH_INTEGRATOR` |
-| Status | `A_COCKPIT_INTEGRATED / FULL_GATE_GREEN` |
+| Status | `A_COCKPIT_INTEGRATED_AND_RECEIPTED / FULL_GATE_GREEN` |
 | Active writer | Fresh Role 2 integrator; exclusive shared write/merge authority is limited to this integration branch, never `current-main` |
 | Protected untracked inputs | The five owner directives remain intentional read-only untracked inputs at their D-LAUNCH-6 hashes, not partial implementation; the worktree is otherwise clean after the final seal |
-| Current Phase 2 landed state | Accepted F-BRIDGE, SI-RECON, Q, dashboard-equivalent, L15, A-CORE, A-HAZARD, and A-COCKPIT donors are integrated serially; A-COCKPIT contributes exact fixture-only cockpit/observability contracts and Foundation observability derivation; focused, deterministic, and full repository gates pass |
+| Current Phase 2 landed state | Accepted F-BRIDGE, SI-RECON, Q, dashboard-equivalent, L15, A-CORE, A-HAZARD, and A-COCKPIT donors are integrated serially; A-COCKPIT merge `0204687d8c65875c99d17ae7bee1c61707f0be0f` contributes exact fixture-only cockpit/observability contracts and Foundation observability derivation; focused, deterministic, and full repository gates pass |
 
 ## Accepted inputs
 
@@ -98,7 +98,7 @@ Updated: `2026-07-14T05:13:14Z`
 
 Current A-COCKPIT integration blocker: **none**. Its accepted packet remains fixture-only and `DIRECTOR_MOUNT_REQUIRED`; no production route, live green, or overall assurance readiness is claimed. The current branch is a serial integration checkpoint, not `INTEGRATION_CANDIDATE_READY` and not `INTEGRATED_ACCEPTED`.
 
-Next exact task: seal the A-COCKPIT receipt, then integrate A-AGENT and A-STABILITY one at a time with focused plus repository-wide gates and immutable receipts. A-FORMAL, A-CASE, and any L tip lacking a clean final `LANE_READY` receipt remain refused. After donor fan-in, perform the already-recorded shared production composition, persistence, route, cockpit-mount, runtime/browser, ops-preflight, and real-adapter acceptance work.
+Next exact task: integrate A-AGENT and A-STABILITY one at a time with focused plus repository-wide gates and immutable receipts. A-FORMAL, A-CASE, and any L tip lacking a clean final `LANE_READY` receipt remain refused. After donor fan-in, perform the already-recorded shared production composition, persistence, route, cockpit-mount, runtime/browser, ops-preflight, and real-adapter acceptance work.
 
 Next combined command after accepted Q/L adapters replace every fixture seam:
 
@@ -172,4 +172,4 @@ Current counts: expected accepted donors `14`; discovered exact tips `14`; recei
 | L lane | `9b0d4ad534644273c28d24fec2e18b17717f1167`; state generation 16, L13 issued; eight partial untracked L13 implementation/request paths | No L13/L16/L17/final receipt and no exact `L LANE_READY`; refuse and integrate last only after a clean immutable reseal |
 | A-ACTION-EVIDENCE / S2 | No branch, worktree, or accepted receipt; A-CORE marks the seam `WAITING` | Not a discovered donor; preserve as `NOT_CONFIGURED`/missing evidence rather than fabricate one |
 
-The next serial order is: seal A-COCKPIT, then integrate A-AGENT and A-STABILITY one at a time; hold A-FORMAL and A-CASE; integrate L last only after a clean `LANE_READY` receipt exists. Prior closed rows must not be repeated. Every new donor fan-in gets focused and repository-wide gates plus its own immutable integration receipt before the next donor.
+The next serial order is: integrate A-AGENT and A-STABILITY one at a time; hold A-FORMAL and A-CASE; integrate L last only after a clean `LANE_READY` receipt exists. Prior closed rows must not be repeated. Every new donor fan-in gets focused and repository-wide gates plus its own immutable integration receipt before the next donor.

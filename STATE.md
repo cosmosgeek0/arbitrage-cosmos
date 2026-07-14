@@ -1,6 +1,6 @@
 # STATE.md — what is true right now
 
-**Current checkpoint:** 2026-07-14 · Phase 2 accepted A-COCKPIT packet integrated after receipted A-HAZARD on `i00-product-assembly-20260713`
+**Current checkpoint:** 2026-07-14 · Phase 2 accepted A-COCKPIT merge `0204687d8c65875c99d17ae7bee1c61707f0be0f` receipted after A-HAZARD on `i00-product-assembly-20260713`
 **Law:** any landed change that alters project state must update this file in the same commit. This file wins on "what is the current state"; `ARCHITECTURE.md` wins on "how it is designed"; `MISSION.md` wins on "why".
 
 ## What this is

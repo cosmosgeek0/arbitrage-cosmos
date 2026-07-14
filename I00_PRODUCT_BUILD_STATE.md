@@ -2,7 +2,7 @@
 
 Schema version: `I00_PRODUCT_BUILD_STATE_V1`
 
-Updated: `2026-07-14T04:18:04Z`
+Updated: `2026-07-14T04:25:39Z`
 
 ## Identity
 
@@ -10,12 +10,14 @@ Updated: `2026-07-14T04:18:04Z`
 | --- | --- |
 | Canonical Main base SHA | Live `current-main` and `origin/current-main` are `7383fd89477ed0b3e677e53c57c35d76ac34bbd8`; the integration branch merge-base remains `1fec867fa3f62d17829543b3776dc768506ae8ac` until the Phase 2 canonical baseline sync |
 | Integration branch/worktree | `i00-product-assembly-20260713` at `/Users/cosmosgeek/Desktop/i00-assembly` |
+| Latest integration merge | `0670f533840f415b612fb290d2c944f94af50d82`; tree `26fe03af99053750cfcc1687e72d6b29519a1a76` |
+| Latest integration receipt | `docs/archive/i00-phase2/F_BRIDGE_INTEGRATION_RECEIPT.md` |
 | Verified acceptance implementation | Historical prestage implementation `a2be4865d0d003d1dedd38c351b4e8ccf6033c2d`; Phase 1 handoff HEAD `9bf531ccca203ca66bad39787a0930fd608807a7` |
 | Phase | `FINAL_INTEGRATION / PHASE_2_FRESH_INTEGRATOR` |
-| Status | `DIRECTOR_AUTHORITY_ACCEPTED` |
+| Status | `F_BRIDGE_INTEGRATED / SI_RECON_REQUIRED` |
 | Active writer | Fresh Role 2 integrator; exclusive shared write/merge authority is limited to this integration branch, never `current-main` |
 | Protected untracked inputs | The five owner directives remain intentional read-only untracked inputs at their D-LAUNCH-6 hashes, not partial implementation; the worktree is otherwise clean after the final seal |
-| Production/shared paths changed by this authority acceptance | None; only this state file changes before the authority commit |
+| Current Phase 2 landed state | F-BRIDGE is integrated at `0670f533840f415b612fb290d2c944f94af50d82`; focused and deterministic gates pass, while the full suite honestly stops at the accepted SI-RECON expectation defect `179/180` |
 
 ## Accepted inputs
 
@@ -128,7 +130,7 @@ The immutable donor is the committed branch object, never the donor worktree con
 
 | Expected accepted donor | Discovered immutable tip | Acceptance receipt SHA-256 | Changed-path proof | Integrated at transfer |
 | --- | --- | --- | --- | --- |
-| F-BRIDGE | `a0c0c2e5ef3180aa720488463643433cefeb65e5` (`current-main` merge `c9009079b0c27c2a7e2d1a0111a022bceb2e61db`) | `e01a614d89755553e5e86db657b8f2ed804060b68f8088c3f34b9c27d76bbba4` | Accepted implementation and fixture manifests are sealed in `F_BRIDGE_RECEIPT.md` | No; canonical Main baseline sync required |
+| F-BRIDGE | `a0c0c2e5ef3180aa720488463643433cefeb65e5` (`current-main` merge `c9009079b0c27c2a7e2d1a0111a022bceb2e61db`) | `e01a614d89755553e5e86db657b8f2ed804060b68f8088c3f34b9c27d76bbba4` | Accepted implementation and fixture manifests are sealed in `F_BRIDGE_RECEIPT.md` | Yes, merge `0670f533840f415b612fb290d2c944f94af50d82`; intermediate full gate is explicitly blocked pending accepted SI-RECON |
 | SI-RECON | `f03ed786a8c5cab50ef27ad33026a74f79f7df87` (`current-main` merge `c43262af78b43de0ac5ec819e82f04af60f1f255`) | `a0ac1bd8da362999e93d0b10094a4791f900e2a245e66b115a78128030574585` | One production expectation plus immutable receipt | No; canonical Main baseline sync required |
 | Q lane | `02b4eccc8d2ef53b830cafae06e5175715fa6ebb` | `9cfa0356228d7f48674df2d9db523f0f0d53dab1a4e4255b6ba9676e463ec5dc` | 504 `quant/**` additions; sorted newline-terminated path-set SHA-256 `e8cf75f00380d265671227553c7019741fa0feb2004cfe37be56d66c592c11d8` | No |
 | Dashboard shell | `692501587617d4880303fbd747d93e63c376f088` | `878cc578d88f38ca3bf8edce554b2cb258b4e9309718854f7ba18c33cb50b968` | 22 additions; path-set SHA-256 `49400222f70044a8fe851b26123a59cba7cc973f8a346de20aceb0e60f70419c`; 21-file subtree `d3d899db3b0395532a3cf12b2304e91a2ce528ce` | Yes, explicitly receipted 21/21 byte-equivalent through IP-CONTROL; stale root `DASH_INTEGRATION_NOTES.md` is superseded by `IP_CONTROL_MOUNT_REQUEST.md` and excluded |
@@ -143,7 +145,7 @@ The immutable donor is the committed branch object, never the donor worktree con
 | A-AGENT | `97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437` | `c237939f112a41abfb83508ed57e5783a9344cc3cb76e02003ca64487831a92c` | 20 paths; path-set SHA-256 `11a0a317f05371d5a9378776cc0d7343a5d4a622c5f19dce2c2f6dbe8a5d6b27` | No |
 | A-STABILITY | `d35674e7f9621320c35e0bc0270efd515cc64dbd` | `b26f902d90fb82633ac8532d5aa82169801ded3ec6d7bcf3477737a64eab2168` | 19 paths; path-set SHA-256 `84b18ffcfd1893442eedacad74d4ef94823a4f5d846a1a5362e859ed6c5cc117` | No |
 
-Transfer counts: expected accepted donors `14`; discovered exact tips `14`; receipt-accepted `14`; integrated by ancestry or receipted equivalence `5`. The required equality is **not yet claimed**; it becomes a candidate gate only when all 14 accepted donors are receipted as integrated.
+Current counts: expected accepted donors `14`; discovered exact tips `14`; receipt-accepted `14`; integrated by ancestry or receipted equivalence `6`. The required equality is **not yet claimed**; it becomes a candidate gate only when all 14 accepted donors are receipted as integrated.
 
 ### Refused, blocked, or not-yet-existing donors
 

@@ -1,6 +1,6 @@
 # STATE.md — what is true right now
 
-**Current checkpoint:** 2026-07-14 · Phase 2 accepted A-CASE/S4 merge `86ee3b5f81c73c64eccf1d10b14a1f3bdf8a4bf1` receipted after A-STABILITY; all 15 currently accepted donors now integrated on `i00-product-assembly-20260713`
+**Current checkpoint:** 2026-07-14 · Phase 2 all 15 currently accepted donors integrated; L and A-FORMAL refused on a post-fan-in immutable audit; shared serial-spine wiring is next on `i00-product-assembly-20260713`
 **Law:** any landed change that alters project state must update this file in the same commit. This file wins on "what is the current state"; `ARCHITECTURE.md` wins on "how it is designed"; `MISSION.md` wins on "why".
 
 ## What this is
@@ -20,7 +20,8 @@ A private Binance arbitrage/intelligence operating machine ("Cosmos Arbitrage Co
 - Accepted A-AGENT donor `97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437` is integrated by exact Git ancestry with 20 byte-identical donor paths. Its immutable donor-tip suite passes `111/111`; on the accumulated branch, 109/109 integration-safe behavior checks pass and the two donor-context branch/path assertions are replaced by exact Git-object provenance rather than weakened.
 - Accepted A-STABILITY donor `d35674e7f9621320c35e0bc0270efd515cc64dbd` is integrated by exact Git ancestry with 19 byte-identical donor paths. Its immutable donor-tip suite passes `212/212`; on the accumulated branch, 211/211 integration-safe behavior checks pass and the sole donor-context branch/path assertion is replaced by exact Git-object provenance. Resource ownership remains `UNKNOWN`.
 - Accepted A-CASE/S4 donor `b4d8a446cb4cd6e77e7fbaf38f927b7513dc316c` is integrated by exact Git ancestry with 41 byte-identical donor paths. Its immutable donor-tip suite passes `233/233`; on the accumulated branch, 231/231 integration-safe behavior checks pass and the two lane-context assertions are replaced by exact Git ancestry/path proof. The projection remains `SYNTHETIC_ONLY` with `authorityEffect=NONE`.
-- A-CASE/S4 advanced to accepted tip `b4d8a446cb4cd6e77e7fbaf38f927b7513dc316c` with exact `CASE_PRESTAGE_READY`; it is now queued after A-STABILITY. A-FORMAL remains blocked and the current L worktree remains dirty/partial without `LANE_READY`.
+- A-CASE/S4 accepted tip `b4d8a446cb4cd6e77e7fbaf38f927b7513dc316c` is integrated and receipted with exact `CASE_PRESTAGE_READY`; all 41 donor paths remain byte-identical.
+- Post-fan-in conditional audit: L tip `13e5e3f4695c926bae513d3f254e4924970d36df` remains generation 19 L16 `ISSUED`, lacks `LIVE_EDGE_RECEIPT.md` and `L LANE_READY`, and has nine donor-owned untracked paths; A-FORMAL tip `89c783bd9e55ce83c21ed1181757122d88e4c980` still terminates `BLOCKED_NO_NETWORK_BOUNDARY_VIOLATED`. Neither is integrated or partially copied.
 - Milestone tags (all pushed): `sprint-foundation-final`, `sprint-intelligence-final`, `sprint-runtime-final`, `sprint-capital-final`, `sprint-convergence-final`.
 - Milestone commits on `current-main`: audited baseline `b272049` → organs round 1 `c4ae7a9` → organs round 2 `87af782` → convergence `b58e64e`.
 - Feature branches preserved on origin as recovery points (`market-intelligence-main-20260711`, `backend-foundation-parallel-20260711-070056`, `live-intelligence-runtime-main-20260711`, `capital-supervision-main-20260711`, `system-convergence-vertical-slice-20260711`, `engine-overdrive`, `engine-volume-overdrive`).
@@ -76,7 +77,7 @@ F-BRIDGE focused proof is green: execution `173/173`, execution import purity `3
 
 ## Next build families (in order)
 
-1. Re-audit A-FORMAL and L after accepted-donor fan-in; integrate L last only if a clean immutable `LANE_READY` receipt exists, otherwise preserve exact refusals.
+1. Apply shared insertion requests through existing owners: production composition, Ledger CAS, quantity bridge, persistence/cursors, routes, cockpit mount, root assurance harness, and dependency-driven startup. Preserve exact L and A-FORMAL refusals.
 2. Apply the accepted shared insertion requests through the existing System Integration/Ledger/Foundation owners; mount the Q protocol client and dashboard without creating duplicate truth or lifecycle owners.
 3. Complete authenticated private account truth (Spot/USD-M/Margin balances, liabilities, permissions, fees, funding, borrow capacity, freshness) only from an accepted donor; otherwise retain `NOT_CONFIGURED`.
 4. Prove dependency-driven startup, runtime readback, browser truth, restart/reconciliation, and complete I00 local acceptance.

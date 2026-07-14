@@ -2,7 +2,7 @@
 
 Schema version: `I00_PRODUCT_BUILD_STATE_V1`
 
-Updated: `2026-07-14T05:29:50Z`
+Updated: `2026-07-14T05:32:30Z`
 
 ## Identity
 
@@ -12,9 +12,10 @@ Updated: `2026-07-14T05:29:50Z`
 | Integration branch/worktree | `i00-product-assembly-20260713` at `/Users/cosmosgeek/Desktop/i00-assembly` |
 | Latest integration merge | A-CASE/S4 `86ee3b5f81c73c64eccf1d10b14a1f3bdf8a4bf1`; tree `db4708ef5bdd261f4493885a770aa3ff670bf674` |
 | Latest integration receipt | `docs/archive/i00-phase2/A_CASE_INTEGRATION_RECEIPT.md` |
+| Latest conditional donor audit | `docs/archive/i00-phase2/CONDITIONAL_DONOR_REAUDIT_RECEIPT.md`; L and A-FORMAL refused on exact immutable evidence |
 | Verified acceptance implementation | Historical prestage implementation `a2be4865d0d003d1dedd38c351b4e8ccf6033c2d`; Phase 1 handoff HEAD `9bf531ccca203ca66bad39787a0930fd608807a7` |
 | Phase | `FINAL_INTEGRATION / PHASE_2_FRESH_INTEGRATOR` |
-| Status | `A_CASE_INTEGRATED_AND_RECEIPTED / ACCEPTED_DONOR_EQUALITY_PROVEN / FULL_GATE_GREEN` |
+| Status | `ACCEPTED_DONOR_EQUALITY_PROVEN / CONDITIONAL_DONORS_REFUSED / SHARED_WIRING_NEXT` |
 | Active writer | Fresh Role 2 integrator; exclusive shared write/merge authority is limited to this integration branch, never `current-main` |
 | Protected untracked inputs | The five owner directives remain intentional read-only untracked inputs at their D-LAUNCH-6 hashes, not partial implementation; the worktree is otherwise clean after the final seal |
 | Current Phase 2 landed state | All 15 currently accepted donors are integrated serially by exact ancestry or receipted equivalence; S4 merge `86ee3b5f81c73c64eccf1d10b14a1f3bdf8a4bf1` preserves all 41 packet blobs and its read-only `authorityEffect=NONE` boundary; focused, deterministic, and full repository gates pass |
@@ -24,7 +25,7 @@ Updated: `2026-07-14T05:29:50Z`
 | Input | Accepted immutable or living evidence | Current use |
 | --- | --- | --- |
 | Q lane | `02b4eccc8d2ef53b830cafae06e5175715fa6ebb`; Q17 acceptance receipt SHA-256 `9cfa0356228d7f48674df2d9db523f0f0d53dab1a4e4255b6ba9676e463ec5dc`; exact `Q LANE_READY — PARKED` | Integrated by merge ancestry at `042dc9897d04bed2b0de3043cbdcbac408251412`; advisory `ABSTAIN_UNKNOWN`; production transport/mount still `NOT_CONFIGURED` |
-| L lane | Latest discovered tip `13e5e3f4695c926bae513d3f254e4924970d36df` remains L16-issued with four untracked donor-owned L16 paths; no final `LIVE_EDGE_RECEIPT.md` or `L LANE_READY` exists | Refused as dirty/partial until a clean immutable L17 receipt-sealed tip exists; private truth, journal, ticket, reconciliation, recovery, and signed validation remain absent |
+| L lane | Tip `13e5e3f4695c926bae513d3f254e4924970d36df`, tree `336dc0632060943bff8c3b37dcaa99d688688691`, remains generation 19 L16 `ISSUED` with nine donor-owned untracked L16 paths; no final `LIVE_EDGE_RECEIPT.md` or `L LANE_READY` exists | Refused as `DIRTY_PARTIAL_L16 / FINAL_RECEIPT_ABSENT / L_LANE_READY_NOT_SEALED`; private truth, journal, ticket, reconciliation, recovery, and signed validation remain absent |
 | Dashboard donor | `692501587617d4880303fbd747d93e63c376f088`; donor receipt SHA-256 `878cc578d88f38ca3bf8edce554b2cb258b4e9309718854f7ba18c33cb50b968`; Phase 2 equivalence receipt in `docs/archive/i00-phase2/DASHBOARD_EQUIVALENCE_VALIDATION_RECEIPT.md` | Integrated by exact 21-file Git-tree equivalence through IP-CONTROL; director mount still required |
 | Infrastructure donor | `2cec412927fa2f64f05a0b2774b18e45f8ce4fa5`; work `9a82d4715c73ebe4156638c2bf5e8a2c02373bbf`; immutable receipt SHA-256 `d5159d60419faf11b153557ce830a0d563c723a1b6d74bf7af8fd0517edc7293` | Integrated as artifact-only Git ancestry; not installed, deployed, configured, or externally exercised |
 | Product Assurance core | `08a0a09780727e2b4ba59017b5701998abe29b77`; receipt SHA-256 `93b1f6283d48ddeadf9b7205e47f3ccfc698d4f79f98b8e82ecad1d7aa4a302e`; exact `CORE_SCAFFOLD_READY` | Integrated as dormant scaffold and generated evidence; root harness, satellite insertions, and production composition still pending |
@@ -102,9 +103,9 @@ Updated: `2026-07-14T05:29:50Z`
 
 ## Current blocker and resume
 
-Current S4 integration blocker: **none**. Its accepted packet remains read-only `SYNTHETIC_ONLY` with `authorityEffect=NONE`; no production owner, control/effect authority, live green, or overall assurance readiness is claimed. The current branch is a serial integration checkpoint with accepted-donor equality proven, not `INTEGRATION_CANDIDATE_READY` and not `INTEGRATED_ACCEPTED`.
+Current accepted-donor integration blocker: **none**; expected = discovered = receipt-accepted = integrated is `15`. L is separately refused as dirty L16 without a final receipt, and A-FORMAL remains terminally blocked. The current branch is a serial integration checkpoint with accepted-donor equality proven, not `INTEGRATION_CANDIDATE_READY` and not `INTEGRATED_ACCEPTED`.
 
-Next exact task: re-audit the moving L tip and A-FORMAL receipt; integrate L last only if its worktree is clean and an exact immutable `L LANE_READY` receipt exists. Otherwise preserve both refusals and begin the recorded shared production composition, persistence, route, cockpit-mount, root-harness, runtime/browser, ops-preflight, and real-adapter acceptance work.
+Next exact task: begin the recorded shared production composition, Ledger CAS and quantity bridge, accepted insertion rows, route/cursor persistence, cockpit mount, root harness, dependency-driven startup, runtime/browser, ops-preflight, and real-adapter acceptance work. Preserve L and A-FORMAL refusals unless a later explicitly re-audited clean immutable accepted tip exists.
 
 Next combined command after accepted Q/L adapters replace every fixture seam:
 
@@ -175,7 +176,7 @@ Current counts: expected accepted donors `15`; discovered exact tips `15`; recei
 | Expected future item | Discovered truth | Ruling |
 | --- | --- | --- |
 | A-FORMAL | `89c783bd9e55ce83c21ed1181757122d88e4c980`; D-LAUNCH-10 reseal SHA-256 `d693696aa339d490ef58fee2bf4c833ce660d6a265391c5363079b32d62a165f` | `BLOCKED_NO_NETWORK_BOUNDARY_VIOLATED`; root `npm test` exit 127; the handoff/board ready label is incorrect; refuse |
-| L lane | `13e5e3f4695c926bae513d3f254e4924970d36df`; state remains L16 issued and donor worktree contains four untracked donor-owned L16 paths | No final receipt and no exact `L LANE_READY`; dirty/partial donor is refused and may integrate last only after a clean immutable reseal |
+| L lane | `13e5e3f4695c926bae513d3f254e4924970d36df`; tree `336dc0632060943bff8c3b37dcaa99d688688691`; generation 19 L16 `ISSUED`; nine donor-owned untracked paths, path-set SHA-256 `884b3ad3e81cf683430dd781fc7bc624787d3864eddcf3dc8c1428a60c9c6040` | No final receipt and no exact `L LANE_READY`; dirty/partial donor is refused |
 | A-ACTION-EVIDENCE / S2 | No branch, worktree, or accepted receipt; A-CORE marks the seam `WAITING` | Not a discovered donor; preserve as `NOT_CONFIGURED`/missing evidence rather than fabricate one |
 
-The accepted donor sequence is complete. Re-audit A-FORMAL and L; hold A-FORMAL unless a superseding accepted receipt exists, and integrate L last only after a clean immutable `LANE_READY` receipt exists. Prior closed rows must not be repeated.
+The accepted donor sequence is complete and both conditional donors are refused on the immutable snapshot above. Prior closed rows must not be repeated. Shared serial-spine wiring is next.

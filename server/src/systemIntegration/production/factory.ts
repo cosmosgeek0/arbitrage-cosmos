@@ -265,6 +265,28 @@ class MarketEvidenceReader {
 
   readSource(kind: PublicSourceKind, nowMs = this.clock.nowMs()): Readonly<SourceProjectionEvidence> {
     const facts = this.readFacts();
+    return this.sourceEvidence(kind, nowMs, facts);
+  }
+
+  readSources(nowMs = this.clock.nowMs()): Readonly<{
+    spot: Readonly<SourceProjectionEvidence>;
+    usdm: Readonly<SourceProjectionEvidence>;
+  }> {
+    // Spot and USD-M belong to one supervisor step. Scanning the accepted
+    // MarketEngine cache once both removes duplicate full-universe work and
+    // prevents the two source projections from observing different row cuts.
+    const facts = this.readFacts();
+    return Object.freeze({
+      spot: this.sourceEvidence('SPOT', nowMs, facts),
+      usdm: this.sourceEvidence('USDM', nowMs, facts),
+    });
+  }
+
+  private sourceEvidence(
+    kind: PublicSourceKind,
+    nowMs: number,
+    facts: Readonly<MarketFacts>,
+  ): Readonly<SourceProjectionEvidence> {
     const sourceTime = kind === 'SPOT'
       ? facts.latestSpotSourceTimeMs
       : facts.latestUsdmSourceTimeMs;
@@ -693,8 +715,7 @@ class PublicIntelligenceLifecycle {
     // Receipt time and evaluation time belong to the same deterministic
     // supervisor step. Taking a second clock sample here can place a newly
     // accepted receipt after ctx.nowMs and manufacture a negative age.
-    const spot = this.evidence.readSource('SPOT', ctx.nowMs);
-    const usdm = this.evidence.readSource('USDM', ctx.nowMs);
+    const { spot, usdm } = this.evidence.readSources(ctx.nowMs);
     const spotFresh = spot.timestamp !== null && evaluateFreshness(spot.timestamp, ctx.nowMs).state === 'FRESH';
     const usdmFresh = usdm.connected
       && usdm.timestamp !== null

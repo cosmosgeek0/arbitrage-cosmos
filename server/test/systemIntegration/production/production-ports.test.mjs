@@ -254,7 +254,7 @@ test('accepted public owners drive UniverseGraph and IntelligenceRuntimeBridge r
   const universe = world.ports.runtimes.intelligenceRuntime.health(world.ctx());
   assert.equal(universe.running, true);
   assert.equal(universe.timestamp.sourceTimeMs, START - 250);
-  assert.equal(allRowsReads, 4);
+  assert.equal(allRowsReads, 3);
 
   await world.ports.runtimes.marketIntelligence.start();
   const intelligence = world.ports.runtimes.marketIntelligence.health(world.ctx());
@@ -268,7 +268,7 @@ test('accepted public owners drive UniverseGraph and IntelligenceRuntimeBridge r
   world.usdm.set('BTCUSDT', START + 950);
   const held = world.ports.runtimes.marketIntelligence.health(world.ctx());
   assert.equal(held.timestamp.sourceTimeMs, START - 200);
-  assert.equal(allRowsReads, 8);
+  assert.equal(allRowsReads, 5);
 
   world.clock.now = START + 5_000;
   world.spot.set('BTCUSDT', START + 4_900);
@@ -276,12 +276,12 @@ test('accepted public owners drive UniverseGraph and IntelligenceRuntimeBridge r
   const advanced = world.ports.runtimes.marketIntelligence.health(world.ctx());
   assert.equal(advanced.timestamp.sourceTimeMs, START + 4_950);
   assert.ok(advanced.timestamp.receivedAtMs >= intelligence.timestamp.receivedAtMs);
-  assert.equal(allRowsReads, 11);
+  assert.equal(allRowsReads, 7);
 
   world.clock.now = START + 14_951;
   const stale = world.ports.runtimes.marketIntelligence.health(world.ctx());
   assert.equal(stale.timestamp, null);
-  assert.equal(allRowsReads, 13);
+  assert.equal(allRowsReads, 8);
 });
 
 test('market intelligence fails closed when USD-M disconnects with fresh cached evidence', async () => {

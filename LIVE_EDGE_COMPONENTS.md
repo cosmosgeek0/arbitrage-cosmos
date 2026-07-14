@@ -200,6 +200,15 @@ history canonical and exempt from the worker allowlist.
 | Canonical filter and L15 satellite proof boundary | `projection.ts`, `types.ts` | exact L04 owner replay; exact L15 commit/tree/work/blob/raw-SHA/347 assertion binding | arithmetic rejection evidence or `ACCEPTED_SATELLITE_ONLY` | `FILTER_BLOCKED` requires current genuine price/grid/quantity/notional arithmetic and excludes owner/capability/reference/revision/precision gaps. L15 remains never merged, wired, deployed, live or ready |
 | Offline external-proof tests | `server/test/liveEdge/externalProofEvidence/**` | focused `21/21`; accumulated LiveEdge `1,595/1,595` | test-only | Proves exact catalogs, eight local gates, L12/L13 lineage, all L15 identities, canonical 257-instrument owner capacity, false-green rejection, deep freeze, bounds, secret safety and inert imports; network-free |
 
+## L17 delta
+
+| Component | Path | Lane build proof | Integration state | Authority / limitation |
+| --- | --- | --- | --- | --- |
+| D-LAUNCH-16 worker-only scope gate | `ops/tests/lane-worker-scope-gate.sh` | `BUILT_AND_TESTED`; hostile `35/35` | `VERIFIED_PENDING_RECEIPT` | Selects the latest qualifying first-parent two-parent exact `director:` merge, then checks every later worker commit, every merge parent and every tracked/worktree path against §3.3; the structural classifier is not cryptographic authorship proof |
+| Final lane evidence adapter | `server/src/liveEdge/adapters/finalLaneEvidence/**` | `BUILT_AND_TESTED`; focused `23/23` | injected evidence only; pending immutable receipt | Binds exact L12/L13/L16, L15, scope-gate and measured-command evidence while emitting `LOCAL_GATE_EVIDENCE_COMPLETE`, `PENDING_IMMUTABLE_RECEIPT_ACCEPTANCE`, `INJECTED_UNATTESTED`, `SYNTHETIC_ONLY`, `readinessAuthority=NONE` and `laneReadyProof=false` |
+| Fault, external and combined-evidence classification | `projection.ts`, `types.ts` | exact closed 18-subject catalog, four operational non-performance facts and chronology validation | owner-gated / unproven / prohibited / not performed / deferred | Does not run or fabricate protocol/security, external fault/restart, rollback, backup/restore, canary, private, signed, money-action, deployment or combined Q/L proof; current `FILTER_BLOCKED` requires exact unexpired canonical L16/L04 owner evidence |
+| Offline final-lane proofs | `server/test/liveEdge/finalLaneEvidence/**`, `ops/tests/test-lane-worker-scope-gate.sh` | focused `23/23`; scope `35/35`; accumulated LiveEdge `1,618/1,618` | test-only | Proves lineage, exact counts, freeze, purity, secret safety, hostile Git and worktree states, replace/index/graft/race hardening and false-readiness rejection; network-free |
+
 ## Director-owned integration still required
 
 - owner-approved Basis/Volume advisory intake;
@@ -244,6 +253,9 @@ durable control adapter; none is promoted to canonical production wiring here.
 
 ## Explicitly absent
 
+- an attested measurement source, cryptographic director-authorship proof,
+  immutable receipt acceptance, readiness authority or lane-ready proof in the
+  L17 implementation adapter;
 - an external runner, credential access, public/private runtime reader,
   deployment or restart authority, readiness authority, signed/test/live order,
   borrow/repay path or other money-action path in L16;

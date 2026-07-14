@@ -23,7 +23,7 @@ Candidate state: `NOT_CANDIDATE_READY`
 | Forbidden authority | No `current-main` write, push, Phase 3 self-certification, private read, signed call, AWS/Cloudflare mutation, deployment, or money authority |
 | Final integration order | `/Users/cosmosgeek/Desktop/FINAL_INTEGRATION_AND_INDEPENDENT_VERIFICATION_ORDER.md`; SHA-256 `73615984fa0403a4c0d7ea0db9893292d57ea18614714398684cf9a3062fb05c` |
 | Frozen local Main authority cutoff | `d78be24f4da14632c857ee250b62e3fec33c2743`; tree `ea9113c2bf5fd95d4e39bde214d2ecf1f1e7e995`; parent/prior pin `ac01b5e43830bc681ee7e251749c4d1fab210029` |
-| Main freshness boundary | Local `current-main` and local remote-tracking ref were observed at the cutoff. No fetch was performed; remote freshness is not claimed. A later board-only descendant is outside the frozen input unless the cutoff remains its ancestor; it cannot alter the donor table merely by moving a ref. |
+| Main freshness boundary | Local `current-main` and its local remote-tracking ref were observed at descendant `2b32317dbf89907bcf529231247f1f9a63235d49`, tree `4b3b079c9133eeb8649a5ecfd13e83ce5061e7a0`, with the frozen cutoff still its ancestor. No fetch was performed; remote freshness is not claimed. The later board state is outside the frozen input and cannot alter the donor table merely by moving a ref. |
 | Living QL pins | `QL_DIRECTOR_STATE.md`: latest touch `d78be24f4da14632c857ee250b62e3fec33c2743`, blob `8116ec491fc7fc863dbcb4015be4cdb105a5a1bc`, SHA-256 `77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc`; `QL_PARALLEL_DAG.md`: latest touch `ac01b5e43830bc681ee7e251749c4d1fab210029`, blob `701b3f263e73bf659ba4319c5839e798c1ce7abb`, SHA-256 `cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec` |
 
 ### DIRECTOR_AUTHORITY_ACCEPTED
@@ -151,8 +151,9 @@ ledger-persistence, engine-supervisor
 | Foundation quantity bridge / Ledger CAS | `12/12`; `9/9` |
 | Authority protocol | `14/14` against D-LAUNCH-27 cutoff |
 | I00 proof / command / acceptance contracts | `46/46`; `28/28`; `34/34` |
-| Production runtime temporal/restart focus | `14/14`; hostile advancing-clock and concurrent clock-regression proofs; same-data dirty-cache replay restored all seven required public/engine owners to `READY / LIVE_PUBLIC` with Q `ABSTAIN_UNKNOWN` and honest safety degradation |
-| I00 performance contract | `38/38`; exact 14-component `OWNER:ownerPath` projections, `blockerCode` capture, owner-forgery rejection, bounded hydrated-baseline timeout refusal, and short-window RSS-slope nonclaim |
+| Production runtime temporal/restart focus | `15/15`; hostile advancing-clock, projection-cadence, stale-source, USD-M disconnect, and concurrent clock-regression proofs; same-data dirty-cache replay restored all seven required public/engine owners to `READY / LIVE_PUBLIC` with Q `ABSTAIN_UNKNOWN` and honest safety degradation |
+| Intelligence Runtime bridge focus | `23/23`; oversized failure batches retain the exact comparator-defined survivors with one bounded eviction pass |
+| I00 performance contract | `41/41`; exact 14-component `OWNER:ownerPath` projections, `blockerCode` capture, owner-forgery rejection, bounded hydrated-baseline timeout refusal, short-window RSS-slope nonclaim, and direct reset/acknowledge/snapshot phase event-loop measurement with interval-substitution rejection |
 | Focused security / I00 scope-security | 148 assertions; `7/7` |
 | Product Assurance hostile / provenance | `2/2`; `4/4` |
 | Root Product Assurance | 515 files scanned; 207 discovered; 207 covered; 0 uncovered; 802 behavior plus 4 provenance |

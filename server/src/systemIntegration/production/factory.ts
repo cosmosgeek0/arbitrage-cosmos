@@ -372,7 +372,8 @@ class MarketEvidenceReader {
 }
 
 const PUBLIC_UNIVERSE_CONFIGURATION = 'i00-public-universe-v1';
-const MAX_PROJECTED_UNIVERSE_ROWS = 4_096;
+const MAX_PUBLIC_INTELLIGENCE_PROJECTION_INTERVAL_MS = 5_000;
+const MAX_PROJECTED_UNIVERSE_ROWS = 640;
 const MAX_PROJECTED_MARK_EVIDENCE = 256;
 
 interface IntelligenceRefresh {
@@ -607,9 +608,13 @@ function coverageSlice(
  */
 class PublicIntelligenceLifecycle {
   private readonly bridge: IntelligenceRuntimeBridge;
+  private readonly projectionIntervalMs: number;
   private runtimeActive = false;
   private intelligenceActive = false;
   private lastProjectionKey: string | null = null;
+  private lastProjectionAtMs: number | null = null;
+  private lastProjectedSpotTimestamp: Readonly<SourcedTimestamp> | null = null;
+  private lastProjectedUsdmTimestamp: Readonly<SourcedTimestamp> | null = null;
   private lastUniverseReady = false;
   private lastEvidenceReady = false;
 
@@ -620,6 +625,13 @@ class PublicIntelligenceLifecycle {
     private readonly maxAgeMs: number,
   ) {
     this.bridge = new IntelligenceRuntimeBridge({ clock });
+    // Sampling may reduce allocation churn, but it must never outlive the
+    // source contract. Re-project at least twice inside the configured
+    // freshness window and immediately fail closed on the source reads below.
+    this.projectionIntervalMs = Math.min(
+      MAX_PUBLIC_INTELLIGENCE_PROJECTION_INTERVAL_MS,
+      Math.max(1, Math.floor(maxAgeMs / 2)),
+    );
   }
 
   startRuntime(): Promise<void> {
@@ -670,6 +682,9 @@ class PublicIntelligenceLifecycle {
 
   private resetGenerationProjection(): void {
     this.lastProjectionKey = null;
+    this.lastProjectionAtMs = null;
+    this.lastProjectedSpotTimestamp = null;
+    this.lastProjectedUsdmTimestamp = null;
     this.lastUniverseReady = false;
     this.lastEvidenceReady = false;
   }
@@ -681,7 +696,9 @@ class PublicIntelligenceLifecycle {
     const spot = this.evidence.readSource('SPOT', ctx.nowMs);
     const usdm = this.evidence.readSource('USDM', ctx.nowMs);
     const spotFresh = spot.timestamp !== null && evaluateFreshness(spot.timestamp, ctx.nowMs).state === 'FRESH';
-    const usdmFresh = usdm.timestamp !== null && evaluateFreshness(usdm.timestamp, ctx.nowMs).state === 'FRESH';
+    const usdmFresh = usdm.connected
+      && usdm.timestamp !== null
+      && evaluateFreshness(usdm.timestamp, ctx.nowMs).state === 'FRESH';
     if (!spot.connected || !spotFresh) {
       this.lastUniverseReady = false;
       this.lastEvidenceReady = false;
@@ -694,17 +711,23 @@ class PublicIntelligenceLifecycle {
     }
 
     const key = `${spot.timestamp?.sourceTimeMs ?? 'receive'}:${usdmFresh ? usdm.timestamp?.sourceTimeMs ?? 'receive' : 'unavailable'}`;
-    if (key !== this.lastProjectionKey) {
+    const projectionDue = this.lastProjectionAtMs === null
+      || ctx.nowMs - this.lastProjectionAtMs >= this.projectionIntervalMs;
+    const retryNeeded = !this.lastUniverseReady || (usdmFresh && !this.lastEvidenceReady);
+    if (projectionDue && (key !== this.lastProjectionKey || retryNeeded)) {
       const projected = this.project(ctx.nowMs, spot.timestamp as Readonly<SourcedTimestamp>, usdmFresh ? usdm.timestamp : null);
       this.lastProjectionKey = key;
+      this.lastProjectionAtMs = ctx.nowMs;
+      this.lastProjectedSpotTimestamp = spot.timestamp;
+      this.lastProjectedUsdmTimestamp = usdmFresh ? usdm.timestamp : null;
       this.lastUniverseReady = projected.universeReady;
       this.lastEvidenceReady = projected.evidenceReady;
     }
     return Object.freeze({
       universeReady: this.lastUniverseReady,
       evidenceReady: this.lastEvidenceReady && usdmFresh,
-      spotTimestamp: spot.timestamp,
-      usdmTimestamp: usdm.timestamp,
+      spotTimestamp: this.lastProjectedSpotTimestamp,
+      usdmTimestamp: this.lastProjectedUsdmTimestamp,
     });
   }
 

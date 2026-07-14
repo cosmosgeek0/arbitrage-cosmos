@@ -58,6 +58,7 @@ const SYSTEM_CHECKPOINT_CONFIG_KEY = 'system.integration.checkpoint.v1';
 const MEASUREMENT_BASELINE_TIMEOUT_MS = 60_000;
 const MEASUREMENT_BASELINE_POLL_MS = 250;
 const MIN_RSS_SLOPE_WINDOW_MS = 240_000;
+const PROBE_CONTROL_TIMEOUT_MS = 5_000;
 export const BASELINE_LIVE_COMPONENT_IDS = Object.freeze([
   'public-spot-source',
   'public-usdm-source',
@@ -275,20 +276,25 @@ async function startBuiltApp(dataDir, port, sampleIntervalMs, testedSha) {
       SKIP_DOTENV: '1',
       I00_PERF_PROBE: '1',
       I00_PERF_TELEMETRY_FD: '3',
+      I00_PERF_CONTROL_FD: '4',
       I00_PERF_SAMPLE_INTERVAL_MS: String(sampleIntervalMs),
       I00_TESTED_SHA: testedSha,
       I00_OPS_STATE_DIR: opsStateDir,
       I00_DEPLOY_FROZEN_MARKER: deployFrozenMarker,
     },
-    stdio: ['ignore', 'pipe', 'pipe', 'pipe'],
+    stdio: ['ignore', 'pipe', 'pipe', 'pipe', 'pipe'],
   });
   const stdout = captureStream(child.stdout);
   const stderr = captureStream(child.stderr);
   const telemetry = captureStream(child.stdio[3]);
+  const control = child.stdio[4];
+  let controlFailure = null;
+  control.on('error', (error) => { controlFailure = error; });
   try {
     await waitForServer(child, `http://${HOST}:${port}`);
-    return { child, stdout, stderr, telemetry };
+    return { child, stdout, stderr, telemetry, control, controlFailure: () => controlFailure };
   } catch (error) {
+    if (!control.writableEnded && !control.destroyed) control.end();
     if (!childFinished(child)) child.kill('SIGTERM');
     await waitForExit(child, 3_000).catch(() => {
       if (!childFinished(child)) child.kill('SIGKILL');
@@ -1137,21 +1143,108 @@ function inspectDatabase(dataDir, testedSha, expectation) {
 
 function parseTelemetry(text) {
   const samples = [];
+  const controlResults = [];
   let malformed = 0;
   for (const line of text.split('\n')) {
     if (line.length === 0) continue;
     try {
       const value = JSON.parse(line);
-      if (value?.schemaVersion !== 'i00.app-process-probe.v1') malformed += 1;
-      else samples.push(value);
+      if (value?.schemaVersion === 'i00.app-process-probe.v1') samples.push(value);
+      else if (value?.schemaVersion === 'i00.app-process-probe.control-result.v1') controlResults.push(value);
+      else malformed += 1;
     } catch {
       malformed += 1;
     }
   }
-  return { samples, malformed };
+  return { samples, controlResults, malformed };
 }
 
-export function processReport(samples) {
+export function phaseEventLoopSummaryValid(summary) {
+  const exactKeys = ['count', 'max', 'mean', 'min', 'p50', 'p95', 'p99'];
+  if (summary === null || typeof summary !== 'object' || Array.isArray(summary)) return false;
+  if (Object.keys(summary).toSorted().join('\0') !== exactKeys.join('\0')) return false;
+  if (!Number.isSafeInteger(summary.count) || summary.count < 1) return false;
+  const values = [summary.min, summary.p50, summary.p95, summary.p99, summary.max, summary.mean];
+  if (!values.every((value) => Number.isFinite(value) && value >= 0)) return false;
+  return summary.min <= summary.p50
+    && summary.p50 <= summary.p95
+    && summary.p95 <= summary.p99
+    && summary.p99 <= summary.max
+    && summary.mean >= summary.min
+    && summary.mean <= summary.max;
+}
+
+function requirePhaseEventLoopSummary(summary) {
+  if (!phaseEventLoopSummaryValid(summary)) throw new Error('PHASE_EVENT_LOOP_MEASUREMENT_INVALID');
+  return Object.freeze({
+    count: summary.count,
+    min: summary.min,
+    p50: summary.p50,
+    p95: summary.p95,
+    p99: summary.p99,
+    max: summary.max,
+    mean: summary.mean,
+  });
+}
+
+function singletonMetricSummaryValid(summary) {
+  return phaseEventLoopSummaryValid(summary)
+    && summary.count === 1
+    && summary.min === summary.p50
+    && summary.p50 === summary.p95
+    && summary.p95 === summary.p99
+    && summary.p99 === summary.max
+    && summary.max === summary.mean;
+}
+
+function phaseProcessEventLoopValid(process) {
+  const p95 = process?.eventLoopP95Ms;
+  const p99 = process?.eventLoopP99Ms;
+  const max = process?.eventLoopMaxMs;
+  return singletonMetricSummaryValid(p95)
+    && phaseEventLoopSummaryValid(p99)
+    && p99.count > 1
+    && singletonMetricSummaryValid(max)
+    && p95.p99 === p99.p95
+    && max.p99 === p99.max;
+}
+
+async function requestProbeControl(runtime, command, requestId) {
+  if (!runtime?.control?.writable || runtime.controlFailure() !== null || childFinished(runtime.child)) {
+    throw new Error('PERF_PROBE_CONTROL_PIPE_UNAVAILABLE');
+  }
+  const envelope = `${JSON.stringify({
+    schemaVersion: 'i00.app-process-probe.control.v1',
+    requestId,
+    command,
+  })}\n`;
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`PERF_PROBE_CONTROL_WRITE_TIMEOUT:${command}`)), PROBE_CONTROL_TIMEOUT_MS);
+    runtime.control.write(envelope, (error) => {
+      clearTimeout(timer);
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+  const deadline = performance.now() + PROBE_CONTROL_TIMEOUT_MS;
+  while (performance.now() < deadline) {
+    const result = parseTelemetry(runtime.telemetry.content()).controlResults
+      .find((candidate) => candidate?.requestId === requestId);
+    if (result !== undefined) {
+      if (result.command !== command || result.status !== 'OK') {
+        throw new Error(`PERF_PROBE_CONTROL_REJECTED:${command}:${result.reason ?? 'UNKNOWN'}`);
+      }
+      return result;
+    }
+    if (runtime.controlFailure() !== null) throw new Error(`PERF_PROBE_CONTROL_PIPE_FAILED:${command}`);
+    if (childFinished(runtime.child)) throw new Error(`PERF_PROBE_EXITED_DURING_CONTROL:${command}`);
+    await delay(10);
+  }
+  throw new Error(`PERF_PROBE_CONTROL_TIMEOUT:${command}`);
+}
+
+export function processReport(samples, phaseEventLoopSummary) {
+  const eventLoop = requirePhaseEventLoopSummary(phaseEventLoopSummary);
   let rssSlopeBytesPerHour = null;
   if (samples.length >= 2) {
     const elapsedMs = samples.at(-1).monotonicMs - samples[0].monotonicMs;
@@ -1165,9 +1258,12 @@ export function processReport(samples) {
     cpuHostPercent: summarize(samples.map((sample) => sample.cpuHostPercent)),
     rssBytes: summarize(samples.map((sample) => sample.rssBytes), 0),
     heapUsedBytes: summarize(samples.map((sample) => sample.heapUsedBytes), 0),
-    eventLoopP95Ms: summarize(samples.map((sample) => sample.eventLoopP95Ms)),
-    eventLoopP99Ms: summarize(samples.map((sample) => sample.eventLoopP99Ms)),
-    eventLoopMaxMs: summarize(samples.map((sample) => sample.eventLoopMaxMs)),
+    eventLoopP95Ms: summarize([eventLoop.p95]),
+    // Preserve the complete direct cumulative phase histogram in the p99
+    // evidence row. The adjacent singleton rows bind its p95 and max without
+    // discarding count, distribution, or mean during receipt validation.
+    eventLoopP99Ms: eventLoop,
+    eventLoopMaxMs: summarize([eventLoop.max]),
     rssSlopeBytesPerHour: rssSlopeBytesPerHour === null ? null : Math.round(rssSlopeBytesPerHour * 1_000) / 1_000,
   });
 }
@@ -1175,6 +1271,7 @@ export function processReport(samples) {
 async function terminateBuiltApp(runtime, requestedSignal) {
   const startedAt = performance.now();
   if (!['SIGTERM', 'SIGKILL'].includes(requestedSignal)) throw new Error('TERMINATION_SIGNAL_INVALID');
+  if (!runtime.control.writableEnded && !runtime.control.destroyed) runtime.control.end();
   if (!childFinished(runtime.child)) runtime.child.kill(requestedSignal);
   let forced = false;
   let exit;
@@ -1250,21 +1347,29 @@ async function runPhase({
   let websocket = null;
   try {
     const snapshots = [await waitForMeasurementBaseline(origin, options.testedSha)];
+    websocket = await openWebSockets(port, options.wsClients);
+    await requestProbeControl(runtime, 'RESET_PHASE_EVENT_LOOP', `${phaseId}.${generation}.RESET`);
     const telemetryBeforeLoad = parseTelemetry(runtime.telemetry.content()).samples;
     const measurementSequenceFloor = telemetryBeforeLoad.length === 0
       ? -1
       : Math.max(...telemetryBeforeLoad.map((sample) => sample.sequence));
-    websocket = await openWebSockets(port, options.wsClients);
     const loadStarted = performance.now();
     const [http, wsExercise] = await Promise.all([
       driveHttp(origin, durationMs, options.httpRps, options.httpConcurrency),
       exerciseWebSockets(websocket.clients, websocket.aggregate, durationMs, options.focusSymbol),
     ]);
+    const loadEnded = performance.now();
+    const phaseEventLoopResult = await requestProbeControl(runtime, 'SNAPSHOT_PHASE_EVENT_LOOP', `${phaseId}.${generation}.SNAPSHOT`);
+    const phaseEventLoop = requirePhaseEventLoopSummary(phaseEventLoopResult.eventLoopDelay);
+    const telemetryAfterLoad = parseTelemetry(runtime.telemetry.content()).samples;
+    const measurementSequenceCeiling = telemetryAfterLoad.length === 0
+      ? measurementSequenceFloor
+      : Math.max(...telemetryAfterLoad.map((sample) => sample.sequence));
     const restartAttempt = canonicalRestartAttempt
       ? await attemptCanonicalRestart(origin, snapshots[0], options.testedSha)
       : null;
     snapshots.push(await requestSnapshot(origin, 'END', options.testedSha));
-    const measuredDurationSeconds = (performance.now() - loadStarted) / 1_000;
+    const measuredDurationSeconds = (loadEnded - loadStarted) / 1_000;
     for (const state of websocket.clients) state.openAtShutdown = state.socket.readyState === WebSocket.OPEN;
     const stopped = terminationSignal === 'SIGKILL'
       ? await crashBuiltApp(runtime)
@@ -1275,8 +1380,10 @@ async function runPhase({
       ? inspectDatabase(dataDir, options.testedSha, databaseExpectation)
       : null;
     const parsedTelemetry = parseTelemetry(stopped.telemetryText);
-    const measuredTelemetry = parsedTelemetry.samples.filter((sample) => sample.sequence > measurementSequenceFloor);
-    const process = processReport(measuredTelemetry);
+    const measuredTelemetry = parsedTelemetry.samples.filter((sample) => (
+      sample.sequence > measurementSequenceFloor && sample.sequence <= measurementSequenceCeiling
+    ));
+    const process = processReport(measuredTelemetry, phaseEventLoop);
     const cleanLogMarkerObserved = stopped.stdoutText.includes('control-room shutdown complete');
     const shutdownPassed = terminationSignal === 'SIGTERM'
       ? !stopped.forced && stopped.exit.code === 0 && stopped.exit.signal === null && cleanLogMarkerObserved
@@ -1465,7 +1572,7 @@ function hostFingerprint() {
   return Object.freeze({ fingerprintSha256: sha256(canonicalJson(host)), ...host });
 }
 
-function buildSlo(phases, raw, continuity, secretScanPassed) {
+export function buildSlo(phases, raw, continuity, secretScanPassed) {
   const telemetry = raw.flatMap((entry) => entry.rawTelemetry);
   const httpLatencies = raw.flatMap((entry) => entry.rawHttpLatencies);
   const scheduled = phases.reduce((sum, phase) => sum + phase.http.scheduled, 0);
@@ -1473,9 +1580,13 @@ function buildSlo(phases, raw, continuity, secretScanPassed) {
   const measuredSeconds = phases.reduce((sum, phase) => sum + phase.durationSeconds, 0);
   const responseBytes = phases.reduce((sum, phase) => sum + phase.http.responseBytes, 0);
   const rssSlopes = phases.map((phase) => phase.process.rssSlopeBytesPerHour).filter(Number.isFinite);
+  const phaseEventLoopP99s = phases.map((phase) => phase?.process?.eventLoopP99Ms?.p99);
+  const phaseEventLoopMeasurementValid = phases.length === 3
+    && phases.every((phase) => phaseProcessEventLoopValid(phase?.process))
+    && phaseEventLoopP99s.every(Number.isFinite);
   const checks = [
     evaluateBound('host.cpu.percent.p95', summarize(telemetry.map((sample) => sample.cpuHostPercent)).p95, LOCAL_PROXY_SLOS.cpuHostPercent),
-    evaluateBound('node.event_loop_lag_ms.p99', summarize(telemetry.map((sample) => sample.eventLoopP99Ms)).p99, LOCAL_PROXY_SLOS.eventLoopLagMs),
+    evaluateBound('node.event_loop_lag_ms.p99', phaseEventLoopMeasurementValid ? Math.max(...phaseEventLoopP99s) : null, LOCAL_PROXY_SLOS.eventLoopLagMs),
     evaluateBound('process.rss_bytes.max', summarize(telemetry.map((sample) => sample.rssBytes)).max, LOCAL_PROXY_SLOS.rssBytes),
     evaluateBound('soak.rss_slope_bytes_per_hour.max', rssSlopes.length === 0 ? null : Math.max(...rssSlopes), LOCAL_PROXY_SLOS.rssSlopeBytesPerHour),
     evaluateBound('storage.wal_bytes.max', Math.max(...phases.map((phase) => phase.storage.wal.maxBytes)), LOCAL_PROXY_SLOS.walBytes),
@@ -1484,6 +1595,7 @@ function buildSlo(phases, raw, continuity, secretScanPassed) {
     evaluateBound('api.response_bytes_per_second', measuredSeconds <= 0 ? null : responseBytes / measuredSeconds, LOCAL_PROXY_SLOS.apiBytesPerSecond),
   ];
   const invariantFailures = raw.flatMap((entry) => entry.invariants);
+  if (!phaseEventLoopMeasurementValid) invariantFailures.push('PHASE_EVENT_LOOP_MEASUREMENT_INVALID');
   if (!continuity.passed) invariantFailures.push(...continuity.reasonCodes);
   if (!secretScanPassed) invariantFailures.push('SECRET_SCAN_FAILED');
   const overall = aggregateSloStatus(checks, invariantFailures);
@@ -1820,6 +1932,30 @@ export function validatePerformanceDocument(document, expectedSource = {}) {
     semanticFailures.push('PERFORMANCE_RUNTIME_INVENTORY_DRIFT');
   }
   const phases = Array.isArray(document?.phases) ? document.phases : [];
+  if (phases.length !== 3 || phases.some((phase) => !phaseProcessEventLoopValid(phase?.process))) {
+    semanticFailures.push('PERFORMANCE_PHASE_EVENT_LOOP_MEASUREMENT_INVALID');
+  }
+  const eventLoopChecks = Array.isArray(document?.slo?.checks)
+    ? document.slo.checks.filter((check) => check?.metric === 'node.event_loop_lag_ms.p99')
+    : [];
+  const directPhaseP99s = phases.map((phase) => phase?.process?.eventLoopP99Ms?.p99);
+  const expectedEventLoopCheck = phases.length === 3
+      && phases.every((phase) => phaseProcessEventLoopValid(phase?.process))
+      && directPhaseP99s.every(Number.isFinite)
+    ? evaluateBound('node.event_loop_lag_ms.p99', Math.max(...directPhaseP99s), LOCAL_PROXY_SLOS.eventLoopLagMs)
+    : null;
+  if (expectedEventLoopCheck === null
+      || eventLoopChecks.length !== 1
+      || canonicalJson(eventLoopChecks[0]) !== canonicalJson(expectedEventLoopCheck)) {
+    semanticFailures.push('PERFORMANCE_EVENT_LOOP_SLO_INVALID');
+  }
+  const recomputedOverall = Array.isArray(document?.slo?.checks)
+      && Array.isArray(document?.slo?.invariantFailures)
+    ? aggregateSloStatus(document.slo.checks, document.slo.invariantFailures)
+    : null;
+  if (recomputedOverall === null || document?.slo?.overall !== recomputedOverall) {
+    semanticFailures.push('PERFORMANCE_SLO_AGGREGATE_INVALID');
+  }
   const bootRows = phases.map((phase) => phase?.storage?.integrity?.bootRelease);
   if (phases.length !== 3
       || phases[0]?.phaseId !== 'CANONICAL_RESTART_GATE'

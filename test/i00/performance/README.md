@@ -23,6 +23,8 @@ The default measured performance window is 60 seconds split across three process
 
 An hourly RSS slope is not a truthful claim from the default 20-second per-boot windows. It remains `NOT_CONFIGURED` unless a post-baseline phase supplies at least four minutes of telemetry, which the 900-second long campaign does. Absolute RSS, heap, CPU, event-loop, HTTP, WebSocket, and storage gates remain measured in the default campaign.
 
+Event-loop p99 is a direct cumulative histogram for each measured load window, not a percentile of periodic interval percentiles. After the canonical baseline is hydrated and local WebSocket clients are open, the parent harness uses an inherited private control pipe to reset and arm a dedicated `monitorEventLoopDelay` histogram and waits for the child acknowledgement before starting load. It disables and snapshots that histogram immediately when load completes, before restart/readback and shutdown work. Periodic CPU/RSS samples continue on their own cadence with a separate interval histogram; those interval delay fields remain diagnostic and cannot substitute for the direct phase measurement. The SLO evaluates the maximum of the three direct phase p99 values and fails closed if any reset, snapshot, count, or ordered histogram statistic is missing or invalid.
+
 ## Frozen-source law
 
 Run mode requires the integration branch, an exact HEAD/tree binding, and no dirty source. The sole exceptions are immutable evidence outputs plus these five untracked owner directives, each verified against its pinned SHA-256 and recorded in source-freeze evidence:

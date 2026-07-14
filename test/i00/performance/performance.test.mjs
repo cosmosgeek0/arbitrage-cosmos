@@ -7,6 +7,9 @@ import { Worker } from 'node:worker_threads';
 import { deflateSync } from 'node:zlib';
 
 import {
+  createPhaseEventLoopController,
+} from './app-probe.mjs';
+import {
   CANONICAL_SYSTEM_COMPONENT_IDS,
   CANONICAL_SYSTEM_COMPONENT_OWNERS,
   I00_MANAGED_INVENTORY_EXPECTATIONS,
@@ -38,8 +41,10 @@ import {
 } from './local-acceptance.mjs';
 import {
   BASELINE_LIVE_COMPONENT_IDS,
+  buildSlo,
   measurementBaselineValid,
   parseSoakArgs,
+  phaseEventLoopSummaryValid,
   processReport,
   validatePerformanceDocument,
   waitForMeasurementBaseline,
@@ -93,6 +98,14 @@ const TOPBAR = Object.freeze([
 
 function summary(value = 1) {
   return { count: 2, min: value, p50: value, p95: value, p99: value, max: value, mean: value };
+}
+
+function singletonSummary(value = 1) {
+  return { count: 1, min: value, p50: value, p95: value, p99: value, max: value, mean: value };
+}
+
+function directEventLoopSummary(p99 = 12) {
+  return { count: 997, min: 1, p50: 2, p95: 8, p99, max: p99 + 4, mean: 3 };
 }
 
 function managedInventoryFixture() {
@@ -272,7 +285,7 @@ function phase(phaseId, bootGeneration, startValue) {
     },
     process: {
       samples: 2, cpuOneCorePercent: summary(), cpuHostPercent: summary(), rssBytes: summary(100),
-      heapUsedBytes: summary(50), eventLoopP95Ms: summary(), eventLoopP99Ms: summary(), eventLoopMaxMs: summary(),
+      heapUsedBytes: summary(50), eventLoopP95Ms: singletonSummary(8), eventLoopP99Ms: directEventLoopSummary(12), eventLoopMaxMs: singletonSummary(16),
       rssSlopeBytesPerHour: 0,
     },
     storage: {
@@ -306,10 +319,16 @@ function restartBarrier() {
 }
 
 function performanceDocument() {
-  const checks = Object.values(LOCAL_PROXY_SLOS).map((bound, index) => ({
-    metric: `metric-${index}`, unit: bound.unit, observed: 1, soft: bound.soft, hard: bound.hard,
-    status: 'PASS', reason: 'Measured value is within the bound.',
-  }));
+  const checks = [
+    evaluateBound('host.cpu.percent.p95', 1, LOCAL_PROXY_SLOS.cpuHostPercent),
+    evaluateBound('node.event_loop_lag_ms.p99', 12, LOCAL_PROXY_SLOS.eventLoopLagMs),
+    evaluateBound('process.rss_bytes.max', 100, LOCAL_PROXY_SLOS.rssBytes),
+    evaluateBound('soak.rss_slope_bytes_per_hour.max', 0, LOCAL_PROXY_SLOS.rssSlopeBytesPerHour),
+    evaluateBound('storage.wal_bytes.max', 4_096, LOCAL_PROXY_SLOS.walBytes),
+    evaluateBound('api.http_latency_ms.p95', 1, LOCAL_PROXY_SLOS.httpP95Ms),
+    evaluateBound('api.unexpected_percent', 0, LOCAL_PROXY_SLOS.httpUnexpectedPercent),
+    evaluateBound('api.response_bytes_per_second', 1, LOCAL_PROXY_SLOS.apiBytesPerSecond),
+  ];
   return {
     schemaVersion: 'i00.local-proxy-performance.v1',
     truthClass: 'LOCAL_PROXY_MEASURED',
@@ -925,11 +944,127 @@ test('hourly RSS slope refuses short startup windows and measures long stable wi
     eventLoopP99Ms: 1,
     eventLoopMaxMs: 1,
   });
-  const startup = processReport([sample(0, 100), sample(20_000, 200)]);
+  const startup = processReport([sample(0, 100), sample(20_000, 200)], summary());
   assert.equal(startup.rssSlopeBytesPerHour, null);
 
-  const stable = processReport([sample(0, 100), sample(240_000, 200)]);
+  const stable = processReport([sample(0, 100), sample(240_000, 200)], summary());
   assert.equal(stable.rssSlopeBytesPerHour, 1_500);
+});
+
+test('phase event-loop report uses the direct cumulative histogram and rejects interval substitutes', () => {
+  const intervalSamples = [
+    {
+      monotonicMs: 0,
+      rssBytes: 100,
+      cpuOneCorePercent: 1,
+      cpuHostPercent: 1,
+      heapUsedBytes: 50,
+      eventLoopP95Ms: 900,
+      eventLoopP99Ms: 999,
+      eventLoopMaxMs: 1_500,
+    },
+    {
+      monotonicMs: 20_000,
+      rssBytes: 100,
+      cpuOneCorePercent: 1,
+      cpuHostPercent: 1,
+      heapUsedBytes: 50,
+      eventLoopP95Ms: 800,
+      eventLoopP99Ms: 950,
+      eventLoopMaxMs: 1_400,
+    },
+  ];
+  const directPhaseHistogram = {
+    count: 997,
+    min: 1,
+    p50: 2,
+    p95: 8,
+    p99: 12,
+    max: 24,
+    mean: 3,
+  };
+  const report = processReport(intervalSamples, directPhaseHistogram);
+  assert.deepEqual(report.eventLoopP95Ms, singletonSummary(8));
+  assert.deepEqual(report.eventLoopP99Ms, directPhaseHistogram);
+  assert.deepEqual(report.eventLoopMaxMs, singletonSummary(24));
+  assert.equal(report.eventLoopP99Ms.p99, 12);
+  assert.notEqual(report.eventLoopP99Ms.p99, intervalSamples[0].eventLoopP99Ms);
+  assert.equal(phaseEventLoopSummaryValid(directPhaseHistogram), true);
+  assert.throws(() => processReport(intervalSamples), /PHASE_EVENT_LOOP_MEASUREMENT_INVALID/);
+  assert.throws(
+    () => processReport(intervalSamples, { ...directPhaseHistogram, count: 0 }),
+    /PHASE_EVENT_LOOP_MEASUREMENT_INVALID/,
+  );
+  assert.throws(
+    () => processReport(intervalSamples, { ...directPhaseHistogram, p95: 13 }),
+    /PHASE_EVENT_LOOP_MEASUREMENT_INVALID/,
+  );
+  assert.throws(
+    () => processReport(intervalSamples, { ...directPhaseHistogram, p99: Number.NaN }),
+    /PHASE_EVENT_LOOP_MEASUREMENT_INVALID/,
+  );
+  assert.throws(
+    () => processReport(intervalSamples, { ...directPhaseHistogram, forged: 1 }),
+    /PHASE_EVENT_LOOP_MEASUREMENT_INVALID/,
+  );
+});
+
+test('app probe phase histogram requires one reset and returns one direct bounded snapshot', () => {
+  const calls = [];
+  const histogram = {
+    count: 6,
+    min: 1_000_000,
+    max: 24_000_000,
+    mean: 3_000_000,
+    disable() { calls.push('disable'); },
+    reset() { calls.push('reset'); },
+    enable() { calls.push('enable'); },
+    percentile(value) { return ({ 50: 2_000_000, 95: 8_000_000, 99: 12_000_000 })[value]; },
+  };
+  const controller = createPhaseEventLoopController(histogram);
+  const unarmed = controller.snapshot();
+  assert.equal(unarmed.status, 'ERROR');
+  assert.equal(unarmed.reason, 'PHASE_EVENT_LOOP_NOT_ARMED');
+  assert.equal(controller.reset().status, 'OK');
+  const duplicate = controller.reset();
+  assert.equal(duplicate.status, 'ERROR');
+  assert.equal(duplicate.reason, 'PHASE_EVENT_LOOP_ALREADY_ARMED');
+  const snapshot = controller.snapshot();
+  assert.equal(snapshot.status, 'OK');
+  assert.equal(phaseEventLoopSummaryValid(snapshot.eventLoopDelay), true);
+  assert.deepEqual(snapshot.eventLoopDelay, {
+    count: 6,
+    min: 1,
+    p50: 2,
+    p95: 8,
+    p99: 12,
+    max: 24,
+    mean: 3,
+  });
+  assert.deepEqual(calls, ['disable', 'reset', 'enable', 'disable']);
+});
+
+test('local proxy event-loop SLO uses the worst of the three direct phase p99s', () => {
+  const phases = performanceDocument().phases;
+  for (const [index, p99] of [12, 18, 15].entries()) {
+    phases[index].process.eventLoopP95Ms = singletonSummary(8);
+    phases[index].process.eventLoopP99Ms = directEventLoopSummary(p99);
+    phases[index].process.eventLoopMaxMs = singletonSummary(p99 + 4);
+  }
+  const raw = phases.map(() => ({
+    rawTelemetry: [{ cpuHostPercent: 1, rssBytes: 100, eventLoopP99Ms: 9_999, eventLoopMaxMs: 20_000 }],
+    rawHttpLatencies: [1],
+    invariants: [],
+  }));
+  const slo = buildSlo(phases, raw, { passed: true, reasonCodes: [] }, true);
+  const eventLoopCheck = slo.checks.find((check) => check.metric === 'node.event_loop_lag_ms.p99');
+  assert.equal(eventLoopCheck.observed, 18);
+  assert.equal(eventLoopCheck.status, 'PASS');
+
+  phases[2].process.eventLoopP99Ms = { ...phases[2].process.eventLoopP99Ms, count: 0 };
+  const blocked = buildSlo(phases, raw, { passed: true, reasonCodes: [] }, true);
+  assert.equal(blocked.overall, 'BLOCKED');
+  assert.ok(blocked.invariantFailures.includes('PHASE_EVENT_LOOP_MEASUREMENT_INVALID'));
 });
 
 test('complete acceptance exposes explicit modes and each required layer exactly once', () => {
@@ -982,6 +1117,26 @@ test('performance schema and semantics accept complete runtime evidence and reje
   const baselineRejected = validatePerformanceDocument(invalidBaseline, { headSha: HEAD, treeSha: TREE });
   assert.equal(baselineRejected.passed, false);
   assert.ok(baselineRejected.semanticFailures.includes('PERFORMANCE_RUNTIME_TRUTH_INVALID'));
+
+  const missingDirectEventLoop = structuredClone(valid);
+  missingDirectEventLoop.phases[1].process.eventLoopP99Ms.count = 0;
+  const eventLoopRejected = validatePerformanceDocument(missingDirectEventLoop, { headSha: HEAD, treeSha: TREE });
+  assert.equal(eventLoopRejected.passed, false);
+  assert.ok(eventLoopRejected.semanticFailures.includes('PERFORMANCE_PHASE_EVENT_LOOP_MEASUREMENT_INVALID'));
+
+  const forgedEventLoopSlo = structuredClone(valid);
+  forgedEventLoopSlo.phases[2].process.eventLoopP99Ms.p99 = 250;
+  forgedEventLoopSlo.phases[2].process.eventLoopP99Ms.max = 254;
+  forgedEventLoopSlo.phases[2].process.eventLoopMaxMs = singletonSummary(254);
+  const forgedEventLoopRejected = validatePerformanceDocument(forgedEventLoopSlo, { headSha: HEAD, treeSha: TREE });
+  assert.equal(forgedEventLoopRejected.passed, false);
+  assert.ok(forgedEventLoopRejected.semanticFailures.includes('PERFORMANCE_EVENT_LOOP_SLO_INVALID'));
+
+  const intervalSubstitution = structuredClone(valid);
+  intervalSubstitution.phases[1].process.eventLoopP99Ms = singletonSummary(12);
+  const intervalSubstitutionRejected = validatePerformanceDocument(intervalSubstitution, { headSha: HEAD, treeSha: TREE });
+  assert.equal(intervalSubstitutionRejected.passed, false);
+  assert.ok(intervalSubstitutionRejected.semanticFailures.includes('PERFORMANCE_PHASE_EVENT_LOOP_MEASUREMENT_INVALID'));
 });
 
 test('performance semantics reject managed inventory omission and same-shape field forgeries', () => {

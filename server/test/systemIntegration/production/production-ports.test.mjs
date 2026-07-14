@@ -230,6 +230,12 @@ test('public Spot and USD-M become LIVE_PUBLIC only with connected fresh raw eve
 
 test('accepted public owners drive UniverseGraph and IntelligenceRuntimeBridge readiness without Q', async () => {
   const world = createWorld();
+  const originalAllRows = world.market.allRows;
+  let allRowsReads = 0;
+  world.market.allRows = function countedAllRows() {
+    allRowsReads += 1;
+    return originalAllRows.call(this);
+  };
   world.market.rows = [{
     symbol: 'BTCUSDT',
     base: 'BTC',
@@ -248,6 +254,7 @@ test('accepted public owners drive UniverseGraph and IntelligenceRuntimeBridge r
   const universe = world.ports.runtimes.intelligenceRuntime.health(world.ctx());
   assert.equal(universe.running, true);
   assert.equal(universe.timestamp.sourceTimeMs, START - 250);
+  assert.equal(allRowsReads, 4);
 
   await world.ports.runtimes.marketIntelligence.start();
   const intelligence = world.ports.runtimes.marketIntelligence.health(world.ctx());
@@ -259,9 +266,52 @@ test('accepted public owners drive UniverseGraph and IntelligenceRuntimeBridge r
   world.clock.now = START + 1_000;
   world.spot.set('BTCUSDT', START + 900);
   world.usdm.set('BTCUSDT', START + 950);
+  const held = world.ports.runtimes.marketIntelligence.health(world.ctx());
+  assert.equal(held.timestamp.sourceTimeMs, START - 200);
+  assert.equal(allRowsReads, 8);
+
+  world.clock.now = START + 5_000;
+  world.spot.set('BTCUSDT', START + 4_900);
+  world.usdm.set('BTCUSDT', START + 4_950);
   const advanced = world.ports.runtimes.marketIntelligence.health(world.ctx());
-  assert.equal(advanced.timestamp.sourceTimeMs, START + 950);
+  assert.equal(advanced.timestamp.sourceTimeMs, START + 4_950);
   assert.ok(advanced.timestamp.receivedAtMs >= intelligence.timestamp.receivedAtMs);
+  assert.equal(allRowsReads, 11);
+
+  world.clock.now = START + 14_951;
+  const stale = world.ports.runtimes.marketIntelligence.health(world.ctx());
+  assert.equal(stale.timestamp, null);
+  assert.equal(allRowsReads, 13);
+});
+
+test('market intelligence fails closed when USD-M disconnects with fresh cached evidence', async () => {
+  const world = createWorld();
+  world.market.rows = [{
+    symbol: 'BTCUSDT',
+    base: 'BTC',
+    hasSpot: true,
+    hasPerp: true,
+    perpMark: 60_000,
+    perpIndexPrice: 59_990,
+  }];
+  await startMarket(world);
+  world.market.feeds['spot-miniticker'] = 'open';
+  world.market.feeds['futures-markprice'] = 'open';
+  world.spot.set('BTCUSDT', START - 250);
+  world.usdm.set('BTCUSDT', START - 200);
+  await world.ports.runtimes.intelligenceRuntime.start();
+  await world.ports.runtimes.marketIntelligence.start();
+
+  assert.equal(
+    world.ports.runtimes.marketIntelligence.health(world.ctx()).timestamp.sourceTimeMs,
+    START - 200,
+  );
+  world.market.feeds['futures-markprice'] = 'closed';
+
+  const disconnected = world.ports.runtimes.marketIntelligence.health(world.ctx());
+  assert.equal(disconnected.running, true);
+  assert.equal(disconnected.timestamp, null);
+  assert.equal(world.ports.runtimes.intelligenceRuntime.health(world.ctx()).timestamp.sourceTimeMs, START - 250);
 });
 
 test('intelligence projection uses one supervisor-step clock for receipt and freshness truth', async () => {

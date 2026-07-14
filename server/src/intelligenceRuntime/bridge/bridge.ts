@@ -1076,15 +1076,16 @@ export class IntelligenceRuntimeBridge {
         lastObservedAtMs: atMs,
       });
     }
-    while (this.#failureRecords.size > this.#config.maximumFailureRecords) {
-      const oldest = [...this.#failureRecords.values()].sort((left, right) => (
+    const overflow = this.#failureRecords.size - this.#config.maximumFailureRecords;
+    if (overflow <= 0) return;
+    const oldest = [...this.#failureRecords.values()]
+      .sort((left, right) => (
         left.lastObservedAtMs - right.lastObservedAtMs
         || left.firstObservedAtMs - right.firstObservedAtMs
         || codePointCompare(left.failure.id, right.failure.id)
-      ))[0];
-      if (!oldest) break;
-      this.#failureRecords.delete(oldest.failure.id);
-    }
+      ))
+      .slice(0, overflow);
+    for (const record of oldest) this.#failureRecords.delete(record.failure.id);
   }
 
   #finishEvaluation(

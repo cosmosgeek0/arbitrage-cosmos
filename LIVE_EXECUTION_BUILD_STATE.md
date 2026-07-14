@@ -8,7 +8,7 @@ Program: `LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H`
 
 Current phase: `L12`
 
-Phase status: `VERIFIED_PENDING_IMPLEMENTATION_FREEZE`
+Phase status: `IMPLEMENTATION_FROZEN_PENDING_RECEIPT`
 
 Lane status: `L_SPINE_FINALE_ACTIVE`
 
@@ -128,8 +128,9 @@ Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`, `L06`, `L07`, `L08`, 
   `live-edge-receipts/patches/L12-canonical-owner-projection-integration.request.md`
 - Implementation status: the behavior-backed chaos correction passes the
   current server build, focused/purity/accumulated LiveEdge, protocol,
-  standard/cross-family and targeted canonical owner gates. Exact scope/hash
-  checks and the implementation freeze remain before the immutable receipt.
+  standard/cross-family and targeted canonical owner gates. Exact worker scope,
+  protected-input and static security checks pass; the immutable receipt is the
+  remaining L12 seal.
 - Latest already accepted receipt before L12:
   `live-edge-receipts/RECEIPTS/L11_ACCEPTANCE.md`.
 
@@ -235,8 +236,9 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
   lookup before reconciliation with zero resubmission, preserves client IDs and
   fills, retains explicit residuals and leaves unresolved evidence in recovery.
   The other scenario envelopes remain structural injected evidence, not
-  deployed proof. Existing owner behavior directly covers 10 scenarios and
-  partially/compositionally covers eight; database-failure-before-send
+  deployed proof. With the canonical all-state crash test, existing owner
+  behavior directly covers 11 scenarios and partially/compositionally covers
+  seven; database-failure-before-send
   orchestration and cloud-alarm-to-halt wiring remain explicit I00/L15 gaps.
   Output is deeply immutable, `SYNTHETIC_ONLY`,
   `OWNER_EVIDENCE_ADAPTER_ONLY`, non-sendable, non-authorizing and `UNWIRED`.
@@ -278,7 +280,7 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
   Control `97/97`; Execution `178/178`; Reconciliation `75/75`; `npm test`
   `377/377`; `npm run test:all` `2,479/2,479`. Independent source/test review
   found no remaining P0/P1 blocker after the all-state recovery proof. Exact
-  scope/hash and implementation-freeze checks remain.
+  worker scope, protected-input and static security checks pass.
 - Historical accepted L08.2 reference: protocol `22/22`; accumulated LiveEdge
   `1,223/1,223`; `npm test` `377/377`; `npm run test:all` `2,479/2,479`.
 - L02 focused source-contract subset: exit 0, 43/43.

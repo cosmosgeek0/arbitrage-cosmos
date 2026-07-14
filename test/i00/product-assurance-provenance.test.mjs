@@ -29,6 +29,7 @@ test('Product Assurance manifest closes 801 donor callbacks plus one live replac
   assert.equal(validation.gitObjectContextProofs, 6);
   assert.equal(validation.liveContextReplacements, 1);
   assert.equal(validation.contextReplacementRows, 7);
+  assert.equal(validation.postIntegrationReplacementRows, 3);
 
   const core = manifest.suites.find((suite) => suite.id === 'A_CORE_BEHAVIOR');
   assert.equal(core.expectedPasses, 31);
@@ -61,6 +62,10 @@ test('Product Assurance manifest closes 801 donor callbacks plus one live replac
 test('all six accepted assurance donors are exact Git-object ancestors with immutable receipts and blobs', () => {
   const result = verifyProductAssuranceDonors(manifest);
   assert.equal(result.passed, true, JSON.stringify(result.donors.filter((entry) => !entry.passed)));
+  assert.equal(result.mergeCutBlobCount, 193);
+  assert.equal(result.donorIdenticalHeadBlobCount, 190);
+  assert.equal(result.postIntegrationReplacementCount, 3);
+  assert(result.postIntegrationReplacements.every((entry) => entry.passed));
   assert.deepEqual(result.donors.map((entry) => [entry.id, entry.pathCount, entry.blobMismatches.length]), [
     ['A_CORE', 36, 0],
     ['A_HAZARD', 24, 0],
@@ -95,6 +100,12 @@ test('donor provenance fails closed on object ancestry path blob and receipt sub
     (entry) => { entry.integrationReceipt.statusNeedle = 'FORGED_INTEGRATED'; },
     (entry) => { entry.requiredAncestry.push({ ancestor: entry.acceptedTip, descendant: entry.deltaBase }); },
     (entry) => { entry.requiredObjects.push('0'.repeat(40)); },
+    (entry) => { entry.postIntegrationReplacements = []; },
+    (entry) => { entry.postIntegrationReplacements[0].path = entry.donorReceipt.path; },
+    (entry) => { entry.postIntegrationReplacements[0].donorBlob = '0'.repeat(40); },
+    (entry) => { entry.postIntegrationReplacements[0].replacementCommit = '0'.repeat(40); },
+    (entry) => { entry.postIntegrationReplacements[0].replacementBlob = entry.postIntegrationReplacements[0].donorBlob; },
+    (entry) => { entry.postIntegrationReplacements.push(structuredClone(entry.postIntegrationReplacements[0])); },
   ];
   for (const mutate of mutations) {
     const hostile = clone(canonical);
@@ -114,6 +125,11 @@ test('manifest selection and operation coverage mutations fail closed without ex
     (document) => { document.suites[4].excludedContextTests[0].replacementProofId = ''; },
     (document) => { document.suites[5].expectedPasses += 1; },
     (document) => { document.expectedSkippedCallbacks = 7; },
+    (document) => { document.expectedPostIntegrationReplacementRows = 4; },
+    (document) => { document.donors[0].postIntegrationReplacements.pop(); },
+    (document) => { document.donors[1].postIntegrationReplacements.push(structuredClone(document.donors[0].postIntegrationReplacements[0])); },
+    (document) => { document.donors[0].postIntegrationReplacements[0].replacementBlob = '0'.repeat(40); },
+    (document) => { document.donors[0].postIntegrationReplacements[0].unknown = true; },
     (document) => { document.contextProofPolicy = 'SIX_SKIPPED_CALLBACKS'; },
   ];
   for (const mutate of manifestMutations) {

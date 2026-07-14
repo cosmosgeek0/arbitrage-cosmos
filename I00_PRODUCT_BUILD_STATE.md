@@ -164,7 +164,7 @@ These focused results do not replace the complete C-bound gate. Final `npm test`
 
 The exact-Q acceptance archive preserves the complete accepted donor root, without Git metadata, so Q17's frozen root protocol and schema inputs remain available inside the isolated archive. A `quant/`-only pathspec is regression-tested as forbidden.
 
-All six Product Assurance donor delta path sets remain byte-exact at the candidate HEAD. The current News GET operation and accepted L operation sites are registered only through the integration-owned, source-hash-bound operation overlay; donor scanner and purity-test blobs are not rewritten for assembled context.
+Product Assurance donor equality remains exact at the recorded merge cuts: 193/193 blobs. At the candidate HEAD, 190 remain donor-identical and exactly three authorized serial-spine replacements are bound to one-parent restoration commit `9a6ec938ef45716379d4f4f4972102ef85cb7271`: A-CORE is 34 unchanged plus two replacements, and A-CASE-S4 is 40 unchanged plus one replacement. Those replacements preserve the explicit News GET disposition and fail-closed sealed-owner evidence needed by a clean detached verifier; every other donor path and all donor/integration receipts remain exact.
 
 ## Runtime and external measurements
 

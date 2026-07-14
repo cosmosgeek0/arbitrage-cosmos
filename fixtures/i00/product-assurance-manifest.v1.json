@@ -8,6 +8,7 @@
   "expectedGitObjectContextProofs": 6,
   "expectedLiveContextReplacements": 1,
   "expectedContextReplacementRows": 7,
+  "expectedPostIntegrationReplacementRows": 3,
   "contextProofPolicy": "SIX_GIT_OBJECT_PROOFS_REPLACE_FIVE_DONOR_CONTEXT_CALLBACKS_ONE_LIVE_OPERATION_POLICY_REPLACES_THE_A_CORE_DENOMINATOR_CALLBACK",
   "integrationReplacement": {
     "id": "LIVE_OPERATION_POLICY",
@@ -51,7 +52,21 @@
         "statusNeedle": "Status: `A_CORE_INTEGRATED / CORE_SCAFFOLD_READY_PRESERVED`"
       },
       "requiredAncestry": [],
-      "requiredObjects": []
+      "requiredObjects": [],
+      "postIntegrationReplacements": [
+        {
+          "path": "test/productAssurance/production-operation-scan.mjs",
+          "donorBlob": "fb702db91b56b68f20c91d94f91666b150e41bec",
+          "replacementCommit": "9a6ec938ef45716379d4f4f4972102ef85cb7271",
+          "replacementBlob": "4546f31b7d42e4a4e7d9d7e396f377bf010ac76e"
+        },
+        {
+          "path": "test/productAssurance/scope-purity.mjs",
+          "donorBlob": "382c9c00173467098a10a6d4a7e8e893026c05bf",
+          "replacementCommit": "9a6ec938ef45716379d4f4f4972102ef85cb7271",
+          "replacementBlob": "655a6fbe439034cd1770b52d7f898cced1f88368"
+        }
+      ]
     },
     {
       "id": "A_HAZARD",
@@ -80,7 +95,8 @@
         "statusNeedle": "Status: `A_HAZARD_INTEGRATED / HAZARD_PRESTAGE_READY_PRESERVED`"
       },
       "requiredAncestry": [],
-      "requiredObjects": []
+      "requiredObjects": [],
+      "postIntegrationReplacements": []
     },
     {
       "id": "A_COCKPIT",
@@ -109,7 +125,8 @@
         "statusNeedle": "Status: `A_COCKPIT_INTEGRATED / COCKPIT_PRESTAGE_READY_PRESERVED`"
       },
       "requiredAncestry": [],
-      "requiredObjects": []
+      "requiredObjects": [],
+      "postIntegrationReplacements": []
     },
     {
       "id": "A_AGENT",
@@ -138,7 +155,8 @@
         "statusNeedle": "Status: `A_AGENT_INTEGRATED / AGENT_PRESTAGE_READY_PRESERVED`"
       },
       "requiredAncestry": [],
-      "requiredObjects": []
+      "requiredObjects": [],
+      "postIntegrationReplacements": []
     },
     {
       "id": "A_STABILITY",
@@ -167,7 +185,8 @@
         "statusNeedle": "Status: `A_STABILITY_INTEGRATED / STABILITY_PRESTAGE_READY_PRESERVED`"
       },
       "requiredAncestry": [],
-      "requiredObjects": []
+      "requiredObjects": [],
+      "postIntegrationReplacements": []
     },
     {
       "id": "A_CASE_S4",
@@ -211,6 +230,14 @@
       ],
       "requiredObjects": [
         "ab33b3712cddd67c3ec91cfa1dd232c75226cd9f"
+      ],
+      "postIntegrationReplacements": [
+        {
+          "path": "test/productAssurance/systemic/assuranceCase/purity-scope.test.mjs",
+          "donorBlob": "6d278916093e54b0b2969a332fae1f5cc403ab5c",
+          "replacementCommit": "9a6ec938ef45716379d4f4f4972102ef85cb7271",
+          "replacementBlob": "cdb8dc8bf0bb962991641e629204978768b99d87"
+        }
       ]
     }
   ],

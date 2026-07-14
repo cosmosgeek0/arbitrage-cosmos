@@ -399,6 +399,7 @@ const PRODUCT_ASSURANCE_MANIFEST_KEYS = Object.freeze([
   'expectedGitObjectContextProofs',
   'expectedLiveContextReplacements',
   'expectedContextReplacementRows',
+  'expectedPostIntegrationReplacementRows',
   'contextProofPolicy',
   'integrationReplacement',
   'operationScan',
@@ -419,6 +420,7 @@ const PRODUCT_ASSURANCE_DONOR_KEYS = Object.freeze([
   'integrationReceipt',
   'requiredAncestry',
   'requiredObjects',
+  'postIntegrationReplacements',
 ]);
 const PRODUCT_ASSURANCE_SUITE_KEYS = Object.freeze([
   'id',
@@ -428,6 +430,35 @@ const PRODUCT_ASSURANCE_SUITE_KEYS = Object.freeze([
   'runs',
   'excludedContextTests',
   'expectedPasses',
+]);
+const PRODUCT_ASSURANCE_POST_INTEGRATION_REPLACEMENT_KEYS = Object.freeze([
+  'path',
+  'donorBlob',
+  'replacementCommit',
+  'replacementBlob',
+]);
+const EXPECTED_PRODUCT_ASSURANCE_POST_INTEGRATION_REPLACEMENTS = Object.freeze([
+  Object.freeze({
+    donorId: 'A_CORE',
+    path: 'test/productAssurance/production-operation-scan.mjs',
+    donorBlob: 'fb702db91b56b68f20c91d94f91666b150e41bec',
+    replacementCommit: '9a6ec938ef45716379d4f4f4972102ef85cb7271',
+    replacementBlob: '4546f31b7d42e4a4e7d9d7e396f377bf010ac76e',
+  }),
+  Object.freeze({
+    donorId: 'A_CORE',
+    path: 'test/productAssurance/scope-purity.mjs',
+    donorBlob: '382c9c00173467098a10a6d4a7e8e893026c05bf',
+    replacementCommit: '9a6ec938ef45716379d4f4f4972102ef85cb7271',
+    replacementBlob: '655a6fbe439034cd1770b52d7f898cced1f88368',
+  }),
+  Object.freeze({
+    donorId: 'A_CASE_S4',
+    path: 'test/productAssurance/systemic/assuranceCase/purity-scope.test.mjs',
+    donorBlob: '6d278916093e54b0b2969a332fae1f5cc403ab5c',
+    replacementCommit: '9a6ec938ef45716379d4f4f4972102ef85cb7271',
+    replacementBlob: 'cdb8dc8bf0bb962991641e629204978768b99d87',
+  }),
 ]);
 
 function compareAscii(left, right) {
@@ -494,6 +525,8 @@ export function validateProductAssuranceManifest(document) {
   addError(errors, document?.expectedGitObjectContextProofs === 6, 'GIT_OBJECT_CONTEXT_PROOF_TOTAL');
   addError(errors, document?.expectedLiveContextReplacements === 1, 'LIVE_CONTEXT_REPLACEMENT_TOTAL');
   addError(errors, document?.expectedContextReplacementRows === 7, 'CONTEXT_REPLACEMENT_ROW_TOTAL');
+  addError(errors, document?.expectedPostIntegrationReplacementRows === 3,
+    'POST_INTEGRATION_REPLACEMENT_TOTAL');
   addError(errors, document?.contextProofPolicy
     === 'SIX_GIT_OBJECT_PROOFS_REPLACE_FIVE_DONOR_CONTEXT_CALLBACKS_ONE_LIVE_OPERATION_POLICY_REPLACES_THE_A_CORE_DENOMINATOR_CALLBACK',
   'CONTEXT_PROOF_POLICY');
@@ -519,6 +552,7 @@ export function validateProductAssuranceManifest(document) {
   addError(errors, donors.length === PRODUCT_ASSURANCE_DONOR_IDS.length, 'DONOR_COUNT');
   addError(errors, uniqueStrings(donors.map((donor) => donor?.id))
     && sameMembers(donors.map((donor) => donor.id), PRODUCT_ASSURANCE_DONOR_IDS), 'DONOR_IDS');
+  const postIntegrationReplacements = [];
   for (const donor of donors) {
     const prefix = `DONOR_${donor?.id ?? 'UNKNOWN'}`;
     addError(errors, exactKeys(donor, PRODUCT_ASSURANCE_DONOR_KEYS), `${prefix}_KEYS`);
@@ -552,7 +586,23 @@ export function validateProductAssuranceManifest(document) {
         && FULL_SHA.test(entry.ancestor ?? '') && FULL_SHA.test(entry.descendant ?? '')), `${prefix}_REQUIRED_ANCESTRY`);
     addError(errors, uniqueStrings(donor?.requiredObjects)
       && donor.requiredObjects.every((value) => FULL_SHA.test(value)), `${prefix}_REQUIRED_OBJECTS`);
+    const replacements = Array.isArray(donor?.postIntegrationReplacements)
+      ? donor.postIntegrationReplacements : [];
+    addError(errors, Array.isArray(donor?.postIntegrationReplacements)
+      && replacements.every((entry) => exactKeys(entry, PRODUCT_ASSURANCE_POST_INTEGRATION_REPLACEMENT_KEYS)
+        && SAFE_PATH.test(entry.path ?? '')
+        && FULL_SHA.test(entry.donorBlob ?? '')
+        && FULL_SHA.test(entry.replacementCommit ?? '')
+        && FULL_SHA.test(entry.replacementBlob ?? ''))
+      && uniqueStrings(replacements.map((entry) => entry.path))
+      && exactOrderedMembers(replacements.map((entry) => entry.path), sortedStrings(replacements.map((entry) => entry.path))),
+    `${prefix}_POST_INTEGRATION_REPLACEMENTS`);
+    postIntegrationReplacements.push(...replacements.map((entry) => ({ donorId: donor.id, ...entry })));
   }
+  addError(errors, postIntegrationReplacements.length === document?.expectedPostIntegrationReplacementRows
+    && JSON.stringify(postIntegrationReplacements)
+      === JSON.stringify(EXPECTED_PRODUCT_ASSURANCE_POST_INTEGRATION_REPLACEMENTS),
+  'POST_INTEGRATION_REPLACEMENTS_EXACT');
 
   const suites = Array.isArray(document?.suites) ? document.suites : [];
   addError(errors, suites.length === PRODUCT_ASSURANCE_SUITE_IDS.length, 'SUITE_COUNT');
@@ -658,6 +708,7 @@ export function validateProductAssuranceManifest(document) {
     gitObjectContextProofs,
     liveContextReplacements,
     contextReplacementRows,
+    postIntegrationReplacementRows: postIntegrationReplacements.length,
     errors: Object.freeze(errors),
     passed: errors.length === 0,
   });
@@ -754,6 +805,61 @@ function pathSetDigest(paths) {
   return digest(Buffer.from(`${paths.join('\n')}\n`, 'utf8'));
 }
 
+function verifyProductAssurancePostIntegrationReplacement(donor, replacement, paths, donorBlobs, headBlobs) {
+  const relativePath = replacement?.path ?? '';
+  const replacementCommit = replacement?.replacementCommit ?? '';
+  const safePath = SAFE_PATH.test(relativePath);
+  const replacementExists = FULL_SHA.test(replacementCommit)
+    && gitExitZero(['cat-file', '-e', `${replacementCommit}^{commit}`]);
+  const replacementParents = replacementExists
+    ? safeGit(['show', '-s', '--format=%P', replacementCommit])?.trim().split(/\s+/u).filter(Boolean) ?? []
+    : [];
+  const donorBlob = safePath ? donorBlobs?.get(relativePath) ?? null : null;
+  const headBlob = safePath ? headBlobs?.get(relativePath) ?? null : null;
+  const predecessorBlob = replacementExists && replacementParents.length === 1 && safePath
+    ? safeGit(['rev-parse', `${replacementCommit}^:${relativePath}`])?.trim() ?? null
+    : null;
+  const committedReplacementBlob = replacementExists && safePath
+    ? safeGit(['rev-parse', `${replacementCommit}:${relativePath}`])?.trim() ?? null
+    : null;
+  const latestTouch = safePath
+    ? safeGit(['log', '-1', '--format=%H', 'HEAD', '--', relativePath])?.trim() || null
+    : null;
+  const mergeReachableToReplacement = replacementExists
+    && gitExitZero(['merge-base', '--is-ancestor', donor?.mergeCommit ?? '', replacementCommit]);
+  const replacementReachableToHead = replacementExists
+    && gitExitZero(['merge-base', '--is-ancestor', replacementCommit, 'HEAD']);
+  const passed = exactKeys(replacement, PRODUCT_ASSURANCE_POST_INTEGRATION_REPLACEMENT_KEYS)
+    && safePath
+    && paths?.includes(relativePath) === true
+    && FULL_SHA.test(replacement?.donorBlob ?? '')
+    && FULL_SHA.test(replacement?.replacementBlob ?? '')
+    && replacement.donorBlob !== replacement.replacementBlob
+    && donorBlob === replacement.donorBlob
+    && replacementParents.length === 1
+    && predecessorBlob === replacement.donorBlob
+    && committedReplacementBlob === replacement.replacementBlob
+    && headBlob === replacement.replacementBlob
+    && latestTouch === replacementCommit
+    && mergeReachableToReplacement
+    && replacementReachableToHead;
+  return Object.freeze({
+    path: relativePath || null,
+    donorBlob,
+    declaredDonorBlob: replacement?.donorBlob ?? null,
+    replacementCommit: replacementCommit || null,
+    replacementParents: Object.freeze(replacementParents),
+    predecessorBlob,
+    committedReplacementBlob,
+    declaredReplacementBlob: replacement?.replacementBlob ?? null,
+    headBlob,
+    latestTouch,
+    mergeReachableToReplacement,
+    replacementReachableToHead,
+    passed,
+  });
+}
+
 export function verifyProductAssuranceDonor(donor) {
   const baseExists = FULL_SHA.test(donor?.deltaBase ?? '') && gitExitZero(['cat-file', '-e', `${donor.deltaBase}^{commit}`]);
   const donorExists = FULL_SHA.test(donor?.acceptedTip ?? '') && gitExitZero(['cat-file', '-e', `${donor.acceptedTip}^{commit}`]);
@@ -770,16 +876,28 @@ export function verifyProductAssuranceDonor(donor) {
   const donorBlobs = donorExists ? gitTreeBlobs(donor.acceptedTip) : null;
   const mergeBlobs = mergeExists ? gitTreeBlobs(donor.mergeCommit) : null;
   const headBlobs = gitTreeBlobs('HEAD');
+  const replacementRows = Array.isArray(donor?.postIntegrationReplacements)
+    ? donor.postIntegrationReplacements : [];
+  const replacementPathSet = new Set(replacementRows.map((entry) => entry?.path));
+  const replacementRowsValid = replacementPathSet.size === replacementRows.length;
+  const postIntegrationReplacements = replacementRows.map((replacement) => (
+    verifyProductAssurancePostIntegrationReplacement(donor, replacement, paths, donorBlobs, headBlobs)
+  ));
+  const replacementsByPath = new Map(postIntegrationReplacements.map((entry) => [entry.path, entry]));
   const blobResults = (paths ?? []).map((relativePath) => {
     const donorBlob = donorBlobs?.get(relativePath) ?? null;
     const mergeBlob = mergeBlobs?.get(relativePath) ?? null;
     const headBlob = headBlobs?.get(relativePath) ?? null;
+    const replacement = replacementsByPath.get(relativePath) ?? null;
     return Object.freeze({
       path: relativePath,
       donorBlob,
       mergeBlob,
       headBlob,
-      passed: donorBlob !== null && donorBlob === mergeBlob && donorBlob === headBlob,
+      headDisposition: replacement === null ? 'DONOR_IDENTICAL' : 'AUTHORIZED_POST_INTEGRATION_REPLACEMENT',
+      replacementCommit: replacement?.replacementCommit ?? null,
+      passed: donorBlob !== null && donorBlob === mergeBlob
+        && (replacement === null ? donorBlob === headBlob : replacement.passed),
     });
   });
 
@@ -848,6 +966,9 @@ export function verifyProductAssuranceDonor(donor) {
     && donorTree === donor?.donorTree && mergeTree === donor?.mergeTree
     && mergeShapePassed && donorMerged && mergeReachable && pathSetPassed
     && blobResults.length === donor?.deltaPathCount && blobResults.every((entry) => entry.passed)
+    && replacementRowsValid
+    && postIntegrationReplacements.length === replacementRows.length
+    && postIntegrationReplacements.every((entry) => entry.passed)
     && donorReceiptPassed && integrationReceiptPassed && diffCheckPassed
     && requiredAncestry.every((entry) => entry.passed)
     && requiredObjects.every((entry) => entry.passed);
@@ -866,6 +987,8 @@ export function verifyProductAssuranceDonor(donor) {
     pathSetPassed,
     blobsChecked: blobResults.length,
     blobMismatches: Object.freeze(blobResults.filter((entry) => !entry.passed)),
+    donorIdenticalHeadBlobs: blobResults.filter((entry) => entry.headDisposition === 'DONOR_IDENTICAL').length,
+    postIntegrationReplacements: Object.freeze(postIntegrationReplacements),
     donorReceipt,
     donorReceiptPassed,
     integrationReceipt,
@@ -881,10 +1004,22 @@ export function verifyProductAssuranceDonors(document) {
   const validation = validateProductAssuranceManifest(document);
   if (!validation.passed) return Object.freeze({ validation, donors: Object.freeze([]), passed: false });
   const donors = document.donors.map((donor) => verifyProductAssuranceDonor(donor));
+  const mergeCutBlobCount = donors.reduce((total, donor) => total + donor.blobsChecked, 0);
+  const donorIdenticalHeadBlobCount = donors.reduce((total, donor) => total + donor.donorIdenticalHeadBlobs, 0);
+  const postIntegrationReplacements = donors.flatMap((donor) => donor.postIntegrationReplacements);
   return Object.freeze({
     validation,
     donors: Object.freeze(donors),
-    passed: donors.length === PRODUCT_ASSURANCE_DONOR_IDS.length && donors.every((donor) => donor.passed),
+    mergeCutBlobCount,
+    donorIdenticalHeadBlobCount,
+    postIntegrationReplacementCount: postIntegrationReplacements.length,
+    postIntegrationReplacements: Object.freeze(postIntegrationReplacements),
+    passed: donors.length === PRODUCT_ASSURANCE_DONOR_IDS.length
+      && donors.every((donor) => donor.passed)
+      && mergeCutBlobCount === 193
+      && donorIdenticalHeadBlobCount === 190
+      && postIntegrationReplacements.length === 3
+      && postIntegrationReplacements.every((entry) => entry.passed),
   });
 }
 

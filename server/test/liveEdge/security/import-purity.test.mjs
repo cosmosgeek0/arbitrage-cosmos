@@ -63,6 +63,9 @@ const CANONICAL_BARRIER_SOURCE = path.resolve('server/src/systemIntegration/cont
 const BINANCE_DOCUMENTARY_DATA_SOURCE = path.resolve(
   'server/src/liveEdge/adapters/binanceContracts/manifest.ts',
 );
+const BINANCE_PRIVATE_TRUTH_EXTENSION_SOURCE = path.resolve(
+  'server/src/liveEdge/adapters/binanceContracts/privateTruthExtension.ts',
+);
 const BINANCE_DOCUMENTARY_DATA_EXPORTS = new Set([
   'BINANCE_ADDITIONAL_CONTRACT_SEEDS',
   'BINANCE_APPROVED_PRODUCT_BASES',
@@ -71,6 +74,13 @@ const BINANCE_DOCUMENTARY_DATA_EXPORTS = new Set([
   'BINANCE_OFFICIAL_SOURCES',
   'BINANCE_PROTECTED_LOCATORS',
   'BINANCE_RATE_HEADER_TEMPLATES',
+]);
+const BINANCE_DOCUMENTARY_LITERAL_OWNERS = new Map([
+  [BINANCE_DOCUMENTARY_DATA_SOURCE, BINANCE_DOCUMENTARY_DATA_EXPORTS],
+  [BINANCE_PRIVATE_TRUTH_EXTENSION_SOURCE, new Set([
+    'USDM_ALGO_OPEN_ORDERS_SOURCE',
+    'USDM_ALGO_OPEN_ORDERS_CONTRACT',
+  ])],
 ]);
 
 const FORBIDDEN_NODE_MODULES = new Set([
@@ -195,8 +205,8 @@ function containingVariableName(node) {
 }
 
 function isBinanceDocumentaryDataLiteral(file, node) {
-  return file === BINANCE_DOCUMENTARY_DATA_SOURCE
-    && BINANCE_DOCUMENTARY_DATA_EXPORTS.has(containingVariableName(node));
+  return BINANCE_DOCUMENTARY_LITERAL_OWNERS.get(file)
+    ?.has(containingVariableName(node)) === true;
 }
 
 function normalizedModuleRoot(specifier) {

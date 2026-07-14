@@ -63,7 +63,7 @@ function gapRealm(kind) {
 
 function queryMetadata(kind, isGap) {
   if (isGap) return { queryScope: 'ACCOUNT_WIDE', querySymbol: null, queryAsset: null, queryType: null, marginMode: null };
-  if (['SPOT_OPEN_ORDERS', 'USDM_OPEN_ORDERS'].includes(kind)) {
+  if (['SPOT_OPEN_ORDERS', 'USDM_OPEN_ORDERS', 'USDM_ALGO_OPEN_ORDERS'].includes(kind)) {
     return { queryScope: 'ALL_SYMBOLS', querySymbol: null, queryAsset: null, queryType: null, marginMode: null };
   }
   if (kind === 'MARGIN_OPEN_ORDERS') {
@@ -518,12 +518,48 @@ test('every fact kind preserves explicit unavailable truth independently', () =>
   }
 });
 
+test('USD-M algo-open-order truth is independently accepted, fixture-suppliable, and fail-closed', () => {
+  const unavailableInput = unavailableFactInput('USDM_ALGO_OPEN_ORDERS');
+  assert.equal(unavailableInput.contractId, 'USDM_ALGO_OPEN_ORDERS_QUERY');
+  assert.equal(unavailableInput.queryScope, 'ALL_SYMBOLS');
+  assert.equal(unavailableInput.querySymbol, null);
+  assert.equal(unavailableInput.queryCoverage.kind, 'CURRENT_UNFILTERED');
+  assert.notEqual(unavailableInput.sourceId, L05_PRIVATE_GAP_SOURCE_ID);
+
+  const current = normalizePrivateFactEvidence({
+    ...unavailableInput,
+    readState: 'OK',
+    authority: 'SYNTHETIC_TEST',
+    completeness: 'COMPLETE',
+    sourceTimeMs: T0,
+    value: [],
+  }, T0);
+  assert.equal(current.factKind, 'USDM_ALGO_OPEN_ORDERS');
+  assert.equal(current.contractId, 'USDM_ALGO_OPEN_ORDERS_QUERY');
+  assert.deepEqual(current.value, []);
+  assert.equal(current.usableAsPrivateEvidence, true);
+  assert.deepEqual(current.contentBlockingCodes, []);
+  assertNoAuthority(current);
+
+  const unavailable = normalizePrivateFactEvidence(unavailableInput, T0);
+  assert.equal(unavailable.contractId, 'USDM_ALGO_OPEN_ORDERS_QUERY');
+  assert.equal(unavailable.value, null);
+  assert.equal(unavailable.usableAsPrivateEvidence, false);
+  assert.ok(unavailable.reasonCodes.includes('PRIVATE_SOURCE_UNAVAILABLE'));
+  assert.deepEqual(unavailable.contentBlockingCodes, []);
+  assertNoAuthority(unavailable);
+
+  assert.throws(() => normalizePrivateFactEvidence({
+    ...unavailableInput,
+    contractId: 'USDM_OPEN_ORDERS_QUERY',
+  }, T0), /contract identity mismatch/);
+});
+
 test('official gaps remain explicit and cannot acquire a candidate contract or value', () => {
   for (const kind of [
     'USDM_COMMISSIONS',
     'USDM_INCOME',
     'USDM_ADL',
-    'USDM_ALGO_OPEN_ORDERS',
     'USDM_ACCOUNT_CONFIGURATION',
     'USDM_SYMBOL_CONFIGURATION',
     'MARGIN_MAX_BORROWABLE',

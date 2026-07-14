@@ -101,7 +101,7 @@ const CONTRACT_IDS = Object.freeze({
   USDM_BALANCE: 'USDM_BALANCE_V3',
   USDM_POSITIONS: 'USDM_POSITION_RISK_V3',
   USDM_OPEN_ORDERS: 'USDM_OPEN_ORDERS_QUERY',
-  USDM_ALGO_OPEN_ORDERS: null,
+  USDM_ALGO_OPEN_ORDERS: 'USDM_ALGO_OPEN_ORDERS_QUERY',
   USDM_TRADES: 'USDM_USER_TRADES_QUERY',
   USDM_COMMISSIONS: null,
   USDM_INCOME: null,
@@ -126,7 +126,6 @@ const CONTRACT_IDS = Object.freeze({
 });
 
 const GAP_REASONS = Object.freeze({
-  USDM_ALGO_OPEN_ORDERS: 'UNAVAILABLE_L02_CONTRACT_GAP_USDM_ALGO_OPEN_ORDERS',
   USDM_COMMISSIONS: 'UNAVAILABLE_L02_CONTRACT_GAP_USDM_COMMISSION',
   USDM_INCOME: 'UNAVAILABLE_L02_CONTRACT_GAP_USDM_INCOME',
   USDM_ADL: 'UNAVAILABLE_L02_CONTRACT_GAP_USDM_ADL',
@@ -144,7 +143,7 @@ function productFor(kind) {
 
 function queryMetadata(kind, isGap = false) {
   if (isGap) return { queryScope: 'ACCOUNT_WIDE', querySymbol: null, queryAsset: null, queryType: null, marginMode: null };
-  if (['SPOT_OPEN_ORDERS', 'USDM_OPEN_ORDERS'].includes(kind)) {
+  if (['SPOT_OPEN_ORDERS', 'USDM_OPEN_ORDERS', 'USDM_ALGO_OPEN_ORDERS'].includes(kind)) {
     return { queryScope: 'ALL_SYMBOLS', querySymbol: null, queryAsset: null, queryType: null, marginMode: null };
   }
   if (kind === 'MARGIN_OPEN_ORDERS') {
@@ -281,6 +280,7 @@ function valueFor(kind, profileId, posture) {
     case 'USDM_BALANCE':
     case 'USDM_POSITIONS':
     case 'USDM_OPEN_ORDERS':
+    case 'USDM_ALGO_OPEN_ORDERS':
     case 'USDM_TRADES':
     case 'MARGIN_OPEN_ORDERS':
     case 'MARGIN_TRADES':
@@ -351,7 +351,6 @@ function valueFor(kind, profileId, posture) {
     case 'USDM_COMMISSIONS':
     case 'USDM_INCOME':
     case 'USDM_ADL':
-    case 'USDM_ALGO_OPEN_ORDERS':
     case 'USDM_ACCOUNT_CONFIGURATION':
     case 'USDM_SYMBOL_CONFIGURATION':
     case 'MARGIN_MAX_BORROWABLE':
@@ -445,6 +444,40 @@ function usdmPositionSideValue(kind, positionSide) {
       goodTillDate: 0,
     }];
   }
+  if (kind === 'USDM_ALGO_OPEN_ORDERS') {
+    return [{
+      algoId: 102,
+      clientAlgoId: 'projection-usdm-algo-1',
+      algoType: 'CONDITIONAL',
+      orderType: 'STOP_MARKET',
+      symbol: 'BTCUSDT',
+      side: 'BUY',
+      positionSide,
+      timeInForce: 'GTC',
+      quantity: '0.01',
+      algoStatus: 'NEW',
+      actualOrderId: '',
+      actualPrice: '0',
+      triggerPrice: '59000',
+      price: '0',
+      icebergQuantity: 'null',
+      tpTriggerPrice: '0',
+      tpPrice: '0',
+      slTriggerPrice: '0',
+      slPrice: '0',
+      tpOrderType: '',
+      selfTradePreventionMode: 'NONE',
+      workingType: 'CONTRACT_PRICE',
+      priceMatch: 'NONE',
+      closePosition: false,
+      priceProtect: false,
+      reduceOnly: false,
+      createTime: EVALUATED_AT_MS - 200,
+      updateTime: EVALUATED_AT_MS - 100,
+      triggerTime: 0,
+      goodTillDate: 0,
+    }];
+  }
   if (kind === 'USDM_TRADES') {
     return [{
       symbol: 'BTCUSDT',
@@ -475,6 +508,7 @@ function fact(kind, index, {
   evaluatedAtMs = EVALUATED_AT_MS,
   injectedValue,
   query = {},
+  unavailable = false,
 } = {}) {
   const product = productFor(kind);
   const gapReason = GAP_REASONS[kind] ?? null;
@@ -497,13 +531,15 @@ function fact(kind, index, {
     sourceId: contract?.sourceIds[0] ?? 'L02-BINANCE-2026-07-12',
     schemaRevision: L05_PRIVATE_FACT_SCHEMA_REVISIONS[kind],
     receiptId: `private-receipt:${index.toString(16).padStart(24, '0')}`,
-    readState: gapReason === null ? 'OK' : 'UNAVAILABLE',
-    authority: gapReason === null ? 'SYNTHETIC_TEST' : 'UNAVAILABLE',
-    completeness: gapReason === null ? 'COMPLETE' : 'UNAVAILABLE',
-    sourceTimeMs: gapReason === null ? sourceTimeMs : null,
+    readState: gapReason === null && !unavailable ? 'OK' : 'UNAVAILABLE',
+    authority: gapReason === null && !unavailable ? 'SYNTHETIC_TEST' : 'UNAVAILABLE',
+    completeness: gapReason === null && !unavailable ? 'COMPLETE' : 'UNAVAILABLE',
+    sourceTimeMs: gapReason === null && !unavailable ? sourceTimeMs : null,
     receivedAtMs,
     maxAgeMs,
-    value: injectedValue ?? valueFor(kind, profileId, posture),
+    value: gapReason === null && !unavailable
+      ? injectedValue ?? valueFor(kind, profileId, posture)
+      : null,
   }, evaluatedAtMs);
 }
 
@@ -936,11 +972,18 @@ test('new-exposure completeness requires all-symbol open-order evidence for ever
       reason: 'FACT_OPEN_ORDERS_NOT_ALL_SYMBOLS_SPOT_OPEN_ORDERS',
     },
     {
-      name: 'USD-M',
+      name: 'USD-M standard orders',
       product: 'USD_M_PERPETUAL',
       posture: 'USDM_NEW_EXPOSURE',
       kind: 'USDM_OPEN_ORDERS',
       reason: 'FACT_OPEN_ORDERS_NOT_ALL_SYMBOLS_USDM_OPEN_ORDERS',
+    },
+    {
+      name: 'USD-M algo orders',
+      product: 'USD_M_PERPETUAL',
+      posture: 'USDM_NEW_EXPOSURE',
+      kind: 'USDM_ALGO_OPEN_ORDERS',
+      reason: 'FACT_OPEN_ORDERS_NOT_ALL_SYMBOLS_USDM_ALGO_OPEN_ORDERS',
     },
     {
       name: 'Margin',
@@ -1001,13 +1044,95 @@ test('new-exposure completeness requires all-symbol open-order evidence for ever
   }
 });
 
+test('USD-M standard and algo open-order facts are independently required and fail closed', () => {
+  const posture = 'USDM_NEW_EXPOSURE';
+  const permissions = [
+    permissionDecision('READ_KEY', posture),
+    permissionDecision('EXECUTION_KEY', posture),
+  ];
+  const completeFacts = factsFor(['USD_M_PERPETUAL'], posture);
+  const standard = completeFacts.find((item) => item.factKind === 'USDM_OPEN_ORDERS');
+  const algo = completeFacts.find((item) => item.factKind === 'USDM_ALGO_OPEN_ORDERS');
+  assert.equal(standard.contractId, 'USDM_OPEN_ORDERS_QUERY');
+  assert.equal(algo.contractId, 'USDM_ALGO_OPEN_ORDERS_QUERY');
+  assert.deepEqual(standard.value, []);
+  assert.deepEqual(algo.value, []);
+  assert.equal(standard.queryScope, 'ALL_SYMBOLS');
+  assert.equal(algo.queryScope, 'ALL_SYMBOLS');
+
+  const baseline = project({ posture, facts: completeFacts, permissions });
+  assert.equal(
+    baseline.futures.reasonCodes.includes('FACT_MISSING_USDM_OPEN_ORDERS'),
+    false,
+  );
+  assert.equal(
+    baseline.futures.reasonCodes.includes('FACT_MISSING_USDM_ALGO_OPEN_ORDERS'),
+    false,
+  );
+
+  const missingAlgo = project({
+    posture,
+    facts: completeFacts.filter((item) => item.factKind !== 'USDM_ALGO_OPEN_ORDERS'),
+    permissions,
+  });
+  assert.ok(missingAlgo.futures.reasonCodes.includes(
+    'FACT_MISSING_USDM_ALGO_OPEN_ORDERS',
+  ));
+  assert.equal(
+    missingAlgo.futures.reasonCodes.includes('FACT_MISSING_USDM_OPEN_ORDERS'),
+    false,
+  );
+
+  const unavailableAlgo = fact('USDM_ALGO_OPEN_ORDERS', 1_050, {
+    posture,
+    unavailable: true,
+  });
+  const unavailable = project({
+    posture,
+    facts: completeFacts.map((item) => (
+      item.factKind === 'USDM_ALGO_OPEN_ORDERS' ? unavailableAlgo : item
+    )),
+    permissions,
+  });
+  assert.ok(unavailable.futures.reasonCodes.includes(
+    'FACT_UNUSABLE_USDM_ALGO_OPEN_ORDERS',
+  ));
+  assert.ok(unavailable.futures.reasonCodes.includes('PRIVATE_SOURCE_UNAVAILABLE'));
+  assert.equal(
+    unavailable.futures.reasonCodes.includes('FACT_UNUSABLE_USDM_OPEN_ORDERS'),
+    false,
+  );
+
+  const missingStandard = project({
+    posture,
+    facts: completeFacts.filter((item) => item.factKind !== 'USDM_OPEN_ORDERS'),
+    permissions,
+  });
+  assert.ok(missingStandard.futures.reasonCodes.includes(
+    'FACT_MISSING_USDM_OPEN_ORDERS',
+  ));
+  assert.equal(
+    missingStandard.futures.reasonCodes.includes('FACT_MISSING_USDM_ALGO_OPEN_ORDERS'),
+    false,
+  );
+  assertNoAuthority(missingAlgo);
+  assertNoAuthority(unavailable);
+  assertNoAuthority(missingStandard);
+});
+
 test('USD-M position mode binds permission posture and every position-side-bearing fact', async (t) => {
   const posture = 'USDM_NEW_EXPOSURE';
   const oneWayPermissions = [
     permissionDecision('READ_KEY', posture),
     permissionDecision('EXECUTION_KEY', posture),
   ];
-  const vectors = ['USDM_ACCOUNT', 'USDM_POSITIONS', 'USDM_OPEN_ORDERS', 'USDM_TRADES'];
+  const vectors = [
+    'USDM_ACCOUNT',
+    'USDM_POSITIONS',
+    'USDM_OPEN_ORDERS',
+    'USDM_ALGO_OPEN_ORDERS',
+    'USDM_TRADES',
+  ];
   for (let index = 0; index < vectors.length; index += 1) {
     const kind = vectors[index];
     await t.test(`one-way ${kind}`, () => {
@@ -1122,7 +1247,7 @@ test('fresh sibling evidence cannot fill a missing required Spot fact', () => {
   assertNoAuthority(result);
 });
 
-test('accepted L02 USD-M and Margin gaps remain explicit and block their entry postures', () => {
+test('remaining accepted L02 USD-M and Margin gaps stay explicit and block their entry postures', () => {
   const spotUsdmFacts = factsFor(
     ['SPOT', 'USD_M_PERPETUAL', 'MARGIN'],
     'SPOT_USDM_NEW_EXPOSURE',
@@ -1269,9 +1394,24 @@ test('permission facts bind every normalized boolean to the matching permission 
   assertNoAuthority(result);
 });
 
-test('USD-M algo/configuration and Margin borrow-repay gaps stay cross-contract closed', () => {
+test('USD-M algo truth and remaining configuration/Margin gaps stay cross-contract closed', () => {
+  assert.throws(
+    () => resolvePrivateFactContract(
+      'USDM_ALGO_OPEN_ORDERS',
+      MATRIX_SHA,
+      'USDM_OPEN_ORDERS_QUERY',
+    ),
+    /contract identity mismatch/,
+  );
+  const algoContract = resolvePrivateFactContract(
+    'USDM_ALGO_OPEN_ORDERS',
+    MATRIX_SHA,
+    'USDM_ALGO_OPEN_ORDERS_QUERY',
+  ).contract;
+  assert.equal(algoContract.id, 'USDM_ALGO_OPEN_ORDERS_QUERY');
+  assert.equal(algoContract.operation.value, '/fapi/v1/openAlgoOrders');
+
   for (const [kind, foreignContract] of [
-    ['USDM_ALGO_OPEN_ORDERS', 'USDM_OPEN_ORDERS_QUERY'],
     ['USDM_ACCOUNT_CONFIGURATION', 'USDM_ACCOUNT_V3'],
     ['USDM_SYMBOL_CONFIGURATION', 'USDM_ACCOUNT_V3'],
     ['MARGIN_BORROW_REPAY_HISTORY', 'MARGIN_INTEREST_HISTORY_QUERY'],
@@ -1281,7 +1421,7 @@ test('USD-M algo/configuration and Margin borrow-repay gaps stay cross-contract 
       /no accepted L02 contract/,
     );
   }
-  const algoGap = fact('USDM_ALGO_OPEN_ORDERS', 708, {
+  const algoFact = fact('USDM_ALGO_OPEN_ORDERS', 708, {
     posture: 'USDM_NEW_EXPOSURE',
   });
   const accountConfigGap = fact('USDM_ACCOUNT_CONFIGURATION', 709, {
@@ -1293,11 +1433,11 @@ test('USD-M algo/configuration and Margin borrow-repay gaps stay cross-contract 
   const marginGap = fact('MARGIN_BORROW_REPAY_HISTORY', 711, {
     posture: 'MARGIN_NEW_EXPOSURE',
   });
-  assert.equal(algoGap.value, null);
+  assert.deepEqual(algoFact.value, []);
+  assert.deepEqual(algoFact.contentBlockingCodes, []);
   assert.equal(accountConfigGap.value, null);
   assert.equal(usdmGap.value, null);
   assert.equal(marginGap.value, null);
-  assert.deepEqual(algoGap.contentBlockingCodes, [GAP_REASONS.USDM_ALGO_OPEN_ORDERS]);
   assert.deepEqual(accountConfigGap.contentBlockingCodes, [GAP_REASONS.USDM_ACCOUNT_CONFIGURATION]);
   assert.deepEqual(usdmGap.contentBlockingCodes, [GAP_REASONS.USDM_SYMBOL_CONFIGURATION]);
   assert.deepEqual(marginGap.contentBlockingCodes, [GAP_REASONS.MARGIN_BORROW_REPAY_HISTORY]);

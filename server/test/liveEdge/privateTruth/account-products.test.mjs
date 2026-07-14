@@ -39,7 +39,7 @@ function queryMetadata(kind, isGap = false) {
   if (isGap) {
     return { queryScope: 'ACCOUNT_WIDE', querySymbol: null, queryAsset: null, queryType: null, marginMode: null };
   }
-  if (['SPOT_OPEN_ORDERS', 'USDM_OPEN_ORDERS'].includes(kind)) {
+  if (['SPOT_OPEN_ORDERS', 'USDM_OPEN_ORDERS', 'USDM_ALGO_OPEN_ORDERS'].includes(kind)) {
     return { queryScope: 'ALL_SYMBOLS', querySymbol: null, queryAsset: null, queryType: null, marginMode: null };
   }
   if (kind === 'MARGIN_OPEN_ORDERS') {
@@ -238,6 +238,42 @@ function usdmOrder(overrides = {}) {
   };
 }
 
+function usdmAlgoOrder(overrides = {}) {
+  return {
+    algoId: 202,
+    clientAlgoId: 'synthetic-usdm-algo-1',
+    algoType: 'CONDITIONAL',
+    orderType: 'TAKE_PROFIT',
+    symbol: 'BTCUSDT',
+    side: 'SELL',
+    positionSide: 'BOTH',
+    timeInForce: 'GTC',
+    quantity: '0.01000000',
+    algoStatus: 'NEW',
+    actualOrderId: '',
+    actualPrice: '0.00000',
+    triggerPrice: '61000.00000000',
+    price: '61000.00000000',
+    icebergQuantity: 'null',
+    tpTriggerPrice: '0.00000000',
+    tpPrice: '0.00000000',
+    slTriggerPrice: '0.00000000',
+    slPrice: '0.00000000',
+    tpOrderType: '',
+    selfTradePreventionMode: 'EXPIRE_MAKER',
+    workingType: 'CONTRACT_PRICE',
+    priceMatch: 'NONE',
+    closePosition: false,
+    priceProtect: false,
+    reduceOnly: false,
+    createTime: T0 - 1_000,
+    updateTime: T0,
+    triggerTime: 0,
+    goodTillDate: 0,
+    ...overrides,
+  };
+}
+
 function usdmTrade(overrides = {}) {
   return {
     buyer: true,
@@ -391,6 +427,7 @@ test('USD-M and Margin current rows cannot postdate their private fact cut', () 
     ['USDM_BALANCE', [usdmBalance({ updateTime: T0 + 10_000 })]],
     ['USDM_POSITIONS', [usdmPosition({ updateTime: T0 + 10_000 })]],
     ['USDM_OPEN_ORDERS', [usdmOrder({ updateTime: T0 + 10_000 })]],
+    ['USDM_ALGO_OPEN_ORDERS', [usdmAlgoOrder({ updateTime: T0 + 10_000 })]],
     ['MARGIN_OPEN_ORDERS', [marginOrder({ updateTime: T0 + 10_000 })]],
   ]) {
     assert.throws(
@@ -416,6 +453,59 @@ test('non-empty current USD-M open-order and trade shapes normalize exact decima
     assertNoAuthority(fact);
     assertDeeplyFrozen(fact);
   }
+});
+
+test('USD-M algo open orders normalize their dedicated official response without standard-order substitution', () => {
+  const algoOrders = normalize('USDM_ALGO_OPEN_ORDERS', [usdmAlgoOrder()]);
+  assert.equal(algoOrders.contractId, PRIVATE_FACT_CONTRACT_POLICY.USDM_ALGO_OPEN_ORDERS.contractId);
+  assert.equal(algoOrders.value[0].algoId, '202');
+  assert.equal(algoOrders.value[0].quantity, '0.01');
+  assert.equal(algoOrders.value[0].triggerPrice, '61000');
+  assert.equal(algoOrders.value[0].actualOrderId, null);
+  assert.equal(algoOrders.value[0].icebergQuantity, null);
+  assert.equal(algoOrders.value[0].tpOrderType, null);
+  assert.equal(algoOrders.usableAsPrivateEvidence, true);
+  assertNoAuthority(algoOrders);
+  assertDeeplyFrozen(algoOrders);
+  assert.equal(
+    normalize('USDM_ALGO_OPEN_ORDERS', [usdmAlgoOrder({ timeInForce: 'RPI' })])
+      .value[0].timeInForce,
+    'RPI',
+  );
+
+  assert.throws(
+    () => normalize('USDM_ALGO_OPEN_ORDERS', [usdmOrder()]),
+    /exact fields/i,
+  );
+  assert.throws(
+    () => normalize('USDM_OPEN_ORDERS', [usdmAlgoOrder()]),
+    /exact fields/i,
+  );
+});
+
+test('unavailable USD-M algo orders stay fail-closed even when standard open orders are known empty', () => {
+  const standardOrders = normalize('USDM_OPEN_ORDERS', []);
+  const unavailableAlgo = normalizePrivateFactEvidence(currentEvidence(
+    'USDM_ALGO_OPEN_ORDERS',
+    null,
+    {
+      readState: 'UNAVAILABLE',
+      authority: 'UNAVAILABLE',
+      completeness: 'UNAVAILABLE',
+      sourceTimeMs: null,
+    },
+  ), T0 + 20);
+
+  assert.equal(standardOrders.usableAsPrivateEvidence, true);
+  assert.deepEqual(standardOrders.value, []);
+  assert.notEqual(unavailableAlgo.contractId, null);
+  assert.equal(unavailableAlgo.injectedValue, null);
+  assert.equal(unavailableAlgo.value, null);
+  assert.equal(unavailableAlgo.validUntilMs, null);
+  assert.equal(unavailableAlgo.usableAsPrivateEvidence, false);
+  assert.ok(unavailableAlgo.reasonCodes.includes('PRIVATE_SOURCE_UNAVAILABLE'));
+  assertNoAuthority(unavailableAlgo);
+  assertDeeplyFrozen(unavailableAlgo);
 });
 
 test('USD-M current open orders close active enums and official field relationships', () => {
@@ -648,6 +738,10 @@ test('all non-empty USD-M and Margin identity collections reject exact and confl
       conflict: usdmOrder({ price: '59001' }), wrap: (rows) => rows,
     },
     {
+      name: 'USD-M algo orders', kind: 'USDM_ALGO_OPEN_ORDERS', row: usdmAlgoOrder(),
+      conflict: usdmAlgoOrder({ triggerPrice: '61001' }), wrap: (rows) => rows,
+    },
+    {
       name: 'USD-M trades', kind: 'USDM_TRADES', row: usdmTrade(),
       conflict: usdmTrade({ realizedPnl: '-1' }), wrap: (rows) => rows,
     },
@@ -700,9 +794,8 @@ test('USD-M balance and Margin order collections reject overbound truth rather t
   assert.throws(() => normalize('MARGIN_OPEN_ORDERS', orders), /bounded array/i);
 });
 
-test('USD-M algo orders/configuration plus Margin borrow-repay history remain exact null L02 gaps', () => {
+test('USD-M configuration plus Margin borrow-repay history remain exact null L02 gaps', () => {
   const expected = new Map([
-    ['USDM_ALGO_OPEN_ORDERS', 'UNAVAILABLE_L02_CONTRACT_GAP_USDM_ALGO_OPEN_ORDERS'],
     ['USDM_ACCOUNT_CONFIGURATION', 'UNAVAILABLE_L02_CONTRACT_GAP_USDM_ACCOUNT_CONFIGURATION'],
     ['USDM_SYMBOL_CONFIGURATION', 'UNAVAILABLE_L02_CONTRACT_GAP_USDM_SYMBOL_CONFIGURATION'],
     ['MARGIN_BORROW_REPAY_HISTORY', 'OFFICIAL_DOC_CONFLICT_MARGIN_BORROW_REPAY_HISTORY_PARAMETERS'],
@@ -721,21 +814,22 @@ test('USD-M algo orders/configuration plus Margin borrow-repay history remain ex
 });
 
 test('USD-M and Margin client order identities share the exact non-secret Binance grammar', () => {
-  for (const [kind, row] of [
-    ['USDM_OPEN_ORDERS', usdmOrder()],
-    ['MARGIN_OPEN_ORDERS', marginOrder()],
+  for (const [kind, property, row] of [
+    ['USDM_OPEN_ORDERS', 'clientOrderId', usdmOrder()],
+    ['USDM_ALGO_OPEN_ORDERS', 'clientAlgoId', usdmAlgoOrder()],
+    ['MARGIN_OPEN_ORDERS', 'clientOrderId', marginOrder()],
   ]) {
-    const admitted = { ...row, clientOrderId: 'a'.repeat(36) };
-    assert.equal(normalize(kind, [admitted]).value[0].clientOrderId.length, 36);
-    for (const clientOrderId of [
+    const admitted = { ...row, [property]: 'a'.repeat(36) };
+    assert.equal(normalize(kind, [admitted]).value[0][property].length, 36);
+    for (const identity of [
       'a'.repeat(37), 'contains space', 'abc+def',
       'eyJabcde.abcdefgh.ijklmnop',
       'AKIAIOSFODNN7EXAMPLE', 'ASIAIOSFODNN7EXAMPLE',
       `AROA${'A1'.repeat(8)}`,
     ]) {
       assert.throws(
-        () => normalize(kind, [{ ...row, clientOrderId }]),
-        /clientOrderId|secret-shaped text|client-order-id grammar/i,
+        () => normalize(kind, [{ ...row, [property]: identity }]),
+        /clientOrderId|clientAlgoId|secret-shaped text|client-order-id grammar/i,
       );
     }
   }

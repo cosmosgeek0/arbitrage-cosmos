@@ -133,12 +133,16 @@ const REQUIRED: Readonly<Record<PrivateProduct, readonly PrivateFactKind[]>> = O
   ]),
 });
 
-const OPEN_ORDER_FACT_KIND: Readonly<Record<PrivateProduct, PrivateFactKind>> =
-  Object.freeze({
-    SPOT: 'SPOT_OPEN_ORDERS',
-    USD_M_PERPETUAL: 'USDM_OPEN_ORDERS',
-    MARGIN: 'MARGIN_OPEN_ORDERS',
-  });
+const OPEN_ORDER_FACT_KINDS = Object.freeze({
+    SPOT: Object.freeze(['SPOT_OPEN_ORDERS'] as const),
+    USD_M_PERPETUAL: Object.freeze([
+      'USDM_OPEN_ORDERS', 'USDM_ALGO_OPEN_ORDERS',
+    ] as const),
+    MARGIN: Object.freeze(['MARGIN_OPEN_ORDERS'] as const),
+  } as const satisfies Readonly<Record<
+    PrivateProduct,
+    readonly PrivateFactKind[]
+  >>);
 
 export interface ProjectPrivateTruthInput {
   readonly matrixSha256: unknown;
@@ -614,10 +618,12 @@ function productProjection(
         reasons.push('USDM_POSITION_MODE_FACT_PERMISSION_MISMATCH');
       }
       const sideBearingKinds = Object.freeze([
-        'USDM_ACCOUNT', 'USDM_POSITIONS', 'USDM_OPEN_ORDERS', 'USDM_TRADES',
+        'USDM_ACCOUNT', 'USDM_POSITIONS', 'USDM_OPEN_ORDERS',
+        'USDM_ALGO_OPEN_ORDERS', 'USDM_TRADES',
       ] as const satisfies readonly PrivateFactKind[]);
       for (const kind of sideBearingKinds) {
         for (const fact of grouped.get(kind) ?? []) {
+          if (!fact.usableAsPrivateEvidence || fact.value === null) continue;
           const rows = kind === 'USDM_ACCOUNT'
             ? (fact.value as Readonly<{
                 positions: readonly Readonly<{ positionSide: string }>[];
@@ -638,7 +644,8 @@ function productProjection(
   }
 
   for (const fact of productFacts) {
-    if (fact.factKind === OPEN_ORDER_FACT_KIND[product]
+    if ((OPEN_ORDER_FACT_KINDS[product] as readonly PrivateFactKind[])
+      .includes(fact.factKind)
       && fact.queryScope !== 'ALL_SYMBOLS') {
       reasons.push(`FACT_OPEN_ORDERS_NOT_ALL_SYMBOLS_${fact.factKind}`);
     }

@@ -51,6 +51,7 @@ export const BINANCE_KEY_TYPES = ['HMAC', 'RSA', 'ED25519'] as const;
 export const BINANCE_SIGNING_ALGORITHMS = [
   'NONE',
   'HMAC_SHA256',
+  'HMAC_RSA',
   'HMAC_RSA_ED25519',
   'ED25519_SESSION',
   'UNKNOWN',

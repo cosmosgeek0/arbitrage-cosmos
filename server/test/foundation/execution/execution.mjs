@@ -749,6 +749,30 @@ try {
     check('partial close progresses through read-only client-order refresh', retriedClose.ok && partialClose.snapshot().lifecycle === 'CLOSED');
     check('partial close is submitted once, never duplicated', partialClosePorts.calls.filter((c) => c.method === 'submitPaper' && c.request.phase === 'CLOSE' && c.request.leg.key === 'SPOT').length === 1);
     check('partial close retry uses lookup on the same client-order ID', partialClosePorts.calls.some((c) => c.method === 'lookupByClientOrderId' && c.request.phase === 'CLOSE' && c.request.leg.clientOrderId === partialClose.snapshot().closingLegs.SPOT.definition.clientOrderId));
+
+    const terminalPartialPorts = new FakePorts()
+      .queueSubmission('CLOSE:SPOT', {
+        kind: 'CANCELLED',
+        venueOrderId: 'terminal-partial-close-spot',
+        cumulativeFilledQuantity: 0.4,
+      });
+    const { coordinator: terminalPartial } = await readyCoordinator({}, terminalPartialPorts);
+    await terminalPartial.open();
+    const terminalPartialResult = await terminalPartial.close();
+    check('terminal-partial submission maps directly to canonical CANCELLED truth', !terminalPartialResult.ok && terminalPartial.snapshot().closingLegs.SPOT.lifecycle === 'CANCELLED' && terminalPartial.snapshot().closingLegs.SPOT.cumulativeFilledQuantity === 0.4);
+    check('terminal-partial close retains residual and cannot report CLOSED', terminalPartial.snapshot().lifecycle === 'ONE_LEG_EXPOSED' && terminalPartial.snapshot().openingLegs.SPOT.cumulativeFilledQuantity - terminalPartial.snapshot().closingLegs.SPOT.cumulativeFilledQuantity === 0.6);
+    check('terminal-partial close uses one deterministic submission identity', terminalPartialPorts.calls.filter((c) => c.method === 'submitPaper' && c.request.phase === 'CLOSE' && c.request.leg.key === 'SPOT').length === 1);
+
+    const rejectedClosePorts = new FakePorts()
+      .queueSubmission('CLOSE:SPOT', {
+        kind: 'REJECTED',
+        failure: portFailure('CLOSE_SPOT_REJECTED'),
+      });
+    const { coordinator: rejectedClose } = await readyCoordinator({}, rejectedClosePorts);
+    await rejectedClose.open();
+    const rejectedCloseResult = await rejectedClose.close();
+    check('rejected close enters recovery with opening exposure intact', !rejectedCloseResult.ok && rejectedClose.snapshot().lifecycle === 'RECOVERY_REQUIRED' && rejectedClose.snapshot().closingLegs.SPOT.lifecycle === 'REJECTED' && rejectedClose.snapshot().openingLegs.SPOT.cumulativeFilledQuantity === 1);
+    check('rejected first close leg prevents the second close submission', !rejectedClosePorts.calls.some((c) => c.method === 'submitPaper' && c.request.phase === 'CLOSE' && c.request.leg.key === 'PERP'));
   }
 
   section('11. Restart between legs and deterministic checkpoint restore');

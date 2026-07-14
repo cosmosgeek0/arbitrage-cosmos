@@ -174,6 +174,16 @@ history canonical and exempt from the worker allowlist.
 | Section 20 cold-start and recovery-campaign evidence | `projection.ts`, `types.ts` | `BUILT_AND_TESTED` | synthetic structural evidence only | Fails closed through the seven cold-start steps and validates a closed 20-scenario injected evidence matrix. Only the server-crash campaign carries per-cut replay witnesses; the adapter cannot dispatch recovery or turn a structural envelope into deployed proof |
 | Offline exposure/recovery proofs | `server/test/liveEdge/exposureRecoveryProjection/**` | focused `21/21`; accumulated LiveEdge `1,537/1,537` | test-only | Executes accepted L10/L07 reconstruction at all nine valid durable event-state cuts and the canonical Foundation coordinator across all 15 plan and 10 leg lifecycle states; proves exact restore, owner lookup before reconciliation, zero resubmission, stable client IDs/fills, explicit residuals and hostile unresolved recovery, plus chain, risk, halt, closed-schema, secret and tamper failures; network-free |
 
+## L13 delta
+
+| Component | Path | Lane build proof | Integration state | Authority / limitation |
+| --- | --- | --- | --- | --- |
+| Canonical machine-role owner-evidence adapter | `server/src/liveEdge/adapters/machineGraphEvidence/**` | `BUILT_AND_TESTED`; focused `37/37` | `VERIFIED_UNWIRED`; receipt pending | Validates the exact 27-role catalog and canonical component bindings while emitting no topology, graph edge, whole-machine health, first-root-cause, readiness or effective-mode decision |
+| L12 lineage binding | `projection.ts`, `types.ts` | full accepted L12 validator replayed | synthetic owner evidence only | Copies one exact L12 subject/snapshot/recovery/component binding without parsing economics or recomputing exposure, Capital, Risk, reconciliation or recovery truth |
+| Control capability evidence | `projection.ts`, `types.ts` | exact 18-action L14 parity | every action `UNAVAILABLE` | Only the two existing Foundation lifecycle mappings are identified as `PROVEN_CONTROL_PLANE_RUNTIME_ONLY`; no command persistence, route, dispatch or behavior is created |
+| Metric and alarm evidence | `projection.ts`, `types.ts` | exact 36 metrics / 13 alarms; canonical Foundation catalog parity | record-only | Preserves owner revisions, digests, timing, counter/gauge units and internally coherent rate evidence with empty labels; alarms cannot act, liquidate or mutate Capital, and HALT is recommendation-only |
+| Offline machine-evidence proofs | `server/test/liveEdge/machineGraphEvidence/**` | focused `37/37`; accumulated LiveEdge `1,574/1,574` | test-only | Proves exact catalogs, L12 provenance, unknown preservation, rate/counter invariants, secret/shape bounds, determinism, deep freeze, purity and explicit non-capabilities; network-free |
+
 ## L14 delta
 
 | Component | Path | Lane build proof | Integration state | Authority / limitation |
@@ -219,9 +229,9 @@ revisions; L08.1 and L08.2 rerun the current L04 binding rather than trusting a
 caller's self-sealed projection.
 They create no Capital/Risk decision, order, ticket, coordinator, lifecycle,
 reconciliation or persistence owner. Production composition remains
-director-owned. L09/L10/L11 are accepted director-integrated history, L12 is a
-lane-side owner-evidence projection only, and L14 remains an unwired durable
-control adapter; none is promoted to canonical production wiring here.
+director-owned. L09/L10/L11 are accepted director-integrated history, L12/L13
+are lane-side owner-evidence projections only, and L14 remains an unwired
+durable control adapter; none is promoted to canonical production wiring here.
 
 ## Explicitly absent
 
@@ -256,6 +266,8 @@ control adapter; none is promoted to canonical production wiring here.
   in L08.
 - a second Normal/Reverse/Volume strategy, lifecycle, position, debt,
   reconciliation, outcome or recovery-action owner in L09-L12.
+- a second topology, health evaluator, alarm evaluator, trace index, root-cause
+  selector, read model, command store, control route or readiness owner in L13.
 - canonical Ledger persistence, System Integration command dispatch or a
   production control route in L14.
 

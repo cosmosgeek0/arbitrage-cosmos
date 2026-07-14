@@ -2,13 +2,13 @@
 
 Schema version: 1
 
-Generation: 16
+Generation: 17
 
 Program: `LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H`
 
 Current phase: `L13`
 
-Phase status: `ISSUED`
+Phase status: `VERIFIED_PENDING_RECEIPT`
 
 Lane status: `L_SPINE_FINALE_ACTIVE`
 
@@ -18,6 +18,10 @@ Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`, `L06`, `L07`, `L08`, 
 
 - Canonical ruling commit:
   `a4a8ebd349e638e047a9ebf20bf6ec170376d08e` (`D-LAUNCH-16`).
+- Latest canonical director-state commit:
+  `7ff1fd05584779672690f5058a01b1de573b4ccd` (`D-LAUNCH-17`). Its
+  Phase-1 handoff leaves the L finale and external-action boundary unchanged;
+  I00 takes the L lane last after `L LANE_READY`.
 - Latest qualifying director merge / worker scope baseline:
   `3a8e17be71d21df14f6b236a563cb0595f9eb824`.
 - The baseline has two parents and a `director:` subject. Imported director
@@ -137,10 +141,12 @@ Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`, `L06`, `L07`, `L08`, 
 - Path: `live-edge-receipts/TASKS/L13.md`.
 - Preceding accepted receipt:
   `live-edge-receipts/RECEIPTS/L12.md`.
-- L13 implementation status: `NOT_STARTED`; only its bounded task is issued.
+- L13 implementation status: `VERIFIED_PENDING_RECEIPT`.
 - Required shape: one pure 27-role/18-control/36-metric/13-alarm owner-evidence
   adapter, with no graph, health, alarm, control, persistence or action
   authority.
+- Final focused proof: `37/37`; accumulated LiveEdge: `1,574/1,574`;
+  independent source/test audits: accepted with no remaining P0/P1.
 
 ## Frozen input hashes
 
@@ -169,9 +175,9 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 
 ## Working-tree checkpoint
 
-- Expected worker-authored changes after this acceptance-state commit: none
-  beyond the issued L13 task and L12 acceptance record. L13 implementation must
-  remain inside its bounded task paths.
+- Expected worker-authored phase changes: the L13 adapter source/tests, its
+  bounded task/decision/inert integration request, and these two permitted lane
+  state manifests. All are inside §3.3.
 - Expected untracked preserved owner inputs: `DIRECTOR_Q_L_TWO_LANE_LAUNCH.md`, `LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md`.
 - Worker scope is measured from director merge
   `3a8e17be71d21df14f6b236a563cb0595f9eb824`; director-imported history is
@@ -250,6 +256,14 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
   orchestration and cloud-alarm-to-halt wiring remain explicit I00/L15 gaps.
   The exact immutable receipt is `live-edge-receipts/RECEIPTS/L12.md`. Output is deeply immutable, `SYNTHETIC_ONLY`,
   `OWNER_EVIDENCE_ADAPTER_ONLY`, non-sendable, non-authorizing and `UNWIRED`.
+- L13 verified pending receipt: one pure owner-evidence adapter validates the
+  exact ordered 27-role, 18-control, 36-metric and 13-alarm catalogs; consumes
+  canonical System Integration/L14/Foundation catalogs; validates the full L12
+  lineage; preserves nullable unknowns, exact owner revisions/digests, closed
+  counter/gauge units and internally coherent rate diagnostics; and leaves all
+  controls unavailable. It emits no topology, health, root-cause, readiness,
+  alarm, command, persistence or action truth. Output is deeply immutable,
+  `SYNTHETIC_ONLY_UNWIRED` and `OWNER_EVIDENCE_ADAPTER_ONLY`.
 - L14 lane-ready: the bounded durable control-command adapter is accepted on
   lane ancestry as `BUILT_AND_TESTED` and `UNWIRED`; canonical Ledger/System
   Integration persistence, L08-dependent owner wiring and production dispatch
@@ -280,6 +294,13 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 
 ## Measured tests
 
+- L13 verified tree: server build exit `0`; focused machine-graph evidence
+  `37/37`; import purity `4/4`; accumulated LiveEdge `1,574/1,574`; protocol
+  `22/22`; Foundation Control `97/97`; Foundation Observability `130/130`;
+  Foundation read model `72/72`; built System Integration `180/180`; `npm test`
+  and `npm run test:all` exit `0`. Independent source and test audits returned
+  `ACCEPT_SOURCE` and `ACCEPT_TESTS`; worker scope, protected inputs, static
+  purity and whitespace checks pass.
 - L12 accepted corrected tree after the behavior-backed chaos upgrade: server
   build exit `0`; focused exposure/recovery projection `21/21`, including all
   nine valid durable L10 state cuts and exact Foundation coverage of all 15

@@ -1099,6 +1099,18 @@ test('performance schema and semantics accept complete runtime evidence and reje
   assert.equal(validateJsonSchema(schema, valid).passed, true);
   assert.equal(validatePerformanceDocument(valid, { headSha: HEAD, treeSha: TREE }).passed, true);
 
+  const nanosecondPrecision = structuredClone(valid);
+  for (const phaseRow of nanosecondPrecision.phases) {
+    phaseRow.process.eventLoopP99Ms.p95 = 8.000511;
+    phaseRow.process.eventLoopP99Ms.max = 16.000511;
+    phaseRow.process.eventLoopP95Ms = singletonSummary(8.001);
+    phaseRow.process.eventLoopMaxMs = singletonSummary(16.001);
+  }
+  assert.equal(
+    validatePerformanceDocument(nanosecondPrecision, { headSha: HEAD, treeSha: TREE }).passed,
+    true,
+  );
+
   const falseGreen = structuredClone(valid);
   falseGreen.phases[0].snapshots[0].tradeReadyStatus = 200;
   falseGreen.phases[0].snapshots[0].tradeReadyClassification = 'READY_200';

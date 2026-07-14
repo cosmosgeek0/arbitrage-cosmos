@@ -1205,8 +1205,8 @@ function phaseProcessEventLoopValid(process) {
     && phaseEventLoopSummaryValid(p99)
     && p99.count > 1
     && singletonMetricSummaryValid(max)
-    && p95.p99 === p99.p95
-    && max.p99 === p99.max;
+    && p95.p99 === summarize([p99.p95]).p99
+    && max.p99 === summarize([p99.max]).p99;
 }
 
 async function requestProbeControl(runtime, command, requestId) {

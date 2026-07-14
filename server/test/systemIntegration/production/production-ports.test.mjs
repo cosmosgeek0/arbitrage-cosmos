@@ -4,6 +4,9 @@ import test from 'node:test';
 import {
   createProductionSystemIntegrationPorts,
 } from '../../../dist/systemIntegration/production/index.js';
+import {
+  SourceObservationTracker,
+} from '../../../dist/systemIntegration/production/temporal.js';
 
 const START = Date.UTC(2026, 6, 12, 12, 0, 0);
 
@@ -259,6 +262,43 @@ test('accepted public owners drive UniverseGraph and IntelligenceRuntimeBridge r
   const advanced = world.ports.runtimes.marketIntelligence.health(world.ctx());
   assert.equal(advanced.timestamp.sourceTimeMs, START + 950);
   assert.ok(advanced.timestamp.receivedAtMs >= intelligence.timestamp.receivedAtMs);
+});
+
+test('intelligence projection uses one supervisor-step clock for receipt and freshness truth', async () => {
+  const world = createWorld();
+  let clockReads = 0;
+  world.clock.nowMs = () => START + clockReads++;
+  world.market.rows = [{
+    symbol: 'BTCUSDT',
+    base: 'BTC',
+    hasSpot: true,
+    hasPerp: true,
+    perpMark: 60_000,
+    perpIndexPrice: 59_990,
+  }];
+  await startMarket(world);
+  world.market.feeds['spot-miniticker'] = 'open';
+  world.market.feeds['futures-markprice'] = 'open';
+  world.spot.set('BTCUSDT', START - 250);
+  world.usdm.set('BTCUSDT', START - 200);
+  await world.ports.runtimes.intelligenceRuntime.start();
+
+  const ctx = world.ctx();
+  const health = world.ports.runtimes.intelligenceRuntime.health(ctx);
+  assert.equal(health.running, true);
+  assert.equal(health.timestamp.sourceTimeMs, START - 250);
+  assert.equal(health.timestamp.receivedAtMs, ctx.nowMs);
+  assert.ok(clockReads > 1);
+});
+
+test('source observation tracker fails closed when a concurrent step regresses behind receipt time', () => {
+  const tracker = new SourceObservationTracker();
+  tracker.beginGeneration(null);
+  const accepted = tracker.read(START - 100, START, 'public.test.source', 10_000);
+  assert.equal(accepted.receivedAtMs, START);
+  assert.equal(tracker.read(START - 100, START - 1, 'public.test.source', 10_000), null);
+  const recovered = tracker.read(START - 100, START + 1, 'public.test.source', 10_000);
+  assert.equal(recovered.receivedAtMs, START);
 });
 
 test('denied or disconnected public owners cannot admit intelligence readiness', async () => {

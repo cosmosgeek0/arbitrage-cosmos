@@ -151,7 +151,8 @@ ledger-persistence, engine-supervisor
 | Foundation quantity bridge / Ledger CAS | `12/12`; `9/9` |
 | Authority protocol | `14/14` against D-LAUNCH-27 cutoff |
 | I00 proof / command / acceptance contracts | `46/46`; `28/28`; `34/34` |
-| I00 performance contract | `26/26`; exact 14-component `OWNER:ownerPath` projections, `blockerCode` capture, and owner-forgery rejection |
+| Production runtime temporal/restart focus | `14/14`; hostile advancing-clock and concurrent clock-regression proofs; same-data dirty-cache replay restored all seven required public/engine owners to `READY / LIVE_PUBLIC` with Q `ABSTAIN_UNKNOWN` and honest safety degradation |
+| I00 performance contract | `38/38`; exact 14-component `OWNER:ownerPath` projections, `blockerCode` capture, owner-forgery rejection, bounded hydrated-baseline timeout refusal, and short-window RSS-slope nonclaim |
 | Focused security / I00 scope-security | 148 assertions; `7/7` |
 | Product Assurance hostile / provenance | `2/2`; `4/4` |
 | Root Product Assurance | 515 files scanned; 207 discovered; 207 covered; 0 uncovered; 802 behavior plus 4 provenance |

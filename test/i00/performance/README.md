@@ -19,7 +19,9 @@ node test/i00/performance/local-acceptance.mjs --validate-only --candidate-sha "
 
 The variables above must contain exact absolute or repository-relative paths, except `CANDIDATE_SHA` and `SEAL_SHA`, which must be full 40-hex Git commit IDs. Never resolve either identity from a moving branch during rendering or verification.
 
-The default performance window is 60 seconds split across three process boots: a canonical restart-gate attempt followed by graceful `SIGTERM`, a distinct `SIGKILL` boot, and an application-first recovery boot. `--long` selects 900 seconds; `--duration-seconds` is bounded to 60–3600. The default load is 24 HTTP requests/second with concurrency 8, four local WebSocket clients, and bounded BTCUSDT subscribe/unsubscribe bursts. The app binds only to `127.0.0.1` and receives an allowlisted keyless child environment.
+The default measured performance window is 60 seconds split across three process boots: a canonical restart-gate attempt followed by graceful `SIGTERM`, a distinct `SIGKILL` boot, and an application-first recovery boot. Before each measured phase, the harness polls for at most 60 seconds for one exact canonical baseline: live public source/engine ownership, Q `ABSTAIN_UNKNOWN`, honest non-readiness, ops/reconciliation interlock truth, and populated owner timestamps. Cold-start observations remain outside process SLO summaries; failure to establish the baseline still fails closed through the existing exact snapshot invariants. `--long` selects 900 measured seconds; `--duration-seconds` is bounded to 60–3600. The default load is 24 HTTP requests/second with concurrency 8, four local WebSocket clients, and bounded BTCUSDT subscribe/unsubscribe bursts. The app binds only to `127.0.0.1` and receives an allowlisted keyless child environment.
+
+An hourly RSS slope is not a truthful claim from the default 20-second per-boot windows. It remains `NOT_CONFIGURED` unless a post-baseline phase supplies at least four minutes of telemetry, which the 900-second long campaign does. Absolute RSS, heap, CPU, event-loop, HTTP, WebSocket, and storage gates remain measured in the default campaign.
 
 ## Frozen-source law
 

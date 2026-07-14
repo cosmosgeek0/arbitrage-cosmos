@@ -263,8 +263,7 @@ class MarketEvidenceReader {
     });
   }
 
-  readSource(kind: PublicSourceKind): Readonly<SourceProjectionEvidence> {
-    const nowMs = this.clock.nowMs();
+  readSource(kind: PublicSourceKind, nowMs = this.clock.nowMs()): Readonly<SourceProjectionEvidence> {
     const facts = this.readFacts();
     const sourceTime = kind === 'SPOT'
       ? facts.latestSpotSourceTimeMs
@@ -292,7 +291,7 @@ class MarketEvidenceReader {
   readComponent(kind: PublicSourceKind): Readonly<SystemComponentSnapshot> {
     const lifecycle = this.lifecycle();
     const nowMs = this.clock.nowMs();
-    const evidence = this.readSource(kind);
+    const evidence = this.readSource(kind, nowMs);
     const freshness = evidence.timestamp ? evaluateFreshness(evidence.timestamp, nowMs) : null;
     const ready = evidence.connected && freshness?.state === 'FRESH';
     const stopped = !lifecycle.active;
@@ -676,8 +675,11 @@ class PublicIntelligenceLifecycle {
   }
 
   private refresh(ctx: ComponentStepContext): Readonly<IntelligenceRefresh> {
-    const spot = this.evidence.readSource('SPOT');
-    const usdm = this.evidence.readSource('USDM');
+    // Receipt time and evaluation time belong to the same deterministic
+    // supervisor step. Taking a second clock sample here can place a newly
+    // accepted receipt after ctx.nowMs and manufacture a negative age.
+    const spot = this.evidence.readSource('SPOT', ctx.nowMs);
+    const usdm = this.evidence.readSource('USDM', ctx.nowMs);
     const spotFresh = spot.timestamp !== null && evaluateFreshness(spot.timestamp, ctx.nowMs).state === 'FRESH';
     const usdmFresh = usdm.timestamp !== null && evaluateFreshness(usdm.timestamp, ctx.nowMs).state === 'FRESH';
     if (!spot.connected || !spotFresh) {

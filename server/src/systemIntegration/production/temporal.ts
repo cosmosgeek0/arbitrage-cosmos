@@ -56,6 +56,10 @@ export class SourceObservationTracker {
   ): Readonly<SourcedTimestamp> | null {
     const sourceTime = validUtcOrNull(sourceTimeMs);
     if (!this.active || sourceTime === null || !isValidUtcMillis(observedAtMs)) return null;
+    // A concurrent reader may have already accepted this owner event at a
+    // later receipt time. Never return that future receipt to an older
+    // supervisor step; the next monotonic observation can retry safely.
+    if (this.acceptedReceiveTimeMs !== null && observedAtMs < this.acceptedReceiveTimeMs) return null;
     if (this.acceptedSourceTimeMs === null && sourceTime === this.baselineSourceTimeMs) return null;
     if (this.acceptedSourceTimeMs !== null && sourceTime < this.acceptedSourceTimeMs) return null;
     if (sourceTime !== this.acceptedSourceTimeMs) {

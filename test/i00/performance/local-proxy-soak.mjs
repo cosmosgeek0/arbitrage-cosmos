@@ -55,6 +55,18 @@ const REQUEST_TIMEOUT_MS = 5_000;
 const HOST = '127.0.0.1';
 const CANONICAL_RESTART_CONTROL_ID = 'component.engine-supervisor.restart';
 const SYSTEM_CHECKPOINT_CONFIG_KEY = 'system.integration.checkpoint.v1';
+const MEASUREMENT_BASELINE_TIMEOUT_MS = 60_000;
+const MEASUREMENT_BASELINE_POLL_MS = 250;
+const MIN_RSS_SLOPE_WINDOW_MS = 240_000;
+export const BASELINE_LIVE_COMPONENT_IDS = Object.freeze([
+  'public-spot-source',
+  'public-usdm-source',
+  'market-universe',
+  'intelligence-runtime',
+  'market-intelligence',
+  'basis-engine',
+  'volume-engine',
+]);
 
 function optionMap(argv) {
   const result = new Map();
@@ -631,6 +643,57 @@ async function requestSnapshot(origin, label, testedSha) {
   });
 }
 
+export function measurementBaselineValid(snapshot) {
+  const components = Array.isArray(snapshot?.canonicalComponents) ? snapshot.canonicalComponents : [];
+  const byId = new Map(components.map((component) => [component?.componentId, component]));
+  const liveComponentsValid = BASELINE_LIVE_COMPONENT_IDS.every((componentId) => {
+    const component = byId.get(componentId);
+    return component?.observedLifecycle === 'READY' && component?.capability === 'LIVE_PUBLIC';
+  });
+  return snapshot?.liveStatus === 200
+    && snapshot?.readyStatus === 503
+    && snapshot?.readyClassification === 'HONEST_NOT_READY_503'
+    && snapshot?.tradeReadyStatus === 503
+    && snapshot?.tradeReadyClassification === 'HONEST_NOT_READY_503'
+    && snapshot?.healthSemanticsValid === true
+    && snapshot?.stateStatus === 200
+    && snapshot?.basisStatus === 200
+    && snapshot?.volumeStatus === 200
+    && snapshot?.productSupervisorStatus === 200
+    && snapshot?.qProjectionValid === true
+    && snapshot?.bootRevisionProjectionValid === true
+    && snapshot?.opsProjectionValid === true
+    && snapshot?.canonicalRuntimeEvidenceValid === true
+    && snapshot?.restartControlWiringState === 'WIRED_LIVE'
+    && typeof snapshot?.restartControlRevision === 'string'
+    && liveComponentsValid
+    && [
+      'stateNowMs',
+      'basisLastBookTs',
+      'basisLastMarkTs',
+      'volumeLastBookTs',
+      'volumeLastTradeTs',
+      'volumeTradeMessages',
+    ].every((field) => Number.isSafeInteger(snapshot?.[field]));
+}
+
+export async function waitForMeasurementBaseline(origin, testedSha, dependencies = {}) {
+  const timeoutMs = dependencies.timeoutMs ?? MEASUREMENT_BASELINE_TIMEOUT_MS;
+  const pollMs = dependencies.pollMs ?? MEASUREMENT_BASELINE_POLL_MS;
+  const now = dependencies.now ?? (() => performance.now());
+  const request = dependencies.request ?? requestSnapshot;
+  const sleep = dependencies.sleep ?? delay;
+  const deadline = now() + timeoutMs;
+  let snapshot;
+  do {
+    snapshot = await request(origin, 'START', testedSha);
+    if (measurementBaselineValid(snapshot)) return snapshot;
+    if (now() >= deadline) break;
+    await sleep(pollMs);
+  } while (now() < deadline);
+  throw new Error('MEASUREMENT_BASELINE_TIMEOUT');
+}
+
 async function postJson(origin, pathname, body) {
   const response = await fetch(`${origin}${pathname}`, {
     method: 'POST',
@@ -1088,11 +1151,13 @@ function parseTelemetry(text) {
   return { samples, malformed };
 }
 
-function processReport(samples) {
+export function processReport(samples) {
   let rssSlopeBytesPerHour = null;
   if (samples.length >= 2) {
     const elapsedMs = samples.at(-1).monotonicMs - samples[0].monotonicMs;
-    if (elapsedMs > 0) rssSlopeBytesPerHour = ((samples.at(-1).rssBytes - samples[0].rssBytes) / elapsedMs) * 3_600_000;
+    if (elapsedMs >= MIN_RSS_SLOPE_WINDOW_MS) {
+      rssSlopeBytesPerHour = ((samples.at(-1).rssBytes - samples[0].rssBytes) / elapsedMs) * 3_600_000;
+    }
   }
   return Object.freeze({
     samples: samples.length,
@@ -1184,7 +1249,11 @@ async function runPhase({
   const storageSampler = startStorageSampler(dataDir, options.sampleIntervalMs);
   let websocket = null;
   try {
-    const snapshots = [await requestSnapshot(origin, 'START', options.testedSha)];
+    const snapshots = [await waitForMeasurementBaseline(origin, options.testedSha)];
+    const telemetryBeforeLoad = parseTelemetry(runtime.telemetry.content()).samples;
+    const measurementSequenceFloor = telemetryBeforeLoad.length === 0
+      ? -1
+      : Math.max(...telemetryBeforeLoad.map((sample) => sample.sequence));
     websocket = await openWebSockets(port, options.wsClients);
     const loadStarted = performance.now();
     const [http, wsExercise] = await Promise.all([
@@ -1206,7 +1275,8 @@ async function runPhase({
       ? inspectDatabase(dataDir, options.testedSha, databaseExpectation)
       : null;
     const parsedTelemetry = parseTelemetry(stopped.telemetryText);
-    const process = processReport(parsedTelemetry.samples);
+    const measuredTelemetry = parsedTelemetry.samples.filter((sample) => sample.sequence > measurementSequenceFloor);
+    const process = processReport(measuredTelemetry);
     const cleanLogMarkerObserved = stopped.stdoutText.includes('control-room shutdown complete');
     const shutdownPassed = terminationSignal === 'SIGTERM'
       ? !stopped.forced && stopped.exit.code === 0 && stopped.exit.signal === null && cleanLogMarkerObserved
@@ -1363,7 +1433,7 @@ async function runPhase({
     return {
       phase,
       rawHttpLatencies: http.rawLatencies,
-      rawTelemetry: parsedTelemetry.samples,
+      rawTelemetry: measuredTelemetry,
       measuredDurationSeconds,
       allShutdownSocketsReceived1012,
       allCrashSocketsClosedAbnormally,
@@ -1706,7 +1776,8 @@ export function validatePerformanceDocument(document, expectedSource = {}) {
   }
   const snapshots = Array.isArray(document?.phases) ? document.phases.flatMap((phase) => Array.isArray(phase.snapshots) ? phase.snapshots : []) : [];
   if (snapshots.length !== 6 || snapshots.some((snapshot) => (
-    !snapshot.qProjectionValid
+    !measurementBaselineValid(snapshot)
+      || !snapshot.qProjectionValid
       || !snapshot.bootRevisionProjectionValid
       || !snapshot.opsProjectionValid
       || snapshot.readyStatus !== 503

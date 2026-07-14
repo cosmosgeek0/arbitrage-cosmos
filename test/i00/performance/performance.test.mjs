@@ -36,7 +36,14 @@ import {
   validateQVenvManifest,
   validateQArchiveInventory,
 } from './local-acceptance.mjs';
-import { parseSoakArgs, validatePerformanceDocument } from './local-proxy-soak.mjs';
+import {
+  BASELINE_LIVE_COMPONENT_IDS,
+  measurementBaselineValid,
+  parseSoakArgs,
+  processReport,
+  validatePerformanceDocument,
+  waitForMeasurementBaseline,
+} from './local-proxy-soak.mjs';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const HEAD = 'a'.repeat(40);
@@ -120,9 +127,9 @@ function canonicalComponentsFixture() {
   return CANONICAL_SYSTEM_COMPONENT_IDS.map((componentId, index) => ({
     componentId,
     owner: CANONICAL_SYSTEM_COMPONENT_OWNERS[index],
-    observedLifecycle: 'BLOCKED',
-    capability: 'UNAVAILABLE',
-    blocker: `BLOCKER_${index}`,
+    observedLifecycle: BASELINE_LIVE_COMPONENT_IDS.includes(componentId) ? 'READY' : 'BLOCKED',
+    capability: BASELINE_LIVE_COMPONENT_IDS.includes(componentId) ? 'LIVE_PUBLIC' : 'UNAVAILABLE',
+    blocker: BASELINE_LIVE_COMPONENT_IDS.includes(componentId) ? null : `BLOCKER_${index}`,
   }));
 }
 
@@ -855,6 +862,76 @@ test('bounded performance CLI defaults to plan and refuses ambiguous or unsafe v
   assert.throws(() => assertLoopbackHost('0.0.0.0'), /NON_LOOPBACK/);
 });
 
+test('performance measurement starts only from exact hydrated canonical truth', () => {
+  const cold = snapshot('START', 100, 1);
+  for (const component of cold.canonicalComponents) {
+    if (!BASELINE_LIVE_COMPONENT_IDS.includes(component.componentId)) continue;
+    component.observedLifecycle = 'BLOCKED';
+    component.capability = 'UNAVAILABLE';
+    component.blocker = 'SOURCE_NOT_READY';
+  }
+  assert.equal(measurementBaselineValid(cold), false);
+
+  const hydrated = structuredClone(cold);
+  for (const component of hydrated.canonicalComponents) {
+    if (!BASELINE_LIVE_COMPONENT_IDS.includes(component.componentId)) continue;
+    component.observedLifecycle = 'READY';
+    component.capability = 'LIVE_PUBLIC';
+    component.blocker = null;
+  }
+  assert.equal(measurementBaselineValid(hydrated), true);
+
+  hydrated.qAdvisoryAction = null;
+  hydrated.qProjectionValid = false;
+  assert.equal(measurementBaselineValid(hydrated), false);
+});
+
+test('performance measurement refuses an invalid baseline when the bounded poll expires', async () => {
+  const invalid = snapshot('START', 1, 1);
+  invalid.canonicalComponents = canonicalComponentsFixture().map((component) => ({
+    ...component,
+    observedLifecycle: 'BLOCKED',
+    capability: 'UNAVAILABLE',
+    blocker: 'SOURCE_NOT_READY',
+  }));
+  let monotonicMs = 0;
+  let requests = 0;
+  await assert.rejects(
+    waitForMeasurementBaseline('http://127.0.0.1:1', HEAD, {
+      timeoutMs: 10,
+      pollMs: 5,
+      now: () => monotonicMs,
+      request: async () => {
+        requests += 1;
+        return invalid;
+      },
+      sleep: async (durationMs) => {
+        monotonicMs += durationMs;
+      },
+    }),
+    /MEASUREMENT_BASELINE_TIMEOUT/,
+  );
+  assert.equal(requests, 2);
+});
+
+test('hourly RSS slope refuses short startup windows and measures long stable windows', () => {
+  const sample = (monotonicMs, rssBytes) => ({
+    monotonicMs,
+    rssBytes,
+    cpuOneCorePercent: 1,
+    cpuHostPercent: 1,
+    heapUsedBytes: 50,
+    eventLoopP95Ms: 1,
+    eventLoopP99Ms: 1,
+    eventLoopMaxMs: 1,
+  });
+  const startup = processReport([sample(0, 100), sample(20_000, 200)]);
+  assert.equal(startup.rssSlopeBytesPerHour, null);
+
+  const stable = processReport([sample(0, 100), sample(240_000, 200)]);
+  assert.equal(stable.rssSlopeBytesPerHour, 1_500);
+});
+
 test('complete acceptance exposes explicit modes and each required layer exactly once', () => {
   assert.equal(parseOptions(['--plan']).mode, 'PLAN');
   assert.equal(parseOptions(['--run', '--q-venv=/tmp/q', '--browser-receipt=evidence/browser.json']).mode, 'RUN');
@@ -895,6 +972,16 @@ test('performance schema and semantics accept complete runtime evidence and reje
   assert.equal(rejected.passed, false);
   assert.ok(rejected.semanticFailures.includes('PERFORMANCE_RUNTIME_TRUTH_INVALID'));
   assert.ok(rejected.semanticFailures.includes('PERFORMANCE_FALSE_GREEN_VISIBILITY_INVALID'));
+
+  const invalidBaseline = structuredClone(valid);
+  const publicSpot = invalidBaseline.phases[0].snapshots[0].canonicalComponents
+    .find((component) => component.componentId === 'public-spot-source');
+  publicSpot.observedLifecycle = 'BLOCKED';
+  publicSpot.capability = 'UNAVAILABLE';
+  publicSpot.blocker = 'SOURCE_NOT_READY';
+  const baselineRejected = validatePerformanceDocument(invalidBaseline, { headSha: HEAD, treeSha: TREE });
+  assert.equal(baselineRejected.passed, false);
+  assert.ok(baselineRejected.semanticFailures.includes('PERFORMANCE_RUNTIME_TRUTH_INVALID'));
 });
 
 test('performance semantics reject managed inventory omission and same-shape field forgeries', () => {

@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import {
+  reduceTrustedWebSocketCloseDiagnostic,
   snapshotTrustedWebSocketCloseEvent,
   webSocketCloseDiagnosticAttributes,
 } from '../../src/lib/webSocketCloseDiagnostic.ts';
@@ -102,6 +103,65 @@ test('malformed or unbounded close observations fail closed', () => {
   assert.equal(snapshotTrustedWebSocketCloseEvent(trusted(), 1_000_001), null);
 });
 
+test('an unopened retry cannot overwrite the last established socket close', () => {
+  const restart = snapshotTrustedWebSocketCloseEvent(new CloseEvent({
+    code: 1012,
+    reason: 'service restart',
+    wasClean: true,
+    isTrusted: true,
+  }), 7);
+  const unopenedRetry = new CloseEvent({
+    code: 1006,
+    reason: '',
+    wasClean: false,
+    isTrusted: true,
+  });
+
+  assert.equal(reduceTrustedWebSocketCloseDiagnostic(null, unopenedRetry, 8, false), null);
+  const retained = reduceTrustedWebSocketCloseDiagnostic(restart, unopenedRetry, 8, false);
+  assert.equal(retained, restart);
+  assert.deepEqual(retained, {
+    code: 1012,
+    reason: 'service restart',
+    wasClean: true,
+    reconnectGeneration: 7,
+  });
+});
+
+test('a later established socket close replaces prior restart truth and malformed truth clears it', () => {
+  const restart = snapshotTrustedWebSocketCloseEvent(new CloseEvent({
+    code: 1012,
+    reason: 'service restart',
+    wasClean: true,
+    isTrusted: true,
+  }), 7);
+  const establishedFailure = new CloseEvent({
+    code: 1006,
+    reason: '',
+    wasClean: false,
+    isTrusted: true,
+  });
+
+  assert.deepEqual(reduceTrustedWebSocketCloseDiagnostic(restart, establishedFailure, 9, true), {
+    code: 1006,
+    reason: '',
+    wasClean: false,
+    reconnectGeneration: 9,
+  });
+  assert.deepEqual(reduceTrustedWebSocketCloseDiagnostic(null, new CloseEvent({
+    code: 1012,
+    reason: 'service restart',
+    wasClean: true,
+    isTrusted: true,
+  }), 10, true), {
+    code: 1012,
+    reason: 'service restart',
+    wasClean: true,
+    reconnectGeneration: 10,
+  });
+  assert.equal(reduceTrustedWebSocketCloseDiagnostic(restart, { type: 'close' }, 9, true), null);
+});
+
 test('production store records the diagnostic only inside the guarded real onclose path', async () => {
   const source = await readFile(new URL('../../src/store.tsx', import.meta.url), 'utf8');
   assert.match(source, /ws\.onclose = \(event\) => \{/);
@@ -110,10 +170,14 @@ test('production store records the diagnostic only inside the guarded real onclo
     1,
   );
   assert.equal(
-    (source.match(/snapshotTrustedWebSocketCloseEvent\(event, socketGeneration\)/g) ?? []).length,
+    (source.match(/reduceTrustedWebSocketCloseDiagnostic\(/g) ?? []).length,
     1,
   );
+  assert.match(source, /let connectionEstablished = false;/);
+  assert.match(source, /connectionEstablished = true;/);
+  assert.match(source, /setWebSocketCloseDiagnostic\(\(current\) => reduceTrustedWebSocketCloseDiagnostic\(/);
+  assert.match(source, /socketGeneration,\s*connectionEstablished,/);
   assert.match(source, /id=\{WEB_SOCKET_CLOSE_DIAGNOSTIC_ID\}/);
   assert.match(source, /hidden\s+aria-hidden="true"/);
-  assert.doesNotMatch(source, /code\s*:\s*1012|setWebSocketCloseDiagnostic\([^s]/);
+  assert.doesNotMatch(source, /code\s*:\s*1012/);
 });

@@ -114,7 +114,7 @@ The current living-input authority protocol passes `14/14` against immutable cut
 | Dashboard mount | Accepted donor mounted into the existing app through the canonical Product provider and IP-CONTROL insertion requests; no duplicate shell or browser strategy truth. |
 | Startup | Dependency-driven production composition replaces arbitrary startup delays; owner evidence is projected through canonical components. |
 | Command result | `GET /api/product-integration/v1/commands/:commandId/result` requires exact command/idempotency/control identity and server-derived authentication; durable result is 200 terminal, 202 pending, 404 absent/substituted, or 503 unavailable/fail-closed. |
-| WebSocket | Canonical `/ws` emits supervisor deltas and bounded seven-field material pages; retention/gap requires backfill; raw log/metric floods are excluded. |
+| WebSocket | Canonical `/ws` emits supervisor deltas and bounded seven-field material pages; retention/gap requires backfill; raw log/metric floods are excluded. Browser close truth is generation-bound: unopened retry failures retain the last established-socket close, and a later established close replaces or fail-closed clears it. Focused in-app-browser proof observed clean `1012 / service restart` surviving a failed retry, followed by a real established crash surfacing unclean `1006`; complete C-bound browser evidence remains pending. |
 | Restart terminalization | Success requires exact supervisor correlation, accepted revision, target generation, and correlated `RUNNING`/`DEGRADED`; active/failure/boot-lost evidence stays pending or attention-required; exact replay does not reissue. |
 | Assurance insertion requests | Applied only through canonical source/runtime/control/ledger owners. Fixture evidence remains non-authoritative and cannot mint live green. |
 
@@ -145,7 +145,7 @@ ledger-persistence, engine-supervisor
 | `npm run typecheck` | Exit 0; server and web pass |
 | `npm run build` | Exit 0; server and web pass; Vite 1,880 modules; advisory large-chunk warning only |
 | Product Integration | `108/108` |
-| Product Control | `72/72` |
+| Product Control | `74/74`, including restart truth surviving unopened retry failure and a later established failure replacing prior clean truth |
 | System Integration | `372/372` after restart-terminalization hardening |
 | L06 / L12 / L13 / L14 | `79/79`; `21/21`; `37/37`; `38/38` |
 | Foundation quantity bridge / Ledger CAS | `12/12`; `9/9` |

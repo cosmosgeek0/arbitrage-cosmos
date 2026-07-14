@@ -15,7 +15,7 @@ import { createSettledPoll } from './lib/polling';
 import { readDurableMaterialCursor } from './lib/productIntegration/useProductControlRoomBinding';
 import {
   WEB_SOCKET_CLOSE_DIAGNOSTIC_ID,
-  snapshotTrustedWebSocketCloseEvent,
+  reduceTrustedWebSocketCloseDiagnostic,
   webSocketCloseDiagnosticAttributes,
   type WebSocketCloseDiagnostic,
 } from './lib/webSocketCloseDiagnostic';
@@ -369,10 +369,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const durableCursor = readDurableMaterialCursor();
       if (durableCursor.state === 'VALID') socketUrl.searchParams.set('afterCursor', durableCursor.cursor);
       const ws = new WebSocket(socketUrl.toString());
+      let connectionEstablished = false;
       wsRef.current = ws;
       liveWs = ws;
       ws.onopen = () => {
         if (closed || socketGeneration !== generation || wsRef.current !== ws) return;
+        connectionEstablished = true;
         setConnected(true);
         sendLiveSub(); // re-attach any live book subscription after reconnect
       };
@@ -393,7 +395,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       };
       ws.onclose = (event) => {
         if (closed || socketGeneration !== generation || wsRef.current !== ws) return;
-        setWebSocketCloseDiagnostic(snapshotTrustedWebSocketCloseEvent(event, socketGeneration));
+        setWebSocketCloseDiagnostic((current) => reduceTrustedWebSocketCloseDiagnostic(
+          current,
+          event,
+          socketGeneration,
+          connectionEstablished,
+        ));
         wsRef.current = null;
         if (liveWs === ws) liveWs = null;
         setConnected(false);

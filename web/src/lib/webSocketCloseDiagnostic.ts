@@ -49,6 +49,23 @@ export function snapshotTrustedWebSocketCloseEvent(
   });
 }
 
+/**
+ * A failed connection attempt can emit a trusted 1006 CloseEvent without ever
+ * reaching `open`. It is transport-attempt truth, but it must not erase the
+ * last established socket's close evidence. Once a socket has opened, its
+ * close always becomes authoritative; malformed evidence therefore clears the
+ * prior diagnostic instead of preserving a stale success claim.
+ */
+export function reduceTrustedWebSocketCloseDiagnostic(
+  current: WebSocketCloseDiagnostic | null,
+  event: Event,
+  reconnectGeneration: number,
+  connectionEstablished: boolean,
+): WebSocketCloseDiagnostic | null {
+  if (connectionEstablished !== true) return current;
+  return snapshotTrustedWebSocketCloseEvent(event, reconnectGeneration);
+}
+
 export function webSocketCloseDiagnosticAttributes(
   diagnostic: WebSocketCloseDiagnostic | null,
 ): WebSocketCloseDiagnosticAttributes {

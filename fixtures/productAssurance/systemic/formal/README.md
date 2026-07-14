@@ -7,10 +7,11 @@ gate, exchange hand, remediation controller, ledger, supervisor, or cockpit.
 
 ## Evidence boundary
 
-- Ten finite protocol models currently cover the original ambiguity, recovery,
+- Thirteen finite protocol models cover the original ambiguity, recovery,
   fencing, repair, liability, halt, and cancellation set plus frozen-L order
-  policy, Foundation-owned normal-Basis lifecycle, and Reverse-Basis liability
-  recovery. Batch 2 adds Volume, exchange-twin, and durable-control models.
+  policy, Foundation-owned normal-Basis lifecycle, Reverse-Basis liability
+  recovery, Volume lifecycle, exchange-twin ambiguity/reconciliation, and
+  durable-control revision transitions.
 - The executable bounded-check path is a deterministic, dependency-free explicit-state
   explorer running on the repository's existing Node.js runtime.
 - TLA+ modules and TLC configurations are source artifacts only. No independent
@@ -25,7 +26,7 @@ gate, exchange hand, remediation controller, ledger, supervisor, or cockpit.
 ## Local proof command
 
 ```text
-node --test --test-concurrency=1 --test-reporter=spec test/productAssurance/systemic/formal/*.test.mjs test/productAssurance/systemic/formal/contracts/*.test.mjs
+/usr/bin/sandbox-exec -p '(version 1)(allow default)(deny network*)' node --test --test-concurrency=1 --test-reporter=spec test/productAssurance/systemic/formal/*.test.mjs test/productAssurance/systemic/formal/contracts/*.test.mjs
 ```
 
 The root test scripts do not discover this packet-local test path. Wiring the
@@ -36,6 +37,22 @@ Under D-LAUNCH-22, the prior root-egress result is adjudicated
 `KNOWN_PREEXISTING_TEST_EGRESS`; this non-candidate worker must not rerun the
 root gate or touch server startup. The active gate is only the focused command
 under total network denial.
+
+The focused S3 gate passes 44/44 tests under total network denial, including
+exact coverage of all 144 reachable M08-M13 transition-conformance rows.
+
+The M01-M07 finite envelopes are unchanged in this deepening batch: growth is
+zero states and zero transitions. Safe retrofitting was not cheap because it
+would alter already-sealed abstraction semantics. The frozen-L scenarios are
+represented explicitly by M08-M13 instead. Batch 2 content, receipt, and exact
+commit identities remain pending until the reseal commit is created.
+
+The batch-2 audit also made the finite envelopes stricter: a flat failed Volume
+gate is `BLOCKED` with an absent action, each TLA+ module has a one-cut guard,
+exchange-twin placement has an explicit liveness obligation, and durable
+controls retain post-intent expiry, rejection, or finalization failure as
+visible pending ambiguity with monotonic journal versions. The focused-suite
+transition-conformance test is landed and green.
 
 ## Truth labels
 

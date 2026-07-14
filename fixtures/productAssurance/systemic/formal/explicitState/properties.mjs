@@ -159,6 +159,48 @@ const catalog = [
     title: 'Reverse-Basis repay ends ordering',
     statement: 'After a confirmed repay observation, no later order observation is accepted before exact zero-liability and closure evidence.',
   },
+  {
+    propertyId: 'S3-M11-INV-01',
+    kind: 'SAFETY',
+    title: 'Volume authority remains record-only',
+    statement: 'The Volume lifecycle never sends an action, owns an executor, or creates a borrow liability; it emits synthetic record-only decisions.',
+  },
+  {
+    propertyId: 'S3-M12-INV-01',
+    kind: 'SAFETY',
+    title: 'Unproved race allocates no fill',
+    statement: 'An equal-time trade/cancel race without proved source order cannot allocate an economic fill or affirmative local truth.',
+  },
+  {
+    propertyId: 'S3-M12-INV-02',
+    kind: 'SAFETY',
+    title: 'Exchange-twin quantities conserve',
+    statement: 'Filled, remaining, and expired quantities partition the requested quantity and observed fills never decrease.',
+  },
+  {
+    propertyId: 'S3-M13-INV-01',
+    kind: 'SAFETY',
+    title: 'Control revision reservation is atomic',
+    statement: 'Only one command may reserve and publish from a given expected global control revision.',
+  },
+  {
+    propertyId: 'S3-M13-INV-02',
+    kind: 'SAFETY',
+    title: 'Control journal phases are monotonic',
+    statement: 'Journal version one is durable PENDING; terminal completion or rejection requires journal version two.',
+  },
+  {
+    propertyId: 'S3-M13-INV-03',
+    kind: 'SAFETY',
+    title: 'Terminal control replay is inert',
+    statement: 'An exact terminal command replay returns the bound receipt without another owner publication.',
+  },
+  {
+    propertyId: 'S3-M13-LIV-01',
+    kind: 'LIVENESS',
+    title: 'Terminal control replay returns',
+    statement: 'Under the declared lookup fairness assumption, an exact terminal command replay returns its bound receipt without owner republication.',
+  },
 ];
 
 export const PROPERTY_CATALOG = Object.freeze(catalog.map((entry) => Object.freeze({ ...entry })));

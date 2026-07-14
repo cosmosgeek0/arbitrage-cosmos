@@ -33,6 +33,9 @@ const EXPECTED_CANONICAL_COUNTS = Object.freeze({
   'S3-M08-ORDER-POLICY': Object.freeze([13, 12]),
   'S3-M09-NORMAL-BASIS-LIFECYCLE': Object.freeze([69, 78]),
   'S3-M10-REVERSE-BASIS-LIABILITY': Object.freeze([198, 219]),
+  'S3-M11-VOLUME-LIFECYCLE': Object.freeze([49, 55]),
+  'S3-M12-EXCHANGE-TWIN-AMBIGUITY': Object.freeze([27, 38]),
+  'S3-M13-DURABLE-CONTROL-REVISION': Object.freeze([123, 161]),
 });
 
 const EXPECTED_AMENDMENT_PROPERTY_IDS = Object.freeze([
@@ -92,9 +95,9 @@ function tinyModel({
   });
 }
 
-test('ten canonical models exhaust their pinned bounded graphs and cover the full property catalog', () => {
+test('thirteen canonical models exhaust their pinned bounded graphs and cover the full property catalog', () => {
   const reports = runModels(CANONICAL_MODELS);
-  assert.equal(reports.length, 10);
+  assert.equal(reports.length, 13);
   assert.deepEqual(reports.map((report) => report.modelId), Object.keys(EXPECTED_CANONICAL_COUNTS));
   for (const report of reports) {
     assert.equal(report.overallStatus, 'PASS', report.modelId);
@@ -107,8 +110,8 @@ test('ten canonical models exhaust their pinned bounded graphs and cover the ful
     assert.equal(report.properties.some((property) => property.status !== 'PASS'), false, report.modelId);
     assert.equal(validateExplicitStateReport(report).ok, true, report.modelId);
   }
-  assert.equal(reports.reduce((sum, report) => sum + report.exploration.states, 0), 1_603);
-  assert.equal(reports.reduce((sum, report) => sum + report.exploration.transitions, 0), 1_940);
+  assert.equal(reports.reduce((sum, report) => sum + report.exploration.states, 0), 1_802);
+  assert.equal(reports.reduce((sum, report) => sum + report.exploration.transitions, 0), 2_194);
   const covered = new Set(reports.flatMap((report) => report.properties.map((property) => property.propertyId)));
   assert.deepEqual([...covered].sort(), PROPERTY_CATALOG.map((property) => property.propertyId).sort());
   assert.deepEqual(
@@ -150,7 +153,11 @@ test('every hostile negative control is detected with a counterexample', () => {
     DROP_KILL_GUARD: ['S3-SAF-08', 'S3-SAF-11'],
     CANCEL_REQUEST_IS_FACT: ['S3-SAF-03', 'S3-SAF-14'],
     REPAY_PRINCIPAL_ONLY: ['S3-SAF-15'],
+    HALT_ALLOWS_ADD: ['S3-SAF-08', 'S3-SAF-11'],
+    AMBIGUOUS_CANCEL_RACE_ALLOCATES_FILL: ['S3-SAF-06', 'S3-SAF-13', 'S3-M12-INV-01'],
+    NON_ATOMIC_CONTROL_REVISION_RESERVATION: ['S3-SAF-01', 'S3-M13-INV-01'],
   });
+  assert.equal(reports.length, 13);
   for (const report of reports) {
     assert.equal(report.overallStatus, 'FAIL', report.profile);
     const failed = report.properties.filter((property) => property.status === 'FAIL');

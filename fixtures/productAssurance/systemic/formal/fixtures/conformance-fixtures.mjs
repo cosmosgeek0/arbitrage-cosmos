@@ -24,6 +24,15 @@ const FROZEN_L_VERSION = Object.freeze({
   normalBasisEvidence: 'server/src/liveEdge/adapters/normalBasis/evidence.ts@sha256:a2101caacc8a1d5fe5bb5552274531dc9288f7ea5d635c214d9e6272c8311f51',
   reverseBasisTypes: 'server/src/liveEdge/adapters/reverseBasisLifecycle/types.ts@sha256:530598f7f05804690a34e6344833235db6762e31cc5343438ab104499680ef53',
   reverseBasisLifecycle: 'server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts@sha256:f287106fb6002cf2cd05e26049cac73e79726448d703c86a61d785adcbecd7be',
+  volumeTypes: 'server/src/liveEdge/adapters/volumeLifecycle/types.ts@sha256:44268936146d03334d7e813490357649a0e264ebe1c3832d3215eacba5cf30de',
+  volumeLifecycle: 'server/src/liveEdge/adapters/volumeLifecycle/lifecycle.ts@sha256:703f49ed69b4b729e9d2130bcdfd500759611840cf8564bd3363a53b45543a0d',
+  exchangeTwinTypes: 'server/src/liveEdge/adapters/exchangeTwin/types.ts@sha256:c3bf70a72a5d87d6899e0cc21a7dcd106842e6de57002c8fcbd08decdea097f9',
+  exchangeTwin: 'server/src/liveEdge/adapters/exchangeTwin/twin.ts@sha256:4084c2bb579a6b8e31cc3335ea5239aecb0c4d02069be149c16cf041ad6d726d',
+  controlTypes: 'server/src/liveEdge/controls/types.ts@sha256:2896d2f40c55bbb464454121df0c79567c67ea8e9b0537e91cd017835a666373',
+  controlAdapter: 'server/src/liveEdge/controls/adapter.ts@sha256:a80417934958059395fb22bf706867f0e386837faa13fc83a36402dea5bf1654',
+  controlIntegrity: 'server/src/liveEdge/controls/integrity.ts@sha256:ee7c10923ca1c40dda6e9f306f70586cf78e5143932516d6c539c2c9bc1bd73d',
+  controlValidation: 'server/src/liveEdge/controls/validation.ts@sha256:b128e5299af7fdc0506accec751ffb1884aeddb5dd657b0892963f45b951e9de',
+  controlSyntheticPersistence: 'server/test/liveEdge/controls/fixtures.mjs@sha256:1dfedf361082414e3f77252cd50de06173278dff8309f820eed7b36dcd3a7023',
 });
 
 export const CONFORMANCE_EVIDENCE_REFS = Object.freeze({
@@ -48,6 +57,18 @@ export const CONFORMANCE_EVIDENCE_REFS = Object.freeze({
   l10EventReducer: 'server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts#L1465-L1913',
   l10StageProjection: 'server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts#L1283-L1462',
   l10FoldAndReplay: 'server/src/liveEdge/adapters/reverseBasisLifecycle/lifecycle.ts#L1919-L2810',
+  l11StateAndAuthority: 'server/src/liveEdge/adapters/volumeLifecycle/types.ts#L9-L16',
+  l11Planning: 'server/src/liveEdge/adapters/volumeLifecycle/lifecycle.ts#L1824-L2122',
+  l11TwinSettlement: 'server/src/liveEdge/adapters/volumeLifecycle/lifecycle.ts#L1270-L1821',
+  l11Reducer: 'server/src/liveEdge/adapters/volumeLifecycle/lifecycle.ts#L2397-L2820',
+  l12Ordering: 'server/src/liveEdge/adapters/exchangeTwin/twin.ts#L555-L684',
+  l12Reducer: 'server/src/liveEdge/adapters/exchangeTwin/twin.ts#L1138-L2538',
+  l12State: 'server/src/liveEdge/adapters/exchangeTwin/types.ts#L342-L430',
+  l13Types: 'server/src/liveEdge/controls/types.ts#CanonicalControlPersistencePort',
+  l13GuardsAndPublish: 'server/src/liveEdge/controls/adapter.ts#DurableControlCommandAdapter.submit',
+  l13Integrity: 'server/src/liveEdge/controls/integrity.ts#prepareControlEventAppend',
+  l13Validation: 'server/src/liveEdge/controls/validation.ts#validateControlPlaneSnapshot',
+  l13SyntheticReservation: 'server/test/liveEdge/controls/fixtures.mjs#createHarness().deps.persistence.append',
 });
 
 function freezeRows(rows) {
@@ -411,4 +432,184 @@ const M10 = fixture({
   residualAssumptions: ['SYNTHETIC_ONLY and SUPPORTING_EVIDENCE_ONLY; stage is derived rather than a transition guard and runtime_claim_closure is NOT_PERMITTED.'],
 });
 
-export const CONFORMANCE_FIXTURES = Object.freeze([M01, M02, M03, M04, M05, M06, M07, M08, M09, M10]);
+const M11 = fixture({
+  mappingId: 'S3-CONFORMANCE-M11',
+  modelId: 'S3-M11-VOLUME-LIFECYCLE',
+  implementationReleaseSha: FROZEN_L_IMPLEMENTATION_RELEASE_SHA,
+  schemaVersions: [FROZEN_L_VERSION.volumeTypes],
+  commandVersions: [FROZEN_L_VERSION.volumeLifecycle],
+  storageVersions: ['FINITE_EVENT_BATCH_NO_RUNTIME_STORE'],
+  mappings: freezeRows([
+    {
+      mappingId: 'S3-M11-MAP-STATE', category: 'STATE', modelElementId: 'ABSENT|PROBE|CONFIRM|ADD_ALLOWED|HOLD|REDUCE|EXIT|RECOVERY_REQUIRED',
+      implementationOwner: 'liveEdge.adapters.volumeLifecycle', implementationPath: 'server/src/liveEdge/adapters/volumeLifecycle/types.ts', implementationSymbol: 'VolumeLifecycleState and VolumeLifecycleProjection',
+      durableRecord: 'Immutable lifecycle projection and bounded history supplied by the caller', postcondition: null,
+      atomicity: 'MANY_TO_ONE', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l11StateAndAuthority, CONFORMANCE_EVIDENCE_REFS.l11Reducer],
+    },
+    {
+      mappingId: 'S3-M11-MAP-INCREASE', category: 'ACTION', modelElementId: 'PLAN_RECORD_ONLY_ENTRY_OR_ADD',
+      implementationOwner: 'liveEdge.adapters.volumeLifecycle', implementationPath: 'server/src/liveEdge/adapters/volumeLifecycle/lifecycle.ts', implementationSymbol: 'evaluateVolumeLifecycle, entryGateReasons, planIncreasingStage, and actionRequest',
+      durableRecord: 'Deterministic pending-action projection; no owner send', postcondition: null,
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l11Planning, CONFORMANCE_EVIDENCE_REFS.l11Reducer],
+    },
+    {
+      mappingId: 'S3-M11-MAP-PROTECT', category: 'ACTION', modelElementId: 'CLASSIFY_PROTECTION_AND_PLAN_REDUCE_OR_EXIT',
+      implementationOwner: 'liveEdge.adapters.volumeLifecycle', implementationPath: 'server/src/liveEdge/adapters/volumeLifecycle/lifecycle.ts', implementationSymbol: 'exitTriggers and planRiskReduction',
+      durableRecord: 'Record-only protective action projection', postcondition: null,
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l11Planning],
+    },
+    {
+      mappingId: 'S3-M11-MAP-TWIN', category: 'ACTION', modelElementId: 'SETTLE_TWIN_OR_ENTER_RECOVERY',
+      implementationOwner: 'liveEdge.adapters.volumeLifecycle', implementationPath: 'server/src/liveEdge/adapters/volumeLifecycle/lifecycle.ts', implementationSymbol: 'twinSettlement, settleTwin, settledTwinReplayMatches, and recovery',
+      durableRecord: 'Bound twin evidence retained in immutable lifecycle projection', postcondition: null,
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l11TwinSettlement, CONFORMANCE_EVIDENCE_REFS.l11Reducer],
+    },
+    {
+      mappingId: 'S3-M11-MAP-RECOVERY', category: 'ACTION', modelElementId: 'RESOLVE_VOLUME_RECOVERY',
+      implementationOwner: 'liveEdge.adapters.volumeLifecycle', implementationPath: 'server/src/liveEdge/adapters/volumeLifecycle/lifecycle.ts', implementationSymbol: 'evaluateVolumeLifecycle recoveryReady branch and recovery',
+      durableRecord: 'Immutable recovery projection; no runtime worker', postcondition: null,
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l11Reducer, CONFORMANCE_EVIDENCE_REFS.l11TwinSettlement],
+    },
+    {
+      mappingId: 'S3-M11-MAP-INVARIANT', category: 'INVARIANT', modelElementId: 'S3-SAF-06|S3-SAF-08|S3-SAF-11|S3-SAF-12|S3-SAF-13|S3-SAF-14|S3-M11-INV-01',
+      implementationOwner: 'liveEdge.adapters.volumeLifecycle', implementationPath: 'server/src/liveEdge/adapters/volumeLifecycle/lifecycle.ts', implementationSymbol: 'entryGateReasons, planRiskReduction, twinSettlement, settleTwin, and recovery',
+      durableRecord: 'Immutable lifecycle projection and bound evidence revisions', postcondition: 'Halt blocks ENTRY/ADD, protective EXIT remains non-sendable, active UNKNOWN truth enters recovery, a failed flat gate returns BLOCKED with no projection, and pending twin evidence cannot be locally replaced.',
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l11Planning, CONFORMANCE_EVIDENCE_REFS.l11TwinSettlement, CONFORMANCE_EVIDENCE_REFS.l11Reducer],
+    },
+    {
+      mappingId: 'S3-M11-MAP-POST', category: 'POSTCONDITION', modelElementId: 'FLAT_BLOCKED_ABSENT|SETTLED_STAGE|PROTECTIVE_EXIT|VISIBLE_RECOVERY',
+      implementationOwner: 'liveEdge.adapters.volumeLifecycle', implementationPath: 'server/src/liveEdge/adapters/volumeLifecycle/lifecycle.ts', implementationSymbol: 'evaluateVolumeLifecycle, terminalDecision, and settleTwin',
+      durableRecord: 'Immutable record-only lifecycle decision', postcondition: 'Only exact bound twin evidence changes quantity; ambiguity remains RECOVERY_REQUIRED and every action retains sendEligible false.',
+      atomicity: 'MANY_TO_ONE', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l11TwinSettlement, CONFORMANCE_EVIDENCE_REFS.l11Reducer],
+    },
+  ]),
+  omittedEnvironmentBehavior: ['No sender, cancel action, executor lease, borrow liability, durable store, or runtime recovery scheduler exists in the Volume adapter; evaluateVolumeProtectionRevision is outside this lifecycle-transition envelope.'],
+  residualAssumptions: ['SYNTHETIC_ONLY record-only decisions; halt may plan protective EXIT but never ENTRY/ADD, and runtime_claim_closure is NOT_PERMITTED.'],
+});
+
+const M12 = fixture({
+  mappingId: 'S3-CONFORMANCE-M12',
+  modelId: 'S3-M12-EXCHANGE-TWIN-AMBIGUITY',
+  implementationReleaseSha: FROZEN_L_IMPLEMENTATION_RELEASE_SHA,
+  schemaVersions: [FROZEN_L_VERSION.exchangeTwinTypes],
+  commandVersions: [FROZEN_L_VERSION.exchangeTwin],
+  storageVersions: ['CALLER_OWNED_TWIN_CHECKPOINT'],
+  mappings: freezeRows([
+    {
+      mappingId: 'S3-M12-MAP-STATE', category: 'STATE', modelElementId: 'TWIN_ORDER_CANCEL_CRASH_AND_RECONCILIATION',
+      implementationOwner: 'liveEdge.adapters.exchangeTwin', implementationPath: 'server/src/liveEdge/adapters/exchangeTwin/types.ts', implementationSymbol: 'TwinOrderState and TwinScenarioState',
+      durableRecord: 'Caller-owned serialized exchange-twin checkpoint', postcondition: null,
+      atomicity: 'MANY_TO_ONE', status: 'MAPPED', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l12State, CONFORMANCE_EVIDENCE_REFS.l12Reducer],
+    },
+    {
+      mappingId: 'S3-M12-MAP-PLACE', category: 'ACTION', modelElementId: 'PREFLIGHT_AND_SINGLE_PLACEMENT',
+      implementationOwner: 'liveEdge.adapters.exchangeTwin', implementationPath: 'server/src/liveEdge/adapters/exchangeTwin/twin.ts', implementationSymbol: 'reduceCanonical PLACE_DISPATCH and VENUE_ARRIVAL branches; executeAggressive',
+      durableRecord: 'Immutable TwinScenarioState projection', postcondition: null,
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l12Reducer],
+    },
+    {
+      mappingId: 'S3-M12-MAP-RACE', category: 'ACTION', modelElementId: 'TRADE_CANCEL_RACE_AND_DELIVERY',
+      implementationOwner: 'liveEdge.adapters.exchangeTwin', implementationPath: 'server/src/liveEdge/adapters/exchangeTwin/twin.ts', implementationSymbol: 'reduceCanonical TRADE_EVIDENCE, CANCEL_DISPATCH, CANCEL_ARRIVAL, and CANCEL_DELIVERY branches',
+      durableRecord: 'Immutable TwinOrderState event projection', postcondition: null,
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l12Ordering, CONFORMANCE_EVIDENCE_REFS.l12Reducer],
+    },
+    {
+      mappingId: 'S3-M12-MAP-RESTORE', category: 'ACTION', modelElementId: 'CRASH_AND_RESTORE_CHECKPOINT',
+      implementationOwner: 'liveEdge.adapters.exchangeTwin', implementationPath: 'server/src/liveEdge/adapters/exchangeTwin/twin.ts', implementationSymbol: 'reduceCanonical CRASH and RESTART branches; checkpointExchangeTwin and restoreExchangeTwin',
+      durableRecord: 'Caller-owned serialized exchange-twin checkpoint', postcondition: null,
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l12Reducer],
+    },
+    {
+      mappingId: 'S3-M12-MAP-RECONCILE', category: 'ACTION', modelElementId: 'APPLY_EXACT_OR_VISIBLE_UNRESOLVED_RECONCILIATION',
+      implementationOwner: 'liveEdge.adapters.exchangeTwin', implementationPath: 'server/src/liveEdge/adapters/exchangeTwin/twin.ts', implementationSymbol: 'reduceCanonical RECONCILIATION_OBSERVATION branch and validateCommittedState',
+      durableRecord: 'Injected reconciliation observation retained in TwinScenarioState', postcondition: null,
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l12Ordering, CONFORMANCE_EVIDENCE_REFS.l12Reducer],
+    },
+    {
+      mappingId: 'S3-M12-MAP-INVARIANT', category: 'INVARIANT', modelElementId: 'S3-SAF-03|S3-SAF-05|S3-SAF-06|S3-SAF-11|S3-SAF-13|S3-SAF-14|S3-M12-INV-01|S3-M12-INV-02',
+      implementationOwner: 'liveEdge.adapters.exchangeTwin', implementationPath: 'server/src/liveEdge/adapters/exchangeTwin/twin.ts', implementationSymbol: 'eventOrderingDomains, sourceOrderIsProved, validateCommittedState, reduceCanonical, checkpointExchangeTwin, and restoreExchangeTwin',
+      durableRecord: 'Immutable twin state and caller-owned checkpoint', postcondition: 'Unproved equal-time races allocate no fill; cancel ACK cannot erase fill; UNKNOWN cannot become OBSERVED; exact reconciliation alone clears recovery.',
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l12Ordering, CONFORMANCE_EVIDENCE_REFS.l12Reducer],
+    },
+    {
+      mappingId: 'S3-M12-MAP-POST', category: 'POSTCONDITION', modelElementId: 'OBSERVED_EXACT_OR_RECOVERY_REQUIRED',
+      implementationOwner: 'liveEdge.adapters.exchangeTwin', implementationPath: 'server/src/liveEdge/adapters/exchangeTwin/twin.ts', implementationSymbol: 'validateCommittedState and runExchangeTwinScenario',
+      durableRecord: 'Immutable TwinScenarioState projection', postcondition: 'OBSERVED is twin-local synthetic truth only; mismatch or ambiguity remains RECOVERY_REQUIRED.',
+      atomicity: 'MANY_TO_ONE', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l12Ordering, CONFORMANCE_EVIDENCE_REFS.l12Reducer],
+    },
+  ]),
+  omittedEnvironmentBehavior: ['Injected reconciliation performs no owner query; caller persistence atomicity, runtime retry scheduling, execution leases, and capital authority are absent.'],
+  residualAssumptions: ['SYNTHETIC_ONLY twin-local OBSERVED is not canonical Foundation truth; identity uniqueness is not fencing and runtime_claim_closure is NOT_PERMITTED.'],
+});
+
+const M13 = fixture({
+  mappingId: 'S3-CONFORMANCE-M13',
+  modelId: 'S3-M13-DURABLE-CONTROL-REVISION',
+  implementationReleaseSha: FROZEN_L_IMPLEMENTATION_RELEASE_SHA,
+  schemaVersions: [FROZEN_L_VERSION.controlTypes, FROZEN_L_VERSION.controlValidation],
+  commandVersions: [FROZEN_L_VERSION.controlAdapter, FROZEN_L_VERSION.controlIntegrity],
+  storageVersions: [FROZEN_L_VERSION.controlSyntheticPersistence],
+  mappings: freezeRows([
+    {
+      mappingId: 'S3-M13-MAP-STATE', category: 'STATE', modelElementId: 'CONTROL_PREVIEW_JOURNAL_REVISION_PUBLICATION_AND_REPLAY',
+      implementationOwner: 'liveEdge.controls', implementationPath: 'server/src/liveEdge/controls/types.ts', implementationSymbol: 'ControlPlaneSnapshot, ControlCommandLookup, and CanonicalControlPersistencePort',
+      durableRecord: 'PENDING/terminal command journal contract with global controlRevision', postcondition: null,
+      atomicity: 'MANY_TO_ONE', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l13Types, CONFORMANCE_EVIDENCE_REFS.l13SyntheticReservation],
+    },
+    {
+      mappingId: 'S3-M13-MAP-PREVIEW', category: 'ACTION', modelElementId: 'PREVIEW_AND_CANONICAL_GUARDS',
+      implementationOwner: 'liveEdge.controls', implementationPath: 'server/src/liveEdge/controls/adapter.ts', implementationSymbol: 'DurableControlCommandAdapter.preview, DurableControlCommandAdapter.submit, riskIncreasingByNature, recoveryBlocked, and recheckRisk',
+      durableRecord: 'Preview digest and bound canonical snapshot revisions', postcondition: null,
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l13GuardsAndPublish, CONFORMANCE_EVIDENCE_REFS.l13Validation],
+    },
+    {
+      mappingId: 'S3-M13-MAP-RESERVE', category: 'ACTION', modelElementId: 'APPEND_INTENT_AND_RESERVE_GLOBAL_REVISION',
+      implementationOwner: 'liveEdge.controls contract + synthetic harness', implementationPath: 'server/test/liveEdge/controls/fixtures.mjs', implementationSymbol: 'createHarness().deps.persistence.append CONTROL_INTENT_COMMITTED and VERSION_CONFLICT branches',
+      durableRecord: 'Synthetic append reserves expectedControlRevision plus one', postcondition: null,
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l13Integrity, CONFORMANCE_EVIDENCE_REFS.l13SyntheticReservation, CONFORMANCE_EVIDENCE_REFS.l13Types],
+    },
+    {
+      mappingId: 'S3-M13-MAP-INTEGRITY', category: 'ACTION', modelElementId: 'PREPARE_AND_CONFIRM_CONTROL_EVENT_APPEND',
+      implementationOwner: 'liveEdge.controls', implementationPath: 'server/src/liveEdge/controls/integrity.ts', implementationSymbol: 'prepareControlEventAppend and confirmControlEventAppend',
+      durableRecord: 'Hash-linked append request and acknowledgement validation', postcondition: null,
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l13Integrity],
+    },
+    {
+      mappingId: 'S3-M13-MAP-PUBLISH', category: 'ACTION', modelElementId: 'PUBLISH_RESERVED_COMMAND',
+      implementationOwner: 'liveEdge.controls', implementationPath: 'server/src/liveEdge/controls/adapter.ts', implementationSymbol: 'publish, lifecycleCommand, and DurableControlCommandAdapter.submit',
+      durableRecord: 'Committed intent must precede injected owner publication', postcondition: null,
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l13GuardsAndPublish, CONFORMANCE_EVIDENCE_REFS.l13Integrity],
+    },
+    {
+      mappingId: 'S3-M13-MAP-FINALIZE', category: 'ACTION', modelElementId: 'FINALIZE_OR_RETAIN_PENDING_AMBIGUITY',
+      implementationOwner: 'liveEdge.controls', implementationPath: 'server/src/liveEdge/controls/adapter.ts', implementationSymbol: 'finalizeRejected, publish failure branches, post-publication expiry branch, and outcome append handling',
+      durableRecord: 'Journal version one remains PENDING on ambiguous post-intent outcome', postcondition: null,
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l13GuardsAndPublish, CONFORMANCE_EVIDENCE_REFS.l13Integrity],
+    },
+    {
+      mappingId: 'S3-M13-MAP-REPLAY', category: 'ACTION', modelElementId: 'RELOAD_AND_REPLAY_DURABLE_RESULT',
+      implementationOwner: 'liveEdge.controls', implementationPath: 'server/src/liveEdge/controls/adapter.ts', implementationSymbol: 'lookup and replayResult',
+      durableRecord: 'Exact command lookup and bound terminal/PENDING receipt', postcondition: null,
+      atomicity: 'ONE_TO_ONE', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l13GuardsAndPublish, CONFORMANCE_EVIDENCE_REFS.l13Types],
+    },
+    {
+      mappingId: 'S3-M13-MAP-INVARIANT', category: 'INVARIANT', modelElementId: 'S3-SAF-01|S3-SAF-04|S3-SAF-08|S3-SAF-11|S3-SAF-12|S3-SAF-13|S3-M13-INV-01|S3-M13-INV-02|S3-M13-INV-03',
+      implementationOwner: 'liveEdge.controls contract + synthetic harness', implementationPath: 'server/src/liveEdge/controls/adapter.ts', implementationSymbol: 'DurableControlCommandAdapter.submit, publish, replayResult, and finalizeRejected',
+      durableRecord: 'Command journal plus globally reserved controlRevision', postcondition: 'One revision admits one command; publication follows intent; halt/repair/UNKNOWN block risk-increasing publication while safe controls remain admissible; terminal replay never republishes.',
+      atomicity: 'ONE_TO_MANY', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l13GuardsAndPublish, CONFORMANCE_EVIDENCE_REFS.l13Integrity, CONFORMANCE_EVIDENCE_REFS.l13SyntheticReservation],
+    },
+    {
+      mappingId: 'S3-M13-MAP-POST', category: 'POSTCONDITION', modelElementId: 'COMPLETED|REJECTED|PREINTENT_REJECTED|WAITING_L08|PENDING_AMBIGUOUS',
+      implementationOwner: 'liveEdge.controls', implementationPath: 'server/src/liveEdge/controls/adapter.ts', implementationSymbol: 'DurableControlCommandAdapter.submit, auditRejection, replayResult, and finalizeRejected',
+      durableRecord: 'Bound command journal receipt', postcondition: 'Known outcome may complete or reject; pre-intent failure uses auditRejection without reserving the command journal; WAITING_L08 never publishes; post-intent uncertainty stays PENDING.',
+      atomicity: 'MANY_TO_ONE', status: 'PARTIAL', evidenceRefs: [CONFORMANCE_EVIDENCE_REFS.l13GuardsAndPublish, CONFORMANCE_EVIDENCE_REFS.l13Integrity],
+    },
+  ]),
+  mismatches: ['Atomic global control-revision reservation is implemented only by the synthetic test harness; the production CanonicalControlPersistencePort is unwired to canonical Ledger/System Integration persistence.'],
+  omittedEnvironmentBehavior: ['No canonical persistence adapter, runtime restart orchestration, L08 action dispatch, or externally authorized money action is wired.'],
+  residualAssumptions: ['L14 is BUILT_AND_TESTED_UNWIRED; persistenceProven is false, all outputs retain externalActionAuthorization NONE, and runtime_claim_closure is NOT_PERMITTED.'],
+});
+
+export const CONFORMANCE_FIXTURES = Object.freeze([
+  M01, M02, M03, M04, M05, M06, M07, M08, M09, M10, M11, M12, M13,
+]);

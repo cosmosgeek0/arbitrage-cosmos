@@ -69,7 +69,7 @@ function conformanceContext(candidate) {
   });
 }
 
-test('all ten packet conformance fixtures are valid and stay fail-closed', () => {
+test('all thirteen packet conformance fixtures are valid and stay fail-closed', () => {
   const verdicts = CONFORMANCE_FIXTURES.map((fixture) => {
     assert.equal(validateConformanceMapping(fixture).ok, true, fixture.modelId);
     const result = evaluateConformanceMapping(fixture);
@@ -79,7 +79,8 @@ test('all ten packet conformance fixtures are valid and stay fail-closed', () =>
   });
   assert.deepEqual(verdicts, [
     'MISMATCH', 'MISMATCH', 'UNKNOWN', 'UNKNOWN', 'UNKNOWN', 'UNKNOWN', 'UNKNOWN',
-    'UNKNOWN', 'REFERENCE_ONLY', 'REFERENCE_ONLY',
+    'UNKNOWN', 'REFERENCE_ONLY', 'REFERENCE_ONLY', 'REFERENCE_ONLY', 'REFERENCE_ONLY',
+    'MISMATCH',
   ]);
 });
 
@@ -212,7 +213,7 @@ test('complete triage inventory authenticates every failed negative-control prop
     .map((triage) => `${triage.modelId}:${triage.modelProfile}:${triage.propertyId}`)
     .sort();
 
-  assert.equal(actualFailures.length, 18);
+  assert.equal(actualFailures.length, 25);
   assert.equal(inventory.length, actualFailures.length);
   assert.deepEqual(inventoryIdentities, actualFailures);
   assert.equal(new Set(inventory.map((triage) => triage.triageId)).size, inventory.length);
@@ -407,9 +408,9 @@ test('render-neutral view separates bounded model results from implementation as
   assert.equal(view.overall.boundedModelStatus, 'BOUNDED_EXHAUSTIVE_PASS');
   assert.equal(view.overall.implementationAssuranceStatus, 'MISMATCH');
   assert.equal(view.overall.runtimeClaimClosure, 'NOT_PERMITTED');
-  assert.equal(view.models.length, 10);
+  assert.equal(view.models.length, 13);
   assert.equal(view.models.every((model) => model.sourceTruth === 'SYNTHETIC_ONLY' && model.runtimeWiring === 'NOT_WIRED'), true);
-  assert.equal(view.models.reduce((total, model) => total + model.triage.total, 0), 18);
+  assert.equal(view.models.reduce((total, model) => total + model.triage.total, 0), 25);
   assert.equal(view.models.every((model) => model.triage.total >= 1 && model.triage.runtimeCorpusEligible === 0), true);
   const inventoryCounts = new Map();
   for (const triage of buildCounterexampleTriageInventory()) {

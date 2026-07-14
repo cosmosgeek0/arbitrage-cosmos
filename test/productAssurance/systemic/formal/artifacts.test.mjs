@@ -21,7 +21,7 @@ function filesRecursively(path) {
 
 test('model manifest independently verifies every source file and bundle digest', () => {
   assert.equal(MODEL_BUNDLE_HASH_ALGORITHM, 'SHA256_SORTED_PATH_NUL_FILE_SHA256_NEWLINE');
-  assert.equal(MODEL_MANIFEST.length, 10);
+  assert.equal(MODEL_MANIFEST.length, 13);
   for (const model of MODEL_MANIFEST) {
     const seen = new Set();
     for (const file of model.files) {

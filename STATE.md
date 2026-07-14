@@ -1,6 +1,6 @@
 # STATE.md — what is true right now
 
-**Frozen:** 2026-07-12 · branch `current-main` · convergence tip `b58e64e` (this docs consolidation lands directly after it)
+**Current checkpoint:** 2026-07-14 · Phase 2 integration branch `i00-product-assembly-20260713` · authority handoff `c1266f24c464a49ef1657e2549b06d7a90d6cac7`
 **Law:** any landed change that alters project state must update this file in the same commit. This file wins on "what is the current state"; `ARCHITECTURE.md` wins on "how it is designed"; `MISSION.md` wins on "why".
 
 ## What this is
@@ -9,11 +9,11 @@ A private Binance arbitrage/intelligence operating machine ("Cosmos Arbitrage Co
 
 ## Git truth
 
-- Remote: `git@github.com:cosmosgeek0/arbitrage-cosmos.git` · default branch `current-main` (pushed and current).
+- Remote: `git@github.com:cosmosgeek0/arbitrage-cosmos.git` · default branch `current-main` remains untouched at `7383fd89477ed0b3e677e53c57c35d76ac34bbd8`.
 - Milestone tags (all pushed): `sprint-foundation-final`, `sprint-intelligence-final`, `sprint-runtime-final`, `sprint-capital-final`, `sprint-convergence-final`.
 - Milestone commits on `current-main`: audited baseline `b272049` → organs round 1 `c4ae7a9` → organs round 2 `87af782` → convergence `b58e64e`.
 - Feature branches preserved on origin as recovery points (`market-intelligence-main-20260711`, `backend-foundation-parallel-20260711-070056`, `live-intelligence-runtime-main-20260711`, `capital-supervision-main-20260711`, `system-convergence-vertical-slice-20260711`, `engine-overdrive`, `engine-volume-overdrive`).
-- Workspace: the project lives solely at `/Users/cosmosgeek/Desktop/Main`. All satellite clones and worktrees were removed 2026-07-12 after their branches were verified on origin. Never create a second writer in this tree; parallel builds use fresh disposable clones per `DIRECTOR.md`.
+- Workspace: canonical Main is `/Users/cosmosgeek/Desktop/Main`; the sole Phase 2 shared writer is `/Users/cosmosgeek/Desktop/i00-assembly` on `i00-product-assembly-20260713`. Donor worktrees are immutable recovery/audit points and are never bulk-copied.
 - `.env`, `data/`, `dist/`, `node_modules/` are never tracked. Keys are server-side only.
 
 ## Component status (release labels are cumulative; see ARCHITECTURE.md)
@@ -22,7 +22,7 @@ A private Binance arbitrage/intelligence operating machine ("Cosmos Arbitrage Co
 | --- | --- |
 | Audited product (services, Binance owners, ledger, cockpit) | LIVE_PUBLIC (read-only key posture) |
 | Basis engine + Volume engine (`server/src/engine/**`) | LIVE_PUBLIC — sole strategy authorities |
-| Backend Foundation (`server/src/foundation/**`) | WIRED via adapters; execution coordinator dry-run only; USD-M test-order boundary dormant/NOT wired |
+| Backend Foundation (`server/src/foundation/**`) | WIRED via adapters; accepted F-BRIDGE `a0c0c2e5ef3180aa720488463643433cefeb65e5` hardens terminalization and restart recovery; execution coordinator remains dry-run only; USD-M test-order boundary dormant/NOT wired |
 | Market Intelligence (`server/src/intelligenceFoundation/**`) | WIRED as evidence substrate |
 | Intelligence Runtime (`server/src/intelligenceRuntime/**`) | WIRED for composed public sources; continuous effectful feed = next work |
 | Capital Supervision (`server/src/capitalFoundation/**`) | WIRED read/advisory; reservation authority UNAVAILABLE (needs real account truth) |
@@ -30,15 +30,15 @@ A private Binance arbitrage/intelligence operating machine ("Cosmos Arbitrage Co
 | Operator modes | READ_ONLY / ADVISORY / VALIDATE_ONLY only; kill switch fail-closed for new risk |
 | Live execution / signed calls / borrow / transfer | MISSING by design — mechanically blocked |
 
-## Verification (last full run: 2026-07-12, twice, identical)
+## Verification (Phase 2 F-BRIDGE intermediate gate, 2026-07-14)
 
 ```bash
-npm test               # deterministic CI lane: typecheck, build, engines, focused safety (exit 0)
-npm run test:all       # everything below in one command (exit 0, twice)
-npm run test:integration  # boots built app, live public-market path (gates 72/72)
+npm run test:foundation  # exit 0; all 24 sorted files passed
+npm test                 # exit 0; deterministic 377/377
+npm run test:all         # exit 1; exact System Integration result 179/180
 ```
 
-Focused lanes: existing checks 377 · gates 72 · intelligence 152 · runtime 394 · capital 433 · foundation 871 (incl. risk 884 assertions) · integration scenarios 30 (SC-01..SC-30). Security: existing 146 perimeter/safety checks + convergence egress tripwire. Zero known failing tests.
+F-BRIDGE focused proof is green: execution `173/173`, execution import purity `30/30`, compatibility `131/131`, reconciliation `75/75`. The only full-suite failure is `server/test/systemIntegration/verticalSlice/authority.scenarios.test.mjs`: actual canonical truth `DIVERGED`, stale fixture expectation `PARTIAL`. Accepted SI-RECON donor `f03ed786a8c5cab50ef27ad33026a74f79f7df87` is the bounded correction and must be integrated/tested separately next. No product source is weakened to hide this failure.
 
 ## What is genuinely live vs not
 

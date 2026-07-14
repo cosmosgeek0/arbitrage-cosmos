@@ -1,0 +1,300 @@
+{
+  "acceptedQIdentity": {
+    "acceptanceReceiptDigest": "9cfa0356228d7f48674df2d9db523f0f0d53dab1a4e4255b6ba9676e463ec5dc",
+    "acceptedProtocolCommit": "73e1a1ff7daa48df8dac45713fc5f106842edafc",
+    "acceptedQCommit": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+    "protocolSchemaDigest": "229af0ff13d600c7d305c6deb7f57b61bdb6f8a35f6f2349d91f5ab1b4972f1c"
+  },
+  "assurancePrestageReady": false,
+  "authorityGranted": false,
+  "baseCommit": "9785c93102b00389847b77c2f9348c06abc4344b",
+  "changedPaths": [
+    "fixtures/productAssurance/fixtures-root/core-assurance-evidence.json",
+    "fixtures/productAssurance/fixtures-root/fault-harness-synthetic.json",
+    "fixtures/productAssurance/generated/AGENTIC_DIAGNOSTIC_BOUNDARY.md",
+    "fixtures/productAssurance/generated/ASSURANCE_INSERTION_REQUEST.md",
+    "fixtures/productAssurance/generated/FAULT_INJECTION_AND_SOAK_REPORT.md",
+    "fixtures/productAssurance/generated/OPERATIONAL_FAILURE_ATLAS.md",
+    "fixtures/productAssurance/generated/OUT_OF_BAND_RECOVERY_REPORT.md",
+    "fixtures/productAssurance/generated/Q_ASSURANCE_COVERAGE_MATRIX.md",
+    "fixtures/productAssurance/generated/RELIABILITY_POLICY_REGISTRY.md",
+    "fixtures/productAssurance/generated/SAFETY_INVARIANT_CATALOG.md",
+    "fixtures/productAssurance/generated/TELEMETRY_COVERAGE_MATRIX.md",
+    "fixtures/productAssurance/receipts/IP_ASSURANCE_RECEIPT.md",
+    "fixtures/productAssurance/receipts/IP_ASSURANCE_WORKER_STATE.md",
+    "server/src/productAssurance/adapters/ownerContracts.ts",
+    "server/src/productAssurance/catalog/core.ts",
+    "server/src/productAssurance/cockpit/viewModel.ts",
+    "server/src/productAssurance/common.ts",
+    "server/src/productAssurance/controllers/gate.ts",
+    "server/src/productAssurance/diagnostics/boundary.ts",
+    "server/src/productAssurance/failureAtlas/atlas.ts",
+    "server/src/productAssurance/faults/harness.ts",
+    "server/src/productAssurance/index.ts",
+    "server/src/productAssurance/invariants/evaluator.ts",
+    "server/src/productAssurance/operations/policy.ts",
+    "server/src/productAssurance/projections/operationalTruth.ts",
+    "server/src/productAssurance/qCoverage/generator.ts",
+    "server/src/productAssurance/remediation/campaign.ts",
+    "server/test/productAssurance/core-policy-inventory.test.mjs",
+    "server/test/productAssurance/helpers.mjs",
+    "server/test/productAssurance/operational-remediation.test.mjs",
+    "server/test/productAssurance/owner-contract-gate-adversarial.test.mjs",
+    "server/test/productAssurance/production-operation-scan-adversarial.test.mjs",
+    "server/test/productAssurance/systemic-diagnostics.test.mjs",
+    "test/productAssurance/generate-closure.mjs",
+    "test/productAssurance/production-operation-scan.mjs",
+    "test/productAssurance/scope-purity.mjs"
+  ],
+  "counts": {
+    "cockpitSections": 11,
+    "faultScenarios": 103,
+    "insertionRequests": 68,
+    "invariants": 15,
+    "operationPolicies": 14,
+    "ownerContractSurfaces": 5,
+    "ownerQuestions": 25,
+    "qRequirements": 11
+  },
+  "disposition": "CORE_SCAFFOLD_READY",
+  "evaluatedAtMs": 1783952981020,
+  "evaluatedAtUtc": "2026-07-13T14:29:41.020Z",
+  "governingRulingCommit": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+  "immutableInterfaces": [
+    {
+      "acceptedCommit": "9785c93102b00389847b77c2f9348c06abc4344b",
+      "authorityId": "CURRENT_MAIN_ACCEPTED_BASE",
+      "consumptionLaw": "Read canonical owners; never create a fourteenth supervisor component.",
+      "interfaceId": "ASSURANCE_FROZEN_BASE",
+      "protocolRevision": "EDGE_PROTOCOL_V1",
+      "receiptPaths": [
+        "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md"
+      ],
+      "schemaRevision": "SYSTEM_INTEGRATION_CONTRACTS_V1",
+      "sourcePaths": [
+        "ARCHITECTURE.md",
+        "server/src/systemIntegration/contracts/constants.ts"
+      ],
+      "status": "FROZEN_BASE"
+    },
+    {
+      "acceptedCommit": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+      "authorityId": "Q_LANE",
+      "consumptionLaw": "Metadata and accepted read contracts only; Q stays advisory and abstention preserves UNKNOWN.",
+      "interfaceId": "Q_ACCEPTED_ADVISORY_INTERFACE",
+      "protocolRevision": "EDGE_PROTOCOL_V1",
+      "receiptPaths": [
+        "quant/RECEIPTS/Q17.md",
+        "quant/RECEIPTS/Q17_ACCEPTANCE.md"
+      ],
+      "schemaRevision": "229af0ff13d600c7d305c6deb7f57b61bdb6f8a35f6f2349d91f5ab1b4972f1c",
+      "sourcePaths": [
+        "EDGE_PROTOCOL_V1.md",
+        "quant/RECEIPTS/Q17_ACCEPTANCE.md"
+      ],
+      "status": "ACCEPTED_ADVISORY_ONLY"
+    },
+    {
+      "acceptedCommit": "c86c41d64b92a5c0399dabfdb3fa81816bd03d45",
+      "authorityId": "L_LANE",
+      "consumptionLaw": "Consume accepted frontier metadata only; do not imply LANE_READY or consume active L09/L11 work.",
+      "interfaceId": "L_ACCEPTED_FRONTIER_INTERFACE",
+      "protocolRevision": "EDGE_PROTOCOL_V1",
+      "receiptPaths": [
+        "live-edge-receipts/RECEIPTS/L08.2.md",
+        "live-edge-receipts/RECEIPTS/L10_ACCEPTANCE.md",
+        "live-edge-receipts/RECEIPTS/L14_ACCEPTANCE.md"
+      ],
+      "schemaRevision": "L08_2_L10_L14_ACCEPTED_FRONTIER",
+      "sourcePaths": [
+        "EDGE_PROTOCOL_V1.md",
+        "live-edge-receipts/RECEIPTS/L08.2.md",
+        "live-edge-receipts/RECEIPTS/L10_ACCEPTANCE.md",
+        "live-edge-receipts/RECEIPTS/L14_ACCEPTANCE.md"
+      ],
+      "status": "ACCEPTED_PARTIAL_FRONTIER"
+    },
+    {
+      "acceptedCommit": "8058ab8febb639839333d4e2c604068a0c7390ea",
+      "authorityId": "IP_RUNTIME",
+      "consumptionLaw": "Consume immutable public runtime interfaces without importing sibling packet implementation.",
+      "interfaceId": "IP_RUNTIME_ACCEPTED_INTERFACE",
+      "protocolRevision": "IP_RUNTIME_PACKET_V1",
+      "receiptPaths": [
+        "IP_RUNTIME_RECEIPT.md"
+      ],
+      "schemaRevision": "IP_RUNTIME_ACCEPTED_AT_COMMIT",
+      "sourcePaths": [
+        "IP_RUNTIME_STATE.md"
+      ],
+      "status": "ACCEPTED_PACKET_TIP"
+    },
+    {
+      "acceptedCommit": "56c47dad398c485b6653036c8b90c53f11061b1e",
+      "authorityId": "IP_CONTROL",
+      "consumptionLaw": "Return render-neutral contracts and insertion notes; do not mount or duplicate the cockpit.",
+      "interfaceId": "IP_CONTROL_ACCEPTED_INTERFACE",
+      "protocolRevision": "IP_CONTROL_PACKET_V1",
+      "receiptPaths": [
+        "IP_CONTROL_RECEIPT.md"
+      ],
+      "schemaRevision": "IP_CONTROL_ACCEPTED_AT_COMMIT",
+      "sourcePaths": [
+        "IP_CONTROL_STATE.md"
+      ],
+      "status": "ACCEPTED_PACKET_TIP"
+    },
+    {
+      "acceptedCommit": "6bfd543afb693ea18f4baf08e962e6d698f140fb",
+      "authorityId": "IP_OPS",
+      "consumptionLaw": "Deployment remains owner-approved and artifact-only; this packet performs no external mutation.",
+      "interfaceId": "IP_OPS_ACCEPTED_INTERFACE",
+      "protocolRevision": "IP_OPS_PACKET_V1",
+      "receiptPaths": [
+        "IP_OPS_RECEIPT.md"
+      ],
+      "schemaRevision": "IP_OPS_ACCEPTED_AT_COMMIT",
+      "sourcePaths": [
+        "IP_OPS_STATE.md"
+      ],
+      "status": "ACCEPTED_PACKET_TIP"
+    },
+    {
+      "acceptedCommit": "23e985c17b9b860fee26be397fa05b26f3daf8f2",
+      "authorityId": "IP_PROOF",
+      "consumptionLaw": "Supply deterministic fixture contracts and exact insertion rows; IP-PROOF owns shared campaign execution.",
+      "interfaceId": "IP_PROOF_ACCEPTED_INTERFACE",
+      "protocolRevision": "IP_PROOF_PACKET_V1",
+      "receiptPaths": [
+        "IP_PROOF_RECEIPT.md"
+      ],
+      "schemaRevision": "IP_PROOF_ACCEPTED_AT_COMMIT",
+      "sourcePaths": [
+        "IP_PROOF_STATE.md"
+      ],
+      "status": "ACCEPTED_PACKET_TIP"
+    }
+  ],
+  "implementationCommit": "f67db03293b184473f7f8e79b8872c6f6697f264",
+  "ownerContractWaitingSeams": {
+    "ACTION_EVIDENCE": {
+      "blocker": "DIRECTOR_ACCEPTED_SATELLITE_COMMIT_MISSING",
+      "ownerId": "ACTION_EVIDENCE_SATELLITE",
+      "targetSeam": "fixtures/productAssurance/systemic/actionEvidence/**"
+    },
+    "ASSURANCE_CASE": {
+      "blocker": "DIRECTOR_ACCEPTED_SATELLITE_COMMIT_MISSING",
+      "ownerId": "ASSURANCE_CASE_SATELLITE",
+      "targetSeam": "fixtures/productAssurance/systemic/assuranceCase/**"
+    },
+    "COVERAGE": {
+      "blocker": "DIRECTOR_ACCEPTED_S5_AND_I08_OWNER_CONTRACT_MISSING",
+      "ownerId": "I08_S5_COVERAGE_OWNER",
+      "targetSeam": "canonical systemIntegration supervisor plus accepted S5 coverage contract"
+    },
+    "DIAGNOSTIC_GOVERNANCE": {
+      "blocker": "DIRECTOR_ACCEPTED_SATELLITE_COMMIT_MISSING",
+      "ownerId": "A_AGENT_DIAGNOSTIC_GOVERNANCE",
+      "targetSeam": "fixtures/productAssurance/systemic/agentBoundary/**"
+    },
+    "RATE_BUDGET": {
+      "blocker": "AGGREGATE_RATE_BUDGET_OWNER_CONTRACT_NOT_CONFIGURED",
+      "ownerId": "INTELLIGENCE_RUNTIME_RATE_BUDGET",
+      "targetSeam": "server/src/intelligenceRuntime lifecycle and aggregate snapshot contract"
+    }
+  },
+  "releaseId": "IP_ASSURANCE_CORE_SCAFFOLD_20260713",
+  "reviewedOperationDisposition": {
+    "column": 25,
+    "disposition": "KEEP_CANONICAL",
+    "dispositionId": "DISPOSITION_NEWS_CONTEXT_PUBLIC_GET_V1",
+    "effectiveKind": "NETWORK_HTTP_REQUEST",
+    "effectiveSymbol": "fetch:GET",
+    "line": 2302,
+    "observedSemantics": {
+      "aggregateConcurrency": "OWNER_CONTRACT_WAITING",
+      "bodyLimitBytes": 8388608,
+      "boundedStateEntries": 1024,
+      "contentTypeValidated": true,
+      "failureResult": "CACHED_DELAYED_OR_EXPLICIT_SOURCE_ERROR",
+      "failureSuppressionMs": 15000,
+      "inFlightCoalescing": "SAME_KEY",
+      "maximumAttempts": 2,
+      "method": "GET_BY_CURRENT_CALLER_CONTRACT",
+      "redirects": "MANUAL_MAX_3_REDIRECTS_4_REQUEST_HOPS",
+      "retryClasses": [
+        "TIMEOUT",
+        "UNAVAILABLE",
+        "HTTP_408",
+        "HTTP_429",
+        "HTTP_5XX"
+      ],
+      "retryDelayMs": 350,
+      "timeoutPerAttemptMs": 8000,
+      "urlPolicy": "HTTPS_NO_CREDENTIALS_HOST_ALLOWLIST_REDIRECT_REVALIDATION"
+    },
+    "operationClass": "PURE_READ",
+    "operationId": "OP_NEWS_CONTEXT_PUBLIC_READ",
+    "ownerId": "EXISTING_NEWS_CONTEXT_SERVICE",
+    "path": "server/src/services/newsContext.ts",
+    "rawKind": "MUTATION_CALL",
+    "rawSymbol": "fetch:DYNAMIC_METHOD",
+    "rulingCommit": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+    "siteId": "OPSITE_FD086559819579DF346A",
+    "sourceDigestAlgorithm": "sha256",
+    "sourceSha256": "38aa196200f1325cd135f2a8a00f46ace5caa1d2fcf0811c357c52f80f47bede"
+  },
+  "revision": 2,
+  "scanner": {
+    "coverageVerdict": "PASS",
+    "covered": 143,
+    "discovered": 143,
+    "failOnUncoveredExitCode": 0,
+    "filesScanned": 368,
+    "reasonCodes": [],
+    "schemaVersion": "production-operation-scan.v1",
+    "uncovered": 0,
+    "uncoveredSites": []
+  },
+  "schema": "PRODUCT_ASSURANCE_CORE_EVIDENCE_V2",
+  "testedCommit": "f67db03293b184473f7f8e79b8872c6f6697f264",
+  "verifiedInputs": [
+    {
+      "path": "IP_ASSURANCE.md",
+      "role": "FROZEN_D_LAUNCH_8_PACKET_PROVENANCE",
+      "sha256": "5f6d4b3b70e384f6123e9ccc01891faf04aef9da7f7cfd1e0c63be5c3ba68803",
+      "source": "WORKTREE",
+      "verified": true
+    },
+    {
+      "gitObject": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6:IP_ASSURANCE.md",
+      "path": "IP_ASSURANCE.md",
+      "role": "D_LAUNCH_13_GOVERNING_PACKET",
+      "sha256": "49dcd690275ff35cb32566af307ad572d2a527e06d7388885f98826560968e84",
+      "source": "GIT_OBJECT",
+      "verified": true
+    },
+    {
+      "gitObject": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6:QL_DIRECTOR_STATE.md",
+      "path": "QL_DIRECTOR_STATE.md",
+      "role": "D_LAUNCH_13_DIRECTOR_RULING",
+      "sha256": "ec61e1678dcb108a92b9dda5503233c76b35fa5301c36077e04bdaead7b44307",
+      "source": "GIT_OBJECT",
+      "verified": true
+    },
+    {
+      "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+      "role": "PROTECTED_UNTRACKED_I00_OWNER_INPUT",
+      "sha256": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5",
+      "source": "WORKTREE",
+      "verified": true
+    },
+    {
+      "path": "fixtures/productAssurance/generated/SYSTEMIC_ASSURANCE_DEDUP_MATRIX.md",
+      "role": "DIRECTOR_ACCEPTED_DEDUP_LAW_PROTECTED_INPUT",
+      "sha256": "22686d2cd1c54bbc39af56399298a0ed9563bbc8643ad4f0e498718de83cb2cd",
+      "source": "WORKTREE",
+      "verified": true
+    }
+  ]
+}

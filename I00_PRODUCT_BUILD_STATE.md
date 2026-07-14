@@ -2,19 +2,19 @@
 
 Schema version: `I00_PRODUCT_BUILD_STATE_V1`
 
-Updated: `2026-07-14T04:28:29Z`
+Updated: `2026-07-14T04:30:53Z`
 
 ## Identity
 
 | Field | Current truth |
 | --- | --- |
-| Canonical Main base SHA | Live `current-main` and `origin/current-main` are `7383fd89477ed0b3e677e53c57c35d76ac34bbd8`; the integration branch merge-base remains `1fec867fa3f62d17829543b3776dc768506ae8ac` until the Phase 2 canonical baseline sync |
+| Canonical Main base SHA | Live `current-main` and `origin/current-main` are `7383fd89477ed0b3e677e53c57c35d76ac34bbd8`; exact canonical ancestry is integrated at `ce8d79a751c886dff388fa8f3f2fa6fb3f0414ee` without writing Main |
 | Integration branch/worktree | `i00-product-assembly-20260713` at `/Users/cosmosgeek/Desktop/i00-assembly` |
-| Latest integration merge | `ba965fb0fbb5e10819d5a704e99153892fe94031`; tree `08f19362c21160970d5e9732abca69f59baf648b` |
-| Latest integration receipt | `docs/archive/i00-phase2/SI_RECON_INTEGRATION_RECEIPT.md` |
+| Latest integration merge | `ce8d79a751c886dff388fa8f3f2fa6fb3f0414ee`; tree `512f0022e782fccfd2e5c554570b2f0be948d2de` |
+| Latest integration receipt | `docs/archive/i00-phase2/CURRENT_MAIN_BASELINE_SYNC_RECEIPT.md` |
 | Verified acceptance implementation | Historical prestage implementation `a2be4865d0d003d1dedd38c351b4e8ccf6033c2d`; Phase 1 handoff HEAD `9bf531ccca203ca66bad39787a0930fd608807a7` |
 | Phase | `FINAL_INTEGRATION / PHASE_2_FRESH_INTEGRATOR` |
-| Status | `F_BRIDGE_AND_SI_RECON_INTEGRATED / FULL_GATE_GREEN` |
+| Status | `CANONICAL_MAIN_BASELINE_SYNCED / FULL_GATE_GREEN` |
 | Active writer | Fresh Role 2 integrator; exclusive shared write/merge authority is limited to this integration branch, never `current-main` |
 | Protected untracked inputs | The five owner directives remain intentional read-only untracked inputs at their D-LAUNCH-6 hashes, not partial implementation; the worktree is otherwise clean after the final seal |
 | Current Phase 2 landed state | F-BRIDGE is integrated at `0670f533840f415b612fb290d2c944f94af50d82`; SI-RECON is integrated at `ba965fb0fbb5e10819d5a704e99153892fe94031`; focused, deterministic, and full repository gates pass |

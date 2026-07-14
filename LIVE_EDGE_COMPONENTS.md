@@ -125,7 +125,8 @@ exact Spot LIMIT/TIF join below.
 
 L08.1 resolves only the L09 Spot order/TIF capability blocker. It does not
 wire L09, alter strategy ownership, or add a live/test order route. Director
-must rebase L09/L10/L11 from the exact accepted L08.1 receipt cut.
+integrated the later accepted L09/L10/L11 history; those director merges are
+canonical history under D-LAUNCH-16 and are not worker-authored lane changes.
 
 ## L08.2 delta
 
@@ -138,8 +139,47 @@ must rebase L09/L10/L11 from the exact accepted L08.1 receipt cut.
 L08.2 resolves only the L09-002 L07-consumption blocker. It consumes the exact
 accepted L08.1 Spot `LIMIT` plus `GTC`/`IOC`/`FOK` surface without changing
 L04, L08.1 or the accepted L07 fill mechanics. It adds no sender, order route,
-policy authority or production wiring. Director must rebase L09/L10/L11 from
-the exact accepted L08.2 receipt cut.
+policy authority or production wiring. D-LAUNCH-15 integrated the accepted
+L09 implementation and D-LAUNCH-16 makes the director-merged L09/L10/L11
+history canonical and exempt from the worker allowlist.
+
+## L09 delta
+
+| Component | Path | Lane build proof | Integration state | Authority / limitation |
+| --- | --- | --- | --- | --- |
+| Normal-Basis owner-evidence binding | `server/src/liveEdge/adapters/normalBasis/**` | `BUILT_AND_TESTED` | `LANE_READY_UNWIRED` | Binds accepted strategy, execution-policy, exchange-twin, Foundation execution and reconciliation evidence without creating a strategy, Capital, Risk, execution, reconciliation or outcome owner |
+| Restart and owner checkpoint evidence | `ownerCheckpoint.ts`, `ownerOutcome.ts` | `BUILT_AND_TESTED` | injected comparison only | Preserves exact owner identities and revision cuts across restart; no private acquisition, persistence, order or production lifecycle is claimed |
+| Offline Normal-Basis proofs | `server/test/liveEdge/normalBasis/**` | focused `35/35` at acceptance | test-only | Proves owner-chain, restart, preflight and mismatch failure behavior with synthetic injected fixtures; network-free and non-sendable |
+
+## L10 delta
+
+| Component | Path | Lane build proof | Integration state | Authority / limitation |
+| --- | --- | --- | --- | --- |
+| Reverse-Basis lifecycle projection | `server/src/liveEdge/adapters/reverseBasisLifecycle/**` | `BUILT_AND_TESTED` | `LANE_READY_UNWIRED` | Retains exact Margin liability, Futures hedge, closure and recovery evidence from canonical owners without creating a second lifecycle, debt, execution or reconciliation authority |
+| Offline reverse lifecycle proofs | `server/test/liveEdge/reverseBasisLifecycle/**` | focused `99/99` at acceptance | test-only | Proves restart, ambiguity, recovery, closure, preflight and hostile owner-evidence failures; fixtures remain synthetic and network-free |
+
+## L11 delta
+
+| Component | Path | Lane build proof | Integration state | Authority / limitation |
+| --- | --- | --- | --- | --- |
+| Volume lifecycle projection | `server/src/liveEdge/adapters/volumeLifecycle/**` | `BUILT_AND_TESTED` | `LANE_READY_UNWIRED` | Preserves one canonical occupancy/lifecycle projection, protection and no-repeat posture, and recommendation-only recovery handoff; the existing Volume engine and canonical owners retain authority |
+| Offline Volume lifecycle proofs | `server/test/liveEdge/volumeLifecycle/**` | focused `143/143` at acceptance | test-only | Proves occupancy, protection, twin/recovery and adversarial failure behavior with injected evidence; no order, mutation or duplicate strategy owner |
+
+## L12 delta
+
+| Component | Path | Lane build proof | Integration state | Authority / limitation |
+| --- | --- | --- | --- | --- |
+| Exposure and recovery owner projection | `server/src/liveEdge/adapters/exposureRecoveryProjection/**` | `VERIFIED_PENDING_RECEIPT` | `UNWIRED`; implementation freeze and receipt pending | Validates one exact subject and revision-bound Capital/Foundation/reconciliation owner-evidence bundle; copies exposure and economics without recomputation and never grants Capital, Risk, control, execution, reconciliation or outcome authority |
+| Section 19 decision-chain and kill-posture guard | `projection.ts`, `types.ts` | `VERIFIED_PENDING_RECEIPT` | evidence adapter only | Requires the complete proposal-to-outcome chain, a current mutation-bound Risk recheck and one canonical truth binding; halt blocks exposure increases while preserving observation, cancellation, reduction, close, hedge, unwind, repay and recovery paths |
+| Section 20 cold-start and recovery-campaign evidence | `projection.ts`, `types.ts` | `VERIFIED_PENDING_RECEIPT` | synthetic structural evidence only | Fails closed through the seven cold-start steps and validates a closed 20-scenario injected evidence matrix. Only the server-crash campaign carries per-cut replay witnesses; the adapter cannot dispatch recovery or turn a structural envelope into deployed proof |
+| Offline exposure/recovery proofs | `server/test/liveEdge/exposureRecoveryProjection/**` | focused `21/21`; accumulated LiveEdge `1,537/1,537` | test-only | Executes accepted L10/L07 reconstruction at all nine valid durable event-state cuts and the canonical Foundation coordinator across all 15 plan and 10 leg lifecycle states; proves exact restore, owner lookup before reconciliation, zero resubmission, stable client IDs/fills, explicit residuals and hostile unresolved recovery, plus chain, risk, halt, closed-schema, secret and tamper failures; network-free |
+
+## L14 delta
+
+| Component | Path | Lane build proof | Integration state | Authority / limitation |
+| --- | --- | --- | --- | --- |
+| Durable control-command value adapter | `server/src/liveEdge/controls/**` | `BUILT_AND_TESTED` | `LANE_READY_UNWIRED` | Validates bounded injected command/journal values and adapts only the existing Foundation Control Plane lifecycle seam; canonical Ledger/System Integration persistence and production dispatch remain I00-owned |
+| Offline control proofs | `server/test/liveEdge/controls/**` | focused `38/38` at acceptance | test-only | Proves integrity, journal, risk and hostile command behavior without creating a second control owner or performing an external action |
 
 ## Director-owned integration still required
 
@@ -179,8 +219,9 @@ revisions; L08.1 and L08.2 rerun the current L04 binding rather than trusting a
 caller's self-sealed projection.
 They create no Capital/Risk decision, order, ticket, coordinator, lifecycle,
 reconciliation or persistence owner. Production composition remains
-director-owned; L09/L10/L11 must rebase from the exact accepted L08.2 receipt
-cut.
+director-owned. L09/L10/L11 are accepted director-integrated history, L12 is a
+lane-side owner-evidence projection only, and L14 remains an unwired durable
+control adapter; none is promoted to canonical production wiring here.
 
 ## Explicitly absent
 
@@ -213,6 +254,10 @@ cut.
   recovery mutation, second strategy/coordinator, Capital/Risk override,
   calibration owner, store, ticket, canonical lifecycle or production binding
   in L08.
+- a second Normal/Reverse/Volume strategy, lifecycle, position, debt,
+  reconciliation, outcome or recovery-action owner in L09-L12.
+- canonical Ledger persistence, System Integration command dispatch or a
+  production control route in L14.
 
 `LIVE_EXECUTION_NOT_IMPLEMENTED` remains mechanically enforced by the canonical
 Foundation execution barrier and the L01 regression proof.

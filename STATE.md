@@ -1,6 +1,6 @@
 # STATE.md — what is true right now
 
-**Current checkpoint:** 2026-07-14 · Phase 2 accepted L15 infrastructure integrated after Q and dashboard equivalence on `i00-product-assembly-20260713` · authority handoff `c1266f24c464a49ef1657e2549b06d7a90d6cac7`
+**Current checkpoint:** 2026-07-14 · Phase 2 accepted L15 infrastructure merge `35672dcc448d2ca55b17c24344fb413b4d1e14a7` receipted after Q and dashboard equivalence on `i00-product-assembly-20260713`
 **Law:** any landed change that alters project state must update this file in the same commit. This file wins on "what is the current state"; `ARCHITECTURE.md` wins on "how it is designed"; `MISSION.md` wins on "why".
 
 ## What this is

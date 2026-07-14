@@ -17,6 +17,8 @@ import {
   ACCEPTANCE_PLAN,
   EXPECTED_CANDIDATE_LIMITATIONS,
   EXPECTED_ACCEPTED_DONORS,
+  Q_ARCHIVE_REQUIRED_FILES,
+  Q_DONOR_ARCHIVE_ARGS,
   buildIntegrationCandidateReceiptDocument,
   parseOptions,
   renderIntegrationCandidateReceiptMarkdown,
@@ -25,6 +27,7 @@ import {
   validateDetachedCandidateWorktreeDocument,
   validateIntegrationCandidateReceiptMarkdown,
   validateProofCatalogSealBindingDocuments,
+  validateQArchiveInventory,
   validateSealEvidencePathBinding,
   validateWorkingSealPathSet,
 } from './local-acceptance.mjs';
@@ -410,6 +413,28 @@ function completeFixture() {
   };
   return { document, performanceReceipt, browserReceipt, candidateManifest, initialEvidence };
 }
+
+test('exact Q donor archive preserves the complete accepted repository root', () => {
+  assert.equal(Object.isFrozen(Q_DONOR_ARCHIVE_ARGS), true);
+  assert.deepEqual(Q_DONOR_ARCHIVE_ARGS, [
+    'archive',
+    '--format=tar',
+    Q_DONOR_SHA,
+  ]);
+  assert.equal(Q_DONOR_ARCHIVE_ARGS.includes('quant'), false);
+  const expected = Q_ARCHIVE_REQUIRED_FILES.map((entry) => ({
+    path: entry.path,
+    mode: '100644',
+    type: 'blob',
+  }));
+  const observed = Q_ARCHIVE_REQUIRED_FILES.map((entry) => ({
+    path: entry.path,
+    kind: 'REGULAR',
+    mode: '100644',
+    sha256: entry.sha256,
+  }));
+  assert.equal(validateQArchiveInventory(expected, observed).passed, true);
+});
 
 test('validate-only requires an explicit exact candidate SHA', () => {
   const parsed = parseOptions(['--validate-only', `--candidate-sha=${CANDIDATE}`, `--seal-sha=${SEAL}`]);

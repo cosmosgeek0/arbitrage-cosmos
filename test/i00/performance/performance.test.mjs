@@ -29,10 +29,12 @@ import {
 } from './contract.mjs';
 import {
   ACCEPTANCE_PLAN,
+  Q_ARCHIVE_REQUIRED_FILES,
   parseOptions,
   validateBrowserArtifacts,
   validateBrowserDocument,
   validateQVenvManifest,
+  validateQArchiveInventory,
 } from './local-acceptance.mjs';
 import { parseSoakArgs, validatePerformanceDocument } from './local-proxy-soak.mjs';
 
@@ -1491,6 +1493,24 @@ test('exact accepted Q donor identities remain pinned in the harness contract', 
   assert.equal(Q_DONOR_SHA, '02b4eccc8d2ef53b830cafae06e5175715fa6ebb');
   assert.equal(Q_DONOR_TREE, '5c86cebf0966cedd7ba01c56a01704b4f7bd0224');
   assert.equal(Q_RECEIPT_SHA256, '9cfa0356228d7f48674df2d9db523f0f0d53dab1a4e4255b6ba9676e463ec5dc');
+});
+
+test('exact Q donor inventory rejects a hostile partial archive before pytest', () => {
+  const expected = Q_ARCHIVE_REQUIRED_FILES.map((entry) => ({
+    path: entry.path,
+    mode: '100644',
+    type: 'blob',
+  }));
+  const observed = Q_ARCHIVE_REQUIRED_FILES.slice(1).map((entry) => ({
+    path: entry.path,
+    kind: 'REGULAR',
+    mode: '100644',
+    sha256: entry.sha256,
+  }));
+  const validation = validateQArchiveInventory(expected, observed);
+  assert.equal(validation.passed, false);
+  assert.ok(validation.failures.includes('Q_ARCHIVE_REQUIRED_ENTRY_MISSING:EDGE_PROTOCOL_V1.md'));
+  assert.ok(validation.failures.includes('Q_ARCHIVE_ENTRY_MISSING:EDGE_PROTOCOL_V1.md'));
 });
 
 test('Q venv manifest rejects interpreter, distribution, and plugin-environment drift', () => {

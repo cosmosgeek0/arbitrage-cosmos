@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   statSync,
@@ -293,6 +294,24 @@ export const ACCEPTANCE_PLAN = Object.freeze([
   Object.freeze({ id: 'browser_receipt', kind: 'BROWSER_RECEIPT', command: Object.freeze([]) }),
   Object.freeze({ id: 'source_freeze', kind: 'SOURCE_FREEZE', command: Object.freeze([]) }),
   Object.freeze({ id: 'diff_check', kind: 'COMMAND', command: Object.freeze(['git', 'diff', '--check']) }),
+]);
+
+export const Q_DONOR_ARCHIVE_ARGS = Object.freeze([
+  'archive',
+  '--format=tar',
+  Q_DONOR_SHA,
+]);
+
+export const Q_ARCHIVE_REQUIRED_FILES = Object.freeze([
+  Object.freeze({ path: 'EDGE_PROTOCOL_V1.md', sha256: '951fdbb5f347f900c61e60055f90cf2e1e1e743b75b7dc733652acb8d43353a1' }),
+  Object.freeze({ path: 'package-lock.json', sha256: '3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf' }),
+  Object.freeze({ path: 'packages/edge-protocol-tests/protocol.test.mjs', sha256: 'b9745ad52d92c50fcfa48b9772024b86fcf4fa738e8c35c817fa77021ad970b9' }),
+  Object.freeze({ path: 'packages/edge-protocol/fixtures/fixtures-v1.json', sha256: 'c42a4257ea5f46abb38ec9ab4e56983e7049cdf5b448150a4d4647a6234d99a4' }),
+  Object.freeze({ path: 'packages/edge-protocol/schema/edge-protocol-v1.schema.json', sha256: '229af0ff13d600c7d305c6deb7f57b61bdb6f8a35f6f2349d91f5ab1b4972f1c' }),
+  Object.freeze({ path: 'quant/DIRECTIVE_INPUTS.lock', sha256: '410010ef635a5e44b205e56c6b38f2d06e5b8e72312f5d63edcb24a5086355e1' }),
+  Object.freeze({ path: 'quant/EDGE_HYPOTHESIS_MAP.md', sha256: '234b0daf3086ce6e3a27fd96fa48581370bbdc427fb76cef63197fc6b303d3b4' }),
+  Object.freeze({ path: 'quant/registry/edge_hypotheses.v1.json', sha256: '24c78ece6b0d6fb7307ba3b6fb01a396632db5ca557a7d52889e890b3912425e' }),
+  Object.freeze({ path: 'quant/uv.lock', sha256: '716a9d0208f449bba51cde7fd67f9c90206ab0724aeac86ba862e119be859d29' }),
 ]);
 
 export function parseOptions(argv) {
@@ -1187,9 +1206,101 @@ function commandOutput(executable, args, cwd, environment, maximumBytes = 4 * 10
   });
 }
 
+function parseQDonorTreeInventory(raw) {
+  return raw.toString('utf8').split('\0').filter(Boolean).map((record) => {
+    const tab = record.indexOf('\t');
+    const header = tab === -1 ? '' : record.slice(0, tab);
+    const relativePath = tab === -1 ? '' : record.slice(tab + 1);
+    const match = /^(\d{6}) (blob|tree|commit) ([0-9a-f]{40})$/.exec(header);
+    if (!match) throw new Error('Q_ARCHIVE_DONOR_INVENTORY_INVALID');
+    return Object.freeze({
+      path: normalizedRepositoryPath(relativePath, 'Q_ARCHIVE_DONOR_ENTRY'),
+      mode: match[1],
+      type: match[2],
+    });
+  });
+}
+
+function collectQArchiveInventory(archiveRoot) {
+  const requiredPaths = new Set(Q_ARCHIVE_REQUIRED_FILES.map((entry) => entry.path));
+  const entries = [];
+  const visit = (directory, prefix = '') => {
+    for (const entry of readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name, 'en'))) {
+      const relativePath = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
+      const absolute = path.join(directory, entry.name);
+      const info = lstatSync(absolute);
+      if (info.isDirectory()) {
+        visit(absolute, relativePath);
+        continue;
+      }
+      const regular = info.isFile();
+      entries.push(Object.freeze({
+        path: relativePath,
+        kind: regular ? 'REGULAR' : info.isSymbolicLink() ? 'SYMLINK' : 'OTHER',
+        mode: regular ? ((info.mode & 0o111) === 0 ? '100644' : '100755') : null,
+        sha256: regular && requiredPaths.has(relativePath) ? sha256(readFileSync(absolute)) : null,
+      }));
+    }
+  };
+  visit(archiveRoot);
+  return entries;
+}
+
+export function validateQArchiveInventory(expectedEntries, observedEntries) {
+  const failures = [];
+  if (!Array.isArray(expectedEntries) || !Array.isArray(observedEntries)) {
+    return Object.freeze({ passed: false, failures: Object.freeze(['Q_ARCHIVE_INVENTORY_INVALID']) });
+  }
+  const expected = new Map();
+  const observed = new Map();
+  for (const entry of expectedEntries) {
+    if (typeof entry?.path !== 'string' || expected.has(entry.path)) {
+      failures.push('Q_ARCHIVE_DONOR_INVENTORY_INVALID');
+      continue;
+    }
+    expected.set(entry.path, entry);
+    if (entry.type !== 'blob' || !['100644', '100755'].includes(entry.mode)) {
+      failures.push(`Q_ARCHIVE_DONOR_ENTRY_FORBIDDEN:${entry.path}`);
+    }
+  }
+  for (const entry of observedEntries) {
+    if (typeof entry?.path !== 'string' || observed.has(entry.path)) {
+      failures.push('Q_ARCHIVE_EXTRACTED_INVENTORY_INVALID');
+      continue;
+    }
+    observed.set(entry.path, entry);
+  }
+  if (expected.size !== observed.size) failures.push('Q_ARCHIVE_ENTRY_COUNT_MISMATCH');
+  for (const [relativePath, expectedEntry] of expected) {
+    const observedEntry = observed.get(relativePath);
+    if (!observedEntry) {
+      failures.push(`Q_ARCHIVE_ENTRY_MISSING:${relativePath}`);
+      continue;
+    }
+    if (observedEntry.kind !== 'REGULAR') failures.push(`Q_ARCHIVE_ENTRY_NOT_REGULAR:${relativePath}`);
+    if (observedEntry.mode !== expectedEntry.mode) failures.push(`Q_ARCHIVE_ENTRY_MODE_MISMATCH:${relativePath}`);
+  }
+  for (const relativePath of observed.keys()) {
+    if (!expected.has(relativePath)) failures.push(`Q_ARCHIVE_ENTRY_UNEXPECTED:${relativePath}`);
+  }
+  for (const required of Q_ARCHIVE_REQUIRED_FILES) {
+    if (!expected.has(required.path)) failures.push(`Q_ARCHIVE_REQUIRED_DONOR_ENTRY_MISSING:${required.path}`);
+    const observedEntry = observed.get(required.path);
+    if (!observedEntry) failures.push(`Q_ARCHIVE_REQUIRED_ENTRY_MISSING:${required.path}`);
+    else if (observedEntry.sha256 !== required.sha256) failures.push(`Q_ARCHIVE_REQUIRED_ENTRY_HASH_MISMATCH:${required.path}`);
+  }
+  return Object.freeze({
+    expectedEntryCount: expected.size,
+    observedEntryCount: observed.size,
+    requiredEntryCount: Q_ARCHIVE_REQUIRED_FILES.length,
+    failures: Object.freeze(failures),
+    passed: failures.length === 0,
+  });
+}
+
 async function extractQArchive(destination, environment) {
   mkdirSync(destination, { recursive: true });
-  const archive = spawn('git', ['archive', '--format=tar', Q_DONOR_SHA, 'quant'], { cwd: ROOT, env: environment, stdio: ['ignore', 'pipe', 'pipe'] });
+  const archive = spawn('git', Q_DONOR_ARCHIVE_ARGS, { cwd: ROOT, env: environment, stdio: ['ignore', 'pipe', 'pipe'] });
   const unpack = spawn('tar', ['-x', '-C', destination], { cwd: ROOT, env: environment, stdio: ['pipe', 'ignore', 'pipe'] });
   archive.stdout.pipe(unpack.stdin);
   let errors = '';
@@ -1202,6 +1313,18 @@ async function extractQArchive(destination, environment) {
   if (archiveExit.code !== 0 || unpackExit.code !== 0 || archiveExit.signal !== null || unpackExit.signal !== null) {
     throw new Error(`Q_ARCHIVE_EXTRACTION_FAILED:${sha256(errors)}`);
   }
+}
+
+async function verifyQArchiveInventory(archiveRoot, environment) {
+  const expected = parseQDonorTreeInventory(await gitOutput([
+    'ls-tree',
+    '-rz',
+    '--full-tree',
+    Q_DONOR_SHA,
+  ], environment));
+  const result = validateQArchiveInventory(expected, collectQArchiveInventory(archiveRoot));
+  if (!result.passed) throw new Error(result.failures[0] ?? 'Q_ARCHIVE_INVENTORY_MISMATCH');
+  return result;
 }
 
 async function verifyQDonorGit(environment) {
@@ -1297,6 +1420,7 @@ async function runQArchiveGate(tempRoot, qVenv, environment) {
   await extractQArchive(archiveRoot, environment);
   const quantRoot = path.join(archiveRoot, 'quant');
   if (lstatSync(path.join(archiveRoot, '.git'), { throwIfNoEntry: false })) throw new Error('Q_ARCHIVE_GIT_METADATA_FORBIDDEN');
+  await verifyQArchiveInventory(archiveRoot, environment);
   const resolvedVenv = realpathSync(qVenv);
   if (!statSync(path.join(resolvedVenv, 'bin/python'), { throwIfNoEntry: false })?.isFile()) throw new Error('Q_VENV_PYTHON_MISSING');
   symlinkSync(resolvedVenv, path.join(quantRoot, '.venv'), 'dir');

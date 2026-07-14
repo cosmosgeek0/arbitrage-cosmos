@@ -63,7 +63,7 @@ These are focused source results, not the complete C-bound local acceptance:
 | L06 / L12 / L13 / L14 | `79/79`; `21/21`; `37/37`; `38/38` |
 | Foundation quantity bridge / Ledger CAS | `12/12`; `9/9`, including independent-writer race, crash rollback, recovery, and replay proofs |
 | Living-input authority protocol | `14/14` against immutable D-LAUNCH-27 cutoff `d78be24f4da14632c857ee250b62e3fec33c2743` |
-| I00 proof / command / acceptance contracts | `46/46`; `28/28`; `32/32` |
+| I00 proof / command / acceptance contracts | `46/46`; `28/28`; `34/34` |
 | Security and I00 scope-security | `148` focused security assertions; `7/7` scope-security |
 | Root Product Assurance | 515 files; 207/207 discovered/covered; 0 uncovered; 802 behavior plus 4 provenance |
 | `bash ops/tests/i00/run-all.sh` | Exit 0; 10/10 files; 394 assertions |
@@ -73,6 +73,10 @@ These are focused source results, not the complete C-bound local acceptance:
 | Diff hygiene | `git diff --check` exit 0 at the latest source audit |
 
 The final C-bound `npm test`, `npm run test:all`, generated-report parity, deterministic scenarios, runtime startup, restart/reconciliation, performance campaign, and browser sweep are not claimed here. Their exact commands, exit states, durations, byte counts, output hashes, inventory readback, limitations, and evidence paths belong only in S and its immutable candidate receipt.
+
+The exact-Q acceptance archive preserves the complete accepted donor root, without Git metadata, so Q17's frozen root protocol and schema inputs remain available inside the isolated archive. A `quant/`-only pathspec is regression-tested as forbidden.
+
+All six Product Assurance donor delta path sets remain byte-exact at the candidate HEAD. The current News GET operation and accepted L operation sites are registered only through the integration-owned, source-hash-bound operation overlay; donor scanner and purity-test blobs are not rewritten for assembled context.
 
 ## Known limitations
 

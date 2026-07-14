@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, resolve, sep } from 'node:path';
 import test from 'node:test';
 
@@ -11,7 +12,6 @@ const ASSIGNED_BASE = 'c57610cb5f7d56efb61e53ae27057fbe92a6a2f6';
 const S1_ACCEPTED = 'ab33b3712cddd67c3ec91cfa1dd232c75226cd9f';
 const PROTECTED_I00 = 'I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md';
 const PROTECTED_I00_SHA256 = '9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5';
-const SEALED_OWNER_HELPER = resolve(REPO, 'test/i00/sealed-owner-evidence.mjs');
 
 const git = (...args) => execFileSync('git', args, { cwd: REPO, encoding: 'utf8' }).trim();
 const latestDirectorMerge = () => {
@@ -73,17 +73,10 @@ test('tracked and untracked paths remain inside the two exclusive roots', () => 
 });
 
 test('protected untracked I00 input remains byte-identical', () => {
-  const output = execFileSync(process.execPath, [
-    SEALED_OWNER_HELPER,
-    '--root', REPO,
-    '--path', PROTECTED_I00,
-  ], { cwd: REPO, encoding: 'utf8' }).trim();
-  const prefix = 'SEALED_OWNER_EVIDENCE_VERIFIED ';
-  assert.equal(output.startsWith(prefix), true, output);
-  const [evidence] = JSON.parse(output.slice(prefix.length));
-  assert.equal(evidence.path, PROTECTED_I00);
-  assert.equal(evidence.sha256, PROTECTED_I00_SHA256);
-  assert.ok(['LIVE_OWNER_FILE', 'SEALED_CANDIDATE_HASH'].includes(evidence.evidenceMode));
+  const path = resolve(REPO, PROTECTED_I00);
+  assert.equal(existsSync(path), true);
+  const digest = createHash('sha256').update(readFileSync(path)).digest('hex');
+  assert.equal(digest, PROTECTED_I00_SHA256);
 });
 
 test('fixture modules have no ambient effects or authority dependencies', () => {

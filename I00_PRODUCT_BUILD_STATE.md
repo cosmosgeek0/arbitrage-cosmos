@@ -150,7 +150,7 @@ ledger-persistence, engine-supervisor
 | L06 / L12 / L13 / L14 | `79/79`; `21/21`; `37/37`; `38/38` |
 | Foundation quantity bridge / Ledger CAS | `12/12`; `9/9` |
 | Authority protocol | `14/14` against D-LAUNCH-27 cutoff |
-| I00 proof / command / acceptance contracts | `46/46`; `28/28`; `32/32` |
+| I00 proof / command / acceptance contracts | `46/46`; `28/28`; `34/34` |
 | Focused security / I00 scope-security | 148 assertions; `7/7` |
 | Product Assurance hostile / provenance | `2/2`; `4/4` |
 | Root Product Assurance | 515 files scanned; 207 discovered; 207 covered; 0 uncovered; 802 behavior plus 4 provenance |
@@ -161,6 +161,10 @@ ledger-persistence, engine-supervisor
 | `git diff --check` | Exit 0 at latest source audit |
 
 These focused results do not replace the complete C-bound gate. Final `npm test`, `npm run test:all`, generated-report parity, Q donor runs, deterministic scenarios, runtime startup, restart/reconciliation, performance, browser acceptance, evidence manifests, and complete-receipt validation must all be measured from exact C. S records the exact command, exit/signal, duration, stdout/stderr bytes and hashes, inventory/control observations, and evidence paths.
+
+The exact-Q acceptance archive preserves the complete accepted donor root, without Git metadata, so Q17's frozen root protocol and schema inputs remain available inside the isolated archive. A `quant/`-only pathspec is regression-tested as forbidden.
+
+All six Product Assurance donor delta path sets remain byte-exact at the candidate HEAD. The current News GET operation and accepted L operation sites are registered only through the integration-owned, source-hash-bound operation overlay; donor scanner and purity-test blobs are not rewritten for assembled context.
 
 ## Runtime and external measurements
 

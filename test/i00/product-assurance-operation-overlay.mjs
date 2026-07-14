@@ -41,6 +41,10 @@ const ASSESSMENT_SITE_IDS = Object.freeze([
   'OPSITE_3EC04308A744BC59E87E',
 ].sort());
 
+const NEWS_CONTEXT_PATH = 'server/src/services/newsContext.ts';
+const NEWS_CONTEXT_SOURCE_SHA256 = '1698a3592d89e9c3f666f0341071ceeb9acb2c7b63b932f6250f10c7a39b099a';
+const NEWS_CONTEXT_SITE_ID = 'OPSITE_FD086559819579DF346A';
+
 const TWIN_RULE = Object.freeze({
   ruleId: 'i00-live-edge-exchange-twin-synthetic-state-v1',
   operationId: 'OP_L07_EXCHANGE_TWIN_SYNTHETIC_STATE_REDUCTION',
@@ -63,7 +67,17 @@ const ASSESSMENT_RULE = Object.freeze({
   symbolPattern: '^(?:new:BoundedInboundQueue|this\\.#queue\\.(?:offer|shift))$',
 });
 
+const NEWS_CONTEXT_RULE = Object.freeze({
+  ruleId: 'i00-news-context-explicit-public-get-v1',
+  operationId: 'OP_NEWS_CONTEXT_PUBLIC_READ',
+  pathExact: Object.freeze([NEWS_CONTEXT_PATH]),
+  pathPrefixes: Object.freeze([]),
+  kinds: Object.freeze([OPERATION_KINDS.MUTATION_CALL]),
+  symbolPattern: '^fetch:DYNAMIC_METHOD$',
+});
+
 export const I00_OPERATION_MAPPING_OVERLAY = Object.freeze([
+  NEWS_CONTEXT_RULE,
   TWIN_RULE,
   ASSESSMENT_RULE,
 ]);
@@ -95,7 +109,7 @@ function exactSites(report, {
 
 function verifyBaseUncovered(report) {
   const observed = report.uncoveredSites.map((site) => site.siteId).sort();
-  const expected = [...TWIN_SITE_IDS, ...ASSESSMENT_SITE_IDS].sort();
+  const expected = [NEWS_CONTEXT_SITE_ID, ...TWIN_SITE_IDS, ...ASSESSMENT_SITE_IDS].sort();
   if (!exactMembers(observed, expected)) {
     throw new Error(`I00_OPERATION_OVERLAY_BASE_SET_DRIFT:${JSON.stringify({ expected, observed })}`);
   }
@@ -117,9 +131,25 @@ function verifyBaseUncovered(report) {
     ]),
     symbolSet: new Set(['new:BoundedInboundQueue', 'this.#queue.offer', 'this.#queue.shift']),
   })) throw new Error('I00_OPERATION_OVERLAY_ASSESSMENT_SOURCE_DRIFT');
+  if (!exactSites(report, {
+    path: NEWS_CONTEXT_PATH,
+    sourceSha256: NEWS_CONTEXT_SOURCE_SHA256,
+    siteIds: [NEWS_CONTEXT_SITE_ID],
+    kindSet: new Set([OPERATION_KINDS.MUTATION_CALL]),
+    symbolSet: new Set(['fetch:DYNAMIC_METHOD']),
+  })) throw new Error('I00_OPERATION_OVERLAY_NEWS_SOURCE_DRIFT');
 }
 
 function verifyIntegratedMappings(report) {
+  if (!exactSites(report, {
+    path: NEWS_CONTEXT_PATH,
+    sourceSha256: NEWS_CONTEXT_SOURCE_SHA256,
+    siteIds: [NEWS_CONTEXT_SITE_ID],
+    kindSet: new Set([OPERATION_KINDS.MUTATION_CALL]),
+    symbolSet: new Set(['fetch:DYNAMIC_METHOD']),
+    operationId: NEWS_CONTEXT_RULE.operationId,
+    mappingRuleId: NEWS_CONTEXT_RULE.ruleId,
+  })) throw new Error('I00_OPERATION_OVERLAY_NEWS_MAPPING_DRIFT');
   if (!exactSites(report, {
     path: TWIN_PATH,
     sourceSha256: TWIN_SOURCE_SHA256,

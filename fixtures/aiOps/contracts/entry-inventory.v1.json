@@ -1,0 +1,1364 @@
+{
+  "artifactId": "aiops-entry-inventory",
+  "contentHash": "8db24b87cfea552a2344614da3caa8e3532a7bda5983707fe8dc8d5c190330f2",
+  "createdAtMs": 1784001600000,
+  "environment": "SHADOW",
+  "owner": "AI_OPS_A1_CONTRACTS",
+  "payload": [
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REUSE_BOUND",
+      "digest": "4f4aac43a685f9a4f3635e7eabcc0610917ea761",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REUSE",
+      "entryId": "foundation.canonical-json",
+      "insertionRequestIds": [],
+      "mappedRequirement": "foundation.canonical-json",
+      "owner": "FOUNDATION",
+      "path": "server/src/foundation/contracts/identity.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REUSE_BOUND",
+      "digest": "7672fbfc23a286ac856348dbf244dcab2c937672",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REUSE",
+      "entryId": "foundation.time",
+      "insertionRequestIds": [],
+      "mappedRequirement": "foundation.time",
+      "owner": "FOUNDATION",
+      "path": "server/src/foundation/contracts/time.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REUSE_BOUND",
+      "digest": "988c23c17bfacec2b32ea96744f42498dc9d9da0",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REUSE",
+      "entryId": "foundation.failures",
+      "insertionRequestIds": [],
+      "mappedRequirement": "foundation.failures",
+      "owner": "FOUNDATION",
+      "path": "server/src/foundation/contracts/failures.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_NARROW_ADAPTER_DONOR",
+      "digest": "7b6b92a4fcbcc15d22b90d35f1244427fa1b0eab",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "ADAPT",
+      "entryId": "product-assurance.diagnostic-boundary",
+      "insertionRequestIds": [],
+      "mappedRequirement": "product-assurance.diagnostic-boundary",
+      "owner": "PRODUCT_ASSURANCE",
+      "path": "server/src/productAssurance/diagnostics/boundary.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_NARROW_ADAPTER_DONOR",
+      "digest": "b777635f1eeb4d92882e86ae0789086425603653",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "ADAPT",
+      "entryId": "product-assurance.catalog-core",
+      "insertionRequestIds": [],
+      "mappedRequirement": "product-assurance.catalog-core",
+      "owner": "PRODUCT_ASSURANCE",
+      "path": "server/src/productAssurance/catalog/core.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_NARROW_ADAPTER_DONOR",
+      "digest": "d63a7c9001dc9296ce9d02bd7bcf1854ac56883a",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "ADAPT",
+      "entryId": "product-assurance.operations-policy",
+      "insertionRequestIds": [],
+      "mappedRequirement": "product-assurance.operations-policy",
+      "owner": "PRODUCT_ASSURANCE",
+      "path": "server/src/productAssurance/operations/policy.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_NARROW_ADAPTER_DONOR",
+      "digest": "5b858894af4e31af0922a5e84e07b9cd795caf20",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "ADAPT",
+      "entryId": "product-assurance.remediation-campaign",
+      "insertionRequestIds": [],
+      "mappedRequirement": "product-assurance.remediation-campaign",
+      "owner": "PRODUCT_ASSURANCE",
+      "path": "server/src/productAssurance/remediation/campaign.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_NARROW_ADAPTER_DONOR",
+      "digest": "30ee43149328ede255acb5421324e64819fc6f01",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "ADAPT",
+      "entryId": "product-assurance.failure-atlas",
+      "insertionRequestIds": [],
+      "mappedRequirement": "product-assurance.failure-atlas",
+      "owner": "PRODUCT_ASSURANCE",
+      "path": "server/src/productAssurance/failureAtlas/atlas.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_NARROW_ADAPTER_DONOR",
+      "digest": "042456c58b1cd5b6eb179c0c9c289f6e69d06034",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "ADAPT",
+      "entryId": "s6.boundary-schema",
+      "insertionRequestIds": [],
+      "mappedRequirement": "s6.boundary-schema",
+      "owner": "IP_ASSURANCE_S6",
+      "path": "fixtures/productAssurance/systemic/agentBoundary/agent-boundary-v1.schema.json",
+      "resolvedAtShadowBase": true,
+      "revision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "6336ad5613e16af2dd4147cd27ab63d5042e743b",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "s6.canonical-kernel",
+      "insertionRequestIds": [],
+      "mappedRequirement": "s6.canonical-kernel",
+      "owner": "IP_ASSURANCE_S6",
+      "path": "fixtures/productAssurance/systemic/agentBoundary/canonical.mjs",
+      "resolvedAtShadowBase": true,
+      "revision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_NARROW_ADAPTER_DONOR",
+      "digest": "9d8399e6c0d2a74a892bf759342a75e40eabd867",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "ADAPT",
+      "entryId": "s6.evaluators",
+      "insertionRequestIds": [],
+      "mappedRequirement": "s6.evaluators",
+      "owner": "IP_ASSURANCE_S6",
+      "path": "fixtures/productAssurance/systemic/agentBoundary/evaluators.mjs",
+      "resolvedAtShadowBase": true,
+      "revision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "f9d53717160f892685851c2f84e961b74b8f1347",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "s6.provider-stub",
+      "insertionRequestIds": [],
+      "mappedRequirement": "s6.provider-stub",
+      "owner": "IP_ASSURANCE_S6",
+      "path": "fixtures/productAssurance/systemic/agentBoundary/provider-stub.mjs",
+      "resolvedAtShadowBase": true,
+      "revision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_NARROW_ADAPTER_DONOR",
+      "digest": "0489eee2f468cb328bbff8a6c3de44a4b9478cc5",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "ADAPT",
+      "entryId": "s6.insertion-draft",
+      "insertionRequestIds": [],
+      "mappedRequirement": "s6.insertion-draft",
+      "owner": "IP_ASSURANCE_S6",
+      "path": "fixtures/productAssurance/systemic/agentBoundary/ASSURANCE_INSERTION_REQUEST_DRAFT.json",
+      "resolvedAtShadowBase": true,
+      "revision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "308a7b90a3a75a707bb22a8880ee02b6acef9675",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "s6.owner-law",
+      "insertionRequestIds": [],
+      "mappedRequirement": "s6.owner-law",
+      "owner": "IP_ASSURANCE_OWNER",
+      "path": "IP_ASSURANCE.md",
+      "resolvedAtShadowBase": true,
+      "revision": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "cee6e95858726e088210d3e4f7deafc5e8accf03",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "product-assurance.generated-atlas",
+      "insertionRequestIds": [],
+      "mappedRequirement": "product-assurance.generated-atlas",
+      "owner": "PRODUCT_ASSURANCE",
+      "path": "fixtures/productAssurance/generated/OPERATIONAL_FAILURE_ATLAS.md",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_NARROW_ADAPTER_DONOR",
+      "digest": "ea2dfc4ab36626ea5945cbf45f144b253944866b",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "ADAPT",
+      "entryId": "product-runtime.types",
+      "insertionRequestIds": [],
+      "mappedRequirement": "product-runtime.types",
+      "owner": "PRODUCT_INTEGRATION_RUNTIME",
+      "path": "server/src/productIntegration/runtime/types.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_NARROW_ADAPTER_DONOR",
+      "digest": "5338ceace7e97b51045b6928fd0c6c287d58093c",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "ADAPT",
+      "entryId": "product-runtime.controls",
+      "insertionRequestIds": [],
+      "mappedRequirement": "product-runtime.controls",
+      "owner": "PRODUCT_RUNTIME_SYSTEM_CONTROL_COMMAND_OWNER",
+      "path": "server/src/productIntegration/runtime/controls.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_NARROW_ADAPTER_DONOR",
+      "digest": "7dca4a1cb3c11f8a468d71d808a2933329b9538f",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "ADAPT",
+      "entryId": "product-runtime.command-owner",
+      "insertionRequestIds": [],
+      "mappedRequirement": "product-runtime.command-owner",
+      "owner": "PRODUCT_RUNTIME_SYSTEM_CONTROL_COMMAND_OWNER",
+      "path": "server/src/productIntegration/runtime/systemControlCommandOwner.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_NARROW_ADAPTER_DONOR",
+      "digest": "db2d73885fa3fa276fcf181293820902bf009d10",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "ADAPT",
+      "entryId": "system-control.types",
+      "insertionRequestIds": [],
+      "mappedRequirement": "system-control.types",
+      "owner": "FOUNDATION_CONTROL",
+      "path": "server/src/systemIntegration/controls/types.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_NARROW_ADAPTER_DONOR",
+      "digest": "ef035124b0a2e7c63beed8ac2284365599de988b",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "ADAPT",
+      "entryId": "ledger.adapter",
+      "insertionRequestIds": [],
+      "mappedRequirement": "ledger.adapter",
+      "owner": "LEDGER",
+      "path": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REUSE_BOUND",
+      "digest": "cb2433266dde597de22b873db68c4e5c33d34a1b",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REUSE",
+      "entryId": "ledger.owner",
+      "insertionRequestIds": [],
+      "mappedRequirement": "ledger.owner",
+      "owner": "LEDGER",
+      "path": "server/src/ledger.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "UNFINISHED_INTERFACE_DEPENDENCY",
+      "digest": "99728adf274e3b150c6aa263d3150726e93bef95",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "MISSING_REQUIRED",
+      "entryId": "root.package",
+      "insertionRequestIds": [
+        "AIOPS-IR-PACKAGE-006"
+      ],
+      "mappedRequirement": "Accepted root test and package mount",
+      "owner": "FRESH_POST_ACCEPTANCE_INTEGRATOR",
+      "path": "package.json",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "UNFINISHED_INTERFACE_DEPENDENCY",
+      "digest": "07b6192b9842e70d256884b81ab8d1368e27e180",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "MISSING_REQUIRED",
+      "entryId": "i00.product-assurance-manifest",
+      "insertionRequestIds": [
+        "AIOPS-IR-TEST-MOUNT-026"
+      ],
+      "mappedRequirement": "Accepted Product Assurance scan-manifest regeneration",
+      "owner": "ROOT_TEST_ACCEPTANCE_OWNER",
+      "path": "fixtures/i00/product-assurance-manifest.v1.json",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5",
+      "digestAlgorithm": "SHA-256",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "i00.section14.owner-law",
+      "insertionRequestIds": [],
+      "mappedRequirement": "I00 section 14 durable self-healing registry owner law",
+      "owner": "OWNER",
+      "path": "/Users/cosmosgeek/Desktop/Main/I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+      "resolvedAtShadowBase": false,
+      "revision": "owner-file-20260714",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5",
+      "digestAlgorithm": "SHA-256",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "i00.section20.owner-law",
+      "insertionRequestIds": [],
+      "mappedRequirement": "I00 section 20 diagnostic-provider external authorization owner law",
+      "owner": "OWNER",
+      "path": "/Users/cosmosgeek/Desktop/Main/I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+      "resolvedAtShadowBase": false,
+      "revision": "owner-file-20260714",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "SOURCE_FROZEN_LOCAL_ACCEPTANCE_PENDING",
+      "digest": "97c28d71a1f9b6986e4b00ae18d2e0df9943bef5",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "i00.self-healing-registry",
+      "insertionRequestIds": [],
+      "mappedRequirement": "I00 section 14 durable self-healing registry",
+      "owner": "I00_ACCEPTANCE_OWNER",
+      "path": "I00_PRODUCT_BUILD_STATE.md",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_NARROW_ADAPTER_DONOR",
+      "digest": "5b858894af4e31af0922a5e84e07b9cd795caf20",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "ADAPT",
+      "entryId": "product-assurance.autonomic-reconcile-kernel",
+      "insertionRequestIds": [
+        "AIOPS-IR-REMEDIATION-010"
+      ],
+      "mappedRequirement": "Bounded autonomic reconcile kernel",
+      "owner": "PRODUCT_ASSURANCE_REMEDIATION",
+      "path": "server/src/productAssurance/remediation/campaign.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_NARROW_ADAPTER_DONOR",
+      "digest": "7b6b92a4fcbcc15d22b90d35f1244427fa1b0eab",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "ADAPT",
+      "entryId": "product-assurance.runtime-assurance-separation",
+      "insertionRequestIds": [
+        "AIOPS-IR-ASSURANCE-011"
+      ],
+      "mappedRequirement": "Runtime-assurance separation",
+      "owner": "PRODUCT_ASSURANCE_DIAGNOSTICS",
+      "path": "server/src/productAssurance/diagnostics/boundary.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_NARROW_ADAPTER_DONOR",
+      "digest": "042456c58b1cd5b6eb179c0c9c289f6e69d06034",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "ADAPT",
+      "entryId": "ip-assurance.subordinate-llm-plane",
+      "insertionRequestIds": [
+        "AIOPS-IR-ASSURANCE-011"
+      ],
+      "mappedRequirement": "Subordinate LLM diagnostic and repair-assistance plane",
+      "owner": "IP_ASSURANCE_S6",
+      "path": "fixtures/productAssurance/systemic/agentBoundary/agent-boundary-v1.schema.json",
+      "resolvedAtShadowBase": true,
+      "revision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "NOT_CONFIGURED_AND_NO_REAL_PROVIDER_AUTH",
+      "digest": "97c28d71a1f9b6986e4b00ae18d2e0df9943bef5",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "MISSING_REQUIRED",
+      "entryId": "i00.provider-authorization",
+      "insertionRequestIds": [
+        "AIOPS-IR-AUTH-004",
+        "AIOPS-IR-CONFIG-025"
+      ],
+      "mappedRequirement": "I00 section 20 diagnostic-provider external authorization",
+      "owner": "BACKEND_SECURITY_OPERATOR_ACCESS",
+      "path": "I00_PRODUCT_BUILD_STATE.md",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "SOURCE_FROZEN_LOCAL_ACCEPTANCE_PENDING_NOT_ACCEPTED",
+      "digest": "97c28d71a1f9b6986e4b00ae18d2e0df9943bef5",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "MISSING_REQUIRED",
+      "entryId": "i00.acceptance-phases",
+      "insertionRequestIds": [
+        "AIOPS-IR-DOCS-017",
+        "AIOPS-IR-BARREL-018",
+        "AIOPS-IR-TEST-MOUNT-026"
+      ],
+      "mappedRequirement": "I00 phases I02 I03 I04 I08 I09 I10 I11 I13 I14 and section 27 acceptance",
+      "owner": "I00_ACCEPTANCE_OWNER",
+      "path": "I00_PRODUCT_BUILD_STATE.md",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "308a7b90a3a75a707bb22a8880ee02b6acef9675",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "ip-assurance.sections-3.1-3.9",
+      "insertionRequestIds": [],
+      "mappedRequirement": "IP Assurance sections 3.1 through 3.9",
+      "owner": "IP_ASSURANCE_OWNER",
+      "path": "IP_ASSURANCE.md",
+      "resolvedAtShadowBase": true,
+      "revision": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "308a7b90a3a75a707bb22a8880ee02b6acef9675",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "ip-assurance.systemic-s6",
+      "insertionRequestIds": [],
+      "mappedRequirement": "IP Assurance Systemic Amendment section 7 S6",
+      "owner": "IP_ASSURANCE_S6",
+      "path": "IP_ASSURANCE.md",
+      "resolvedAtShadowBase": true,
+      "revision": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "308a7b90a3a75a707bb22a8880ee02b6acef9675",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "ip-assurance.systemic-s8",
+      "insertionRequestIds": [],
+      "mappedRequirement": "IP Assurance Systemic Amendment section 9 S8",
+      "owner": "IP_ASSURANCE_S8",
+      "path": "IP_ASSURANCE.md",
+      "resolvedAtShadowBase": true,
+      "revision": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_NARROW_ADAPTER_DONOR",
+      "digest": "df43a8426691a7c73b4402d9f9cc96247876ae84",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "ADAPT",
+      "entryId": "s8.stability-contracts",
+      "insertionRequestIds": [],
+      "mappedRequirement": "Integrated S8 stability contracts",
+      "owner": "IP_ASSURANCE_S8",
+      "path": "fixtures/productAssurance/systemic/stability/contracts.mjs",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "958f03f5d463bc2790499e06ce814a0f5a1d56ff",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "s8.stability-integration-receipt",
+      "insertionRequestIds": [],
+      "mappedRequirement": "Integrated S8 stability donor receipt",
+      "owner": "I00_INTEGRATOR",
+      "path": "docs/archive/i00-phase2/A_STABILITY_INTEGRATION_RECEIPT.md",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "1088ead1bea2854beb52bb41b29aae51e663dff3",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "product-assurance.generated-diagnostic-boundary",
+      "insertionRequestIds": [],
+      "mappedRequirement": "AGENTIC_DIAGNOSTIC_BOUNDARY.md",
+      "owner": "PRODUCT_ASSURANCE",
+      "path": "fixtures/productAssurance/generated/AGENTIC_DIAGNOSTIC_BOUNDARY.md",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "f3657fa8a31f91caeb36b5229ad0fd61806e9bf6",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "i00.donor-receipt.a-agent",
+      "insertionRequestIds": [],
+      "mappedRequirement": "Integrated A-AGENT and S6 donor receipt",
+      "owner": "I00_INTEGRATOR",
+      "path": "docs/archive/i00-phase2/A_AGENT_INTEGRATION_RECEIPT.md",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "dc7a70f25520b8bbf5423e217fc081226f29c676",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "i00.donor-receipt.a-case",
+      "insertionRequestIds": [],
+      "mappedRequirement": "Integrated canonical case donor receipt",
+      "owner": "I00_INTEGRATOR",
+      "path": "docs/archive/i00-phase2/A_CASE_INTEGRATION_RECEIPT.md",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "a6aae22e16c54682fad77ff34acf5aee0b94de99",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "i00.donor-receipt.a-cockpit",
+      "insertionRequestIds": [],
+      "mappedRequirement": "Integrated canonical cockpit donor receipt",
+      "owner": "I00_INTEGRATOR",
+      "path": "docs/archive/i00-phase2/A_COCKPIT_INTEGRATION_RECEIPT.md",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "INCIDENT_OWNER_NOT_CONFIGURED",
+      "digest": "e1496fc9416f60a06f97ab5cd807a5e6580537e7",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "MISSING_REQUIRED",
+      "entryId": "canonical.incident-owner",
+      "insertionRequestIds": [
+        "AIOPS-IR-INCIDENT-019"
+      ],
+      "mappedRequirement": "Canonical incident identity and lifecycle owner",
+      "owner": "DIRECTOR_RATIFIED_INCIDENT_OWNER_REQUIRED",
+      "path": "server/src/productIntegration/runtime/managedInventory.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_NARROW_ADAPTER_DONOR",
+      "digest": "7ac5cf1b743e650de54fa9f8f00fbadb4842a47a",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "ADAPT",
+      "entryId": "canonical.material-event-owner",
+      "insertionRequestIds": [],
+      "mappedRequirement": "Canonical material-event delivery owner",
+      "owner": "PRODUCT_INTEGRATION_RUNTIME",
+      "path": "server/src/productIntegration/runtime/materialDelivery.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "eee7b95d1e9b4821102ca4979deb5720d4f018d8",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "canonical.approval-owner",
+      "insertionRequestIds": [],
+      "mappedRequirement": "Existing capital approval owner; not the missing human AI Ops signer",
+      "owner": "CAPITAL_FOUNDATION_APPROVALS",
+      "path": "server/src/capitalFoundation/approvals/index.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "SIGNER_PRINCIPAL_AND_RECEIPT_OWNER_NOT_RATIFIED",
+      "digest": "7b6b92a4fcbcc15d22b90d35f1244427fa1b0eab",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "MISSING_REQUIRED",
+      "entryId": "canonical.human-aiops-approval-owner",
+      "insertionRequestIds": [
+        "AIOPS-IR-APPROVAL-023"
+      ],
+      "mappedRequirement": "Separately authenticated human AI Ops approval and signature owner",
+      "owner": "HUMAN_APPROVAL_OWNER_REQUIRED",
+      "path": "server/src/productAssurance/diagnostics/boundary.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "ffc09a9f4d33d1851a1716061ec310b556e83051",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "canonical.telemetry-owner",
+      "insertionRequestIds": [],
+      "mappedRequirement": "Canonical telemetry coverage evidence",
+      "owner": "PRODUCT_ASSURANCE_TELEMETRY",
+      "path": "fixtures/productAssurance/generated/TELEMETRY_COVERAGE_MATRIX.md",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "DIRECTOR_ACCEPTED_S5_AND_I08_OWNER_CONTRACT_MISSING",
+      "digest": "6caa44ecab1dbc2561fdd92947b442c029b6dc4a",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "MISSING_REQUIRED",
+      "entryId": "canonical.telemetry-runtime-owner",
+      "insertionRequestIds": [
+        "AIOPS-IR-ASSURANCE-011"
+      ],
+      "mappedRequirement": "Accepted telemetry emission owner for AI Ops",
+      "owner": "PRODUCT_ASSURANCE_OWNER_CONTRACTS",
+      "path": "server/src/productAssurance/adapters/ownerContracts.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REUSE_BOUND",
+      "digest": "453cd980861bfa19c0bdde989b90a02264356b91",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REUSE",
+      "entryId": "canonical.auth-owner",
+      "insertionRequestIds": [],
+      "mappedRequirement": "Canonical operator-access authentication owner",
+      "owner": "BACKEND_SECURITY_OPERATOR_ACCESS",
+      "path": "server/src/security/access.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "AI_OPS_PRINCIPALS_NOT_CONFIGURED",
+      "digest": "e1496fc9416f60a06f97ab5cd807a5e6580537e7",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "MISSING_REQUIRED",
+      "entryId": "canonical.aiops-principals",
+      "insertionRequestIds": [
+        "AIOPS-IR-AUTH-004"
+      ],
+      "mappedRequirement": "Canonical configured AI Ops worker principals",
+      "owner": "BACKEND_SECURITY_OPERATOR_ACCESS",
+      "path": "server/src/productIntegration/runtime/managedInventory.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_NARROW_ADAPTER_DONOR",
+      "digest": "1281a5e0b6e090ad4021e20594dfcefd231b1064",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "ADAPT",
+      "entryId": "canonical.cockpit-owner",
+      "insertionRequestIds": [],
+      "mappedRequirement": "Canonical cockpit projection owner",
+      "owner": "PRODUCT_ASSURANCE_COCKPIT",
+      "path": "server/src/productAssurance/cockpit/viewModel.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "d489c7dab7021ad68bb2cbed6cb0ef9bd20b186b",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "monitoring.browser-synthetic",
+      "insertionRequestIds": [],
+      "mappedRequirement": "Existing browser and synthetic monitoring",
+      "owner": "I00_BROWSER_PROBE_OWNER",
+      "path": "test/i00/performance/app-probe.mjs",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/i00/performance/app-probe.mjs",
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REUSE_BOUND",
+      "digest": "111c2839e37fc33bb34859cd28f8cae9c59e24b5",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REUSE",
+      "entryId": "monitoring.synthetic-probe",
+      "insertionRequestIds": [],
+      "mappedRequirement": "Existing synthetic deployment probe",
+      "owner": "I00_OPERATIONS",
+      "path": "ops/i00/bin/probe.mjs",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "ops/i00/bin/probe.mjs",
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REUSE_BOUND",
+      "digest": "cbfd50b1c6639722d5469d974fd718f74e974ef5",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REUSE",
+      "entryId": "mechanism.worktree-scope",
+      "insertionRequestIds": [],
+      "mappedRequirement": "Existing worktree and lane-scope enforcement",
+      "owner": "DIRECTOR_SCOPE_GATE",
+      "path": "ops/tests/lane-worker-scope-gate.sh",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "ops/tests/lane-worker-scope-gate.sh",
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REUSE_BOUND",
+      "digest": "6bc83e95b767ad51b412385719532b659bd96388",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REUSE",
+      "entryId": "mechanism.test-acceptance",
+      "insertionRequestIds": [],
+      "mappedRequirement": "Existing complete I00 acceptance test mechanism",
+      "owner": "I00_ACCEPTANCE_OWNER",
+      "path": "test/i00/complete-acceptance.mjs",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/i00/complete-acceptance.mjs",
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "0b4513051024a1e237105051a086166f820e2f64",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "mechanism.worktree-patch-test",
+      "insertionRequestIds": [],
+      "mappedRequirement": "Existing isolated worktree patch and test mechanism",
+      "owner": "DIRECTOR_RULEBOOK_OWNER",
+      "path": "docs/archive/DIRECTOR_RULEBOOK.md",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "be721b432c67dd638c5758bc5b7817c82e2b7d21",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "mechanism.release-assembly",
+      "insertionRequestIds": [],
+      "mappedRequirement": "Existing release assembly mechanism",
+      "owner": "I00_RELEASE_OWNER",
+      "path": "ops/i00/bin/assemble-release.mjs",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "480654e66a38076126e34bd4b617d8f0854a72f8",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "mechanism.release-switch",
+      "insertionRequestIds": [],
+      "mappedRequirement": "Existing release switch mechanism",
+      "owner": "I00_RELEASE_OWNER",
+      "path": "ops/i00/bin/release-switch.sh",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "MECHANISM_PRESENT_REAL_CANARY_NOT_PERFORMED",
+      "digest": "11a960982c20eaca37bcebb1769b88d297c191a8",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "mechanism.canary-evidence",
+      "insertionRequestIds": [],
+      "mappedRequirement": "Existing canary evidence mechanism",
+      "owner": "LIVE_EDGE_FINAL_LANE_EVIDENCE",
+      "path": "server/src/liveEdge/adapters/finalLaneEvidence/projection.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "REAL_CANARY_NOT_PERFORMED_AND_SECTION20_AUTH_MISSING",
+      "digest": "327a92a79c5845add960ea4aabb3d481413e461b",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "MISSING_REQUIRED",
+      "entryId": "mechanism.canary-activation",
+      "insertionRequestIds": [
+        "AIOPS-IR-CONFIG-025"
+      ],
+      "mappedRequirement": "Owner-authorized real canary and current readback",
+      "owner": "I00_OPERATIONS_OWNER",
+      "path": "ops/docs/i00/ACTIVATION_AND_BOUNDARY_RUNBOOK.md",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "e2540de6368fc39996f649612b9980c48acadd7f",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "mechanism.rollback-switch",
+      "insertionRequestIds": [],
+      "mappedRequirement": "Existing rollback mechanism",
+      "owner": "I00_RELEASE_OWNER",
+      "path": "ops/i00/bin/rollback-switch.sh",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "HISTORICAL_ARCHIVE_REFERENCE_ONLY",
+      "digest": "0b4513051024a1e237105051a086166f820e2f64",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "docs.director-rulebook",
+      "insertionRequestIds": [],
+      "mappedRequirement": "DIRECTOR_RULEBOOK.md actual archive path",
+      "owner": "DIRECTOR",
+      "path": "docs/archive/DIRECTOR_RULEBOOK.md",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "HISTORICAL_ARCHIVE_REFERENCE_ONLY",
+      "digest": "edfc46a892e8cbdd9a88fe6c8e3e9654a3a52ae2",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "docs.blueprint",
+      "insertionRequestIds": [],
+      "mappedRequirement": "BLUEPRINT.md actual archive path",
+      "owner": "PROJECT_ARCHITECTURE",
+      "path": "docs/archive/BLUEPRINT.md",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "HISTORICAL_ARCHIVE_REFERENCE_ONLY",
+      "digest": "63e2bbc4d0dde1a6eaa6efba0a04b32ed6716fda",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "docs.engine",
+      "insertionRequestIds": [],
+      "mappedRequirement": "ENGINE.md actual archive path",
+      "owner": "ENGINE_OWNER",
+      "path": "docs/archive/ENGINE.md",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "HISTORICAL_ARCHIVE_REFERENCE_ONLY",
+      "digest": "e61e796833942222a6fa99676198daf87fe588fe",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "docs.project-memory",
+      "insertionRequestIds": [],
+      "mappedRequirement": "PROJECT_MEMORY.md actual archive path",
+      "owner": "PROJECT_STATE_ARCHIVE",
+      "path": "docs/archive/PROJECT_MEMORY.md",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "HISTORICAL_ARCHIVE_REFERENCE_ONLY",
+      "digest": "52cd828a8bf0970f230cf29589e5ec21ad944c5b",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "docs.design-playbook",
+      "insertionRequestIds": [],
+      "mappedRequirement": "DESIGN_PLAYBOOK.md actual archive path",
+      "owner": "UI_DESIGN_OWNER",
+      "path": "docs/archive/DESIGN_PLAYBOOK.md",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "DUPLICATE_AUTHORITY_FORBIDDEN",
+      "digest": "93d7604599b43109eb67433e85101009c3f82b8e",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REJECT_DUPLICATE",
+      "entryId": "reject-duplicate.source-of-truth",
+      "insertionRequestIds": [],
+      "mappedRequirement": "No second durable source of truth",
+      "owner": "ARCHITECTURE_AUTHORITY_MAP",
+      "path": "ARCHITECTURE.md",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "DUPLICATE_AUTHORITY_FORBIDDEN",
+      "digest": "7ac5cf1b743e650de54fa9f8f00fbadb4842a47a",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REJECT_DUPLICATE",
+      "entryId": "reject-duplicate.event-bus",
+      "insertionRequestIds": [],
+      "mappedRequirement": "No second event bus",
+      "owner": "PRODUCT_INTEGRATION_RUNTIME",
+      "path": "server/src/productIntegration/runtime/materialDelivery.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "DUPLICATE_AUTHORITY_FORBIDDEN",
+      "digest": "97c28d71a1f9b6986e4b00ae18d2e0df9943bef5",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REJECT_DUPLICATE",
+      "entryId": "reject-duplicate.incident-database",
+      "insertionRequestIds": [
+        "AIOPS-IR-INCIDENT-019"
+      ],
+      "mappedRequirement": "No incident database before canonical incident owner ratification",
+      "owner": "DIRECTOR_RATIFIED_INCIDENT_OWNER_REQUIRED",
+      "path": "I00_PRODUCT_BUILD_STATE.md",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "DUPLICATE_AUTHORITY_FORBIDDEN",
+      "digest": "7dca4a1cb3c11f8a468d71d808a2933329b9538f",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REJECT_DUPLICATE",
+      "entryId": "reject-duplicate.command-registry",
+      "insertionRequestIds": [],
+      "mappedRequirement": "No second command registry",
+      "owner": "PRODUCT_RUNTIME_SYSTEM_CONTROL_COMMAND_OWNER",
+      "path": "server/src/productIntegration/runtime/systemControlCommandOwner.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "DUPLICATE_AUTHORITY_FORBIDDEN",
+      "digest": "eee7b95d1e9b4821102ca4979deb5720d4f018d8",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REJECT_DUPLICATE",
+      "entryId": "reject-duplicate.approval-store",
+      "insertionRequestIds": [],
+      "mappedRequirement": "No second approval store",
+      "owner": "CAPITAL_FOUNDATION_APPROVALS",
+      "path": "server/src/capitalFoundation/approvals/index.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "DUPLICATE_AUTHORITY_FORBIDDEN",
+      "digest": "7530fcdc936cf5ddf60df6ae0a9547623eda6c25",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REJECT_DUPLICATE",
+      "entryId": "reject-duplicate.health-system",
+      "insertionRequestIds": [],
+      "mappedRequirement": "No second health system",
+      "owner": "SYSTEM_INTEGRATION_APPLICATION_HEALTH",
+      "path": "server/src/systemIntegration/application/health.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "DUPLICATE_AUTHORITY_FORBIDDEN",
+      "digest": "1ef4fff0e59d045c192261229c7408a904d267c8",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REJECT_DUPLICATE",
+      "entryId": "reject-duplicate.executor",
+      "insertionRequestIds": [],
+      "mappedRequirement": "No second executor",
+      "owner": "FOUNDATION_EXECUTION",
+      "path": "server/src/foundation/execution/index.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "DUPLICATE_AUTHORITY_FORBIDDEN",
+      "digest": "cb2433266dde597de22b873db68c4e5c33d34a1b",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REJECT_DUPLICATE",
+      "entryId": "reject-duplicate.ledger",
+      "insertionRequestIds": [],
+      "mappedRequirement": "No second ledger",
+      "owner": "LEDGER",
+      "path": "server/src/ledger.ts",
+      "resolvedAtShadowBase": true,
+      "revision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+      "digestAlgorithm": "SHA-256",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "authority.activation-directive",
+      "insertionRequestIds": [],
+      "mappedRequirement": "authority.activation-directive",
+      "owner": "OWNER",
+      "path": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+      "resolvedAtShadowBase": false,
+      "revision": "owner-file-20260714",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "4d938de306fb7577d8ff143677e30fb21fc3192da16d554c3a578b59566fb590",
+      "digestAlgorithm": "SHA-256",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "authority.command",
+      "insertionRequestIds": [],
+      "mappedRequirement": "authority.command",
+      "owner": "OWNER",
+      "path": "/Users/cosmosgeek/Desktop/command.txt",
+      "resolvedAtShadowBase": false,
+      "revision": "owner-file-20260714",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "46549feced327d805c6057ecedffc8b65469c6537e5ce64b8c0a4f559eb1da30",
+      "digestAlgorithm": "SHA-256",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "authority.time-amendment",
+      "insertionRequestIds": [],
+      "mappedRequirement": "authority.time-amendment",
+      "owner": "OWNER",
+      "path": "/Users/cosmosgeek/Desktop/OWNER TIME-OPTIMIZATION AMENDMENT.txt",
+      "resolvedAtShadowBase": false,
+      "revision": "owner-file-20260714",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "51d9343f747c7f652bbcd53137b06dec2f760268a9799ea57fbe077eaef898f0",
+      "digestAlgorithm": "SHA-256",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "authority.resolution-receipt",
+      "insertionRequestIds": [],
+      "mappedRequirement": "authority.resolution-receipt",
+      "owner": "MAIN_DIRECTOR",
+      "path": "/Users/cosmosgeek/Desktop/Main/AI_OPS_AUTHORITY_RESOLUTION_RECEIPT.md",
+      "resolvedAtShadowBase": false,
+      "revision": "main-observed-20260714",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "PRESENT_REFERENCE_ONLY",
+      "digest": "db90f7165ec577e19bab0dd4abca29b647ffb7b2d5be677c9b7f4faa5de80878",
+      "digestAlgorithm": "SHA-256",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "authority.d-launch-29",
+      "insertionRequestIds": [],
+      "mappedRequirement": "authority.d-launch-29",
+      "owner": "MAIN_DIRECTOR",
+      "path": "/Users/cosmosgeek/Desktop/Main/QL_DIRECTOR_STATE.md",
+      "resolvedAtShadowBase": false,
+      "revision": "2b32317dbf89907bcf529231247f1f9a63235d49",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    }
+  ],
+  "provenance": {
+    "acceptedS6Revision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+    "generatorId": "ai-ops-a1-contract-generator",
+    "generatorVersion": 1,
+    "hashProfile": "AI_OPS_CANONICAL_JSON_SHA256_V1",
+    "s6OwnerLawRevision": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+    "shadowStatus": "SHADOW_SPECULATIVE",
+    "sourceRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86"
+  },
+  "revision": 1,
+  "schema": "AI_OPS_ENTRY_INVENTORY_V1",
+  "state": "SHADOW_SPECULATIVE",
+  "version": 1
+}

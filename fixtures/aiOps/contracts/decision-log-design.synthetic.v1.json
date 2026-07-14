@@ -1,0 +1,49 @@
+{
+  "artifactId": "aiops-decision-log-design",
+  "contentHash": "ab348cc7966bb1e6f779a978fd245b7a329aee2eb4fe1b4ed666ac7e9af0a4f4",
+  "createdAtMs": 1784001600000,
+  "environment": "SHADOW",
+  "owner": "AI_OPS_A1_CONTRACTS",
+  "payload": {
+    "actionClass": "B",
+    "actorIdentityId": "aiops-shadow-runtime-diagnostician",
+    "actorRole": "RUNTIME_DIAGNOSTICIAN",
+    "assuranceVerified": false,
+    "authorityCreated": false,
+    "capabilityId": "EXPLAIN_INCIDENT",
+    "checkpointReceiptReference": null,
+    "decisionId": "aiops-shadow-decision-fixture-1",
+    "inputDigest": "195527422c8633b72093d741a1f83314dd2c23633d746babbe732ba635e50502",
+    "outcome": "DENY",
+    "policyBundleDigest": "5702f436fd5f2b13ce4a9e0374d688f41c340366b0ef400fa0128d8b55c6e3ab",
+    "policyRevision": "shadow-policy-revision-1",
+    "previousRecordDigest": null,
+    "reasonCodes": [
+      "EXISTING_LEDGER_PERSISTENCE_PORT_NOT_MOUNTED",
+      "SHADOW_SPECULATIVE"
+    ],
+    "recordDigest": "f96de75570d3b2b0db583784cb505a2aed006688c8731244be5b57e577c79333",
+    "redactionIds": [
+      "AI_OPS_REDACTION_SYNTHETIC_FIXTURE"
+    ],
+    "requestedAssurance": "HASH_CHAIN",
+    "resultDigest": "8f9d50e9a6f46bac97b08131552779fe5b94a7f064a61bcebe175506f9984dab",
+    "schema": "AI_OPS_DECISION_LOG_RECORD_V1",
+    "sequence": 1,
+    "state": "SHADOW_SPECULATIVE",
+    "timestampMs": 1784001600000
+  },
+  "provenance": {
+    "acceptedS6Revision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+    "generatorId": "ai-ops-a1-contract-generator",
+    "generatorVersion": 1,
+    "hashProfile": "AI_OPS_CANONICAL_JSON_SHA256_V1",
+    "s6OwnerLawRevision": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+    "shadowStatus": "SHADOW_SPECULATIVE",
+    "sourceRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86"
+  },
+  "revision": 1,
+  "schema": "AI_OPS_DECISION_LOG_DESIGN_V1",
+  "state": "SHADOW_SPECULATIVE",
+  "version": 1
+}

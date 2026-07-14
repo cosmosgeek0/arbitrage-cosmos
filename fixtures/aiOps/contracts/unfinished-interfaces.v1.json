@@ -1,0 +1,98 @@
+{
+  "artifactId": "aiops-unfinished-interfaces",
+  "contentHash": "e0cd431f0816a40010f5617a05ac943bf5a8c70ff5a8099e01c4eb35495a83e0",
+  "createdAtMs": 1784001600000,
+  "environment": "SHADOW",
+  "owner": "AI_OPS_A1_CONTRACTS",
+  "payload": [
+    {
+      "currentState": "UNFINISHED",
+      "dependencyId": "I00_ACCEPTED_AI_OPS_INTERFACES",
+      "insertionRequestIds": [
+        "AIOPS-IR-DOCS-017",
+        "AIOPS-IR-BARREL-018"
+      ],
+      "requirement": "Port into a fresh worktree from the then-accepted SHA and revalidate every accepted interface."
+    },
+    {
+      "currentState": "MISSING_REQUIRED",
+      "dependencyId": "CANONICAL_INCIDENT_OWNER",
+      "insertionRequestIds": [
+        "AIOPS-IR-INCIDENT-019"
+      ],
+      "requirement": "Director ratifies exactly one incident identity and lifecycle owner."
+    },
+    {
+      "currentState": "MISSING_REQUIRED",
+      "dependencyId": "HUMAN_APPROVAL_AND_SIGNATURE_OWNER",
+      "insertionRequestIds": [
+        "AIOPS-IR-APPROVAL-023"
+      ],
+      "requirement": "Separately authenticated owner signs exact runbook and policy artifacts."
+    },
+    {
+      "currentState": "NOT_WIRED",
+      "dependencyId": "AI_OPS_CONTROL_REGISTRY_MOUNT",
+      "insertionRequestIds": [
+        "AIOPS-IR-CONTROLS-008"
+      ],
+      "requirement": "Canonical registry supplies namespaced entries, handlers, CAS and independent readback."
+    },
+    {
+      "currentState": "NOT_WIRED",
+      "dependencyId": "AI_OPS_LEDGER_AND_AUDIT_MOUNT",
+      "insertionRequestIds": [
+        "AIOPS-IR-PERSISTENCE-003",
+        "AIOPS-IR-AUDIT-021"
+      ],
+      "requirement": "Ledger adapter and independent audit delivery satisfy append, readback and loss gates."
+    },
+    {
+      "currentState": "NOT_CONFIGURED",
+      "dependencyId": "AI_OPS_WORKER_IDENTITY_AND_CONFIG",
+      "insertionRequestIds": [
+        "AIOPS-IR-AUTH-004",
+        "AIOPS-IR-CONFIG-025"
+      ],
+      "requirement": "Three isolated principals bind non-secret provider configuration with explicit billing domain."
+    },
+    {
+      "currentState": "NOT_WIRED",
+      "dependencyId": "AI_OPS_RUNBOOK_EXECUTION_BINDING",
+      "insertionRequestIds": [
+        "AIOPS-IR-REMEDIATION-010"
+      ],
+      "requirement": "Existing remediation and command owners ratify each action; A1 never executes."
+    },
+    {
+      "currentState": "MISSING_REQUIRED",
+      "dependencyId": "AI_OPS_ACCEPTED_ASSURANCE_BINDING",
+      "insertionRequestIds": [
+        "AIOPS-IR-ASSURANCE-011"
+      ],
+      "requirement": "Accepted Atlas and S6 evidence bind through Product Assurance owner adapters without fixture promotion."
+    },
+    {
+      "currentState": "NOT_MOUNTED",
+      "dependencyId": "AI_OPS_ROOT_TEST_AND_OPERATION_MANIFEST",
+      "insertionRequestIds": [
+        "AIOPS-IR-PACKAGE-006",
+        "AIOPS-IR-TEST-MOUNT-026"
+      ],
+      "requirement": "Mount focused suite and regenerate Product Assurance scan manifest from accepted SHA."
+    }
+  ],
+  "provenance": {
+    "acceptedS6Revision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+    "generatorId": "ai-ops-a1-contract-generator",
+    "generatorVersion": 1,
+    "hashProfile": "AI_OPS_CANONICAL_JSON_SHA256_V1",
+    "s6OwnerLawRevision": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+    "shadowStatus": "SHADOW_SPECULATIVE",
+    "sourceRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86"
+  },
+  "revision": 1,
+  "schema": "AI_OPS_UNFINISHED_INTERFACES_V1",
+  "state": "SHADOW_SPECULATIVE",
+  "version": 1
+}

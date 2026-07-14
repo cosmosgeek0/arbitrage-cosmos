@@ -1,0 +1,972 @@
+{
+  "artifactId": "aiops-runbook-templates",
+  "contentHash": "0ef366da5a6231fedff9dccfc964f13fd0bdd321c8c95be651755a37cd2206d9",
+  "createdAtMs": 1784001600000,
+  "environment": "SHADOW",
+  "owner": "AI_OPS_A1_CONTRACTS",
+  "payload": [
+    {
+      "actionClass": "A",
+      "actionId": "RECONNECT_STREAM",
+      "authorityCreated": false,
+      "conflictGraphIds": [
+        "AI_OPS_CONFLICT_GRAPH_RECONNECT_STREAM"
+      ],
+      "eligibleFingerprintPatterns": [
+        "AI_OPS_FINGERPRINT_RECONNECT_STREAM_V1"
+      ],
+      "expiresAtMs": 1815537600000,
+      "fencingRequired": true,
+      "graduationTarget": {
+        "capabilityId": "RECONNECT_STREAM",
+        "maximumConsecutiveFailures": 1,
+        "maximumCostMicrounitsPerRun": 0,
+        "maximumFailureRatePermillion": 2000,
+        "maximumFalsePositiveRatePermillion": 1000,
+        "maximumFalseRepairRatePermillion": 0,
+        "maximumP99LatencyMs": 5000,
+        "maximumRecurrenceCount": 2,
+        "maximumRecurrenceRatePermillion": 5000,
+        "maximumResourceBytesPerRun": 2000000,
+        "maximumRetryAttemptsPerIncident": 3,
+        "maximumRollbackRatePermillion": 1000,
+        "maximumUnresolvedSeverityRank": 0,
+        "minimumAbstentionPrecisionPermillion": 990000,
+        "minimumCalibrationScorePermillion": 950000,
+        "minimumEvidenceCompletenessPermillion": 1000000,
+        "minimumLabeledCases": 500,
+        "minimumQuietPeriodMs": 3600000,
+        "minimumReplayPassRatePermillion": 999000,
+        "minimumShadowRuns": 500,
+        "minimumSuccessRatePermillion": 998000,
+        "minimumSuccessfulRuns": 499,
+        "targetRevision": 1
+      },
+      "idempotencyKeyFields": [
+        "incidentId",
+        "actionId",
+        "resourceId",
+        "policyRevision"
+      ],
+      "independentPostconditionIds": [
+        "AI_OPS_POSTCONDITION_RECONNECT_STREAM",
+        "AI_OPS_POSTCONDITION_NO_CAPITAL_EFFECT"
+      ],
+      "leaseRequired": true,
+      "manualFallbackId": "AI_OPS_MANUAL_FALLBACK_RECONNECT_STREAM",
+      "maximumAttempts": 3,
+      "maximumBlastRadiusResources": 1,
+      "maximumDurationMs": 10000,
+      "maximumEffects": 1,
+      "owner": "PRODUCT_ASSURANCE_REMEDIATION_OWNER_REQUIRED",
+      "ownerSignature": null,
+      "ownerSignatureState": "OWNER_SIGNATURE_REQUIRED",
+      "preconditionIds": [
+        "AI_OPS_PRECONDITION_SHADOW_MODE",
+        "AI_OPS_PRECONDITION_RECONNECT_STREAM_BOUNDED"
+      ],
+      "recurrenceEscalationClass": "B",
+      "registrationState": "INSERTION_REQUEST_ONLY",
+      "requiredEvidenceIds": [
+        "AI_OPS_EVIDENCE_TRIGGER",
+        "AI_OPS_EVIDENCE_PRECONDITION",
+        "AI_OPS_EVIDENCE_POSTCONDITION",
+        "AI_OPS_EVIDENCE_QUIET_PERIOD"
+      ],
+      "requiredTelemetryIds": [
+        "AI_OPS_TELEMETRY_RECONNECT_STREAM",
+        "AI_OPS_TELEMETRY_CAPITAL_EFFECT_NONE"
+      ],
+      "revision": 1,
+      "revocationState": "UNSIGNED_INACTIVE",
+      "rollbackOrCompensationId": "AI_OPS_COMPENSATE_RECONNECT_STREAM",
+      "runbookId": "AI_OPS_RUNBOOK_RECONNECT_STREAM",
+      "schema": "AI_OPS_RUNBOOK_MANIFEST_TEMPLATE_V1",
+      "triggerIds": [
+        "AI_OPS_TRIGGER_RECONNECT_STREAM"
+      ],
+      "typedParameterSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "resourceId": {
+            "maxLength": 192,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "resourceId"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "actionClass": "A",
+      "actionId": "RESUBSCRIBE_REPLAY_SAFE",
+      "authorityCreated": false,
+      "conflictGraphIds": [
+        "AI_OPS_CONFLICT_GRAPH_RESUBSCRIBE_REPLAY_SAFE"
+      ],
+      "eligibleFingerprintPatterns": [
+        "AI_OPS_FINGERPRINT_RESUBSCRIBE_REPLAY_SAFE_V1"
+      ],
+      "expiresAtMs": 1815537600000,
+      "fencingRequired": true,
+      "graduationTarget": {
+        "capabilityId": "RESUBSCRIBE_REPLAY_SAFE",
+        "maximumConsecutiveFailures": 1,
+        "maximumCostMicrounitsPerRun": 0,
+        "maximumFailureRatePermillion": 2000,
+        "maximumFalsePositiveRatePermillion": 1000,
+        "maximumFalseRepairRatePermillion": 0,
+        "maximumP99LatencyMs": 8000,
+        "maximumRecurrenceCount": 2,
+        "maximumRecurrenceRatePermillion": 5000,
+        "maximumResourceBytesPerRun": 4000000,
+        "maximumRetryAttemptsPerIncident": 2,
+        "maximumRollbackRatePermillion": 1000,
+        "maximumUnresolvedSeverityRank": 0,
+        "minimumAbstentionPrecisionPermillion": 990000,
+        "minimumCalibrationScorePermillion": 950000,
+        "minimumEvidenceCompletenessPermillion": 1000000,
+        "minimumLabeledCases": 500,
+        "minimumQuietPeriodMs": 3600000,
+        "minimumReplayPassRatePermillion": 999000,
+        "minimumShadowRuns": 500,
+        "minimumSuccessRatePermillion": 998000,
+        "minimumSuccessfulRuns": 499,
+        "targetRevision": 1
+      },
+      "idempotencyKeyFields": [
+        "incidentId",
+        "actionId",
+        "resourceId",
+        "policyRevision"
+      ],
+      "independentPostconditionIds": [
+        "AI_OPS_POSTCONDITION_RESUBSCRIBE_REPLAY_SAFE",
+        "AI_OPS_POSTCONDITION_NO_CAPITAL_EFFECT"
+      ],
+      "leaseRequired": true,
+      "manualFallbackId": "AI_OPS_MANUAL_FALLBACK_RESUBSCRIBE_REPLAY_SAFE",
+      "maximumAttempts": 2,
+      "maximumBlastRadiusResources": 1,
+      "maximumDurationMs": 16000,
+      "maximumEffects": 1,
+      "owner": "PRODUCT_ASSURANCE_REMEDIATION_OWNER_REQUIRED",
+      "ownerSignature": null,
+      "ownerSignatureState": "OWNER_SIGNATURE_REQUIRED",
+      "preconditionIds": [
+        "AI_OPS_PRECONDITION_SHADOW_MODE",
+        "AI_OPS_PRECONDITION_RESUBSCRIBE_REPLAY_SAFE_BOUNDED"
+      ],
+      "recurrenceEscalationClass": "B",
+      "registrationState": "INSERTION_REQUEST_ONLY",
+      "requiredEvidenceIds": [
+        "AI_OPS_EVIDENCE_TRIGGER",
+        "AI_OPS_EVIDENCE_PRECONDITION",
+        "AI_OPS_EVIDENCE_POSTCONDITION",
+        "AI_OPS_EVIDENCE_QUIET_PERIOD"
+      ],
+      "requiredTelemetryIds": [
+        "AI_OPS_TELEMETRY_RESUBSCRIBE_REPLAY_SAFE",
+        "AI_OPS_TELEMETRY_CAPITAL_EFFECT_NONE"
+      ],
+      "revision": 1,
+      "revocationState": "UNSIGNED_INACTIVE",
+      "rollbackOrCompensationId": "AI_OPS_COMPENSATE_RESUBSCRIBE_REPLAY_SAFE",
+      "runbookId": "AI_OPS_RUNBOOK_RESUBSCRIBE_REPLAY_SAFE",
+      "schema": "AI_OPS_RUNBOOK_MANIFEST_TEMPLATE_V1",
+      "triggerIds": [
+        "AI_OPS_TRIGGER_RESUBSCRIBE_REPLAY_SAFE"
+      ],
+      "typedParameterSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "resourceId": {
+            "maxLength": 192,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "resourceId"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "actionClass": "A",
+      "actionId": "RESNAPSHOT_READ_MODEL",
+      "authorityCreated": false,
+      "conflictGraphIds": [
+        "AI_OPS_CONFLICT_GRAPH_RESNAPSHOT_READ_MODEL"
+      ],
+      "eligibleFingerprintPatterns": [
+        "AI_OPS_FINGERPRINT_RESNAPSHOT_READ_MODEL_V1"
+      ],
+      "expiresAtMs": 1815537600000,
+      "fencingRequired": true,
+      "graduationTarget": {
+        "capabilityId": "RESNAPSHOT_READ_MODEL",
+        "maximumConsecutiveFailures": 1,
+        "maximumCostMicrounitsPerRun": 0,
+        "maximumFailureRatePermillion": 1000,
+        "maximumFalsePositiveRatePermillion": 1000,
+        "maximumFalseRepairRatePermillion": 0,
+        "maximumP99LatencyMs": 15000,
+        "maximumRecurrenceCount": 1,
+        "maximumRecurrenceRatePermillion": 5000,
+        "maximumResourceBytesPerRun": 16000000,
+        "maximumRetryAttemptsPerIncident": 2,
+        "maximumRollbackRatePermillion": 1000,
+        "maximumUnresolvedSeverityRank": 0,
+        "minimumAbstentionPrecisionPermillion": 990000,
+        "minimumCalibrationScorePermillion": 950000,
+        "minimumEvidenceCompletenessPermillion": 1000000,
+        "minimumLabeledCases": 500,
+        "minimumQuietPeriodMs": 7200000,
+        "minimumReplayPassRatePermillion": 999000,
+        "minimumShadowRuns": 1000,
+        "minimumSuccessRatePermillion": 999000,
+        "minimumSuccessfulRuns": 999,
+        "targetRevision": 1
+      },
+      "idempotencyKeyFields": [
+        "incidentId",
+        "actionId",
+        "resourceId",
+        "policyRevision"
+      ],
+      "independentPostconditionIds": [
+        "AI_OPS_POSTCONDITION_RESNAPSHOT_READ_MODEL",
+        "AI_OPS_POSTCONDITION_NO_CAPITAL_EFFECT"
+      ],
+      "leaseRequired": true,
+      "manualFallbackId": "AI_OPS_MANUAL_FALLBACK_RESNAPSHOT_READ_MODEL",
+      "maximumAttempts": 2,
+      "maximumBlastRadiusResources": 1,
+      "maximumDurationMs": 30000,
+      "maximumEffects": 1,
+      "owner": "PRODUCT_ASSURANCE_REMEDIATION_OWNER_REQUIRED",
+      "ownerSignature": null,
+      "ownerSignatureState": "OWNER_SIGNATURE_REQUIRED",
+      "preconditionIds": [
+        "AI_OPS_PRECONDITION_SHADOW_MODE",
+        "AI_OPS_PRECONDITION_RESNAPSHOT_READ_MODEL_BOUNDED"
+      ],
+      "recurrenceEscalationClass": "B",
+      "registrationState": "INSERTION_REQUEST_ONLY",
+      "requiredEvidenceIds": [
+        "AI_OPS_EVIDENCE_TRIGGER",
+        "AI_OPS_EVIDENCE_PRECONDITION",
+        "AI_OPS_EVIDENCE_POSTCONDITION",
+        "AI_OPS_EVIDENCE_QUIET_PERIOD"
+      ],
+      "requiredTelemetryIds": [
+        "AI_OPS_TELEMETRY_RESNAPSHOT_READ_MODEL",
+        "AI_OPS_TELEMETRY_CAPITAL_EFFECT_NONE"
+      ],
+      "revision": 1,
+      "revocationState": "UNSIGNED_INACTIVE",
+      "rollbackOrCompensationId": "AI_OPS_COMPENSATE_RESNAPSHOT_READ_MODEL",
+      "runbookId": "AI_OPS_RUNBOOK_RESNAPSHOT_READ_MODEL",
+      "schema": "AI_OPS_RUNBOOK_MANIFEST_TEMPLATE_V1",
+      "triggerIds": [
+        "AI_OPS_TRIGGER_RESNAPSHOT_READ_MODEL"
+      ],
+      "typedParameterSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "resourceId": {
+            "maxLength": 192,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "resourceId"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "actionClass": "A",
+      "actionId": "REFRESH_BOUNDED_METADATA_CACHE",
+      "authorityCreated": false,
+      "conflictGraphIds": [
+        "AI_OPS_CONFLICT_GRAPH_REFRESH_BOUNDED_METADATA_CACHE"
+      ],
+      "eligibleFingerprintPatterns": [
+        "AI_OPS_FINGERPRINT_REFRESH_BOUNDED_METADATA_CACHE_V1"
+      ],
+      "expiresAtMs": 1815537600000,
+      "fencingRequired": true,
+      "graduationTarget": {
+        "capabilityId": "REFRESH_BOUNDED_METADATA_CACHE",
+        "maximumConsecutiveFailures": 1,
+        "maximumCostMicrounitsPerRun": 0,
+        "maximumFailureRatePermillion": 1334,
+        "maximumFalsePositiveRatePermillion": 1000,
+        "maximumFalseRepairRatePermillion": 0,
+        "maximumP99LatencyMs": 10000,
+        "maximumRecurrenceCount": 2,
+        "maximumRecurrenceRatePermillion": 5000,
+        "maximumResourceBytesPerRun": 8000000,
+        "maximumRetryAttemptsPerIncident": 2,
+        "maximumRollbackRatePermillion": 1000,
+        "maximumUnresolvedSeverityRank": 0,
+        "minimumAbstentionPrecisionPermillion": 990000,
+        "minimumCalibrationScorePermillion": 950000,
+        "minimumEvidenceCompletenessPermillion": 1000000,
+        "minimumLabeledCases": 500,
+        "minimumQuietPeriodMs": 3600000,
+        "minimumReplayPassRatePermillion": 999000,
+        "minimumShadowRuns": 750,
+        "minimumSuccessRatePermillion": 998666,
+        "minimumSuccessfulRuns": 749,
+        "targetRevision": 1
+      },
+      "idempotencyKeyFields": [
+        "incidentId",
+        "actionId",
+        "resourceId",
+        "policyRevision"
+      ],
+      "independentPostconditionIds": [
+        "AI_OPS_POSTCONDITION_REFRESH_BOUNDED_METADATA_CACHE",
+        "AI_OPS_POSTCONDITION_NO_CAPITAL_EFFECT"
+      ],
+      "leaseRequired": true,
+      "manualFallbackId": "AI_OPS_MANUAL_FALLBACK_REFRESH_BOUNDED_METADATA_CACHE",
+      "maximumAttempts": 2,
+      "maximumBlastRadiusResources": 1,
+      "maximumDurationMs": 20000,
+      "maximumEffects": 1,
+      "owner": "PRODUCT_ASSURANCE_REMEDIATION_OWNER_REQUIRED",
+      "ownerSignature": null,
+      "ownerSignatureState": "OWNER_SIGNATURE_REQUIRED",
+      "preconditionIds": [
+        "AI_OPS_PRECONDITION_SHADOW_MODE",
+        "AI_OPS_PRECONDITION_REFRESH_BOUNDED_METADATA_CACHE_BOUNDED"
+      ],
+      "recurrenceEscalationClass": "B",
+      "registrationState": "INSERTION_REQUEST_ONLY",
+      "requiredEvidenceIds": [
+        "AI_OPS_EVIDENCE_TRIGGER",
+        "AI_OPS_EVIDENCE_PRECONDITION",
+        "AI_OPS_EVIDENCE_POSTCONDITION",
+        "AI_OPS_EVIDENCE_QUIET_PERIOD"
+      ],
+      "requiredTelemetryIds": [
+        "AI_OPS_TELEMETRY_REFRESH_BOUNDED_METADATA_CACHE",
+        "AI_OPS_TELEMETRY_CAPITAL_EFFECT_NONE"
+      ],
+      "revision": 1,
+      "revocationState": "UNSIGNED_INACTIVE",
+      "rollbackOrCompensationId": "AI_OPS_COMPENSATE_REFRESH_BOUNDED_METADATA_CACHE",
+      "runbookId": "AI_OPS_RUNBOOK_REFRESH_BOUNDED_METADATA_CACHE",
+      "schema": "AI_OPS_RUNBOOK_MANIFEST_TEMPLATE_V1",
+      "triggerIds": [
+        "AI_OPS_TRIGGER_REFRESH_BOUNDED_METADATA_CACHE"
+      ],
+      "typedParameterSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "resourceId": {
+            "maxLength": 192,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "resourceId"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "actionClass": "A",
+      "actionId": "REBUILD_BOUNDED_DERIVED_CACHE",
+      "authorityCreated": false,
+      "conflictGraphIds": [
+        "AI_OPS_CONFLICT_GRAPH_REBUILD_BOUNDED_DERIVED_CACHE"
+      ],
+      "eligibleFingerprintPatterns": [
+        "AI_OPS_FINGERPRINT_REBUILD_BOUNDED_DERIVED_CACHE_V1"
+      ],
+      "expiresAtMs": 1815537600000,
+      "fencingRequired": true,
+      "graduationTarget": {
+        "capabilityId": "REBUILD_BOUNDED_DERIVED_CACHE",
+        "maximumConsecutiveFailures": 1,
+        "maximumCostMicrounitsPerRun": 0,
+        "maximumFailureRatePermillion": 1000,
+        "maximumFalsePositiveRatePermillion": 1000,
+        "maximumFalseRepairRatePermillion": 0,
+        "maximumP99LatencyMs": 30000,
+        "maximumRecurrenceCount": 1,
+        "maximumRecurrenceRatePermillion": 5000,
+        "maximumResourceBytesPerRun": 64000000,
+        "maximumRetryAttemptsPerIncident": 1,
+        "maximumRollbackRatePermillion": 1000,
+        "maximumUnresolvedSeverityRank": 0,
+        "minimumAbstentionPrecisionPermillion": 990000,
+        "minimumCalibrationScorePermillion": 950000,
+        "minimumEvidenceCompletenessPermillion": 1000000,
+        "minimumLabeledCases": 500,
+        "minimumQuietPeriodMs": 14400000,
+        "minimumReplayPassRatePermillion": 999000,
+        "minimumShadowRuns": 1000,
+        "minimumSuccessRatePermillion": 999000,
+        "minimumSuccessfulRuns": 999,
+        "targetRevision": 1
+      },
+      "idempotencyKeyFields": [
+        "incidentId",
+        "actionId",
+        "resourceId",
+        "policyRevision"
+      ],
+      "independentPostconditionIds": [
+        "AI_OPS_POSTCONDITION_REBUILD_BOUNDED_DERIVED_CACHE",
+        "AI_OPS_POSTCONDITION_NO_CAPITAL_EFFECT"
+      ],
+      "leaseRequired": true,
+      "manualFallbackId": "AI_OPS_MANUAL_FALLBACK_REBUILD_BOUNDED_DERIVED_CACHE",
+      "maximumAttempts": 1,
+      "maximumBlastRadiusResources": 1,
+      "maximumDurationMs": 60000,
+      "maximumEffects": 1,
+      "owner": "PRODUCT_ASSURANCE_REMEDIATION_OWNER_REQUIRED",
+      "ownerSignature": null,
+      "ownerSignatureState": "OWNER_SIGNATURE_REQUIRED",
+      "preconditionIds": [
+        "AI_OPS_PRECONDITION_SHADOW_MODE",
+        "AI_OPS_PRECONDITION_REBUILD_BOUNDED_DERIVED_CACHE_BOUNDED"
+      ],
+      "recurrenceEscalationClass": "B",
+      "registrationState": "INSERTION_REQUEST_ONLY",
+      "requiredEvidenceIds": [
+        "AI_OPS_EVIDENCE_TRIGGER",
+        "AI_OPS_EVIDENCE_PRECONDITION",
+        "AI_OPS_EVIDENCE_POSTCONDITION",
+        "AI_OPS_EVIDENCE_QUIET_PERIOD"
+      ],
+      "requiredTelemetryIds": [
+        "AI_OPS_TELEMETRY_REBUILD_BOUNDED_DERIVED_CACHE",
+        "AI_OPS_TELEMETRY_CAPITAL_EFFECT_NONE"
+      ],
+      "revision": 1,
+      "revocationState": "UNSIGNED_INACTIVE",
+      "rollbackOrCompensationId": "AI_OPS_COMPENSATE_REBUILD_BOUNDED_DERIVED_CACHE",
+      "runbookId": "AI_OPS_RUNBOOK_REBUILD_BOUNDED_DERIVED_CACHE",
+      "schema": "AI_OPS_RUNBOOK_MANIFEST_TEMPLATE_V1",
+      "triggerIds": [
+        "AI_OPS_TRIGGER_REBUILD_BOUNDED_DERIVED_CACHE"
+      ],
+      "typedParameterSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "resourceId": {
+            "maxLength": 192,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "resourceId"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "actionClass": "A",
+      "actionId": "RESTART_CLASSIFIED_STATELESS_CHILD",
+      "authorityCreated": false,
+      "conflictGraphIds": [
+        "AI_OPS_CONFLICT_GRAPH_RESTART_CLASSIFIED_STATELESS_CHILD"
+      ],
+      "eligibleFingerprintPatterns": [
+        "AI_OPS_FINGERPRINT_RESTART_CLASSIFIED_STATELESS_CHILD_V1"
+      ],
+      "expiresAtMs": 1815537600000,
+      "fencingRequired": true,
+      "graduationTarget": {
+        "capabilityId": "RESTART_CLASSIFIED_STATELESS_CHILD",
+        "maximumConsecutiveFailures": 1,
+        "maximumCostMicrounitsPerRun": 0,
+        "maximumFailureRatePermillion": 500,
+        "maximumFalsePositiveRatePermillion": 1000,
+        "maximumFalseRepairRatePermillion": 0,
+        "maximumP99LatencyMs": 20000,
+        "maximumRecurrenceCount": 1,
+        "maximumRecurrenceRatePermillion": 5000,
+        "maximumResourceBytesPerRun": 16000000,
+        "maximumRetryAttemptsPerIncident": 1,
+        "maximumRollbackRatePermillion": 1000,
+        "maximumUnresolvedSeverityRank": 0,
+        "minimumAbstentionPrecisionPermillion": 990000,
+        "minimumCalibrationScorePermillion": 950000,
+        "minimumEvidenceCompletenessPermillion": 1000000,
+        "minimumLabeledCases": 500,
+        "minimumQuietPeriodMs": 21600000,
+        "minimumReplayPassRatePermillion": 999000,
+        "minimumShadowRuns": 2000,
+        "minimumSuccessRatePermillion": 999500,
+        "minimumSuccessfulRuns": 1999,
+        "targetRevision": 1
+      },
+      "idempotencyKeyFields": [
+        "incidentId",
+        "actionId",
+        "resourceId",
+        "policyRevision"
+      ],
+      "independentPostconditionIds": [
+        "AI_OPS_POSTCONDITION_RESTART_CLASSIFIED_STATELESS_CHILD",
+        "AI_OPS_POSTCONDITION_NO_CAPITAL_EFFECT"
+      ],
+      "leaseRequired": true,
+      "manualFallbackId": "AI_OPS_MANUAL_FALLBACK_RESTART_CLASSIFIED_STATELESS_CHILD",
+      "maximumAttempts": 1,
+      "maximumBlastRadiusResources": 1,
+      "maximumDurationMs": 40000,
+      "maximumEffects": 1,
+      "owner": "PRODUCT_ASSURANCE_REMEDIATION_OWNER_REQUIRED",
+      "ownerSignature": null,
+      "ownerSignatureState": "OWNER_SIGNATURE_REQUIRED",
+      "preconditionIds": [
+        "AI_OPS_PRECONDITION_SHADOW_MODE",
+        "AI_OPS_PRECONDITION_RESTART_CLASSIFIED_STATELESS_CHILD_BOUNDED"
+      ],
+      "recurrenceEscalationClass": "B",
+      "registrationState": "INSERTION_REQUEST_ONLY",
+      "requiredEvidenceIds": [
+        "AI_OPS_EVIDENCE_TRIGGER",
+        "AI_OPS_EVIDENCE_PRECONDITION",
+        "AI_OPS_EVIDENCE_POSTCONDITION",
+        "AI_OPS_EVIDENCE_QUIET_PERIOD"
+      ],
+      "requiredTelemetryIds": [
+        "AI_OPS_TELEMETRY_RESTART_CLASSIFIED_STATELESS_CHILD",
+        "AI_OPS_TELEMETRY_CAPITAL_EFFECT_NONE"
+      ],
+      "revision": 1,
+      "revocationState": "UNSIGNED_INACTIVE",
+      "rollbackOrCompensationId": "AI_OPS_COMPENSATE_RESTART_CLASSIFIED_STATELESS_CHILD",
+      "runbookId": "AI_OPS_RUNBOOK_RESTART_CLASSIFIED_STATELESS_CHILD",
+      "schema": "AI_OPS_RUNBOOK_MANIFEST_TEMPLATE_V1",
+      "triggerIds": [
+        "AI_OPS_TRIGGER_RESTART_CLASSIFIED_STATELESS_CHILD"
+      ],
+      "typedParameterSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "resourceId": {
+            "maxLength": 192,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "resourceId"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "actionClass": "A",
+      "actionId": "ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER",
+      "authorityCreated": false,
+      "conflictGraphIds": [
+        "AI_OPS_CONFLICT_GRAPH_ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER"
+      ],
+      "eligibleFingerprintPatterns": [
+        "AI_OPS_FINGERPRINT_ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER_V1"
+      ],
+      "expiresAtMs": 1815537600000,
+      "fencingRequired": true,
+      "graduationTarget": {
+        "capabilityId": "ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER",
+        "maximumConsecutiveFailures": 1,
+        "maximumCostMicrounitsPerRun": 250000,
+        "maximumFailureRatePermillion": 500,
+        "maximumFalsePositiveRatePermillion": 1000,
+        "maximumFalseRepairRatePermillion": 0,
+        "maximumP99LatencyMs": 30000,
+        "maximumRecurrenceCount": 1,
+        "maximumRecurrenceRatePermillion": 5000,
+        "maximumResourceBytesPerRun": 32000000,
+        "maximumRetryAttemptsPerIncident": 1,
+        "maximumRollbackRatePermillion": 1000,
+        "maximumUnresolvedSeverityRank": 0,
+        "minimumAbstentionPrecisionPermillion": 990000,
+        "minimumCalibrationScorePermillion": 950000,
+        "minimumEvidenceCompletenessPermillion": 1000000,
+        "minimumLabeledCases": 500,
+        "minimumQuietPeriodMs": 21600000,
+        "minimumReplayPassRatePermillion": 999000,
+        "minimumShadowRuns": 2000,
+        "minimumSuccessRatePermillion": 999500,
+        "minimumSuccessfulRuns": 1999,
+        "targetRevision": 1
+      },
+      "idempotencyKeyFields": [
+        "incidentId",
+        "actionId",
+        "resourceId",
+        "policyRevision"
+      ],
+      "independentPostconditionIds": [
+        "AI_OPS_POSTCONDITION_ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER",
+        "AI_OPS_POSTCONDITION_NO_CAPITAL_EFFECT"
+      ],
+      "leaseRequired": true,
+      "manualFallbackId": "AI_OPS_MANUAL_FALLBACK_ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER",
+      "maximumAttempts": 1,
+      "maximumBlastRadiusResources": 1,
+      "maximumDurationMs": 60000,
+      "maximumEffects": 1,
+      "owner": "PRODUCT_ASSURANCE_REMEDIATION_OWNER_REQUIRED",
+      "ownerSignature": null,
+      "ownerSignatureState": "OWNER_SIGNATURE_REQUIRED",
+      "preconditionIds": [
+        "AI_OPS_PRECONDITION_SHADOW_MODE",
+        "AI_OPS_PRECONDITION_ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER_BOUNDED"
+      ],
+      "recurrenceEscalationClass": "B",
+      "registrationState": "INSERTION_REQUEST_ONLY",
+      "requiredEvidenceIds": [
+        "AI_OPS_EVIDENCE_TRIGGER",
+        "AI_OPS_EVIDENCE_PRECONDITION",
+        "AI_OPS_EVIDENCE_POSTCONDITION",
+        "AI_OPS_EVIDENCE_QUIET_PERIOD"
+      ],
+      "requiredTelemetryIds": [
+        "AI_OPS_TELEMETRY_ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER",
+        "AI_OPS_TELEMETRY_CAPITAL_EFFECT_NONE"
+      ],
+      "revision": 1,
+      "revocationState": "UNSIGNED_INACTIVE",
+      "rollbackOrCompensationId": "AI_OPS_COMPENSATE_ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER",
+      "runbookId": "AI_OPS_RUNBOOK_ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER",
+      "schema": "AI_OPS_RUNBOOK_MANIFEST_TEMPLATE_V1",
+      "triggerIds": [
+        "AI_OPS_TRIGGER_ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER"
+      ],
+      "typedParameterSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "resourceId": {
+            "maxLength": 192,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "resourceId"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "actionClass": "A",
+      "actionId": "COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE",
+      "authorityCreated": false,
+      "conflictGraphIds": [
+        "AI_OPS_CONFLICT_GRAPH_COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE"
+      ],
+      "eligibleFingerprintPatterns": [
+        "AI_OPS_FINGERPRINT_COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE_V1"
+      ],
+      "expiresAtMs": 1815537600000,
+      "fencingRequired": true,
+      "graduationTarget": {
+        "capabilityId": "COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE",
+        "maximumConsecutiveFailures": 1,
+        "maximumCostMicrounitsPerRun": 0,
+        "maximumFailureRatePermillion": 1000,
+        "maximumFalsePositiveRatePermillion": 1000,
+        "maximumFalseRepairRatePermillion": 0,
+        "maximumP99LatencyMs": 20000,
+        "maximumRecurrenceCount": 2,
+        "maximumRecurrenceRatePermillion": 5000,
+        "maximumResourceBytesPerRun": 32000000,
+        "maximumRetryAttemptsPerIncident": 1,
+        "maximumRollbackRatePermillion": 1000,
+        "maximumUnresolvedSeverityRank": 0,
+        "minimumAbstentionPrecisionPermillion": 990000,
+        "minimumCalibrationScorePermillion": 950000,
+        "minimumEvidenceCompletenessPermillion": 1000000,
+        "minimumLabeledCases": 500,
+        "minimumQuietPeriodMs": 7200000,
+        "minimumReplayPassRatePermillion": 999000,
+        "minimumShadowRuns": 1000,
+        "minimumSuccessRatePermillion": 999000,
+        "minimumSuccessfulRuns": 999,
+        "targetRevision": 1
+      },
+      "idempotencyKeyFields": [
+        "incidentId",
+        "actionId",
+        "resourceId",
+        "policyRevision"
+      ],
+      "independentPostconditionIds": [
+        "AI_OPS_POSTCONDITION_COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE",
+        "AI_OPS_POSTCONDITION_NO_CAPITAL_EFFECT"
+      ],
+      "leaseRequired": true,
+      "manualFallbackId": "AI_OPS_MANUAL_FALLBACK_COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE",
+      "maximumAttempts": 1,
+      "maximumBlastRadiusResources": 1,
+      "maximumDurationMs": 40000,
+      "maximumEffects": 1,
+      "owner": "PRODUCT_ASSURANCE_REMEDIATION_OWNER_REQUIRED",
+      "ownerSignature": null,
+      "ownerSignatureState": "OWNER_SIGNATURE_REQUIRED",
+      "preconditionIds": [
+        "AI_OPS_PRECONDITION_SHADOW_MODE",
+        "AI_OPS_PRECONDITION_COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE_BOUNDED"
+      ],
+      "recurrenceEscalationClass": "B",
+      "registrationState": "INSERTION_REQUEST_ONLY",
+      "requiredEvidenceIds": [
+        "AI_OPS_EVIDENCE_TRIGGER",
+        "AI_OPS_EVIDENCE_PRECONDITION",
+        "AI_OPS_EVIDENCE_POSTCONDITION",
+        "AI_OPS_EVIDENCE_QUIET_PERIOD"
+      ],
+      "requiredTelemetryIds": [
+        "AI_OPS_TELEMETRY_COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE",
+        "AI_OPS_TELEMETRY_CAPITAL_EFFECT_NONE"
+      ],
+      "revision": 1,
+      "revocationState": "UNSIGNED_INACTIVE",
+      "rollbackOrCompensationId": "AI_OPS_COMPENSATE_COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE",
+      "runbookId": "AI_OPS_RUNBOOK_COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE",
+      "schema": "AI_OPS_RUNBOOK_MANIFEST_TEMPLATE_V1",
+      "triggerIds": [
+        "AI_OPS_TRIGGER_COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE"
+      ],
+      "typedParameterSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "resourceId": {
+            "maxLength": 192,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "resourceId"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "actionClass": "A",
+      "actionId": "RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY",
+      "authorityCreated": false,
+      "conflictGraphIds": [
+        "AI_OPS_CONFLICT_GRAPH_RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY"
+      ],
+      "eligibleFingerprintPatterns": [
+        "AI_OPS_FINGERPRINT_RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY_V1"
+      ],
+      "expiresAtMs": 1815537600000,
+      "fencingRequired": true,
+      "graduationTarget": {
+        "capabilityId": "RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY",
+        "maximumConsecutiveFailures": 1,
+        "maximumCostMicrounitsPerRun": 0,
+        "maximumFailureRatePermillion": 400,
+        "maximumFalsePositiveRatePermillion": 1000,
+        "maximumFalseRepairRatePermillion": 0,
+        "maximumP99LatencyMs": 15000,
+        "maximumRecurrenceCount": 1,
+        "maximumRecurrenceRatePermillion": 5000,
+        "maximumResourceBytesPerRun": 8000000,
+        "maximumRetryAttemptsPerIncident": 1,
+        "maximumRollbackRatePermillion": 1000,
+        "maximumUnresolvedSeverityRank": 0,
+        "minimumAbstentionPrecisionPermillion": 990000,
+        "minimumCalibrationScorePermillion": 950000,
+        "minimumEvidenceCompletenessPermillion": 1000000,
+        "minimumLabeledCases": 500,
+        "minimumQuietPeriodMs": 21600000,
+        "minimumReplayPassRatePermillion": 999000,
+        "minimumShadowRuns": 2500,
+        "minimumSuccessRatePermillion": 999600,
+        "minimumSuccessfulRuns": 2499,
+        "targetRevision": 1
+      },
+      "idempotencyKeyFields": [
+        "incidentId",
+        "actionId",
+        "resourceId",
+        "policyRevision"
+      ],
+      "independentPostconditionIds": [
+        "AI_OPS_POSTCONDITION_RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY",
+        "AI_OPS_POSTCONDITION_NO_CAPITAL_EFFECT"
+      ],
+      "leaseRequired": true,
+      "manualFallbackId": "AI_OPS_MANUAL_FALLBACK_RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY",
+      "maximumAttempts": 1,
+      "maximumBlastRadiusResources": 1,
+      "maximumDurationMs": 30000,
+      "maximumEffects": 1,
+      "owner": "PRODUCT_ASSURANCE_REMEDIATION_OWNER_REQUIRED",
+      "ownerSignature": null,
+      "ownerSignatureState": "OWNER_SIGNATURE_REQUIRED",
+      "preconditionIds": [
+        "AI_OPS_PRECONDITION_SHADOW_MODE",
+        "AI_OPS_PRECONDITION_RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY_BOUNDED"
+      ],
+      "recurrenceEscalationClass": "B",
+      "registrationState": "INSERTION_REQUEST_ONLY",
+      "requiredEvidenceIds": [
+        "AI_OPS_EVIDENCE_TRIGGER",
+        "AI_OPS_EVIDENCE_PRECONDITION",
+        "AI_OPS_EVIDENCE_POSTCONDITION",
+        "AI_OPS_EVIDENCE_QUIET_PERIOD"
+      ],
+      "requiredTelemetryIds": [
+        "AI_OPS_TELEMETRY_RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY",
+        "AI_OPS_TELEMETRY_CAPITAL_EFFECT_NONE"
+      ],
+      "revision": 1,
+      "revocationState": "UNSIGNED_INACTIVE",
+      "rollbackOrCompensationId": "AI_OPS_COMPENSATE_RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY",
+      "runbookId": "AI_OPS_RUNBOOK_RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY",
+      "schema": "AI_OPS_RUNBOOK_MANIFEST_TEMPLATE_V1",
+      "triggerIds": [
+        "AI_OPS_TRIGGER_RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY"
+      ],
+      "typedParameterSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "resourceId": {
+            "maxLength": 192,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "resourceId"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "actionClass": "A",
+      "actionId": "REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION",
+      "authorityCreated": false,
+      "conflictGraphIds": [
+        "AI_OPS_CONFLICT_GRAPH_REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION"
+      ],
+      "eligibleFingerprintPatterns": [
+        "AI_OPS_FINGERPRINT_REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION_V1"
+      ],
+      "expiresAtMs": 1815537600000,
+      "fencingRequired": true,
+      "graduationTarget": {
+        "capabilityId": "REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION",
+        "maximumConsecutiveFailures": 1,
+        "maximumCostMicrounitsPerRun": 0,
+        "maximumFailureRatePermillion": 400,
+        "maximumFalsePositiveRatePermillion": 1000,
+        "maximumFalseRepairRatePermillion": 0,
+        "maximumP99LatencyMs": 10000,
+        "maximumRecurrenceCount": 1,
+        "maximumRecurrenceRatePermillion": 5000,
+        "maximumResourceBytesPerRun": 8000000,
+        "maximumRetryAttemptsPerIncident": 1,
+        "maximumRollbackRatePermillion": 1000,
+        "maximumUnresolvedSeverityRank": 0,
+        "minimumAbstentionPrecisionPermillion": 990000,
+        "minimumCalibrationScorePermillion": 950000,
+        "minimumEvidenceCompletenessPermillion": 1000000,
+        "minimumLabeledCases": 500,
+        "minimumQuietPeriodMs": 21600000,
+        "minimumReplayPassRatePermillion": 999000,
+        "minimumShadowRuns": 2500,
+        "minimumSuccessRatePermillion": 999600,
+        "minimumSuccessfulRuns": 2499,
+        "targetRevision": 1
+      },
+      "idempotencyKeyFields": [
+        "incidentId",
+        "actionId",
+        "resourceId",
+        "policyRevision"
+      ],
+      "independentPostconditionIds": [
+        "AI_OPS_POSTCONDITION_REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION",
+        "AI_OPS_POSTCONDITION_NO_CAPITAL_EFFECT"
+      ],
+      "leaseRequired": true,
+      "manualFallbackId": "AI_OPS_MANUAL_FALLBACK_REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION",
+      "maximumAttempts": 1,
+      "maximumBlastRadiusResources": 1,
+      "maximumDurationMs": 20000,
+      "maximumEffects": 1,
+      "owner": "PRODUCT_ASSURANCE_REMEDIATION_OWNER_REQUIRED",
+      "ownerSignature": null,
+      "ownerSignatureState": "OWNER_SIGNATURE_REQUIRED",
+      "preconditionIds": [
+        "AI_OPS_PRECONDITION_SHADOW_MODE",
+        "AI_OPS_PRECONDITION_REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION_BOUNDED"
+      ],
+      "recurrenceEscalationClass": "B",
+      "registrationState": "INSERTION_REQUEST_ONLY",
+      "requiredEvidenceIds": [
+        "AI_OPS_EVIDENCE_TRIGGER",
+        "AI_OPS_EVIDENCE_PRECONDITION",
+        "AI_OPS_EVIDENCE_POSTCONDITION",
+        "AI_OPS_EVIDENCE_QUIET_PERIOD"
+      ],
+      "requiredTelemetryIds": [
+        "AI_OPS_TELEMETRY_REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION",
+        "AI_OPS_TELEMETRY_CAPITAL_EFFECT_NONE"
+      ],
+      "revision": 1,
+      "revocationState": "UNSIGNED_INACTIVE",
+      "rollbackOrCompensationId": "AI_OPS_COMPENSATE_REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION",
+      "runbookId": "AI_OPS_RUNBOOK_REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION",
+      "schema": "AI_OPS_RUNBOOK_MANIFEST_TEMPLATE_V1",
+      "triggerIds": [
+        "AI_OPS_TRIGGER_REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION"
+      ],
+      "typedParameterSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "resourceId": {
+            "maxLength": 192,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "resourceId"
+        ],
+        "type": "object"
+      }
+    }
+  ],
+  "provenance": {
+    "acceptedS6Revision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+    "generatorId": "ai-ops-a1-contract-generator",
+    "generatorVersion": 1,
+    "hashProfile": "AI_OPS_CANONICAL_JSON_SHA256_V1",
+    "s6OwnerLawRevision": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+    "shadowStatus": "SHADOW_SPECULATIVE",
+    "sourceRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86"
+  },
+  "revision": 1,
+  "schema": "AI_OPS_RUNBOOK_TEMPLATES_V1",
+  "state": "SHADOW_SPECULATIVE",
+  "version": 1
+}

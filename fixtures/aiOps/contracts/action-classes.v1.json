@@ -1,0 +1,121 @@
+{
+  "artifactId": "aiops-action-classes",
+  "contentHash": "29a0fd61c8cb311f1c0ec1fb9000243902d8a7032b8ebf20b37dfe8c73700759",
+  "createdAtMs": 1784001600000,
+  "environment": "SHADOW",
+  "owner": "AI_OPS_A1_CONTRACTS",
+  "payload": [
+    {
+      "actionClass": "A",
+      "dialect": "AI_OPS_ACTIVATION_SECTION_7_V1",
+      "disposition": "INDIVIDUALLY_REGISTERED_LOCAL_NON_CAPITAL_REVERSIBLE_ONLY",
+      "eligibleActions": [
+        "RECONNECT_STREAM",
+        "RESUBSCRIBE_REPLAY_SAFE",
+        "RESNAPSHOT_READ_MODEL",
+        "REFRESH_BOUNDED_METADATA_CACHE",
+        "REBUILD_BOUNDED_DERIVED_CACHE",
+        "RESTART_CLASSIFIED_STATELESS_CHILD",
+        "ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER",
+        "COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE",
+        "RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY",
+        "REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION"
+      ],
+      "operationalAuthorityCreated": false,
+      "requiredEvidence": [
+        "DETERMINISTIC_TRIGGER",
+        "CANONICAL_REGISTRATION",
+        "PRECONDITIONS",
+        "IDEMPOTENCY",
+        "LEASE_AND_FENCING",
+        "RETRY_BUDGET",
+        "CONFLICT_GRAPH",
+        "RESOURCE_CAP",
+        "TIMEOUT",
+        "INDEPENDENT_POSTCONDITIONS",
+        "QUIET_PERIOD",
+        "ROLLBACK_OR_COMPENSATION",
+        "RECURRENCE_ESCALATION",
+        "NINE_POINT_S6_PROMOTION_EVIDENCE"
+      ]
+    },
+    {
+      "actionClass": "B",
+      "dialect": "AI_OPS_ACTIVATION_SECTION_7_V1",
+      "disposition": "PROPOSAL_ONLY",
+      "eligibleActions": [
+        "HOST_OR_SYSTEM_SERVICE_RESTART",
+        "CONFIGURATION_CHANGE",
+        "PROVIDER_ACTIVATION_OR_CHANGE",
+        "AWS_CLOUDFLARE_TUNNEL_OR_NETWORK_MUTATION",
+        "DATABASE_REPAIR_OR_MIGRATION",
+        "DEPLOYMENT_OR_ROLLBACK",
+        "CAPITAL_ADJACENT_RECOVERY"
+      ],
+      "operationalAuthorityCreated": false,
+      "requiredEvidence": [
+        "TYPED_PROPOSAL",
+        "HUMAN_OWNER_APPROVAL",
+        "CANONICAL_EFFECT_OWNER",
+        "INDEPENDENT_READBACK"
+      ]
+    },
+    {
+      "actionClass": "C",
+      "dialect": "AI_OPS_ACTIVATION_SECTION_7_V1",
+      "disposition": "ISOLATED_PATCH_ONLY",
+      "eligibleActions": [
+        "CODE_OR_TEST_MODIFICATION",
+        "UI_MODIFICATION",
+        "ALGORITHM_FEATURE_OR_MODEL_CHANGE",
+        "RUNBOOK_OR_POLICY_CHANGE"
+      ],
+      "operationalAuthorityCreated": false,
+      "requiredEvidence": [
+        "ISOLATED_WORKTREE",
+        "EXACT_BASE_AND_DIFF",
+        "FOCUSED_AND_ACCUMULATED_TESTS",
+        "INDEPENDENT_VERIFICATION",
+        "HASH_BOUND_HANDOFF"
+      ]
+    },
+    {
+      "actionClass": "D",
+      "dialect": "AI_OPS_ACTIVATION_SECTION_7_V1",
+      "disposition": "PERMANENTLY_DENIED",
+      "eligibleActions": [
+        "AI_OPS_DENY_ARBITRARY_TOOL_OR_IO",
+        "AI_OPS_DENY_CREDENTIAL_ACCESS_OR_MUTATION",
+        "AI_OPS_DENY_DUPLICATE_AUTHORITY_CREATION",
+        "AI_OPS_DENY_EVIDENCE_OR_HISTORY_MUTATION",
+        "AI_OPS_DENY_FUNDS_MUTATION",
+        "AI_OPS_DENY_LIVE_CODE_OR_PERSISTENCE_WRITE",
+        "AI_OPS_DENY_ORDER_MUTATION",
+        "AI_OPS_DENY_OWNER_GATE_BYPASS",
+        "AI_OPS_DENY_SAFETY_CONTROL_DISABLE",
+        "AI_OPS_DENY_SELF_APPROVAL_OR_VERIFICATION",
+        "AI_OPS_DENY_SELF_MERGE_OR_DEPLOY",
+        "AI_OPS_DENY_SELF_POLICY_MUTATION",
+        "AI_OPS_DENY_TRADING_CONSTRAINT_MUTATION",
+        "AI_OPS_DENY_UNTRUSTED_DATA_AS_INSTRUCTION"
+      ],
+      "operationalAuthorityCreated": false,
+      "requiredEvidence": [
+        "HARD_DENIAL_MATCH"
+      ]
+    }
+  ],
+  "provenance": {
+    "acceptedS6Revision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+    "generatorId": "ai-ops-a1-contract-generator",
+    "generatorVersion": 1,
+    "hashProfile": "AI_OPS_CANONICAL_JSON_SHA256_V1",
+    "s6OwnerLawRevision": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+    "shadowStatus": "SHADOW_SPECULATIVE",
+    "sourceRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86"
+  },
+  "revision": 1,
+  "schema": "AI_OPS_ACTION_CLASSES_V1",
+  "state": "SHADOW_SPECULATIVE",
+  "version": 1
+}

@@ -1,0 +1,58 @@
+{
+  "artifactId": "aiops-schema-reuse-map",
+  "contentHash": "2b536817890d1c9d7d0946a5f5b644bd7165c0a173bb4c54ab920d03ea761400",
+  "createdAtMs": 1784001600000,
+  "environment": "SHADOW",
+  "owner": "AI_OPS_A1_CONTRACTS",
+  "payload": [
+    {
+      "adaptation": "Add strict policy negative-zero and lone-surrogate rejection; preserve hash-profile label.",
+      "donor": "Foundation canonicalJson and time",
+      "mode": "REUSE",
+      "targetContract": "AI_OPS_ARTIFACT_ENVELOPE_V1"
+    },
+    {
+      "adaptation": "Expand three isolated worker rows across five closed provider states plus one explicit NOT_CONFIGURED advisor row; retain absence semantics.",
+      "donor": "S6 WorkloadIdentityEventV1 and ExternalSandboxNotConfiguredV1",
+      "mode": "ADAPT",
+      "targetContract": "AI_OPS_IDENTITY_PROVIDER_MATRIX_V1"
+    },
+    {
+      "adaptation": "Reuse evidence grammar only; never cast A-D because directive section 7 meanings differ.",
+      "donor": "S6 SelfCorrectionClassPolicyV1 and CandidateV1",
+      "mode": "ADAPT",
+      "targetContract": "AI_OPS_ACTION_CLASS_V1"
+    },
+    {
+      "adaptation": "Expose append/readback port over Ledger; do not create storage.",
+      "donor": "S6 AppendRetentionReceiptV1 and Ledger adapter",
+      "mode": "ADAPT",
+      "targetContract": "AI_OPS_DECISION_LOG_PORT_V1"
+    },
+    {
+      "adaptation": "Unsigned insertion-only templates with numerical per-capability targets.",
+      "donor": "S6 repair evidence and Product Assurance remediation campaign",
+      "mode": "ADAPT",
+      "targetContract": "AI_OPS_RUNBOOK_MANIFEST_TEMPLATE_V1"
+    },
+    {
+      "adaptation": "Same DRAFT and PENDING_BACKEND grammar with AI Ops seams.",
+      "donor": "S6 InsertionRequestRowV1",
+      "mode": "REUSE",
+      "targetContract": "AI_OPS_INSERTION_REQUESTS_V1"
+    }
+  ],
+  "provenance": {
+    "acceptedS6Revision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+    "generatorId": "ai-ops-a1-contract-generator",
+    "generatorVersion": 1,
+    "hashProfile": "AI_OPS_CANONICAL_JSON_SHA256_V1",
+    "s6OwnerLawRevision": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+    "shadowStatus": "SHADOW_SPECULATIVE",
+    "sourceRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86"
+  },
+  "revision": 1,
+  "schema": "AI_OPS_SCHEMA_REUSE_MAP_V1",
+  "state": "SHADOW_SPECULATIVE",
+  "version": 1
+}

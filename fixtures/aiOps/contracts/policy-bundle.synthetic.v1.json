@@ -1,0 +1,86 @@
+{
+  "artifactId": "aiops-policy-bundle-fixture",
+  "contentHash": "3277b08022b9ecec6af707c2d65e979528f5ae56cc5e895144083f6604f4b472",
+  "createdAtMs": 1784001600000,
+  "environment": "SHADOW",
+  "owner": "AI_OPS_A1_CONTRACTS",
+  "payload": {
+    "candidate": {
+      "declaredBundleDigest": "5702f436fd5f2b13ce4a9e0374d688f41c340366b0ef400fa0128d8b55c6e3ab",
+      "payload": {
+        "allowedActionClasses": [
+          "A",
+          "B",
+          "C"
+        ],
+        "authorityExpansionRequested": false,
+        "bundleId": "aiops-shadow-policy-fixture",
+        "bundleType": "SNAPSHOT",
+        "effectiveAtMs": 1784001600000,
+        "expiresAtMs": 1784088000000,
+        "fileInventory": [
+          {
+            "digest": "3a9b2362faf564e35c9b802604e64692653eae6178f5cad5cb7aecf4aa8cf36e",
+            "digestAlgorithm": "SHA-256",
+            "mediaType": "application/json",
+            "path": "deny.json"
+          },
+          {
+            "digest": "5c4d891f7ba8a8fab9b8464c8d91e284d940a2998666cf8a3c15246304667432",
+            "digestAlgorithm": "SHA-256",
+            "mediaType": "application/vnd.openpolicyagent.rego",
+            "path": "policy.rego"
+          }
+        ],
+        "hardDenialIds": [
+          "AI_OPS_DENY_ARBITRARY_TOOL_OR_IO",
+          "AI_OPS_DENY_CREDENTIAL_ACCESS_OR_MUTATION",
+          "AI_OPS_DENY_DUPLICATE_AUTHORITY_CREATION",
+          "AI_OPS_DENY_EVIDENCE_OR_HISTORY_MUTATION",
+          "AI_OPS_DENY_FUNDS_MUTATION",
+          "AI_OPS_DENY_LIVE_CODE_OR_PERSISTENCE_WRITE",
+          "AI_OPS_DENY_ORDER_MUTATION",
+          "AI_OPS_DENY_OWNER_GATE_BYPASS",
+          "AI_OPS_DENY_SAFETY_CONTROL_DISABLE",
+          "AI_OPS_DENY_SELF_APPROVAL_OR_VERIFICATION",
+          "AI_OPS_DENY_SELF_MERGE_OR_DEPLOY",
+          "AI_OPS_DENY_SELF_POLICY_MUTATION",
+          "AI_OPS_DENY_TRADING_CONSTRAINT_MUTATION",
+          "AI_OPS_DENY_UNTRUSTED_DATA_AS_INSTRUCTION"
+        ],
+        "parentBundleDigest": null,
+        "policyEpoch": 1,
+        "revision": "shadow-policy-revision-1",
+        "schema": "AI_OPS_POLICY_BUNDLE_V1"
+      },
+      "signature": {
+        "algorithm": "ED25519",
+        "keyReference": "owner-key-ref://synthetic-test-key",
+        "payloadType": "application/vnd.aiops.policy-bundle.v1+jcs",
+        "schema": "AI_OPS_POLICY_SIGNATURE_V1",
+        "signatureBytesBase64Url": "U1lOVEhFVElDX1VOVkVSSUZJRURfU0lHTkFUVVJF",
+        "signedPayloadDigest": "5702f436fd5f2b13ce4a9e0374d688f41c340366b0ef400fa0128d8b55c6e3ab",
+        "signerRole": "AI_OPS_OWNER"
+      }
+    },
+    "credentialMaterialPresent": false,
+    "fileContentsUtf8": {
+      "deny.json": "{\"default\":\"deny\"}",
+      "policy.rego": "package aiops\ndefault allow := false"
+    },
+    "fixtureState": "SYNTHETIC_UNVERIFIED"
+  },
+  "provenance": {
+    "acceptedS6Revision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+    "generatorId": "ai-ops-a1-contract-generator",
+    "generatorVersion": 1,
+    "hashProfile": "AI_OPS_CANONICAL_JSON_SHA256_V1",
+    "s6OwnerLawRevision": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+    "shadowStatus": "SHADOW_SPECULATIVE",
+    "sourceRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86"
+  },
+  "revision": 1,
+  "schema": "AI_OPS_POLICY_BUNDLE_FIXTURE_V1",
+  "state": "SHADOW_SPECULATIVE",
+  "version": 1
+}

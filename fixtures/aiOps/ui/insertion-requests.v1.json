@@ -1,0 +1,411 @@
+{
+  "schema": "AiOpsShadowInsertionRequestSetV1",
+  "version": 1,
+  "posture": "SHADOW_SPECULATIVE",
+  "baseSha": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+  "authorityCreated": false,
+  "rows": [
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-A4-IR-MOUNT-001",
+      "status": "DRAFT",
+      "requestedOwner": "Future fresh AI Ops integrator + accepted System/Health composition owner",
+      "targetSeam": "Existing System/Health operational overview and AI Ops workspace mount",
+      "reason": "Port the closed AiOpsWorkspace projection only after INTEGRATED_ACCEPTED; satisfy AIOPS-IR-ROUTES-002, AIOPS-IR-NAVIGATION-005, and AIOPS-IR-COCKPIT-015 without a second route, shell, topbar, store, or navigation owner.",
+      "contract": [
+        "Mount web/src/aiOps/AiOpsWorkspace.tsx into the accepted existing product surface.",
+        "Supply one closed canonical snapshot and keep all local tabs presentation-only.",
+        "Preserve SHADOW_SPECULATIVE until the complete lane acceptance loop passes in a fresh accepted worktree."
+      ],
+      "tests": [
+        "Canonical route ownership remains singular.",
+        "No duplicate topbar, settings, navigation, store, or provider appears.",
+        "All five local projection sections render from one supplied snapshot."
+      ],
+      "expectedBehavior": [
+        "System/Health owns the overview and workspace entry.",
+        "Deep links reuse accepted navigation at integration time.",
+        "Unmounted or missing owner data renders NOT_CONFIGURED or UNKNOWN."
+      ],
+      "wiringState": [
+        "PENDING_BACKEND:MOUNT_A4_AI_OPS_WORKSPACE_IN_ACCEPTED_SYSTEM_HEALTH"
+      ],
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-A4-IR-CANONICAL-READ-002",
+      "status": "DRAFT",
+      "requestedOwner": "System Integration + Product Assurance canonical read owners",
+      "targetSeam": "Closed AI Ops supervisor and assurance snapshot adapter",
+      "reason": "A4 cannot replace PRODUCT_ASSURANCE_CANONICAL_READ_OWNER_NOT_CONFIGURED or derive system, risk, capital, health, telemetry, incident, trace, lease, or workflow truth.",
+      "contract": [
+        "Adapt existing SystemSupervisorReadModel and accepted Product Assurance projection into an immutable render snapshot.",
+        "Every fact carries owner, source identity, revision, observed time, posture, reason, and null-preserving value.",
+        "No browser-side evaluator, cache, discovery loop, or source-of-truth store."
+      ],
+      "tests": [
+        "Unknown and unavailable values remain null or explicit non-green postures.",
+        "Expected-component denominator includes missing and silent owners.",
+        "Source hashes and revisions survive projection unchanged."
+      ],
+      "expectedBehavior": [
+        "Canonical owner output is rendered without recomputation.",
+        "Stale and conflicting sources fail visibly.",
+        "AI-off product truth remains independently available."
+      ],
+      "wiringState": [
+        "PENDING_BACKEND:PRODUCT_ASSURANCE_CANONICAL_READ_OWNER_NOT_CONFIGURED",
+        "PENDING_BACKEND:PROJECT_DIAGNOSTIC_WORKER_ASSURANCE_FIELDS"
+      ],
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-A4-IR-INCIDENT-003",
+      "status": "DRAFT",
+      "requestedOwner": "Accepted deterministic incident gate + Ledger projection owner",
+      "targetSeam": "Incident list, evidence, suppression/inhibition/actionability, commands, and forensic correlation",
+      "reason": "INCIDENT_OWNER_NOT_CONFIGURED. A4 synthetic cases must never become an incident classifier, grouping engine, suppression store, command handler, or durable history owner; satisfy AIOPS-IR-INCIDENT-019, AIOPS-IR-EVENTS-009, and AIOPS-IR-AUDIT-021.",
+      "contract": [
+        "Supply owner-computed incident fields and bounded correlation traces.",
+        "Map the eight registry-backed command requests to the existing policy/command owner.",
+        "Persist only through the existing Ledger owner."
+      ],
+      "tests": [
+        "Creating, grouping, suppressing, acknowledging, closing, and archiving remain owner-only.",
+        "Every command passes identity, schema, budget, lease/fence, receipt, and readback gates.",
+        "Raw logs remain with Logs; the cockpit receives bounded drill-down only."
+      ],
+      "expectedBehavior": [
+        "A visible command never grants authority.",
+        "Missing command handlers render NOT_WIRED and disabled.",
+        "Conflicting evidence preserves abstention."
+      ],
+      "wiringState": [
+        "PENDING_BACKEND:INCIDENT_OWNER_NOT_CONFIGURED",
+        "PENDING_BACKEND:MOUNT_INCIDENT_SUPPRESSION_INHIBITION_ACTIONABILITY_PROJECTION"
+      ],
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-A4-IR-CHAT-004",
+      "status": "DRAFT",
+      "requestedOwner": "Accepted authenticated AI case router and diagnostic provider owner",
+      "targetSeam": "Owner chat request and evidence-cited response projection",
+      "reason": "No accepted AI chat/session/actionability interface exists. A4 must not create a personal ChatGPT embed, provider client, session store, credential path, or natural-language authority bypass.",
+      "contract": [
+        "Bind each owner message to a canonical case and fresh authenticated identity.",
+        "Return evidence IDs, timestamps, requested capability, expected effect, policy result, cost, and state.",
+        "Persist canonical evidence and workflow state outside model conversation context."
+      ],
+      "tests": [
+        "Natural language cannot bypass typed tool/policy requests.",
+        "Stale or missing evidence is disclosed in every affected response.",
+        "Provider credentials and raw private payloads never enter browser JavaScript."
+      ],
+      "expectedBehavior": [
+        "Local draft preparation remains presentation-only.",
+        "Send remains NOT_WIRED until case router and provider owners are accepted.",
+        "Fresh session lineage resumes from signed context and canonical workflow state."
+      ],
+      "wiringState": [
+        "PENDING_BACKEND:MOUNT_AUTHENTICATED_AI_CASE_ROUTER",
+        "PENDING_BACKEND:MOUNT_AI_CONTEXT_SESSION_LINEAGE_READBACK"
+      ],
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-A4-IR-CONTROLS-005",
+      "status": "DRAFT",
+      "requestedOwner": "Existing canonical Control Plane/control registry + Product Assurance diagnostic boundary",
+      "targetSeam": "AI_OPS A01-L10 registry read, requested change-set, compare-and-swap, effect, receipt, rollback, and independent readback",
+      "reason": "A4 projects 120 namespaced rows but cannot add an AIControlRegistry, permission evaluator, budget authority, effect handler, requested/effective store, or policy route; satisfy AIOPS-IR-CONTROLS-008 and AIOPS-IR-AUTH-004.",
+      "contract": [
+        "Return every canonical field plus requested, effective, independent readback, dependencies, conflicts, expiry, and server envelope.",
+        "Accept only authenticated owner ControlChangeSet requests against an exact registry revision.",
+        "Validate and apply atomically, then independently read back every affected row."
+      ],
+      "tests": [
+        "Every UI request stays within the supplied immutable maximum-authority envelope.",
+        "Turning every request to its projected maximum leaves every absolute hard denial unreachable.",
+        "Missing handler, stale revision, partial effect, disagreement, or rollback failure locks the capability fail-closed."
+      ],
+      "expectedBehavior": [
+        "Client disabled state is presentation only; server policy is authoritative.",
+        "Bulk disable may be offered after wiring; no bulk enable action exists.",
+        "Risk, Capital, AWS, Notifications, RefreshDock, and command effects remain delegated to existing owners."
+      ],
+      "wiringState": [
+        "PENDING_BACKEND:MOUNT_AI_OPS_CONTROL_REGISTRY_PROJECTION",
+        "PENDING_BACKEND:MOUNT_AI_OPS_CONTROL_CHANGESET_AND_READBACK"
+      ],
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-A4-IR-KILL-006",
+      "status": "DRAFT",
+      "requestedOwner": "I09 + L14/IP-CONTROL diagnostic-plane kill owner",
+      "targetSeam": "diagnostic-plane.kill / SET_DIAGNOSTIC_PLANE_KILL engage-only projection",
+      "reason": "The diagnostic kill is a pending backend draft and must never overload the financial SET_KILL_SWITCH command.",
+      "contract": [
+        "Expose desired, effective, blocking reason, independent readback, receipt, revision, and observation time.",
+        "Allow engage only; self-reenable is always false.",
+        "Evidence, audit, deterministic monitoring, and normal product operation continue while AI is off."
+      ],
+      "tests": [
+        "Kill works when provider and model paths are unavailable.",
+        "No release/resume path is created by A4.",
+        "Financial and diagnostic kill identities never alias."
+      ],
+      "expectedBehavior": [
+        "One action engages the server-owned diagnostic kill when accepted.",
+        "Unknown or missing readback remains non-green and fail-closed.",
+        "A4 stays disabled and NOT_WIRED until the owner exists."
+      ],
+      "wiringState": [
+        "PENDING_BACKEND:SET_DIAGNOSTIC_PLANE_KILL"
+      ],
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-A4-IR-PROVIDER-007",
+      "status": "DRAFT",
+      "requestedOwner": "Diagnostic provider workload-identity, egress, retention, qualification, and budget owners",
+      "targetSeam": "Per-role provider/model mapping and qualification readback",
+      "reason": "The fixture uses only obvious fake identities. UI_SUBSCRIPTION_ONLY cannot activate unattended runtime; satisfy AIOPS-IR-MANAGED-INVENTORY-022 and unfinished I03/I08/I13 bindings.",
+      "contract": [
+        "Keep Runtime Diagnostician, Repair Worker, Independent Verifier, and optional Research Advisor identities isolated.",
+        "Return provider/model/prompt/tool versions, auth posture, retention, egress, quotas, costs, health, and qualification evidence.",
+        "Permit fallback only after the exact route passes equivalent schemas, denials, privacy, retention, eval, and budget gates."
+      ],
+      "tests": [
+        "No credential inheritance between roles.",
+        "No provider key or exchange secret reaches the browser.",
+        "Unqualified or unavailable fallback becomes DIAGNOSTIC_PLANE_UNAVAILABLE."
+      ],
+      "expectedBehavior": [
+        "NOT_CONFIGURED remains visible until all external authorization proofs pass.",
+        "Provider agreement never becomes proof or authority.",
+        "Budget exhaustion is a bounded state transition."
+      ],
+      "wiringState": [
+        "PENDING_BACKEND:MOUNT_DIAGNOSTIC_PROVIDER_WORKLOAD_IDENTITY_PROJECTION",
+        "PENDING_BACKEND:MOUNT_PROVIDER_QUALIFICATION_AND_RATE_BUDGET_READBACK"
+      ],
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-A4-IR-GOVERNANCE-008",
+      "status": "DRAFT",
+      "requestedOwner": "Product Assurance operation-policy, runbook, diagnostic-governance, and evaluation owners",
+      "targetSeam": "Classification, runbook, policy, provider qualification, and capability-graduation projection",
+      "reason": "A4 cannot own classification, runbook registration, policy evaluation, provider qualification, capability graduation, promotion, or learning state.",
+      "contract": [
+        "Supply immutable manifest revisions and numerical evidence identities per capability.",
+        "Separate incident severity, reasoning depth, operating mode, and authority envelope.",
+        "Expose abstention, calibration, corpus, replay, cost, latency, shadow-period, canary, rollback, and retirement evidence."
+      ],
+      "tests": [
+        "More reasoning budget never expands permission.",
+        "Producer cannot verify its own independence.",
+        "Missing graduation evidence renders MISSING or REFERENCE_ONLY."
+      ],
+      "expectedBehavior": [
+        "Only accepted owner projections can render READY.",
+        "No recent incident or PnL hot-rewrites model, strategy, policy, Risk, or Capital.",
+        "Promotion remains exact-version and independently reviewed."
+      ],
+      "wiringState": [
+        "PENDING_BACKEND:A_AGENT_DIAGNOSTIC_GOVERNANCE_OWNER_BINDING",
+        "PENDING_BACKEND:MOUNT_CAPABILITY_GRADUATION_PROJECTION"
+      ],
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-A4-IR-PROBES-009",
+      "status": "DRAFT",
+      "requestedOwner": "Accepted deterministic synthetic browser-probe owner",
+      "targetSeam": "Bounded UI probe result and incident-evidence projection",
+      "reason": "No live UI-probe owner/runner interface is accepted. A4 must not poll, render on a timer, or create a browser/network monitor; satisfy AIOPS-IR-BROWSER-PROBE-024.",
+      "contract": [
+        "Project page/auth, routes/widgets, API/DOM coherence, missing/stale, impossible-green, controls, themes, console/network, and owner journeys.",
+        "Attach bounded DOM/accessibility, screenshot, network, console, build-hash, and expected-fixture artifacts only on failure.",
+        "Feed material failures through the canonical incident owner."
+      ],
+      "tests": [
+        "Probe runner is deterministic and independent of model polling.",
+        "Impossible green and broken-control cases fail visibly.",
+        "Artifacts are bounded, redacted, hashed, and provenance-linked."
+      ],
+      "expectedBehavior": [
+        "A4 renders projection rows only.",
+        "Missing live runner remains UNKNOWN or NOT_CONFIGURED.",
+        "Model diagnosis occurs only after a material probe failure."
+      ],
+      "wiringState": [
+        "PENDING_BACKEND:MOUNT_SYNTHETIC_UI_PROBE_OWNER_PROJECTION"
+      ],
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-A4-IR-REFRESH-010",
+      "status": "DRAFT",
+      "requestedOwner": "Existing RefreshDock / Connection Watchman owner",
+      "targetSeam": "RefreshDock and POST /api/refresh requested/effective/readback projection",
+      "reason": "RefreshDock is the sole refresh/reset owner. A4 cannot call POST /api/refresh, add a reset route, reconnect, restart, cadence, latency, or source-health owner; satisfy AIOPS-IR-REFRESH-013.",
+      "contract": [
+        "Expose target, target posture, requested state, effective state, independent readback, revision, receipt, and reason.",
+        "Reuse canonicalRefreshTargetPosture and accepted target semantics unchanged.",
+        "Route any future request through the existing authenticated owner only."
+      ],
+      "tests": [
+        "A4 source contains no fetch, WebSocket, EventSource, timer, or /api/refresh invocation.",
+        "runtime/all/market target posture remains CONTROL_PREVIEW_REQUIRED where applicable.",
+        "No duplicate reset/restart owner exists."
+      ],
+      "expectedBehavior": [
+        "A4 displays PROJECTION_ONLY while unmounted.",
+        "Unknown effective/readback remains visible.",
+        "Refresh action, if later mounted, remains owned by RefreshDock."
+      ],
+      "wiringState": [
+        "PENDING_BACKEND:MOUNT_REFRESH_DOCK_AI_OPS_READBACK_PROJECTION"
+      ],
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-A4-IR-COCKPIT-011",
+      "status": "DRAFT",
+      "requestedOwner": "System Integration supervisor + existing telemetry/SLO/trace owners",
+      "targetSeam": "Five-level cockpit, bounded history, dependency graph, and forensic drill-down",
+      "reason": "A4 must consume validated owner outputs and must not reimplement cockpit evaluators, trend/SLO evaluation, trace indexing, inventory discovery, or money lifecycle truth.",
+      "contract": [
+        "Supply L1 immediate safety, L2 inventory graph, L3 resilience/history, L4 read-only money lifecycle, and L5 bounded forensics.",
+        "Supply source/process age, p50/p95/p99, queue/backpressure, drops/coalescing, reconciliation/ambiguity, recovery, cost, incidents, host/WAL, and rate-budget series.",
+        "Keep Risk and Capital configuration out of AI permissions."
+      ],
+      "tests": [
+        "Historical unknowns remain null and non-green.",
+        "L4 is observation-only with no money actions.",
+        "Raw logs remain searchable in Logs rather than becoming the primary cockpit."
+      ],
+      "expectedBehavior": [
+        "Existing owner evaluations pass through unchanged.",
+        "Bounded trends expose observation time and source revision.",
+        "Forensic drill-down uses canonical correlation identity."
+      ],
+      "wiringState": [
+        "PENDING_BACKEND:MOUNT_ACCEPTED_FIVE_LEVEL_COCKPIT_PROJECTION",
+        "PENDING_BACKEND:MOUNT_HISTORICAL_SLO_AND_TRACE_READBACK"
+      ],
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-A4-IR-AUTH-012",
+      "status": "DRAFT",
+      "requestedOwner": "Existing authenticated browser/backend owner",
+      "targetSeam": "Owner identity, fresh reauthentication, exact approval principal, and browser-safe projection",
+      "reason": "A4 cannot edit auth, add provider subscription auth, create sessions, or treat an AI/service identity as the human production approver; satisfy AIOPS-IR-AUTH-004 and AIOPS-IR-APPROVAL-023.",
+      "contract": [
+        "Reuse the accepted Cloudflare/authenticated backend route.",
+        "Require fresh human-owner authentication for exact elevated production artifacts.",
+        "Keep provider/exchange credentials server-side and out of projections."
+      ],
+      "tests": [
+        "Chat context never satisfies approval identity.",
+        "Builder, verifier, director, CI, and service account cannot occupy human approver field.",
+        "Expired, stale-hash, scope-mismatched, or inherited approvals fail closed."
+      ],
+      "expectedBehavior": [
+        "Read-only fixture access creates no authority.",
+        "Elevated requests show exact scope, environment, reason, limits, revision, TTL, receipt, and readback.",
+        "No secrets appear in browser payloads or logs."
+      ],
+      "wiringState": [
+        "PENDING_BACKEND:MOUNT_ACCEPTED_OWNER_AUTH_AND_APPROVAL_PROJECTION"
+      ],
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-A4-IR-LOGS-NOTIFY-013",
+      "status": "DRAFT",
+      "requestedOwner": "Existing Logs + Notifications owners",
+      "targetSeam": "AI audit drill-down, paging, delivery, acknowledgement, escalation, and postmortem links",
+      "reason": "A4 must not duplicate the complete audit timeline, delivery state, paging destination, acknowledgement, escalation chain, or archive owner; satisfy AIOPS-IR-TELEMETRY-012, AIOPS-IR-NOTIFY-014, and AIOPS-IR-AUDIT-021.",
+      "contract": [
+        "Logs owns complete AI run/tool/policy/audit timeline.",
+        "Notifications owns delivery, paging, acknowledgement, escalation, and postmortem threshold.",
+        "A4 receives bounded summaries and deep-link identities only."
+      ],
+      "tests": [
+        "Delivery success and failure are independently visible.",
+        "No A4 notification store or paging transport exists.",
+        "Audit loss and paging loss fail visibly."
+      ],
+      "expectedBehavior": [
+        "Cockpit shows posture and links; full evidence stays with canonical owners.",
+        "Urgent pages remain distinct from tickets and informational events.",
+        "Archive requires verified outcome and owner policy."
+      ],
+      "wiringState": [
+        "PENDING_BACKEND:MOUNT_LOGS_AI_OPS_AUDIT_LINKS",
+        "PENDING_BACKEND:MOUNT_NOTIFICATIONS_AI_OPS_PAGING_READBACK"
+      ],
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-A4-IR-TEST-MOUNT-014",
+      "status": "DRAFT",
+      "requestedOwner": "Future fresh integrator + independent fresh verifier",
+      "targetSeam": "Accepted mount verification and canonical test discovery",
+      "reason": "A4 cannot edit package scripts, routes, shared CSS, or canonical mounts. Its focused tests must be rerun after porting against accepted interfaces; satisfy AIOPS-IR-PACKAGE-006 and AIOPS-IR-TEST-MOUNT-026.",
+      "contract": [
+        "Port only the accepted A4 artifact into a fresh worktree from the accepted SHA.",
+        "Recheck every imported interface and insertion seam against that SHA.",
+        "Run the entire lane acceptance loop, repository gates, and DESIGN ship gate.",
+        "Update STATE.md in the same accepted port commit if component status, wiring, counts, or commands change; this speculative shadow receipt does not alter canonical project state."
+      ],
+      "tests": [
+        "Focused suite runs under total network deny.",
+        "Rendered app passes 2940 CSS-pixel owner viewport plus 1440/1920 at 100/125 percent, light/dark, computed-style, overflow, keyboard, and click checks.",
+        "Independent verifier reconstructs branch, scope, sources, hashes, tests, and authority boundary without inheriting builder narrative."
+      ],
+      "expectedBehavior": [
+        "No SHADOW artifact gains PRESTAGE_READY or acceptance status.",
+        "Any interface drift blocks the port until reconciled through the canonical owner.",
+        "Only post-port full acceptance may create a real receipt and canonical STATE.md update."
+      ],
+      "wiringState": [
+        "PENDING_BACKEND:PORT_A4_AFTER_INTEGRATED_ACCEPTED",
+        "PENDING_BACKEND:RUN_CANONICAL_MOUNT_AND_SIX_RUN_BROWSER_GATE"
+      ],
+      "authorityCreated": false
+    }
+  ]
+}

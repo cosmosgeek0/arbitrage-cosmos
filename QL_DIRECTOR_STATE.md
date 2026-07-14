@@ -67,6 +67,8 @@ Both branches descend from PROTOCOL_SHA. Main stays director-owned; neither Code
 4. Owner directives arrive from "commanders" (external ChatGPT) as .md files — verify hashes, correct stale assumptions from git truth (they are navigation hints, not acceptance evidence), register a D-LAUNCH-N acceptance entry here, then cut worktrees + blocks.
 5. External-action boundary (launch §10 / I00 §20) is never delegated and never inferred.
 
+## D-LAUNCH-18 (2026-07-14): L lane SEALED LANE_READY / BUILT_AND_TESTED_UNWIRED (L worktree df6b472). ALL donors accepted+sealed: Q(02b4ecc), L lane, dash-shell, l15-infra, 4 IP packets, assurance A-CORE+hazard/formal/cockpit/agent/stability/S4. Role-2 integrator (WORKER_PROMPTS wave 11, folder i00-assembly) now integrates every donor incl. L LAST, then INTEGRATION_CANDIDATE_READY. Role-3 verifier = different fresh session next. Landing (Phase 5) = me.
+
 ## D-LAUNCH-17 (2026-07-14): FINAL_INTEGRATION order accepted — Phase 1 handoff complete
 Commander endgame order = controlling handoff law. DIRECTOR_HANDOFF_READY committed in i00-assembly (9bf531c) with exact donor table. Old director read-only except Phase-5 landing. Role 2 integrator block = WORKER_PROMPTS wave 11 (integrate accepted donors NOW, L lane LAST after LANE_READY, stop at INTEGRATION_CANDIDATE_READY). Role 3 verifier = DIFFERENT session, NEW worktree pinned to candidate SHA. Role 4 fix owner only on rejection.
 

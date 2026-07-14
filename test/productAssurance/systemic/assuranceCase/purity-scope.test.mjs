@@ -8,12 +8,42 @@ import test from 'node:test';
 const REPO = resolve(import.meta.dirname, '../../../..');
 const FIXTURE_ROOT = resolve(REPO, 'fixtures/productAssurance/systemic/assuranceCase');
 const TEST_ROOT = resolve(REPO, 'test/productAssurance/systemic/assuranceCase');
-const BASE = 'c57610cb5f7d56efb61e53ae27057fbe92a6a2f6';
+const ASSIGNED_BASE = 'c57610cb5f7d56efb61e53ae27057fbe92a6a2f6';
 const S1_ACCEPTED = 'ab33b3712cddd67c3ec91cfa1dd232c75226cd9f';
 const PROTECTED_I00 = 'I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md';
 const PROTECTED_I00_SHA256 = '9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5';
 
 const git = (...args) => execFileSync('git', args, { cwd: REPO, encoding: 'utf8' }).trim();
+const latestDirectorMerge = () => {
+  const record = git(
+    'log',
+    '--first-parent',
+    '--merges',
+    '--grep=^director:',
+    '--max-count=1',
+    '--format=%H%x1f%P%x1f%s',
+    'HEAD',
+  );
+  const [commit = '', parentList = '', subject = ''] = record.split('\x1f');
+  const parents = parentList.split(/\s+/).filter(Boolean);
+  assert.match(commit, /^[0-9a-f]{40}$/, 'latest director merge must resolve to a full commit ID');
+  assert.equal(parents.length, 2, 'latest director merge must have exactly two parents');
+  assert.match(subject, /^director:/, 'latest director merge must carry the canonical director prefix');
+  execFileSync('git', ['merge-base', '--is-ancestor', ASSIGNED_BASE, commit], { cwd: REPO });
+  return commit;
+};
+const committedPathsAfter = (baseline) => git('rev-list', '--first-parent', `${baseline}..HEAD`)
+  .split('\n')
+  .filter(Boolean)
+  .flatMap((commit) => git(
+    'diff-tree',
+    '--root',
+    '--no-commit-id',
+    '--name-only',
+    '-r',
+    '-m',
+    commit,
+  ).split('\n').filter(Boolean));
 const walk = (root) => readdirSync(root).flatMap((name) => {
   const path = resolve(root, name);
   return statSync(path).isDirectory() ? walk(path) : [path];
@@ -27,13 +57,13 @@ const allowedRepoPath = (path) => (
 
 test('branch and base ancestry match the assigned S4 lane', () => {
   assert.equal(git('branch', '--show-current'), 'ip-assur-case-20260713');
-  execFileSync('git', ['merge-base', '--is-ancestor', BASE, 'HEAD'], { cwd: REPO });
+  execFileSync('git', ['merge-base', '--is-ancestor', ASSIGNED_BASE, 'HEAD'], { cwd: REPO });
   assert.equal(git('rev-parse', S1_ACCEPTED), S1_ACCEPTED);
-  assert.equal(git('merge-base', BASE, S1_ACCEPTED), '9785c93102b00389847b77c2f9348c06abc4344b');
+  assert.equal(git('merge-base', ASSIGNED_BASE, S1_ACCEPTED), '9785c93102b00389847b77c2f9348c06abc4344b');
 });
 
 test('tracked and untracked paths remain inside the two exclusive roots', () => {
-  const committed = git('diff', '--name-only', `${BASE}..HEAD`).split('\n').filter(Boolean);
+  const committed = committedPathsAfter(latestDirectorMerge());
   const unstaged = git('diff', '--name-only').split('\n').filter(Boolean);
   const staged = git('diff', '--cached', '--name-only').split('\n').filter(Boolean);
   const porcelain = execFileSync('git', ['status', '--porcelain=v1', '-z', '--untracked-files=all'], { cwd: REPO });

@@ -8,16 +8,19 @@ Audit branch/base: `preverify-20260714` / `0bbf23c06c60c1a4553422f099d8b242f13b6
 
 Base tree: `3ed205eab255d230bbc44d0b623b9e500b5ccb69`
 
-Observed integration ref: `i00-product-assembly-20260713@139d2cf07ffd3167bd54a3c14c0fc6671c2f02e9`
+Observed integration ref: `i00-product-assembly-20260713@18a0b9d1153a5f4bb6c8b42909362c6a295475bb`
 
-Observed integration tree: `84dd406f40c66c6771daee657a51224393a7d8d6`
+Observed integration tree: `135ec02a6615741307c323b561bf999e2d71ab20`
+
+Observed living director ref: `current-main@5a304482a84d12aee0b1e982283458f113450735` (`D-LAUNCH-20`), tree `4ff9f07ced847a9b2781d7a6974b27937bcd1155`
+
 Method: immutable Git objects and refs only; no network, checkout, merge, build, test, external action, secret access, or other-worktree filesystem inspection.
 
 ## Executive verdict
 
 The 15 requested branch tips all resolve and every local branch ref equals the supplied tip. Fourteen tips carry an immutable accepted/prestage/ready receipt consistent with their bounded disposition. **A-FORMAL does not.** Its latest reseal passes a scope audit but preserves terminal `BLOCKED_NO_NETWORK_BOUNDARY_VIOLATED`; its packet state is blocked; Role 2 separately refused it. Therefore Git does not support a claim that the requested set is `15/15 receipt-accepted`.
 
-The observed integration ref is not a candidate. For the requested set it contains 12 exact donor ancestors, one explicitly receipted dashboard subtree equivalence, and omits exact L and A-FORMAL. Its own 15-donor denominator uses a different set that includes F-BRIDGE and SI-RECON and excludes L/A-FORMAL. D-LAUNCH-19 says the final regenerated set is 15 including L. The final candidate must reconcile that denominator from Git; this audit does not choose one on Role 3’s behalf.
+The observed integration ref is not a candidate. For the requested set it contains 13 exact donor ancestors, one explicitly receipted dashboard subtree equivalence, and excludes A-FORMAL under a written blocked disposition. Exact L was integrated last as second parent of merge `ec82bc51d5311dfb3f505216bfb3fa41733f038c`. The integration receipt reports `16/16/16/16` after removing blocked A-FORMAL from the D-LAUNCH-18 set and counting F-BRIDGE and SI-RECON as receipted-equivalence donors. D-LAUNCH-20 now makes every fixed prior number non-authoritative: the candidate and Role 3 must regenerate equality and record every expected-but-blocked/missing disposition from Git.
 
 All mechanically attributable worker path sets are within their recorded ownership. L and S4 contain canonical director-merge history outside their worker roots; those exact paths are identified below and must remain exemptions, not be misreported as worker authorship. Static import-purity/duplicate-authority scans found no new live executor, ledger, exchange transport, strategy owner, capital/risk owner, production socket, or secret boundary in the donor-owned source. Several final-candidate integration risks remain and are listed as findings.
 
@@ -31,7 +34,7 @@ All mechanically attributable worker path sets are within their recorded ownersh
 | IP-OPS directive | blob `a25cbd1d1a695296c635560c962840d579a16a04`; SHA-256 `2af8348906f9306765a0d0d57f21b01349767e6115f04f43ce00fa6328f1b779` |
 | IP-PROOF directive | blob `a72e951378584735655c7a1a2a625527dbfee1f8`; SHA-256 `e59d516ba9acb9a7bb1ce63ca149ce662f308a0fd0900b72db3d2fe2e8bb93b6` |
 | Canonical authority map at audit base | `ARCHITECTURE.md` blob `93d7604599b43109eb67433e85101009c3f82b8e`; SHA-256 `beb8be8baefe2faa78356e2dc44983735b855535c21cd5f0172a8e1e3fa665db` |
-| Living director ruling | `current-main@bf262c08984cf05cb84425e850b187af5f8adf03` (`D-LAUNCH-19`) |
+| Living director ruling | `current-main@5a304482a84d12aee0b1e982283458f113450735` (`D-LAUNCH-20`), tree `4ff9f07ced847a9b2781d7a6974b27937bcd1155` |
 
 The protected directives are owner inputs rather than donor payload. Their blob and raw hashes bind the law; they are not counted as donor paths.
 
@@ -150,10 +153,10 @@ Committed import-purity proof identities include L’s `server/test/liveEdge/sec
 
 ## Presence in the observed integration ref
 
-| Requested donor | `139d2cf…` disposition |
+| Requested donor | `18a0b9d…` disposition |
 | --- | --- |
 | Q | Exact ancestor via merge `042dc9897d04bed2b0de3043cbdcbac408251412`; one receipted lock correction |
-| L | Not ancestor; exact eligible last merge still pending at cutoff |
+| L | Exact ancestor and exact second parent of required-last merge `ec82bc51d5311dfb3f505216bfb3fa41733f038c` |
 | Dashboard shell | Not ancestor; exact 21-file subtree equivalence through IP-CONTROL |
 | L15 | Exact ancestor via `35672dc…`; artifact-only |
 | IP-RUNTIME | Exact ancestor via `f5523e63efcb0a5434341cf9328162be1482fc38` |
@@ -170,15 +173,23 @@ Committed import-purity proof identities include L’s `server/test/liveEdge/sec
 
 IP integration has evolved 14 of 46 IP-CONTROL paths and 17 of 24 IP-PROOF paths after exact donor fan-in; none is missing. Ancestry proves provenance, not correctness of the evolved blobs. Role 3 must audit those candidate bytes independently.
 
+### Post-L integration seal
+
+- Required-last L merge: `ec82bc51d5311dfb3f505216bfb3fa41733f038c`; tree `7192a94883f6ac43d0c7d06b2a0f24275a7feef8`; ordered parents pre-L `139d2cf07ffd3167bd54a3c14c0fc6671c2f02e9` then exact L `df6b472993ca9659ce09cf5f72004981c6835f0d`.
+- Receipt-seal commit: `18a0b9d1153a5f4bb6c8b42909362c6a295475bb`; tree `135ec02a6615741307c323b561bf999e2d71ab20`; parent `ec82bc51d5311dfb3f505216bfb3fa41733f038c`.
+- `docs/archive/i00-phase2/L_LANE_INTEGRATION_RECEIPT.md`: blob `da5c77329f29de01b7984593e60c9cdf54887c7a`; raw SHA-256 `198af74b4f0931123a41d6b0a94b1bbcd6890813986d981bd39e95ba486c296b`.
+- The receipt reports all 303 donor-delta blobs exact, zero pre-L/donor path overlap, `16/16/16/16` regenerated equality, A-FORMAL explicitly out, Product Assurance `495` files / `198` discovered / `198` covered / `0` uncovered, `802` behavior plus `4` provenance, full LiveEdge `1,618/1,618`, `npm test` exit 0, and `npm run test:all` exit 0.
+- The same receipt explicitly says this is **not** `INTEGRATION_CANDIDATE_READY`: L shared wiring, final source freeze, runtime/restart/reconciliation, browser acceptance, component inventory, and candidate sealing remain pending. These are receipt-reported results, not independently rerun by this worker.
+
 ## Role-3 finding register
 
 ### PVA-001 — A-FORMAL is not receipt-accepted
 
-Severity: candidate-completeness blocker. `89c783b…` is scope-compliant but its latest immutable reseal and state remain `BLOCKED_NO_NETWORK_BOUNDARY_VIOLATED`; root `npm test` is recorded exit 127, formal tooling is not configured, conformance is `MISMATCH 2 / UNKNOWN 5`, and runtime corpus eligibility is zero. The board label cannot override this. Require a newer explicit owner ruling plus immutable accepted receipt or exclude it with an exact disposition and regenerate the denominator.
+Severity: candidate-completeness boundary. `89c783b…` is scope-compliant but its latest immutable reseal and state remain `BLOCKED_NO_NETWORK_BOUNDARY_VIOLATED`; root `npm test` is recorded exit 127, formal tooling is not configured, conformance is `MISMATCH 2 / UNKNOWN 5`, and runtime corpus eligibility is zero. D-LAUNCH-20 now explicitly documents it out of this candidate and permits re-entry only through a director-controlled post-landing wave. Role 3 must verify that exclusion and ensure no Formal bytes or claims entered the frozen candidate.
 
-### PVA-002 — donor denominator conflict
+### PVA-002 — regenerated denominator and dispositions
 
-Severity: candidate-completeness blocker. D-LAUNCH-19 says 15 including L; Role-2 state at `139d2cf…` counts a different 15 including F-BRIDGE/SI-RECON and says L would become 16; the user-specified set includes blocked Formal. Candidate receipt must prove `expected = discovered = receipt-accepted = integrated = instrumented` from one named set, not reuse any prior number.
+Severity: high candidate check. D-LAUNCH-20 supersedes every fixed denominator and accepts the observed integration inventory as 16 only for that exact snapshot: D-LAUNCH-18’s set minus blocked A-FORMAL plus F-BRIDGE and SI-RECON as receipted equivalences. The candidate and Role 3 must independently prove `expected = discovered = receipt-accepted = integrated = instrumented` from the frozen tree and write an explicit disposition for every expected-but-blocked/missing item. The requested 15-row audit remains useful provenance, not the candidate denominator.
 
 ### PVA-003 — dashboard equivalence and truth hazards
 
@@ -202,7 +213,7 @@ Severity: medium. A-CORE’s receipt names tested commit `f67db032…`; tip `08a
 
 ### PVA-008 — no candidate existed at cutoff
 
-Severity: boundary. No `INTEGRATION_CANDIDATE_READY` receipt/ref existed. Full current-tree tests, L-last integration, runtime/restart/reconciliation, browser ship gate, expected-vs-instrumented component inventory and independent verification remain outside this audit.
+Severity: boundary. No `INTEGRATION_CANDIDATE_READY` receipt/ref existed. L-last integration and repository-wide test reruns are receipt-sealed at `18a0b9d…`, but L shared wiring, final source-freeze rerun, runtime/restart/reconciliation, browser ship gate, expected-vs-instrumented component inventory, candidate sealing, and independent verification remain outside this audit.
 
 ## Reproduction command family
 

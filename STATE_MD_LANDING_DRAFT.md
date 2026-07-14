@@ -2,14 +2,14 @@
 
 Draft status: **NON-DONOR / NOT LANDING TRUTH / DO NOT COPY UNCHANGED**
 
-Evidence cutoff: `i00-product-assembly-20260713@139d2cf07ffd3167bd54a3c14c0fc6671c2f02e9`, tree `84dd406f40c66c6771daee657a51224393a7d8d6`
+Evidence cutoff: `i00-product-assembly-20260713@18a0b9d1153a5f4bb6c8b42909362c6a295475bb`, tree `135ec02a6615741307c323b561bf999e2d71ab20`
 
 Prepared from: `preverify-20260714@0bbf23c06c60c1a4553422f099d8b242f13b6dc5`
-Observed living `current-main`: `bf262c08984cf05cb84425e850b187af5f8adf03`, tree `753030474827ab41b957dbb6174353bc818819b3`
+Observed living `current-main`: `5a304482a84d12aee0b1e982283458f113450735`, tree `4ff9f07ced847a9b2781d7a6974b27937bcd1155` (`D-LAUNCH-20`)
 
 The director applies this rewrite atomically only after Role 2 seals one immutable candidate, a different Role-3 session returns exact `VERIFIED_CANDIDATE` for that SHA, and the exact verified bytes land. Every bracketed field is mandatory. Delete this draft banner when copying the adjusted body into root `STATE.md`.
 
-The observed integration ref is pre-L and not a candidate. It does not contain D-LAUNCH-18/19, exact L or A-FORMAL. Its full current-tree tests, runtime/restart/reconciliation, browser ship gate and candidate seal are pending. Historical counts below are evidence inputs, not final landing claims.
+The observed integration ref is post-L but not a candidate. Exact L is the second parent of required-last merge `ec82bc51d5311dfb3f505216bfb3fa41733f038c`; seal `18a0b9d…` reports repository gates green and regenerated `16/16/16/16`. D-LAUNCH-20 explicitly excludes blocked A-FORMAL, counts F-BRIDGE and SI-RECON by receipted equivalence, and rules S2 `NOT_CONFIGURED` rather than fabricated. L shared wiring, final source-freeze rerun, runtime/restart/reconciliation, browser acceptance, component inventory and candidate seal remain pending. Historical counts below are evidence inputs, not final landing claims.
 
 ---
 
@@ -59,7 +59,7 @@ integrated=[FINAL_INTEGRATED]
 instrumented=[FINAL_INSTRUMENTED]
 ```
 
-All five values must be equal and their exact denominator must be named in the candidate receipt. Do not reuse 14, 15 or 16 from an earlier snapshot. At the draft cutoff, D-LAUNCH-19 and Role-2 state disagree on the denominator, and A-FORMAL is blocked.
+All five values must be equal and their exact denominator must be named in the candidate receipt. Do not reuse 14, 15 or 16 from an earlier snapshot. D-LAUNCH-20 makes the regenerated frozen-tree inventory plus an explicit disposition for every expected-but-blocked/missing item the law. The observed pre-candidate seal reports `16/16/16/16`; Role 3 must regenerate it independently.
 
 | Input | Exact immutable identity | Candidate/landing disposition |
 | --- | --- | --- |
@@ -73,15 +73,15 @@ All five values must be equal and their exact denominator must be named in the c
 | IP-PROOF | `23e985c17b9b860fee26be397fa05b26f3daf8f2`; tree `1329fe73139016cf728d47551c75f7ca69daa558`; receipt SHA-256 `569f09af842f527ca19269a8e66dbdc367145a03ff31aba839defe252d14ad7b` | `[ANCESTRY_AND_EVOLVED_PROOF_AUDIT]`; final proof must be regenerated from candidate, not packet prestage |
 | A-CORE | `08a0a09780727e2b4ba59017b5701998abe29b77`; tree `b904ca0f5b6f7c8df294274351611635560f80f7`; receipt SHA-256 `93b1f6283d48ddeadf9b7205e47f3ccfc698d4f79f98b8e82ecad1d7aa4a302e` | `[ANCESTRY_AND_ROOT_DISCOVERY_RESULT]`; exact donor status `CORE_SCAFFOLD_READY` |
 | A-HAZARD | `ab33b3712cddd67c3ec91cfa1dd232c75226cd9f`; tree `e33224d4b2e6b018fd39bfdcb403b3d88e74712f`; receipt SHA-256 `ecfca4e7d60d9dca3b07e4e21d4595ebb234dab421924f14226cf39f8a9c85ea` | `[ANCESTRY_AND_INSTRUMENTATION]`; fixture/evidence only |
-| A-FORMAL | `89c783bd9e55ce83c21ed1181757122d88e4c980`; tree `bb444b7ea959f086bbc1d1021b6f9b45e0fadf79`; blocked reseal SHA-256 `d693696aa339d490ef58fee2bf4c833ce660d6a265391c5363079b32d62a165f` | `[A_FORMAL_DISPOSITION]`; draft default is `BLOCKED_NO_NETWORK_BOUNDARY_VIOLATED / NOT_RECEIPT_ACCEPTED / NOT_INTEGRATED`; a board label is insufficient |
+| A-FORMAL | `89c783bd9e55ce83c21ed1181757122d88e4c980`; tree `bb444b7ea959f086bbc1d1021b6f9b45e0fadf79`; blocked reseal SHA-256 `d693696aa339d490ef58fee2bf4c833ce660d6a265391c5363079b32d62a165f` | `BLOCKED_NO_NETWORK_BOUNDARY_VIOLATED / NOT_RECEIPT_ACCEPTED / DOCUMENTED-OUT`; D-LAUNCH-20 permits re-entry only through a director-controlled post-landing wave |
 | A-COCKPIT | `d4ff9c94c9fec9477481223c4b33d8f671a34f6d`; tree `bda9b452c9e6564576fa3cd390a5981cd6907c09`; receipt SHA-256 `b75055388f99632f2dc5ebb87d92b6d969f666397014e89a616a6e262f0650dd` | `[ANCESTRY_AND_CANONICAL_BINDING]`; packet-local fixture truth |
 | A-AGENT | `97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437`; tree `e68ef10d09c11bc5623099a2eb6eb6881054486b`; receipt SHA-256 `c237939f112a41abfb83508ed57e5783a9344cc3cb76e02003ca64487831a92c` | `[ANCESTRY_AND_CANONICAL_BINDING]`; diagnostic stub, no tools/authority |
 | A-STABILITY | `d35674e7f9621320c35e0bc0270efd515cc64dbd`; tree `16c92923b837105471b232df0480d1270bda756e`; receipt SHA-256 `b26f902d90fb82633ac8532d5aa82169801ded3ec6d7bcf3477737a64eab2168` | `[ANCESTRY_AND_RESOURCE_OWNER_DISPOSITION]`; resource truth remains unknown until confirmed |
 | S4 assurance case | `b4d8a446cb4cd6e77e7fbaf38f927b7513dc316c`; tree `3c773878016f4a56c6b03fe6485a42b002c3f5d2`; receipt SHA-256 `05369b8aa403a4fae6b86143ddcb7d61551d5996838c92b9bc4aba79401a3550` | `[ANCESTRY_AND_CANONICAL_BINDING]`; `SYNTHETIC_ONLY`, authority effect none |
 
-Canonical correction ancestry also includes F-BRIDGE `a0c0c2e5ef3180aa720488463643433cefeb65e5` and SI-RECON `f03ed786a8c5cab50ef27ad33026a74f79f7df87` through their accepted `current-main` merges. Record whether they are prerequisites or counted donors in `[FINAL_DENOMINATOR_DEFINITION]`; never count the same semantic input twice.
+Canonical correction ancestry includes F-BRIDGE `a0c0c2e5ef3180aa720488463643433cefeb65e5` and SI-RECON `f03ed786a8c5cab50ef27ad33026a74f79f7df87` through accepted `current-main` merges. D-LAUNCH-20 counts both as receipted-equivalence donors in the observed 16-row inventory; the final candidate must re-prove their identities and avoid counting either semantic input twice.
 
-S2 action evidence has no accepted donor branch or receipt at the draft cutoff. Its final state is `[S2_DISPOSITION]`, default `NOT_CONFIGURED / MISSING ACCEPTED EVIDENCE`; do not fabricate one.
+S2 action evidence has no accepted donor branch or receipt. D-LAUNCH-20 rules it `NOT_CONFIGURED / MISSING ACCEPTED EVIDENCE`, not a donor, and forbidden to fabricate into the frozen inventory before landing.
 
 ## Canonical component and release matrix
 
@@ -149,6 +149,7 @@ These are not final landing results. They tell the director what must be superse
 | Q `02b4ecc…` | focused `384/384`, 96.50% branch coverage; full `3,011` passed and six documented shard-only skips; final posture `ABSTAIN_UNKNOWN` |
 | L `df6b472…` | scope `35/35`; focused `23/23`; import purity `4/4`; LiveEdge `1,618/1,618`; protocol `22/22`; Risk `884/884`; Control `97/97`; Execution `178/178`; Reconciliation `75/75`; Observability `130/130`; read model `72/72`; SI `180/180`; `npm test` `377/377`; `test:all` `2,479/2,479`; donor remains unwired |
 | I00 pre-L state `139d2cf…` | Product Integration `89/89`; Control Room `44/44`; SI `218/218`; focused bridge bundle `36/36`; persistence `38/38`; health/quantity `15/15`; boundaries `69/69 + 146/146`; built app `73/73`; A-CORE `32/32`; operation scan 386 files/143 sites; Hazard `69/69`; Cockpit `50/50 + 100/100`; Agent `111/111`; Stability `212/212`; S4 `233/233`; typecheck/build pass; current-tree `npm test` and `test:all` explicitly pending |
+| I00 post-L seal `18a0b9d…` | L exact-last merge `ec82bc5…`; 303/303 donor paths exact; Product Assurance 495 files / 198 discovered / 198 covered / 0 uncovered; `802` behavior + `4` provenance; I00 proof `36/36`; full LiveEdge `1,618/1,618`; `npm test` exit 0; `npm run test:all` exit 0; receipt SHA-256 `198af74b4f0931123a41d6b0a94b1bbcd6890813986d981bd39e95ba486c296b`; still not a candidate |
 
 ## Independent Role-3 verification
 
@@ -232,4 +233,4 @@ If deployed/private/signed/live work is not separately authorized, the next safe
 
 ## Mandatory substitution audit before landing
 
-The director must prove no `[` placeholder remains, the donor denominator conflict is resolved, A-FORMAL/S2 have exact dispositions, candidate and Role-3 SHAs/trees match, every final count comes from the frozen candidate or independent verification, deployed state is not inferred, and the root `STATE.md` update lands atomically with the exact verified bytes and final receipts.
+The director must prove no `[` placeholder remains, the D-LAUNCH-20 denominator law and every exclusion/missing disposition are satisfied, candidate and Role-3 SHAs/trees match, every final count comes from the frozen candidate or independent verification, deployed state is not inferred, and the root `STATE.md` update lands atomically with the exact verified bytes and final receipts.

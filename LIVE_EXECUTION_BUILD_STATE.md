@@ -2,17 +2,17 @@
 
 Schema version: 1
 
-Generation: 15
+Generation: 16
 
 Program: `LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H`
 
-Current phase: `L12`
+Current phase: `L13`
 
-Phase status: `IMPLEMENTATION_FROZEN_PENDING_RECEIPT`
+Phase status: `ISSUED`
 
 Lane status: `L_SPINE_FINALE_ACTIVE`
 
-Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`, `L06`, `L07`, `L08`, `L08.1`, `L08.2`, `L09`, `L10`, `L11`, `L14`; `L15` is accepted on its satellite and awaits I00 fan-in.
+Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`, `L06`, `L07`, `L08`, `L08.1`, `L08.2`, `L09`, `L10`, `L11`, `L12`, `L14`; `L15` is accepted on its satellite and awaits I00 fan-in.
 
 ## D-LAUNCH-16 RESUME AND WORKER SCOPE BASELINE
 
@@ -100,6 +100,18 @@ Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`, `L06`, `L07`, `L08`, 
 - L08.2 immutable receipt commit / exact director cut:
   `1dd33b13288f051f1d7835baea156ebfe0ea8e1e`
 - L08.2 receipt tree: `4a31c49073e77201e5e5ef53426c5c3121ffece7`
+- L12 implementation commit:
+  `0358218ec7b3e16c409c9cd49e7c55303783e446`
+- L12 final frozen implementation/handoff commit:
+  `6d4a330db6047e0b5d384c905b8632617168c71c`
+- L12 frozen implementation tree:
+  `baf3a4de74bf51702a6d8e9dcfaf57d4b843d56a`
+- L12 immutable receipt commit:
+  `03805c0d2af6cbd90ef22d466896aa3ebc9d4bc5`
+- L12 immutable receipt tree:
+  `6adb4b0b65744410036f74fc29d9af082cc4f02d`
+- L12 immutable receipt SHA-256:
+  `15fcaf2d2cf90ca534c4c26ef59560b10b6a4e2549a71ad6d02c7c4abbe8f7b6`
 - L09-002 source blocker commit:
   `a560b8ac84820e5edc15c5f36727368ecc9c9442`; decision blob
   `caa3df4ce16fdae168c298d0bb64e29e976e76b4`, SHA-256
@@ -122,17 +134,13 @@ Accepted phases: `L00`, `L01`, `L02`, `L03`, `L04`, `L05`, `L06`, `L07`, `L08`, 
 
 ## Exact current task
 
-- Path: `live-edge-receipts/TASKS/L12.md`
-- Decision: `live-edge-receipts/DECISIONS/D0016-l12-exposure-recovery-projection.md`
-- Shared-owner request:
-  `live-edge-receipts/patches/L12-canonical-owner-projection-integration.request.md`
-- Implementation status: the behavior-backed chaos correction passes the
-  current server build, focused/purity/accumulated LiveEdge, protocol,
-  standard/cross-family and targeted canonical owner gates. Exact worker scope,
-  protected-input and static security checks pass; the immutable receipt is the
-  remaining L12 seal.
-- Latest already accepted receipt before L12:
-  `live-edge-receipts/RECEIPTS/L11_ACCEPTANCE.md`.
+- Path: `live-edge-receipts/TASKS/L13.md`.
+- Preceding accepted receipt:
+  `live-edge-receipts/RECEIPTS/L12.md`.
+- L13 implementation status: `NOT_STARTED`; only its bounded task is issued.
+- Required shape: one pure 27-role/18-control/36-metric/13-alarm owner-evidence
+  adapter, with no graph, health, alarm, control, persistence or action
+  authority.
 
 ## Frozen input hashes
 
@@ -161,9 +169,9 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 
 ## Working-tree checkpoint
 
-- Expected worker-authored changes before the L12 implementation commit: only
-  the L12 adapter/tests, bounded task/decision/request, this state and the
-  component manifest.
+- Expected worker-authored changes after this acceptance-state commit: none
+  beyond the issued L13 task and L12 acceptance record. L13 implementation must
+  remain inside its bounded task paths.
 - Expected untracked preserved owner inputs: `DIRECTOR_Q_L_TWO_LANE_LAUNCH.md`, `LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md`.
 - Worker scope is measured from director merge
   `3a8e17be71d21df14f6b236a563cb0595f9eb824`; director-imported history is
@@ -222,7 +230,7 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
   reconciliation evidence remains owner-injected and synthetic.
 - L11 lane-ready: Volume retains one canonical occupancy/lifecycle projection,
   exact protection/no-repeat state and recommendation-only recovery handoff.
-- L12 corrected pending final gates and immutable receipt: one pure
+- L12 accepted lane-ready: one pure
   exposure/recovery adapter
   validates the full §19 owner chain, one revision-bound Capital truth,
   immediate Risk recheck, halt admission law, the §20 exposure/economics/
@@ -240,7 +248,7 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
   behavior directly covers 11 scenarios and partially/compositionally covers
   seven; database-failure-before-send
   orchestration and cloud-alarm-to-halt wiring remain explicit I00/L15 gaps.
-  Output is deeply immutable, `SYNTHETIC_ONLY`,
+  The exact immutable receipt is `live-edge-receipts/RECEIPTS/L12.md`. Output is deeply immutable, `SYNTHETIC_ONLY`,
   `OWNER_EVIDENCE_ADAPTER_ONLY`, non-sendable, non-authorizing and `UNWIRED`.
 - L14 lane-ready: the bounded durable control-command adapter is accepted on
   lane ancestry as `BUILT_AND_TESTED` and `UNWIRED`; canonical Ledger/System
@@ -272,7 +280,7 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 
 ## Measured tests
 
-- L12 latest corrected tree after the behavior-backed chaos upgrade: server
+- L12 accepted corrected tree after the behavior-backed chaos upgrade: server
   build exit `0`; focused exposure/recovery projection `21/21`, including all
   nine valid durable L10 state cuts and exact Foundation coverage of all 15
   plan plus 10 leg lifecycle states; import purity `4/4`; accumulated LiveEdge
@@ -405,6 +413,7 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 - L09 is accepted `LANE_READY` / `BUILT_AND_TESTED` / `UNWIRED` and must not be repeated.
 - L10 is accepted `LANE_READY` / `BUILT_AND_TESTED` / `UNWIRED` and must not be repeated.
 - L11 is accepted `LANE_READY` / `BUILT_AND_TESTED` / `UNWIRED` and must not be repeated.
+- L12 is accepted `LANE_READY` / `BUILT_AND_TESTED` / `UNWIRED` and must not be repeated.
 - L14 is accepted `LANE_READY` / `BUILT_AND_TESTED` / `UNWIRED` on this lane's ancestry and must not be repeated.
 - L15 is accepted on its deployment/infrastructure satellite and must not be
   reimplemented in the spine; director I00 owns fan-in.
@@ -413,33 +422,34 @@ Director-only shared changes must be inert files under `live-edge-receipts/patch
 - Production Basis/Volume assessment ingress, production component identity/policy binding, package scripts and supervisor/API projection remain director-owned.
 - D-LAUNCH-16 resolves the prior false scope blocker. The latest qualifying
   director merge is the gate baseline; L09-L11 are present as canonical
-  imported history and exempt from §3.3. L12 is active and has no new blocker.
+  imported history and exempt from §3.3. L12 is accepted; L13 is active and
+  has no new blocker.
 
 ## Exact next task
 
-Seal the immutable L12 receipt against the verified frozen implementation,
-write the immediate L12 acceptance-state seal, then proceed without pause to
-L13 §21-§23 lane-side evidence adapters. Stop only on a new precise `BLOCKED`
-or final `L LANE_READY`.
+Execute the issued L13 §21-§23 lane-side machine-graph/observability evidence
+adapter, freeze its focused and accumulated proof, then proceed without pause
+to L16/L17. Stop only on a new precise `BLOCKED` or final `L LANE_READY`.
 
 ## Files to re-read on resume
 
 - `MISSION.md`
 - `ARCHITECTURE.md` Part II
 - `LIVE_EXECUTION_BUILD_STATE.md`
-- `live-edge-receipts/TASKS/L12.md`
+- `live-edge-receipts/TASKS/L13.md`
 - `live-edge-receipts/DIRECTIVE_INPUTS.lock`
 - `live-edge-receipts/DECISIONS/D0002-director-launch-digest-acceptance.md`
-- `live-edge-receipts/DECISIONS/D0016-l12-exposure-recovery-projection.md`
-- `server/src/liveEdge/adapters/exposureRecoveryProjection/types.ts`
-- `server/src/liveEdge/adapters/exposureRecoveryProjection/projection.ts`
+- `live-edge-receipts/RECEIPTS/L12.md`
+- `server/src/systemIntegration/contracts/constants.ts`
+- `server/src/foundation/observability/types.ts`
+- `server/src/liveEdge/controls/types.ts`
 - `EDGE_PROTOCOL_V1.md`
 - `LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md`
 - only Section 7 of the corrected/accepted launch file
 
 ## Work not to repeat unless inputs changed
 
-- Do not repeat accepted L00/L01/L02/L03/L04/L05/L06/L07/L08/L08.1/L08.2/L09/L10/L11/L14/L15 work, broad
+- Do not repeat accepted L00/L01/L02/L03/L04/L05/L06/L07/L08/L08.1/L08.2/L09/L10/L11/L12/L14/L15 work, broad
   source discovery, canonical owner/code/test inventory or launch-hash
   investigation.
 - Do not rebuild L09/L10/L11 or the L15 satellite.

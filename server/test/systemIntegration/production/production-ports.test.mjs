@@ -231,10 +231,22 @@ test('public Spot and USD-M become LIVE_PUBLIC only with connected fresh raw eve
 test('accepted public owners drive UniverseGraph and IntelligenceRuntimeBridge readiness without Q', async () => {
   const world = createWorld();
   const originalAllRows = world.market.allRows;
+  const originalPriceUpdatedAt = world.market.priceUpdatedAt;
+  const originalMarkEventTimestamp = world.market.markEventTimestamp;
   let allRowsReads = 0;
+  let priceTimestampReads = 0;
+  let markTimestampReads = 0;
   world.market.allRows = function countedAllRows() {
     allRowsReads += 1;
     return originalAllRows.call(this);
+  };
+  world.market.priceUpdatedAt = function countedPriceUpdatedAt(symbol) {
+    priceTimestampReads += 1;
+    return originalPriceUpdatedAt.call(this, symbol);
+  };
+  world.market.markEventTimestamp = function countedMarkEventTimestamp(symbol) {
+    markTimestampReads += 1;
+    return originalMarkEventTimestamp.call(this, symbol);
   };
   world.market.rows = [{
     symbol: 'BTCUSDT',
@@ -254,7 +266,9 @@ test('accepted public owners drive UniverseGraph and IntelligenceRuntimeBridge r
   const universe = world.ports.runtimes.intelligenceRuntime.health(world.ctx());
   assert.equal(universe.running, true);
   assert.equal(universe.timestamp.sourceTimeMs, START - 250);
-  assert.equal(allRowsReads, 3);
+  assert.equal(allRowsReads, 2);
+  assert.equal(priceTimestampReads, 2);
+  assert.equal(markTimestampReads, 2);
 
   await world.ports.runtimes.marketIntelligence.start();
   const intelligence = world.ports.runtimes.marketIntelligence.health(world.ctx());
@@ -268,7 +282,7 @@ test('accepted public owners drive UniverseGraph and IntelligenceRuntimeBridge r
   world.usdm.set('BTCUSDT', START + 950);
   const held = world.ports.runtimes.marketIntelligence.health(world.ctx());
   assert.equal(held.timestamp.sourceTimeMs, START - 200);
-  assert.equal(allRowsReads, 5);
+  assert.equal(allRowsReads, 4);
 
   world.clock.now = START + 5_000;
   world.spot.set('BTCUSDT', START + 4_900);
@@ -276,12 +290,12 @@ test('accepted public owners drive UniverseGraph and IntelligenceRuntimeBridge r
   const advanced = world.ports.runtimes.marketIntelligence.health(world.ctx());
   assert.equal(advanced.timestamp.sourceTimeMs, START + 4_950);
   assert.ok(advanced.timestamp.receivedAtMs >= intelligence.timestamp.receivedAtMs);
-  assert.equal(allRowsReads, 7);
+  assert.equal(allRowsReads, 5);
 
   world.clock.now = START + 14_951;
   const stale = world.ports.runtimes.marketIntelligence.health(world.ctx());
   assert.equal(stale.timestamp, null);
-  assert.equal(allRowsReads, 8);
+  assert.equal(allRowsReads, 6);
 });
 
 test('market intelligence fails closed when USD-M disconnects with fresh cached evidence', async () => {
@@ -337,21 +351,21 @@ test('sibling intelligence probes share exactly one same-step refresh and never 
   const sameStep = world.ctx();
   assert.equal(world.ports.runtimes.intelligenceRuntime.health(sameStep).timestamp.sourceTimeMs, START - 250);
   assert.equal(world.ports.runtimes.marketIntelligence.health(sameStep).timestamp.sourceTimeMs, START - 200);
-  assert.equal(allRowsReads, 3);
+  assert.equal(allRowsReads, 2);
 
   assert.equal(world.ports.runtimes.marketIntelligence.health(sameStep).timestamp.sourceTimeMs, START - 200);
-  assert.equal(allRowsReads, 4);
+  assert.equal(allRowsReads, 3);
 
   world.ports.runtimes.intelligenceRuntime.health(sameStep);
   const differentStep = { ...sameStep, correlationId: 'different-production-step' };
   assert.equal(world.ports.runtimes.marketIntelligence.health(differentStep).timestamp.sourceTimeMs, START - 200);
-  assert.equal(allRowsReads, 6);
+  assert.equal(allRowsReads, 5);
 
   world.ports.runtimes.intelligenceRuntime.stop();
   await world.ports.runtimes.intelligenceRuntime.start();
   await world.ports.runtimes.marketIntelligence.start();
   assert.equal(world.ports.runtimes.marketIntelligence.health(sameStep).timestamp.sourceTimeMs, START - 200);
-  assert.equal(allRowsReads, 8);
+  assert.equal(allRowsReads, 6);
 });
 
 test('intelligence projection uses one supervisor-step clock for receipt and freshness truth', async () => {

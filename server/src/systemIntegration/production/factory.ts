@@ -95,6 +95,35 @@ interface SourceProjectionEvidence {
   readonly facts: Readonly<MarketFacts>;
 }
 
+interface MarketFactsCut {
+  readonly facts: Readonly<MarketFacts>;
+  readonly rows: readonly Readonly<ProductionMarketRow>[];
+  readonly spotSourceTimes: ReadonlyMap<string, number | null>;
+  readonly usdmSourceTimes: ReadonlyMap<string, number | null>;
+}
+
+interface IntelligenceSourceCut {
+  readonly spot: Readonly<SourceProjectionEvidence>;
+  readonly usdm: Readonly<SourceProjectionEvidence>;
+  readonly market: Readonly<MarketFactsCut>;
+}
+
+function invalidMarketFactsCut(): Readonly<MarketFactsCut> {
+  return Object.freeze({
+    facts: Object.freeze({
+      valid: false,
+      universeSymbols: null,
+      spotObservedSymbols: null,
+      usdmObservedSymbols: null,
+      latestSpotSourceTimeMs: null,
+      latestUsdmSourceTimeMs: null,
+    }),
+    rows: Object.freeze([]),
+    spotSourceTimes: new Map<string, number | null>(),
+    usdmSourceTimes: new Map<string, number | null>(),
+  });
+}
+
 function validateFactoryInput(input: Readonly<ProductionSystemIntegrationInput>): void {
   if (!input || typeof input !== 'object') throw new TypeError('production integration input is required');
   if (typeof input.clock?.nowMs !== 'function') throw new TypeError('clock.nowMs is required');
@@ -194,30 +223,22 @@ class MarketEvidenceReader {
   }
 
   readFacts(): Readonly<MarketFacts> {
+    return this.readFactsCut().facts;
+  }
+
+  private readFactsCut(): Readonly<MarketFactsCut> {
     let rows: readonly Readonly<ProductionMarketRow>[];
     try {
       rows = this.market.allRows();
     } catch {
-      return Object.freeze({
-        valid: false,
-        universeSymbols: null,
-        spotObservedSymbols: null,
-        usdmObservedSymbols: null,
-        latestSpotSourceTimeMs: null,
-        latestUsdmSourceTimeMs: null,
-      });
+      return invalidMarketFactsCut();
     }
     if (!Array.isArray(rows) || rows.length > MAX_MARKET_ROWS) {
-      return Object.freeze({
-        valid: false,
-        universeSymbols: null,
-        spotObservedSymbols: null,
-        usdmObservedSymbols: null,
-        latestSpotSourceTimeMs: null,
-        latestUsdmSourceTimeMs: null,
-      });
+      return invalidMarketFactsCut();
     }
     const symbols = new Set<string>();
+    const spotSourceTimes = new Map<string, number | null>();
+    const usdmSourceTimes = new Map<string, number | null>();
     let spotObservedSymbols = 0;
     let usdmObservedSymbols = 0;
     let latestSpotSourceTimeMs: number | null = null;
@@ -230,6 +251,7 @@ class MarketEvidenceReader {
         symbols.add(row.symbol);
         if (row.hasSpot) {
           const sourceTime = validUtcOrNull(this.market.priceUpdatedAt(row.symbol));
+          spotSourceTimes.set(row.symbol, sourceTime);
           if (sourceTime !== null) {
             spotObservedSymbols += 1;
             latestSpotSourceTimeMs = latest(latestSpotSourceTimeMs, sourceTime);
@@ -237,6 +259,7 @@ class MarketEvidenceReader {
         }
         if (row.hasPerp) {
           const sourceTime = validUtcOrNull(this.market.markEventTimestamp(row.symbol));
+          usdmSourceTimes.set(row.symbol, sourceTime);
           if (sourceTime !== null) {
             usdmObservedSymbols += 1;
             latestUsdmSourceTimeMs = latest(latestUsdmSourceTimeMs, sourceTime);
@@ -244,22 +267,20 @@ class MarketEvidenceReader {
         }
       }
     } catch {
-      return Object.freeze({
-        valid: false,
-        universeSymbols: null,
-        spotObservedSymbols: null,
-        usdmObservedSymbols: null,
-        latestSpotSourceTimeMs: null,
-        latestUsdmSourceTimeMs: null,
-      });
+      return invalidMarketFactsCut();
     }
     return Object.freeze({
-      valid: true,
-      universeSymbols: symbols.size,
-      spotObservedSymbols,
-      usdmObservedSymbols,
-      latestSpotSourceTimeMs,
-      latestUsdmSourceTimeMs,
+      facts: Object.freeze({
+        valid: true,
+        universeSymbols: symbols.size,
+        spotObservedSymbols,
+        usdmObservedSymbols,
+        latestSpotSourceTimeMs,
+        latestUsdmSourceTimeMs,
+      }),
+      rows: Object.freeze([...rows]),
+      spotSourceTimes,
+      usdmSourceTimes,
     });
   }
 
@@ -268,17 +289,15 @@ class MarketEvidenceReader {
     return this.sourceEvidence(kind, nowMs, facts);
   }
 
-  readSources(nowMs = this.clock.nowMs()): Readonly<{
-    spot: Readonly<SourceProjectionEvidence>;
-    usdm: Readonly<SourceProjectionEvidence>;
-  }> {
+  readSourcesWithMarketCut(nowMs = this.clock.nowMs()): Readonly<IntelligenceSourceCut> {
     // Spot and USD-M belong to one supervisor step. Scanning the accepted
     // MarketEngine cache once both removes duplicate full-universe work and
     // prevents the two source projections from observing different row cuts.
-    const facts = this.readFacts();
+    const market = this.readFactsCut();
     return Object.freeze({
-      spot: this.sourceEvidence('SPOT', nowMs, facts),
-      usdm: this.sourceEvidence('USDM', nowMs, facts),
+      spot: this.sourceEvidence('SPOT', nowMs, market.facts),
+      usdm: this.sourceEvidence('USDM', nowMs, market.facts),
+      market,
     });
   }
 
@@ -742,7 +761,8 @@ class PublicIntelligenceLifecycle {
     // Receipt time and evaluation time belong to the same deterministic
     // supervisor step. Taking a second clock sample here can place a newly
     // accepted receipt after ctx.nowMs and manufacture a negative age.
-    const { spot, usdm } = this.evidence.readSources(ctx.nowMs);
+    const sourceCut = this.evidence.readSourcesWithMarketCut(ctx.nowMs);
+    const { spot, usdm } = sourceCut;
     const spotFresh = spot.timestamp !== null && evaluateFreshness(spot.timestamp, ctx.nowMs).state === 'FRESH';
     const usdmFresh = usdm.connected
       && usdm.timestamp !== null
@@ -763,7 +783,12 @@ class PublicIntelligenceLifecycle {
       || ctx.nowMs - this.lastProjectionAtMs >= this.projectionIntervalMs;
     const retryNeeded = !this.lastUniverseReady || (usdmFresh && !this.lastEvidenceReady);
     if (projectionDue && (key !== this.lastProjectionKey || retryNeeded)) {
-      const projected = this.project(ctx.nowMs, spot.timestamp as Readonly<SourcedTimestamp>, usdmFresh ? usdm.timestamp : null);
+      const projected = this.project(
+        ctx.nowMs,
+        spot.timestamp as Readonly<SourcedTimestamp>,
+        usdmFresh ? usdm.timestamp : null,
+        sourceCut.market,
+      );
       this.lastProjectionKey = key;
       this.lastProjectionAtMs = ctx.nowMs;
       this.lastProjectedSpotTimestamp = spot.timestamp;
@@ -783,27 +808,22 @@ class PublicIntelligenceLifecycle {
     nowMs: number,
     spotTimestamp: Readonly<SourcedTimestamp>,
     usdmTimestamp: Readonly<SourcedTimestamp> | null,
+    marketCut: Readonly<MarketFactsCut>,
   ): Readonly<Pick<IntelligenceRefresh, 'universeReady' | 'evidenceReady'>> {
-    let rows: readonly Readonly<ProductionMarketRow>[];
-    try {
-      rows = this.market.allRows();
-    } catch {
+    if (!marketCut.facts.valid || marketCut.rows.length === 0 || marketCut.rows.length > MAX_MARKET_ROWS) {
       return Object.freeze({ universeReady: false, evidenceReady: false });
     }
-    if (!Array.isArray(rows) || rows.length === 0 || rows.length > MAX_MARKET_ROWS) {
-      return Object.freeze({ universeReady: false, evidenceReady: false });
-    }
-    const boundedRows = rows.slice(0, MAX_PROJECTED_UNIVERSE_ROWS);
+    const boundedRows = marketCut.rows.slice(0, MAX_PROJECTED_UNIVERSE_ROWS);
     const spotListings = boundedRows
       .filter((row) => row.hasSpot
-        && validUtcOrNull(this.market.priceUpdatedAt(row.symbol)) === spotTimestamp.sourceTimeMs)
+        && marketCut.spotSourceTimes.get(row.symbol) === spotTimestamp.sourceTimeMs)
       .map((row) => listing(row, 'SPOT', nowMs, spotTimestamp))
       .filter((record): record is Readonly<ListingObservation> => record !== null);
     const perpetualListings = usdmTimestamp === null
       ? []
       : boundedRows
         .filter((row) => row.hasPerp
-          && validUtcOrNull(this.market.markEventTimestamp(row.symbol)) === usdmTimestamp.sourceTimeMs)
+          && marketCut.usdmSourceTimes.get(row.symbol) === usdmTimestamp.sourceTimeMs)
         .map((row) => listing(row, 'USD_M_PERPETUAL', nowMs, usdmTimestamp))
         .filter((record): record is Readonly<ListingObservation> => record !== null);
     const coverageRecords = [
@@ -840,7 +860,7 @@ class PublicIntelligenceLifecycle {
     for (const row of boundedRows) {
       if (normalized.length >= MAX_PROJECTED_MARK_EVIDENCE || !row.hasPerp
           || typeof row.perpMark !== 'number' || !Number.isFinite(row.perpMark) || row.perpMark <= 0) continue;
-      const sourceTimeMs = validUtcOrNull(this.market.markEventTimestamp(row.symbol));
+      const sourceTimeMs = marketCut.usdmSourceTimes.get(row.symbol) ?? null;
       if (sourceTimeMs === null || sourceTimeMs !== usdmTimestamp.sourceTimeMs
           || sourceTimeMs > usdmTimestamp.receivedAtMs) continue;
       const result = normalizeMarkPrice({

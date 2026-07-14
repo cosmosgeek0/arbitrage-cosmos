@@ -2,6 +2,8 @@ import { createReadStream, writeSync } from 'node:fs';
 import os from 'node:os';
 import { monitorEventLoopDelay, performance } from 'node:perf_hooks';
 
+export const PHASE_EVENT_LOOP_RESOLUTION_MS = 10;
+
 function nanosecondsToMilliseconds(value) {
   return Number.isFinite(value) ? value / 1_000_000 : null;
 }
@@ -50,7 +52,7 @@ if (process.env.I00_PERF_PROBE === '1') {
     : 1_000;
   const logicalCpuCount = Math.max(1, os.cpus().length);
   const intervalHistogram = monitorEventLoopDelay({ resolution: 20 });
-  const phaseHistogram = monitorEventLoopDelay({ resolution: 20 });
+  const phaseHistogram = monitorEventLoopDelay({ resolution: PHASE_EVENT_LOOP_RESOLUTION_MS });
   let previousCpu = process.cpuUsage();
   let previousAt = performance.now();
   let sequence = 0;

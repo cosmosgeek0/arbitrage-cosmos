@@ -153,7 +153,7 @@ ledger-persistence, engine-supervisor
 | I00 proof / command / acceptance contracts | `46/46`; `28/28`; `34/34` |
 | Production runtime temporal/restart focus | `15/15`; one shared Spot/USD-M market-cache cut per intelligence refresh; hostile advancing-clock, projection-cadence, stale-source, USD-M disconnect, and concurrent clock-regression proofs; same-data dirty-cache replay restored all seven required public/engine owners to `READY / LIVE_PUBLIC` with Q `ABSTAIN_UNKNOWN` and honest safety degradation |
 | Intelligence Runtime bridge focus | `23/23`; oversized failure batches retain the exact comparator-defined survivors with one bounded eviction pass |
-| I00 performance contract | `41/41`; exact 14-component `OWNER:ownerPath` projections, `blockerCode` capture, owner-forgery rejection, bounded hydrated-baseline timeout refusal, short-window RSS-slope nonclaim, and direct reset/acknowledge/snapshot phase event-loop measurement with interval-substitution rejection |
+| I00 performance contract | `41/41`; exact 14-component `OWNER:ownerPath` projections, `blockerCode` capture, owner-forgery rejection, bounded hydrated-baseline timeout refusal, short-window RSS-slope nonclaim, and direct 10 ms reset/acknowledge/snapshot phase event-loop measurement with interval-substitution rejection |
 | Focused security / I00 scope-security | 148 assertions; `7/7` |
 | Product Assurance hostile / provenance | `2/2`; `4/4` |
 | Root Product Assurance | 515 files scanned; 207 discovered; 207 covered; 0 uncovered; 802 behavior plus 4 provenance |

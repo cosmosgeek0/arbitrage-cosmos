@@ -66,7 +66,7 @@ These are focused source results, not the complete C-bound local acceptance:
 | I00 proof / command / acceptance contracts | `46/46`; `28/28`; `34/34` |
 | Production runtime temporal/restart focus | `15/15`; hostile advancing-clock, projection-cadence, stale-source, USD-M disconnect, and concurrent clock-regression proofs; same-data dirty-cache replay restored all seven required public/engine owners to `READY / LIVE_PUBLIC` with Q `ABSTAIN_UNKNOWN` and honest safety degradation |
 | Intelligence Runtime bridge focus | `23/23`; oversized failure batches retain the exact comparator-defined survivors with one bounded eviction pass |
-| I00 performance contract | `41/41`, including exact canonical `OWNER:ownerPath` binding, owner-forgery rejection, bounded hydrated-baseline timeout refusal, short-window RSS-slope nonclaim, and a direct reset/acknowledge/snapshot phase event-loop histogram that rejects interval substitution |
+| I00 performance contract | `41/41`, including exact canonical `OWNER:ownerPath` binding, owner-forgery rejection, bounded hydrated-baseline timeout refusal, short-window RSS-slope nonclaim, and a direct 10 ms reset/acknowledge/snapshot phase event-loop histogram that rejects interval substitution |
 | Security and I00 scope-security | `148` focused security assertions; `7/7` scope-security |
 | Root Product Assurance | 515 files; 207/207 discovered/covered; 0 uncovered; 802 behavior plus 4 provenance |
 | `bash ops/tests/i00/run-all.sh` | Exit 0; 10/10 files; 394 assertions |

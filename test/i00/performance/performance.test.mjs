@@ -7,6 +7,7 @@ import { Worker } from 'node:worker_threads';
 import { deflateSync } from 'node:zlib';
 
 import {
+  PHASE_EVENT_LOOP_RESOLUTION_MS,
   createPhaseEventLoopController,
 } from './app-probe.mjs';
 import {
@@ -1010,6 +1011,7 @@ test('phase event-loop report uses the direct cumulative histogram and rejects i
 });
 
 test('app probe phase histogram requires one reset and returns one direct bounded snapshot', () => {
+  assert.equal(PHASE_EVENT_LOOP_RESOLUTION_MS, 10);
   const calls = [];
   const histogram = {
     count: 6,
